@@ -8,7 +8,7 @@
 <script src="assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html" aria-current="page">Preview</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html" aria-current="page">Preview</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow">dharmatiles preview</div>
@@ -67,9 +67,10 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="limits">Limits</h2>
 <ul>
+  <li>Editing in the view is designed but not built: see <a href="design/editor.html">the editor</a>.</li>
   <li>Made for your own machine: the mesh is sent whole (about 90 bytes a triangle), fine on the loopback, not meant for a network.</li>
   <li>A change rebuilds the whole tile.</li>
-  <li>No section cuts, measuring or editing in the view.</li>
+  <li>No section cuts or measuring.</li>
   <li><code>--system</code> is fixed for a run; restart for the other base.</li>
 </ul>
 

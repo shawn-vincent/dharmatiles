@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Editor</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<style>
+  .wf { font-family: var(--f-body); }
+  .wf .frame { fill: var(--bg); stroke: var(--line-2); stroke-width: 1.5; }
+  .wf .pane { fill: var(--panel); stroke: var(--line); }
+  .wf .raised { fill: var(--raised); stroke: var(--line); }
+  .wf .plate { fill: var(--plate); stroke: none; }
+  .wf .ground { fill: var(--earth); opacity: .55; }
+  .wf .grass { fill: var(--moss); opacity: .7; }
+  .wf .water { fill: var(--water); opacity: .6; }
+  .wf .rock { fill: var(--stone); }
+  .wf .sel { fill: none; stroke: var(--brass); stroke-width: 2.5; }
+  .wf .selfill { fill: color-mix(in srgb, var(--brass) 22%, transparent); }
+  .wf .code { fill: var(--muted); }
+  .wf .t { fill: var(--ink); font-size: 12px; }
+  .wf .s { fill: var(--muted); font-size: 10.5px; }
+  .wf .m { fill: var(--ink); font: 11px var(--f-code); white-space: pre; }
+  .wf .b { fill: var(--brass); font-size: 12px; font-weight: 600; }
+  .wf .ok { fill: var(--ok); font-size: 11px; font-weight: 600; }
+  .wf .hair { stroke: var(--line-2); stroke-width: 1; fill: none; }
+  .wf .dash { stroke: var(--brass); stroke-width: 1.5; stroke-dasharray: 4 3; fill: none; }
+  .wf .line { stroke: var(--plate-ink); stroke-width: 2; fill: none; }
+  .wf .handle { fill: var(--raised); stroke: var(--brass); stroke-width: 2; }
+  .tiers { display: grid; gap: 10px; margin: 14px 0 20px; }
+  .tier { display: grid; grid-template-columns: 7.5em 1fr; gap: 4px 16px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 10px; max-width: 78ch; }
+  .tier .when { font: 800 20px/1.1 var(--f-display); color: var(--brass); }
+  .tier p { margin: 0; }
+  @media (max-width: 560px) { .tier { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Design · not built yet</div>
+  <h1>The editor</h1>
+  <p class="lede">The preview becomes the editor. You open a tile and it is on the plate, with its document beside it. Click any stone and its line in the document lights up; drag one of its numbers and the stone changes; type <code>rock</code> and click the bank to put one there. Every change, made by hand, in the view or by an assistant, is a change to the document's text, and the text is always the tile.</p>
+  <div class="facts">
+    <div><div class="k">One view</div><div class="v">the preview is the editor</div></div>
+    <div><div class="k">Controls</div><div class="v">five, everywhere</div></div>
+    <div><div class="k">Truth</div><div class="v">the <code>.dtile</code> text</div></div>
+    <div><div class="k">Runs</div><div class="v">web first, then desktop, then tablets and phones</div></div>
+  </div>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#principles">Principles</a></li>
+  <li><a href="#five">Five controls</a></li>
+  <li><a href="#open">Opening a tile</a></li>
+  <li><a href="#select">Selecting</a></li>
+  <li><a href="#lens">Changing: the lens</a></li>
+  <li><a href="#place">Placing and drawing</a></li>
+  <li><a href="#text">The text</a></li>
+  <li><a href="#stack">The stack and the map</a></li>
+  <li><a href="#gate">The gate, always in view</a></li>
+  <li><a href="#ladder">Many versions at once</a></li>
+  <li><a href="#speed">How fast it answers</a></li>
+  <li><a href="#assistant">The assistant</a></li>
+  <li><a href="#screens">Every screen</a></li>
+  <li><a href="#native">Web, then native</a></li>
+  <li><a href="#program">What the program needs</a></li>
+  <li><a href="#stages">Stages</a></li>
+  <li><a href="#not">What it does not do</a></li>
+  <li><a href="#open-q">Open questions</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="principles">Principles</h2>
+<p>The editor follows Bret Victor's design work, starting from his principle that <q>creators need an immediate connection to what they create</q> (<cite>Inventing on Principle</cite>, 2012). Each idea below is how that work applies to a terrain tile.</p>
+<div class="grid2">
+  <div class="card"><h3>See it change as you change it</h3><p>A change shows in the view while your hand is still on it: the line moves as you drag its point, the rocks grow as you drag their size. Where the full build is too slow for that, the view answers at once with what it can, a draft, and the full build follows (<a href="#speed">how fast it answers</a>).</p></div>
+  <div class="card"><h3>Show the state</h3><p>Nothing a tile depends on is hidden. Lines, regions and fill points are drawn on the plate; each stack entry shows what it reads and writes; the gate's verdict and the overhang paint are always on. From <cite>Learnable Programming</cite>: the reader should never have to simulate the program in their head.</p></div>
+  <div class="card"><h3>Point at the thing</h3><p>The view and the text are two faces of one tile, linked both ways. Point at a stone and you see the words that made it; point at the words and you see the stones. You change a tile by touching it, and the touch is written down as text you can read.</p></div>
+  <div class="card"><h3>Make by reacting</h3><p>You rarely start from nothing: you start from a library tile, or from a choice the editor shows you. Completion shows what each element and each word makes, with its picture. Seeds and sweeps lay out several versions to choose between.</p></div>
+  <div class="card"><h3>Up and down the ladder</h3><p>From one build, step up to the same tile at eight seeds, or across the whole range of one control, and step back down by clicking the one you want (<cite>Up and Down the Ladder of Abstraction</cite>).</p></div>
+  <div class="card"><h3>Ask for little</h3><p>From <cite>Magic Ink</cite>: good information software needs as little interaction as possible. The editor shows what matters without being asked, keeps no hidden modes, and gives each gesture one meaning everywhere.</p></div>
+</div>
+<p>Two rules come from dharmatiles itself:</p>
+<ul>
+  <li><strong>The text is the tile.</strong> The editor never holds a second model of the tile. Every gesture becomes an edit to the document, made by the same format-preserving editor that keeps your layout and comments (<code>dt-doc</code>'s <code>edit.rs</code>). The file opens in any text editor and any change there shows in the view.</li>
+  <li><strong>The gate is a gate.</strong> The editor shows overhang, it never hides it, and it never offers to loosen a limit. Red and orange mean overhang only; the editor's own colour for selection and handles is brass.</li>
+</ul>
+
+<h2 id="five">Five controls</h2>
+<p>The whole editor is five things. Each does several jobs, and each works the same on every screen.</p>
+<figure class="diagram">
+<svg class="wf" viewBox="0 0 880 500" role="img" aria-label="The editor on a desktop: the document on the left, the tile on the plate in the middle with a rock selected and its lens beside it, the stack on the right, the bar along the bottom of the view, and the title with the gate's verdict along the top.">
+  <rect class="frame" x="1" y="1" width="878" height="498" rx="8"/>
+  <!-- title -->
+  <text class="t" x="18" y="27" style="font-weight:600">water+grass</text><text class="s" x="104" y="27">▾  My tiles</text>
+  <rect class="raised" x="716" y="12" width="150" height="24" rx="12"/><circle cx="732" cy="24" r="4" style="fill:var(--ok)"/><text class="ok" x="742" y="28">passes · band 0.03%</text>
+  <line class="hair" x1="1" y1="46" x2="879" y2="46"/>
+  <!-- text pane -->
+  <rect class="pane" x="1" y="46" width="270" height="453"/>
+  <text class="m" x="14" y="72">tile water+grass size="1x1"</text>
+  <text class="m" x="14" y="90">  line shore wobble=5 {…}</text>
+  <text class="m" x="14" y="108">  region pool { … }</text>
+  <text class="m" x="14" y="126">  region bank { … }</text>
+  <text class="m" x="14" y="144">  stack {</text>
+  <text class="m" x="14" y="162">    dirt in=bank</text>
+  <text class="m" x="14" y="180">    grass in=bank</text>
+  <text class="m" x="14" y="198">    ground in=pool …</text>
+  <rect class="selfill" x="8" y="205" width="256" height="18" rx="3"/>
+  <text class="m" x="14" y="218">    scatter in=pool count=2 {</text>
+  <text class="m" x="14" y="236">      rock size="6..10"</text>
+  <text class="m" x="14" y="254">    }</text>
+  <text class="m" x="14" y="272">    water</text>
+  <text class="m" x="14" y="290">  }</text>
+  <text class="s" x="14" y="478">document · completion · errors at their line</text>
+  <!-- view -->
+  <polygon class="plate" points="470,130 650,225 470,320 290,225"/>
+  <polygon class="grass" points="470,150 620,228 540,270 390,192"/>
+  <polygon class="water" points="390,192 540,270 470,306 320,228"/>
+  <ellipse class="rock" cx="430" cy="252" rx="16" ry="10"/>
+  <ellipse class="rock" cx="468" cy="270" rx="12" ry="8"/>
+  <ellipse class="sel" cx="430" cy="252" rx="20" ry="14"/>
+  <path class="dash" d="M448,246 L520,186"/>
+  <!-- lens -->
+  <rect class="raised" x="520" y="120" width="170" height="104" rx="6"/>
+  <text class="b" x="532" y="140">scatter · rock 1 of 2</text>
+  <text class="t" x="532" y="162">count</text><text class="m" x="620" y="162">‹ 2 ›</text>
+  <text class="t" x="532" y="182">size</text><text class="m" x="620" y="182">6‥10 mm</text>
+  <text class="t" x="532" y="202">seed</text><text class="m" x="620" y="202">⚄ 97</text>
+  <text class="s" x="532" y="218">+ 4 more · pin this one</text>
+  <!-- bar -->
+  <rect class="raised" x="300" y="440" width="380" height="34" rx="17"/>
+  <text class="s" x="320" y="461" style="font-size:12px">Type an element, a command, or ask…</text>
+  <text class="s" x="300" y="490">the bar: place · command · completion · ask</text>
+  <!-- stack -->
+  <rect class="pane" x="700" y="46" width="179" height="453"/>
+  <text class="s" x="714" y="68">stack, as the plan runs it</text>
+  <g>
+    <rect class="raised" x="710" y="78" width="160" height="28" rx="4"/><text class="t" x="720" y="96">dirt</text><text class="s" x="790" y="96">in bank</text>
+    <rect class="raised" x="710" y="112" width="160" height="28" rx="4"/><text class="t" x="720" y="130">ground</text><text class="s" x="790" y="130">in pool</text>
+    <rect class="raised" x="710" y="146" width="160" height="28" rx="4" style="stroke:var(--brass);stroke-width:2"/><text class="b" x="720" y="164">scatter</text><text class="s" x="790" y="164">in pool · 2</text>
+    <rect class="raised" x="710" y="180" width="160" height="28" rx="4"/><text class="t" x="720" y="198">grass</text><text class="s" x="790" y="198">in bank</text>
+    <rect class="raised" x="710" y="214" width="160" height="28" rx="4"/><text class="t" x="720" y="232">water</text><text class="s" x="790" y="232">reads ground</text>
+  </g>
+  <path class="dash" d="M706,188 C690,180 690,168 706,162"/>
+  <text class="s" x="714" y="262">grass reads the rocks: it</text>
+  <text class="s" x="714" y="276">runs after them</text>
+  <text class="s" x="290" y="76">the view: select · drag · place</text>
+</svg>
+<figcaption>Desktop. A rock is selected: its scatter is lit in the text and the stack, and the lens beside it holds the scatter's controls.</figcaption>
+</figure>
+<div class="tbl"><table>
+<thead><tr><th>Control</th><th>What it is</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><strong>The view</strong></td><td>The tile on the plate, as the preview shows it today.</td><td>Orbit, pan and zoom as now. Click to select, click again to climb to what contains it. Drag a handle to move a point. In placing, click to put the thing there.</td></tr>
+<tr><td><strong>The lens</strong></td><td>A small card beside the selection.</td><td>The selected entry's controls as values you drag or pick. It appears with a selection and goes with it.</td></tr>
+<tr><td><strong>The text</strong></td><td>The document, in a code editor.</td><td>Typing, completion, errors at their line, and the other face of every selection.</td></tr>
+<tr><td><strong>The stack</strong></td><td>The stack's entries in the order the plan runs them.</td><td>Select an entry, mute it, drag it into another order; see what it reads and writes.</td></tr>
+<tr><td><strong>The bar</strong></td><td>One line to type into, at the foot of the view.</td><td>An element name starts placing it; a command runs (<kbd>build</kbd>, <kbd>seeds</kbd>, <kbd>system ol</kbd>); anything else is a request to the assistant.</td></tr>
+</tbody></table></div>
+<p>The title, at the top, names the tile and opens the list of tiles (My tiles and the Library, as in the preview today). The gate's verdict sits at the other end of the title. There is no toolbar, no menu bar and no mode switch.</p>
+
+<h2 id="open">Opening a tile</h2>
+<ul>
+  <li><code>dharmatiles</code>, <code>dharmatiles preview my-tile.dtile</code> and picking a tile in the list all open the same view, with the tile and its document. There is no separate edit command and no edit mode: a tile you can see is a tile you can change.</li>
+  <li><strong>Your own tiles</strong> (in <code>$DT_HOME</code>, else <code>~/dharmatiles</code>, or a file you named) are changed in place. Each finished gesture (a drag released, a click placed, a pause in typing) writes the file.</li>
+  <li><strong>Library tiles</strong> open read-only. The first change offers one choice, <em>Make it mine</em>, which copies the document (and the parts it uses stay <code>lib:</code> references) into My tiles under the same name and carries on with the change there. The library is never written by the editor.</li>
+  <li><strong>Other editors.</strong> The file is still watched. A save from another editor while the page has no unsaved typing simply loads. If the page has unsaved typing, a line over the text says the file changed on disk and offers to load it or keep yours.</li>
+  <li><strong>Undo</strong> is one history for every kind of change, in the view, in the text or by the assistant: <kbd>⌘Z</kbd> and <kbd>⇧⌘Z</kbd>, or the two-finger tap and three-finger tap on a touch screen. Each step is a text change, so undo is exact.</li>
+</ul>
+
+<h2 id="select">Selecting</h2>
+<p>Every solid in a build already carries the stack path that made it (its tag's <code>owner</code>, such as <code>tile/water+grass/scatter#1/2</code>), and every triangle of the final mesh keeps which solid it came from. That is enough to go from any point on the tile to the words that made it.</p>
+<ul>
+  <li><strong>Hover</strong> lifts the thing under the pointer with a thin brass outline and names it in the bar's hint ("rock 2 of scatter in pool").</li>
+  <li><strong>Click</strong> selects it. The entry is lit in the stack and its node in the text is marked, scrolled into view if needed. The lens opens beside it.</li>
+  <li><strong>Click again on the same spot</strong> climbs: a rock, then its scatter, then the region it stands in, then the tile. <kbd>Esc</kbd> or a click on empty plate clears the selection.</li>
+  <li><strong>In the text</strong>, putting the cursor in a node selects it in the view; hovering a node outlines its geometry without selecting it.</li>
+  <li><strong>On the plate</strong>, lines, fill points and regions are drawn as a thin overlay, and are selected like any solid.</li>
+  <li><strong>One of many.</strong> Picking a single rock out of a scatter shows <em>pin this one</em> in the lens: the rock becomes its own entry with an <code>at=</code> where it stands, and the scatter's count drops by one, so the rest stay where they were.</li>
+</ul>
+
+<h2 id="lens">Changing: the lens</h2>
+<p>The lens shows the controls the document sets on the selected entry, and a line <em>+ more</em> that opens every other control the element takes, faint, at its default. Everything in it comes from the element schema (<code>dharmatiles elements --json</code>), so a new control appears in the lens the day it is added to the schema.</p>
+<div class="tbl"><table>
+<thead><tr><th>Kind of value</th><th>In the lens</th></tr></thead>
+<tbody>
+<tr><td>Number</td><td>Drag left and right to scrub (<kbd>⇧</kbd> for fine), or click to type. The view follows while you drag.</td></tr>
+<tr><td>Range (<code>6..10</code>)</td><td>Two ends to drag, and the middle to slide both.</td></tr>
+<tr><td>Word (<code>wear=worn</code>)</td><td>A row of the element's words, each with its one-line description; hover a word to try it in the view.</td></tr>
+<tr><td>Point (<code>at=</code>)</td><td>A handle on the plate (see <a href="#place">placing</a>), and the numbers here.</td></tr>
+<tr><td>Region or line (<code>in=</code>, <code>along=</code>)</td><td>The document's names; hover one to light it on the plate.</td></tr>
+<tr><td>Seed</td><td>A die: click for the next seed, drag to run through seeds.</td></tr>
+</tbody></table></div>
+<p>Setting a control back to its default removes it from the text. The lens never shows a value the document does not hold, apart from the faint defaults under <em>+ more</em>. Each control's name links to its line on the element's page.</p>
+<p>The same scrubbing works in the text: hold <kbd>⌥</kbd> and drag any number in the document.</p>
+
+<h2 id="place">Placing and drawing</h2>
+<figure class="diagram">
+<svg class="wf" viewBox="0 0 880 250" role="img" aria-label="Three gestures on the plate: placing a rock, drawing a line through points, and adding a fill point to make a region.">
+  <g transform="translate(10,10)">
+    <rect class="frame" x="0" y="0" width="276" height="230" rx="6"/>
+    <rect class="plate" x="28" y="28" width="220" height="150"/>
+    <ellipse class="rock" cx="96" cy="88" rx="14" ry="10"/>
+    <circle cx="170" cy="116" r="16" class="dash"/><circle cx="170" cy="116" r="2" style="fill:var(--brass)"/>
+    <text class="m" x="28" y="200">+ rock at="0.64,0.42"</text>
+    <text class="s" x="28" y="218">type rock, click the plate</text>
+  </g>
+  <g transform="translate(302,10)">
+    <rect class="frame" x="0" y="0" width="276" height="230" rx="6"/>
+    <rect class="plate" x="28" y="28" width="220" height="150"/>
+    <path class="line" d="M28,120 C80,100 120,140 170,104 S230,80 248,86"/>
+    <circle class="handle" cx="28" cy="120" r="5"/><circle class="handle" cx="120" cy="124" r="5"/><circle class="handle" cx="248" cy="86" r="5"/>
+    <text class="s" x="18" y="140" style="fill:var(--plate-ink)">west</text><text class="s" x="232" y="76" style="fill:var(--plate-ink)">east</text>
+    <text class="m" x="28" y="200">line shore { through west … east }</text>
+    <text class="s" x="28" y="218">type line, click points; edges snap to words</text>
+  </g>
+  <g transform="translate(594,10)">
+    <rect class="frame" x="0" y="0" width="276" height="230" rx="6"/>
+    <rect class="plate" x="28" y="28" width="220" height="150"/>
+    <path class="grass" d="M28,28 H248 V86 C230,80 200,90 170,104 C120,140 80,100 28,120 Z"/>
+    <path class="line" d="M28,120 C80,100 120,140 170,104 S230,80 248,86"/>
+    <circle cx="120" cy="64" r="5" style="fill:var(--brass)"/>
+    <text class="t" x="132" y="68" style="fill:var(--plate-ink)">bank</text>
+    <text class="m" x="28" y="200">region bank { fill "0.4,0.8" }</text>
+    <text class="s" x="28" y="218">type region, click inside the lines</text>
+  </g>
+</svg>
+<figcaption>Placing, drawing a line, and filling a region. Each writes one node into the text.</figcaption>
+</figure>
+<ul>
+  <li><strong>Place a thing.</strong> Type an element in the bar (<code>rock</code>, <code>tree</code>, <code>boulder</code>, or a definition such as <code>oak</code>). Its footprint follows the pointer across the tile's surface; a click writes <code>rock at="x,y"</code> into the stack, in squares from the south-west corner as the language has it, and the draft build shows it at once. Click again to place another; <kbd>Esc</kbd> stops. Dragging a box instead of clicking writes a range (<code>at="0.4..0.8,0.2..0.5"</code>): the thing goes somewhere in it, by seed.</li>
+  <li><strong>Place many.</strong> Type <code>scatter</code> and drag over a region; it writes <code>scatter in=pool count=3 { rock }</code> and opens the lens on its count.</li>
+  <li><strong>Paint a surface.</strong> Type <code>dirt</code>, <code>ground</code>, <code>floor</code> or <code>water</code> and click a region: it writes the entry with <code>in=</code> that region.</li>
+  <li><strong>Draw a line.</strong> Type <code>line</code>, then click points on the plate; <kbd>Enter</kbd> or a double-click ends it. A point dropped on an edge or a corner snaps and is written as its word (<code>west</code>, <code>south-east</code>). The line's <code>wobble</code> shows as a faint band either side.</li>
+  <li><strong>Make a region.</strong> Type <code>region</code> and click inside an area the lines enclose: it writes the region with a fill point there, and a name to type over. Click another area to add a second fill point to the same region.</li>
+  <li><strong>Move things.</strong> A selected line shows its points as handles; a region its fill points; a placed thing its <code>at=</code>. Dragging a handle rewrites that point. The overlay moves at once, before any build.</li>
+</ul>
+<p>Where the plan cares about order, a new entry is put where the plan can run it; the plan orders the stack by what each element reads and writes, so the place in the text is for the reader.</p>
+
+<h2 id="text">The text</h2>
+<p>The text pane is a code editor (CodeMirror 6, vendored with the page like three.js, with a KDL v2 grammar). It is a full editor for people who prefer to type, and everything in it is fed by the program.</p>
+<ul>
+  <li><strong>Completion everywhere</strong>, from the element schema: the elements a stack can hold at this point; an element's controls with their unit, default and one-line help; a word control's words with their descriptions; the document's own line and region names after <code>in=</code>, <code>along=</code> and <code>bounded-by</code>; edge and corner words; <code>lib:</code> parts; level names in expressions. Completing an element inserts the controls it must have, with the cursor on the first.</li>
+  <li><strong>Pictures in completion.</strong> Each element in the list shows its picture from its element page, so you choose by what it makes.</li>
+  <li><strong>Errors as you type.</strong> The program's checker (read and plan, no build) runs on every pause in typing, and its errors appear at their span with the same text and help as <code>dharmatiles check</code>. The view keeps the last good build until the text checks again.</li>
+  <li><strong>Hover</strong> a control for its line from the element page and a link to the page.</li>
+  <li><strong>Folding and outline</strong> follow the document's nodes; the stack pane is the outline of the stack.</li>
+  <li><strong>Edits from the view</strong> arrive as ordinary changes with your cursor kept, and a short brass flash on the changed text so you see what a gesture wrote.</li>
+</ul>
+
+<h2 id="stack">The stack and the map</h2>
+<ul>
+  <li><strong>The stack pane</strong> lists the entries in the order the plan runs them, which is not always the order of the text (grass written before the rocks it grows round runs after them). Each row has the element, its place words (<code>in pool</code>, <code>along shore</code>) and, for a scatter, its count.</li>
+  <li><strong>Reads and writes.</strong> Hovering a row draws a thin line to each row it reads from: water reads the ground under it, grass reads the rocks it must part round. A read nothing can satisfy, which <code>check</code> refuses, is the row's error.</li>
+  <li><strong>Mute</strong> a row (its eye) to see the tile without it: the editor writes KDL's <code>/-</code> before the node, so the document says exactly what is muted.</li>
+  <li><strong>Drag</strong> a row to move its node in the text.</li>
+  <li><strong>Definitions</strong> (<code>use</code> and <code>define</code>) show as a row that opens to the entries inside, read-only when they come from the library.</li>
+  <li><strong>The map</strong> is not another pane. Turn the view to the top (<kbd>2</kbd>) and the overlay becomes a map: regions tinted by what fills them, their names, the lines with their widths and wobble, fill points, and placed things' footprints. The same overlay drapes over the tile in every other view, fainter.</li>
+</ul>
+
+<h2 id="gate">The gate, always in view</h2>
+<p>The gate's verdict is in the title at all times: <em>passes</em>, or what fails, with the band and overhang figures. The overhang paint is always on, as in the preview.</p>
+<ul>
+  <li><strong>Click the verdict</strong> to go to the worst patch: the view turns to it and selects the entry that made it, because every overhanging triangle knows its solid. The lens is then on the controls most likely to cure it.</li>
+  <li>A draft build is marked <em>draft</em> next to the verdict; the gate's verdict always comes from a full build.</li>
+</ul>
+
+<h2 id="ladder">Many versions at once</h2>
+<ul>
+  <li><strong>Seeds.</strong> <kbd>seeds</kbd> in the bar, or a long press on the seed's die, lays a strip of eight small views under the main one: the same tile at the next eight seeds, turned together with the main view. Click one to take its seed.</li>
+  <li><strong>Sweeps.</strong> A long press on any number in the lens sweeps it: five small views across the control's range, from its lowest to its highest sensible value. Click one to take its value, or drag between them.</li>
+  <li><strong>Compare.</strong> <kbd>compare</kbd> pins the current build beside the next one, so a change can be judged side by side.</li>
+</ul>
+<p>The small views are draft builds, made one after another in the background; the strip fills in as they arrive.</p>
+
+<h2 id="speed">How fast it answers</h2>
+<p>A full build takes from about a second for a plain tile to minutes for trees. The editor never waits for it with nothing to show. It answers in three steps, each replacing the one before:</p>
+<div class="tiers">
+  <div class="tier"><div class="when">At once</div><p><strong>The overlay.</strong> Lines, fill points, regions and placed footprints are drawn by the page from the plan, and move with the hand. Checking the text (read and plan) takes milliseconds.</p></div>
+  <div class="tier"><div class="when">Under a second</div><p><strong>A draft build</strong> at fewer cells per square, with fine detail (grass blades, leaves, pebbles) shown as light stand-in volumes, and only the stack entries the change touches rebuilt. Marked <em>draft</em>.</p></div>
+  <div class="tier"><div class="when">When ready</div><p><strong>The full build</strong>, which the gate judges. It starts when the hand lets go, and the view swaps to it without moving the camera, as the preview does today.</p></div>
+</div>
+<p>The second step does not exist yet: draft builds and per-entry rebuilds are on the <a href="../roadmap.html#editor">roadmap</a> as the first work for the editor. Until they exist, the editor works with the first and third steps.</p>
+
+<h2 id="assistant">The assistant</h2>
+<p>With an API key for a language model, the bar also takes requests in words: <em>put three mossy rocks on the left bank</em>, <em>make the shore wander more</em>, <em>why is this red?</em>. The model works through the same edits as every other gesture, so what it does is text you can read, and one undo takes it back.</p>
+<ul>
+  <li><strong>Asking.</strong> Anything typed in the bar that is not an element or a command is a request; the bar shows <em>Ask</em> before you send it. <kbd>⌥Enter</kbd> sends anything as a request.</li>
+  <li><strong>What it sees.</strong> The document, the selection (so <em>these rocks</em> means the selected ones), the plan, the gate's verdict, and on request pictures of the current build from any view, painted with overhang as the view paints it.</li>
+  <li><strong>What it can do.</strong> The tools the program's MCP server already offers (check a document, list and describe elements, build, render, audit) and the document edits: set or remove a control, add or remove a node. It can change only the open document. It can read the library and the element pages.</li>
+  <li><strong>What you see.</strong> Its answer in a small card over the bar; each change it makes lands in the text with the brass flash, and the view rebuilds as for any other change. All the changes of one request are one undo step, named after the request.</li>
+  <li><strong>Fixing what the gate refuses.</strong> After its change builds, the assistant is given the gate's verdict and may try again, up to a small number of times, before it reports what it did.</li>
+  <li><strong>The key</strong> is entered once in settings (the title's menu), and kept by the program in your config folder (on macOS, in the Keychain once the app is native). The program, not the page, talks to the provider, so the key never sits in the browser, and nothing is sent anywhere else. The assistant shows how much each request used.</li>
+  <li><strong>The model.</strong> Claude by default, with the provider and model chosen in settings.</li>
+</ul>
+
+<h2 id="screens">Every screen</h2>
+<p>The same five controls on every screen, rearranged. The view always has the most room.</p>
+<figure class="diagram">
+<svg class="wf" viewBox="0 0 880 400" role="img" aria-label="The editor on a tablet and on a phone. On the tablet the view fills the screen, the stack is a narrow column at the right, and the text slides in from the left. On the phone the view fills the screen and a sheet at the bottom holds the bar, the lens and the text, at three heights.">
+  <!-- tablet -->
+  <g transform="translate(10,10)">
+    <rect class="frame" x="0" y="0" width="470" height="350" rx="14"/>
+    <text class="t" x="18" y="26" style="font-weight:600">water+grass ▾</text>
+    <rect class="raised" x="356" y="12" width="100" height="22" rx="11"/><text class="ok" x="368" y="27">passes</text>
+    <polygon class="plate" points="230,90 380,170 230,250 80,170"/>
+    <polygon class="grass" points="230,108 354,172 288,206 164,142"/>
+    <polygon class="water" points="164,142 288,206 230,236 106,172"/>
+    <ellipse class="rock" cx="196" cy="190" rx="13" ry="8"/><ellipse class="sel" cx="196" cy="190" rx="17" ry="12"/>
+    <rect class="raised" x="214" y="200" width="120" height="66" rx="6"/>
+    <text class="b" x="224" y="218">scatter</text><text class="t" x="224" y="238">count</text><text class="m" x="280" y="238">‹ 2 ›</text><text class="t" x="224" y="256">size</text><text class="m" x="280" y="256">6‥10</text>
+    <rect class="pane" x="404" y="46" width="58" height="230" rx="6"/>
+    <rect class="raised" x="410" y="56" width="46" height="22" rx="3"/><rect class="raised" x="410" y="84" width="46" height="22" rx="3"/><rect class="raised" x="410" y="112" width="46" height="22" rx="3" style="stroke:var(--brass);stroke-width:2"/><rect class="raised" x="410" y="140" width="46" height="22" rx="3"/><rect class="raised" x="410" y="168" width="46" height="22" rx="3"/>
+    <rect class="pane" x="0" y="46" width="22" height="230"/><text class="s" x="6" y="166">‹</text>
+    <rect class="raised" x="100" y="296" width="270" height="32" rx="16"/><text class="s" x="118" y="316">Type an element, a command, or ask…</text>
+    <text class="s" x="18" y="344">text slides in from the left edge; stack shrinks to its icons</text>
+  </g>
+  <!-- phone peek -->
+  <g transform="translate(504,10)">
+    <rect class="frame" x="0" y="0" width="170" height="350" rx="22"/>
+    <text class="t" x="14" y="30" style="font-weight:600;font-size:11px">water+grass ▾</text>
+    <circle cx="152" cy="26" r="5" style="fill:var(--ok)"/>
+    <polygon class="plate" points="85,90 155,128 85,166 15,128"/>
+    <polygon class="grass" points="85,100 142,129 112,145 55,116"/>
+    <polygon class="water" points="55,116 112,145 85,159 28,130"/>
+    <ellipse class="rock" cx="70" cy="138" rx="7" ry="4"/><ellipse class="sel" cx="70" cy="138" rx="10" ry="7"/>
+    <rect class="raised" x="0" y="248" width="170" height="102" rx="16"/>
+    <rect x="70" y="255" width="30" height="4" rx="2" style="fill:var(--line-2)"/>
+    <text class="b" x="14" y="280">scatter · rock 1 of 2</text>
+    <text class="t" x="14" y="300">count ‹ 2 ›  size 6‥10</text>
+    <rect class="pane" x="10" y="312" width="150" height="28" rx="14"/><text class="s" x="22" y="330">Type or ask…</text>
+  </g>
+  <!-- phone full -->
+  <g transform="translate(700,10)">
+    <rect class="frame" x="0" y="0" width="170" height="350" rx="22"/>
+    <polygon class="plate" points="85,44 125,66 85,88 45,66"/>
+    <rect class="raised" x="0" y="96" width="170" height="254" rx="16"/>
+    <rect x="70" y="103" width="30" height="4" rx="2" style="fill:var(--line-2)"/>
+    <text class="s" x="14" y="126">stack · text</text>
+    <text class="m" x="14" y="148" style="font-size:9.5px">stack {</text>
+    <text class="m" x="14" y="164" style="font-size:9.5px">  dirt in=bank</text>
+    <text class="m" x="14" y="180" style="font-size:9.5px">  grass in=bank</text>
+    <rect class="selfill" x="10" y="186" width="150" height="16" rx="3"/>
+    <text class="m" x="14" y="198" style="font-size:9.5px">  scatter in=pool count=2</text>
+    <text class="m" x="14" y="214" style="font-size:9.5px">    rock size="6..10"</text>
+    <text class="m" x="14" y="230" style="font-size:9.5px">  water</text>
+    <rect class="pane" x="10" y="312" width="150" height="28" rx="14"/><text class="s" x="22" y="330">Type or ask…</text>
+  </g>
+  <text class="s" x="10" y="392">Tablet, landscape</text>
+  <text class="s" x="504" y="392">Phone: the sheet low</text>
+  <text class="s" x="700" y="392">Phone: the sheet high</text>
+</svg>
+<figcaption>Tablet and phone. On a phone the lens, the stack and the text share one sheet at the foot of the screen; pull it up for more, and the tile stays in view above it. The bar is at the foot of the view on every screen, where a thumb reaches it.</figcaption>
+</figure>
+<div class="tbl"><table>
+<thead><tr><th>Screen</th><th>Layout</th></tr></thead>
+<tbody>
+<tr><td>Wide (1100 px and more)</td><td>Text, view and stack side by side; the text and the stack panes can be dragged narrower or closed to an edge.</td></tr>
+<tr><td>Medium (700–1100 px)</td><td>The view fills the screen; the stack is a narrow column of icons on the right that opens on hover or tap; the text slides in from the left edge and covers part of the view.</td></tr>
+<tr><td>Narrow (under 700 px)</td><td>The view fills the screen; a sheet at the bottom holds the bar, then the lens, then the stack and the text, at three heights: low (the bar and the selection's name), half (the lens) and high (the stack and the text, with the tile still visible above).</td></tr>
+</tbody></table></div>
+<div class="tbl"><table>
+<thead><tr><th>Touch</th><th>Does</th></tr></thead>
+<tbody>
+<tr><td>One finger drag</td><td>Orbit; on a handle, move it</td></tr>
+<tr><td>Two fingers</td><td>Pan and pinch to zoom</td></tr>
+<tr><td>Tap</td><td>Select; tap again to climb</td></tr>
+<tr><td>Long press</td><td>On the tile while placing, place; on a value, sweep it</td></tr>
+<tr><td>Two-finger tap, three-finger tap</td><td>Undo, redo</td></tr>
+</tbody></table></div>
+<p>Everything works with a keyboard alone too: <kbd>/</kbd> goes to the bar, <kbd>Tab</kbd> moves between the panes, the arrow keys move a selected handle by one cell, and the preview's view keys stay as they are. Focus is always visible; with reduced motion set, nothing animates.</p>
+
+<h2 id="native">Web, then native</h2>
+<p>The editor is one web page served by the program, as the preview is. It stays one page through every step:</p>
+<ol>
+  <li><strong>In the browser</strong>, from <code>dharmatiles</code> on your own machine. This is the first version, and stays.</li>
+  <li><strong>A desktop app</strong> (Tauri): the same page in a window, with the program inside the app instead of behind a port. It adds files opened from Finder, the Keychain for the key, and a menu bar with the same commands as the bar.</li>
+  <li><strong>Tablets and phones</strong>: view and edit first, built by the program on your computer over the local network, with a pairing code shown on the computer. This needs the smaller meshes on the roadmap (a 2×2 grass tile is 140 MB today). Building on the tablet itself comes later, and needs a mesh library that runs there.</li>
+</ol>
+
+<h2 id="program">What the program needs</h2>
+<p>Most of the editor is the page. These are the program's parts, each small, built on what exists:</p>
+<div class="tbl"><table>
+<thead><tr><th>Need</th><th>Built on</th></tr></thead>
+<tbody>
+<tr><td>The mesh carries, for each triangle, which stack entry made it (a table of owner paths and an index per triangle).</td><td>Solid tags and the per-triangle source ids the materials already use.</td></tr>
+<tr><td>The plan for the page: lines as polylines, regions as masks, fill points, footprints, each entry's reads and writes, and the spans of every node.</td><td><code>dt-eval::check</code> and <code>dt-doc</code>'s spans.</td></tr>
+<tr><td>An edit call: a list of edits in, the new text and its changed ranges out.</td><td><code>dt-doc</code>'s <code>edit.rs</code>; adding and removing a node, and <code>/-</code>, are new.</td></tr>
+<tr><td>Building from text the page sends, without writing the file, for drafts and sweeps.</td><td>The preview's build worker.</td></tr>
+<tr><td>Writing the file, refused if it changed since the page read it.</td><td>The file watcher.</td></tr>
+<tr><td>Draft builds and per-entry rebuilds.</td><td>The stack's slot order, which already fixes every solid's id.</td></tr>
+<tr><td>The assistant: a streamed conversation with the provider, the tools, the key in settings.</td><td>The MCP server's tools.</td></tr>
+<tr><td>Protection for writes. Today the server checks that the request's <code>Host</code> is the loopback, which stops DNS rebinding but not a web page elsewhere posting to <code>127.0.0.1</code>. Writing files needs more: a secret made at start and given only to the page, and a check of the request's <code>Origin</code>.</td><td>The preview server.</td></tr>
+</tbody></table></div>
+
+<h2 id="stages">Stages</h2>
+<p>Each stage is usable on its own, and ends when it is used to make a real tile.</p>
+<ol>
+  <li><strong>Select.</strong> Owner paths in the mesh; hover, click and climb; the stack pane; the text pane read-only, linked both ways.</li>
+  <li><strong>Edit.</strong> The text pane editable with completion and errors; the lens; writing the file; one undo; <em>Make it mine</em>; the write protection.</li>
+  <li><strong>Draft.</strong> Draft builds and per-entry rebuilds, so the lens answers while you drag.</li>
+  <li><strong>Place and draw.</strong> The bar; placing, scattering, painting; lines and regions on the plate; handles; the map overlay; reads and writes in the stack.</li>
+  <li><strong>The gate and the ladder.</strong> The verdict that jumps to the worst patch; seeds, sweeps and compare.</li>
+  <li><strong>The assistant.</strong></li>
+  <li><strong>Every screen</strong>: the medium and narrow layouts and touch, tested on a tablet and a phone against a build on the computer.</li>
+  <li><strong>The desktop app</strong>, then the tablet and phone over the network.</li>
+</ol>
+
+<h2 id="not">What it does not do</h2>
+<ul>
+  <li><strong>No second model.</strong> No hidden scene, no project file, no state that is not in the document (apart from the camera, the selection and the panes, which the browser remembers).</li>
+  <li><strong>No property sheet for everything.</strong> The lens holds one entry's controls, beside it; there is no panel listing every control of every entry.</li>
+  <li><strong>No node graph.</strong> The stack is a list, and the plan orders it; its reads and writes are drawn on hover, not wired by hand.</li>
+  <li><strong>No modes.</strong> Placing ends with a click elsewhere or <kbd>Esc</kbd>; there is no edit mode, select tool or move tool.</li>
+  <li><strong>No sculpting.</strong> You do not push vertices. You change what a tile is made of, and the program grows the geometry; that is what keeps every tile printable.</li>
+  <li><strong>No loosening the gate.</strong> Nothing in the editor turns a limit off or hides overhang.</li>
+</ul>
+
+<h2 id="open-q">Open questions</h2>
+<ul>
+  <li>Whether a placed thing is written as its own entry each time (<code>rock at=…</code>, three rocks, three lines) or gathered into one <code>scatter</code> with listed points, which the language does not have yet.</li>
+  <li>Whether the editor writes the file on every finished gesture, as designed here, or keeps changes until <kbd>⌘S</kbd>.</li>
+  <li>How a new tile starts: from a copy of a library tile only, or also from a blank tile of a chosen size.</li>
+  <li>Whether the assistant's changes apply at once (as designed) or wait for you to accept them.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>

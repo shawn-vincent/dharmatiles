@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Roadmap</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+<style>
+  .road { list-style: none; padding: 0; margin: 12px 0 22px; display: grid; gap: 10px; }
+  .road li { max-width: 78ch; padding-left: 0; }
+  .road li > .st { margin-right: 8px; vertical-align: 1px; }
+  .road li > strong { font-weight: 600; }
+  .road .why { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .st-plain { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--muted); }
+  .st-idea { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 14px 0 6px; font-size: 14px; }
+  .legend span.st { margin-right: 6px; }
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html" aria-current="page">Roadmap</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">What is not done yet</div>
+  <h1>Roadmap</h1>
+  <p class="lede">Everything outstanding: what is not built, what is built but short of its target, what is failing, the ideas waiting for a decision, and the work on the program itself. When an item is done it leaves this page and the page it belongs to says what the program now does.</p>
+  <div class="legend">
+    <div><span class="st st-risk">Failing</span>a test or a target that does not pass today</div>
+    <div><span class="st st-proposed">Designed</span>the design is written; it needs building</div>
+    <div><span class="st st-plain">Planned</span>agreed, not started</div>
+    <div><span class="st st-idea">Idea</span>worth doing; not yet agreed</div>
+    <div><span class="st st-owner">Needs Shawn</span>a decision or an action only Shawn can take</div>
+  </div>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#next">Where to start</a></li>
+  <li><a href="#editor">The editor</a></li>
+  <li><a href="#language">The language</a></li>
+  <li><a href="#elements">Elements</a></li>
+  <li><a href="#targets">Targets not met</a></li>
+  <li><a href="#printing">Printing and slicers</a></li>
+  <li><a href="#release">Releases and platforms</a></li>
+  <li><a href="#code">The code</a></li>
+  <li><a href="#questions">Open questions</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="next">Where to start</h2>
+<p>The order these are best taken in. Each one is described in its section below.</p>
+<ol>
+  <li><strong>Rerun the slow tests</strong> and fix the OpenLOCK failure, so everything after starts from green.</li>
+  <li><strong>Draft builds and per-entry rebuilds.</strong> The editor's live feel depends on them, and they make every element faster to iterate.</li>
+  <li><strong>The editor</strong>, in the stages its <a href="design/editor.html">design</a> sets out: select, then edit, then place, then the assistant.</li>
+  <li><strong>Lines with <code>width=</code> and <code>along=</code></strong>, the language's biggest gap: paths, walls and streams that follow a drawn line.</li>
+  <li><strong>The first public release</strong>, once the licence for the library is decided.</li>
+</ol>
+
+<h2 id="editor">The editor</h2>
+<p>The preview becomes the editor: one view in which you see a tile, select any part of it, change it, and place new things on it, with the document's text beside it. The design is <a href="design/editor.html">The editor</a>.</p>
+<ul class="road">
+  <li><span class="st st-proposed">Designed</span><strong>Select in the view.</strong> Click a stone, a blade or a wall and the stack entry that made it, and its line in the document, light up; hover a line in the document and its geometry lights up in the view.<span class="why">Every solid already carries its stack path; the mesh needs to carry it to the page.</span></li>
+  <li><span class="st st-proposed">Designed</span><strong>Edit in place.</strong> A selected entry's controls appear beside it as values you drag; each change is written into the document's text, keeping its layout and comments, and the tile rebuilds.</li>
+  <li><span class="st st-proposed">Designed</span><strong>Place by clicking.</strong> Pick an element and click the tile to put it there; drag a line's points and a region's fill point on the plate.</li>
+  <li><span class="st st-proposed">Designed</span><strong>The document beside the view</strong>: a code editor with completion from the element schema, the checker's errors at their line as you type, and each element's page on hover.</li>
+  <li><span class="st st-proposed">Designed</span><strong>The stack and the map</strong>: the stack as the plan runs it, with what each entry reads and writes; the lines and regions drawn on the plate.</li>
+  <li><span class="st st-proposed">Designed</span><strong>One layout for every screen</strong>: desktop, tablet and phone, mouse and touch.</li>
+  <li><span class="st st-proposed">Designed</span><strong>An assistant.</strong> With your own API key, ask in words ("put three mossy rocks on the left bank") and a language model makes the change through the same edits, shows the difference, and can be undone like any other change.</li>
+  <li><span class="st st-proposed">Designed</span><strong>Seeds and sweeps</strong>: a strip of the same tile at other seeds, or across a range of one control, picked by clicking.</li>
+  <li><span class="st st-plain">Planned</span><strong>Draft builds.</strong> A quick build at fewer cells per square, with grass, leaves and other fine detail drawn as light stand-ins, so the view answers a change in well under a second. The full build follows and replaces it.</li>
+  <li><span class="st st-plain">Planned</span><strong>Per-entry rebuilds.</strong> Keep each stack entry's solids, keyed by what it read, and rebuild only the entries a change touches, then the union and the gate.</li>
+  <li><span class="st st-plain">Planned</span><strong>Smaller meshes.</strong> Indexed and quantised meshes for the view (a 2×2 grass tile is 140 MB sent whole today), needed before a view on another device.</li>
+  <li><span class="st st-plain">Planned</span><strong>Section cuts and measuring</strong> in the view.</li>
+  <li><span class="st st-idea">Idea</span><strong>Side by side</strong>: two builds of one tile, or two tiles, turned together.</li>
+  <li><span class="st st-plain">Planned</span><strong>Change the system without restarting</strong> (DungeonBlocks or OpenLOCK) from the view.</li>
+  <li><span class="st st-plain">Planned</span><strong>A desktop app</strong> that holds the same page and the program in one window (Tauri), then <strong>tablets and phones</strong>: view and edit first, building on the phone later.</li>
+</ul>
+
+<h2 id="language">The language</h2>
+<ul class="road">
+  <li><span class="st st-plain">Planned</span><strong>A line's <code>width=</code>, and building <code>along=</code> a line.</strong> Walls, paths and streams that follow a drawn line. <code>check</code> already names such lines; <code>build</code> refuses them.</li>
+  <li><span class="st st-plain">Planned</span><strong>Plan, then build.</strong> An element that places things first and builds them later, so others can read the places in between. The reeds' ripple rings need it: the water is built before the reeds, and cannot yet ring them.</li>
+  <li><span class="st st-idea">Idea</span><strong>Grass that writes the surface.</strong> Let the soil dip 0.4 mm under grass. Grass is built after the lift today, so it cannot.</li>
+  <li><span class="st st-idea">Idea</span><strong>Lift a small rock to show above grass.</strong> Grass already stands lower beside rocks; only rocks under about 3 mm would need it.</li>
+</ul>
+
+<h2 id="elements">Elements</h2>
+<h3>Controls the schema has and the build refuses</h3>
+<p>These are on their element pages, marked not built yet: <code>check</code> accepts them and <code>build</code> refuses them.</p>
+<ul class="road">
+  <li><span class="st st-plain">Planned</span><a href="elements/scatter.html"><strong>scatter</strong></a>: <code>clumps</code> (gather into clumps), <code>mostly</code> (skew every child's size), <code>spread</code> (a cluster round <code>at=</code>).</li>
+  <li><span class="st st-plain">Planned</span><a href="elements/rock.html"><strong>rock</strong></a>, <a href="elements/stone.html">stone</a>, <a href="elements/boulder.html">boulder</a>, <a href="elements/pebble.html">pebble</a>: <code>wear</code> (crisp, or chipped and rounded edges).</li>
+  <li><span class="st st-plain">Planned</span><a href="elements/cliff.html"><strong>cliff</strong></a>: the foot (<code>bank-height</code>, <code>bank-reach</code>, <code>scree</code>, <code>boulders</code>, <code>grit</code>) and the rock shape weights (columns, blocks, slabs, odd, monoliths).</li>
+</ul>
+<h3>Not built</h3>
+<ul class="road">
+  <li><span class="st st-plain">Planned</span><a href="elements/wall.html"><strong>wall</strong></a>: doors, windows and hatches; the mortar sheet behind the stones.</li>
+  <li><span class="st st-plain">Planned</span><a href="elements/floor.html"><strong>floor</strong></a>: cracks engraved in the flags.</li>
+</ul>
+<h3>Built, to be improved</h3>
+<ul class="road">
+  <li><span class="st st-plain">Planned</span><a href="elements/tree.html"><strong>tree</strong></a>: the crown reads thin; leaves under the crown lie flat instead of hanging; the crown's width and its share of the 55–65° band are tight; a tree builds slowly.</li>
+  <li><span class="st st-idea">Idea</span><a href="elements/grass.html"><strong>grass</strong></a>: rework the blades by the leaf method (what it must look like, then guarantees by construction, then iterations judged on renders).</li>
+  <li><span class="st st-plain">Planned</span><a href="elements/cliff.html"><strong>cliff</strong></a>: some builds drop a hairline shard (at most 0.01 mm³; cause not found); the guard against thin fins is not built; the rubble at the foot is thin and the columns too tidy.</li>
+</ul>
+
+<h2 id="targets">Targets not met</h2>
+<ul class="road">
+  <li><span class="st st-risk">Failing</span><strong>The OpenLOCK test.</strong> In the last full run one library tile failed the gate or the base checks when built for OpenLOCK. Find it and fix the geometry where it is made.</li>
+  <li><span class="st st-risk">Failing</span><strong>Not rerun.</strong> The golden and OpenLOCK tests have not run since the code was cleaned up and renamed. Quick checks show identical builds; the full run is owed.</li>
+  <li><span class="st st-risk">Failing</span><strong>Dirt stones' relief.</strong> The 10–40 mm band of the relief spectrum is 1.203 times its target, against an allowance of ±20%.</li>
+  <li><span class="st st-risk">Failing</span><strong>Rock texture.</strong> The printable-texture score on the rocks tile is 88–93%; the target is 95–97%.</li>
+</ul>
+
+<h2 id="printing">Printing and slicers</h2>
+<ul class="road">
+  <li><span class="st st-plain">Planned</span><strong>A file Bambu Studio cannot save over.</strong> Bambu Studio saves its project over the 3MF it opened, so the next build replaces your changes or your changes replace the build. Name each 3MF uniquely, or write the build somewhere Bambu Studio does not save.</li>
+  <li><span class="st st-plain">Planned</span><strong>OrcaSlicer and PrusaSlicer.</strong> Check that both keep the painting, and say so on <a href="standards/printing.html#colour">Printing</a>.</li>
+  <li><span class="st st-idea">Idea</span><strong>Colours through Bambu Studio's import dialog</strong>: a plain 3MF variant that carries base-material colours and no painting, for people who want Bambu Studio to match colours to their filaments.</li>
+  <li><span class="st st-owner">Needs Shawn</span><strong>A test print of the cliff</strong>, and of a painted 3MF on a multi-colour printer.</li>
+</ul>
+
+<h2 id="release">Releases and platforms</h2>
+<ul class="road">
+  <li><span class="st st-owner">Needs Shawn</span><strong>The licence for the library and its renders.</strong> The code is MIT OR Apache-2.0; the tiles and pictures are undecided, and must be decided before a public release.</li>
+  <li><span class="st st-owner">Needs Shawn</span><strong>Publish the first release</strong>: the macOS binary and a Homebrew formula are ready to build; publishing them is Shawn's.</li>
+  <li><span class="st st-plain">Planned</span><strong>Linux and Windows builds</strong>, and the same golden hashes on every system.</li>
+  <li><span class="st st-plain">Planned</span><strong>CI</strong>, once the builds are cross-platform. Until then the tests run on Shawn's Mac.</li>
+  <li><span class="st st-idea">Idea</span><strong>Building in a browser or on a phone.</strong> It needs a mesh library that compiles to WebAssembly. The pure-Rust port of Manifold does, but is slower in parallel today; measure it again on our tiles when this comes back.</li>
+</ul>
+
+<h2 id="code">The code</h2>
+<p>Tidying that makes the program easier to change. None of it changes a build.</p>
+<ul class="road">
+  <li><span class="st st-plain">Planned</span><strong>One hash.</strong> Merge the remaining copies of the FNV hash into one, checked against the golden hashes.</li>
+  <li><span class="st st-plain">Planned</span><strong>Fewer lint exceptions.</strong> 371 <code>#[allow]</code>s, many for long functions: split them where a stage boundary already exists.</li>
+  <li><span class="st st-plain">Planned</span><strong>Split the big files</strong>: grass's <code>leaves.rs</code> by stage; <code>rock.rs</code> into a <code>rock/</code> folder; the tree's <code>graph.rs</code> into <code>tree/</code>; the build driver in <code>dt-eval</code>.</li>
+  <li><span class="st st-plain">Planned</span><strong>One progress report.</strong> Three implementations of build progress become one.</li>
+  <li><span class="st st-plain">Planned</span><strong>The preview server</strong>: a read timeout on connections; the page's shared files (the theme, fonts, three.js) in one place with a generated table of what is served.</li>
+  <li><span class="st st-plain">Planned</span><strong>Leftovers</strong>: the disabled GitHub workflow still names the old parity paths; old phase tags remain in comments; a stale comment in a build script.</li>
+</ul>
+
+<h2 id="questions">Open questions</h2>
+<ul class="road">
+  <li><span class="st st-owner">Needs Shawn</span><strong>Rock shape mixes.</strong> Which mixes of rock shapes the library offers, and what they are called.</li>
+  <li><span class="st st-owner">Needs Shawn</span><strong>Fieldstone streaks.</strong> Whether fieldstone walls carry streaks of colour or texture through their courses.</li>
+  <li><span class="st st-owner">Needs Shawn</span><strong>Crown width.</strong> How wide a tree's crown may spread past its square.</li>
+  <li><span class="st st-owner">Needs Shawn</span><strong>The editor's open questions</strong>, listed at the end of <a href="design/editor.html#open">its design</a>.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>
