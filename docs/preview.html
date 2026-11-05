@@ -13,13 +13,14 @@
 <header class="hero">
   <div class="eyebrow">dharmatiles preview</div>
   <h1>Preview</h1>
-  <p class="lede">A live, painted 3D view of your tiles in the browser, with the document beside it. Click anything on the tile to see the stack entry and the line that made it. It rebuilds a tile every time you save it, paints overhang the way the printability gate sees it, and shows a mistake at its line. It is part of the program and works offline.</p>
+  <p class="lede">A live, painted 3D view of your tiles in the browser, and their editor. Click anything on the tile to see the stack entry and the line that made it, drag its values, or type in the document beside it. It rebuilds a tile every time you save it, paints overhang the way the printability gate sees it, and shows a mistake at its line. It is part of the program and works offline.</p>
   <figure class="shot"><img src="img/preview.jpg" alt="The preview: the document on the left, a painted tile on the plate in the middle with one rock selected, and the stack on the right"><figcaption>The document, the tile on the plate and its stack. A rock is selected: its scatter and its line light up with it.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#run">Run it</a></li>
   <li><a href="#shows">What it shows</a></li>
   <li><a href="#select">Selecting</a></li>
+  <li><a href="#edit">Editing</a></li>
   <li><a href="#keys">Moving round a tile</a></li>
   <li><a href="#live">Live updates</a></li>
   <li><a href="#paint">Paint</a></li>
@@ -40,7 +41,7 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <h2 id="shows">What it shows</h2>
 <ul>
   <li><strong>The title bar:</strong> the tile menu, the tile's size and base, and the gate's verdict. Click the verdict for the record: why a tile fails, and the audit's numbers.</li>
-  <li><strong>The document</strong> on the left, as written, coloured by kind. Library tiles are read only.</li>
+  <li><strong>The document</strong> on the left, as written, coloured by kind, and editable (see <a href="#edit">Editing</a>).</li>
   <li><strong>The stack</strong> on the right in build order: each entry with its element, its line, and a <kbd>?</kbd> to its element page. An entry whose geometry is all hidden under others (ground under water) says so.</li>
   <li><strong>The tile on the plate</strong>, painted like the PNG renders, with its squares ruled on the plate. The <kbd>⋯</kbd> button holds paint, overhang, wireframe, grid, projection and all nine views.</li>
   <li><strong>Overhang from the gate itself:</strong> faces between 55° and 65° are orange, faces past 65° red. The colours come from the gate's own flags, so the view and <code>build</code> cannot disagree.</li>
@@ -57,6 +58,17 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
   <li><strong>Double-click</strong>, or <kbd>f</kbd>, flies to the selection.</li>
 </ul>
 <p>Water owns the surface it fills, so clicking the pool selects the water; the ground beneath it is reached from the stack.</p>
+
+<h2 id="edit">Editing</h2>
+<p>Every change is a change to the document's text, and the text is the tile: what you change in the view you can read, and keep, in the file.</p>
+<ul>
+  <li><strong>The lens.</strong> Selecting an entry opens its controls beside it: the ones written, then the rest at their defaults, faint. Drag a number sideways to change it (<kbd>Shift</kbd> for fine steps), or click it to type. A word control is a row of its words; a switch flips; <kbd>×</kbd> takes a control out, back to its default. A scatter's lens holds its things' controls too. Only the value changes in the text: the layout and comments stay.</li>
+  <li><strong>Typing.</strong> The document is checked as you type, without building: a mistake is underlined at its line and said in words under the text. Completion offers element names at the start of a node, an element's controls on its line, and after <code>name=</code> the control's words, or the document's regions and lines. <kbd>Ctrl</kbd>-<kbd>Space</kbd> asks for it.</li>
+  <li><strong>Saved as you go.</strong> A change is written to the file half a second after it reads cleanly, and the tile rebuilds. A text with a mistake is kept in the page, unsaved, until it is fixed. If the file changes on disk under unsaved changes, you choose which to keep.</li>
+  <li><strong>One undo.</strong> <kbd>⌘Z</kbd> (<kbd>Ctrl</kbd>-<kbd>Z</kbd>) undoes typing and changes made in the lens alike; <kbd>⌘⇧Z</kbd> redoes.</li>
+  <li><strong>Make it mine.</strong> Library tiles are never written. Typing in one, or changing it in the lens, offers a copy in My tiles, its <code>use</code>s pointing back at the library; the copy opens, ready to change.</li>
+</ul>
+<p>Only a page served by this run of the program can change a file: each change carries a secret the page reads from the program, and a page from any other site is refused.</p>
 
 <h2 id="keys">Moving round a tile</h2>
 <p>Orbit with the left button, pan with the right button or <kbd>Shift</kbd>, zoom with the wheel or a pinch, toward the point under the pointer. A fling keeps turning and settles. Picking a view turns the tile there rather than cutting.</p>
@@ -83,9 +95,9 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="limits">Limits</h2>
 <ul>
-  <li>Selecting works; editing is designed but not built: see <a href="design/editor.html">the editor</a>. The document is read only for now.</li>
+  <li>Placing things by clicking the tile, drawing lines and regions, and the assistant are designed but not built: see <a href="design/editor.html">the editor</a>.</li>
   <li>Made for your own machine: the mesh is sent whole (about 94 bytes a triangle), fine on the loopback, not meant for a network.</li>
-  <li>A change rebuilds the whole tile.</li>
+  <li>A saved change rebuilds the whole tile at full quality, so a dragged value shows on the tile when the drag ends and the build finishes.</li>
   <li>No section cuts or measuring.</li>
   <li><code>--system</code> is fixed for a run; restart for the other base.</li>
 </ul>

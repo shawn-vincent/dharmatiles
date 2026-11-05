@@ -16,6 +16,7 @@ manifold-ffi = ["dt-eval/manifold-ffi", "dt-eval/manifold-parallel", "dt-kit/man
 [dependencies]
 clap.workspace = true
 dt-doc.workspace = true
+kdl.workspace = true
 dt-eval.workspace = true
 dt-kit.workspace = true
 dt-elements.workspace = true

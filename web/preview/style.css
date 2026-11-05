@@ -69,19 +69,65 @@ button { font: inherit; color: inherit; }
 #textstate { white-space: nowrap; }
 #textstate .back { background: none; border: 0; padding: 0; color: var(--brass); cursor: pointer; font-size: 12px; }
 #textstate .back:hover { text-decoration: underline; }
-#code { flex: 1; overflow: auto; padding: 8px 0 40px; font: 12.5px/1.75 var(--f-code); }
-.ln { display: flex; padding-right: 10px; cursor: pointer; white-space: pre; }
-.ln::before { content: attr(data-n); width: 38px; flex: none; text-align: right; padding-right: 12px; color: var(--line-2); }
-.ln:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+#code { flex: 1; overflow: auto; font: 12.5px/1.75 var(--f-code); position: relative; }
+/* the editor: a transparent textarea over the highlighted lines */
+.ed { position: relative; display: inline-block; min-width: 100%; min-height: 100%; vertical-align: top; }
+.hl { padding: 8px 0 40px; }
+.ln { display: block; white-space: pre; padding: 0 10px 0 50px; position: relative; tab-size: 4; }
+.ln::before { content: attr(data-n); position: absolute; left: 0; width: 38px; text-align: right; color: var(--line-2); }
 .ln.sel { background: color-mix(in srgb, var(--brass) 20%, transparent); box-shadow: inset 3px 0 0 var(--brass); }
 .ln.hov { background: color-mix(in srgb, var(--brass) 9%, transparent); }
 .ln.err { text-decoration: underline wavy var(--over); text-underline-offset: 4px; }
+.ta { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 8px 10px 40px 50px; border: 0; outline: none; resize: none; overflow: hidden; background: transparent; color: transparent; caret-color: var(--ink); font: inherit; line-height: inherit; letter-spacing: inherit; white-space: pre; tab-size: 4; -webkit-text-fill-color: transparent; }
+.ta::selection { background: color-mix(in srgb, var(--brass) 32%, transparent); }
+.ta.ro { caret-color: var(--muted); }
 .tk-n { color: var(--brass); font-weight: 600; }
 .tk-k { color: var(--water); }
 .tk-s { color: var(--moss); }
 .tk-v { color: var(--bloom); }
 .tk-c { color: var(--muted); }
 #codehint { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+#codehint.bad { color: var(--ink); box-shadow: inset 3px 0 0 var(--over); background: color-mix(in srgb, var(--over) 8%, transparent); }
+
+/* completion */
+#comp { position: fixed; z-index: 30; width: 340px; max-height: 260px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 4px; }
+#comp .it { display: grid; grid-template-columns: 12px auto minmax(0, 1fr); gap: 9px; align-items: center; padding: 5px 8px; border-radius: var(--r); cursor: pointer; }
+#comp .it.on, #comp .it:hover { background: var(--panel); }
+#comp .it .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--fam, var(--line-2)); box-shadow: none; }
+#comp .it .nm { font: 600 12.5px var(--f-code); }
+#comp .it .ds { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* the lens: the selection's controls, beside it */
+#lens { position: absolute; z-index: 4; width: 288px; max-height: calc(100% - 64px); overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 10px 12px 8px; user-select: none; }
+#lens .lt { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; }
+#lens .lt b { color: var(--brass); font-weight: 600; }
+#lens .lt a { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+#lens .grp { font-size: 12px; color: var(--muted); margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line); }
+#lens .row { display: grid; grid-template-columns: 78px minmax(0, 1fr) 14px; align-items: center; min-height: 28px; gap: 6px; }
+#lens .row .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lens .row.faint .nm, #lens .row.faint .val { opacity: .55; }
+#lens .cell { min-width: 0; display: flex; align-items: center; gap: 4px; }
+#lens .val { font: 13px var(--f-code); padding: 2px 6px; border-radius: var(--r); cursor: text; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lens .val:hover { background: color-mix(in srgb, var(--brass) 12%, transparent); }
+#lens .val.ro { cursor: default; } #lens .val.ro:hover { background: none; }
+#lens .num { border-bottom: 1px dashed var(--brass); cursor: ew-resize; touch-action: none; }
+#lens .val.ro .num { border-bottom: 0; cursor: default; }
+#lens .num.active { background: color-mix(in srgb, var(--brass) 25%, transparent); }
+#lens .unit { color: var(--muted); font: 11.5px var(--f-code); }
+#lens .words { display: flex; flex-wrap: wrap; gap: 4px; }
+#lens .words button, #lens .flip { border: 1px solid var(--line); background: none; border-radius: var(--r); padding: 0 6px; font-size: 12px; cursor: pointer; }
+#lens .words button.on, #lens .flip.on { background: var(--brass); color: var(--on-brass); border-color: var(--brass); }
+#lens button:disabled { cursor: default; opacity: .7; }
+#lens .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 15px; line-height: 1; }
+#lens .x:hover { color: var(--ink); }
+#lens .note { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
+#lens .linkish, #textstate .back { background: none; border: 0; padding: 0; color: var(--brass); cursor: pointer; font: inherit; }
+#lens .linkish:hover { text-decoration: underline; }
+#lens .more { font-size: 12px; margin-top: 6px; }
+#lens input.edit { width: 100%; font: 13px var(--f-code); background: var(--bg); color: var(--ink); border: 1px solid var(--brass); border-radius: var(--r); padding: 1px 5px; }
+#mine { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(380px, calc(100% - 32px)); }
+#mine p { margin: 0 0 12px; }
+.row-btns { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ---- the view: the plate ---- */
 #view { grid-area: view; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: radial-gradient(120% 90% at 50% 40%, var(--plate-hi), var(--plate) 60%, color-mix(in srgb, var(--plate) 88%, var(--plate-ink))); }

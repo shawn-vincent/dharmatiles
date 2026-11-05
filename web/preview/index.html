@@ -64,15 +64,21 @@
     <div id="status" hidden><div id="bar"><i id="bar-fill"></i></div><span id="status-text"></span></div>
     <div id="hint" role="status"></div>
     <div id="errors" hidden></div>
+    <div id="lens" role="dialog" aria-label="Controls of the selection" hidden></div>
     <div id="empty"><button id="choose" class="btn" type="button">Choose a tile</button></div>
+    <div class="card" id="mine" role="dialog" aria-label="Make it mine" hidden>
+      <p><b>This is a library tile.</b> Make a copy in My tiles to change it? The library stays as it is.</p>
+      <div class="row-btns"><button class="btn" id="mine-cancel" type="button">Cancel</button><button class="btn on" id="mine-ok" type="button">Make it mine</button></div>
+    </div>
   </main>
 
   <aside id="stack-pane" aria-label="The stack">
     <div class="cap">Stack <span class="muted">in build order</span></div>
     <ol id="stack"></ol>
-    <p class="hint">Click a thing in the view to select it; click again to climb to what holds it. <kbd>Esc</kbd> clears. Drag to orbit, right-drag to pan, scroll to zoom, <kbd>1</kbd>–<kbd>9</kbd> for views.</p>
+    <p class="hint">Click a thing in the view to select it; click again to climb to what holds it. Drag a number beside it sideways to change it. <kbd>Esc</kbd> clears, <kbd>⌘Z</kbd> undoes. Drag to orbit, right-drag to pan, scroll to zoom, <kbd>1</kbd>–<kbd>9</kbd> for views.</p>
   </aside>
 </div>
+<div id="comp" role="listbox" aria-label="What can go here" hidden></div>
 <script type="module" src="/js/main.js"></script>
 </body>
 </html>

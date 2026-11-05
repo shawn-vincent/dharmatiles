@@ -67,6 +67,16 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/payload.js"),
     ),
     (
+        "/js/lens.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/lens.js"),
+    ),
+    (
+        "/js/complete.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/complete.js"),
+    ),
+    (
         "/js/text.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/text.js"),

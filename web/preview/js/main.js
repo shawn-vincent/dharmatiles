@@ -9,7 +9,9 @@
 
 import { browserHost } from './host.js';
 import { parsePayload, NO_ENTRY } from './payload.js';
-import { TextPane } from './text.js';
+import { TextPane, byteToIndex } from './text.js';
+import { Lens } from './lens.js';
+import { suggest } from './complete.js';
 import { Viewer, VIEWS } from './viewer.js';
 
 const $ = (id) => document.getElementById(id);
@@ -30,7 +32,8 @@ const state = {
 window.dtPreview = { state, viewer }; // for tests and the console
 
 const tile = () => state.tiles[state.selected];
-const stackItems = () => (tile()?.plan?.stack || []).map((s) => (typeof s === 'string' ? { label: s } : s));
+// the stack of the text now: the last clean check of it while editing, else the last build's
+const stackItems = () => ((doc.stack && doc.tile === state.selected ? doc.stack : tile()?.plan?.stack) || []).map((s) => (typeof s === 'string' ? { label: s } : s));
 // only a scatter's things are picked one by one (a dirt's clods or a grass's clumps are the entry)
 const piecesOf = (e) => (stackItems()[e]?.what === 'scatter' ? state.pieces.get(e) || 0 : 0);
 const same = (a, b) => (!a && !b) || (a && b && !!a.tile === !!b.tile && a.entry === b.entry && (a.piece ?? null) === (b.piece ?? null));
@@ -130,7 +133,14 @@ $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
 try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* ignore */ }
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (!$('mine').hidden) { $('mine').hidden = true; return; }
     if (!closePopovers()) setSel(null);
+    return;
+  }
+  // one undo for the whole page: typing and changes made in the view
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.target.tagName !== 'INPUT' && (e.key === 'z' || e.key === 'Z' || e.key === 'y')) {
+    e.preventDefault();
+    undo(e.key === 'y' || e.shiftKey ? 1 : -1);
     return;
   }
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
@@ -235,6 +245,8 @@ $('filter').onkeydown = (e) => {
 
 // ---- choosing a tile ---------------------------------------------------
 function select(i) {
+  if (dirty()) save(true); // what was typed is not lost by moving on
+  closeComp(); lens.hide();
   if (state.selected >= 0 && viewer.payload) state.cameras.set(state.selected, viewer.getCamera());
   if (i !== state.selected) { state.sel = null; state.hov = null; $('tilebtn').classList.remove('sel'); }
   state.selected = i;
@@ -279,16 +291,44 @@ async function loadMesh(i, version) {
     }
     // a selection the new build no longer has goes
     if (state.sel && !state.sel.tile && state.sel.entry >= stackItems().length) state.sel = null;
+    lensBox = state.sel && !state.sel.tile ? viewer.centreOf(state.sel.entry, state.sel.piece) : null;
+    renderLens();
     renderAll();
   } catch (e) {
     console.error(e);
   }
 }
 
-// ---- the text ------------------------------------------------------------
+// ---- the document: the text, one history, checking and saving -----------------
+// The text pane edits the file shown (the tile's document, or a file it
+// uses).  Every change is checked at once against the server (the errors
+// and the stack, without building) and saved soon after when it reads
+// cleanly; the worker sees the saved file and rebuilds.  A text with a
+// mistake stays here, unsaved, until it is fixed.
+let elements = [];
+host.elements().then((v) => { elements = v; renderLens(); }).catch(() => {});
+const elementNamed = (n) => elements.find((e) => e.name === n);
+
+const doc = {
+  tile: -1, file: null, base: null, writable: false,
+  history: [], at: -1, lastKind: null, lastTime: 0,
+  checkTimer: 0, saveTimer: 0, checkSeq: 0, saving: false,
+  checked: null, ok: true, errors: [], stack: null, note: null, conflict: null,
+};
+state.doc = doc;
+const dirty = () => texts.text != null && doc.base != null && texts.text !== doc.base;
+
 const texts = new TextPane($('code'), {
-  onLine: (n) => setSel(entryAtLine(n), { from: 'text' }),
+  onCaretLine: (n) => { closeComp(); setSel(entryAtLine(n), { from: 'text' }); },
   onHoverLine: (n) => setHov(n == null ? null : entryAtLine(n)),
+  onEdit: (text, kind) => {
+    edited(text, kind);
+    const last = texts.caret().before.slice(-1);
+    if (/[\w=+\-.]/.test(last)) openComp(false); else closeComp();
+  },
+  onReadOnly: () => offerMine(),
+  onKey: (e) => compKey(e),
+  onHistory: (step) => undo(step),
 });
 
 /** The innermost entry written on line `n` of the file shown, else the tile (its own file) or nothing. */
@@ -303,23 +343,102 @@ function entryAtLine(n) {
   return texts.file === tile()?.path ? { tile: true } : null;
 }
 
+// one history for the file shown: typing (a pause or another kind of change
+// starts a new step), changes from the lens, and changes on disk
+function resetHistory(text) { doc.history = [{ text, caret: 0 }]; doc.at = 0; doc.lastKind = null; }
+function record(text, kind) {
+  const now = performance.now();
+  const join = kind === 'type' && doc.lastKind === 'type' && now - doc.lastTime < 1000 && doc.at > 0;
+  doc.history.length = doc.at + 1;
+  const h = { text, caret: texts.ta.selectionStart };
+  if (join) doc.history[doc.at] = h; else { doc.history.push(h); doc.at++; }
+  if (doc.history.length > 400) { doc.history.shift(); doc.at--; }
+  doc.lastKind = kind; doc.lastTime = now;
+}
+function undo(step) {
+  const i = doc.at + step;
+  if (!doc.writable || i < 0 || i >= doc.history.length) return;
+  doc.at = i; doc.lastKind = null;
+  const h = doc.history[i];
+  texts.setText(h.text, h.caret);
+  closeComp();
+  changed();
+}
+
+/** The user changed the text: `kind` is type, lens, or drag (a scrub under way, kept out of the history until it ends). */
+function edited(text, kind) {
+  if (kind !== 'drag') record(text, kind);
+  changed();
+}
+function changed() {
+  clearTimeout(doc.checkTimer);
+  doc.checkTimer = setTimeout(check, 120);
+  clearTimeout(doc.saveTimer);
+  if (!lens.dragging) doc.saveTimer = setTimeout(save, 500);
+  renderTextBar();
+}
+
+async function check() {
+  const t = tile();
+  if (!t || texts.text == null) return;
+  const text = texts.text, seq = ++doc.checkSeq;
+  const r = await host.post(`/api/tiles/${t.index}/check`, { text, file: texts.file === t.path ? undefined : texts.file });
+  if (seq !== doc.checkSeq || text !== texts.text || !r.body || t !== tile()) return;
+  doc.checked = text;
+  doc.ok = !!r.body.ok;
+  doc.errors = r.body.errors || [];
+  if (r.body.ok && r.body.stack) doc.stack = r.body.stack; // the last good stack stays while there are mistakes
+  renderStack(); markText(); renderTextBar(); renderLens();
+}
+
+async function save(now = false) {
+  if (!doc.writable || !dirty() || doc.saving) return;
+  if (doc.checked !== texts.text) { if (!now) doc.saveTimer = setTimeout(save, 250); return; } // after its check
+  if (!doc.ok) { renderTextBar(); return; } // a mistake: kept here until it is fixed
+  const t = tile(), text = texts.text;
+  doc.saving = true;
+  renderTextBar();
+  const r = await host.post(`/api/tiles/${t.index}/save`, { text, base: doc.base, file: texts.file === t.path ? undefined : texts.file });
+  doc.saving = false;
+  doc.note = null;
+  if (r.status === 200) { doc.base = text; doc.conflict = null; }
+  else if (r.status === 409) doc.conflict = r.body?.text ?? '';
+  else doc.note = r.body?.error || `could not save (${r.status})`;
+  renderTextBar();
+  if (dirty() && !doc.conflict && !doc.note) changed(); // typed while it saved
+}
+addEventListener('beforeunload', (e) => {
+  if (dirty() && doc.writable) { save(true); e.preventDefault(); }
+});
+
 let textToken = 0;
 async function loadText(file) {
   const t = tile();
-  if (!t || /\.stl$/i.test(t.path)) { texts.clear(); state.textFor = null; renderTextBar(); return; }
-  const key = [t.index, file || t.path, t.mesh_version, t.status, t.errors.length];
+  if (!t || /\.stl$/i.test(t.path)) { texts.clear(); state.textFor = null; doc.base = null; renderTextBar(); return; }
+  const want = file || t.path;
+  if (dirty() && texts.file !== want) await save(true);
+  // unsaved changes to this file stay; a new build of the same file brings nothing new
+  if (dirty() && texts.file === want && doc.tile === t.index) return;
+  const key = [t.index, want, t.mesh_version, t.status, t.errors.length];
   if (state.textFor && state.textFor.join('|') === key.join('|')) return;
   state.textFor = key;
   const token = ++textToken;
   try {
-    const r = await fetch(`/api/tiles/${t.index}/text${file && file !== t.path ? `?file=${encodeURIComponent(file)}` : ''}`, { cache: 'no-store' });
-    if (token !== textToken) return;
-    if (!r.ok) { state.textFor = null; return; }
-    const v = await r.json();
-    texts.writable = v.writable;
-    texts.show(v.file, v.text);
+    const v = await host.text(t.index, want === t.path ? null : want);
+    if (token !== textToken || !v) { if (!v) state.textFor = null; return; }
+    if (dirty() && texts.file === v.file && doc.tile === t.index) return;
+    const fresh = doc.tile !== t.index || texts.file !== v.file;
+    doc.tile = t.index;
+    doc.writable = v.writable;
+    doc.base = v.text;
+    doc.conflict = null; doc.note = null;
+    texts.show(v.file, v.text, v.writable);
+    if (fresh) resetHistory(v.text);
+    else if (doc.history[doc.at]?.text !== v.text) record(v.text, 'disk'); // changed on disk: one more step
+    doc.checked = v.text; doc.ok = !t.errors.length; doc.errors = []; doc.stack = null; // the build's plan is this text's
     renderTextBar();
     markText();
+    renderLens();
   } catch (e) { console.error(e); state.textFor = null; }
 }
 
@@ -330,13 +449,27 @@ function renderTextBar() {
   $('textpath').title = f || '';
   const st = $('textstate');
   st.replaceChildren();
-  if (f && f !== t?.path) {
-    // a file the tile uses: the way back to the tile's own
+  const button = (label, fn, cls = 'back') => {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'back'; b.textContent = 'Back to the tile';
-    b.onclick = () => loadText(null).then(() => { markText(); revealSel(); });
-    st.append(b);
-  } else if (f) st.textContent = f.startsWith('lib:') ? 'library, read only' : 'read only for now';
+    b.type = 'button'; b.className = cls; b.textContent = label; b.onclick = fn;
+    return b;
+  };
+  if (f && f !== t?.path) st.append(button('Back to the tile', () => loadText(null).then(() => { markText(); revealSel(); })));
+  else if (f && !doc.writable) {
+    st.append(f.startsWith('lib:') ? 'library · ' : 'read only · ');
+    if (f.startsWith('lib:')) st.append(button('Make it mine', () => offerMine()));
+  } else if (doc.conflict != null) {
+    st.append('changed on disk: ');
+    st.append(button('take the disk’s', () => { const d = doc.conflict; doc.conflict = null; doc.base = d; texts.setText(d); record(d, 'disk'); changed(); }), ' or ',
+      button('keep mine', () => { doc.base = doc.conflict; doc.conflict = null; changed(); }));
+  } else if (doc.note) st.textContent = doc.note;
+  else if (f) st.textContent = doc.saving ? 'saving…' : !dirty() ? 'saved' : doc.checked === texts.text && !doc.ok ? 'not saved: a mistake' : 'editing…';
+  // the first mistake, in words, under the text
+  const hint = $('codehint');
+  const e = doc.checked === texts.text && !doc.ok ? doc.errors.find((x) => !x.file || x.file === texts.file) || doc.errors[0] : null;
+  hint.classList.toggle('bad', !!e);
+  hint.textContent = e ? `${e.line ? `Line ${e.line}: ` : ''}${e.message}.${e.help ? ` ${e.help[0].toUpperCase()}${e.help.slice(1)}` : ''}`
+    : doc.writable ? 'Type to change the tile; it is saved as you go. Ctrl-Space lists what can go here.' : 'Click a line to select it in the view.';
 }
 
 function linesOf(w) {
@@ -348,9 +481,81 @@ function linesOf(w) {
 
 function markText() {
   const t = tile();
-  const errs = (t?.errors || []).filter((e) => e.file === texts.file && e.line).map((e) => e.line);
+  const live = doc.checked === texts.text && doc.tile === state.selected;
+  const errs = (live ? doc.errors : t?.errors || []).filter((e) => (!e.file || e.file === texts.file) && e.line).map((e) => e.line);
   texts.mark(state.sel?.tile ? null : linesOf(state.sel), linesOf(state.hov), errs);
 }
+
+// ---- completion -------------------------------------------------------------
+const comp = { s: null, i: 0 };
+function openComp(force) {
+  if (!doc.writable || !elements.length) return closeComp();
+  const s = suggest(texts.caret(), texts.text, elements, force);
+  if (!s) return closeComp();
+  comp.s = s; comp.i = 0;
+  renderComp();
+}
+function renderComp() {
+  const box = $('comp');
+  box.replaceChildren();
+  comp.s.items.forEach((it, i) => {
+    const d = document.createElement('div');
+    d.className = `it fam-${FAMILY[it.label] || (it.kind === 'definition' ? 'plant' : 'doc')}${i === comp.i ? ' on' : ''}`;
+    d.setAttribute('role', 'option');
+    d.innerHTML = '<i class="sw"></i><span class="nm"></span><span class="ds"></span>';
+    d.querySelector('.nm').textContent = it.label;
+    d.querySelector('.ds').textContent = it.about || it.kind;
+    d.onpointerdown = (e) => { e.preventDefault(); comp.i = i; acceptComp(); };
+    box.append(d);
+  });
+  const xy = texts.caretXY();
+  box.hidden = false;
+  if (xy) {
+    const h = box.offsetHeight, w = box.offsetWidth;
+    box.style.left = `${Math.max(8, Math.min(xy.x - 6, innerWidth - w - 8))}px`;
+    box.style.top = `${xy.y + h + 4 > innerHeight ? xy.y - h - 26 : xy.y + 2}px`;
+  }
+  box.children[comp.i]?.scrollIntoView({ block: 'nearest' });
+}
+function closeComp() { comp.s = null; $('comp').hidden = true; }
+function acceptComp() {
+  const it = comp.s?.items[comp.i];
+  if (!it) return closeComp();
+  const s = comp.s;
+  closeComp();
+  texts.insert(it.insert, s.from, s.to);
+}
+function compKey(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === ' ') { openComp(true); return true; }
+  if (!comp.s) return false;
+  const n = comp.s.items.length;
+  if (e.key === 'ArrowDown') { comp.i = (comp.i + 1) % n; renderComp(); return true; }
+  if (e.key === 'ArrowUp') { comp.i = (comp.i + n - 1) % n; renderComp(); return true; }
+  if (e.key === 'Enter' || e.key === 'Tab') { acceptComp(); return true; }
+  if (e.key === 'Escape') { closeComp(); return true; }
+  return false;
+}
+
+// ---- make it mine -----------------------------------------------------------
+function offerMine() {
+  const t = tile();
+  if (!t || !t.path.startsWith('lib:')) return;
+  $('mine').hidden = false;
+  $('mine-ok').focus();
+}
+$('mine-cancel').onclick = () => { $('mine').hidden = true; };
+$('mine-ok').onclick = async () => {
+  const t = tile();
+  $('mine-ok').disabled = true;
+  const r = await host.post(`/api/tiles/${t.index}/mine`, {});
+  $('mine-ok').disabled = false;
+  $('mine').hidden = true;
+  if (r.status !== 200 || r.body?.index == null) { doc.note = r.body?.error || 'could not make a copy'; renderTextBar(); return; }
+  // the copy joins the list with the next snapshot
+  const i = r.body.index;
+  for (let k = 0; k < 40 && !state.tiles[i]; k++) await new Promise((res) => setTimeout(res, 50));
+  if (state.tiles[i]) select(i);
+};
 
 // ---- the selection ----------------------------------------------------------
 function describe(w) {
@@ -372,10 +577,12 @@ function setSel(w, { from } = {}) {
   // the text follows: the selection's own file, scrolled to it
   if (w && !w.tile) {
     const it = stackItems()[w.entry];
-    if (it?.file && it.file !== texts.file && from !== 'text') loadText(it.file).then(() => revealSel());
+    if (it?.file && it.file !== texts.file && from !== 'text') loadText(it.file).then(() => { revealSel(); renderLens(); });
   } else if (w?.tile && texts.file !== tile()?.path) loadText(null);
   markText();
   if (from !== 'text') revealSel();
+  lensBox = w && !w.tile ? viewer.centreOf(w.entry, w.piece) : null;
+  renderLens();
 }
 function revealSel() { const l = linesOf(state.sel); if (l) texts.reveal(l[0]); }
 
@@ -446,6 +653,63 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerleave', () => { setHov(null); $('hint').style.display = 'none'; });
 canvas.addEventListener('dblclick', () => frameSel());
+
+// ---- the lens ---------------------------------------------------------------
+const lens = new Lens($('lens'), {
+  writable: () => doc.writable,
+  replace(start, len, text, end) {
+    const t = texts.text;
+    const i = byteToIndex(t, start), j = byteToIndex(t, start + len);
+    texts.setText(t.slice(0, i) + text + t.slice(j));
+    edited(texts.text, end ? 'lens' : 'drag');
+  },
+  async set(at, name, value) {
+    if (!doc.writable) return offerMine();
+    const r = await host.post('/api/edit', { text: texts.text, at, name, value });
+    if (r.status !== 200) { doc.note = r.body?.error || 'that change could not be made'; renderTextBar(); return; }
+    texts.setText(r.body.text);
+    edited(texts.text, 'lens');
+  },
+  makeMine: () => offerMine(),
+});
+let lensBox = null; // the selection's bounds, for placing the lens
+
+/** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
+function renderLens() {
+  const s = state.sel;
+  const it = s && !s.tile ? stackItems()[s.entry] : null;
+  if (!it || it.element === 'connector' || !it.span || it.file !== texts.file || !elements.length) { lens.hide(); return; }
+  const groups = [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
+  for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
+  lens.show({ title: it.label, href: it.href, groups });
+  placeLens();
+}
+
+/** Beside the selection, on whichever side has room, never over it. */
+function placeLens() {
+  const box = $('lens');
+  if (box.hidden) return;
+  const view = $('view').getBoundingClientRect();
+  const w = box.offsetWidth, h = box.offsetHeight;
+  let rect = null;
+  if (lensBox) {
+    const xs = [], ys = [];
+    for (const x of [lensBox.lo[0], lensBox.hi[0]]) for (const y of [lensBox.lo[1], lensBox.hi[1]]) for (const z of [lensBox.lo[2], lensBox.hi[2]]) {
+      const p = viewer.project([x, y, z]);
+      xs.push(p.x); ys.push(p.y);
+    }
+    rect = { l: Math.min(...xs), r: Math.max(...xs), t: Math.min(...ys), b: Math.max(...ys) };
+  }
+  let left, top;
+  if (!rect) { left = view.width - w - 12; top = 56; }
+  else {
+    left = rect.r + 16 + w < view.width - 8 ? rect.r + 16 : rect.l - 16 - w > 8 ? rect.l - 16 - w : view.width - w - 12;
+    top = (rect.t + rect.b) / 2 - h / 2;
+  }
+  box.style.left = `${Math.max(8, Math.min(left, view.width - w - 8))}px`;
+  box.style.top = `${Math.max(52, Math.min(top, view.height - h - 8))}px`;
+}
+viewer.onRender = () => placeLens();
 
 // ---- the stack -----------------------------------------------------------
 // each element's family, for its colour (the docs site uses the same)

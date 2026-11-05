@@ -607,6 +607,12 @@ export class Viewer {
     return any ? { lo, hi } : null;
   }
 
+  /** Where world point `p` falls on the canvas, in CSS pixels. */
+  project(p) {
+    const v = new THREE.Vector3(...p).project(this.camera);
+    return { x: ((v.x + 1) / 2) * this.canvas.clientWidth, y: ((1 - v.y) / 2) * this.canvas.clientHeight };
+  }
+
   draw() {
     if (this.pending) return;
     this.pending = requestAnimationFrame(() => { this.pending = 0; this.render(); });
@@ -622,5 +628,6 @@ export class Viewer {
     this.uniforms.uL1.value.copy(dirv(18, azim - 20));
     this.uniforms.uL2.value.copy(dirv(elev - 20, azim + 110));
     this.renderer.render(this.scene, this.camera);
+    this.onRender?.();
   }
 }

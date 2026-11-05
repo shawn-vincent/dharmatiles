@@ -97,6 +97,11 @@ fn summary_json(l: &Element) -> Value {
     })
 }
 
+/// Every element with its controls, for the editor's lens and completion.
+pub(crate) fn all_json() -> Value {
+    Value::Array(ELEMENTS.iter().map(element_json).collect())
+}
+
 fn element_json(l: &'static Element) -> Value {
     let takes = dt_elements::takes(l.name);
     let mut v = summary_json(l);

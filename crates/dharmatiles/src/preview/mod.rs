@@ -25,6 +25,7 @@
 //! the finished mesh.  Errors are pushed with their file, line and column.
 
 mod assets;
+mod edit;
 pub mod payload;
 pub(crate) mod roots;
 mod server;
@@ -151,6 +152,8 @@ pub struct Shared {
     roots: Vec<Root>,
     /// When the folders were last rescanned.
     scanned: Mutex<Option<Instant>>,
+    /// This run's secret: the editor's calls carry it (see `server`).
+    token: String,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -198,6 +201,7 @@ impl Shared {
             palette: None,
             roots,
             scanned: Mutex::new(None),
+            token: edit::token(),
         };
         me.rescan();
         me

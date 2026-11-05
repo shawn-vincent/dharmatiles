@@ -93,6 +93,8 @@ fn serves_the_viewer_and_its_vendored_three() {
         "/js/payload.js",
         "/js/host.js",
         "/js/text.js",
+        "/js/lens.js",
+        "/js/complete.js",
         "/style.css",
         "/logo.svg",
         "/favicon.svg",
@@ -414,4 +416,145 @@ fn serves_a_tiles_own_text_and_nothing_else() {
     assert!(head.starts_with("HTTP/1.1 404"), "{head}");
     let (head, _) = get(&r, "/api/tiles/0/text?file=lib%3Aparts%2Fgrass.dtile");
     assert!(head.starts_with("HTTP/1.1 404"), "{head}");
+}
+
+fn post(
+    r: &Running,
+    path: &str,
+    token: Option<&str>,
+    origin: Option<&str>,
+    body: &str,
+) -> (String, Value) {
+    let mut c = TcpStream::connect(r.addr).unwrap();
+    let mut head = format!(
+        "POST {path} HTTP/1.1\r\nHost: {}\r\nContent-Length: {}\r\n",
+        r.addr,
+        body.len()
+    );
+    if let Some(t) = token {
+        head.push_str(&format!("X-DT-Token: {t}\r\n"));
+    }
+    if let Some(o) = origin {
+        head.push_str(&format!("Origin: {o}\r\n"));
+    }
+    write!(c, "{head}\r\n{body}").unwrap();
+    let mut all = Vec::new();
+    c.read_to_end(&mut all).unwrap();
+    let split = all.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+    let head = String::from_utf8_lossy(&all[..split]).into_owned();
+    (
+        head,
+        serde_json::from_slice(&all[split + 4..]).unwrap_or(Value::Null),
+    )
+}
+
+#[test]
+fn the_editor_checks_edits_and_saves_only_with_the_token() {
+    let dir = std::env::temp_dir().join(format!("dt-edit-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    let text = "tile t size=\"1x1\" {\n    stack {\n        dirt\n    }\n}\n";
+    std::fs::write(&file, text).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    assert_eq!(token.len(), 32);
+    let body = serde_json::json!({ "text": text }).to_string();
+    // no token, a wrong one, or a foreign page: refused
+    assert!(
+        post(&r, "/api/tiles/0/check", None, None, &body)
+            .0
+            .starts_with("HTTP/1.1 403")
+    );
+    assert!(
+        post(&r, "/api/tiles/0/check", Some("nope"), None, &body)
+            .0
+            .starts_with("HTTP/1.1 403")
+    );
+    assert!(
+        post(
+            &r,
+            "/api/tiles/0/check",
+            Some(&token),
+            Some("https://evil.example"),
+            &body
+        )
+        .0
+        .starts_with("HTTP/1.1 403")
+    );
+    // check: the stack, with each entry's offset and controls
+    let (h, v) = post(
+        &r,
+        "/api/tiles/0/check",
+        Some(&token),
+        Some(&format!("http://{}", r.addr)),
+        &body,
+    );
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    assert_eq!(v["ok"], true, "{v}");
+    let at = v["stack"][0]["span"][0].as_u64().unwrap();
+    assert_eq!(&text[usize::try_from(at).unwrap()..][..4], "dirt");
+    let bad = serde_json::json!({ "text": "tile t size=\"1x1\" { stack { durt } }" }).to_string();
+    let (_, v) = post(&r, "/api/tiles/0/check", Some(&token), None, &bad);
+    assert_eq!(v["ok"], false);
+    assert!(v["errors"][0]["line"].is_number(), "{v}");
+    // edit: a control written on the line, the rest kept
+    let e =
+        serde_json::json!({ "text": text, "at": at, "name": "wear", "value": "worn" }).to_string();
+    let (h, v) = post(&r, "/api/edit", Some(&token), None, &e);
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
+    let edited = v["text"].as_str().unwrap().to_owned();
+    assert_eq!(edited, text.replace("dirt\n", "dirt wear=worn\n"));
+    // save: only over the text it was edited from
+    let s = serde_json::json!({ "text": edited, "base": "something else" }).to_string();
+    let (h, v) = post(&r, "/api/tiles/0/save", Some(&token), None, &s);
+    assert!(h.starts_with("HTTP/1.1 409"), "{h}");
+    assert_eq!(v["text"], text);
+    let s = serde_json::json!({ "text": edited, "base": text }).to_string();
+    assert!(
+        post(&r, "/api/tiles/0/save", Some(&token), None, &s)
+            .0
+            .starts_with("HTTP/1.1 200")
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), edited);
+    // only the tile's own files
+    let s = serde_json::json!({ "text": "x", "base": "", "file": "/etc/hosts" }).to_string();
+    assert!(
+        post(&r, "/api/tiles/0/save", Some(&token), None, &s)
+            .0
+            .starts_with("HTTP/1.1 403")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_library_tile_is_never_written() {
+    let r = start(&[FLAT], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let t = token["token"].as_str().unwrap();
+    let text = dt_eval::Files.read(FLAT).unwrap();
+    let s = serde_json::json!({ "text": "tile x {}", "base": text }).to_string();
+    let (h, _) = post(&r, "/api/tiles/0/save", Some(t), None, &s);
+    assert!(h.starts_with("HTTP/1.1 403"), "{h}");
+    assert_eq!(dt_eval::Files.read(FLAT).unwrap(), text);
+}
+
+#[test]
+fn serves_every_element_for_the_lens() {
+    let r = start(&[], false);
+    let v: Value = serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
+    let rock = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["name"] == "rock")
+        .unwrap();
+    assert!(
+        rock["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["name"] == "size")
+    );
 }

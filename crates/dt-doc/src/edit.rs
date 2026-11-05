@@ -268,9 +268,94 @@ fn remove_child(kids: &mut KdlDocument, i: usize) {
     }
 }
 
+/// The path (as [`set_control`] takes it) of the node whose text holds
+/// byte `offset` most deeply: give the offset a node's name starts at and
+/// get that node.  Each step is `name#k`, `k` counting same-named siblings.
+///
+/// # Errors
+/// If the text doesn't parse, or no node holds the offset.
+pub fn path_at(text: &str, offset: usize) -> Result<Vec<String>, EditError> {
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut path = Vec::new();
+    let mut nodes = doc.nodes();
+    'down: loop {
+        let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+        for n in nodes {
+            let name = n.name().value();
+            let k = seen.entry(name).or_default();
+            *k += 1;
+            let sp = n.span();
+            if offset >= sp.offset() && offset < sp.offset() + sp.len().max(1) {
+                path.push(format!("{name}#{k}"));
+                match n.children() {
+                    Some(c) => {
+                        nodes = c.nodes();
+                        continue 'down;
+                    }
+                    None => break 'down,
+                }
+            }
+        }
+        break;
+    }
+    if path.is_empty() {
+        return Err(EditError::NoNode(format!("byte {offset}")));
+    }
+    Ok(path)
+}
+
+/// [`set_control`] on the node at byte `offset` (see [`path_at`]).
+///
+/// # Errors
+/// As [`path_at`] and [`set_control`].
+pub fn set_control_at(
+    text: &str,
+    offset: usize,
+    name: &str,
+    value: impl Into<KdlValue>,
+) -> Result<String, EditError> {
+    let path = path_at(text, offset)?;
+    let steps: Vec<&str> = path.iter().map(String::as_str).collect();
+    set_control(text, &steps, name, value)
+}
+
+/// [`remove_control`] on the node at byte `offset` (see [`path_at`]).
+///
+/// # Errors
+/// As [`path_at`] and [`remove_control`].
+pub fn remove_control_at(text: &str, offset: usize, name: &str) -> Result<String, EditError> {
+    let path = path_at(text, offset)?;
+    let steps: Vec<&str> = path.iter().map(String::as_str).collect();
+    remove_control(text, &steps, name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_node_at_an_offset() {
+        let t = "tile a {\n    stack {\n        dirt\n        scatter count=2 { rock size=\"6..10\" }\n        scatter\n    }\n}\n";
+        let at = |s: &str| t.find(s).unwrap();
+        assert_eq!(
+            path_at(t, at("dirt")).unwrap(),
+            ["tile#1", "stack#1", "dirt#1"]
+        );
+        assert_eq!(
+            path_at(t, at("rock")).unwrap(),
+            ["tile#1", "stack#1", "scatter#1", "rock#1"]
+        );
+        assert_eq!(
+            path_at(t, t.rfind("scatter").unwrap()).unwrap(),
+            ["tile#1", "stack#1", "scatter#2"]
+        );
+        let out = set_control_at(t, at("rock"), "size", "8..12").unwrap();
+        assert!(out.contains("rock size=\"8..12\" }"), "{out}");
+        let out = set_control_at(t, at("dirt"), "wear", "worn").unwrap();
+        assert!(out.contains("        dirt wear=worn\n"), "{out}");
+        let out = remove_control_at(t, at("scatter"), "count").unwrap();
+        assert!(out.contains("        scatter { rock"), "{out}");
+    }
 
     const SRC: &str = "// top\nthing a=1   b=\"x\" { // note\n    kid 4.5 // keep\n    kid 6\n}\n";
 

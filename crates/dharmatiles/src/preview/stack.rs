@@ -109,7 +109,45 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
     };
     v["span"] = json!([start, len]);
     v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
+    v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name()));
+    // a scatter's things, each with its own controls, for the lens; a
+    // node is addressed by the offset its name starts at
+    v["things"] = json!(
+        e.children
+            .iter()
+            .map(|c| json!({
+                "what": c.what.value,
+                "at": c.what.span.offset(),
+                "controls": settings(&c.controls, &c.what.span, e.src.name()),
+            }))
+            .collect::<Vec<_>>()
+    );
     v
+}
+
+/// The controls written on an entry (a default is not written: its span
+/// is the entry's name): name, the text written (`size="6..10"`, or a
+/// child line `height 35`) and its byte span, and the file it is in (a
+/// definition's controls are written in the definition's file).
+fn settings(
+    controls: &[dt_eval::doc::Setting],
+    name: &miette::SourceSpan,
+    file: &str,
+) -> Vec<Value> {
+    controls
+        .iter()
+        .filter(|c| c.span != *name)
+        .map(|c| {
+            let (o, l) = (c.span.offset(), c.span.len());
+            let text = c.src.inner();
+            json!({
+                "name": c.name,
+                "text": text.get(o..o + l).unwrap_or_default(),
+                "span": [o, l],
+                "file": (c.src.name() != file).then(|| c.src.name()),
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]

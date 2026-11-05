@@ -1,10 +1,13 @@
 //! The HTTP side: a thread per connection, plain `std::net`.
 //!
-//! Only `GET` and one `POST`; every response closes the connection.  The
-//! `Host` header must name the loopback address, so a web page on another
-//! site cannot reach the server through DNS rebinding.
+//! Every response closes the connection.  The `Host` header must name the
+//! loopback address, so a web page on another site cannot reach the server
+//! through DNS rebinding.  A request that changes or reads a draft (check,
+//! edit, save, make it mine) must also carry this run's token in
+//! `X-DT-Token`, which only a page served from here can read
+//! (`/api/session`), and an `Origin`, when sent, must be the loopback.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::sync::mpsc::RecvTimeoutError;
@@ -28,7 +31,16 @@ struct Request {
     /// The query string's `key=value` pairs, percent-decoded.
     query: Vec<(String, String)>,
     host: String,
+    /// `Origin`, when the browser sent one.
+    origin: Option<String>,
+    /// `X-DT-Token`.
+    token: Option<String>,
+    /// The body (`Content-Length` bytes, at most [`MAX_BODY`]).
+    body: Vec<u8>,
 }
+
+/// The largest request body read: a document, not a mesh.
+const MAX_BODY: usize = 4 << 20;
 
 impl Request {
     fn param(&self, key: &str) -> Option<&str> {
@@ -82,22 +94,36 @@ fn read_request(conn: &TcpStream) -> Option<Request> {
         })
         .collect();
     let mut host = String::new();
+    let (mut origin, mut token, mut length) = (None, None, 0usize);
     for _ in 0..64 {
         let mut h = String::new();
         if r.read_line(&mut h).ok()? == 0 || h.trim().is_empty() {
             break;
         }
-        if let Some((k, v)) = h.split_once(':')
-            && k.eq_ignore_ascii_case("host")
-        {
-            v.trim().clone_into(&mut host);
+        if let Some((k, v)) = h.split_once(':') {
+            let v = v.trim();
+            match k.to_ascii_lowercase().as_str() {
+                "host" => v.clone_into(&mut host),
+                "origin" => origin = Some(v.to_owned()),
+                "x-dt-token" => token = Some(v.to_owned()),
+                "content-length" => length = v.parse().ok()?,
+                _ => {}
+            }
         }
     }
+    if length > MAX_BODY {
+        return None;
+    }
+    let mut body = vec![0; length];
+    r.read_exact(&mut body).ok()?;
     Some(Request {
         method,
         path,
         query,
         host,
+        origin,
+        token,
+        body,
     })
 }
 
@@ -164,8 +190,26 @@ fn one(mut conn: TcpStream, shared: &Shared) {
     if !loopback(&req.host) {
         return respond(&mut conn, "403 Forbidden", "text/plain", b"loopback only");
     }
+    // the editor's calls: this run's token, from a loopback page
+    if req.path.starts_with("/api/") && req.method == "POST" && !req.path.ends_with("/build") {
+        let origin_ok = req
+            .origin
+            .as_deref()
+            .is_none_or(|o| o.strip_prefix("http://").is_some_and(loopback));
+        if !origin_ok || req.token.as_deref() != Some(shared.token.as_str()) {
+            return respond(&mut conn, "403 Forbidden", "text/plain", b"not this page");
+        }
+        let (status, v) = super::edit::post(shared, &req.path, &req.body);
+        return json(&mut conn, status, &v);
+    }
     match (req.method.as_str(), req.path.as_str()) {
         ("GET", "/api/events") => events(conn, shared),
+        ("GET", "/api/session") => json(
+            &mut conn,
+            "200 OK",
+            &serde_json::json!({ "token": shared.token }),
+        ),
+        ("GET", "/api/elements") => json(&mut conn, "200 OK", &crate::elements::all_json()),
         ("GET", "/api/tiles") => json(&mut conn, "200 OK", &shared.snapshot()),
         ("GET", p) if tile_route(p).is_some_and(|(_, w)| w == "mesh") => {
             let mesh = tile_route(p).and_then(|(i, _)| shared.mesh(i));

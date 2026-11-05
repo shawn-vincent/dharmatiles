@@ -1,0 +1,312 @@
+//! The editor's calls (`POST`, with this run's token; see `server`):
+//!
+//! - `/api/edit` `{text, at, name, value}`: set a control on the node whose
+//!   name starts at byte `at`, in whichever form it is written, keeping
+//!   everything else byte for byte; `value: null` takes it out.  Nothing
+//!   is written to disk: the page saves the result.
+//! - `/api/tiles/N/check` `{text, file?}`: read and plan the tile with
+//!   `text` in place of its document (or of `file`, one it uses): the
+//!   errors and the stack, under a second, for the text pane as you type.
+//! - `/api/tiles/N/save` `{text, base, file?}`: write the document (or a
+//!   file it uses) when what is on disk is still `base`; else `409` with
+//!   what is there.  Library files are never written.  The worker sees the
+//!   new file and rebuilds.
+//! - `/api/tiles/N/mine`: copy a library tile into My tiles, its `use`s
+//!   pointing back at the library, and return the copy's index.
+
+use std::collections::BTreeMap;
+use std::hash::{BuildHasher, Hasher};
+
+use dt_eval::Source;
+
+use super::roots::personal_home;
+use super::*;
+
+/// 128 random bits, hex: the run's token.
+pub(super) fn token() -> String {
+    let word = |salt: u64| {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u64(salt);
+        h.write_u128(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos()),
+        );
+        h.write_u32(std::process::id());
+        h.finish()
+    };
+    format!("{:016x}{:016x}", word(1), word(2))
+}
+
+/// The text of a file, overlaid on the disk: the document being edited.
+struct Overlay(BTreeMap<String, String>);
+
+impl Source for Overlay {
+    fn read(&self, path: &str) -> Result<String, String> {
+        self.0
+            .get(path)
+            .cloned()
+            .map_or_else(|| dt_eval::Files.read(path), Ok)
+    }
+}
+
+fn bad(msg: impl Into<String>) -> (&'static str, Value) {
+    ("400 Bad Request", json!({ "error": msg.into() }))
+}
+
+/// Route one editor call.
+pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> (&'static str, Value) {
+    let Ok(v) = serde_json::from_slice::<Value>(body) else {
+        return bad("the body is not JSON");
+    };
+    if path == "/api/edit" {
+        return edit(&v);
+    }
+    let Some((i, what)) = path
+        .strip_prefix("/api/tiles/")
+        .and_then(|r| r.split_once('/'))
+        .and_then(|(n, w)| Some((n.parse::<usize>().ok()?, w)))
+    else {
+        return ("404 Not Found", json!({ "error": "no such call" }));
+    };
+    let Some((tile, files)) = lock(&shared.tiles)
+        .get(i)
+        .filter(|t| !t.gone)
+        .map(|t| (t.path.clone(), t.files.clone()))
+    else {
+        return ("404 Not Found", json!({ "error": "no such tile" }));
+    };
+    // only the tile's document, or a file its last build read
+    let file = match v["file"].as_str() {
+        None => tile.clone(),
+        Some(f) if f == tile || files.contains_key(f) => f.to_owned(),
+        Some(_) => {
+            return (
+                "403 Forbidden",
+                json!({ "error": "not a file of this tile" }),
+            );
+        }
+    };
+    match what {
+        "check" => check(shared, &tile, &file, &v),
+        "save" => save(&file, &v),
+        "mine" => mine(shared, &tile, &files),
+        _ => ("404 Not Found", json!({ "error": "no such call" })),
+    }
+}
+
+/// A KDL value from JSON: whole numbers stay whole.
+fn kdl_value(v: &Value) -> Option<kdl::KdlValue> {
+    Some(match v {
+        Value::Bool(b) => kdl::KdlValue::Bool(*b),
+        Value::Number(n) => match n.as_i64() {
+            Some(i) => kdl::KdlValue::Integer(i128::from(i)),
+            None => kdl::KdlValue::Float(n.as_f64()?),
+        },
+        Value::String(s) => kdl::KdlValue::String(s.clone()),
+        _ => return None,
+    })
+}
+
+fn edit(v: &Value) -> (&'static str, Value) {
+    let (Some(text), Some(at), Some(name)) = (
+        v["text"].as_str(),
+        v["at"].as_u64().and_then(|a| usize::try_from(a).ok()),
+        v["name"].as_str(),
+    ) else {
+        return bad("give text, at and name");
+    };
+    let out = if v["value"].is_null() {
+        dt_doc::edit::remove_control_at(text, at, name)
+    } else {
+        match kdl_value(&v["value"]) {
+            Some(k) => dt_doc::edit::set_control_at(text, at, name, k),
+            None => return bad("a value is a number, a string or a switch"),
+        }
+    };
+    match out {
+        Ok(t) => ("200 OK", json!({ "text": t })),
+        Err(e) => (
+            "422 Unprocessable Entity",
+            json!({ "error": e.to_string() }),
+        ),
+    }
+}
+
+fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, Value) {
+    let Some(text) = v["text"].as_str() else {
+        return bad("give the text");
+    };
+    let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
+    let opts = Options {
+        system: shared.system.clone(),
+        ..Options::default()
+    };
+    match dt_eval::check(&src, tile, &opts) {
+        Ok(c) => {
+            let stack = c.tile.as_ref().map(|t| stack::items(t, &shared.system));
+            (
+                "200 OK",
+                json!({ "ok": true, "errors": [], "stack": stack }),
+            )
+        }
+        Err(errs) => (
+            "200 OK",
+            json!({ "ok": false, "errors": errors_json(&errs) }),
+        ),
+    }
+}
+
+/// May the editor write `file`?  Never the library, nor a read-only file.
+pub(super) fn writable(file: &str) -> bool {
+    !file.starts_with(dt_eval::LIB)
+        && std::fs::metadata(file).is_ok_and(|m| m.is_file() && !m.permissions().readonly())
+}
+
+fn save(file: &str, v: &Value) -> (&'static str, Value) {
+    let (Some(text), Some(base)) = (v["text"].as_str(), v["base"].as_str()) else {
+        return bad("give the text and the base it was edited from");
+    };
+    if !writable(file) {
+        return (
+            "403 Forbidden",
+            json!({ "error": "this file is not yours to write: make it yours first" }),
+        );
+    }
+    let now = std::fs::read_to_string(file).unwrap_or_default();
+    if now != base {
+        return (
+            "409 Conflict",
+            json!({ "error": "the file changed on disk", "text": now }),
+        );
+    }
+    if now == text {
+        return ("200 OK", json!({ "ok": true }));
+    }
+    // a whole file or none: write beside it, then rename over it
+    let tmp = format!("{file}.dt-save");
+    match std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, file)) {
+        Ok(()) => ("200 OK", json!({ "ok": true })),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            (
+                "500 Internal Server Error",
+                json!({ "error": format!("cannot write {file}: {e}") }),
+            )
+        }
+    }
+}
+
+/// `use "parts/grass"` in a library tile names a library file; in a copy
+/// it must say so (`use "lib:parts/grass"`).  The build's files say which.
+fn pin_uses(text: &str, files: &BTreeMap<String, Option<SystemTime>>) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let t = line.trim_start();
+        let pinned = t.strip_prefix("use ").and_then(|rest| {
+            let rest = rest.trim_start();
+            let target = rest.strip_prefix('"')?.split('"').next()?;
+            if target.starts_with(dt_eval::LIB) || target.starts_with('/') {
+                return None;
+            }
+            let want = format!("/{}", target.trim_end_matches(".dtile"));
+            let lib = files.keys().find(|f| {
+                f.starts_with(dt_eval::LIB)
+                    && (f.trim_end_matches(".dtile").ends_with(&want)
+                        || f.trim_end_matches(".dtile")
+                            == format!("{}{}", dt_eval::LIB, &want[1..]))
+            })?;
+            Some(line.replacen(
+                &format!("\"{target}\""),
+                &format!("\"{}\"", lib.trim_end_matches(".dtile")),
+                1,
+            ))
+        });
+        out.push_str(pinned.as_deref().unwrap_or(line));
+    }
+    out
+}
+
+fn mine(
+    shared: &Shared,
+    tile: &str,
+    files: &BTreeMap<String, Option<SystemTime>>,
+) -> (&'static str, Value) {
+    if !tile.starts_with(dt_eval::LIB) {
+        return bad("only a library tile is copied");
+    }
+    let Ok(text) = dt_eval::Files.read(tile) else {
+        return (
+            "404 Not Found",
+            json!({ "error": format!("cannot read {tile}") }),
+        );
+    };
+    let home = shared
+        .roots
+        .iter()
+        .find_map(|r| match &r.kind {
+            RootKind::Dir(d) => Some(d.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(personal_home);
+    if let Err(e) = std::fs::create_dir_all(&home) {
+        return (
+            "500 Internal Server Error",
+            json!({ "error": format!("cannot make {}: {e}", home.display()) }),
+        );
+    }
+    let stem = tile
+        .rsplit('/')
+        .next()
+        .unwrap_or("tile")
+        .trim_end_matches(".dtile")
+        .to_owned();
+    let dest = (1..1000)
+        .map(|n| {
+            home.join(if n == 1 {
+                format!("{stem}.dtile")
+            } else {
+                format!("{stem}-{n}.dtile")
+            })
+        })
+        .find(|p| !p.exists());
+    let Some(dest) = dest else {
+        return (
+            "500 Internal Server Error",
+            json!({ "error": "no free name" }),
+        );
+    };
+    if let Err(e) = std::fs::write(&dest, pin_uses(&text, files)) {
+        return (
+            "500 Internal Server Error",
+            json!({ "error": format!("cannot write {}: {e}", dest.display()) }),
+        );
+    }
+    if shared.rescan() {
+        shared.broadcast(&shared.snapshot());
+    }
+    let path = dest.to_string_lossy().into_owned();
+    let index = lock(&shared.tiles).iter().position(|t| t.path == path);
+    if let Some(i) = index {
+        shared.want(i);
+    }
+    ("200 OK", json!({ "path": path, "index": index }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_copy_points_its_uses_at_the_library() {
+        let files = BTreeMap::from([
+            ("lib:tiles/water/a.dtile".to_owned(), None),
+            ("lib:parts/grass.dtile".to_owned(), None),
+        ]);
+        let text = "// a\nuse \"parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile a {}\n";
+        assert_eq!(
+            pin_uses(text, &files),
+            "// a\nuse \"lib:parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile a {}\n"
+        );
+    }
+}
