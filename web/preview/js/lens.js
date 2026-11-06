@@ -1,5 +1,5 @@
-// The property sheet: the selected entry's controls, docked below the stack
-// in the right sidebar (docs/design/editor.html). Every number in a value is
+// The property sheet: the selected entry's controls fill the right sidebar
+// (docs/design/editor.html). Every number in a value is
 // scrubbed by dragging it sideways (Shift for fine steps) or typed after a
 // click; a word control is a row of its words; a switch flips.  Each change
 // is a change to the document's text, made through `api`:
@@ -53,13 +53,21 @@ export class Lens {
     this.api = api;
     this.more = false;
     this.drag = null;
+    this.hide();
   }
 
-  hide() { this.root.hidden = true; this.model = null; }
+  hide() {
+    this.model = null;
+    this.root.hidden = false;
+    this.root.replaceChildren();
+    const empty = el('div', 'empty');
+    empty.append(el('b', '', 'Nothing selected'), 'Click something on the tile or put the cursor in its line to inspect and change it.');
+    this.root.append(empty);
+  }
   get dragging() { return !!this.drag; }
 
   /**
-   * Show `model`: {title, href, note, groups: [{heading, at, element, schema, written: [setting]}]},
+   * Show `model`: {title, href, note, actions, groups: [{heading, at, element, schema, written: [setting]}]},
    * a setting being {name, text, span: [byte offset, length], file}.
    */
   show(model) {
@@ -69,39 +77,52 @@ export class Lens {
     r.replaceChildren();
     r.hidden = false;
     const head = el('div', 'lt');
-    head.append(el('b', '', model.title));
+    const heading = el('div', 'heading');
+    heading.append(el('span', 'cap', 'Properties'), el('b', '', model.title));
+    head.append(heading);
     if (model.href) {
-      const a = el('a', '', 'element page');
+      const a = el('a', '', 'Help ↗');
       a.href = model.href; a.target = '_blank'; a.rel = 'noopener';
+      a.title = `Help for ${model.title}`;
       head.append(a);
     }
-    r.append(head);
+    const body = el('div', 'body');
+    r.append(head, body);
     if (!this.api.writable()) {
       const n = el('div', 'note');
       n.append('A library tile: ');
       const b = el('button', 'linkish', 'make it yours');
       b.onclick = () => this.api.makeMine();
       n.append(b, ' to change it.');
-      r.append(n);
+      body.append(n);
     }
-    if (model.note) r.append(el('div', 'note', model.note));
+    if (model.note) body.append(el('div', 'note', model.note));
     let hidden = 0;
     for (const g of model.groups) {
-      if (g.heading) r.append(el('div', 'grp', g.heading));
+      if (g.heading) body.append(el('div', 'grp', g.heading));
       const written = new Map(g.written.map((s) => [s.name, s]));
       const controls = g.schema ? g.schema.controls : g.written.map((s) => ({ name: s.name }));
       for (const c of controls) {
         const s = written.get(c.name);
         if (!s && (c.expert || c.taken === false) && !this.more) { hidden++; continue; }
-        r.append(this.row(g, c, s));
+        body.append(this.row(g, c, s));
       }
       // written controls the schema does not know (a definition's arguments)
-      if (g.schema) for (const s of g.written) if (!g.schema.controls.some((c) => c.name === s.name)) r.append(this.row(g, { name: s.name }, s));
+      if (g.schema) for (const s of g.written) if (!g.schema.controls.some((c) => c.name === s.name)) body.append(this.row(g, { name: s.name }, s));
     }
     if (hidden || this.more) {
       const b = el('button', 'linkish more', this.more ? 'fewer controls' : `${hidden} more control${hidden === 1 ? '' : 's'}`);
       b.onclick = () => { this.more = !this.more; this.show(this.model); };
-      r.append(b);
+      body.append(b);
+    }
+    if (model.actions?.length) {
+      const actions = el('div', 'entry-actions');
+      for (const action of model.actions) {
+        const b = el('button', `btn${action.danger ? ' danger' : ''}`, action.label);
+        b.type = 'button'; b.title = action.title; b.onclick = action.run;
+        actions.append(b);
+      }
+      r.append(actions);
     }
   }
 

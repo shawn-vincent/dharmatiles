@@ -531,7 +531,7 @@ async function check() {
     const i = (doc.stack || []).findIndex((it) => it.span && it.span[0] === at && it.file === texts.file);
     if (i >= 0) { setSel({ entry: i, piece: null }, { from: 'view' }); }
   }
-  renderStack(); markText(); renderTextBar(); renderLens(); drawOverlay();
+  markText(); renderTextBar(); renderLens(); drawOverlay();
   return true;
 }
 
@@ -776,7 +776,6 @@ function setSel(w, { from, guarded = false } = {}) {
   state.sel = w;
   $('tilebtn').classList.toggle('sel', !!w?.tile);
   viewer.setHighlight(isEntry(w) ? w : null, hovForView());
-  renderStack();
   // the text follows: the selection's own file, scrolled to it
   if (isEntry(w)) {
     const it = stackItems()[w.entry];
@@ -793,7 +792,6 @@ function setHov(w) {
   if (same(w, state.hov)) return;
   state.hov = w;
   viewer.setHighlight(isEntry(state.sel) ? state.sel : null, hovForView());
-  document.querySelectorAll('.srow').forEach((r) => r.classList.toggle('hov', isEntry(w) && Number(r.dataset.entry) === w.entry));
   markText();
 }
 const hovForView = () => (isEntry(state.hov) && !same(state.hov, state.sel) ? state.hov : null);
@@ -902,7 +900,14 @@ function renderLens() {
   if (!it || it.element === 'connector' || !it.span || it.file !== texts.file || !elements.length) { lens.hide(); return; }
   const groups = [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
   for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
-  lens.show({ title: it.label, href: it.href, groups });
+  const actions = [];
+  if (it.file === texts.file && doc.writable) {
+    actions.push(
+      { label: 'Hide', title: `Hide ${it.label} without deleting it`, run: () => muteAt(it.span[0], it.label) },
+      { label: 'Delete', title: `Delete ${it.label} from the document`, run: () => removeAt(it.span[0], it.label) },
+    );
+  }
+  lens.show({ title: it.label, href: it.href, groups, actions });
 }
 viewer.onRender = () => drawOverlay();
 
@@ -1002,7 +1007,6 @@ tools = new Tools(canvas, viewer, overlay, { bar: $('place'), input: $('place-in
 });
 $('tool').querySelector('button').onclick = () => tools.stop();
 
-// ---- the stack -----------------------------------------------------------
 // each element's family, for its colour (the docs site uses the same)
 const FAMILY = {
   ground: 'surface', dirt: 'surface', floor: 'surface', water: 'water',
@@ -1010,103 +1014,15 @@ const FAMILY = {
   grass: 'plant', reeds: 'plant', flowers: 'plant', tree: 'plant',
   dungeonblocks: 'base', openlock: 'base', connector: 'base', stl: 'base',
 };
-function renderStack() {
-  const ol = $('stack');
-  ol.replaceChildren();
-  const items = stackItems();
-  items.forEach((it, i) => {
-    const li = document.createElement('li');
-    const base = i === items.length - 1 && it.element === 'connector';
-    li.className = `srow fam-${FAMILY[it.element] || 'doc'}${base ? ' base' : ''}`;
-    li.tabIndex = 0;
-    li.dataset.entry = i;
-    const sel = isEntry(state.sel) && state.sel.entry === i;
-    li.classList.toggle('sel', !!sel);
-    if (viewer.payload && !state.pieces.has(i)) li.classList.add('hidden-geo');
-    const n = piecesOf(i);
-    const sub = base ? 'added to every tile'
-      : `${it.what || it.element || ''}${n > 1 ? ` · ${n} pieces` : ''}${it.lines ? ` · ${it.file && it.file !== tile()?.path ? `${it.file.replace(/^lib:/, '').replace(/\.dtile$/, '')} ` : ''}line ${it.lines[0]}` : ''}`;
-    li.innerHTML = '<i class="sw"></i><div><span class="nm"></span><span class="pl"></span></div>';
-    li.querySelector('.nm').textContent = it.label;
-    li.querySelector('.pl').textContent = sel && state.sel.piece != null ? `${describe(state.sel)}` : sub;
-    const acts = document.createElement('div');
-    acts.className = 'acts';
-    if (!base && it.span && it.file === texts.file && doc.writable) {
-      acts.append(
-        act('◐', `Mute ${it.label}: see the tile without it (writes /- before it)`, () => muteAt(it.span[0])),
-        act('×', `Take ${it.label} out of the text`, () => removeAt(it.span[0], it.label)),
-      );
-    }
-    if (it.href) {
-      const a = document.createElement('a');
-      a.className = 'doc'; a.href = it.href; a.target = '_blank'; a.rel = 'noopener';
-      a.textContent = '?'; a.title = `${it.element}: its page in the docs`;
-      a.onclick = (e) => e.stopPropagation();
-      acts.append(a);
-    }
-    li.append(acts);
-    li.onclick = () => setSel(same(state.sel, { entry: i, piece: null }) ? null : { entry: i, piece: null }, { from: 'stack' });
-    li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
-    li.ondblclick = () => { setSel({ entry: i, piece: null }, { from: 'stack' }); frameSel(); };
-    li.onpointerenter = () => setHov({ entry: i, piece: null });
-    li.onpointerleave = () => setHov(null);
-    ol.append(li);
-  });
-  // muted entries: written with /- before them, so not in the plan
-  for (const m of mutedEntries()) {
-    const li = document.createElement('li');
-    li.className = `srow muted fam-${FAMILY[m.name] || 'doc'}`;
-    li.tabIndex = 0;
-    li.innerHTML = '<i class="sw"></i><div><span class="nm"></span><span class="pl"></span></div>';
-    li.querySelector('.nm').textContent = m.label;
-    li.querySelector('.pl').textContent = `muted · line ${m.line}`;
-    const acts = document.createElement('div');
-    acts.className = 'acts on';
-    if (doc.writable) acts.append(act('◑', `Unmute ${m.name}`, () => unmute(m)));
-    li.append(acts);
-    li.onclick = () => texts.reveal(m.line);
-    li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
-    ol.insertBefore(li, ol.querySelector('.srow.base')); // above the base the system adds
-  }
-}
 
-function act(label, title, fn) {
-  const b = document.createElement('button');
-  b.type = 'button'; b.className = 'act'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
-  b.onclick = (e) => { e.stopPropagation(); fn(); };
-  return b;
-}
-
-/** The stack's muted nodes in the text shown: {name, line, index (of the /-), len (of /- and its space)}. */
-function mutedEntries() {
-  if (texts.file !== tile()?.path || texts.text == null) return [];
-  const out = [];
-  const known = new Set([...elements.map((e) => e.name), ...[...texts.text.matchAll(/^\s*define\s+([\w+\-.]+)/gm)].map((m) => m[1])]);
-  let index = 0;
-  texts.text.split('\n').forEach((line, i) => {
-    const m = line.match(/^(\s*)(\/-\s*)([A-Za-z_][\w+\-.]*)/);
-    if (m && known.has(m[3])) {
-      const label = line.slice(m[0].length - m[3].length).replace(/\s*(\{.*|\/\/.*|;.*)$/, '').trim();
-      out.push({ name: m[3], label, line: i + 1, index: index + m[1].length, len: m[2].length });
-    }
-    index += line.length + 1;
-  });
-  return out;
-}
-
-function muteAt(byte) {
+function muteAt(byte, label = 'Entry') {
   if (!doc.writable) return offerMine();
   const t = texts.text, i = byteToIndex(t, byte);
   if (isEntry(state.sel)) setSel(null);
   texts.setText(`${t.slice(0, i)}/- ${t.slice(i)}`);
   edited(texts.text, 'view');
   askDraft();
-}
-function unmute(m) {
-  const t = texts.text;
-  texts.setText(t.slice(0, m.index) + t.slice(m.index + m.len));
-  edited(texts.text, 'view');
-  askDraft();
+  toast(`${label} hidden`, () => undo(-1));
 }
 async function removeAt(byte, label = 'Entry') {
   if (!doc.writable) return offerMine();
@@ -1143,7 +1059,6 @@ let timer = 0;
 function renderAll() {
   renderList();
   renderTitle();
-  renderStack();
   viewer.setHighlight(isEntry(state.sel) ? state.sel : null, hovForView());
   const t = tile();
   if (t) loadText(state.textFor && state.textFor[0] === t.index && state.textFor[1] !== t.path ? state.textFor[1] : null);

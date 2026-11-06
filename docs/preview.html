@@ -13,8 +13,7 @@
 <header class="hero">
   <div class="eyebrow">dharmatiles preview</div>
   <h1>Preview</h1>
-  <p class="lede">A live, painted 3D view of your tiles in the browser, and their editor. Click anything on the tile to see the stack entry and the line that made it, drag its values, or type in the document beside it. It rebuilds a tile every time you save it, paints overhang the way the printability gate sees it, and shows a mistake at its line. It is part of the program and works offline.</p>
-  <figure class="shot"><img src="img/preview.jpg" alt="The preview: the document on the left, a painted tile on the plate in the middle with one rock selected, and the stack on the right"><figcaption>The document, the tile on the plate and its stack. A rock is selected: its scatter and its line light up with it.</figcaption></figure>
+  <p class="lede">A live, painted 3D view of your tiles in the browser, and their editor. Click anything on the tile to see the line and editable properties that made it, or type in the document beside it. It rebuilds a tile every time you save it, paints overhang the way the printability gate sees it, and shows a mistake at its line. It is part of the program and works offline.</p>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#run">Run it</a></li>
@@ -42,28 +41,28 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <ul>
   <li><strong>The title bar:</strong> the tile menu, the tile's size and base, and the gate's verdict. Click the verdict for the record: why a tile fails, the audit's numbers, and an action that flies to the largest red face (or the largest orange face when there is no red).</li>
   <li><strong>The document</strong> on the left, as written, coloured by kind, and editable (see <a href="#edit">Editing</a>).</li>
-  <li><strong>The stack</strong> on the right in build order: each entry with its element, its line, and a <kbd>?</kbd> to its element page. An entry whose geometry is all hidden under others (ground under water) says so.</li>
+  <li><strong>The property sheet</strong> filling the right sidebar: the selected entry's editable controls, a Help link to its element page, and Hide and Delete at the foot.</li>
   <li><strong>The tile on the plate</strong>, painted like the PNG renders, with its squares ruled on the plate. The <kbd>⋯</kbd> button holds paint, overhang, wireframe, grid, projection and all nine views.</li>
   <li><strong>Overhang from the gate itself:</strong> faces between 55° and 65° are orange, faces past 65° red. The colours come from the gate's own flags, so the view and <code>build</code> cannot disagree.</li>
   <li><strong>Progress</strong> while a tile builds: the stage, an element's own count (grass blades, wall stones, tree leaves) and the time left, estimated from the last build of the same tile.</li>
 </ul>
 
 <h2 id="select">Selecting</h2>
-<p>Every triangle of a built tile knows the stack entry that made it, so the view, the stack and the document share one selection, tinted with the current theme's accent.</p>
+<p>Every triangle of a built tile knows the entry that made it, so the view, the property sheet and the document share one selection, tinted with the current theme's accent.</p>
 <ul>
   <li><strong>Hover</strong> a thing on the tile and it lights up and is named beside the pointer: <q>rocks in pool · 2 of 3</q>.</li>
   <li><strong>Click</strong> to select it. A thing a scatter placed is selected on its own; click it again to climb to the whole scatter, then to the region it is <code>in=</code>, then the tile. Clicking the plate or <kbd>Esc</kbd> clears.</li>
-  <li><strong>The stack and the document follow:</strong> the entry's row and its lines light up. An entry written in a file the tile uses (grass from <code>lib:parts/grass.dtile</code>) opens that file; <em>Back to the tile</em> returns.</li>
-  <li><strong>Click a line</strong> in the document, or a row in the stack, to select its entry in the view; hover one to light its geometry. A <code>line</code> or <code>region</code> node selects that line or region on the map.</li>
+  <li><strong>The property sheet and document follow:</strong> the entry's controls open on the right and its lines light up. An entry written in a file the tile uses (grass from <code>lib:parts/grass.dtile</code>) opens that file; <em>Back to the tile</em> returns.</li>
+  <li><strong>Click a line</strong> in the document to select its entry in the view; hover it to light its geometry. A <code>line</code> or <code>region</code> node selects that line or region on the map.</li>
   <li><strong>Double-click</strong>, or <kbd>f</kbd>, flies to the selection.</li>
 </ul>
-<p>Water owns the surface it fills, so clicking the pool selects the water; the ground beneath it is reached from the stack.</p>
+<p>Water owns the surface it fills, so clicking the pool selects the water; put the cursor in the ground's line to reach the ground beneath it.</p>
 
 <h2 id="edit">Editing</h2>
 <p>Every change is a change to the document's text, and the text is the tile: what you change in the view you can read, and keep, in the file.</p>
 <ul>
   <li><strong>Start fresh.</strong> <em>New tile</em> makes printable flat ground in My tiles at 1×1, 2×1, 1×2 or 2×2 squares, ready to change in the same editor.</li>
-  <li><strong>The property sheet.</strong> Selecting an entry opens its controls in a stable panel below the stack in the right sidebar: the ones written, then the rest at their defaults, faint. Drag a number sideways to change it (<kbd>Shift</kbd> for fine steps), or click it to type. A word control is a row of its words; a switch flips; <kbd>×</kbd> takes a control out, back to its default. A scatter's sheet holds its things' controls too. Only the value changes in the text: the layout and comments stay.</li>
+  <li><strong>The property sheet.</strong> Selecting an entry opens its controls in the whole right sidebar: the ones written, then the rest at their defaults, faint. Help is always at the top right; Hide and Delete stay at the bottom. Drag a number sideways to change it (<kbd>Shift</kbd> for fine steps), or click it to type. A word control is a row of its words; a switch flips; <kbd>×</kbd> takes a control out, back to its default. A scatter's sheet holds its things' controls too. Only the value changes in the text: the layout and comments stay.</li>
   <li><strong>Typing.</strong> The document is checked as you type, without building: a mistake is underlined at its line and said in words under the text. Completion offers element names at the start of a node, an element's controls on its line, and after <code>name=</code> the control's words, or the document's regions and lines. <kbd>Ctrl</kbd>-<kbd>Space</kbd> asks for it.</li>
   <li><strong>Drafts while you drag.</strong> As a value is dragged, the view shows quick drafts of the tile: fewer cells, the parts not joined, and overhang judged face by face. The verdict says <em>draft</em> beside it, since a draft is never judged by the gate. Let go and the full build follows.</li>
   <li><strong>Saved as you go.</strong> A change is written to the file half a second after it reads cleanly, and the tile rebuilds. A text with a mistake is kept in the page, unsaved, until it is fixed. If you leave while it cannot be saved, the editor makes discarding explicit. If the file changes on disk under unsaved changes, you choose which to keep.</li>
@@ -77,13 +76,13 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <ul>
   <li><strong>Things</strong> (<code>rock</code>, <code>boulder</code>, <code>tree</code>, a definition): its footprint follows the pointer with the point in squares; a click writes <code>rock at="0.64,0.42"</code> at the end of the stack, and a dragged box writes a range, <code>at="0.4..0.8,0.2..0.5"</code>. Click again to place another.</li>
   <li><strong>Surfaces</strong> (<code>dirt</code>, <code>ground</code>, <code>floor</code>, <code>water</code>, <code>grass</code>): the region under the pointer lights up; a click writes the entry <code>in=</code> it, or for the whole tile outside every region.</li>
-  <li><strong>Scatter</strong>: click or drag in a region to write <code>scatter in=pool count=3 { rock }</code>, with its lens open on the count. <code>scatter boulder</code> scatters boulders.</li>
+  <li><strong>Scatter</strong>: click or drag in a region to write <code>scatter in=pool count=3 { rock }</code>, with its property sheet open on the count. <code>scatter boulder</code> scatters boulders.</li>
   <li><strong>Walls and cliffs</strong>: click a line, or near an edge, to write <code>along=</code> it.</li>
   <li><strong>Lines</strong>: click points on the plate; <kbd>Enter</kbd> or a double-click ends the line, <kbd>Backspace</kbd> takes back the last point. A point by the middle of an edge or a corner snaps and is written as its word (<code>north</code>, <code>south-east</code>); one close to an edge goes onto it.</li>
   <li><strong>Regions</strong>: click inside the area the lines enclose; it writes <code>region area-1 { bounded-by …; fill "x,y" }</code> naming every line, for you to rename and trim.</li>
   <li><strong>Handles.</strong> A selected line shows its points, a region its fill points, a placed thing its <code>at=</code>: drag one to rewrite that point.</li>
   <li><strong>The map.</strong> Lines are drawn on the tile, dashed, and regions tinted by what is laid in them. Looking straight down (<em>Map</em>, <kbd>2</kbd>), the regions' names and fill points show too.</li>
-  <li><strong>Mute and delete.</strong> A stack row's <kbd>◐</kbd> writes <code>/-</code> before its node, so the tile builds without it and the document says so; the muted row stays in the stack to unmute. <kbd>×</kbd> takes the node out of the text.</li>
+  <li><strong>Hide and delete.</strong> The property sheet's <em>Hide</em> writes <code>/-</code> before the selected node, so the tile builds without it and the document says so. <em>Delete</em> takes the node out of the text. Both offer an immediate Undo.</li>
 </ul>
 
 <h2 id="keys">Moving round a tile</h2>
@@ -114,7 +113,7 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="limits">Limits</h2>
 <ul>
-  <li>Seeds and sweeps, dragging stack rows to reorder them, and the deferred assistant are designed but not built: see <a href="design/editor.html">the editor</a>. The map shows a region's area as the last good check made it; a line moved by its handle redraws when the text next checks.</li>
+  <li>Seeds, sweeps and the deferred assistant are designed but not built: see <a href="design/editor.html">the editor</a>. The map shows a region's area as the last good check made it; a line moved by its handle redraws when the text next checks.</li>
   <li>Made for your own machine: the mesh is sent whole (about 94 bytes a triangle), fine on the loopback, not meant for a network.</li>
   <li>Every build, draft or full, builds the whole tile: a tile with a tree drafts in seconds, not at once.</li>
   <li>No section cuts or measuring.</li>

@@ -45,20 +45,20 @@
   <p><a class="btn" href="editor-mockup.html">Try the mockup</a> A made-up tile in your browser to click, drag, place on and ask. Nothing behind it is built.</p>
   <div class="facts">
     <div><div class="k">One view</div><div class="v">the preview is the editor</div></div>
-    <div><div class="k">Controls</div><div class="v">five, everywhere</div></div>
+    <div><div class="k">Surfaces</div><div class="v">view, text, properties and bar</div></div>
     <div><div class="k">Truth</div><div class="v">the <code>.dtile</code> text</div></div>
     <div><div class="k">Runs</div><div class="v">web first, then desktop, then tablets and phones</div></div>
   </div>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#principles">Principles</a></li>
-  <li><a href="#five">Five controls</a></li>
+  <li><a href="#five">Four surfaces</a></li>
   <li><a href="#open">Opening a tile</a></li>
   <li><a href="#select">Selecting</a></li>
   <li><a href="#lens">Changing: the property sheet</a></li>
   <li><a href="#place">Placing and drawing</a></li>
   <li><a href="#text">The text</a></li>
-  <li><a href="#stack">The stack and the map</a></li>
+  <li><a href="#stack">The map</a></li>
   <li><a href="#gate">The gate, always in view</a></li>
   <li><a href="#ladder">Many versions at once</a></li>
   <li><a href="#speed">How fast it answers</a></li>
@@ -76,7 +76,7 @@
 <p>The editor follows Bret Victor's design work, starting from his principle that <q>creators need an immediate connection to what they create</q> (<cite>Inventing on Principle</cite>, 2012). Each idea below is how that work applies to a terrain tile.</p>
 <div class="grid2">
   <div class="card"><h3>See it change as you change it</h3><p>A change shows in the view while your hand is still on it: the line moves as you drag its point, the rocks grow as you drag their size. Where the full build is too slow for that, the view answers at once with what it can, a draft, and the full build follows (<a href="#speed">how fast it answers</a>).</p></div>
-  <div class="card"><h3>Show the state</h3><p>Nothing a tile depends on is hidden. Lines, regions and fill points are drawn on the plate; each stack entry shows what it reads and writes; the gate's verdict and the overhang paint are always on. From <cite>Learnable Programming</cite>: the reader should never have to simulate the program in their head.</p></div>
+  <div class="card"><h3>Show the state</h3><p>Nothing a tile depends on is hidden. Lines, regions and fill points are drawn on the plate; the selected entry's source and controls stay visible; the gate's verdict and the overhang paint are always on. From <cite>Learnable Programming</cite>: the reader should never have to simulate the program in their head.</p></div>
   <div class="card"><h3>Point at the thing</h3><p>The view and the text are two faces of one tile, linked both ways. Point at a stone and you see the words that made it; point at the words and you see the stones. You change a tile by touching it, and the touch is written down as text you can read.</p></div>
   <div class="card"><h3>Make by reacting</h3><p>You rarely start from nothing: you start from a library tile, or from a choice the editor shows you. Completion shows what each element and each word makes, with its picture. Seeds and sweeps lay out several versions to choose between.</p></div>
   <div class="card"><h3>Up and down the ladder</h3><p>From one build, step up to the same tile at eight seeds, or across the whole range of one control, and step back down by clicking the one you want (<cite>Up and Down the Ladder of Abstraction</cite>).</p></div>
@@ -88,10 +88,10 @@
   <li><strong>The gate is a gate.</strong> The editor shows overhang, it never hides it, and it never offers to loosen a limit. Red and orange mean overhang only; selection and handles use the current theme's accent.</li>
 </ul>
 
-<h2 id="five">Five controls</h2>
-<p>The whole editor is five things. Each does several jobs, and each works the same on every screen.</p>
+<h2 id="five">Four surfaces</h2>
+<p>The whole editor is four working surfaces. Each does several jobs, and each works the same on every screen.</p>
 <figure class="diagram">
-<svg class="wf" viewBox="0 0 880 500" role="img" aria-label="The editor on a desktop: the document on the left, the tile on the plate in the middle, the stack and docked property sheet on the right, the bar along the bottom of the view, and the title with the gate's verdict along the top.">
+<svg class="wf" viewBox="0 0 880 500" role="img" aria-label="The editor on a desktop: the document on the left, the tile on the plate in the middle, the property sheet filling the right sidebar, the bar along the bottom of the view, and the title with the gate's verdict along the top.">
   <rect class="frame" x="1" y="1" width="878" height="498" rx="8"/>
   <!-- title -->
   <text class="t" x="18" y="27" style="font-weight:600">water+grass</text><text class="s" x="104" y="27">▾  My tiles</text>
@@ -125,38 +125,28 @@
   <rect class="raised" x="300" y="440" width="380" height="34" rx="17"/>
   <text class="s" x="320" y="461" style="font-size:12px">Type an element, a command, or ask…</text>
   <text class="s" x="300" y="490">the bar: place · command · completion · ask</text>
-  <!-- stack -->
+  <!-- property sheet -->
   <rect class="pane" x="700" y="46" width="179" height="453"/>
-  <text class="s" x="714" y="68">stack, as the plan runs it</text>
-  <g>
-    <rect class="raised" x="710" y="78" width="160" height="28" rx="4"/><text class="t" x="720" y="96">dirt</text><text class="s" x="790" y="96">in bank</text>
-    <rect class="raised" x="710" y="112" width="160" height="28" rx="4"/><text class="t" x="720" y="130">ground</text><text class="s" x="790" y="130">in pool</text>
-    <rect class="raised" x="710" y="146" width="160" height="28" rx="4" style="stroke:var(--accent);stroke-width:2"/><text class="b" x="720" y="164">scatter</text><text class="s" x="790" y="164">in pool · 2</text>
-    <rect class="raised" x="710" y="180" width="160" height="28" rx="4"/><text class="t" x="720" y="198">grass</text><text class="s" x="790" y="198">in bank</text>
-    <rect class="raised" x="710" y="214" width="160" height="28" rx="4"/><text class="t" x="720" y="232">water</text><text class="s" x="790" y="232">reads ground</text>
-  </g>
-  <path class="dash" d="M706,188 C690,180 690,168 706,162"/>
-  <text class="s" x="714" y="262">grass reads the rocks: it</text>
-  <text class="s" x="714" y="276">runs after them</text>
-  <!-- property sheet, docked below the stack -->
-  <line class="hair" x1="700" y1="304" x2="879" y2="304"/>
-  <text class="s" x="714" y="324">PROPERTIES</text>
-  <text class="b" x="714" y="346">scatter · rock 1 of 2</text>
-  <text class="t" x="714" y="370">count</text><text class="m" x="800" y="370">‹ 2 ›</text>
-  <text class="t" x="714" y="392">size</text><text class="m" x="800" y="392">6‥10 mm</text>
-  <text class="t" x="714" y="414">seed</text><text class="m" x="800" y="414">⚄ 97</text>
-  <text class="s" x="714" y="438">+ 4 more</text>
+  <text class="s" x="714" y="68">PROPERTIES</text><text class="s" x="834" y="68">Help ↗</text>
+  <text class="b" x="714" y="91">scatter · rock 1 of 2</text>
+  <line class="hair" x1="700" y1="105" x2="879" y2="105"/>
+  <text class="t" x="714" y="134">count</text><text class="m" x="800" y="134">‹ 2 ›</text>
+  <text class="t" x="714" y="160">size</text><text class="m" x="800" y="160">6‥10 mm</text>
+  <text class="t" x="714" y="186">seed</text><text class="m" x="800" y="186">⚄ 97</text>
+  <text class="s" x="714" y="216">+ 4 more</text>
+  <line class="hair" x1="700" y1="451" x2="879" y2="451"/>
+  <rect class="raised" x="710" y="462" width="74" height="26" rx="4"/><text class="t" x="735" y="480">Hide</text>
+  <rect class="raised" x="792" y="462" width="77" height="26" rx="4"/><text class="t" x="812" y="480">Delete</text>
   <text class="s" x="290" y="76">the view: select · drag · place</text>
 </svg>
-<figcaption>Desktop. A rock is selected: its scatter is lit in the text and the stack, and its property sheet is docked at the bottom of the right sidebar.</figcaption>
+<figcaption>Desktop. A rock is selected: its scatter is lit in the text and its property sheet fills the right sidebar, with Help at the top and Hide and Delete at the bottom.</figcaption>
 </figure>
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>What it is</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><strong>The view</strong></td><td>The tile on the plate, as the preview shows it today.</td><td>Orbit, pan and zoom as now. Click to select, click again to climb to what contains it. Drag a handle to move a point. In placing, click to put the thing there.</td></tr>
-<tr><td><strong>The property sheet</strong></td><td>A stable bottom panel below the stack.</td><td>The selected entry's controls as values you drag or pick. It appears with a selection without covering the tile.</td></tr>
+<tr><td><strong>The property sheet</strong></td><td>The whole right sidebar.</td><td>The selected entry's controls as values you drag or pick, with Help above and Hide and Delete anchored below. It never covers the tile.</td></tr>
 <tr><td><strong>The text</strong></td><td>The document, in a code editor.</td><td>Typing, completion, errors at their line, and the other face of every selection.</td></tr>
-<tr><td><strong>The stack</strong></td><td>The stack's entries in the order the plan runs them.</td><td>Select an entry, mute it, drag it into another order; see what it reads and writes.</td></tr>
 <tr><td><strong>The bar</strong></td><td>One line to type into, at the foot of the view.</td><td>An element name starts placing it; a command runs (<kbd>build</kbd>, <kbd>seeds</kbd>, <kbd>system ol</kbd>); anything else is a request to the assistant.</td></tr>
 </tbody></table></div>
 <p>The title, at the top, names the tile and opens the list of tiles (My tiles and the Library, as in the preview today). The gate's verdict sits at the other end of the title. There is no toolbar, no menu bar and no mode switch.</p>
@@ -175,7 +165,7 @@
 <p>Every solid in a build already carries the stack path that made it (its tag's <code>owner</code>, such as <code>tile/water+grass/scatter#1/2</code>), and every triangle of the final mesh keeps which solid it came from. That is enough to go from any point on the tile to the words that made it.</p>
 <ul>
   <li><strong>Hover</strong> lifts the thing under the pointer with a thin accent outline and names it in the bar's hint ("rock 2 of scatter in pool").</li>
-  <li><strong>Click</strong> selects it. The entry is lit in the stack and its node in the text is marked, scrolled into view if needed. Its property sheet opens below the stack.</li>
+  <li><strong>Click</strong> selects it. Its node in the text is marked and scrolled into view if needed; its property sheet fills the right sidebar.</li>
   <li><strong>Click again on the same spot</strong> climbs: a rock, then its scatter, then the region it stands in, then the tile. <kbd>Esc</kbd> or a click on empty plate clears the selection.</li>
   <li><strong>In the text</strong>, putting the cursor in a node selects it in the view; hovering a node outlines its geometry without selecting it.</li>
   <li><strong>On the plate</strong>, lines, fill points and regions are drawn as a thin overlay, and are selected like any solid.</li>
@@ -183,7 +173,7 @@
 </ul>
 
 <h2 id="lens">Changing: the property sheet</h2>
-<p>The property sheet is anchored below the stack in the right sidebar, so changing a selection never covers or shifts the tile. It shows the controls the document sets on the selected entry, and a line <em>+ more</em> that opens every other control the element takes, faint, at its default. Everything in it comes from the element schema (<code>dharmatiles elements --json</code>), so a new control appears in the sheet the day it is added to the schema.</p>
+<p>The property sheet fills the right sidebar, so changing a selection never covers or shifts the tile. Its Help link stays at the top right; Hide and Delete stay at the bottom. Between them it shows the controls the document sets on the selected entry, and a line <em>+ more</em> that opens every other control the element takes, faint, at its default. Everything in it comes from the element schema (<code>dharmatiles elements --json</code>), so a new control appears in the sheet the day it is added to the schema.</p>
 <div class="tbl"><table>
 <thead><tr><th>Kind of value</th><th>In the property sheet</th></tr></thead>
 <tbody>
@@ -247,18 +237,14 @@
   <li><strong>Pictures in completion.</strong> Each element in the list shows its picture from its element page, so you choose by what it makes.</li>
   <li><strong>Errors as you type.</strong> The program's checker (read and plan, no build) runs on every pause in typing, and its errors appear at their span with the same text and help as <code>dharmatiles check</code>. The view keeps the last good build until the text checks again.</li>
   <li><strong>Hover</strong> a control for its line from the element page and a link to the page.</li>
-  <li><strong>Folding and outline</strong> follow the document's nodes; the stack pane is the outline of the stack.</li>
+  <li><strong>Folding and outline</strong> follow the document's nodes.</li>
   <li><strong>Edits from the view</strong> arrive as ordinary changes with your cursor kept, and a short accent flash on the changed text so you see what a gesture wrote.</li>
 </ul>
 
-<h2 id="stack">The stack and the map</h2>
+<h2 id="stack">The map</h2>
 <ul>
-  <li><strong>The stack pane</strong> lists the entries in the order the plan runs them, which is not always the order of the text (grass written before the rocks it grows round runs after them). Each row has the element, its place words (<code>in pool</code>, <code>along shore</code>) and, for a scatter, its count.</li>
-  <li><strong>Reads and writes.</strong> Hovering a row draws a thin line to each row it reads from: water reads the ground under it, grass reads the rocks it must part round. A read nothing can satisfy, which <code>check</code> refuses, is the row's error.</li>
-  <li><strong>Mute</strong> a row (its eye) to see the tile without it: the editor writes KDL's <code>/-</code> before the node, so the document says exactly what is muted.</li>
-  <li><strong>Drag</strong> a row to move its node in the text.</li>
-  <li><strong>Definitions</strong> (<code>use</code> and <code>define</code>) show as a row that opens to the entries inside, read-only when they come from the library.</li>
   <li><strong>The map</strong> is not another pane. Turn the view to the top (<kbd>2</kbd>) and the overlay becomes a map: regions tinted by what fills them, their names, the lines with their widths and wobble, fill points, and placed things' footprints. The same overlay drapes over the tile in every other view, fainter.</li>
+  <li><strong>Hide</strong> at the foot of the property sheet lets you see the tile without the selected entry. The editor writes KDL's <code>/-</code> before the node, so the document says exactly what is hidden; the toast offers Undo.</li>
 </ul>
 
 <h2 id="gate">The gate, always in view</h2>
@@ -298,9 +284,9 @@
 </ul>
 
 <h2 id="screens">Every screen</h2>
-<p>The same five controls on every screen, rearranged. The view always has the most room.</p>
+<p>The same four surfaces on every screen, rearranged. The view always has the most room.</p>
 <figure class="diagram">
-<svg class="wf" viewBox="0 0 880 400" role="img" aria-label="The editor on a tablet and on a phone. On the tablet the view fills the screen, the stack is a narrow column at the right, and the text slides in from the left. On the phone the view fills the screen and a sheet at the bottom holds the bar, the lens and the text, at three heights.">
+<svg class="wf" viewBox="0 0 880 400" role="img" aria-label="The editor on a tablet and phone. The view has priority; the property sheet and document stack beneath or beside it as room allows.">
   <!-- tablet -->
   <g transform="translate(10,10)">
     <rect class="frame" x="0" y="0" width="470" height="350" rx="14"/>
@@ -316,7 +302,7 @@
     <rect class="raised" x="410" y="56" width="46" height="22" rx="3"/><rect class="raised" x="410" y="84" width="46" height="22" rx="3"/><rect class="raised" x="410" y="112" width="46" height="22" rx="3" style="stroke:var(--accent);stroke-width:2"/><rect class="raised" x="410" y="140" width="46" height="22" rx="3"/><rect class="raised" x="410" y="168" width="46" height="22" rx="3"/>
     <rect class="pane" x="0" y="46" width="22" height="230"/><text class="s" x="6" y="166">‹</text>
     <rect class="raised" x="100" y="296" width="270" height="32" rx="16"/><text class="s" x="118" y="316">Type an element, a command, or ask…</text>
-    <text class="s" x="18" y="344">text slides in from the left edge; stack shrinks to its icons</text>
+    <text class="s" x="18" y="344">property sheet stays beside the view; text follows below</text>
   </g>
   <!-- phone peek -->
   <g transform="translate(504,10)">
@@ -339,7 +325,7 @@
     <polygon class="plate" points="85,44 125,66 85,88 45,66"/>
     <rect class="raised" x="0" y="96" width="170" height="254" rx="16"/>
     <rect x="70" y="103" width="30" height="4" rx="2" style="fill:var(--line-2)"/>
-    <text class="s" x="14" y="126">stack · text</text>
+    <text class="s" x="14" y="126">document</text>
     <text class="m" x="14" y="148" style="font-size:9.5px">stack {</text>
     <text class="m" x="14" y="164" style="font-size:9.5px">  dirt in=bank</text>
     <text class="m" x="14" y="180" style="font-size:9.5px">  grass in=bank</text>
@@ -353,14 +339,14 @@
   <text class="s" x="504" y="392">Phone: the sheet low</text>
   <text class="s" x="700" y="392">Phone: the sheet high</text>
 </svg>
-<figcaption>Tablet and phone. On a phone the lens, the stack and the text share one sheet at the foot of the screen; pull it up for more, and the tile stays in view above it. The bar is at the foot of the view on every screen, where a thumb reaches it.</figcaption>
+<figcaption>Tablet and phone. The view comes first, followed by the selected entry's property sheet and the document. The placing bar stays at the foot of the view, where a thumb reaches it.</figcaption>
 </figure>
 <div class="tbl"><table>
 <thead><tr><th>Screen</th><th>Layout</th></tr></thead>
 <tbody>
-<tr><td>Wide (1100 px and more)</td><td>Text, view and stack side by side; the text and the stack panes can be dragged narrower or closed to an edge.</td></tr>
-<tr><td>Medium (700–1100 px)</td><td>The view fills the screen; the stack is a narrow column of icons on the right that opens on hover or tap; the text slides in from the left edge and covers part of the view.</td></tr>
-<tr><td>Narrow (under 700 px)</td><td>The view fills the screen; a sheet at the bottom holds the bar, then the lens, then the stack and the text, at three heights: low (the bar and the selection's name), half (the lens) and high (the stack and the text, with the tile still visible above).</td></tr>
+<tr><td>Wide (1100 px and more)</td><td>Document, view and property sheet sit side by side. The selected entry's properties occupy the whole right sidebar.</td></tr>
+<tr><td>Medium (700–1100 px)</td><td>The view comes first; the property sheet and document stack below it without floating over the tile.</td></tr>
+<tr><td>Narrow (under 700 px)</td><td>The same single-column order keeps the view, selected properties and source available without a duplicate outline.</td></tr>
 </tbody></table></div>
 <div class="tbl"><table>
 <thead><tr><th>Touch</th><th>Does</th></tr></thead>
@@ -400,7 +386,7 @@
 <h2 id="stages">Stages</h2>
 <p>Each stage is usable on its own, and ends when it is used to make a real tile.</p>
 <ol>
-  <li><strong>Built — Select.</strong> Owner paths in the mesh; hover, click and climb; the stack pane; the text pane linked both ways.</li>
+  <li><strong>Built — Select.</strong> Owner paths in the mesh; hover, click and climb; the text and property panes linked to the view.</li>
   <li><strong>Built — Edit.</strong> The text pane editable with completion and errors; the property sheet; writing the file; one undo; <em>Make it mine</em>; the write protection.</li>
   <li><strong>Built — Draft.</strong> Draft builds answer while the property sheet is dragged. Per-entry rebuilding remains.</li>
   <li><strong>Built — Place and draw.</strong> The bar; placing, scattering, painting; lines and regions on the plate; handles; the map overlay; mute and delete.</li>
@@ -414,7 +400,7 @@
 <ul>
   <li><strong>No second model.</strong> No hidden scene, no project file, no state that is not in the document (apart from the camera, the selection and the panes, which the browser remembers).</li>
   <li><strong>No property sheet for everything.</strong> The docked sheet holds one selected entry's controls; there is no panel listing every control of every entry.</li>
-  <li><strong>No node graph.</strong> The stack is a list, and the plan orders it; its reads and writes are drawn on hover, not wired by hand.</li>
+  <li><strong>No node graph or duplicate outline.</strong> The document is the ordering surface; the plan derives its execution order without asking the editor to show a second list.</li>
   <li><strong>No modes.</strong> Placing ends with a click elsewhere or <kbd>Esc</kbd>; there is no edit mode, select tool or move tool.</li>
   <li><strong>No sculpting.</strong> You do not push vertices. You change what a tile is made of, and the program grows the geometry; that is what keeps every tile printable.</li>
   <li><strong>No loosening the gate.</strong> Nothing in the editor turns a limit off or hides overhang.</li>
