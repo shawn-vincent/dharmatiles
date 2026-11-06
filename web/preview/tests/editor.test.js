@@ -8,6 +8,7 @@ import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/paylo
 import { snap } from '../js/place.js';
 import { indentSelection, newlineAt } from '../js/text.js';
 import { rememberView, shortcutViews } from '../js/view-presets.js';
+import { describeChange } from '../js/history.js';
 
 const elements = [
   {
@@ -28,6 +29,18 @@ test('view shortcuts keep ISO and Map plus two recent alternatives', () => {
   recent = rememberView(recent, 'right');
   assert.deepEqual(shortcutViews(recent), ['painted', 'top', 'right', 'front']);
   assert.deepEqual(rememberView(recent, 'top'), recent);
+});
+
+test('history describes the text that was added, changed, or removed', () => {
+  assert.deepEqual(describeChange('rock size=8', 'rock size=12', 'type'), {
+    title: 'Edited · line 1', line: 1, removed: '8', added: '12',
+  });
+  assert.deepEqual(describeChange('rock\nwater', 'rock', 'view', 'Deleted water'), {
+    title: 'Deleted water · line 2', line: 2, removed: 'water', added: null,
+  });
+  const long = describeChange('', `about "${'x'.repeat(100)}"`, 'type');
+  assert.equal(long.added.length, 76);
+  assert.match(long.added, /…$/);
 });
 
 function caret(text, marker = '|') {

@@ -92,6 +92,7 @@ fn serves_the_viewer_and_its_vendored_three() {
         "/js/main.js",
         "/js/viewer.js",
         "/js/view-presets.js",
+        "/js/history.js",
         "/js/payload.js",
         "/js/host.js",
         "/js/text.js",
@@ -100,6 +101,8 @@ fn serves_the_viewer_and_its_vendored_three() {
         "/style.css",
         "/logo.svg",
         "/favicon.svg",
+        "/icons/undo-2.svg",
+        "/icons/redo-2.svg",
     ] {
         assert!(get(&r, p).0.starts_with("HTTP/1.1 200"), "{p}");
     }

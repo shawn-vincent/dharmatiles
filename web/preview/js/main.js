@@ -15,6 +15,7 @@ import { Lens, valueOf } from './lens.js';
 import { suggest } from './complete.js';
 import { Viewer, VIEWS } from './viewer.js';
 import { rememberView, shortcutViews } from './view-presets.js';
+import { describeChange } from './history.js';
 import { Overlay } from './overlay.js';
 import { Tools } from './place.js';
 
@@ -484,21 +485,24 @@ function mapNode(w) {
 
 // one history for the file shown: typing (a pause or another kind of change
 // starts a new step), changes from the lens, and changes on disk
-function historyLabel(kind, before, after) {
-  const a = (before || '').split('\n'), b = (after || '').split('\n');
-  let line = 0;
-  while (line < a.length && line < b.length && a[line] === b[line]) line++;
-  const at = Math.min(line + 1, Math.max(a.length, b.length));
-  const names = { type: 'Typing', lens: 'Changed properties', view: 'Changed tile', disk: 'Changed on disk' };
-  return `${names[kind] || 'Edited'} · line ${Math.max(1, at)}`;
-}
-
 function historyButton(entry, target, distance, direction) {
   const b = document.createElement('button');
   b.type = 'button';
   const action = document.createElement('span'); action.className = 'action'; action.textContent = entry.label;
   const away = document.createElement('span'); away.className = 'distance'; away.textContent = distance === 1 ? '1 step' : `${distance} steps`;
   b.append(action, away);
+  if (entry.change?.removed || entry.change?.added) {
+    const change = document.createElement('span'); change.className = 'change';
+    if (entry.change.removed) {
+      const removed = document.createElement('code'); removed.className = 'removed'; removed.textContent = `− ${entry.change.removed}`;
+      change.append(removed);
+    }
+    if (entry.change.added) {
+      const added = document.createElement('code'); added.className = 'added'; added.textContent = `+ ${entry.change.added}`;
+      change.append(added);
+    }
+    b.append(change);
+  }
   b.title = `${direction} to ${entry.label}`;
   b.onclick = () => { goHistory(target); closePopovers(); };
   return b;
@@ -533,7 +537,9 @@ function record(text, kind, label = null) {
   const now = performance.now();
   const join = kind === 'type' && doc.lastKind === 'type' && now - doc.lastTime < 1000 && doc.at > 0;
   doc.history.length = doc.at + 1;
-  const h = { text, caret: texts.ta.selectionStart, kind, label: label || historyLabel(kind, doc.history[doc.at]?.text, text) };
+  const before = doc.history[join ? doc.at - 1 : doc.at]?.text || '';
+  const change = describeChange(before, text, kind, label);
+  const h = { text, caret: texts.ta.selectionStart, kind, label: change.title, change };
   if (join) doc.history[doc.at] = h; else { doc.history.push(h); doc.at++; }
   if (doc.history.length > 400) { doc.history.shift(); doc.at--; }
   doc.lastKind = kind; doc.lastTime = now;

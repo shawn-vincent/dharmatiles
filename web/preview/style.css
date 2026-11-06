@@ -27,15 +27,22 @@ button { font: inherit; color: inherit; }
 .history-split { position: relative; display: inline-flex; }
 .history-split > button { height: 30px; color: var(--muted); background: var(--raised); border: 1px solid var(--line); cursor: pointer; }
 .history-split > button:first-child { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: var(--r) 0 0 var(--r); }
+.history-icon { display: inline-block; width: 15px; height: 15px; flex: none; background: currentColor; mask: center / contain no-repeat; -webkit-mask: center / contain no-repeat; }
+.history-icon.undo { mask-image: url("/icons/undo-2.svg"); -webkit-mask-image: url("/icons/undo-2.svg"); }
+.history-icon.redo { mask-image: url("/icons/redo-2.svg"); -webkit-mask-image: url("/icons/redo-2.svg"); }
 .history-split > button:nth-child(2) { width: 22px; padding: 0; margin-left: -1px; border-radius: 0 var(--r) var(--r) 0; font-size: 10px; }
 .history-split > button:hover:not(:disabled) { color: var(--ink); border-color: var(--line-2); z-index: 1; }
 .history-split > button:disabled { opacity: .42; cursor: default; }
-.history-menu { top: 35px; left: 0; width: min(330px, calc(100vw - 24px)); max-height: min(440px, calc(100vh - 72px)); overflow-y: auto; padding: 5px; }
+.history-menu { top: 35px; left: 0; width: min(400px, calc(100vw - 24px)); max-height: min(440px, calc(100vh - 72px)); overflow-y: auto; padding: 5px; }
 .history-split:last-child .history-menu { left: auto; right: 0; }
 .history-menu button { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; gap: 12px; padding: 7px 8px; color: var(--ink); background: none; border: 0; border-radius: var(--r); text-align: left; cursor: pointer; }
 .history-menu button:hover, .history-menu button:focus-visible { background: var(--panel); }
 .history-menu .action { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history-menu .distance { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.history-menu .change { grid-column: 1 / -1; display: grid; gap: 3px; min-width: 0; }
+.history-menu code { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; border-radius: 3px; padding: 2px 5px; font: 11.5px/1.35 var(--f-code); }
+.history-menu code.removed { color: var(--earth); background: color-mix(in srgb, var(--earth) 11%, transparent); text-decoration: line-through; text-decoration-thickness: 1px; }
+.history-menu code.added { color: var(--moss); background: color-mix(in srgb, var(--moss) 11%, transparent); }
 #title .grow { flex: 1; }
 #conn { font-size: 12px; white-space: nowrap; }
 #gate { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--raised); border-radius: 999px; padding: 5px 12px 5px 10px; cursor: pointer; font-size: 12.5px; font-weight: 600; white-space: nowrap; }

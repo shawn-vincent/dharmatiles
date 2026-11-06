@@ -67,6 +67,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/view-presets.js"),
     ),
     (
+        "/js/history.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/history.js"),
+    ),
+    (
         "/js/payload.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/payload.js"),
@@ -115,6 +120,21 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/vendor/LICENSE-three",
         "text/plain; charset=utf-8",
         include_bytes!("../../../../web/preview/vendor/LICENSE-three"),
+    ),
+    (
+        "/icons/undo-2.svg",
+        "image/svg+xml",
+        include_bytes!("../../../../web/preview/icons/undo-2.svg"),
+    ),
+    (
+        "/icons/redo-2.svg",
+        "image/svg+xml",
+        include_bytes!("../../../../web/preview/icons/redo-2.svg"),
+    ),
+    (
+        "/vendor/LICENSE-lucide",
+        "text/plain; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/LICENSE-lucide"),
     ),
 ];
 
