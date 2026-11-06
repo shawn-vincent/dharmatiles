@@ -685,6 +685,9 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
         serde_json::json!({ "system": "lego" }),
     );
     assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+    // where it would go, without building
+    let (_, v) = call("/api/tiles/0/export", serde_json::json!({ "where": true }));
+    assert_eq!(v["out"], dir.join("out").to_string_lossy().as_ref(), "{v}");
     let (h, v) = call("/api/tiles/0/export", serde_json::json!({ "system": "ol" }));
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
     assert_eq!(v["ok"], true, "{v}");
@@ -709,4 +712,23 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
         serde_json::json!({ "path": dir.join("out/ol/none.stl") }),
     );
     assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+}
+
+#[test]
+fn a_library_tile_exports_to_my_tiles_never_into_the_library() {
+    let mine = super::roots::personal_home().join("out");
+    assert_eq!(edit::export_dir("lib:tiles/ground/1x1-grass.dtile"), mine);
+    // the same tile named by its file inside the library folder
+    if let Some(lib) = dt_eval::source::library_dir() {
+        let file = lib.join("tiles/ground/1x1-grass.dtile");
+        assert_eq!(edit::export_dir(&file.to_string_lossy()), mine);
+    }
+    // a file of yours: its project's out/
+    let dir = std::env::temp_dir().join(format!("dt-where-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("a")).unwrap();
+    std::fs::write(dir.join("dharmatiles.dtile"), "name \"t\"\n").unwrap();
+    assert_eq!(
+        edit::export_dir(&dir.join("a/t.dtile").to_string_lossy()),
+        dir.join("out")
+    );
 }

@@ -588,9 +588,7 @@ fn mine(
 }
 
 /// Export: the same build as `dharmatiles build` (the saved file, through
-/// the gate), written to the project's `out/` (beside the nearest
-/// `dharmatiles.dtile` above the tile, else beside the tile; a library
-/// tile's go where `build` would put them).  `system` is `db` or `ol`
+/// the gate), written to [`export_dir`].  With `where`, only says where.  `system` is `db` or `ol`
 /// (default: the preview's); `threemf` adds the painted 3MF.
 fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
     let system = match v["system"].as_str() {
@@ -607,12 +605,22 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
     } else {
         None
     };
-    let out = if tile.starts_with("lib:") {
-        crate::library::out_dir(None)
-    } else {
-        let dir = Path::new(tile).parent().unwrap_or_else(|| Path::new("."));
-        dt_eval::discover(dir).out
-    };
+    let out = export_dir(tile);
+    if v["where"].as_bool() == Some(true) {
+        // shown with ~ for the home folder
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let shown = home
+            .as_deref()
+            .and_then(|h| out.strip_prefix(h).ok())
+            .map_or_else(
+                || out.display().to_string(),
+                |r| format!("~/{}", r.display()),
+            );
+        return (
+            "200 OK",
+            json!({ "out": out.display().to_string(), "shown": shown }),
+        );
+    }
     let palette = shared.palette();
     let extras = crate::build::Extras {
         progress: false,
@@ -658,6 +666,23 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
         }
         Err(e) => ("500 Internal Server Error", json!({ "error": e })),
     }
+}
+
+/// Where `tile` exports to: never the library.  A library tile (`lib:`,
+/// or a file inside the library folder) goes to `out/` in My tiles; any
+/// other file to its project's `out/` (beside the nearest
+/// `dharmatiles.dtile` above it), else `out/` beside it.
+pub(super) fn export_dir(tile: &str) -> PathBuf {
+    let in_library = tile.starts_with("lib:")
+        || dt_eval::source::library_dir()
+            .and_then(|l| l.canonicalize().ok())
+            .zip(Path::new(tile).canonicalize().ok())
+            .is_some_and(|(l, t)| t.starts_with(l));
+    if in_library {
+        return personal_home().join("out");
+    }
+    let dir = Path::new(tile).parent().unwrap_or_else(|| Path::new("."));
+    dt_eval::discover(dir).out
 }
 
 /// Show a written file in the Finder (macOS `open -R`; elsewhere the

@@ -1278,7 +1278,7 @@ function renderAll() {
 }
 
 // ---- export: the same build as `dharmatiles build`, written to out/ ----------
-const exporting = { system: null, busy: false, files: null, error: null };
+const exporting = { system: null, busy: false, files: null, error: null, out: null };
 try { exporting.system = localStorage.getItem('dt-export-system'); } catch { /* ignore */ }
 try { $('export-3mf').checked = localStorage.getItem('dt-export-3mf') === '1'; } catch { /* ignore */ }
 /** Why export is not possible now, or null. */
@@ -1312,14 +1312,25 @@ function renderExport() {
       c.textContent = f.split(/[\\/]/).slice(-3).join('/'); c.title = f; // out/db/name-db.stl; the whole path on hover
       p.append(c);
     });
-  } else p.textContent = why || 'Writes to out/ beside your tiles, as dharmatiles build does.';
+  } else {
+    p.textContent = why || (exporting.out ? `Writes to ${exporting.out.shown}` : 'Writes to out/, as dharmatiles build does.');
+    p.title = exporting.out?.out || '';
+  }
   $('export-reveal').hidden = !exporting.files;
 }
 for (const b of $('export-system').children) {
   b.onclick = () => { exporting.system = b.dataset.sys; exporting.files = null; try { localStorage.setItem('dt-export-system', b.dataset.sys); } catch { /* ignore */ } renderExport(); };
 }
 $('export-3mf').onchange = (e) => { try { localStorage.setItem('dt-export-3mf', e.target.checked ? '1' : '0'); } catch { /* ignore */ } exporting.files = null; renderExport(); };
-$('export').addEventListener('click', () => { exporting.files = null; exporting.error = null; renderExport(); });
+$('export').addEventListener('click', async () => {
+  exporting.files = null; exporting.error = null; exporting.out = null; renderExport();
+  const t = tile();
+  if (!t) return;
+  try {
+    const r = await host.post(`/api/tiles/${t.index}/export`, { where: true });
+    if (r.status === 200 && t === tile()) { exporting.out = r.body; renderExport(); }
+  } catch { /* said when exporting */ }
+});
 $('export-go').onclick = async () => {
   const t = tile();
   if (!t || exportBlock()) return renderExport();
