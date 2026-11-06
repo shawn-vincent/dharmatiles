@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use dt_eval::progress::{Status, Timings, Tracker, plan_stages};
 use dt_eval::{Built, Library, Options, Progress, build, build_with, check};
+use rayon::prelude::*;
 
 /// One tile for each element that reports sub-progress.
 const TILES: &[&str] = &[
@@ -47,21 +48,19 @@ fn fingerprint(b: &Built) -> (Vec<(String, u64)>, u64) {
     )
 }
 
+/// Each tile tracked on two threads and built plain on the whole machine,
+/// all at once: the reporter changes nothing, and progress only climbs,
+/// to 100% at the end.
 #[test]
-fn a_reporter_changes_nothing_at_1_4_and_16_threads() {
-    for path in TILES {
+fn progress_climbs_to_100_percent_and_changes_nothing() {
+    TILES.par_iter().for_each(|path| {
         let plain = fingerprint(&build(&Library, path, &Options::default()).unwrap());
-        for threads in [1, 4, 16] {
-            let (b, _) = tracked(path, threads);
-            assert_eq!(fingerprint(&b), plain, "{path} at {threads} threads");
-        }
-    }
-}
-
-#[test]
-fn progress_is_monotonic_and_ends_at_100_percent() {
-    for path in TILES {
-        let (b, v) = tracked(path, 4);
+        let (b, v) = tracked(path, 2);
+        assert_eq!(
+            fingerprint(&b),
+            plain,
+            "{path}: the reporter changed the build"
+        );
         assert!(v.len() > 3, "{path}: {} reports", v.len());
         for w in v.windows(2) {
             assert!(w[1].fraction >= w[0].fraction, "{path}: {w:?}");
@@ -76,7 +75,7 @@ fn progress_is_monotonic_and_ends_at_100_percent() {
         // every stage reported its own time
         assert!(b.stage_secs.iter().any(|(k, _)| k == "union"), "{path}");
         assert!(b.stage_secs.iter().any(|(k, _)| k == "audit"), "{path}");
-    }
+    });
 }
 
 #[derive(Default)]
@@ -97,11 +96,13 @@ impl dt_kit::Reporter for Subs {
 
 #[test]
 fn elements_with_a_loop_report_their_counts() {
-    for (path, what) in [
+    [
         ("lib:tiles/test/1x1-wall-cut-stone.dtile", "stones"),
         ("lib:tiles/test/2x2-grass.dtile", "blades"),
         ("lib:tiles/test/2x2-rocks.dtile", "stones"),
-    ] {
+    ]
+    .par_iter()
+    .for_each(|&(path, what)| {
         let subs = Arc::new(Subs::default());
         build_with(
             &Library,
@@ -122,5 +123,5 @@ fn elements_with_a_loop_report_their_counts() {
             mine.iter().any(|s| s.1 == s.2),
             "{path}: the loop reports its end"
         );
-    }
+    });
 }

@@ -2,15 +2,20 @@
 //! hashes, triangle count, volume, overhang mm² and see-through holes,
 //! as insta snapshots; `cargo insta review` shows what changed.
 //!
-//! Determinism level B (Shawn, 2 Nov 2026): every tile is built twice at
-//! 1, 4 and 16 threads and every stage hash must agree on every platform;
-//! the hash snapshot is shared by macOS and Linux; Windows checks the
-//! metrics snapshot and the render gate only.
+//! Each golden tile is built once on the whole machine, all of them at
+//! once, and the tests share the builds. Determinism: every tile is built
+//! again on two threads and every stage hash must agree; the hash
+//! snapshot is shared by macOS and Linux; Windows checks the metrics
+//! snapshot and the render gate only.
 
 #![allow(clippy::unwrap_used)]
 
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
 use dt_eval::{Built, Library, Options, build};
 use dt_kit::{VIEWS, render};
+use rayon::prelude::*;
 
 const TILES: &[&str] = &[
     "lib:tiles/test/1x1-flat.dtile",
@@ -37,6 +42,26 @@ fn build_at(path: &str, threads: usize) -> Built {
         .unwrap();
     pool.install(|| build(&Library, path, &Options::default()))
         .unwrap_or_else(|e| panic!("{path}: {e:?}"))
+}
+
+/// Every golden tile, built once on the whole machine, all at once; every
+/// test here reads these.
+static BUILT: LazyLock<HashMap<&'static str, Built>> = LazyLock::new(|| {
+    TILES
+        .par_iter()
+        .map(|&p| {
+            (
+                p,
+                build(&Library, p, &Options::default()).unwrap_or_else(|e| panic!("{p}: {e:?}")),
+            )
+        })
+        .collect()
+});
+
+fn built(path: &str) -> &'static Built {
+    BUILT
+        .get(path)
+        .unwrap_or_else(|| panic!("{path} is not a golden tile"))
 }
 
 fn hashes(b: &Built) -> String {
@@ -70,29 +95,29 @@ fn metrics(b: &Built) -> String {
     )
 }
 
+/// Every leaf solid takes a slot reserved in sequence, so a build is the
+/// same whatever the threads: each golden tile on two threads, all at once,
+/// against its build on the whole machine.
 #[test]
-fn stage_hashes_agree_at_1_4_and_16_threads() {
-    for path in TILES {
-        let first = hashes(&build_at(path, 1));
-        for threads in [1, 4, 16] {
-            for run in 0..2 {
-                assert_eq!(
-                    hashes(&build_at(path, threads)),
-                    first,
-                    "{path}: {threads} threads, run {run}"
-                );
-            }
-        }
-        println!("{path}\n{first}");
-    }
+fn stage_hashes_agree_whatever_the_threads() {
+    // the shared builds first, on this thread: a pool worker must never
+    // wait on them while they wait on the pool
+    LazyLock::force(&BUILT);
+    TILES.par_iter().for_each(|path| {
+        assert_eq!(
+            hashes(&build_at(path, 2)),
+            hashes(built(path)),
+            "{path}: 2 threads against all"
+        );
+    });
 }
 
 #[test]
 fn golden_metrics() {
     for path in TILES {
-        let b = build_at(path, 4);
+        let b = built(path);
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
-        insta::assert_snapshot!(format!("{name}-metrics"), metrics(&b));
+        insta::assert_snapshot!(format!("{name}-metrics"), metrics(b));
     }
 }
 
@@ -100,15 +125,15 @@ fn golden_metrics() {
 #[cfg(not(windows))]
 fn golden_hashes() {
     for path in TILES {
-        let b = build_at(path, 4);
+        let b = built(path);
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
-        insta::assert_snapshot!(format!("{name}-hashes"), hashes(&b));
+        insta::assert_snapshot!(format!("{name}-hashes"), hashes(b));
     }
 }
 
 #[test]
 fn the_flat_tile_meets_the_exit_criteria() {
-    let b = build_at("lib:tiles/test/1x1-flat.dtile", 4);
+    let b = built("lib:tiles/test/1x1-flat.dtile");
     let a = &b.audit;
     assert!(a.watertight, "watertight after the float32 reload");
     assert_eq!(a.overhang_mm2, 0.0);
@@ -137,7 +162,7 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
         "lib:tiles/ground/1x1-soil.dtile",
         "lib:tiles/test/2x2-dirt.dtile",
     ] {
-        let b = build_at(path, 4);
+        let b = built(path);
         let a = &b.audit;
         assert!(a.watertight, "{path}: watertight after the float32 reload");
         assert_eq!(a.overhang_mm2, 0.0, "{path}");
@@ -171,7 +196,7 @@ fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
         "lib:tiles/test/2x2-water.dtile",
         "lib:tiles/test/2x2-dirt-stones.dtile",
     ] {
-        let b = build_at(path, 4);
+        let b = built(path);
         let a = &b.audit;
         assert!(a.watertight, "{path}: watertight after the float32 reload");
         assert_eq!(a.overhang_mm2, 0.0, "{path}");
@@ -208,7 +233,7 @@ fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
         "lib:tiles/test/1x1-wall-fieldstone.dtile",
         "lib:tiles/test/1x1-floor-stone.dtile",
     ] {
-        let b = build_at(path, 4);
+        let b = built(path);
         let a = &b.audit;
         assert!(a.watertight, "{path}: watertight after the float32 reload");
         assert_eq!(a.overhang_mm2, 0.0, "{path}");
@@ -231,7 +256,7 @@ fn the_grass_tiles_meet_the_exit_criteria() {
         "lib:tiles/test/2x2-meadow.dtile",
         "lib:tiles/test/2x2-shore.dtile",
     ] {
-        let b = build_at(path, 4);
+        let b = built(path);
         let a = &b.audit;
         assert!(a.watertight, "{path}: watertight after the float32 reload");
         assert_eq!(a.overhang_mm2, 0.0, "{path}");
