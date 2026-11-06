@@ -19,7 +19,8 @@
 //!    equal depth (0.75 mm), build the blade, skew it for printability,
 //!    seat its belly 0.3 mm off the clump, stand it off, gate the neck,
 //!    tuck base and tip, solidify. The blade blends continuously with the
-//!    surface normal: curled (32°) and tip-lifted (1.2 mm) on upward faces,
+//!    surface normal: curled (32°) and tip-lifted (1.2 mm) on every
+//!    upward-facing part of the crown,
 //!    a flush end-to-end arch (0.8 mm) on undersides, bare below a normal z
 //!    of −0.75.
 //! 6. **Skewer cull.** A leaf whose blade is inside a branch where the
@@ -51,6 +52,9 @@ const CANDIDATE_FACTOR: f64 = 10.0;
 /// Zone blend: fully pitched blade at normal z ≥ HI, fully flush at ≤ LO.
 const ZONE_HI: f64 = 0.30;
 const ZONE_LO: f64 = -0.45;
+/// Every leaf rooted on an upward-facing crown surface is fully pitched,
+/// even when its downhill tip reaches a steeper part of the crown.
+const TOP_NORMAL_Z: f64 = 0.0;
 /// Below this normal z the clump stays bare.
 const PLACEABLE_NORMAL_Z: f64 = -0.75;
 /// Tip clearance ceiling blend: ceiling = touch + st × this.
@@ -436,9 +440,10 @@ fn place_inner(
             counter.tick();
             let n = root_n[i];
             let lying = reach.lying_nz(roots[i], n, dirs[i]);
+            let st = leaf_zone(n[2], lying);
             let k = 1.0 - SIZE_JITTER * h01(seed, "org-size", i);
             let o = job.leaf(roots[i], n, dirs[i], lying, standoffs[i], len * k, wid * k);
-            (zone(lying), o)
+            (st, o)
         })
         .collect();
     stats.times.build = clock.lap();
@@ -999,6 +1004,17 @@ fn zone(nz: f64) -> f64 {
     tz * tz * (3.0 - 2.0 * tz)
 }
 
+/// Upward-facing roots own the top silhouette: keep them fully pitched even
+/// when their downhill tips cross onto a steeper surface. Elsewhere the whole
+/// blade's lowest crown normal still controls the pitch for printability.
+fn leaf_zone(root_nz: f64, lying_nz: f64) -> f64 {
+    if root_nz >= TOP_NORMAL_Z {
+        1.0
+    } else {
+        zone(lying_nz)
+    }
+}
+
 // ── one leaf ──────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1037,7 +1053,8 @@ impl Job<'_> {
         ls: f64,
         ws: f64,
     ) -> Outcome {
-        let st = zone(lying_nz);
+        let on_top = nrm[2] >= TOP_NORMAL_Z;
+        let st = leaf_zone(nrm[2], lying_nz);
         let flush = st < 0.5;
         let mut arch_mm = (1.0 - st) * FLUSH_ARCH_MM;
         let mut blade = Blade {
@@ -1051,7 +1068,8 @@ impl Job<'_> {
             curl_deg: st * self.shape.curl_deg.min(PITCH_CURL_DEG),
             lift_mm: st * TIP_LIFT_MM,
         };
-        let k = hang_scale(lying_nz, self.shape.overhang_deg, &blade, arch_mm);
+        let support_nz = if on_top { nrm[2] } else { lying_nz };
+        let k = hang_scale(support_nz, self.shape.overhang_deg, &blade, arch_mm);
         blade.arch_deg *= k;
         blade.curl_deg *= k;
         blade.lift_mm *= k;
@@ -1084,7 +1102,7 @@ impl Job<'_> {
         // the crown below it would start a layer in air: lay it flat
         // instead.
         let built = match built {
-            Ok((surf, _, _)) if self.hangs(&surf) => {
+            Ok((surf, _, _)) if !on_top && self.hangs(&surf) => {
                 self.drape_turning(base, nrm, t_leaf, &blade, drape_embed(standoff))
             }
             b => b,
@@ -1630,5 +1648,14 @@ mod tests {
         // The printer limit lays underside blades flat: no root faces
         // straight down.
         assert!(stats.leaves.iter().all(|l| l.normal[2] >= -0.75));
+        // Every upward-facing root contributes a proud leaf to the top
+        // silhouette, even if its downhill tip crosses onto the side.
+        assert!(
+            stats
+                .leaves
+                .iter()
+                .filter(|l| l.normal[2] >= TOP_NORMAL_Z)
+                .all(|l| (l.zone - 1.0).abs() < f64::EPSILON)
+        );
     }
 }

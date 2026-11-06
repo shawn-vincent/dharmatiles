@@ -3,13 +3,9 @@
 //! front dome, offset upward so the branch runs along its underside,
 //! roughened by inward-only noise (fine grain and a coarse 4 mm lumpiness).
 //!
-//! Printable by construction: a naive clump's undersides hang in the
-//! air (about 150–220 mm² of a 1×1 tree's wood and clumps fail the
-//! layer-reach audit there). Here the noise never dents an underside (a
-//! dent there is a ceiling over air), and the crown is then cut with
-//! [`dt_kit::stand`] (mod.rs), which bevels whatever still hangs at 37°
-//! up from what holds it. Tops and sides, the silhouette from above and
-//! from eye level, are those of the plain clump.
+//! The clump remains a closed, naturally rounded volume after the crown is
+//! assembled. Noise fades from the underside so it does not carve ceiling-like
+//! dents there, but the underside itself is not clipped or bevelled flat.
 
 use dt_kit::graph::{Curve, add, cross, dist, dot, norm, scale, sub, unit};
 use dt_kit::{TriMesh, form};
@@ -79,7 +75,7 @@ fn up_perp(t: [f64; 3]) -> [f64; 3] {
     }
 }
 
-/// The clump surface before the cut, outward wound.
+/// The complete clump surface, outward wound.
 pub fn mesh(s: &Spec) -> TriMesh {
     let r_base = s.r_wood;
     let r_tip = s.r_foliage;

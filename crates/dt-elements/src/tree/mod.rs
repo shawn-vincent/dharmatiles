@@ -12,7 +12,7 @@
 //!    barked ([`bark`]), the trunk flared and sunk into the ground, all
 //!    unioned into one closed volume.
 //! 4. The clumps ([`clump`]): the swept rounded cones at the branch ends,
-//!    noised, each cut to stand on its own branch (no hanging underside).
+//!    noised and unioned without clipping their naturally rounded undersides.
 //! 5. Leaves on the clumps ([`leaves`]: the organic union-surface placer).
 //!
 //! Sizes follow the system like a photocopy (D2): every length here is
@@ -293,14 +293,12 @@ pub struct Grown {
     pub min_curve_elevation_deg: f64,
     pub trunk_radius_mm: f64,
     pub clumps: usize,
-    pub clump_cuts: usize,
     pub wood_cut_mm3: f64,
     pub slivers: usize,
     pub leaves_placed: usize,
     /// Leaves the placer could not build (a degenerate frame): a warning,
     /// noted in the build record, never swallowed.
     pub leaves_failed_error: usize,
-    pub clump_cut_mm3: f64,
     pub leaves: usize,
 }
 
@@ -511,18 +509,10 @@ impl Tree {
                 .map_err(LookError::build)?;
             grown.clumps = solids.len();
             scene.progress().fraction("clumps", 0.26);
-            let blobs = union(&solids).map_err(LookError::build)?;
-            let (blobs, slivers) = crumbs(scene, blobs, Material::Leaf)?;
-            grown.slivers += slivers;
-            // printable by construction: what hangs is bevelled away
-            let (crown_solid, stood) =
-                dt_kit::stand(scene, &blobs, &wood, Material::Leaf, &stand_rule)
-                    .map_err(LookError::build)?;
-            scene.progress().fraction("crown", LEAVES_FROM);
-            grown.clump_cut_mm3 = stood.cut_mm3;
+            let crown_solid = union(&solids).map_err(LookError::build)?;
             let (crown_solid, slivers) = crumbs(scene, crown_solid, Material::Leaf)?;
             grown.slivers += slivers;
-            grown.clump_cuts = stood.pieces;
+            scene.progress().fraction("crown", LEAVES_FROM);
             if p.leaves {
                 let shape = leaves::LeafShape {
                     length_mm: leaf.length_mm / s,
@@ -947,8 +937,6 @@ impl Element for Tree {
             ("tree.min_curve_elevation_deg", gr.min_curve_elevation_deg),
             ("tree.trunk_radius_mm", gr.trunk_radius_mm),
             ("tree.clumps", gr.clumps as f64),
-            ("tree.clump_cuts", gr.clump_cuts as f64),
-            ("tree.clump_cut_mm3", gr.clump_cut_mm3),
             ("tree.wood_cut_mm3", gr.wood_cut_mm3),
             ("tree.slivers_dropped", gr.slivers as f64),
             ("tree.leaves_placed", gr.leaves_placed as f64),
