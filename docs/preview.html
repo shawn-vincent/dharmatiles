@@ -49,7 +49,7 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 </ul>
 
 <h2 id="select">Selecting</h2>
-<p>Every triangle of a built tile knows the stack entry that made it, so the view, the stack and the document share one selection, tinted brass.</p>
+<p>Every triangle of a built tile knows the stack entry that made it, so the view, the stack and the document share one selection, tinted with the current theme's accent.</p>
 <ul>
   <li><strong>Hover</strong> a thing on the tile and it lights up and is named beside the pointer: <q>rocks in pool · 2 of 3</q>.</li>
   <li><strong>Click</strong> to select it. A thing a scatter placed is selected on its own; click it again to climb to the whole scatter, then to the region it is <code>in=</code>, then the tile. Clicking the plate or <kbd>Esc</kbd> clears.</li>
@@ -63,12 +63,12 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <p>Every change is a change to the document's text, and the text is the tile: what you change in the view you can read, and keep, in the file.</p>
 <ul>
   <li><strong>Start fresh.</strong> <em>New tile</em> makes printable flat ground in My tiles at 1×1, 2×1, 1×2 or 2×2 squares, ready to change in the same editor.</li>
-  <li><strong>The lens.</strong> Selecting an entry opens its controls beside it: the ones written, then the rest at their defaults, faint. Drag a number sideways to change it (<kbd>Shift</kbd> for fine steps), or click it to type. A word control is a row of its words; a switch flips; <kbd>×</kbd> takes a control out, back to its default. A scatter's lens holds its things' controls too. Only the value changes in the text: the layout and comments stay.</li>
+  <li><strong>The property sheet.</strong> Selecting an entry opens its controls in a stable panel below the stack in the right sidebar: the ones written, then the rest at their defaults, faint. Drag a number sideways to change it (<kbd>Shift</kbd> for fine steps), or click it to type. A word control is a row of its words; a switch flips; <kbd>×</kbd> takes a control out, back to its default. A scatter's sheet holds its things' controls too. Only the value changes in the text: the layout and comments stay.</li>
   <li><strong>Typing.</strong> The document is checked as you type, without building: a mistake is underlined at its line and said in words under the text. Completion offers element names at the start of a node, an element's controls on its line, and after <code>name=</code> the control's words, or the document's regions and lines. <kbd>Ctrl</kbd>-<kbd>Space</kbd> asks for it.</li>
   <li><strong>Drafts while you drag.</strong> As a value is dragged, the view shows quick drafts of the tile: fewer cells, the parts not joined, and overhang judged face by face. The verdict says <em>draft</em> beside it, since a draft is never judged by the gate. Let go and the full build follows.</li>
   <li><strong>Saved as you go.</strong> A change is written to the file half a second after it reads cleanly, and the tile rebuilds. A text with a mistake is kept in the page, unsaved, until it is fixed. If you leave while it cannot be saved, the editor makes discarding explicit. If the file changes on disk under unsaved changes, you choose which to keep.</li>
-  <li><strong>One undo.</strong> <kbd>⌘Z</kbd> (<kbd>Ctrl</kbd>-<kbd>Z</kbd>) undoes typing and changes made in the lens alike; <kbd>⌘⇧Z</kbd> redoes.</li>
-  <li><strong>Make it mine.</strong> Library tiles are never written. Typing in one, or changing it in the lens, offers a copy in My tiles, its <code>use</code>s pointing back at the library; the copy opens, ready to change.</li>
+  <li><strong>One undo.</strong> <kbd>⌘Z</kbd> (<kbd>Ctrl</kbd>-<kbd>Z</kbd>) undoes typing and changes made in the property sheet alike; <kbd>⌘⇧Z</kbd> redoes.</li>
+  <li><strong>Make it mine.</strong> Library tiles are never written. Typing in one, or changing it in the property sheet, offers a copy in My tiles, its <code>use</code>s pointing back at the library; the copy opens, ready to change.</li>
 </ul>
 <p>Only a page served by this run of the program can change a file: each change carries a secret the page reads from the program, and a page from any other site is refused.</p>
 

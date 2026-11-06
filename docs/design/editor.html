@@ -16,21 +16,21 @@
   .wf .grass { fill: var(--moss); opacity: .7; }
   .wf .water { fill: var(--water); opacity: .6; }
   .wf .rock { fill: var(--stone); }
-  .wf .sel { fill: none; stroke: var(--brass); stroke-width: 2.5; }
-  .wf .selfill { fill: color-mix(in srgb, var(--brass) 22%, transparent); }
+  .wf .sel { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+  .wf .selfill { fill: color-mix(in srgb, var(--accent) 22%, transparent); }
   .wf .code { fill: var(--muted); }
   .wf .t { fill: var(--ink); font-size: 12px; }
   .wf .s { fill: var(--muted); font-size: 10.5px; }
   .wf .m { fill: var(--ink); font: 11px var(--f-code); white-space: pre; }
-  .wf .b { fill: var(--brass); font-size: 12px; font-weight: 600; }
+  .wf .b { fill: var(--accent); font-size: 12px; font-weight: 600; }
   .wf .ok { fill: var(--ok); font-size: 11px; font-weight: 600; }
   .wf .hair { stroke: var(--line-2); stroke-width: 1; fill: none; }
-  .wf .dash { stroke: var(--brass); stroke-width: 1.5; stroke-dasharray: 4 3; fill: none; }
+  .wf .dash { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; fill: none; }
   .wf .line { stroke: var(--plate-ink); stroke-width: 2; fill: none; }
-  .wf .handle { fill: var(--raised); stroke: var(--brass); stroke-width: 2; }
+  .wf .handle { fill: var(--raised); stroke: var(--accent); stroke-width: 2; }
   .tiers { display: grid; gap: 10px; margin: 14px 0 20px; }
   .tier { display: grid; grid-template-columns: 7.5em 1fr; gap: 4px 16px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 10px; max-width: 78ch; }
-  .tier .when { font: 800 20px/1.1 var(--f-display); color: var(--brass); }
+  .tier .when { font: 800 20px/1.1 var(--f-display); color: var(--accent); }
   .tier p { margin: 0; }
   @media (max-width: 560px) { .tier { grid-template-columns: 1fr; } }
 </style>
@@ -55,7 +55,7 @@
   <li><a href="#five">Five controls</a></li>
   <li><a href="#open">Opening a tile</a></li>
   <li><a href="#select">Selecting</a></li>
-  <li><a href="#lens">Changing: the lens</a></li>
+  <li><a href="#lens">Changing: the property sheet</a></li>
   <li><a href="#place">Placing and drawing</a></li>
   <li><a href="#text">The text</a></li>
   <li><a href="#stack">The stack and the map</a></li>
@@ -85,13 +85,13 @@
 <p>Two rules come from dharmatiles itself:</p>
 <ul>
   <li><strong>The text is the tile.</strong> The editor never holds a second model of the tile. Every gesture becomes an edit to the document, made by the same format-preserving editor that keeps your layout and comments (<code>dt-doc</code>'s <code>edit.rs</code>). The file opens in any text editor and any change there shows in the view.</li>
-  <li><strong>The gate is a gate.</strong> The editor shows overhang, it never hides it, and it never offers to loosen a limit. Red and orange mean overhang only; the editor's own colour for selection and handles is brass.</li>
+  <li><strong>The gate is a gate.</strong> The editor shows overhang, it never hides it, and it never offers to loosen a limit. Red and orange mean overhang only; selection and handles use the current theme's accent.</li>
 </ul>
 
 <h2 id="five">Five controls</h2>
 <p>The whole editor is five things. Each does several jobs, and each works the same on every screen.</p>
 <figure class="diagram">
-<svg class="wf" viewBox="0 0 880 500" role="img" aria-label="The editor on a desktop: the document on the left, the tile on the plate in the middle with a rock selected and its lens beside it, the stack on the right, the bar along the bottom of the view, and the title with the gate's verdict along the top.">
+<svg class="wf" viewBox="0 0 880 500" role="img" aria-label="The editor on a desktop: the document on the left, the tile on the plate in the middle, the stack and docked property sheet on the right, the bar along the bottom of the view, and the title with the gate's verdict along the top.">
   <rect class="frame" x="1" y="1" width="878" height="498" rx="8"/>
   <!-- title -->
   <text class="t" x="18" y="27" style="font-weight:600">water+grass</text><text class="s" x="104" y="27">▾  My tiles</text>
@@ -121,14 +121,6 @@
   <ellipse class="rock" cx="430" cy="252" rx="16" ry="10"/>
   <ellipse class="rock" cx="468" cy="270" rx="12" ry="8"/>
   <ellipse class="sel" cx="430" cy="252" rx="20" ry="14"/>
-  <path class="dash" d="M448,246 L520,186"/>
-  <!-- lens -->
-  <rect class="raised" x="520" y="120" width="170" height="104" rx="6"/>
-  <text class="b" x="532" y="140">scatter · rock 1 of 2</text>
-  <text class="t" x="532" y="162">count</text><text class="m" x="620" y="162">‹ 2 ›</text>
-  <text class="t" x="532" y="182">size</text><text class="m" x="620" y="182">6‥10 mm</text>
-  <text class="t" x="532" y="202">seed</text><text class="m" x="620" y="202">⚄ 97</text>
-  <text class="s" x="532" y="218">+ 4 more · pin this one</text>
   <!-- bar -->
   <rect class="raised" x="300" y="440" width="380" height="34" rx="17"/>
   <text class="s" x="320" y="461" style="font-size:12px">Type an element, a command, or ask…</text>
@@ -139,22 +131,30 @@
   <g>
     <rect class="raised" x="710" y="78" width="160" height="28" rx="4"/><text class="t" x="720" y="96">dirt</text><text class="s" x="790" y="96">in bank</text>
     <rect class="raised" x="710" y="112" width="160" height="28" rx="4"/><text class="t" x="720" y="130">ground</text><text class="s" x="790" y="130">in pool</text>
-    <rect class="raised" x="710" y="146" width="160" height="28" rx="4" style="stroke:var(--brass);stroke-width:2"/><text class="b" x="720" y="164">scatter</text><text class="s" x="790" y="164">in pool · 2</text>
+    <rect class="raised" x="710" y="146" width="160" height="28" rx="4" style="stroke:var(--accent);stroke-width:2"/><text class="b" x="720" y="164">scatter</text><text class="s" x="790" y="164">in pool · 2</text>
     <rect class="raised" x="710" y="180" width="160" height="28" rx="4"/><text class="t" x="720" y="198">grass</text><text class="s" x="790" y="198">in bank</text>
     <rect class="raised" x="710" y="214" width="160" height="28" rx="4"/><text class="t" x="720" y="232">water</text><text class="s" x="790" y="232">reads ground</text>
   </g>
   <path class="dash" d="M706,188 C690,180 690,168 706,162"/>
   <text class="s" x="714" y="262">grass reads the rocks: it</text>
   <text class="s" x="714" y="276">runs after them</text>
+  <!-- property sheet, docked below the stack -->
+  <line class="hair" x1="700" y1="304" x2="879" y2="304"/>
+  <text class="s" x="714" y="324">PROPERTIES</text>
+  <text class="b" x="714" y="346">scatter · rock 1 of 2</text>
+  <text class="t" x="714" y="370">count</text><text class="m" x="800" y="370">‹ 2 ›</text>
+  <text class="t" x="714" y="392">size</text><text class="m" x="800" y="392">6‥10 mm</text>
+  <text class="t" x="714" y="414">seed</text><text class="m" x="800" y="414">⚄ 97</text>
+  <text class="s" x="714" y="438">+ 4 more</text>
   <text class="s" x="290" y="76">the view: select · drag · place</text>
 </svg>
-<figcaption>Desktop. A rock is selected: its scatter is lit in the text and the stack, and the lens beside it holds the scatter's controls.</figcaption>
+<figcaption>Desktop. A rock is selected: its scatter is lit in the text and the stack, and its property sheet is docked at the bottom of the right sidebar.</figcaption>
 </figure>
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>What it is</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><strong>The view</strong></td><td>The tile on the plate, as the preview shows it today.</td><td>Orbit, pan and zoom as now. Click to select, click again to climb to what contains it. Drag a handle to move a point. In placing, click to put the thing there.</td></tr>
-<tr><td><strong>The lens</strong></td><td>A small card beside the selection.</td><td>The selected entry's controls as values you drag or pick. It appears with a selection and goes with it.</td></tr>
+<tr><td><strong>The property sheet</strong></td><td>A stable bottom panel below the stack.</td><td>The selected entry's controls as values you drag or pick. It appears with a selection without covering the tile.</td></tr>
 <tr><td><strong>The text</strong></td><td>The document, in a code editor.</td><td>Typing, completion, errors at their line, and the other face of every selection.</td></tr>
 <tr><td><strong>The stack</strong></td><td>The stack's entries in the order the plan runs them.</td><td>Select an entry, mute it, drag it into another order; see what it reads and writes.</td></tr>
 <tr><td><strong>The bar</strong></td><td>One line to type into, at the foot of the view.</td><td>An element name starts placing it; a command runs (<kbd>build</kbd>, <kbd>seeds</kbd>, <kbd>system ol</kbd>); anything else is a request to the assistant.</td></tr>
@@ -174,18 +174,18 @@
 <h2 id="select">Selecting</h2>
 <p>Every solid in a build already carries the stack path that made it (its tag's <code>owner</code>, such as <code>tile/water+grass/scatter#1/2</code>), and every triangle of the final mesh keeps which solid it came from. That is enough to go from any point on the tile to the words that made it.</p>
 <ul>
-  <li><strong>Hover</strong> lifts the thing under the pointer with a thin brass outline and names it in the bar's hint ("rock 2 of scatter in pool").</li>
-  <li><strong>Click</strong> selects it. The entry is lit in the stack and its node in the text is marked, scrolled into view if needed. The lens opens beside it.</li>
+  <li><strong>Hover</strong> lifts the thing under the pointer with a thin accent outline and names it in the bar's hint ("rock 2 of scatter in pool").</li>
+  <li><strong>Click</strong> selects it. The entry is lit in the stack and its node in the text is marked, scrolled into view if needed. Its property sheet opens below the stack.</li>
   <li><strong>Click again on the same spot</strong> climbs: a rock, then its scatter, then the region it stands in, then the tile. <kbd>Esc</kbd> or a click on empty plate clears the selection.</li>
   <li><strong>In the text</strong>, putting the cursor in a node selects it in the view; hovering a node outlines its geometry without selecting it.</li>
   <li><strong>On the plate</strong>, lines, fill points and regions are drawn as a thin overlay, and are selected like any solid.</li>
-  <li><strong>One of many.</strong> Picking a single rock out of a scatter shows <em>pin this one</em> in the lens: the rock becomes its own entry with an <code>at=</code> where it stands, and the scatter's count drops by one, so the rest stay where they were.</li>
+  <li><strong>One of many.</strong> Picking a single rock out of a scatter shows <em>pin this one</em> in the property sheet: the rock becomes its own entry with an <code>at=</code> where it stands, and the scatter's count drops by one, so the rest stay where they were.</li>
 </ul>
 
-<h2 id="lens">Changing: the lens</h2>
-<p>The lens shows the controls the document sets on the selected entry, and a line <em>+ more</em> that opens every other control the element takes, faint, at its default. Everything in it comes from the element schema (<code>dharmatiles elements --json</code>), so a new control appears in the lens the day it is added to the schema.</p>
+<h2 id="lens">Changing: the property sheet</h2>
+<p>The property sheet is anchored below the stack in the right sidebar, so changing a selection never covers or shifts the tile. It shows the controls the document sets on the selected entry, and a line <em>+ more</em> that opens every other control the element takes, faint, at its default. Everything in it comes from the element schema (<code>dharmatiles elements --json</code>), so a new control appears in the sheet the day it is added to the schema.</p>
 <div class="tbl"><table>
-<thead><tr><th>Kind of value</th><th>In the lens</th></tr></thead>
+<thead><tr><th>Kind of value</th><th>In the property sheet</th></tr></thead>
 <tbody>
 <tr><td>Number</td><td>Drag left and right to scrub (<kbd>⇧</kbd> for fine), or click to type. The view follows while you drag.</td></tr>
 <tr><td>Range (<code>6..10</code>)</td><td>Two ends to drag, and the middle to slide both.</td></tr>
@@ -194,7 +194,7 @@
 <tr><td>Region or line (<code>in=</code>, <code>along=</code>)</td><td>The document's names; hover one to light it on the plate.</td></tr>
 <tr><td>Seed</td><td>A die: click for the next seed, drag to run through seeds.</td></tr>
 </tbody></table></div>
-<p>Setting a control back to its default removes it from the text. The lens never shows a value the document does not hold, apart from the faint defaults under <em>+ more</em>. Each control's name links to its line on the element's page.</p>
+<p>Setting a control back to its default removes it from the text. The property sheet never shows a value the document does not hold, apart from the faint defaults under <em>+ more</em>. Each control's name links to its line on the element's page.</p>
 <p>The same scrubbing works in the text: hold <kbd>⌥</kbd> and drag any number in the document.</p>
 
 <h2 id="place">Placing and drawing</h2>
@@ -204,7 +204,7 @@
     <rect class="frame" x="0" y="0" width="276" height="230" rx="6"/>
     <rect class="plate" x="28" y="28" width="220" height="150"/>
     <ellipse class="rock" cx="96" cy="88" rx="14" ry="10"/>
-    <circle cx="170" cy="116" r="16" class="dash"/><circle cx="170" cy="116" r="2" style="fill:var(--brass)"/>
+    <circle cx="170" cy="116" r="16" class="dash"/><circle cx="170" cy="116" r="2" style="fill:var(--accent)"/>
     <text class="m" x="28" y="200">+ rock at="0.64,0.42"</text>
     <text class="s" x="28" y="218">type rock, click the plate</text>
   </g>
@@ -222,7 +222,7 @@
     <rect class="plate" x="28" y="28" width="220" height="150"/>
     <path class="grass" d="M28,28 H248 V86 C230,80 200,90 170,104 C120,140 80,100 28,120 Z"/>
     <path class="line" d="M28,120 C80,100 120,140 170,104 S230,80 248,86"/>
-    <circle cx="120" cy="64" r="5" style="fill:var(--brass)"/>
+    <circle cx="120" cy="64" r="5" style="fill:var(--accent)"/>
     <text class="t" x="132" y="68" style="fill:var(--plate-ink)">bank</text>
     <text class="m" x="28" y="200">region bank { fill "0.4,0.8" }</text>
     <text class="s" x="28" y="218">type region, click inside the lines</text>
@@ -232,7 +232,7 @@
 </figure>
 <ul>
   <li><strong>Place a thing.</strong> Type an element in the bar (<code>rock</code>, <code>tree</code>, <code>boulder</code>, or a definition such as <code>oak</code>). Its footprint follows the pointer across the tile's surface; a click writes <code>rock at="x,y"</code> into the stack, in squares from the south-west corner as the language has it, and the draft build shows it at once. Click again to place another; <kbd>Esc</kbd> stops. Dragging a box instead of clicking writes a range (<code>at="0.4..0.8,0.2..0.5"</code>): the thing goes somewhere in it, by seed.</li>
-  <li><strong>Place many.</strong> Type <code>scatter</code> and drag over a region; it writes <code>scatter in=pool count=3 { rock }</code> and opens the lens on its count.</li>
+  <li><strong>Place many.</strong> Type <code>scatter</code> and drag over a region; it writes <code>scatter in=pool count=3 { rock }</code> and opens the property sheet on its count.</li>
   <li><strong>Paint a surface.</strong> Type <code>dirt</code>, <code>ground</code>, <code>floor</code> or <code>water</code> and click a region: it writes the entry with <code>in=</code> that region.</li>
   <li><strong>Draw a line.</strong> Type <code>line</code>, then click points on the plate; <kbd>Enter</kbd> or a double-click ends it. A point dropped on an edge or a corner snaps and is written as its word (<code>west</code>, <code>south-east</code>). The line's <code>wobble</code> shows as a faint band either side.</li>
   <li><strong>Make a region.</strong> Type <code>region</code> and click inside an area the lines enclose: it writes the region with a fill point there, and a name to type over. Click another area to add a second fill point to the same region.</li>
@@ -248,7 +248,7 @@
   <li><strong>Errors as you type.</strong> The program's checker (read and plan, no build) runs on every pause in typing, and its errors appear at their span with the same text and help as <code>dharmatiles check</code>. The view keeps the last good build until the text checks again.</li>
   <li><strong>Hover</strong> a control for its line from the element page and a link to the page.</li>
   <li><strong>Folding and outline</strong> follow the document's nodes; the stack pane is the outline of the stack.</li>
-  <li><strong>Edits from the view</strong> arrive as ordinary changes with your cursor kept, and a short brass flash on the changed text so you see what a gesture wrote.</li>
+  <li><strong>Edits from the view</strong> arrive as ordinary changes with your cursor kept, and a short accent flash on the changed text so you see what a gesture wrote.</li>
 </ul>
 
 <h2 id="stack">The stack and the map</h2>
@@ -264,14 +264,14 @@
 <h2 id="gate">The gate, always in view</h2>
 <p>The gate's verdict is in the title at all times: <em>passes</em>, or what fails, with the band and overhang figures. The overhang paint is always on, as in the preview.</p>
 <ul>
-  <li><strong>Click the verdict</strong> to go to the worst patch: the view turns to it and selects the entry that made it, because every overhanging triangle knows its solid. The lens is then on the controls most likely to cure it.</li>
+  <li><strong>Click the verdict</strong> to go to the worst patch: the view turns to it and selects the entry that made it, because every overhanging triangle knows its solid. The property sheet then shows the controls most likely to cure it.</li>
   <li>A draft build is marked <em>draft</em> next to the verdict; the gate's verdict always comes from a full build.</li>
 </ul>
 
 <h2 id="ladder">Many versions at once</h2>
 <ul>
   <li><strong>Seeds.</strong> <kbd>seeds</kbd> in the bar, or a long press on the seed's die, lays a strip of eight small views under the main one: the same tile at the next eight seeds, turned together with the main view. Click one to take its seed.</li>
-  <li><strong>Sweeps.</strong> A long press on any number in the lens sweeps it: five small views across the control's range, from its lowest to its highest sensible value. Click one to take its value, or drag between them.</li>
+  <li><strong>Sweeps.</strong> A long press on any number in the property sheet sweeps it: five small views across the control's range, from its lowest to its highest sensible value. Click one to take its value, or drag between them.</li>
   <li><strong>Compare.</strong> <kbd>compare</kbd> pins the current build beside the next one, so a change can be judged side by side.</li>
 </ul>
 <p>The small views are draft builds, made one after another in the background; the strip fills in as they arrive.</p>
@@ -313,7 +313,7 @@
     <rect class="raised" x="214" y="200" width="120" height="66" rx="6"/>
     <text class="b" x="224" y="218">scatter</text><text class="t" x="224" y="238">count</text><text class="m" x="280" y="238">‹ 2 ›</text><text class="t" x="224" y="256">size</text><text class="m" x="280" y="256">6‥10</text>
     <rect class="pane" x="404" y="46" width="58" height="230" rx="6"/>
-    <rect class="raised" x="410" y="56" width="46" height="22" rx="3"/><rect class="raised" x="410" y="84" width="46" height="22" rx="3"/><rect class="raised" x="410" y="112" width="46" height="22" rx="3" style="stroke:var(--brass);stroke-width:2"/><rect class="raised" x="410" y="140" width="46" height="22" rx="3"/><rect class="raised" x="410" y="168" width="46" height="22" rx="3"/>
+    <rect class="raised" x="410" y="56" width="46" height="22" rx="3"/><rect class="raised" x="410" y="84" width="46" height="22" rx="3"/><rect class="raised" x="410" y="112" width="46" height="22" rx="3" style="stroke:var(--accent);stroke-width:2"/><rect class="raised" x="410" y="140" width="46" height="22" rx="3"/><rect class="raised" x="410" y="168" width="46" height="22" rx="3"/>
     <rect class="pane" x="0" y="46" width="22" height="230"/><text class="s" x="6" y="166">‹</text>
     <rect class="raised" x="100" y="296" width="270" height="32" rx="16"/><text class="s" x="118" y="316">Type an element, a command, or ask…</text>
     <text class="s" x="18" y="344">text slides in from the left edge; stack shrinks to its icons</text>
@@ -401,8 +401,8 @@
 <p>Each stage is usable on its own, and ends when it is used to make a real tile.</p>
 <ol>
   <li><strong>Built — Select.</strong> Owner paths in the mesh; hover, click and climb; the stack pane; the text pane linked both ways.</li>
-  <li><strong>Built — Edit.</strong> The text pane editable with completion and errors; the lens; writing the file; one undo; <em>Make it mine</em>; the write protection.</li>
-  <li><strong>Built — Draft.</strong> Draft builds answer while the lens is dragged. Per-entry rebuilding remains.</li>
+  <li><strong>Built — Edit.</strong> The text pane editable with completion and errors; the property sheet; writing the file; one undo; <em>Make it mine</em>; the write protection.</li>
+  <li><strong>Built — Draft.</strong> Draft builds answer while the property sheet is dragged. Per-entry rebuilding remains.</li>
   <li><strong>Built — Place and draw.</strong> The bar; placing, scattering, painting; lines and regions on the plate; handles; the map overlay; mute and delete.</li>
   <li><strong>The gate and the ladder.</strong> The verdict that jumps to the worst patch; seeds, sweeps and compare.</li>
   <li><strong>The assistant.</strong></li>
@@ -413,7 +413,7 @@
 <h2 id="not">What it does not do</h2>
 <ul>
   <li><strong>No second model.</strong> No hidden scene, no project file, no state that is not in the document (apart from the camera, the selection and the panes, which the browser remembers).</li>
-  <li><strong>No property sheet for everything.</strong> The lens holds one entry's controls, beside it; there is no panel listing every control of every entry.</li>
+  <li><strong>No property sheet for everything.</strong> The docked sheet holds one selected entry's controls; there is no panel listing every control of every entry.</li>
   <li><strong>No node graph.</strong> The stack is a list, and the plan orders it; its reads and writes are drawn on hover, not wired by hand.</li>
   <li><strong>No modes.</strong> Placing ends with a click elsewhere or <kbd>Esc</kbd>; there is no edit mode, select tool or move tool.</li>
   <li><strong>No sculpting.</strong> You do not push vertices. You change what a tile is made of, and the program grows the geometry; that is what keeps every tile printable.</li>

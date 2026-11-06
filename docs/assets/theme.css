@@ -3,8 +3,8 @@
 
    The idea: a tile is always shown the same way, on the pale light-box
    plate the renderer uses (#D9E0EB), ruled in its squares.  Around it the
-   chrome is dark loam (or cool paper in light), and brass marks what you
-   can press.  Red and orange mean overhang and nothing else; the four
+   chrome is Moonpool at night and Lichen & Linen by day; a botanical or
+   sea-glass accent marks what you can press. Red and orange mean overhang and nothing else; the four
    material colours mean element families and nothing else.
 
    Type: Big Shoulders Display for names and headings (the box-art voice),
@@ -21,8 +21,8 @@
   --f-display: "Big Shoulders Display", "Arial Narrow", sans-serif-condensed, Impact, sans-serif;
   --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --f-code: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
-  /* shape: tiles are square, so corners are nearly square */
-  --r: 3px; --r-lg: 6px;
+  /* Lichen & Linen is tactile and gently rounded. Moonpool tightens this below. */
+  --r: 5px; --r-lg: 10px;
   --sq: 24px;            /* the ruling of the plate pattern */
   --ease: cubic-bezier(.2, .7, .2, 1);
 
@@ -32,46 +32,48 @@
   /* overhang: these two colours are the gate's, and only the gate's */
   --over: #E5483B; --band: #FF8C1A;
 
-  /* light: cool paper */
-  --bg: #F1F2F4; --panel: #E7E9ED; --raised: #FFFFFF; --line: #CDD1D8; --line-2: #B4BAC4;
-  --ink: #1A1714; --muted: #5E5850;
-  --brass: #8C5E0E; --brass-hi: #A8720F; --on-brass: #FFFFFF;
-  --moss: #4D7A22; --water: #1A7186; --stone: #59606B; --earth: #8A5A28; --bloom: #9A3F86;
-  --ok: #3E7A1E; --err: #C8301F;
-  --code-bg: #E7E9ED;
-  --shadow: 0 1px 2px rgb(26 23 20 / .06), 0 6px 18px -8px rgb(26 23 20 / .18);
+  /* light: Lichen & Linen */
+  --bg: #F3F2EC; --panel: #E6EAE1; --raised: #FCFCF8; --line: #C9D1C8; --line-2: #AEBBB0;
+  --ink: #1D2922; --muted: #657168;
+  --accent: #287B62; --accent-hi: #1F654F; --on-accent: #F5FFF9;
+  --moss: #4F844F; --water: #337F8A; --stone: #64706A; --earth: #987563; --bloom: #895E82;
+  --ok: #397A55; --err: #B83B2E;
+  --code-bg: #E6EAE1;
+  --shadow: 0 1px 2px rgb(29 41 34 / .06), 0 12px 30px -18px rgb(40 51 45 / .3);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  /* dark: loam */
-  --bg: #1A1714; --panel: #221E1A; --raised: #2A2520; --line: #3A332C; --line-2: #4C443B;
-  --ink: #ECE5D8; --muted: #A99F90;
-  --brass: #E0AC4A; --brass-hi: #F0C46A; --on-brass: #1A1714;
-  --moss: #9CC266; --water: #62C2D6; --stone: #B4B9C2; --earth: #D3A16C; --bloom: #DE93CB;
-  --ok: #9CC266; --err: #F06A5C; --over: #EE5444;
-  --code-bg: #14120F;
+  /* dark: Moonpool */
+  --r: 4px; --r-lg: 8px;
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
+  --moss: #72B07C; --water: #83A8FF; --stone: #B9C9CD; --earth: #C08A73; --bloom: #C895E5;
+  --ok: #50B780; --err: #F06A5C; --over: #EE5444;
+  --code-bg: #061015;
   --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 28px -10px rgb(0 0 0 / .6);
   color-scheme: dark;
 } }
 :root[data-theme="dark"] {
-  --bg: #1A1714; --panel: #221E1A; --raised: #2A2520; --line: #3A332C; --line-2: #4C443B;
-  --ink: #ECE5D8; --muted: #A99F90;
-  --brass: #E0AC4A; --brass-hi: #F0C46A; --on-brass: #1A1714;
-  --moss: #9CC266; --water: #62C2D6; --stone: #B4B9C2; --earth: #D3A16C; --bloom: #DE93CB;
-  --ok: #9CC266; --err: #F06A5C; --over: #EE5444;
-  --code-bg: #14120F;
+  --r: 4px; --r-lg: 8px;
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
+  --moss: #72B07C; --water: #83A8FF; --stone: #B9C9CD; --earth: #C08A73; --bloom: #C895E5;
+  --ok: #50B780; --err: #F06A5C; --over: #EE5444;
+  --code-bg: #061015;
   --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 28px -10px rgb(0 0 0 / .6);
   color-scheme: dark;
 }
 
-::selection { background: color-mix(in srgb, var(--brass) 38%, transparent); }
-:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; border-radius: var(--r); }
+::selection { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r); }
 
 /* the mark: the lotus, drawn in the current colour */
 .mark { display: inline-block; width: 1.35em; height: 1.35em; flex: none; vertical-align: -.28em; background: currentColor;
   -webkit-mask: var(--mark-url, url("logo.svg")) center / contain no-repeat; mask: var(--mark-url, url("logo.svg")) center / contain no-repeat; }
 .wordmark { font: 800 22px/1 var(--f-display); letter-spacing: .01em; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
-.wordmark .mark { color: var(--brass); }
+.wordmark .mark { color: var(--accent); }
 
 /* buttons: one look everywhere */
 .btn, button.btn {
@@ -81,23 +83,23 @@
   transition: border-color .15s var(--ease), background-color .15s var(--ease), color .15s var(--ease);
 }
 .btn:hover { border-color: var(--line-2); background: color-mix(in srgb, var(--raised) 80%, var(--ink) 4%); }
-.btn[aria-pressed="true"], .btn.on { background: var(--brass); border-color: var(--brass); color: var(--on-brass); }
+.btn[aria-pressed="true"], .btn.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.icon { padding: 6px; width: 30px; height: 30px; justify-content: center; font-size: 15px; }
 
 /* segmented control: a row of choices, one chosen */
 .seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: calc(var(--r) + 2px); flex-wrap: wrap; }
 .seg > button { font: 500 13px/1 var(--f-body); color: var(--muted); background: transparent; border: 0; border-radius: var(--r); padding: 6px 10px; cursor: pointer; white-space: nowrap; transition: color .15s var(--ease), background-color .15s var(--ease); }
 .seg > button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.seg > button[aria-pressed="true"], .seg > button.on { background: var(--brass); color: var(--on-brass); }
+.seg > button[aria-pressed="true"], .seg > button.on { background: var(--accent); color: var(--on-accent); }
 .seg > button .n { opacity: .7; font-size: 11px; margin-left: 3px; font-variant-numeric: tabular-nums; }
 
 /* switch: a checkbox drawn as a sliding square */
 .switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; font: 500 13px/1 var(--f-body); color: var(--ink); }
 .switch input { appearance: none; -webkit-appearance: none; margin: 0; width: 28px; height: 16px; border-radius: var(--r); background: var(--line); position: relative; cursor: pointer; flex: none; transition: background-color .15s var(--ease); }
 .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 2px; background: var(--raised); box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .18s var(--ease); }
-.switch input:checked { background: var(--brass); }
-.switch input:checked::after { transform: translateX(12px); background: var(--on-brass); }
-.switch input:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::after { transform: translateX(12px); background: var(--on-accent); }
+.switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 kbd { font: 500 10.5px/1 var(--f-code); color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--r); padding: 2px 4px; background: var(--bg); }
 
@@ -106,8 +108,8 @@ input[type="search"], input[type="text"], .field {
   border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; width: 100%;
 }
 input[type="search"]::placeholder { color: var(--muted); }
-input[type="search"]:focus { border-color: var(--brass); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brass) 22%, transparent); }
-input[type="range"] { accent-color: var(--brass); }
+input[type="search"]:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+input[type="range"] { accent-color: var(--accent); }
 
 /* the plate: every render and the live view sit on it */
 .plate {

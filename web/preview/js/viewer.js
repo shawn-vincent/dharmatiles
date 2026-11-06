@@ -63,12 +63,12 @@ void main() {
 
 // The render.rs shading: 0.3 + key + 0.35 fill, *0.95, gamma 1/1.25,
 // back faces turned to face the camera.
-// The selection and the thing under the pointer are tinted brass. `who`
+// The selection and the thing under the pointer are tinted by the theme accent. `who`
 // stores (entry + 1, piece), with entry 0 meaning none; the uniforms keep
 // ordinary zero-based entries and a piece of -1 means the whole entry.
 const FRAG = `
 uniform vec3 uCam; uniform vec3 uDir; uniform float uOrtho; uniform vec3 uL1; uniform vec3 uL2;
-uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uBrass;
+uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uAccent;
 varying vec3 vN; varying vec3 vC; varying vec3 vP; varying vec2 vWho;
 float is(vec2 w) {
   vec2 v = floor(vWho + 0.5);
@@ -81,7 +81,7 @@ void main() {
   float shade = 0.3 + max(dot(n, uL1), 0.0) + 0.35 * max(dot(n, uL2), 0.0);
   vec3 c = pow(clamp(vC * shade * 0.95, 0.0, 1.0), vec3(1.0 / 1.25));
   float k = max(is(uSel) * 0.42, is(uHov) * 0.22);
-  c = mix(c, uBrass * (0.55 + 0.45 * shade), k);
+  c = mix(c, uAccent * (0.55 + 0.45 * shade), k);
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -121,7 +121,7 @@ export class Viewer {
     this.initInertia();
     this.uniforms = {
       uCam: { value: new THREE.Vector3() }, uDir: { value: new THREE.Vector3(0, 1, 0) }, uOrtho: { value: 0 }, uL1: { value: new THREE.Vector3() }, uL2: { value: new THREE.Vector3() },
-      uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) }, uBrass: { value: new THREE.Color(0.88, 0.67, 0.29) },
+      uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) }, uAccent: { value: new THREE.Color(0.15, 0.48, 0.38) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
@@ -634,9 +634,9 @@ export class Viewer {
     this.draw();
   }
 
-  /** The brass of the theme (`--brass`), as the tint's colour. */
-  setBrass(css) {
-    try { this.uniforms.uBrass.value.setStyle(css); } catch { /* keep the default */ }
+  /** The theme's accent (`--accent`), used to tint selected geometry. */
+  setAccent(css) {
+    try { this.uniforms.uAccent.value.setStyle(css); } catch { /* keep the default */ }
     this.draw();
   }
 

@@ -44,11 +44,11 @@
 <p>Anything laid over the plate, such as the preview's progress and error panels, uses the plate's own light colours in both themes.</p>
 
 <h2 id="colour">Colour</h2>
-<p>The page is dark loam or cool paper. Brass marks anything you can press or that is chosen. Every other colour has one meaning.</p>
+<p>The light theme is <strong>Lichen &amp; Linen</strong>: unbleached paper, stone grey and botanical green. The dark theme is <strong>Moonpool</strong>: near-black marine blue, sea-glass cyan and cool periwinkle. Their accent marks anything you can press or that is chosen. Every other colour has one meaning.</p>
 <div class="swatches">
-  <div style="--c: var(--bg)"><i></i><b>Loam / paper</b><span><code>--bg</code>, <code>--panel</code>, <code>--raised</code>: the page and its surfaces</span></div>
-  <div style="--c: var(--ink)"><i></i><b>Bone / ink</b><span><code>--ink</code>, <code>--muted</code>: text</span></div>
-  <div style="--c: var(--brass)"><i></i><b>Brass</b><span><code>--brass</code>: links, chosen buttons, focus, the lotus. Nothing else.</span></div>
+  <div style="--c: var(--bg)"><i></i><b>Linen / moonpool</b><span><code>--bg</code>, <code>--panel</code>, <code>--raised</code>: the page and its surfaces</span></div>
+  <div style="--c: var(--ink)"><i></i><b>Ink</b><span><code>--ink</code>, <code>--muted</code>: text</span></div>
+  <div style="--c: var(--accent)"><i></i><b>Lichen / sea glass</b><span><code>--accent</code>: links, chosen buttons, focus, the lotus and editor selection. Nothing else.</span></div>
   <div style="--c: var(--over)"><i></i><b>Overhang red</b><span><code>--over</code>: faces past the limit, gate failures, errors</span></div>
   <div style="--c: var(--band)"><i></i><b>Band orange</b><span><code>--band</code>: 55–65°, allowed within budget</span></div>
   <div style="--c: var(--earth)"><i></i><b>Earth</b><span><code>--earth</code>: surfaces (ground, dirt, floor)</span></div>
@@ -78,18 +78,18 @@
   <button class="btn icon" type="button" aria-label="Theme">☾</button>
 </div>
 <dl class="defs">
-  <dt>.btn</dt><dd>An action. <code>aria-pressed="true"</code> fills it with brass.</dd>
+  <dt>.btn</dt><dd>An action. <code>aria-pressed="true"</code> fills it with the theme accent.</dd>
   <dt>.seg</dt><dd>One choice from a row: the preview's views and its My tiles / Library switch.</dd>
   <dt>.switch</dt><dd>On or off, with its keyboard key beside it when it has one.</dd>
   <dt>☀ / ☾</dt><dd>Light or dark. It follows the system until it is used, then remembers the choice (<code>dt-theme</code> in the browser).</dd>
-  <dt>Focus</dt><dd>A 2 px brass outline on every control.</dd>
-  <dt>.dtile code</dt><dd>Coloured by <code>site.js</code>: node names brass, properties water, strings moss, numbers earth, comments muted.</dd>
+  <dt>Focus</dt><dd>A 2 px accent outline on every control.</dd>
+  <dt>.dtile code</dt><dd>Coloured by <code>site.js</code>: node names use the accent, properties water, strings moss, numbers earth, comments muted.</dd>
 </dl>
 
 <h2 id="rules">Rules</h2>
 <ul>
   <li>New colours, fonts or control styles go into <code>theme.css</code>, never into one page or into the preview alone.</li>
-  <li>Corners are nearly square (<code>--r</code> 3 px, <code>--r-lg</code> 6 px), because tiles are square. Status marks are small squares, not dots.</li>
+  <li>Corners are gently rounded in tactile Lichen &amp; Linen (<code>--r</code> 5 px, <code>--r-lg</code> 10 px) and slightly tighter in instrument-like Moonpool (4 px and 8 px). Status marks remain small squares, not dots.</li>
   <li>A render is shown whole (<code>object-fit: contain</code>) on the plate, never cropped.</li>
   <li>Motion answers an action (a switch sliding, a view easing). Nothing moves by itself except a building tile's mark. Reduced motion turns all of it off.</li>
   <li>An element's family has one colour everywhere: the element cards, the mark on its page and the preview's stack. So a <code>cliff</code> is stone-coloured in all three. The document's own elements are grey and the bases a darker grey.</li>

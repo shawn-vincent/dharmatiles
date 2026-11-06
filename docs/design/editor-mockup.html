@@ -15,7 +15,7 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); overflow: hidden; }
   button { font: inherit; color: inherit; }
-  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   #app { display: grid; height: 100dvh; grid-template-rows: 48px minmax(0, 1fr);
          grid-template-columns: var(--textw, 340px) minmax(0, 1fr) 232px;
@@ -38,7 +38,7 @@
   #gate.busy i { background: var(--muted); animation: blink 1s infinite; }
   #gate .tag { font-weight: 500; color: var(--muted); border: 1px solid var(--line-2); border-radius: var(--r); padding: 0 5px; font-size: 11px; }
   @keyframes blink { 50% { opacity: .3; } }
-  #progress { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--brass); width: 0; transition: width .12s linear; }
+  #progress { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--accent); width: 0; transition: width .12s linear; }
   #helpbtn { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--raised); cursor: pointer; }
 
   .menu { position: absolute; top: 44px; left: 12px; width: 280px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 6px; z-index: 20; }
@@ -57,14 +57,14 @@
   .ln { display: flex; padding-right: 10px; cursor: pointer; white-space: pre; position: relative; }
   .ln::before { counter-increment: ln; content: counter(ln); width: 34px; flex: none; text-align: right; padding-right: 12px; color: var(--line-2); }
   .ln:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
-  .ln.sel { background: color-mix(in srgb, var(--brass) 20%, transparent); box-shadow: inset 3px 0 0 var(--brass); }
-  .ln.hov { background: color-mix(in srgb, var(--brass) 9%, transparent); }
+  .ln.sel { background: color-mix(in srgb, var(--accent) 20%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+  .ln.hov { background: color-mix(in srgb, var(--accent) 9%, transparent); }
   .ln.flash { animation: flash 1.2s var(--ease); }
   .ln.add { background: color-mix(in srgb, var(--moss) 22%, transparent); box-shadow: inset 3px 0 0 var(--moss); }
   .ln.del { color: var(--muted); text-decoration: line-through; opacity: .7; }
   .ln.mute { opacity: .5; }
-  @keyframes flash { 0% { background: color-mix(in srgb, var(--brass) 45%, transparent); } 100% { background: transparent; } }
-  .tk-n { color: var(--brass); font-weight: 600; }
+  @keyframes flash { 0% { background: color-mix(in srgb, var(--accent) 45%, transparent); } 100% { background: transparent; } }
+  .tk-n { color: var(--accent); font-weight: 600; }
   .tk-k { color: var(--water); }
   .tk-s { color: var(--moss); }
   .tk-v { color: var(--bloom); }
@@ -86,32 +86,32 @@
   /* the lens */
   #lens { position: absolute; width: 236px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 10px 12px 8px; z-index: 5; display: none; user-select: none; }
   #lens .lt { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; }
-  #lens .lt b { color: var(--brass); font-weight: 600; }
+  #lens .lt b { color: var(--accent); font-weight: 600; }
   #lens .lt a { color: var(--muted); font-size: 12px; margin-left: auto; }
   #lens .row { display: grid; grid-template-columns: 76px 1fr; align-items: center; min-height: 28px; gap: 6px; }
   #lens .row .nm { color: var(--ink); font-size: 13px; }
   #lens .row .nm a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--line-2); }
   #lens .row.faint { opacity: .45; }
-  #lens .val { font: 13px var(--f-code); cursor: ew-resize; padding: 2px 6px; border-radius: var(--r); border-bottom: 1px dashed var(--brass); touch-action: none; }
-  #lens .val:hover, #lens .val.active { background: color-mix(in srgb, var(--brass) 18%, transparent); }
+  #lens .val { font: 13px var(--f-code); cursor: ew-resize; padding: 2px 6px; border-radius: var(--r); border-bottom: 1px dashed var(--accent); touch-action: none; }
+  #lens .val:hover, #lens .val.active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
   #lens .unit { color: var(--muted); font: 12px var(--f-code); margin-left: 4px; }
   #lens .dots { color: var(--muted); padding: 0 2px; cursor: ew-resize; font-family: var(--f-code); }
   #lens .die { cursor: pointer; font-size: 17px; line-height: 1; margin-right: 6px; vertical-align: -1px; }
   #lens .words { display: flex; flex-wrap: wrap; gap: 4px; }
   #lens .words button { border: 1px solid var(--line); background: none; border-radius: var(--r); padding: 2px 7px; font-size: 12.5px; cursor: pointer; }
-  #lens .words button.on { background: var(--brass); color: var(--on-brass); border-color: var(--brass); }
+  #lens .words button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   #lens .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; border-top: 1px solid var(--line); padding-top: 7px; }
-  #lens .acts button { background: none; border: 0; color: var(--brass); cursor: pointer; padding: 2px 0; font-size: 12.5px; }
+  #lens .acts button { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 2px 0; font-size: 12.5px; }
   #lens .acts button + button::before { content: "·"; color: var(--muted); margin-right: 6px; }
   #lens .note { color: var(--muted); font-size: 12.5px; margin: 2px 0 4px; }
-  #lens input.edit { width: 90px; font: 13px var(--f-code); background: var(--bg); color: var(--ink); border: 1px solid var(--brass); border-radius: var(--r); padding: 1px 5px; }
+  #lens input.edit { width: 90px; font: 13px var(--f-code); background: var(--bg); color: var(--ink); border: 1px solid var(--accent); border-radius: var(--r); padding: 1px 5px; }
 
   /* the bar */
   #barwrap { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); z-index: 7; }
   #bar { display: flex; align-items: center; gap: 8px; background: var(--raised); border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 6px 4px 16px; box-shadow: var(--shadow); }
   #bar input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 14px var(--f-body); padding: 8px 0; outline: none; }
   #bar .kind { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
-  #bar .kind.ask { color: var(--on-brass); background: var(--brass); border-color: var(--brass); }
+  #bar .kind.ask { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
   #comp { position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 4px; display: none; max-height: 320px; overflow: auto; }
   #comp .it { display: grid; grid-template-columns: 14px auto 1fr; gap: 10px; align-items: center; padding: 7px 10px; border-radius: var(--r); cursor: pointer; }
   #comp .it.on, #comp .it:hover { background: var(--panel); }
@@ -137,8 +137,8 @@
   /* strip of versions */
   #strip { position: absolute; left: 12px; right: 12px; bottom: 76px; display: none; gap: 8px; overflow-x: auto; padding: 8px; background: color-mix(in srgb, var(--bg) 88%, transparent); border: 1px solid var(--line); border-radius: var(--r-lg); z-index: 6; }
   #strip .th { flex: none; width: 132px; cursor: pointer; border-radius: var(--r); border: 2px solid transparent; background: var(--panel); }
-  #strip .th:hover { border-color: var(--brass); }
-  #strip .th.on { border-color: var(--brass); }
+  #strip .th:hover { border-color: var(--accent); }
+  #strip .th.on { border-color: var(--accent); }
   #strip img { display: block; width: 100%; height: 92px; object-fit: cover; border-radius: var(--r) var(--r) 0 0; }
   #strip .th span { display: block; font: 12px var(--f-code); padding: 3px 6px; color: var(--muted); }
   #strip .close { flex: none; align-self: start; background: none; border: 0; cursor: pointer; color: var(--muted); font-size: 18px; }
@@ -163,12 +163,12 @@
   .srow .nm { font-weight: 600; font-size: 13.5px; }
   .srow .pl { display: block; color: var(--muted); font-size: 12px; }
   .srow .eye { background: none; border: 0; cursor: pointer; color: var(--muted); padding: 4px; font-size: 14px; }
-  .srow.sel { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
-  .srow.sel .nm { color: var(--brass); }
-  .srow.reads { border-style: dashed; border-color: var(--brass); }
+  .srow.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .srow.sel .nm { color: var(--accent); }
+  .srow.reads { border-style: dashed; border-color: var(--accent); }
   .srow.mute { opacity: .5; }
   .srow.mute .nm { text-decoration: line-through; }
-  .srow .rd { display: none; font-size: 11.5px; color: var(--brass); }
+  .srow .rd { display: none; font-size: 11.5px; color: var(--accent); }
   .srow.hov .rd { display: block; }
   #stack .defs { margin-top: 14px; font-size: 12px; color: var(--muted); }
 
@@ -199,7 +199,7 @@
   #sheetbar { padding: 0 10px; flex: none; position: relative; }
   #sheetbar #barwrap { position: relative; left: auto; bottom: auto; transform: none; width: 100%; }
   #sheetsel { padding: 6px 14px 0; font-size: 13px; color: var(--muted); flex: none; }
-  #sheetsel b { color: var(--brass); }
+  #sheetsel b { color: var(--accent); }
   #sheetlens { flex: none; padding: 0 10px; }
   #sheetlens #lens { position: static; width: auto; box-shadow: none; border: 0; padding: 4px 4px 8px; }
   #sheettabs { flex: none; padding: 4px 10px; }
@@ -736,31 +736,31 @@ function select(k) { sel = k; hideStrip(); applyHighlight(); renderText(); rende
 let selOutline = null, hovOutline = null, handles = [];
 function applyHighlight() {
   if (!built) return;
-  const brass = new THREE.Color(cssv('--brass') || '#E0AC4A');
+  const accent = new THREE.Color(cssv('--accent') || '#38C9B3');
   const lit = (k, base) => k && (base === k || base.startsWith(k + '/'));
   for (const p of built.picks) {
     const on = lit(sel, p.key), h = !on && lit(hov, p.key);
     if (p.grass) {
       const m = p.obj; if (!m.isInstancedMesh) { m.material.opacity = on ? .6 : .38; continue; }
       const a = m.instanceColor.array, b = m.userData.base;
-      for (let i = 0; i < a.length; i++) a[i] = on ? b[i] * .7 + [brass.r, brass.g, brass.b][i % 3] * .3 : h ? b[i] * .88 + [brass.r, brass.g, brass.b][i % 3] * .12 : b[i];
+      for (let i = 0; i < a.length; i++) a[i] = on ? b[i] * .7 + [accent.r, accent.g, accent.b][i % 3] * .3 : h ? b[i] * .88 + [accent.r, accent.g, accent.b][i % 3] * .12 : b[i];
       m.instanceColor.needsUpdate = true; continue;
     }
-    if (p.key === 'line:shore') { p.obj.material.color.set(on || sel === 'region:pool' || sel === 'region:bank' ? brass : h ? '#f6dca3' : '#F3F1EA'); continue; }
+    if (p.key === 'line:shore') { p.obj.material.color.set(on || sel === 'region:pool' || sel === 'region:bank' ? accent : h ? '#f6dca3' : '#F3F1EA'); continue; }
     if (p.key === 'terrain') continue;
-    p.obj.traverse(o => { if (o.material && 'emissive' in o.material) { o.material.emissive.copy(brass); o.material.emissiveIntensity = on ? .22 : h ? .1 : 0; } });
+    p.obj.traverse(o => { if (o.material && 'emissive' in o.material) { o.material.emissive.copy(accent); o.material.emissiveIntensity = on ? .22 : h ? .1 : 0; } });
   }
   // outlines for regions and surfaces
   if (selOutline) { tileGroup.remove(selOutline); selOutline = null; }
   if (hovOutline) { tileGroup.remove(hovOutline); hovOutline = null; }
   const regionFor = k => { if (!k) return null; if (k === 'tile') return 'tile'; if (k.startsWith('region:')) return k.slice(7); if (k.startsWith('e:') && !k.includes('/')) { const e = entry(doc, +k.slice(2)); if (e && ['dirt', 'ground', 'water'].includes(e.type)) return e.type === 'water' ? 'pool' : e.in || 'tile'; } return null; };
   const st = proposal ? proposal.st : doc;
-  const rs = regionFor(sel); if (rs) { selOutline = tube(outline(st, built.c, rs), .22, brass); tileGroup.add(selOutline); }
-  const rh = regionFor(hov); if (rh && hov !== sel) { hovOutline = tube(outline(st, built.c, rh), .14, brass, .5); tileGroup.add(hovOutline); }
+  const rs = regionFor(sel); if (rs) { selOutline = tube(outline(st, built.c, rs), .22, accent); tileGroup.add(selOutline); }
+  const rh = regionFor(hov); if (rh && hov !== sel) { hovOutline = tube(outline(st, built.c, rh), .14, accent, .5); tileGroup.add(hovOutline); }
   // handles on the line's points
   handles.forEach(h => tileGroup.remove(h)); handles = [];
   if (sel === 'line:shore' && doc.shore) {
-    doc.shore.pts.forEach((p, i) => { const m = new THREE.Mesh(new THREE.SphereGeometry(.95, 16, 12), new THREE.MeshBasicMaterial({ color: brass })); const v = shoreV(doc, built.c, p[0]); m.position.copy(toXZ(p[0], v, Math.max(heightAt(doc, built.c, p[0], v), waterLevel(doc)) + .5)); m.userData.handle = i; tileGroup.add(m); handles.push(m); });
+    doc.shore.pts.forEach((p, i) => { const m = new THREE.Mesh(new THREE.SphereGeometry(.95, 16, 12), new THREE.MeshBasicMaterial({ color: accent })); const v = shoreV(doc, built.c, p[0]); m.position.copy(toXZ(p[0], v, Math.max(heightAt(doc, built.c, p[0], v), waterLevel(doc)) + .5)); m.userData.handle = i; tileGroup.add(m); handles.push(m); });
   }
 }
 
@@ -850,7 +850,7 @@ function lensSpec(k) {
   if (!k) return null;
   const R = (name, kind, get, set, o = {}) => ({ name, kind, get, set, ...o });
   if (k === 'tile') return { title: `tile ${doc.name}`, el: 'tile', rows: [R('seed', 'seed', s => s.seed, (s, v) => s.seed = v)], more: [['size', '"1x1"'], ['system', 'from the command']] };
-  if (k === 'line:shore') return { title: 'line shore', el: 'line', rows: [R('wobble', 'num', s => s.shore.wobble, (s, v) => s.shore.wobble = v, { min: 0, max: 12, step: .5, unit: 'mm' })], note: 'Drag the brass points on the plate.', more: [['width', 'none']] };
+  if (k === 'line:shore') return { title: 'line shore', el: 'line', rows: [R('wobble', 'num', s => s.shore.wobble, (s, v) => s.shore.wobble = v, { min: 0, max: 12, step: .5, unit: 'mm' })], note: 'Drag the accent points on the plate.', more: [['width', 'none']] };
   if (k.startsWith('region:')) return { title: k.replace(':', ' '), el: 'region', rows: [], note: `Bounded by shore, filled from one point. Elements act in it with in=${k.slice(7)}.` };
   const [ids, sub] = k.slice(2).split('/'), id = +ids, e = entry(doc, id); if (!e) return null;
   const E = f => s => f(entry(s, id)), Es = f => (s, v) => f(entry(s, id), v);
@@ -1042,7 +1042,7 @@ function ghostMove(ev) {
   const uv = surfaceUV(ev); if (!uv) { if (ghost) ghost.visible = false; return; }
   if (ELEMENTS[placing].place === 'surface') { const reg = regionAt(doc, built.c, uv[0], uv[1]); hov = doc.shore ? 'region:' + reg : 'tile'; applyHighlight(); return; }
   const size = placing === 'tree' ? 9 : ELEMENTS[placing].size;
-  if (!ghost) { ghost = new THREE.Mesh(new THREE.CylinderGeometry(size / 2, size / 2, .3, 32), new THREE.MeshBasicMaterial({ color: cssv('--brass') || '#E0AC4A', transparent: true, opacity: .55 })); scene.add(ghost); }
+  if (!ghost) { ghost = new THREE.Mesh(new THREE.CylinderGeometry(size / 2, size / 2, .3, 32), new THREE.MeshBasicMaterial({ color: cssv('--accent') || '#38C9B3', transparent: true, opacity: .55 })); scene.add(ghost); }
   ghost.visible = true; ghost.position.copy(toXZ(uv[0], uv[1], heightAt(doc, built.c, uv[0], uv[1]) + .4));
 }
 function placeAt(ev) {
@@ -1146,7 +1146,7 @@ function renderComp() {
   comp.forEach((c, i) => {
     if (c.kind !== last) { box.insertAdjacentHTML('beforeend', `<div class="grp">${{ element: 'Place or add an element', command: 'Commands', ask: 'The assistant' }[c.kind]}</div>`); last = c.kind; }
     const d = document.createElement('div'); d.className = 'it' + (i === ci ? ' on' : '') + (c.fam ? ' fam-' + c.fam : '');
-    d.innerHTML = `<span class="sw" style="${c.kind === 'ask' ? 'background:var(--brass);border-radius:50%' : c.kind === 'command' ? 'background:none;border:1px solid var(--line-2)' : ''}"></span><span class="nm">${esc(c.kind === 'ask' ? 'Ask' : c.name)}</span><span class="ds">${esc(c.kind === 'ask' ? '“' + c.desc + '”' : c.desc)}</span>`;
+    d.innerHTML = `<span class="sw" style="${c.kind === 'ask' ? 'background:var(--accent);border-radius:50%' : c.kind === 'command' ? 'background:none;border:1px solid var(--line-2)' : ''}"></span><span class="nm">${esc(c.kind === 'ask' ? 'Ask' : c.name)}</span><span class="ds">${esc(c.kind === 'ask' ? '“' + c.desc + '”' : c.desc)}</span>`;
     d.onmousedown = e => { e.preventDefault(); ci = i; run(); };
     box.append(d);
   });

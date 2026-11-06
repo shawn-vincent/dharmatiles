@@ -13,7 +13,7 @@
     if (b) {
       const dark = s ? s === 'dark' : sys.matches;
       b.textContent = dark ? '☀' : '☾';
-      b.setAttribute('aria-label', dark ? 'Switch to light' : 'Switch to dark');
+      b.setAttribute('aria-label', dark ? 'Switch to Lichen & Linen' : 'Switch to Moonpool');
       b.title = b.getAttribute('aria-label');
     }
   };

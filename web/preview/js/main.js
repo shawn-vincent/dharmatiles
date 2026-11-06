@@ -129,6 +129,9 @@ function applyTheme() {
   else delete document.documentElement.dataset.theme;
   const isDark = stored ? stored === 'dark' : dark.matches;
   $('theme').textContent = isDark ? '☀' : '☾';
+  $('theme').setAttribute('aria-label', isDark ? 'Switch to Lichen & Linen' : 'Switch to Moonpool');
+  $('theme').title = isDark ? 'Lichen & Linen light theme (t)' : 'Moonpool dark theme (t)';
+  viewer.setAccent(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
   viewer.setGridDim(Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--grid')) || 1);
 }
 function toggleTheme() {
@@ -360,7 +363,6 @@ async function loadMesh(i, version) {
     }
     // a selection the new build no longer has goes
     if (isEntry(state.sel) && state.sel.entry >= stackItems().length) state.sel = null;
-    lensBox = isEntry(state.sel) ? viewer.centreOf(state.sel.entry, state.sel.piece) : null;
     renderLens();
     renderAll();
   } catch (e) {
@@ -783,7 +785,6 @@ function setSel(w, { from, guarded = false } = {}) {
   markText();
   tools?.paint();
   if (from !== 'text') revealSel();
-  lensBox = isEntry(w) ? viewer.centreOf(w.entry, w.piece) : null;
   renderLens();
 }
 function revealSel() { const l = linesOf(state.sel); if (l) texts.reveal(l[0]); }
@@ -894,8 +895,6 @@ const lens = new Lens($('lens'), {
   },
   makeMine: () => offerMine(),
 });
-let lensBox = null; // the selection's bounds, for placing the lens
-
 /** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
 function renderLens() {
   const s = state.sel;
@@ -904,34 +903,8 @@ function renderLens() {
   const groups = [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
   for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
   lens.show({ title: it.label, href: it.href, groups });
-  placeLens();
 }
-
-/** Beside the selection, on whichever side has room, never over it. */
-function placeLens() {
-  const box = $('lens');
-  if (box.hidden) return;
-  const view = $('view').getBoundingClientRect();
-  const w = box.offsetWidth, h = box.offsetHeight;
-  let rect = null;
-  if (lensBox) {
-    const xs = [], ys = [];
-    for (const x of [lensBox.lo[0], lensBox.hi[0]]) for (const y of [lensBox.lo[1], lensBox.hi[1]]) for (const z of [lensBox.lo[2], lensBox.hi[2]]) {
-      const p = viewer.project([x, y, z]);
-      xs.push(p.x); ys.push(p.y);
-    }
-    rect = { l: Math.min(...xs), r: Math.max(...xs), t: Math.min(...ys), b: Math.max(...ys) };
-  }
-  let left, top;
-  if (!rect) { left = view.width - w - 12; top = 56; }
-  else {
-    left = rect.r + 16 + w < view.width - 8 ? rect.r + 16 : rect.l - 16 - w > 8 ? rect.l - 16 - w : view.width - w - 12;
-    top = (rect.t + rect.b) / 2 - h / 2;
-  }
-  box.style.left = `${Math.max(8, Math.min(left, view.width - w - 8))}px`;
-  box.style.top = `${Math.max(52, Math.min(top, view.height - h - 8))}px`;
-}
-viewer.onRender = () => { placeLens(); drawOverlay(); };
+viewer.onRender = () => drawOverlay();
 
 // ---- the map, the bar and its tools ----------------------------------------
 const overlay = new Overlay($('over'), viewer);

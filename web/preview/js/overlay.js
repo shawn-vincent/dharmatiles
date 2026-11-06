@@ -104,14 +104,14 @@ export class Overlay {
     c.clearRect(0, 0, this.canvas.clientWidth, this.canvas.clientHeight);
     if (!this.viewer.payload && !this.viewer.plan) return;
     const k = this.strength();
-    const ink = css('--plate-ink'), brass = css('--brass');
+    const ink = css('--plate-ink'), accent = css('--accent');
     if (m && scene.show !== false) {
       // regions, as runs of lattice nodes, one quad a run
       for (const r of m.regions) {
         const sel = scene.selRegion === r.name;
         const tint = scene.tints?.[r.name];
         if (!tint && !sel && k < 1) continue;
-        c.fillStyle = sel ? brass : tint || ink;
+        c.fillStyle = sel ? accent : tint || ink;
         c.globalAlpha = sel ? 0.34 : (tint ? 0.26 : 0.1) * k;
         const step = 1 / m.cells;
         for (let j = 0; j < r.ny; j++) {
@@ -141,14 +141,14 @@ export class Overlay {
           const mid = l.pts[Math.floor(l.pts.length / 2)];
           const a = this.at(mid), b = this.at([mid[0] + (2 * l.wobble) / this.sq, mid[1]]);
           c.lineWidth = Math.max(2, Math.hypot(b.x - a.x, b.y - a.y));
-          c.strokeStyle = sel ? brass : ink;
+          c.strokeStyle = sel ? accent : ink;
           c.globalAlpha = 0.1 * k + (sel ? 0.1 : 0);
           c.lineJoin = 'round'; c.lineCap = 'round';
           path(); c.stroke();
         }
         c.globalAlpha = sel ? 1 : 0.55 + 0.35 * k;
         c.lineWidth = sel ? 2.5 : 1.5;
-        c.strokeStyle = sel ? brass : ink;
+        c.strokeStyle = sel ? accent : ink;
         c.setLineDash(sel ? [] : [6, 4]);
         path(); c.stroke();
         c.setLineDash([]);
@@ -164,7 +164,7 @@ export class Overlay {
             if (!f.at) continue;
             const p = this.at(f.at);
             this.tag(p.x, p.y - 8, r.name, scene.selRegion === r.name);
-            c.fillStyle = scene.selRegion === r.name ? brass : ink;
+            c.fillStyle = scene.selRegion === r.name ? accent : ink;
             c.beginPath(); c.arc(p.x, p.y, 3, 0, 7); c.fill();
           }
         }
@@ -175,18 +175,18 @@ export class Overlay {
       const [a, b] = scene.box;
       const q = [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]].map((p) => this.at(p));
       c.beginPath(); q.forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y))); c.closePath();
-      c.fillStyle = brass; c.globalAlpha = 0.18; c.fill();
-      c.globalAlpha = 1; c.strokeStyle = brass; c.lineWidth = 1.5; c.setLineDash([5, 4]); c.stroke(); c.setLineDash([]);
+      c.fillStyle = accent; c.globalAlpha = 0.18; c.fill();
+      c.globalAlpha = 1; c.strokeStyle = accent; c.lineWidth = 1.5; c.setLineDash([5, 4]); c.stroke(); c.setLineDash([]);
     }
     if (scene.path?.length) {
-      c.strokeStyle = brass; c.lineWidth = 2.5; c.globalAlpha = 1;
+      c.strokeStyle = accent; c.lineWidth = 2.5; c.globalAlpha = 1;
       c.beginPath();
       scene.path.map((q) => this.at(q)).forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
       c.stroke();
     }
     if (scene.ring) {
       const { q, r } = scene.ring;
-      c.strokeStyle = brass; c.fillStyle = brass; c.lineWidth = 2;
+      c.strokeStyle = accent; c.fillStyle = accent; c.lineWidth = 2;
       c.beginPath();
       for (let n = 0; n <= 32; n++) {
         const t = (n / 32) * Math.PI * 2;
@@ -198,9 +198,9 @@ export class Overlay {
     for (const h of scene.handles || []) {
       const p = this.at(h.q);
       c.beginPath(); c.arc(p.x, p.y, h.hot ? 7 : 5.5, 0, 7);
-      c.fillStyle = h.hot ? brass : css('--raised');
+      c.fillStyle = h.hot ? accent : css('--raised');
       c.fill();
-      c.lineWidth = 2; c.strokeStyle = brass; c.stroke();
+      c.lineWidth = 2; c.strokeStyle = accent; c.stroke();
     }
     if (scene.label) {
       const p = this.at(scene.label.q);
@@ -216,10 +216,10 @@ export class Overlay {
     const w = c.measureText(text).width + 10;
     const left = align === 'center' ? x - w / 2 : x;
     c.globalAlpha = 0.92;
-    c.fillStyle = on ? css('--brass') : 'rgb(255 255 255)';
+    c.fillStyle = on ? css('--accent') : 'rgb(255 255 255)';
     c.fillRect(left, y - 17, w, 18);
     c.globalAlpha = 1;
-    c.fillStyle = on ? css('--on-brass') : '#1A1714';
+    c.fillStyle = on ? css('--on-accent') : '#1A1714';
     c.textAlign = 'left';
     c.fillText(text, left + 5, y - 3);
     c.textAlign = align;
