@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Changelog</title>
+<link rel="stylesheet" href="assets/site.css">
+<link rel="alternate" type="application/rss+xml" title="dharmatiles changelog" href="changelog.xml">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html" aria-current="page">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">dharmatiles releases</div>
+  <h1>Changelog</h1>
+  <p class="lede">What changed in each version, newest first. Install the current one with <code>brew install shawn-vincent/dharmatiles/dharmatiles</code>. Follow new versions with the <a href="changelog.xml">RSS feed</a>.</p>
+</header>
+<nav class="toc" aria-label="Versions"><div class="eyebrow">Versions</div><ol>
+  <li><a href="#v0.2.0">0.2.0 · 6 Nov 2026</a></li>
+  <li><a href="#v0.1.0">0.1.0 · 4 Nov 2026</a></li>
+  <li><a href="#v0.0.9">0.0.9 · 1–3 Nov 2026</a></li>
+  <li><a href="#v0.0.8">0.0.8 · late Oct 2026</a></li>
+  <li><a href="#v0.0.7">0.0.7 · July 2026</a></li>
+  <li><a href="#v0.0.6">0.0.6 · June 2026</a></li>
+  <li><a href="#v0.0.5">0.0.5 · early June 2026</a></li>
+  <li><a href="#v0.0.4">0.0.4 · 30 May – 4 Jun 2026</a></li>
+  <li><a href="#v0.0.3">0.0.3 · 29 May 2026</a></li>
+  <li><a href="#v0.0.1">0.0.1 · 26 May 2026</a></li>
+</ol></nav>
+<article class="doc">
+
+<p>Versions before 0.1.0 were never published; their numbers and dates are given after the fact, from the project's history, and are approximate.</p>
+
+<h2 id="v0.2.0">0.2.0 <small>6 November 2026</small></h2>
+<p>The editor, and tiles named by their files.</p>
+<ul>
+  <li><strong>An editor in the preview.</strong> Click anything on the tile to select it and see the text that made it; change it in the property sheet or the text. Place and draw rocks, trees, scatters, surfaces, lines and regions straight onto the tile. Drafts show while you drag; the full build follows.</li>
+  <li><strong>Your work is kept.</strong> Changes save as you go once they read cleanly; a change that can't be saved is never thrown away without asking. <em>New tile</em> starts a printable flat tile; <em>Make it mine</em> copies a library tile into My tiles.</li>
+  <li><strong>One undo history</strong> for typing and property changes, with a menu to jump several steps.</li>
+  <li><strong>The printability gate is actionable:</strong> the verdict says why a tile fails and flies to the worst face.</li>
+  <li><strong>Two themes:</strong> Lichen &amp; Linen by day, Moonpool by night, shared by the editor and this site.</li>
+  <li><strong>A tile is named by its file.</strong> The <code>tile</code> node no longer takes a name: write <code>tile size="2x2" seed=1 { … }</code>. Renaming a tile never changes how it comes out. Rename in the editor with <kbd>F2</kbd> or a double-click on the title. <em>Breaking:</em> remove the name from your tiles' <code>tile</code> line; every tile's random layout changes once.</li>
+  <li><strong>Cliffs in all nine forms</strong> (corner, mound, spire, canyon, escarpment, needles, plateau, massif and the run), with thirteen cliff tiles in the library.</li>
+  <li><strong>The library is read from disk:</strong> new and edited library tiles show at once. <code>dharmatiles</code> with no command opens the preview on your tiles (<code>~/dharmatiles</code>) and the library.</li>
+  <li><strong>Overhang in two steps:</strong> 55° is the target; 55–65° is allowed in small budgeted patches, painted orange; past 65° red.</li>
+  <li><strong>3MF as a Bambu Studio project,</strong> one coloured slot per material.</li>
+  <li><strong>This site, rewritten for tile makers:</strong> a page and a picture for every element, and the same look as the editor.</li>
+  <li>The language server is gone; the test suite runs in under three minutes.</li>
+  <li><em>Known:</em> nine library tiles, mostly cliffs, fail the printability gate at their new layouts.</li>
+</ul>
+
+<h2 id="v0.1.0">0.1.0 <small>4 November 2026</small></h2>
+<p>The first published version: dharmatiles as a single Rust program.</p>
+<ul>
+  <li><strong>The tile language.</strong> Tiles are short <code>.dtile</code> documents (KDL v2): lines and regions, and a stack of elements. Errors point at their line, with a suggestion.</li>
+  <li><strong>Elements:</strong> ground, dirt, rock, stone, boulder, pebble, scatter, water, grass, reeds, flowers, wall, floor and tree, and a first cliff (the cliff run).</li>
+  <li><strong>The printability gate</strong> on every build: watertight, nothing lost, overhang held to 55°.</li>
+  <li><strong>DungeonBlocks and OpenLOCK</strong> bases from one document.</li>
+  <li><strong>The preview:</strong> a live, painted 3D view in the browser that rebuilds on save, with the overhang painted.</li>
+  <li><strong>3MF</strong> painted by material, and an MCP server for agents.</li>
+  <li><strong>The library:</strong> ground, water, wall and floor tiles, ready to build.</li>
+  <li>macOS on Apple silicon, through Homebrew.</li>
+</ul>
+
+<h2 id="v0.0.9">0.0.9 <small>1–3 November 2026</small></h2>
+<p>The move to Rust: the program rebuilt in phases, each element checked against the Python one it replaced, and the tile language settled on KDL v2. Builds became identical at any number of threads, and much faster.</p>
+
+<h2 id="v0.0.8">0.0.8 <small>late October 2026</small></h2>
+<p>A round of experiments that set the look of today's elements: sculpted grass, faceted rocks, meadows of rocks, grass and bare earth, water with waves from its shores, bare earth with clods and pebbles, reeds on the shore, and cliffs of stacked, cracked blocks in eight forms. Every output reloads watertight.</p>
+
+<h2 id="v0.0.7">0.0.7 <small>July 2026</small></h2>
+<p>Walls and floors: coursed brick, cut stone, and drystone fieldstone walls with a crack-network of stones; the finished wall top at the standard height; a floor as a wall laid on its side.</p>
+
+<h2 id="v0.0.6">0.0.6 <small>June 2026</small></h2>
+<p>Trees: grown branches with bark, clumped crowns, and printable leaves placed over the whole crown. Rocks reworked as faceted stones.</p>
+
+<h2 id="v0.0.5">0.0.5 <small>early June 2026</small></h2>
+<p>Composed tiles: rocks and grass placed together, grass and water on one tile, sampled parameters for variety, and a build record in every file. (Tagged <code>v0.1.0</code> in the repository at the time, 11 June.)</p>
+
+<h2 id="v0.0.4">0.0.4 <small>30 May – 4 June 2026</small></h2>
+<p>A Python library in place of single scripts; grass grown blade by blade; the OpenLOCK base; per-face colours in the STL.</p>
+
+<h2 id="v0.0.3">0.0.3 <small>29 May 2026</small></h2>
+<p>3D grass blades that stack and arch over the ground, printable without supports.</p>
+
+<h2 id="v0.0.1">0.0.1 <small>26 May 2026</small></h2>
+<p>The first tile: a blank DungeonBlocks square, and grass pressed into it from a heightmap.</p>
+
+</article>
+</div>
+</body>
+</html>
