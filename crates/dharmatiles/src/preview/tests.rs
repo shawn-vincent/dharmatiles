@@ -91,6 +91,7 @@ fn serves_the_viewer_and_its_vendored_three() {
     for p in [
         "/js/main.js",
         "/js/viewer.js",
+        "/js/view-presets.js",
         "/js/payload.js",
         "/js/host.js",
         "/js/text.js",
