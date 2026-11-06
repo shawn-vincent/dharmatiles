@@ -136,6 +136,7 @@ button { font: inherit; color: inherit; }
 /* ---- the view: the plate ---- */
 #view { grid-area: view; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: radial-gradient(120% 90% at 50% 40%, var(--plate-hi), var(--plate) 60%, color-mix(in srgb, var(--plate) 88%, var(--plate-ink))); }
 #canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+#canvas:focus-visible { outline: 2px solid var(--brass); outline-offset: -3px; }
 #viewbar { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; align-items: center; z-index: 3; }
 #viewbar .seg > button { padding: 5px 9px; }
 #display { top: 40px; right: 0; width: 230px; display: flex; flex-direction: column; gap: 9px; padding: 12px; }
@@ -144,6 +145,8 @@ button { font: inherit; color: inherit; }
 #allviews button { background: none; border: 1px solid var(--line); border-radius: var(--r); padding: 3px 4px; cursor: pointer; font-size: 12px; }
 #allviews button.on { background: var(--brass); border-color: var(--brass); color: var(--on-brass); }
 #hint { position: absolute; pointer-events: none; color: #1A1714; background: rgb(255 255 255 / .92); border: 1px solid rgb(43 51 64 / .16); border-radius: var(--r); padding: 3px 8px; font-size: 12px; white-space: nowrap; box-shadow: 0 6px 16px -10px rgb(26 23 20 / .5); display: none; z-index: 3; }
+#toast { position: absolute; z-index: 5; left: 50%; bottom: 64px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px); color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 8px 9px 8px 13px; font-size: 12.5px; }
+#toast button { border: 0; border-radius: var(--r); padding: 3px 7px; color: var(--brass); background: color-mix(in srgb, var(--brass) 12%, transparent); cursor: pointer; font-weight: 600; }
 
 /* overlays on the plate: always the plate's own light chrome, in both themes */
 #status, #errors { color: #1A1714; background: rgb(255 255 255 / .88); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgb(43 51 64 / .16); box-shadow: 0 8px 24px -12px rgb(26 23 20 / .45); z-index: 2; }

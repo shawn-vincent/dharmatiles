@@ -37,7 +37,8 @@ export function suggest(caret, text, elements, force = false) {
   const before = caret.before;
   // the node the caret is in on this line: after the last `{` or `;`
   const seg = before.slice(Math.max(before.lastIndexOf('{'), before.lastIndexOf(';')) + 1);
-  if (/\/\//.test(before) || (before.split('"').length % 2 === 0)) return null; // in a comment or a string
+  const line = before.slice(before.lastIndexOf('\n') + 1);
+  if (/\/\//.test(line) || (before.split('"').length % 2 === 0)) return null; // in a comment or a string
   const n = names(text);
   const el = (name) => elements.find((e) => e.name === name);
   const rank = (items, word) => items

@@ -11,6 +11,23 @@
 
 export const NO_ENTRY = 65535;
 
+/**
+ * Expand per-triangle ownership to the mesh's three vertices for the GPU.
+ * Entry 0 means no owner; a real entry is stored +1. Uint16 is exact for
+ * every practical stack and half the memory of the old float attribute.
+ */
+export function ownerVertices(entry, piece) {
+  const who = new Uint16Array(6 * entry.length);
+  for (let t = 0; t < entry.length; t++) {
+    const e = entry[t] === NO_ENTRY ? 0 : entry[t] + 1;
+    for (let v = 0; v < 3; v++) {
+      who[6 * t + 2 * v] = e;
+      who[6 * t + 2 * v + 1] = piece[t];
+    }
+  }
+  return who;
+}
+
 export function parsePayload(buffer) {
   const head = new DataView(buffer);
   const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));

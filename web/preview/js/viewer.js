@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from '/vendor/OrbitControls.js';
+import { ownerVertices } from './payload.js';
 
 THREE.ColorManagement.enabled = false; // colours are already display values
 
@@ -62,15 +63,16 @@ void main() {
 
 // The render.rs shading: 0.3 + key + 0.35 fill, *0.95, gamma 1/1.25,
 // back faces turned to face the camera.
-// The selection and the thing under the pointer are tinted brass: who =
-// (entry, piece), a piece of -1 meaning the whole entry, an entry of -1 none.
+// The selection and the thing under the pointer are tinted brass. `who`
+// stores (entry + 1, piece), with entry 0 meaning none; the uniforms keep
+// ordinary zero-based entries and a piece of -1 means the whole entry.
 const FRAG = `
 uniform vec3 uCam; uniform vec3 uDir; uniform float uOrtho; uniform vec3 uL1; uniform vec3 uL2;
 uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uBrass;
 varying vec3 vN; varying vec3 vC; varying vec3 vP; varying vec2 vWho;
 float is(vec2 w) {
   vec2 v = floor(vWho + 0.5);
-  return (w.x >= 0.0 && v.x == w.x && (w.y < 0.0 || v.y == w.y)) ? 1.0 : 0.0;
+  return (w.x >= 0.0 && v.x == w.x + 1.0 && (w.y < 0.0 || v.y == w.y)) ? 1.0 : 0.0;
 }
 void main() {
   vec3 n = normalize(vN);
@@ -83,12 +85,12 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
 }`;
 
-// The pick pass: each fragment writes its (entry + 1, piece) as four bytes.
+// The pick pass: `who` already carries entry + 1, so zero stays no owner.
 const PICK_FRAG = `
 varying vec2 vWho;
 void main() {
   vec2 v = floor(vWho + 0.5);
-  float e = v.x + 1.0;
+  float e = v.x;
   gl_FragColor = vec4(mod(e, 256.0), floor(e / 256.0), mod(v.y, 256.0), floor(v.y / 256.0)) / 255.0;
 }`;
 
@@ -106,7 +108,7 @@ void main() {
 export class Viewer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setClearColor(0x000000, 0); // the plate is the page's backdrop behind the canvas
     this.scene = new THREE.Scene();
     this.persp = new THREE.PerspectiveCamera(FOV, 1, 1, 1000);
@@ -417,11 +419,7 @@ export class Viewer {
     this.grey = null;
     g.setAttribute('paint', this.currentPaint());
     // who made each triangle, on its three corners
-    const who = new Float32Array(6 * payload.triangles);
-    for (let t = 0; t < payload.triangles; t++) {
-      const e = payload.entry[t] === 65535 ? -1 : payload.entry[t], p = payload.piece[t];
-      for (let v = 0; v < 3; v++) { who[6 * t + 2 * v] = e; who[6 * t + 2 * v + 1] = p; }
-    }
+    const who = ownerVertices(payload.entry, payload.piece);
     g.setAttribute('who', new THREE.BufferAttribute(who, 2));
     if (this.mesh) { this.scene.remove(this.mesh); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); }
     this.mesh = new THREE.Mesh(g, this.material);

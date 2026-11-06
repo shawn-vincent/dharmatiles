@@ -33,6 +33,7 @@ const state = {
   textFor: null,       // [tile index, file, mesh_version] the text pane shows
 };
 let tools = null; // the bar's tools (below)
+let toastTimer = 0;
 window.dtPreview = { state, viewer, get tools() { return tools; } }; // for tests and the console
 
 const tile = () => state.tiles[state.selected];
@@ -43,6 +44,17 @@ const piecesOf = (e) => (stackItems()[e]?.what === 'scatter' ? state.pieces.get(
 const keyOf = (w) => (!w ? '' : w.tile ? 'tile' : w.region != null ? `r:${w.region}` : w.line != null ? `l:${w.line}` : `e:${w.entry}:${w.piece ?? ''}`);
 const same = (a, b) => keyOf(a) === keyOf(b);
 const isEntry = (w) => !!w && w.entry != null;
+
+function toast(message, action = null) {
+  const box = $('toast');
+  clearTimeout(toastTimer);
+  box.querySelector('span').textContent = message;
+  const button = box.querySelector('button');
+  button.hidden = !action;
+  button.onclick = action ? () => { box.hidden = true; action(); } : null;
+  box.hidden = false;
+  toastTimer = setTimeout(() => { box.hidden = true; }, 5000);
+}
 
 // ---- the view's controls: views and the display menu -------------------
 const SHOWN_VIEWS = ['painted', 'top', 'low', 'close'];
@@ -385,7 +397,10 @@ const texts = new TextPane($('code'), {
     if (/[\w=+\-.]/.test(last)) openComp(false); else closeComp();
   },
   onReadOnly: () => offerMine(),
-  onKey: (e) => compKey(e),
+  onKey: (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { save(true); return true; }
+    return compKey(e);
+  },
   onHistory: (step) => undo(step),
 });
 
@@ -1030,7 +1045,7 @@ function renderStack() {
     if (!base && it.span && it.file === texts.file && doc.writable) {
       acts.append(
         act('◐', `Mute ${it.label}: see the tile without it (writes /- before it)`, () => muteAt(it.span[0])),
-        act('×', `Take ${it.label} out of the text`, () => removeAt(it.span[0])),
+        act('×', `Take ${it.label} out of the text`, () => removeAt(it.span[0], it.label)),
       );
     }
     if (it.href) {
@@ -1104,7 +1119,7 @@ function unmute(m) {
   edited(texts.text, 'view');
   askDraft();
 }
-async function removeAt(byte) {
+async function removeAt(byte, label = 'Entry') {
   if (!doc.writable) return offerMine();
   const r = await host.post('/api/edit', { op: 'remove', text: texts.text, at: byte });
   if (r.status !== 200) { doc.note = r.body?.error || 'that could not be taken out'; renderTextBar(); return; }
@@ -1112,6 +1127,7 @@ async function removeAt(byte) {
   texts.setText(r.body.text);
   edited(texts.text, 'view');
   askDraft();
+  toast(`${label} removed`, () => undo(-1));
 }
 
 // ---- the title, the gate and the record ---------------------------------------

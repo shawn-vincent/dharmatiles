@@ -44,16 +44,20 @@ export function browserHost() {
       return r.ok ? r.json() : [];
     },
     async post(path, body) {
-      const send = async () => fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-DT-Token': await session() },
-        body: JSON.stringify(body),
-      });
-      let r = await send();
-      if (r.status === 403 && token) { token = null; r = await send(); } // the program restarted
-      let v = null;
-      try { v = await r.json(); } catch { /* not JSON */ }
-      return { status: r.status, body: v };
+      try {
+        const send = async () => fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-DT-Token': await session() },
+          body: JSON.stringify(body),
+        });
+        let r = await send();
+        if (r.status === 403 && token) { token = null; r = await send(); } // the program restarted
+        let v = null;
+        try { v = await r.json(); } catch { /* not JSON */ }
+        return { status: r.status, body: v };
+      } catch {
+        return { status: 0, body: { error: 'the editor is disconnected' } };
+      }
     },
   };
 }

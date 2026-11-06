@@ -45,6 +45,39 @@ export function byteToIndex(text, b) {
   return text.length;
 }
 
+/** A pure Tab/Shift-Tab edit: text and the selection after it. */
+export function indentSelection(text, a, b, out = false) {
+  const start = text.lastIndexOf('\n', a - 1) + 1;
+  let end = text.indexOf('\n', b);
+  if (end < 0) end = text.length;
+  const before = text.slice(start, end);
+  let removedFirst = 0;
+  const changed = before.split('\n').map((line, i) => {
+    if (!out) return `    ${line}`;
+    const n = Math.min(4, (line.match(/^ */) || [''])[0].length);
+    if (i === 0) removedFirst = n;
+    return line.slice(n);
+  }).join('\n');
+  let selStart, selEnd;
+  if (a === b && !out) selStart = selEnd = a + 4;
+  else if (a === b) selStart = selEnd = Math.max(start, a - removedFirst);
+  else {
+    const delta = out ? changed.length - before.length : 4 * before.split('\n').length;
+    selStart = out ? Math.max(start, a - removedFirst) : a + 4;
+    selEnd = b + delta;
+  }
+  return { text: text.slice(0, start) + changed + text.slice(end), start: selStart, end: selEnd };
+}
+
+/** A pure Enter edit: carry indentation and add one level after `{`. */
+export function newlineAt(text, a, b) {
+  const start = text.lastIndexOf('\n', a - 1) + 1;
+  const line = text.slice(start, a);
+  const base = (line.match(/^ */) || [''])[0];
+  const insert = `\n${base}${line.trimEnd().endsWith('{') ? '    ' : ''}`;
+  return { text: text.slice(0, a) + insert + text.slice(b), caret: a + insert.length };
+}
+
 export class TextPane {
   /**
    * `code` is the scrolling element.  Callbacks: onCaretLine(n) when the
@@ -84,9 +117,13 @@ export class TextPane {
     });
     ta.addEventListener('keydown', (e) => {
       if (cb.onKey?.(e)) { e.preventDefault(); e.stopPropagation(); return; }
-      if (e.key === 'Tab' && !e.shiftKey && this.writable) { // indent, not leave the pane
+      if (e.key === 'Tab' && this.writable) { // indent, not leave the pane
         e.preventDefault();
-        this.insert('    ');
+        this.indent(e.shiftKey);
+      }
+      if (e.key === 'Enter' && this.writable) {
+        e.preventDefault();
+        this.newline();
       }
       if (ta.readOnly && e.key.length === 1 && !e.metaKey && !e.ctrlKey) cb.onReadOnly?.();
     });
@@ -137,6 +174,21 @@ export class TextPane {
   insert(s, from = this.ta.selectionStart, to = this.ta.selectionEnd) {
     const t = this.ta.value;
     this.setText(t.slice(0, from) + s + t.slice(to), from + s.length);
+    this.cb.onEdit?.(this.text, 'type');
+  }
+
+  /** Tab/Shift-Tab: indent the selected lines, or the caret's line. */
+  indent(out = false) {
+    const r = indentSelection(this.ta.value, this.ta.selectionStart, this.ta.selectionEnd, out);
+    this.setText(r.text);
+    this.ta.setSelectionRange(r.start, r.end);
+    this.cb.onEdit?.(this.text, 'type');
+  }
+
+  /** Enter carries the line's indentation; after `{` it enters one level. */
+  newline() {
+    const r = newlineAt(this.ta.value, this.ta.selectionStart, this.ta.selectionEnd);
+    this.setText(r.text, r.caret);
     this.cb.onEdit?.(this.text, 'type');
   }
 
