@@ -28,6 +28,9 @@
 
   /* the plate: identical in both themes, like the renders */
   --plate: #D9E0EB; --plate-hi: #EBEFF5; --plate-ink: #2B3340;
+  /* the editor's open sky: bright lake blue by day */
+  --sky-top: #5D9FCA; --sky-mid: #9BCBE2; --sky-horizon: #E3EFF0;
+  --sky-glow: rgb(255 246 211 / .62); --sky-cloud: rgb(255 255 255 / .22); --sky-haze: rgb(231 242 238 / .7);
 
   /* overhang: these two colours are the gate's, and only the gate's */
   --over: #E5483B; --band: #FF8C1A;
@@ -50,6 +53,8 @@
   --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
   --moss: #72B07C; --water: #83A8FF; --stone: #B9C9CD; --earth: #C08A73; --bloom: #C895E5;
   --ok: #50B780; --err: #F06A5C; --over: #EE5444;
+  --sky-top: #06182E; --sky-mid: #0E3A59; --sky-horizon: #2A6374;
+  --sky-glow: rgb(119 203 233 / .2); --sky-cloud: rgb(139 205 218 / .09); --sky-haze: rgb(46 105 116 / .48);
   --code-bg: #061015;
   --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 28px -10px rgb(0 0 0 / .6);
   color-scheme: dark;
@@ -61,6 +66,8 @@
   --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
   --moss: #72B07C; --water: #83A8FF; --stone: #B9C9CD; --earth: #C08A73; --bloom: #C895E5;
   --ok: #50B780; --err: #F06A5C; --over: #EE5444;
+  --sky-top: #06182E; --sky-mid: #0E3A59; --sky-horizon: #2A6374;
+  --sky-glow: rgb(119 203 233 / .2); --sky-cloud: rgb(139 205 218 / .09); --sky-haze: rgb(46 105 116 / .48);
   --code-bg: #061015;
   --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 28px -10px rgb(0 0 0 / .6);
   color-scheme: dark;
