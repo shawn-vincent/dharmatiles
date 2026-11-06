@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { suggest } from '../js/complete.js';
 import { browserHost } from '../js/host.js';
-import { parseValue, valueOf } from '../js/lens.js';
+import { parseValue, valueOf, wordControlNeedsSelect } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
 import { indentSelection, newlineAt } from '../js/text.js';
@@ -96,6 +96,13 @@ test('lens values preserve their exact written value', () => {
   assert.equal(parseValue('7.5'), 7.5);
   assert.equal(parseValue('#true'), true);
   assert.equal(parseValue('"mossy"'), 'mossy');
+});
+
+test('word controls become dropdowns before their buttons would wrap', () => {
+  const words = (...names) => names.map((word) => ({ word }));
+  assert.equal(wordControlNeedsSelect(words('bare', 'dirt')), false);
+  assert.equal(wordControlNeedsSelect(words('rubble', 'broken', 'massive')), true);
+  assert.equal(wordControlNeedsSelect(words('one very long choice', 'another')), true);
 });
 
 test('the text editor indents selections and carries block indentation', () => {

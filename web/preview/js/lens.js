@@ -40,6 +40,11 @@ export function parseValue(raw) {
   return t.replace(/^#?"|"#?$/g, '');
 }
 
+/** Button choices stay direct only when they are certain to fit on one row. */
+export function wordControlNeedsSelect(words) {
+  return words.length > 2 || words.reduce((n, word) => n + word.word.length, 0) > 18;
+}
+
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -138,16 +143,34 @@ export class Lens {
     const shown = v ? v.text : (c.default ?? '');
     const words = c.words?.length ? c.words : null;
     if (words) {
-      const box = el('span', 'words');
       const cur = shown.replace(/^"|"$/g, '');
-      for (const w of words) {
-        const b = el('button', w.word === cur ? 'on' : '', w.word);
-        b.title = w.about || '';
-        b.disabled = ro;
-        b.onclick = () => this.api.set(g.at, c.name, w.word);
-        box.append(b);
+      if (wordControlNeedsSelect(words)) {
+        const select = el('select', 'word-select');
+        select.disabled = ro;
+        if (!words.some((w) => w.word === cur)) {
+          const option = el('option', '', 'not set'); option.value = ''; option.disabled = true;
+          select.append(option);
+        }
+        for (const w of words) {
+          const option = el('option', '', w.word);
+          option.value = w.word; option.title = w.about || '';
+          select.append(option);
+        }
+        select.value = words.some((w) => w.word === cur) ? cur : '';
+        select.title = words.find((w) => w.word === cur)?.about || c.about || '';
+        select.onchange = () => this.api.set(g.at, c.name, select.value);
+        cell.append(select);
+      } else {
+        const box = el('span', 'words');
+        for (const w of words) {
+          const b = el('button', w.word === cur ? 'on' : '', w.word);
+          b.title = w.about || '';
+          b.disabled = ro;
+          b.onclick = () => this.api.set(g.at, c.name, w.word);
+          box.append(b);
+        }
+        cell.append(box);
       }
-      cell.append(box);
     } else if (c.unit === 'switch') {
       const on = /#?true/.test(shown);
       const b = el('button', `flip${on ? ' on' : ''}`, on ? 'on' : 'off');

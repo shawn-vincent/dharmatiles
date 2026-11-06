@@ -133,10 +133,10 @@ button { font: inherit; color: inherit; }
 #lens .empty { margin: auto; max-width: 22ch; padding: 28px 18px; color: var(--muted); text-align: center; line-height: 1.55; }
 #lens .empty b { display: block; margin-bottom: 5px; color: var(--ink); font: 700 20px/1.1 var(--f-display); }
 #lens .grp { font-size: 12px; color: var(--muted); margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line); }
-#lens .row { display: grid; grid-template-columns: 78px minmax(0, 1fr) 14px; align-items: center; min-height: 28px; gap: 6px; }
-#lens .row .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lens .row { display: grid; grid-template-columns: 78px minmax(0, 1fr) 14px; align-items: start; min-height: 30px; gap: 6px; }
+#lens .row .nm { padding-top: 4px; font-size: 13px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #lens .row.faint .nm, #lens .row.faint .val { opacity: .55; }
-#lens .cell { min-width: 0; display: flex; align-items: center; gap: 4px; }
+#lens .cell { min-width: 0; min-height: 28px; display: flex; align-items: flex-start; gap: 4px; }
 #lens .val { font: 13px var(--f-code); padding: 2px 6px; border-radius: var(--r); cursor: text; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #lens .val:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 #lens .val.ro { cursor: default; } #lens .val.ro:hover { background: none; }
@@ -147,8 +147,11 @@ button { font: inherit; color: inherit; }
 #lens .words { display: flex; flex-wrap: wrap; gap: 4px; }
 #lens .words button, #lens .flip { border: 1px solid var(--line); background: none; border-radius: var(--r); padding: 0 6px; font-size: 12px; cursor: pointer; }
 #lens .words button.on, #lens .flip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+#lens .word-select { width: 100%; min-width: 0; height: 27px; color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 2px 24px 2px 7px; font: 12.5px var(--f-body); cursor: pointer; }
+#lens .word-select:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent); outline-offset: 0; }
+#lens .word-select:disabled { cursor: default; opacity: .7; }
 #lens button:disabled { cursor: default; opacity: .7; }
-#lens .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 15px; line-height: 1; }
+#lens .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px 0 0; font-size: 15px; line-height: 1; }
 #lens .x:hover { color: var(--ink); }
 #lens .note { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
 #lens .linkish, #textstate .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
