@@ -157,7 +157,6 @@ button { font: inherit; color: inherit; }
 /* ---- the view: the plate ---- */
 #view { grid-area: view; position: relative; min-width: 0; min-height: 0; overflow: hidden;
   background:
-    radial-gradient(circle at 78% 16%, var(--sky-glow) 0, transparent 24%),
     radial-gradient(ellipse 48% 15% at 18% 55%, var(--sky-cloud) 0, transparent 72%),
     radial-gradient(ellipse 75% 34% at 38% 108%, var(--sky-haze) 0, transparent 72%),
     linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 56%, var(--sky-horizon) 100%); }

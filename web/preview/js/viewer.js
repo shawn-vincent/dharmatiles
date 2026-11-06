@@ -27,7 +27,7 @@ const FOV = 40;
 const GRID_BELOW_MM = 0.02;
 // ink lines on the plate: bold at each square, fine at a fifth of one, faded with distance
 const GRID_FRAG = `
-uniform float uDim; uniform float uSq; uniform vec2 uCentre; uniform float uR0; uniform float uR1;
+uniform float uDim; uniform float uSq; uniform vec2 uCentre; uniform float uR0; uniform float uR1; uniform vec3 uInk;
 varying vec2 vXY;
 float line(float v, float px, float w) {
   float d = abs(fract(v - 0.5) - 0.5) / px; // distance to the nearest line, in pixels
@@ -42,7 +42,7 @@ void main() {
   float fade = 1.0 - smoothstep(uR0, uR1, distance(vXY, uCentre));
   float a = max(major * 0.42, minor * 0.13) * fade * uDim;
   if (a < 0.01) discard;
-  gl_FragColor = vec4(0.17, 0.2, 0.25, a);
+  gl_FragColor = vec4(uInk, a);
 }`;
 const NARROW_FOV = 3; // the near-orthographic end of the projection tween
 const easeInOutCubic = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
@@ -457,7 +457,7 @@ export class Viewer {
 
   /**
    * The ground grid, ruled at the square size (35 mm DungeonBlocks, 25.4
-   * OpenLOCK): white lines, bold at every square and fine in between, a
+   * OpenLOCK): theme-contrasting lines, bold at every square and fine in between, a
    * plane at the tile's datum (z = 0, where the base meets the tile body;
    * an STL has none, so its lowest point) that fades out toward the
    * horizon.  It is drawn after the tile, without writing depth, a hair
@@ -475,6 +475,7 @@ export class Viewer {
       uniforms: {
         uSq: { value: sq }, uDim: { value: this.gridDim ?? 1 }, uCentre: { value: new THREE.Vector2(w / 2, h / 2) },
         uR0: { value: Math.max(w, h) * 1.2 }, uR1: { value: reach * 0.5 },
+        uInk: { value: this.gridInk?.clone() ?? new THREE.Color(0.17, 0.2, 0.25) },
       },
       vertexShader: 'varying vec2 vXY; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXY = w.xy; gl_Position = projectionMatrix * viewMatrix * w; }',
       fragmentShader: GRID_FRAG,
@@ -488,10 +489,18 @@ export class Viewer {
     this.scene.add(this.grid);
   }
 
-  /** Dim the grid a little on the night sky (the tile's paint never changes). */
+  /** Set the grid's opacity independently of the tile's paint. */
   setGridDim(v) {
     this.gridDim = v;
     if (this.grid) this.grid.material.uniforms.uDim.value = v;
+    this.draw();
+  }
+
+  /** The theme's grid ink: dark by day, pale against Moonpool's twilight. */
+  setGridColor(css) {
+    this.gridInk ??= new THREE.Color(0.17, 0.2, 0.25);
+    try { this.gridInk.setStyle(css); } catch { /* keep the previous colour */ }
+    if (this.grid) this.grid.material.uniforms.uInk.value.copy(this.gridInk);
     this.draw();
   }
 

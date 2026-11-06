@@ -163,6 +163,7 @@ function applyTheme() {
   $('theme').setAttribute('aria-label', isDark ? 'Switch to Lichen & Linen' : 'Switch to Moonpool');
   $('theme').title = isDark ? 'Lichen & Linen light theme (t)' : 'Moonpool dark theme (t)';
   viewer.setAccent(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  viewer.setGridColor(getComputedStyle(document.documentElement).getPropertyValue('--grid-ink').trim());
   viewer.setGridDim(Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--grid')) || 1);
 }
 function toggleTheme() {
