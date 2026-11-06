@@ -39,9 +39,14 @@ export function describeChange(before = '', after = '', kind = 'edit', custom = 
     ? changedPart(removedLines[0], addedLines[0])
     : { removed: excerpt(removedLines), added: excerpt(addedLines) };
   const line = Math.max(1, start + 1);
-  const names = { type: 'Edited', lens: 'Changed properties', view: 'Changed tile', disk: 'Changed on disk' };
+  let action = custom;
+  if (!action && kind === 'type') {
+    action = fragments.removed && fragments.added ? 'Replaced text'
+      : fragments.removed ? 'Deleted text' : fragments.added ? 'Typed' : 'Edited';
+  }
+  const names = { lens: 'Changed properties', view: 'Changed tile', disk: 'Disk change' };
   return {
-    title: `${custom || names[kind] || 'Edited'} · line ${line}`,
+    title: `${action || names[kind] || 'Edited'} on line ${line}`,
     line,
     removed: fragments.removed,
     added: fragments.added,

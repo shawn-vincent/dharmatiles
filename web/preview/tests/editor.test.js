@@ -33,11 +33,12 @@ test('view shortcuts keep ISO and Map plus two recent alternatives', () => {
 
 test('history describes the text that was added, changed, or removed', () => {
   assert.deepEqual(describeChange('rock size=8', 'rock size=12', 'type'), {
-    title: 'Edited · line 1', line: 1, removed: '8', added: '12',
+    title: 'Replaced text on line 1', line: 1, removed: '8', added: '12',
   });
   assert.deepEqual(describeChange('rock\nwater', 'rock', 'view', 'Deleted water'), {
-    title: 'Deleted water · line 2', line: 2, removed: 'water', added: null,
+    title: 'Deleted water on line 2', line: 2, removed: 'water', added: null,
   });
+  assert.equal(describeChange('rock', 'rocks', 'type').title, 'Typed on line 1');
   const long = describeChange('', `about "${'x'.repeat(100)}"`, 'type');
   assert.equal(long.added.length, 76);
   assert.match(long.added, /…$/);
