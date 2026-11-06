@@ -67,6 +67,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/view-presets.js"),
     ),
     (
+        "/js/layout.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/layout.js"),
+    ),
+    (
         "/js/history.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/history.js"),
@@ -110,6 +115,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/vendor/three.module.min.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/vendor/three.module.min.js"),
+    ),
+    (
+        "/vendor/codemirror.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/codemirror.js"),
     ),
     (
         "/vendor/OrbitControls.js",

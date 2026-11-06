@@ -90,5 +90,15 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
             })
         })
         .collect();
-    json!({ "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions })
+    // the tile node itself, for the property sheet when nothing is selected
+    let own = node.map(|n| {
+        let at = n.name().span().offset();
+        let controls: Vec<Value> = dt_doc::edit::props_at(text, at)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, text, span)| json!({ "name": name, "text": text, "span": span }))
+            .collect();
+        json!({ "at": at, "controls": controls })
+    });
+    json!({ "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "tile": own })
 }

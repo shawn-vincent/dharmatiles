@@ -32,6 +32,7 @@
     <span class="grow"></span>
     <span id="conn" class="muted">connecting…</span>
     <button id="gate" type="button" hidden aria-expanded="false" title="The printability gate: click for the build record"><i></i><span class="lbl" id="gatetext"></span></button>
+    <button id="export" class="btn" type="button" hidden aria-expanded="false" title="Write the STL (or a 3MF) to out/">Export</button>
     <button id="theme" class="btn icon" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button>
     <div id="progress"></div>
 
@@ -43,7 +44,37 @@
       </div>
       <ul id="tiles"></ul>
     </div>
+  </header>
 
+  <section id="text" aria-label="The document">
+    <div id="textbar"><span id="textpath"></span><span id="textstate"></span><button class="pane-x" id="hide-text" type="button" title="Hide the text ([)" aria-label="Hide the text">×</button></div>
+    <div id="code" role="list"></div>
+    <div id="codehint">Click a line to select it in the view.</div>
+  </section>
+
+  <main id="view">
+    <canvas id="canvas" tabindex="0" aria-label="3D tile view"></canvas>
+    <canvas id="over" aria-hidden="true"></canvas>
+    <div id="viewbar">
+      <div id="reopen" hidden><button class="btn" id="show-text" type="button" title="Show the text ([)">Text</button><button class="btn" id="show-props" type="button" title="Show the properties (])">Properties</button></div>
+      <div class="seg" id="views" role="group" aria-label="Views"></div>
+      <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display">⋯</button>
+      <div id="display" class="menu" hidden>
+        <label class="switch"><input type="checkbox" id="t-paint" checked> Paint <kbd>c</kbd></label>
+        <label class="switch"><input type="checkbox" id="t-overhang" checked> Overhang <kbd>o</kbd></label>
+        <label class="switch"><input type="checkbox" id="t-wire"> Wireframe <kbd>w</kbd></label>
+        <label class="switch"><input type="checkbox" id="t-grid" checked> Grid <kbd>g</kbd></label>
+        <button id="b-proj" class="btn" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
+        <div id="allviews"></div>
+        <div class="seg" id="layout-seg" role="group" aria-label="Layout">
+          <button type="button" data-preset="edit" title="Text over properties in one sidebar">Edit</button>
+          <button type="button" data-preset="inspect" title="Text, view and properties side by side">Inspect</button>
+          <button type="button" data-preset="look" title="Only the view (\)">Look</button>
+        </div>
+        <label class="switch"><input type="checkbox" id="t-right"> Panes on the right</label>
+        <button id="b-keys" class="btn" type="button">Keys <kbd>?</kbd></button>
+      </div>
+    </div>
     <div id="record-card" class="card" hidden>
       <div id="verdict" hidden></div>
       <button id="show-worst" class="btn inspect" type="button" hidden>Show worst face</button>
@@ -55,28 +86,12 @@
         <li><i class="sw" style="background:#2a2a2e"></i><span>Tile side wall</span></li>
       </ul>
     </div>
-  </header>
-
-  <section id="text" aria-label="The document">
-    <div id="textbar"><span id="textpath"></span><span id="textstate"></span></div>
-    <div id="code" role="list"></div>
-    <div id="codehint">Click a line to select it in the view.</div>
-  </section>
-
-  <main id="view">
-    <canvas id="canvas" tabindex="0" aria-label="3D tile view"></canvas>
-    <canvas id="over" aria-hidden="true"></canvas>
-    <div id="viewbar">
-      <div class="seg" id="views" role="group" aria-label="Views"></div>
-      <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display">⋯</button>
-      <div id="display" class="menu" hidden>
-        <label class="switch"><input type="checkbox" id="t-paint" checked> Paint <kbd>c</kbd></label>
-        <label class="switch"><input type="checkbox" id="t-overhang" checked> Overhang <kbd>o</kbd></label>
-        <label class="switch"><input type="checkbox" id="t-wire"> Wireframe <kbd>w</kbd></label>
-        <label class="switch"><input type="checkbox" id="t-grid" checked> Grid <kbd>g</kbd></label>
-        <button id="b-proj" class="btn" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
-        <div id="allviews"></div>
-      </div>
+    <div id="export-card" class="card" hidden>
+      <div class="cap">Export</div>
+      <div class="seg" id="export-system" role="group" aria-label="Connector system"><button type="button" data-sys="db">DungeonBlocks</button><button type="button" data-sys="ol">OpenLOCK</button></div>
+      <label class="switch"><input type="checkbox" id="export-3mf"> Also a painted 3MF</label>
+      <p id="export-why"></p>
+      <div class="row-btns"><button class="btn" id="export-reveal" type="button" hidden>Reveal in Finder</button><button class="btn on" id="export-go" type="button">Export</button></div>
     </div>
     <div id="status" hidden><div id="bar"><i id="bar-fill"></i></div><span id="status-text"></span></div>
     <div id="hint" role="status"></div>
@@ -102,6 +117,7 @@
   </main>
 
   <aside id="properties-pane" aria-label="Properties">
+    <button class="pane-x" id="hide-props" type="button" title="Hide the properties (])" aria-label="Hide the properties">×</button>
     <div id="lens" role="region" aria-label="Properties of the selection"></div>
   </aside>
 </div>
@@ -115,6 +131,40 @@
     <label class="field">Size<select id="new-size" name="size"><option>1x1</option><option>2x1</option><option>1x2</option><option>2x2</option></select></label>
     <p class="dialog-note" id="new-note">Starts as printable flat ground. Everything about it is ordinary text you can change.</p>
     <div class="row-btns"><button class="btn" id="new-cancel" type="button">Cancel</button><button class="btn on" id="new-ok" type="submit">Create tile</button></div>
+  </form>
+</dialog>
+
+<dialog id="keys" aria-labelledby="keys-title">
+  <form method="dialog">
+    <div class="eyebrow">Editor</div>
+    <h2 id="keys-title">Keys</h2>
+    <div class="cols">
+      <dl>
+        <dt><kbd>⌘1</kbd></dt><dd>The text</dd>
+        <dt><kbd>⌘2</kbd></dt><dd>The view</dd>
+        <dt><kbd>⌘3</kbd></dt><dd>The properties</dd>
+        <dt><kbd>[</kbd></dt><dd>Hide or show the text</dd>
+        <dt><kbd>]</kbd></dt><dd>Hide or show the properties</dd>
+        <dt><kbd>\</kbd></dt><dd>Only the view</dd>
+        <dt><kbd>⌘F</kbd></dt><dd>Find in the text</dd>
+        <dt><kbd>⌘Z</kbd> <kbd>⌘⇧Z</kbd></dt><dd>Undo, redo</dd>
+        <dt><kbd>F2</kbd></dt><dd>Rename the tile</dd>
+      </dl>
+      <dl>
+        <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Views</dd>
+        <dt><kbd>a</kbd> <kbd>/</kbd></dt><dd>Place or draw</dd>
+        <dt><kbd>f</kbd></dt><dd>Frame the selection</dd>
+        <dt><kbd>c</kbd></dt><dd>Paint</dd>
+        <dt><kbd>o</kbd></dt><dd>Overhang</dd>
+        <dt><kbd>w</kbd></dt><dd>Wireframe</dd>
+        <dt><kbd>g</kbd></dt><dd>Grid</dd>
+        <dt><kbd>p</kbd></dt><dd>Perspective or orthographic</dd>
+        <dt><kbd>t</kbd></dt><dd>Light or dark</dd>
+        <dt><kbd>⌃Space</kbd></dt><dd>What can go here</dd>
+      </dl>
+    </div>
+    <p class="dialog-note">Single keys work when the text is not being typed into.</p>
+    <div class="row-btns"><button class="btn on" value="close" autofocus>Close</button></div>
   </form>
 </dialog>
 

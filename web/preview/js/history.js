@@ -20,8 +20,8 @@ function changedPart(before, after) {
   while (end < before.length - start && end < after.length - start
     && before[before.length - 1 - end] === after[after.length - 1 - end]) end++;
   return {
-    removed: clipped(before.slice(start, before.length - end || undefined)),
-    added: clipped(after.slice(start, after.length - end || undefined)),
+    removed: clipped(before.slice(start, before.length - end)),
+    added: clipped(after.slice(start, after.length - end)),
   };
 }
 
@@ -42,7 +42,8 @@ export function describeChange(before = '', after = '', kind = 'edit', custom = 
   let action = custom;
   if (!action && kind === 'type') {
     action = fragments.removed && fragments.added ? 'Replaced text'
-      : fragments.removed ? 'Deleted text' : fragments.added ? 'Typed' : 'Edited';
+      : fragments.removed ? 'Deleted text' : fragments.added ? 'Typed'
+        : before !== after ? 'Changed spacing' : 'Edited';
   }
   const names = { lens: 'Changed properties', view: 'Changed tile', disk: 'Disk change' };
   return {

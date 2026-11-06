@@ -18,9 +18,11 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#run">Run it</a></li>
   <li><a href="#shows">What it shows</a></li>
+  <li><a href="#layout">Panes</a></li>
   <li><a href="#select">Selecting</a></li>
   <li><a href="#edit">Editing</a></li>
   <li><a href="#keys">Moving round a tile</a></li>
+  <li><a href="#export">Export</a></li>
   <li><a href="#live">Live updates</a></li>
   <li><a href="#paint">Paint</a></li>
   <li><a href="#limits">Limits</a></li>
@@ -39,13 +41,22 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="shows">What it shows</h2>
 <ul>
-  <li><strong>The title bar:</strong> the tile menu, the tile's size and base, and the gate's verdict. Click the verdict for the record: why a tile fails, the audit's numbers, and an action that flies to the largest red face (or the largest orange face when there is no red).</li>
-  <li><strong>The document</strong> on the left, as written, coloured by kind, and editable (see <a href="#edit">Editing</a>).</li>
-  <li><strong>The property sheet</strong> filling the right sidebar: the selected entry's editable controls, a Help link to its element page, and Hide and Delete at the foot.</li>
+  <li><strong>The title bar:</strong> the tile menu, the tile's size and base, the gate's verdict and <a href="#export">Export</a>. Click the verdict for the record, which drops down over the view: why a tile fails, the audit's numbers, and an action that flies to the largest red face (or the largest orange face when there is no red).</li>
+  <li><strong>The document</strong> in the sidebar, as written, coloured by kind, and editable (see <a href="#edit">Editing</a>).</li>
+  <li><strong>The property sheet</strong> under it: the selected entry's editable controls, a Help link to its element page, and Hide and Delete at the foot. With nothing selected it shows the tile itself: its <code>size</code> and <code>seed</code>, <em>New seed</em> and <em>Rename</em>.</li>
   <li><strong>The tile on the plate</strong>, painted like the PNG renders, with its squares ruled against an open blue sky. The <kbd>⋯</kbd> button holds paint, overhang, wireframe, grid, projection and all nine views.</li>
   <li><strong>Overhang from the gate itself:</strong> faces between 55° and 65° are orange, faces past 65° red. The colours come from the gate's own flags, so the view and <code>build</code> cannot disagree.</li>
   <li><strong>Progress</strong> while a tile builds: the stage, an element's own count (grass blades, wall stones, tree leaves) and the time left, estimated from the last build of the same tile.</li>
 </ul>
+
+<h2 id="layout">Panes</h2>
+<p>The document and the property sheet share one sidebar by default, the text above the properties: the <strong>Edit</strong> layout. Every edge between panes is a sash: drag it to resize, double-click it to reset. Each pane's <kbd>×</kbd> hides it, and a button on the view brings it back.</p>
+<ul>
+  <li><strong>Edit:</strong> the text over the properties, in one sidebar.</li>
+  <li><strong>Inspect:</strong> the text, the view and the properties side by side.</li>
+  <li><strong>Look:</strong> only the view.</li>
+</ul>
+<p>The three are in the <kbd>⋯</kbd> menu, with <em>Panes on the right</em> to put the sidebar on the other side. <kbd>[</kbd> hides or shows the text, <kbd>]</kbd> the properties, <kbd>\</kbd> both. The layout and its sizes are remembered in the browser. On a narrow screen the panes stack under the view instead.</p>
 
 <h2 id="select">Selecting</h2>
 <p>Every triangle of a built tile knows the entry that made it, so the view, the property sheet and the document share one selection, tinted with the current theme's accent.</p>
@@ -63,7 +74,7 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <ul>
   <li><strong>Start fresh.</strong> <em>New tile</em> makes printable flat ground in My tiles, in a file called what you name it, at 1×1, 2×1, 1×2 or 2×2 squares, ready to change in the same editor.</li>
   <li><strong>The property sheet.</strong> Selecting an entry opens its controls in the whole right sidebar: the ones written, then the rest at their defaults, faint. Help is always at the top right; Hide and Delete stay at the bottom. Drag a number sideways to change it (<kbd>Shift</kbd> for fine steps), or click it to type. A short word control shows its choices directly; larger sets use a dropdown so the sheet stays aligned. A switch flips; <kbd>×</kbd> takes a control out, back to its default. A scatter's sheet holds its things' controls too. Only the value changes in the text: the layout and comments stay.</li>
-  <li><strong>Typing.</strong> The document is checked as you type, without building: a mistake is underlined at its line and said in words under the text. Completion offers element names at the start of a node, an element's controls on its line, and after <code>name=</code> the control's words, or the document's regions and lines. <kbd>Ctrl</kbd>-<kbd>Space</kbd> asks for it.</li>
+  <li><strong>Typing.</strong> The document is checked as you type, without building: a mistake is underlined at its line, marked in the gutter (hover the mark for the message) and said in words under the text. Long lines wrap, each continuation indented under its line; <kbd>⌘F</kbd> finds and replaces; a <code>{</code> block folds from the arrow beside its line; brackets are matched and closed; <kbd>⌥</kbd>-drag or <kbd>⌘</kbd>-click makes several cursors. Completion offers element names at the start of a node, an element's controls on its line, and after <code>name=</code> the control's words, or the document's regions and lines. <kbd>Ctrl</kbd>-<kbd>Space</kbd> asks for it.</li>
   <li><strong>Drafts while you drag.</strong> As a value is dragged, the view shows quick drafts of the tile: fewer cells, the parts not joined, and overhang judged face by face. The verdict says <em>draft</em> beside it, since a draft is never judged by the gate. Let go and the full build follows.</li>
   <li><strong>Saved as you go.</strong> A change is written to the file half a second after it reads cleanly, and the tile rebuilds. A text with a mistake is kept in the page, unsaved, until it is fixed. If you leave while it cannot be saved, the editor makes discarding explicit. If the file changes on disk under unsaved changes, you choose which to keep.</li>
   <li><strong>One history.</strong> <kbd>⌘Z</kbd> (<kbd>Ctrl</kbd>-<kbd>Z</kbd>) undoes typing and changes made in the property sheet alike; <kbd>⌘⇧Z</kbd> redoes. Undo and Redo also live in the title bar: press either for one step, or open its arrow to inspect the action history and jump several versions at once. Each action shows a short monospace excerpt of what it added and, when applicable, what it removed.</li>
@@ -100,11 +111,18 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <tr><td><kbd>t</kbd></td><td>Light or dark</td></tr>
 <tr><td><kbd>f</kbd></td><td>Fly to the selection</td></tr>
 <tr><td><kbd>A</kbd> or <kbd>/</kbd></td><td>The bar: place or draw</td></tr>
+<tr><td><kbd>[</kbd> <kbd>]</kbd> <kbd>\</kbd></td><td>Hide or show the text, the properties, both</td></tr>
+<tr><td><kbd>⌘1</kbd> <kbd>⌘2</kbd> <kbd>⌘3</kbd></td><td>Put the keyboard in the text, the view, the properties</td></tr>
+<tr><td><kbd>?</kbd></td><td>Every key, in the editor</td></tr>
+<tr><td><kbd>⌘F</kbd></td><td>Find and replace in the document</td></tr>
 <tr><td><kbd>Tab</kbd> / <kbd>Shift</kbd>-<kbd>Tab</kbd></td><td>Indent or unindent the selected document lines</td></tr>
 <tr><td><kbd>⌘S</kbd> or <kbd>Ctrl</kbd>-<kbd>S</kbd></td><td>Check and save now</td></tr>
 <tr><td><kbd>Esc</kbd></td><td>Put a tool down, close a menu, else clear the selection</td></tr>
 </tbody></table></div>
-<p>Choices are remembered in the browser. With reduced motion set in your system, views cut and nothing coasts.</p>
+<p>Single keys work when the document is not being typed into. Choices are remembered in the browser. With reduced motion set in your system, views cut and nothing coasts.</p>
+
+<h2 id="export">Export</h2>
+<p><em>Export</em>, beside the verdict, runs the same build as <code>dharmatiles build</code> on the saved file and writes it to <code>out/</code>: the project's (beside the nearest <code>dharmatiles.dtile</code> above the tile), else one beside the tile, as <code>out/db/my-tile-db.stl</code>. Choose DungeonBlocks or OpenLOCK, and <em>Also a painted 3MF</em> for a 3MF painted by material (a Bambu Studio project when <code>~/dharmatiles/bambu.3mf</code> exists; see <a href="printing.html">Printing</a>). <em>Reveal in Finder</em> shows what was written. Export waits while the tile builds or has unsaved changes, and is refused, with the reason, while the tile fails the printability gate.</p>
 
 <h2 id="live">Live updates</h2>
 <p>Save the document, or any file it <code>use</code>s, and the tile rebuilds. The old tile and your camera stay until the new one is ready. A mistake shows over the view as <code>file:line:column</code> with a hint, in front of the last good build; the next good save clears it. One tile builds at a time: tiles named on the command line are built at the start, and a tile picked from a folder is built when you pick it.</p>

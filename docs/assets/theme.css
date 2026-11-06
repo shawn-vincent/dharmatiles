@@ -28,6 +28,10 @@
 
   /* the plate: identical in both themes, like the renders */
   --plate: #D9E0EB; --plate-hi: #EBEFF5; --plate-ink: #2B3340;
+  /* chrome laid on the plate (status, errors, hints): light in both themes */
+  --chip-ink: #1A1714; --chip-muted: #5E5850; --chip-err: #B8281A; --chip-bg: rgb(255 255 255 / .88);
+  --chip-line: rgb(43 51 64 / .16); --chip-shadow: 0 8px 24px -12px rgb(26 23 20 / .45);
+  --scrim: rgb(18 20 24 / .46);
   /* the editor's open sky: bright lake blue by day */
   --sky-top: #5D9FCA; --sky-mid: #9BCBE2; --sky-horizon: #E3EFF0;
   --sky-cloud: rgb(255 255 255 / .22); --sky-haze: rgb(231 242 238 / .7); --grid-ink: #2B3340;
@@ -117,6 +121,19 @@ input[type="search"], input[type="text"], .field {
 input[type="search"]::placeholder { color: var(--muted); }
 input[type="search"]:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 input[type="range"] { accent-color: var(--accent); }
+
+/* dialogs: native modal semantics, in the same quiet material */
+dialog { width: min(420px, calc(100% - 32px)); color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 0; }
+dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
+dialog form { padding: 20px; }
+dialog .eyebrow { color: var(--muted); font: 700 11px/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; }
+dialog h2 { font: 700 27px/1.05 var(--f-display); margin: 6px 0 18px; }
+dialog .field { display: grid; gap: 6px; margin: 12px 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+dialog input, dialog select { width: 100%; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; font: 14px var(--f-body); }
+dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent) 20%, transparent); }
+.dialog-note { color: var(--muted); font-size: 12.5px; margin: 14px 0 20px; }
+.btn.danger { color: var(--err); }
+.btn.danger:hover { border-color: var(--err); }
 
 /* the plate: every render and the live view sit on it */
 .plate {

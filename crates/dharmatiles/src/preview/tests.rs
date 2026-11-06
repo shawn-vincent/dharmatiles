@@ -629,3 +629,84 @@ fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
     assert_eq!(bits[usize::try_from(n * (n - 3) + n / 2).unwrap()], b'0');
     assert_eq!(pool["fills"][0]["at"], serde_json::json!([0.5, 0.2]));
 }
+
+#[test]
+fn the_map_carries_the_tiles_own_controls() {
+    let dir = std::env::temp_dir().join(format!("dt-own-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    let text = "tile size=\"2x1\" seed=7 {\n    stack {\n        dirt\n    }\n}\n";
+    std::fs::write(&file, text).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let v = post(
+        &r,
+        "/api/tiles/0/check",
+        Some(&token),
+        None,
+        &serde_json::json!({ "text": text }).to_string(),
+    )
+    .1;
+    let own = &v["map"]["tile"];
+    assert_eq!(own["at"], 0, "{v}");
+    let seed = own["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "seed")
+        .unwrap();
+    let s = usize::try_from(seed["span"][0].as_u64().unwrap()).unwrap();
+    assert_eq!(&text[s..=s], "7");
+    assert_eq!(seed["text"], "7");
+}
+
+#[test]
+fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_written() {
+    let dir = std::env::temp_dir().join(format!("dt-export-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("deep/er")).unwrap();
+    std::fs::write(dir.join("dharmatiles.dtile"), "name \"t\"\n").unwrap();
+    let file = dir.join("deep/er/flat.dtile");
+    std::fs::write(
+        &file,
+        "tile size=\"1x1\" {\n    stack {\n        dirt\n    }\n}\n",
+    )
+    .unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let call = |p: &str, body: Value| post(&r, p, Some(&token), None, &body.to_string());
+    // a system that is not one is refused
+    let (h, _) = call(
+        "/api/tiles/0/export",
+        serde_json::json!({ "system": "lego" }),
+    );
+    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+    let (h, v) = call("/api/tiles/0/export", serde_json::json!({ "system": "ol" }));
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
+    assert_eq!(v["ok"], true, "{v}");
+    // the project's out/, by system and the tile's own name, not its folders
+    let stl = dir.join("out/ol/flat-ol.stl");
+    assert!(stl.is_file(), "{v}");
+    assert!(
+        v["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f == stl.to_string_lossy().as_ref())
+    );
+    // reveal: only a written STL or 3MF
+    let (h, _) = call(
+        "/api/reveal",
+        serde_json::json!({ "path": dir.join("dharmatiles.dtile") }),
+    );
+    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+    let (h, _) = call(
+        "/api/reveal",
+        serde_json::json!({ "path": dir.join("out/ol/none.stl") }),
+    );
+    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+}

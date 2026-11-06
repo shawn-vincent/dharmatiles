@@ -18,6 +18,7 @@ import { rememberView, shortcutViews } from './view-presets.js';
 import { describeChange } from './history.js';
 import { Overlay } from './overlay.js';
 import { Tools } from './place.js';
+import { Layout } from './layout.js';
 
 const $ = (id) => document.getElementById(id);
 const host = browserHost();
@@ -122,7 +123,7 @@ toggle('t-grid', (on) => viewer.setGrid(on));
 
 // popovers: one open at a time; Esc or a click outside closes it
 const popovers = [
-  ['tilebtn', 'menu'], ['dispbtn', 'display'], ['gate', 'record-card'],
+  ['tilebtn', 'menu'], ['dispbtn', 'display'], ['gate', 'record-card'], ['export', 'export-card'],
   ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
 ];
 function openPopover(id) {
@@ -185,8 +186,39 @@ function setProjection(ortho, animated = true) {
 }
 $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
 try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* ignore */ }
+// the panes: Edit (text over properties), Inspect (side by side), Look (the view alone)
+const layout = new Layout($('app'), (st) => {
+  $('reopen').hidden = !st.hideText && !st.hideProps;
+  $('show-text').hidden = !st.hideText;
+  $('show-props').hidden = !st.hideProps;
+  const preset = st.hideText && st.hideProps ? 'look' : st.hideText || st.hideProps ? null : st.mode;
+  for (const b of $('layout-seg').children) b.classList.toggle('on', b.dataset.preset === preset);
+  $('t-right').checked = st.side === 'right';
+});
+$('hide-text').onclick = $('show-text').onclick = () => layout.toggle('text');
+$('hide-props').onclick = $('show-props').onclick = () => layout.toggle('props');
+for (const b of $('layout-seg').children) b.onclick = () => layout.preset(b.dataset.preset);
+$('t-right').onchange = (e) => layout.set({ side: e.target.checked ? 'right' : 'left' });
+const showKeys = () => { closePopovers(); $('keys').showModal(); };
+$('b-keys').onclick = showKeys;
+/** ⌘1/⌘2/⌘3: put the keyboard in the text, the view or the properties (showing the pane first). */
+function focusPane(n) {
+  const st = layout.state;
+  if (n === 1) { if (st.hideText) layout.toggle('text'); texts.focus(); }
+  if (n === 2) $('canvas').focus();
+  if (n === 3) {
+    if (st.hideProps) layout.toggle('props');
+    const f = $('lens').querySelector('button, input, select, [tabindex], .val');
+    if (f) { if (!f.hasAttribute('tabindex') && f.classList.contains('val')) f.tabIndex = -1; f.focus(); }
+    else { $('lens').tabIndex = -1; $('lens').focus(); }
+  }
+}
+
 addEventListener('keydown', (e) => {
-  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && tools?.key(e)) { e.preventDefault(); return; }
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && ['1', '2', '3'].includes(e.key)) {
+    e.preventDefault(); focusPane(Number(e.key)); return;
+  }
+  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.isContentEditable && tools?.key(e)) { e.preventDefault(); return; }
   if (e.key === 'Escape') {
     if (!$('mine').hidden) { $('mine').hidden = true; return; }
     if (!closePopovers()) setSel(null);
@@ -212,6 +244,10 @@ addEventListener('keydown', (e) => {
   if (e.key === 'f' && state.sel) frameSel();
   if (e.key === 'a' || e.key === '/') { e.preventDefault(); $('place-in').focus(); }
   if (e.key === 'F2') { e.preventDefault(); startRename(); }
+  if (e.key === '[') layout.toggle('text');
+  if (e.key === ']') layout.toggle('props');
+  if (e.key === '\\') layout.toggle('both');
+  if (e.key === '?') { e.preventDefault(); showKeys(); }
 });
 
 // ---- the tile menu -----------------------------------------------------
@@ -586,7 +622,7 @@ function record(text, kind, label = null) {
   doc.history.length = doc.at + 1;
   const before = doc.history[join ? doc.at - 1 : doc.at]?.text || '';
   const change = describeChange(before, text, kind, label);
-  const h = { text, caret: texts.ta.selectionStart, kind, label: change.title, change };
+  const h = { text, caret: texts.selectionStart, kind, label: change.title, change };
   if (join) doc.history[doc.at] = h; else { doc.history.push(h); doc.at++; }
   if (doc.history.length > 400) { doc.history.shift(); doc.at--; }
   doc.lastKind = kind; doc.lastTime = now;
@@ -717,6 +753,7 @@ function confirmDiscard() {
     ? 'The file changed on disk while your version was open. Choose which version to keep before leaving.'
     : !doc.ok ? 'This edit contains a mistake, so it has not been saved.'
       : doc.note || 'This edit has not been saved yet.';
+  dlg.returnValue = ''; // showModal keeps the last choice: Esc must mean keep editing
   dlg.showModal();
   leaving = new Promise((resolve) => {
     dlg.addEventListener('close', () => {
@@ -806,8 +843,14 @@ function renderTextBar() {
   const hint = $('codehint');
   const e = doc.checked === texts.text && !doc.ok ? doc.errors.find((x) => !x.file || x.file === texts.file) || doc.errors[0] : null;
   hint.classList.toggle('bad', !!e);
+  // the hint shows until the first edit; a mistake always shows, on one line (all of it on hover)
+  if (dirty()) { try { localStorage.setItem('dt-hint-seen', '1'); } catch { /* ignore */ } }
+  let seen = false;
+  try { seen = localStorage.getItem('dt-hint-seen') === '1'; } catch { /* ignore */ }
   hint.textContent = e ? `${e.line ? `Line ${e.line}: ` : ''}${e.message}.${e.help ? ` ${e.help[0].toUpperCase()}${e.help.slice(1)}` : ''}`
-    : doc.writable ? 'Type to change the tile; it is saved as you go. Ctrl-Space lists what can go here.' : 'Click a line to select it in the view.';
+    : doc.writable ? 'Type to change the tile; it saves as you go. ⌃Space: what can go here; ? for keys.' : 'Click a line to select it in the view.';
+  hint.title = hint.textContent;
+  hint.hidden = !e && doc.writable && seen;
 }
 
 function linesOf(w) {
@@ -824,7 +867,8 @@ function linesOf(w) {
 function markText() {
   const t = tile();
   const live = doc.checked === texts.text && doc.tile === state.selected;
-  const errs = (live ? doc.errors : t?.errors || []).filter((e) => (!e.file || e.file === texts.file) && e.line).map((e) => e.line);
+  const errs = (live ? doc.errors : t?.errors || []).filter((e) => (!e.file || e.file === texts.file) && e.line)
+    .map((e) => ({ line: e.line, message: `${e.message}${e.help ? `. ${e.help}` : ''}` }));
   texts.mark(state.sel?.tile ? null : linesOf(state.sel), linesOf(state.hov), errs);
 }
 
@@ -1042,9 +1086,29 @@ const lens = new Lens($('lens'), {
   makeMine: () => offerMine(),
 });
 /** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
+// the tile node's own controls: shown when nothing is selected, so the sheet is never empty
+const TILE_SCHEMA = {
+  name: 'tile',
+  controls: [
+    { name: 'size', about: 'squares across, then down: "2x1"', default: '"1x1"' },
+    { name: 'seed', unit: 'number', about: 'the layout: another seed, another arrangement of the same tile', default: '1' },
+  ],
+};
+function renderTileLens() {
+  const t = tile(), own = doc.map?.tile;
+  if (!t || !own || texts.file !== t.path) { lens.hide(); return; }
+  // a written property as the lens reads it: `name=value` and its span
+  const written = own.controls.map((c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] }));
+  const actions = doc.writable ? [
+    { label: 'New seed', title: 'Another arrangement of the same tile', run: () => lens.api.set(own.at, 'seed', 1 + Math.floor(Math.random() * 9999)) },
+    { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
+  ] : [];
+  lens.show({ title: stem(t), kind: 'tile', href: 'https://shawn-vincent.github.io/dharmatiles/language.html', note: 'The tile. Select something on it to change that instead.', groups: [{ at: own.at, schema: TILE_SCHEMA, written }], actions });
+}
 function renderLens() {
   const s = state.sel;
   const it = isEntry(s) ? stackItems()[s.entry] : null;
+  if (!s || s.tile) { renderTileLens(); return; }
   if (!it || it.element === 'connector' || !it.span || it.file !== texts.file || !elements.length) { lens.hide(); return; }
   const groups = [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
   for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
@@ -1055,7 +1119,7 @@ function renderLens() {
       { label: 'Delete', title: `Delete ${it.label} from the document`, run: () => removeAt(it.span[0], it.label) },
     );
   }
-  lens.show({ title: it.label, href: it.href, groups, actions });
+  lens.show({ title: it.label, kind: it.what || it.element, href: it.href, groups, actions });
 }
 viewer.onRender = () => drawOverlay();
 
@@ -1213,6 +1277,65 @@ function renderAll() {
   markText();
 }
 
+// ---- export: the same build as `dharmatiles build`, written to out/ ----------
+const exporting = { system: null, busy: false, files: null, error: null };
+try { exporting.system = localStorage.getItem('dt-export-system'); } catch { /* ignore */ }
+try { $('export-3mf').checked = localStorage.getItem('dt-export-3mf') === '1'; } catch { /* ignore */ }
+/** Why export is not possible now, or null. */
+function exportBlock() {
+  const t = tile();
+  if (!t) return 'Choose a tile first.';
+  if (t.status === 'building' || t.status === 'idle') return 'Wait for the build to finish.';
+  if (doc.writable && dirty()) return 'Save your changes first: export builds the file as saved.';
+  if (!t.record) return 'The tile has no good build yet: fix the mistakes first.';
+  if (t.record.audit.failures.length) return `It fails the printability gate: ${t.record.audit.failures[0]}. Fix the geometry first.`;
+  return null;
+}
+function renderExport() {
+  const t = tile();
+  $('export').hidden = !t;
+  const why = exporting.busy ? null : exportBlock();
+  const sys = exporting.system || state.system || 'db';
+  for (const b of $('export-system').children) b.classList.toggle('on', b.dataset.sys === sys);
+  $('export-go').disabled = !!why || exporting.busy;
+  $('export-go').textContent = exporting.busy ? 'Exporting…' : $('export-3mf').checked ? 'Export STL and 3MF' : 'Export STL';
+  const p = $('export-why');
+  p.classList.toggle('bad', !!(why || exporting.error));
+  p.replaceChildren();
+  if (exporting.busy) p.textContent = 'Building through the gate…';
+  else if (exporting.error) p.textContent = exporting.error;
+  else if (exporting.files) {
+    p.append('Written: ');
+    exporting.files.filter((f) => /\.(stl|3mf)$/.test(f)).forEach((f, i) => {
+      if (i) p.append(', ');
+      const c = document.createElement('code');
+      c.textContent = f.split(/[\\/]/).slice(-3).join('/'); c.title = f; // out/db/name-db.stl; the whole path on hover
+      p.append(c);
+    });
+  } else p.textContent = why || 'Writes to out/ beside your tiles, as dharmatiles build does.';
+  $('export-reveal').hidden = !exporting.files;
+}
+for (const b of $('export-system').children) {
+  b.onclick = () => { exporting.system = b.dataset.sys; exporting.files = null; try { localStorage.setItem('dt-export-system', b.dataset.sys); } catch { /* ignore */ } renderExport(); };
+}
+$('export-3mf').onchange = (e) => { try { localStorage.setItem('dt-export-3mf', e.target.checked ? '1' : '0'); } catch { /* ignore */ } exporting.files = null; renderExport(); };
+$('export').addEventListener('click', () => { exporting.files = null; exporting.error = null; renderExport(); });
+$('export-go').onclick = async () => {
+  const t = tile();
+  if (!t || exportBlock()) return renderExport();
+  exporting.busy = true; exporting.error = null; exporting.files = null; renderExport();
+  try {
+    const r = await host.post(`/api/tiles/${t.index}/export`, { system: exporting.system || state.system || 'db', threemf: $('export-3mf').checked });
+    if (r.status !== 200) exporting.error = r.body?.error || `could not export (${r.status})`;
+    else if (!r.body.ok) exporting.error = r.body.errors?.[0]?.message || (r.body.failures?.length ? `Fails the gate: ${r.body.failures[0]}` : 'the build failed');
+    else exporting.files = r.body.files || [];
+    if (r.status === 200 && r.body.files && !r.body.ok) exporting.files = r.body.files;
+  } catch { exporting.error = 'cannot export while the editor is disconnected'; }
+  exporting.busy = false;
+  renderExport();
+};
+$('export-reveal').onclick = () => { const f = exporting.files?.find((x) => /\.(stl|3mf)$/.test(x)); if (f) host.post('/api/reveal', { path: f }); };
+
 function renderTitle() {
   const t = tile();
   $('empty').hidden = !!t;
@@ -1223,7 +1346,7 @@ function renderTitle() {
   $('verdict').hidden = true;
   $('show-worst').hidden = true;
   if (!t) {
-    status.hidden = true; errs.hidden = true; gate.hidden = true;
+    status.hidden = true; errs.hidden = true; gate.hidden = true; $('export').hidden = true;
     $('tilename').textContent = 'Choose a tile'; $('tilewhere').textContent = ''; $('tileplan').textContent = '';
     $('progress').style.width = '0';
     document.title = 'dharmatiles';
@@ -1269,6 +1392,7 @@ function renderTitle() {
   }
   const r = t.record;
   gate.hidden = false;
+  renderExport();
   gate.className = building ? 'busy' : '';
   if (!r) {
     $('gatetext').textContent = building ? 'building' : t.status === 'failed' ? 'no build' : '–';

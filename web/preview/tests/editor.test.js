@@ -6,7 +6,8 @@ import { browserHost } from '../js/host.js';
 import { parseValue, valueOf, wordControlNeedsSelect } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
-import { indentSelection, newlineAt } from '../js/text.js';
+import { indentSelection, newlineAt, indentFor, braceEnd } from '../js/text.js';
+import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { rememberView, shortcutViews } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
 
@@ -191,4 +192,54 @@ test('a disconnected edit reports a recoverable result instead of rejecting', as
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test('history names an indent at the start of a line as spacing, not a removal', () => {
+  const d = describeChange('rock', '  rock', 'type');
+  assert.equal(d.removed, null);
+  assert.equal(d.title, 'Changed spacing on line 1');
+});
+
+test('a stored layout falls back to the defaults field by field', () => {
+  assert.deepEqual(normalise(null), { ...DEFAULTS });
+  assert.deepEqual(normalise({ mode: 'sideways', side: 'right', sidew: -5, texth: 3, hideText: 'yes' }),
+    { ...DEFAULTS, side: 'right' });
+  assert.equal(normalise({ mode: 'inspect', textw: 410 }).textw, 410);
+});
+
+test('panes give way so the view keeps its minimum', () => {
+  const w = 1280;
+  const e = fit({ ...DEFAULTS, sidew: 5000 }, w);
+  assert.equal(e.sidew, w - MIN.view - SASH);
+  const i = fit({ ...DEFAULTS, mode: 'inspect', textw: 900, propw: 300 }, w);
+  assert.ok(i.textw + i.propw + 2 * SASH + MIN.view <= w);
+  assert.ok(i.textw >= MIN.text && i.propw >= MIN.props);
+  assert.equal(fit({ ...DEFAULTS, sidew: 10 }, w).sidew, MIN.text);
+});
+
+test('the grid puts every shown pane and sash in place', () => {
+  const edit = grid({ ...DEFAULTS });
+  assert.match(edit.areas, /"text sash-side view" "sash-split sash-side view" "properties sash-side view"/);
+  assert.match(grid({ ...DEFAULTS, side: 'right' }).areas, /"view sash-side text"/);
+  assert.match(grid({ ...DEFAULTS, hideProps: true }).areas, /"text sash-side view"/);
+  assert.doesNotMatch(grid({ ...DEFAULTS, hideProps: true }).areas, /properties/);
+  const ins = grid({ ...DEFAULTS, mode: 'inspect' });
+  assert.match(ins.areas, /"text sash-side view sash-props properties"/);
+  assert.match(grid({ ...DEFAULTS, mode: 'inspect', side: 'right', hideText: true }).areas, /"properties sash-side view"/);
+  assert.equal(grid({ ...DEFAULTS, hideText: true, hideProps: true }).areas, '"title" "view"');
+});
+
+test('a new line is indented by the line above, one more after {, one less before }', () => {
+  const t = 'tile {\n    stack {\n        rock\n    }\n}';
+  assert.equal(indentFor(t, t.indexOf('\n')), 4); // after "tile {"
+  assert.equal(indentFor(t, t.indexOf('rock') + 4), 8);
+  const close = t.indexOf('    }');
+  assert.equal(indentFor(t, close + 4), 4); // before "}" under stack
+  assert.equal(indentFor('a // { not a brace\n', 18), 0);
+});
+
+test('a brace folds to its own closing brace, skipping strings and comments', () => {
+  const t = 'stack {\n    about "a { b"\n    // }\n    rock\n}\nwater';
+  assert.equal(braceEnd(t, t.indexOf('{')), t.lastIndexOf('}'));
+  assert.equal(braceEnd('a {', 2), null);
 });

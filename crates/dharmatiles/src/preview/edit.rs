@@ -80,6 +80,9 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> (&'static str, V
     if path == "/api/new" {
         return new_tile(shared, &v);
     }
+    if path == "/api/reveal" {
+        return reveal(&v);
+    }
     let Some((i, what)) = path
         .strip_prefix("/api/tiles/")
         .and_then(|r| r.split_once('/'))
@@ -110,6 +113,7 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> (&'static str, V
         "save" => save(&file, &v),
         "mine" => mine(shared, &tile, &files),
         "rename" => rename(shared, &tile, &v),
+        "export" => export(shared, &tile, &v),
         "draft" => {
             let (Some(text), Some(id)) = (v["text"].as_str(), v["id"].as_u64()) else {
                 return bad("give the text and an id");
@@ -580,6 +584,113 @@ fn mine(
     match home(shared).and_then(|h| write_new(&h, &stem, &pin_uses(&text, files))) {
         Ok(dest) => listed(shared, &dest),
         Err(e) => e,
+    }
+}
+
+/// Export: the same build as `dharmatiles build` (the saved file, through
+/// the gate), written to the project's `out/` (beside the nearest
+/// `dharmatiles.dtile` above the tile, else beside the tile; a library
+/// tile's go where `build` would put them).  `system` is `db` or `ol`
+/// (default: the preview's); `threemf` adds the painted 3MF.
+fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
+    let system = match v["system"].as_str() {
+        None => shared.system.clone(),
+        Some(s @ ("db" | "ol")) => s.to_owned(),
+        Some(_) => return bad("system is db or ol"),
+    };
+    let threemf = v["threemf"].as_bool().unwrap_or(false);
+    let template = if threemf {
+        match crate::bambu::template(None) {
+            Ok(t) => t,
+            Err(e) => return ("500 Internal Server Error", json!({ "error": e })),
+        }
+    } else {
+        None
+    };
+    let out = if tile.starts_with("lib:") {
+        crate::library::out_dir(None)
+    } else {
+        let dir = Path::new(tile).parent().unwrap_or_else(|| Path::new("."));
+        dt_eval::discover(dir).out
+    };
+    let palette = shared.palette();
+    let extras = crate::build::Extras {
+        progress: false,
+        tile_no: None,
+        png: false,
+        threemf,
+        template: template.as_deref(),
+        palette: &palette,
+    };
+    let opts = crate::library::options(system.clone(), None);
+    let t0 = std::time::Instant::now();
+    let mut b = match dt_eval::build_with(&dt_eval::Files, tile, &opts, &dt_eval::Progress::none())
+    {
+        Ok(b) => b,
+        Err(errs) => {
+            return (
+                "200 OK",
+                json!({ "path": tile, "ok": false, "errors": crate::build::errors_json(&errs) }),
+            );
+        }
+    };
+    // a file of yours goes to out/<system>/<name>-<system>.stl, not under
+    // the folders it sits in (a library tile mirrors the library, as build does)
+    if !tile.starts_with("lib:") {
+        let stem = Path::new(tile)
+            .file_stem()
+            .map_or_else(|| "tile".to_owned(), |s| s.to_string_lossy().into_owned());
+        b.out = PathBuf::from(&system).join(format!("{stem}-{system}.stl"));
+    }
+    let built_s = t0.elapsed().as_secs_f64();
+    let failures = b.audit.failures(&opts.printer);
+    match crate::build::write(&b, &failures, built_s, &out, extras) {
+        Ok(files) => {
+            let mut r = crate::build::tile_json(&b, &failures, built_s);
+            r["failures"] = json!(failures);
+            r["files"] = json!(
+                files
+                    .iter()
+                    .map(|f| f.display().to_string())
+                    .collect::<Vec<_>>()
+            );
+            ("200 OK", r)
+        }
+        Err(e) => ("500 Internal Server Error", json!({ "error": e })),
+    }
+}
+
+/// Show a written file in the Finder (macOS `open -R`; elsewhere the
+/// folder is opened).  Only an STL or 3MF that exists.
+fn reveal(v: &Value) -> (&'static str, Value) {
+    let Some(p) = v["path"].as_str().map(PathBuf::from) else {
+        return bad("give the path");
+    };
+    let kind = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if !matches!(kind, "stl" | "3mf") || !p.is_file() {
+        return bad("only a written STL or 3MF");
+    }
+    let r = if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&p)
+            .status()
+    } else {
+        let dir = p.parent().unwrap_or_else(|| Path::new("."));
+        std::process::Command::new(if cfg!(windows) {
+            "explorer"
+        } else {
+            "xdg-open"
+        })
+        .arg(dir)
+        .status()
+    };
+    match r {
+        Ok(_) => ("200 OK", json!({ "ok": true })),
+        Err(e) => (
+            "500 Internal Server Error",
+            json!({ "error": e.to_string() }),
+        ),
     }
 }
 

@@ -1,36 +1,21 @@
 // The text pane: the document as written, highlighted, and editable.
 //
-// A transparent textarea lies exactly over the highlighted lines (same
-// font, line height and padding), so typing, selecting, copying and the
-// system's text keys all work as they do anywhere, while the lines under
-// it carry the colours and the marks: the selection, the hovered entry and
-// the lines with mistakes.  The page owns the history (one undo for typing
-// and for changes made in the view), so the textarea's own undo is not used.
+// CodeMirror 6 (vendor/codemirror.js, bundled once from the entry beside
+// it): soft wrap with continuation lines indented under their parent,
+// find and replace (⌘F), bracket matching, folding, a lint gutter fed by
+// the check's mistakes, outdent, and several cursors.  The page owns the
+// history (one undo for typing and for changes made in the view), so
+// CodeMirror's own history is not loaded.
 
-const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-
-// KDL v2, enough to colour it: comments, strings, keywords, numbers,
-// properties (`name=`), node names (the first word of a node) and other words.
-const TOKEN = /(\/\/.*$)|(\/-)|(#?"(?:[^"\\]|\\.)*"#?)|([A-Za-z_][\w+\-.]*)(=)|(#true|#false|#null|#inf|#-inf|#nan)|(-?\d+(?:\.\d+)?(?![\w.]))|([A-Za-z_][\w+\-.]*)|([{};])/g;
-
-/** One line as HTML spans. */
-export function highlight(line) {
-  let out = '', last = 0, atNode = true;
-  for (const m of line.matchAll(TOKEN)) {
-    out += esc(line.slice(last, m.index));
-    last = m.index + m[0].length;
-    if (m[1]) out += `<span class="tk-c">${esc(m[1])}</span>`;
-    else if (m[2]) { out += '<span class="tk-c">/-</span>'; atNode = true; continue; }
-    else if (m[3]) out += `<span class="tk-s">${esc(m[3])}</span>`;
-    else if (m[4]) out += `<span class="tk-k">${esc(m[4])}</span>=`;
-    else if (m[6]) out += `<span class="tk-v">${esc(m[6])}</span>`;
-    else if (m[7]) out += `<span class="tk-v">${esc(m[7])}</span>`;
-    else if (m[8]) out += atNode ? `<span class="tk-n">${esc(m[8])}</span>` : esc(m[8]);
-    else if (m[9]) { out += esc(m[9]); atNode = true; continue; }
-    atNode = false;
-  }
-  return out + esc(line.slice(last));
-}
+import {
+  Prec, EditorState, Compartment, StateEffect, StateField, RangeSetBuilder,
+  EditorView, keymap, lineNumbers, drawSelection, highlightActiveLineGutter, highlightSpecialChars,
+  rectangularSelection, crosshairCursor, dropCursor, Decoration, ViewPlugin,
+  defaultKeymap, indentLess, indentMore, insertNewlineAndIndent,
+  searchKeymap, highlightSelectionMatches, search,
+  StreamLanguage, HighlightStyle, syntaxHighlighting, bracketMatching, foldGutter, foldKeymap, foldService,
+  indentUnit, indentService, setDiagnostics, lintGutter, closeBrackets, closeBracketsKeymap, tags,
+} from '../vendor/codemirror.js';
 
 /** UTF-8 byte offset `b` in `text` as a string index (the server counts bytes). */
 export function byteToIndex(text, b) {
@@ -78,196 +63,272 @@ export function newlineAt(text, a, b) {
   return { text: text.slice(0, a) + insert + text.slice(b), caret: a + insert.length };
 }
 
+/** The indentation for a new line at `pos`: the line above's, one level more after `{`, one less before `}`. */
+export function indentFor(text, pos) {
+  const start = text.lastIndexOf('\n', pos - 1) + 1;
+  const rest = text.slice(pos, (text.indexOf('\n', pos) + 1 || text.length + 1) - 1);
+  let i = start - 1, prev = '';
+  while (i > 0) { // the nearest line above with something on it
+    const s = text.lastIndexOf('\n', i - 1) + 1;
+    prev = text.slice(s, i);
+    if (prev.trim()) break;
+    i = s - 1;
+  }
+  const head = start === pos ? '' : text.slice(start, pos);
+  const line = head.trim() ? head : prev;
+  let n = (line.match(/^ */) || [''])[0].length;
+  if (line.replace(/\/\/.*$/, '').trimEnd().endsWith('{')) n += 4;
+  if (rest.trimStart().startsWith('}')) n = Math.max(0, n - 4);
+  return n;
+}
+
+/** For a line ending in `{`, the offset of its matching `}` (strings and comments skipped), else null. */
+export function braceEnd(text, from) {
+  let depth = 0;
+  for (let i = from; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') { i++; while (i < text.length && text[i] !== '"') { if (text[i] === '\\') i++; i++; } continue; }
+    if (c === '/' && text[i + 1] === '/') { const nl = text.indexOf('\n', i); if (nl < 0) return null; i = nl; continue; }
+    if (c === '{') depth++;
+    if (c === '}' && --depth === 0) return i;
+  }
+  return null;
+}
+
+// KDL v2, enough to colour it: comments, strings, properties (`name=`),
+// keywords, numbers, node names (the first word of a node) and other words.
+const kdl = StreamLanguage.define({
+  name: 'kdl',
+  startState: () => ({ atNode: true }),
+  token(stream, st) {
+    if (stream.sol()) st.atNode = true;
+    if (stream.eatSpace()) return null;
+    if (stream.match(/^\/\/.*/)) return 'comment';
+    if (stream.match('/-')) { st.atNode = true; return 'comment'; }
+    if (stream.match(/^#?"(?:[^"\\]|\\.)*"?#?/)) { st.atNode = false; return 'string'; }
+    if (stream.match(/^[A-Za-z_][\w+\-.]*(?==)/)) { st.atNode = false; return 'propertyName'; }
+    if (stream.match(/^(#true|#false|#null|#inf|#-inf|#nan)/)) { st.atNode = false; return 'atom'; }
+    if (stream.match(/^-?\d+(?:\.\d+)?(?![\w.])/)) { st.atNode = false; return 'number'; }
+    if (stream.match(/^[A-Za-z_][\w+\-.]*/)) { const n = st.atNode; st.atNode = false; return n ? 'tagName' : null; }
+    if (stream.match(/^[{};]/)) { st.atNode = true; return 'brace'; }
+    stream.next();
+    return null;
+  },
+  languageData: { commentTokens: { line: '//' } },
+});
+const colours = HighlightStyle.define([
+  { tag: tags.comment, class: 'tk-c' },
+  { tag: tags.string, class: 'tk-s' },
+  { tag: tags.propertyName, class: 'tk-k' },
+  { tag: [tags.atom, tags.number], class: 'tk-v' },
+  { tag: tags.tagName, class: 'tk-n' },
+]);
+
+// soft wrap: a wrapped line's continuation sits one level under its own indentation
+const hanging = ViewPlugin.fromClass(class {
+  constructor(view) { this.decorations = this.build(view); }
+  update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+  build(view) {
+    const b = new RangeSetBuilder();
+    for (const { from, to } of view.visibleRanges) {
+      for (let pos = from; pos <= to;) {
+        const line = view.state.doc.lineAt(pos);
+        const n = (line.text.match(/^ */) || [''])[0].length + 4;
+        b.add(line.from, line.from, Decoration.line({ attributes: { style: `padding-left: calc(${n}ch + 6px); text-indent: -${n}ch` } }));
+        pos = line.to + 1;
+      }
+    }
+    return b.finish();
+  }
+}, { decorations: (v) => v.decorations });
+
+// the page's marks: the selected entry's lines, the hovered entry's, the lines with mistakes
+const setMarks = StateEffect.define();
+const marks = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) {
+      if (!e.is(setMarks)) continue;
+      const { sel, hov, errs } = e.value;
+      const doc = tr.state.doc, b = new RangeSetBuilder();
+      const inside = (r, n) => r && n >= r[0] && n <= r[1];
+      const err = new Set(errs);
+      for (let n = 1; n <= doc.lines; n++) {
+        const cls = [inside(sel, n) && 'ln-sel', !inside(sel, n) && inside(hov, n) && 'ln-hov', err.has(n) && 'ln-err'].filter(Boolean);
+        if (cls.length) { const l = doc.line(n); b.add(l.from, l.from, Decoration.line({ class: cls.join(' ') })); }
+      }
+      deco = b.finish();
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+const folds = foldService.of((state, from) => {
+  const line = state.doc.lineAt(from);
+  if (!line.text.replace(/\/\/.*$/, '').trimEnd().endsWith('{')) return null;
+  const text = state.doc.toString();
+  const open = line.from + line.text.replace(/\/\/.*$/, '').lastIndexOf('{');
+  const end = braceEnd(text, open);
+  if (end == null || state.doc.lineAt(end).number === line.number) return null;
+  return { from: line.to, to: end };
+});
+
+const QUIET = 'dt-quiet'; // a change made by the page, not by typing
+
 export class TextPane {
   /**
-   * `code` is the scrolling element.  Callbacks: onCaretLine(n) when the
-   * caret moves to a line by a click or a key, onHoverLine(n|null),
+   * `code` is the element the editor fills.  Callbacks: onCaretLine(n) when
+   * the caret moves to a line by a click or a key, onHoverLine(n|null),
    * onEdit(text, kind) after the user changes the text, onReadOnly() when
-   * they try to type into a file they cannot write, and onKey(e) first, for
-   * completion (return true when it took the key).
+   * they try to type into a file they cannot write, onKey(e) first, for
+   * completion (return true when it took the key), and onHistory(step).
    */
   constructor(code, cb) {
     this.code = code;
     this.cb = cb;
-    this.rows = [];
     this.file = null;
     this.text = null;
     this.writable = false;
     this.marks = {};
-    const ed = document.createElement('div');
-    ed.className = 'ed';
-    this.hl = document.createElement('div');
-    this.hl.className = 'hl';
-    this.hl.setAttribute('aria-hidden', 'true');
-    const ta = document.createElement('textarea');
-    ta.className = 'ta';
-    ta.spellcheck = false;
-    ta.wrap = 'off';
-    ta.setAttribute('autocapitalize', 'off');
-    ta.setAttribute('autocomplete', 'off');
-    ta.setAttribute('aria-label', 'The document');
-    this.ta = ta;
-    ed.append(this.hl, ta);
-    code.replaceChildren(ed);
+    this.hovered = null;
+    this.ro = new Compartment();
+    const pane = this;
+    const keyFirst = Prec.highest(EditorView.domEventHandlers({
+      keydown(e) {
+        if (cb.onKey?.(e)) { e.preventDefault(); e.stopPropagation(); return true; }
+        if (!pane.writable && e.key.length === 1 && !e.metaKey && !e.ctrlKey) { cb.onReadOnly?.(); return true; }
+        return false;
+      },
+      paste() { if (!pane.writable) { cb.onReadOnly?.(); return true; } return false; },
+      mousemove(e, view) {
+        const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }, false);
+        const n = pos == null ? null : view.state.doc.lineAt(pos).number;
+        if (n !== pane.hovered) { pane.hovered = n; cb.onHoverLine?.(n); }
+      },
+      mouseleave() { pane.hovered = null; cb.onHoverLine?.(null); },
+    }));
+    const keys = keymap.of([
+      { key: 'Tab', run: indentMore, shift: indentLess },
+      { key: 'Enter', run: insertNewlineAndIndent },
+      ...closeBracketsKeymap, ...searchKeymap, ...foldKeymap, ...defaultKeymap,
+    ]);
+    this.view = new EditorView({
+      parent: code,
+      state: EditorState.create({
+        doc: '',
+        extensions: [
+          lineNumbers(), foldGutter({ openText: '▾', closedText: '▸' }), lintGutter(), highlightActiveLineGutter(),
+          highlightSpecialChars(), drawSelection(), dropCursor(), EditorState.allowMultipleSelections.of(true),
+          rectangularSelection(), crosshairCursor(), bracketMatching(), closeBrackets(), highlightSelectionMatches(),
+          search({ top: true }), kdl, syntaxHighlighting(colours), folds,
+          indentUnit.of('    '), EditorState.tabSize.of(4),
+          indentService.of((cx, pos) => indentFor(cx.state.doc.toString(), pos)),
+          EditorView.lineWrapping, hanging, marks, keyFirst, keys,
+          this.ro.of(EditorState.readOnly.of(true)),
+          EditorView.contentAttributes.of({ 'aria-label': 'The document', autocapitalize: 'off', spellcheck: 'false' }),
+          EditorView.updateListener.of((u) => this.updated(u)),
+        ],
+      }),
+    });
+  }
 
-    ta.addEventListener('input', () => {
-      this.text = ta.value;
-      this.render();
-      cb.onEdit?.(this.text, 'type');
-    });
-    ta.addEventListener('keydown', (e) => {
-      if (cb.onKey?.(e)) { e.preventDefault(); e.stopPropagation(); return; }
-      if (e.key === 'Tab' && this.writable) { // indent, not leave the pane
-        e.preventDefault();
-        this.indent(e.shiftKey);
-      }
-      if (e.key === 'Enter' && this.writable) {
-        e.preventDefault();
-        this.newline();
-      }
-      if (ta.readOnly && e.key.length === 1 && !e.metaKey && !e.ctrlKey) cb.onReadOnly?.();
-    });
-    // the menu's Undo and Redo go to the page's history too
-    ta.addEventListener('beforeinput', (e) => {
-      if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') {
-        e.preventDefault();
-        cb.onHistory?.(e.inputType === 'historyUndo' ? -1 : 1);
-      }
-    });
-    ta.addEventListener('paste', () => { if (ta.readOnly) cb.onReadOnly?.(); });
-    const caret = () => cb.onCaretLine?.(this.caretLine());
-    ta.addEventListener('click', caret);
-    ta.addEventListener('keyup', (e) => { if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End' || e.key.startsWith('Page')) caret(); });
-    ta.addEventListener('pointermove', (e) => {
-      const n = this.lineAtY(e.clientY);
-      if (n !== this.hovered) { this.hovered = n; cb.onHoverLine?.(n); }
-    });
-    ta.addEventListener('pointerleave', () => { this.hovered = null; cb.onHoverLine?.(null); });
+  updated(u) {
+    const quiet = u.transactions.some((tr) => tr.isUserEvent(QUIET));
+    if (u.docChanged) {
+      this.text = u.state.doc.toString();
+      if (!quiet) this.cb.onEdit?.(this.text, 'type');
+    }
+    if (u.selectionSet && !quiet && u.transactions.some((tr) => tr.isUserEvent('select'))) {
+      this.cb.onCaretLine?.(this.caretLine());
+    }
+  }
+
+  /** Change the document from the page (not typing): only the changed middle, so folds and scroll stay. */
+  replace(text, selection) {
+    const old = this.view.state.doc.toString();
+    let a = 0;
+    while (a < old.length && a < text.length && old[a] === text[a]) a++;
+    let b = 0;
+    while (b < old.length - a && b < text.length - a && old[old.length - 1 - b] === text[text.length - 1 - b]) b++;
+    const spec = { userEvent: QUIET };
+    if (a !== old.length || a !== text.length) spec.changes = { from: a, to: old.length - b, insert: text.slice(a, text.length - b) };
+    if (selection) spec.selection = selection;
+    this.view.dispatch(spec);
+    this.text = text;
   }
 
   /** Show `text` from `file`; the caret and scroll stay when it is the same file. */
   show(file, text, writable) {
     const same = file === this.file;
     this.writable = !!writable;
-    this.ta.readOnly = !writable;
-    this.ta.classList.toggle('ro', !writable);
+    this.view.dispatch({ effects: this.ro.reconfigure(EditorState.readOnly.of(!writable)), userEvent: QUIET });
+    this.code.classList.toggle('ro', !writable);
     if (same && text === this.text) return;
-    const top = this.code.scrollTop;
-    const [s, e] = [this.ta.selectionStart, this.ta.selectionEnd];
     this.file = file;
-    this.setText(text);
-    if (same) { this.code.scrollTop = top; this.ta.setSelectionRange(Math.min(s, text.length), Math.min(e, text.length)); }
-    else { this.code.scrollTop = 0; this.ta.setSelectionRange(0, 0); }
+    if (same) { this.setText(text); return; }
+    this.replace(text, { anchor: 0 });
+    this.view.scrollDOM.scrollTop = 0;
+    this.applyMarks();
   }
 
   /** Replace the text (a change made elsewhere: the view, undo); the caret stays near where it was. */
   setText(text, caret = null) {
-    const [s, e] = [this.ta.selectionStart, this.ta.selectionEnd];
-    this.text = text;
-    this.ta.value = text;
-    if (caret != null) this.ta.setSelectionRange(caret, caret);
-    else this.ta.setSelectionRange(Math.min(s, text.length), Math.min(e, text.length));
-    this.render();
+    const s = this.view.state.selection.main;
+    const clamp = (n) => Math.min(n, text.length);
+    this.replace(text, caret != null ? { anchor: caret } : { anchor: clamp(s.anchor), head: clamp(s.head) });
   }
 
-  /** Type `s` at the caret, as if typed (the textarea's own undo is not used). */
-  insert(s, from = this.ta.selectionStart, to = this.ta.selectionEnd) {
-    const t = this.ta.value;
-    this.setText(t.slice(0, from) + s + t.slice(to), from + s.length);
-    this.cb.onEdit?.(this.text, 'type');
+  /** Type `s` over [from, to] (the caret's selection by default), as if typed. */
+  insert(s, from = this.view.state.selection.main.from, to = this.view.state.selection.main.to) {
+    this.view.dispatch({ changes: { from, to, insert: s }, selection: { anchor: from + s.length }, userEvent: 'input.complete' });
   }
 
-  /** Tab/Shift-Tab: indent the selected lines, or the caret's line. */
-  indent(out = false) {
-    const r = indentSelection(this.ta.value, this.ta.selectionStart, this.ta.selectionEnd, out);
-    this.setText(r.text);
-    this.ta.setSelectionRange(r.start, r.end);
-    this.cb.onEdit?.(this.text, 'type');
-  }
+  clear() { this.file = null; this.replace(''); }
 
-  /** Enter carries the line's indentation; after `{` it enters one level. */
-  newline() {
-    const r = newlineAt(this.ta.value, this.ta.selectionStart, this.ta.selectionEnd);
-    this.setText(r.text, r.caret);
-    this.cb.onEdit?.(this.text, 'type');
-  }
-
-  clear() { this.file = null; this.text = null; this.ta.value = ''; this.render(); }
-
-  render() {
-    const lines = (this.text ?? '').split('\n');
-    const frag = document.createDocumentFragment();
-    this.rows = lines.map((line, i) => {
-      const d = document.createElement('div');
-      d.className = 'ln';
-      d.dataset.n = i + 1;
-      d.innerHTML = highlight(line) || ' ';
-      frag.append(d);
-      return d;
-    });
-    this.hl.replaceChildren(frag);
-    this.applyMarks();
-  }
-
-  caretLine() { return this.ta.value.slice(0, this.ta.selectionStart).split('\n').length; }
-  /** The caret's line and column (both from 1) and the line's text. */
+  /** Where the caret is, as an index into the text. */
+  get selectionStart() { return this.view.state.selection.main.from; }
+  caretLine() { return this.view.state.doc.lineAt(this.view.state.selection.main.head).number; }
+  /** The caret's line and column (both from 1) and the line's text either side of it. */
   caret() {
-    const t = this.ta.value, i = this.ta.selectionStart;
-    const start = t.lastIndexOf('\n', i - 1) + 1;
-    const end = t.indexOf('\n', i);
-    return { index: i, line: t.slice(0, i).split('\n').length, col: i - start + 1, start, before: t.slice(start, i), after: t.slice(i, end < 0 ? t.length : end) };
+    const i = this.view.state.selection.main.head;
+    const l = this.view.state.doc.lineAt(i);
+    return { index: i, line: l.number, col: i - l.from + 1, start: l.from, before: l.text.slice(0, i - l.from), after: l.text.slice(i - l.from) };
   }
 
-  lineH() { return this.rows[0]?.offsetHeight || 22; }
-  lineAtY(clientY) {
-    const r = this.hl.getBoundingClientRect();
-    const n = Math.floor((clientY - r.top) / this.lineH()) + 1;
-    return n >= 1 && n <= this.rows.length ? n : null;
-  }
   /** Where the caret is on screen (its bottom left), for the completion list. */
   caretXY() {
-    const c = this.caret();
-    const row = this.rows[c.line - 1];
-    if (!row) return null;
-    if (!this.chW) {
-      const m = document.createElement('span');
-      m.textContent = 'x'.repeat(40);
-      m.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
-      row.append(m);
-      this.chW = m.getBoundingClientRect().width / 40;
-      m.remove();
-    }
-    const r = row.getBoundingClientRect();
-    const gutter = parseFloat(getComputedStyle(this.ta).paddingLeft) || 50;
-    return { x: r.left + gutter + (c.col - 1) * this.chW, y: r.bottom };
+    const c = this.view.coordsAtPos(this.view.state.selection.main.head);
+    return c ? { x: c.left, y: c.bottom } : null;
   }
 
-  focus() { this.ta.focus({ preventScroll: true }); }
+  focus() { this.view.focus(); }
 
-  /** Mark lines: `sel` and `hov` are [first, last] (1-based) or null; `errs` line numbers. */
+  /** Mark lines: `sel` and `hov` are [first, last] (1-based) or null; `errs` line numbers or {line, message}. */
   mark(sel, hov, errs = []) {
     this.marks = { sel, hov, errs };
     this.applyMarks();
   }
 
   applyMarks() {
-    const { sel, hov, errs } = this.marks;
-    const inside = (r, n) => r && n >= r[0] && n <= r[1];
-    this.rows.forEach((d, i) => {
-      const n = i + 1;
-      d.classList.toggle('sel', !!inside(sel, n));
-      d.classList.toggle('hov', !inside(sel, n) && !!inside(hov, n));
-      d.classList.toggle('err', !!errs?.includes(n));
-    });
+    const { sel = null, hov = null, errs = [] } = this.marks;
+    const doc = this.view.state.doc;
+    const list = (errs || []).map((e) => (typeof e === 'number' ? { line: e } : e)).filter((e) => e.line >= 1 && e.line <= doc.lines);
+    const diags = list.map((e) => { const l = doc.line(e.line); return { from: l.from, to: l.to, severity: 'error', message: e.message || 'A mistake on this line' }; });
+    this.view.dispatch(setDiagnostics(this.view.state, diags), { effects: setMarks.of({ sel, hov, errs: list.map((e) => e.line) }), userEvent: QUIET });
   }
 
   /** Scroll so line `n` is in view, unless it already is. */
   reveal(n) {
-    const d = this.rows[n - 1];
-    if (!d) return;
-    const c = this.code, top = d.offsetTop, h = d.offsetHeight;
-    if (top < c.scrollTop + 8 || top + h > c.scrollTop + c.clientHeight - 24) {
-      c.scrollTo({ top: Math.max(0, top - c.clientHeight / 3), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    const doc = this.view.state.doc;
+    if (n < 1 || n > doc.lines) return;
+    const pos = doc.line(n).from;
+    const block = this.view.lineBlockAt(pos);
+    const sc = this.view.scrollDOM;
+    const top = block.top, bottom = block.bottom;
+    if (top < sc.scrollTop + 8 || bottom > sc.scrollTop + sc.clientHeight - 24) {
+      this.view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: sc.clientHeight / 3 }), userEvent: QUIET });
     }
   }
 }

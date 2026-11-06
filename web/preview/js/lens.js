@@ -72,7 +72,7 @@ export class Lens {
   get dragging() { return !!this.drag; }
 
   /**
-   * Show `model`: {title, href, note, actions, groups: [{heading, at, element, schema, written: [setting]}]},
+   * Show `model`: {title, kind (the element it edits), href, note, actions, groups: [{heading, at, element, schema, written: [setting]}]},
    * a setting being {name, text, span: [byte offset, length], file}.
    */
   show(model) {
@@ -83,7 +83,7 @@ export class Lens {
     r.hidden = false;
     const head = el('div', 'lt');
     const heading = el('div', 'heading');
-    heading.append(el('span', 'cap', 'Properties'), el('b', '', model.title));
+    heading.append(el('span', 'cap', model.kind || 'Properties'), el('b', '', model.title));
     head.append(heading);
     if (model.href) {
       const a = el('a', '', 'Help ↗');
@@ -179,15 +179,22 @@ export class Lens {
       cell.append(b);
     } else {
       const val = el('span', `val${ro ? ' ro' : ''}`);
+      // a quoted value shows without its quotes ("20%" reads as 20%, like 100%);
+      // they stay in the text, hidden, so a scrub rewrites them as written
+      const pre = (shown.match(/^#?"/) || [''])[0];
+      const post = pre ? (shown.slice(pre.length).match(/"#?$/) || [''])[0] : '';
+      const body = shown.slice(pre.length, shown.length - post.length);
+      if (pre) val.append(el('span', 'q', pre));
       let last = 0;
-      for (const m of shown.matchAll(NUM)) {
-        val.append(shown.slice(last, m.index));
+      for (const m of body.matchAll(NUM)) {
+        val.append(body.slice(last, m.index));
         const n = el('span', 'num', m[0]);
         if (!ro) this.scrubber(n, g, c, s, v);
         val.append(n);
         last = m.index + m[0].length;
       }
-      val.append(shown.slice(last));
+      val.append(body.slice(last));
+      if (post) val.append(el('span', 'q', post));
       if (!shown) val.append(el('span', 'unit', 'not set'));
       if (!ro) val.addEventListener('click', (e) => { if (!this.moved) this.typeIn(val, g, c, s, v, e); });
       cell.append(val);
