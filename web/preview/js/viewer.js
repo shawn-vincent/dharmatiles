@@ -177,9 +177,15 @@ export class Viewer {
     this.controls.maxZoom = 40;
     this.controls.target.copy(target);
     this.controls.enableRotate = this.orbit !== false;
-    this.controls.addEventListener('change', () => { this.sample(); this.draw(); });
+    let userMoving = false;
+    this.controls.addEventListener('change', () => {
+      if (userMoving) this.onUserViewChange?.();
+      this.sample();
+      this.draw();
+    });
     // the user took hold (drag, wheel, touch): the tween ends and the controls own the camera
-    this.controls.addEventListener('start', () => this.cancelTween(true));
+    this.controls.addEventListener('start', () => { userMoving = true; this.cancelTween(true); });
+    this.controls.addEventListener('end', () => { userMoving = false; });
     this.controls.update();
   }
 

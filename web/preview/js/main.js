@@ -1,5 +1,5 @@
 // The editor page (docs/design/editor.html): the tile menu, the text, the
-// view and the stack, linked by one selection.  Talks to the server only
+// view and the property sheet, linked by one selection. Talks to the server only
 // through `host` (js/host.js), so a desktop app can reuse this page and the
 // viewer with a different host.
 //
@@ -14,6 +14,7 @@ import { TextPane, byteToIndex } from './text.js';
 import { Lens, valueOf } from './lens.js';
 import { suggest } from './complete.js';
 import { Viewer, VIEWS } from './viewer.js';
+import { rememberView, shortcutViews } from './view-presets.js';
 import { Overlay } from './overlay.js';
 import { Tools } from './place.js';
 
@@ -25,10 +26,10 @@ const state = {
   tiles: [], roots: [], root: -1, selected: -1, overhangDeg: 55, steepestDeg: 65, system: 'db',
   lastInRoot: new Map(), // root index -> the tile last chosen there
   loaded: new Map(),   // tile index -> mesh_version shown
-  cameras: new Map(),  // tile index -> saved camera
-  view: 'painted', buildStart: new Map(),
+  cameras: new Map(),  // tile index -> saved camera and active preset
+  view: 'painted', activeView: null, buildStart: new Map(),
   sel: null,           // {entry, piece} (piece null: the whole entry) | {region} | {line} | {tile: true} | null
-  hov: null,           // the same, under the pointer (view, text or stack)
+  hov: null,           // the same, under the pointer (view or text)
   pieces: new Map(),   // entry -> how many pieces its geometry has
   textFor: null,       // [tile index, file, mesh_version] the text pane shows
 };
@@ -57,27 +58,53 @@ function toast(message, action = null) {
 }
 
 // ---- the view's controls: views and the display menu -------------------
-const SHOWN_VIEWS = ['painted', 'top', 'low', 'close'];
-VIEWS.forEach(([name, label], i) => {
-  const mk = () => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'view'; b.dataset.view = name;
-    b.textContent = name === 'top' ? 'Map' : label;
-    b.title = `${label} (${i + 1})`;
-    b.onclick = () => pickView(name);
-    return b;
-  };
-  if (SHOWN_VIEWS.includes(name)) $('views').append(mk());
-  $('allviews').append(mk());
-});
-function pickView(name, animate = true) {
-  state.view = name;
-  viewer.setView(name, animate);
+const viewIndex = new Map(VIEWS.map((view, i) => [view[0], { view, i }]));
+let recentViews = ['low', 'close'];
+try {
+  const saved = JSON.parse(localStorage.getItem('dt-preview-recent-views'));
+  if (Array.isArray(saved)) {
+    const valid = saved.filter((name) => viewIndex.has(name) && !['painted', 'top'].includes(name));
+    recentViews = [...new Set([...valid, 'low', 'close'])].slice(0, 2);
+  }
+} catch { /* private mode or an older malformed value */ }
+
+function viewButton(name) {
+  const entry = viewIndex.get(name);
+  if (!entry) return null;
+  const [, label] = entry.view;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'view'; b.dataset.view = name;
+  b.textContent = name === 'top' ? 'Map' : label;
+  b.title = `${label} (${entry.i + 1})`;
+  b.onclick = () => pickView(name);
+  return b;
+}
+
+function showActiveView(name) {
   document.querySelectorAll('button.view').forEach((b) => {
-    b.classList.toggle('on', b.dataset.view === name);
-    b.setAttribute('aria-pressed', b.dataset.view === name);
+    const on = b.dataset.view === name;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on);
   });
 }
+
+function renderViewShortcuts() {
+  $('views').replaceChildren(...shortcutViews(recentViews).map(viewButton).filter(Boolean));
+  showActiveView(state.activeView);
+}
+
+VIEWS.forEach(([name]) => $('allviews').append(viewButton(name)));
+renderViewShortcuts();
+function pickView(name, animate = true) {
+  state.view = name;
+  state.activeView = name;
+  recentViews = rememberView(recentViews, name);
+  try { localStorage.setItem('dt-preview-recent-views', JSON.stringify(recentViews)); } catch { /* private mode */ }
+  renderViewShortcuts();
+  viewer.setView(name, animate);
+  showActiveView(name);
+}
+viewer.onUserViewChange = () => { state.activeView = null; showActiveView(null); };
 const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 toggle('t-overhang', (on) => viewer.setOverhang(on));
 // paint on or off (grey plastic): remembered in the browser
@@ -93,7 +120,10 @@ toggle('t-wire', (on) => viewer.setWireframe(on));
 toggle('t-grid', (on) => viewer.setGrid(on));
 
 // popovers: one open at a time; Esc or a click outside closes it
-const popovers = [['tilebtn', 'menu'], ['dispbtn', 'display'], ['gate', 'record-card']];
+const popovers = [
+  ['tilebtn', 'menu'], ['dispbtn', 'display'], ['gate', 'record-card'],
+  ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
+];
 function openPopover(id) {
   for (const [btn, pop] of popovers) {
     const open = pop === id && $(pop).hidden;
@@ -105,6 +135,7 @@ function openPopover(id) {
     $('tiles').querySelector('li.sel')?.scrollIntoView({ block: 'center' });
     $('filter').focus();
   }
+  if ((id === 'undo-history' || id === 'redo-history') && !$(id).hidden) renderHistory(true);
 }
 const closePopovers = () => {
   let any = false;
@@ -312,8 +343,14 @@ $('new-form').onsubmit = async (e) => {
 async function select(i, guarded = false) {
   if (!guarded && i !== state.selected && !(await canLeave())) return false;
   closeComp(); lens.hide();
-  if (state.selected >= 0 && viewer.payload) state.cameras.set(state.selected, viewer.getCamera());
-  if (i !== state.selected) { state.sel = null; state.hov = null; $('tilebtn').classList.remove('sel'); }
+  if (state.selected >= 0 && viewer.payload) {
+    state.cameras.set(state.selected, { camera: viewer.getCamera(), activeView: state.activeView });
+  }
+  if (i !== state.selected) {
+    state.sel = null; state.hov = null; state.activeView = null;
+    $('tilebtn').classList.remove('sel');
+    showActiveView(null);
+  }
   state.selected = i;
   viewer.clear();
   viewer.setPlan(null);
@@ -322,7 +359,7 @@ async function select(i, guarded = false) {
   if (!t || t.gone) {
     state.selected = -1;
     history.replaceState(null, '', `#root=${state.root}`);
-    texts.clear(); state.textFor = null;
+    texts.clear(); state.textFor = null; clearDocumentHistory();
     renderAll();
     return true;
   }
@@ -359,7 +396,11 @@ async function loadMesh(i, version) {
     state.loaded.set(i, version);
     if (first) {
       const saved = state.cameras.get(i);
-      if (saved) viewer.setCamera(saved); else pickView(state.view, false);
+      if (saved) {
+        viewer.setCamera(saved.camera);
+        state.activeView = saved.activeView;
+        showActiveView(state.activeView);
+      } else pickView(state.view, false);
     }
     // a selection the new build no longer has goes
     if (isEntry(state.sel) && state.sel.entry >= stackItems().length) state.sel = null;
@@ -442,29 +483,77 @@ function mapNode(w) {
 
 // one history for the file shown: typing (a pause or another kind of change
 // starts a new step), changes from the lens, and changes on disk
-function resetHistory(text) { doc.history = [{ text, caret: 0 }]; doc.at = 0; doc.lastKind = null; }
-function record(text, kind) {
+function historyLabel(kind, before, after) {
+  const a = (before || '').split('\n'), b = (after || '').split('\n');
+  let line = 0;
+  while (line < a.length && line < b.length && a[line] === b[line]) line++;
+  const at = Math.min(line + 1, Math.max(a.length, b.length));
+  const names = { type: 'Typing', lens: 'Changed properties', view: 'Changed tile', disk: 'Changed on disk' };
+  return `${names[kind] || 'Edited'} · line ${Math.max(1, at)}`;
+}
+
+function historyButton(entry, target, distance, direction) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  const action = document.createElement('span'); action.className = 'action'; action.textContent = entry.label;
+  const away = document.createElement('span'); away.className = 'distance'; away.textContent = distance === 1 ? '1 step' : `${distance} steps`;
+  b.append(action, away);
+  b.title = `${direction} to ${entry.label}`;
+  b.onclick = () => { goHistory(target); closePopovers(); };
+  return b;
+}
+
+function renderHistory(buildMenus = false) {
+  const canUndo = doc.writable && doc.at > 0;
+  const canRedo = doc.writable && doc.at >= 0 && doc.at < doc.history.length - 1;
+  $('undo').disabled = !canUndo; $('undo-drop').disabled = !canUndo;
+  $('redo').disabled = !canRedo; $('redo-drop').disabled = !canRedo;
+  if (!buildMenus) return;
+  const undoMenu = $('undo-history'), redoMenu = $('redo-history');
+  undoMenu.replaceChildren(); redoMenu.replaceChildren();
+  for (let target = doc.at - 1; target >= 0; target--) {
+    undoMenu.append(historyButton(doc.history[target + 1], target, doc.at - target, 'Undo'));
+  }
+  for (let target = doc.at + 1; target < doc.history.length; target++) {
+    redoMenu.append(historyButton(doc.history[target], target, target - doc.at, 'Redo'));
+  }
+}
+
+function resetHistory(text) {
+  doc.history = [{ text, caret: 0, kind: 'open', label: 'Opened document' }];
+  doc.at = 0; doc.lastKind = null;
+  renderHistory();
+}
+function clearDocumentHistory() {
+  doc.writable = false; doc.base = null; doc.history = []; doc.at = -1; doc.lastKind = null;
+  renderHistory();
+}
+function record(text, kind, label = null) {
   const now = performance.now();
   const join = kind === 'type' && doc.lastKind === 'type' && now - doc.lastTime < 1000 && doc.at > 0;
   doc.history.length = doc.at + 1;
-  const h = { text, caret: texts.ta.selectionStart };
+  const h = { text, caret: texts.ta.selectionStart, kind, label: label || historyLabel(kind, doc.history[doc.at]?.text, text) };
   if (join) doc.history[doc.at] = h; else { doc.history.push(h); doc.at++; }
   if (doc.history.length > 400) { doc.history.shift(); doc.at--; }
   doc.lastKind = kind; doc.lastTime = now;
+  renderHistory();
 }
-function undo(step) {
-  const i = doc.at + step;
+function goHistory(i) {
   if (!doc.writable || i < 0 || i >= doc.history.length) return;
   doc.at = i; doc.lastKind = null;
   const h = doc.history[i];
   texts.setText(h.text, h.caret);
   closeComp();
   changed();
+  renderHistory();
 }
+function undo(step) { goHistory(doc.at + step); }
+$('undo').onclick = () => undo(-1);
+$('redo').onclick = () => undo(1);
 
 /** The user changed the text: `kind` is type, lens, or drag (a scrub under way, kept out of the history until it ends). */
-function edited(text, kind) {
-  if (kind !== 'drag') record(text, kind);
+function edited(text, kind, label = null) {
+  if (kind !== 'drag') record(text, kind, label);
   else askDraft();
   changed();
 }
@@ -601,7 +690,7 @@ async function canLeave() {
 let textToken = 0;
 async function loadText(file) {
   const t = tile();
-  if (!t || /\.stl$/i.test(t.path)) { texts.clear(); state.textFor = null; doc.base = null; renderTextBar(); return; }
+  if (!t || /\.stl$/i.test(t.path)) { texts.clear(); state.textFor = null; clearDocumentHistory(); renderTextBar(); return; }
   const want = file || t.path;
   if (dirty() && texts.file !== want && !(await canLeave())) return false;
   // unsaved changes to this file stay; a new build of the same file brings nothing new
@@ -889,7 +978,7 @@ const lens = new Lens($('lens'), {
     const r = await host.post('/api/edit', { text: texts.text, at, name, value });
     if (r.status !== 200) { doc.note = r.body?.error || 'that change could not be made'; renderTextBar(); return; }
     texts.setText(r.body.text);
-    edited(texts.text, 'lens');
+    edited(texts.text, 'lens', `Changed ${name}`);
   },
   makeMine: () => offerMine(),
 });
@@ -985,7 +1074,7 @@ async function insertNode(place, node, { select: sel } = {}) {
   if (r.status !== 200) { doc.note = r.body?.error || 'that could not be written'; renderTextBar(); return; }
   texts.setText(r.body.text, byteToIndex(r.body.text, r.body.at));
   if (sel) { state.sel = null; setSel(sel, { from: 'view' }); } else doc.selectAt = r.body.at;
-  edited(texts.text, 'view');
+  edited(texts.text, 'view', `Added ${node.trim().split(/\s+/)[0]}`);
   askDraft();
   const l = texts.text.slice(0, byteToIndex(texts.text, r.body.at)).split('\n').length;
   texts.reveal(l);
@@ -1020,7 +1109,7 @@ function muteAt(byte, label = 'Entry') {
   const t = texts.text, i = byteToIndex(t, byte);
   if (isEntry(state.sel)) setSel(null);
   texts.setText(`${t.slice(0, i)}/- ${t.slice(i)}`);
-  edited(texts.text, 'view');
+  edited(texts.text, 'view', `Hid ${label}`);
   askDraft();
   toast(`${label} hidden`, () => undo(-1));
 }
@@ -1030,7 +1119,7 @@ async function removeAt(byte, label = 'Entry') {
   if (r.status !== 200) { doc.note = r.body?.error || 'that could not be taken out'; renderTextBar(); return; }
   setSel(null);
   texts.setText(r.body.text);
-  edited(texts.text, 'view');
+  edited(texts.text, 'view', `Deleted ${label}`);
   askDraft();
   toast(`${label} removed`, () => undo(-1));
 }

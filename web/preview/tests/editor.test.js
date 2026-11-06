@@ -7,6 +7,7 @@ import { parseValue, valueOf } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
 import { indentSelection, newlineAt } from '../js/text.js';
+import { rememberView, shortcutViews } from '../js/view-presets.js';
 
 const elements = [
   {
@@ -18,6 +19,16 @@ const elements = [
   },
   { name: 'grass', role: 'plant', about: 'blades of grass', controls: [] },
 ];
+
+test('view shortcuts keep ISO and Map plus two recent alternatives', () => {
+  let recent = ['low', 'close'];
+  assert.deepEqual(shortcutViews(recent), ['painted', 'top', 'low', 'close']);
+  recent = rememberView(recent, 'front');
+  assert.deepEqual(shortcutViews(recent), ['painted', 'top', 'front', 'low']);
+  recent = rememberView(recent, 'right');
+  assert.deepEqual(shortcutViews(recent), ['painted', 'top', 'right', 'front']);
+  assert.deepEqual(rememberView(recent, 'top'), recent);
+});
 
 function caret(text, marker = '|') {
   const index = text.indexOf(marker);

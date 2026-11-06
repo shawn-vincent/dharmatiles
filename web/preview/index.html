@@ -17,6 +17,18 @@
     <span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i><span class="txt">dharmatiles</span></span>
     <button id="tilebtn" type="button" aria-haspopup="true" aria-expanded="false" title="Choose a tile"><span id="tilename">Choose a tile</span><span class="where" id="tilewhere"></span><span aria-hidden="true">▾</span></button>
     <span id="tileplan" class="muted"></span>
+    <div id="history-controls" aria-label="Document history">
+      <div class="history-split">
+        <button id="undo" type="button" title="Undo (⌘Z)" disabled><span aria-hidden="true">↶</span><span class="history-label">Undo</span></button>
+        <button id="undo-drop" type="button" aria-label="Choose how far to undo" aria-haspopup="true" aria-expanded="false" disabled>▾</button>
+        <div id="undo-history" class="menu history-menu" hidden></div>
+      </div>
+      <div class="history-split">
+        <button id="redo" type="button" title="Redo (⌘⇧Z)" disabled><span aria-hidden="true">↷</span><span class="history-label">Redo</span></button>
+        <button id="redo-drop" type="button" aria-label="Choose how far to redo" aria-haspopup="true" aria-expanded="false" disabled>▾</button>
+        <div id="redo-history" class="menu history-menu" hidden></div>
+      </div>
+    </div>
     <span class="grow"></span>
     <span id="conn" class="muted">connecting…</span>
     <button id="gate" type="button" hidden aria-expanded="false" title="The printability gate: click for the build record"><i></i><span class="lbl" id="gatetext"></span></button>

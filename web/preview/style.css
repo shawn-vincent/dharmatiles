@@ -23,6 +23,19 @@ button { font: inherit; color: inherit; }
 #tilebtn #tilename { overflow: hidden; text-overflow: ellipsis; }
 #tilebtn .where { font-weight: 400; color: var(--muted); font-size: 12.5px; }
 #tileplan { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#history-controls { display: flex; align-items: center; gap: 5px; flex: none; }
+.history-split { position: relative; display: inline-flex; }
+.history-split > button { height: 30px; color: var(--muted); background: var(--raised); border: 1px solid var(--line); cursor: pointer; }
+.history-split > button:first-child { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: var(--r) 0 0 var(--r); }
+.history-split > button:nth-child(2) { width: 22px; padding: 0; margin-left: -1px; border-radius: 0 var(--r) var(--r) 0; font-size: 10px; }
+.history-split > button:hover:not(:disabled) { color: var(--ink); border-color: var(--line-2); z-index: 1; }
+.history-split > button:disabled { opacity: .42; cursor: default; }
+.history-menu { top: 35px; left: 0; width: min(330px, calc(100vw - 24px)); max-height: min(440px, calc(100vh - 72px)); overflow-y: auto; padding: 5px; }
+.history-split:last-child .history-menu { left: auto; right: 0; }
+.history-menu button { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; gap: 12px; padding: 7px 8px; color: var(--ink); background: none; border: 0; border-radius: var(--r); text-align: left; cursor: pointer; }
+.history-menu button:hover, .history-menu button:focus-visible { background: var(--panel); }
+.history-menu .action { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-menu .distance { color: var(--muted); font-size: 11px; white-space: nowrap; }
 #title .grow { flex: 1; }
 #conn { font-size: 12px; white-space: nowrap; }
 #gate { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--raised); border-radius: 999px; padding: 5px 12px 5px 10px; cursor: pointer; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
@@ -202,7 +215,7 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 .sw { width: 12px; height: 12px; border-radius: 2px; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); }
 
 /* ---- smaller screens: the panes narrow, then flow under the view ---- */
-@media (max-width: 1200px) { #app { --textw: 280px; grid-template-columns: var(--textw) minmax(0, 1fr) 250px; } #tileplan { display: none; } }
+@media (max-width: 1200px) { #app { --textw: 280px; grid-template-columns: var(--textw) minmax(0, 1fr) 250px; } #tileplan, .history-label { display: none; } }
 @media (max-width: 900px) {
   body { overflow: auto; }
   #app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px 62vh auto auto; grid-template-areas: "title" "view" "properties" "text"; }
@@ -210,6 +223,7 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
   #properties-pane { height: min(520px, 70vh); }
   #code { max-height: 60vh; }
   #title .wordmark .txt, #conn { display: none; }
+  .history-label { display: none; }
   #tilebtn { max-width: 60%; }
   #status { min-width: 0; right: 12px; }
 }
