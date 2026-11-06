@@ -202,6 +202,7 @@ dialog input:focus, dialog select:focus { border-color: var(--brass); outline: 3
 #verdict::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: currentColor; flex: none; }
 #verdict.pass { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
 #verdict.fail { color: var(--over); background: color-mix(in srgb, var(--over) 13%, transparent); }
+#show-worst { width: 100%; margin: 0 0 10px; color: var(--brass); border-color: var(--brass); background: color-mix(in srgb, var(--brass) 8%, var(--raised)); font-weight: 600; }
 #failures .f { color: var(--over); font-size: 12.5px; margin: 0 0 6px; padding-left: 18px; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0; font-size: 13px; }
 dt { color: var(--muted); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }

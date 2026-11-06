@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { suggest } from '../js/complete.js';
 import { browserHost } from '../js/host.js';
 import { parseValue, valueOf } from '../js/lens.js';
-import { NO_ENTRY, ownerVertices, parsePayload } from '../js/payload.js';
+import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
 import { indentSelection, newlineAt } from '../js/text.js';
 
@@ -118,6 +118,30 @@ test('GPU ownership is compact, repeated per corner and reserves zero for none',
   const who = ownerVertices(new Uint16Array([2, NO_ENTRY]), new Uint16Array([7, 0]));
   assert.ok(who instanceof Uint16Array);
   assert.deepEqual([...who], [3, 7, 3, 7, 3, 7, 0, 0, 0, 0, 0, 0]);
+});
+
+test('the gate points to the largest red face before any orange face', () => {
+  const p = {
+    triangles: 3,
+    positions: new Float32Array([
+      0,0,0, 4,0,0, 0,4,0,
+      0,0,1, 1,0,1, 0,1,1,
+      0,0,2, 2,0,2, 0,2,2,
+    ]),
+    clean: new Uint8Array(27).fill(100),
+    painted: new Uint8Array(27).fill(100),
+    entry: new Uint16Array([1, 2, 3]),
+    piece: new Uint16Array([0, 4, 0]),
+  };
+  p.painted.set([255, 140, 26], 0); // large orange
+  p.painted.set([230, 30, 30], 9);  // small red
+  p.painted.set([230, 30, 30], 18); // larger red: the answer
+  const got = worstFlagged(p);
+  assert.equal(got.kind, 'red');
+  assert.equal(got.triangle, 2);
+  assert.equal(got.entry, 3);
+  assert.deepEqual(got.lo, [0, 0, 2]);
+  assert.deepEqual(got.hi, [2, 2, 2]);
 });
 
 test('a foreign mesh fails clearly', () => {

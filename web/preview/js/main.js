@@ -823,6 +823,22 @@ function frameSel() {
   viewer.flyTo({ target: pose.target, dir: pose.dir, dist: size * 2.4 });
 }
 
+/** Explain the gate's paint by taking the camera to its most important face. */
+function showWorst() {
+  const f = viewer.worstFlagged();
+  if (!f) return;
+  if (f.entry != null) setSel({ entry: f.entry, piece: f.piece }, { from: 'view' });
+  const pose = viewer.pose();
+  const size = Math.max(4, Math.hypot(f.hi[0] - f.lo[0], f.hi[1] - f.lo[1], f.hi[2] - f.lo[2]));
+  pose.target.set((f.lo[0] + f.hi[0]) / 2, (f.lo[1] + f.hi[1]) / 2, (f.lo[2] + f.hi[2]) / 2);
+  viewer.flyTo({ target: pose.target, dir: pose.dir, dist: size * 3.2 });
+  closePopovers();
+  toast(f.kind === 'red'
+    ? `Showing the largest face past ${state.steepestDeg}°`
+    : `Showing the largest face in the ${state.overhangDeg}–${state.steepestDeg}° band`);
+}
+$('show-worst').onclick = showWorst;
+
 // hover and click in the view: a click is a press and release that hardly moved
 const canvas = $('canvas');
 let down = null, hoverRaf = 0, lastMove = null;
@@ -1169,6 +1185,7 @@ function renderTitle() {
   $('failures').replaceChildren();
   clearInterval(timer);
   $('verdict').hidden = true;
+  $('show-worst').hidden = true;
   if (!t) {
     status.hidden = true; errs.hidden = true; gate.hidden = true;
     $('tilename').textContent = 'Choose a tile'; $('tilewhere').textContent = ''; $('tileplan').textContent = '';
@@ -1238,6 +1255,14 @@ function renderTitle() {
   v.hidden = false;
   v.className = fails ? 'fail' : 'pass';
   v.textContent = fails ? `Fails the printability gate${stale}` : `Passes the printability gate${stale}`;
+  const worst = viewer.worstFlagged();
+  if (worst) {
+    const show = $('show-worst');
+    show.hidden = false;
+    show.textContent = worst.kind === 'red'
+      ? `Inspect largest face past ${state.steepestDeg}°`
+      : `Inspect largest face at ${state.overhangDeg}–${state.steepestDeg}°`;
+  }
   row(dl, 'Triangles', a.triangles.toLocaleString());
   row(dl, 'Watertight', a.watertight ? 'Yes' : 'No', a.watertight ? 'ok' : 'bad');
   const lo = state.overhangDeg, hi = state.steepestDeg;

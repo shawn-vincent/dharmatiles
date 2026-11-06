@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from '/vendor/OrbitControls.js';
-import { ownerVertices } from './payload.js';
+import { ownerVertices, worstFlagged } from './payload.js';
 
 THREE.ColorManagement.enabled = false; // colours are already display values
 
@@ -657,6 +657,9 @@ export class Viewer {
     }
     return any ? { lo, hi } : null;
   }
+
+  /** The gate-painted face the user should inspect first. */
+  worstFlagged() { return this.payload ? worstFlagged(this.payload) : null; }
 
   /** Where world point `p` falls on the canvas, in CSS pixels. */
   project(p) {

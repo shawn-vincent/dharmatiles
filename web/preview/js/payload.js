@@ -28,6 +28,36 @@ export function ownerVertices(entry, piece) {
   return who;
 }
 
+/**
+ * The largest face painted by the gate, red before orange. Returns its owner
+ * and bounds so the editor can explain a verdict by taking the user there.
+ */
+export function worstFlagged(payload) {
+  let best = null;
+  for (let t = 0; t < payload.triangles; t++) {
+    const k = 9 * t;
+    const p = payload.painted, c = payload.clean;
+    const changed = p[k] !== c[k] || p[k + 1] !== c[k + 1] || p[k + 2] !== c[k + 2];
+    if (!changed) continue;
+    const red = p[k] > 180 && p[k + 1] < 90 && p[k + 2] < 90;
+    const priority = red ? 2 : 1;
+    const q = payload.positions;
+    const ax = q[k + 3] - q[k], ay = q[k + 4] - q[k + 1], az = q[k + 5] - q[k + 2];
+    const bx = q[k + 6] - q[k], by = q[k + 7] - q[k + 1], bz = q[k + 8] - q[k + 2];
+    const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+    const area = Math.hypot(cx, cy, cz) / 2;
+    if (best && (priority < best.priority || (priority === best.priority && area <= best.area))) continue;
+    const xs = [q[k], q[k + 3], q[k + 6]], ys = [q[k + 1], q[k + 4], q[k + 7]], zs = [q[k + 2], q[k + 5], q[k + 8]];
+    best = {
+      priority, area, kind: red ? 'red' : 'orange', triangle: t,
+      entry: payload.entry[t] === NO_ENTRY ? null : payload.entry[t], piece: payload.piece[t],
+      lo: [Math.min(...xs), Math.min(...ys), Math.min(...zs)],
+      hi: [Math.max(...xs), Math.max(...ys), Math.max(...zs)],
+    };
+  }
+  return best;
+}
+
 export function parsePayload(buffer) {
   const head = new DataView(buffer);
   const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
