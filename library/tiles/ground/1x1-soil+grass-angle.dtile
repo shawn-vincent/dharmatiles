@@ -1,4 +1,4 @@
-tile soil+grass-angle size="1x1" seed=100 {
+tile size="1x1" seed=100 {
     about "Dirt tucked into the south-west corner of a meadow."
     line margin wobble=2.5 { through "0,0.5" "0.5,0" }
     region path { bounded-by margin; fill "0.15,0.15" }

@@ -51,35 +51,35 @@ function caret(text, marker = '|') {
 }
 
 test('completion offers element names at a node', () => {
-  const c = caret('tile a { stack { ro| } }');
+  const c = caret('tile { stack { ro| } }');
   const got = suggest(c.caret, c.text, elements);
   assert.deepEqual(got.items.map((x) => x.label), ['rock']);
   assert.equal(got.items[0].insert, 'rock');
 });
 
 test('completion offers controls but not ones already written', () => {
-  const c = caret('tile a { stack { rock size=8 sh| } }');
+  const c = caret('tile { stack { rock size=8 sh| } }');
   const got = suggest(c.caret, c.text, elements);
   assert.deepEqual(got.items.map((x) => x.label), ['shape']);
   assert.equal(got.items[0].insert, 'shape=');
 });
 
 test('completion knows regions and line edges', () => {
-  let c = caret('tile a { region bank { fill "0.5,0.5" }; stack { grass in=ba| } }');
+  let c = caret('tile { region bank { fill "0.5,0.5" }; stack { grass in=ba| } }');
   assert.deepEqual(suggest(c.caret, c.text, elements).items.map((x) => x.label), ['bank']);
-  c = caret('tile a { stack { rock along=no| } }');
+  c = caret('tile { stack { rock along=no| } }');
   assert.deepEqual(suggest(c.caret, c.text, elements).items.map((x) => x.label), ['north']);
 });
 
 test('completion stays out of strings and comments', () => {
-  let c = caret('tile a { about "ro|" }');
+  let c = caret('tile { about "ro|" }');
   assert.equal(suggest(c.caret, c.text, elements), null);
-  c = caret('tile a { // ro|\n stack {} }');
+  c = caret('tile { // ro|\n stack {} }');
   assert.equal(suggest(c.caret, c.text, elements), null);
 });
 
 test('a comment on an earlier line does not disable completion', () => {
-  const c = caret('// a useful note\ntile a { stack { ro| } }');
+  const c = caret('// a useful note\ntile { stack { ro| } }');
   assert.deepEqual(suggest(c.caret, c.text, elements).items.map((x) => x.label), ['rock']);
 });
 

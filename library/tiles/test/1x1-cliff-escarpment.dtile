@@ -1,6 +1,6 @@
 // A band whose height ramps along the edge.
 
-tile "1x1-cliff-escarpment" size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about """
         A band whose height ramps along the edge.
         """

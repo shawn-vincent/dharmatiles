@@ -1,6 +1,6 @@
 // Bare earth on one square (seed 13).
 
-tile soil size="1x1" seed=13 {
+tile size="1x1" seed=13 {
     about "Bare earth: clods, grit and half-sunk pebbles over gentle rises."
     stack {
         dirt bumps=2.5 bump-size=14 {   // rises up to 2.5 mm, about 14 mm across

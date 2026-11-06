@@ -1,6 +1,6 @@
 // A long, stepped rise across the tile.
 
-tile "2x1-cliff-escarpment" size="2x1" seed=1 {
+tile size="2x1" seed=1 {
     about "A long, stepped rise across the tile."
 
     stack {

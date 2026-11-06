@@ -15,12 +15,18 @@ pub(crate) fn check(paths: &[String], json: bool) -> u8 {
                 if !json {
                     match &c.tile {
                         Some(t) if pending.is_empty() => {
-                            tell!("ok {p}: tile `{}`, {} stack entries", t.name, t.stack.len());
+                            tell!(
+                                "ok {p}: {}x{} tile, {} stack entries",
+                                t.cols,
+                                t.rows,
+                                t.stack.len()
+                            );
                         }
                         Some(t) => {
                             tell!(
-                                "ok {p}: tile `{}`; {} part(s) need elements not built yet, so `build` refuses it:",
-                                t.name,
+                                "ok {p}: {}x{} tile; {} part(s) need elements not built yet, so `build` refuses it:",
+                                t.cols,
+                                t.rows,
                                 pending.len()
                             );
                             for d in pending {
@@ -40,7 +46,7 @@ pub(crate) fn check(paths: &[String], json: bool) -> u8 {
                 reports.push(json!({
                     "path": p,
                     "ok": true,
-                    "tile": c.tile.as_ref().map(|t| t.name.clone()),
+                    "tile": c.tile.as_ref().map(|t| format!("{}x{}", t.cols, t.rows)),
                     "pending": errors_json(pending),
                 }));
             }

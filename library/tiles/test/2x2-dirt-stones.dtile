@@ -1,4 +1,4 @@
-tile dirt-stones size="2x2" seed=1 {
+tile size="2x2" seed=1 {
     about "Bare earth with bedded stones on a 2×2 tile: a test tile."
     stack {
         dirt level="edge + 0.3" bumps="2.2..3.2" bump-size=14 {

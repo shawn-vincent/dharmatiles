@@ -1,6 +1,6 @@
 // Two or three tall stacks on a shared footing.
 
-tile "1x1-cliff-needles" size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about """
         Two or three tall stacks on a shared footing.
         """

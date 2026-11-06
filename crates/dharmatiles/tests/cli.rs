@@ -21,7 +21,7 @@ fn a_closed_pipe_ends_quietly_with_0() {
     let d = scratch("pipe");
     let doc = d.join("t.dtile");
     // ~1 MB of errors: far more than a pipe buffers, so the write fails
-    let bad = "tile t { stack {\n".to_owned() + &"  gruond\n".repeat(4000) + "} }\n";
+    let bad = "tile { stack {\n".to_owned() + &"  gruond\n".repeat(4000) + "} }\n";
     std::fs::write(&doc, bad).unwrap();
     let mut child = Command::new(EXE)
         .arg("check")
@@ -183,7 +183,7 @@ fn watch_rebuilds_when_a_used_file_changes() {
     std::fs::write(&parts, "define raised { stack { ground level=6 } }\n").unwrap();
     std::fs::write(
         &tile,
-        "use \"./p\" raised\ntile t size=\"1x1\" seed=1 {\n    stack {\n        raised\n    }\n}\n",
+        "use \"./p\" raised\ntile size=\"1x1\" seed=1 {\n    stack {\n        raised\n    }\n}\n",
     )
     .unwrap();
     let mut child = Command::new(EXE)

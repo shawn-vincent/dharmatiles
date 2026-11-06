@@ -144,7 +144,6 @@ fn binds_loopback_only() {
 fn builds_a_tile_and_serves_its_mesh() {
     let r = start(&[FLAT], true);
     let t = wait_for(&r, "ready", |t| t["status"] == "ready");
-    assert_eq!(t["plan"]["tile"], "flat");
     assert_eq!(t["plan"]["cols"], 1);
     assert!((t["plan"]["square_mm"].as_f64().unwrap() - 35.0).abs() < 1e-9);
     assert_eq!(t["record"]["audit"]["watertight"], true);
@@ -458,7 +457,7 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     let dir = std::env::temp_dir().join(format!("dt-edit-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile t size=\"1x1\" {\n    stack {\n        dirt\n    }\n}\n";
+    let text = "tile size=\"1x1\" {\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -500,7 +499,7 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     assert_eq!(v["ok"], true, "{v}");
     let at = v["stack"][0]["span"][0].as_u64().unwrap();
     assert_eq!(&text[usize::try_from(at).unwrap()..][..4], "dirt");
-    let bad = serde_json::json!({ "text": "tile t size=\"1x1\" { stack { durt } }" }).to_string();
+    let bad = serde_json::json!({ "text": "tile size=\"1x1\" { stack { durt } }" }).to_string();
     let (_, v) = post(&r, "/api/tiles/0/check", Some(&token), None, &bad);
     assert_eq!(v["ok"], false);
     assert!(v["errors"][0]["line"].is_number(), "{v}");
@@ -539,7 +538,7 @@ fn a_library_tile_is_never_written() {
     let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
     let t = token["token"].as_str().unwrap();
     let text = dt_eval::Files.read(FLAT).unwrap();
-    let s = serde_json::json!({ "text": "tile x {}", "base": text }).to_string();
+    let s = serde_json::json!({ "text": "tile {}", "base": text }).to_string();
     let (h, _) = post(&r, "/api/tiles/0/save", Some(t), None, &s);
     assert!(h.starts_with("HTTP/1.1 403"), "{h}");
     assert_eq!(dt_eval::Files.read(FLAT).unwrap(), text);
@@ -590,7 +589,7 @@ fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
     let dir = std::env::temp_dir().join(format!("dt-place-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile t size=\"1x1\" {\n    line shore { through west \"1,0.5\" }\n    region pool { bounded-by shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
+    let text = "tile size=\"1x1\" {\n    line shore { through west \"1,0.5\" }\n    region pool { bounded-by shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);

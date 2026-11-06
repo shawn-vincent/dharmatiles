@@ -1,4 +1,4 @@
-tile water-3x3 size="3x3" seed=17 {
+tile size="3x3" seed=17 {
     about "Nine squares of open water."
     stack {
         ground level="water - 2.2"

@@ -1,4 +1,4 @@
-tile floor-stone-wall size="1x1" seed=72 {
+tile size="1x1" seed=72 {
     stack {
         dirt
         floor texture=chipped seed=22

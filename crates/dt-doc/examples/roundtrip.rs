@@ -33,15 +33,15 @@ fn show(name: &str, what: &str, old: &str, new: &str) {
 
 fn main() {
     let (name, text) = common::GRASS_TREE;
-    let tree = ["tile grass-tree", "stack", "tree"];
+    let tree = ["tile", "stack", "tree"];
     let new = set_control(text, &tree, "at", "1,1").expect("insert");
     show(name, "insert at=\"1,1\" on the tree", text, &new);
-    let leaf = ["tile grass-tree", "stack", "tree", "leaf"];
+    let leaf = ["tile", "stack", "tree", "leaf"];
     let new = set_control(text, &leaf, "length", 5.5).expect("set");
     show(name, "leaf length 4.5 -> 5.5", text, &new);
 
     let (name, text) = common::WALL_CORNER;
-    let wall = ["tile wall-fieldstone-corner", "stack", "wall"];
+    let wall = ["tile", "stack", "wall"];
     let new = set_control(text, &wall, "thickness", 6.5).expect("set");
     show(name, "thickness 7 -> 6.5 (child form)", text, &new);
     let new = remove_control(text, &wall, "coping").expect("remove");

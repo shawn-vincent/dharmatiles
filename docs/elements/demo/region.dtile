@@ -1,6 +1,6 @@
 // The region page's picture: two lines make three regions, each its own
 // surface.
-tile regions size="1x1" seed=8 {
+tile size="1x1" seed=8 {
     line upper wobble=3 { through "0,0.5" "1,0.56" }
     line lower wobble=4 { through "0,0.2" "1,0.26" }
     region yard { bounded-by upper; fill "0.5,0.85" }

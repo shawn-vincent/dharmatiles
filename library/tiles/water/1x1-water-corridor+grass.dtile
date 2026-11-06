@@ -1,6 +1,6 @@
 // A channel of water west to east between two meadow banks.
 
-tile water-corridor+grass size="1x1" seed=62 {
+tile size="1x1" seed=62 {
     about "A channel of water west to east between two meadow banks."
     line shore-north wobble=1.5 { through "0,0.57" "1,0.57" }
     line shore-south wobble=1.5 { through "0,0.43" "1,0.43" }

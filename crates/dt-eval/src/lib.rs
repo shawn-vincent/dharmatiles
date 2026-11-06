@@ -297,7 +297,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                 &tile.src,
                 tile.span,
                 "dt::empty",
-                format!("the tile `{}` has nothing in its stack", tile.name),
+                "the tile has nothing in its stack",
                 "nothing to build",
             )
             .help("add an element to its stack, such as `stack { ground }`"),
@@ -472,7 +472,7 @@ pub fn build_with(
     let Some(tile) = &c.tile else {
         return Err(vec![
             Diag::plain("dt::no-tile", format!("`{path}` has no tile to build"))
-                .help("a tile document holds one `tile name size=\"1x1\" { stack { … } }`; parts, printer and level files are only checked"),
+                .help("a tile document holds one `tile size=\"1x1\" { stack { … } }`; parts, printer and level files are only checked"),
         ]);
     };
     if !tile.pending.is_empty() {
@@ -549,9 +549,7 @@ pub fn build_with(
             scene.bank();
         }
         match *step {
-            Step::Lift => scene
-                .lift(&format!("tile/{}/ground", tile.name))
-                .map_err(|e| fail(e.to_string()))?,
+            Step::Lift => scene.lift("tile/ground").map_err(|e| fail(e.to_string()))?,
             Step::Entry(i) => {
                 let pinned = tile.stack.get(i).and_then(|e| e.seed);
                 let ctx = Ctx {
@@ -648,7 +646,7 @@ pub fn build_with(
         audit,
         stages: scene.stages().to_vec(),
         record,
-        out: out_path(path, &tile.name, &opts.system),
+        out: out_path(path, &opts.system),
         footprint,
         edge_mm,
         notes: scene.notes().to_vec(),
@@ -753,8 +751,9 @@ fn trace_entries(
         .unzip()
 }
 
-/// Seeds by path: `tile/<name>/<element>/<k>`, `k` counting same-named
-/// entries, so adding an entry of another element changes no other seed.
+/// Seeds by path: `tile/<element>/<k>`, `k` counting same-named entries,
+/// so adding an entry of another element changes no other seed.  The
+/// tile's file name is not in it: renaming a tile never reshuffles it.
 fn entry_paths(tile: &Tile) -> Vec<String> {
     let mut seen: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
     let mut out: Vec<String> = tile
@@ -764,12 +763,12 @@ fn entry_paths(tile: &Tile) -> Vec<String> {
             let k = seen.entry(e.what.value.as_str()).or_default();
             *k += 1;
             match &e.id {
-                Some(id) => format!("tile/{}/{}/{id}", tile.name, e.what.value),
-                None => format!("tile/{}/{}/{}", tile.name, e.what.value, *k - 1),
+                Some(id) => format!("tile/{}/{id}", e.what.value),
+                None => format!("tile/{}/{}", e.what.value, *k - 1),
             }
         })
         .collect();
-    out.push(format!("tile/{}/connector", tile.name));
+    out.push("tile/connector".to_owned());
     out
 }
 
@@ -777,7 +776,7 @@ fn entry_paths(tile: &Tile) -> Vec<String> {
 /// disk path keeps its folders below `tiles/` (all of them if it has
 /// none), resolved so the result always stays inside `<system>/`: a `..`
 /// that would leave it is dropped, and an absolute path keeps none.
-fn out_path(path: &str, name: &str, system: &str) -> PathBuf {
+fn out_path(path: &str, system: &str) -> PathBuf {
     let p = path.strip_prefix(LIB).unwrap_or(path).replace('\\', "/");
     let rel = p.rsplit_once("tiles/").map_or(p.as_str(), |(_, r)| r);
     let (dir, file) = rel.rsplit_once('/').unwrap_or(("", rel));
@@ -797,7 +796,7 @@ fn out_path(path: &str, name: &str, system: &str) -> PathBuf {
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .filter(|s| !s.is_empty() && s != "." && s != "..")
-        .unwrap_or_else(|| name.replace(['/', '\\', ':'], "-"));
+        .unwrap_or_else(|| "tile".to_owned());
     let mut out = PathBuf::from(system);
     out.extend(folders);
     out.push(format!("{stem}-{system}.stl"));
@@ -811,48 +810,42 @@ mod tests {
     #[test]
     fn out_paths_mirror_the_library() {
         assert_eq!(
-            out_path("lib:tiles/test/1x1-flat.dtile", "flat", "db"),
+            out_path("lib:tiles/test/1x1-flat.dtile", "db"),
             PathBuf::from("db/test/1x1-flat-db.stl")
         );
-        assert_eq!(
-            out_path("my.dtile", "x", "db"),
-            PathBuf::from("db/my-db.stl")
-        );
+        assert_eq!(out_path("my.dtile", "db"), PathBuf::from("db/my-db.stl"));
     }
 
     #[test]
     fn out_paths_stay_inside_the_system_folder() {
         // was: db/../../t/evil/f-db.stl, outside out/
         assert_eq!(
-            out_path("tiles/../../t/evil/f.dtile", "a", "db"),
+            out_path("tiles/../../t/evil/f.dtile", "db"),
             PathBuf::from("db/t/evil/f-db.stl")
         );
         assert_eq!(
-            out_path("../t/evil/f.dtile", "a", "db"),
+            out_path("../t/evil/f.dtile", "db"),
             PathBuf::from("db/t/evil/f-db.stl")
         );
         assert_eq!(
-            out_path("a/../../../f.dtile", "a", "db"),
+            out_path("a/../../../f.dtile", "db"),
             PathBuf::from("db/f-db.stl")
         );
         assert_eq!(
-            out_path("/abs/proj/f.dtile", "a", "db"),
+            out_path("/abs/proj/f.dtile", "db"),
             PathBuf::from("db/f-db.stl")
         );
         assert_eq!(
-            out_path("C:\\proj\\f.dtile", "a", "db"),
+            out_path("C:\\proj\\f.dtile", "db"),
             PathBuf::from("db/f-db.stl")
         );
-        assert_eq!(
-            out_path("dir/", "ü/../../x", "db"),
-            PathBuf::from("db/dir/ü-..-..-x-db.stl")
-        );
+        assert_eq!(out_path("dir/", "db"), PathBuf::from("db/dir/tile-db.stl"));
         for p in [
             "tiles/../../t/evil/f.dtile",
             "../../x.dtile",
             "/x/../../y.dtile",
         ] {
-            let o = out_path(p, "a", "db");
+            let o = out_path(p, "db");
             assert!(
                 o.components()
                     .all(|c| matches!(c, std::path::Component::Normal(_))),

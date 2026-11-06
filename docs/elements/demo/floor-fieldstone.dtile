@@ -1,5 +1,5 @@
 // The wall page's drystone: a flagstone floor with a fieldstone wall on it.
-tile floor-fieldstone size="1x1" seed=4 {
+tile size="1x1" seed=4 {
     about "Drystone flagstones with a fieldstone wall along the north edge."
     stack {
         dirt

@@ -1,6 +1,6 @@
 // A cove of water cut in from the east edge through dirt.
 
-tile water-u+soil size="1x1" seed=54 {
+tile size="1x1" seed=54 {
     about "A cove of water cut in from the east edge through dirt."
     line shore wobble=1.5 { through "1,0.43" "0.62,0.3" "0.38,0.43" "0.44,0.57" "0.64,0.7" "1,0.57" }
     region cove { bounded-by shore; fill "0.85,0.5" }

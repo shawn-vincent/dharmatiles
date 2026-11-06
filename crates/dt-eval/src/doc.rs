@@ -126,8 +126,6 @@ pub struct Region {
 /// What the evaluator needs from a tile document.
 #[derive(Clone, Debug)]
 pub struct Tile {
-    /// The tile's name.
-    pub name: String,
     /// Squares across.
     pub cols: u32,
     /// Squares up.
@@ -153,7 +151,7 @@ pub struct Tile {
     pub pending: Vec<Diag>,
     /// The tile's own text.
     pub src: Src,
-    /// Where its name is written.
+    /// Where its `tile` keyword is written.
     pub span: SourceSpan,
 }
 
@@ -446,7 +444,6 @@ impl Reader<'_> {
             }),
         };
         let mut t = Tile {
-            name: def.name.value.clone(),
             cols: header.cols,
             rows: header.rows,
             seed,

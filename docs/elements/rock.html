@@ -60,7 +60,7 @@
 <pre><code>rock at="0.5,0.5" size="6..10"     // one rock, there
 rock in=pool                       // one rock, anywhere in the pool region</code></pre>
 <p>Many rocks are a <a href="scatter.html"><code>scatter</code></a>:</p>
-<pre><code>tile rocks size="2x2" seed=1 {
+<pre><code>tile size="2x2" seed=1 {
     stack {
         dirt level=edge { stones none }
         scatter per-square="2.25..3" gap=1.5 { rock }

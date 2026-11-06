@@ -1,6 +1,6 @@
 // Rock band against the north edge.
 
-tile "1x1-cliff" size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about """
         Rock band against the north edge.
         """

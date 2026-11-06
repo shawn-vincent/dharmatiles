@@ -1,6 +1,6 @@
 // Water crossing four ways through dirt.
 
-tile water-corridor-x+soil size="1x1" seed=57 {
+tile size="1x1" seed=57 {
     about "Water crossing four ways through dirt."
     line shore-sw { through "0,0.43" "0.43,0" }
     line shore-nw { through "0,0.57" "0.43,1" }

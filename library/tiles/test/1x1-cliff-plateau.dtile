@@ -1,6 +1,6 @@
 // A free-standing flat-topped mass.
 
-tile "1x1-cliff-plateau" size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about """
         A free-standing flat-topped mass.
         """

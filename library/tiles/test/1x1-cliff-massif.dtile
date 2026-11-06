@@ -1,6 +1,6 @@
 // A free-standing mass with a tall core and a lower tier round it.
 
-tile "1x1-cliff-massif" size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about """
         A free-standing mass with a tall core and a lower tier round it.
         """

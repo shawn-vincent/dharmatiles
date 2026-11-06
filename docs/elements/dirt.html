@@ -51,7 +51,7 @@
 
 <h2 id="use">Using it in a tile</h2>
 <p>The plainest tile is dirt on its own. <code>bumps</code> lifts gentle rises, <code>bump-size</code> sets how wide they are, and <code>clods</code> sets how cloddy the soil is:</p>
-<pre><code>tile soil size="1x1" seed=13 {
+<pre><code>tile size="1x1" seed=13 {
     stack {
         dirt bumps=2.5 bump-size=14 {   // rises up to 2.5 mm, about 14 mm across
             clods some                  // or: few, many
@@ -59,7 +59,7 @@
     }
 }</code></pre>
 <p>Under other elements, write <code>dirt</code> first and let the rest stand on it. Restrict it to a <a href="region.html">region</a> with <code>in=</code>:</p>
-<pre><code>tile soil+grass size="1x1" seed=42 {
+<pre><code>tile size="1x1" seed=42 {
     line margin wobble=5 { through "0.48,1" "0.52,0" }
     region meadow { bounded-by margin; fill "0.25,0.5" }
     stack {

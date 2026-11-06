@@ -1,6 +1,6 @@
 // Water crossing four ways through a meadow.
 
-tile water-corridor-x+grass size="1x1" seed=66 {
+tile size="1x1" seed=66 {
     about "Water crossing four ways through a meadow."
     line shore-sw { through "0,0.43" "0.43,0" }
     line shore-nw { through "0,0.57" "0.43,1" }

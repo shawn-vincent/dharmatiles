@@ -1,6 +1,6 @@
 // A shallow pool tucked into the south-west corner of a meadow bank.
 
-tile water+grass-angle size="1x1" seed=61 {
+tile size="1x1" seed=61 {
     about "A shallow pool tucked into the south-west corner of a meadow bank."
     line shore wobble=2.5 { through "0,0.4" "0.4,0" }
     region pool { bounded-by shore; fill "0.1,0.1" }

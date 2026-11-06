@@ -1,4 +1,4 @@
-tile soil-corridor+grass size="1x1" seed=101 {
+tile size="1x1" seed=101 {
     about "A dirt path west to east between two meadows."
     line north-margin wobble=3 { through "0,0.67" "1,0.67" }
     line south-margin wobble=3 { through "0,0.33" "1,0.33" }

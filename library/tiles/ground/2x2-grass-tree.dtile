@@ -2,7 +2,7 @@
 
 use "parts/grass" long-grass
 
-tile grass-tree size="2x2" seed=84 {
+tile size="2x2" seed=84 {
     stack {
         ground                          // flat, at the ground level (5 mm)
         long-grass                      // grows round the trunk, wherever it is listed

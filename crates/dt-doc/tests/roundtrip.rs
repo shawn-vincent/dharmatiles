@@ -98,13 +98,7 @@ fn grass_length_edit_touches_only_the_value() {
 #[test]
 fn leaf_length_edit_in_a_group() {
     let (name, text) = GRASS_TREE;
-    let new = set_control(
-        text,
-        &["tile grass-tree", "stack", "tree", "leaf"],
-        "length",
-        5.5,
-    )
-    .unwrap();
+    let new = set_control(text, &["tile", "stack", "tree", "leaf"], "length", 5.5).unwrap();
     assert_eq!(changed(text, &new), ("4", "5"));
     let lines = changed_lines(text, &new);
     assert_eq!(lines.len(), 1);
@@ -115,7 +109,7 @@ fn leaf_length_edit_in_a_group() {
 #[test]
 fn child_form_edit_stays_a_child_line() {
     let (name, text) = WALL_CORNER;
-    let path = ["tile wall-fieldstone-corner", "stack", "wall"];
+    let path = ["tile", "stack", "wall"];
     let new = set_control(text, &path, "thickness", 6.5).unwrap();
     let lines = changed_lines(text, &new);
     assert_eq!(lines.len(), 1);
@@ -135,7 +129,7 @@ fn child_form_edit_stays_a_child_line() {
 #[test]
 fn insertion_goes_on_the_line_as_a_property() {
     let (name, text) = GRASS_TREE;
-    let path = ["tile grass-tree", "stack", "tree"];
+    let path = ["tile", "stack", "tree"];
     let new = set_control(text, &path, "at", "1,1").unwrap();
     let lines = changed_lines(text, &new);
     assert_eq!(lines.len(), 1);
@@ -148,7 +142,7 @@ fn insertion_goes_on_the_line_as_a_property() {
     assert!(tree.place.at.is_some());
 
     // On a line with only a name and a comment.
-    let new = insert_property(text, &["tile grass-tree", "stack", "ground"], "level", 4).unwrap();
+    let new = insert_property(text, &["tile", "stack", "ground"], "level", 4).unwrap();
     assert_eq!(
         changed_lines(text, &new)[0].2,
         "        ground level=4                          // flat, at the ground level (5 mm)"
@@ -156,13 +150,7 @@ fn insertion_goes_on_the_line_as_a_property() {
     redecode(name, &new);
 
     // Into a group line.
-    let new = insert_property(
-        text,
-        &["tile grass-tree", "stack", "tree", "crown"],
-        "clump-size",
-        6,
-    )
-    .unwrap();
+    let new = insert_property(text, &["tile", "stack", "tree", "crown"], "clump-size", 6).unwrap();
     assert!(
         changed_lines(text, &new)[0]
             .2
@@ -201,7 +189,7 @@ fn insertion_into_the_second_of_two_same_named_entries() {
 #[test]
 fn removal_in_either_form() {
     let (name, text) = WALL_CORNER;
-    let path = ["tile wall-fieldstone-corner", "stack", "wall"];
+    let path = ["tile", "stack", "wall"];
     // A property on the line.
     let new = remove_control(text, &path, "seed").unwrap();
     assert_eq!(new, text.replace(" seed=14", ""));
@@ -235,21 +223,9 @@ fn removal_in_either_form() {
 #[test]
 fn edits_compose() {
     let (name, text) = CLIFF_RUN;
-    let a = set_control(text, &["tile cliff-run", "stack", "cliff"], "height", 40).unwrap();
-    let b = set_control(
-        &a,
-        &["tile cliff-run", "stack", "scatter#2"],
-        "per-square",
-        3,
-    )
-    .unwrap();
-    let c = set_control(
-        &b,
-        &["tile cliff-run", "stack", "scatter", "stone"],
-        "mostly",
-        "even",
-    )
-    .unwrap();
+    let a = set_control(text, &["tile", "stack", "cliff"], "height", 40).unwrap();
+    let b = set_control(&a, &["tile", "stack", "scatter#2"], "per-square", 3).unwrap();
+    let c = set_control(&b, &["tile", "stack", "scatter", "stone"], "mostly", "even").unwrap();
     let lines = changed_lines(text, &c);
     assert_eq!(lines.len(), 3);
     assert!(lines[0].2.contains("cliff along=north height=40 {"));

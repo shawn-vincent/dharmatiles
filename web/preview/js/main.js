@@ -211,6 +211,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'p') setProjection(!viewer.isOrtho);
   if (e.key === 'f' && state.sel) frameSel();
   if (e.key === 'a' || e.key === '/') { e.preventDefault(); $('place-in').focus(); }
+  if (e.key === 'F2') { e.preventDefault(); startRename(); }
 });
 
 // ---- the tile menu -----------------------------------------------------
@@ -252,7 +253,7 @@ function renderList() {
     const li = document.createElement('li');
     li.className = t.index === state.selected ? 'sel' : '';
     li.tabIndex = 0; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', t.index === state.selected);
-    li.title = t.name && t.name !== stem(t) ? `${t.path}\ntile “${t.name}”` : t.path;
+    li.title = t.path;
     li.innerHTML = '<span></span><span class="name"></span>';
     li.firstChild.className = dotClass(t);
     li.querySelector('.name').textContent = stem(t);
@@ -340,6 +341,52 @@ $('new-form').onsubmit = async (e) => {
   for (let k = 0; k < 40 && !state.tiles[i]; k++) await new Promise((res) => setTimeout(res, 50));
   if (state.tiles[i]) select(i, true);
 };
+
+// ---- renaming: a tile's file name is its name ---------------------------
+const renameable = (t) => !!t && !t.path.startsWith('lib:') && /\.dtile$/i.test(t.path) && rootOf(t.root).kind === 'dir';
+function startRename() {
+  const t = tile();
+  if (!renameable(t) || $('rename')) return;
+  closePopovers();
+  const input = document.createElement('input');
+  input.id = 'rename'; input.type = 'text'; input.value = stem(t); input.maxLength = 80;
+  input.setAttribute('aria-label', 'Rename the tile'); input.spellcheck = false; input.autocomplete = 'off';
+  $('tilebtn').hidden = true;
+  $('tilebtn').before(input);
+  input.focus(); input.select();
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    const name = input.value.trim();
+    if (!commit || !name || name === stem(t)) { done = true; input.remove(); $('tilebtn').hidden = false; if (doc.note) { doc.note = null; renderTextBar(); } return; }
+    done = true;
+    input.disabled = true;
+    if (!(await canLeave())) { input.remove(); $('tilebtn').hidden = false; return; }
+    let r;
+    try { r = await host.post(`/api/tiles/${t.index}/rename`, { name }); } catch { r = { status: 0, body: { error: 'the editor is disconnected' } }; }
+    if (r.status !== 200 || r.body?.index == null) {
+      // stay in the field with the reason, so the name can be fixed
+      done = false; input.disabled = false; input.classList.add('bad');
+      input.title = r.body?.error || 'The tile could not be renamed.';
+      doc.note = input.title; renderTextBar(); input.focus();
+      return;
+    }
+    input.remove(); $('tilebtn').hidden = false;
+    doc.note = null;
+    carried = { history: doc.history, at: doc.at };
+    const i = r.body.index;
+    for (let k = 0; k < 40 && !state.tiles[i]; k++) await new Promise((res) => setTimeout(res, 50));
+    if (state.tiles[i]) await select(i, true);
+  };
+  input.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  };
+  input.oninput = () => { input.classList.remove('bad'); input.title = ''; };
+  input.onblur = () => finish(true);
+}
+$('tilebtn').ondblclick = (e) => { e.preventDefault(); closePopovers(); startRename(); };
 
 // ---- choosing a tile ---------------------------------------------------
 async function select(i, guarded = false) {
@@ -695,6 +742,7 @@ async function canLeave() {
 }
 
 let textToken = 0;
+let carried = null; // the undo history a rename brings to the renamed file
 async function loadText(file) {
   const t = tile();
   if (!t || /\.stl$/i.test(t.path)) { texts.clear(); state.textFor = null; clearDocumentHistory(); renderTextBar(); return; }
@@ -716,10 +764,12 @@ async function loadText(file) {
     doc.base = v.text;
     doc.conflict = null; doc.note = null;
     texts.show(v.file, v.text, v.writable);
-    if (fresh) resetHistory(v.text);
+    if (fresh && carried && carried.history[carried.at]?.text === v.text) {
+      doc.history = carried.history; doc.at = carried.at; renderHistory(); // a rename keeps its undo
+    } else if (fresh) resetHistory(v.text);
     else if (doc.history[doc.at]?.text !== v.text) record(v.text, 'disk'); // changed on disk: one more step
     doc.checked = v.text; doc.ok = !t.errors.length; doc.errors = []; doc.stack = null; // the build's plan is this text's
-    if (fresh) doc.map = null;
+    if (fresh) { doc.map = null; carried = null; }
     if (v.file === t.path && !doc.map) check(); // its map, for the overlay
     renderTextBar();
     markText();
@@ -731,7 +781,9 @@ async function loadText(file) {
 function renderTextBar() {
   const t = tile();
   const f = texts.file;
-  $('textpath').textContent = f ? `‎${f}` : '';
+  $('textpath').textContent = !f ? '' : f === t?.path
+    ? `${rootOf(t.root).label || 'Files'} › ${f.split(/[\\/:]/).pop()}`
+    : `‎${f}`;
   $('textpath').title = f || '';
   const st = $('textstate');
   st.replaceChildren();
@@ -851,7 +903,7 @@ $('mine-ok').onclick = async () => {
 // ---- the selection ----------------------------------------------------------
 function describe(w) {
   if (!w) return '';
-  if (w.tile) return `tile ${tile()?.name || ''}`.trim();
+  if (w.tile) return tile() ? `tile ${stem(tile())}` : 'tile';
   if (w.region != null) return `region ${w.region}`;
   if (w.line != null) return `line ${w.line}`;
   const it = stackItems()[w.entry];
@@ -1179,7 +1231,7 @@ function renderTitle() {
   }
   $('tilename').textContent = stem(t);
   $('tilewhere').textContent = rootOf(t.root).label || '';
-  $('tilebtn').title = t.name && t.name !== stem(t) ? `${t.path}\nthe document calls it “${t.name}”` : t.path;
+  $('tilebtn').title = renameable(t) ? `${t.path}\nDouble-click or F2 to rename` : t.path;
   document.title = `${stem(t)} · dharmatiles`;
   const p = t.plan;
   $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares · ${state.system === 'ol' ? 'OpenLOCK' : 'DungeonBlocks'}` : '';

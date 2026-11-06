@@ -32,7 +32,7 @@ fn rendered(d: &Diag) -> String {
 
 #[test]
 fn a_misspelt_look_points_at_its_line_with_a_hint() {
-    let e = errors("tile flat size=\"1x1\" {\n    stack {\n        grond\n    }\n}\n");
+    let e = errors("tile size=\"1x1\" {\n    stack {\n        grond\n    }\n}\n");
     assert_eq!(e.len(), 1);
     assert_eq!(e[0].location(), Some(("t.dtile".into(), 3, 9)));
     assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
@@ -47,16 +47,16 @@ fn a_misspelt_look_points_at_its_line_with_a_hint() {
 
 #[test]
 fn an_unknown_level_lists_the_levels() {
-    let e = errors("tile flat {\n  stack {\n    ground level=grund\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    ground level=grund\n  }\n}\n");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
-    let e = errors("tile flat {\n  stack {\n    ground level=lava\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    ground level=lava\n  }\n}\n");
     assert!(e[0].help.as_deref().unwrap().contains("wall-top (33.1 mm)"));
 }
 
 #[test]
 fn an_unknown_control_names_the_ones_there_are() {
-    let e = errors("tile flat {\n  stack {\n    ground bumpz=3\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    ground bumpz=3\n  }\n}\n");
     assert_eq!(e[0].code, "dt::unknown-control");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert!(
@@ -68,7 +68,7 @@ fn an_unknown_control_names_the_ones_there_are() {
 
 #[test]
 fn a_control_not_built_yet_is_checked_but_not_built() {
-    let text = "tile flat {\n  stack {\n    rock wear=worn\n  }\n}\n";
+    let text = "tile {\n  stack {\n    rock wear=worn\n  }\n}\n";
     let src = mem(&[("t.dtile", text)]);
     let c = check(&src, "t.dtile", &Options::default()).unwrap();
     assert_eq!(c.pending().len(), 1); // `wear`
@@ -139,19 +139,19 @@ fn use_paths_name_the_library_or_the_project() {
         ("proj/parts/raised.dtile", raised),
         (
             "proj/tiles/a.dtile",
-            "use \"parts/raised\" raised\ntile a { stack { raised } }\n",
+            "use \"parts/raised\" raised\ntile { stack { raised } }\n",
         ),
         (
             "proj/tiles/b.dtile",
-            "use \"lib:parts/raised\" raised\ntile b { stack { raised } }\n",
+            "use \"lib:parts/raised\" raised\ntile { stack { raised } }\n",
         ),
         (
             "proj/tiles/c.dtile",
-            "use \"../parts/raised\" raised\ntile c { stack { raised } }\n",
+            "use \"../parts/raised\" raised\ntile { stack { raised } }\n",
         ),
         (
             "proj/tiles/d.dtile",
-            "use \"./raised\" raised\ntile d { stack { raised } }\n",
+            "use \"./raised\" raised\ntile { stack { raised } }\n",
         ),
     ]);
     for (path, from) in [
@@ -180,7 +180,7 @@ fn use_paths_name_the_library_or_the_project() {
 fn definition_parameters_take_arguments_and_defaults() {
     let src = mem(&[(
         "t.dtile",
-        "define raised {\n  param by 2\n  stack { ground level=by }\n}\ntile t {\n  stack { raised by=6 }\n}\n",
+        "define raised {\n  param by 2\n  stack { ground level=by }\n}\ntile {\n  stack { raised by=6 }\n}\n",
     )]);
     let t = check(&src, "t.dtile", &Options::default())
         .unwrap()
@@ -194,14 +194,14 @@ fn definition_parameters_take_arguments_and_defaults() {
 
 #[test]
 fn kdl_syntax_errors_carry_their_place() {
-    let e = errors("tile flat {\n  stack {\n    ground level=5mm\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    ground level=5mm\n  }\n}\n");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert!(e[0].help.is_some());
 }
 
 #[test]
 fn a_bad_import_points_at_the_use_line() {
-    let e = errors("use \"lib:parts/nothing\" lawn\ntile flat { stack { ground } }\n");
+    let e = errors("use \"lib:parts/nothing\" lawn\ntile { stack { ground } }\n");
     assert_eq!(e[0].location().unwrap().1, 1);
     assert!(e[0].message.contains("nothing.dtile"));
 }
@@ -215,7 +215,7 @@ fn imports_inline_definitions_and_levels_resolve() {
         ),
         (
             "tiles/t.dtile",
-            "use \"../parts/flats\" raised\ntile t { levels foot=4; stack { raised } }\n",
+            "use \"../parts/flats\" raised\ntile { levels foot=4; stack { raised } }\n",
         ),
     ]);
     let c = check(&src, "tiles/t.dtile", &Options::default()).unwrap();
@@ -237,7 +237,7 @@ fn imports_inline_definitions_and_levels_resolve() {
 fn a_line_and_two_regions_make_a_step() {
     let src = mem(&[(
         "t.dtile",
-        r#"tile step size="1x1" seed=3 {
+        r#"tile size="1x1" seed=3 {
     line across { through west east }
     region low { bounded-by across; fill "0.5,0.25" }
     region high { bounded-by across; fill "0.5,0.75" }
@@ -273,7 +273,7 @@ fn a_line_and_two_regions_make_a_step() {
 #[test]
 fn an_unknown_region_is_refused() {
     let e = errors(
-        "tile t {\n  line across { through west east }\n  region a { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    ground in=b\n  }\n}\n",
+        "tile {\n  line across { through west east }\n  region a { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    ground in=b\n  }\n}\n",
     );
     assert_eq!(e[0].code, "dt::unknown-name");
     assert_eq!(e[0].location().unwrap().1, 5);
@@ -284,7 +284,7 @@ fn an_unknown_region_is_refused() {
 fn a_later_paint_removes_the_stones_it_covers() {
     let src = mem(&[(
         "t.dtile",
-        r#"tile pool size="2x2" seed=2 {
+        r#"tile size="2x2" seed=2 {
     line across { through west east }
     region low { bounded-by across; fill "1,0.5" }
     region high { bounded-by across; fill "1,1.5" }
@@ -317,7 +317,7 @@ fn a_later_paint_removes_the_stones_it_covers() {
 fn a_rock_placed_past_the_edge_is_refused() {
     let src = mem(&[(
         "t.dtile",
-        r#"tile r size="1x1" seed=1 {
+        r#"tile size="1x1" seed=1 {
     stack {
         ground
         rock at="0.05,0.5" size=10
@@ -339,7 +339,7 @@ fn a_rock_placed_past_the_edge_is_refused() {
 fn water_alone_builds_a_tile() {
     let src = mem(&[(
         "t.dtile",
-        r#"tile w size="1x1" seed=1 {
+        r#"tile size="1x1" seed=1 {
     stack { water }
 }
 "#,
@@ -350,7 +350,7 @@ fn water_alone_builds_a_tile() {
 
 #[test]
 fn a_seed_wobbles_the_lines_again() {
-    let text = r#"tile step size="1x1" seed=3 {
+    let text = r#"tile size="1x1" seed=3 {
     line across wobble=4 { through west east }
     region low { bounded-by across; fill "0.5,0.1" }
     region high { bounded-by across; fill "0.5,0.9" }
@@ -394,7 +394,7 @@ fn the_floor_and_wall_tiles_build_with_grass() {
 
 #[test]
 fn a_wall_off_its_area_is_refused() {
-    let text = "tile t size=\"1x1\" {\n  line across { through west east }\n  region south { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    dirt\n    wall in=south along=north style=cut-stone\n  }\n}\n";
+    let text = "tile size=\"1x1\" {\n  line across { through west east }\n  region south { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    dirt\n    wall in=south along=north style=cut-stone\n  }\n}\n";
     let src = mem(&[("t.dtile", text)]);
     let Err(e) = build(&src, "t.dtile", &Options::default()) else {
         panic!("built a wall off its area");
@@ -407,7 +407,7 @@ fn a_wall_off_its_area_is_refused() {
 fn a_wall_in_a_definition_needs_along_from_the_call() {
     let def = "define ruin-corner {\n    stack {\n        wall style=cut-stone\n    }\n}\n";
     let without = format!(
-        "{def}tile t size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner\n    }}\n}}\n"
+        "{def}tile size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner\n    }}\n}}\n"
     );
     let e = errors(&without);
     assert!(
@@ -416,7 +416,7 @@ fn a_wall_in_a_definition_needs_along_from_the_call() {
         "{e:?}"
     );
     let with = format!(
-        "{def}tile t size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner along=\"north\"\n    }}\n}}\n"
+        "{def}tile size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner along=\"north\"\n    }}\n}}\n"
     );
     let src = mem(&[("t.dtile", &with)]);
     assert!(check(&src, "t.dtile", &Options::default()).is_ok());

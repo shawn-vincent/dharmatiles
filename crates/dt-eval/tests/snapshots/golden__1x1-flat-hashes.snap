@@ -4,7 +4,7 @@ expression: hashes(&b)
 ---
 0ea44dd159a8fbd3  plan
 1fbe2d61b0d89bc9  surface
-abc26af752e9ad33  ground:tile/flat/ground
-9fd12c9bda20b6e3  connector:tile/flat/connector
+abc26af752e9ad33  ground:tile/ground
+9fd12c9bda20b6e3  connector:tile/connector
 ec96c3a610c4c0d7  union
 abd50db1bf01d97b  export

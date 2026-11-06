@@ -22,7 +22,8 @@ dharmatiles watch my-tile.dtile                              # rebuild on every 
 dharmatiles preview my-tile.dtile --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl
 dharmatiles                                                 # no command = preview --open: browse My tiles ($DT_HOME, else ~/dharmatiles) and the Library; folders as args work too
 
-cargo test --release --workspace            # all tests (insta golden hashes included)
+cargo test --release --workspace            # all tests (insta golden hashes included), under 5 minutes
+cargo test --release -p dt-eval --test openlock -- --ignored   # release check: every library tile through the gate on both systems
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
 cargo xtask sheet <tile|name> [--seeds …]   # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
@@ -65,12 +66,12 @@ Also: `xtask/` (`docs`, `pictures`, `sheet`), `library/` (`.dtile` documents: `t
 
 `document -> dt-doc (decode, check against the element schema) -> dt-eval::check (plan: surfaces first, then lift, then solids, in the order each element's reads and writes allow) -> build each element into the Scene -> union -> audit -> STL`. An element says what it reads and writes in `Element::plan`; the scheduler orders the stack and refuses reads nothing can satisfy (a grass line listed before the rocks it must grow round is fine: the plan runs the rocks first).
 
-Every leaf solid takes a slot reserved in sequence, so its source id (and so the material of every output triangle, and every hash) is fixed by index whatever thread builds it. Builds are identical at 1, 4 and 16 threads; the golden tests check it (`crates/dt-eval/tests/golden.rs`, insta snapshots in `crates/dt-eval/tests/snapshots/`).
+Every leaf solid takes a slot reserved in sequence, so its source id (and so the material of every output triangle, and every hash) is fixed by index whatever thread builds it. Builds are identical whatever the threads; the golden tests check it by building each golden tile again on two threads (`crates/dt-eval/tests/golden.rs`, insta snapshots in `crates/dt-eval/tests/snapshots/`).
 
 ### Tile documents
 
 ```kdl
-tile water+grass size="1x1" seed=97 {
+tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }

@@ -1,6 +1,6 @@
 // A single tall pillar of rock.
 
-tile "1x1-cliff-spire" size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about "A single tall pillar of rock."
 
     stack {

@@ -1,7 +1,7 @@
 // Water in the lower half, a meadow bank in the upper, with a wandering
 // shore.
 
-tile water+grass size="1x1" seed=97 {
+tile size="1x1" seed=97 {
     about "Water in the lower half, a meadow bank in the upper, with a wandering shore."
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }

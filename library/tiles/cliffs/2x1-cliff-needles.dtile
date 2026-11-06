@@ -1,6 +1,6 @@
 // A cluster of thin pillars.
 
-tile "2x1-cliff-needles" size="2x1" seed=1 {
+tile size="2x1" seed=1 {
     about "A cluster of thin pillars."
 
     stack {

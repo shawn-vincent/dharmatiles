@@ -1,6 +1,6 @@
 // Water in a T, open to the west, east and north edges.
 
-tile water-corridor-t+soil size="1x1" seed=56 {
+tile size="1x1" seed=56 {
     about "Water in a T, open to the west, east and north edges."
     line shore-south wobble=1.5 { through "0,0.43" "1,0.43" }
     line shore-northwest wobble=1.5 { through "0,0.57" "0.44,0.58" "0.43,1" }

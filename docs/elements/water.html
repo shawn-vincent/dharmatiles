@@ -57,14 +57,14 @@
 
 <h2 id="use">Using it in a tile</h2>
 <p>A pool is a bed of <a href="ground.html"><code>ground</code></a> below the water level, then <code>water</code>, which fills everything lower than its level:</p>
-<pre><code>tile water size="1x1" seed=7 {
+<pre><code>tile size="1x1" seed=7 {
     stack {
         ground level="water - 2.2"      // the bed, 2.2 mm under the water
         water                           // fills to the water level, 2.6 mm
     }
 }</code></pre>
 <p>A shore is a line dividing the tile into a pool and a bank. Rocks in the pool send chop and leave a wake:</p>
-<pre><code>tile water+grass size="1x1" seed=97 {
+<pre><code>tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }

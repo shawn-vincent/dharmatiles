@@ -2,7 +2,7 @@
 // 1×1, ruined and crenellated: exercises corners, battlements, ruin,
 // hearting and foot rubble in the golden tests.
 
-tile wall-cut-stone-corner size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about "A ruined, crenellated cut-stone corner on bare dirt, for golden tests."
     stack {
         dirt

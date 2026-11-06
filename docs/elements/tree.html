@@ -51,7 +51,7 @@
 <p>A tree goes anywhere in its area, kept a crown's radius from the tile edge, or where <code>at=</code> says. Grass grows round the trunk wherever the grass is listed:</p>
 <pre><code>use "parts/grass" long-grass
 
-tile grass-tree size="2x2" seed=84 {
+tile size="2x2" seed=84 {
     stack {
         ground
         long-grass
@@ -65,7 +65,7 @@ tile grass-tree size="2x2" seed=84 {
 <p><code>leaves clumps-only</code> leaves off the separate leaves; <code>leaves bare</code> makes a winter tree. The six branching knobs (<code>branch split=… eagerness=…</code>) are expert controls, allowed only in a parts file:</p>
 <pre><code>use "parts/trees" oak
 
-tile grove size="2x2" seed=3 {
+tile size="2x2" seed=3 {
     stack {
         dirt
         scatter count=2 { oak }         // a definition whose stack is one thing is a thing

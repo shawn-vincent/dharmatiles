@@ -2,7 +2,7 @@
 
 use "parts/grass" long-grass
 
-tile grass-tree size="1x1" seed=42 {
+tile size="1x1" seed=42 {
     stack {
         ground                          // flat, at the ground level (5 mm)
         scatter per-square=3 gap=7 {    // rocks first: grass grows round them

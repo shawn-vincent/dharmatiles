@@ -3,7 +3,7 @@
 
 use "parts/grass" lawn
 
-tile grass-flowers size="1x1" seed=7 {
+tile size="1x1" seed=7 {
     about "A meadow with four wildflowers."
     stack {
         dirt

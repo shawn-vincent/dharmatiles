@@ -1,4 +1,4 @@
-tile tree size="1x1" seed=42 {
+tile size="1x1" seed=42 {
     about "One tree on flat ground: the 1×1 grass-tree tile without its grass and rocks."
     stack {
         ground

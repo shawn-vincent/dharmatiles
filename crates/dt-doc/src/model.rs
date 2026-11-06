@@ -110,7 +110,7 @@ pub struct TileHeader {
 pub enum DefKind {
     /// `define name { … }`
     Define,
-    /// `tile name size="2x1" seed=… { … }`
+    /// `tile size="2x1" seed=… { … }` (named by its file)
     Tile(TileHeader),
 }
 
@@ -265,7 +265,7 @@ pub struct Entry {
     /// A scatter's things, or the scatters inside a surface.
     pub children: Vec<Entry>,
     /// The path that addresses this node in [`crate::edit`], such as
-    /// `["tile cliff-run", "stack", "scatter#2", "boulder"]`.
+    /// `["tile", "stack", "scatter#2", "boulder"]`.
     pub path: Vec<String>,
     /// The whole node.
     pub span: SourceSpan,

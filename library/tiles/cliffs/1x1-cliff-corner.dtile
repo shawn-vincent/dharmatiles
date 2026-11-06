@@ -1,6 +1,6 @@
 // Rock round the north-west corner: two faces on show.
 
-tile "1x1-cliff-corner" size="1x1" seed=2 {
+tile size="1x1" seed=2 {
     about "Rock round the north-west corner: two faces on show."
 
     stack {

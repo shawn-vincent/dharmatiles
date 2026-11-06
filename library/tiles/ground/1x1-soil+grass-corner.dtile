@@ -1,4 +1,4 @@
-tile soil+grass-corner size="1x1" seed=99 {
+tile size="1x1" seed=99 {
     about "A patch of grass in the south-west corner; the rest is bare dirt."
     line margin wobble=2.5 { through "0,0.5" "0.5,0" }
     region patch { bounded-by margin; fill "0.15,0.15" }

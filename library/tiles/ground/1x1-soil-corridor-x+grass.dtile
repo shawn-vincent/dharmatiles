@@ -1,4 +1,4 @@
-tile soil-corridor-x+grass size="1x1" seed=105 {
+tile size="1x1" seed=105 {
     about "A dirt path crossing four ways through a meadow."
     line southwest-margin wobble=2.2 { through "0,0.33" "0.33,0" }
     line northwest-margin wobble=2.2 { through "0,0.67" "0.33,1" }

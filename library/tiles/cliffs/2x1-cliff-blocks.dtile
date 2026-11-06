@@ -1,6 +1,6 @@
 // A cliff run of big squared blocks, bare on top.
 
-tile "2x1-cliff-blocks" size="2x1" seed=2 {
+tile size="2x1" seed=2 {
     about "A cliff run of big squared blocks, bare on top."
 
     stack {

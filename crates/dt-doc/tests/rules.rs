@@ -28,10 +28,10 @@ fn assert_fails(text: &str, code: &str, want: &str) {
 
 #[test]
 fn sizes_are_mm_and_h_is_opt_in() {
-    let e = first("tile t { stack { tree height=40 } }");
+    let e = first("tile { stack { tree height=40 } }");
     let n = e.value("height").unwrap().num().unwrap();
     assert_eq!((n.unit, n.bounds(&none).unwrap()), (None, (40.0, 40.0)));
-    let e = first("tile t { stack { tree height=(h)1.2 } }");
+    let e = first("tile { stack { tree height=(h)1.2 } }");
     let n = e.value("height").unwrap().num().unwrap();
     assert_eq!(n.unit, Some(Unit::H));
     assert!((n.bounds(&none).unwrap().0 - 1.2 * schema::H_MM).abs() < 1e-9);
@@ -40,23 +40,23 @@ fn sizes_are_mm_and_h_is_opt_in() {
 #[test]
 fn levels_are_named_or_mm_or_expressions() {
     for text in [
-        "tile t { stack { dirt level=ground } }",
-        "tile t { stack { dirt level=wall-top } }",
-        "tile t { stack { dirt level=4 } }",
-        "tile t { stack { dirt level=\"ground - 1\" } }",
-        "tile t { levels foot=4; stack { dirt level=foot } }",
-        "tile t { levels path=\"ground - 1\"; stack { dirt level=path } }",
+        "tile { stack { dirt level=ground } }",
+        "tile { stack { dirt level=wall-top } }",
+        "tile { stack { dirt level=4 } }",
+        "tile { stack { dirt level=\"ground - 1\" } }",
+        "tile { levels foot=4; stack { dirt level=foot } }",
+        "tile { levels path=\"ground - 1\"; stack { dirt level=path } }",
     ] {
         snippet(text);
     }
     assert_fails(
-        "tile t { stack { dirt level=grund } }",
+        "tile { stack { dirt level=grund } }",
         "dt::unknown-name",
         "did you mean `ground`?",
     );
     // A level name is not a size.
     assert_fails(
-        "tile t { stack { tree height=ground } }",
+        "tile { stack { tree height=ground } }",
         "dt::unknown-name",
         "no parameter is called `ground`",
     );
@@ -67,10 +67,10 @@ fn levels_are_named_or_mm_or_expressions() {
 #[test]
 fn standard_levels_need_no_use_line() {
     let k = dt_doc::Known::standard();
-    dt_doc::decode("t.dtile", "tile t { stack { dirt level=edge } }", &k).unwrap();
+    dt_doc::decode("t.dtile", "tile { stack { dirt level=edge } }", &k).unwrap();
     // Without the prelude the names are unknown.
     let bare = dt_doc::Known::new();
-    assert!(dt_doc::decode("t.dtile", "tile t { stack { dirt level=edge } }", &bare).is_err());
+    assert!(dt_doc::decode("t.dtile", "tile { stack { dirt level=edge } }", &bare).is_err());
 }
 
 #[test]
@@ -79,17 +79,17 @@ fn standard_levels_are_in_mm_and_listed_for_an_unknown_name() {
     let mm = |n: &str| k.levels().iter().find(|(k, _)| k == n).map(|(_, v)| *v);
     assert_eq!(mm("ground"), Some(5.0));
     assert_eq!(mm("wall-top"), Some(33.1));
-    let e = dt_doc::decode("t.dtile", "tile t { stack { dirt level=lava } }", &k).unwrap_err();
+    let e = dt_doc::decode("t.dtile", "tile { stack { dirt level=lava } }", &k).unwrap_err();
     let help = e[0].help.as_deref().unwrap();
     assert!(help.contains("wall-top (33.1 mm)"), "{help}");
     // a near miss is suggested on its own
-    let e = dt_doc::decode("t.dtile", "tile t { stack { dirt level=grund } }", &k).unwrap_err();
+    let e = dt_doc::decode("t.dtile", "tile { stack { dirt level=grund } }", &k).unwrap_err();
     assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
 }
 
 #[test]
 fn a_tile_may_override_a_standard_level() {
-    snippet("tile t { levels ground=6; stack { dirt level=ground } }");
+    snippet("tile { levels ground=6; stack { dirt level=ground } }");
 }
 
 // ---- R6.5 / D2: every written size scales; recorded as metadata ---------
@@ -114,7 +114,7 @@ fn scaling_is_recorded_per_control() {
         grass.control("clearings").unwrap().scaling(),
         Scaling::Squares
     );
-    let e = first("tile t { stack { tree { leaf length=4.5 } } }");
+    let e = first("tile { stack { tree { leaf length=4.5 } } }");
     let s = e.control("leaf").unwrap();
     assert_eq!(s.subs[0].control.unwrap().scaling(), Scaling::Photocopy);
 }
@@ -123,14 +123,14 @@ fn scaling_is_recorded_per_control() {
 
 #[test]
 fn line_and_child_forms_decode_the_same() {
-    let a = first("tile t { stack { cliff along=north height=35 } }");
-    let b = first("tile t { stack { cliff along=north { height 35 } } }");
+    let a = first("tile { stack { cliff along=north height=35 } }");
+    let b = first("tile { stack { cliff along=north { height 35 } } }");
     assert_eq!(a.value("height"), b.value("height"));
     assert_eq!(a.control("height").unwrap().form, Form::Property);
     assert_eq!(b.control("height").unwrap().form, Form::Child);
     // Words, and place words, too.
-    let a = first("tile t { stack { cliff along=north rock=blocks } }");
-    let b = first("tile t { stack { cliff { along north; rock blocks } } }");
+    let a = first("tile { stack { cliff along=north rock=blocks } }");
+    let b = first("tile { stack { cliff { along north; rock blocks } } }");
     assert_eq!(a.value("rock"), b.value("rock"));
     assert_eq!(a.place.along.unwrap().value, b.place.along.unwrap().value);
 }
@@ -138,7 +138,7 @@ fn line_and_child_forms_decode_the_same() {
 #[test]
 fn a_control_is_written_once() {
     assert_fails(
-        "tile t { stack { cliff along=north height=35 { height 40 } } }",
+        "tile { stack { cliff along=north height=35 { height 40 } } }",
         "dt::duplicate",
         "`height` is set twice",
     );
@@ -147,17 +147,17 @@ fn a_control_is_written_once() {
 #[test]
 fn groups_are_child_lines() {
     assert_fails(
-        "tile t { stack { tree leaf=4 } }",
+        "tile { stack { tree leaf=4 } }",
         "dt::group",
         "`leaf` is a group",
     );
     assert_fails(
-        "tile t { stack { tree { leaf 4.5 } } }",
+        "tile { stack { tree { leaf 4.5 } } }",
         "dt::group",
         "has no value of its own",
     );
     // A control with a value and sub-controls: ledges 1 height="40%".
-    let e = first("tile t { stack { cliff along=north { ledges 1 height=\"40%\" } } }");
+    let e = first("tile { stack { cliff along=north { ledges 1 height=\"40%\" } } }");
     let l = e.control("ledges").unwrap();
     assert_eq!(
         l.value
@@ -182,25 +182,25 @@ fn groups_are_child_lines() {
         (0.4, 0.4)
     );
     // bumps: a value, or up/down.
-    first("tile t { stack { ground bumps=3 } }");
-    first("tile t { stack { ground { bumps up=3 down=1 } } }");
+    first("tile { stack { ground bumps=3 } }");
+    first("tile { stack { ground { bumps up=3 down=1 } } }");
 }
 
 // ---- R6.3: units are not written ----------------------------------------
 
 #[test]
 fn mm_annotation_is_an_optional_check() {
-    let e = first("tile t { stack { tree { leaf length=(mm)4.5 } } }");
+    let e = first("tile { stack { tree { leaf length=(mm)4.5 } } }");
     let n = e.sub("leaf", "length").unwrap().num().unwrap();
     assert_eq!(n.unit, Some(Unit::Mm));
     assert_eq!(n.bounds(&none).unwrap(), (4.5, 4.5));
     assert_fails(
-        "tile t { stack { tree { crown clumps=(mm)30 } } }",
+        "tile { stack { tree { crown clumps=(mm)30 } } }",
         "dt::unit",
         "(mm) and (h) are for sizes and levels",
     );
     assert_fails(
-        "tile t { stack { tree height=(cm)4 } }",
+        "tile { stack { tree height=(cm)4 } }",
         "dt::unit",
         "units are not written",
     );
@@ -209,12 +209,12 @@ fn mm_annotation_is_an_optional_check() {
 #[test]
 fn unit_suffixes_are_refused_with_a_hint() {
     assert_fails(
-        "tile t { stack { tree { leaf length=\"4.5mm\" } } }",
+        "tile { stack { tree { leaf length=\"4.5mm\" } } }",
         "dt::expr",
         "`4.5mm` is just `4.5`",
     );
     assert_fails(
-        "tile t { stack { tree { leaf length=4.5mm } } }",
+        "tile { stack { tree { leaf length=4.5mm } } }",
         "dt::syntax",
         "units are not written: write 4.5",
     );
@@ -224,7 +224,7 @@ fn unit_suffixes_are_refused_with_a_hint() {
 
 #[test]
 fn ranges_and_percents_are_quoted() {
-    let e = first("tile t { stack { grass cover=\"85%\" length=\"8..14\" } }");
+    let e = first("tile { stack { grass cover=\"85%\" length=\"8..14\" } }");
     assert_eq!(
         e.value("cover")
             .unwrap()
@@ -244,12 +244,12 @@ fn ranges_and_percents_are_quoted() {
         (8.0, 14.0)
     );
     assert_fails(
-        "tile t { stack { grass cover=85% } }",
+        "tile { stack { grass cover=85% } }",
         "dt::syntax",
         "\"85%\"",
     );
     assert_fails(
-        "tile t { stack { grass length=8..14 } }",
+        "tile { stack { grass length=8..14 } }",
         "dt::syntax",
         "\"8..14\"",
     );
@@ -258,17 +258,17 @@ fn ranges_and_percents_are_quoted() {
 #[test]
 fn shares_are_percents_and_sizes_are_not() {
     assert_fails(
-        "tile t { stack { rock buried=0.3 } }",
+        "tile { stack { rock buried=0.3 } }",
         "dt::percent",
         "write `buried=\"30%\"`",
     );
     assert_fails(
-        "tile t { stack { rock size=\"20%\" } }",
+        "tile { stack { rock size=\"20%\" } }",
         "dt::percent",
         "not a percent",
     );
     assert_fails(
-        "tile t { stack { rock size=\"8..2\" } }",
+        "tile { stack { rock size=\"8..2\" } }",
         "dt::range",
         "low end first",
     );
@@ -276,13 +276,13 @@ fn shares_are_percents_and_sizes_are_not() {
 
 #[test]
 fn skew_is_mostly_not_caret() {
-    let e = first("tile t { stack { scatter count=3 mostly=large { stone size=\"1..6\" } } }");
+    let e = first("tile { stack { scatter count=3 mostly=large { stone size=\"1..6\" } } }");
     assert_eq!(
         e.value("mostly").unwrap().word().unwrap().sets,
         &[("exponent", 0.5)]
     );
     assert_fails(
-        "tile t { stack { scatter count=3 { stone size=\"1..6^2\" } } }",
+        "tile { stack { scatter count=3 { stone size=\"1..6^2\" } } }",
         "dt::expr",
         "mostly=small",
     );
@@ -293,22 +293,19 @@ fn skew_is_mostly_not_caret() {
 #[test]
 fn old_words_say_what_replaced_them() {
     for (text, want) in [
-        ("tile t { stack { hills } }", "`hills` is now `ground`"),
-        ("tile t { stack { meadow } }", "`meadow` is now `grass`"),
+        ("tile { stack { hills } }", "`hills` is now `ground`"),
+        ("tile { stack { meadow } }", "`meadow` is now `grass`"),
         (
-            "tile t { stack { wall along=north family=brick } }",
+            "tile { stack { wall along=north family=brick } }",
             "`family` is now `style`",
         ),
+        ("tile { stack { dirt self=yard } }", "`self=` is now `in=`"),
         (
-            "tile t { stack { dirt self=yard } }",
-            "`self=` is now `in=`",
-        ),
-        (
-            "tile t { stack { dirt { bank near=cliff } } }",
+            "tile { stack { dirt { bank near=cliff } } }",
             "`near=` is now `against=`",
         ),
-        ("tile t { stack { scree } }", "scatter against=cliff"),
-        ("tile t cols=2 { }", "size=\\\"2x1\\\""),
+        ("tile { stack { scree } }", "scatter against=cliff"),
+        ("tile cols=2 { }", "size=\\\"2x1\\\""),
         ("heights { edge 3.4 }", "`heights` is now `levels`"),
     ] {
         let (_, shown) = fails(text);
@@ -324,24 +321,24 @@ fn old_words_say_what_replaced_them() {
 
 #[test]
 fn words_keep_their_numbers_and_numbers_are_accepted() {
-    let e = first("tile t { stack { cliff along=north { stone-size massive } } }");
+    let e = first("tile { stack { cliff along=north { stone-size massive } } }");
     let w = e.value("stone-size").unwrap().word().unwrap();
     assert_eq!((w.word, w.sets), ("massive", &[("stone-size", 1.35)][..]));
-    let e = first("tile t { stack { cliff along=north { stone-size \"135%\" } } }");
+    let e = first("tile { stack { cliff along=north { stone-size \"135%\" } } }");
     let n = e.value("stone-size").unwrap().num().unwrap();
     assert!((n.bounds(&none).unwrap().0 - 1.35).abs() < 1e-12);
     // Weights instead of a word.
-    let e = first("tile t { stack { cliff along=north { rock columns=50 blocks=50 } } }");
+    let e = first("tile { stack { cliff along=north { rock columns=50 blocks=50 } } }");
     assert!(e.value("rock").is_none());
     assert_eq!(e.control("rock").unwrap().subs.len(), 2);
     // A misspelt word suggests the right one.
     assert_fails(
-        "tile t { stack { tree { crown shape=rund } } }",
+        "tile { stack { tree { crown shape=rund } } }",
         "dt::choice",
         "did you mean `round`?",
     );
     // Wall height: a word or mm.
-    let e = first("tile t { stack { wall along=south { height 20 } } }");
+    let e = first("tile { stack { wall along=south { height 20 } } }");
     assert!(e.value("height").unwrap().num().is_some());
 }
 
@@ -351,17 +348,17 @@ fn words_keep_their_numbers_and_numbers_are_accepted() {
 fn branch_knobs_are_for_parts_files_only() {
     for b in ["open", "normal", "dense"] {
         first(&format!(
-            "tile t {{ stack {{ tree {{ crown branching={b} }} }} }}"
+            "tile {{ stack {{ tree {{ crown branching={b} }} }} }}"
         ));
     }
     assert_fails(
-        "tile t { stack { tree { branch split=30 } } }",
+        "tile { stack { tree { branch split=30 } } }",
         "dt::expert",
         "crown branching=open|normal|dense",
     );
     snippet("define my-tree { stack { tree { branch split=30 eagerness=0.5 } } }");
     assert_fails(
-        "tile t { stack { tree { debug attractors=#true } } }",
+        "tile { stack { tree { debug attractors=#true } } }",
         "dt::unknown-control",
         "--show attractors",
     );
@@ -372,17 +369,17 @@ fn branch_knobs_are_for_parts_files_only() {
 #[test]
 fn regions_only_on_divided_tiles() {
     assert_fails(
-        "tile t { region all { fill \"0.5,0.5\" }; stack { dirt in=all } }",
+        "tile { region all { fill \"0.5,0.5\" }; stack { dirt in=all } }",
         "dt::region",
         "the whole tile is already the default area",
     );
     assert_fails(
-        "tile t { stack { dirt in=verge } }",
+        "tile { stack { dirt in=verge } }",
         "dt::unknown-name",
         "leave `in=` out",
     );
     assert_fails(
-        "tile t { line l { through west east }; region r { bounded-by l } }",
+        "tile { line l { through west east }; region r { bounded-by l } }",
         "dt::region",
         "fill point",
     );
@@ -390,58 +387,54 @@ fn regions_only_on_divided_tiles() {
 
 #[test]
 fn a_tile_is_1x1_unless_it_says() {
-    let doc = snippet("tile t { stack { ground } }");
+    let doc = snippet("tile { stack { ground } }");
     let h = doc.tile().unwrap().header().unwrap();
     assert_eq!((h.cols, h.rows, h.seed), (1, 1, None));
-    let doc = snippet("tile t size=\"3x2\" seed=9 { }");
+    let doc = snippet("tile size=\"3x2\" seed=9 { }");
     let h = doc.tile().unwrap().header().unwrap();
     assert_eq!((h.cols, h.rows, h.seed), (3, 2, Some(9)));
-    assert_fails("tile t size=\"3 by 2\" { }", "dt::tile", "columns by rows");
-    assert_fails("tile t size=2x2 { }", "dt::syntax", "\"2x2\"");
+    assert_fails("tile size=\"3 by 2\" { }", "dt::tile", "columns by rows");
+    assert_fails("tile size=2x2 { }", "dt::syntax", "\"2x2\"");
 }
 
 #[test]
 fn a_tile_is_at_most_64_squares_a_side() {
-    let h = snippet("tile t size=\"64x64\" { }")
+    let h = snippet("tile size=\"64x64\" { }")
         .tile()
         .unwrap()
         .header()
         .unwrap();
     assert_eq!((h.cols, h.rows), (64, 64));
-    assert_fails("tile t size=\"65x1\" { }", "dt::tile", "at most 64 squares");
+    assert_fails("tile size=\"65x1\" { }", "dt::tile", "at most 64 squares");
     assert_fails(
-        "tile t size=\"1x100000\" { }",
+        "tile size=\"1x100000\" { }",
         "dt::tile",
         "at most 64 squares",
     );
-    assert_fails(
-        "tile t size=\"33554432x1\" { }",
-        "dt::tile",
-        "several tiles",
-    );
+    assert_fails("tile size=\"33554432x1\" { }", "dt::tile", "several tiles");
 }
 
 // ---- D6 / V4: edges, edge paths, side= -----------------------------------
 
 #[test]
 fn edges_and_edge_paths() {
-    let e = first("tile t { stack { wall along=\"south east north\" } }");
+    let e = first("tile { stack { wall along=\"south east north\" } }");
     assert_eq!(
         e.place.along.unwrap().value,
         Along::Edges(vec![Edge::South, Edge::East, Edge::North])
     );
     assert_fails(
-        "tile t { stack { wall along=\"north south\" } }",
+        "tile { stack { wall along=\"north south\" } }",
         "dt::place",
         "don't meet at a corner",
     );
     assert_fails(
-        "tile t { stack { wall along=nort } }",
+        "tile { stack { wall along=nort } }",
         "dt::unknown-name",
         "did you mean `north`?",
     );
     assert_fails(
-        "tile t { stack { wall } }",
+        "tile { stack { wall } }",
         "dt::missing-control",
         "`wall` needs `along=`",
     );
@@ -449,15 +442,15 @@ fn edges_and_edge_paths() {
 
 #[test]
 fn side_is_for_drawn_lines() {
-    let e = first("tile t { line l { through west east }; stack { wall along=l side=left } }");
+    let e = first("tile { line l { through west east }; stack { wall along=l side=left } }");
     assert_eq!(e.place.side.unwrap().value, Side::Left);
     assert_fails(
-        "tile t { stack { wall along=north side=left } }",
+        "tile { stack { wall along=north side=left } }",
         "dt::place",
         "always stands inside the tile",
     );
     assert_fails(
-        "tile t { line l { through west east }; stack { wall along=l side=middle } }",
+        "tile { line l { through west east }; stack { wall along=l side=middle } }",
         "dt::choice",
         "left, right or centre",
     );
@@ -466,7 +459,7 @@ fn side_is_for_drawn_lines() {
 #[test]
 fn a_line_cannot_take_an_edge_name() {
     assert_fails(
-        "tile t { line north { through west east } }",
+        "tile { line north { through west east } }",
         "dt::line",
         "tile edge",
     );
@@ -476,26 +469,26 @@ fn a_line_cannot_take_an_edge_name() {
 
 #[test]
 fn points_are_pairs_corners_and_edges() {
-    let e = first("tile t { stack { tree at=\"0.5,0.5\" } }");
+    let e = first("tile { stack { tree at=\"0.5,0.5\" } }");
     assert!(matches!(e.place.at.unwrap().value, Point::Pair { .. }));
-    let e = first("tile t { stack { tree at=north-west } }");
+    let e = first("tile { stack { tree at=north-west } }");
     assert_eq!(e.place.at.unwrap().value, Point::Corner(Corner::NorthWest));
-    let e = first("tile t { stack { tree at=south } }");
+    let e = first("tile { stack { tree at=south } }");
     assert_eq!(e.place.at.unwrap().value, Point::Edge(Edge::South));
-    assert_fails("tile t { stack { tree at=\"1 1\" } }", "dt::point", "comma");
+    assert_fails("tile { stack { tree at=\"1 1\" } }", "dt::point", "comma");
     assert_fails(
-        "tile t { stack { tree at=\"2,0.5\" } }",
+        "tile { stack { tree at=\"2,0.5\" } }",
         "dt::point",
         "off the tile",
     );
-    assert_fails("tile t { stack { tree at=1 } }", "dt::point", "quoted pair");
+    assert_fails("tile { stack { tree at=1 } }", "dt::point", "quoted pair");
 }
 
 // ---- D12 / V10: a range for at=, none for anywhere -----------------------
 
 #[test]
 fn at_may_be_a_range_or_absent() {
-    let doc = snippet("tile t size=\"2x2\" { stack { tree at=\"0.6..1.4,0.6..1.4\"; rock } }");
+    let doc = snippet("tile size=\"2x2\" { stack { tree at=\"0.6..1.4,0.6..1.4\"; rock } }");
     let s = &doc.tile().unwrap().stack;
     let at = &s[0].place.at.as_ref().unwrap().value;
     assert!(at.is_range());
@@ -508,17 +501,17 @@ fn at_may_be_a_range_or_absent() {
 #[test]
 fn a_thing_is_one() {
     assert_fails(
-        "tile t { stack { tree count=3 } }",
+        "tile { stack { tree count=3 } }",
         "dt::unknown-control",
         "scatter count=… { tree }",
     );
     assert_fails(
-        "tile t { stack { rock per-square=3 } }",
+        "tile { stack { rock per-square=3 } }",
         "dt::unknown-control",
         "a scatter's job",
     );
     assert_fails(
-        "tile t { stack { tree along=north } }",
+        "tile { stack { tree along=north } }",
         "dt::place",
         "scatter along=",
     );
@@ -527,7 +520,7 @@ fn a_thing_is_one() {
 #[test]
 fn scatter_owns_placement_and_mixes_by_weight() {
     let e = first(
-        "tile t { stack { scatter per-square=6 mostly=small { boulder size=\"2..8\" weight=2; pebble } } }",
+        "tile { stack { scatter per-square=6 mostly=small { boulder size=\"2..8\" weight=2; pebble } } }",
     );
     assert_eq!(e.children.len(), 2);
     assert_eq!(e.children[0].place.weight.as_ref().unwrap().value, 2.0);
@@ -535,7 +528,7 @@ fn scatter_owns_placement_and_mixes_by_weight() {
     assert_eq!(e.kind, Kind::Solid);
     // A defined thing can be scattered, and placed alone.
     let doc = snippet(
-        "use \"parts/trees\" oak\ntile t size=\"2x2\" { stack { scatter count=2 { oak }; oak at=\"1,1\" height=60 } }",
+        "use \"parts/trees\" oak\ntile size=\"2x2\" { stack { scatter count=2 { oak }; oak at=\"1,1\" height=60 } }",
     );
     let s = &doc.tile().unwrap().stack;
     assert_eq!(s[0].kind, Kind::Solid);
@@ -554,45 +547,42 @@ fn scatter_owns_placement_and_mixes_by_weight() {
 fn scatter_rules() {
     for (text, want) in [
         (
-            "tile t { stack { scatter { rock } } }",
+            "tile { stack { scatter { rock } } }",
             "a scatter says how many",
         ),
         (
-            "tile t { stack { scatter count=1 { rock } } }",
+            "tile { stack { scatter count=1 { rock } } }",
             "for more than one",
         ),
         (
-            "tile t { stack { scatter count=3 per-square=2 { rock } } }",
+            "tile { stack { scatter count=3 per-square=2 { rock } } }",
             "both say how many",
         ),
         (
-            "tile t { stack { scatter count=3 spread=5 { rock } } }",
+            "tile { stack { scatter count=3 spread=5 { rock } } }",
             "clusters round an `at=`",
         ),
         (
-            "tile t { stack { scatter count=3 reach=5 { rock } } }",
+            "tile { stack { scatter count=3 reach=5 { rock } } }",
             "`against=`",
         ),
-        ("tile t { stack { scatter count=3 } }", "children say what"),
+        ("tile { stack { scatter count=3 } }", "children say what"),
         (
-            "tile t { stack { scatter count=3 { dirt } } }",
+            "tile { stack { scatter count=3 { dirt } } }",
             "can't be scattered",
         ),
         (
-            "tile t { stack { scatter count=3 { rock at=\"0.5,0.5\" } } }",
+            "tile { stack { scatter count=3 { rock at=\"0.5,0.5\" } } }",
             "placed by its scatter",
         ),
-        ("tile t { stack { rock weight=2 } }", "share of the mix"),
+        ("tile { stack { rock weight=2 } }", "share of the mix"),
+        ("tile { stack { tree { rock } } }", "can't go inside `tree`"),
         (
-            "tile t { stack { tree { rock } } }",
-            "can't go inside `tree`",
-        ),
-        (
-            "tile t { stack { dirt { rock } } }",
+            "tile { stack { dirt { rock } } }",
             "things on a surface go in a scatter",
         ),
         (
-            "tile t { stack { scatter count=2.5 { rock } } }",
+            "tile { stack { scatter count=2.5 { rock } } }",
             "count of whole things",
         ),
     ] {
@@ -609,7 +599,7 @@ fn scatter_rules() {
 #[test]
 fn kinds_let_solids_be_planned_first() {
     let doc = snippet(
-        "use \"parts/grass\" lawn\ntile t { stack { lawn; scatter count=3 { rock }; dirt; wall along=north } }",
+        "use \"parts/grass\" lawn\ntile { stack { lawn; scatter count=3 { rock }; dirt; wall along=north } }",
     );
     let kinds: Vec<_> = doc.tile().unwrap().stack.iter().map(|e| e.kind).collect();
     assert_eq!(
@@ -622,33 +612,33 @@ fn kinds_let_solids_be_planned_first() {
 
 #[test]
 fn use_names_where_every_name_came_from() {
-    snippet("use \"lib:parts/grass\" lawn\ntile t { stack { lawn } }");
+    snippet("use \"lib:parts/grass\" lawn\ntile { stack { lawn } }");
     assert_fails(
-        "tile t { stack { lawn } }",
+        "tile { stack { lawn } }",
         "dt::unknown-element",
         "write `use \"parts/grass\" lawn`",
     );
     assert_fails(
-        "use \"parts/grass\" lawn\ntile t { stack { long-grass } }",
+        "use \"parts/grass\" lawn\ntile { stack { long-grass } }",
         "dt::unknown-element",
         "add it to the use line",
     );
     assert_fails(
-        "use \"parts/grass\" lwn\ntile t { }",
+        "use \"parts/grass\" lwn\ntile { }",
         "dt::use",
         "did you mean `lawn`?",
     );
     assert_fails(
-        "use \"parts/gras\" lawn\ntile t { }",
+        "use \"parts/gras\" lawn\ntile { }",
         "dt::use",
         "did you mean `parts/grass`?",
     );
     assert_fails(
-        "use \"parts/grass\"\ntile t { }",
+        "use \"parts/grass\"\ntile { }",
         "dt::use",
         "use \"parts/grass\" lawn long-grass",
     );
-    let u = dt_doc::uses("t.dtile", "use \"./mine\" a b\ntile t { }").unwrap();
+    let u = dt_doc::uses("t.dtile", "use \"./mine\" a b\ntile { }").unwrap();
     assert_eq!(u[0].key(), "./mine");
     assert_eq!(u[0].names.len(), 2);
 }
@@ -656,23 +646,23 @@ fn use_names_where_every_name_came_from() {
 #[test]
 fn definitions_are_typed_by_what_their_parameters_fill() {
     assert_fails(
-        "use \"parts/grass\" lawn\ntile t { stack { lawn cover=0.5 } }",
+        "use \"parts/grass\" lawn\ntile { stack { lawn cover=0.5 } }",
         "dt::percent",
         "cover=\"50%\"",
     );
     assert_fails(
-        "use \"parts/grass\" lawn\ntile t { stack { lawn lenght=5 } }",
+        "use \"parts/grass\" lawn\ntile { stack { lawn lenght=5 } }",
         "dt::unknown-control",
         "did you mean `length`?",
     );
     // A required parameter.
     assert_fails(
-        "define d { param h; stack { tree height=h } }\ntile t { stack { d } }",
+        "define d { param h; stack { tree height=h } }\ntile { stack { d } }",
         "dt::missing-control",
         "`d` needs `h`",
     );
     // Calls in any order within a file; loops refused.
-    snippet("tile t { stack { b } }\ndefine b { stack { a } }\ndefine a { stack { ground } }");
+    snippet("tile { stack { b } }\ndefine b { stack { a } }\ndefine a { stack { ground } }");
     assert_fails(
         "define a { stack { b } }\ndefine b { stack { a } }",
         "dt::loop",
@@ -685,14 +675,14 @@ fn definitions_are_typed_by_what_their_parameters_fill() {
 #[test]
 fn every_mistake_is_reported() {
     let (e, shown) =
-        fails("tile t { stack { hills; tree hieght=40; wall along=north style=feildstone } }");
+        fails("tile { stack { hills; tree hieght=40; wall along=north style=feildstone } }");
     assert_eq!(e.len(), 3, "{shown}");
     assert!(e.iter().all(|e| e.help.is_some()), "{shown}");
 }
 
 #[test]
 fn value_is_kept_with_its_span() {
-    let text = "tile t { stack { tree height=40 } }";
+    let text = "tile { stack { tree height=40 } }";
     let doc = snippet(text);
     let e = &doc.tile().unwrap().stack[0];
     let s = e.control("height").unwrap().value.as_ref().unwrap().span;
@@ -705,11 +695,11 @@ fn value_is_kept_with_its_span() {
 #[test]
 fn the_r6_snippets_decode() {
     let e = first(
-        "tile t { stack { wall along=south style=cut-stone {\n    height full\n    thickness 7\n} } }",
+        "tile { stack { wall along=south style=cut-stone {\n    height full\n    thickness 7\n} } }",
     );
     assert_eq!(e.value("style").unwrap().word().unwrap().word, "cut-stone");
     let e = first(
-        "tile t { stack { cliff along=north height=55 {\n    depth \"12..24\"                  // how far the rock reaches into the tile\n    rock blocks\n    ledges 1 height=\"40%\"           // a shelf 40% of the way up: 22 mm\n} } }",
+        "tile { stack { cliff along=north height=55 {\n    depth \"12..24\"                  // how far the rock reaches into the tile\n    rock blocks\n    ledges 1 height=\"40%\"           // a shelf 40% of the way up: 22 mm\n} } }",
     );
     assert_eq!(
         e.value("depth")
@@ -725,34 +715,26 @@ fn the_r6_snippets_decode() {
 
 #[test]
 fn ids_are_plain_names_and_unique_among_same_named_siblings() {
-    let e = first("tile t { stack { ground id=low } }");
+    let e = first("tile { stack { ground id=low } }");
     assert_eq!(e.place.id.unwrap().value, "low");
-    snippet("tile t { stack { ground id=a; tree id=a } }");
+    snippet("tile { stack { ground id=a; tree id=a } }");
     assert_fails(
-        "tile t { stack { ground id=x; ground id=x } }",
+        "tile { stack { ground id=x; ground id=x } }",
         "dt::id",
         "already has `id=x`",
     );
     assert_fails(
-        "tile t { stack { ground id=\"a/b\" } }",
+        "tile { stack { ground id=\"a/b\" } }",
         "dt::id",
         "plain name",
     );
-    assert_fails(
-        "tile t { stack { ground id=\"0\" } }",
-        "dt::id",
-        "plain name",
-    );
-    assert_fails(
-        "tile t { stack { ground id=\"\" } }",
-        "dt::id",
-        "plain name",
-    );
+    assert_fails("tile { stack { ground id=\"0\" } }", "dt::id", "plain name");
+    assert_fails("tile { stack { ground id=\"\" } }", "dt::id", "plain name");
 }
 
 #[test]
 fn seeds_run_from_0_to_i64_max() {
-    let h = snippet("tile t seed=9223372036854775807 { }")
+    let h = snippet("tile seed=9223372036854775807 { }")
         .tile()
         .unwrap()
         .header()
@@ -760,21 +742,35 @@ fn seeds_run_from_0_to_i64_max() {
     assert_eq!(h.seed, Some(i64::MAX));
     // was "`seed` is a whole number" for a whole number too big
     assert_fails(
-        "tile t seed=18446744073709551615 { }",
+        "tile seed=18446744073709551615 { }",
         "dt::seed",
         "from 0 to 9223372036854775807, not 18446744073709551615",
     );
     // was reported at the tile's name, by dt-eval
-    let (e, _) = fails("tile t seed=-5 { }");
+    let (e, _) = fails("tile seed=-5 { }");
     assert_eq!(e[0].code, "dt::seed");
-    assert_eq!(e[0].span.offset(), "tile t seed=".len());
-    assert_fails("tile t { stack { ground seed=-1 } }", "dt::seed", "not -1");
-    assert_fails("tile t seed=1.5 { }", "dt::seed", "is a whole number");
+    assert_eq!(e[0].span.offset(), "tile seed=".len());
+    assert_fails("tile { stack { ground seed=-1 } }", "dt::seed", "not -1");
+    assert_fails("tile seed=1.5 { }", "dt::seed", "is a whole number");
 }
 
 #[test]
 fn an_unclosed_brace_is_one_error() {
-    let (e, shown) = fails("tile a size=\"1x1\" {\n stack {\n  ground\n }\n");
+    let (e, shown) = fails("tile size=\"1x1\" {\n stack {\n  ground\n }\n");
     assert_eq!(e.len(), 1, "{shown}");
     assert!(shown.contains("No closing '}'"), "{shown}");
+}
+
+#[test]
+fn a_tile_is_named_by_its_file() {
+    assert_fails(
+        "tile meadow size=\"1x1\" { stack { ground } }",
+        "dt::tile-name",
+        "its file name is its name",
+    );
+    assert_fails(
+        "tile \"My Pond\" { stack { ground } }",
+        "dt::tile-name",
+        "rename the file",
+    );
 }

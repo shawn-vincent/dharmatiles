@@ -31,7 +31,7 @@
 
 
 <h2 id="document">1. What a tile document is</h2>
-<p>A tile document is one <code>.dtile</code> file holding exactly one <code>tile</code> node. The tile has a name, a size and a seed, and a body with:</p>
+<p>A tile document is one <code>.dtile</code> file holding exactly one <code>tile</code> node. The tile has a size and a seed, and a body with (its file name is its name: <code>tile</code> takes none):</p>
 <ul>
   <li><code>about</code>: optional free text, one string;</li>
   <li><code>levels</code>: optional named heights this tile adds or overrides;</li>
@@ -41,7 +41,7 @@
 <p>Above the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes and may hold file-level <code>levels</code>. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>edges</code> (the edge contract). Anything else at the top level is an error.</p>
 <p>The smallest tile in the library:</p>
 <pre><code>// library/tiles/test/1x1-flat.dtile
-tile flat size="1x1" {
+tile size="1x1" {
     stack {
         ground                          // flat, at the ground level (5 mm)
     }
@@ -284,7 +284,7 @@ define oak {
 
 use "parts/grass" long-grass
 
-tile grass-tree size="2x2" seed=84 {
+tile size="2x2" seed=84 {
     stack {
         ground                          // flat, at the ground level (5 mm)
         long-grass                      // grows round the trunk, wherever it is listed
@@ -307,7 +307,7 @@ tile grass-tree size="2x2" seed=84 {
 <pre><code>// library/tiles/walls/1x1-wall-fieldstone-corner.dtile
 use "parts/grass" lawn
 
-tile wall-fieldstone-corner size="1x1" seed=64 {
+tile size="1x1" seed=64 {
     stack {
         dirt                                // bare earth at the ground level
 
@@ -336,7 +336,7 @@ tile wall-fieldstone-corner size="1x1" seed=64 {
 <h3 id="ex-cliff">A cliff run</h3>
 <pre><code>// library/tiles/cliffs/2x1-cliff.dtile
 
-tile cliff-run size="2x1" seed=1 {
+tile size="2x1" seed=1 {
     about """
         Rock band against the north edge. Both ends finish in the
         standard end section, so runs butt end to end.
@@ -372,7 +372,7 @@ tile cliff-run size="2x1" seed=1 {
 <p>A path of bare dirt winding up a 1×2 tile through grass, with a cluster of rocks beside it: lines, regions, <code>in=</code> and <code>at=</code> together. (It is a test document in the repository, <code>crates/dt-doc/tests/fixtures/1x2-grass-path-rocks.dtile</code>.)</p>
 <pre><code>use "parts/grass" lawn
 
-tile grass-path-rocks size="1x2" seed=7 {
+tile size="1x2" seed=7 {
 
     // From the middle of the south edge to the middle of the north edge,
     // 9 mm wide, wandering up to 3 mm off its points.

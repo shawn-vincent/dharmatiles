@@ -2,7 +2,7 @@
 
 use "parts/grass" lawn
 
-tile wall-stone size="1x1" seed=61 {
+tile size="1x1" seed=61 {
     stack {
         dirt                                // bare earth at the ground level
 

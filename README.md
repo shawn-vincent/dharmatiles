@@ -9,7 +9,7 @@
 You describe a tile in a short `.dtile` document: where the lines run, which regions they make, and what goes in each one. `dharmatiles` grows the geometry from that description (dirt with clods and pebbles, grass that parts round rocks, water that ripples off its shores, stone walls, cliffs, trees) and writes an STL that prints base down with no supports.
 
 ```kdl
-tile water+grass size="1x1" seed=97 {
+tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }

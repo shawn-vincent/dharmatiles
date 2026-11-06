@@ -1,6 +1,6 @@
 // Rock on two opposite sides with a passage between.
 
-tile "2x2-cliff-canyon" size="2x2" seed=1 {
+tile size="2x2" seed=1 {
     about "Rock on two opposite sides with a passage between."
 
     stack {

@@ -1,5 +1,5 @@
 // The wall page's regular brick: running bond, topped with battlements.
-tile wall-battlements size="1x1" seed=2 {
+tile size="1x1" seed=2 {
     about "A regular-brick wall with battlements."
     stack {
         dirt

@@ -1,7 +1,7 @@
 // The define page's picture: one definition, lawn, called three ways.
 use "parts/grass" lawn long-grass
 
-tile calls size="1x1" seed=6 {
+tile size="1x1" seed=6 {
     line a wobble=2 { through "0.33,0" "0.33,1" }
     line b wobble=2 { through "0.67,0" "0.67,1" }
     region west { bounded-by a; fill "0.1,0.5" }

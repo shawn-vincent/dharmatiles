@@ -1,6 +1,6 @@
 // A tall corner of stacked slabs round the north-west corner.
 
-tile "2x2-cliff-corner" size="2x2" seed=1 {
+tile size="2x2" seed=1 {
     about "A tall corner of stacked slabs round the north-west corner."
 
     stack {

@@ -1,6 +1,6 @@
 // A rounded heap of rock.
 
-tile "1x1-cliff-mound" size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about "A rounded heap of rock."
 
     stack {

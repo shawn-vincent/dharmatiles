@@ -1,6 +1,6 @@
 // The shoreline wanders (bays, headlands) about a third of the way across.
 
-tile shore size="2x2" seed=1 {
+tile size="2x2" seed=1 {
     about "A meadow meeting water, with reeds: a test tile."
     line shore wobble=11 { through "0.94,0" "0.94,2" }
     region land { bounded-by shore; fill "0.3,1" }

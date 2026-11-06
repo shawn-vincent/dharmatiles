@@ -1,6 +1,6 @@
 // A low, flat-topped table of rock.
 
-tile "2x2-cliff-plateau" size="2x2" seed=1 {
+tile size="2x2" seed=1 {
     about "A low, flat-topped table of rock."
 
     stack {

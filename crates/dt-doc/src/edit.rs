@@ -9,8 +9,8 @@
 //! [`crate::model::Entry::path`] gives it:
 //!
 //! - `"stack"` — the first child called `stack`;
-//! - `"tile cliff-run"` — the first `tile` whose first argument is
-//!   `cliff-run`;
+//! - `"tile"` — the tile (a definition is `"define <name>"`, the first
+//!   `define` whose first argument is `<name>`);
 //! - `"scatter#2"` — the second child called `scatter`.
 //!
 //! [`set_control`] is the call a GUI wants: it changes a control in
@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn finds_the_node_at_an_offset() {
-        let t = "tile a {\n    stack {\n        dirt\n        scatter count=2 { rock size=\"6..10\" }\n        scatter\n    }\n}\n";
+        let t = "tile {\n    stack {\n        dirt\n        scatter count=2 { rock size=\"6..10\" }\n        scatter\n    }\n}\n";
         let at = |s: &str| t.find(s).unwrap();
         assert_eq!(
             path_at(t, at("dirt")).unwrap(),
@@ -637,7 +637,7 @@ pub fn remove_node_at(text: &str, offset: usize) -> Result<String, EditError> {
 mod place_tests {
     use super::*;
 
-    const T: &str = "tile a size=\"1x1\" {\n    line shore { through \"0,0.38\" east }\n    stack {\n        dirt in=bank // hi\n        rock at=\"0.5,0.5\"\n    }\n}\n";
+    const T: &str = "tile size=\"1x1\" {\n    line shore { through \"0,0.38\" east }\n    stack {\n        dirt in=bank // hi\n        rock at=\"0.5,0.5\"\n    }\n}\n";
 
     #[test]
     fn a_new_entry_goes_at_the_end_of_the_stack() {
@@ -668,13 +668,13 @@ mod place_tests {
 
     #[test]
     fn a_tile_without_a_stack_gets_one() {
-        let (t, at) = insert_node("tile b size=\"1x1\" {\n}\n", Place::Stack, "rock").unwrap();
+        let (t, at) = insert_node("tile size=\"1x1\" {\n}\n", Place::Stack, "rock").unwrap();
         assert_eq!(
             t,
-            "tile b size=\"1x1\" {\n    stack {\n        rock\n    }\n}\n"
+            "tile size=\"1x1\" {\n    stack {\n        rock\n    }\n}\n"
         );
         assert!(t[at..].starts_with("rock"));
-        let (t, at) = insert_node("tile b {}", Place::Stack, "rock").unwrap();
+        let (t, at) = insert_node("tile {}", Place::Stack, "rock").unwrap();
         assert!(t[at..].starts_with("rock"), "{t} {at}");
         KdlDocument::parse(&t).unwrap();
     }
@@ -686,11 +686,11 @@ mod place_tests {
         assert!(t.contains("    stack {\n        rock at"), "{t}");
         let at = T.find("line shore").unwrap();
         let t = remove_node_at(T, at).unwrap();
-        assert!(t.starts_with("tile a size=\"1x1\" {\n    stack {"), "{t}");
-        let one = "tile c { stack { rock; tree } }";
+        assert!(t.starts_with("tile size=\"1x1\" {\n    stack {"), "{t}");
+        let one = "tile { stack { rock; tree } }";
         assert_eq!(
             remove_node_at(one, one.find("rock").unwrap()).unwrap(),
-            "tile c { stack { tree } }"
+            "tile { stack { tree } }"
         );
     }
 

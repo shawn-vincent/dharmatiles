@@ -1,6 +1,6 @@
 // A channel from the west edge opening into broad water to the east.
 
-tile water-corridor-open+grass size="1x1" seed=67 {
+tile size="1x1" seed=67 {
     about "A channel from the west edge opening into broad water to the east."
     line shore-south wobble=1.5 { through "0,0.43" "0.6,0" }
     line shore-north wobble=1.5 { through "0,0.57" "0.6,1" }

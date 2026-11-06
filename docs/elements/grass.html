@@ -52,7 +52,7 @@
 
 <h2 id="use">Using it in a tile</h2>
 <p>Grass grows on the surface the stack painted, so write <a href="dirt.html"><code>dirt</code></a> (or <a href="ground.html"><code>ground</code></a>) first; the dirt shows between the blades and in the clearings:</p>
-<pre><code>tile grass size="1x1" seed=1 {
+<pre><code>tile size="1x1" seed=1 {
     stack {
         dirt
         grass
@@ -61,7 +61,7 @@
 <p>Rocks, trees, walls and flowers are built before the grass wherever they are listed, so the blades always grow round them. Most library tiles use a preset:</p>
 <pre><code>use "parts/grass" lawn          // or long-grass: longer, taller blades
 
-tile meadow size="2x2" seed=4 {
+tile size="2x2" seed=4 {
     stack {
         dirt
         scatter per-square=1 { rock size="4..8" }

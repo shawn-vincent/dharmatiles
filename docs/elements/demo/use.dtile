@@ -3,7 +3,7 @@
 use "parts/trees" oak
 use "parts/grass" lawn
 
-tile parts size="1x1" seed=12 {
+tile size="1x1" seed=12 {
     stack {
         dirt
         oak height=40

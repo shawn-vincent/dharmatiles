@@ -1,5 +1,5 @@
 // The stone page's picture: stones scattered over plain dirt.
-tile stones size="1x1" seed=5 {
+tile size="1x1" seed=5 {
     stack {
         dirt
         scatter per-square=12 { stone }

@@ -1,6 +1,6 @@
 // Bands against the west and east edges: a canyon between.
 
-tile "1x1-cliff-canyon" size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about """
         Bands against the west and east edges: a canyon between.
         """

@@ -1,4 +1,4 @@
-tile wall-cut-stone size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about "A cut-stone wall on bare dirt: a test tile."
     stack {
         dirt

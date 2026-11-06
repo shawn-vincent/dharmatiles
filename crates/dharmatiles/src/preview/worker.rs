@@ -60,7 +60,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         let frame = dt_kit::Frame::for_system(&opts.system, t.cols, t.rows);
         let [w, h] = frame.size_mm();
         json!({
-            "tile": t.name, "cols": t.cols, "rows": t.rows,
+            "cols": t.cols, "rows": t.rows,
             "square_mm": frame.square_mm, "size_mm": [w, h],
             // the tile's zero height: where the base meets the tile body
             "datum_z": 0.0,
@@ -68,11 +68,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         })
     });
     if let Some(p) = &plan {
-        let name = p["tile"].as_str().unwrap_or_default().to_owned();
-        shared.update(i, |t| {
-            t.plan = Some(p.clone());
-            t.name = name;
-        });
+        shared.update(i, |t| t.plan = Some(p.clone()));
     }
     // the progress bar: stages weighted by what the last build of this
     // tile measured, else by the elements' defaults

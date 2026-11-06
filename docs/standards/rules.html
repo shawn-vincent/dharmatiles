@@ -43,6 +43,7 @@
   <li>The ground meets every tile edge at the <code>edge</code> level, 3.4 mm, so any two tiles sit side by side. The other standard levels are <code>ground</code> 5 mm, <code>water</code> 2.6 mm and <code>wall-top</code> 33.1 mm.</li>
   <li><code>z = 0</code> is the top of the base; the base owns everything below it.</li>
   <li>Nothing is clipped at the tile edge: a thing near the edge is moved or shrunk back until it fits inside.</li>
+  <li>A tile is named by its file and nothing else: the <code>tile</code> node takes no name, and seeds are keyed by the seed and the stack, never the file name, so renaming a tile never changes it.</li>
   <li>File names and edges follow the <a href="tile-system.html">tile system</a>.</li>
 </ul>
 

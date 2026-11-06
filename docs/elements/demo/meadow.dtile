@@ -1,7 +1,7 @@
 // The composing page's meadow: rocks bedded in dirt, grass growing round them.
 use "parts/grass" lawn
 
-tile meadow size="2x2" seed=1 {
+tile size="2x2" seed=1 {
     about "Rocks, grass and bare earth on one tile."
     stack {
         dirt                                         // the ground, and the bare earth between the grass

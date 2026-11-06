@@ -1,6 +1,6 @@
 // A low, broken cliff run of smaller stones.
 
-tile "2x1-cliff-rubble" size="2x1" seed=4 {
+tile size="2x1" seed=4 {
     about "A low, broken cliff run of smaller stones."
 
     stack {

@@ -3,7 +3,7 @@
 // A 2×1 cliff run: a band of stacked rock against the north edge, with dirt
 // on its top and scree at its foot.
 
-tile cliff-run size="2x1" seed=1 {
+tile size="2x1" seed=1 {
     about """
         Rock band against the north edge. Both ends finish in the
         standard end section, so runs butt end to end.

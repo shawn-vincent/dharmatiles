@@ -1,6 +1,6 @@
 // A channel turning from the west edge to the north edge.
 
-tile water-corridor-turn+grass size="1x1" seed=64 {
+tile size="1x1" seed=64 {
     about "A channel turning from the west edge to the north edge."
     line shore-outer wobble=1.5 { through "0,0.43" "0.54,0.46" "0.57,1" }
     line shore-inner wobble=1.5 { through "0,0.57" "0.46,0.54" "0.43,1" }

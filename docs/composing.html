@@ -53,7 +53,7 @@
 <p>A tile is a short document that lists elements in a <code>stack</code>. Solids (rocks, trees, walls, cliffs) are planned before anything grows, so grass and dirt grow round every solid wherever it is listed. A meadow in the as-built vocabulary looks like this:</p>
 <pre><code>use "parts/grass" lawn
 
-tile meadow size="2x2" seed=1 {
+tile size="2x2" seed=1 {
     stack {
         dirt                                         // the ground, and the bare earth between the grass
         scatter per-square=2 {                       // about 8 rocks on a 2×2

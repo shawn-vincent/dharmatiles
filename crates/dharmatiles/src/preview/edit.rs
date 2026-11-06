@@ -17,6 +17,11 @@
 //!   new file and rebuilds.
 //! - `/api/tiles/N/mine`: copy a library tile into My tiles, its `use`s
 //!   pointing back at the library, and return the copy's index.
+//! - `/api/tiles/N/rename` `{name}`: rename the tile's file in its folder
+//!   (a tile's file name is its name), never over another file, and
+//!   return the new path and index.  Library tiles are not renamed.
+//! - `/api/new` `{name, size}`: make a flat, printable tile called `name`
+//!   in My tiles, never over another file.
 //! - `/api/tiles/N/draft` `{text, file?, id}`: build a draft of the tile
 //!   from `text` (see `dt_eval::Options::draft`), on a thread of its own so
 //!   a full build never holds it up.  Only the latest asked for is built;
@@ -25,6 +30,7 @@
 
 use std::collections::BTreeMap;
 use std::hash::{BuildHasher, Hasher};
+use std::path::{Path, PathBuf};
 
 use dt_eval::Source;
 
@@ -103,6 +109,7 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> (&'static str, V
         "check" => check(shared, &tile, &file, &v),
         "save" => save(&file, &v),
         "mine" => mine(shared, &tile, &files),
+        "rename" => rename(shared, &tile, &v),
         "draft" => {
             let (Some(text), Some(id)) = (v["text"].as_str(), v["id"].as_u64()) else {
                 return bad("give the text and an id");
@@ -121,47 +128,96 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> (&'static str, V
     }
 }
 
-/// A conservative filename for a tile name. The document keeps the name as
-/// written; this is only the file's stem, and never contains a path separator.
-fn tile_stem(name: &str) -> String {
-    let mut out = String::with_capacity(name.len());
-    let mut dash = false;
-    for c in name.chars() {
-        if c.is_ascii_alphanumeric() || matches!(c, '+' | '_' | '-') {
-            out.push(c.to_ascii_lowercase());
-            dash = false;
-        } else if !out.is_empty() && !dash {
-            out.push('-');
-            dash = true;
-        }
-    }
-    while out.ends_with('-') {
-        out.pop();
-    }
+/// The file stem for a tile name: the name as written, with only what a
+/// file name cannot hold (path separators, `:`, control characters)
+/// turned into `-`, and no leading dot.  A tile's file name is its name.
+fn file_stem(name: &str) -> String {
+    let out: String = name
+        .trim()
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') || c.is_control() {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let out = out.trim_start_matches('.').trim();
     if out.is_empty() {
-        "untitled".to_owned()
+        "Untitled tile".to_owned()
     } else {
-        out
+        out.to_owned()
     }
 }
 
-/// Make a small, valid tile in My tiles and return its slot. Starting from a
-/// printable flat square gives the editor something real to select and change;
-/// every later gesture remains ordinary `.dtile` text.
-fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let name = v["name"].as_str().unwrap_or("Untitled tile").trim();
-    let name = if name.is_empty() {
-        "Untitled tile"
-    } else {
-        name
-    };
-    let size = v["size"].as_str().unwrap_or("1x1");
-    if !matches!(size, "1x1" | "2x1" | "1x2" | "2x2") {
-        return bad("size must be 1x1, 2x1, 1x2 or 2x2");
-    }
+/// A tile name from the page: one line of at most 80 characters.
+fn tile_name(v: &Value) -> Result<String, (&'static str, Value)> {
+    let name = v["name"].as_str().unwrap_or("").trim();
     if name.chars().count() > 80 || name.contains(['\n', '\r']) {
-        return bad("the tile name must be one line of at most 80 characters");
+        return Err(bad("a tile name is one line of at most 80 characters"));
     }
+    Ok(file_stem(name))
+}
+
+/// Write `text` as `<stem>.dtile` in `dir`, or `<stem> 2.dtile`, … when
+/// that is taken: created new, so another file is never overwritten.
+fn write_new(dir: &Path, stem: &str, text: &str) -> Result<PathBuf, (&'static str, Value)> {
+    use std::io::Write;
+    for n in 1..1000 {
+        let dest = dir.join(if n == 1 {
+            format!("{stem}.dtile")
+        } else {
+            format!("{stem} {n}.dtile")
+        });
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&dest)
+        {
+            Ok(mut f) => {
+                return f
+                    .write_all(text.as_bytes())
+                    .map(|()| dest.clone())
+                    .map_err(|e| {
+                        let _ = std::fs::remove_file(&dest);
+                        (
+                            "500 Internal Server Error",
+                            json!({ "error": format!("cannot write {}: {e}", dest.display()) }),
+                        )
+                    });
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => {
+                return Err((
+                    "500 Internal Server Error",
+                    json!({ "error": format!("cannot write {}: {e}", dest.display()) }),
+                ));
+            }
+        }
+    }
+    Err((
+        "500 Internal Server Error",
+        json!({ "error": "no free name" }),
+    ))
+}
+
+/// After a file appears or moves: list it, start its build, say where.
+fn listed(shared: &Shared, dest: &Path) -> (&'static str, Value) {
+    if shared.rescan() {
+        shared.broadcast(&shared.snapshot());
+    }
+    let path = dest.to_string_lossy().into_owned();
+    let index = lock(&shared.tiles)
+        .iter()
+        .position(|t| t.path == path && !t.gone);
+    if let Some(i) = index {
+        shared.want(i);
+    }
+    ("200 OK", json!({ "path": path, "index": index }))
+}
+
+fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
     let home = shared
         .roots
         .iter()
@@ -170,47 +226,102 @@ fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
             _ => None,
         })
         .unwrap_or_else(personal_home);
-    if let Err(e) = std::fs::create_dir_all(&home) {
-        return (
+    std::fs::create_dir_all(&home).map_err(|e| {
+        (
             "500 Internal Server Error",
             json!({ "error": format!("cannot make {}: {e}", home.display()) }),
-        );
+        )
+    })?;
+    Ok(home)
+}
+
+/// Rename a tile's file in its folder.  Never over another file: a link
+/// to the new name is made first (which fails if the name is taken), then
+/// the old name removed.  Only a change of case, on a disk that ignores
+/// case, renames in place.
+fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
+    if tile.starts_with(dt_eval::LIB) {
+        return bad("a library tile is not renamed; make it yours first");
     }
-    let stem = tile_stem(name);
-    let dest = (1..1000)
-        .map(|n| {
-            home.join(if n == 1 {
-                format!("{stem}.dtile")
-            } else {
-                format!("{stem}-{n}.dtile")
-            })
-        })
-        .find(|p| !p.exists());
-    let Some(dest) = dest else {
-        return (
-            "500 Internal Server Error",
-            json!({ "error": "no free name" }),
-        );
+    let from = PathBuf::from(tile);
+    if from.extension().and_then(|e| e.to_str()) != Some("dtile") {
+        return bad("only a tile document is renamed");
+    }
+    let in_folder = shared.roots.iter().any(|r| match &r.kind {
+        RootKind::Dir(d) => from.starts_with(d),
+        _ => false,
+    });
+    if !in_folder {
+        return bad("only a tile in a folder the preview lists is renamed here");
+    }
+    let stem = match tile_name(v) {
+        Ok(s) => s,
+        Err(e) => return e,
     };
-    let quoted = serde_json::to_string(name).unwrap_or_else(|_| "\"Untitled tile\"".to_owned());
+    let Some(dir) = from.parent() else {
+        return bad("the tile has no folder");
+    };
+    let to = dir.join(format!("{stem}.dtile"));
+    if to == from {
+        return listed(shared, &to);
+    }
+    match std::fs::hard_link(&from, &to) {
+        Ok(()) => {
+            if let Err(e) = std::fs::remove_file(&from) {
+                let _ = std::fs::remove_file(&to);
+                return (
+                    "500 Internal Server Error",
+                    json!({ "error": format!("cannot rename {}: {e}", from.display()) }),
+                );
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let same = matches!(
+                (std::fs::canonicalize(&from), std::fs::canonicalize(&to)),
+                (Ok(a), Ok(b)) if a == b
+            );
+            if !same {
+                return (
+                    "409 Conflict",
+                    json!({ "error": format!("a tile called “{stem}” is already in this folder") }),
+                );
+            }
+            if let Err(e) = std::fs::rename(&from, &to) {
+                return (
+                    "500 Internal Server Error",
+                    json!({ "error": format!("cannot rename {}: {e}", from.display()) }),
+                );
+            }
+        }
+        Err(e) => {
+            return (
+                "500 Internal Server Error",
+                json!({ "error": format!("cannot rename {}: {e}", from.display()) }),
+            );
+        }
+    }
+    listed(shared, &to)
+}
+
+/// Make a small, valid tile in My tiles and return its slot. Starting from a
+/// printable flat square gives the editor something real to select and change;
+/// every later gesture remains ordinary `.dtile` text.
+fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
+    let size = v["size"].as_str().unwrap_or("1x1");
+    if !matches!(size, "1x1" | "2x1" | "1x2" | "2x2") {
+        return bad("size must be 1x1, 2x1, 1x2 or 2x2");
+    }
+    let stem = match tile_name(v) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
     let text = format!(
-        "tile {quoted} size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        ground level=edge\n    }}\n}}\n"
+        "tile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        ground level=edge\n    }}\n}}\n"
     );
-    if let Err(e) = std::fs::write(&dest, text) {
-        return (
-            "500 Internal Server Error",
-            json!({ "error": format!("cannot write {}: {e}", dest.display()) }),
-        );
+    match home(shared).and_then(|h| write_new(&h, &stem, &text)) {
+        Ok(dest) => listed(shared, &dest),
+        Err(e) => e,
     }
-    if shared.rescan() {
-        shared.broadcast(&shared.snapshot());
-    }
-    let path = dest.to_string_lossy().into_owned();
-    let index = lock(&shared.tiles).iter().position(|t| t.path == path);
-    if let Some(i) = index {
-        shared.want(i);
-    }
-    ("200 OK", json!({ "path": path, "index": index }))
 }
 
 /// A draft the page asked for.
@@ -460,56 +571,16 @@ fn mine(
             json!({ "error": format!("cannot read {tile}") }),
         );
     };
-    let home = shared
-        .roots
-        .iter()
-        .find_map(|r| match &r.kind {
-            RootKind::Dir(d) => Some(d.clone()),
-            _ => None,
-        })
-        .unwrap_or_else(personal_home);
-    if let Err(e) = std::fs::create_dir_all(&home) {
-        return (
-            "500 Internal Server Error",
-            json!({ "error": format!("cannot make {}: {e}", home.display()) }),
-        );
-    }
     let stem = tile
         .rsplit('/')
         .next()
         .unwrap_or("tile")
         .trim_end_matches(".dtile")
         .to_owned();
-    let dest = (1..1000)
-        .map(|n| {
-            home.join(if n == 1 {
-                format!("{stem}.dtile")
-            } else {
-                format!("{stem}-{n}.dtile")
-            })
-        })
-        .find(|p| !p.exists());
-    let Some(dest) = dest else {
-        return (
-            "500 Internal Server Error",
-            json!({ "error": "no free name" }),
-        );
-    };
-    if let Err(e) = std::fs::write(&dest, pin_uses(&text, files)) {
-        return (
-            "500 Internal Server Error",
-            json!({ "error": format!("cannot write {}: {e}", dest.display()) }),
-        );
+    match home(shared).and_then(|h| write_new(&h, &stem, &pin_uses(&text, files))) {
+        Ok(dest) => listed(shared, &dest),
+        Err(e) => e,
     }
-    if shared.rescan() {
-        shared.broadcast(&shared.snapshot());
-    }
-    let path = dest.to_string_lossy().into_owned();
-    let index = lock(&shared.tiles).iter().position(|t| t.path == path);
-    if let Some(i) = index {
-        shared.want(i);
-    }
-    ("200 OK", json!({ "path": path, "index": index }))
 }
 
 #[cfg(test)]
@@ -522,10 +593,10 @@ mod tests {
             ("lib:tiles/water/a.dtile".to_owned(), None),
             ("lib:parts/grass.dtile".to_owned(), None),
         ]);
-        let text = "// a\nuse \"parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile a {}\n";
+        let text = "// a\nuse \"parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile {}\n";
         assert_eq!(
             pin_uses(text, &files),
-            "// a\nuse \"lib:parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile a {}\n"
+            "// a\nuse \"lib:parts/grass\" lawn\nuse \"lib:parts/trees\" oak\ntile {}\n"
         );
     }
 
@@ -542,12 +613,44 @@ mod tests {
         );
         assert_eq!(status, "200 OK");
         let path = made["path"].as_str().unwrap();
-        assert!(path.ends_with("shore-first-try.dtile"), "{path}");
+        assert!(path.ends_with("Shore - first try.dtile"), "{path}");
         let text = std::fs::read_to_string(path).unwrap();
-        assert!(text.contains("tile \"Shore / first try\" size=\"2x1\""));
+        assert!(text.contains("tile size=\"2x1\""));
         assert!(text.contains("ground level=edge"));
         dt_eval::check(&dt_eval::Files, path, &Options::default()).unwrap();
         assert!(made["index"].is_number());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_rename_moves_the_file_and_never_clobbers() {
+        let dir = std::env::temp_dir().join(format!("dt-rename-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
+        let shared = Shared::with_roots(roots, &[], "db", 55.0, 65.0);
+        let pond = new_tile(&shared, &json!({ "name": "Pond" })).1;
+        let marsh = new_tile(&shared, &json!({ "name": "Marsh" })).1;
+        let pond = pond["path"].as_str().unwrap().to_owned();
+        let marsh = marsh["path"].as_str().unwrap().to_owned();
+
+        let (status, moved) = rename(&shared, &pond, &json!({ "name": "Still lake" }));
+        assert_eq!(status, "200 OK", "{moved}");
+        let lake = moved["path"].as_str().unwrap().to_owned();
+        assert!(lake.ends_with("Still lake.dtile"), "{lake}");
+        assert!(!Path::new(&pond).exists());
+        assert!(moved["index"].is_number());
+
+        let (status, _) = rename(&shared, &marsh, &json!({ "name": "Still lake" }));
+        assert_eq!(status, "409 Conflict");
+        assert!(Path::new(&marsh).exists());
+
+        let (status, _) = rename(
+            &shared,
+            "lib:tiles/test/1x1-flat.dtile",
+            &json!({ "name": "x" }),
+        );
+        assert_eq!(status, "400 Bad Request");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

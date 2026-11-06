@@ -1,7 +1,7 @@
 // The wall page's ruins: a cut-stone wall with 70% of it fallen.
 use "parts/grass" lawn
 
-tile wall-ruins size="1x1" seed=5 {
+tile size="1x1" seed=5 {
     about "A ruined cut-stone wall on a lawn."
     stack {
         dirt

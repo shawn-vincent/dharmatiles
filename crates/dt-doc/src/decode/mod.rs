@@ -525,7 +525,15 @@ impl<'k> Decoder<'k> {
 
     fn definition(&mut self, node: &KdlNode, file_levels: &[String]) -> Option<Definition> {
         let is_tile = node.name().value() == "tile";
-        let name = self.name_arg(node, if is_tile { "tile" } else { "definition" })?;
+        // A tile is named by its file: the node is just `tile`.
+        let name = if is_tile {
+            Spanned {
+                value: "tile".to_owned(),
+                span: node.name().span(),
+            }
+        } else {
+            self.name_arg(node, "definition")?
+        };
         let kind = if is_tile {
             DefKind::Tile(self.tile_header(node))
         } else {
@@ -592,7 +600,11 @@ impl<'k> Decoder<'k> {
         }
 
         self.param_controls.clear();
-        let step = format!("{} {}", node.name().value(), def.name.value);
+        let step = if is_tile {
+            "tile".to_owned()
+        } else {
+            format!("{} {}", node.name().value(), def.name.value)
+        };
         let mut stacks = 0;
         let mut params: Vec<&KdlNode> = Vec::new();
         for n in body.nodes() {
@@ -694,15 +706,28 @@ impl<'k> Decoder<'k> {
             rows: 1,
             seed: None,
         };
-        for e in node.entries().iter().skip(1) {
+        for (i, e) in node.entries().iter().enumerate() {
             let Some(key) = e.name() else {
+                if i == 0 && arg_str(e).is_some() {
+                    self.err(
+                        "dt::tile-name",
+                        e.span(),
+                        "a tile takes no name: its file name is its name",
+                        "remove this",
+                    )
+                    .help = Some(
+                        "write `tile size=\"2x1\" seed=1 { … }`; rename the file to rename the tile"
+                            .to_owned(),
+                    );
+                    continue;
+                }
                 self.err(
                     "dt::tile",
                     e.span(),
                     "a tile takes `size=` and `seed=`",
                     "unexpected value",
                 )
-                .help = Some("write `tile my-tile size=\"2x1\" seed=1 { … }`".to_owned());
+                .help = Some("write `tile size=\"2x1\" seed=1 { … }`".to_owned());
                 continue;
             };
             match key.value() {

@@ -3,7 +3,7 @@
 
 use "parts/grass" lawn
 
-tile grass-path-rocks size="1x2" seed=7 {
+tile size="1x2" seed=7 {
 
     // From the middle of the south edge to the middle of the north edge,
     // 9 mm wide, wandering up to 3 mm off its points.

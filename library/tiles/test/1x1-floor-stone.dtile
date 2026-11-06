@@ -1,4 +1,4 @@
-tile floor-stone size="1x1" seed=1 {
+tile size="1x1" seed=1 {
     about "A dressed stone floor: a test tile."
     stack {
         dirt

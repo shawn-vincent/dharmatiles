@@ -1,4 +1,4 @@
-tile soil-corridor-turn+grass size="1x1" seed=103 {
+tile size="1x1" seed=103 {
     about "A dirt path turning from the west edge to the north edge."
     line outer-margin wobble=2.2 { through "0,0.33" "0.64,0.36" "0.67,1" }
     line inner-margin wobble=2.2 { through "0,0.67" "0.36,0.64" "0.33,1" }

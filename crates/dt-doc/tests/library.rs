@@ -99,7 +99,7 @@ fn the_prelude_is_levels_kdl() {
 fn flat_tile_is_one_ground() {
     let doc = decode_ok(FLAT);
     let t = tile(&doc);
-    assert_eq!(t.name.value, "flat");
+    assert_eq!(t.name.value, "tile");
     assert_eq!(
         t.header(),
         Some(TileHeader {
@@ -272,7 +272,7 @@ fn grass_tree_keeps_every_control() {
     // leaf_length_mm=4.5, leaf_width_mm=3.0
     assert_eq!(num(tree.sub("leaf", "length")), 4.5);
     assert_eq!(num(tree.sub("leaf", "width")), 3.0);
-    assert_eq!(tree.path, ["tile grass-tree", "stack", "tree"]);
+    assert_eq!(tree.path, ["tile", "stack", "tree"]);
 }
 
 #[test]
@@ -355,10 +355,7 @@ fn cliff_run_keeps_every_control() {
     assert!(close(range(pebble.value("size")), (1.0, 2.2)));
     assert!(close(range(pebble.value("buried")), (0.2, 0.5)));
     assert_eq!(dirt.kind, Kind::Mixed, "dirt holding pebbles");
-    assert_eq!(
-        pebble.path,
-        ["tile cliff-run", "stack", "dirt", "scatter", "pebble"]
-    );
+    assert_eq!(pebble.path, ["tile", "stack", "dirt", "scatter", "pebble"]);
 
     // FORMS['run']: height 35, mass 1.35, cap; KINDS shares.
     let cliff = entry(&t.stack, "cliff");
@@ -398,10 +395,10 @@ fn cliff_run_keeps_every_control() {
         &[("exponent", 2.0)]
     );
     assert_eq!(stones.kind, Kind::Solid);
-    assert_eq!(stones.path, ["tile cliff-run", "stack", "scatter"]);
+    assert_eq!(stones.path, ["tile", "stack", "scatter"]);
     // SCREE_BLOCKS 2.5, SCREE_BLOCK_MM (4.5, 8)
     let boulders = &t.stack[3];
-    assert_eq!(boulders.path, ["tile cliff-run", "stack", "scatter#2"]);
+    assert_eq!(boulders.path, ["tile", "stack", "scatter#2"]);
     assert_eq!(num(boulders.value("per-square")), 2.5);
     assert!(close(range(boulders.children[0].value("size")), (4.5, 8.0)));
 }
@@ -451,7 +448,7 @@ fn path_rocks_is_a_divided_tile() {
         Along::Line("trail".into())
     );
     assert!(close(range(path.value("level")), (4.0, 4.0)));
-    assert_eq!(path.path, ["tile grass-path-rocks", "stack", "dirt#2"]);
+    assert_eq!(path.path, ["tile", "stack", "dirt#2"]);
 
     let cluster = &t.stack[2];
     assert_eq!(cluster.place.region.as_ref().unwrap().value, "verge");

@@ -21,7 +21,7 @@
 //! A worker thread builds the tiles one at a time and, as `watch` does,
 //! polls the modification time of every file a build read, rebuilding the
 //! tile when one changes.  Each build pushes the plan pass first (the
-//! tile's name, size and stack, from `check`, before any geometry), then
+//! tile's size and stack, from `check`, before any geometry), then
 //! the finished mesh.  Errors are pushed with their file, line and column.
 
 mod assets;
@@ -68,6 +68,7 @@ struct Superseded;
 /// One served tile.
 pub struct Slot {
     path: String,
+    /// Its name: the file name, without `.dtile`.
     name: String,
     /// The root it is listed under, and its group there.
     root: usize,

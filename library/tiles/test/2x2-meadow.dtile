@@ -2,7 +2,7 @@
 // roots under a rock, blades stop pressed against it and stand lower beside
 // it, and the flow wraps it.
 
-tile meadow size="2x2" seed=1 {
+tile size="2x2" seed=1 {
     about "Rocks and grass on dirt: a test tile."
     stack {
         dirt level=edge {
