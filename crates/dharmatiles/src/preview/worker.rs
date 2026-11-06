@@ -2,6 +2,31 @@
 
 use super::*;
 
+/// A progress reporter that also notices when any source read by the plan
+/// pass changes. Progress events are safe interruption boundaries in the
+/// otherwise synchronous geometry pipeline.
+struct LatestBuild {
+    tracker: Option<Arc<Tracker>>,
+    files: BTreeMap<String, Option<SystemTime>>,
+}
+
+impl LatestBuild {
+    fn changed(&self) -> bool {
+        self.files.iter().any(|(f, at)| mtime(f) != *at)
+    }
+}
+
+impl dt_kit::Reporter for LatestBuild {
+    fn report(&self, event: &dt_kit::Event<'_>) {
+        if self.changed() {
+            std::panic::resume_unwind(Box::new(Superseded));
+        }
+        if let Some(t) = &self.tracker {
+            dt_kit::Reporter::report(t.as_ref(), event);
+        }
+    }
+}
+
 /// Build tile `i`: plan pass, then geometry, pushing each result.
 pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
     let Some(path) = lock(&shared.tiles).get(i).map(|t| t.path.clone()) else {
@@ -69,32 +94,68 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         let sink = shared.sink(i);
         Arc::new(Tracker::new(stages, Box::new(move |s| sink(s))))
     });
-    let reporter = tracker.as_ref().map_or_else(dt_eval::Progress::none, |t| {
-        dt_eval::Progress::new(t.clone())
+    let mut watched = rec.files();
+    if let Some(f) = &shared.palette {
+        let f = f.to_string_lossy().into_owned();
+        watched.insert(f.clone(), mtime(&f));
+    }
+    let latest = Arc::new(LatestBuild {
+        tracker: tracker.clone(),
+        files: watched,
     });
-    let built = std::panic::catch_unwind(AssertUnwindSafe(|| {
+    let reporter = dt_eval::Progress::new(latest.clone());
+    let built = match std::panic::catch_unwind(AssertUnwindSafe(|| {
         dt_eval::build_with(&rec, &path, opts, &reporter)
-    }))
-    .unwrap_or_else(|_| {
-        Err(vec![Diag::plain(
+    })) {
+        Ok(built) => built,
+        Err(panic) if panic.is::<Superseded>() => {
+            tell!("cancelled superseded build of {path}");
+            shared.update(i, |t| {
+                t.progress = None;
+                t.files = latest.files.clone();
+            });
+            return;
+        }
+        Err(_) => Err(vec![Diag::plain(
             "dt::panic",
             "the build panicked (a bug in an element); see the terminal".to_owned(),
-        )])
-    });
+        )]),
+    };
+    if latest.changed() {
+        tell!("discarded superseded build of {path}");
+        shared.update(i, |t| {
+            t.progress = None;
+            t.files = latest.files.clone();
+        });
+        return;
+    }
     match built {
         Err(errs) => finish_err(rec, &errs),
         Ok(b) => {
             let built_s = t0.elapsed().as_secs_f64();
             let failures = b.audit.failures(&opts.printer);
             let record = tile_json(&b, &failures, built_s);
-            reporter.begin(ENCODE, "preparing the view");
+            // Cancellation panics are caught only around build_with. Encoding
+            // uses the ordinary tracker and explicit changed checks instead.
+            let encode_progress = tracker.as_ref().map_or_else(dt_eval::Progress::none, |t| {
+                dt_eval::Progress::new(t.clone())
+            });
+            encode_progress.begin(ENCODE, "preparing the view");
             let t_encode = Instant::now();
             let mesh = Arc::new(payload::from_built(
                 &b,
                 opts.printer.overhang_deg,
                 &shared.palette(),
             ));
-            reporter.end(ENCODE);
+            if latest.changed() {
+                tell!("discarded superseded view of {path}");
+                shared.update(i, |t| {
+                    t.progress = None;
+                    t.files = latest.files.clone();
+                });
+                return;
+            }
+            encode_progress.end(ENCODE);
             if let Some(t) = &tracker {
                 t.finish();
             }
@@ -193,5 +254,30 @@ pub fn work(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool
             Some(i) => rebuild(shared, i, opts),
             None => std::thread::sleep(POLL),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_changed_source_cancels_at_the_next_progress_boundary() {
+        let missing = "/a/path/that/dharmatiles-does-not-have".to_owned();
+        let latest = LatestBuild {
+            tracker: None,
+            files: BTreeMap::from([(missing, Some(SystemTime::UNIX_EPOCH))]),
+        };
+        assert!(latest.changed());
+        let stopped = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            dt_kit::Reporter::report(
+                &latest,
+                &dt_kit::Event::Begin {
+                    key: "test",
+                    label: "test",
+                },
+            );
+        }));
+        assert!(stopped.is_err_and(|p| p.is::<Superseded>()));
     }
 }

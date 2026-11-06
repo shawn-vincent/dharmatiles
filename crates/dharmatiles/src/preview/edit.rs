@@ -222,6 +222,17 @@ pub(super) struct DraftRequest {
     id: u64,
 }
 
+/// A newer drag request makes the draft currently being computed worthless.
+struct LatestDraft(Arc<Shared>);
+
+impl dt_kit::Reporter for LatestDraft {
+    fn report(&self, _event: &dt_kit::Event<'_>) {
+        if lock(&self.0.draft_req).is_some() {
+            std::panic::resume_unwind(Box::new(Superseded));
+        }
+    }
+}
+
 /// The draft thread: builds the latest draft asked for, one at a time.
 pub(super) fn drafts(shared: Arc<Shared>, opts: Options) {
     let opts = Options {
@@ -242,8 +253,13 @@ pub(super) fn drafts(shared: Arc<Shared>, opts: Options) {
             };
             let Some(r) = req else { continue };
             let src = Overlay(BTreeMap::from([(r.file.clone(), r.text.clone())]));
-            let built =
-                std::panic::catch_unwind(AssertUnwindSafe(|| dt_eval::build(&src, &r.path, &opts)));
+            let progress = dt_eval::Progress::new(Arc::new(LatestDraft(Arc::clone(&shared))));
+            let built = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                dt_eval::build_with(&src, &r.path, &opts, &progress)
+            }));
+            if built.as_ref().is_err_and(|panic| panic.is::<Superseded>()) {
+                continue;
+            }
             // a newer request already waiting makes this one moot
             if lock(&shared.draft_req).is_some() {
                 continue;

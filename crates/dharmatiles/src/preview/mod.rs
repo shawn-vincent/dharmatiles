@@ -61,6 +61,10 @@ pub const FIRST_PORT: u16 = 7878;
 const ENCODE: &str = "encode";
 /// How often folders are rescanned for new and deleted tiles.
 const RESCAN: Duration = Duration::from_secs(1);
+/// Private unwind payload used for cooperative latest-edit-wins cancellation.
+/// `resume_unwind` avoids printing an alarming panic for an expected abort.
+#[derive(Debug)]
+struct Superseded;
 /// One served tile.
 pub struct Slot {
     path: String,
