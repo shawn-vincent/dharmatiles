@@ -513,10 +513,15 @@ export class Viewer {
         return gm;
       });
       this.scene.add(...meshes);
-      this.sketches.set(id, { geometry: g, meshes });
+      this.sketches.set(id, { geometry: g, meshes, bounds: payload.meta?.lo && { lo: payload.meta.lo, hi: payload.meta.hi } });
     }
     this.applyFade();
     this.draw();
+  }
+
+  /** The bounds of each sketch shown: [{lo, hi}]. */
+  sketchBounds() {
+    return [...this.sketches.values()].map((k) => k.bounds).filter(Boolean);
   }
 
   /** The mesh shown is an older build's (a new one is being built): fade all of it. */
@@ -627,10 +632,9 @@ export class Viewer {
   setWireframe(on) { this.material.wireframe = on; this.draw(); }
   setGrid(on) { this.showGrid = on; if (this.grid) this.grid.visible = on; this.draw(); }
 
-  /** Put the camera on a named view, framing the tile as render.rs does. */
-  setView(name, animate = true) {
+  /** Put the camera on a named view, framing the tile (or bounds `b`) as render.rs does. */
+  setView(name, animate = true, b = this.bounds()) {
     const v = VIEWS.find((x) => x[0] === name);
-    const b = this.bounds();
     if (!v || !b) return;
     const [, , elev, azim, close] = v;
     const centre = new THREE.Vector3(...b.lo.map((l, k) => 0.5 * (l + b.hi[k])));

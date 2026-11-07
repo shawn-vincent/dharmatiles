@@ -457,6 +457,34 @@ function startRename() {
 $('tilebtn').ondblclick = (e) => { e.preventDefault(); closePopovers(); startRename(); };
 
 // ---- choosing a tile ---------------------------------------------------
+// ---- the camera before a tile's mesh is in --------------------------------
+// The view starts on a 1×1 tile, and while a tile builds it follows what is
+// known of its size: the plan's footprint, then each sketch the build sends.
+// The finished mesh frames it; moving the view yourself stops the following.
+const ONE_SQUARE = { lo: [0, 0, 0], hi: [35, 35, 8] };
+let following = null; // {i, b}: the tile followed and the bounds last framed
+function followBuild() {
+  const t = tile();
+  if (!following || !t || following.i !== t.index) return;
+  const [w, h] = t.plan?.size_mm || [35, 35];
+  const b = { lo: [0, 0, 0], hi: [w, h, 8] };
+  for (const k of viewer.sketchBounds?.() || []) {
+    for (let a = 0; a < 3; a++) { b.lo[a] = Math.min(b.lo[a], k.lo[a]); b.hi[a] = Math.max(b.hi[a], k.hi[a]); }
+  }
+  // a small change is not worth a camera move
+  const size = (x) => Math.hypot(...x.hi.map((v, a) => v - x.lo[a]));
+  const was = following.b;
+  if (was && Math.abs(size(b) - size(was)) < 0.08 * size(was)
+    && b.lo.every((v, a) => Math.abs(v - was.lo[a]) < 2) && b.hi.every((v, a) => Math.abs(v - was.hi[a]) < 2)) return;
+  following.b = b;
+  viewer.setView(state.view, true, b);
+}
+viewer.setView(state.view, false, ONE_SQUARE);
+{
+  const user = viewer.onUserViewChange;
+  viewer.onUserViewChange = () => { following = null; user?.(); };
+}
+
 async function select(i, guarded = false) {
   if (!guarded && i !== state.selected && !(await canLeave())) return false;
   closeComp(); lens.hide();
@@ -483,7 +511,10 @@ async function select(i, guarded = false) {
   state.root = t.root;
   state.lastInRoot.set(t.root, i);
   history.replaceState(null, '', `#tile=${i}`);
+  // no mesh to frame yet and no view of yours kept: follow the build
+  following = t.mesh_version == null && !state.cameras.get(i) ? { i, b: null } : null;
   if (t.plan) viewer.setPlan(t.plan);
+  followBuild();
   if (t.status === 'idle') host.build(i);
   if (t.mesh_version != null) loadMesh(i, t.mesh_version);
   renderAll();
@@ -519,8 +550,9 @@ async function loadMesh(i, version) {
         viewer.setCamera(saved.camera);
         state.activeView = saved.activeView;
         showActiveView(state.activeView);
-      } else pickView(state.view, false);
+      } else pickView(state.view, following?.i === i);
     }
+    if (following?.i === i) following = null;
     // a selection the new build no longer has goes
     if (isEntry(state.sel) && state.sel.entry >= stackItems().length) state.sel = null;
     renderLens();
@@ -740,6 +772,7 @@ async function syncSketches(t) {
   const ids = new Set(list.map((k) => k.id));
   for (const id of sketchCache.keys()) if (!ids.has(id)) sketchCache.delete(id);
   viewer.setSketches(got.filter((k) => k.payload));
+  followBuild();
 }
 function changed() {
   clearTimeout(doc.checkTimer);
@@ -1670,7 +1703,7 @@ host.connect({
     state.tiles[t.index] = t;
     if (t.draft_id != null && t.draft_id !== before?.draft_id) draftArrived(t);
     if (t.index !== state.selected) { if (browsing()) renderList(); return; }
-    if (t.plan && JSON.stringify(t.plan) !== JSON.stringify(viewer.plan)) viewer.setPlan(t.plan);
+    if (t.plan && JSON.stringify(t.plan) !== JSON.stringify(viewer.plan)) { viewer.setPlan(t.plan); followBuild(); }
     renderAll();
     showBuild(t);
     // the new mesh swaps in place: the camera is kept
