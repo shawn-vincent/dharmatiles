@@ -109,6 +109,34 @@ fn serves_the_viewer_and_its_vendored_three() {
     assert!(get(&r, "/nope").0.starts_with("HTTP/1.1 404"));
 }
 
+/// Every script the page can import is served: a module missing from the
+/// table would only fail in the browser.
+#[test]
+fn every_page_script_is_served() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/preview");
+    let mut dirs = vec![root.join("js")];
+    while let Some(dir) = dirs.pop() {
+        for e in std::fs::read_dir(&dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                dirs.push(p);
+            } else if p.extension().is_some_and(|x| x == "js") {
+                let url = format!(
+                    "/{}",
+                    p.strip_prefix(&root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                );
+                assert!(
+                    super::assets::find(&url).is_some(),
+                    "{url} is not in assets::FILES"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn refuses_a_foreign_host_header() {
     let r = start(&[], false);

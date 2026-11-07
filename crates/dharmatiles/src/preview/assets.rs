@@ -57,6 +57,66 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/main.js"),
     ),
     (
+        "/js/editor/app.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/app.js"),
+    ),
+    (
+        "/js/editor/build.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/build.js"),
+    ),
+    (
+        "/js/editor/chrome.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/chrome.js"),
+    ),
+    (
+        "/js/editor/document.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/document.js"),
+    ),
+    (
+        "/js/editor/export.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/export.js"),
+    ),
+    (
+        "/js/editor/live.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/live.js"),
+    ),
+    (
+        "/js/editor/map.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/map.js"),
+    ),
+    (
+        "/js/editor/open.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/open.js"),
+    ),
+    (
+        "/js/editor/selection.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/selection.js"),
+    ),
+    (
+        "/js/editor/sheet.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/sheet.js"),
+    ),
+    (
+        "/js/editor/tiles.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/tiles.js"),
+    ),
+    (
+        "/js/editor/title.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/title.js"),
+    ),
+    (
         "/js/viewer.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/viewer.js"),
