@@ -241,7 +241,7 @@ impl Element for Flowers {
         let frame = *scene.frame();
         let s = frame.scale();
         let [w, h] = frame.size_mm();
-        let (nx, ny) = frame.nodes();
+        let (nx, _) = frame.nodes();
         let Some((surface, _)) = scene.surface() else {
             return Err(LookError::general(
                 "flowers have no ground to grow on",
@@ -252,7 +252,7 @@ impl Element for Flowers {
         let blocker = scene.standing(&[Kind::Rock, Kind::Tree, Kind::Wall], 0.45);
         let wet = scene.wet().clone();
         let n_sq = w * h / (frame.square_mm * frame.square_mm);
-        let share = ctx.area.bits.iter().filter(|&&b| b).count() as f64 / (nx * ny) as f64;
+        let share = ctx.area.share();
         let n = libm::round(self.per_square * n_sq * share) as usize;
         let mut rng = Rng::new(ctx.seed.key("flowers"));
         let reach = self.outer * s;

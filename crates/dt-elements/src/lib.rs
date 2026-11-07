@@ -191,6 +191,15 @@ pub struct Ctx<'a> {
     pub draft: bool,
 }
 
+impl Ctx<'_> {
+    /// The planned foot of the solids of `kind` (a word as written), if
+    /// the tile has one.
+    #[must_use]
+    pub fn foot(&self, kind: &str) -> Option<&Foot> {
+        self.foots.iter().find(|f| f.kind.name() == kind)
+    }
+}
+
 /// Where a planned solid meets the ground: what a bank heaps against and
 /// a scatter gathers at (plan, then build).
 #[derive(Clone, Debug)]

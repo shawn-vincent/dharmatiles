@@ -306,21 +306,13 @@ fn sample_surface(rng: &mut Rng, m: &TriMesh, n: usize) -> Vec<([f64; 3], [f64; 
 }
 
 /// One rock at the reference square, `d` mm wide, family drawn from
-/// `mix` (dome, slab, block, wedge weights), up to its
-/// grain.
+/// `mix` (dome, slab, block, wedge weights), up to its grain. A `low`
+/// stone is no taller than 0.55 of its width, not at least 2.5 mm (scree
+/// and buried grit, not spikes).
 ///
 /// # Errors
 /// [`LookError`] if the hull fails (it cannot for these points).
-pub fn make_stone(rng: &mut Rng, d: f64, mix: [f64; 4]) -> Result<Stone, LookError> {
-    make_stone_low(rng, d, mix, false)
-}
-
-/// [`make_stone`], with `low`: a small stone is no taller than 0.55 of its
-/// width, not at least 2.5 mm (scree and buried grit, not spikes).
-///
-/// # Errors
-/// As [`make_stone`].
-pub fn make_stone_low(rng: &mut Rng, d: f64, mix: [f64; 4], low: bool) -> Result<Stone, LookError> {
+pub fn make_stone(rng: &mut Rng, d: f64, mix: [f64; 4], low: bool) -> Result<Stone, LookError> {
     let total: f64 = mix.iter().sum();
     let mut u = rng.random() * total;
     let mut family = Family::Wedge;
@@ -458,20 +450,12 @@ pub struct Item {
     pub bury: (f64, f64),
 }
 
-/// One stone, or (a quarter of the time when
-/// `clusters`) a cluster of 2 to 4.
+/// One stone, or (a quarter of the time when `clusters`) a cluster of 2
+/// to 4; `low` as for [`make_stone`].
 ///
 /// # Errors
 /// As [`make_stone`].
-pub fn make_item(rng: &mut Rng, d: f64, mix: [f64; 4], clusters: bool) -> Result<Item, LookError> {
-    make_item_low(rng, d, mix, clusters, false)
-}
-
-/// [`make_item`] with [`make_stone_low`]'s `low`.
-///
-/// # Errors
-/// As [`make_stone`].
-pub fn make_item_low(
+pub fn make_item(
     rng: &mut Rng,
     d: f64,
     mix: [f64; 4],
@@ -479,7 +463,7 @@ pub fn make_item_low(
     low: bool,
 ) -> Result<Item, LookError> {
     use std::f64::consts::TAU;
-    let main = make_stone_low(rng, d, mix, low)?;
+    let main = make_stone(rng, d, mix, low)?;
     if !clusters || rng.random() >= CLUSTER_PROB {
         return Ok(Item {
             stones: vec![([0.0, 0.0], main)],
@@ -493,7 +477,7 @@ pub fn make_item_low(
     let ang0 = rng.uniform(0.0, TAU);
     for j in 1..k {
         let dj = (d * rng.uniform(CLUSTER_SIZE.0, CLUSTER_SIZE.1)).max(MIN_STONE_MM);
-        let s = make_stone_low(rng, dj, mix, low)?;
+        let s = make_stone(rng, dj, mix, low)?;
         #[allow(clippy::cast_precision_loss)]
         let ang = ang0 + j as f64 * TAU / k as f64 + rng.uniform(-0.5, 0.5);
         let dist = (d / 2.0 + dj / 2.0) * rng.uniform(CLUSTER_DIST.0, CLUSTER_DIST.1);
@@ -727,7 +711,7 @@ impl Element for Single {
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let mut rng = Rng::new(ctx.seed.key("rock"));
         let d = self.thing.draw(&mut rng);
-        let item = make_item(&mut rng, d, self.thing.mix, false)?;
+        let item = make_item(&mut rng, d, self.thing.mix, false, false)?;
         let yaw = rng.uniform(0.0, 360.0);
         let s = scene.frame().scale();
         let sq = scene.frame().square_mm;
@@ -977,18 +961,25 @@ impl Element for Scatter {
         let frame = *scene.frame();
         let s = frame.scale();
         let mut rng = Rng::new(ctx.seed.key("scatter"));
+        // gathered against a foot (scree), or spread over the area
+        let foot = match ctx.against {
+            Some(kind) => Some(ctx.foot(kind).ok_or_else(|| {
+                LookError::general(
+                    format!("nothing in this tile to gather against: no `{kind}`"),
+                    format!("add a `{kind}` to the stack, or remove `against=`"),
+                )
+            })?),
+            None => None,
+        };
         // squares the area covers
         #[allow(clippy::cast_precision_loss)]
-        let squares = ctx.area.bits.iter().filter(|&&b| b).count() as f64
-            / (frame.cells_per_square as f64 * frame.cells_per_square as f64);
-        let squares = match ctx.against {
-            Some(k) => ctx
-                .foots
-                .iter()
-                .find(|f| f.kind.name() == k)
-                .map_or(0.0, |f| f.squares),
-            None => squares,
-        };
+        let squares = foot.map_or_else(
+            || {
+                ctx.area.count() as f64
+                    / (frame.cells_per_square as f64 * frame.cells_per_square as f64)
+            },
+            |f| f.squares,
+        );
         let n = match self.count {
             Some((a, b)) => rng.uniform(a, b.max(a + f64::EPSILON)),
             None => {
@@ -1016,33 +1007,18 @@ impl Element for Scatter {
                 })
                 .unwrap_or(&self.things[self.things.len() - 1]);
             let d = thing.draw(&mut r);
-            let mix = if ctx.against.is_some() {
-                SCREE_MIX
-            } else {
-                thing.mix
+            let mut item = match foot {
+                Some(_) => make_item(&mut r, d, SCREE_MIX, false, true)?,
+                None => make_item(&mut r, d, thing.mix, true, thing.buried.1 > 0.0)?,
             };
-            let mut item = make_item_low(
-                &mut r,
-                d,
-                mix,
-                ctx.against.is_none(),
-                ctx.against.is_some() || thing.buried.1 > 0.0,
-            )?;
             item.bury = thing.buried;
             items.push(item);
             kinds.push(thing.kind.as_str());
         }
         let radii: Vec<f64> = items.iter().map(|it| it.r * s).collect();
-        let placed = if let Some(kind) = ctx.against {
-            let Some(foot) = ctx.foots.iter().find(|f| f.kind.name() == kind) else {
-                return Err(LookError::general(
-                    format!("nothing in this tile to gather against: no `{kind}`"),
-                    format!("add a `{kind}` to the stack, or remove `against=`"),
-                ));
-            };
-            place_at_foot(scene, ctx, &mut rng, foot, &items, &kinds, self.reach)
-        } else {
-            place(scene, ctx, &mut rng, &radii, self.gap * s)
+        let placed = match foot {
+            Some(foot) => place_at_foot(scene, ctx, &mut rng, foot, &items, &kinds, self.reach),
+            None => place(scene, ctx, &mut rng, &radii, self.gap * s),
         };
         let posed: Vec<(&Item, [f64; 2], f64)> = placed
             .iter()
@@ -1093,7 +1069,7 @@ pub fn dirt_stones(
     for i in 0..n {
         let mut r = Rng::new(seed.key("stone").index(i as u64));
         let d = D_MM.0 + (D_MM.1 - D_MM.0) * libm::pow(r.random(), 1.5);
-        let st = make_stone(&mut r, d, FAMILIES)?.scaled(1.0, Z_SCALE);
+        let st = make_stone(&mut r, d, FAMILIES, false)?.scaled(1.0, Z_SCALE);
         stones.push((st, r.uniform(0.0, 360.0)));
     }
     let radii: Vec<f64> = stones.iter().map(|(s, _)| s.radius()).collect();
@@ -1174,7 +1150,7 @@ mod tests {
     fn a_stone_is_faceted_chipped_and_grounded() {
         for i in 0..6 {
             let mut rng = Rng::new(Seed::new(9).index(i));
-            let s = make_stone(&mut rng, 6.0 + 1.8 * i as f64, FAMILIES).unwrap();
+            let s = make_stone(&mut rng, 6.0 + 1.8 * i as f64, FAMILIES, false).unwrap();
             assert!(s.convex.is_closed());
             assert!((10..=200).contains(&s.facets), "facets {}", s.facets);
             assert!(s.chips <= 16);
@@ -1190,7 +1166,7 @@ mod tests {
     #[test]
     fn scaling_keeps_the_planes() {
         let mut rng = Rng::new(Seed::new(3));
-        let s = make_stone(&mut rng, 10.0, FAMILIES)
+        let s = make_stone(&mut rng, 10.0, FAMILIES, false)
             .unwrap()
             .scaled(0.7, 0.65);
         assert!(s.convex.is_closed());

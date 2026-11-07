@@ -176,7 +176,7 @@ impl Element for Grass {
 
         // 2 clearings of bare earth, and the flow round them and the rocks
         let n_sq = (w / frame.square_mm) * (h / frame.square_mm);
-        let share = ctx.area.bits.iter().filter(|&&b| b).count() as f64 / (nx * ny) as f64;
+        let share = ctx.area.share();
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let count = if self.clearings <= 0.0 {
             0

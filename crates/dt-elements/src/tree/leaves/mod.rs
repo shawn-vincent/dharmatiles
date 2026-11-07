@@ -215,23 +215,6 @@ pub struct Placed {
     pub zone: f64,
 }
 
-/// Wall time of each stage, seconds.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct LeafTimes {
-    /// Ray structures, normals, wood bodies.
-    pub prepare: f64,
-    /// Candidates and the Poisson-disk throw.
-    pub roots: f64,
-    /// The coverage test.
-    pub coverage: f64,
-    /// Directions and standoffs.
-    pub layout: f64,
-    /// Every leaf's seat, build and cull.
-    pub build: f64,
-    /// All of it.
-    pub total: f64,
-}
-
 /// What the placer did.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LeafStats {
@@ -262,8 +245,6 @@ pub struct LeafStats {
     pub uncovered: usize,
     /// Each returned leaf, in output order.
     pub leaves: Vec<Placed>,
-    /// Stage times.
-    pub times: LeafTimes,
 }
 
 impl LeafStats {
@@ -347,7 +328,6 @@ fn place_inner(
             "leaf shape must be positive and finite: {shape:?}"
         )));
     }
-    let mut clock = Clock::start();
     let mut stats = LeafStats::default();
     if foliage.triangles.is_empty() {
         return Ok((Vec::new(), stats));
@@ -356,7 +336,6 @@ fn place_inner(
     // ── prepare ──────────────────────────────────────────────────────────
     let crown = Crown::new(foliage);
     let bodies: Vec<Body> = split_bodies(wood).par_iter().map(Body::new).collect();
-    stats.times.prepare = clock.lap();
 
     let len = shape.length_mm;
     let wid = shape.width_mm;
@@ -398,7 +377,6 @@ fn place_inner(
         root_n.push(n);
     }
     stats.roots = roots.len();
-    stats.times.roots = clock.lap();
 
     // ── coverage verification ──────────────────────────────────────────────
     let tests = {
@@ -421,7 +399,6 @@ fn place_inner(
         .collect();
     stats.test_points = checked.len();
     stats.uncovered = checked.iter().filter(|c| !**c).count();
-    stats.times.coverage = clock.lap();
 
     // ── directions and standoffs ──────────────────────────────────────────
     let dirs: Vec<V> = roots
@@ -430,7 +407,6 @@ fn place_inner(
         .map(|(b, n)| reach.direction(*b, *n))
         .collect();
     let standoffs = shingle_standoffs(&roots, &dirs, len, seed);
-    stats.times.layout = clock.lap();
 
     // ── per-leaf build ────────────────────────────────────────────────────
     let tris = leaf::surface_triangles();
@@ -453,7 +429,6 @@ fn place_inner(
             (st, o)
         })
         .collect();
-    stats.times.build = clock.lap();
 
     let mut solids = Vec::new();
     for (i, (st, o)) in outcomes.into_iter().enumerate() {
@@ -476,7 +451,6 @@ fn place_inner(
         }
     }
     stats.placed = solids.len();
-    stats.times.total = clock.total();
     Ok((solids, stats))
 }
 
@@ -706,28 +680,6 @@ fn leaf_zone(root_nz: f64, lying_nz: f64) -> f64 {
         1.0
     } else {
         zone(lying_nz)
-    }
-}
-
-/// Stage timing.
-struct Clock {
-    start: std::time::Instant,
-    last: std::time::Instant,
-}
-
-impl Clock {
-    fn start() -> Self {
-        let t = std::time::Instant::now();
-        Self { start: t, last: t }
-    }
-    fn lap(&mut self) -> f64 {
-        let t = std::time::Instant::now();
-        let s = (t - self.last).as_secs_f64();
-        self.last = t;
-        s
-    }
-    fn total(&self) -> f64 {
-        self.start.elapsed().as_secs_f64()
     }
 }
 

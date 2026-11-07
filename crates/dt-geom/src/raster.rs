@@ -40,6 +40,13 @@ impl Mask {
         self.bits.iter().filter(|&&b| b).count()
     }
 
+    /// The share of nodes set, 0 to 1.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss, reason = "node counts are far below 2^52")]
+    pub fn share(&self) -> f64 {
+        self.count() as f64 / (self.nx * self.ny) as f64
+    }
+
     /// A 64-bit FNV-1a hash of the flags (a stage hash).
     #[must_use]
     pub fn content_hash(&self) -> u64 {
