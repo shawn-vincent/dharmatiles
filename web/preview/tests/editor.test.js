@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { suggest } from '../js/complete.js';
 import { browserHost } from '../js/host.js';
-import { parseValue, valueOf, wordControlNeedsSelect } from '../js/lens.js';
+import { kdlString, parseValue, unquote, valueOf, wordControlNeedsSelect } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
 import { indentSelection, newlineAt, indentFor, braceEnd } from '../js/text.js';
@@ -219,12 +219,15 @@ test('panes give way so the view keeps its minimum', () => {
 
 test('the grid puts every shown pane and sash in place', () => {
   const edit = grid({ ...DEFAULTS });
-  assert.match(edit.areas, /"text sash-side view" "sash-split sash-side view" "properties sash-side view"/);
-  assert.match(grid({ ...DEFAULTS, side: 'right' }).areas, /"view sash-side text"/);
-  assert.match(grid({ ...DEFAULTS, hideProps: true }).areas, /"text sash-side view"/);
-  assert.doesNotMatch(grid({ ...DEFAULTS, hideProps: true }).areas, /properties/);
+  assert.match(edit.areas, /"side sash-side view"/);
+  assert.equal(edit.editor.areas, '"text" "sash-split" "properties"');
+  assert.equal(edit.props, 'editor');
+  assert.match(grid({ ...DEFAULTS, side: 'right' }).areas, /"view sash-side side"/);
+  assert.equal(grid({ ...DEFAULTS, hideProps: true }).editor.areas, '"text"');
+  assert.equal(grid({ ...DEFAULTS, hideText: true }).editor.areas, '"properties"');
   const ins = grid({ ...DEFAULTS, mode: 'inspect' });
-  assert.match(ins.areas, /"text sash-side view sash-props properties"/);
+  assert.match(ins.areas, /"side sash-side view sash-props properties"/);
+  assert.equal(ins.props, 'app');
   assert.match(grid({ ...DEFAULTS, mode: 'inspect', side: 'right', hideText: true }).areas, /"properties sash-side view"/);
   assert.equal(grid({ ...DEFAULTS, hideText: true, hideProps: true }).areas, '"title" "view"');
 });
@@ -242,4 +245,12 @@ test('a brace folds to its own closing brace, skipping strings and comments', ()
   const t = 'stack {\n    about "a { b"\n    // }\n    rock\n}\nwater';
   assert.equal(braceEnd(t, t.indexOf('{')), t.lastIndexOf('}'));
   assert.equal(braceEnd('a {', 2), null);
+});
+
+test('a description is written as a KDL v2 string and read back the same', () => {
+  const s = 'A "pool" \\ by the bank\n\u0001';
+  const k = kdlString(s);
+  assert.equal(k, '"A \\"pool\\" \\\\ by the bank\\n\\u{1}"');
+  assert.equal(unquote(k), s);
+  assert.equal(unquote('#"raw "quotes""#'), 'raw "quotes"');
 });

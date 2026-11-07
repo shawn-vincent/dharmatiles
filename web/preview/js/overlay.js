@@ -1,8 +1,7 @@
 // The overlay: the tile's map drawn over the view (docs/design/editor.html,
-// "The stack and the map").  Looking straight down it is the map: regions
-// tinted by what fills them, their names, the lines with their wobble, the
-// fill points.  In every other view the same drawing lies on the tile,
-// fainter.  The tools draw here too: a footprint under the pointer, the
+// "The stack and the map"): the selected line with its wobble, or the
+// selected region with its name and fill points; every line and region
+// while a tool is held.  Nothing selected, nothing drawn.  The tools draw here too: a footprint under the pointer, the
 // line being drawn, the box being dragged, and the handles of the
 // selection.  Points are in squares; heights come from the surfaces the
 // build made, so the drawing lies on the ground, not on the datum.
@@ -93,7 +92,7 @@ export class Overlay {
   }
 
   /**
-   * Draw `scene`: {show, tints: {region: colour}, selRegion, selLine,
+   * Draw `scene`: {show, all (every line and region: a tool is held), tints: {region: colour}, selRegion, selLine,
    * handles: [{q, hot, kind}], ring: {q, r}, path: [q], box: [q, q],
    * label: {q, text}}.
    */
@@ -105,15 +104,24 @@ export class Overlay {
     if (!this.viewer.payload && !this.viewer.plan) return;
     const k = this.strength();
     const ink = css('--plate-ink'), accent = css('--accent');
+    // The map shows only what is being worked on: the selected line or
+    // region, or all of them while a tool that draws or places is held.
+    // Nothing selected, nothing drawn.
     if (m && scene.show !== false) {
-      // regions, as runs of lattice nodes, one quad a run
+      const all = !!scene.all;
+      c.save();
+      // never past the tile's edge
+      const edge = [[0, 0], [m.cols, 0], [m.cols, m.rows], [0, m.rows]].map((q) => this.at(q, 0.1));
+      c.beginPath(); edge.forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y))); c.closePath();
+      c.clip();
+      // regions: every run of lattice nodes in one path, filled once
       for (const r of m.regions) {
         const sel = scene.selRegion === r.name;
-        const tint = scene.tints?.[r.name];
-        if (!tint && !sel && k < 1) continue;
-        c.fillStyle = sel ? accent : tint || ink;
-        c.globalAlpha = sel ? 0.34 : (tint ? 0.26 : 0.1) * k;
+        if (!sel && !all) continue;
+        c.fillStyle = sel ? accent : scene.tints?.[r.name] || ink;
+        c.globalAlpha = sel ? 0.3 : 0.16 * k;
         const step = 1 / m.cells;
+        c.beginPath();
         for (let j = 0; j < r.ny; j++) {
           let i = 0;
           while (i < r.nx) {
@@ -122,51 +130,50 @@ export class Overlay {
             while (i < r.nx && r.bits[j * r.nx + i] === '1') i++;
             const x0 = Math.max(0, (a - 0.5) * step), x1 = Math.min(m.cols, (i - 0.5) * step);
             const y0 = Math.max(0, (j - 0.5) * step), y1 = Math.min(m.rows, (j + 0.5) * step);
-            const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map((q) => this.at(q, 0.1));
-            c.beginPath();
-            corners.forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+            [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map((q) => this.at(q, 0.1))
+              .forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
             c.closePath();
-            c.fill();
           }
         }
+        c.fill('nonzero');
       }
       c.globalAlpha = 1;
       // lines: the wobble's band, then the line
       for (const l of m.lines) {
         const sel = scene.selLine === l.name;
+        if (!sel && !all) continue;
         const pts = l.pts.map((q) => this.at(q));
         if (pts.length < 2) continue;
         const path = () => { c.beginPath(); pts.forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y))); };
-        if (l.wobble) {
+        if (l.wobble && sel) {
           const mid = l.pts[Math.floor(l.pts.length / 2)];
           const a = this.at(mid), b = this.at([mid[0] + (2 * l.wobble) / this.sq, mid[1]]);
           c.lineWidth = Math.max(2, Math.hypot(b.x - a.x, b.y - a.y));
-          c.strokeStyle = sel ? accent : ink;
-          c.globalAlpha = 0.1 * k + (sel ? 0.1 : 0);
-          c.lineJoin = 'round'; c.lineCap = 'round';
+          c.strokeStyle = accent;
+          c.globalAlpha = 0.18;
+          c.lineJoin = 'round'; c.lineCap = 'butt';
           path(); c.stroke();
         }
-        c.globalAlpha = sel ? 1 : 0.55 + 0.35 * k;
+        c.globalAlpha = sel ? 1 : 0.7;
         c.lineWidth = sel ? 2.5 : 1.5;
         c.strokeStyle = sel ? accent : ink;
         c.setLineDash(sel ? [] : [6, 4]);
         path(); c.stroke();
         c.setLineDash([]);
       }
+      c.restore();
       c.globalAlpha = 1;
-      // region names, at their first fill point, on the map
-      if (k >= 1 || scene.selRegion) {
-        c.font = '600 12px "IBM Plex Sans", sans-serif';
-        c.textAlign = 'center'; c.textBaseline = 'bottom';
-        for (const r of m.regions) {
-          if (k < 1 && scene.selRegion !== r.name) continue;
-          for (const f of r.fills) {
-            if (!f.at) continue;
-            const p = this.at(f.at);
-            this.tag(p.x, p.y - 8, r.name, scene.selRegion === r.name);
-            c.fillStyle = scene.selRegion === r.name ? accent : ink;
-            c.beginPath(); c.arc(p.x, p.y, 3, 0, 7); c.fill();
-          }
+      // the selected region's name, at its fill points
+      c.font = '600 12px "IBM Plex Sans", sans-serif';
+      c.textAlign = 'center'; c.textBaseline = 'bottom';
+      for (const r of m.regions) {
+        if (scene.selRegion !== r.name) continue;
+        for (const f of r.fills) {
+          if (!f.at) continue;
+          const p = this.at(f.at);
+          this.tag(p.x, p.y - 8, r.name, true);
+          c.fillStyle = accent;
+          c.beginPath(); c.arc(p.x, p.y, 3, 0, 7); c.fill();
         }
       }
     }

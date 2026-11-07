@@ -1,7 +1,9 @@
 // The editor's panes: which are shown, where, and how big.
 //
 // Two arrangements: Edit (one sidebar, the text over the properties) and
-// Inspect (the text, the view, the properties side by side).  Look hides
+// Inspect (the text, the view, the properties side by side).  The sidebar
+// is two pages: the tile browser, and beside it the editor page it slides
+// to when a tile is chosen (main.js moves between them).  Look hides
 // both panes for the whole view.  Every pane edge is a sash: drag it, or
 // double-click it to reset.  [ hides the text, ] the properties, \ both.
 // The choice is remembered in this browser (dt-layout); below 900 px the
@@ -50,37 +52,45 @@ export function fit(o, w) {
   return r;
 }
 
-/** The grid for a layout: {columns, rows, areas} as CSS strings. */
+/**
+ * The grid for a layout: {columns, rows, areas} for the page as CSS
+ * strings, {rows, areas} for the editor page inside the sidebar, and
+ * where the properties go ('editor': under the text; 'app': their own
+ * column).  The sidebar (`side`) holds the tile browser and, slid in
+ * beside it, the editor page.
+ */
 export function grid(o) {
-  const both = !o.hideText && !o.hideProps;
   const q = (row) => `"${row.join(' ')}"`;
   if (o.hideText && o.hideProps) {
-    return { columns: 'minmax(0, 1fr)', rows: '48px minmax(0, 1fr)', areas: [q(['title']), q(['view'])].join(' ') };
+    return { columns: 'minmax(0, 1fr)', rows: '48px minmax(0, 1fr)', areas: [q(['title']), q(['view'])].join(' '), editor: { rows: 'minmax(0, 1fr)', areas: q(['text']) }, props: 'editor' };
   }
   if (o.mode === 'edit') {
-    const side = o.side === 'left';
-    const cols = side ? [`${o.sidew}px`, `${SASH}px`, 'minmax(0, 1fr)'] : ['minmax(0, 1fr)', `${SASH}px`, `${o.sidew}px`];
-    const row = (pane) => (side ? [pane, 'sash-side', 'view'] : ['view', 'sash-side', pane]);
-    if (!both) {
-      const pane = o.hideText ? 'properties' : 'text';
-      return { columns: cols.join(' '), rows: '48px minmax(0, 1fr)', areas: [q(['title', 'title', 'title']), q(row(pane))].join(' ') };
+    const left = o.side === 'left';
+    const cols = left ? [`${o.sidew}px`, `${SASH}px`, 'minmax(0, 1fr)'] : ['minmax(0, 1fr)', `${SASH}px`, `${o.sidew}px`];
+    const row = left ? ['side', 'sash-side', 'view'] : ['view', 'sash-side', 'side'];
+    let editor;
+    if (o.hideText || o.hideProps) editor = { rows: 'minmax(0, 1fr)', areas: q([o.hideText ? 'properties' : 'text']) };
+    else {
+      const pct = Math.round(o.texth * 1000) / 10;
+      editor = {
+        rows: `minmax(${MIN.rows}px, ${pct}fr) ${SASH}px minmax(${MIN.rows}px, ${Math.round((100 - pct) * 10) / 10}fr)`,
+        areas: [q(['text']), q(['sash-split']), q(['properties'])].join(' '),
+      };
     }
-    const pct = Math.round(o.texth * 1000) / 10;
-    return {
-      columns: cols.join(' '),
-      rows: `48px minmax(${MIN.rows}px, ${pct}fr) ${SASH}px minmax(${MIN.rows}px, ${Math.round((100 - pct) * 10) / 10}fr)`,
-      areas: [q(['title', 'title', 'title']), q(row('text')), q(row('sash-split')), q(row('properties'))].join(' '),
-    };
+    return { columns: cols.join(' '), rows: '48px minmax(0, 1fr)', areas: [q(['title', 'title', 'title']), q(row)].join(' '), editor, props: 'editor' };
   }
-  // inspect: the text on the sidebar's side, the properties opposite
-  const [first, last] = o.side === 'left' ? ['text', 'properties'] : ['properties', 'text'];
-  const width = { text: `${o.textw}px`, properties: `${o.propw}px` };
-  const hidden = { text: o.hideText, properties: o.hideProps };
+  // inspect: the sidebar (browser, text) on its side, the properties opposite
+  const [first, last] = o.side === 'left' ? ['side', 'properties'] : ['properties', 'side'];
+  const width = { side: `${o.textw}px`, properties: `${o.propw}px` };
+  const hidden = { side: o.hideText, properties: o.hideProps };
   const areas = [], cols = [];
   if (!hidden[first]) { areas.push(first, 'sash-side'); cols.push(width[first], `${SASH}px`); }
   areas.push('view'); cols.push('minmax(0, 1fr)');
   if (!hidden[last]) { areas.push('sash-props', last); cols.push(`${SASH}px`, width[last]); }
-  return { columns: cols.join(' '), rows: '48px minmax(0, 1fr)', areas: [q(areas.map(() => 'title')), q(areas)].join(' ') };
+  return {
+    columns: cols.join(' '), rows: '48px minmax(0, 1fr)', areas: [q(areas.map(() => 'title')), q(areas)].join(' '),
+    editor: { rows: 'minmax(0, 1fr)', areas: q(['text']) }, props: 'app',
+  };
 }
 
 export class Layout {
@@ -92,6 +102,9 @@ export class Layout {
     let stored = null;
     try { stored = JSON.parse(localStorage.getItem('dt-layout') || 'null'); } catch { /* private mode, or nothing kept */ }
     this.o = normalise(stored);
+    this.side = app.querySelector('#side');
+    this.editor = app.querySelector('#editor');
+    this.props = app.querySelector('#properties-pane');
     this.sashes = {};
     for (const name of ['sash-side', 'sash-split', 'sash-props']) {
       const s = document.createElement('div');
@@ -101,7 +114,7 @@ export class Layout {
       s.setAttribute('aria-orientation', name === 'sash-split' ? 'horizontal' : 'vertical');
       s.title = 'Drag to resize; double-click to reset';
       s.style.gridArea = name;
-      app.append(s);
+      (name === 'sash-split' ? this.editor : app).append(s);
       this.sashes[name] = s;
       this.drag(s, name);
     }
@@ -123,6 +136,13 @@ export class Layout {
     if (name === 'look') this.set({ hideText: true, hideProps: true });
     else this.set({ mode: name, hideText: false, hideProps: false });
   }
+  /** Whether the sidebar (the tile browser, the text) is showing. */
+  get sideShown() {
+    if (this.narrow.matches) return true;
+    return this.o.mode === 'edit' ? !(this.o.hideText && this.o.hideProps) : !this.o.hideText;
+  }
+  /** Show the sidebar, if a layout hid it. */
+  showSide() { if (!this.sideShown) this.set({ hideText: false }); }
   /** Which preset the layout is now, if any. */
   get presetName() {
     if (this.o.hideText && this.o.hideProps) return 'look';
@@ -137,15 +157,27 @@ export class Layout {
     this.app.dataset.layout = o.mode;
     this.app.classList.toggle('hide-text', o.hideText);
     this.app.classList.toggle('hide-props', o.hideProps);
+    const g = grid(o);
+    const place = (where) => {
+      const parent = where === 'app' ? this.app : this.editor;
+      if (this.props.parentElement !== parent) parent.append(this.props);
+    };
+    const es = this.editor.style;
     if (narrow) {
       st.gridTemplateColumns = st.gridTemplateRows = st.gridTemplateAreas = '';
+      es.gridTemplateRows = 'minmax(0, 1fr)'; es.gridTemplateAreas = '"text"';
+      place('app');
+      this.side.hidden = false;
       for (const s of Object.values(this.sashes)) s.hidden = true;
     } else {
-      const g = grid(o);
       st.gridTemplateColumns = g.columns;
       st.gridTemplateRows = g.rows;
       st.gridTemplateAreas = g.areas;
-      for (const [name, s] of Object.entries(this.sashes)) s.hidden = !g.areas.includes(name);
+      es.gridTemplateRows = g.editor.rows;
+      es.gridTemplateAreas = g.editor.areas;
+      place(g.props);
+      this.side.hidden = !g.areas.includes('side');
+      for (const [name, s] of Object.entries(this.sashes)) s.hidden = !(name === 'sash-split' ? g.editor.areas : g.areas).includes(name);
     }
     if (save) { try { localStorage.setItem('dt-layout', JSON.stringify(this.o)); } catch { /* ignore */ } }
     this.onChange(this.o);
@@ -165,10 +197,10 @@ export class Layout {
       s.classList.add('on');
       document.body.classList.add(name === 'sash-split' ? 'resizing-rows' : 'resizing');
       const rect = this.app.getBoundingClientRect();
+      const ed = this.editor.getBoundingClientRect();
       const move = (ev) => {
         if (name === 'sash-split') {
-          const top = rect.top + 48, h = rect.height - 48 - SASH;
-          this.o.texth = Math.min(0.9, Math.max(0.1, (ev.clientY - top) / h));
+          this.o.texth = Math.min(0.9, Math.max(0.1, (ev.clientY - ed.top) / (ed.height - SASH)));
         } else {
           const fromLeft = ev.clientX - rect.left, fromRight = rect.right - ev.clientX;
           const pane = this.paneAt(name);

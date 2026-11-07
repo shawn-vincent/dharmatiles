@@ -98,7 +98,52 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
             .into_iter()
             .map(|(name, text, span)| json!({ "name": name, "text": text, "span": span }))
             .collect();
-        json!({ "at": at, "controls": controls })
+        let child = |name: &str| {
+            n.children()
+                .and_then(|c| c.nodes().iter().find(|k| k.name().value() == name))
+        };
+        // `about "…"`: its string, and where the string is written
+        let about = child("about").map(|a| {
+            let value = a.entries().first().filter(|e| e.name().is_none()).map(|e| {
+                let sp = e.span();
+                let whole = &text[sp.offset()..sp.offset() + sp.len()];
+                let lead = whole.len() - whole.trim_start().len();
+                let v = whole.trim();
+                json!({ "text": v, "span": [sp.offset() + lead, v.len()] })
+            });
+            json!({ "at": a.name().span().offset(), "value": value })
+        });
+        // `levels foot=4`: the tile's own levels
+        let levels = child("levels").map(|l| {
+            let at = l.name().span().offset();
+            let controls: Vec<Value> = dt_doc::edit::props_at(text, at)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(name, text, span)| json!({ "name": name, "text": text, "span": span }))
+                .collect();
+            json!({ "at": at, "controls": controls, "block": l.children().is_some() })
+        });
+        json!({ "at": at, "controls": controls, "about": about, "levels": levels, "standard_levels": standard_levels() })
     });
     json!({ "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "tile": own })
+}
+
+/// The standard levels every tile sees (library/parts/levels.dtile): each
+/// name and its height in mm as written there.
+fn standard_levels() -> Vec<Value> {
+    kdl::KdlDocument::parse(dt_doc::known::PRELUDE)
+        .ok()
+        .iter()
+        .flat_map(|d| d.nodes().iter().filter(|n| n.name().value() == "levels"))
+        .flat_map(|n| n.children().map(|c| c.nodes().to_vec()).unwrap_or_default())
+        .filter_map(|n| {
+            let v = n
+                .entries()
+                .first()?
+                .value()
+                .as_float()
+                .or_else(|| n.entries().first()?.value().as_integer().map(|i| i as f64))?;
+            Some(json!({ "name": n.name().value(), "value": v }))
+        })
+        .collect()
 }

@@ -12,9 +12,27 @@ button { font: inherit; color: inherit; }
 
 /* The panes' grid is set by js/layout.js (Edit, Inspect, Look; sizes
    remembered); this is the Edit layout before it runs. */
-#app { display: grid; height: 100dvh; grid-template-rows: 48px minmax(0, 3fr) 6px minmax(0, 2fr);
+#app { display: grid; height: 100dvh; grid-template-rows: 48px minmax(0, 1fr);
        grid-template-columns: 520px 6px minmax(0, 1fr);
-       grid-template-areas: "title title title" "text sash-side view" "sash-split sash-side view" "properties sash-side view"; }
+       grid-template-areas: "title title title" "side sash-side view"; }
+
+/* ---- the sidebar: the tile browser, and beside it the editor page ----
+   Choosing a tile slides the page in from the right; ‹ slides back. */
+#side { grid-area: side; position: relative; overflow: hidden; min-width: 0; min-height: 0; background: var(--panel); }
+#track { display: flex; width: 200%; height: 100%; transition: transform .28s var(--ease); }
+#side.editing #track { transform: translateX(-50%); }
+#browser, #editpage { flex: 0 0 50%; min-width: 0; height: 100%; display: flex; flex-direction: column; }
+#browser { gap: 8px; padding: 10px 12px 0; }
+#browsebar { display: flex; align-items: center; gap: 8px; }
+#browsebar #roots { flex: 1; }
+#forward { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; }
+#browser #tiles { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: 12px; }
+#crumb { flex: none; display: flex; align-items: center; gap: 2px; min-height: 40px; padding: 4px 8px; border-bottom: 1px solid var(--line); background: var(--bg); min-width: 0; }
+#crumb .sep { color: var(--muted); padding: 0 2px; }
+#back { flex: none; display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid transparent; border-radius: var(--r); padding: 4px 7px; color: var(--muted); cursor: pointer; font-size: 13px; }
+#back:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+#back span:first-child { font-size: 17px; line-height: 1; }
+#editor { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(120px, 60fr) 6px minmax(120px, 40fr); grid-template-areas: "text" "sash-split" "properties"; }
 
 /* ---- sashes: every pane edge can be dragged ---- */
 .sash { position: relative; z-index: 4; cursor: col-resize; touch-action: none; background: var(--line); background-clip: content-box; padding: 0 2.5px; }
@@ -45,12 +63,12 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 /* ---- the title bar ---- */
 #title { grid-area: title; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--line); position: relative; z-index: 6; background: var(--bg); min-width: 0; }
 #title .wordmark { font-size: 19px; flex: none; }
-#tilebtn { display: inline-flex; align-items: baseline; gap: 7px; background: none; border: 1px solid transparent; border-radius: var(--r-lg); padding: 5px 8px; cursor: pointer; font-weight: 600; min-width: 0; max-width: 40%; white-space: nowrap; }
-#tilebtn:hover, #tilebtn[aria-expanded="true"] { border-color: var(--line); background: var(--panel); }
+#tilebtn { display: inline-flex; align-items: baseline; gap: 7px; background: none; border: 1px solid transparent; border-radius: var(--r); padding: 4px 7px; cursor: pointer; font-weight: 600; min-width: 0; white-space: nowrap; }
+#tilebtn:hover { border-color: var(--line); background: var(--panel); }
 #tilebtn.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); }
 #tilebtn #tilename { overflow: hidden; text-overflow: ellipsis; }
 #tilebtn .where { font-weight: 400; color: var(--muted); font-size: 12.5px; }
-#rename { font: 600 14px var(--f-body); color: var(--ink); background: var(--raised); border: 1px solid var(--accent); border-radius: var(--r-lg); padding: 5px 8px; width: min(320px, 40%); outline: 3px solid color-mix(in srgb, var(--accent) 20%, transparent); }
+#rename { font: 600 14px var(--f-body); color: var(--ink); background: var(--raised); border: 1px solid var(--accent); border-radius: var(--r); padding: 4px 7px; flex: 1; min-width: 0; outline: 3px solid color-mix(in srgb, var(--accent) 20%, transparent); }
 #rename.bad { border-color: var(--err); outline-color: color-mix(in srgb, var(--err) 20%, transparent); }
 #tileplan { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #history-controls { display: flex; align-items: center; gap: 5px; flex: none; }
@@ -85,8 +103,6 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 @keyframes pulse { 50% { opacity: .35; } }
 
 .menu { position: absolute; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 8px; z-index: 20; }
-#menu { top: 44px; left: 12px; width: 320px; max-height: calc(100dvh - 64px); display: flex; flex-direction: column; gap: 8px; }
-#menu #tiles { overflow-y: auto; min-height: 0; }
 .menu-find { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
 .menu-find input { min-width: 0; }
 .card { position: absolute; z-index: 20; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 12px 14px; }
@@ -254,7 +270,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #bar { width: 120px; height: 6px; border-radius: 2px; background: var(--chip-line); overflow: hidden; flex: none; }
 #bar-fill { display: block; height: 100%; width: 0; background: var(--accent-hi); transition: width .12s linear; }
 #status-text { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-#errors { position: absolute; left: 12px; right: 12px; bottom: 12px; max-height: 45%; overflow: auto; border-radius: var(--r-lg); border-left: 3px solid var(--over); padding: 12px 14px; }
+#errors { position: absolute; left: 12px; right: 12px; bottom: 12px; max-height: 45%; overflow: auto; border-radius: var(--r-lg); border-left: 3px solid var(--err); padding: 12px 14px; }
 #errors .e { margin: 0 0 10px; cursor: pointer; } #errors .e:last-child { margin: 0; }
 #errors .where { font: 500 12px/1.4 var(--f-code); color: var(--chip-err); margin-bottom: 2px; }
 #errors .help { color: var(--chip-muted); font-size: 12.5px; margin-top: 2px; }
@@ -285,14 +301,14 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 @media (max-width: 1200px) { #tileplan, .history-label { display: none; } }
 @media (max-width: 900px) {
   body { overflow: auto; }
-  #app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px 62vh auto auto; grid-template-areas: "title" "view" "properties" "text"; }
+  #app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px 62vh auto auto; grid-template-areas: "title" "view" "properties" "side"; }
+  #side { height: 75vh; border-top: 1px solid var(--line); }
   .sash, .pane-x, #reopen { display: none !important; }
   #text, #properties-pane { border: 0; border-top: 1px solid var(--line); }
   #properties-pane { height: min(520px, 70vh); }
   #code { max-height: 60vh; }
   #title .wordmark .txt, #conn { display: none; }
   .history-label { display: none; }
-  #tilebtn { max-width: 60%; }
   #status { min-width: 0; right: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -317,3 +333,8 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 #tool span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .9; }
 #tool button { border: 0; background: color-mix(in srgb, var(--on-accent) 18%, transparent); color: inherit; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; font-size: 14px; line-height: 1; flex: none; }
 #errors { bottom: 64px; }
+
+/* a seed's dice: another arrangement */
+#lens .dice { flex: none; width: 24px; height: 24px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--muted); cursor: pointer; padding: 0; }
+#lens .dice:hover { color: var(--accent); border-color: var(--accent); }
+#lens .dice svg { width: 15px; height: 15px; }

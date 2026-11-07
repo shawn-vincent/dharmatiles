@@ -635,7 +635,7 @@ fn the_map_carries_the_tiles_own_controls() {
     let dir = std::env::temp_dir().join(format!("dt-own-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"2x1\" seed=7 {\n    stack {\n        dirt\n    }\n}\n";
+    let text = "tile size=\"2x1\" seed=7 {\n    about \"A bank\"\n    levels foot=4\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -660,6 +660,18 @@ fn the_map_carries_the_tiles_own_controls() {
     let s = usize::try_from(seed["span"][0].as_u64().unwrap()).unwrap();
     assert_eq!(&text[s..=s], "7");
     assert_eq!(seed["text"], "7");
+    // the description and the tile's own levels, where they are written
+    let a = &own["about"]["value"];
+    let s = usize::try_from(a["span"][0].as_u64().unwrap()).unwrap();
+    assert_eq!(&text[s..s + 8], "\"A bank\"");
+    assert_eq!(a["text"], "\"A bank\"");
+    assert_eq!(own["levels"]["controls"][0]["name"], "foot");
+    assert_eq!(own["levels"]["controls"][0]["text"], "4");
+    let std = own["standard_levels"].as_array().unwrap();
+    assert!(
+        std.iter().any(|l| l["name"] == "edge" && l["value"] == 3.4),
+        "{std:?}"
+    );
 }
 
 #[test]

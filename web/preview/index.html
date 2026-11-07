@@ -15,7 +15,6 @@
 <div id="app">
   <header id="title">
     <span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i><span class="txt">dharmatiles</span></span>
-    <button id="tilebtn" type="button" aria-haspopup="true" aria-expanded="false" title="Choose a tile"><span id="tilename">Choose a tile</span><span class="where" id="tilewhere"></span><span aria-hidden="true">▾</span></button>
     <span id="tileplan" class="muted"></span>
     <div id="history-controls" aria-label="Document history">
       <div class="history-split">
@@ -36,21 +35,41 @@
     <button id="theme" class="btn icon" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button>
     <div id="progress"></div>
 
-    <div id="menu" class="menu" hidden>
-      <nav id="roots" class="seg" aria-label="Where the tiles come from" hidden></nav>
-      <div class="menu-find">
-        <input id="filter" type="search" placeholder="Filter tiles" aria-label="Filter tiles">
-        <button id="new" class="btn" type="button">New tile</button>
-      </div>
-      <ul id="tiles"></ul>
-    </div>
   </header>
 
-  <section id="text" aria-label="The document">
-    <div id="textbar"><span id="textpath"></span><span id="textstate"></span><button class="pane-x" id="hide-text" type="button" title="Hide the text ([)" aria-label="Hide the text">×</button></div>
-    <div id="code" role="list"></div>
-    <div id="codehint">Click a line to select it in the view.</div>
-  </section>
+  <div id="side" class="editing">
+    <div id="track">
+      <section id="browser" aria-label="Tiles" inert>
+        <div id="browsebar">
+          <nav id="roots" class="seg" aria-label="Where the tiles come from" hidden></nav>
+          <button id="forward" class="btn" type="button" hidden title="Back to the tile (Esc)"><span id="forward-name"></span> ›</button>
+        </div>
+        <div class="menu-find">
+          <input id="filter" type="search" placeholder="Filter tiles" aria-label="Filter tiles">
+          <button id="new" class="btn" type="button">New tile</button>
+        </div>
+        <ul id="tiles" role="listbox" aria-label="Tiles"></ul>
+      </section>
+      <div id="editpage">
+        <div id="crumb">
+          <button id="back" type="button" title="All the tiles"><span aria-hidden="true">‹</span> <span id="tilewhere">Tiles</span></button>
+          <span class="sep" aria-hidden="true">›</span>
+          <button id="tilebtn" type="button" title="The tile's own properties"><span id="tilename"></span></button>
+        </div>
+        <div id="editor">
+          <section id="text" aria-label="The document">
+            <div id="textbar"><span id="textpath"></span><span id="textstate"></span><button class="pane-x" id="hide-text" type="button" title="Hide the text ([)" aria-label="Hide the text">×</button></div>
+            <div id="code" role="list"></div>
+            <div id="codehint">Click a line to select it in the view.</div>
+          </section>
+          <aside id="properties-pane" aria-label="Properties">
+            <button class="pane-x" id="hide-props" type="button" title="Hide the properties (])" aria-label="Hide the properties">×</button>
+            <div id="lens" role="region" aria-label="Properties of the selection"></div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <main id="view">
     <canvas id="canvas" tabindex="0" aria-label="3D tile view"></canvas>
@@ -116,10 +135,6 @@
     </div>
   </main>
 
-  <aside id="properties-pane" aria-label="Properties">
-    <button class="pane-x" id="hide-props" type="button" title="Hide the properties (])" aria-label="Hide the properties">×</button>
-    <div id="lens" role="region" aria-label="Properties of the selection"></div>
-  </aside>
 </div>
 <div id="comp" role="listbox" aria-label="What can go here" hidden></div>
 

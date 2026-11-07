@@ -11,7 +11,7 @@
 import { browserHost } from './host.js';
 import { parsePayload, NO_ENTRY } from './payload.js';
 import { TextPane, byteToIndex } from './text.js';
-import { Lens, valueOf } from './lens.js';
+import { Lens, valueOf, kdlString } from './lens.js';
 import { suggest } from './complete.js';
 import { Viewer, VIEWS } from './viewer.js';
 import { rememberView, shortcutViews } from './view-presets.js';
@@ -123,7 +123,7 @@ toggle('t-grid', (on) => viewer.setGrid(on));
 
 // popovers: one open at a time; Esc or a click outside closes it
 const popovers = [
-  ['tilebtn', 'menu'], ['dispbtn', 'display'], ['gate', 'record-card'], ['export', 'export-card'],
+  ['dispbtn', 'display'], ['gate', 'record-card'], ['export', 'export-card'],
   ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
 ];
 function openPopover(id) {
@@ -131,11 +131,6 @@ function openPopover(id) {
     const open = pop === id && $(pop).hidden;
     $(pop).hidden = !open;
     $(btn).setAttribute('aria-expanded', open);
-  }
-  if (id === 'menu' && !$('menu').hidden) {
-    renderList();
-    $('tiles').querySelector('li.sel')?.scrollIntoView({ block: 'center' });
-    $('filter').focus();
   }
   if ((id === 'undo-history' || id === 'redo-history') && !$(id).hidden) renderHistory(true);
 }
@@ -145,7 +140,35 @@ const closePopovers = () => {
   return any;
 };
 for (const [btn, pop] of popovers) $(btn).onclick = (e) => { e.stopPropagation(); openPopover(pop); };
-$('choose').onclick = (e) => { e.stopPropagation(); openPopover('menu'); };
+$('choose').onclick = () => {
+  const lib = state.roots.findIndex((r) => r.kind === 'library');
+  if (lib >= 0) state.root = lib;
+  showBrowser();
+};
+
+// ---- the sidebar's two pages: the tile browser, and the editor beside it ----
+const browsing = () => !$('side').classList.contains('editing');
+function showBrowser() {
+  layout.showSide();
+  $('side').classList.remove('editing');
+  $('browser').inert = false; $('editpage').inert = true;
+  const t = tile();
+  if (t && t.root !== state.root && state.roots[t.root] && !$('filter').value) state.root = t.root;
+  renderList();
+  // scroll the list only: scrollIntoView would scroll the sliding sidebar too
+  const ul = $('tiles'), li = ul.querySelector('li.sel');
+  if (li) ul.scrollTop = li.offsetTop - ul.offsetTop - (ul.clientHeight - li.offsetHeight) / 2;
+  $('side').scrollLeft = 0;
+  $('filter').focus({ preventScroll: true });
+}
+function showEditor() {
+  if (!tile()) return;
+  $('side').classList.add('editing');
+  $('browser').inert = true; $('editpage').inert = false;
+}
+$('back').onclick = showBrowser;
+$('forward').onclick = showEditor;
+$('tilebtn').onclick = () => setSel({ tile: true });
 addEventListener('pointerdown', (e) => {
   if (popovers.some(([b, p]) => $(p).contains(e.target) || $(b).contains(e.target))) return;
   closePopovers();
@@ -221,7 +244,9 @@ addEventListener('keydown', (e) => {
   if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.isContentEditable && tools?.key(e)) { e.preventDefault(); return; }
   if (e.key === 'Escape') {
     if (!$('mine').hidden) { $('mine').hidden = true; return; }
-    if (!closePopovers()) setSel(null);
+    if (closePopovers()) return;
+    if (browsing() && tile() && !$('side').hidden) { showEditor(); return; }
+    setSel(null);
     return;
   }
   // one undo for the whole page: typing and changes made in the view
@@ -293,7 +318,10 @@ function renderList() {
     li.innerHTML = '<span></span><span class="name"></span>';
     li.firstChild.className = dotClass(t);
     li.querySelector('.name').textContent = stem(t);
-    li.onclick = () => { closePopovers(); select(t.index); };
+    li.onclick = async () => {
+      if (t.index === state.selected) { showEditor(); return; }
+      if ((await select(t.index)) !== false) showEditor();
+    };
     li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
     return li;
   };
@@ -337,6 +365,7 @@ function renderList() {
 }
 $('filter').oninput = renderList;
 $('filter').onkeydown = (e) => {
+  if (e.key === 'Escape' && tile()) { e.preventDefault(); e.stopPropagation(); showEditor(); return; }
   if (e.key !== 'Enter') return;
   const first = $('tiles').querySelector('li:not(.group):not(.note)');
   first?.click();
@@ -818,9 +847,8 @@ async function loadText(file) {
 function renderTextBar() {
   const t = tile();
   const f = texts.file;
-  $('textpath').textContent = !f ? '' : f === t?.path
-    ? `${rootOf(t.root).label || 'Files'} › ${f.split(/[\\/:]/).pop()}`
-    : `‎${f}`;
+  // the tile's own file is named in the crumb above; another file (a part) by its path
+  $('textpath').textContent = !f || f === t?.path ? '' : `‎${f}`;
   $('textpath').title = f || '';
   const st = $('textstate');
   st.replaceChildren();
@@ -1090,20 +1118,69 @@ const lens = new Lens($('lens'), {
 const TILE_SCHEMA = {
   name: 'tile',
   controls: [
-    { name: 'size', about: 'squares across, then down: "2x1"', default: '"1x1"' },
+    { name: 'size', about: 'squares across, then up: "2x1"; drag a number to change it', default: '"1x1"' },
     { name: 'seed', unit: 'number', about: 'the layout: another seed, another arrangement of the same tile', default: '1' },
   ],
+};
+// a written property as the lens reads it: `name=value` and its span
+const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] });
+/** A whole-node change to the tile's text (insert or remove), as one step of history. */
+async function tileEdit(body, label) {
+  if (!doc.writable) return offerMine();
+  const r = await host.post('/api/edit', { text: texts.text, ...body });
+  if (r.status !== 200) { doc.note = r.body?.error || 'that change could not be made'; renderTextBar(); return; }
+  texts.setText(r.body.text);
+  edited(texts.text, 'lens', label);
+}
+const LEVEL_ABOUT = {
+  edge: 'where the ground meets the tile edge; neighbouring tiles line up on it',
+  ground: 'grass and soil regions',
+  water: 'the calm water surface',
+  'wall-top': 'the top of a wall',
 };
 function renderTileLens() {
   const t = tile(), own = doc.map?.tile;
   if (!t || !own || texts.file !== t.path) { lens.hide(); return; }
-  // a written property as the lens reads it: `name=value` and its span
-  const written = own.controls.map((c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] }));
+  const groups = [{ at: own.at, schema: TILE_SCHEMA, written: own.controls.map(asWritten) }];
+  // the description: `about "…"` in the tile's body
+  const about = own.about, av = about?.value;
+  groups.push({
+    heading: 'Description',
+    at: own.at,
+    schema: { controls: [{ name: 'about', unit: 'text', about: 'a sentence on what the tile is; shown in the library' }] },
+    written: av ? [asWritten({ name: 'about', text: av.text, span: av.span })] : [],
+    set: (_, value) => (value == null
+      ? about && tileEdit({ op: 'remove', at: about.at }, 'Took out the description')
+      : about ? null : tileEdit({ op: 'insert', place: 'tile', node: `about ${kdlString(String(value))}` }, 'Described the tile')),
+  });
+  // the tile's levels: the standard ones it can override, and its own
+  const lv = own.levels;
+  if (!lv?.block) {
+    groups.push({
+      heading: 'Levels (mm)',
+      at: lv?.at ?? own.at,
+      schema: {
+        controls: (own.standard_levels || []).map((l) => ({
+          name: l.name, unit: 'mm', default: String(l.value),
+          about: `${LEVEL_ABOUT[l.name] || 'a standard level'}; ${l.value} mm unless this tile says otherwise`,
+        })),
+      },
+      written: (lv?.controls || []).map(asWritten),
+      set: (name, value) => {
+        if (lv) {
+          if (value == null && lv.controls.length === 1 && lv.controls[0].name === name) return tileEdit({ op: 'remove', at: lv.at }, `Took out level ${name}`);
+          return lens.api.set(lv.at, name, value);
+        }
+        if (value == null) return null;
+        return tileEdit({ op: 'insert', place: 'tile', node: `levels ${name}=${typeof value === 'number' ? value : kdlString(String(value))}` }, `Set level ${name}`);
+      },
+    });
+  }
   const actions = doc.writable ? [
-    { label: 'New seed', title: 'Another arrangement of the same tile', run: () => lens.api.set(own.at, 'seed', 1 + Math.floor(Math.random() * 9999)) },
     { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
   ] : [];
-  lens.show({ title: stem(t), kind: 'tile', href: 'https://shawn-vincent.github.io/dharmatiles/language.html', note: 'The tile. Select something on it to change that instead.', groups: [{ at: own.at, schema: TILE_SCHEMA, written }], actions });
+  const note = lv?.block ? 'The tile. Its levels are written as a block: change them in the text.' : 'The tile. Select something on it to change that instead.';
+  lens.show({ title: stem(t), kind: 'tile', href: 'https://shawn-vincent.github.io/dharmatiles/language.html', note, groups, actions });
 }
 function renderLens() {
   const s = state.sel;
@@ -1183,6 +1260,7 @@ function drawOverlay() {
     tints: tints(),
     selRegion: s?.region ?? null,
     selLine: s?.line ?? null,
+    all: !!tools?.tool,
     ...(tools?.scene() || {}),
   });
 }
@@ -1358,14 +1436,18 @@ function renderTitle() {
   $('show-worst').hidden = true;
   if (!t) {
     status.hidden = true; errs.hidden = true; gate.hidden = true; $('export').hidden = true;
-    $('tilename').textContent = 'Choose a tile'; $('tilewhere').textContent = ''; $('tileplan').textContent = '';
+    $('tilename').textContent = ''; $('tilewhere').textContent = 'Tiles'; $('tileplan').textContent = '';
+    $('forward').hidden = true;
+    if (!browsing()) showBrowser();
     $('progress').style.width = '0';
     document.title = 'dharmatiles';
     return;
   }
   $('tilename').textContent = stem(t);
-  $('tilewhere').textContent = rootOf(t.root).label || '';
-  $('tilebtn').title = renameable(t) ? `${t.path}\nDouble-click or F2 to rename` : t.path;
+  $('tilewhere').textContent = rootOf(t.root).label || 'Tiles';
+  $('back').title = `All of ${rootOf(t.root).label || 'the tiles'}`;
+  $('forward').hidden = false; $('forward-name').textContent = stem(t);
+  $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile's properties; double-click or F2 to rename` : `${t.path}\nClick for the tile's properties`;
   document.title = `${stem(t)} · dharmatiles`;
   const p = t.plan;
   $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares · ${state.system === 'ol' ? 'OpenLOCK' : 'DungeonBlocks'}` : '';
@@ -1495,7 +1577,7 @@ host.connect({
     const before = state.tiles[t.index];
     state.tiles[t.index] = t;
     if (t.draft_id != null && t.draft_id !== before?.draft_id) draftArrived(t);
-    if (t.index !== state.selected) { if (!$('menu').hidden) renderList(); return; }
+    if (t.index !== state.selected) { if (browsing()) renderList(); return; }
     if (t.plan && JSON.stringify(t.plan) !== JSON.stringify(viewer.plan)) viewer.setPlan(t.plan);
     renderAll();
     // the new mesh swaps in place: the camera is kept

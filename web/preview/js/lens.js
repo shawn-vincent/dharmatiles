@@ -14,6 +14,9 @@
 const STEP = { mm: 0.1, level: 0.1, degrees: 1, percent: 1, count: 1, 'per square': 0.05, number: 0.05 };
 const PX = { count: 10, degrees: 3, percent: 3 }; // pixels a step takes; 4 otherwise
 const NUM = /-?\d+(?:\.\d+)?/g;
+// a die showing five
+const DICE = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+  + [[5, 5], [11, 5], [8, 8], [5, 11], [11, 11]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.25" fill="currentColor"/>`).join('') + '</svg>';
 const enc = new TextEncoder();
 const bytes = (s) => enc.encode(s).length;
 const decimals = (s) => (s.includes('.') ? s.split('.')[1].length : 0);
@@ -38,6 +41,21 @@ export function parseValue(raw) {
   if (t === '#true' || t === 'true') return true;
   if (t === '#false' || t === 'false') return false;
   return t.replace(/^#?"|"#?$/g, '');
+}
+
+/** `text` as a KDL v2 string. */
+export function kdlString(text) {
+  const esc = { '"': '\\"', '\\': '\\\\', '\n': '\\n', '\r': '\\r', '\t': '\\t' };
+  return `"${text.replace(/["\\\n\r\t\u0000-\u001f\u007f]/g, (ch) => esc[ch] ?? `\\u{${ch.charCodeAt(0).toString(16)}}`)}"`;
+}
+
+/** A written KDL string's text: quotes off, escapes undone. */
+export function unquote(written) {
+  const t = written.trim();
+  const raw = t.match(/^(#+)"([\s\S]*)"\1$/);
+  if (raw) return raw[2];
+  if (!/^"[\s\S]*"$/.test(t)) return t;
+  return t.slice(1, -1).replace(/\\(u\{([0-9a-fA-F]+)\}|[\s\S])/g, (_, e, hex) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : ({ n: '\n', r: '\r', t: '\t', s: ' ' }[e] ?? e)));
 }
 
 /** Button choices stay direct only when they are certain to fit on one row. */
@@ -131,6 +149,9 @@ export class Lens {
     }
   }
 
+  /** Write control `name` of group `g`: through the group's own writer when it has one. */
+  put(g, name, value) { return g.set ? g.set(name, value) : this.api.set(g.at, name, value); }
+
   row(g, c, s) {
     const ro = !this.api.writable() || (s && s.file);
     const row = el('div', `row${s ? '' : ' faint'}`);
@@ -158,7 +179,7 @@ export class Lens {
         }
         select.value = words.some((w) => w.word === cur) ? cur : '';
         select.title = words.find((w) => w.word === cur)?.about || c.about || '';
-        select.onchange = () => this.api.set(g.at, c.name, select.value);
+        select.onchange = () => this.put(g, c.name, select.value);
         cell.append(select);
       } else {
         const box = el('span', 'words');
@@ -166,7 +187,7 @@ export class Lens {
           const b = el('button', w.word === cur ? 'on' : '', w.word);
           b.title = w.about || '';
           b.disabled = ro;
-          b.onclick = () => this.api.set(g.at, c.name, w.word);
+          b.onclick = () => this.put(g, c.name, w.word);
           box.append(b);
         }
         cell.append(box);
@@ -175,18 +196,19 @@ export class Lens {
       const on = /#?true/.test(shown);
       const b = el('button', `flip${on ? ' on' : ''}`, on ? 'on' : 'off');
       b.disabled = ro;
-      b.onclick = () => this.api.set(g.at, c.name, !on);
+      b.onclick = () => this.put(g, c.name, !on);
       cell.append(b);
     } else {
       const val = el('span', `val${ro ? ' ro' : ''}`);
       // a quoted value shows without its quotes ("20%" reads as 20%, like 100%);
       // they stay in the text, hidden, so a scrub rewrites them as written
-      const pre = (shown.match(/^#?"/) || [''])[0];
+      const pre = c.unit === 'text' ? '' : (shown.match(/^#?"/) || [''])[0];
       const post = pre ? (shown.slice(pre.length).match(/"#?$/) || [''])[0] : '';
-      const body = shown.slice(pre.length, shown.length - post.length);
+      // a description reads as its words: no quotes, no escapes
+      const body = c.unit === 'text' ? unquote(shown) : shown.slice(pre.length, shown.length - post.length);
       if (pre) val.append(el('span', 'q', pre));
       let last = 0;
-      for (const m of body.matchAll(NUM)) {
+      for (const m of c.unit === 'text' ? [] : body.matchAll(NUM)) {
         val.append(body.slice(last, m.index));
         const n = el('span', 'num', m[0]);
         if (!ro) this.scrubber(n, g, c, s, v);
@@ -198,12 +220,20 @@ export class Lens {
       if (!shown) val.append(el('span', 'unit', 'not set'));
       if (!ro) val.addEventListener('click', (e) => { if (!this.moved) this.typeIn(val, g, c, s, v, e); });
       cell.append(val);
-      if (c.unit && !['number', 'word', 'tag', 'count'].includes(c.unit)) cell.append(el('span', 'unit', c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit));
+      // a seed's dice: another arrangement, at random
+      if (c.name === 'seed' && !ro) {
+        const d = el('button', 'dice');
+        d.type = 'button'; d.title = 'Roll a new seed: another arrangement'; d.setAttribute('aria-label', 'Roll a new seed');
+        d.innerHTML = DICE;
+        d.onclick = () => this.put(g, c.name, 1 + Math.floor(Math.random() * 9999));
+        cell.append(d);
+      }
+      if (c.unit && !['number', 'word', 'tag', 'count', 'text'].includes(c.unit)) cell.append(el('span', 'unit', c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit));
     }
     if (s && !ro) {
       const x = el('button', 'x', '×');
       x.title = `Take ${c.name} out (back to its default)`;
-      x.onclick = () => this.api.set(g.at, c.name, null);
+      x.onclick = () => this.put(g, c.name, null);
       row.append(x);
     }
     return row;
@@ -215,7 +245,7 @@ export class Lens {
       if (e.button !== 0) return;
       e.preventDefault();
       this.moved = false;
-      if (!s) { this.moved = true; this.api.set(g.at, c.name, parseValue(c.default ?? '0')); return; } // write the default; drag again
+      if (!s) { this.moved = true; this.put(g, c.name, parseValue(c.default ?? '0')); return; } // write the default; drag again
       n.setPointerCapture(e.pointerId);
       const start = Number(n.textContent);
       const step = STEP[c.unit] ?? 0.1;
@@ -261,7 +291,9 @@ export class Lens {
   /** Type a value in place of the shown one. */
   typeIn(val, g, c, s, v) {
     const input = el('input', 'edit');
-    input.value = v ? v.text : (c.default ?? '');
+    const text = c.unit === 'text'; // plain words: typed without quotes, written as a KDL string
+    input.value = text ? unquote(v ? v.text : '') : v ? v.text : (c.default ?? '');
+    const was = input.value;
     input.spellcheck = false;
     val.replaceWith(input);
     input.focus();
@@ -270,9 +302,11 @@ export class Lens {
     const finish = (keep) => {
       if (done) return;
       done = true;
-      if (keep && input.value !== (v ? v.text : c.default ?? '')) {
-        if (s) this.api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), input.value.trim(), true);
-        else this.api.set(g.at, c.name, parseValue(input.value));
+      if (keep && input.value !== was) {
+        const typed = text ? input.value.trim() : null;
+        if (text && !typed) this.put(g, c.name, null);
+        else if (s) this.api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), text ? kdlString(typed) : input.value.trim(), true);
+        else this.put(g, c.name, text ? typed : parseValue(input.value));
       }
       this.show(this.model);
     };
