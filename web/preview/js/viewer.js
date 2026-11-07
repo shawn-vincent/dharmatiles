@@ -126,7 +126,7 @@ void main() {
 const FADE = 0.45, STALE = 0.3, SKETCH_PARTS = 0.7, SKETCH_ROUGH = 0.35;
 // Seconds the rest takes to fade when something is selected, and to come
 // back when nothing is; and a hover's, quicker.
-const FADE_IN = 0.12, FADE_OUT = 0.1, HOVER_S = 0.08;
+const FADE_IN = 0.12, FADE_OUT = 0.1, HOVER_S = 0.14;
 // The hover: with nothing selected the rest dims a little round what is
 // under the pointer; with a selection, what is under the pointer lifts
 // part way out of the fade.
@@ -795,12 +795,16 @@ export class Viewer {
     const selChange = selMoved || (t.rest !== rest && (t.rest === FADE || rest === FADE));
     const retarget = Object.keys(target).some((k) => t[k] !== target[k]);
     if (!can || reduceMotion()) this.fadeTo(target, 0);
-    else if (moved || retarget) this.fadeTo(target, selChange ? (selecting ? FADE_IN : FADE_OUT) : HOVER_S);
+    // a hover moves less than a selection: timed against its own full move
+    else if (moved || retarget) {
+      if (selChange) this.fadeTo(target, selecting ? FADE_IN : FADE_OUT, 1 - FADE);
+      else this.fadeTo(target, HOVER_S, Math.max(1 - HOVER_REST, HOVER_LIFT - FADE));
+    }
     this.showFade();
   }
 
-  /** Ease the rest and each thing standing out of it to `target` over `seconds` (0: at once). */
-  fadeTo(target, seconds) {
+  /** Ease the rest and each thing standing out of it to `target` over `seconds` (0: at once); a move shorter than `full` takes its share of the time. */
+  fadeTo(target, seconds, full = 1 - FADE) {
     if (this.fadeTween) cancelAnimationFrame(this.fadeTween);
     this.fadeTween = null;
     this.fxTarget = target;
@@ -808,7 +812,7 @@ export class Viewer {
     const far = Math.max(...Object.keys(target).map((k) => Math.abs(target[k] - from[k])));
     if (!seconds || far === 0) { Object.assign(this.fx, target); this.settleFade(); return; }
     // part of the way there already: the rest of the time, not all of it
-    const ms = seconds * 1000 * Math.min(1, far / (1 - FADE));
+    const ms = seconds * 1000 * Math.min(1, far / full);
     const t0 = performance.now();
     const tick = (now) => {
       const e = easeInOutCubic(Math.min(1, (now - t0) / ms));
