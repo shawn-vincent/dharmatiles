@@ -92,7 +92,6 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .history-menu code.removed { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 .history-menu code.added { color: var(--moss); }
 #title .grow { flex: 1; }
-#conn { font-size: 12px; white-space: nowrap; }
 #gate { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--raised); border-radius: 999px; padding: 5px 12px 5px 10px; cursor: pointer; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 #gate i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 #gate.fail { color: var(--over); } #gate.fail i { background: var(--over); }
@@ -313,7 +312,7 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
   #text, #properties-pane { border: 0; border-top: 1px solid var(--line); }
   #properties-pane { height: min(520px, 70vh); }
   #code { max-height: 60vh; }
-  #title .wordmark .txt, #conn { display: none; }
+  #title .wordmark .txt { display: none; }
   .history-label { display: none; }
   #status { min-width: 0; right: 12px; }
 }

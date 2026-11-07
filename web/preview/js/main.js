@@ -26,9 +26,11 @@ const viewer = new Viewer($('canvas'));
 
 const state = {
   tiles: [], roots: [], root: -1, selected: -1, overhangDeg: 55, steepestDeg: 65, system: 'db',
-  lastInRoot: new Map(), // root index -> the tile last chosen there
-  loaded: new Map(),   // tile index -> mesh_version shown
-  cameras: new Map(),  // tile index -> saved camera and active preset
+  live: false,         // the event stream is open and its snapshot in
+  ever: false,         // it has been, once: so a loss reads 'reconnecting…', not 'connecting…'
+  gap: false,          // it dropped since: the server's numbering may have started again
+  loaded: new Map(),   // tile index -> mesh_version shown (the server's numbering)
+  cameras: new Map(),  // tile path -> saved camera and active preset
   view: 'painted', activeView: null, buildStart: new Map(),
   sel: null,           // {entry, piece} (piece null: the whole entry) | {region} | {line} | {tile: true} | null
   hov: null,           // the same, under the pointer (view or text)
@@ -489,7 +491,7 @@ async function select(i, guarded = false) {
   if (!guarded && i !== state.selected && !(await canLeave())) return false;
   closeComp(); lens.hide();
   if (state.selected >= 0 && viewer.payload) {
-    state.cameras.set(state.selected, { camera: viewer.getCamera(), activeView: state.activeView });
+    state.cameras.set(tile().path, { camera: viewer.getCamera(), activeView: state.activeView });
   }
   if (i !== state.selected) {
     state.sel = null; state.hov = null; state.activeView = null;
@@ -509,13 +511,11 @@ async function select(i, guarded = false) {
     return true;
   }
   state.root = t.root;
-  state.lastInRoot.set(t.root, i);
-  history.replaceState(null, '', `#tile=${i}`);
+  history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
   // no mesh to frame yet and no view of yours kept: follow the build
-  following = t.mesh_version == null && !state.cameras.get(i) ? { i, b: null } : null;
+  following = t.mesh_version == null && !state.cameras.get(t.path) ? { i, b: null } : null;
   if (t.plan) viewer.setPlan(t.plan);
   followBuild();
-  if (t.status === 'idle') host.build(i);
   if (t.mesh_version != null) loadMesh(i, t.mesh_version);
   renderAll();
   // a build already running: what it has sent so far, not only what comes next
@@ -547,7 +547,7 @@ async function loadMesh(i, version) {
     sketchCache.clear(); viewer.setSketches([]);
     showBuild(state.tiles[i]);
     if (first) {
-      const saved = state.cameras.get(i);
+      const saved = state.cameras.get(state.tiles[i].path);
       if (saved) {
         viewer.setCamera(saved.camera);
         state.activeView = saved.activeView;
@@ -754,9 +754,13 @@ const sketchCache = new Map(); // sketch id -> Promise of its payload, or null
 let sketchGen = 0;
 function showBuild(t) {
   if (!t || t.index !== state.selected) return;
+  // the tile shown is built: asking again is harmless, and covers a server
+  // that restarted or a request lost while it was down
+  if (t.status === 'idle' && state.live) host.build(t.index);
   const shown = state.loaded.get(t.index);
   const current = t.status === 'ready' && t.mesh_version === shown;
-  viewer.setStale(shown != null && !drafts.shown && !current);
+  // what is shown is not the tile as it is: a build is on its way, or the server is away
+  viewer.setStale(shown != null && (!state.live || (!drafts.shown && !current)));
   syncSketches(t);
 }
 async function syncSketches(t) {
@@ -766,7 +770,8 @@ async function syncSketches(t) {
   const list = drafts.shown ? [] : (t.sketches || []);
   for (const k of list) {
     if (!sketchCache.has(k.id)) {
-      sketchCache.set(k.id, host.fetchSketch(t.index, k.id).then(parsePayload).catch(() => null));
+      // a failed fetch is not kept: the next sync asks again
+      sketchCache.set(k.id, host.fetchSketch(t.index, k.id).then(parsePayload).catch(() => { sketchCache.delete(k.id); return null; }));
     }
   }
   const got = await Promise.all(list.map(async (k) => ({ id: k.id, rough: k.rough, payload: await sketchCache.get(k.id) })));
@@ -788,16 +793,8 @@ async function check() {
   const t = tile();
   if (!t || texts.text == null) return false;
   const text = texts.text, seq = ++doc.checkSeq;
-  let r;
-  try {
-    r = await host.post(`/api/tiles/${t.index}/check`, { text, file: texts.file === t.path ? undefined : texts.file });
-  } catch {
-    if (seq === doc.checkSeq && text === texts.text && t === tile()) {
-      doc.note = 'cannot check while the editor is disconnected';
-      renderTextBar();
-    }
-    return false;
-  }
+  const r = await host.post(`/api/tiles/${t.index}/check`, { text, file: texts.file === t.path ? undefined : texts.file });
+  if (r.status === 0) return false; // the server is away: not checked yet, and checked again when it is back
   if (seq !== doc.checkSeq || text !== texts.text || !r.body || t !== tile()) return false;
   doc.note = null;
   doc.checked = text;
@@ -818,6 +815,7 @@ async function check() {
 async function save(now = false) {
   if (!doc.writable || !dirty()) return !dirty();
   if (doc.saving) return false;
+  if (!state.live) { renderTextBar(); return false; } // saved when the server is back
   if (doc.checked !== texts.text) {
     if (now) await check();
     else { doc.saveTimer = setTimeout(save, 250); return false; }
@@ -833,8 +831,6 @@ async function save(now = false) {
     if (r.status === 200) { doc.base = text; doc.conflict = null; }
     else if (r.status === 409) doc.conflict = r.body?.text ?? '';
     else doc.note = r.body?.error || `could not save (${r.status})`;
-  } catch {
-    doc.note = 'cannot save while the editor is disconnected';
   } finally {
     doc.saving = false;
     renderTextBar();
@@ -938,7 +934,7 @@ function renderTextBar() {
     st.append(button('take the disk’s', () => { const d = doc.conflict; doc.conflict = null; doc.base = d; texts.setText(d); record(d, 'disk'); changed(); }), ' or ',
       button('keep mine', () => { doc.base = doc.conflict; doc.conflict = null; changed(); }));
   } else if (doc.note) st.textContent = doc.note;
-  else if (f) st.textContent = doc.saving ? 'saving…' : !dirty() ? 'saved' : doc.checked === texts.text && !doc.ok ? 'not saved: a mistake' : 'editing…';
+  else if (f) st.textContent = doc.saving ? 'saving…' : !dirty() ? 'saved' : !state.live ? 'not saved yet: waiting for dharmatiles preview' : doc.checked === texts.text && !doc.ok ? 'not saved: a mistake' : 'editing…';
   // the first mistake, in words, under the text
   const hint = $('codehint');
   const e = doc.checked === texts.text && !doc.ok ? doc.errors.find((x) => !x.file || x.file === texts.file) || doc.errors[0] : null;
@@ -1561,8 +1557,14 @@ function renderTitle() {
   clearInterval(timer);
   $('verdict').hidden = true;
   $('show-worst').hidden = true;
+  // waiting has one look, whether for a build or for the server: the chip's
+  // pulsing dot and the status strip (and in the view, the faded tile)
+  const away = !state.live;
+  const awayLabel = state.ever ? 'reconnecting…' : 'connecting…';
   if (!t) {
-    status.hidden = true; errs.hidden = true; gate.hidden = true; $('export').hidden = true;
+    status.hidden = true; errs.hidden = true; $('export').hidden = true;
+    gate.hidden = !away;
+    if (away) { gate.className = 'busy'; $('gatetext').textContent = awayLabel; }
     $('tilename').textContent = ''; $('tilewhere').textContent = 'Tiles'; $('tileplan').textContent = '';
     $('forward').hidden = true;
     if (!browsing()) showBrowser();
@@ -1580,7 +1582,12 @@ function renderTitle() {
   $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares · ${state.system === 'ol' ? 'OpenLOCK' : 'DungeonBlocks'}` : '';
   // building…
   const building = t.status === 'building' || t.status === 'idle';
-  if (building) {
+  const busy = building || away, busyLabel = away ? awayLabel : 'building';
+  if (away) {
+    status.hidden = false;
+    $('bar-fill').style.width = '0%';
+    $('status-text').textContent = 'Waiting for dharmatiles preview…';
+  } else if (building) {
     if (!state.buildStart.has(t.index)) state.buildStart.set(t.index, performance.now());
     // before the first progress event there is only the clock
     const tick = () => {
@@ -1613,9 +1620,9 @@ function renderTitle() {
   const r = t.record;
   gate.hidden = false;
   renderExport();
-  gate.className = building ? 'busy' : '';
+  gate.className = busy ? 'busy' : '';
   if (!r) {
-    $('gatetext').textContent = building ? 'building' : t.status === 'failed' ? 'no build' : '–';
+    $('gatetext').textContent = busy ? busyLabel : t.status === 'failed' ? 'no build' : '–';
     if (t.status === 'failed') gate.className = 'fail';
     row(dl, 'State', { idle: 'Not built yet', building: 'Building', failed: 'Failed', ready: 'Ready' }[t.status] || t.status);
     return;
@@ -1623,8 +1630,8 @@ function renderTitle() {
   const a = r.audit;
   const stale = t.status === 'failed' ? ' (last good build)' : '';
   const fails = a.failures.length > 0;
-  if (!building) gate.className = fails ? 'fail' : (a.band_mm2 > 0 || a.overhang_mm2 > 0) ? 'warn' : '';
-  $('gatetext').textContent = building ? 'building' : fails ? 'fails the gate' : 'passes';
+  if (!busy) gate.className = fails ? 'fail' : (a.band_mm2 > 0 || a.overhang_mm2 > 0) ? 'warn' : '';
+  $('gatetext').textContent = busy ? busyLabel : fails ? 'fails the gate' : 'passes';
   if (drafts.shown) {
     const tag = document.createElement('span');
     tag.className = 'tag'; tag.textContent = 'draft';
@@ -1664,10 +1671,40 @@ function renderTitle() {
 }
 
 // ---- live updates ----------------------------------------------------
+/**
+ * After the stream dropped, the server may be a new one, numbering its
+ * meshes, sketches and drafts from the start again: forget what was
+ * keyed by its numbers, and find the tile shown again by its path.
+ */
+function afterGap(m) {
+  const path = tile()?.path;
+  state.loaded.clear();
+  sketchCache.clear();
+  Object.assign(drafts, { sent: 0, waiting: false, again: false, shown: false });
+  if (path == null) return;
+  const i = m.tiles.findIndex((t) => t.path === path && !t.gone);
+  // the text pane's document follows its tile to its new number, unsaved edits and all
+  if (doc.tile === state.selected) doc.tile = i;
+  state.selected = i;
+  state.textFor = null;
+}
+
 host.connect({
-  onState: (s) => { $('conn').textContent = s === 'live' ? '' : s; },
+  onState: (s) => {
+    state.live = s === 'live';
+    state.ever ||= state.live;
+    if (!state.live) state.gap = true;
+    renderTitle();
+    showBuild(tile());
+  },
   onSnapshot: (m) => {
-    state.tiles = m.tiles; state.roots = m.roots || []; state.overhangDeg = m.overhang_deg; state.steepestDeg = m.steepest_deg ?? m.overhang_deg + 10; state.system = m.system;
+    const gapped = state.gap;
+    state.gap = false;
+    if (gapped) afterGap(m);
+    state.tiles = m.tiles; state.roots = m.roots || [];
+    // an edit the server never got: checked, drafted and saved now
+    if (gapped && tile() && dirty()) { changed(); askDraft(); }
+    state.overhangDeg = m.overhang_deg; state.steepestDeg = m.steepest_deg ?? m.overhang_deg + 10; state.system = m.system;
     $('lg-orange').textContent = `${state.overhangDeg}–${state.steepestDeg}°: allowed within budget`;
     $('lg-red').textContent = `Over ${state.steepestDeg}°: small patches allowed, more fails`;
     const cur = state.tiles[state.selected];
@@ -1686,9 +1723,10 @@ host.connect({
       return;
     }
     // the first snapshot: the tile in the address, else the first root with tiles
-    const want = (location.hash.match(/tile=(\d+)/) || [])[1];
+    const want = decodeURIComponent((location.hash.match(/tile=([^&]+)/) || [])[1] || '');
     const wantRoot = (location.hash.match(/root=(\d+)/) || [])[1];
-    if (want != null && state.tiles[want] && !state.tiles[want].gone) return select(Number(want));
+    const wanted = want ? state.tiles.findIndex((t) => t.path === want && !t.gone) : -1;
+    if (wanted >= 0) return select(wanted);
     const roots = state.roots.length ? state.roots.map((_, i) => i) : [0];
     state.root = wantRoot != null && state.roots[wantRoot] ? Number(wantRoot)
       : (roots.find((r) => inRoot(r).length) ?? roots[0]);

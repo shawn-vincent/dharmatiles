@@ -48,6 +48,7 @@
   <li><strong>The view is in place before the first build:</strong> it frames a 1×1 tile at once, then the tile's own footprint, follows the parts as they stream in, and flies to the finished tile.</li>
   <li><strong>No tint on a faded selection:</strong> the fade marks it; the tint comes back with the fade off, or while a rebuild runs.</li>
   <li><strong>Hover shows through the fade too:</strong> with nothing selected, the rest dims a little round what is under the pointer; with a selection, what is under the pointer lifts part way out of the fade, and clicking it rises the rest of the way. Moving between parts cross-fades them.</li>
+  <li><strong>The page waits for the program and reconnects:</strong> when <code>dharmatiles preview</code> stops, the gate chip pulses <em>reconnecting…</em> and the tile fades and breathes, as for a build; when it starts again, however long after, the page carries on with the same tile, rebuilding it if needed and saving an edit typed meanwhile. Before, the page could stay stuck: waiting to build forever, showing an old mesh, or ignoring drafts after a restart.</li>
 </ul>
 
 <h2 id="v0.7.0">0.7.0 <small>7 November 2026</small></h2>
