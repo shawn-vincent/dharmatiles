@@ -68,7 +68,7 @@ void main() {
 // ordinary zero-based entries and a piece of -1 means the whole entry.
 const FRAG = `
 uniform vec3 uCam; uniform vec3 uDir; uniform float uOrtho; uniform vec3 uL1; uniform vec3 uL2;
-uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uAccent;
+uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uAccent; uniform float uTintSel;
 uniform vec2 uKeep; uniform vec2 uLeave; uniform float uKeepA; uniform float uLeaveA;
 uniform float uMode; uniform float uGhost; // 0 all; 2 the rest, faded; 3 all, faded; 4 the kept and leaving things
 varying vec3 vN; varying vec3 vC; varying vec3 vP; varying vec2 vWho;
@@ -87,7 +87,8 @@ void main() {
   if (dot(n, ray) > 0.0) n = -n;
   float shade = 0.3 + max(dot(n, uL1), 0.0) + 0.35 * max(dot(n, uL2), 0.0);
   vec3 c = pow(clamp(vC * shade * 0.95, 0.0, 1.0), vec3(1.0 / 1.25));
-  float k = max(is(uSel) * 0.42, is(uHov) * 0.22);
+  // the fade marks the selection; without it, the tint does
+  float k = max(is(uSel) * 0.42 * uTintSel, is(uHov) * 0.22);
   c = mix(c, uAccent * (0.55 + 0.45 * shade), k);
   float a = uMode > 3.5 ? mix(uLeaveA, uKeepA, keep) : uMode > 1.5 ? uGhost : 1.0;
   gl_FragColor = vec4(c, a);
@@ -137,7 +138,7 @@ export class Viewer {
     this.initInertia();
     this.uniforms = {
       uCam: { value: new THREE.Vector3() }, uDir: { value: new THREE.Vector3(0, 1, 0) }, uOrtho: { value: 0 }, uL1: { value: new THREE.Vector3() }, uL2: { value: new THREE.Vector3() },
-      uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) }, uKeep: { value: new THREE.Vector2(-1, -1) }, uLeave: { value: new THREE.Vector2(-1, -1) }, uKeepA: { value: 1 }, uLeaveA: { value: 1 }, uAccent: { value: new THREE.Color(0.15, 0.48, 0.38) },
+      uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) }, uKeep: { value: new THREE.Vector2(-1, -1) }, uLeave: { value: new THREE.Vector2(-1, -1) }, uKeepA: { value: 1 }, uLeaveA: { value: 1 }, uTintSel: { value: 0 }, uAccent: { value: new THREE.Color(0.15, 0.48, 0.38) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: { ...this.uniforms, uMode: { value: 0 }, uGhost: { value: 1 } }, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
@@ -748,6 +749,7 @@ export class Viewer {
     this.ghost.u.uMode.value = this.stale ? 3 : 2;
     const u = this.uniforms, sel = u.uSel.value, keep = u.uKeep.value, leave = u.uLeave.value;
     const fading = this.fade && sel.x >= 0 && !this.stale && !sketched;
+    u.uTintSel.value = this.fade && !this.stale && !sketched ? 0 : 1;
     const same = (a, b) => a.x === b.x && a.y === b.y;
     const fx = this.fx;
     const moved = fading && !same(sel, keep);
