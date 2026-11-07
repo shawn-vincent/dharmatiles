@@ -110,20 +110,20 @@ tile size="1x1" seed=62 {
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr id="c-style"><td><code>style</code></td><td>word</td><td><code>cut-stone</code></td><td>how stones are made and laid<dl class="words"><dt><code>fieldstone</code></dt><dd>drystone fieldstone</dd><dt><code>cut-stone</code></dt><dd>dressed ashlar</dd><dt><code>brick</code></dt><dd>irregular brick</dd><dt><code>regular-brick</code></dt><dd>uniform brick in running bond</dd></dl></td></tr>
-<tr id="c-height"><td><code>height</code></td><td>mm</td><td><code>full</code></td><td>height above what it stands on<dl class="words"><dt><code>full</code></dt><dd>up to the wall-top level</dd><dt><code>low</code></dt><dd>half the wall top (provisional)</dd></dl></td></tr>
-<tr id="c-thickness"><td><code>thickness</code></td><td>mm</td><td><code>7</code></td><td>wall thickness</td></tr>
+<tr id="c-height"><td><code>height</code></td><td>mm, 6 to 200</td><td><code>full</code></td><td>height above what it stands on<dl class="words"><dt><code>full</code></dt><dd>up to the wall-top level</dd><dt><code>low</code></dt><dd>half the wall top (provisional)</dd></dl></td></tr>
+<tr id="c-thickness"><td><code>thickness</code></td><td>mm, 2 to 40</td><td><code>7</code></td><td>wall thickness</td></tr>
 <tr id="c-stones"><td><code>stones</code></td><td>group</td><td>—</td><td>stone size</td></tr>
-<tr id="c-stones-height"><td><code>stones height</code></td><td>mm</td><td>—</td><td>course height</td></tr>
-<tr id="c-stones-length"><td><code>stones length</code></td><td>mm</td><td>—</td><td>stone length along the wall</td></tr>
+<tr id="c-stones-height"><td><code>stones height</code></td><td>mm, 1 to 40, or a range</td><td>—</td><td>course height</td></tr>
+<tr id="c-stones-length"><td><code>stones length</code></td><td>mm, 2 to 80, or a range</td><td>—</td><td>stone length along the wall</td></tr>
 <tr id="c-stones-texture"><td><code>stones texture</code></td><td>word</td><td>—</td><td>surface finish of each stone<dl class="words"><dt><code>chipped</code></dt><dd>chipped cut stone (Hirst Arts m50)</dd><dt><code>worn</code></dt><dd>soft, weathered</dd><dt><code>hewn</code></dt><dd>rough-hewn all over</dd><dt><code>dressed</code></dt><dd>near-smooth ashlar, crisp edges</dd></dl></td></tr>
 <tr id="c-joints"><td><code>joints</code></td><td>group</td><td>—</td><td>the gaps between stones</td></tr>
-<tr id="c-joints-width"><td><code>joints width</code></td><td>mm</td><td>—</td><td>mortar gap</td></tr>
-<tr id="c-joints-depth"><td><code>joints depth</code></td><td>mm</td><td>—</td><td>how deep the gaps between stones look</td></tr>
+<tr id="c-joints-width"><td><code>joints width</code></td><td>mm, 0 to 3</td><td>—</td><td>mortar gap</td></tr>
+<tr id="c-joints-depth"><td><code>joints depth</code></td><td>mm, 0 to 5</td><td>—</td><td>how deep the gaps between stones look</td></tr>
 <tr id="c-edges"><td><code>edges</code></td><td>group</td><td>—</td><td>the stone corners</td></tr>
-<tr id="c-edges-rounding"><td><code>edges rounding</code></td><td>mm</td><td>—</td><td>how worn the stone corners are</td></tr>
+<tr id="c-edges-rounding"><td><code>edges rounding</code></td><td>mm, 0 to 5, or a range</td><td>—</td><td>how worn the stone corners are</td></tr>
 <tr id="c-coping"><td><code>coping</code></td><td>word</td><td>—</td><td>what tops a drystone wall<dl class="words"><dt><code>loose</code></dt><dd>loose stones perched on top</dd><dt><code>on-edge</code></dt><dd>stones set on edge</dd></dl></td></tr>
 <tr id="c-bond"><td><code>bond</code></td><td>word</td><td>—</td><td>random courses, or brick-style offsets<dl class="words"><dt><code>irregular</code></dt><dd>random courses and bays</dd><dt><code>running</code></dt><dd>uniform courses, half-unit offsets</dd></dl></td></tr>
-<tr id="c-ruin"><td><code>ruin</code></td><td>percent</td><td>—</td><td>how much has fallen</td></tr>
+<tr id="c-ruin"><td><code>ruin</code></td><td>percent, 0% to 100%</td><td>—</td><td>how much has fallen</td></tr>
 <tr id="c-top"><td><code>top</code></td><td>word</td><td>—</td><td>castle crenellations<dl class="words"><dt><code>flat</code></dt><dd>a flat top</dd><dt><code>battlements</code></dt><dd>merlons and crenels</dd></dl></td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>

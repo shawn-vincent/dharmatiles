@@ -119,8 +119,12 @@ pub struct Control {
     /// Expert controls are accepted in `define`s (parts files) and
     /// refused in tiles.
     pub expert: bool,
-    /// The sensible range for a number, used to catch slips.
-    pub limits: Option<(f64, f64)>,
+    /// The numbers it takes, as the element reads them: mm at the
+    /// reference square, a share as a fraction.  `None` for any number its
+    /// axis allows.
+    pub limits: Option<Limits>,
+    /// True when it takes a range (`size="6..15"`), drawn from per thing.
+    pub ranges: bool,
     /// The default, as an author would write it; empty if none.
     pub default: &'static str,
     /// One line of help.
@@ -155,10 +159,186 @@ impl Control {
         Some(Value::Num(Num { expr, unit: None }))
     }
 
+    /// The numbers it takes, for a table or a hint: "20 to 120",
+    /// "0% to 100%", "over 0", with ", or a range" when it takes one;
+    /// `None` when its axis says it all.
+    #[must_use]
+    pub fn takes(&self) -> Option<String> {
+        let share = self.value == Some(Axis::Share);
+        let shown = |v: f64| {
+            if share {
+                format!("{}%", fmt(v * 100.0))
+            } else {
+                fmt(v)
+            }
+        };
+        let limits = self.limits.map(|l| l.describe(shown));
+        match (limits, self.ranges) {
+            (Some(l), true) => Some(format!("{l}, or a range")),
+            (Some(l), false) => Some(l),
+            (None, true) => Some("a number or a range".to_owned()),
+            (None, false) => None,
+        }
+    }
+
     /// True for a group: sub-controls only, no value of its own.
     #[must_use]
     pub fn is_group(&self) -> bool {
         self.value.is_none()
+    }
+}
+
+/// The numbers a control takes: from `min` (or over it, when `above`) up
+/// to `max`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Limits {
+    /// The low end.
+    pub min: f64,
+    /// The high end; infinite for no high end.
+    pub max: f64,
+    /// True when `min` itself is refused: "over 0".
+    pub above: bool,
+}
+
+impl Limits {
+    /// True when `v` is one of the numbers.
+    #[must_use]
+    pub fn holds(&self, v: f64) -> bool {
+        v.is_finite()
+            && (if self.above {
+                v > self.min
+            } else {
+                v >= self.min
+            })
+            && v <= self.max
+    }
+
+    /// The numbers in words, each shown by `show`: "1 to 6", "over 0",
+    /// "over 0, up to 200".
+    #[must_use]
+    pub fn describe(&self, show: impl Fn(f64) -> String) -> String {
+        let (lo, hi) = (show(self.min), show(self.max));
+        match (self.above, self.max.is_finite()) {
+            (false, true) => format!("{lo} to {hi}"),
+            (false, false) => format!("{lo} or more"),
+            (true, true) => format!("over {lo}, up to {hi}"),
+            (true, false) => format!("over {lo}"),
+        }
+    }
+}
+
+/// A number as an author writes it: no trailing zeros.
+fn fmt(v: f64) -> String {
+    if v.is_nan() {
+        return "NaN".to_owned();
+    }
+    if v.is_infinite() {
+        return if v > 0.0 { "∞" } else { "-∞" }.to_owned();
+    }
+    let s = format!("{v:.4}");
+    s.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+/// Why a value is refused: the message, the label at the value, and what
+/// to write instead.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Refusal {
+    /// What is wrong.
+    pub message: String,
+    /// A word or two at the value.
+    pub label: &'static str,
+    /// What to write instead.
+    pub help: Option<String>,
+}
+
+impl Control {
+    /// The one check of a number written for this control, `lo..hi` (one
+    /// number has `lo == hi`), with names already resolved, in the units
+    /// the element reads.  `range` is true when it was written as a range.
+    /// `owner` and the control's name word the message: `tree height`.
+    ///
+    /// # Errors
+    /// The [`Refusal`] for a value the control does not take.
+    pub fn check(&self, owner: &str, lo: f64, hi: f64, range: bool) -> Result<(), Refusal> {
+        check(
+            self.value.unwrap_or(Axis::Number),
+            self.limits,
+            self.ranges,
+            (owner, self.name),
+            (lo, hi, range),
+        )
+    }
+}
+
+/// [`Control::check`], for a value whose control is known only by its
+/// axis (then it takes any range of numbers the axis allows).
+///
+/// # Errors
+/// The [`Refusal`] for a value the axis does not take.
+pub fn check(
+    axis: Axis,
+    limits: Option<Limits>,
+    ranges: bool,
+    (owner, name): (&str, &str),
+    (lo, hi, range): (f64, f64, bool),
+) -> Result<(), Refusal> {
+    {
+        let refuse = |message: String, label, help: Option<String>| {
+            Err(Refusal {
+                message,
+                label,
+                help,
+            })
+        };
+        if range && !ranges {
+            return refuse(
+                format!("`{owner} {name}` takes one number, not a range"),
+                "a range",
+                Some(format!("write one number, such as {name}={}", fmt(lo))),
+            );
+        }
+        if lo > hi {
+            return refuse(
+                "a range is written low end first".to_owned(),
+                "high..low",
+                Some(format!("write \"{}..{}\"", fmt(hi), fmt(lo))),
+            );
+        }
+        if matches!(axis, Axis::Mm | Axis::Count | Axis::PerSquare) && lo < 0.0 {
+            return refuse(
+                format!("`{owner} {name}` can't be negative"),
+                "below zero",
+                None,
+            );
+        }
+        if axis == Axis::Count && (lo.fract() != 0.0 || hi.fract() != 0.0) {
+            return refuse(
+                format!("`{owner} {name}` is a count of whole things"),
+                "not whole",
+                Some("per-square densities may be fractions; counts can't".to_owned()),
+            );
+        }
+        if let Some(l) = limits
+            && !(l.holds(lo) && l.holds(hi))
+        {
+            let shown = |v: f64| match axis {
+                Axis::Share => format!("{}%", fmt(v * 100.0)),
+                Axis::Mm => format!("{} mm", fmt(v)),
+                _ => fmt(v),
+            };
+            let limits = l.describe(shown);
+            let written = if range {
+                format!("{}..{}", shown(lo), shown(hi))
+            } else {
+                shown(lo)
+            };
+            return refuse(
+                format!("`{owner} {name}` is {limits}, not {written}"),
+                "out of range",
+                Some(format!("`{name}` takes {limits}")),
+            );
+        }
+        Ok(())
     }
 }
 

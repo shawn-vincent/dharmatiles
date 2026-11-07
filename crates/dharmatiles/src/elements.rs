@@ -122,7 +122,10 @@ fn control_json(takes: Option<&[&str]>, path: &str, c: &Control) -> Value {
     json!({
         "name": c.name,
         "unit": c.value.map(unit),
-        "limits": c.limits.map(|(lo, hi)| [lo, hi]),
+        // the numbers as a slider would bound them; `takes` says it in words
+        "limits": c.limits.filter(|l| l.max.is_finite()).map(|l| [l.min, l.max]),
+        "ranges": c.ranges,
+        "takes": c.takes(),
         "default": (!c.default.is_empty()).then_some(c.default),
         "required": c.required,
         "expert": c.expert,
@@ -174,8 +177,8 @@ fn rows(takes: Option<&[&str]>, path: &str, c: &'static Control, depth: usize, o
     let mut kind = c
         .value
         .map_or_else(|| "group".to_owned(), |a| unit(a).to_owned());
-    if let Some((lo, hi)) = c.limits {
-        let _ = write!(kind, " {lo}..{hi}");
+    if let Some(t) = c.takes() {
+        let _ = write!(kind, ", {t}");
     }
     let mut flags = Vec::new();
     if c.required {

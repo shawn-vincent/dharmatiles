@@ -98,8 +98,7 @@ impl Water {
         let mut level_mm = f64::NAN;
         for c in controls {
             if c.name == "level" {
-                level_mm = read::positive(c)
-                    .map_err(|e| e.with_help("write level=water or mm, such as level=2.6"))?;
+                level_mm = read::number(c)?;
             }
         }
         if level_mm.is_nan() {

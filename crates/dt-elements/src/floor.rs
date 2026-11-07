@@ -39,7 +39,7 @@ impl Floor {
         only("floor", controls, CONTROLS)?;
         let get = |n: &str| controls.iter().find(|c| c.name == n);
         let fieldstone = match get("style") {
-            Some(c) => read::word(c, &["cut-stone", "fieldstone"])? == "fieldstone",
+            Some(c) => read::word(c)? == "fieldstone",
             None => false,
         };
         let mut m = if fieldstone {
@@ -65,7 +65,7 @@ impl Floor {
         for c in controls {
             match c.name.as_str() {
                 "texture" => {
-                    let w = read::word(c, &["chipped", "worn", "hewn", "dressed"])?;
+                    let w = read::word(c)?;
                     if let Some(t) = wall::texture(w) {
                         if fieldstone {
                             m.relief = Some(t.2);
@@ -75,7 +75,7 @@ impl Floor {
                     }
                 }
                 "slabs" => {
-                    let v = read::number(c, 1.0, 6.0)?;
+                    let v = read::number(c)?;
                     if v.fract() != 0.0 {
                         return Err(LookError::control(
                             "slabs",
@@ -91,7 +91,7 @@ impl Floor {
                 "level" => {
                     m.thickness = match &c.value {
                         Value::Word(w) if w == "floor" => 7.4,
-                        _ => read::number(c, 1.0, 30.0)?,
+                        _ => read::number(c)?,
                     }
                 }
                 _ => {}

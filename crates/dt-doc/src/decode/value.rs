@@ -321,54 +321,14 @@ impl Decoder<'_> {
                 1.0
             };
             let (lo, hi) = (lo * mult, hi * mult);
-            if lo > hi {
-                self.err(
-                    "dt::range",
-                    span,
-                    "a range is written low end first",
-                    "high..low",
-                )
-                .help = Some(format!("write \"{}..{}\"", fmt_num(hi), fmt_num(lo)));
-                return None;
-            }
-            if matches!(axis, Axis::Mm | Axis::Count | Axis::PerSquare) && lo < 0.0 {
-                self.err(
-                    "dt::range",
-                    span,
-                    format!("`{owner} {name}` can't be negative"),
-                    "below zero",
-                );
-                return None;
-            }
-            if axis == Axis::Count && (lo.fract() != 0.0 || hi.fract() != 0.0) {
-                self.err(
-                    "dt::range",
-                    span,
-                    format!("`{owner} {name}` is a count of whole things"),
-                    "not whole",
-                )
-                .help = Some("per-square densities may be fractions; counts can't".to_owned());
-                return None;
-            }
-            if let Some((min, max)) = k.and_then(|k| k.limits)
-                && (lo < min || hi > max)
-            {
-                self.err(
-                    "dt::range",
-                    span,
-                    format!(
-                        "`{owner} {name}` is outside {}–{}",
-                        fmt_num(min),
-                        fmt_num(max)
-                    ),
-                    "out of range",
-                )
-                .help = Some(format!(
-                    "`{name}` takes {} to {}{}",
-                    fmt_num(min),
-                    fmt_num(max),
-                    if matches!(axis, Axis::Mm) { " mm" } else { "" }
-                ));
+            let checked = match k {
+                Some(k) => k.check(owner, lo, hi, x.is_range()),
+                None => {
+                    crate::schema::check(axis, None, true, (owner, name), (lo, hi, x.is_range()))
+                }
+            };
+            if let Err(r) = checked {
+                self.err("dt::range", span, r.message, r.label).help = r.help;
                 return None;
             }
         }

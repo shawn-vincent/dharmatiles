@@ -870,20 +870,27 @@ impl Reader<'_> {
         let mut ok = true;
         for s in &e.controls {
             // the control's own value, then its sub-controls as `control/sub`
-            let mut items: Vec<(
-                String,
-                &Spanned<Value>,
-                SourceSpan,
-                Option<&'static Control>,
-            )> = Vec::new();
+            let mut items: Vec<Item<'_>> = Vec::new();
             if let Some(v) = &s.value {
-                items.push((s.name.value.clone(), v, s.span, s.control));
+                items.push(Item {
+                    name: s.name.value.clone(),
+                    owner: element.name,
+                    value: v,
+                    span: s.span,
+                    control: s.control,
+                });
             }
             for sub in &s.subs {
                 let name = format!("{}/{}", s.name.value, sub.name.value);
                 match &sub.value {
                     Some(v) if takes.contains(&name.as_str()) => {
-                        items.push((name, v, sub.span, sub.control));
+                        items.push(Item {
+                            name,
+                            owner: &s.name.value,
+                            value: v,
+                            span: sub.span,
+                            control: sub.control,
+                        });
                     }
                     _ => {
                         ok = false;
@@ -903,7 +910,14 @@ impl Reader<'_> {
                     &format!("the group `{}` on `{}` is", s.name.value, element.name),
                 ));
             }
-            for (name, v, span, control) in items {
+            for Item {
+                name,
+                owner,
+                value: v,
+                span,
+                control,
+            } in items
+            {
                 let b = bind(v, src, scope);
                 let value = match value(&b, &scope.levels) {
                     Ok(v) => v,
@@ -913,6 +927,12 @@ impl Reader<'_> {
                         continue;
                     }
                 };
+                if let Some(c) = control
+                    && let Err(why) = checked(c, owner, &value, &b)
+                {
+                    self.errors.push(*why);
+                    continue;
+                }
                 if !takes.contains(&name.as_str()) {
                     // a control written at its default changes nothing
                     let default = control.and_then(|c| default_value(c, &scope.levels));
@@ -940,6 +960,36 @@ impl Reader<'_> {
         }
         ok.then_some(out)
     }
+}
+
+/// One value written for a control: its own, or a sub-control's
+/// (`crown/width`, owned by `crown`).
+struct Item<'a> {
+    name: String,
+    owner: &'a str,
+    value: &'a Spanned<Value>,
+    span: SourceSpan,
+    control: Option<&'static Control>,
+}
+
+/// The schema's check of a value once its names are resolved (decode
+/// checked it already when it was a plain number).
+fn checked(
+    c: &'static Control,
+    owner: &str,
+    v: &dt_elements::Value,
+    b: &Bound,
+) -> Result<(), Box<Diag>> {
+    let (lo, hi, range) = match *v {
+        dt_elements::Value::Number(x) => (x, x, false),
+        dt_elements::Value::Range(lo, hi) => (lo, hi, true),
+        dt_elements::Value::Word(_) => return Ok(()),
+    };
+    c.check(owner, lo, hi, range).map_err(|r| {
+        let mut d = Diag::at(&b.src, b.value.span, "dt::range", r.message, r.label);
+        d.help = r.help;
+        Box::new(d)
+    })
 }
 
 /// One setting for an element, and, for a word that stands for numbers

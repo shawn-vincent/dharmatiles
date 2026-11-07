@@ -225,8 +225,7 @@ impl Wall {
         only("wall", controls, CONTROLS)?;
         let get = |n: &str| controls.iter().find(|c| c.name == n);
         let family = match get("style") {
-            Some(c) => match read::word(c, &["cut-stone", "fieldstone", "brick", "regular-brick"])?
-            {
+            Some(c) => match read::word(c)? {
                 "fieldstone" => Family::Fieldstone,
                 "brick" => Family::Brick,
                 "regular-brick" => Family::RegularBrick,
@@ -242,14 +241,14 @@ impl Wall {
                     m.height = match &c.value {
                         Value::Word(w) if w == "full" => Height::Top(WALL_TOP_MM),
                         Value::Word(w) if w == "low" => Height::Top(LOW_TOP_MM),
-                        _ => Height::Rel(read::number(c, 6.0, 200.0)?),
+                        _ => Height::Rel(read::number(c)?),
                     }
                 }
-                "thickness" => m.thickness = read::number(c, 2.0, 40.0)?,
-                "stones/height" => m.course = read::span(c, 1.0, 40.0)?,
-                "stones/length" => m.bay = read::span(c, 2.0, 80.0)?,
+                "thickness" => m.thickness = read::number(c)?,
+                "stones/height" => m.course = read::span(c)?,
+                "stones/length" => m.bay = read::span(c)?,
                 "stones/texture" => {
-                    let w = read::word(c, &["chipped", "worn", "hewn", "dressed"])?;
+                    let w = read::word(c)?;
                     if let Some(t) = texture(w) {
                         if family == Family::Fieldstone {
                             // fieldstone keeps its pebble roundings; the
@@ -260,30 +259,25 @@ impl Wall {
                         }
                     }
                 }
-                "joints/width" => m.joint = read::number(c, 0.0, 3.0)?,
+                "joints/width" => m.joint = read::number(c)?,
                 "joints/depth" => {
-                    m.reveal = read::number(c, 0.0, 5.0)?;
+                    m.reveal = read::number(c)?;
                     depth_set = true;
                 }
-                "edges/rounding" => m.rounding = read::span(c, 0.0, 5.0)?,
-                "coping" => m.coping_on_edge = read::word(c, &["loose", "on-edge"])? == "on-edge",
+                "edges/rounding" => m.rounding = read::span(c)?,
+                "coping" => m.coping_on_edge = read::word(c)? == "on-edge",
                 "bond" => {
-                    m.bond = if read::word(c, &["irregular", "running"])? == "running" {
+                    m.bond = if read::word(c)? == "running" {
                         Bond::Running
                     } else {
                         Bond::Irregular
                     }
                 }
                 "ruin" => {
-                    // a share: dt-doc takes it only as a percent and the
-                    // evaluator hands it on divided by 100, so the element
-                    // reads 0..1 and nothing else (no bare-number guess:
-                    // `150%` is refused, not read as 1.5%)
-                    m.ruin = read::share(c, 0.0, 1.0).map_err(|e| {
-                        e.with_help("write how much has fallen, such as ruin=\"40%\"")
-                    })?;
+                    // a share, written as a percent: the element reads 0..1
+                    m.ruin = read::number(c)?;
                 }
-                "top" => m.battlements = read::word(c, &["flat", "battlements"])? == "battlements",
+                "top" => m.battlements = read::word(c)? == "battlements",
                 _ => {}
             }
         }
@@ -372,9 +366,6 @@ mod tests {
         .unwrap();
         assert!((w.mason.chip - 0.80).abs() < 1e-12);
         assert!((w.mason.ruin - 0.4).abs() < 1e-12);
-        assert!(Wall::new(&[c("bond", Value::Word("herringbone".into()))]).is_err());
-        // a share is 0..1: `150%` is refused, not read as 1.5 %
-        assert!(Wall::new(&[c("ruin", Value::Number(1.5))]).is_err());
     }
 
     #[test]

@@ -115,7 +115,7 @@ fn elements_ground_lists_its_controls() {
         .lines()
         .find(|l| l.trim_start().starts_with("bumps "))
         .unwrap();
-    assert!(bumps.contains("mm 0..15"), "{bumps}");
+    assert!(bumps.contains("mm, 0 to 15, or a range"), "{bumps}");
     assert!(text.contains("up="), "{text}");
 }
 

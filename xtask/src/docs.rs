@@ -291,16 +291,8 @@ fn reference(element: &Value, tiles: &[(String, String)]) -> String {
 fn takes(c: &Value) -> String {
     let unit = c["unit"].as_str().unwrap_or("group");
     let mut t = esc(unit);
-    if let Some([lo, hi]) = c["limits"].as_array().map(Vec::as_slice) {
-        let n = |v: &Value| {
-            let f = v.as_f64().unwrap_or_default();
-            if f.fract() == 0.0 {
-                format!("{f:.0}")
-            } else {
-                format!("{f}")
-            }
-        };
-        let _ = write!(t, ", {}–{}", n(lo), n(hi));
+    if let Some(takes) = c["takes"].as_str() {
+        let _ = write!(t, ", {}", esc(takes));
     }
     t
 }

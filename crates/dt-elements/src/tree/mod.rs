@@ -152,7 +152,7 @@ pub struct Tree {
 
 /// `leaves`: whether there are leaves, and clumps.
 fn leaves_word(c: &Control) -> Result<(bool, bool), LookError> {
-    Ok(match read::word(c, &["on", "clumps-only", "bare"])? {
+    Ok(match read::word(c)? {
         "on" => (true, true),
         "clumps-only" => (false, true),
         _ => (false, false),
@@ -160,8 +160,8 @@ fn leaves_word(c: &Control) -> Result<(bool, bool), LookError> {
 }
 
 /// A size, or a range of them, kept as written (drawn when the tree grows).
-fn length(c: &Control, lo: f64, hi: f64) -> Result<Value, LookError> {
-    read::span(c, lo, hi).map(|_| c.value.clone())
+fn length(c: &Control) -> Result<Value, LookError> {
+    read::span(c).map(|_| c.value.clone())
 }
 
 impl Tree {
@@ -182,45 +182,44 @@ impl Tree {
         ordered.extend(controls.iter().filter(|c| c.name.starts_with("branch/")));
         for c in ordered {
             match c.name.as_str() {
-                "height" => p.height = length(c, 10.0, 200.0)?,
-                "trunk/height" => p.trunk = length(c, 0.0, 200.0)?,
-                "trunk/width" => p.trunk_width = Some(length(c, 0.5, 40.0)?),
-                "crown/width" => p.width = length(c, 2.0, 200.0)?,
-                "crown/clump-size" => p.clump_size = length(c, 1.0, 20.0)?,
-                "leaf/length" => p.leaf_length = length(c, 0.5, 20.0)?,
-                "leaf/width" => p.leaf_width = length(c, 0.5, 20.0)?,
+                "height" => p.height = length(c)?,
+                "trunk/height" => p.trunk = length(c)?,
+                "trunk/width" => p.trunk_width = Some(length(c)?),
+                "crown/width" => p.width = length(c)?,
+                "crown/clump-size" => p.clump_size = length(c)?,
+                "leaf/length" => p.leaf_length = length(c)?,
+                "leaf/width" => p.leaf_width = length(c)?,
                 "crown/clumps" => {
-                    let v = read::number(c, 1.0, 400.0)
-                        .map_err(|e| e.with_help("the library tiles use 32"))?;
+                    let v = read::number(c)?;
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     {
                         p.clumps = v.round() as usize;
                     }
                 }
-                "crown/shape.top-pointiness" => p.shape.top_pointiness = read::any_number(c)?,
-                "crown/shape.top-curve" => p.shape.top_curve = read::any_number(c)?,
-                "crown/shape.bottom-pointiness" => p.shape.bottom_pointiness = read::any_number(c)?,
-                "crown/shape.bottom-curve" => p.shape.bottom_curve = read::any_number(c)?,
+                "crown/shape.top-pointiness" => p.shape.top_pointiness = read::number(c)?,
+                "crown/shape.top-curve" => p.shape.top_curve = read::number(c)?,
+                "crown/shape.bottom-pointiness" => p.shape.bottom_pointiness = read::number(c)?,
+                "crown/shape.bottom-curve" => p.shape.bottom_curve = read::number(c)?,
                 "crown/branching.split" | "branch/split" => {
-                    p.split_deg = read::any_number(c)?.clamp(1.0, 89.0);
+                    p.split_deg = read::number(c)?;
                 }
                 "crown/branching.eagerness" | "branch/eagerness" => {
-                    p.eagerness = read::any_number(c)?.clamp(0.0, 1.0);
+                    p.eagerness = read::number(c)?;
                 }
                 "crown/branching.target" | "branch/target" => {
-                    p.target = read::any_number(c)?.clamp(0.0, 1.0);
+                    p.target = read::number(c)?;
                 }
                 "crown/branching.balance" | "branch/balance" => {
-                    p.balance = read::any_number(c)?.clamp(0.0, 1.0);
+                    p.balance = read::number(c)?;
                 }
                 "crown/branching.exponent" | "branch/exponent" => {
-                    p.exponent = read::any_number(c)?.clamp(1.0, 8.0);
+                    p.exponent = read::number(c)?;
                 }
                 "crown/branching.min-radius" | "branch/min-radius" => {
-                    p.min_radius = read::any_number(c)?.clamp(0.2, 5.0);
+                    p.min_radius = read::number(c)?;
                 }
-                "leaves.leaves" => p.leaves = read::any_number(c)? > 0.5,
-                "leaves.clumps" => p.clumps_on = read::any_number(c)? > 0.5,
+                "leaves.leaves" => p.leaves = read::number(c)? > 0.5,
+                "leaves.clumps" => p.clumps_on = read::number(c)? > 0.5,
                 "leaves" => (p.leaves, p.clumps_on) = leaves_word(c)?,
                 _ => {}
             }

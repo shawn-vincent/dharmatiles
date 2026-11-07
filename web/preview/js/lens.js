@@ -156,7 +156,7 @@ export class Lens {
     const ro = !this.api.writable() || (s && s.file);
     const row = el('div', `row${s ? '' : ' faint'}`);
     const nm = el('span', 'nm', c.name);
-    nm.title = [c.about, c.unit && `in ${c.unit}`, c.limits && `${c.limits[0]} to ${c.limits[1]}`].filter(Boolean).join(' · ');
+    nm.title = [c.about, c.unit && `in ${c.unit}`, c.takes].filter(Boolean).join(' · ');
     row.append(nm);
     const cell = el('span', 'cell');
     row.append(cell);

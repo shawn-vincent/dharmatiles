@@ -4,7 +4,7 @@
 //! marked *provisional* have numbers chosen for this table that the element
 //! may still tune; the words themselves are settled.
 
-use crate::schema::{Axis, Control, Element, PlaceWord, Role, Word};
+use crate::schema::{Axis, Control, Element, Limits, PlaceWord, Role, Word};
 
 const fn c(name: &'static str, value: Axis, about: &'static str) -> Control {
     Control {
@@ -15,6 +15,7 @@ const fn c(name: &'static str, value: Axis, about: &'static str) -> Control {
         required: false,
         expert: false,
         limits: None,
+        ranges: false,
         default: "",
         about,
     }
@@ -29,6 +30,7 @@ const fn group(name: &'static str, subs: &'static [Control], about: &'static str
         required: false,
         expert: false,
         limits: None,
+        ranges: false,
         default: "",
         about,
     }
@@ -60,8 +62,27 @@ impl Control {
         self.expert = true;
         self
     }
+    /// Takes `lo` to `hi`.
     const fn limits(mut self, lo: f64, hi: f64) -> Self {
-        self.limits = Some((lo, hi));
+        self.limits = Some(Limits {
+            min: lo,
+            max: hi,
+            above: false,
+        });
+        self
+    }
+    /// Takes numbers over `lo`, up to `hi` (infinite for no high end).
+    const fn over(mut self, lo: f64, hi: f64) -> Self {
+        self.limits = Some(Limits {
+            min: lo,
+            max: hi,
+            above: true,
+        });
+        self
+    }
+    /// Takes a range as well as one number.
+    const fn ranges(mut self) -> Self {
+        self.ranges = true;
         self
     }
     const fn default(mut self, d: &'static str) -> Self {
@@ -90,10 +111,15 @@ pub static TAGS: &[&str] = &["cliff", "wall", "rock", "tree"];
 
 const BUMPS: Control = c("bumps", Axis::Mm, "how far it rises and falls")
     .limits(0.0, 15.0)
+    .ranges()
     .default("0")
     .subs(&[
-        c("up", Axis::Mm, "how far it rises").limits(0.0, 15.0),
-        c("down", Axis::Mm, "how far it falls").limits(0.0, 15.0),
+        c("up", Axis::Mm, "how far it rises")
+            .limits(0.0, 15.0)
+            .ranges(),
+        c("down", Axis::Mm, "how far it falls")
+            .limits(0.0, 15.0)
+            .ranges(),
     ]);
 const BUMP_SIZE: Control = c(
     "bump-size",
@@ -101,7 +127,9 @@ const BUMP_SIZE: Control = c(
     "how wide the hills are: broad and rolling, or choppy",
 )
 .limits(5.0, 70.0);
-const LEVEL: Control = c("level", Axis::Level, "where the surface sits").default("ground");
+const LEVEL: Control = c("level", Axis::Level, "where the surface sits")
+    .over(0.0, f64::INFINITY)
+    .default("ground");
 
 static STONES: &[Word] = &[
     // (4, 7) stones per 2×2 is `some`; `many` is provisional.
@@ -166,7 +194,10 @@ static WEAR: &[Word] = &[
 
 const fn rock_controls(size: &'static str) -> [Control; 5] {
     [
-        c("size", Axis::Mm, "rock width").default(size),
+        c("size", Axis::Mm, "rock width")
+            .over(0.0, 200.0)
+            .ranges()
+            .default(size),
         c("mostly", Axis::Word, "skews the size range").words(MOSTLY),
         c("shape", Axis::Word, "river stones, broken rock, flat slabs").words(ROCK_SHAPE),
         c("wear", Axis::Word, "sharp, or chipped and rounded edges").words(WEAR),
@@ -174,7 +205,8 @@ const fn rock_controls(size: &'static str) -> [Control; 5] {
             "buried",
             Axis::Share,
             "how much of each rock is under the ground",
-        ),
+        )
+        .ranges(),
     ]
 }
 
@@ -287,19 +319,28 @@ static LEAVES: &[Word] = &[
 static TREE: &[Control] = &[
     c("height", Axis::Mm, "ground to the top of the crown")
         .limits(20.0, 120.0)
+        .ranges()
         .default("40"),
     group(
         "trunk",
         &[
-            c("height", Axis::Mm, "bare trunk below the crown").default("30"),
-            c("width", Axis::Mm, "trunk thickness at the ground"),
+            c("height", Axis::Mm, "bare trunk below the crown")
+                .limits(0.0, 200.0)
+                .ranges()
+                .default("30"),
+            c("width", Axis::Mm, "trunk thickness at the ground")
+                .limits(0.5, 40.0)
+                .ranges(),
         ],
         "the bare trunk",
     ),
     group(
         "crown",
         &[
-            c("width", Axis::Mm, "crown width").default("30"),
+            c("width", Axis::Mm, "crown width")
+                .limits(2.0, 200.0)
+                .ranges()
+                .default("30"),
             c("shape", Axis::Word, "silhouette")
                 .words(CROWN_SHAPE)
                 .default("round"),
@@ -310,7 +351,10 @@ static TREE: &[Control] = &[
             )
             .limits(8.0, 200.0)
             .default("32"),
-            c("clump-size", Axis::Mm, "size of each clump").default("5.5"),
+            c("clump-size", Axis::Mm, "size of each clump")
+                .limits(1.0, 20.0)
+                .ranges()
+                .default("5.5"),
             c(
                 "branching",
                 Axis::Word,
@@ -331,32 +375,41 @@ static TREE: &[Control] = &[
     group(
         "leaf",
         &[
-            c("length", Axis::Mm, "leaf length").default("4.5"),
-            c("width", Axis::Mm, "leaf width").default("3"),
+            c("length", Axis::Mm, "leaf length")
+                .limits(0.5, 20.0)
+                .ranges()
+                .default("4.5"),
+            c("width", Axis::Mm, "leaf width")
+                .limits(0.5, 20.0)
+                .ranges()
+                .default("3"),
         ],
         "one leaf",
     ),
     group(
         "branch",
         &[
-            c("split", Axis::Deg, "half-angle of the cone a branch keeps"),
+            c("split", Axis::Deg, "half-angle of the cone a branch keeps").limits(1.0, 89.0),
             c(
                 "eagerness",
                 Axis::Number,
                 "1 splits early, 0 only near the tips",
-            ),
+            )
+            .limits(0.0, 1.0),
             c(
                 "target",
                 Axis::Number,
                 "aim point in the attractor cloud, 0 low to 1 high",
-            ),
+            )
+            .limits(0.0, 1.0),
             c(
                 "balance",
                 Axis::Number,
                 "how evenly a fork shares its attractors, 0 to 1",
-            ),
-            c("exponent", Axis::Number, "pipe-model exponent"),
-            c("min-radius", Axis::Mm, "branch radius at a tip"),
+            )
+            .limits(0.0, 1.0),
+            c("exponent", Axis::Number, "pipe-model exponent").limits(1.0, 8.0),
+            c("min-radius", Axis::Mm, "branch radius at a tip").limits(0.2, 5.0),
         ],
         "the generator's six branching knobs (expert: parts files only)",
     )
@@ -415,14 +468,21 @@ static WALL: &[Control] = &[
         .words(WALL_STYLE)
         .default("cut-stone"),
     c("height", Axis::Mm, "height above what it stands on")
+        .limits(6.0, 200.0)
         .words(WALL_HEIGHT)
         .default("full"),
-    c("thickness", Axis::Mm, "wall thickness").default("7"),
+    c("thickness", Axis::Mm, "wall thickness")
+        .limits(2.0, 40.0)
+        .default("7"),
     group(
         "stones",
         &[
-            c("height", Axis::Mm, "course height"),
-            c("length", Axis::Mm, "stone length along the wall"),
+            c("height", Axis::Mm, "course height")
+                .limits(1.0, 40.0)
+                .ranges(),
+            c("length", Axis::Mm, "stone length along the wall")
+                .limits(2.0, 80.0)
+                .ranges(),
             c("texture", Axis::Word, "surface finish of each stone").words(TEXTURE),
         ],
         "stone size",
@@ -430,14 +490,16 @@ static WALL: &[Control] = &[
     group(
         "joints",
         &[
-            c("width", Axis::Mm, "mortar gap"),
-            c("depth", Axis::Mm, "how deep the gaps between stones look"),
+            c("width", Axis::Mm, "mortar gap").limits(0.0, 3.0),
+            c("depth", Axis::Mm, "how deep the gaps between stones look").limits(0.0, 5.0),
         ],
         "the gaps between stones",
     ),
     group(
         "edges",
-        &[c("rounding", Axis::Mm, "how worn the stone corners are")],
+        &[c("rounding", Axis::Mm, "how worn the stone corners are")
+            .limits(0.0, 5.0)
+            .ranges()],
         "the stone corners",
     ),
     c("coping", Axis::Word, "what tops a drystone wall").words(&[
@@ -448,7 +510,7 @@ static WALL: &[Control] = &[
         w("irregular", "random courses and bays", &[]),
         w("running", "uniform courses, half-unit offsets", &[]),
     ]),
-    c("ruin", Axis::Share, "how much has fallen"),
+    c("ruin", Axis::Share, "how much has fallen").limits(0.0, 1.0),
     c("top", Axis::Word, "castle crenellations").words(&[
         w("flat", "a flat top", &[]),
         w("battlements", "merlons and crenels", &[]),
@@ -479,6 +541,7 @@ static FLOOR: &[Control] = &[
         Axis::Level,
         "the pavement top: 7.4 is the official interior floor",
     )
+    .limits(1.0, 30.0)
     .default("7.4"),
 ];
 
@@ -580,8 +643,12 @@ static CLIFF: &[Control] = &[
         "the shape of the mass: a band on an edge, or free-standing",
     )
     .words(CLIFF_FORM),
-    c("height", Axis::Mm, "height above the foot").default("35"),
-    c("depth", Axis::Mm, "how far the rock reaches into the tile"),
+    c("height", Axis::Mm, "height above the foot")
+        .limits(6.0, 120.0)
+        .default("35"),
+    c("depth", Axis::Mm, "how far the rock reaches into the tile")
+        .limits(4.0, 60.0)
+        .ranges(),
     c(
         "rock",
         Axis::Word,
@@ -614,7 +681,7 @@ static CLIFF: &[Control] = &[
         "shattered",
         &[
             c("patches", Axis::Count, "broken patches along the run"),
-            c("width", Axis::Mm, "how wide each patch is"),
+            c("width", Axis::Mm, "how wide each patch is").ranges(),
         ],
         "broken patches with more cracks and scree",
     ),
@@ -623,12 +690,14 @@ static CLIFF: &[Control] = &[
         Axis::Mm,
         "dirt heaped against the face: how high (a range)",
     )
+    .ranges()
     .default("1.5..3.5"),
     c(
         "bank-reach",
         Axis::Mm,
         "dirt heaped against the face: how far out (a range)",
     )
+    .ranges()
     .default("3..6.5"),
     c(
         "scree",
@@ -659,12 +728,15 @@ static CLIFF: &[Control] = &[
 // ---- scatter ------------------------------------------------------------
 
 static SCATTER: &[Control] = &[
-    c("count", Axis::Count, "how many, in total"),
+    c("count", Axis::Count, "how many, in total")
+        .limits(0.0, 10_000.0)
+        .ranges(),
     c(
         "per-square",
         Axis::PerSquare,
         "how many per square of the area, or of length along a line",
-    ),
+    )
+    .ranges(),
     c(
         "spread",
         Axis::Mm,
@@ -738,8 +810,8 @@ pub static ELEMENTS: &[Element] = &[
                 "bank",
                 &[
                     c("against", Axis::Tag, "what the bank leans on").required(),
-                    c("height", Axis::Mm, "height at the face"),
-                    c("reach", Axis::Mm, "how far out it runs"),
+                    c("height", Axis::Mm, "height at the face").ranges(),
+                    c("reach", Axis::Mm, "how far out it runs").ranges(),
                 ],
                 "earth heaped against a cliff or wall",
             ),
@@ -753,20 +825,30 @@ pub static ELEMENTS: &[Element] = &[
         needs: &[],
         holds_scatter: true,
         controls: &[
-            c("length", Axis::Mm, "blade length along the ground").default("3.5..6.5"),
-            c("height", Axis::Mm, "how tall a blade stands over the ground").default("1.5..2"),
+            c("length", Axis::Mm, "blade length along the ground")
+                .over(0.0, f64::INFINITY)
+                .ranges()
+                .default("3.5..6.5"),
+            c("height", Axis::Mm, "how tall a blade stands over the ground")
+                .over(0.0, f64::INFINITY)
+                .ranges()
+                .default("1.5..2"),
             c(
                 "clearings",
                 Axis::PerSquare,
                 "patches of bare earth the grass parts round",
             )
+            .limits(0.0, 20.0)
             .default("1.5"),
-            c("cover", Axis::Share, "share of the ground grassed over").default("100%"),
+            c("cover", Axis::Share, "share of the ground grassed over")
+                .limits(0.0, 1.0)
+                .default("100%"),
             c(
                 "bare",
                 Axis::Share,
                 "the least share left bare: clearings are added until the bare earth, rocks included, reaches it",
             )
+            .limits(0.0, 0.9)
             .default("0%"),
             c("flow", Axis::Word, "how tidily the blades lean together")
                 .words(FLOW)
@@ -781,9 +863,18 @@ pub static ELEMENTS: &[Element] = &[
         needs: &[],
         holds_scatter: false,
         controls: &[
-            c("clumps", Axis::Count, "how many clumps along the shore").default("3..5"),
-            c("stems", Axis::Count, "stems in a clump").default("5..9"),
-            c("height", Axis::Mm, "how tall a stem stands").default("8..13"),
+            c("clumps", Axis::Count, "how many clumps along the shore")
+                .limits(0.0, 30.0)
+                .ranges()
+                .default("3..5"),
+            c("stems", Axis::Count, "stems in a clump")
+                .limits(1.0, 30.0)
+                .ranges()
+                .default("5..9"),
+            c("height", Axis::Mm, "how tall a stem stands")
+                .over(0.0, f64::INFINITY)
+                .ranges()
+                .default("8..13"),
         ],
     },
     Element {
@@ -794,13 +885,27 @@ pub static ELEMENTS: &[Element] = &[
         needs: &[],
         holds_scatter: false,
         controls: &[
-            c("per-square", Axis::PerSquare, "how many flowers a square").default("4"),
-            c("petals", Axis::Count, "petals round the centre").default("5"),
-            c("radius", Axis::Mm, "from the centre to a petal's tip").default("2.5"),
-            c("centre", Axis::Mm, "radius of the centre dome").default("1.5"),
-            c("stem", Axis::Mm, "height of the column under each dome").default("1"),
-            c("dome", Axis::Mm, "height of the centre dome").default("1"),
-            c("petal", Axis::Mm, "height of each petal dome").default("0.5"),
+            c("per-square", Axis::PerSquare, "how many flowers a square")
+                .limits(0.0, 40.0)
+                .default("4"),
+            c("petals", Axis::Count, "petals round the centre")
+                .limits(0.0, 12.0)
+                .default("5"),
+            c("radius", Axis::Mm, "from the centre to a petal's tip")
+                .limits(0.5, 10.0)
+                .default("2.5"),
+            c("centre", Axis::Mm, "radius of the centre dome")
+                .limits(0.3, 8.0)
+                .default("1.5"),
+            c("stem", Axis::Mm, "height of the column under each dome")
+                .limits(0.3, 6.0)
+                .default("1"),
+            c("dome", Axis::Mm, "height of the centre dome")
+                .limits(0.2, 4.0)
+                .default("1"),
+            c("petal", Axis::Mm, "height of each petal dome")
+                .limits(0.2, 4.0)
+                .default("0.5"),
         ],
     },
     Element {
@@ -810,7 +915,9 @@ pub static ELEMENTS: &[Element] = &[
         place: &[PlaceWord::In],
         needs: &[],
         holds_scatter: false,
-        controls: &[c("level", Axis::Level, "the calm water level").default("water")],
+        controls: &[c("level", Axis::Level, "the calm water level")
+            .over(0.0, f64::INFINITY)
+            .default("water")],
     },
     thing("rock", "one rock", &ROCK),
     thing("stone", "a rock with stone sizes, about 1–6 mm", &STONE),
@@ -951,6 +1058,89 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Every control of every element, with the name that owns it.
+    fn every_control() -> Vec<(&'static str, &'static Control)> {
+        let mut out = Vec::new();
+        for l in ELEMENTS {
+            for k in l.controls {
+                out.push((l.name, k));
+                out.extend(k.subs.iter().map(|s| (k.name, s)));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn every_number_default_is_one_its_control_takes() {
+        let known = crate::Known::standard();
+        let level = |name: &str| {
+            known
+                .levels()
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| *v)
+        };
+        for (owner, k) in every_control() {
+            let Some(crate::model::Value::Num(n)) = k.default_value() else {
+                continue;
+            };
+            let (lo, hi) = n
+                .bounds(&level)
+                .unwrap_or_else(|e| panic!("{owner} {}: {e}", k.name));
+            if let Err(r) = k.check(owner, lo, hi, n.expr.is_range()) {
+                panic!("{owner} {}: {}", k.name, r.message);
+            }
+        }
+    }
+
+    #[test]
+    fn branching_words_stay_within_the_expert_knobs() {
+        let tree = crate::schema::element("tree").unwrap();
+        let branch = tree.control("branch").unwrap();
+        for word in tree
+            .control("crown")
+            .unwrap()
+            .sub("branching")
+            .unwrap()
+            .words
+        {
+            for (name, v) in word.sets {
+                let knob = branch.sub(name).unwrap();
+                assert!(
+                    knob.check("branch", *v, *v, false).is_ok(),
+                    "{} {name}={v}",
+                    word.word
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_number_outside_its_control_is_refused_once_in_the_schema() {
+        let tree = crate::schema::element("tree").unwrap();
+        let height = tree.control("height").unwrap();
+        let r = height.check("tree", 150.0, 150.0, false).unwrap_err();
+        assert_eq!(r.message, "`tree height` is 20 mm to 120 mm, not 150 mm");
+        let ruin = crate::schema::element("wall")
+            .unwrap()
+            .control("ruin")
+            .unwrap();
+        let r = ruin.check("wall", 1.5, 1.5, false).unwrap_err();
+        assert_eq!(r.message, "`wall ruin` is 0% to 100%, not 150%");
+        let level = crate::schema::element("ground")
+            .unwrap()
+            .control("level")
+            .unwrap();
+        assert!(level.check("ground", 0.0, 0.0, false).is_err());
+        assert!(level.check("ground", 0.1, 0.1, false).is_ok());
+        let cliff = crate::schema::element("cliff")
+            .unwrap()
+            .control("height")
+            .unwrap();
+        let r = cliff.check("cliff", 30.0, 40.0, true).unwrap_err();
+        assert_eq!(r.message, "`cliff height` takes one number, not a range");
     }
 
     #[test]

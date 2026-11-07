@@ -160,27 +160,16 @@ impl Dirt {
         let mut clod_density = CLOD_DENSITY;
         for c in controls {
             if c.name == "clods.density" {
-                clod_density = read::number(c, 0.0, 5.0)
-                    .map_err(|e| e.with_help("write clods few, some or many"))?;
+                clod_density = read::number(c)?;
             }
         }
         let mut stones = STONES_2X2;
         for c in controls {
             #[allow(clippy::cast_possible_truncation)]
             match (c.name.as_str(), &c.value) {
-                ("stones.min", Value::Number(v)) if (0.0..=100.0).contains(v) => {
-                    stones.0 = libm::round(*v) as i64;
-                }
-                ("stones.max", Value::Number(v)) if (0.0..=100.0).contains(v) => {
-                    stones.1 = libm::round(*v) as i64;
-                }
-                ("stones.min" | "stones.max", v) => {
-                    return Err(LookError::control(
-                        "stones",
-                        format!("stones per 2×2 must be 0 to 100, not {v}"),
-                        "write stones none, some or many".into(),
-                    ));
-                }
+                // the numbers behind the `stones` word
+                ("stones.min", Value::Number(v)) => stones.0 = libm::round(*v) as i64,
+                ("stones.max", Value::Number(v)) => stones.1 = libm::round(*v) as i64,
                 _ => {}
             }
         }

@@ -555,14 +555,6 @@ impl Thing {
                 _ => {}
             }
         }
-        let (lo, hi) = t.size;
-        if !(lo.is_finite() && hi.is_finite() && lo > 0.0 && hi >= lo && hi <= 200.0) {
-            return Err(LookError::control(
-                "size",
-                format!("a {kind}'s size is from more than 0 to 200 mm, not {lo}..{hi}"),
-                "write size=\"6..15\"".into(),
-            ));
-        }
         Ok(t)
     }
 
@@ -912,21 +904,6 @@ impl Scatter {
                 }
                 _ => {}
             }
-        }
-        let ok = |(a, b): (f64, f64)| a.is_finite() && b.is_finite() && a >= 0.0 && b >= a;
-        if !ok(s.per_square) || s.count.is_some_and(|c| !ok(c) || c.1 > 10_000.0) {
-            return Err(LookError::control(
-                "per-square",
-                "a scatter's count is from 0 up".into(),
-                "write per-square=\"2.25..3\" or count=5".into(),
-            ));
-        }
-        if !(s.gap.is_finite() && s.gap >= 0.0) {
-            return Err(LookError::control(
-                "gap",
-                format!("a gap is 0 mm or more, not {}", s.gap),
-                "write gap=1.5".into(),
-            ));
         }
         for ch in children {
             if !is_thing(&ch.name) {

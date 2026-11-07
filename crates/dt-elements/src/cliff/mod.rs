@@ -107,15 +107,9 @@ impl Cliff {
                 help: None,
             };
             match (k.name.as_str(), &k.value) {
-                ("height", Value::Number(v)) if (6.0..=120.0).contains(v) => c.height = Some(*v),
-                ("height", v) => return Err(bad(format!("a cliff is 6 to 120 mm high, not {v}"))),
-                ("depth", Value::Number(v)) if (4.0..=60.0).contains(v) => c.depth = Some((*v, *v)),
-                ("depth", Value::Range(a, b)) if *a >= 4.0 && *b <= 60.0 => {
-                    c.depth = Some((*a, *b))
-                }
-                ("depth", v) => {
-                    return Err(bad(format!("a cliff reaches 4 to 60 mm out, not {v}")));
-                }
+                ("height", Value::Number(v)) => c.height = Some(*v),
+                ("depth", Value::Number(v)) => c.depth = Some((*v, *v)),
+                ("depth", Value::Range(a, b)) => c.depth = Some((*a, *b)),
                 ("stone-size", Value::Word(s)) => {
                     c.size = match s.as_str() {
                         "rubble" => 1.0 / 1.35,

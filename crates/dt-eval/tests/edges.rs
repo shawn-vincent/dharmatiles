@@ -137,6 +137,23 @@ fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
 }
 
 #[test]
+fn a_value_out_of_range_once_its_names_resolve_is_refused_when_read() {
+    // a level names other levels: only the reader knows what it comes to
+    let e = errors("tile { stack { ground level=\"ground - 50\" } }\n");
+    assert!(
+        e[0].message.starts_with("`ground level` is over 0, not -4"),
+        "{}",
+        e[0].message
+    );
+    // a parameter is checked at the call, against the control it feeds
+    let e = errors(
+        "define tall {\n    param height 50\n    stack { tree height=height }\n}\n\
+         tile { stack { ground; tall height=150 } }\n",
+    );
+    assert_eq!(e[0].message, "`tall height` is 20 mm to 120 mm, not 150 mm");
+}
+
+#[test]
 fn level_messages_show_numbers_as_written() {
     // was "not Number(inf)"
     for (level, shown) in [("#inf", "not ∞"), ("#nan", "not NaN"), ("-50", "not -50")] {

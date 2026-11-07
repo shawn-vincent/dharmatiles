@@ -63,9 +63,9 @@ impl Reeds {
         };
         for c in controls {
             match c.name.as_str() {
-                "clumps" => r.clumps = read::counts(c, 0, 30)?,
-                "stems" => r.stems = read::counts(c, 1, 30)?,
-                "height" => r.height = read::positive_span(c)?,
+                "clumps" => r.clumps = read::counts(c)?,
+                "stems" => r.stems = read::counts(c)?,
+                "height" => r.height = read::span(c)?,
                 _ => {}
             }
         }

@@ -64,8 +64,8 @@ pub struct Shape {
     pub size_mm: f64,
 }
 
-fn amount(c: &Control, lo: f64, hi: f64) -> Result<Amount, LookError> {
-    read::span(c, lo, hi).map(|(a, b)| Amount(a, b))
+fn amount(c: &Control) -> Result<Amount, LookError> {
+    read::span(c).map(|(a, b)| Amount(a, b))
 }
 
 impl Shape {
@@ -83,18 +83,12 @@ impl Shape {
         for c in controls {
             match c.name.as_str() {
                 "level" => {
-                    s.level_mm = read::positive(c).map_err(|e| {
-                        e.with_help(
-                            "write a named level (ground, edge, water, wall-top) or mm, such as level=5",
-                        )
-                    })?;
+                    s.level_mm = read::number(c)?;
                 }
-                "bumps" | "bumps/up" => s.up = amount(c, 0.0, 15.0)?,
-                "bumps/down" => s.down = amount(c, 0.0, 15.0)?,
+                "bumps" | "bumps/up" => s.up = amount(c)?,
+                "bumps/down" => s.down = amount(c)?,
                 "bump-size" => {
-                    s.size_mm = read::number(c, 5.0, 70.0).map_err(|e| {
-                        e.with_help("write one width, from 5 to 70 mm, such as bump-size=14")
-                    })?;
+                    s.size_mm = read::number(c)?;
                 }
                 _ => {}
             }
@@ -331,13 +325,8 @@ mod tests {
     }
 
     #[test]
-    fn out_of_range_bumps_are_refused() {
-        let e = Ground::new(&controls(&[
-            ("level", Value::Number(5.0)),
-            ("bumps", Value::Number(40.0)),
-        ]))
-        .unwrap_err();
-        assert_eq!(e.control.as_deref(), Some("bumps"));
+    fn a_range_for_one_number_is_refused() {
+        // the schema refuses it first; the element still reads only a number
         let e = Ground::new(&controls(&[
             ("level", Value::Number(5.0)),
             ("bump-size", Value::Range(10.0, 20.0)),

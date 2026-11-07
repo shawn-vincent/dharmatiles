@@ -72,13 +72,13 @@ impl Flowers {
         };
         for c in controls {
             match c.name.as_str() {
-                "per-square" => f.per_square = read::number(c, 0.0, 40.0)?,
-                "petals" => f.petals = read::number(c, 0.0, 12.0)?.round() as usize,
-                "radius" => f.outer = read::number(c, 0.5, 10.0)?,
-                "centre" => f.centre = read::number(c, 0.3, 8.0)?,
-                "stem" => f.stem = read::number(c, 0.3, 6.0)?,
-                "dome" => f.dome = read::number(c, 0.2, 4.0)?,
-                "petal" => f.petal = read::number(c, 0.2, 4.0)?,
+                "per-square" => f.per_square = read::number(c)?,
+                "petals" => f.petals = read::number(c)?.round() as usize,
+                "radius" => f.outer = read::number(c)?,
+                "centre" => f.centre = read::number(c)?,
+                "stem" => f.stem = read::number(c)?,
+                "dome" => f.dome = read::number(c)?,
+                "petal" => f.petal = read::number(c)?,
                 _ => {}
             }
         }

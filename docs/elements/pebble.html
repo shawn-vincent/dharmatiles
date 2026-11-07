@@ -37,11 +37,11 @@ dirt { scatter per-square=40 { pebble } }</code></pre>
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-size"><td><code>size</code></td><td>mm</td><td><code>1..2.2</code></td><td>rock width</td></tr>
+<tr id="c-size"><td><code>size</code></td><td>mm, over 0, up to 200, or a range</td><td><code>1..2.2</code></td><td>rock width</td></tr>
 <tr id="c-mostly"><td><code>mostly</code></td><td>word</td><td>—</td><td>skews the size range<dl class="words"><dt><code>small</code></dt><dd>skewed toward the low end (exponent 2)</dd><dt><code>even</code></dt><dd>a uniform draw</dd><dt><code>large</code></dt><dd>leaning toward the high end</dd></dl></td></tr>
 <tr id="c-shape"><td><code>shape</code></td><td>word</td><td>—</td><td>river stones, broken rock, flat slabs<dl class="words"><dt><code>rounded</code></dt><dd>river stones</dd><dt><code>angular</code></dt><dd>broken rock</dd><dt><code>flat</code></dt><dd>flat slabs</dd></dl></td></tr>
 <tr id="c-wear"><td><code>wear</code></td><td>word</td><td>—</td><td>sharp, or chipped and rounded edges <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span><dl class="words"><dt><code>crisp</code></dt><dd>sharp edges</dd><dt><code>worn</code></dt><dd>chipped and rounded edges</dd></dl></td></tr>
-<tr id="c-buried"><td><code>buried</code></td><td>percent</td><td>—</td><td>how much of each rock is under the ground</td></tr>
+<tr id="c-buried"><td><code>buried</code></td><td>percent, a number or a range</td><td>—</td><td>how much of each rock is under the ground</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">

@@ -97,13 +97,13 @@ impl Grass {
         let (mut lo, mut hi) = (None, None);
         for c in controls {
             match c.name.as_str() {
-                "length" => g.length = read::positive_span(c)?,
-                "height" => g.height = read::positive_span(c)?,
-                "clearings" => g.clearings = read::number(c, 0.0, 20.0)?,
-                "cover" => g.cover = read::share(c, 0.0, 1.0)?,
-                "bare" => g.bare = read::share(c, 0.0, 0.9)?,
-                "flow.meander-min" => lo = Some(read::any_number(c)?),
-                "flow.meander-max" => hi = Some(read::any_number(c)?),
+                "length" => g.length = read::span(c)?,
+                "height" => g.height = read::span(c)?,
+                "clearings" => g.clearings = read::number(c)?,
+                "cover" => g.cover = read::number(c)?,
+                "bare" => g.bare = read::number(c)?,
+                "flow.meander-min" => lo = Some(read::number(c)?),
+                "flow.meander-max" => hi = Some(read::number(c)?),
                 _ => {}
             }
         }
