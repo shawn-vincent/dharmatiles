@@ -17,11 +17,11 @@
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use dt_elements::Foot;
-use dt_kit::{Frame, Scene, Seed};
+use dt_kit::{Frame, Scene};
 
-use crate::Options;
 use crate::doc::Tile;
 use crate::plan::Step;
+use crate::{Job, Options};
 
 /// The scenes one tile's last build left, step by step.  Give each tile
 /// (and its drafts) its own: a build keeps only its own steps.  Builds
@@ -129,14 +129,7 @@ pub(crate) fn base_key(
 }
 
 /// Each step's key: the one before it and what the step itself reads.
-pub(crate) fn step_keys(
-    base: u64,
-    tile: &Tile,
-    steps: &[Step],
-    paths: &[String],
-    seeds: &[Seed],
-    area_hash: &[u64],
-) -> Vec<u64> {
+pub(crate) fn step_keys(base: u64, tile: &Tile, steps: &[Step], jobs: &[Job]) -> Vec<u64> {
     let mut h = base;
     steps
         .iter()
@@ -166,9 +159,9 @@ pub(crate) fn step_keys(
                     let text = format!(
                         "{i}|{}|{}|{:?}|{}",
                         entry.unwrap_or_else(|| "connector".to_owned()),
-                        paths.get(i).map_or("", String::as_str),
-                        seeds[i],
-                        area_hash[i]
+                        jobs.get(i).map_or("", |j| j.path.as_str()),
+                        jobs[i].seed,
+                        jobs[i].area_hash
                     );
                     mix(h, text.as_bytes())
                 }

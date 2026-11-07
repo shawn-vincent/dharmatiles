@@ -200,6 +200,8 @@ pub struct Checked {
     /// The tile's build order.
     pub steps: Vec<Step>,
     elements: Vec<Box<dyn Element>>,
+    /// What each element writes, from its plan.
+    writes: Vec<dt_elements::Write>,
     /// Each step's area: `None` for the whole tile, else a region index.
     /// Masks are only made by `build` (one per distinct area), so `check`
     /// holds no grid however long the stack.
@@ -247,6 +249,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             tile: None,
             steps: Vec::new(),
             elements: Vec::new(),
+            writes: Vec::new(),
             areas: Vec::new(),
             frame: Frame::dungeonblocks(1, 1),
             seed: 0,
@@ -358,6 +361,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         file: read.file,
         tile: Some(tile),
         steps,
+        writes: plans.iter().map(|p| p.writes).collect(),
         elements,
         areas,
         frame,
@@ -479,7 +483,6 @@ pub fn build_with(
 ///
 /// # Errors
 /// As [`build`].
-#[allow(clippy::too_many_lines)]
 pub fn build_cached(
     sources: &dyn Source,
     path: &str,
@@ -500,273 +503,353 @@ pub fn build_cached(
     if !tile.pending.is_empty() {
         return Err(tile.pending.clone());
     }
-    let fail = |e: String| vec![Diag::plain("dt::build", e)];
-    let root = Seed::new(c.seed);
-    let mut scene = Scene::new(c.frame, root);
-    scene.set_progress(progress.clone());
-    let mut stage_secs: Vec<(String, f64)> = Vec::new();
-    let keys_of_stages = progress::stage_keys(tile, &c.steps);
-    let edge_mm = tile
-        .edges
-        .iter()
-        .find(|(surface, _)| surface == "ground")
-        .map(|(_, mm)| mm * c.frame.scale());
-    scene.set_edge(edge_mm);
-    let water_edge = tile
-        .edges
-        .iter()
-        .find(|(surface, _)| surface == "water")
-        .map(|(_, mm)| mm * c.frame.scale());
-    scene.set_water_edge(water_edge);
-    let mut h = c.steps.iter().fold(0xcbf2_9ce4_8422_2325, |h, s| {
-        fnv(
-            h,
-            match s {
-                Step::Entry(i) => *i as u64,
-                Step::Lift => u64::MAX,
-            },
-        )
-    });
-    let (masks, mask_of) = masks(tile, &c.frame, &c.areas);
-    let hashes: Vec<u64> = masks.iter().map(Mask::content_hash).collect();
-    h = mask_of.iter().fold(h, |h, &m| fnv(h, hashes[m]));
-    // the plan's hash leads the stages, but is not the scene's: a scene a
-    // cache kept serves a build whose later steps differ
-    let plan_stage = Stage {
-        name: "plan".to_owned(),
-        hash: h,
-    };
-    let paths = entry_paths(tile);
-    // with water, the ground's areas are banked down to each other once the
-    // surfaces are painted, before any solid reads the ground
-    let writes: Vec<dt_elements::Write> = c.elements.iter().map(|l| l.plan().writes).collect();
-    let fills = writes.contains(&dt_elements::Write::Fill);
-    // plan, then build: what stands on the ground says where its foot is
-    // before anything is built, so a bank or scatter listed before it
-    // (or after) can lean on it
-    let mut foots = Vec::new();
-    for (i, element) in c.elements.iter().enumerate() {
-        let ctx = Ctx {
-            area: &masks[mask_of[i]],
-            path: &paths[i],
-            seed: tile
-                .stack
-                .get(i)
-                .and_then(|e| e.seed)
-                .map_or_else(|| root.path(&paths[i]), Seed::new),
-            along: tile.stack.get(i).and_then(|e| e.along.as_deref()),
-            at: tile.stack.get(i).and_then(|e| e.at),
-            printer: opts.printer,
-            against: None,
-            foots: &[],
-            draft: opts.draft,
+    let plan = Plan::new(&c, tile, opts)?;
+    let ran = plan.run(progress, cache)?;
+    plan.finish(path, &text, ran, progress)
+}
+
+fn build_error(e: String) -> Vec<Diag> {
+    vec![Diag::plain("dt::build", e)]
+}
+
+/// One stack entry (or the connector after the stack), as a build sees it.
+pub(crate) struct Job {
+    /// Its stack path (`tile/grass/0`), the owner of what it makes.
+    pub path: String,
+    /// Its seed: `seed=` when pinned, else keyed by its path.
+    pub seed: Seed,
+    /// Which of the build's masks is its area.
+    pub mask: usize,
+    /// That mask's content hash.
+    pub area_hash: u64,
+}
+
+/// What a build works out before any step runs.
+struct Plan<'a> {
+    c: &'a Checked,
+    tile: &'a Tile,
+    opts: &'a Options,
+    /// One mask per distinct area.
+    masks: Vec<Mask>,
+    /// One per element, in stack order, the connector last.
+    jobs: Vec<Job>,
+    /// The planned feet of every solid that has one.
+    foots: Vec<dt_elements::Foot>,
+    edge_mm: Option<f64>,
+    water_edge: Option<f64>,
+    /// With water, the ground's areas are banked down to each other once
+    /// the surfaces are painted, before any solid reads the ground.
+    fills: bool,
+    /// Each step's progress key and label.
+    stages: Vec<(String, String)>,
+    /// The order and areas, hashed: it leads the stages, but is not the
+    /// scene's (a scene a cache kept serves a build whose later steps
+    /// differ).
+    plan_stage: Stage,
+}
+
+/// The scene after the last step, and how it got there.
+struct Ran {
+    scene: Scene,
+    stage_secs: Vec<(String, f64)>,
+    /// Steps the cache gave.
+    reused: usize,
+}
+
+impl<'a> Plan<'a> {
+    fn new(c: &'a Checked, tile: &'a Tile, opts: &'a Options) -> Result<Self, Vec<Diag>> {
+        let root = Seed::new(c.seed);
+        let edge = |of: &str| {
+            tile.edges
+                .iter()
+                .find(|(surface, _)| surface == of)
+                .map(|(_, mm)| mm * c.frame.scale())
         };
-        match element.foot(&c.frame, &ctx) {
-            Ok(Some(f)) => foots.push(f),
-            Ok(None) => {}
-            Err(e) => return Err(fail(format!("{}: {}", paths[i], e.message))),
+        let (masks, mask_of) = masks(tile, &c.frame, &c.areas);
+        let hashes: Vec<u64> = masks.iter().map(Mask::content_hash).collect();
+        let order = c.steps.iter().fold(0xcbf2_9ce4_8422_2325, |h, s| {
+            fnv(
+                h,
+                match s {
+                    Step::Entry(i) => *i as u64,
+                    Step::Lift => u64::MAX,
+                },
+            )
+        });
+        let plan_hash = mask_of.iter().fold(order, |h, &m| fnv(h, hashes[m]));
+        let jobs = entry_paths(tile)
+            .into_iter()
+            .zip(&mask_of)
+            .enumerate()
+            .map(|(i, (path, &mask))| Job {
+                seed: tile
+                    .stack
+                    .get(i)
+                    .and_then(|e| e.seed)
+                    .map_or_else(|| root.path(&path), Seed::new),
+                path,
+                mask,
+                area_hash: hashes[mask],
+            })
+            .collect();
+        let mut plan = Self {
+            c,
+            tile,
+            opts,
+            masks,
+            jobs,
+            foots: Vec::new(),
+            edge_mm: edge("ground"),
+            water_edge: edge("water"),
+            fills: c.writes.contains(&dt_elements::Write::Fill),
+            stages: progress::stage_keys(tile, &c.steps),
+            plan_stage: Stage {
+                name: "plan".to_owned(),
+                hash: plan_hash,
+            },
+        };
+        // what stands on the ground says where its foot is before anything
+        // is built, so a bank or scatter listed before it (or after) can
+        // lean on it
+        let mut foots = Vec::new();
+        for (i, element) in c.elements.iter().enumerate() {
+            let ctx = Ctx {
+                against: None,
+                ..plan.ctx(i)
+            };
+            match element.foot(&c.frame, &ctx) {
+                Ok(Some(f)) => foots.push(f),
+                Ok(None) => {}
+                Err(e) => return Err(build_error(format!("{}: {}", plan.jobs[i].path, e.message))),
+            }
+        }
+        plan.foots = foots;
+        Ok(plan)
+    }
+
+    /// Element `i`'s view of the build.
+    fn ctx(&self, i: usize) -> Ctx<'_> {
+        let entry = self.tile.stack.get(i);
+        let job = &self.jobs[i];
+        Ctx {
+            area: &self.masks[job.mask],
+            path: &job.path,
+            seed: job.seed,
+            along: entry.and_then(|e| e.along.as_deref()),
+            at: entry.and_then(|e| e.at),
+            printer: self.opts.printer,
+            against: entry.and_then(|e| e.against.as_deref()),
+            foots: &self.foots,
+            draft: self.opts.draft,
         }
     }
-    let mut painted = false;
-    // sketches start with the lifted ground, which carries what the
-    // surfaces made before it: a lone pebble is no picture of a tile
-    let mut lifted = !c.steps.contains(&Step::Lift);
-    let mut sketched = 0;
-    let seeds: Vec<Seed> = (0..c.elements.len())
-        .map(|i| {
-            tile.stack
-                .get(i)
-                .and_then(|e| e.seed)
-                .map_or_else(|| root.path(&paths[i]), Seed::new)
-        })
-        .collect();
-    let area_hash: Vec<u64> = mask_of.iter().map(|&m| hashes[m]).collect();
-    let base = cache::base_key(&c.frame, c.seed, opts, [edge_mm, water_edge], fills, &foots);
-    let keys = cache::step_keys(base, tile, &c.steps, &paths, &seeds, &area_hash);
-    let mut first = 0;
-    if let Some((n, k)) = cache.and_then(|c| c.longest(&keys)) {
-        scene = k.scene;
+
+    /// Every step, from the last one `cache` kept.
+    fn run(&self, progress: &Progress, cache: Option<&Cache>) -> Result<Ran, Vec<Diag>> {
+        let (c, tile) = (self.c, self.tile);
+        let mut scene = Scene::new(c.frame, Seed::new(c.seed));
         scene.set_progress(progress.clone());
-        painted = k.painted;
-        first = n + 1;
-        // what the cache gave: each stage done at once, and the scene so far
-        // sketched in one piece
-        for (key, label) in &keys_of_stages[..first] {
+        scene.set_edge(self.edge_mm);
+        scene.set_water_edge(self.water_edge);
+        let mut stage_secs = Vec::new();
+        let mut painted = false;
+        // sketches start with the lifted ground, which carries what the
+        // surfaces made before it: a lone pebble is no picture of a tile
+        let mut lifted = !c.steps.contains(&Step::Lift);
+        let mut sketched = 0;
+        let base = cache::base_key(
+            &c.frame,
+            c.seed,
+            self.opts,
+            [self.edge_mm, self.water_edge],
+            self.fills,
+            &self.foots,
+        );
+        let keys = cache::step_keys(base, tile, &c.steps, &self.jobs);
+        let mut first = 0;
+        if let Some((n, k)) = cache.and_then(|c| c.longest(&keys)) {
+            scene = k.scene;
+            scene.set_progress(progress.clone());
+            painted = k.painted;
+            first = n + 1;
+            // what the cache gave: each stage done at once, and the scene so
+            // far sketched in one piece
+            for (key, label) in &self.stages[..first] {
+                progress.begin(key, label);
+                progress.end(key);
+            }
+            lifted |= c.steps[..first].contains(&Step::Lift);
+            if lifted
+                && progress.sketching()
+                && !scene.parts().is_empty()
+                && let Ok((mesh, mats)) = scene.soup_since(0)
+            {
+                progress.sketch(&mesh, &mats, false);
+                sketched = scene.parts().len();
+            }
+        }
+        for (n, step) in c.steps.iter().enumerate().skip(first) {
+            let t_stage = std::time::Instant::now();
+            let (key, label) = &self.stages[n];
             progress.begin(key, label);
-            progress.end(key);
-        }
-        lifted |= c.steps[..first].contains(&Step::Lift);
-        if lifted
-            && progress.sketching()
-            && !scene.parts().is_empty()
-            && let Ok((mesh, mats)) = scene.soup_since(0)
-        {
-            progress.sketch(&mesh, &mats, false);
-            sketched = scene.parts().len();
-        }
-    }
-    for (n, step) in c.steps.iter().enumerate().skip(first) {
-        let t_stage = std::time::Instant::now();
-        progress.begin(&keys_of_stages[n].0, &keys_of_stages[n].1);
-        let surface = matches!(*step, Step::Entry(i) if writes[i] == dt_elements::Write::Surface);
-        if fills && !painted && !surface {
-            painted = true;
-            scene.bank();
-        }
-        match *step {
-            Step::Lift => scene.lift("tile/ground").map_err(|e| fail(e.to_string()))?,
-            Step::Entry(i) => {
-                let pinned = tile.stack.get(i).and_then(|e| e.seed);
-                let ctx = Ctx {
-                    area: &masks[mask_of[i]],
-                    path: &paths[i],
-                    seed: pinned.map_or_else(|| root.path(&paths[i]), Seed::new),
-                    along: tile.stack.get(i).and_then(|e| e.along.as_deref()),
-                    at: tile.stack.get(i).and_then(|e| e.at),
-                    printer: opts.printer,
-                    against: tile.stack.get(i).and_then(|e| e.against.as_deref()),
-                    foots: &foots,
-                    draft: opts.draft,
-                };
-                c.elements[i].build(&mut scene, &ctx).map_err(|e| {
-                    let msg = format!("{}: {}", paths[i], e.message);
+            let surface =
+                matches!(*step, Step::Entry(i) if c.writes[i] == dt_elements::Write::Surface);
+            if self.fills && !painted && !surface {
+                painted = true;
+                scene.bank();
+            }
+            match *step {
+                Step::Lift => scene
+                    .lift("tile/ground")
+                    .map_err(|e| build_error(e.to_string()))?,
+                Step::Entry(i) => c.elements[i].build(&mut scene, &self.ctx(i)).map_err(|e| {
+                    let msg = format!("{}: {}", self.jobs[i].path, e.message);
                     match tile.stack.get(i) {
                         Some(en) => vec![
                             Diag::at(&en.src, en.span, "dt::build", msg, "while building this")
                                 .maybe_help(e.help),
                         ],
-                        None => fail(msg),
+                        None => build_error(msg),
                     }
-                })?;
+                })?,
+            }
+            // a front end showing the build as it goes gets what this stage made
+            lifted |= *step == Step::Lift;
+            if lifted
+                && progress.sketching()
+                && scene.parts().len() > sketched
+                && let Ok((mesh, mats)) = scene.soup_since(sketched)
+            {
+                progress.sketch(&mesh, &mats, false);
+                sketched = scene.parts().len();
+            }
+            progress.end(key);
+            stage_secs.push((key.clone(), t_stage.elapsed().as_secs_f64()));
+            if let Some(cache) = cache {
+                let mut scene = scene.clone();
+                scene.set_progress(Progress::none());
+                cache.put(
+                    n,
+                    cache::Kept {
+                        key: keys[n],
+                        scene,
+                        painted,
+                    },
+                );
             }
         }
-        // a front end showing the build as it goes gets what this stage made
-        lifted |= *step == Step::Lift;
-        if lifted
-            && progress.sketching()
-            && scene.parts().len() > sketched
-            && let Ok((mesh, mats)) = scene.soup_since(sketched)
-        {
-            progress.sketch(&mesh, &mats, false);
-            sketched = scene.parts().len();
-        }
-        progress.end(&keys_of_stages[n].0);
-        stage_secs.push((keys_of_stages[n].0.clone(), t_stage.elapsed().as_secs_f64()));
-        if let Some(cache) = cache {
-            let mut scene = scene.clone();
-            scene.set_progress(Progress::none());
-            cache.put(
-                n,
-                cache::Kept {
-                    key: keys[n],
-                    scene,
-                    painted,
-                },
-            );
-        }
-    }
-    let t_stage = std::time::Instant::now();
-    progress.begin(progress::UNION, "joining the parts");
-    // the masonry is brick when every wall and floor is, and there is some
-    let masonry: Vec<bool> = tile
-        .stack
-        .iter()
-        .filter(|e| matches!(e.what.value.as_str(), "wall" | "floor"))
-        .map(|e| {
-            e.controls.iter().any(|c| {
-                c.name == "style"
-                    && matches!(&c.value, dt_elements::Value::Word(w) if w.contains("brick"))
-            })
+        Ok(Ran {
+            scene,
+            stage_secs,
+            reused: first,
         })
-        .collect();
-    let brick = !masonry.is_empty() && masonry.iter().all(|&b| b);
-    let (mesh, mats) = if opts.draft {
-        scene.soup_since(0)
-    } else {
-        scene.union()
     }
-    .map_err(|e| fail(e.to_string()))?;
-    let (entry_in, piece_in) =
-        trace_entries(&scene, &mesh, &paths, tile, &c, &masks, &mask_of, &writes);
-    progress.end(progress::UNION);
-    stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed().as_secs_f64()));
-    let t_stage = std::time::Instant::now();
-    progress.begin(progress::AUDIT, "checking printability");
-    let footprint = c.frame.size_mm();
-    // the band every element gets: the printer's overhang to its steepest
-    let band = dt_kit::Band {
-        max_deg: opts.printer.steepest_deg,
-        ..dt_kit::Band::DEFAULT
-    };
-    let (export, audit) = if opts.draft {
-        // the base is the same in every draft: its sockets are not flagged
-        let base = u16::try_from(tile.stack.len()).unwrap_or(NO_ENTRY);
-        let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
-        dt_kit::draft(mesh, &opts.printer, &skip)
-    } else {
-        dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band))
-    };
-    progress.end(progress::AUDIT);
-    stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
-    let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
-    let entries = export
-        .source
-        .iter()
-        .map(|&t| entry_in.get(t as usize).copied().unwrap_or(NO_ENTRY))
-        .collect();
-    let pieces = export
-        .source
-        .iter()
-        .map(|&t| piece_in.get(t as usize).copied().unwrap_or(0))
-        .collect();
-    scene.record("export", export.mesh.content_hash());
-    let record = BuildRecord {
-        engine: opts.engine.clone(),
-        document: path.to_owned(),
-        document_hash: doc::text_hash(&text),
-        seed: c.seed,
-        system: opts.system.clone(),
-    };
-    Ok(Built {
-        export,
-        materials,
-        audit,
-        stages: std::iter::once(plan_stage)
-            .chain(scene.stages().iter().cloned())
-            .collect(),
-        record,
-        out: out_path(path, &opts.system),
-        footprint,
-        edge_mm,
-        notes: scene.notes().to_vec(),
-        surface: scene.surface(),
-        covered: scene.support().map(|g| dt_kit::Mask {
-            nx: g.nx,
-            ny: g.ny,
-            bits: g.z.iter().map(|z| z.is_finite()).collect(),
-        }),
-        stage_secs,
-        reused: first,
-        brick,
-        entries,
-        pieces,
-    })
+
+    /// The union, the gate and the result.
+    fn finish(
+        &self,
+        path: &str,
+        text: &str,
+        ran: Ran,
+        progress: &Progress,
+    ) -> Result<Built, Vec<Diag>> {
+        let (c, tile, opts) = (self.c, self.tile, self.opts);
+        let Ran {
+            mut scene,
+            mut stage_secs,
+            reused,
+        } = ran;
+        let t_stage = std::time::Instant::now();
+        progress.begin(progress::UNION, "joining the parts");
+        // the masonry is brick when every wall and floor is, and there is some
+        let masonry: Vec<bool> = tile
+            .stack
+            .iter()
+            .filter(|e| matches!(e.what.value.as_str(), "wall" | "floor"))
+            .map(|e| {
+                e.controls.iter().any(|c| {
+                    c.name == "style"
+                        && matches!(&c.value, dt_elements::Value::Word(w) if w.contains("brick"))
+                })
+            })
+            .collect();
+        let brick = !masonry.is_empty() && masonry.iter().all(|&b| b);
+        let (mesh, mats) = if opts.draft {
+            scene.soup_since(0)
+        } else {
+            scene.union()
+        }
+        .map_err(|e| build_error(e.to_string()))?;
+        let (entry_in, piece_in) = trace_entries(&scene, &mesh, self);
+        progress.end(progress::UNION);
+        stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed().as_secs_f64()));
+        let t_stage = std::time::Instant::now();
+        progress.begin(progress::AUDIT, "checking printability");
+        let footprint = c.frame.size_mm();
+        // the band every element gets: the printer's overhang to its steepest
+        let band = dt_kit::Band {
+            max_deg: opts.printer.steepest_deg,
+            ..dt_kit::Band::DEFAULT
+        };
+        let (export, audit) = if opts.draft {
+            // the base is the same in every draft: its sockets are not flagged
+            let base = u16::try_from(tile.stack.len()).unwrap_or(NO_ENTRY);
+            let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
+            dt_kit::draft(mesh, &opts.printer, &skip)
+        } else {
+            dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band))
+        };
+        progress.end(progress::AUDIT);
+        stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
+        let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
+        let entries = export
+            .source
+            .iter()
+            .map(|&t| entry_in.get(t as usize).copied().unwrap_or(NO_ENTRY))
+            .collect();
+        let pieces = export
+            .source
+            .iter()
+            .map(|&t| piece_in.get(t as usize).copied().unwrap_or(0))
+            .collect();
+        scene.record("export", export.mesh.content_hash());
+        let record = BuildRecord {
+            engine: opts.engine.clone(),
+            document: path.to_owned(),
+            document_hash: doc::text_hash(text),
+            seed: c.seed,
+            system: opts.system.clone(),
+        };
+        Ok(Built {
+            export,
+            materials,
+            audit,
+            stages: std::iter::once(self.plan_stage.clone())
+                .chain(scene.stages().iter().cloned())
+                .collect(),
+            record,
+            out: out_path(path, &opts.system),
+            footprint,
+            edge_mm: self.edge_mm,
+            notes: scene.notes().to_vec(),
+            surface: scene.surface(),
+            covered: scene.support().map(|g| dt_kit::Mask {
+                nx: g.nx,
+                ny: g.ny,
+                bits: g.z.iter().map(|z| z.is_finite()).collect(),
+            }),
+            stage_secs,
+            reused,
+            brick,
+            entries,
+            pieces,
+        })
+    }
 }
 
-/// Each triangle of the union's stack entry and piece: by its solid's
-/// owner (the entry's path), and for the lifted ground by the last
-/// surface entry whose area covers the triangle's middle.
-#[allow(clippy::too_many_arguments)]
-fn trace_entries(
-    scene: &Scene,
-    mesh: &dt_kit::TriMesh,
-    paths: &[String],
-    tile: &Tile,
-    c: &Checked,
-    masks: &[Mask],
-    mask_of: &[usize],
-    writes: &[dt_elements::Write],
-) -> (Vec<u16>, Vec<u16>) {
+fn trace_entries(scene: &Scene, mesh: &dt_kit::TriMesh, plan: &Plan<'_>) -> (Vec<u16>, Vec<u16>) {
+    let (tile, c, masks) = (plan.tile, plan.c, &plan.masks);
+    let writes = &c.writes;
     let to16 = |i: usize| u16::try_from(i).unwrap_or(NO_ENTRY);
     let mut seen: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
     let parts: Vec<(Option<u16>, u16)> = scene
@@ -776,7 +859,10 @@ fn trace_entries(
             let k = seen.entry(p.tag.owner.as_str()).or_default();
             *k += 1;
             (
-                paths.iter().position(|x| *x == p.tag.owner).map(to16),
+                plan.jobs
+                    .iter()
+                    .position(|j| j.path == p.tag.owner)
+                    .map(to16),
                 to16(*k - 1),
             )
         })
@@ -823,7 +909,7 @@ fn trace_entries(
             .iter()
             .rev()
             .find(|&&e| {
-                let m = &masks[mask_of[e]];
+                let m = &masks[plan.jobs[e].mask];
                 m.bits[j.min(m.ny - 1) * m.nx + i.min(m.nx - 1)]
             })
             .or(surfaces.first())
