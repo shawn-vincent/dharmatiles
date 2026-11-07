@@ -1,7 +1,7 @@
 //! The audit gate: the mesh as a slicer sees it.
 //!
 //! Pinch separation, the float32 reload, keeping the largest body, and the
-//! layer-reach overhang rule (`overhang_faces`, the 55° rule that wins over
+//! layer-reach overhang rule (`Slices`, the 55° rule that wins over
 //! the other three `audit_overhang` copies). Order, as `stl_safe`: separate
 //! pinches, quantise to float32 and merge by position, split into bodies
 //! and keep the largest (reporting the rest), then check watertightness,
@@ -267,7 +267,11 @@ pub fn audit_banded(
         .map(|(d, _)| d)
         .partition(|d| d.volume_mm3.abs() < VOID_SLIVER_MM3);
     let watertight = m.is_watertight();
-    let (mut overhang, holes) = overhang_faces(&m, footprint, printer);
+    let slices = Slices::cut(&m, printer);
+    let (mut overhang, holes) = slices.as_ref().map_or_else(
+        || (vec![false; m.triangles.len()], 0),
+        |sl| (sl.flag(&m, printer), sl.holes(footprint)),
+    );
     let areas = face_areas(&m);
     let mut in_band = vec![false; overhang.len()];
     let mut band_budget_mm2 = 0.0;
@@ -287,7 +291,9 @@ pub fn audit_banded(
                 overhang_deg: b.max_deg,
                 ..*printer
             };
-            let (hard, _) = overhang_faces(&m, footprint, &cap);
+            let hard = slices
+                .as_ref()
+                .map_or_else(|| vec![false; m.triangles.len()], |sl| sl.flag(&m, &cap));
             for k in 0..overhang.len() {
                 if overhang[k] && tolerant[k] && !hard[k] {
                     overhang[k] = false;
@@ -461,35 +467,41 @@ fn separate_pinches(m: &mut TriMesh) -> usize {
                 .push(u32::try_from(i).unwrap_or(u32::MAX));
         }
         // pairs closer than NEAR (rare: found by cell, edges checked after)
-        let mut near = Vec::new();
-        for (i, p) in m.positions.iter().enumerate() {
-            let k = key(*p);
-            // cells are 2 NEAR wide, so a point within NEAR lies in this
-            // cell or the one on the side of the cell this point is nearer
-            #[allow(clippy::cast_precision_loss)]
-            let side = [0, 1, 2].map(|a| {
-                if p[a] / CELL - k[a] as f64 >= 0.5 {
-                    1
-                } else {
-                    -1
-                }
-            });
-            let i = u32::try_from(i).unwrap_or(u32::MAX);
-            for c in 0..8 {
-                let cell = [0, 1, 2].map(|a| k[a] + if c >> a & 1 == 1 { side[a] } else { 0 });
-                let Some(list) = cells.get(&cell) else {
-                    continue;
-                };
-                for &j in list {
-                    if j > i {
-                        let d = dist(*p, m.positions[j as usize]);
-                        if d < NEAR {
-                            near.push((i, j, d));
-                        }
+        // (each point on its own; `pairs` is sorted below, so the order
+        // they are found in does not matter)
+        let near: Vec<(u32, u32, f64)> = m
+            .positions
+            .par_iter()
+            .enumerate()
+            .flat_map_iter(|(i, p)| {
+                let k = key(*p);
+                // cells are 2 NEAR wide, so a point within NEAR lies in this
+                // cell or the one on the side of the cell this point is nearer
+                #[allow(clippy::cast_precision_loss)]
+                let side = [0, 1, 2].map(|a| {
+                    if p[a] / CELL - k[a] as f64 >= 0.5 {
+                        1
+                    } else {
+                        -1
                     }
-                }
-            }
-        }
+                });
+                let i = u32::try_from(i).unwrap_or(u32::MAX);
+                let cells = &cells;
+                let positions = &m.positions;
+                (0..8).flat_map(move |c| {
+                    let cell = [0, 1, 2].map(|a| k[a] + if c >> a & 1 == 1 { side[a] } else { 0 });
+                    cells
+                        .get(&cell)
+                        .into_iter()
+                        .flatten()
+                        .filter(move |&&j| j > i)
+                        .filter_map(move |&j| {
+                            let d = dist(*p, positions[j as usize]);
+                            (d < NEAR).then_some((i, j, d))
+                        })
+                })
+            })
+            .collect();
         if near.is_empty() {
             break;
         }
@@ -740,12 +752,17 @@ fn face_areas(m: &TriMesh) -> Vec<f64> {
         .collect()
 }
 
-/// The overhang faces: the mesh sliced every layer by
+/// The overhang test: the mesh sliced every layer by
 /// vertical rays on a `grid_mm` lattice (offset off the mesh's own grids,
 /// so no ray grazes an edge); a layer's material farther than `reach +
 /// (k − 1) × layer × tan(overhang)` from layer k below it (any k within
 /// `span_mm`) droops. Flagged: the downward faces above z = 0.05 under such
-/// material. Also returns the rays inside `footprint` that hit nothing.
+/// material.
+///
+/// The slicing ([`Slices::cut`]) does not depend on the overhang angle;
+/// only the flagging ([`Slices::flag`]) does, so one cut serves the gate's
+/// angle and the band's.  [`Slices::holes`] counts the rays inside the
+/// footprint that hit nothing.
 ///
 /// A void thinner than the printer's `gap` (measured exactly along each
 /// ray, not at layer resolution) is filled before the layers are cut: such
@@ -754,160 +771,203 @@ fn face_areas(m: &TriMesh) -> Vec<f64> {
 /// 0.11 mm under a wall stone is (walls R10: "the lip over the sub-mm
 /// joint prints"); the plain layer-reach rule, written for stacked rock with real
 /// gaps, counted every such roof as a drooping shelf.
-fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, usize) {
-    let none = (vec![false; m.triangles.len()], 0);
-    let Some((lo, hi)) = bounds(m) else {
-        return none;
-    };
-    let g = p.grid_mm;
-    let (x0, y0) = (lo[0] + 0.0137, lo[1] + 0.0091);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let count = |a: f64, b: f64| ((b - a) / g).ceil().max(0.0) as usize;
-    let (nx, ny) = (count(x0, hi[0]), count(y0, hi[1]));
-    if nx == 0 || ny == 0 {
-        return none;
-    }
-    let lay = p.layer_mm;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let nl = ((hi[2] / lay).ceil().max(0.0) as usize) + 1;
-    #[allow(clippy::cast_possible_truncation)]
-    let layer_of = |z: f64| ((z / lay + 0.5).floor() as i64).clamp(0, nl as i64) as usize;
+struct Slices {
+    x0: f64,
+    y0: f64,
+    g: f64,
+    lay: f64,
+    nx: usize,
+    ny: usize,
+    nl: usize,
+    inside: Vec<bool>,
+    far: Vec<Vec<f32>>,
+    hit_any: Vec<bool>,
+}
 
-    // Every (column, z) hit, one list per triangle, gathered in order.
-    let hits: Vec<Vec<(usize, f64)>> = m
-        .triangles
-        .par_iter()
-        .map(|t| column_hits(m, t, [x0, y0], g, nx, ny))
-        .collect();
-    let mut per_col: Vec<Vec<f64>> = vec![Vec::new(); nx * ny];
-    for list in &hits {
-        for &(col, z) in list {
-            per_col[col].push(z);
-        }
-    }
-    let mut occ = vec![0u8; (nl + 1) * nx * ny];
-    let mut hit_any = vec![false; nx * ny];
-    for (col, zs) in per_col.iter_mut().enumerate() {
-        if zs.is_empty() {
-            continue;
-        }
-        hit_any[col] = true;
-        zs.sort_by(f64::total_cmp);
-        // hits alternate in, out, in, …: drop an out and the next in when
-        // the void between them is thinner than the printer's gap. An odd
-        // count means the column does not alternate (a grazing ray, an
-        // open seam): no gap-fill there, the hits are cut as they are.
-        let fill = zs.len().is_multiple_of(2);
-        let mut kept: Vec<f64> = Vec::with_capacity(zs.len());
-        for (k, &z) in zs.iter().enumerate() {
-            if fill
-                && k.is_multiple_of(2)
-                && k > 0
-                && kept.len().is_multiple_of(2)
-                && z - zs[k - 1] < p.gap_mm
-            {
-                kept.pop();
-                continue;
-            }
-            kept.push(z);
-        }
-        for z in kept {
-            occ[layer_of(z) * nx * ny + col] ^= 1;
-        }
-    }
-    // inside at layer k: an odd count of hits at layers ≤ k
-    let mut inside = vec![false; nl * nx * ny];
-    let mut odd = vec![0u8; nx * ny];
-    for k in 0..nl {
-        for col in 0..nx * ny {
-            odd[col] ^= occ[k * nx * ny + col];
-            inside[k * nx * ny + col] = odd[col] == 1;
-        }
-    }
-    let layer = |k: usize| &inside[k * nx * ny..(k + 1) * nx * ny];
-    // distance (mm) to the nearest material of every layer, in parallel
+impl Slices {
     #[allow(clippy::cast_possible_truncation)]
-    let far: Vec<Vec<f32>> = (0..nl)
-        .into_par_iter()
-        .map(|k| {
-            dt_geom::distance(layer(k), nx, ny)
-                .into_iter()
-                .map(|d| (d * g) as f32)
-                .collect()
-        })
-        .collect();
-    let c = lay * libm::tan(p.overhang_deg.to_radians());
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let span = (p.span_mm / lay) as usize;
-    let mut bad = vec![false; nl * nx * ny];
-    for i in 1..nl {
-        let cur = layer(i);
-        for col in 0..nx * ny {
-            if !cur[col] {
-                continue;
-            }
-            bad[i * nx * ny + col] = (1..=span.min(i)).any(|j| {
-                #[allow(clippy::cast_possible_truncation)]
-                let limit = (p.reach_mm + (j - 1) as f64 * c) as f32;
-                far[i - j][col] > limit
-            });
-        }
+    fn layer_of(&self, z: f64) -> usize {
+        ((z / self.lay + 0.5).floor() as i64).clamp(0, self.nl as i64) as usize
     }
-    // 3 × 3 dilation in each layer, then a face may sit under layer k or k + 1
-    let mut grown = vec![false; nl * nx * ny];
-    for k in 0..nl {
-        for jy in 0..ny {
-            for ix in 0..nx {
-                if !bad[k * nx * ny + jy * nx + ix] {
+
+    /// `None` for a mesh with no extent on the lattice.
+    fn cut(m: &TriMesh, p: &Printer) -> Option<Self> {
+        let (lo, hi) = bounds(m)?;
+        let g = p.grid_mm;
+        let (x0, y0) = (lo[0] + 0.0137, lo[1] + 0.0091);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let count = |a: f64, b: f64| ((b - a) / g).ceil().max(0.0) as usize;
+        let (nx, ny) = (count(x0, hi[0]), count(y0, hi[1]));
+        if nx == 0 || ny == 0 {
+            return None;
+        }
+        let lay = p.layer_mm;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let nl = ((hi[2] / lay).ceil().max(0.0) as usize) + 1;
+        #[allow(clippy::cast_possible_truncation)]
+        let layer_of = |z: f64| ((z / lay + 0.5).floor() as i64).clamp(0, nl as i64) as usize;
+
+        // Every (column, z) hit, one list per triangle, gathered in order.
+        let hits: Vec<Vec<(usize, f64)>> = m
+            .triangles
+            .par_iter()
+            .map(|t| column_hits(m, t, [x0, y0], g, nx, ny))
+            .collect();
+        let mut per_col: Vec<Vec<f64>> = vec![Vec::new(); nx * ny];
+        for list in &hits {
+            for &(col, z) in list {
+                per_col[col].push(z);
+            }
+        }
+        let mut occ = vec![0u8; (nl + 1) * nx * ny];
+        let mut hit_any = vec![false; nx * ny];
+        // each column sorted and gap-filled on its own thread (a column
+        // keeps its first hit, so one that was hit stays hit)
+        let gap = p.gap_mm;
+        per_col.par_iter_mut().for_each(|zs| {
+            zs.sort_by(f64::total_cmp);
+            // hits alternate in, out, in, …: drop an out and the next in when
+            // the void between them is thinner than the printer's gap. An odd
+            // count means the column does not alternate (a grazing ray, an
+            // open seam): no gap-fill there, the hits are cut as they are.
+            let fill = zs.len().is_multiple_of(2);
+            let mut kept: Vec<f64> = Vec::with_capacity(zs.len());
+            for (k, &z) in zs.iter().enumerate() {
+                if fill
+                    && k.is_multiple_of(2)
+                    && k > 0
+                    && kept.len().is_multiple_of(2)
+                    && z - zs[k - 1] < gap
+                {
+                    kept.pop();
                     continue;
                 }
-                for dy in jy.saturating_sub(1)..=(jy + 1).min(ny - 1) {
-                    for dx in ix.saturating_sub(1)..=(ix + 1).min(nx - 1) {
-                        grown[k * nx * ny + dy * nx + dx] = true;
-                    }
+                kept.push(z);
+            }
+            *zs = kept;
+        });
+        for (col, zs) in per_col.iter().enumerate() {
+            hit_any[col] = !zs.is_empty();
+            for &z in zs {
+                occ[layer_of(z) * nx * ny + col] ^= 1;
+            }
+        }
+        // inside at layer k: an odd count of hits at layers ≤ k
+        let mut inside = vec![false; nl * nx * ny];
+        let mut odd = vec![0u8; nx * ny];
+        for k in 0..nl {
+            for col in 0..nx * ny {
+                odd[col] ^= occ[k * nx * ny + col];
+                inside[k * nx * ny + col] = odd[col] == 1;
+            }
+        }
+        let layer = |k: usize| &inside[k * nx * ny..(k + 1) * nx * ny];
+        // distance (mm) to the nearest material of every layer, in parallel
+        #[allow(clippy::cast_possible_truncation)]
+        let far: Vec<Vec<f32>> = (0..nl)
+            .into_par_iter()
+            .map(|k| {
+                dt_geom::distance(layer(k), nx, ny)
+                    .into_iter()
+                    .map(|d| (d * g) as f32)
+                    .collect()
+            })
+            .collect();
+        Some(Self {
+            x0,
+            y0,
+            g,
+            lay,
+            nx,
+            ny,
+            nl,
+            inside,
+            far,
+            hit_any,
+        })
+    }
+
+    /// The downward faces under material that droops at `p`'s overhang.
+    fn flag(&self, m: &TriMesh, p: &Printer) -> Vec<bool> {
+        let Self {
+            x0,
+            y0,
+            g,
+            lay,
+            nx,
+            ny,
+            nl,
+            ..
+        } = *self;
+        let far = &self.far;
+        let layer = |k: usize| &self.inside[k * nx * ny..(k + 1) * nx * ny];
+        let layer_of = |z: f64| self.layer_of(z);
+        let c = lay * libm::tan(p.overhang_deg.to_radians());
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let span = (p.span_mm / lay) as usize;
+        let cells = nx * ny;
+        // a cell droops when material sits in it with too little below
+        // (each layer on its own thread)
+        let mut bad = vec![false; nl * cells];
+        bad.par_chunks_mut(cells)
+            .enumerate()
+            .skip(1)
+            .for_each(|(i, row)| {
+                for (col, b) in row.iter_mut().enumerate() {
+                    *b = layer(i)[col]
+                        && (1..=span.min(i)).any(|j| {
+                            #[allow(clippy::cast_possible_truncation)]
+                            let limit = (p.reach_mm + (j - 1) as f64 * c) as f32;
+                            far[i - j][col] > limit
+                        });
                 }
-            }
-        }
+            });
+        // a face is flagged under a drooping cell within one cell of it, in
+        // its layer or the one above (asked per face, not dilated everywhere)
+        let near = |k: usize, ix: usize, iy: usize| {
+            (iy.saturating_sub(1)..=(iy + 1).min(ny - 1)).any(|y| {
+                (ix.saturating_sub(1)..=(ix + 1).min(nx - 1)).any(|x| bad[k * cells + y * nx + x])
+            })
+        };
+        m.triangles
+            .par_iter()
+            .map(|t| {
+                let [a, b, cc] = t.map(|i| m.positions[i as usize]);
+                let f = cross(sub(b, a), sub(cc, a));
+                let l = (f[0] * f[0] + f[1] * f[1] + f[2] * f[2]).sqrt();
+                if l == 0.0 {
+                    return false;
+                }
+                let n = f.map(|x| x / l);
+                let pc = [0, 1, 2].map(|k| (a[k] + b[k] + cc[k]) / 3.0);
+                if !(n[2] < 0.0 && pc[2] > 0.05) {
+                    return false;
+                }
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let at = |v: f64, o: f64, n: usize| {
+                    ((v - o) / g).round().clamp(0.0, (n - 1) as f64) as usize
+                };
+                let ix = at(pc[0] - n[0] * 0.5 * g, x0, nx);
+                let iy = at(pc[1] - n[1] * 0.5 * g, y0, ny);
+                let kz = layer_of(pc[2]).min(nl - 1);
+                near(kz, ix, iy) || (kz + 1 < nl && near(kz + 1, ix, iy))
+            })
+            .collect()
     }
-    for k in 0..nl - 1 {
-        for col in 0..nx * ny {
-            if grown[(k + 1) * nx * ny + col] {
-                grown[k * nx * ny + col] = true;
-            }
-        }
+
+    /// The rays inside `footprint` that hit nothing.
+    fn holes(&self, footprint: [f64; 2]) -> usize {
+        let Self {
+            x0, y0, g, nx, ny, ..
+        } = *self;
+        let hit_any = &self.hit_any;
+        (0..nx * ny)
+            .filter(|&col| {
+                let (x, y) = (x0 + (col % nx) as f64 * g, y0 + (col / nx) as f64 * g);
+                !hit_any[col] && x < footprint[0] && y < footprint[1] && x > 0.0 && y > 0.0
+            })
+            .count()
     }
-    let flagged = m
-        .triangles
-        .iter()
-        .map(|t| {
-            let [a, b, cc] = t.map(|i| m.positions[i as usize]);
-            let f = cross(sub(b, a), sub(cc, a));
-            let l = (f[0] * f[0] + f[1] * f[1] + f[2] * f[2]).sqrt();
-            if l == 0.0 {
-                return false;
-            }
-            let n = f.map(|x| x / l);
-            let pc = [0, 1, 2].map(|k| (a[k] + b[k] + cc[k]) / 3.0);
-            if !(n[2] < 0.0 && pc[2] > 0.05) {
-                return false;
-            }
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let at = |v: f64, o: f64, n: usize| {
-                ((v - o) / g).round().clamp(0.0, (n - 1) as f64) as usize
-            };
-            let ix = at(pc[0] - n[0] * 0.5 * g, x0, nx);
-            let iy = at(pc[1] - n[1] * 0.5 * g, y0, ny);
-            let kz = layer_of(pc[2]).min(nl - 1);
-            grown[kz * nx * ny + iy * nx + ix]
-        })
-        .collect();
-    let holes = (0..nx * ny)
-        .filter(|&col| {
-            let (x, y) = (x0 + (col % nx) as f64 * g, y0 + (col / nx) as f64 * g);
-            !hit_any[col] && x < footprint[0] && y < footprint[1] && x > 0.0 && y > 0.0
-        })
-        .count();
-    (flagged, holes)
 }
 
 pub(crate) fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
