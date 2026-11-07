@@ -117,7 +117,7 @@ pub fn stand(
     };
     let inside_t = voxels(&t, lo, g, lay, nx, ny, nz);
     let inside_w = voxels(&w, lo, g, lay, nx, ny, nz);
-    // the audit's rule (audit.rs, `Slices`), with margins: a
+    // the audit's rule (audit/overhang.rs, `Slices`), with margins: a
     // voxel stays if, for every j up to the span, material j layers down
     // lies within reach + (j − 1) × the cone's step
     let cone = lay / libm::tan(s.angle_deg.to_radians());
