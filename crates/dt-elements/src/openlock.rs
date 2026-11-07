@@ -1,4 +1,4 @@
-//! `connector` for OpenLOCK: the clip-socket base under z = 0 (P5).
+//! `connector` for OpenLOCK: the clip-socket base under z = 0.
 //!
 //! OpenLOCK credit: the clip
 //! socket dimensions and placement follow OpenSCAD-OpenLock by Caitlyn

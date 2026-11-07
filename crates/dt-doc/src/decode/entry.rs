@@ -22,7 +22,7 @@ enum Parent {
     Surface,
 }
 
-/// Controls asked of a thing that are a scatter's job (R6 D11).
+/// Controls asked of a thing that are a scatter's job.
 const SCATTER_ONLY: [&str; 6] = ["count", "per-square", "spread", "reach", "clumps", "gap"];
 
 /// What a name on an entry resolved to.

@@ -24,7 +24,7 @@ pub struct TriMesh {
     /// Triangle runs: run `r` is triangles `run_index[r]/3 .. run_index[r+1]/3`
     /// (indices into the flat vertex-index array, as in `MeshGL`).
     pub run_index: Vec<u32>,
-    /// The original (source) ID of each run (R9: material tracking).
+    /// The original (source) ID of each run.
     pub run_original_id: Vec<u32>,
     /// Per-triangle face ID (coplanar faces share one). Empty if unknown.
     pub face_id: Vec<u32>,
@@ -136,7 +136,7 @@ impl TriMesh {
     }
 
     /// A 64-bit FNV-1a hash of the exact bytes of every field: equal hashes
-    /// mean byte-identical meshes (R2).
+    /// mean byte-identical meshes.
     #[must_use]
     pub fn content_hash(&self) -> u64 {
         let mut h = Fnv::default();

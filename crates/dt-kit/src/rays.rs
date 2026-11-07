@@ -21,7 +21,7 @@
 //!
 //! Queries are batched: one call casts many rays, in parallel inside the
 //! backend, and returns answers in input order, so results do not depend
-//! on the thread count (R2).
+//! on the thread count.
 
 use dt_geom::{ObvhsRays, Ray, TriMesh};
 

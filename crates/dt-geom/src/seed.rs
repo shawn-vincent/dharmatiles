@@ -48,7 +48,7 @@ impl Seed {
 
 /// A seeded random stream (SplitMix64), for draws that must follow one
 /// another, such as dart throwing. Make one per keyed seed; never share
-/// one across threads. Seeded maths uses `libm` (R2).
+/// one across threads. Seeded maths uses `libm`.
 #[derive(Clone, Debug)]
 pub struct Rng(u64);
 

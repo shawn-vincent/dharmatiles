@@ -1,4 +1,4 @@
-//! Forms: the P5 operations that make stones, blocks and branches as
+//! Forms: the operations that make stones, blocks and branches as
 //! triangle meshes and turn them into solids (walls, floors, trees).
 //!
 //! A form is built as a [`TriMesh`] in its own frame (a level set of a
@@ -291,8 +291,8 @@ fn relief_along(
 }
 
 /// **subdivide**: every triangle split in four at its edge midpoints
-/// (shared midpoints, so a closed mesh stays closed). Port of trimesh's
-/// `subdivide`, which `stone_relief(refine=1)` runs first.
+/// (shared midpoints, so a closed mesh stays closed). As trimesh's
+/// `subdivide`.
 #[must_use]
 pub fn subdivide(mesh: &TriMesh) -> TriMesh {
     let mut positions = mesh.positions.clone();

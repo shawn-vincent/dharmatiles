@@ -26,7 +26,6 @@ pub const SWATH_SPACING_MM: f64 = 11.0;
 const SWATH_LATERAL_ASPECT: f64 = 0.65;
 const SWATH_WARP_MM: f64 = 2.5;
 const SWATH_WARP_SIGMA_MM: f64 = 3.0;
-const SWATH_AMP_MM: (f64, f64) = (1.2, 2.2);
 // 4 lenses
 const SOIL_LENS_CANDIDATES: usize = 80;
 const SOIL_LENS_SCORE_NOISE: f64 = 0.8;
@@ -264,7 +263,6 @@ pub struct Swaths {
     sites: Vec<[f64; 2]>,
     axis: Vec<[f64; 2]>,
     perp: Vec<[f64; 2]>,
-    amp: Vec<f64>,
     warp: Lat,
     phase: Vec<f64>,
     a_min: Vec<f64>,
@@ -287,9 +285,11 @@ impl Swaths {
             axis.push(a);
             perp.push([-a[1], a[0]]);
         }
-        let amp: Vec<f64> = (0..n)
-            .map(|_| rng.uniform(SWATH_AMP_MM.0, SWATH_AMP_MM.1))
-            .collect();
+        // one draw per swath, unused, kept so every later draw from `rng`
+        // (and so the grass) stays as it is
+        for _ in 0..n {
+            let _ = rng.random();
+        }
         let grid = Lat::new(-m, -m, w + m, h + m, 0.25, 0.0);
         let warp_n = grid.noise(seed.key("warp"), SWATH_WARP_SIGMA_MM * s);
         let warp = warp_n.with(warp_n.z.iter().map(|v| SWATH_WARP_MM * s * v).collect());
@@ -298,7 +298,6 @@ impl Swaths {
             sites,
             axis,
             perp,
-            amp,
             warp,
             phase,
             a_min: vec![0.0; n],
@@ -355,13 +354,6 @@ impl Swaths {
         let s = ((a - self.a_min[o]) / self.length[o]).clamp(0.0, 1.0);
         let l = (b / self.b_max[o]).clamp(-1.0, 1.0);
         (o, s, l)
-    }
-
-    /// The wave envelope: low upstream and at the sides, crest downstream
-    /// centre. Kept for the swath's amplitude; blade length uses `s` only.
-    #[allow(dead_code)]
-    pub fn env(&self, o: usize, s: f64, l: f64) -> f64 {
-        self.amp[o] * (0.25 + 0.75 * libm::pow(s, 1.6)) * libm::pow(1.0 - l * l, 0.6)
     }
 }
 

@@ -1,6 +1,5 @@
 //! Every library file prints back byte for byte, and edits keep every
-//! byte outside the edited node (plan.html R6: "comments and layout
-//! survive the edit byte for byte outside the edited node").
+//! byte outside the edited node: comments and layout survive an edit.
 #![allow(clippy::unwrap_used)] // test helpers outside #[test] fns
 
 mod common;

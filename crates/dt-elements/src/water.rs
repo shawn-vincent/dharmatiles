@@ -2,7 +2,7 @@
 //!
 //! The water fills its area up to its level wherever the ground is lower,
 //! and is lifted with the ground as one surface whose top over the water
-//! is the water material (R9). Its relief is waves sent out by emitters:
+//! is the water material. Its relief is waves sent out by emitters:
 //!
 //! - the **land** (its border with the water) sends broad rolling swells
 //!   (5–16 mm) that wrap round rocks: distances are geodesic through the

@@ -23,13 +23,13 @@ pub const FLAT: (&str, &str) = lib!("tiles/test/1x1-flat.dtile");
 pub const GRASS_TREE: (&str, &str) = lib!("tiles/ground/2x2-grass-tree.dtile");
 pub const WALL_CORNER: (&str, &str) = lib!("tiles/walls/1x1-wall-fieldstone-corner.dtile");
 pub const CLIFF_RUN: (&str, &str) = lib!("tiles/test/2x1-cliff-full.dtile");
-/// The R6 page's from-scratch tile: a divided tile, not a library tile.
+/// A tile written from scratch: a divided tile, not a library tile.
 pub const PATH_ROCKS: (&str, &str) = (
     "tests/fixtures/1x2-grass-path-rocks.dtile",
     include_str!("../fixtures/1x2-grass-path-rocks.dtile"),
 );
 
-/// Every file under library/, plus the R6 fixture.
+/// Every file under library/, plus that fixture.
 pub const ALL: [(&str, &str); 10] = [
     LEVELS,
     EDGES,
@@ -157,7 +157,7 @@ pub const CASES: [Case; 10] = [
     },
     Case {
         slug: "old-vocabulary",
-        title: "The spike's words",
+        title: "Old words",
         tile: GRASS_TREE,
         from: "ground ",
         to: "hills  ",

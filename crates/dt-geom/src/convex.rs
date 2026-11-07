@@ -8,7 +8,7 @@
 //! crossing edge gets one new vertex (shared by both faces that hold the
 //! edge, so the result stays closed), and the new face is the convex
 //! polygon of the points on the plane. Every step is plain arithmetic in a
-//! fixed order, so the result depends only on the inputs (R2), and a
+//! fixed order, so the result depends only on the inputs, and a
 //! convex solid cut by a plane is convex, so it stays printable wherever
 //! the planes are.
 

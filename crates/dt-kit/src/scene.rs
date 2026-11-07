@@ -20,7 +20,7 @@ pub struct Frame {
 }
 
 /// The DungeonBlocks reference square: every size an author writes is mm
-/// at this square, and scales with the system (R6 decision D2).
+/// at this square, and scales with the system.
 pub const REFERENCE_SQUARE_MM: f64 = 35.0;
 
 /// The OpenLOCK square (one inch).
@@ -124,11 +124,11 @@ pub enum Material {
     Grass = 5,
     /// Flowers.
     Flower = 6,
-    /// Wall and floor stone (P5).
+    /// Wall and floor stone.
     Masonry = 10,
-    /// Branches and trunks (P5).
+    /// Branches and trunks.
     Wood = 11,
-    /// Foliage clumps and leaves (P5).
+    /// Foliage clumps and leaves.
     Leaf = 12,
 }
 
@@ -214,7 +214,7 @@ pub struct Tag {
 }
 
 /// A solid inside the mesh kernel. It never leaves the kernel between
-/// operations (R1): elements combine solids only through kit operations.
+/// operations: elements combine solids only through kit operations.
 #[derive(Clone)]
 pub struct Solid(pub(crate) dt_geom::Solid);
 
@@ -321,7 +321,7 @@ pub struct Part {
     pub solid: Solid,
 }
 
-/// A named stage hash (R2): equal hashes mean byte-identical stages.
+/// A named stage hash: equal hashes mean byte-identical stages.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stage {
     /// The stage, such as `surface` or `connector:tile/flat/connector`.
@@ -786,7 +786,7 @@ impl Scene {
         let slot = self.slots(1, Material::Earth)?.get(0);
         let solid = leaf(slot, &mesh)?;
         if self.wet.count() > 0 {
-            // R9: the top over the water is water, face by face
+            // the top over the water is water, face by face
             let out = solid.0.to_tri_mesh();
             let (nx, step) = (self.field.nx, self.field.step);
             let wet = &self.wet;
@@ -811,7 +811,7 @@ impl Scene {
             let conflicts = self.materials.conflicts - before;
             if conflicts > 0 {
                 // faces that straddle the water line: the first triangle's
-                // material holds for the whole face (R9 stays whole)
+                // material holds for the whole face (so every triangle keeps a material)
                 #[allow(clippy::cast_precision_loss)]
                 self.note("material_conflicts", conflicts as f64);
             }
@@ -980,13 +980,6 @@ impl Scene {
         });
     }
 
-    /// **union**: every part combined in build order (`batch_in_order`),
-    /// exported once, with each triangle's material (R9). Ends the scene's
-    /// time in the kernel; the export is what the audit takes.
-    ///
-    /// # Errors
-    /// [`KitError::Untraced`] if a triangle has no material, or the
-    /// kernel's status.
     /// Every part's mesh from `first` on, side by side, not joined, with
     /// each triangle's material: from 0, a draft's mesh; from a stage's
     /// first part, a sketch of what it added while the build runs.
@@ -1004,30 +997,35 @@ impl Scene {
         for m in meshes {
             mesh.append(&m);
         }
-        let materials = self
-            .materials
-            .trace(&mesh)
-            .into_iter()
-            .map(|m| m.and_then(Material::from_id))
-            .collect::<Option<Vec<_>>>()
-            .ok_or(KitError::Untraced)?;
+        let materials = self.material_of(&mesh)?;
         Ok((mesh, materials))
     }
 
+    /// **union**: every part combined in build order (`batch_in_order`),
+    /// exported once, with each triangle's material. Ends the scene's
+    /// time in the kernel; the export is what the audit takes.
+    ///
+    /// # Errors
+    /// [`KitError::Untraced`] if a triangle has no material, or the
+    /// kernel's status.
     pub fn union(&mut self) -> Result<(TriMesh, Vec<Material>), KitError> {
         let solids: Vec<dt_geom::Solid> = self.parts.iter().map(|p| p.solid.0.clone()).collect();
         let all = batch_in_order(&solids, BoolOp::Union);
         all.status().map_err(KitError::Mesh)?;
         let mesh = all.to_tri_mesh();
         self.record("union", mesh.content_hash());
-        let materials = self
-            .materials
-            .trace(&mesh)
+        let materials = self.material_of(&mesh)?;
+        Ok((mesh, materials))
+    }
+
+    /// Each triangle's material, traced through the kernel's ids.
+    fn material_of(&self, mesh: &TriMesh) -> Result<Vec<Material>, KitError> {
+        self.materials
+            .trace(mesh)
             .into_iter()
             .map(|m| m.and_then(Material::from_id))
             .collect::<Option<Vec<_>>>()
-            .ok_or(KitError::Untraced)?;
-        Ok((mesh, materials))
+            .ok_or(KitError::Untraced)
     }
 }
 

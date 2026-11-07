@@ -7,7 +7,7 @@
 //! full-length 30° arch, a curl over the tip third, and a rigid lift about
 //! the base. The oval is a half-size copy embedded below it; the solid is
 //! the blade, the reversed oval, and a wall stitched vertex for vertex
-//! round both perimeters. All maths is `libm` (R2).
+//! round both perimeters. All maths is `libm`.
 
 use dt_kit::TriMesh;
 

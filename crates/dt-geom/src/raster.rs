@@ -117,7 +117,7 @@ pub fn fill(walls: &Mask, seed: (usize, usize)) -> Mask {
 
 /// The nodes inside `polygons` (closed rings in mm, even-odd, as a slice
 /// returns them) on an `nx` by `ny` lattice of `step` mm spacing, node
-/// `(i, j)` at `(i·step, j·step)`: a solid's footprint (P3). Scanline by
+/// `(i, j)` at `(i·step, j·step)`: a solid's footprint. Scanline by
 /// rows: a node is inside when an odd number of ring edges cross the row
 /// to its left.
 #[must_use]

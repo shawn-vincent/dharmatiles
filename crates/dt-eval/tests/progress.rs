@@ -1,4 +1,4 @@
-//! The progress side channel (docs/rust/preview.html, "Progress"): a
+//! The progress side channel: a
 //! reporter never changes a build, and the bar it drives never goes back
 //! and ends at 100%.
 

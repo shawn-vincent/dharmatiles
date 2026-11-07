@@ -1,9 +1,9 @@
 //! The plan-then-build scheduler.
 //!
 //! Every stack entry first says what it writes and reads ([`Plan`]). The
-//! order follows from that, not from where things are listed (R6 D3:
+//! order follows from that, not from where things are listed:
 //! stack order is free for solids; it only decides which surface paints
-//! over which):
+//! over which.
 //!
 //! 1. surfaces, painted in stack order;
 //! 2. fills (water), each after the solids it reads, and those solids
@@ -14,8 +14,8 @@
 //!    comes after all the others.
 //!
 //! A read nothing in the tile writes, a cycle, or a surface that reads a
-//! solid (P1 paints surfaces before any solid exists) is refused here,
-//! before anything is built (risk R8).
+//! solid (surfaces are painted before any solid exists) is refused here,
+//! before anything is built.
 
 use dt_elements::{Plan, Read, Write};
 

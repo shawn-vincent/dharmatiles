@@ -15,9 +15,9 @@
 //!    noised and unioned without clipping their naturally rounded undersides.
 //! 5. Leaves on the clumps ([`leaves`]: the organic union-surface placer).
 //!
-//! Sizes follow the system like a photocopy (D2): every length here is
+//! Sizes follow the system like a photocopy: every length here is
 //! mm at the 35 mm square, times the frame's scale; bark and clump grain
-//! keep true mm. Placement (D12): `at=` (a range is drawn once from the
+//! keep true mm. Placement: `at=` (a range is drawn once from the
 //! seed), or anywhere in the area with the trunk a crown radius from the
 //! tile edge and clear of stamped solids.
 
@@ -76,7 +76,7 @@ const CLUSTER_LENGTH_MM: f64 = 10.5;
 const HANDLE: f64 = 0.45;
 const MIN_TUBE_RADIUS_MM: f64 = 0.42;
 /// The thinnest branch tip a photocopy may shrink to (a printability
-/// floor, D2).
+/// floor).
 const TIP_FLOOR_MM: f64 = 0.6;
 /// The trunk flares by this share of its radius at the ground, fading over
 /// one radius up, and is sunk this far into the ground.
@@ -745,7 +745,7 @@ fn place(scene: &Scene, ctx: &Ctx<'_>, margin: f64, clear: f64) -> Result<[f64; 
     let (x, y) = if let Some([[x0, x1], [y0, y1]]) = ctx.at {
         let u = rng.random();
         let v = rng.random();
-        // nudged in so the crown stays on the tile (D12: never clipped)
+        // nudged in so the crown stays on the tile, never clipped
         let x = ((x0 + u * (x1 - x0)) * sq).clamp(m, w - m);
         let y = ((y0 + v * (y1 - y0)) * sq).clamp(m, h - m);
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]

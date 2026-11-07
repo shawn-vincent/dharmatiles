@@ -19,8 +19,7 @@ use super::*;
 /// ray, not at layer resolution) is filled before the layers are cut: such
 /// a gap cannot stay open in print, the layer above lands on the one
 /// below, so its roof is not an overhang. This is what a bed joint of
-/// 0.11 mm under a wall stone is (walls R10: "the lip over the sub-mm
-/// joint prints"); the plain layer-reach rule, written for stacked rock with real
+/// 0.11 mm under a wall stone is: the lip over a sub-mm joint prints. The plain layer-reach rule, written for stacked rock with real
 /// gaps, counted every such roof as a drooping shelf.
 pub(super) struct Slices {
     pub(super) x0: f64,

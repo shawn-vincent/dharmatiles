@@ -191,7 +191,7 @@ impl Solid {
         Self(Manifold::hull_pts(points))
     }
 
-    /// Split edges until none is longer than `length` mm (P3: the grain
+    /// Split edges until none is longer than `length` mm (the grain
     /// pass refines before it moves vertices).
     #[must_use]
     pub fn refine_to_length(&self, length: f64) -> Self {
@@ -206,7 +206,7 @@ impl Solid {
     }
 
     /// The cross-section at height `z`: closed polygons in x and y, holes
-    /// wound the other way (P3: footprints by tag).
+    /// wound the other way.
     #[must_use]
     pub fn slice(&self, z: f64) -> Vec<Vec<[f64; 2]>> {
         self.0.slice_at_z(z)
@@ -214,7 +214,7 @@ impl Solid {
 
     /// This solid as a new original with a fresh original ID from the
     /// kernel's process-wide counter. It collapses every source ID into one
-    /// and recomputes face IDs, so it cuts the link R9's material tracing
+    /// and recomputes face IDs, so it cuts the link material tracing
     /// needs; pipelines use [`Solid::with_original_id`] on leaves instead.
     #[must_use]
     pub fn as_original(&self) -> Self {

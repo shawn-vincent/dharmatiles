@@ -16,7 +16,7 @@
 //! seed, and seats over its footprint within its area; a wall whose
 //! footprint misses its area is refused.
 //!
-//! Scale (D2): every author size scales with the square; the joint width
+//! Scale: every author size scales with the square; the joint width
 //! and the most a stone may stand proud of the one under it (0.45 mm) are
 //! printability floors and do not.
 
@@ -833,7 +833,7 @@ pub(crate) fn blocks(
     seed: Seed,
 ) -> Result<(Vec<Block>, Vec<TriMesh>, usize), LookError> {
     let s = finish.scale;
-    // the joint scales with everything else (D2)
+    // the joint scales with everything else
     let jw = m.joint * s;
     let j2 = jw / 2.0;
     let fr = m.face_recess * s;

@@ -4,7 +4,7 @@
 //! are exact planes and the arrises are rounded analytically; then the
 //! common stone relief.
 //!
-//! Printable by construction (walls R10):
+//! Printable by construction:
 //!
 //! - the ring planes carry the per-block attitude (yaw in plan, a lean of
 //!   the faces) instead of a rigid rotation, so every bed stays level and

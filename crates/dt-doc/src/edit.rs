@@ -16,7 +16,7 @@
 //! [`set_control`] is the call a GUI wants: it changes a control in
 //! whichever form it is written (`height=35` on the line, or `height 35`
 //! on its own line), and writes a control that isn't there yet on the
-//! line, as a property (R6.2).  [`remove_control`] takes one out in
+//! line, as a property.  [`remove_control`] takes one out in
 //! either form.  [`set_value`] and [`insert_property`] are the lower-level
 //! pieces.
 
@@ -187,7 +187,7 @@ pub fn insert_property(
 
 /// Set a control in whichever form it is written: the property on the
 /// line, or the first argument of its own child line.  A control that
-/// isn't written yet goes on the line as a property (R6.2).
+/// isn't written yet goes on the line as a property.
 ///
 /// # Errors
 /// If the text doesn't parse or the path matches nothing, or the

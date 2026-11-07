@@ -1,5 +1,4 @@
-//! Where things go: tile edges, corners, points and edge paths (R6 V4, V5,
-//! V10).
+//! Where things go: tile edges, corners, points and edge paths.
 //!
 //! Positions are in squares from the south-west corner, x running east
 //! and y running north.  A point is a quoted pair (`"0.65,1"`); either

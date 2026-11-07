@@ -24,12 +24,12 @@ pub struct ObvhsRays {
 }
 
 impl ObvhsRays {
-    /// The build preset R3 chose: `medium_build` queried fastest on the
+    /// The build preset: `medium_build` queried fastest on the
     /// cliff batches (2.3x Embree single-threaded) and still builds faster
     /// than Embree on both captures.
     pub const PRESET: BvhBuildParams = BvhBuildParams::medium_build();
 
-    /// Build with an explicit obvhs preset (the R3 sweep uses this).
+    /// Build with an explicit obvhs preset (for comparing presets).
     pub fn build_with(
         positions: &[[f32; 3]],
         triangles: &[[u32; 3]],

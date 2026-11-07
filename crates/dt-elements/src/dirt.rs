@@ -1,5 +1,4 @@
-//! `dirt`: bare earth (approved
-//! 29 Oct 2026) on the [`ground`](crate::ground) shape.
+//! `dirt`: bare earth on the [`ground`](crate::ground) shape.
 //!
 //! One height field, built in scale order and combined by smooth maximum,
 //! not by adding (a clod or pebble is a new surface that wins where it is
@@ -17,7 +16,7 @@
 //!    (the half-space cap), sunk 25–45% and filleted into the soil.
 //!
 //! The texture ramps in over the outer 1 mm, so the rim is exactly the
-//! edge level. Stones come with rocks in P3.
+//! edge level.
 //!
 //! Sizes: the ground's hills, patches and clusters follow the square
 //! (layout); clods, grit and pebbles keep their true mm (default 1), so

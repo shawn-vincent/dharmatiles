@@ -1,4 +1,4 @@
-//! Graphs: the P5 operations for branching things (trees; later roots and
+//! Graphs: the operations for branching things (trees; later roots and
 //! vines). [`colonise`] traces a branching graph from a root to target
 //! points by space colonisation, with the tree invariants held by
 //! construction; [`simplify`] keeps its forks and ends; [`pipe_radii`]

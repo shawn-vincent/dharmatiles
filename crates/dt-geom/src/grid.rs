@@ -2,7 +2,7 @@
 //! of a height grid into a solid, and the exact Euclidean distance
 //! transform.
 //!
-//! One convention (plan.html, P2 makes it the only one): a grid of `nx` by
+//! One convention: a grid of `nx` by
 //! `ny` nodes, `step` mm apart, node `(i, j)` at `(i * step, j * step)` mm,
 //! stored row by row (`j` outer). A tile of `cols` squares with `n` cells
 //! per square has `cols * n + 1` nodes across, so its edge nodes lie exactly

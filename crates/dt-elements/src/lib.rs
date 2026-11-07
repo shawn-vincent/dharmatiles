@@ -5,11 +5,9 @@
 //! scheduler in dt-eval can order the stack and refuse reads nothing can
 //! satisfy; then it builds into the scene ([`Element::build`]).
 //!
-//! P1: [`ground`] (then a flat surface at a level) and [`connector`]
-//! (DungeonBlocks). P2: [`ground`] in full (levels, hills, the edge
-//! contract) and [`dirt`]. P3: [`rock`]
-//! and [`water`]. P5: [`wall`], [`floor`], [`tree`] and
-//! [`openlock`] (the OpenLOCK connector).
+//! Surfaces: [`ground`], [`dirt`], [`water`], [`floor`]. Solids: [`rock`]
+//! and its kin, [`grass`], [`reeds`], [`flowers`], [`cliff`], [`wall`],
+//! [`tree`]. Bases: [`connector`] (DungeonBlocks) and [`openlock`].
 
 pub mod cliff;
 pub mod connector;

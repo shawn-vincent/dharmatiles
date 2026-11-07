@@ -4,7 +4,7 @@
 //! a point does not depend on the grid it is sampled on, its resolution
 //! or the order of evaluation. A 35 mm build and a 25.4 mm build (sampled
 //! at positions divided by the scale), or a preview and a final, see the
-//! same pattern (plan.html, P2; architecture.html, "noise").
+//! same pattern.
 //!
 //! One lattice: [`lattice`] gives a value in [-1, 1) to each integer
 //! point `(ix, iy)` for a seed. Two noises are built on it:
@@ -15,7 +15,7 @@
 //!   standard deviation, in position-keyed form. Separable, so a grid costs two passes.
 //! - [`fbm`]: smoothstep-interpolated value noise summed over octaves, in 2D (z = 0).
 //!
-//! Seeded maths uses `libm` (R2: platform `exp` differs by OS).
+//! Seeded maths uses `libm`: platform `exp` differs by OS.
 
 /// The lattice value at integer point `(ix, iy)`, in [-1, 1).
 #[must_use]

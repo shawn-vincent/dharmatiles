@@ -8,9 +8,9 @@
 //! atom   := number "%"? | name | "(" sum ")"
 //! ```
 //!
-//! Units are never written (R6.3): every control knows its own unit, and
+//! Units are never written: every control knows its own unit, and
 //! sizes are millimetres at the DungeonBlocks reference.  `%` is the one
-//! suffix, because a share is a percent (`cover="85%"`).  The spike's
+//! suffix, because a share is a percent (`cover="85%"`).  An old
 //! `"4.5mm"` suffix and the `"1..6^2"` skew are gone; both give an error
 //! that says what to write instead (`4.5`, and `mostly=small`).
 //!

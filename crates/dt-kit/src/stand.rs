@@ -6,7 +6,7 @@
 //! hangs in the air beyond that becomes one bevel at the reach angle,
 //! rising from whatever holds it up. The cut is made by carving with a
 //! level set of the removed voxels, so the rest of the surface is
-//! untouched (P5: foliage clumps standing on their branches).
+//! untouched (foliage clumps standing on their branches).
 
 #![allow(
     clippy::cast_possible_truncation,

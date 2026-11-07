@@ -947,7 +947,7 @@ impl Scatter {
             if !is_thing(&ch.name) {
                 return Err(LookError::general(
                     format!("a scatter of `{}` is not built yet", ch.name),
-                    "P3 scatters rock, stone, boulder and pebble",
+                    "a scatter takes rock, stone, boulder and pebble",
                 ));
             }
             s.things

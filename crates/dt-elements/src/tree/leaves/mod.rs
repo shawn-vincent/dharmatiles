@@ -28,7 +28,7 @@
 //!
 //! Every ray goes through [`dt_kit::rays::RayMesh`]. Leaves are built in
 //! parallel and gathered in root order, so the output is the same at any
-//! thread count (R2).
+//! thread count.
 
 use std::collections::HashMap;
 
@@ -147,8 +147,8 @@ const HANG_MARGIN_DEG: f64 = 3.0;
 /// Surface re-projection lift.
 const PROJECT_LIFT_MM: f64 = 1.0;
 
-/// The leaf's shape. The defaults are the approved leaf: 4.5 × 3 mm, 0.24
-/// mm thick (`Tree(...)`'s `leaf_*` defaults).
+/// The leaf's shape. The defaults: 4.5 × 3 mm, 0.24 mm
+/// thick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LeafShape {
     /// The largest leaf's length, mm (leaves vary down to 80%).
@@ -187,7 +187,7 @@ impl Default for LeafShape {
 }
 
 impl LeafShape {
-    /// Sized for a system (D2: `scale` = square / 35 mm). Length and width
+    /// Sized for a system (`scale` = square / 35 mm). Length and width
     /// scale, but never below four printed lines; the thickness never
     /// scales.
     #[must_use]

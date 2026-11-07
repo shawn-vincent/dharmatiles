@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn hills_are_a_photocopy_at_openlock_scale() {
         // the same hills at the same relative positions, scaled by
-        // 25.4 / 35 in height too (layout-scale noise, R7)
+        // 25.4 / 35 in height too (layout-scale noise)
         let shape = Shape::new(
             "ground",
             &controls(&[("level", Value::Number(5.0)), ("bumps", Value::Number(3.0))]),

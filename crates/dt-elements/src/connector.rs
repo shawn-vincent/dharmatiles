@@ -1,4 +1,4 @@
-//! `connector`: what is under z = 0. P1: the DungeonBlocks socket peg.
+//! `connector`: what is under z = 0: the DungeonBlocks socket peg.
 //!
 //! DungeonBlocks credit: the socket-peg geometry follows the DungeonBlocks
 //! blank/floor tile standard on MyMiniFactory
@@ -15,7 +15,7 @@ use rayon::prelude::*;
 
 use crate::{Ctx, Element, LookError, Plan, Read, Write};
 
-/// `BaseConfig`'s DungeonBlocks constants, mm.
+/// The DungeonBlocks constants, mm.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DungeonBlocks {
     /// Column height for low content.

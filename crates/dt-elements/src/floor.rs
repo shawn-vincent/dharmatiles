@@ -114,7 +114,7 @@ impl Element for Floor {
         let s = f.scale();
         let [w, h] = f.size_mm();
         let mut m = self.mason.clone();
-        // the level scales with everything else (D2: a photocopy, every
+        // the level scales with everything else (a photocopy, every
         // level included): Run scales the thickness
         if m.family == Family::Slab {
             let pitch = f.square_mm / f64::from(self.slabs) / s;

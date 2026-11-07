@@ -1,19 +1,17 @@
-//! R2 spike, with R9's material tracing: a small pipeline (noise, scatter,
+//! Determinism, with material tracing: a small pipeline (noise, scatter,
 //! EDT, then level-set rocks trimmed by planes and one batch union) run with
 //! rayon at 1, 4 and 16 threads, twice each, with every stage hashed.
 //! Go: byte-identical at every thread count, and every output triangle
-//! traced to a material. CI runs this on macOS, Linux and Windows and
-//! prints the hashes (`--nocapture`), so platforms can be compared; on
-//! Linux it also re-runs it with TBB limited to 1, 2 and 4 CPUs.
+//! traced to a material. `--nocapture` prints the hashes, so platforms can
+//! be compared.
 //!
-//! Rules the pipeline follows (and the port must): every random draw comes
+//! Rules every pipeline follows: every random draw comes
 //! from a keyed [`Seed`], never a shared RNG; parallel work writes to its
 //! own slot and is collected in index order; source IDs follow
 //! `dt_geom::source` (a reserved block, leaves relabelled by index, cuts
 //! with IDs we give them, a material table keyed by original and face ID).
-//! Manifold's own parallelism (TBB in C++, rayon in the port) is whatever
-//! the build has; the default build has it on. The port's rayon follows the
-//! test's pool; TBB's thread count is not set here (see the CI job).
+//! Manifold's own parallelism (TBB) is whatever the build has; the default
+//! build has it on. Its thread count is not set here.
 
 #![allow(
     clippy::unwrap_used,
@@ -285,7 +283,7 @@ fn pipeline(root: Seed) -> Hashes {
     let um = all.to_tri_mesh();
     assert!(um.is_watertight());
 
-    // R9: every output triangle traces to a material, and the material is
+    // every output triangle traces to a material, and the material is
     // right: a rock body's agrees with a fresh sample of its field (within
     // a grid cell of the moss line), a cut face lies on its plane.
     let traced = mats.trace(&um);
@@ -360,7 +358,7 @@ fn check(backend: &str) {
             let _ = Solid::reserve_ids(1 + 997 * (threads + run) as u32);
             let h = pool.install(|| pipeline(Seed::new(20_261_101)));
             println!(
-                "R2 {backend} {}-{} threads={threads:>2} run={run} noise={:016x} noise_libm={:016x} scatter={:016x} edt={:016x} rocks={:016x} union={:016x} union_tris={} materials={:016x} traced={}/{} body={} top_cut={}",
+                "determinism {backend} {}-{} threads={threads:>2} run={run} noise={:016x} noise_libm={:016x} scatter={:016x} edt={:016x} rocks={:016x} union={:016x} union_tris={} materials={:016x} traced={}/{} body={} top_cut={}",
                 std::env::consts::OS,
                 std::env::consts::ARCH,
                 h.noise,

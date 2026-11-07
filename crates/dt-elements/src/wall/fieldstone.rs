@@ -1,5 +1,4 @@
-//! Fieldstone (drystone): crack network first (the
-//! approved E25/E29 element). The chassis layout gives the crack topology;
+//! Fieldstone (drystone): crack network first. The chassis layout gives the crack topology;
 //! every bed line has one shared wobble and every head joint one shared
 //! slanted, bowed curve, both keyed on the crack itself, so the two
 //! stones flanking a crack evaluate the same curve and fit each other by
@@ -11,7 +10,7 @@
 //!
 //! Printability (the brief's by-construction rule): a pebble's underside
 //! turns down to its front pole, a shelf that overhangs the stone below
-//! wherever it stands proud of it. The underside here keeps the approved
+//! wherever it stands proud of it. The underside here keeps the
 //! upper profile but turns down no shallower than the overhang limit
 //! allows (`UNDER_*`): the lower half of each latitude ring is pulled
 //! back toward the face so the rounded bottom is a chamfer-like curve the

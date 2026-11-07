@@ -4,7 +4,7 @@
 //! dt-eval resolves `use` paths, decodes those files first, and registers
 //! each with [`Known::add`] under [`crate::model::Use::key`].  The
 //! standard levels come from library/parts/levels.dtile and are visible to
-//! every file without a `use` line (R6.8); [`Known::standard`] loads them
+//! every file without a `use` line; [`Known::standard`] loads them
 //! from the copy compiled into this crate.
 
 use std::collections::BTreeMap;

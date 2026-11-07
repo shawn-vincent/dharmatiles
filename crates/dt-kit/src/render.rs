@@ -22,7 +22,7 @@ pub struct View {
     pub close: bool,
 }
 
-/// The four views of the contact sheet (approved layout).
+/// The four views of the contact sheet in their fixed order.
 pub const VIEWS: [View; 4] = [
     View {
         name: "painted",

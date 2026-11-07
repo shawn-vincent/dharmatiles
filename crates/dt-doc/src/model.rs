@@ -9,7 +9,7 @@
 //!
 //! Values are kept as written, in the reference units: sizes in mm at the
 //! DungeonBlocks reference, levels as level expressions, words with the
-//! numbers they stand for.  Scaling to a system (R6.5) and filling in
+//! numbers they stand for.  Scaling to a system and filling in
 //! defaults are the evaluator's job; [`crate::schema::Control::scaling`]
 //! and [`crate::schema::Control::default`] say how.
 
@@ -227,7 +227,7 @@ pub enum Callee {
     Definition(String),
 }
 
-/// The place words written on an entry (R6 "Place words").
+/// The place words written on an entry.
 #[derive(Debug, Clone, Default)]
 pub struct Place {
     /// `in=`: a region; `None` is the caller's area (the whole tile).
@@ -255,7 +255,7 @@ pub struct Entry {
     pub what: Spanned<String>,
     /// What it resolved to.
     pub callee: Callee,
-    /// Solid or surface, for planning solids first (R6 V1).
+    /// Solid or surface, for planning solids first.
     pub kind: Kind,
     /// Place words.
     pub place: Place,
@@ -441,7 +441,7 @@ impl Value {
     }
 }
 
-/// A printer profile: the hidden printability floors (R6.5).
+/// A printer profile: the hidden printability floors.
 ///
 /// Every size an author writes scales with the system; these never do.
 /// Elements clamp their hidden thicknesses to them after scaling: blade and

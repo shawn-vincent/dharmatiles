@@ -1,11 +1,11 @@
-//! Source identity: one rule that gives both determinism (R2) and material
-//! tracing (R9).
+//! Source identity: one rule that gives both determinism and material
+//! tracing.
 //!
 //! Manifold tags every triangle with an original ID and a face ID, and
 //! orders a boolean's output by original ID. The IDs it mints itself come
 //! from a process-wide counter, so parts built on several threads get them
-//! in scheduling order (R2), and `as_original` collapses a part's sources
-//! into one and recomputes its face IDs (cutting R9's link back to the
+//! in scheduling order, and `as_original` collapses a part's sources
+//! into one and recomputes its face IDs (cutting material tracing's link back to the
 //! level-set triangles a material was sampled on). The rule:
 //!
 //! 1. **Reserve, then assign by index.** Before parallel work, reserve one
@@ -73,8 +73,8 @@ impl IdBlock {
     }
 
     /// The first face ID of `slot`'s range: [`FACE_STRIDE`] IDs per slot,
-    /// so a leaf may have up to that many triangles. P1: widen face IDs to
-    /// u64 (as `MeshGL64` has them) and lift both limits.
+    /// so a leaf may have up to that many triangles. Widening face IDs to u64
+    /// (as `MeshGL64` has them) would lift both limits.
     ///
     /// # Panics
     /// If `slot` is outside the block or past [`MAX_SLOTS`].

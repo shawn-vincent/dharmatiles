@@ -1,11 +1,11 @@
-//! **Piece**: one solid worked in the kernel by a series of cuts (P7).
+//! **Piece**: one solid worked in the kernel by a series of cuts.
 //!
 //! A cliff stone is made by many operations (plane cleaves, chips, a
 //! relief of cutters, a seat), each producing new faces. A `Piece` owns
 //! one source slot, and everything it is cut or joined with takes that
 //! slot's original ID and a fresh run of the slot's face IDs, so the cut
-//! faces trace to the stone's material (R9) and the result is the same
-//! whatever thread works it (R2). Pieces are combined at the end with
+//! faces trace to the stone's material and the result is the same
+//! whatever thread works it. Pieces are combined at the end with
 //! [`Piece::into_solid`] and [`crate::union`].
 
 use dt_geom::vec3::{cross, dot, sub, unit};

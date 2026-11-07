@@ -1,10 +1,8 @@
-//! The built-in elements and their controls: the R6 vocabulary tables
-//! (docs/rust/language.html, "Elements and their vocabulary"), as data.
+//! The built-in elements and their controls, as data.
 //!
 //! Numbers behind words are documented here, next to the word.  Words
-//! marked *provisional* have numbers chosen for this table that the element's
-//! own phase (P2–P7) tunes against its element; the words themselves are
-//! decided.
+//! marked *provisional* have numbers chosen for this table that the element
+//! may still tune; the words themselves are settled.
 
 use crate::schema::{Axis, Control, Element, PlaceWord, Role, Word};
 
@@ -704,7 +702,7 @@ const fn thing(name: &'static str, about: &'static str, controls: &'static [Cont
     }
 }
 
-/// Every built-in element the R6 vocabulary names.
+/// Every built-in element.
 pub static ELEMENTS: &[Element] = &[
     Element {
         name: "ground",
@@ -874,8 +872,7 @@ pub static ELEMENTS: &[Element] = &[
     },
 ];
 
-/// Words from the spike vocabulary, with what replaces them (R6 V6 and
-/// the rest of the 1 Nov 2026 rework).  Used for hints only.
+/// Old words, with what replaces them.  Used for hints only.
 pub static RENAMED: &[(&str, &str)] = &[
     ("hills", "`hills` is now `ground`"),
     ("meadow", "`meadow` is now `grass`"),
@@ -908,7 +905,7 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("lines", "a region is `bounded-by` its lines"),
 ];
 
-/// The hint for a word from the spike vocabulary.
+/// The hint for an old word.
 #[must_use]
 pub fn renamed(word: &str) -> Option<&'static str> {
     RENAMED.iter().find(|(w, _)| *w == word).map(|(_, h)| *h)

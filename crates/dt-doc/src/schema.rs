@@ -1,9 +1,7 @@
 //! What a document may say: the controls each built-in element accepts, the
 //! words that stand for numbers, and how each kind of value scales.
 //!
-//! This is the R6 vocabulary decided on 1 Nov 2026
-//! (docs/rust/language.html, "Decisions D1–D12" and "Elements and their
-//! vocabulary").  The tables live in [`crate::elements`]; this module holds
+//! The tables live in [`crate::elements`]; this module holds
 //! their types.
 //!
 //! The tables are the single source for `dharmatiles elements <name>`, the
@@ -39,7 +37,8 @@ pub enum Axis {
     Share,
     /// A count of things.  Never scales.
     Count,
-    /// A density per square (or per square of length along a line).
+    /// A density per square (or per square of length along a line).  It
+    /// follows the square, so the number never changes.
     PerSquare,
     /// A plain number: a weight, a fraction, an exponent.
     Number,
@@ -51,33 +50,7 @@ pub enum Axis {
     Tag,
 }
 
-/// How a written value changes when a tile is built for another system
-/// (R6.5: "every size the author writes scales with the system like a
-/// photocopy").  The evaluator applies this; dt-doc only records it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Scaling {
-    /// Multiply by the system's square / 35 mm.  Hidden printability
-    /// floors (see [`crate::model::Printer`]) are applied by the elements
-    /// after scaling, so a scaled leaf or blade never gets thinner than
-    /// what prints.
-    Photocopy,
-    /// Positions and densities in squares: they follow the square itself.
-    Squares,
-    /// Angles, shares, counts and words: unchanged.
-    Fixed,
-}
-
 impl Axis {
-    /// How values on this axis scale with the system.
-    #[must_use]
-    pub fn scaling(self) -> Scaling {
-        match self {
-            Axis::Mm | Axis::Level => Scaling::Photocopy,
-            Axis::PerSquare => Scaling::Squares,
-            _ => Scaling::Fixed,
-        }
-    }
-
     /// True when values are numbers or expressions.
     #[must_use]
     pub fn is_numeric(self) -> bool {
@@ -111,7 +84,7 @@ impl Axis {
     }
 }
 
-/// A word that stands for documented numbers (R6 V2): `rock mixed`,
+/// A word that stands for documented numbers: `rock mixed`,
 /// `crown branching=normal`, `mostly=small`.  The decoded model keeps
 /// the word and these numbers, so a GUI can show both.
 #[derive(Debug, PartialEq)]
@@ -144,7 +117,7 @@ pub struct Control {
     /// Whether it must be given.
     pub required: bool,
     /// Expert controls are accepted in `define`s (parts files) and
-    /// refused in tiles (R6 V7).
+    /// refused in tiles.
     pub expert: bool,
     /// The sensible range for a number, used to catch slips.
     pub limits: Option<(f64, f64)>,
@@ -187,15 +160,9 @@ impl Control {
     pub fn is_group(&self) -> bool {
         self.value.is_none()
     }
-
-    /// How its value scales with the system (a group: `Fixed`).
-    #[must_use]
-    pub fn scaling(&self) -> Scaling {
-        self.value.map_or(Scaling::Fixed, Axis::scaling)
-    }
 }
 
-/// The place words (R6 "Place words"): one meaning each, shared by every
+/// The place words: one meaning each, shared by every
 /// element.  Which an element takes is in [`Element::place`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaceWord {
@@ -239,7 +206,7 @@ impl PlaceWord {
 }
 
 /// What kind of stack entry an element is, which decides how the evaluator
-/// plans it (R6 V1: stack order is free for solids).
+/// plans it: stack order is free for solids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     /// Paints or shapes a surface (`ground`, `dirt`, `grass`).  Order
@@ -254,7 +221,7 @@ pub enum Role {
     Scatter,
 }
 
-/// Solid or surface, for planning (R6 V1): every solid is planned before
+/// Solid or surface, for planning: every solid is planned before
 /// anything grows, and surfaces grow round every solid wherever they are
 /// listed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -397,13 +364,5 @@ mod tests {
         assert_eq!(Kind::of([Kind::Solid, Kind::Solid]), Kind::Solid);
         assert_eq!(Kind::of([Kind::Solid, Kind::Surface]), Kind::Mixed);
         assert_eq!(Kind::of([]), Kind::Surface);
-    }
-
-    #[test]
-    fn scaling_follows_the_axis() {
-        assert_eq!(Axis::Mm.scaling(), Scaling::Photocopy);
-        assert_eq!(Axis::Level.scaling(), Scaling::Photocopy);
-        assert_eq!(Axis::Deg.scaling(), Scaling::Fixed);
-        assert_eq!(Axis::PerSquare.scaling(), Scaling::Squares);
     }
 }

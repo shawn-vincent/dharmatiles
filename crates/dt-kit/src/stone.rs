@@ -10,6 +10,7 @@
 use dt_geom::vec3::{cross, dot, norm, sub, unit};
 use dt_geom::{Convex, TriMesh};
 
+use crate::piece::welded;
 use crate::scene::{Slot, Solid, leaf};
 use crate::{Field, KitError, smooth01};
 
@@ -64,30 +65,6 @@ impl Default for Grain {
             down_nz: -0.3,
         }
     }
-}
-
-/// The mesh with split vertices merged: one position per point of the
-/// solid, triangles re-indexed.
-#[allow(clippy::cast_possible_truncation)]
-fn welded(m: &TriMesh) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
-    let mut to: Vec<u32> = (0..m.positions.len() as u32).collect();
-    for (&f, &t) in m.merge_from.iter().zip(&m.merge_to) {
-        to[f as usize] = t;
-    }
-    let mut new = vec![u32::MAX; m.positions.len()];
-    let mut pos = Vec::new();
-    for (i, &t) in to.iter().enumerate() {
-        if t as usize == i {
-            new[i] = pos.len() as u32;
-            pos.push(m.positions[i]);
-        }
-    }
-    let tri = m
-        .triangles
-        .iter()
-        .map(|t| t.map(|v| new[to[v as usize] as usize]))
-        .collect();
-    (pos, tri)
 }
 
 /// **grain**: refine a convex stone to `edge_mm` and push every vertex

@@ -1,4 +1,4 @@
-//! One test (or a few) per R6 rule: what decodes, and what is refused.
+//! One test (or a few) per language rule: what decodes, and what is refused.
 #![allow(clippy::unwrap_used)] // test helpers outside #[test] fns
 
 mod common;
@@ -7,7 +7,7 @@ use common::*;
 use dt_doc::expr::Unit;
 use dt_doc::model::{Form, Value};
 use dt_doc::place::{Along, Corner, Edge, Point, Side};
-use dt_doc::schema::{self, Kind, Scaling};
+use dt_doc::schema::{self, Axis, Kind};
 
 fn none(_: &str) -> Option<f64> {
     None
@@ -24,7 +24,7 @@ fn assert_fails(text: &str, code: &str, want: &str) {
     assert!(flat(&shown).contains(want), "want `{want}`:\n{shown}");
 }
 
-// ---- R6.1 / D1: mm at the reference, named levels, (h) opt-in ----------
+// ---- mm at the reference, named levels, (h) opt-in ----------
 
 #[test]
 fn sizes_are_mm_and_h_is_opt_in() {
@@ -62,7 +62,7 @@ fn levels_are_named_or_mm_or_expressions() {
     );
 }
 
-// ---- R6.8: the standard levels are a prelude ----------------------------
+// ---- the standard levels are a prelude ----------------------------
 
 #[test]
 fn standard_levels_need_no_use_line() {
@@ -92,34 +92,28 @@ fn a_tile_may_override_a_standard_level() {
     snippet("tile { levels ground=6; stack { dirt level=ground } }");
 }
 
-// ---- R6.5 / D2: every written size scales; recorded as metadata ---------
+// ---- every written size scales; recorded as metadata ---------
 
 #[test]
-fn scaling_is_recorded_per_control() {
+fn every_control_has_an_axis_that_says_how_it_scales() {
     let tree = schema::element("tree").unwrap();
-    assert_eq!(
-        tree.control("height").unwrap().scaling(),
-        Scaling::Photocopy
-    );
+    assert_eq!(tree.control("height").unwrap().value, Some(Axis::Mm));
     let leaf = tree.control("leaf").unwrap();
-    assert_eq!(leaf.sub("length").unwrap().scaling(), Scaling::Photocopy);
+    assert_eq!(leaf.sub("length").unwrap().value, Some(Axis::Mm));
     let crown = tree.control("crown").unwrap();
-    assert_eq!(crown.sub("clumps").unwrap().scaling(), Scaling::Fixed);
+    assert_eq!(crown.sub("clumps").unwrap().value, Some(Axis::Count));
     let grass = schema::element("grass").unwrap();
+    assert_eq!(grass.control("height").unwrap().value, Some(Axis::Mm));
     assert_eq!(
-        grass.control("height").unwrap().scaling(),
-        Scaling::Photocopy
-    );
-    assert_eq!(
-        grass.control("clearings").unwrap().scaling(),
-        Scaling::Squares
+        grass.control("clearings").unwrap().value,
+        Some(Axis::PerSquare)
     );
     let e = first("tile { stack { tree { leaf length=4.5 } } }");
     let s = e.control("leaf").unwrap();
-    assert_eq!(s.subs[0].control.unwrap().scaling(), Scaling::Photocopy);
+    assert_eq!(s.subs[0].control.unwrap().value, Some(Axis::Mm));
 }
 
-// ---- R6.2: both forms, same model ---------------------------------------
+// ---- both forms, same model ---------------------------------------
 
 #[test]
 fn line_and_child_forms_decode_the_same() {
@@ -186,7 +180,7 @@ fn groups_are_child_lines() {
     first("tile { stack { ground { bumps up=3 down=1 } } }");
 }
 
-// ---- R6.3: units are not written ----------------------------------------
+// ---- units are not written ----------------------------------------
 
 #[test]
 fn mm_annotation_is_an_optional_check() {
@@ -220,7 +214,7 @@ fn unit_suffixes_are_refused_with_a_hint() {
     );
 }
 
-// ---- R6.4: ranges and percents quoted -----------------------------------
+// ---- ranges and percents quoted -----------------------------------
 
 #[test]
 fn ranges_and_percents_are_quoted() {
@@ -288,7 +282,7 @@ fn skew_is_mostly_not_caret() {
     );
 }
 
-// ---- D8 / V6: renames ----------------------------------------------------
+// ---- renames ----------------------------------------------------
 
 #[test]
 fn old_words_say_what_replaced_them() {
@@ -317,7 +311,7 @@ fn old_words_say_what_replaced_them() {
     }
 }
 
-// ---- D4 / V2: words for character, numbers always accepted --------------
+// ---- words for character, numbers always accepted --------------
 
 #[test]
 fn words_keep_their_numbers_and_numbers_are_accepted() {
@@ -342,7 +336,7 @@ fn words_keep_their_numbers_and_numbers_are_accepted() {
     assert!(e.value("height").unwrap().num().is_some());
 }
 
-// ---- D9 / V7: tree branching ---------------------------------------------
+// ---- tree branching ---------------------------------------------
 
 #[test]
 fn branch_knobs_are_for_parts_files_only() {
@@ -364,7 +358,7 @@ fn branch_knobs_are_for_parts_files_only() {
     );
 }
 
-// ---- D5 / V3: the whole tile is the default area -------------------------
+// ---- the whole tile is the default area -------------------------
 
 #[test]
 fn regions_only_on_divided_tiles() {
@@ -414,7 +408,7 @@ fn a_tile_is_at_most_64_squares_a_side() {
     assert_fails("tile size=\"33554432x1\" { }", "dt::tile", "several tiles");
 }
 
-// ---- D6 / V4: edges, edge paths, side= -----------------------------------
+// ---- edges, edge paths, side= -----------------------------------
 
 #[test]
 fn edges_and_edge_paths() {
@@ -465,7 +459,7 @@ fn a_line_cannot_take_an_edge_name() {
     );
 }
 
-// ---- D7 / V5: points -----------------------------------------------------
+// ---- points -----------------------------------------------------
 
 #[test]
 fn points_are_pairs_corners_and_edges() {
@@ -484,7 +478,7 @@ fn points_are_pairs_corners_and_edges() {
     assert_fails("tile { stack { tree at=1 } }", "dt::point", "quoted pair");
 }
 
-// ---- D12 / V10: a range for at=, none for anywhere -----------------------
+// ---- a range for at=, none for anywhere -----------------------
 
 #[test]
 fn at_may_be_a_range_or_absent() {
@@ -496,7 +490,7 @@ fn at_may_be_a_range_or_absent() {
     assert!(s[1].place.at.is_none());
 }
 
-// ---- D11 / V9: scatter ---------------------------------------------------
+// ---- scatter ---------------------------------------------------
 
 #[test]
 fn a_thing_is_one() {
@@ -594,7 +588,7 @@ fn scatter_rules() {
     }
 }
 
-// ---- D3 / V1: stack order is free for solids -----------------------------
+// ---- stack order is free for solids -----------------------------
 
 #[test]
 fn kinds_let_solids_be_planned_first() {
@@ -690,7 +684,7 @@ fn value_is_kept_with_its_span() {
     assert!(matches!(e.value("height"), Some(Value::Num(_))));
 }
 
-// ---- the R6 page's two snippets -------------------------------------------
+// ---- two whole tiles ------------------------------------------------------
 
 #[test]
 fn the_r6_snippets_decode() {

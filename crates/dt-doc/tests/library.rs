@@ -1,5 +1,5 @@
 //! The library tiles and parts decode, and every value they write
-//! arrives in the model ("nothing in the tile is lost", plan.html R6).
+//! arrives in the model (nothing in the tile is lost).
 #![allow(clippy::unwrap_used)] // test helpers outside #[test] fns
 
 mod common;
@@ -7,7 +7,7 @@ mod common;
 use common::*;
 use dt_doc::model::{Callee, Definition, Entry, Form, Source, TileHeader, Value};
 use dt_doc::place::{Along, Edge, Point};
-use dt_doc::schema::{Kind, Scaling};
+use dt_doc::schema::{Axis, Kind};
 
 fn none(_: &str) -> Option<f64> {
     None
@@ -118,7 +118,7 @@ fn flat_tile_is_one_ground() {
     // Its documented default level is `ground`.
     let level = g.element().unwrap().control("level").unwrap();
     assert_eq!(level.default, "ground");
-    assert_eq!(level.scaling(), Scaling::Photocopy);
+    assert_eq!(level.value, Some(Axis::Level));
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn grass_tree_keeps_every_control() {
     assert_eq!(tree.control("height").unwrap().form, Form::Property);
     assert_eq!(num(tree.sub("trunk", "height")), 30.0);
     assert_eq!(num(tree.sub("crown", "width")), 30.0);
-    // Tree(n_attractors=32): one clump per branch end.
+    // one clump per branch end
     assert_eq!(num(tree.sub("crown", "clumps")), 32.0);
     // The words keep the numbers they stand for.
     let shape = tree.sub("crown", "shape").unwrap().word().unwrap();

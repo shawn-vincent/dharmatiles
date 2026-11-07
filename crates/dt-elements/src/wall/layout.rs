@@ -96,7 +96,7 @@ pub(crate) struct Cell {
 /// How the courses and bays are drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Bond {
-    /// Jittered courses and bays, joints kept apart (R5).
+    /// Jittered courses and bays, joints kept apart.
     Irregular,
     /// Uniform courses and units in half-unit running bond.
     Running,
@@ -197,7 +197,7 @@ pub(crate) struct Courses {
     pub bond: Bond,
 }
 
-/// `_layout`: courses × bays × quoin alternation → cells (R5, R7). Wall
+/// `_layout`: courses × bays × quoin alternation → cells. Wall
 /// ends are always textured faces.
 pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
     let t = c.thickness;

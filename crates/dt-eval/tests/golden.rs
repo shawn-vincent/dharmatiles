@@ -201,7 +201,7 @@ fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
         assert!(a.watertight, "{path}: watertight after the float32 reload");
         assert_eq!(a.overhang_mm2, 0.0, "{path}");
         assert!(a.failures(&Options::default().printer).is_empty(), "{path}");
-        // R9: every triangle traced to a material, and rock present
+        // every triangle traced to a material, and rock present
         assert_eq!(b.materials.len(), b.export.mesh.triangles.len(), "{path}");
         assert!(b.materials.contains(&Material::Rock), "{path}: no rock");
         let note = |k: &str| b.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);

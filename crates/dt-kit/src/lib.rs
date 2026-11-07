@@ -35,7 +35,7 @@
 //! layer-reach rule as a construction); and [`rays`] (first hits and
 //! containment over dt-geom's ray trait, for the leaf placer).
 //!
-//! Kernel rules (R1, R2, R9, from `dt_geom::source`): every leaf solid takes
+//! Kernel rules (from `dt_geom::source`): every leaf solid takes
 //! a [`Slot`] reserved in sequence from the scene's block, so its source ID
 //! is fixed by index whatever thread builds it; cut faces take the
 //! material of the solid cut (cutters get slots of that material); parts
@@ -97,7 +97,7 @@ pub enum KitError {
     Shape(String),
     /// More leaves than the build's source-ID block holds.
     Slots,
-    /// A triangle of the union traces to no material (R9).
+    /// A triangle of the union traces to no material.
     Untraced,
 }
 

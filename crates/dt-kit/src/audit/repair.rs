@@ -38,7 +38,7 @@ pub(super) fn canonical(m: &TriMesh) -> TriMesh {
     }
 }
 
-/// Port of `separate_pinches`: vertex pairs closer than 0.2 µm that are
+/// Vertex pairs closer than 0.2 µm that are
 /// not joined by an edge (or are joined by a sliver edge under 0.02 µm)
 /// are nudged inward along their own normals by 0.15 and 0.30 µm, so the
 /// float32 merge on reload cannot fuse them. Returns how many moved.
