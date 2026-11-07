@@ -518,6 +518,8 @@ async function select(i, guarded = false) {
   if (t.status === 'idle') host.build(i);
   if (t.mesh_version != null) loadMesh(i, t.mesh_version);
   renderAll();
+  // a build already running: what it has sent so far, not only what comes next
+  showBuild(t);
   return true;
 }
 
@@ -1674,6 +1676,7 @@ host.connect({
       renderAll();
       if (cur.plan && JSON.stringify(cur.plan) !== JSON.stringify(viewer.plan)) viewer.setPlan(cur.plan);
       if (cur.mesh_version != null && state.loaded.get(cur.index) !== cur.mesh_version) loadMesh(cur.index, cur.mesh_version);
+      showBuild(cur);
       return;
     }
     if (state.root >= 0) {

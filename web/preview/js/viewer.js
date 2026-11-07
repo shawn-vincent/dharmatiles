@@ -124,6 +124,10 @@ void main() {
 // build's mesh while the new one builds; a stage's finished parts and a
 // rough stand-in in a build's sketch.
 const FADE = 0.45, STALE = 0.3, SKETCH_PARTS = 0.7, SKETCH_ROUGH = 0.35;
+// What stands for work still going (a rough stand-in, or the old build
+// before anything new has come) breathes: its alpha swings this share
+// either way, once every PULSE_S seconds.
+const PULSE = 0.35, PULSE_S = 1.4;
 // Seconds the rest takes to fade when something is selected, and to come
 // back when nothing is; and a hover's, quicker.
 const FADE_IN = 0.12, FADE_OUT = 0.1, HOVER_S = 0.14;
@@ -524,10 +528,32 @@ export class Viewer {
         return gm;
       });
       this.scene.add(...meshes);
-      this.sketches.set(id, { geometry: g, meshes, bounds: payload.meta?.lo && { lo: payload.meta.lo, hi: payload.meta.hi } });
+      this.sketches.set(id, { geometry: g, meshes, rough, bounds: payload.meta?.lo && { lo: payload.meta.lo, hi: payload.meta.hi } });
     }
     this.applyFade();
+    this.pulse();
     this.draw();
+  }
+
+  /** Whether anything shown stands for work still going: a rough stand-in, or the old build alone. */
+  pulsing() {
+    if (reduceMotion()) return false;
+    const rough = [...this.sketches.values()].some((k) => k.rough);
+    return rough || (this.stale && this.sketches.size === 0 && !!this.mesh);
+  }
+
+  /** Breathe what stands for work still going, for as long as there is any. */
+  pulse() {
+    if (this.pulseRaf || !this.pulsing()) return;
+    const tick = (now) => {
+      const w = 1 + PULSE * Math.sin((now / 1000) * ((2 * Math.PI) / PULSE_S));
+      const going = this.pulsing();
+      this.sketchLooks.rough.u.uGhost.value = SKETCH_ROUGH * (going ? w : 1);
+      if (this.stale) this.ghost.u.uGhost.value = STALE * (going && this.sketches.size === 0 ? w : 1);
+      this.draw();
+      this.pulseRaf = going ? requestAnimationFrame(tick) : 0;
+    };
+    this.pulseRaf = requestAnimationFrame(tick);
   }
 
   /** The bounds of each sketch shown: [{lo, hi}]. */
@@ -540,6 +566,7 @@ export class Viewer {
     if (this.stale === !!on) return;
     this.stale = !!on;
     this.applyFade();
+    this.pulse();
     this.draw();
   }
 
