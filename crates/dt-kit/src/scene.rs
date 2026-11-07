@@ -184,22 +184,79 @@ impl Material {
             Self::Leaf => [0.33, 0.52, 0.24],
         }
     }
+}
 
-    /// From the material table's number.
+/// What a solid is, as other elements read it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Kind {
+    /// The lifted surface.
+    Ground,
+    /// The base under z = 0.
+    Connector,
+    /// Rocks, stones, boulders and pebbles.
+    Rock,
+    /// Grass.
+    Grass,
+    /// Reeds.
+    Reeds,
+    /// Flowers.
+    Flowers,
+    /// Trees.
+    Tree,
+    /// Walls.
+    Wall,
+    /// Floors.
+    Floor,
+    /// Cliffs.
+    Cliff,
+    /// The bank at a cliff's foot.
+    Bank,
+}
+
+impl Kind {
+    /// Every kind.
+    pub const ALL: [Self; 11] = [
+        Self::Ground,
+        Self::Connector,
+        Self::Rock,
+        Self::Grass,
+        Self::Reeds,
+        Self::Flowers,
+        Self::Tree,
+        Self::Wall,
+        Self::Floor,
+        Self::Cliff,
+        Self::Bank,
+    ];
+
+    /// The word a document writes for it.
     #[must_use]
-    pub const fn from_id(id: u32) -> Option<Self> {
-        match id {
-            1 => Some(Self::Earth),
-            2 => Some(Self::Connector),
-            3 => Some(Self::Rock),
-            4 => Some(Self::Water),
-            5 => Some(Self::Grass),
-            6 => Some(Self::Flower),
-            10 => Some(Self::Masonry),
-            11 => Some(Self::Wood),
-            12 => Some(Self::Leaf),
-            _ => None,
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Ground => "ground",
+            Self::Connector => "connector",
+            Self::Rock => "rock",
+            Self::Grass => "grass",
+            Self::Reeds => "reeds",
+            Self::Flowers => "flowers",
+            Self::Tree => "tree",
+            Self::Wall => "wall",
+            Self::Floor => "floor",
+            Self::Cliff => "cliff",
+            Self::Bank => "bank",
         }
+    }
+
+    /// The kind a word names, if any.
+    #[must_use]
+    pub fn from_name(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|k| k.name() == word)
+    }
+}
+
+impl std::fmt::Display for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -207,8 +264,8 @@ impl Material {
 /// that made it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tag {
-    /// `ground`, `connector`, …: what other elements read it as.
-    pub kind: &'static str,
+    /// What other elements read it as.
+    pub kind: Kind,
     /// The stack path that made it, such as `tile/flat/stack/0`.
     pub owner: String,
 }
@@ -376,7 +433,7 @@ pub struct Scene {
     sources: Vec<Vec<u32>>,
     block: IdBlock,
     next_slot: u32,
-    materials: Materials,
+    materials: Materials<Material>,
     stages: Vec<Stage>,
     support: Option<Grid>,
     progress: crate::Progress,
@@ -533,7 +590,7 @@ impl Scene {
     /// The nodes inside every solid of `kind` at height `z`: their
     /// footprint, from a slice of each (the query "footprint by tag").
     #[must_use]
-    pub fn footprint(&self, kind: &str, z: f64) -> Mask {
+    pub fn footprint(&self, kind: Kind, z: f64) -> Mask {
         let (nx, ny) = self.frame.nodes();
         let mut out = Mask::new(nx, ny, false);
         for p in self.parts.iter().filter(|p| p.tag.kind == kind) {
@@ -548,7 +605,7 @@ impl Scene {
     /// meets the ground, a trunk, a wall's foot). Grass roots no blade
     /// there and stops its blades against it.
     #[must_use]
-    pub fn standing(&self, kinds: &[&str], above_mm: f64) -> Mask {
+    pub fn standing(&self, kinds: &[Kind], above_mm: f64) -> Mask {
         let (nx, ny) = self.frame.nodes();
         let mut out = Mask::new(nx, ny, false);
         for p in self.parts.iter().filter(|p| kinds.contains(&p.tag.kind)) {
@@ -759,7 +816,7 @@ impl Scene {
         };
         self.next_slot += n;
         for i in 0..n {
-            self.materials.set_id(s.get(i).id, material as u32);
+            self.materials.set_id(s.get(i).id, material);
         }
         Ok(s)
     }
@@ -801,9 +858,9 @@ impl Scene {
                 );
                 let k = j.min(wet.ny - 1) * nx + i.min(nx - 1);
                 if n[2] > 0.05 && wet.bits[k] {
-                    Material::Water as u32
+                    Material::Water
                 } else {
-                    Material::Earth as u32
+                    Material::Earth
                 }
             };
             let before = self.materials.conflicts;
@@ -818,7 +875,7 @@ impl Scene {
         }
         self.add(
             Tag {
-                kind: "ground",
+                kind: Kind::Ground,
                 owner: owner.to_owned(),
             },
             solid,
@@ -1023,7 +1080,6 @@ impl Scene {
         self.materials
             .trace(mesh)
             .into_iter()
-            .map(|m| m.and_then(Material::from_id))
             .collect::<Option<Vec<_>>>()
             .ok_or(KitError::Untraced)
     }

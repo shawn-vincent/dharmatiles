@@ -34,6 +34,7 @@ mod fronds;
 mod lat;
 
 pub(crate) use blade::ring_mesh;
+use dt_kit::Kind;
 use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, distance, form};
 use rayon::prelude::*;
 
@@ -116,13 +117,13 @@ impl Grass {
 impl Element for Grass {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("grass"),
+            writes: Write::Solid(Kind::Grass),
             reads: vec![
-                Read::Solids("ground"),
-                Read::IfAny("rock"),
-                Read::IfAny("tree"),
-                Read::IfAny("wall"),
-                Read::IfAny("flowers"),
+                Read::Solids(Kind::Ground),
+                Read::IfAny(Kind::Rock),
+                Read::IfAny(Kind::Tree),
+                Read::IfAny(Kind::Wall),
+                Read::IfAny(Kind::Flowers),
             ],
             cell_mm: None,
         }
@@ -163,9 +164,9 @@ impl Element for Grass {
             !outside[j * nx + i]
         };
         // what stands on the ground: grass roots nowhere under it
-        let mut blocker = scene.standing(&["rock", "tree", "wall"], FOOT_MM);
+        let mut blocker = scene.standing(&[Kind::Rock, Kind::Tree, Kind::Wall], FOOT_MM);
         // a flower's footprint at its dome, over the column
-        let fl = scene.standing(&["flowers"], 1.0);
+        let fl = scene.standing(&[Kind::Flowers], 1.0);
         blocker
             .bits
             .iter_mut()
@@ -333,7 +334,7 @@ impl Element for Grass {
             let solid = form::solid(slots.get(c as u32), &merged).map_err(LookError::build)?;
             scene.add(
                 Tag {
-                    kind: "grass",
+                    kind: Kind::Grass,
                     owner: owner.clone(),
                 },
                 solid,
@@ -400,7 +401,7 @@ fn obstacle_circles(
     let mut out = flow::Shapes::default();
     for t in things {
         // walls are long: leave them to the rim rule and the blocker
-        if t.kind == "wall" || t.r > 12.0 {
+        if t.kind == Kind::Wall || t.r > 12.0 {
             continue;
         }
         // a pebble or a stone smaller than the shortest blade does not
@@ -425,7 +426,7 @@ fn obstacle_circles(
 
 /// Something standing on the ground: where, how wide.
 struct Thing {
-    kind: &'static str,
+    kind: Kind,
     at: [f64; 2],
     r: f64,
 }
@@ -434,7 +435,7 @@ fn standing_things(scene: &Scene) -> Vec<Thing> {
     scene
         .parts()
         .iter()
-        .filter(|p| ["rock", "tree", "wall"].contains(&p.tag.kind))
+        .filter(|p| [Kind::Rock, Kind::Tree, Kind::Wall].contains(&p.tag.kind))
         .filter_map(|p| {
             let (lo, hi) = p.solid.bounds()?;
             Some(Thing {
@@ -457,7 +458,7 @@ const APRON_OFFSET: (f64, f64) = (0.6, 1.0);
 /// One-sided bare-earth patches (wake or scour) for a minority of rocks.
 fn apron_shapes(rng: &mut Rng, flow: &flow::Flow, things: &[Thing]) -> flow::Shapes {
     let mut out = flow::Shapes::default();
-    for t in things.iter().filter(|t| t.kind == "rock") {
+    for t in things.iter().filter(|t| t.kind == Kind::Rock) {
         if rng.random() >= APRON_PROB {
             continue;
         }

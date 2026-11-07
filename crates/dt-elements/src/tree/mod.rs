@@ -28,6 +28,7 @@ pub mod crown;
 mod leaf;
 pub mod leaves;
 
+use dt_kit::Kind;
 use dt_kit::graph::{self, Colonise, TubeStyle};
 use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
@@ -846,11 +847,11 @@ fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
 impl Element for Tree {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("tree"),
+            writes: Write::Solid(Kind::Tree),
             reads: vec![
-                Read::Solids("ground"),
-                Read::IfAny("wall"),
-                Read::IfAny("floor"),
+                Read::Solids(Kind::Ground),
+                Read::IfAny(Kind::Wall),
+                Read::IfAny(Kind::Floor),
             ],
             cell_mm: None,
         }
@@ -928,7 +929,7 @@ impl Element for Tree {
         scene.stamp(&mask, b.at[2]);
         scene.add(
             Tag {
-                kind: "tree",
+                kind: Kind::Tree,
                 owner: ctx.path.to_owned(),
             },
             b.solid,

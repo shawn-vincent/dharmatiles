@@ -25,6 +25,7 @@ pub(crate) mod fieldstone;
 pub(crate) mod layout;
 pub(crate) mod rubble;
 
+use dt_kit::Kind;
 use dt_kit::form::{clip, solid};
 use dt_kit::{Mask, Material, Rng, Scene, Seed, Solid, Tag, TriMesh, union};
 use rayon::prelude::*;
@@ -345,8 +346,8 @@ impl Wall {
 impl Element for Wall {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("wall"),
-            reads: vec![Read::Solids("ground"), Read::IfAny("floor")],
+            writes: Write::Solid(Kind::Wall),
+            reads: vec![Read::Solids(Kind::Ground), Read::IfAny(Kind::Floor)],
             cell_mm: None,
         }
     }
@@ -361,7 +362,7 @@ impl Element for Wall {
         };
         let sq = scene.frame().square_mm;
         let spine: Vec<[f64; 2]> = along.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
-        build(&self.mason, scene, ctx, &spine, "wall")
+        build(&self.mason, scene, ctx, &spine, Kind::Wall)
     }
 }
 
@@ -476,13 +477,13 @@ pub(crate) fn footprint(scene: &Scene, segs: &[Seg], depth: f64) -> Mask {
     m
 }
 
-/// Build a masonry run into the scene: a wall (`kind` "wall") or a floor.
+/// Build a masonry run into the scene: a wall or a floor.
 pub(crate) fn build(
     m: &Mason,
     scene: &mut Scene,
     ctx: &Ctx<'_>,
     spine: &[[f64; 2]],
-    kind: &'static str,
+    kind: Kind,
 ) -> Result<(), LookError> {
     let (wall, counts, fp, top) = run(m, scene, ctx, spine, kind, &|_| true)?;
     finish_build(scene, ctx, kind, wall, counts, &fp, top);
@@ -493,7 +494,7 @@ pub(crate) fn build(
 pub(crate) fn finish_build(
     scene: &mut Scene,
     ctx: &Ctx<'_>,
-    kind: &'static str,
+    kind: Kind,
     solid: Solid,
     counts: Counts,
     fp: &Mask,
@@ -528,7 +529,7 @@ pub(crate) fn run(
     scene: &mut Scene,
     ctx: &Ctx<'_>,
     spine: &[[f64; 2]],
-    kind: &str,
+    kind: Kind,
     keep: &(dyn Fn(&Cell) -> bool + Sync),
 ) -> Result<Built, LookError> {
     let frame = *scene.frame();

@@ -24,6 +24,7 @@ pub mod tree;
 pub mod wall;
 pub mod water;
 
+pub use dt_kit::Kind;
 use dt_kit::{Mask, Scene, Seed};
 
 /// A control's value, as the document gave it (levels already resolved
@@ -106,7 +107,7 @@ pub enum Write {
     /// The ground surface (painted in stack order, then lifted once).
     Surface,
     /// A solid of this kind.
-    Solid(&'static str),
+    Solid(Kind),
     /// The surface again, filled over what it reads (water): after the
     /// solids it reads and before the lift, which lifts it with the ground.
     Fill,
@@ -116,13 +117,13 @@ pub enum Write {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Read {
     /// Every solid of this kind (`rock`, `tree`, …).
-    Solids(&'static str),
+    Solids(Kind),
     /// Every other solid in the tile, the lifted ground included.
     AllSolids,
     /// Every solid of this kind if the tile has any (water's rocks, what a
     /// thing may stand on such as a wall on a floor); nothing to wait for
     /// if not.
-    IfAny(&'static str),
+    IfAny(Kind),
 }
 
 /// An element's plan.
@@ -194,8 +195,8 @@ pub struct Ctx<'a> {
 /// a scatter gathers at (plan, then build).
 #[derive(Clone, Debug)]
 pub struct Foot {
-    /// What it is (`cliff`).
-    pub kind: &'static str,
+    /// What it is.
+    pub kind: Kind,
     /// Per ground node, row-major: distance from the solid in mm (huge
     /// where it is nowhere near).
     pub dist: Vec<f64>,

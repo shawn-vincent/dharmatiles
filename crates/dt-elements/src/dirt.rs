@@ -260,7 +260,7 @@ pub fn surface(
     let (mut base, rim) = dirt.shape.surface(scene, seed.key("ground"));
     if let Some(b) = &dirt.bank {
         let s = frame.scale();
-        for f in foots.iter().filter(|f| f.kind == b.against) {
+        for f in foots.iter().filter(|f| f.kind.name() == b.against) {
             for k in 0..base.z.len() {
                 let (d, u, e) = (f.dist[k], f.zone[k], f.end[k]);
                 let rr = APRON_END.1 * s

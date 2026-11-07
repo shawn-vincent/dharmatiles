@@ -26,6 +26,7 @@
 //! node within 0.85 of its radius, and at least 0.55 mm under the median
 //! there (0.3 + 0.25 mm below a flat 4 mm floor).
 
+use dt_kit::Kind;
 use dt_kit::vec3::{cross, dot, norm, sub};
 use dt_kit::{
     Convex, Field, Grain, Material, Placed, Rng, Scene, Seed, Spread, Tag, TriMesh, grain, hull,
@@ -641,7 +642,7 @@ fn add_items(
                 .translate([p[0], p[1], z0]);
             scene.add(
                 Tag {
-                    kind: "rock",
+                    kind: Kind::Rock,
                     owner: owner.to_owned(),
                 },
                 sol,
@@ -688,7 +689,7 @@ fn rocks_in(scene: &Scene) -> Vec<[f64; 3]> {
     scene
         .parts()
         .iter()
-        .filter(|p| p.tag.kind == "rock")
+        .filter(|p| p.tag.kind == Kind::Rock)
         .filter_map(|p| p.solid.bounds())
         .map(|(lo, hi)| {
             let c = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
@@ -717,7 +718,7 @@ impl Single {
 impl Element for Single {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("rock"),
+            writes: Write::Solid(Kind::Rock),
             reads: Vec::new(),
             cell_mm: None,
         }
@@ -966,7 +967,7 @@ impl Scatter {
 impl Element for Scatter {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("rock"),
+            writes: Write::Solid(Kind::Rock),
             reads: Vec::new(),
             cell_mm: None,
         }
@@ -984,7 +985,7 @@ impl Element for Scatter {
             Some(k) => ctx
                 .foots
                 .iter()
-                .find(|f| f.kind == k)
+                .find(|f| f.kind.name() == k)
                 .map_or(0.0, |f| f.squares),
             None => squares,
         };
@@ -1033,7 +1034,7 @@ impl Element for Scatter {
         }
         let radii: Vec<f64> = items.iter().map(|it| it.r * s).collect();
         let placed = if let Some(kind) = ctx.against {
-            let Some(foot) = ctx.foots.iter().find(|f| f.kind == kind) else {
+            let Some(foot) = ctx.foots.iter().find(|f| f.kind.name() == kind) else {
                 return Err(LookError::general(
                     format!("nothing in this tile to gather against: no `{kind}`"),
                     format!("add a `{kind}` to the stack, or remove `against=`"),
@@ -1155,7 +1156,7 @@ pub fn dirt_stones(
             .translate([x, y, z0]);
         scene.add(
             Tag {
-                kind: "rock",
+                kind: Kind::Rock,
                 owner: owner.to_owned(),
             },
             sol,

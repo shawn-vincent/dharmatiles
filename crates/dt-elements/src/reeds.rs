@@ -18,6 +18,7 @@
     clippy::too_many_lines
 )]
 
+use dt_kit::Kind;
 use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, form};
 
 use crate::read;
@@ -138,8 +139,8 @@ impl Stem {
 impl Element for Reeds {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("reeds"),
-            reads: vec![Read::Solids("ground"), Read::IfAny("rock")],
+            writes: Write::Solid(Kind::Reeds),
+            reads: vec![Read::Solids(Kind::Ground), Read::IfAny(Kind::Rock)],
             cell_mm: None,
         }
     }
@@ -238,7 +239,7 @@ impl Element for Reeds {
             let solid = form::solid(slots.get(i as u32), &st.mesh()).map_err(LookError::build)?;
             scene.add(
                 Tag {
-                    kind: "reeds",
+                    kind: Kind::Reeds,
                     owner: ctx.path.to_owned(),
                 },
                 solid,

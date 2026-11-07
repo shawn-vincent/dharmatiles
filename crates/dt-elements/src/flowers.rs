@@ -19,6 +19,7 @@
 )]
 
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
+use dt_kit::Kind;
 
 use dt_kit::{Field, Material, Rng, Scene, Spread, Tag, TriMesh, form, scatter, signed_volume};
 
@@ -225,12 +226,12 @@ impl Flowers {
 impl Element for Flowers {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("flowers"),
+            writes: Write::Solid(Kind::Flowers),
             reads: vec![
-                Read::Solids("ground"),
-                Read::IfAny("rock"),
-                Read::IfAny("tree"),
-                Read::IfAny("wall"),
+                Read::Solids(Kind::Ground),
+                Read::IfAny(Kind::Rock),
+                Read::IfAny(Kind::Tree),
+                Read::IfAny(Kind::Wall),
             ],
             cell_mm: None,
         }
@@ -248,7 +249,7 @@ impl Element for Flowers {
             ));
         };
         let ground = Field::from(&surface);
-        let blocker = scene.standing(&["rock", "tree", "wall"], 0.45);
+        let blocker = scene.standing(&[Kind::Rock, Kind::Tree, Kind::Wall], 0.45);
         let wet = scene.wet().clone();
         let n_sq = w * h / (frame.square_mm * frame.square_mm);
         let share = ctx.area.bits.iter().filter(|&&b| b).count() as f64 / (nx * ny) as f64;
@@ -306,7 +307,7 @@ impl Element for Flowers {
                 .map_err(LookError::build)?;
             scene.add(
                 Tag {
-                    kind: "flowers",
+                    kind: Kind::Flowers,
                     owner: ctx.path.to_owned(),
                 },
                 solid,

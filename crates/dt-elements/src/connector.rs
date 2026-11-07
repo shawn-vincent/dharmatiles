@@ -10,6 +10,7 @@
 //! depends on the content's maximum z (`select_peg_height`), so
 //! the connector reads every solid and is built last.
 
+use dt_kit::Kind;
 use dt_kit::{Material, Outline, Scene, Solid, Tag, carve, extrude, loft, union};
 use rayon::prelude::*;
 
@@ -119,7 +120,7 @@ fn logo_parts(logo: &Outline) -> (Outline, Outline) {
 impl Element for DungeonBlocks {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("connector"),
+            writes: Write::Solid(Kind::Connector),
             reads: vec![Read::AllSolids],
             cell_mm: None,
         }
@@ -167,7 +168,7 @@ impl Element for DungeonBlocks {
         let base = union(&pegs).map_err(LookError::build)?;
         scene.add(
             Tag {
-                kind: "connector",
+                kind: Kind::Connector,
                 owner: ctx.path.to_owned(),
             },
             base,

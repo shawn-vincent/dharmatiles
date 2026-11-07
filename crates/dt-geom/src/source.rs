@@ -95,20 +95,31 @@ impl IdBlock {
 }
 
 /// What a triangle's material is, by (original ID, face ID) or by original
-/// ID alone. A face entry wins over an ID entry.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Materials {
-    faces: BTreeMap<(u32, u32), u32>,
-    ids: BTreeMap<u32, u32>,
+/// ID alone. A face entry wins over an ID entry. `M` is the caller's
+/// material type.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Materials<M = u32> {
+    faces: BTreeMap<(u32, u32), M>,
+    ids: BTreeMap<u32, M>,
     /// Faces whose triangles were sampled with more than one material; the
     /// lowest-index triangle's material is kept.
     pub conflicts: usize,
 }
 
-impl Materials {
+impl<M> Default for Materials<M> {
+    fn default() -> Self {
+        Self {
+            faces: BTreeMap::new(),
+            ids: BTreeMap::new(),
+            conflicts: 0,
+        }
+    }
+}
+
+impl<M: Copy + PartialEq> Materials<M> {
     /// Every triangle carrying original ID `id` has `material` (a solid of
     /// one material, or a cut face).
-    pub fn set_id(&mut self, id: u32, material: u32) {
+    pub fn set_id(&mut self, id: u32, material: M) {
         self.ids.insert(id, material);
     }
 
@@ -116,7 +127,7 @@ impl Materials {
     /// triangle `t` of `leaf` (the leaf's own export, after
     /// [`Solid::with_original_id`]). Coplanar triangles share a face ID; the
     /// first triangle of a face decides it.
-    pub fn set_faces(&mut self, leaf: &TriMesh, material: impl Fn(usize) -> u32) {
+    pub fn set_faces(&mut self, leaf: &TriMesh, material: impl Fn(usize) -> M) {
         let Some(ids) = leaf.triangle_original_ids() else {
             return;
         };
@@ -144,7 +155,7 @@ impl Materials {
 
     /// The material of (original ID, face ID).
     #[must_use]
-    pub fn get(&self, id: u32, face: u32) -> Option<u32> {
+    pub fn get(&self, id: u32, face: u32) -> Option<M> {
         self.faces
             .get(&(id, face))
             .or_else(|| self.ids.get(&id))
@@ -153,7 +164,7 @@ impl Materials {
 
     /// The material of every triangle of `mesh` (`None` = untraced).
     #[must_use]
-    pub fn trace(&self, mesh: &TriMesh) -> Vec<Option<u32>> {
+    pub fn trace(&self, mesh: &TriMesh) -> Vec<Option<M>> {
         let Some(ids) = mesh.triangle_original_ids() else {
             return vec![None; mesh.triangle_count()];
         };

@@ -331,7 +331,7 @@ impl Element for Water {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Fill,
-            reads: vec![Read::IfAny("rock")],
+            reads: vec![Read::IfAny(dt_kit::Kind::Rock)],
             cell_mm: Some(crate::CellMm::mm(CELL_MM)),
         }
     }
@@ -346,7 +346,7 @@ impl Element for Water {
         let land = scene
             .ground()
             .unwrap_or_else(|| Field::new(&frame, wl - 2.2 * s));
-        let rock_mask = scene.footprint("rock", wl).bits;
+        let rock_mask = scene.footprint(dt_kit::Kind::Rock, wl).bits;
         let soft = land.blur(LAND_BLUR_MM);
         let land_mask: Vec<bool> = (0..nn)
             .map(|k| (soft.z[k] > wl || !ctx.area.bits[k]) && !rock_mask[k])

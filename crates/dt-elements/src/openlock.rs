@@ -14,6 +14,7 @@
 //! into the bottom. The base never depends on the content, so unlike the
 //! DungeonBlocks peg it has one height.
 
+use dt_kit::Kind;
 use dt_kit::{Material, Outline, Scene, Tag, carve, extrude};
 
 use crate::{Ctx, Element, LookError, Plan, Read, Write};
@@ -124,7 +125,7 @@ impl OpenLock {
 impl Element for OpenLock {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("connector"),
+            writes: Write::Solid(Kind::Connector),
             reads: vec![Read::AllSolids],
             cell_mm: None,
         }
@@ -169,7 +170,7 @@ impl Element for OpenLock {
         let base = carve(&body, &cuts).map_err(LookError::build)?;
         scene.add(
             Tag {
-                kind: "connector",
+                kind: Kind::Connector,
                 owner: ctx.path.to_owned(),
             },
             base,

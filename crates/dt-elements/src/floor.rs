@@ -11,6 +11,7 @@
 //! The area is slab-granular: a slab is laid where its centre is in the
 //! entry's area. `style=fieldstone` lays crack-network flagstones.
 
+use dt_kit::Kind;
 use dt_kit::Scene;
 
 use crate::read;
@@ -103,8 +104,8 @@ impl Floor {
 impl Element for Floor {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("floor"),
-            reads: vec![Read::Solids("ground")],
+            writes: Write::Solid(Kind::Floor),
+            reads: vec![Read::Solids(Kind::Ground)],
             cell_mm: None,
         }
     }
@@ -138,7 +139,7 @@ impl Element for Floor {
             );
             area.bits[j * nx + i]
         };
-        let (solid, counts, mut fp, top) = wall::run(&m, scene, ctx, &spine, "floor", &keep)?;
+        let (solid, counts, mut fp, top) = wall::run(&m, scene, ctx, &spine, Kind::Floor, &keep)?;
         if counts.units == 0 {
             return Err(LookError::build(
                 "the floor's area holds no whole slab: no slab centre falls inside it",
@@ -147,7 +148,7 @@ impl Element for Floor {
         for (b, a) in fp.bits.iter_mut().zip(&area.bits) {
             *b = *b && *a;
         }
-        wall::finish_build(scene, ctx, "floor", solid, counts, &fp, top);
+        wall::finish_build(scene, ctx, Kind::Floor, solid, counts, &fp, top);
         Ok(())
     }
 }

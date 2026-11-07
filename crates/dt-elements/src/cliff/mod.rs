@@ -40,6 +40,7 @@ mod stack;
 mod stone;
 mod util;
 
+use dt_kit::Kind;
 use dt_kit::{Material, Rng, Scene, Support, Tag, smooth01};
 use rayon::prelude::*;
 
@@ -276,7 +277,7 @@ struct Planned {
 impl Element for Cliff {
     fn plan(&self) -> Plan {
         Plan {
-            writes: Write::Solid("cliff"),
+            writes: Write::Solid(Kind::Cliff),
             // the painted surface (always first), not the lifted ground: a bank
             // heaped against the cliff is made before the lift
             reads: vec![],
@@ -341,7 +342,7 @@ impl Element for Cliff {
         }
         let squares = cells.len() as f64 * step / frame.square_mm;
         Ok(Some(crate::Foot {
-            kind: "cliff",
+            kind: Kind::Cliff,
             dist,
             zone: us,
             end: ends,
@@ -538,7 +539,7 @@ impl Element for Cliff {
             )? {
                 scene.add(
                     Tag {
-                        kind: "bank",
+                        kind: Kind::Bank,
                         owner: ctx.path.to_owned(),
                     },
                     d.transformed(&m).into_solid(),
@@ -551,7 +552,7 @@ impl Element for Cliff {
             let solid = p.transformed(&m).into_solid();
             scene.add(
                 Tag {
-                    kind: "cliff",
+                    kind: Kind::Cliff,
                     owner: ctx.path.to_owned(),
                 },
                 solid,
@@ -559,7 +560,7 @@ impl Element for Cliff {
         }
         scene.add(
             Tag {
-                kind: "cliff",
+                kind: Kind::Cliff,
                 owner: ctx.path.to_owned(),
             },
             core.transformed(&m).into_solid(),

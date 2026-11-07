@@ -17,7 +17,7 @@
 //! solid (surfaces are painted before any solid exists) is refused here,
 //! before anything is built.
 
-use dt_elements::{Plan, Read, Write};
+use dt_elements::{Kind, Plan, Read, Write};
 
 /// One step of the build.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,7 +36,7 @@ pub enum Refusal {
         /// The reader.
         entry: usize,
         /// What it reads.
-        kind: &'static str,
+        kind: Kind,
     },
     /// Entry `entry` is a surface that reads a solid.
     SurfaceReadsSolid {
@@ -83,7 +83,7 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
                         .filter(|&j| j != i && plans[j].writes == Write::Solid(kind))
                         .collect();
                     // the lifted ground is a solid every tile with a surface has
-                    let ground = kind == "ground" && lifted;
+                    let ground = kind == Kind::Ground && lifted;
                     if writers.is_empty() && !ground && matches!(r, Read::Solids(_)) {
                         return Err(Refusal::NoWriter { entry: i, kind });
                     }
@@ -117,7 +117,7 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
         plans[i].reads.iter().any(|r| {
             matches!(
                 r,
-                Read::Solids("ground") | Read::IfAny("ground") | Read::AllSolids
+                Read::Solids(Kind::Ground) | Read::IfAny(Kind::Ground) | Read::AllSolids
             )
         })
     };
@@ -166,10 +166,10 @@ mod tests {
     #[test]
     fn surfaces_then_lift_then_solids_then_the_connector() {
         let plans = [
-            p(Write::Solid("connector"), &[Read::AllSolids]),
-            p(Write::Solid("grass"), &[Read::Solids("rock")]),
+            p(Write::Solid(Kind::Connector), &[Read::AllSolids]),
+            p(Write::Solid(Kind::Grass), &[Read::Solids(Kind::Rock)]),
             p(Write::Surface, &[]),
-            p(Write::Solid("rock"), &[Read::Solids("ground")]),
+            p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Ground)]),
         ];
         assert_eq!(
             schedule(&plans),
@@ -186,9 +186,9 @@ mod tests {
     #[test]
     fn a_wall_waits_for_the_floor_it_stands_on() {
         let plans = [
-            p(Write::Solid("wall"), &[Read::IfAny("floor")]),
+            p(Write::Solid(Kind::Wall), &[Read::IfAny(Kind::Floor)]),
             p(Write::Surface, &[]),
-            p(Write::Solid("floor"), &[Read::Solids("ground")]),
+            p(Write::Solid(Kind::Floor), &[Read::Solids(Kind::Ground)]),
         ];
         assert_eq!(
             schedule(&plans),
@@ -205,18 +205,18 @@ mod tests {
     fn refuses_what_it_cannot_satisfy() {
         let none = [
             p(Write::Surface, &[]),
-            p(Write::Solid("grass"), &[Read::Solids("cliff")]),
+            p(Write::Solid(Kind::Grass), &[Read::Solids(Kind::Cliff)]),
         ];
         assert_eq!(
             schedule(&none),
             Err(Refusal::NoWriter {
                 entry: 1,
-                kind: "cliff"
+                kind: Kind::Cliff
             })
         );
         let cycle = [
-            p(Write::Solid("a"), &[Read::Solids("b")]),
-            p(Write::Solid("b"), &[Read::Solids("a")]),
+            p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Tree)]),
+            p(Write::Solid(Kind::Tree), &[Read::Solids(Kind::Rock)]),
         ];
         assert_eq!(
             schedule(&cycle),
@@ -224,28 +224,28 @@ mod tests {
                 entries: vec![0, 1]
             })
         );
-        let early = [p(Write::Surface, &[Read::Solids("rock")])];
+        let early = [p(Write::Surface, &[Read::Solids(Kind::Rock)])];
         assert_eq!(
             schedule(&early),
             Err(Refusal::SurfaceReadsSolid { entry: 0 })
         );
         let optional = [
             p(Write::Surface, &[]),
-            p(Write::Solid("wall"), &[Read::IfAny("floor")]),
+            p(Write::Solid(Kind::Wall), &[Read::IfAny(Kind::Floor)]),
         ];
         assert!(schedule(&optional).is_ok());
-        let no_ground = [p(Write::Solid("rock"), &[Read::Solids("ground")])];
+        let no_ground = [p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Ground)])];
         assert!(schedule(&no_ground).is_err());
         let fill_on_ground = [
             p(Write::Surface, &[]),
-            p(Write::Fill, &[Read::Solids("ground")]),
+            p(Write::Fill, &[Read::Solids(Kind::Ground)]),
         ];
         assert!(schedule(&fill_on_ground).is_err());
         // a fill's prerequisite cannot read the ground either
         let rock_on_ground = [
             p(Write::Surface, &[]),
-            p(Write::Fill, &[Read::IfAny("rock")]),
-            p(Write::Solid("rock"), &[Read::Solids("ground")]),
+            p(Write::Fill, &[Read::IfAny(Kind::Rock)]),
+            p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Ground)]),
         ];
         assert_eq!(
             schedule(&rock_on_ground),
@@ -256,11 +256,11 @@ mod tests {
     #[test]
     fn a_fill_and_what_it_reads_come_before_the_lift() {
         let plans = [
-            p(Write::Solid("connector"), &[Read::AllSolids]),
-            p(Write::Fill, &[Read::IfAny("rock")]),
+            p(Write::Solid(Kind::Connector), &[Read::AllSolids]),
+            p(Write::Fill, &[Read::IfAny(Kind::Rock)]),
             p(Write::Surface, &[]),
-            p(Write::Solid("tree"), &[Read::Solids("ground")]),
-            p(Write::Solid("rock"), &[]),
+            p(Write::Solid(Kind::Tree), &[Read::Solids(Kind::Ground)]),
+            p(Write::Solid(Kind::Rock), &[]),
         ];
         assert_eq!(
             schedule(&plans),
@@ -276,7 +276,7 @@ mod tests {
         // no rocks: the water waits for nothing
         let bare = [
             p(Write::Surface, &[]),
-            p(Write::Fill, &[Read::IfAny("rock")]),
+            p(Write::Fill, &[Read::IfAny(Kind::Rock)]),
         ];
         assert_eq!(
             schedule(&bare),
