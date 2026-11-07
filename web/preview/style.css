@@ -238,6 +238,12 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #lens .linkish, #textstate .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
 #lens .linkish:hover { text-decoration: underline; }
 #lens .more { font-size: 12px; margin-top: 6px; }
+/* a tile's size, picked from a grid under the field (lens.js sizeGrid) */
+.size-grid { position: fixed; z-index: 50; padding: 8px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.size-cells { display: grid; gap: 3px; width: max-content; }
+.size-cell { width: 16px; height: 16px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--bg); cursor: pointer; transition: background .06s, border-color .06s; }
+.size-cell.on { background: var(--accent); border-color: var(--accent-hi); }
+.size-label { margin-top: 6px; font: 12px var(--f-body); color: var(--muted); text-align: center; white-space: nowrap; }
 #lens input.edit { width: 100%; font: 13px var(--f-code); background: var(--bg); color: var(--ink); border: 1px solid var(--accent); border-radius: var(--r); padding: 1px 5px; }
 #lens .entry-actions { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--bg); }
 #lens .entry-actions button { justify-content: center; }

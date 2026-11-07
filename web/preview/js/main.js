@@ -1188,7 +1188,7 @@ const lens = new Lens($('lens'), {
 const TILE_SCHEMA = {
   name: 'tile',
   controls: [
-    { name: 'size', about: 'squares across, then up: "2x1"; drag a number to change it', default: '"1x1"' },
+    { name: 'size', about: 'squares across, then up: "2x1"; click to type or pick it from a grid, or drag a number', default: '"1x1"', picker: 'size' },
     { name: 'seed', unit: 'number', about: 'the layout: another seed, another arrangement of the same tile', default: '1' },
   ],
 };
