@@ -987,18 +987,10 @@ impl Scene {
     /// # Errors
     /// [`KitError::Untraced`] if a triangle has no material, or the
     /// kernel's status.
-    /// Every part's mesh side by side, not joined: a draft's mesh, with
-    /// each triangle's material.  Overlaps stay overlapping; the view
-    /// hides them, a printer would not.
-    ///
-    /// # Errors
-    /// [`KitError::Untraced`] if a triangle's material is unknown.
-    pub fn soup(&mut self) -> Result<(TriMesh, Vec<Material>), KitError> {
-        self.soup_since(0)
-    }
-
-    /// [`Scene::soup`] of the parts from `first` on: what a stage added,
-    /// for a sketch of it while the build runs.
+    /// Every part's mesh from `first` on, side by side, not joined, with
+    /// each triangle's material: from 0, a draft's mesh; from a stage's
+    /// first part, a sketch of what it added while the build runs.
+    /// Overlaps stay overlapping; the view hides them, a printer would not.
     ///
     /// # Errors
     /// [`KitError::Untraced`] if a triangle's material is unknown.

@@ -1,20 +1,22 @@
 //! dharmatiles geometry kernels.
 //!
-//! [`grid`] (lattices, the uniform lift, the distance transform) and
-//! [`raster`] (line rasterising, the paint bucket) arrived in P1; P2 added
-//! [`noise`] (position-keyed noise on one lattice), [`filter`] (blurs,
-//! grey morphology, quantiles), the distance transform's nearest indices,
-//! [`hash`] (a spatial hash), [`lift`] (the error-bounded adaptive lift)
-//! and the seeded stream [`Rng`]. P3 added [`convex`] (polytopes cut by
-//! half-spaces: rock facets and chips), [`geodesic`] (multi-source
-//! distance through a mask), [`noise::fbm3`], polygon rasterising
-//! ([`fill_polygons`]) and the mesh trait's hull, refine, transform and
-//! slice, and [`vec3`] (the 3-vector helpers they share).
+//! - [`grid`]: lattices, the uniform lift, the distance transform (with
+//!   nearest indices); [`raster`]: line and polygon rasterising
+//!   ([`fill_polygons`]), the paint bucket.
+//! - [`noise`]: position-keyed noise on one lattice, and [`noise::fbm3`];
+//!   [`filter`]: blurs, grey morphology, quantiles; [`geodesic`]:
+//!   multi-source distance through a mask.
+//! - [`lift`]: the error-bounded adaptive lift; [`hash`]: a spatial hash;
+//!   [`convex`]: polytopes cut by half-spaces (rock facets and chips);
+//!   [`vec3`]: the 3-vector helpers.
+//! - [`seed::Seed`], the deterministic path-keyed seed derivation, and the
+//!   seeded stream [`Rng`].
+//! - [`mesh::Mesh`] (hull, refine, transform, slice, booleans) and
+//!   [`rays::Rays`], the traits the backends sit behind; [`source`], the
+//!   source-ID rule that keeps booleans deterministic and materials
+//!   traceable.
 //!
-//! Phase 0: the [`mesh::Mesh`] and [`rays::Rays`] traits that every backend
-//! sits behind, and [`seed::Seed`], the deterministic path-keyed seed
-//! derivation, and [`source`], the source-ID rule that keeps booleans
-//! deterministic and materials traceable. The mesh backend is the `manifold-ffi` feature (default, the C++
+//! The mesh backend is the `manifold-ffi` feature (default, the C++
 //! kernel through manifold-csg). [`Solid`] is its solid type.
 
 pub mod backend;

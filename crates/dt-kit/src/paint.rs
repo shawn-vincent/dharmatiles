@@ -15,8 +15,9 @@
 
 use dt_geom::TriMesh;
 
-use crate::render::{ORANGE, RED, SurfacePaint, cross, unit};
+use crate::render::{ORANGE, RED, SurfacePaint};
 use crate::{Material, Palette};
+use dt_geom::vec3::{cross, unit};
 
 /// Per vertex: how far it stands out of its neighbours, in units of the
 /// local edge length, at a fine scale and a coarse one (positive = ridge

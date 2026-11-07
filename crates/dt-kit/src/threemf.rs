@@ -338,8 +338,9 @@ pub(crate) fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
     for (name, data) in files {
         let mut enc =
             flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
-        let _ = enc.write_all(data);
-        let packed = enc.finish().unwrap_or_default();
+        // into memory: writing cannot fail
+        enc.write_all(data).expect("deflate into memory");
+        let packed = enc.finish().expect("deflate into memory");
         let crc = crc32fast::hash(data);
         let offset = size(out.len());
         // local header

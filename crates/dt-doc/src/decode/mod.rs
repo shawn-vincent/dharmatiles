@@ -372,7 +372,7 @@ impl<'k> Decoder<'k> {
             Source::Library(trimmed.to_owned())
         };
         let mut names = Vec::new();
-        for n in &node.entries()[1..] {
+        for n in node.entries().iter().skip(1) {
             match arg_str(n) {
                 Some(s) => names.push(Spanned {
                     value: s.to_owned(),
@@ -863,7 +863,7 @@ impl<'k> Decoder<'k> {
             }
             *slot = this.num(e, Axis::Mm, None, "line", key, ctx);
         };
-        for e in &n.entries()[1..] {
+        for e in n.entries().iter().skip(1) {
             match e.name() {
                 Some(k) => set(self, k.value(), k.span(), e),
                 None => {
@@ -1120,7 +1120,7 @@ impl<'k> Decoder<'k> {
                 }
             }
         };
-        for e in &n.entries()[1..] {
+        for e in n.entries().iter().skip(1) {
             if let Some(k) = e.name() {
                 set(self, k.value(), k.span(), e);
             }

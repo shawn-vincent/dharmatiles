@@ -24,8 +24,8 @@
 use dt_geom::{Bounds, Mesh, TriMesh};
 
 use crate::KitError;
-use crate::graph::dist;
 use crate::scene::{Slot, Solid, leaf};
+use dt_geom::vec3::dist;
 
 /// **level set**: the closed surface where `sdf(p) > 0` (positive inside)
 /// within `[lo, hi]`, on a grid of `edge_mm`, as a triangle mesh in the

@@ -75,8 +75,13 @@ fn unescape(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// The request line and headers, at most.
+const MAX_HEAD: u64 = 16 << 10;
+
 fn read_request(conn: &TcpStream) -> Option<Request> {
-    let mut r = BufReader::new(conn.try_clone().ok()?);
+    // bounded as a whole: a line with no end cannot grow without limit
+    let limit = MAX_HEAD + MAX_BODY as u64;
+    let mut r = BufReader::new(conn.try_clone().ok()?.take(limit));
     let mut first = String::new();
     r.read_line(&mut first).ok()?;
     let mut parts = first.split_whitespace();
@@ -156,7 +161,6 @@ fn json(conn: &mut TcpStream, status: &str, body: &serde_json::Value) {
     );
 }
 
-/// `/api/tiles/N/rest` → `(N, rest)`.
 /// With `DT_WEB` set to `web/preview`, the page's own files (only the
 /// paths the program serves) are read from there on every request, so the
 /// page can be worked on without rebuilding the program.
@@ -176,6 +180,7 @@ fn dev_asset(path: &str) -> Option<(&'static str, Vec<u8>)> {
         .map(|b| (ctype, b))
 }
 
+/// `/api/tiles/N/rest` → `(N, rest)`.
 fn tile_route(path: &str) -> Option<(usize, &str)> {
     let rest = path.strip_prefix("/api/tiles/")?;
     let (n, what) = rest.split_once('/')?;
@@ -202,47 +207,45 @@ fn one(mut conn: TcpStream, shared: &Shared) {
         let (status, v) = super::edit::post(shared, &req.path, &req.body);
         return json(&mut conn, status, &v);
     }
-    match (req.method.as_str(), req.path.as_str()) {
-        ("GET", "/api/events") => events(conn, shared),
-        ("GET", "/api/session") => json(
+    let bytes = |conn: &mut TcpStream, b: Option<Arc<Vec<u8>>>, missing: &[u8]| match b {
+        Some(m) => respond(conn, "200 OK", "application/octet-stream", &m),
+        None => respond(conn, "404 Not Found", "text/plain", missing),
+    };
+    match (
+        req.method.as_str(),
+        req.path.as_str(),
+        tile_route(&req.path),
+    ) {
+        ("GET", "/api/events", _) => events(conn, shared),
+        ("GET", "/api/session", _) => json(
             &mut conn,
             "200 OK",
             &serde_json::json!({ "token": shared.token }),
         ),
-        ("GET", "/api/elements") => json(&mut conn, "200 OK", &crate::elements::all_json()),
-        ("GET", "/api/tiles") => json(&mut conn, "200 OK", &shared.snapshot()),
-        ("GET", p) if tile_route(p).is_some_and(|(_, w)| w == "mesh") => {
-            let draft = req.param("draft").is_some();
-            let mesh = tile_route(p).and_then(|(i, _)| {
-                if draft {
-                    shared.draft_mesh(i)
-                } else {
-                    shared.mesh(i)
-                }
-            });
-            match mesh {
-                Some(m) => respond(&mut conn, "200 OK", "application/octet-stream", &m),
-                None => respond(&mut conn, "404 Not Found", "text/plain", b"no mesh yet"),
-            }
+        ("GET", "/api/elements", _) => json(&mut conn, "200 OK", &crate::elements::all_json()),
+        ("GET", "/api/tiles", _) => json(&mut conn, "200 OK", &shared.snapshot()),
+        ("GET", _, Some((i, "mesh"))) => {
+            let mesh = if req.param("draft").is_some() {
+                shared.draft_mesh(i)
+            } else {
+                shared.mesh(i)
+            };
+            bytes(&mut conn, mesh, b"no mesh yet");
         }
-        ("GET", p) if tile_route(p).is_some_and(|(_, w)| w == "sketch") => {
+        ("GET", _, Some((i, "sketch"))) => {
             let id = req.param("id").and_then(|v| v.parse().ok());
-            match tile_route(p)
-                .zip(id)
-                .and_then(|((i, _), id)| shared.sketch_mesh(i, id))
-            {
-                Some(m) => respond(&mut conn, "200 OK", "application/octet-stream", &m),
-                None => respond(&mut conn, "404 Not Found", "text/plain", b"no such sketch"),
-            }
+            bytes(
+                &mut conn,
+                id.and_then(|id| shared.sketch_mesh(i, id)),
+                b"no such sketch",
+            );
         }
-        ("GET", p) if tile_route(p).is_some_and(|(_, w)| w == "text") => {
-            match tile_route(p).and_then(|(i, _)| shared.text(i, req.param("file"))) {
-                Some(v) => json(&mut conn, "200 OK", &v),
-                None => respond(&mut conn, "404 Not Found", "text/plain", b"no such file"),
-            }
-        }
-        ("POST", p) if tile_route(p).is_some_and(|(_, w)| w == "build") => {
-            let known = tile_route(p).is_some_and(|(i, _)| shared.want(i));
+        ("GET", _, Some((i, "text"))) => match shared.text(i, req.param("file")) {
+            Some(v) => json(&mut conn, "200 OK", &v),
+            None => respond(&mut conn, "404 Not Found", "text/plain", b"no such file"),
+        },
+        ("POST", _, Some((i, "build"))) => {
+            let known = shared.want(i);
             let status = if known {
                 "202 Accepted"
             } else {
@@ -250,19 +253,18 @@ fn one(mut conn: TcpStream, shared: &Shared) {
             };
             json(&mut conn, status, &serde_json::json!({"ok": known}));
         }
-        ("GET", p) if dev_asset(p).is_some() => {
-            let (ctype, body) = dev_asset(p).unwrap_or_default();
-            respond(&mut conn, "200 OK", ctype, &body);
-        }
-        ("GET", p) => match assets::find(p) {
-            Some((ctype, body)) => respond(&mut conn, "200 OK", ctype, body),
-            None => respond(&mut conn, "404 Not Found", "text/plain", b"not found"),
+        ("GET", p, _) => match dev_asset(p) {
+            Some((ctype, body)) => respond(&mut conn, "200 OK", ctype, &body),
+            None => match assets::find(p) {
+                Some((ctype, body)) => respond(&mut conn, "200 OK", ctype, body),
+                None => respond(&mut conn, "404 Not Found", "text/plain", b"not found"),
+            },
         },
         _ => respond(
             &mut conn,
             "405 Method Not Allowed",
             "text/plain",
-            b"GET only",
+            b"no such call",
         ),
     }
 }

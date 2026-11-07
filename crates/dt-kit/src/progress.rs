@@ -44,9 +44,7 @@ pub trait Reporter: Send + Sync {
     /// while the build runs, with each triangle's material.  `rough` is a
     /// stand-in the stage will replace (a cliff's rock boxes); otherwise it
     /// is the stage's finished parts, not yet joined.  Never printed.
-    fn sketch(&self, mesh: &TriMesh, materials: &[Material], rough: bool) {
-        let _ = (mesh, materials, rough);
-    }
+    fn sketch(&self, _mesh: &TriMesh, _materials: &[Material], _rough: bool) {}
 }
 
 /// The handle elements and the evaluator report through.  Cloning is cheap;

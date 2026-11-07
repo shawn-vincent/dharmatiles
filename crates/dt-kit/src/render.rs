@@ -4,6 +4,7 @@
 //! contact sheets. A fixed camera and lights, so views line up between runs.
 
 use dt_geom::TriMesh;
+use dt_geom::vec3::{cross, dot, unit};
 use libm::{cos, sin, tan};
 
 use crate::Material;
@@ -258,23 +259,6 @@ pub fn paint_surface(
 fn dirv(elev: f64, azim: f64) -> [f64; 3] {
     let (e, a) = (elev.to_radians(), azim.to_radians());
     [cos(e) * cos(a), cos(e) * sin(a), sin(e)]
-}
-
-fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-pub(crate) fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-pub(crate) fn unit(a: [f64; 3]) -> [f64; 3] {
-    let l = dot(a, a).sqrt();
-    if l > 0.0 { a.map(|x| x / l) } else { a }
 }
 
 /// **render**: `mesh` with per-face `colours` from `view`, `width` by

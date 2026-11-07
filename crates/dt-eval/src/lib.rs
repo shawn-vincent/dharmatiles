@@ -463,7 +463,6 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
 ///
 /// # Errors
 /// As [`build`].
-#[allow(clippy::too_many_lines)]
 pub fn build_with(
     sources: &dyn Source,
     path: &str,
@@ -668,22 +667,21 @@ pub fn build_cached(
     }
     let t_stage = std::time::Instant::now();
     progress.begin(progress::UNION, "joining the parts");
-    let styles = |is_brick: bool| {
-        tile.stack
-            .iter()
-            .filter(|e| matches!(e.what.value.as_str(), "wall" | "floor"))
-            .filter(|e| {
-                let brick = e.controls.iter().any(|c| {
-                    c.name == "style"
-                        && matches!(&c.value, dt_elements::Value::Word(w) if w.contains("brick"))
-                });
-                brick == is_brick
+    // the masonry is brick when every wall and floor is, and there is some
+    let masonry: Vec<bool> = tile
+        .stack
+        .iter()
+        .filter(|e| matches!(e.what.value.as_str(), "wall" | "floor"))
+        .map(|e| {
+            e.controls.iter().any(|c| {
+                c.name == "style"
+                    && matches!(&c.value, dt_elements::Value::Word(w) if w.contains("brick"))
             })
-            .count()
-    };
-    let brick = styles(true) > 0 && styles(false) == 0;
+        })
+        .collect();
+    let brick = !masonry.is_empty() && masonry.iter().all(|&b| b);
     let (mesh, mats) = if opts.draft {
-        scene.soup()
+        scene.soup_since(0)
     } else {
         scene.union()
     }

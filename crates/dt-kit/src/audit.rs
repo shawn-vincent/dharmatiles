@@ -13,9 +13,9 @@ use dt_geom::TriMesh;
 use rayon::prelude::*;
 
 use crate::form::vertex_normals;
-use crate::graph::{cross, dist, sub};
 use crate::scene::Material;
 use crate::shape::signed_volume;
+use dt_geom::vec3::{cross, dist, sub};
 
 /// The tolerance band: faces past the printer's overhang (55°, the
 /// conservative target everything aims for by construction) but within

@@ -26,7 +26,7 @@
 
 use dt_geom::{ObvhsRays, Ray, Rays, TriMesh};
 
-use crate::graph::{add, cross, dot, norm, scale, sub};
+use dt_geom::vec3::{add, cross, dot, norm, scale, sub, unit};
 
 /// trimesh's `contains_points` default direction.
 const CONTAINS_DIR: [f64; 3] = [0.439_506_445_5, 0.617_598_629_942, 0.652_231_566_745];
@@ -246,11 +246,6 @@ impl<R: Rays> RayMesh<R> {
         let dist = dot(sub(v0, o), n) / pd;
         Some(add(scale(d, dist), o))
     }
-}
-
-fn unit(v: [f64; 3]) -> [f64; 3] {
-    let l = norm(v);
-    if l > 0.0 { v.map(|x| x / l) } else { v }
 }
 
 #[cfg(test)]

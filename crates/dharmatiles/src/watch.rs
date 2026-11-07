@@ -41,13 +41,20 @@ impl Recording {
     /// if a build never gets to read it.
     pub(crate) fn watching(path: &str) -> Self {
         let rec = Self::default();
+        rec.watch(path);
+        rec
+    }
+
+    /// Note `path` and its time now, once (a bundled library file, with
+    /// no folder on disk, never changes).
+    fn watch(&self, path: &str) {
         if !path.starts_with(LIB) || dt_eval::source::library_dir().is_some() {
-            rec.read
+            self.read
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
-                .insert(path.to_owned(), mtime(path));
+                .entry(path.to_owned())
+                .or_insert_with(|| mtime(path));
         }
-        rec
     }
 
     /// The files read, with their times before reading.
@@ -57,17 +64,18 @@ impl Recording {
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
     }
+
+    /// The files read, taken.
+    fn into_files(self) -> BTreeMap<String, Option<SystemTime>> {
+        self.read
+            .into_inner()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
 impl Source for Recording {
     fn read(&self, path: &str) -> Result<String, String> {
-        if !path.starts_with(LIB) || dt_eval::source::library_dir().is_some() {
-            self.read
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .entry(path.to_owned())
-                .or_insert_with(|| mtime(path));
-        }
+        self.watch(path);
         Files.read(path)
     }
 }
@@ -99,14 +107,7 @@ fn build<'a>(
     png: bool,
     cache: dt_eval::Cache,
 ) -> (u8, Tile<'a>) {
-    let rec = Recording::default();
-    if !path.starts_with(LIB) || dt_eval::source::library_dir().is_some() {
-        // watched even if the build never got to read it
-        rec.read
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(path.to_owned(), mtime(path));
-    }
+    let rec = Recording::watching(path);
     let (code, _) = build_one(
         &rec,
         path,
@@ -123,10 +124,7 @@ fn build<'a>(
         },
         false,
     );
-    let files = rec
-        .read
-        .into_inner()
-        .unwrap_or_else(PoisonError::into_inner);
+    let files = rec.into_files();
     (code, Tile { path, files, cache })
 }
 

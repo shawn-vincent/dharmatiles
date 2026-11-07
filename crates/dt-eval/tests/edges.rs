@@ -1,4 +1,4 @@
-//! Edge cases found by the Phase 1 exit review: each test is one repro,
+//! Edge cases found in review: each test is one repro,
 //! kept so the fix stays fixed.
 
 #![allow(clippy::unwrap_used)]

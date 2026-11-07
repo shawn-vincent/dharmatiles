@@ -407,8 +407,7 @@ $('new-form').onsubmit = async (e) => {
   }
   $('new-dialog').close();
   const i = r.body.index;
-  for (let k = 0; k < 40 && !state.tiles[i]; k++) await new Promise((res) => setTimeout(res, 50));
-  if (state.tiles[i]) select(i, true);
+  if (await whenTile(i)) select(i, true);
 };
 
 // ---- renaming: a tile's file name is its name ---------------------------
@@ -444,8 +443,7 @@ function startRename() {
     doc.note = null;
     carried = { history: doc.history, at: doc.at };
     const i = r.body.index;
-    for (let k = 0; k < 40 && !state.tiles[i]; k++) await new Promise((res) => setTimeout(res, 50));
-    if (state.tiles[i]) await select(i, true);
+    if (await whenTile(i)) await select(i, true);
   };
   input.onkeydown = (e) => {
     e.stopPropagation();
@@ -1035,8 +1033,7 @@ $('mine-ok').onclick = async () => {
   if (r.status !== 200 || r.body?.index == null) { doc.note = r.body?.error || 'could not make a copy'; renderTextBar(); return; }
   // the copy joins the list with the next snapshot
   const i = r.body.index;
-  for (let k = 0; k < 40 && !state.tiles[i]; k++) await new Promise((res) => setTimeout(res, 50));
-  if (state.tiles[i]) select(i);
+  if (await whenTile(i)) select(i);
 };
 
 // ---- the selection ----------------------------------------------------------
@@ -1670,6 +1667,21 @@ function renderTitle() {
 }
 
 // ---- live updates ----------------------------------------------------
+/** A plan that differs from the one the view has. */
+const planChanged = (p) => !!p && JSON.stringify(p) !== JSON.stringify(viewer.plan);
+
+// A tile the server just made (new, renamed, copied) joins the list with
+// its next message: wait for it there.
+const awaited = new Map(); // tile index -> resolvers waiting for it
+/** Resolves true once tile `i` is on the list (false if the server changed meanwhile). */
+function whenTile(i) {
+  if (state.tiles[i]) return Promise.resolve(true);
+  return new Promise((res) => awaited.set(i, [...(awaited.get(i) || []), res]));
+}
+function tilesArrived() {
+  for (const [i, rs] of awaited) if (state.tiles[i]) { awaited.delete(i); rs.forEach((r) => r(true)); }
+}
+
 /**
  * After the stream dropped, the server may be a new one, numbering its
  * meshes, sketches and drafts from the start again: forget what was
@@ -1680,6 +1692,9 @@ function afterGap(m) {
   state.loaded.clear();
   sketchCache.clear();
   Object.assign(drafts, { sent: 0, waiting: false, again: false, shown: false });
+  // indices waited for were the old server's
+  for (const rs of awaited.values()) rs.forEach((r) => r(false));
+  awaited.clear();
   if (path == null) return;
   const i = m.tiles.findIndex((t) => t.path === path && !t.gone);
   // the text pane's document follows its tile to its new number, unsaved edits and all
@@ -1701,6 +1716,7 @@ host.connect({
     state.gap = false;
     if (gapped) afterGap(m);
     state.tiles = m.tiles; state.roots = m.roots || [];
+    tilesArrived();
     // an edit the server never got: checked, drafted and saved now
     if (gapped && tile() && dirty()) { changed(); askDraft(); }
     state.overhangDeg = m.overhang_deg; state.steepestDeg = m.steepest_deg ?? m.overhang_deg + 10; state.system = m.system;
@@ -1710,7 +1726,7 @@ host.connect({
     if (cur && !cur.gone) {
       // a rescan or a reconnect: keep the view, catch up on a newer mesh
       renderAll();
-      if (cur.plan && JSON.stringify(cur.plan) !== JSON.stringify(viewer.plan)) viewer.setPlan(cur.plan);
+      if (planChanged(cur.plan)) viewer.setPlan(cur.plan);
       if (cur.mesh_version != null && state.loaded.get(cur.index) !== cur.mesh_version) loadMesh(cur.index, cur.mesh_version);
       showBuild(cur);
       return;
@@ -1741,9 +1757,10 @@ host.connect({
   onTile: (t) => {
     const before = state.tiles[t.index];
     state.tiles[t.index] = t;
+    tilesArrived();
     if (t.draft_id != null && t.draft_id !== before?.draft_id) draftArrived(t);
     if (t.index !== state.selected) { if (browsing()) renderList(); return; }
-    if (t.plan && JSON.stringify(t.plan) !== JSON.stringify(viewer.plan)) { viewer.setPlan(t.plan); followBuild(); }
+    if (planChanged(t.plan)) { viewer.setPlan(t.plan); followBuild(); }
     renderAll();
     showBuild(t);
     // the new mesh swaps in place: the camera is kept

@@ -7,9 +7,14 @@
 //! |---|---|
 //! | `GET /` and assets | the viewer |
 //! | `GET /api/tiles` | every tile's state as JSON |
-//! | `GET /api/tiles/N/mesh` | the tile's mesh as one binary buffer ([`payload`]) |
+//! | `GET /api/tiles/N/mesh` | the tile's mesh as one binary buffer ([`payload`]); `?draft=1` its draft |
+//! | `GET /api/tiles/N/sketch?id=K` | one stage's sketch of a running build |
+//! | `GET /api/tiles/N/text` | the tile's document (or `?file=` one it read) for the text pane |
 //! | `POST /api/tiles/N/build` | build a tile that has not been built yet |
 //! | `GET /api/events` | server-sent events: a snapshot, then one event per state change |
+//! | `GET /api/session` | this run's token, which every other `POST` must carry |
+//! | `GET /api/elements` | the elements and their controls |
+//! | `POST /api/…` | the editor's calls: check, draft, save, rename, new, export… ([`edit`]) |
 //!
 //! The tiles come from roots: the files named on the command line (built
 //! at once), folders (every tile document under them, built when chosen)
@@ -25,6 +30,28 @@
 //! the finished mesh.  Errors are pushed with their file, line and column.
 
 mod assets;
+
+/// Where a tile's build stands.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum State {
+    /// Not built yet: built when it is chosen.
+    Idle,
+    Building,
+    Ready,
+    Failed,
+}
+
+impl State {
+    /// As the page reads it.
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Building => "building",
+            Self::Ready => "ready",
+            Self::Failed => "failed",
+        }
+    }
+}
 mod edit;
 mod map;
 pub mod payload;
@@ -76,8 +103,7 @@ pub struct Slot {
     /// Its file has gone from its folder: off the list, never built.  The
     /// slot stays so every other tile keeps its index.
     gone: bool,
-    /// `idle` (not built yet), `building`, `ready` or `failed`.
-    status: &'static str,
+    status: State,
     plan: Option<Value>,
     record: Option<Value>,
     errors: Vec<Value>,
@@ -124,7 +150,7 @@ impl Slot {
             root,
             group,
             gone: false,
-            status: "idle",
+            status: State::Idle,
             plan: None,
             record: None,
             errors: Vec::new(),
@@ -146,7 +172,7 @@ impl Slot {
             "root": self.root,
             "group": self.group,
             "gone": self.gone,
-            "status": self.status,
+            "status": self.status.as_str(),
             "plan": self.plan,
             "record": self.record,
             "errors": self.errors,
@@ -159,7 +185,7 @@ impl Slot {
     }
 
     fn changed(&self) -> bool {
-        !self.gone && self.status != "idle" && self.files.iter().any(|(f, t)| mtime(f) != *t)
+        !self.gone && self.status != State::Idle && self.files.iter().any(|(f, t)| mtime(f) != *t)
     }
 }
 
@@ -399,7 +425,7 @@ impl Shared {
         let idle = lock(&self.tiles)
             .get(i)
             .filter(|t| !t.gone)
-            .map(|t| t.status == "idle");
+            .map(|t| t.status == State::Idle);
         if idle == Some(true) {
             let mut w = lock(&self.wanted);
             if !w.contains(&i) {
@@ -492,7 +518,7 @@ impl Shared {
         if eager
             && let Some(i) = tiles
                 .iter()
-                .position(|t| t.status == "idle" && !t.gone && named(t))
+                .position(|t| t.status == State::Idle && !t.gone && named(t))
         {
             return Some(i);
         }

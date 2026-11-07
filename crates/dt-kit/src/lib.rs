@@ -2,12 +2,10 @@
 //!
 //! The scene of tagged solids ([`Scene`]), the operations, the audit gate,
 //! the STL writer with its build record, and the CPU preview renderer.
-//! Elements see only this crate's public API (docs/rust/architecture.html,
-//! "Six crates"), so an element cannot reach into the kernels or into another element.
+//! Elements see only this crate's public API, so an element cannot reach
+//! into the kernels or into another element.
 //!
-//! Public operations (budget: about 22 over the whole project; P1 had 12,
-//! P2 adds 5: noise, distance, morphology, scatter and the cap, and makes
-//! paint take fields and lift adaptive):
+//! The public operations:
 //!
 //! | op | what it does |
 //! |---|---|
@@ -29,7 +27,7 @@
 //! | [`stl`] | binary STL with the build record |
 //! | [`render`] | a painted preview |
 //!
-//! P5 adds the forms ([`form`]: level sets, hulls, solids from meshes,
+//! Also the forms ([`form`]: level sets, hulls, solids from meshes,
 //! box clips, the common stone relief and 3D noise) that walls, floors
 //! and trees are made of; graphs ([`graph`]: trace by space
 //! colonisation, loft tubes along a graph with C1 forks); [`stand`] (cut

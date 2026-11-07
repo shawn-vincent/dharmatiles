@@ -254,31 +254,17 @@ pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<
     )
 }
 
-/// The phase an element not built yet arrives in (plan.html).
-fn phase(element: &str) -> Option<u8> {
-    Some(match element {
-        "dirt" => 2,
-        "rock" | "stone" | "boulder" | "pebble" | "scatter" => 3,
-        "grass" => 4,
-        "wall" | "floor" | "tree" => 5,
-        "cliff" => 7,
-        _ => return None,
-    })
-}
-
-/// "`what` not available yet (Phase N)", at `span`.
-fn not_yet(src: &Src, span: SourceSpan, what: &str, phase: Option<u8>) -> Diag {
-    let when = phase.map_or_else(|| "a later phase".to_owned(), |p| format!("Phase {p}"));
+/// "`what` not available yet", at `span`: the language has it, the
+/// elements do not build it yet.
+fn not_yet(src: &Src, span: SourceSpan, what: &str) -> Diag {
     Diag::at(
         src,
         span,
         "dt::not-yet",
-        format!("{what} not available yet ({when})"),
+        format!("{what} not available yet"),
         "not built yet",
     )
-    .help(format!(
-        "`check` accepts this; `build` needs it, which comes in {when}"
-    ))
+    .help("`check` accepts this; `build` does not, yet")
 }
 
 /// A parameter's value and the text it was written in.
@@ -461,20 +447,20 @@ impl Reader<'_> {
         self.dims = (cols, rows);
         for l in &def.lines {
             if let Some(w) = l.width.as_ref() {
-                t.pending
-                    .push(not_yet(src, w.span, "a line's width is", Some(4)));
+                t.pending.push(not_yet(src, w.span, "a line's width is"));
             }
             let wobble = match l.wobble.as_ref().map(|w| (w, w.value.mm(&t.levels))) {
                 None => 0.0,
                 Some((_, Ok(v))) if v.is_finite() && (0.0..=35.0).contains(&v) => v,
-                Some((w, Ok(_) | Err(_))) => {
-                    self.errors.push(Diag::at(
-                        src,
-                        w.span,
-                        "dt::value",
-                        "a line's wobble is from 0 to 35 mm",
-                        "here",
-                    ));
+                Some((w, got)) => {
+                    // a value out of range, or one that is not a length
+                    // (an unknown level): say which
+                    let why = got.err().map_or_else(
+                        || "a line's wobble is from 0 to 35 mm".to_owned(),
+                        |e| format!("a line's wobble is a length from 0 to 35 mm: {e}"),
+                    );
+                    self.errors
+                        .push(Diag::at(src, w.span, "dt::value", why, "here"));
                     0.0
                 }
             };
@@ -482,10 +468,9 @@ impl Reader<'_> {
             for p in &l.through {
                 match fixed_point(&p.value, cols, rows) {
                     Some(xy) => pts.push(xy),
-                    None => {
-                        t.pending
-                            .push(not_yet(src, p.span, "a point drawn from a range is", None))
-                    }
+                    None => t
+                        .pending
+                        .push(not_yet(src, p.span, "a point drawn from a range is")),
                 }
             }
             if wobble > 0.0 {
@@ -500,12 +485,10 @@ impl Reader<'_> {
             for p in &r.fills {
                 match fixed_point(&p.value, cols, rows) {
                     Some(xy) => fills.push(xy),
-                    None => t.pending.push(not_yet(
-                        src,
-                        p.span,
-                        "a fill point drawn from a range is",
-                        None,
-                    )),
+                    None => {
+                        t.pending
+                            .push(not_yet(src, p.span, "a fill point drawn from a range is"))
+                    }
                 }
             }
             t.regions.push(Region {
@@ -641,7 +624,6 @@ impl Reader<'_> {
                             src,
                             e.what.span,
                             &format!("element `{}`", element.name),
-                            phase(element.name),
                         ));
                         continue;
                     };
@@ -718,7 +700,6 @@ impl Reader<'_> {
                                 src,
                                 span,
                                 &format!("`{word}` on `{}` is", element.name),
-                                None,
                             ));
                         }
                     }
@@ -745,7 +726,6 @@ impl Reader<'_> {
                                 src,
                                 c.what.span,
                                 &format!("`{}` inside `{}` is", c.what.value, element.name),
-                                phase(&c.what.value).or(Some(3)),
                             ));
                             continue;
                         };
@@ -762,7 +742,6 @@ impl Reader<'_> {
                                     src,
                                     span,
                                     &format!("`{word}` on a scatter's `{}` is", cl.name),
-                                    None,
                                 ));
                             }
                         }
@@ -912,7 +891,6 @@ impl Reader<'_> {
                             src,
                             sub.name.span,
                             &format!("sub-controls of `{}` are", s.name.value),
-                            phase_of_control(element.name, &s.name.value),
                         ));
                     }
                 }
@@ -923,7 +901,6 @@ impl Reader<'_> {
                     src,
                     s.name.span,
                     &format!("the group `{}` on `{}` is", s.name.value, element.name),
-                    phase_of_control(element.name, &s.name.value),
                 ));
             }
             for (name, v, span, control) in items {
@@ -945,7 +922,6 @@ impl Reader<'_> {
                             src,
                             span,
                             &format!("`{}`'s `{}` is", element.name, s.name.value),
-                            phase_of_control(element.name, &s.name.value),
                         ));
                     }
                     continue;
@@ -992,12 +968,6 @@ fn push_setting(
         span,
         src: Arc::clone(src),
     });
-}
-
-/// The phase a control of a built element arrives in.
-fn phase_of_control(element: &str, control: &str) -> Option<u8> {
-    let _ = (element, control);
-    None
 }
 
 /// A written value for a built element: a range stays a range (the element

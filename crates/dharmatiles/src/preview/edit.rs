@@ -370,27 +370,34 @@ pub(super) fn drafts(shared: Arc<Shared>, opts: Options) {
             let src = Overlay(BTreeMap::from([(r.file.clone(), r.text.clone())]));
             let progress = dt_eval::Progress::new(Arc::new(LatestDraft(Arc::clone(&shared))));
             let cache = shared.build_cache(&r.path, true);
-            let built = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                dt_eval::build_cached(&src, &r.path, &opts, &progress, Some(&cache))
+            // the build and its encoding together: a panic in either must
+            // not end the thread, or drafts stop for the rest of the run
+            let made = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                let b = dt_eval::build_cached(&src, &r.path, &opts, &progress, Some(&cache))?;
+                Ok::<_, Vec<Diag>>(payload::from_draft(
+                    &b,
+                    opts.printer.overhang_deg,
+                    &shared.palette(),
+                ))
             }));
-            if built.as_ref().is_err_and(|panic| panic.is::<Superseded>()) {
-                continue;
-            }
+            let mesh = match made {
+                Err(panic) if panic.is::<Superseded>() => continue,
+                Err(_) => {
+                    tell!("the draft of {} panicked (a bug in an element)", r.path);
+                    continue;
+                }
+                // a mistake in the text: the check shows it, the last draft stays
+                Ok(Err(_)) => continue,
+                Ok(Ok(mesh)) => Arc::new(mesh),
+            };
             // a newer request already waiting makes this one moot
             if lock(&shared.draft_req).is_some() {
                 continue;
             }
-            if let Ok(Ok(b)) = built {
-                let mesh = Arc::new(payload::from_draft(
-                    &b,
-                    opts.printer.overhang_deg,
-                    &shared.palette(),
-                ));
-                shared.update(r.tile, |t| {
-                    t.draft = Some(mesh);
-                    t.draft_id = r.id;
-                });
-            }
+            shared.update(r.tile, |t| {
+                t.draft = Some(mesh);
+                t.draft_id = r.id;
+            });
         }
     });
 }

@@ -219,15 +219,6 @@ impl Piece {
         self.plus(&m)
     }
 
-    /// Only its largest connected part: scraps a cut left detached are not
-    /// stone (the gate would drop them as loose bodies).
-    ///
-    /// # Errors
-    /// [`KitError::Mesh`] if the surface cannot be rebuilt.
-    pub fn largest_part(&self) -> Result<Self, KitError> {
-        self.parts_over(f64::INFINITY)
-    }
-
     /// Only its connected parts of at least `min_mm3` (and always the
     /// largest): what a cut left that is more than a scrap may still be
     /// holding up the stone above it.
@@ -302,6 +293,15 @@ pub fn welded(m: &TriMesh) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
     let mut to: Vec<u32> = (0..u32::try_from(m.positions.len()).unwrap_or(u32::MAX)).collect();
     for (&f, &t) in m.merge_from.iter().zip(&m.merge_to) {
         to[f as usize] = t;
+    }
+    // a vertex merged into one that is itself merged: follow to the end
+    // (the kernel names final targets, so this is a guard, not a change)
+    for i in 0..to.len() {
+        let mut t = to[i];
+        while to[t as usize] != t {
+            t = to[t as usize];
+        }
+        to[i] = t;
     }
     let mut new = vec![u32::MAX; m.positions.len()];
     let mut pos = Vec::new();

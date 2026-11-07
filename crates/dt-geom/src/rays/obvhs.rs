@@ -104,8 +104,10 @@ impl Rays for ObvhsRays {
     }
 }
 
-/// [`super::intersect_triangle`] on precomputed `[v0, e1, e2, Ng]`, in glam
-/// SIMD vectors. Same operations, same order.
+/// Embree's Möller–Trumbore test (`MoellerTrumboreIntersector1`, non-robust
+/// mode, no culling) on precomputed `[v0, e1, e2, Ng]`, in glam SIMD
+/// vectors, so ties and rounding follow Embree's. Returns `t` in units of
+/// the ray's direction, or `None`.
 #[inline(always)]
 fn intersect_embree(tri: &[Vec3A; 4], ray: &ORay) -> Option<f32> {
     let [v0, e1, e2, ng] = *tri;

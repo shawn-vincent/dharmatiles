@@ -56,7 +56,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         return;
     };
     shared.update(i, |t| {
-        t.status = "building";
+        t.status = State::Building;
         t.errors.clear();
         t.progress = None;
         t.sketches.clear();
@@ -69,7 +69,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
     let finish_err = |rec: Recording, errs: &[Diag]| {
         let errors = errors_json(errs);
         shared.update(i, |t| {
-            t.status = "failed";
+            t.status = State::Failed;
             t.progress = None;
             t.sketches.clear();
             t.errors = errors;
@@ -115,14 +115,9 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         let sink = shared.sink(i);
         Arc::new(Tracker::new(stages, Box::new(move |s| sink(s))))
     });
-    let mut watched = rec.files();
-    if let Some(f) = &shared.palette {
-        let f = f.to_string_lossy().into_owned();
-        watched.insert(f.clone(), mtime(&f));
-    }
     let latest = Arc::new(LatestBuild {
         tracker: tracker.clone(),
-        files: watched,
+        files: watched(&rec, shared),
         sketches: Some((Arc::clone(shared), i)),
         stage: Mutex::new(String::new()),
     });
@@ -183,11 +178,10 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
             if let Some(t) = &tracker {
                 t.finish();
             }
-            if let Some(f) = &shared.cache {
+            if shared.cache.is_some() {
                 let mut secs = b.stage_secs.clone();
                 secs.push((ENCODE.to_owned(), t_encode.elapsed().as_secs_f64()));
                 timings.record(&path, &opts.system, &secs);
-                let _ = f;
                 timings.save();
             }
             let reused = match b.reused {
@@ -203,21 +197,27 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
                 b.audit.overhang_mm2
             );
             shared.update(i, |t| {
-                t.status = "ready";
+                t.status = State::Ready;
                 t.progress = None;
                 t.sketches.clear();
                 t.record = Some(record);
                 t.mesh = Some(mesh);
                 t.mesh_version += 1;
-                t.files = rec.files();
-                if let Some(f) = &shared.palette {
-                    let f = f.to_string_lossy().into_owned();
-                    let m = mtime(&f);
-                    t.files.insert(f, m);
-                }
+                t.files = watched(&rec, shared);
             });
         }
     }
+}
+
+/// What a tile's build depends on: the files it read, and the palette.
+fn watched(rec: &Recording, shared: &Shared) -> BTreeMap<String, Option<std::time::SystemTime>> {
+    let mut files = rec.files();
+    if let Some(f) = &shared.palette {
+        let f = f.to_string_lossy().into_owned();
+        let m = mtime(&f);
+        files.insert(f, m);
+    }
+    files
 }
 
 /// An STL file: the gate runs on it as a slicer would read it, and its
@@ -228,7 +228,7 @@ pub(super) fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str)
     let files = BTreeMap::from([(path.to_owned(), mtime(path))]);
     let fail = |msg: String| {
         shared.update(i, |t| {
-            t.status = "failed";
+            t.status = State::Failed;
             t.errors = errors_json(&[Diag::plain("dt::source", msg)]);
             t.files = files.clone();
         });
@@ -251,7 +251,7 @@ pub(super) fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str)
     let clean = dt_kit::paint(&materials, &vec![false; materials.len()]);
     let meta = json!({"overhang_deg": opts.printer.overhang_deg, "footprint": footprint});
     let bytes = Arc::new(payload::encode(&export.mesh, &painted, &clean, &meta));
-    let sq = if opts.system == "ol" { 25.4 } else { 35.0 };
+    let sq = dt_kit::Frame::for_system(&opts.system, 1, 1).square_mm;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let n = |v: f64| (libm::round(v / sq).max(1.0)) as u32;
     let plan = json!({
@@ -269,7 +269,7 @@ pub(super) fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str)
         "build_s": t0.elapsed().as_secs_f64(),
     });
     shared.update(i, |t| {
-        t.status = "ready";
+        t.status = State::Ready;
         t.plan = Some(plan);
         t.record = Some(record);
         t.mesh = Some(bytes);

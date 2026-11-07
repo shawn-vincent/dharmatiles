@@ -60,51 +60,6 @@ pub trait Rays: Sized {
 /// one thread.
 const RAYS_PER_TASK: usize = 256;
 
-/// Embree's Möller–Trumbore test (`MoellerTrumboreIntersector1`, non-robust
-/// mode, no culling), so ties and rounding follow Embree's as closely as a
-/// scalar port can. Returns `t` in units of `dir`, or `None`.
-#[inline]
-pub fn intersect_triangle(tri: [[f32; 3]; 3], ray: &Ray) -> Option<f32> {
-    let [v0, v1, v2] = tri;
-    let e1 = sub(v0, v1);
-    let e2 = sub(v2, v0);
-    let ng = cross(e2, e1);
-    let c = sub(v0, ray.origin);
-    let r = cross(c, ray.dir);
-    let den = dot(ng, ray.dir);
-    let abs_den = den.abs();
-    let sgn = den.to_bits() & 0x8000_0000;
-    let u = f32::from_bits(dot(r, e2).to_bits() ^ sgn);
-    let v = f32::from_bits(dot(r, e1).to_bits() ^ sgn);
-    if abs_den <= 0.0 || u < 0.0 || v < 0.0 || u + v > abs_den {
-        return None;
-    }
-    let t = f32::from_bits(dot(ng, c).to_bits() ^ sgn);
-    if !(abs_den * ray.t_min < t && t <= abs_den * ray.t_max) {
-        return None;
-    }
-    Some(t / abs_den)
-}
-
-#[inline]
-fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-#[inline]
-fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-#[inline]
-fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
