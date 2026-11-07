@@ -10,8 +10,8 @@ publish.workspace = true
 build = "build.rs"
 
 [features]
-default = ["manifold-ffi"]
-manifold-ffi = ["dt-eval/manifold-ffi", "dt-eval/manifold-parallel", "dt-kit/manifold-ffi", "dt-elements/manifold-ffi"]
+default = ["manifold-parallel"]
+manifold-parallel = ["dt-eval/manifold-parallel"]
 
 [dependencies]
 clap.workspace = true

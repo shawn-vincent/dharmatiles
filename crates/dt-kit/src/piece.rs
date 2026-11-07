@@ -9,7 +9,7 @@
 //! [`Piece::into_solid`] and [`crate::union`].
 
 use dt_geom::vec3::{cross, dot, sub, unit};
-use dt_geom::{BoolOp, Grid, Mesh, TriMesh};
+use dt_geom::{BoolOp, Grid, TriMesh};
 
 use crate::KitError;
 use crate::scene::{Slot, Solid};
@@ -175,7 +175,7 @@ impl Piece {
     }
 
     /// Linear map and shift (row-major 3x3, then translation), as
-    /// [`dt_geom::Mesh::transform`].
+    /// [`dt_geom::Solid::transform`].
     #[must_use]
     pub fn transformed(&self, m: &[f64; 12]) -> Self {
         self.with(self.s.transform(m))

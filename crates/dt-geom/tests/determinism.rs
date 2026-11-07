@@ -21,7 +21,7 @@
     clippy::float_cmp
 )]
 
-use dt_geom::{BoolOp, Bounds, Fnv, IdBlock, Materials, Mesh, Seed, TriMesh, batch_in_order};
+use dt_geom::{BoolOp, Bounds, Fnv, IdBlock, Materials, Seed, Solid, TriMesh, batch_in_order};
 use rayon::prelude::*;
 
 const N: usize = 384; // grid cells per side
@@ -168,7 +168,7 @@ fn centroid(m: &TriMesh, t: usize) -> [f64; 3] {
     [0, 1, 2].map(|k| (a[k] + b[k] + c[k]) / 3.0)
 }
 
-fn pipeline<S: Mesh>(root: Seed) -> Hashes {
+fn pipeline(root: Seed) -> Hashes {
     // 1. noise: a height field, every cell independent
     let ns = root.key("noise");
     let height: Vec<f64> = (0..N * N)
@@ -214,8 +214,8 @@ fn pipeline<S: Mesh>(root: Seed) -> Hashes {
     // slots 1 + 3i (body), 2 + 3i (bottom cut), 3 + 3i (top cut).
     let ground_z = 0.0;
     let n_rocks = points.len().min(24);
-    let block = IdBlock::reserve::<S>(1 + 3 * n_rocks as u32);
-    let built: Vec<(S, Materials)> = points[..n_rocks]
+    let block = IdBlock::reserve(1 + 3 * n_rocks as u32);
+    let built: Vec<(Solid, Materials)> = points[..n_rocks]
         .par_iter()
         .enumerate()
         .map(|(i, p)| {
@@ -236,7 +236,7 @@ fn pipeline<S: Mesh>(root: Seed) -> Hashes {
             let slot = 1 + 3 * i as u32;
             let (body, bottom, top) = (block.id(slot), block.id(slot + 1), block.id(slot + 2));
             // rule 2: relabel the leaf, then record its materials from it
-            let leaf = S::level_set(&sdf, b, 0.3)
+            let leaf = Solid::level_set(&sdf, b, 0.3)
                 .with_original_id(body, block.face_base(slot))
                 .unwrap();
             let lm = leaf.to_tri_mesh();
@@ -275,7 +275,7 @@ fn pipeline<S: Mesh>(root: Seed) -> Hashes {
     };
     let mut mats = Materials::default();
     mats.set_id(block.id(0), GROUND);
-    let mut parts = vec![S::from_tri_mesh(&slab).unwrap()];
+    let mut parts = vec![Solid::from_tri_mesh(&slab).unwrap()];
     for (rock, m) in built {
         parts.push(rock);
         mats.merge(m);
@@ -347,7 +347,7 @@ fn pipeline<S: Mesh>(root: Seed) -> Hashes {
     }
 }
 
-fn check<S: Mesh>(backend: &str) {
+fn check(backend: &str) {
     let mut first: Option<Hashes> = None;
     for threads in [1, 4, 16] {
         for run in 0..2 {
@@ -357,8 +357,8 @@ fn check<S: Mesh>(backend: &str) {
                 .unwrap();
             // Shift the kernel's ID counter by a different amount each run:
             // only the order of source IDs may matter, never their values.
-            let _ = S::reserve_ids(1 + 997 * (threads + run) as u32);
-            let h = pool.install(|| pipeline::<S>(Seed::new(20_261_101)));
+            let _ = Solid::reserve_ids(1 + 997 * (threads + run) as u32);
+            let h = pool.install(|| pipeline(Seed::new(20_261_101)));
             println!(
                 "R2 {backend} {}-{} threads={threads:>2} run={run} noise={:016x} noise_libm={:016x} scatter={:016x} edt={:016x} rocks={:016x} union={:016x} union_tris={} materials={:016x} traced={}/{} body={} top_cut={}",
                 std::env::consts::OS,
@@ -384,8 +384,7 @@ fn check<S: Mesh>(backend: &str) {
     }
 }
 
-#[cfg(feature = "manifold-ffi")]
 #[test]
-fn deterministic_ffi() {
-    check::<dt_geom::backend::ffi::FfiSolid>("ffi");
+fn deterministic() {
+    check("manifold");
 }

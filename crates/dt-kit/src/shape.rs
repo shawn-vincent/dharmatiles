@@ -1,7 +1,7 @@
 //! Operations that make and cut solids: loft, extrude, carve, and the
 //! area operation that turns drawn lines and fill points into a mask.
 
-use dt_geom::{BoolOp, Mask, Mesh, TriMesh, batch_in_order};
+use dt_geom::{BoolOp, Mask, TriMesh, batch_in_order};
 
 use crate::scene::{Frame, Slot, Solid, leaf, relabel};
 use crate::{KitError, Outline};

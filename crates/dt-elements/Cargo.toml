@@ -9,8 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-default = ["manifold-ffi", "manifold-parallel"]
-manifold-ffi = ["dt-kit/manifold-ffi"]
+default = ["manifold-parallel"]
 manifold-parallel = ["dt-kit/manifold-parallel"]
 
 # Only the kit: a element cannot reach into the kernels or another element.

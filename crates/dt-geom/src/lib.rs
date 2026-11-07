@@ -11,15 +11,12 @@
 //!   [`vec3`]: the 3-vector helpers.
 //! - [`seed::Seed`], the deterministic path-keyed seed derivation, and the
 //!   seeded stream [`Rng`].
-//! - [`mesh::Mesh`] (hull, refine, transform, slice, booleans) and
-//!   [`rays::Rays`], the traits the backends sit behind; [`source`], the
+//! - [`Solid`] (booleans, hull, refine, transform, slice), Manifold's
+//!   C++ kernel through manifold-csg; [`mesh`], the indexed triangle mesh
+//!   it imports and exports; [`rays`], ray casts on a BVH; [`source`], the
 //!   source-ID rule that keeps booleans deterministic and materials
 //!   traceable.
-//!
-//! The mesh backend is the `manifold-ffi` feature (default, the C++
-//! kernel through manifold-csg). [`Solid`] is its solid type.
 
-pub mod backend;
 pub mod convex;
 pub mod filter;
 pub mod geodesic;
@@ -31,6 +28,7 @@ pub mod noise;
 pub mod raster;
 pub mod rays;
 pub mod seed;
+pub mod solid;
 pub mod source;
 pub mod vec3;
 
@@ -40,12 +38,10 @@ pub use geodesic::geodesic;
 pub use grid::{Grid, LiftError, distance, distance_nearest, lift};
 pub use hash::SpatialHash;
 pub use lift::lift_adaptive;
-pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, Mesh, MeshError, TriMesh, half_space};
+pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, MeshError, TriMesh, half_space};
 pub use raster::{Mask, draw_line, fill, fill_polygons};
-pub use rays::{Hit, ObvhsRays, Ray, Rays};
+pub use rays::{Hit, ObvhsRays, Ray};
 pub use seed::{Rng, Seed};
 pub use source::{IdBlock, Materials, batch_in_order};
 
-/// The backend's solid: the C++ kernel.
-#[cfg(feature = "manifold-ffi")]
-pub type Solid = backend::ffi::FfiSolid;
+pub use solid::Solid;

@@ -12,7 +12,7 @@ use obvhs::{
 };
 use rayon::prelude::*;
 
-use super::{Hit, RAYS_PER_TASK, Ray, Rays};
+use super::{Hit, RAYS_PER_TASK, Ray};
 use crate::Fnv;
 
 /// obvhs CWBVH plus its triangles, stored in BVH leaf order.
@@ -84,19 +84,26 @@ impl ObvhsRays {
     }
 }
 
-impl Rays for ObvhsRays {
-    fn build(positions: &[[f32; 3]], triangles: &[[u32; 3]]) -> Self {
+/// Built deterministically: the same mesh gives the same answers.
+impl ObvhsRays {
+    /// Build the acceleration structure.
+    #[must_use]
+    pub fn build(positions: &[[f32; 3]], triangles: &[[u32; 3]]) -> Self {
         Self::build_with(positions, triangles, Self::PRESET)
     }
 
-    fn intersect(&self, rays: &[Ray]) -> Vec<Option<Hit>> {
+    /// Closest hit for each ray, in input order.
+    #[must_use]
+    pub fn intersect(&self, rays: &[Ray]) -> Vec<Option<Hit>> {
         rays.par_iter()
             .with_min_len(RAYS_PER_TASK)
             .map(|r| self.first_hit(r))
             .collect()
     }
 
-    fn structure_hash(&self) -> u64 {
+    /// A hash of the built structure, for build-determinism checks.
+    #[must_use]
+    pub fn structure_hash(&self) -> u64 {
         let mut h = Fnv::default();
         h.bytes(bytemuck::cast_slice(&self.bvh.nodes));
         h.bytes(bytemuck::cast_slice(&self.bvh.primitive_indices));

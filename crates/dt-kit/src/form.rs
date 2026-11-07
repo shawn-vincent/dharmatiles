@@ -21,7 +21,7 @@
 //! | [`subdivide`] | split every triangle in four (midpoints) | fieldstone (relief needs the density) |
 //! | [`fbm3`] | isotropic 3D value-noise fBm | relief, foliage noise, bark |
 
-use dt_geom::{Bounds, Mesh, TriMesh};
+use dt_geom::{Bounds, TriMesh};
 
 use crate::KitError;
 use crate::scene::{Slot, Solid, leaf};

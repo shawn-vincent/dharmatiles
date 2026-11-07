@@ -9,8 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-default = ["manifold-ffi", "manifold-parallel"]
-manifold-ffi = ["dt-kit/manifold-ffi", "dt-elements/manifold-ffi"]
+default = ["manifold-parallel"]
 manifold-parallel = ["dt-kit/manifold-parallel", "dt-elements/manifold-parallel"]
 [dependencies]
 dt-doc.workspace = true

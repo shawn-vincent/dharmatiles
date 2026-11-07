@@ -8,7 +8,7 @@
 //! closed mesh with the same triangles.
 
 use dt_geom::vec3::{cross, dot, norm, sub, unit};
-use dt_geom::{Convex, Mesh, TriMesh};
+use dt_geom::{Convex, TriMesh};
 
 use crate::scene::{Slot, Solid, leaf};
 use crate::{Field, KitError, smooth01};

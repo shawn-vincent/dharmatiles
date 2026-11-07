@@ -1,8 +1,7 @@
-//! Rays (P5): first hits and point containment against a closed mesh,
+//! Rays: first hits and point containment against a closed mesh,
 //! for elements that seat things on surfaces (the tree's leaf placer).
 //!
-//! Every ray goes through dt-geom's [`dt_geom::Rays`] trait, on the obvhs
-//! backend.
+//! Every ray goes through dt-geom's [`dt_geom::ObvhsRays`] BVH.
 //! The queries follow trimesh's Embree wrapper's conventions:
 //!
 //! - the mesh is moved to its bounding-box minimum and scaled to a box of
@@ -24,7 +23,7 @@
 //! backend, and returns answers in input order, so results do not depend
 //! on the thread count (R2).
 
-use dt_geom::{ObvhsRays, Ray, Rays, TriMesh};
+use dt_geom::{ObvhsRays, Ray, TriMesh};
 
 use dt_geom::vec3::{add, cross, dot, norm, scale, sub, unit};
 
@@ -52,8 +51,8 @@ pub struct RayHit {
 }
 
 /// A closed triangle mesh, ready for ray queries.
-pub struct RayMesh<R: Rays = ObvhsRays> {
-    rays: R,
+pub struct RayMesh {
+    rays: ObvhsRays,
     origin: [f64; 3],
     scale: f64,
     step: f64,
@@ -64,22 +63,20 @@ pub struct RayMesh<R: Rays = ObvhsRays> {
     face_normals: Vec<[f64; 3]>,
 }
 
-impl RayMesh<ObvhsRays> {
+impl RayMesh {
     /// Build over a mesh (positions in mm).
     #[must_use]
     pub fn new(mesh: &TriMesh) -> Self {
-        Self::with_backend(&mesh.positions, &mesh.triangles)
+        Self::build(&mesh.positions, &mesh.triangles)
     }
-}
 
-impl<R: Rays> RayMesh<R> {
-    /// Build over positions and triangles with any [`Rays`] backend.
+    /// Build over positions and triangles (mm).
     #[must_use]
     #[allow(
         clippy::cast_possible_truncation,
         reason = "the f32 build frame is the point: Embree is f32"
     )]
-    pub fn with_backend(positions: &[[f64; 3]], triangles: &[[u32; 3]]) -> Self {
+    fn build(positions: &[[f64; 3]], triangles: &[[u32; 3]]) -> Self {
         let mut lo = [f64::INFINITY; 3];
         let mut hi = [f64::NEG_INFINITY; 3];
         for p in positions {
@@ -108,7 +105,7 @@ impl<R: Rays> RayMesh<R> {
             })
             .collect();
         Self {
-            rays: R::build(&scaled, triangles),
+            rays: ObvhsRays::build(&scaled, triangles),
             origin: lo,
             scale,
             step: (diag * OFFSET_FACTOR).max(OFFSET_FLOOR),

@@ -9,15 +9,11 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-default = ["manifold-ffi", "manifold-parallel"]
-# Mesh backend: Manifold's C++ library (v3.5.3) through manifold-csg.
-# Needs git, cmake and a C++ compiler; the first build compiles Manifold
-# (and TBB, with manifold-parallel).
-manifold-ffi = ["dep:manifold-csg"]
+default = ["manifold-parallel"]
 # Manifold's internal parallelism (TBB in C++). On by
 # default: the C++ kernel is 3x slower without it, and its output is
 # identical run to run on one machine.
-manifold-parallel = ["manifold-csg?/parallel"]
+manifold-parallel = ["manifold-csg/parallel"]
 
 [dependencies]
 bytemuck.workspace = true
@@ -25,7 +21,9 @@ glam.workspace = true
 libm.workspace = true
 obvhs.workspace = true
 rayon.workspace = true
-manifold-csg = { workspace = true, optional = true }
+# Manifold's C++ library (v3.5.3): needs git, cmake and a C++ compiler;
+# the first build compiles Manifold (and TBB, with manifold-parallel).
+manifold-csg = { workspace = true }
 
 [dev-dependencies]
 serde_json.workspace = true

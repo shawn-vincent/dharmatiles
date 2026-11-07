@@ -2,7 +2,7 @@
 //! by area) and the tagged solids elements add, with the source-ID block and
 //! material table of `dt_geom::source`.
 
-use dt_geom::{BoolOp, Grid, IdBlock, Mask, Materials, Mesh, Seed, TriMesh, batch_in_order};
+use dt_geom::{BoolOp, Grid, IdBlock, Mask, Materials, Seed, TriMesh, batch_in_order};
 
 use crate::KitError;
 
@@ -406,7 +406,7 @@ impl Scene {
             parts: Vec::new(),
             placed_at: Vec::new(),
             sources: Vec::new(),
-            block: IdBlock::reserve::<dt_geom::Solid>(SLOTS),
+            block: IdBlock::reserve(SLOTS),
             next_slot: 0,
             materials: Materials::default(),
             stages: Vec::new(),

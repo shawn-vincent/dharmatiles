@@ -1,5 +1,5 @@
-//! The ray trait and its pure-Rust backend: [`ObvhsRays`] (obvhs CWBVH,
-//! with Embree's triangle test), behind [`Rays`].
+//! Ray casts on a triangle mesh: [`ObvhsRays`] (obvhs CWBVH, with
+//! Embree's triangle test), queried in batches.
 
 mod obvhs;
 
@@ -38,24 +38,6 @@ pub struct Hit {
     pub triangle: u32,
 }
 
-/// An acceleration structure over one triangle mesh, queried in batches.
-/// Builds must be deterministic: the same mesh gives the same answers.
-pub trait Rays: Sized {
-    /// Build the acceleration structure.
-    fn build(positions: &[[f32; 3]], triangles: &[[u32; 3]]) -> Self;
-
-    /// Closest hit for each ray, in input order.
-    fn intersect(&self, rays: &[Ray]) -> Vec<Option<Hit>>;
-
-    /// Whether each ray hits anything in `[t_min, t_max]`, in input order.
-    fn occluded(&self, rays: &[Ray]) -> Vec<bool> {
-        self.intersect(rays).iter().map(Option::is_some).collect()
-    }
-
-    /// A hash of the built structure, for build-determinism checks.
-    fn structure_hash(&self) -> u64;
-}
-
 /// Rays per rayon task. Many batches are a few hundred rays; those stay on
 /// one thread.
 const RAYS_PER_TASK: usize = 256;
@@ -72,9 +54,10 @@ mod tests {
         )
     }
 
-    fn check<R: Rays>() {
+    #[test]
+    fn obvhs_square() {
         let (p, t) = square();
-        let r = R::build(&p, &t);
+        let r = ObvhsRays::build(&p, &t);
         let rays = [
             Ray::new([0.7, 0.2, 1.0], [0., 0., -1.]),
             Ray::new([0.2, 0.7, -2.0], [0., 0., 2.]),
@@ -95,12 +78,9 @@ mod tests {
         assert_eq!(h[2], None);
         assert_eq!(h[3], None);
         assert_eq!(h[4].map(|h| h.triangle), Some(0));
-        assert_eq!(r.occluded(&rays), vec![true, true, false, false, true]);
-        assert_eq!(r.structure_hash(), R::build(&p, &t).structure_hash());
-    }
-
-    #[test]
-    fn obvhs_square() {
-        check::<ObvhsRays>();
+        assert_eq!(
+            r.structure_hash(),
+            ObvhsRays::build(&p, &t).structure_hash()
+        );
     }
 }
