@@ -29,6 +29,7 @@ use dt_kit::{
 };
 
 use crate::ground::Shape;
+use crate::read;
 use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
 
 /// The controls `dirt` takes (`bank` comes with walls and cliffs).
@@ -160,16 +161,8 @@ impl Dirt {
         let mut clod_density = CLOD_DENSITY;
         for c in controls {
             if c.name == "clods.density" {
-                match c.value {
-                    Value::Number(v) if (0.0..=5.0).contains(&v) => clod_density = v,
-                    ref v => {
-                        return Err(LookError::control(
-                            "clods",
-                            format!("clod density must be 0 to 5 per mm², not {v}"),
-                            "write clods few, some or many".into(),
-                        ));
-                    }
-                }
+                clod_density = read::number(c, 0.0, 5.0)
+                    .map_err(|e| e.with_help("write clods few, some or many"))?;
             }
         }
         let mut stones = STONES_2X2;

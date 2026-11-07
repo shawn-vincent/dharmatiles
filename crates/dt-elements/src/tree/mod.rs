@@ -32,6 +32,7 @@ use dt_kit::graph::{self, Colonise, TubeStyle};
 use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
+use crate::read;
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 
 /// The controls `tree` takes (dt-doc's vocabulary, sub-controls as
@@ -145,49 +146,18 @@ pub struct Tree {
     p: Params,
 }
 
-fn number(c: &Control) -> Result<f64, LookError> {
-    match c.value {
-        Value::Number(v) if v.is_finite() => Ok(v),
-        ref v => Err(LookError::control(
-            &c.name,
-            format!("`{}` must be a number, not {v}", c.name),
-            "write a number".into(),
-        )),
-    }
-}
-
-fn length(c: &Control, lo: f64, hi: f64) -> Result<Value, LookError> {
-    let ok = |v: f64| v.is_finite() && (lo..=hi).contains(&v);
-    match c.value {
-        Value::Number(v) if ok(v) => Ok(c.value.clone()),
-        Value::Range(a, b) if ok(a) && ok(b) && a <= b => Ok(c.value.clone()),
-        ref v => Err(LookError::control(
-            &c.name,
-            format!("`{}` must be {lo} to {hi} mm, not {v}", c.name),
-            format!("write mm from {lo} to {hi}, or a range such as \"{lo}..{hi}\""),
-        )),
-    }
-}
-
+/// `leaves`: whether there are leaves, and clumps.
 fn leaves_word(c: &Control) -> Result<(bool, bool), LookError> {
-    let help = || "write leaves on, clumps-only or bare".to_owned();
-    match &c.value {
-        Value::Word(w) => match w.as_str() {
-            "on" => Ok((true, true)),
-            "clumps-only" => Ok((false, true)),
-            "bare" => Ok((false, false)),
-            _ => Err(LookError::control(
-                "leaves",
-                format!("leaves is on, clumps-only or bare, not `{w}`"),
-                help(),
-            )),
-        },
-        v => Err(LookError::control(
-            "leaves",
-            format!("leaves is a word, not {v}"),
-            help(),
-        )),
-    }
+    Ok(match read::word(c, &["on", "clumps-only", "bare"])? {
+        "on" => (true, true),
+        "clumps-only" => (false, true),
+        _ => (false, false),
+    })
+}
+
+/// A size, or a range of them, kept as written (drawn when the tree grows).
+fn length(c: &Control, lo: f64, hi: f64) -> Result<Value, LookError> {
+    read::span(c, lo, hi).map(|_| c.value.clone())
 }
 
 impl Tree {
@@ -216,43 +186,37 @@ impl Tree {
                 "leaf/length" => p.leaf_length = length(c, 0.5, 20.0)?,
                 "leaf/width" => p.leaf_width = length(c, 0.5, 20.0)?,
                 "crown/clumps" => {
-                    let v = number(c)?;
-                    if !(1.0..=400.0).contains(&v) {
-                        return Err(LookError::control(
-                            "crown/clumps",
-                            format!("a crown has 1 to 400 clumps, not {v}"),
-                            "the library tiles use 32".into(),
-                        ));
-                    }
+                    let v = read::number(c, 1.0, 400.0)
+                        .map_err(|e| e.with_help("the library tiles use 32"))?;
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     {
                         p.clumps = v.round() as usize;
                     }
                 }
-                "crown/shape.top-pointiness" => p.shape.top_pointiness = number(c)?,
-                "crown/shape.top-curve" => p.shape.top_curve = number(c)?,
-                "crown/shape.bottom-pointiness" => p.shape.bottom_pointiness = number(c)?,
-                "crown/shape.bottom-curve" => p.shape.bottom_curve = number(c)?,
+                "crown/shape.top-pointiness" => p.shape.top_pointiness = read::any_number(c)?,
+                "crown/shape.top-curve" => p.shape.top_curve = read::any_number(c)?,
+                "crown/shape.bottom-pointiness" => p.shape.bottom_pointiness = read::any_number(c)?,
+                "crown/shape.bottom-curve" => p.shape.bottom_curve = read::any_number(c)?,
                 "crown/branching.split" | "branch/split" => {
-                    p.split_deg = number(c)?.clamp(1.0, 89.0);
+                    p.split_deg = read::any_number(c)?.clamp(1.0, 89.0);
                 }
                 "crown/branching.eagerness" | "branch/eagerness" => {
-                    p.eagerness = number(c)?.clamp(0.0, 1.0);
+                    p.eagerness = read::any_number(c)?.clamp(0.0, 1.0);
                 }
                 "crown/branching.target" | "branch/target" => {
-                    p.target = number(c)?.clamp(0.0, 1.0);
+                    p.target = read::any_number(c)?.clamp(0.0, 1.0);
                 }
                 "crown/branching.balance" | "branch/balance" => {
-                    p.balance = number(c)?.clamp(0.0, 1.0);
+                    p.balance = read::any_number(c)?.clamp(0.0, 1.0);
                 }
                 "crown/branching.exponent" | "branch/exponent" => {
-                    p.exponent = number(c)?.clamp(1.0, 8.0);
+                    p.exponent = read::any_number(c)?.clamp(1.0, 8.0);
                 }
                 "crown/branching.min-radius" | "branch/min-radius" => {
-                    p.min_radius = number(c)?.clamp(0.2, 5.0);
+                    p.min_radius = read::any_number(c)?.clamp(0.2, 5.0);
                 }
-                "leaves.leaves" => p.leaves = number(c)? > 0.5,
-                "leaves.clumps" => p.clumps_on = number(c)? > 0.5,
+                "leaves.leaves" => p.leaves = read::any_number(c)? > 0.5,
+                "leaves.clumps" => p.clumps_on = read::any_number(c)? > 0.5,
                 "leaves" => (p.leaves, p.clumps_on) = leaves_word(c)?,
                 _ => {}
             }

@@ -19,6 +19,7 @@ pub mod flowers;
 pub mod grass;
 pub mod ground;
 pub mod openlock;
+mod read;
 pub mod reeds;
 pub mod rock;
 pub mod tree;

@@ -16,7 +16,8 @@
 
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, noise, rim, smax, smooth01};
 
-use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
+use crate::read;
+use crate::{Control, Ctx, Element, LookError, Plan, Write, only};
 
 /// The controls `ground` takes.
 pub const CONTROLS: &[&str] = &["level", "bumps", "bumps/up", "bumps/down", "bump-size"];
@@ -63,21 +64,8 @@ pub struct Shape {
     pub size_mm: f64,
 }
 
-fn number(element: &str, c: &Control, lo: f64, hi: f64) -> Result<Amount, LookError> {
-    let bad = |what: String| {
-        LookError::control(
-            &c.name,
-            format!("`{element}`'s {} must be {what}", c.name),
-            format!("write mm from {lo} to {hi}, or a quoted range such as \"2..3\""),
-        )
-    };
-    match c.value {
-        Value::Number(v) if v.is_finite() && (lo..=hi).contains(&v) => Ok(Amount(v, v)),
-        Value::Range(a, b) if a.is_finite() && b.is_finite() && lo <= a && a <= b && b <= hi => {
-            Ok(Amount(a, b))
-        }
-        ref v => Err(bad(format!("from {lo} to {hi} mm, not {v}"))),
-    }
+fn amount(c: &Control, lo: f64, hi: f64) -> Result<Amount, LookError> {
+    read::span(c, lo, hi).map(|(a, b)| Amount(a, b))
 }
 
 impl Shape {
@@ -94,29 +82,20 @@ impl Shape {
         };
         for c in controls {
             match c.name.as_str() {
-                "level" => match c.value {
-                    Value::Number(v) if v > 0.0 && v.is_finite() => s.level_mm = v,
-                    ref v => {
-                        return Err(LookError::control(
-                            "level",
-                            format!("{element} level must be a finite height above 0 mm, not {v}"),
-                            "write a named level (ground, edge, water, wall-top) or mm, such as level=5"
-                                .into(),
-                        ));
-                    }
-                },
-                "bumps" | "bumps/up" => s.up = number(element, c, 0.0, 15.0)?,
-                "bumps/down" => s.down = number(element, c, 0.0, 15.0)?,
-                "bump-size" => match (&c.value, number(element, c, 5.0, 70.0)?) {
-                    (Value::Number(_), Amount(a, _)) => s.size_mm = a,
-                    _ => {
-                        return Err(LookError::control(
-                            "bump-size",
-                            format!("`{element}`'s bump-size is one width, not a range"),
-                            "write mm from 5 to 70, such as bump-size=14".into(),
-                        ));
-                    }
-                },
+                "level" => {
+                    s.level_mm = read::positive(c).map_err(|e| {
+                        e.with_help(
+                            "write a named level (ground, edge, water, wall-top) or mm, such as level=5",
+                        )
+                    })?;
+                }
+                "bumps" | "bumps/up" => s.up = amount(c, 0.0, 15.0)?,
+                "bumps/down" => s.down = amount(c, 0.0, 15.0)?,
+                "bump-size" => {
+                    s.size_mm = read::number(c, 5.0, 70.0).map_err(|e| {
+                        e.with_help("write one width, from 5 to 70 mm, such as bump-size=14")
+                    })?;
+                }
                 _ => {}
             }
         }
@@ -266,6 +245,7 @@ impl Element for Ground {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::float_cmp)]
     use super::*;
+    use crate::Value;
     use dt_kit::Frame;
 
     pub(crate) fn controls(list: &[(&str, Value)]) -> Vec<Control> {

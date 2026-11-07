@@ -13,6 +13,7 @@
 
 use dt_kit::Scene;
 
+use crate::read;
 use crate::wall::{self, Family, Height, Mason};
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 
@@ -37,7 +38,7 @@ impl Floor {
         only("floor", controls, CONTROLS)?;
         let get = |n: &str| controls.iter().find(|c| c.name == n);
         let fieldstone = match get("style") {
-            Some(c) => wall::word(c, &["cut-stone", "fieldstone"])? == "fieldstone",
+            Some(c) => read::word(c, &["cut-stone", "fieldstone"])? == "fieldstone",
             None => false,
         };
         let mut m = if fieldstone {
@@ -63,7 +64,7 @@ impl Floor {
         for c in controls {
             match c.name.as_str() {
                 "texture" => {
-                    let w = wall::word(c, &["chipped", "worn", "hewn", "dressed"])?;
+                    let w = read::word(c, &["chipped", "worn", "hewn", "dressed"])?;
                     if let Some(t) = wall::texture(w) {
                         if fieldstone {
                             m.relief = Some(t.2);
@@ -73,7 +74,7 @@ impl Floor {
                     }
                 }
                 "slabs" => {
-                    let v = wall::number(c, 1.0, 6.0, "slabs per square")?;
+                    let v = read::number(c, 1.0, 6.0)?;
                     if v.fract() != 0.0 {
                         return Err(LookError::control(
                             "slabs",
@@ -89,7 +90,7 @@ impl Floor {
                 "level" => {
                     m.thickness = match &c.value {
                         Value::Word(w) if w == "floor" => 7.4,
-                        _ => wall::number(c, 1.0, 30.0, "floor level (mm)")?,
+                        _ => read::number(c, 1.0, 30.0)?,
                     }
                 }
                 _ => {}

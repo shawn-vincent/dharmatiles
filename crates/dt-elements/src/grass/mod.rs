@@ -37,7 +37,8 @@ pub(crate) use blade::ring_mesh;
 use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, distance, form};
 use rayon::prelude::*;
 
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
+use crate::read;
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write, only};
 use flow::Swaths;
 use fronds::Surface;
 use lat::Lat;
@@ -77,18 +78,6 @@ pub struct Grass {
     meander: (f64, f64),
 }
 
-fn range(c: &Control) -> Result<(f64, f64), LookError> {
-    match c.value {
-        Value::Number(v) if v.is_finite() && v > 0.0 => Ok((v, v)),
-        Value::Range(a, b) if a.is_finite() && a > 0.0 && b >= a => Ok((a, b)),
-        ref v => Err(LookError {
-            control: Some(c.name.clone()),
-            message: format!("`{}` is a size in mm over 0, or a range, not {v}", c.name),
-            help: Some(format!("write {}=\"3..5\"", c.name)),
-        }),
-    }
-}
-
 impl Grass {
     /// From controls.
     ///
@@ -107,40 +96,13 @@ impl Grass {
         let (mut lo, mut hi) = (None, None);
         for c in controls {
             match c.name.as_str() {
-                "length" => g.length = range(c)?,
-                "height" => g.height = range(c)?,
-                "clearings" => match c.value {
-                    Value::Number(v) if (0.0..=20.0).contains(&v) => g.clearings = v,
-                    ref v => {
-                        return Err(LookError {
-                            control: Some("clearings".into()),
-                            message: format!("clearings are 0 to 20 a square, not {v}"),
-                            help: Some("write clearings=1.5".into()),
-                        });
-                    }
-                },
-                "cover" => match c.value {
-                    Value::Number(v) if (0.0..=1.0).contains(&v) => g.cover = v,
-                    ref v => {
-                        return Err(LookError {
-                            control: Some("cover".into()),
-                            message: format!("cover is 0% to 100%, not {v}"),
-                            help: Some("write cover=\"80%\"".into()),
-                        });
-                    }
-                },
-                "bare" => match c.value {
-                    Value::Number(v) if (0.0..=0.9).contains(&v) => g.bare = v,
-                    ref v => {
-                        return Err(LookError {
-                            control: Some("bare".into()),
-                            message: format!("bare is 0% to 90%, not {v}"),
-                            help: Some("write bare=\"20%\"".into()),
-                        });
-                    }
-                },
-                "flow.meander-min" => lo = Some(num(c)?),
-                "flow.meander-max" => hi = Some(num(c)?),
+                "length" => g.length = read::positive_span(c)?,
+                "height" => g.height = read::positive_span(c)?,
+                "clearings" => g.clearings = read::number(c, 0.0, 20.0)?,
+                "cover" => g.cover = read::share(c, 0.0, 1.0)?,
+                "bare" => g.bare = read::share(c, 0.0, 0.9)?,
+                "flow.meander-min" => lo = Some(read::any_number(c)?),
+                "flow.meander-max" => hi = Some(read::any_number(c)?),
                 _ => {}
             }
         }
@@ -148,17 +110,6 @@ impl Grass {
             g.meander = (a, b.max(a));
         }
         Ok(g)
-    }
-}
-
-fn num(c: &Control) -> Result<f64, LookError> {
-    match c.value {
-        Value::Number(v) if v.is_finite() => Ok(v),
-        ref v => Err(LookError {
-            control: Some(c.name.clone()),
-            message: format!("`{}` is a number, not {v}", c.name),
-            help: None,
-        }),
     }
 }
 

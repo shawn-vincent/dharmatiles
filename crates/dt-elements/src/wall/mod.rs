@@ -29,6 +29,7 @@ use dt_kit::form::{clip, solid};
 use dt_kit::{Mask, Material, Rng, Scene, Seed, Solid, Tag, TriMesh, union};
 use rayon::prelude::*;
 
+use crate::read;
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 use block::{Block, Finish, MAX_PROUD_MM};
 use layout::{Bond, Cell, Courses, End, Envelope, Seg};
@@ -233,43 +234,6 @@ pub struct Wall {
     mason: Mason,
 }
 
-pub(crate) fn number(c: &Control, lo: f64, hi: f64, what: &str) -> Result<f64, LookError> {
-    match c.value {
-        Value::Number(v) if v.is_finite() && (lo..=hi).contains(&v) => Ok(v),
-        ref v => Err(LookError::control(
-            &c.name,
-            format!("{what} must be {lo} to {hi}, not {v}"),
-            format!("write {} as a number, such as {}", c.name, 0.5 * (lo + hi)),
-        )),
-    }
-}
-
-fn span(c: &Control, lo: f64, hi: f64, what: &str) -> Result<(f64, f64), LookError> {
-    match c.value {
-        Value::Range(a, b) if lo <= a && a <= b && b <= hi => Ok((a, b)),
-        Value::Number(_) => number(c, lo, hi, what).map(|v| (v, v)),
-        ref v => Err(LookError::control(
-            &c.name,
-            format!("{what} must lie in {lo} to {hi} mm, not {v}"),
-            format!(
-                "write a size or a range in mm, such as {}=\"{lo}..{hi}\"",
-                c.name
-            ),
-        )),
-    }
-}
-
-pub(crate) fn word<'a>(c: &'a Control, words: &[&str]) -> Result<&'a str, LookError> {
-    match &c.value {
-        Value::Word(w) if words.contains(&w.as_str()) => Ok(w),
-        v => Err(LookError::control(
-            &c.name,
-            format!("`{}` is not one of the choices: {v}", c.name),
-            format!("write one of {}", words.join(", ")),
-        )),
-    }
-}
-
 impl Wall {
     /// From its controls.
     ///
@@ -280,7 +244,8 @@ impl Wall {
         only("wall", controls, CONTROLS)?;
         let get = |n: &str| controls.iter().find(|c| c.name == n);
         let family = match get("style") {
-            Some(c) => match word(c, &["cut-stone", "fieldstone", "brick", "regular-brick"])? {
+            Some(c) => match read::word(c, &["cut-stone", "fieldstone", "brick", "regular-brick"])?
+            {
                 "fieldstone" => Family::Fieldstone,
                 "brick" => Family::Brick,
                 "regular-brick" => Family::RegularBrick,
@@ -296,14 +261,14 @@ impl Wall {
                     m.height = match &c.value {
                         Value::Word(w) if w == "full" => Height::Top(WALL_TOP_MM),
                         Value::Word(w) if w == "low" => Height::Top(LOW_TOP_MM),
-                        _ => Height::Rel(number(c, 6.0, 200.0, "wall height (mm)")?),
+                        _ => Height::Rel(read::number(c, 6.0, 200.0)?),
                     }
                 }
-                "thickness" => m.thickness = number(c, 2.0, 40.0, "wall thickness (mm)")?,
-                "stones/height" => m.course = span(c, 1.0, 40.0, "course height")?,
-                "stones/length" => m.bay = span(c, 2.0, 80.0, "stone length")?,
+                "thickness" => m.thickness = read::number(c, 2.0, 40.0)?,
+                "stones/height" => m.course = read::span(c, 1.0, 40.0)?,
+                "stones/length" => m.bay = read::span(c, 2.0, 80.0)?,
                 "stones/texture" => {
-                    let w = word(c, &["chipped", "worn", "hewn", "dressed"])?;
+                    let w = read::word(c, &["chipped", "worn", "hewn", "dressed"])?;
                     if let Some(t) = texture(w) {
                         if family == Family::Fieldstone {
                             // fieldstone keeps its pebble roundings; the
@@ -314,15 +279,15 @@ impl Wall {
                         }
                     }
                 }
-                "joints/width" => m.joint = number(c, 0.0, 3.0, "joint width (mm)")?,
+                "joints/width" => m.joint = read::number(c, 0.0, 3.0)?,
                 "joints/depth" => {
-                    m.reveal = number(c, 0.0, 5.0, "joint depth (mm)")?;
+                    m.reveal = read::number(c, 0.0, 5.0)?;
                     depth_set = true;
                 }
-                "edges/rounding" => m.rounding = span(c, 0.0, 5.0, "rounding")?,
-                "coping" => m.coping_on_edge = word(c, &["loose", "on-edge"])? == "on-edge",
+                "edges/rounding" => m.rounding = read::span(c, 0.0, 5.0)?,
+                "coping" => m.coping_on_edge = read::word(c, &["loose", "on-edge"])? == "on-edge",
                 "bond" => {
-                    m.bond = if word(c, &["irregular", "running"])? == "running" {
+                    m.bond = if read::word(c, &["irregular", "running"])? == "running" {
                         Bond::Running
                     } else {
                         Bond::Irregular
@@ -333,24 +298,11 @@ impl Wall {
                     // evaluator hands it on divided by 100, so the element
                     // reads 0..1 and nothing else (no bare-number guess:
                     // `150%` is refused, not read as 1.5%)
-                    let v = match c.value {
-                        Value::Number(v) if v.is_finite() => v,
-                        _ => -1.0,
-                    };
-                    if !(0.0..=1.0).contains(&v) {
-                        let shown = match c.value {
-                            Value::Number(v) => format!("{}%", v * 100.0),
-                            ref other => other.to_string(),
-                        };
-                        return Err(LookError::control(
-                            "ruin",
-                            format!("ruin must be 0 to 100%, not {shown}"),
-                            "write how much has fallen, such as ruin=\"40%\"".into(),
-                        ));
-                    }
-                    m.ruin = v;
+                    m.ruin = read::share(c, 0.0, 1.0).map_err(|e| {
+                        e.with_help("write how much has fallen, such as ruin=\"40%\"")
+                    })?;
                 }
-                "top" => m.battlements = word(c, &["flat", "battlements"])? == "battlements",
+                "top" => m.battlements = read::word(c, &["flat", "battlements"])? == "battlements",
                 _ => {}
             }
         }

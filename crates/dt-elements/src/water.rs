@@ -28,7 +28,8 @@
 
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smooth01};
 
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
+use crate::read;
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write, only};
 
 /// The controls `water` takes.
 pub const CONTROLS: &[&str] = &["level"];
@@ -97,16 +98,8 @@ impl Water {
         let mut level_mm = f64::NAN;
         for c in controls {
             if c.name == "level" {
-                match c.value {
-                    Value::Number(v) if v.is_finite() && v > 0.0 => level_mm = v,
-                    ref v => {
-                        return Err(LookError::control(
-                            "level",
-                            format!("water level must be a finite height above 0 mm, not {v}"),
-                            "write level=water or mm, such as level=2.6".into(),
-                        ));
-                    }
-                }
+                level_mm = read::positive(c)
+                    .map_err(|e| e.with_help("write level=water or mm, such as level=2.6"))?;
             }
         }
         if level_mm.is_nan() {

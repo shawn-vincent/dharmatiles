@@ -20,7 +20,8 @@
 
 use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, form};
 
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
+use crate::read;
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write, only};
 
 /// The controls `reeds` takes.
 pub const CONTROLS: &[&str] = &["clumps", "stems", "height"];
@@ -47,20 +48,6 @@ pub struct Reeds {
     height: (f64, f64),
 }
 
-fn counts(c: &Control, lo: i64, hi: i64) -> Result<(i64, i64), LookError> {
-    #[allow(clippy::cast_possible_truncation)]
-    let r = |v: f64| libm::round(v) as i64;
-    match c.value {
-        Value::Number(v) if (lo as f64..=hi as f64).contains(&v) => Ok((r(v), r(v))),
-        Value::Range(a, b) if a >= lo as f64 && b <= hi as f64 && a <= b => Ok((r(a), r(b))),
-        ref v => Err(LookError {
-            control: Some(c.name.clone()),
-            message: format!("`{}` is {lo} to {hi}, or a range of them, not {v}", c.name),
-            help: Some(format!("write {}=\"{lo}..{hi}\"", c.name)),
-        }),
-    }
-}
-
 impl Reeds {
     /// From controls.
     ///
@@ -75,19 +62,9 @@ impl Reeds {
         };
         for c in controls {
             match c.name.as_str() {
-                "clumps" => r.clumps = counts(c, 0, 30)?,
-                "stems" => r.stems = counts(c, 1, 30)?,
-                "height" => match c.value {
-                    Value::Number(v) if v > 0.0 && v.is_finite() => r.height = (v, v),
-                    Value::Range(a, b) if a > 0.0 && b >= a => r.height = (a, b),
-                    ref v => {
-                        return Err(LookError {
-                            control: Some("height".into()),
-                            message: format!("height is a size in mm over 0, not {v}"),
-                            help: Some("write height=\"8..13\"".into()),
-                        });
-                    }
-                },
+                "clumps" => r.clumps = read::counts(c, 0, 30)?,
+                "stems" => r.stems = read::counts(c, 1, 30)?,
+                "height" => r.height = read::positive_span(c)?,
                 _ => {}
             }
         }

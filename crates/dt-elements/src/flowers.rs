@@ -22,7 +22,8 @@ use core::f64::consts::{FRAC_PI_2, PI, TAU};
 
 use dt_kit::{Field, Material, Rng, Scene, Spread, Tag, TriMesh, form, scatter, signed_volume};
 
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
+use crate::read;
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write, only};
 
 /// The controls `flowers` takes.
 pub const CONTROLS: &[&str] = &[
@@ -52,17 +53,6 @@ pub struct Flowers {
     petal: f64,
 }
 
-fn number(c: &Control, lo: f64, hi: f64) -> Result<f64, LookError> {
-    match c.value {
-        Value::Number(v) if (lo..=hi).contains(&v) => Ok(v),
-        ref v => Err(LookError {
-            control: Some(c.name.clone()),
-            message: format!("`{}` is {lo} to {hi}, not {v}", c.name),
-            help: None,
-        }),
-    }
-}
-
 impl Flowers {
     /// From controls.
     ///
@@ -81,13 +71,13 @@ impl Flowers {
         };
         for c in controls {
             match c.name.as_str() {
-                "per-square" => f.per_square = number(c, 0.0, 40.0)?,
-                "petals" => f.petals = number(c, 0.0, 12.0)?.round() as usize,
-                "radius" => f.outer = number(c, 0.5, 10.0)?,
-                "centre" => f.centre = number(c, 0.3, 8.0)?,
-                "stem" => f.stem = number(c, 0.3, 6.0)?,
-                "dome" => f.dome = number(c, 0.2, 4.0)?,
-                "petal" => f.petal = number(c, 0.2, 4.0)?,
+                "per-square" => f.per_square = read::number(c, 0.0, 40.0)?,
+                "petals" => f.petals = read::number(c, 0.0, 12.0)?.round() as usize,
+                "radius" => f.outer = read::number(c, 0.5, 10.0)?,
+                "centre" => f.centre = read::number(c, 0.3, 8.0)?,
+                "stem" => f.stem = read::number(c, 0.3, 6.0)?,
+                "dome" => f.dome = read::number(c, 0.2, 4.0)?,
+                "petal" => f.petal = read::number(c, 0.2, 4.0)?,
                 _ => {}
             }
         }
