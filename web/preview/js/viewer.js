@@ -69,28 +69,34 @@ void main() {
 const FRAG = `
 uniform vec3 uCam; uniform vec3 uDir; uniform float uOrtho; uniform vec3 uL1; uniform vec3 uL2;
 uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uAccent; uniform float uTintSel;
-uniform vec2 uKeep; uniform vec2 uLeave; uniform float uKeepA; uniform float uLeaveA;
-uniform float uMode; uniform float uGhost; // 0 all; 2 the rest, faded; 3 all, faded; 4 the kept and leaving things
+uniform vec2 uKeep; uniform vec2 uLeave; uniform vec2 uLift; uniform vec2 uDrop;
+uniform float uKeepA; uniform float uLeaveA; uniform float uLiftA; uniform float uDropA;
+uniform float uMode; uniform float uGhost; // 0 all; 2 the rest, faded; 3 all, faded; 4 what stands out of the fade
 varying vec3 vN; varying vec3 vC; varying vec3 vP; varying vec2 vWho;
 float is(vec2 w) {
   vec2 v = floor(vWho + 0.5);
   return (w.x >= 0.0 && v.x == w.x + 1.0 && (w.y < 0.0 || v.y == w.y)) ? 1.0 : 0.0;
 }
 void main() {
-  // what stands out of the fade: the selection (uKeep), and while the
-  // selection moves, the thing it left (uLeave), each at its own alpha
-  float keep = is(uKeep), leave = is(uLeave) * (1.0 - keep);
-  if (uMode > 1.5 && uMode < 2.5 && keep + leave > 0.5) discard;
-  if (uMode > 3.5 && keep + leave < 0.5) discard;
+  // what stands out of the fade, each at its own alpha, the first that
+  // holds winning: the selection (uKeep), the thing it just left
+  // (uLeave), the thing under the pointer (uLift), the thing it just left (uDrop)
+  float keep = is(uKeep);
+  float leave = is(uLeave) * (1.0 - keep);
+  float lift = is(uLift) * (1.0 - keep) * (1.0 - leave);
+  float drop = is(uDrop) * (1.0 - keep) * (1.0 - leave) * (1.0 - lift);
+  float out_ = keep + leave + lift + drop;
+  if (uMode > 1.5 && uMode < 2.5 && out_ > 0.5) discard;
+  if (uMode > 3.5 && out_ < 0.5) discard;
   vec3 n = normalize(vN);
   vec3 ray = uOrtho > 0.5 ? uDir : vP - uCam;
   if (dot(n, ray) > 0.0) n = -n;
   float shade = 0.3 + max(dot(n, uL1), 0.0) + 0.35 * max(dot(n, uL2), 0.0);
   vec3 c = pow(clamp(vC * shade * 0.95, 0.0, 1.0), vec3(1.0 / 1.25));
   // the fade marks the selection; without it, the tint does
-  float k = max(is(uSel) * 0.42 * uTintSel, is(uHov) * 0.22);
+  float k = max(is(uSel) * 0.42, is(uHov) * 0.22) * uTintSel;
   c = mix(c, uAccent * (0.55 + 0.45 * shade), k);
-  float a = uMode > 3.5 ? mix(uLeaveA, uKeepA, keep) : uMode > 1.5 ? uGhost : 1.0;
+  float a = uMode > 3.5 ? keep * uKeepA + leave * uLeaveA + lift * uLiftA + drop * uDropA : uMode > 1.5 ? uGhost : 1.0;
   gl_FragColor = vec4(c, a);
 }`;
 
@@ -119,8 +125,12 @@ void main() {
 // rough stand-in in a build's sketch.
 const FADE = 0.45, STALE = 0.3, SKETCH_PARTS = 0.7, SKETCH_ROUGH = 0.35;
 // Seconds the rest takes to fade when something is selected, and to come
-// back when nothing is.
-const FADE_IN = 0.12, FADE_OUT = 0.1;
+// back when nothing is; and a hover's, quicker.
+const FADE_IN = 0.12, FADE_OUT = 0.1, HOVER_S = 0.08;
+// The hover: with nothing selected the rest dims a little round what is
+// under the pointer; with a selection, what is under the pointer lifts
+// part way out of the fade.
+const HOVER_REST = 0.7, HOVER_LIFT = 0.75;
 
 export class Viewer {
   constructor(canvas) {
@@ -138,7 +148,8 @@ export class Viewer {
     this.initInertia();
     this.uniforms = {
       uCam: { value: new THREE.Vector3() }, uDir: { value: new THREE.Vector3(0, 1, 0) }, uOrtho: { value: 0 }, uL1: { value: new THREE.Vector3() }, uL2: { value: new THREE.Vector3() },
-      uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) }, uKeep: { value: new THREE.Vector2(-1, -1) }, uLeave: { value: new THREE.Vector2(-1, -1) }, uKeepA: { value: 1 }, uLeaveA: { value: 1 }, uTintSel: { value: 0 }, uAccent: { value: new THREE.Color(0.15, 0.48, 0.38) },
+      uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) }, uKeep: { value: new THREE.Vector2(-1, -1) }, uLeave: { value: new THREE.Vector2(-1, -1) }, uLift: { value: new THREE.Vector2(-1, -1) }, uDrop: { value: new THREE.Vector2(-1, -1) },
+      uKeepA: { value: 1 }, uLeaveA: { value: 1 }, uLiftA: { value: 1 }, uDropA: { value: 1 }, uTintSel: { value: 0 }, uAccent: { value: new THREE.Color(0.15, 0.48, 0.38) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: { ...this.uniforms, uMode: { value: 0 }, uGhost: { value: 1 } }, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
@@ -150,8 +161,8 @@ export class Viewer {
     this.stale = false; // the mesh shown is an older build's: all of it fades
     // how much shows now (1 solid, FADE faded) of the rest, the selection
     // and the thing it just left; each eases to its own target
-    this.fx = { rest: 1, keep: 1, leave: 1 };
-    this.fxTarget = { rest: 1, keep: 1, leave: 1 };
+    this.fx = { rest: 1, keep: 1, leave: 1, lift: 1, drop: 1 };
+    this.fxTarget = { ...this.fx };
     this.fadeTween = null;
     const pair = (alpha, mode) => {
       const u = { ...this.uniforms, uMode: { value: mode }, uGhost: { value: alpha } };
@@ -751,29 +762,44 @@ export class Viewer {
     const sketched = this.sketches.size > 0;
     if (this.mesh) this.mesh.visible = !this.stale && !sketched;
     this.ghost.u.uMode.value = this.stale ? 3 : 2;
-    const u = this.uniforms, sel = u.uSel.value, keep = u.uKeep.value, leave = u.uLeave.value;
-    const fading = this.fade && sel.x >= 0 && !this.stale && !sketched;
-    u.uTintSel.value = this.fade && !this.stale && !sketched ? 0 : 1;
+    const u = this.uniforms, fx = this.fx;
+    const sel = u.uSel.value, hov = u.uHov.value;
+    const keep = u.uKeep.value, leave = u.uLeave.value, lift = u.uLift.value, drop = u.uDrop.value;
+    const can = this.fade && !this.stale && !sketched;
+    u.uTintSel.value = can ? 0 : 1;
     const same = (a, b) => a.x === b.x && a.y === b.y;
-    const fx = this.fx;
-    const moved = fading && !same(sel, keep);
-    if (moved) {
-      // the selection moves: the new one rises from where it stood (in the
-      // rest, or leaving), the old one sinks into the rest
-      const from = same(sel, leave) ? fx.leave : fx.rest;
+    const selecting = can && sel.x >= 0;
+    const hovering = can && hov.x >= 0 && !same(hov, sel);
+    // where a thing stands now, whichever slot holds it
+    const now = (w) => (same(w, keep) ? fx.keep : same(w, leave) ? fx.leave : same(w, lift) ? fx.lift : same(w, drop) ? fx.drop : fx.rest);
+    let moved = false, selMoved = false;
+    if (selecting && !same(sel, keep)) {
+      // the selection moves: the new one rises from where it stands, the old one sinks
+      const from = now(sel);
       if (keep.x >= 0) { leave.copy(keep); fx.leave = fx.keep; } else leave.set(-1, -1);
-      keep.copy(sel);
-      fx.keep = from;
+      keep.copy(sel); fx.keep = from;
+      moved = selMoved = true;
     }
-    const target = fading ? { rest: FADE, keep: 1, leave: FADE } : { rest: 1, keep: 1, leave: 1 };
+    const want = hovering ? hov : null;
+    if (want ? !same(want, lift) : lift.x >= 0) {
+      // the hover moves: what it left eases back into the rest
+      const from = want ? now(want) : 0;
+      if (lift.x >= 0) { drop.copy(lift); fx.drop = fx.lift; } else drop.set(-1, -1);
+      if (want) { lift.copy(want); fx.lift = from; } else lift.set(-1, -1);
+      moved = true;
+    }
+    const rest = selecting ? FADE : hovering ? HOVER_REST : 1;
+    const target = { rest, keep: 1, leave: rest, lift: selecting ? HOVER_LIFT : 1, drop: rest };
     const t = this.fxTarget;
+    // a selection's change takes a selection's time; a hover's, a hover's
+    const selChange = selMoved || (t.rest !== rest && (t.rest === FADE || rest === FADE));
     const retarget = Object.keys(target).some((k) => t[k] !== target[k]);
-    if (this.stale || sketched || reduceMotion()) this.fadeTo(target, 0);
-    else if (moved || retarget) this.fadeTo(target, fading ? FADE_IN : FADE_OUT);
+    if (!can || reduceMotion()) this.fadeTo(target, 0);
+    else if (moved || retarget) this.fadeTo(target, selChange ? (selecting ? FADE_IN : FADE_OUT) : HOVER_S);
     this.showFade();
   }
 
-  /** Ease the rest, the selection and what it left to `target` over `seconds` (0: at once). */
+  /** Ease the rest and each thing standing out of it to `target` over `seconds` (0: at once). */
   fadeTo(target, seconds) {
     if (this.fadeTween) cancelAnimationFrame(this.fadeTween);
     this.fadeTween = null;
@@ -795,11 +821,12 @@ export class Viewer {
     this.fadeTween = requestAnimationFrame(tick);
   }
 
-  /** At rest: what left the selection is part of the rest again, and with nothing selected nothing is kept. */
+  /** At rest: what was left is part of the rest again; with nothing selected or hovered, nothing stands out. */
   settleFade() {
     const u = this.uniforms;
     u.uLeave.value.set(-1, -1);
-    this.fx.leave = this.fx.rest;
+    u.uDrop.value.set(-1, -1);
+    this.fx.leave = this.fx.drop = this.fx.rest;
     if (u.uSel.value.x < 0 || !this.fade) u.uKeep.value.set(-1, -1);
   }
 
@@ -813,13 +840,15 @@ export class Viewer {
       if (litDepth) litDepth.visible = litColour.visible = false;
       return;
     }
-    // faded, or on the way in or out: the selection over the rest, each at its alpha
+    // something stands out of the fade, or is on its way in or out
     const u = this.uniforms, fx = this.fx;
-    const on = !sketched && u.uKeep.value.x >= 0;
+    const on = !sketched && [u.uKeep, u.uLeave, u.uLift, u.uDrop].some((w) => w.value.x >= 0);
     if (this.mesh) this.mesh.visible = !sketched && !on;
     this.ghost.u.uGhost.value = fx.rest;
     u.uKeepA.value = fx.keep;
     u.uLeaveA.value = fx.leave;
+    u.uLiftA.value = fx.lift;
+    u.uDropA.value = fx.drop;
     for (const g of this.ghosts) g.visible = on;
   }
 
