@@ -1,13 +1,13 @@
 // The default material-to-colour palette (the preview's paint). Copy it,
 // change the colours, and pass it as `dharmatiles build --3mf --palette my.dtile`.
-earth "#806140"
+earth "#87553b"
 connector "#9e9ea3"
-rock "#94949c"
-water "#3d618f"
-grass "#5c8f3d"
+rock "#8892a6"
+water "#2f6e7a"
+grass "#6b8a2f"
 masonry "#a8a399"
-wood "#6b4a2e"
-leaf "#548540"
+wood "#62564b"
+leaf "#2f7d33"
 flower "#d9739e"
 
 // The acrylic paint: ramp NAME tone tone ... — a dark basecoat to the
@@ -15,13 +15,13 @@ flower "#d9739e"
 // takes the pale tones, hollows stay dark). A tone ends `@0.45` to put it
 // at that place from 0 to 1; otherwise they are spaced evenly. Change a
 // colour here, and pass the file as `--palette my.dtile`.
-ramp earth     "#342418" "#583e28" "#806040" "#aa8a64" "#cdb48c"
-ramp pebble    "#606064" "#848280" "#a8a49e"
-ramp water     "#12265c" "#1c569c@0.45" "#3aa0b2@0.72" "#96dcd6@0.9" "#e1f5f0@1.04"
-ramp grass     "#122f17" "#235c25" "#3f8630" "#7fb23f" "#c9e070"
-ramp leaf      "#0c2c15" "#18502a" "#2f7a2c" "#6aa63c" "#b9d268"
-ramp wood      "#1f120a" "#432a18" "#6c4a2c" "#957f5c" "#c4b896"
-ramp rock      "#2c2f37" "#4a4e5a" "#6f7380" "#9fa3ad" "#d9dadd"
+ramp earth     "#381f16" "#5f3526" "#87553b" "#ae8063" "#cfab8c"
+ramp pebble    "#565e6c" "#7a8394" "#a0a9b8"
+ramp water     "#0f2e45" "#17607a@0.45" "#2fa0a0@0.72" "#8cdcc8@0.9" "#e0f5ee@1.04"
+ramp grass     "#1f2e10" "#3d5a1c" "#64852c" "#9cb445" "#d6dd84"
+ramp leaf      "#0a2c14" "#155224" "#227a30" "#4aa640" "#a6d880"
+ramp wood      "#1d1714" "#3d332c" "#62564b" "#8c8174" "#bab1a3"
+ramp rock      "#242c3b" "#3f4a60" "#5f6f89" "#92a0b6" "#d0d8e4"
 ramp masonry   "#332f2b" "#59544d" "#7f796f" "#aea69a" "#e2dccf"
 ramp brick     "#43211f" "#7a3a32" "#a85a48" "#d28a70" "#efd0b6"
 ramp flower    "#b02a6c" "#dc4f93" "#f27db6" "#ffb4d5" "#fff0f6"
