@@ -744,3 +744,44 @@ fn a_library_tile_exports_to_my_tiles_never_into_the_library() {
         dir.join("out")
     );
 }
+
+#[test]
+fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
+    let dir = std::env::temp_dir().join(format!("dt-marks-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    let text = "tile size=\"1x1\" seed=3 {\n    line shore wobble=5 { through \"0,0.38\" \"1,0.42\" }\n    region pool { bounded-by shore; fill \"0.5,0.25\" }\n    region bank { bounded-by shore; fill \"0.5,0.75\" }\n    stack {\n        dirt in=bank\n        water\n    }\n}\n";
+    std::fs::write(&file, text).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let call = |p: &str, body: Value| post(&r, p, Some(&token), None, &body.to_string()).1;
+    let v = call("/api/tiles/0/check", serde_json::json!({ "text": text }));
+    let line = &v["map"]["lines"][0]["sheet"];
+    assert_eq!(line["controls"][0]["name"], "wobble", "{v}");
+    assert_eq!(line["controls"][0]["text"], "5");
+    assert_eq!(line["through"]["text"], "\"0,0.38\" \"1,0.42\"");
+    let s = usize::try_from(line["through"]["span"][0].as_u64().unwrap()).unwrap();
+    assert!(text[s..].starts_with("\"0,0.38\" \"1,0.42\" }"));
+    let region = &v["map"]["regions"][1]["sheet"];
+    assert_eq!(region["bounded_by"]["text"], "shore");
+    assert_eq!(region["fill"]["text"], "\"0.5,0.75\"");
+    let v = call(
+        "/api/edit",
+        serde_json::json!({ "op": "rename", "text": text, "mark": "region", "old": "bank", "new": "meadow" }),
+    );
+    let t = v["text"].as_str().unwrap();
+    assert!(
+        t.contains("region meadow") && t.contains("dirt in=meadow"),
+        "{t}"
+    );
+    let v = call(
+        "/api/edit",
+        serde_json::json!({ "op": "rename", "text": text, "mark": "line", "old": "shore", "new": "pool" }),
+    );
+    assert!(
+        v["text"].as_str().unwrap().contains("line pool"),
+        "a line may share a region's name: {v}"
+    );
+}

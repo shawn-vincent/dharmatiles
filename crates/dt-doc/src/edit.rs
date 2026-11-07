@@ -42,6 +42,8 @@ pub enum EditError {
     NoEntry(String),
     /// The control is already written; set it instead of inserting.
     Exists(String),
+    /// A name that can't be used here, and why.
+    BadName(String),
 }
 
 impl std::fmt::Display for EditError {
@@ -51,6 +53,7 @@ impl std::fmt::Display for EditError {
             EditError::NoNode(s) => write!(f, "no node matches `{s}`"),
             EditError::NoEntry(s) => write!(f, "the node has no `{s}`"),
             EditError::Exists(s) => write!(f, "`{s}` is already written"),
+            EditError::BadName(s) => f.write_str(s),
         }
     }
 }
@@ -633,6 +636,117 @@ pub fn remove_node_at(text: &str, offset: usize) -> Result<String, EditError> {
     Ok(format!("{}{}", &text[..s], &text[e..]))
 }
 
+/// What a tile draws and names: a `line` or a `region`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mark {
+    /// `line <name> { through … }`, named by `bounded-by` and `along=`.
+    Line,
+    /// `region <name> { … }`, named by `in=`.
+    Region,
+}
+
+/// Rename the tile's line or region `old` to `new`, and every place the
+/// tile names it: a line in `bounded-by` and `along=`, a region in `in=`.
+/// Only those names change, each written as it was (quoted or bare);
+/// everything else stays byte for byte.
+///
+/// # Errors
+/// If the text doesn't parse or has no such line or region, or `new` is
+/// not a plain name (a letter, then letters, digits, `-` and `_`), is a
+/// tile edge or corner, or is taken.
+pub fn rename_mark(text: &str, mark: Mark, old: &str, new: &str) -> Result<String, EditError> {
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let tile = doc
+        .nodes()
+        .iter()
+        .find(|n| n.name().value() == "tile")
+        .ok_or_else(|| EditError::NoNode("tile".into()))?;
+    let kind = if mark == Mark::Line { "line" } else { "region" };
+    let plain = new.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        && new
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if !plain {
+        return Err(EditError::BadName(format!(
+            "a {kind} is named with a letter, then letters, digits, - and _"
+        )));
+    }
+    if crate::place::Edge::parse(new).is_some() || crate::place::Corner::parse(new).is_some() {
+        return Err(EditError::BadName(format!(
+            "`{new}` is a tile edge or corner"
+        )));
+    }
+    let named = |n: &KdlNode, what: &str, name: &str| {
+        n.name().value() == what
+            && n.entries()
+                .first()
+                .is_some_and(|e| e.name().is_none() && e.value().as_string() == Some(name))
+    };
+    let body = tile.children().map(KdlDocument::nodes).unwrap_or_default();
+    if new != old && body.iter().any(|n| named(n, kind, new)) {
+        return Err(EditError::BadName(format!(
+            "there is already a {kind} called `{new}`"
+        )));
+    }
+    let def = body
+        .iter()
+        .find(|n| named(n, kind, old))
+        .ok_or_else(|| EditError::NoNode(format!("{kind} {old}")))?;
+    // the value's own bytes in an entry: after `=` for a property
+    let value_span = |e: &KdlEntry| {
+        let sp = e.span();
+        let whole = &text[sp.offset()..sp.offset() + sp.len()];
+        let from = if e.name().is_some() {
+            whole.find('=').map_or(0, |i| i + 1)
+        } else {
+            0
+        };
+        let rest = &whole[from..];
+        let lead = rest.len() - rest.trim_start().len();
+        (sp.offset() + from + lead, rest.trim().len())
+    };
+    let mut spans = vec![value_span(&def.entries()[0])];
+    fn walk<'a>(nodes: &'a [KdlNode], out: &mut Vec<&'a KdlNode>) {
+        for n in nodes {
+            out.push(n);
+            if let Some(c) = n.children() {
+                walk(c.nodes(), out);
+            }
+        }
+    }
+    let mut all = Vec::new();
+    walk(body, &mut all);
+    for n in all {
+        for (i, e) in n.entries().iter().enumerate() {
+            if e.value().as_string() != Some(old) {
+                continue;
+            }
+            let refers = match (mark, e.name().map(|k| k.value())) {
+                (Mark::Line, None) => n.name().value() == "bounded-by",
+                (Mark::Line, Some("along")) | (Mark::Region, Some("in")) => true,
+                _ => false,
+            };
+            // the definition's own name is already in
+            if refers && !(i == 0 && std::ptr::eq(n, def)) {
+                spans.push(value_span(e));
+            }
+        }
+    }
+    spans.sort_unstable();
+    spans.dedup();
+    let mut out = text.to_owned();
+    for &(at, len) in spans.iter().rev() {
+        let was = &text[at..at + len];
+        let word = if was.starts_with('"') {
+            format!("\"{new}\"")
+        } else {
+            new.to_owned()
+        };
+        out.replace_range(at..at + len, &word);
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod place_tests {
     use super::*;
@@ -701,5 +815,41 @@ mod place_tests {
         assert_eq!(p[0].0, "at");
         assert_eq!(p[0].1, "\"0.5,0.5\"");
         assert_eq!(&T[p[0].2[0]..p[0].2[0] + p[0].2[1]], "\"0.5,0.5\"");
+    }
+
+    #[test]
+    fn renames_a_line_or_region_and_what_names_it() {
+        let t = "tile size=\"1x1\" {\n    line shore wobble=5 { through \"0,0.38\" east }\n    line trail { through south north }\n    region pool { bounded-by shore trail; fill \"0.5,0.25\" }\n    region bank { bounded-by \"shore\"; fill \"0.5,0.75\" }\n    stack {\n        dirt in=bank // the bank\n        wall along=shore\n        rock in=\"bank\" at=\"0.5,0.5\"\n    }\n}\n";
+        let r = rename_mark(t, Mark::Line, "shore", "beach").unwrap();
+        assert_eq!(
+            r,
+            t.replace("line shore", "line beach")
+                .replace("by shore", "by beach")
+                .replace("by \"shore\"", "by \"beach\"")
+                .replace("along=shore", "along=beach")
+        );
+        let r = rename_mark(t, Mark::Region, "bank", "meadow").unwrap();
+        assert_eq!(
+            r,
+            t.replace("region bank", "region meadow")
+                .replace("in=bank", "in=meadow")
+                .replace("in=\"bank\"", "in=\"meadow\"")
+        );
+        assert!(matches!(
+            rename_mark(t, Mark::Line, "shore", "trail"),
+            Err(EditError::BadName(_))
+        ));
+        assert!(matches!(
+            rename_mark(t, Mark::Line, "shore", "north"),
+            Err(EditError::BadName(_))
+        ));
+        assert!(matches!(
+            rename_mark(t, Mark::Line, "shore", "2nd"),
+            Err(EditError::BadName(_))
+        ));
+        assert!(matches!(
+            rename_mark(t, Mark::Region, "nope", "x"),
+            Err(EditError::NoNode(_))
+        ));
     }
 }

@@ -120,6 +120,8 @@ try { if (localStorage.getItem('dt-preview-paint') === '0') setPaint(false); } c
 if (/paint=off/.test(location.hash)) { $('t-paint').checked = false; viewer.setPaint(false); } // #paint=off previews grey without saving
 toggle('t-wire', (on) => viewer.setWireframe(on));
 toggle('t-grid', (on) => viewer.setGrid(on));
+toggle('t-fade', (on) => { viewer.setFade(on); try { localStorage.setItem('dt-fade', on ? '1' : '0'); } catch { /* ignore */ } });
+try { if (localStorage.getItem('dt-fade') === '0') { $('t-fade').checked = false; viewer.setFade(false); } } catch { /* ignore */ }
 
 // popovers: one open at a time; Esc or a click outside closes it
 const popovers = [
@@ -264,6 +266,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'o') flip('t-overhang');
   if (e.key === 'w') flip('t-wire');
   if (e.key === 'g') flip('t-grid');
+  if (e.key === 'x') flip('t-fade');
   if (e.key === 't') toggleTheme();
   if (e.key === 'p') setProjection(!viewer.isOrtho);
   if (e.key === 'f' && state.sel) frameSel();
@@ -1131,6 +1134,7 @@ async function tileEdit(body, label) {
   if (r.status !== 200) { doc.note = r.body?.error || 'that change could not be made'; renderTextBar(); return; }
   texts.setText(r.body.text);
   edited(texts.text, 'lens', label);
+  return true;
 }
 const LEVEL_ABOUT = {
   edge: 'where the ground meets the tile edge; neighbouring tiles line up on it',
@@ -1182,8 +1186,62 @@ function renderTileLens() {
   const note = lv?.block ? 'The tile. Its levels are written as a block: change them in the text.' : 'The tile. Select something on it to change that instead.';
   lens.show({ title: stem(t), kind: 'tile', href: 'https://shawn-vincent.github.io/dharmatiles/language.html', note, groups, actions });
 }
+/** A run of written text (a line's points, a region's lines) as a lens setting. */
+const runWritten = (name, run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
+/** Rename the selected line or region, and keep it selected under its new name. */
+async function renameMark(kind, old, name) {
+  const next = String(name ?? '').trim();
+  if (!next || next === old) return;
+  if (await tileEdit({ op: 'rename', mark: kind, old, new: next }, `Renamed ${kind} ${old} to ${next}`)) {
+    state.sel = kind === 'line' ? { line: next } : { region: next };
+  }
+}
+/** The sheet of a drawn line or a region: its name, its controls, its points. */
+function renderMarkLens(kind, m) {
+  const t = tile(), sh = m?.sheet;
+  if (!t || !sh || texts.file !== t.path) { lens.hide(); return; }
+  const nameRow = { name: 'name', unit: 'word', required: true, viaSet: true, about: `what the tile calls this ${kind}; renaming it renames every ${kind === 'line' ? '`bounded-by` and `along=`' : '`in=`'} that names it` };
+  const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0] }];
+  let controls, set;
+  if (kind === 'line') {
+    controls = [
+      nameRow,
+      { name: 'wobble', unit: 'mm', default: '0', about: 'how far the line may wander off its points' },
+      { name: 'width', unit: 'mm', about: 'makes the line a strip; an element along= it covers the strip' },
+      { name: 'through', unit: 'raw', required: true, about: 'the points it runs through: "x,y" in squares, corners, or edge middles (south, east, north, west); drag a number or click to type' },
+    ];
+    written.push(...sh.controls.map(asWritten));
+    const th = runWritten('through', sh.through);
+    if (th) written.push(th);
+    set = (name, value) => (name === 'name' ? renameMark('line', m.name, value) : lens.api.set(sh.at, name, value));
+  } else {
+    const lines = (doc.map?.lines || []).map((l) => ({ word: l.name, about: `bounded by the line ${l.name}` }));
+    controls = [
+      nameRow,
+      { name: 'bounded-by', unit: 'several', words: lines, required: true, about: 'the lines that divide the tile into this region and the rest' },
+      { name: 'fill', unit: 'raw', required: true, about: 'a point inside the region, "x,y" in squares: the region is the area around it that the lines enclose' },
+    ];
+    for (const [n, run] of [['bounded-by', sh.bounded_by], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
+    set = (name, value) => {
+      if (name === 'name') return renameMark('region', m.name, value);
+      if (name === 'bounded-by') {
+        const run = sh.bounded_by;
+        if (!value.length) { doc.note = 'a region needs at least one line'; renderTextBar(); return null; }
+        if (!run?.span) return null;
+        return lens.api.replace(run.span[0], run.span[1], value.join(' '), true);
+      }
+      return null;
+    };
+  }
+  const actions = doc.writable ? [{ label: 'Delete', title: `Delete this ${kind} from the text`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && setSel(null)) }] : [];
+  lens.show({
+    title: m.name, kind, href: `https://shawn-vincent.github.io/dharmatiles/language.html#${kind === 'line' ? 'lines' : 'regions'}`,
+    groups: [{ at: sh.at, schema: { controls }, written, set }], actions,
+  });
+}
 function renderLens() {
   const s = state.sel;
+  if (s && (s.line != null || s.region != null)) { renderMarkLens(s.line != null ? 'line' : 'region', mapNode(s)); return; }
   const it = isEntry(s) ? stackItems()[s.entry] : null;
   if (!s || s.tile) { renderTileLens(); return; }
   if (!it || it.element === 'connector' || !it.span || it.file !== texts.file || !elements.length) { lens.hide(); return; }

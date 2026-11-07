@@ -439,6 +439,18 @@ fn edit(v: &Value) -> (&'static str, Value) {
             };
             return done(dt_doc::edit::remove_node_at(text, at).map(|t| (t, at)));
         }
+        // a line or region renamed, with what names it: {op: rename, mark, old, new}
+        Some("rename") => {
+            let mark = match v["mark"].as_str() {
+                Some("line") => dt_doc::edit::Mark::Line,
+                Some("region") => dt_doc::edit::Mark::Region,
+                _ => return bad("give mark: line or region"),
+            };
+            let (Some(old), Some(new)) = (v["old"].as_str(), v["new"].as_str()) else {
+                return bad("give old and new");
+            };
+            return done(dt_doc::edit::rename_mark(text, mark, old, new.trim()).map(|t| (t, 0)));
+        }
         Some("set") | None => {}
         Some(op) => return bad(format!("no edit called `{op}`")),
     }

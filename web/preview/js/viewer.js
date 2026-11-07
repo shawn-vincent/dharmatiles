@@ -69,12 +69,16 @@ void main() {
 const FRAG = `
 uniform vec3 uCam; uniform vec3 uDir; uniform float uOrtho; uniform vec3 uL1; uniform vec3 uL2;
 uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uAccent;
+uniform float uMode; uniform float uGhost; // 0 all; 1 the selection only; 2 the rest, faded
 varying vec3 vN; varying vec3 vC; varying vec3 vP; varying vec2 vWho;
 float is(vec2 w) {
   vec2 v = floor(vWho + 0.5);
   return (w.x >= 0.0 && v.x == w.x + 1.0 && (w.y < 0.0 || v.y == w.y)) ? 1.0 : 0.0;
 }
 void main() {
+  float sel = is(uSel);
+  if (uMode > 0.5 && uMode < 1.5 && sel < 0.5) discard;
+  if (uMode > 1.5 && sel > 0.5) discard;
   vec3 n = normalize(vN);
   vec3 ray = uOrtho > 0.5 ? uDir : vP - uCam;
   if (dot(n, ray) > 0.0) n = -n;
@@ -82,7 +86,7 @@ void main() {
   vec3 c = pow(clamp(vC * shade * 0.95, 0.0, 1.0), vec3(1.0 / 1.25));
   float k = max(is(uSel) * 0.42, is(uHov) * 0.22);
   c = mix(c, uAccent * (0.55 + 0.45 * shade), k);
-  gl_FragColor = vec4(c, 1.0);
+  gl_FragColor = vec4(c, uMode > 1.5 ? uGhost : 1.0);
 }`;
 
 // The pick pass: `who` already carries entry + 1, so zero stays no owner.
@@ -124,8 +128,16 @@ export class Viewer {
       uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) }, uAccent: { value: new THREE.Color(0.15, 0.48, 0.38) },
     };
     this.material = new THREE.ShaderMaterial({
-      uniforms: this.uniforms, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
+      uniforms: { ...this.uniforms, uMode: { value: 0 }, uGhost: { value: 1 } }, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
     });
+    // With a selection, the rest of the tile fades: drawn after it, first
+    // into depth alone, then translucent, so only its nearest surface shows
+    // and the selection is seen through it.
+    this.fade = true;
+    const ghost = { ...this.uniforms, uMode: { value: 2 }, uGhost: { value: 0.22 } };
+    this.ghostDepth = new THREE.ShaderMaterial({ uniforms: ghost, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide, colorWrite: false });
+    this.ghostColour = new THREE.ShaderMaterial({ uniforms: ghost, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+    this.ghosts = [];
     this.pickMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: PICK_FRAG, side: THREE.DoubleSide });
     this.pickScene = new THREE.Scene();
     this.pickTarget = new THREE.WebGLRenderTarget(1, 1);
@@ -427,10 +439,17 @@ export class Viewer {
     // who made each triangle, on its three corners
     const who = ownerVertices(payload.entry, payload.piece);
     g.setAttribute('who', new THREE.BufferAttribute(who, 2));
-    if (this.mesh) { this.scene.remove(this.mesh); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); }
+    if (this.mesh) { this.scene.remove(this.mesh, ...this.ghosts); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); }
     this.mesh = new THREE.Mesh(g, this.material);
     this.mesh.frustumCulled = false;
     this.scene.add(this.mesh);
+    this.ghosts = [this.ghostDepth, this.ghostColour].map((m, i) => {
+      const gm = new THREE.Mesh(g, m);
+      gm.frustumCulled = false; gm.renderOrder = 1 + i;
+      return gm;
+    });
+    this.scene.add(...this.ghosts);
+    this.applyFade();
     this.pickMesh = new THREE.Mesh(g, this.pickMaterial);
     this.pickMesh.frustumCulled = false;
     this.pickScene.add(this.pickMesh);
@@ -440,7 +459,7 @@ export class Viewer {
   }
 
   clear() {
-    if (this.mesh) { this.scene.remove(this.mesh); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); this.mesh = null; this.pickMesh = null; }
+    if (this.mesh) { this.scene.remove(this.mesh, ...this.ghosts); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); this.mesh = null; this.pickMesh = null; this.ghosts = []; }
     this.payload = null;
     this.buildGrid();
     this.draw();
@@ -646,7 +665,17 @@ export class Viewer {
     const put = (u, w) => u.value.set(w ? w.entry : -1, w && w.piece != null ? w.piece : -1);
     put(this.uniforms.uSel, sel);
     put(this.uniforms.uHov, hov);
+    this.applyFade();
     this.draw();
+  }
+
+  /** Fade what isn't selected (on by default). */
+  setFade(on) { this.fade = !!on; this.applyFade(); this.draw(); }
+
+  applyFade() {
+    const on = this.fade && this.uniforms.uSel.value.x >= 0;
+    this.material.uniforms.uMode.value = on ? 1 : 0;
+    for (const g of this.ghosts) g.visible = on;
   }
 
   /** The theme's accent (`--accent`), used to tint selected geometry. */

@@ -163,7 +163,24 @@ export class Lens {
     const v = s ? valueOf(s.text, c.name) : null;
     const shown = v ? v.text : (c.default ?? '');
     const words = c.words?.length ? c.words : null;
-    if (words) {
+    if (words && c.unit === 'several') {
+      const cur = new Set(shown.split(/\s+/).filter(Boolean).map((w) => unquote(w)));
+      const box = el('span', 'words');
+      for (const w of words) {
+        const on = cur.has(w.word);
+        const b = el('button', on ? 'on' : '', w.word);
+        b.title = w.about || '';
+        b.disabled = ro;
+        b.setAttribute('aria-pressed', on);
+        b.onclick = () => {
+          const next = new Set(cur);
+          if (on) next.delete(w.word); else next.add(w.word);
+          this.put(g, c.name, words.map((x) => x.word).filter((x) => next.has(x)));
+        };
+        box.append(b);
+      }
+      cell.append(box);
+    } else if (words) {
       const cur = shown.replace(/^"|"$/g, '');
       if (wordControlNeedsSelect(words)) {
         const select = el('select', 'word-select');
@@ -202,13 +219,13 @@ export class Lens {
       const val = el('span', `val${ro ? ' ro' : ''}`);
       // a quoted value shows without its quotes ("20%" reads as 20%, like 100%);
       // they stay in the text, hidden, so a scrub rewrites them as written
-      const pre = c.unit === 'text' ? '' : (shown.match(/^#?"/) || [''])[0];
+      const pre = c.unit === 'text' || c.unit === 'raw' ? '' : (shown.match(/^#?"/) || [''])[0];
       const post = pre ? (shown.slice(pre.length).match(/"#?$/) || [''])[0] : '';
       // a description reads as its words: no quotes, no escapes
       const body = c.unit === 'text' ? unquote(shown) : shown.slice(pre.length, shown.length - post.length);
       if (pre) val.append(el('span', 'q', pre));
       let last = 0;
-      for (const m of c.unit === 'text' ? [] : body.matchAll(NUM)) {
+      for (const m of c.unit === 'text' || c.viaSet ? [] : body.matchAll(NUM)) {
         val.append(body.slice(last, m.index));
         const n = el('span', 'num', m[0]);
         if (!ro) this.scrubber(n, g, c, s, v);
@@ -228,9 +245,9 @@ export class Lens {
         d.onclick = () => this.put(g, c.name, 1 + Math.floor(Math.random() * 9999));
         cell.append(d);
       }
-      if (c.unit && !['number', 'word', 'tag', 'count', 'text'].includes(c.unit)) cell.append(el('span', 'unit', c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit));
+      if (c.unit && !['number', 'word', 'tag', 'count', 'text', 'raw'].includes(c.unit)) cell.append(el('span', 'unit', c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit));
     }
-    if (s && !ro) {
+    if (s && !ro && !c.required) {
       const x = el('button', 'x', '×');
       x.title = `Take ${c.name} out (back to its default)`;
       x.onclick = () => this.put(g, c.name, null);
@@ -305,7 +322,7 @@ export class Lens {
       if (keep && input.value !== was) {
         const typed = text ? input.value.trim() : null;
         if (text && !typed) this.put(g, c.name, null);
-        else if (s) this.api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), text ? kdlString(typed) : input.value.trim(), true);
+        else if (s && !c.viaSet) this.api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), text ? kdlString(typed) : input.value.trim(), true);
         else this.put(g, c.name, text ? typed : parseValue(input.value));
       }
       this.show(this.model);

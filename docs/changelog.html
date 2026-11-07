@@ -16,6 +16,7 @@
   <p class="lede">What changed in each version, newest first. Install the current one with <code>brew install shawn-vincent/dharmatiles/dharmatiles</code>.</p>
 </header>
 <nav class="toc" aria-label="Versions"><div class="eyebrow">Versions</div><ol>
+  <li><a href="#v0.5.0">0.5.0 · 6 Nov 2026</a></li>
   <li><a href="#v0.4.0">0.4.0 · 6 Nov 2026</a></li>
   <li><a href="#v0.3.0">0.3.0 · 6 Nov 2026</a></li>
   <li><a href="#v0.2.1">0.2.1 · 6 Nov 2026</a></li>
@@ -33,6 +34,14 @@
 <article class="doc">
 
 <p>Versions before 0.1.0 were never published; their numbers and dates are given after the fact, from the project's history, and are approximate.</p>
+
+<h2 id="v0.5.0">0.5.0 <small>6 November 2026</small></h2>
+<p>Lines and regions in the property sheet, and the rest of the tile fades behind a selection.</p>
+<ul>
+  <li><strong>A line's sheet:</strong> its name, <code>wobble</code>, <code>width</code> and the points it runs <code>through</code> (drag a number, or type). <strong>A region's sheet:</strong> its name, the lines it is <code>bounded-by</code> as toggles, and its <code>fill</code> point. Either can be deleted from its sheet.</li>
+  <li><strong>Rename a line or region</strong> in its sheet and every <code>bounded-by</code>, <code>along=</code> and <code>in=</code> that names it follows.</li>
+  <li><strong>The rest fades:</strong> with something selected, everything else turns translucent. <kbd>x</kbd>, or <em>Fade the rest</em> in the <kbd>⋯</kbd> menu, turns it off.</li>
+</ul>
 
 <h2 id="v0.4.0">0.4.0 <small>6 November 2026</small></h2>
 <p>A tile browser in the sidebar, and every property of the tile in the sheet.</p>
