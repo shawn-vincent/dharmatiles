@@ -59,6 +59,7 @@
 <h2 id="editor">The editor</h2>
 <p>The preview becomes the editor: one view in which you see a tile, select any part of it, change it, and place new things on it, with the document's text beside it. The design is <a href="design/editor.html">The editor</a>.</p>
 <ul class="road">
+  <li><span class="st st-plain">Planned</span><strong>A full value editor for every control.</strong> Each value in the sheet can be written as a single number, a range (<code>2..4</code>) or an expression. A height offers the named levels (<code>edge</code>, <code>water</code>, the tile's own) in a list, and an expression is typed in place with the same completion as the text pane. Today the sheet only scrubs numbers.</li>
   <li><span class="st st-plain">Planned</span><strong>A thin outline</strong> in place of the hover tint, so a hovered thing's own paint shows.</li>
   <li><span class="st st-proposed">Designed</span><strong>Rebuild only what changed.</strong> Drafts work (see <a href="preview.html#edit">the preview</a>) but build the whole tile, so a tile with a tree drafts in seconds. Keeping each entry's parts and rebuilding only the entries a change touches, or that read what it changed, would make every draft quick; each solid's id is reserved in order, so kept parts need their ids kept with them.</li>
   <li><span class="st st-plain">Planned</span><strong>The lens, further</strong>: words tried on hover, and each control's line from its element page on hover.</li>
@@ -76,6 +77,7 @@
 
 <h2 id="language">The language</h2>
 <ul class="road">
+  <li><span class="st st-plain">Planned</span><strong>Terrain by regions with height.</strong> A substantial redesign of how hills, cliffs, regions and terrain are written. Hills come out of <a href="elements/grass.html">grass</a> and <a href="elements/ground.html">ground</a>'s noise into their own shaped regions: height anchors at points, along lines and on region edges (taper to flat at the tile edge, meet the water), point magnets, ranges and seeded randomness. A cliff becomes an object that follows a path, with a height and a region of its own: a fixed top gives a flat-topped cliff, a varied top a jagged one, and the same anchors make spires. The surface stays a height field, solved from the anchors by a distance-weighted blend held under a slope limit; overhangs stay with solids.</li>
   <li><span class="st st-plain">Planned</span><strong>A line's <code>width=</code>, and building <code>along=</code> a line.</strong> Walls, paths and streams that follow a drawn line. <code>check</code> already names such lines; <code>build</code> refuses them.</li>
   <li><span class="st st-plain">Planned</span><strong>Plan, then build.</strong> An element that places things first and builds them later, so others can read the places in between. The reeds' ripple rings need it: the water is built before the reeds, and cannot yet ring them.</li>
   <li><span class="st st-idea">Idea</span><strong>Grass that writes the surface.</strong> Let the soil dip 0.4 mm under grass. Grass is built after the lift today, so it cannot.</li>
