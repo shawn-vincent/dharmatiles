@@ -266,13 +266,13 @@ pub(super) type V = [f64; 3];
 
 pub(super) use dt_kit::graph::{add, cross, dot, norm, scale, sub};
 
-/// `_safe_norm`: unit, or unchanged when near zero.
+/// Unit, or unchanged when near zero.
 pub(super) fn safe_norm(v: V) -> V {
     let n = norm(v);
     if n > 1e-12 { scale(v, 1.0 / n) } else { v }
 }
 
-/// Rodrigues rotation of `v` about unit `axis` (`_rotate_about`).
+/// Rodrigues rotation of `v` about unit `axis`.
 pub(super) fn rotate_about(v: V, axis: V, angle: f64) -> V {
     let (c, s) = (libm::cos(angle), libm::sin(angle));
     add(

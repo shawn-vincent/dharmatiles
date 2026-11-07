@@ -8,7 +8,7 @@
 use dt_kit::{Field, Rng};
 use rayon::prelude::*;
 
-use super::flow::{Flow, MARGIN_MM, Swaths, poisson_sites};
+use super::flow::{Flow, Swaths, poisson_sites};
 
 pub const STRAND_SPACING_MM: f64 = 2.65;
 const STRAND_LEN_MM: (f64, f64) = (15.0, 30.0);
@@ -185,13 +185,11 @@ pub fn plan(
     let keep: Vec<usize> = (0..roots.len())
         .filter(|&i| roots[i][0] >= 0.0 && roots[i][0] < w && roots[i][1] >= 0.0 && roots[i][1] < h)
         .collect();
-    let _ = MARGIN_MM;
     let roots: Vec<[f64; 2]> = keep.iter().map(|&i| roots[i]).collect();
     let l0: Vec<f64> = keep.iter().map(|&i| l0[i]).collect();
     let n = roots.len();
-    let cell = |p: [f64; 2]| surf.soil.node(p[0], p[1]);
     let idx = |p: [f64; 2]| {
-        let (i, j) = cell(p);
+        let (i, j) = surf.soil.node(p[0], p[1]);
         j * surf.soil.nx + i
     };
     // a root under a rock, a trunk or a wall grows where the flow leaves

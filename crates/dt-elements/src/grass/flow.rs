@@ -551,7 +551,7 @@ pub fn finish_flow(
     s: f64,
 ) -> Flow {
     let like = &flow.ux;
-    let (nx, ny) = (like.nx, like.ny);
+    let nx = like.nx;
     let mut vx = flow.ux.z.clone();
     let mut vy = flow.uy.z.clone();
     for i in 0..lenses.centre.len() {
@@ -588,7 +588,6 @@ pub fn finish_flow(
             .collect(),
     );
     let th = steer_rim(seed, &th, w, h, s);
-    let _ = ny;
     Flow::new(
         &th.z.iter().map(|a| libm::cos(*a)).collect::<Vec<_>>(),
         &th.z.iter().map(|a| libm::sin(*a)).collect::<Vec<_>>(),

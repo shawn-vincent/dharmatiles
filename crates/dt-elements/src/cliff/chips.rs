@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 
+use dt_kit::vec3::{add, cross, dot, norm, scale, sub, unit};
 use dt_kit::{Piece, Rng, TriMesh, form, welded};
 
 use super::util::Draw;
@@ -17,33 +18,6 @@ const CHIP_LIP_MM: (f64, f64) = (0.25, 0.9);
 
 type V = [f64; 3];
 
-fn sub(a: V, b: V) -> V {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-fn dot(a: V, b: V) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-fn cross(a: V, b: V) -> V {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-fn norm(a: V) -> f64 {
-    libm::sqrt(dot(a, a))
-}
-fn unit(a: V) -> V {
-    let l = norm(a);
-    if l > 0.0 { a.map(|x| x / l) } else { a }
-}
-fn add(a: V, b: V) -> V {
-    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-fn mul(a: V, k: f64) -> V {
-    a.map(|x| x * k)
-}
-
 /// n tilted by U(0, max_deg) about a random tangent axis.
 pub fn tilted(rng: &mut Rng, n: V, max_deg: f64) -> V {
     let mut t = [
@@ -52,10 +26,10 @@ pub fn tilted(rng: &mut Rng, n: V, max_deg: f64) -> V {
         rng.normal(0.0, 1.0),
     ];
     let d = dot(t, n);
-    t = sub(t, mul(n, d));
+    t = sub(t, scale(n, d));
     t = unit(t);
     let tl = rng.uniform(0.0, max_deg).to_radians();
-    add(mul(n, libm::cos(tl)), mul(t, libm::sin(tl)))
+    add(scale(n, libm::cos(tl)), scale(t, libm::sin(tl)))
 }
 
 pub fn face_normals(p: &[V], t: &[[u32; 3]]) -> Vec<V> {
@@ -158,7 +132,7 @@ pub fn chip_edges(
         }
         let e = unit(e);
         let sv: Vec<f64> = a.pts.iter().map(|&p| dot(p, e)).collect();
-        let o = sub(a.pts[0], mul(e, sv[0]));
+        let o = sub(a.pts[0], scale(e, sv[0]));
         let svmin = sv.iter().copied().fold(f64::INFINITY, f64::min);
         let svmax = sv.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         let mut s = svmin + rng.uniform(0.0, CHIP_GAP_MM.1);
@@ -167,7 +141,7 @@ pub fn chip_edges(
         let u_of = |n: V| {
             let u = cross(n, e);
             let sg = dot(u, sub(nb, n)).signum();
-            mul(u, -sg)
+            scale(u, -sg)
         };
         let uu = [u_of(n1), u_of(n2)];
         let lip = n1[2].min(n2[2]) < CHIP_LIP_NZ;
@@ -196,7 +170,7 @@ pub fn chip_edges(
                 .map(|&u| d * dot(w, u).abs() / (-dot(nc, u)).max(0.05))
                 .fold(0.0, f64::max)
                 + 0.3;
-            let c = add(o, mul(e, s + 0.5 * ln));
+            let c = add(o, scale(e, s + 0.5 * ln));
             let clear = done
                 .iter()
                 .all(|&(c2, h2)| norm(sub(c, c2)) > 0.5 * ln + h2 + 0.5);
@@ -210,7 +184,10 @@ pub fn chip_edges(
                 for (r_, lo, hi) in [(-d, d, ln - d), (0.0, 0.0, ln), (1.0, -1.0, ln + 1.0)] {
                     for sa in [lo, hi] {
                         for ttw in [-tw, tw] {
-                            pts.push(add(add(add(o, mul(e, s + sa)), mul(nc, r_)), mul(w, ttw)));
+                            pts.push(add(
+                                add(add(o, scale(e, s + sa)), scale(nc, r_)),
+                                scale(w, ttw),
+                            ));
                         }
                     }
                 }

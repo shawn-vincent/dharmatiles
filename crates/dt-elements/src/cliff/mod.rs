@@ -40,7 +40,7 @@ mod stack;
 mod stone;
 mod util;
 
-use dt_kit::{Material, Rng, Scene, Support, Tag};
+use dt_kit::{Material, Rng, Scene, Support, Tag, smooth01};
 use rayon::prelude::*;
 
 use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
@@ -256,7 +256,6 @@ impl Cliff {
         let mut st = stack::stack(&mut rng, &fm, &zone, s, max_rocks);
         stack::reconcile(&mut st.rocks, &fm, &mut st.s);
         Ok(Planned {
-            form,
             f2,
             fm,
             zone,
@@ -267,8 +266,6 @@ impl Cliff {
 }
 
 struct Planned {
-    #[allow(dead_code)]
-    form: FormName,
     f2: Frame2,
     fm: form::Form,
     zone: form::Zones,
@@ -319,7 +316,7 @@ impl Element for Cliff {
                 let z = zone.at(p[0]);
                 us[q] = (z - form::ZONE_FLOOR) / (1.0 - form::ZONE_FLOOR);
                 wts[q] = 0.5 + z;
-                ends[q] = dt_kit::smooth01(p[0].min(fm.w - p[0]) / (2.0 * foot::END_MM * s));
+                ends[q] = smooth01(p[0].min(fm.w - p[0]) / (2.0 * foot::END_MM * s));
             }
         }
         let (d, _) = dt_kit::distance(frame, &rock);
@@ -366,11 +363,10 @@ impl Element for Cliff {
             ..
         } = self.pile_plan(&frame, ctx)?;
         let Some((surface, _)) = scene.surface() else {
-            return Err(LookError {
-                control: None,
-                message: "a cliff has no ground to stand on".into(),
-                help: Some("put a `ground` or `dirt` before it".into()),
-            });
+            return Err(LookError::general(
+                "a cliff has no ground to stand on",
+                "put a `ground` or `dirt` before it",
+            ));
         };
         let ground = dt_kit::Field {
             nx: surface.nx,

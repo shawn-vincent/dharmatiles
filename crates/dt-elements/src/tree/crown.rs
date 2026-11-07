@@ -174,7 +174,7 @@ fn smooth_min(a: f64, b: f64, k: f64) -> f64 {
     a.min(b) - h * h * k * 0.25
 }
 
-/// `_sample_canopy`: `n` attractors over the side surface, weighted by
+/// `n` attractors over the side surface, weighted by
 /// its area of revolution (never uniform in height: the apex club-top
 /// artefact returns), on a jittered golden-angle spiral.
 pub fn sample(env: &Envelope, rng: &mut Rng, n: usize) -> Vec<[f64; 3]> {
@@ -254,7 +254,7 @@ fn interp(x: f64, xp: &[f64], fp: &[f64]) -> f64 {
     }
 }
 
-/// `_compute_n_groups`.
+/// How many attractor groups the crown is split into.
 pub fn n_groups(env: &Envelope, width: f64, height: f64) -> usize {
     if width <= 0.0 || height <= 0.0 {
         return 1;
@@ -266,7 +266,7 @@ pub fn n_groups(env: &Envelope, width: f64, height: f64) -> usize {
     n.max(2)
 }
 
-/// `_voronoi_group_attractors`: k-means (Lloyd, 20 rounds) in a z-scaled
+/// K-means (Lloyd, 20 rounds) in a z-scaled
 /// space, seeded from `k` distinct attractors.
 pub fn groups(pts: &[[f64; 3]], k: usize, rng: &mut Rng, z_scale: f64) -> Vec<usize> {
     let n = pts.len();
@@ -319,7 +319,7 @@ pub fn groups(pts: &[[f64; 3]], k: usize, rng: &mut Rng, z_scale: f64) -> Vec<us
     labels
 }
 
-/// `_apply_group_bulge`: each group pushed out along the crown normal in a
+/// Each group pushed out along the crown normal in a
 /// dome, `bulge` at its middle and nothing at its edge.
 pub fn bulge(pts: &[[f64; 3]], labels: &[usize], env: &Envelope, bulge: f64) -> Vec<[f64; 3]> {
     let mut gids = labels.to_vec();

@@ -83,7 +83,7 @@ const FLARE: f64 = 0.45;
 const SINK_MM: f64 = 1.0;
 /// `crown base radius` is the crown radius less this (both library tiles).
 const BASE_INSET_MM: f64 = 1.0;
-/// Grass keeps out of a disc this many trunk radii across (`_stamp_tree`).
+/// Grass keeps out of a disc this many trunk radii across.
 const STAMP_RADII: f64 = 1.8;
 const STAMP_MIN_MM: f64 = 1.6;
 

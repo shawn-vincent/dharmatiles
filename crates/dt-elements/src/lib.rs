@@ -83,6 +83,15 @@ impl LookError {
         }
     }
 
+    /// Not one control's fault: what is wrong and what to do.
+    fn general(message: impl Into<String>, help: impl Into<String>) -> Self {
+        Self {
+            control: None,
+            message: message.into(),
+            help: Some(help.into()),
+        }
+    }
+
     fn build(e: impl std::fmt::Display) -> Self {
         Self {
             control: None,
@@ -423,11 +432,10 @@ pub fn connector(system: &str) -> Result<Box<dyn Element>, LookError> {
     match system {
         "db" => Ok(Box::new(connector::DungeonBlocks::default())),
         "ol" => Ok(Box::new(openlock::OpenLock::default())),
-        _ => Err(LookError {
-            control: None,
-            message: format!("no connector for system `{system}`"),
-            help: Some("the systems are db (DungeonBlocks) and ol (OpenLOCK)".to_owned()),
-        }),
+        _ => Err(LookError::general(
+            format!("no connector for system `{system}`"),
+            "the systems are db (DungeonBlocks) and ol (OpenLOCK)",
+        )),
     }
 }
 

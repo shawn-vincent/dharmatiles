@@ -599,13 +599,12 @@ pub(crate) fn run(
             .filter(|&k| fp.bits[k] && ctx.area.bits[k])
             .collect();
         if mine.is_empty() {
-            return Err(LookError {
-                control: None,
-                message: format!(
+            return Err(LookError::general(
+                format!(
                     "this {kind}'s footprint misses its area: it stands outside its in= region"
                 ),
-                help: Some("put the wall along an edge its region touches, or drop in=".into()),
-            });
+                "put the wall along an edge its region touches, or drop in=",
+            ));
         }
         let ter = |k: usize| scene.surface_field().map_or(0.0, |g| f64::from(g.z[k]));
         let surf = |k: usize| {

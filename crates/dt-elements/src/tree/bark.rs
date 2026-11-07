@@ -210,7 +210,7 @@ impl Bark {
         c
     }
 
-    /// Set the radius of each side of `ring` (`_make_ring` with bark).
+    /// Set the radius of each side of `ring` (a ring with bark).
     pub fn surface(&self, ring: &Ring, angles: &[f64], radii: &mut [f64]) {
         if !self.barked(ring.edge) {
             return;

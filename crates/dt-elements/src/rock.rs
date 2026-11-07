@@ -277,6 +277,9 @@ fn sample_surface(rng: &mut Rng, m: &TriMesh, n: usize) -> Vec<([f64; 3], [f64; 
             (a, b, c)
         })
         .collect();
+    if tris.is_empty() {
+        return Vec::new(); // no surface to sample (a hull that came out empty)
+    }
     let mut cum = Vec::with_capacity(tris.len());
     let mut total = 0.0;
     let mut normals = Vec::with_capacity(tris.len());
@@ -739,17 +742,16 @@ impl Element for Single {
                 let [w, h] = scene.frame().size_mm();
                 let m = item.r * s + RIM_MM * s;
                 if a[0] < m || a[1] < m || a[0] > w - m || a[1] > h - m {
-                    return Err(LookError {
-                        control: None,
-                        message: format!(
+                    return Err(LookError::general(
+                        format!(
                             "a {} {d:.1} mm wide at this point stands past the tile's edge",
                             self.thing.kind
                         ),
-                        help: Some(format!(
+                        format!(
                             "keep it {:.2} squares from every edge",
                             m / scene.frame().square_mm
-                        )),
-                    });
+                        ),
+                    ));
                 }
                 a
             }
@@ -943,21 +945,19 @@ impl Scatter {
         }
         for ch in children {
             if !is_thing(&ch.name) {
-                return Err(LookError {
-                    control: None,
-                    message: format!("a scatter of `{}` is not built yet", ch.name),
-                    help: Some("P3 scatters rock, stone, boulder and pebble".into()),
-                });
+                return Err(LookError::general(
+                    format!("a scatter of `{}` is not built yet", ch.name),
+                    "P3 scatters rock, stone, boulder and pebble",
+                ));
             }
             s.things
                 .push(Thing::new(&ch.name, &ch.controls, ch.weight)?);
         }
         if s.things.is_empty() {
-            return Err(LookError {
-                control: None,
-                message: "a scatter needs a child to say what it scatters".into(),
-                help: Some("write `scatter per-square=2 { rock }`".into()),
-            });
+            return Err(LookError::general(
+                "a scatter needs a child to say what it scatters",
+                "write `scatter per-square=2 { rock }`",
+            ));
         }
         Ok(s)
     }
@@ -1034,11 +1034,10 @@ impl Element for Scatter {
         let radii: Vec<f64> = items.iter().map(|it| it.r * s).collect();
         let placed = if let Some(kind) = ctx.against {
             let Some(foot) = ctx.foots.iter().find(|f| f.kind == kind) else {
-                return Err(LookError {
-                    control: None,
-                    message: format!("nothing in this tile to gather against: no `{kind}`"),
-                    help: Some(format!("add a `{kind}` to the stack, or remove `against=`")),
-                });
+                return Err(LookError::general(
+                    format!("nothing in this tile to gather against: no `{kind}`"),
+                    format!("add a `{kind}` to the stack, or remove `against=`"),
+                ));
             };
             place_at_foot(scene, ctx, &mut rng, foot, &items, &kinds, self.reach)
         } else {

@@ -3,7 +3,7 @@
 
 use dt_kit::{Footprint, Rng, distance_nearest};
 
-/// Draws numpy's generator has and ours lacks.
+/// Draws the kit's `Rng` does not offer.
 pub trait Draw {
     fn pick(&mut self, p: &[f64]) -> usize;
     fn perm(&mut self, n: usize) -> Vec<usize>;
@@ -195,10 +195,6 @@ pub fn label(m: &Mask) -> (G<u32>, u32) {
         }
     }
     (labels, n)
-}
-
-pub fn smooth01(t: f64) -> f64 {
-    dt_kit::smooth01(t)
 }
 
 // ---- polygons ------------------------------------------------------------

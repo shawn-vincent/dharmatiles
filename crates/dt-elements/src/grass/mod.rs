@@ -162,15 +162,6 @@ fn num(c: &Control) -> Result<f64, LookError> {
     }
 }
 
-fn as_field(g: &dt_kit::Grid) -> Field {
-    Field {
-        nx: g.nx,
-        ny: g.ny,
-        step: g.step,
-        z: g.z.iter().map(|&v| f64::from(v)).collect(),
-    }
-}
-
 impl Element for Grass {
     fn plan(&self) -> Plan {
         Plan {
@@ -193,13 +184,12 @@ impl Element for Grass {
         let [w, h] = frame.size_mm();
         let (nx, ny) = frame.nodes();
         let Some((surface, _)) = scene.surface() else {
-            return Err(LookError {
-                control: None,
-                message: "grass has no ground to grow on".into(),
-                help: Some("put a `ground` or `dirt` before it in the stack".into()),
-            });
+            return Err(LookError::general(
+                "grass has no ground to grow on",
+                "put a `ground` or `dirt` before it in the stack",
+            ));
         };
-        let raw = as_field(&surface);
+        let raw = Field::from(&surface);
         let seat = raw.erode(SEAT_ERODE_MM * s).blur(SEAT_BLUR_MM);
         let flat = raw.blur(FLOW_BLUR_MM * s);
         let seed = ctx.seed;

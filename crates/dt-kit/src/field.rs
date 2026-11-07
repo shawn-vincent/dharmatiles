@@ -32,6 +32,18 @@ pub struct Field {
     pub z: Vec<f64>,
 }
 
+impl From<&crate::Grid> for Field {
+    /// A grid (a painted surface, `f32`) as a field.
+    fn from(g: &crate::Grid) -> Self {
+        Self {
+            nx: g.nx,
+            ny: g.ny,
+            step: g.step,
+            z: g.z.iter().map(|&v| f64::from(v)).collect(),
+        }
+    }
+}
+
 impl Field {
     /// A field of `value` on the frame's lattice.
     #[must_use]

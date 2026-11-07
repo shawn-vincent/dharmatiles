@@ -6,17 +6,19 @@
 use std::collections::HashSet;
 
 use dt_kit::rays::RayMesh;
+use dt_kit::vec3::{cross, dot, norm, sub, unit};
 use dt_kit::{KitError, Piece, Rng, Slot, Support, TriMesh, form, hung, welded};
 
 use super::chips::{CHIP_MM, adjacency, chip_edges, corner_chips, face_normals};
 use super::faces::{Column, Face};
 use super::finish::{
-    COLUMN_STEP_MAX, Cutter, SEAT_SLOPE_DEG, occupied, offset_poly, open_faces, prism, top_z_poly,
+    COLUMN_STEP_MAX, Cutter, SEAT_SLOPE_DEG, occupied, offset_poly, open_faces, prism,
 };
 use super::form::{FOOT, Form, GRID_MM};
 use super::relief::relief;
 use super::stack::{Placed, SINK_MM};
-use super::util::{Field, P2, area, bounds, norm2, point_in, ring_dist, smooth01, trace_outline};
+use super::util::{Field, P2, bounds, norm2, point_in, ring_dist, trace_outline};
+use dt_kit::smooth01;
 
 const JOINT_MM: (f64, f64) = (0.8, 1.2);
 const JOINT_MIN_MM: f64 = 4.0;
@@ -58,10 +60,6 @@ impl Env<'_> {
     pub const fn coarse(&self) -> f64 {
         if self.draft { DRAFT_COARSE } else { 1.0 }
     }
-}
-
-fn dot(a: V, b: V) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
 /// Each convex vertical corner cut off by a vertical plane across its
@@ -502,10 +500,10 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
         let v = tr.map(|i| p[i as usize]);
         let e1 = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
         let e2 = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
-        let fnm = unitv(crossv(e1, e2));
+        let fnm = unit(cross(e1, e2));
         for k in 0..3 {
-            let a = unitv(subv(v[(k + 1) % 3], v[k]));
-            let b = unitv(subv(v[(k + 2) % 3], v[k]));
+            let a = unit(sub(v[(k + 1) % 3], v[k]));
+            let b = unit(sub(v[(k + 2) % 3], v[k]));
             let w = libm::acos(dot(a, b).clamp(-1.0, 1.0));
             for c in 0..3 {
                 n[tr[k] as usize][c] += w * fnm[c];
@@ -539,7 +537,7 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
             n[i] = s.map(|x| x / l.len() as f64);
         }
     }
-    let n: Vec<V> = n.into_iter().map(unitv).collect();
+    let n: Vec<V> = n.into_iter().map(unit).collect();
     // edge distance by cell hashing of the sharp segments
     let cell = 0.5;
     let key = |x: f64, y: f64, z: f64| {
@@ -590,10 +588,10 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
         if let Some(l) = hash.get(&key(q[0], q[1], q[2])) {
             for &si in l {
                 let (a, b) = segs[si];
-                let ab = subv(b, a);
-                let tt = (dot(subv(*q, a), ab) / dot(ab, ab).max(1e-12)).clamp(0.0, 1.0);
+                let ab = sub(b, a);
+                let tt = (dot(sub(*q, a), ab) / dot(ab, ab).max(1e-12)).clamp(0.0, 1.0);
                 let c = [a[0] + tt * ab[0], a[1] + tt * ab[1], a[2] + tt * ab[2]];
-                dmin = dmin.min(norm3(subv(*q, c)));
+                dmin = dmin.min(norm(sub(*q, c)));
             }
         }
         let we = smooth01(if dmin.is_finite() {
@@ -603,7 +601,7 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
         });
         let mut w =
             smooth01((q[2] - z0 - 0.15) / TEX_BASE_FADE_MM) * smooth01((n[i][2] + 0.5) / 0.4);
-        let gap = hits[i].map_or(f64::INFINITY, |h| norm3(subv(h.point, *q)));
+        let gap = hits[i].map_or(f64::INFINITY, |h| norm(sub(h.point, *q)));
         w *= smooth01((gap - 0.8) / 0.8);
         let amp = FACE_GRAIN_MM * gr * (0.5 + 0.5 * we) * w;
         out[i] = [
@@ -614,24 +612,6 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
     }
     let g = rock.rebuilt(out, t)?;
     Ok(if g.is_empty() { rock.clone() } else { g })
-}
-
-fn subv(a: V, b: V) -> V {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-fn crossv(a: V, b: V) -> V {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-fn norm3(a: V) -> f64 {
-    libm::sqrt(dot(a, a))
-}
-fn unitv(a: V) -> V {
-    let l = norm3(a);
-    if l > 0.0 { a.map(|x| x / l) } else { a }
 }
 
 /// Per-column mutable state while its stones are built (top down).
@@ -713,7 +693,7 @@ pub fn rock_piece(
         }
     }
     let loaded_at = |q: P2| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]);
-    let rock = chamfer_corners(rock, &rpoly_offset_unused(&poly), c.corner_mm, &loaded_at)?;
+    let rock = chamfer_corners(rock, &poly, c.corner_mm, &loaded_at)?;
     let Some((lo3, hi3)) = rock.bounds() else {
         return Ok(None);
     };
@@ -744,13 +724,13 @@ pub fn rock_piece(
                 .map(|p| dot(*p, cut.d))
                 .fold(f64::NEG_INFINITY, f64::max);
             let mut sh = cut.d.map(|x| x * (vmax - reach_dot(cut.d)).min(0.0));
-            if norm3(sh) <= 0.3 {
+            if norm(sh) <= 0.3 {
                 sh = [0.0; 3];
             }
             let backv = c.back.iter().find(|b| b.0 == ri).map_or(0.0, |b| b.1);
             let ptp = reach_dot(cut.d) - reach_min(cut.d);
             let bk = backv.min((COLUMN_STEP_MAX * (ptp - 4.0)).max(0.0));
-            let off = cut.off + dot(cut.n, subv(sh, cut.d.map(|x| x * bk)));
+            let off = cut.off + dot(cut.n, sub(sh, cut.d.map(|x| x * bk)));
             if !cutter.take(cut.n, off, None, false) {
                 st.refused.insert(k);
             }
@@ -796,13 +776,13 @@ pub fn rock_piece(
                     continue;
                 }
                 dep = rng.uniform(JOINT_MM.0, JOINT_MM.1);
-                n = unitv([f.m[0] + Z_UP[0], f.m[1] + Z_UP[1], f.m[2] + Z_UP[2]]);
+                n = unit([f.m[0] + Z_UP[0], f.m[1] + Z_UP[1], f.m[2] + Z_UP[2]]);
                 extra = 0.5;
             } else if rng.random() > SHOULDER_P * c.zone {
                 continue;
             } else {
                 let k = rng.uniform(0.6, 1.6);
-                n = unitv([f.m[0], f.m[1], k]);
+                n = unit([f.m[0], f.m[1], k]);
                 dep = rng.uniform(SHOULDER_MM.0, SHOULDER_MM.1);
                 extra = 1.0;
             }
@@ -869,8 +849,8 @@ pub fn rock_piece(
                 }
             }
         }
-        let cr = crossv(n1, n2);
-        cr[2].abs() < 0.6 * norm3(cr)
+        let cr = cross(n1, n2);
+        cr[2].abs() < 0.6 * norm(cr)
             && p[2] > r.top_z(p[0], p[1]) - 1.6
             && qs
                 .iter()
@@ -907,16 +887,6 @@ pub fn rock_piece(
     }
     let grained = grain(&rock, env.seed, zbase).and_then(|p| p.parts_over(1e9));
     Ok(Some(grained.unwrap_or(rock)))
-}
-
-fn rpoly_offset_unused(p: &[P2]) -> Vec<P2> {
-    let _ = area;
-    p.to_vec()
-}
-
-#[allow(dead_code)]
-fn _t(_: &Field) {
-    let _ = top_z_poly;
 }
 
 #[cfg(test)]

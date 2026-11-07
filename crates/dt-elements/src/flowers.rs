@@ -252,18 +252,12 @@ impl Element for Flowers {
         let [w, h] = frame.size_mm();
         let (nx, ny) = frame.nodes();
         let Some((surface, _)) = scene.surface() else {
-            return Err(LookError {
-                control: None,
-                message: "flowers have no ground to grow on".into(),
-                help: Some("put a `ground` or `dirt` before them in the stack".into()),
-            });
+            return Err(LookError::general(
+                "flowers have no ground to grow on",
+                "put a `ground` or `dirt` before them in the stack",
+            ));
         };
-        let ground = Field {
-            nx: surface.nx,
-            ny: surface.ny,
-            step: surface.step,
-            z: surface.z.iter().map(|&v| f64::from(v)).collect(),
-        };
+        let ground = Field::from(&surface);
         let blocker = scene.standing(&["rock", "tree", "wall"], 0.45);
         let wet = scene.wet().clone();
         let n_sq = w * h / (frame.square_mm * frame.square_mm);

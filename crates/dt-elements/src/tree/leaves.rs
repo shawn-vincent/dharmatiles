@@ -537,8 +537,8 @@ impl Crown {
         }
     }
 
-    /// Area-weighted samples with smooth normals (`_sample_surface` +
-    /// `_surface_points_with_normals`; same draw order: faces, u, v).
+    /// Area-weighted samples with smooth normals (drawn in this order:
+    /// faces, then u, then v).
     fn sample(&self, n: usize, rng: &mut Rng) -> Samples {
         let mut cum = Vec::with_capacity(self.areas.len());
         let mut s = 0.0;
@@ -618,7 +618,7 @@ impl Crown {
         })
     }
 
-    /// `_project_to_surface_gen`: drop `q` onto the surface along −n from
+    /// Drop `q` onto the surface along −n from
     /// 1 mm above; the hit and its smooth normal, unless it misses or falls
     /// further than `max_drop`.
     fn project(&self, q: V, n: V, max_drop: f64) -> Option<(V, V)> {
@@ -836,7 +836,7 @@ impl PoissonGrid {
 
 // ── direction and standoff ────────────────────────────────────────────────────
 
-/// `_growth_tangent`: steepest descent in the tangent plane; radially out
+/// Steepest descent in the tangent plane; radially out
 /// at the apex.
 fn growth_tangent(n: V, base: V, centroid: V) -> V {
     let down = [0.0, 0.0, -1.0];
@@ -854,7 +854,7 @@ fn growth_tangent(n: V, base: V, centroid: V) -> V {
     safe_norm(sub([1.0, 0.0, 0.0], scale(n, n[0])))
 }
 
-/// `_direction_field_angle`: three positional sines, radians.
+/// Three positional sines, radians.
 fn field_angle(p: V, phase: [f64; 3]) -> f64 {
     let f = 2.0 * std::f64::consts::PI / DIR_WAVELEN_MM;
     let s = (libm::sin(f * p[0] + phase[0])
@@ -864,7 +864,7 @@ fn field_angle(p: V, phase: [f64; 3]) -> f64 {
     DIR_VAR_DEG.to_radians() * s
 }
 
-/// `_shingle_standoffs`: bottom-up, each leaf stands `STEP` above the
+/// Bottom-up, each leaf stands `STEP` above the
 /// tallest lower leaf it has a tip conflict with (capped), plus jitter.
 #[allow(clippy::cast_possible_truncation, reason = "grid cells of a crown")]
 fn shingle_standoffs(bases: &[V], dirs: &[V], len: f64, seed: Seed) -> Vec<f64> {
@@ -1041,7 +1041,7 @@ struct Job<'a> {
 }
 
 impl Job<'_> {
-    /// `_leaf_job`: re-centre on the root, attempt, cull skewers.
+    /// Re-centre on the root, attempt, cull skewers.
     #[allow(clippy::too_many_arguments, reason = "the per-root inputs")]
     fn leaf(
         &self,
@@ -1345,9 +1345,8 @@ impl Job<'_> {
         Ok((out, inner, t))
     }
 
-    /// `_attempt_leaf_gen` as the organic placer calls it (flat-seat
-    /// fallback, base and tip tucks; its burial probe is off under
-    /// `tuck_tip`, so it is not ported). Returns the blade surface, the
+    /// One attempt at a leaf, as the organic placer makes it (flat-seat
+    /// fallback, base and tip tucks; no burial probe under `tuck_tip`). Returns the blade surface, the
     /// root oval (world mm) and the seated tangent.
     #[allow(clippy::too_many_arguments, reason = "the placer's per-leaf knobs")]
     #[allow(
@@ -1522,7 +1521,7 @@ impl Job<'_> {
         }
     }
 
-    /// `_seat_oval_tilt_gen`: pitch the oval about its centre until both
+    /// Pitch the oval about its centre until both
     /// ends sit equally deep (≤ 3 Newton steps, ≤ 60°); `None` to fall back
     /// to a flat seat.
     fn seat_tilt(&self, p0: V, n0: V, t0: V, len: f64) -> Option<f64> {

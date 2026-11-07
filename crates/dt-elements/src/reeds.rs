@@ -172,18 +172,12 @@ impl Element for Reeds {
         let s = frame.scale();
         let [w, h] = frame.size_mm();
         let (Some(bed), Some(wl)) = (scene.bed(), scene.water_edge()) else {
-            return Err(LookError {
-                control: None,
-                message: "reeds have no water to stand in".into(),
-                help: Some("put a `water` in the stack".into()),
-            });
+            return Err(LookError::general(
+                "reeds have no water to stand in",
+                "put a `water` in the stack",
+            ));
         };
-        let bed = Field {
-            nx: bed.nx,
-            ny: bed.ny,
-            step: bed.step,
-            z: bed.z.iter().map(|&v| f64::from(v)).collect(),
-        };
+        let bed = Field::from(bed);
         let (nx, _) = frame.nodes();
         let mut rng = Rng::new(ctx.seed.key("reeds"));
         let ground = |x: f64, y: f64| bed.sample(x.clamp(0.0, w), y.clamp(0.0, h));

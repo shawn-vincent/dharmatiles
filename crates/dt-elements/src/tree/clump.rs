@@ -38,7 +38,7 @@ pub struct Spec {
 }
 
 /// Where a clump of `length` starts on an edge's curve, walking back from
-/// the tip (`_bezier_clump_start`); extended straight back along the
+/// the tip; extended straight back along the
 /// start tangent when the edge is shorter.
 pub fn start_on(c: &Curve, length: f64) -> ([f64; 3], [f64; 3], f64) {
     let pts: Vec<[f64; 3]> = (0..64).map(|k| c.at(f64::from(k) / 63.0)).collect();

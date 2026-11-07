@@ -7,8 +7,9 @@
 use dt_kit::{Piece, form, hung};
 
 use super::form::{FOOT, GRID_MM};
-use super::util::{Field, dilate_disc, smooth01};
+use super::util::{Field, dilate_disc};
 use crate::LookError;
+use dt_kit::smooth01;
 
 pub const END_MM: f64 = 4.0;
 

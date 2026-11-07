@@ -7,10 +7,12 @@
 use std::sync::Arc;
 
 use dt_kit::rays::RayMesh;
+use dt_kit::vec3::dot;
 use dt_kit::{KitError, Piece, TriMesh, hung, tri_normal};
 
 use super::faces::{Face, RELIEF_GRID_MM};
-use super::util::{Field, G, Mask, blur, edt_in, smooth01};
+use super::util::{Field, G, Mask, blur, edt_in};
+use dt_kit::smooth01;
 
 const CRACK_GRID_MM: f64 = 0.1;
 const SHEAR_DEG: f64 = 45.0;
@@ -20,10 +22,6 @@ const RELIEF_OFF_MM: f64 = 4.0;
 const CUT_BLUR_MM: (f64, f64) = (0.08, 0.3);
 const CUT_SHORT_MM: f64 = 0.1;
 const Z_UP: [f64; 3] = [0.0, 0.0, 1.0];
-
-fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
 
 /// Bilinear sample at index coordinates; outside the grid: `cval` when
 /// `constant`, else clamped to the edge.
