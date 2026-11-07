@@ -265,7 +265,7 @@ impl Element for Grass {
             let aprons = apron_shapes(&mut rng, &flow0, &things);
             lenses = fill_bare_earth(&lenses, &aprons, &blocker, &outside, &frame, self.bare);
         }
-        let wrap = obstacle_circles(&things, &blocker, &frame, &flow0);
+        let wrap = obstacle_circles(&things, &blocker, &frame, &flow0, self.length.0 * s);
         let flow = flow::finish_flow(
             seed.key("rim"),
             &mut rng,
@@ -446,18 +446,26 @@ fn raw_node(frame: &dt_kit::Frame, x: f64, y: f64) -> (usize, usize) {
     )
 }
 
-/// Each standing thing as a circle the flow wraps: centre, a ring a little wider than the thing.
+/// Each standing thing at least as wide as the shortest blade, as a circle
+/// the flow wraps: centre, a ring a little wider than the thing.
 fn obstacle_circles(
     things: &[Thing],
     blocker: &dt_kit::Mask,
     frame: &dt_kit::Frame,
     flow: &flow::Flow,
+    shortest: f64,
 ) -> flow::Shapes {
     const FLOW_RING_MM: f64 = 0.6;
     let mut out = flow::Shapes::default();
     for t in things {
         // walls are long: leave them to the rim rule and the blocker
         if t.kind == "wall" || t.r > 12.0 {
+            continue;
+        }
+        // a pebble or a stone smaller than the shortest blade does not
+        // turn the grass: the blades run up to it and tuck against it (an
+        // eddy round each of many small stones stalls the blades round it)
+        if 2.0 * t.r < shortest {
             continue;
         }
         let (i, j) = raw_node(frame, t.at[0], t.at[1]);

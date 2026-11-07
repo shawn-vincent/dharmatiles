@@ -19,6 +19,9 @@ const STRAND_LATERAL_MM: f64 = 0.3;
 pub const TRACE_STEP_MM: f64 = 0.25;
 pub const FROND_HALF_W_MM: (f64, f64) = (0.8, 1.25);
 const FROND_MIN_LEN_MM: f64 = 1.5;
+/// How far along the flow a root under a rock, trunk or wall looks for
+/// open ground to grow from instead.
+const ROOT_EXIT_MM: f64 = 10.0;
 const FROND_DELTA_DEG: f64 = 4.0;
 const STRAY_FRAC: f64 = 0.05;
 const STRAY_DELTA_DEG: (f64, f64) = (20.0, 35.0);
@@ -190,6 +193,27 @@ pub fn plan(
     let idx = |p: [f64; 2]| {
         let (i, j) = cell(p);
         j * surf.soil.nx + i
+    };
+    // a root under a rock, a trunk or a wall grows where the flow leaves
+    // it, so the grass keeps its density on open ground and presses
+    // against what stands there instead of thinning round it
+    let roots = match &surf.blk_depth {
+        Some(blk) => {
+            let under: Vec<usize> = (0..n).filter(|&i| blk.z[idx(roots[i])] > 0.0).collect();
+            let starts: Vec<[f64; 2]> = under.iter().map(|&i| roots[i]).collect();
+            let exits = trace_batch(&starts, ROOT_EXIT_MM, flow, None, 1.0);
+            let mut moved = roots;
+            for (&i, path) in under.iter().zip(&exits) {
+                let open = path.iter().find(|p| {
+                    p[0] >= 0.0 && p[0] < w && p[1] >= 0.0 && p[1] < h && blk.z[idx(**p)] <= 0.0
+                });
+                if let Some(p) = open {
+                    moved[i] = *p;
+                }
+            }
+            moved
+        }
+        None => roots,
     };
     let bank: Vec<bool> = roots
         .iter()
