@@ -511,6 +511,8 @@ async function loadMesh(i, version) {
     surfaceHeights(p);
     drafts.shown = false;
     state.loaded.set(i, version);
+    sketchCache.clear(); viewer.setSketches([]);
+    showBuild(state.tiles[i]);
     if (first) {
       const saved = state.cameras.get(i);
       if (saved) {
@@ -704,8 +706,40 @@ async function draftArrived(t) {
     countPieces(p);
     surfaceHeights(p);
     drafts.shown = true;
+    showBuild(state.tiles[t.index]);
     renderTitle();
   } catch (e) { console.error(e); }
+}
+
+// ---- the build as it goes ----------------------------------------------
+// While the tile builds, the mesh shown is the last build's: it fades. Each
+// stage's sketch (what it has made, or a rough stand-in) replaces it as the
+// build sends them, faded too, until the finished mesh lands. A draft
+// being dragged is shown instead of either.
+const sketchCache = new Map(); // sketch id -> Promise of its payload, or null
+let sketchGen = 0;
+function showBuild(t) {
+  if (!t || t.index !== state.selected) return;
+  const shown = state.loaded.get(t.index);
+  const current = t.status === 'ready' && t.mesh_version === shown;
+  viewer.setStale(shown != null && !drafts.shown && !current);
+  syncSketches(t);
+}
+async function syncSketches(t) {
+  // a finished mesh on its way: the sketches stay until it lands
+  if (t.status === 'ready' && t.mesh_version != null && state.loaded.get(t.index) !== t.mesh_version) return;
+  const gen = ++sketchGen;
+  const list = drafts.shown ? [] : (t.sketches || []);
+  for (const k of list) {
+    if (!sketchCache.has(k.id)) {
+      sketchCache.set(k.id, host.fetchSketch(t.index, k.id).then(parsePayload).catch(() => null));
+    }
+  }
+  const got = await Promise.all(list.map(async (k) => ({ id: k.id, rough: k.rough, payload: await sketchCache.get(k.id) })));
+  if (gen !== sketchGen || t.index !== state.selected) return; // a newer list came
+  const ids = new Set(list.map((k) => k.id));
+  for (const id of sketchCache.keys()) if (!ids.has(id)) sketchCache.delete(id);
+  viewer.setSketches(got.filter((k) => k.payload));
 }
 function changed() {
   clearTimeout(doc.checkTimer);
@@ -1638,6 +1672,7 @@ host.connect({
     if (t.index !== state.selected) { if (browsing()) renderList(); return; }
     if (t.plan && JSON.stringify(t.plan) !== JSON.stringify(viewer.plan)) viewer.setPlan(t.plan);
     renderAll();
+    showBuild(t);
     // the new mesh swaps in place: the camera is kept
     if (t.mesh_version != null && state.loaded.get(t.index) !== t.mesh_version) loadMesh(t.index, t.mesh_version);
   },

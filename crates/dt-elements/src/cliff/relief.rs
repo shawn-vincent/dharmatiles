@@ -12,7 +12,7 @@ use dt_kit::{KitError, Piece, TriMesh, hung, tri_normal};
 use super::faces::{Face, RELIEF_GRID_MM};
 use super::util::{Field, G, Mask, blur, edt_in, smooth01};
 
-const CRACK_GRID_MM: f64 = 0.05;
+const CRACK_GRID_MM: f64 = 0.1;
 const SHEAR_DEG: f64 = 45.0;
 const CRACK_WALL_MM: f64 = 1.6;
 const FACET_END_MM: f64 = 1.5;
@@ -117,11 +117,13 @@ fn fit(us: &[f64], zs: &[f64], k: &[(usize, usize)], front: &Field) -> [f64; 3] 
     [m[0][3] / m[0][0], m[1][3] / m[1][1], m[2][3] / m[2][2]]
 }
 
+/// `coarse` scales both sampling grids: 1 for a print, more for a draft.
 pub fn relief(
     mut rock: Piece,
     faces: &[Arc<Face>],
     core: Option<(f64, f64)>,
     progress: Option<(&dt_kit::Progress, f64, f64)>,
+    coarse: f64,
 ) -> Result<Piece, KitError> {
     let passes: Vec<(f64, &Arc<Face>)> = [SHEAR_DEG.to_radians(), 0.0]
         .into_iter()
@@ -134,11 +136,12 @@ pub fn relief(
         if let Some(t) = &ticks {
             t.tick();
         }
-        let g = if a != 0.0 {
-            RELIEF_GRID_MM
-        } else {
-            CRACK_GRID_MM
-        };
+        let g = coarse
+            * if a != 0.0 {
+                RELIEF_GRID_MM
+            } else {
+                CRACK_GRID_MM
+            };
         let t = rock.mesh();
         if t.positions.is_empty() {
             continue;

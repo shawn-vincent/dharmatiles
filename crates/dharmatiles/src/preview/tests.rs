@@ -785,3 +785,47 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
         "a line may share a region's name: {v}"
     );
 }
+
+#[test]
+fn a_build_sends_sketches_as_it_goes_and_drops_them_when_done() {
+    let r = start(&[FLAT], false);
+    let mut c = TcpStream::connect(r.addr).unwrap();
+    write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
+    let mut lines = BufReader::new(c).lines();
+    // the snapshot first, then ask for the build
+    for l in lines.by_ref() {
+        if l.unwrap().starts_with("data: ") {
+            break;
+        }
+    }
+    assert!(
+        request(r.addr, "POST", "/api/tiles/0/build", &r.addr.to_string())
+            .0
+            .starts_with("HTTP/1.1 202")
+    );
+    let mut sketched = 0;
+    for l in lines.by_ref() {
+        let l = l.unwrap();
+        let Some(data) = l.strip_prefix("data: ") else {
+            continue;
+        };
+        let v: Value = serde_json::from_str(data).unwrap();
+        if v["type"] != "tile" {
+            continue;
+        }
+        let t = &v["tile"];
+        let n = t["sketches"].as_array().map_or(0, Vec::len);
+        if t["status"] == "ready" {
+            assert_eq!(n, 0, "the finished mesh replaces the sketches");
+            break;
+        }
+        if n > 0 {
+            assert_eq!(t["status"], "building");
+            assert_eq!(t["sketches"][0]["rough"], false);
+            sketched += 1;
+        }
+    }
+    // the flat tile's ground and its base, at least
+    assert!(sketched >= 2, "sketches seen in {sketched} updates");
+}

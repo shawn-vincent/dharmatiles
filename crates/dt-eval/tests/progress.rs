@@ -125,3 +125,40 @@ fn elements_with_a_loop_report_their_counts() {
         );
     });
 }
+
+/// Takes the sketches a build sends, and nothing else.
+struct Sketches(Mutex<Vec<(usize, bool)>>);
+
+impl dt_kit::Reporter for Sketches {
+    fn report(&self, _: &dt_kit::Event<'_>) {}
+    fn sketching(&self) -> bool {
+        true
+    }
+    fn sketch(&self, mesh: &dt_kit::TriMesh, materials: &[dt_kit::Material], rough: bool) {
+        assert_eq!(mesh.triangles.len(), materials.len());
+        self.0.lock().unwrap().push((mesh.triangles.len(), rough));
+    }
+}
+
+/// A front end that wants sketches gets the cliff's rough boxes, then each
+/// stage's parts, and the build is the same as one without.
+#[test]
+fn sketches_come_as_the_build_goes_and_change_nothing() {
+    let path = "lib:tiles/test/1x1-cliff-mound.dtile";
+    let opts = Options::default();
+    let plain = fingerprint(&build(&Library, path, &opts).unwrap());
+    let seen = Arc::new(Sketches(Mutex::new(Vec::new())));
+    let b = build_with(&Library, path, &opts, &Progress::new(seen.clone())).unwrap();
+    assert_eq!(fingerprint(&b), plain, "sketching changed the build");
+    let v = seen.0.lock().unwrap().clone();
+    let first_rough = v.iter().position(|s| s.1).expect("the cliff's rough boxes");
+    assert!(v[..first_rough].iter().all(|s| !s.1 && s.0 > 0), "{v:?}");
+    assert!(
+        v.iter().filter(|s| !s.1).count() >= 3,
+        "ground, cliff, base at least: {v:?}"
+    );
+    assert!(
+        !v.last().unwrap().1,
+        "the last sketch is finished parts: {v:?}"
+    );
+}

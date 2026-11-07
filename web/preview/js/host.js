@@ -3,6 +3,7 @@
 //
 //   connect({onSnapshot, onTile, onProgress, onState})  start listening
 //   fetchMesh(index, draft?) -> ArrayBuffer the tile's binary mesh, or its last draft
+//   fetchSketch(index, id) -> ArrayBuffer   one stage's sketch while it builds
 //   build(index)                            build a tile not built yet
 //   text(index, file?) -> {file, text, writable}
 //   elements() -> [element]                 the element schema
@@ -29,6 +30,11 @@ export function browserHost() {
     async fetchMesh(index, draft = false) {
       const r = await fetch(`/api/tiles/${index}/mesh${draft ? '?draft=1' : ''}`, { cache: 'no-store' });
       if (!r.ok) throw new Error(`mesh: ${r.status}`);
+      return r.arrayBuffer();
+    },
+    async fetchSketch(index, id) {
+      const r = await fetch(`/api/tiles/${index}/sketch?id=${id}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`sketch: ${r.status}`);
       return r.arrayBuffer();
     },
     async build(index) {

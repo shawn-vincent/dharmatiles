@@ -176,6 +176,10 @@ pub struct Ctx<'a> {
     /// plan pass that runs before anything is built, so a bank or scatter
     /// listed before the cliff can still lean on it.
     pub foots: &'a [Foot],
+    /// A draft for the editor's view while a value is dragged: an element
+    /// whose cost is in fixed-millimetre detail (a cliff's carving) may
+    /// make it coarser.  Never printed.
+    pub draft: bool,
 }
 
 /// Where a planned solid meets the ground: what a bank heaps against and

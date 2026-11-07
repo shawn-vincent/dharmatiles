@@ -8,6 +8,10 @@ use super::*;
 struct LatestBuild {
     tracker: Option<Arc<Tracker>>,
     files: BTreeMap<String, Option<SystemTime>>,
+    /// Where sketches go (none in tests), with the tile's index.
+    sketches: Option<(Arc<Shared>, usize)>,
+    /// The stage running now, which a sketch belongs to.
+    stage: Mutex<String>,
 }
 
 impl LatestBuild {
@@ -21,9 +25,28 @@ impl dt_kit::Reporter for LatestBuild {
         if self.changed() {
             std::panic::resume_unwind(Box::new(Superseded));
         }
+        if let dt_kit::Event::Begin { key, .. } = event {
+            (*key).clone_into(&mut *lock(&self.stage));
+        }
         if let Some(t) = &self.tracker {
             dt_kit::Reporter::report(t.as_ref(), event);
         }
+    }
+
+    fn sketching(&self) -> bool {
+        self.sketches.is_some()
+    }
+
+    fn sketch(&self, mesh: &dt_kit::TriMesh, materials: &[dt_kit::Material], rough: bool) {
+        let Some((shared, i)) = &self.sketches else {
+            return;
+        };
+        if self.changed() {
+            std::panic::resume_unwind(Box::new(Superseded));
+        }
+        let bytes = payload::sketch(mesh, materials, rough, &shared.palette());
+        let stage = lock(&self.stage).clone();
+        shared.add_sketch(*i, &stage, rough, bytes);
     }
 }
 
@@ -36,6 +59,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         t.status = "building";
         t.errors.clear();
         t.progress = None;
+        t.sketches.clear();
     });
     if path.to_ascii_lowercase().ends_with(".stl") {
         return rebuild_stl(shared, i, opts, &path);
@@ -47,6 +71,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         shared.update(i, |t| {
             t.status = "failed";
             t.progress = None;
+            t.sketches.clear();
             t.errors = errors;
             t.files = rec.files();
         });
@@ -98,6 +123,8 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
     let latest = Arc::new(LatestBuild {
         tracker: tracker.clone(),
         files: watched,
+        sketches: Some((Arc::clone(shared), i)),
+        stage: Mutex::new(String::new()),
     });
     let reporter = dt_eval::Progress::new(latest.clone());
     let built = match std::panic::catch_unwind(AssertUnwindSafe(|| {
@@ -170,6 +197,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
             shared.update(i, |t| {
                 t.status = "ready";
                 t.progress = None;
+                t.sketches.clear();
                 t.record = Some(record);
                 t.mesh = Some(mesh);
                 t.mesh_version += 1;
@@ -263,6 +291,8 @@ mod tests {
         let latest = LatestBuild {
             tracker: None,
             files: BTreeMap::from([(missing, Some(SystemTime::UNIX_EPOCH))]),
+            sketches: None,
+            stage: Mutex::new(String::new()),
         };
         assert!(latest.changed());
         let stopped = std::panic::catch_unwind(AssertUnwindSafe(|| {

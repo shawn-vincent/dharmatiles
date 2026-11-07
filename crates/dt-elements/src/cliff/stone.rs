@@ -46,6 +46,18 @@ pub struct Env<'a> {
     pub s: &'a Field,
     pub placed: &'a [Placed],
     pub seed: u64,
+    /// A draft: carve on coarser grids and leave the grain off.
+    pub draft: bool,
+}
+
+/// How much coarser a draft's carving grids are than a print's.
+pub const DRAFT_COARSE: f64 = 3.0;
+
+impl Env<'_> {
+    /// The carving grids' scale ([`relief`]'s `coarse`).
+    pub const fn coarse(&self) -> f64 {
+        if self.draft { DRAFT_COARSE } else { 1.0 }
+    }
 }
 
 fn dot(a: V, b: V) -> f64 {
@@ -876,7 +888,7 @@ pub fn rock_piece(
             _ => rock,
         }
     };
-    let rock = relief(rock.clone(), &c.faces, None, None)
+    let rock = relief(rock.clone(), &c.faces, None, None, env.coarse())
         .and_then(|p| p.parts_over(1e9))
         .unwrap_or(rock);
     let rock = match top_cracks(rng, &rock, r, &c.faces, env) {
@@ -890,6 +902,9 @@ pub fn rock_piece(
         Err(_) => rock,
     };
     let rock = fit_tile(rock, form, &setback);
+    if env.draft {
+        return Ok(Some(rock));
+    }
     let grained = grain(&rock, env.seed, zbase).and_then(|p| p.parts_over(1e9));
     Ok(Some(grained.unwrap_or(rock)))
 }

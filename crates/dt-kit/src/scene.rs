@@ -987,9 +987,17 @@ impl Scene {
     /// # Errors
     /// [`KitError::Untraced`] if a triangle's material is unknown.
     pub fn soup(&mut self) -> Result<(TriMesh, Vec<Material>), KitError> {
+        self.soup_since(0)
+    }
+
+    /// [`Scene::soup`] of the parts from `first` on: what a stage added,
+    /// for a sketch of it while the build runs.
+    ///
+    /// # Errors
+    /// [`KitError::Untraced`] if a triangle's material is unknown.
+    pub fn soup_since(&self, first: usize) -> Result<(TriMesh, Vec<Material>), KitError> {
         use rayon::prelude::*;
-        let meshes: Vec<TriMesh> = self
-            .parts
+        let meshes: Vec<TriMesh> = self.parts[first.min(self.parts.len())..]
             .par_iter()
             .map(|p| p.solid.0.to_tri_mesh())
             .collect();

@@ -380,7 +380,7 @@ pub(super) fn drafts(shared: Arc<Shared>, opts: Options) {
                 continue;
             }
             if let Ok(Ok(b)) = built {
-                let mesh = Arc::new(payload::from_built(
+                let mesh = Arc::new(payload::from_draft(
                     &b,
                     opts.printer.overhang_deg,
                     &shared.palette(),

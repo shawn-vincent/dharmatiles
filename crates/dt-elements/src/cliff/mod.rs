@@ -413,6 +413,11 @@ impl Element for Cliff {
         progress.fraction("dressing columns", 0.03);
         let core_mesh = core::core_mesh(&st.s, &cols, &placed)
             .map_err(|e| LookError::build(format!("core mesh: {e}")))?;
+        let m = f2.matrix(foot);
+        if progress.sketching() {
+            let rough = rough_pile(&core_mesh, &placed, &m);
+            progress.sketch(&rough, &vec![Material::Rock; rough.triangles.len()], true);
+        }
         let mut frng = Rng::new(ctx.seed.key("cliff-faces"));
         faces::plan_faces(&mut frng, &mut cols, &placed);
         // support cones of resting stones, for the cleaving guard
@@ -433,6 +438,7 @@ impl Element for Cliff {
             s: &st.s,
             placed: &placed,
             seed: ctx.seed.key("cliff-grain").value(),
+            draft: ctx.draft,
         };
         let col_seed = ctx.seed.key("cliff-columns");
         progress.fraction("planning faces and cracks", 0.04);
@@ -506,14 +512,18 @@ impl Element for Cliff {
             &all_faces,
             Some((fm.w, fm.h)),
             Some((&progress, 0.15, 0.72)),
+            env.coarse(),
         )
         .map_err(LookError::build)?;
         progress.fraction("graining the core", 0.72);
-        let core = stone::grain(&core, env.seed, form::FOOT).map_err(LookError::build)?;
+        let core = if ctx.draft {
+            core
+        } else {
+            stone::grain(&core, env.seed, form::FOOT).map_err(LookError::build)?
+        };
         progress.fraction("cleaning up the core", 0.85);
         let core = core.parts_over(1e9).map_err(LookError::build)?;
         progress.fraction("dirt on the tops", 0.90);
-        let m = f2.matrix(foot);
         if self.top_dirt {
             let mut pile = dt_kit::TriMesh::default();
             for mesh in pieces.iter().map(|p| p.1.mesh()).chain([core.mesh()]) {
@@ -562,6 +572,45 @@ impl Element for Cliff {
         scene.note("cliff_top_cracks", tops as f64);
         Ok(())
     }
+}
+
+/// The pile as boxes: the core and each rock's footprint stood from its
+/// underside to its top, placed on the tile by `m`.  A stand-in for the
+/// view while the stones are cut, never printed.
+fn rough_pile(core: &dt_kit::TriMesh, placed: &[stack::Placed], m: &[f64; 12]) -> dt_kit::TriMesh {
+    let mut out = core.clone();
+    out.extra.clear();
+    out.num_extra = 0;
+    out.merge_from.clear();
+    out.merge_to.clear();
+    for r in placed {
+        let poly = r.poly();
+        if poly.len() < 3 {
+            continue;
+        }
+        let top = poly
+            .iter()
+            .map(|p| r.top_z(p[0], p[1]))
+            .fold(f64::NEG_INFINITY, f64::max);
+        if top <= r.z0 {
+            continue;
+        }
+        let b = dt_kit::prism_mesh(&[poly], r.z0, top);
+        let off = out.positions.len() as u32;
+        out.positions.extend(&b.positions);
+        out.triangles
+            .extend(b.triangles.iter().map(|t| t.map(|v| v + off)));
+    }
+    // m is column-major: x' = m0 x + m3 y + m6 z + m9
+    for p in &mut out.positions {
+        let [x, y, z] = *p;
+        *p = [
+            m[0] * x + m[3] * y + m[6] * z + m[9],
+            m[1] * x + m[4] * y + m[7] * z + m[10],
+            m[2] * x + m[5] * y + m[8] * z + m[11],
+        ];
+    }
+    out
 }
 
 /// Approximate overlap area of two convex-ish polygons by the bounds of

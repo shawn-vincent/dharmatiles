@@ -150,6 +150,127 @@ pub fn from_built(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Ve
     )
 }
 
+/// The most triangles a draft or a sketch is sent with; more are thinned
+/// ([`thinned`]).  A finished build is always sent whole.
+pub const VIEW_BUDGET: usize = 400_000;
+
+/// `mesh` with its vertices snapped together on a grid coarse enough to
+/// leave at most `budget` triangles, and the index in `mesh` of each
+/// triangle kept.  A cheap stand-in for a view of a draft or a sketch: it
+/// keeps each kept triangle's own colour and owner, and is never printed.
+#[must_use]
+pub fn thinned(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>) {
+    let n = mesh.triangles.len();
+    if n <= budget {
+        return (mesh.clone(), (0..n).collect());
+    }
+    // a first cell from the surface area: about two triangles per cell face
+    let area: f64 = mesh
+        .triangles
+        .iter()
+        .map(|t| {
+            let [a, b, c] = t.map(|i| mesh.positions[i as usize]);
+            let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+            let x = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            0.5 * (x[0] * x[0] + x[1] * x[1] + x[2] * x[2]).sqrt()
+        })
+        .sum();
+    #[allow(clippy::cast_precision_loss)]
+    let mut cell = (2.0 * area / budget as f64).sqrt().max(1e-3);
+    loop {
+        let mut of = std::collections::HashMap::with_capacity(mesh.positions.len() / 2);
+        let mut positions = Vec::new();
+        let snap: Vec<u32> = mesh
+            .positions
+            .iter()
+            .map(|p| {
+                let k = p.map(|c| libm::floor(c / cell) as i64);
+                *of.entry(k).or_insert_with(|| {
+                    positions.push(*p);
+                    u32::try_from(positions.len() - 1).unwrap_or(u32::MAX)
+                })
+            })
+            .collect();
+        let mut triangles = Vec::new();
+        let mut kept = Vec::new();
+        for (f, t) in mesh.triangles.iter().enumerate() {
+            let [a, b, c] = t.map(|i| snap[i as usize]);
+            if a != b && b != c && a != c {
+                triangles.push([a, b, c]);
+                kept.push(f);
+            }
+        }
+        if triangles.len() <= budget {
+            let out = TriMesh {
+                positions,
+                triangles,
+                ..TriMesh::default()
+            };
+            return (out, kept);
+        }
+        cell *= 1.4;
+    }
+}
+
+/// [`from_built`] thinned to [`VIEW_BUDGET`]: a draft's soup of parts can
+/// be millions of triangles.
+#[must_use]
+pub fn from_draft(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Vec<u8> {
+    let painted = b.colours_with(palette, true);
+    let clean = b.colours_with(palette, false);
+    let (mesh, kept) = thinned(&b.export.mesh, VIEW_BUDGET);
+    let pick = |v: &[[f32; 3]]| kept.iter().map(|&f| v[f]).collect::<Vec<_>>();
+    let pick16 = |v: &[u16]| {
+        kept.iter()
+            .map(|&f| v.get(f).copied().unwrap_or(u16::MAX))
+            .collect::<Vec<_>>()
+    };
+    let meta = json!({
+        "overhang_faces": b.audit.overhang.iter().filter(|&&o| o).count(),
+        "band_faces": b.audit.band.iter().filter(|&&o| o).count(),
+        "overhang_deg": overhang_deg,
+        "footprint": b.footprint,
+        "thinned": kept.len() < b.export.mesh.triangles.len(),
+    });
+    encode_traced(
+        &mesh,
+        &pick(&painted),
+        &pick(&clean),
+        &pick16(&b.entries),
+        &pick16(&b.pieces),
+        &meta,
+    )
+}
+
+/// A sketch of a stage while the build runs ([`dt_kit::Reporter::sketch`]):
+/// painted by material alone, no owner, thinned to [`VIEW_BUDGET`].
+#[must_use]
+pub fn sketch(
+    mesh: &TriMesh,
+    materials: &[dt_kit::Material],
+    rough: bool,
+    palette: &dt_kit::Palette,
+) -> Vec<u8> {
+    let (thin, kept) = thinned(mesh, VIEW_BUDGET);
+    let mats: Vec<dt_kit::Material> = kept
+        .iter()
+        .map(|&f| materials.get(f).copied().unwrap_or(dt_kit::Material::Rock))
+        .collect();
+    let none = vec![false; mats.len()];
+    let colours = dt_kit::paint_mesh(&thin, &mats, &none, &none, None, palette, false);
+    encode(
+        &thin,
+        &colours,
+        &colours,
+        &json!({ "sketch": true, "rough": rough }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,6 +316,37 @@ mod tests {
         assert_eq!(&b[c0 + 9..c0 + 12], &[128, 128, 128]);
         // clean colours follow, no red
         assert_eq!(&b[c0 + 18..c0 + 21], &[128, 128, 128]);
+    }
+
+    #[test]
+    fn thinning_keeps_a_mesh_under_its_budget_and_each_kept_triangle_known() {
+        // a 200 x 200 grid of squares: 80 000 triangles
+        let n = 200;
+        let mut m = TriMesh::default();
+        for j in 0..=n {
+            for i in 0..=n {
+                m.positions
+                    .push([f64::from(i) * 0.1, f64::from(j) * 0.1, 0.0]);
+            }
+        }
+        let at = |i: u32, j: u32| j * (n + 1) + i;
+        for j in 0..n {
+            for i in 0..n {
+                m.triangles.push([at(i, j), at(i + 1, j), at(i + 1, j + 1)]);
+                m.triangles.push([at(i, j), at(i + 1, j + 1), at(i, j + 1)]);
+            }
+        }
+        let (same, all) = thinned(&m, 100_000);
+        assert_eq!(same.triangles.len(), 80_000);
+        assert_eq!(all.len(), 80_000);
+        let (thin, kept) = thinned(&m, 5_000);
+        assert!(
+            thin.triangles.len() <= 5_000 && thin.triangles.len() > 500,
+            "{}",
+            thin.triangles.len()
+        );
+        assert_eq!(kept.len(), thin.triangles.len());
+        assert!(kept.windows(2).all(|w| w[0] < w[1]), "in order, each once");
     }
 
     #[test]

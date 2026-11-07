@@ -91,6 +91,18 @@ pub struct Slot {
     /// for the text it was built from.
     draft: Option<Arc<Vec<u8>>>,
     draft_id: u64,
+    /// While it builds: what each stage has made so far, for the page to
+    /// show as it goes (see [`worker`]).  Gone when the build ends.
+    sketches: Vec<Sketch>,
+}
+
+/// One stage's sketch while a build runs: a later one of the same stage
+/// replaces it (the cliff's rough boxes, then its stones).
+struct Sketch {
+    stage: String,
+    id: u64,
+    rough: bool,
+    mesh: Arc<Vec<u8>>,
 }
 
 impl Slot {
@@ -122,6 +134,7 @@ impl Slot {
             files: BTreeMap::new(),
             draft: None,
             draft_id: 0,
+            sketches: Vec::new(),
         }
     }
 
@@ -141,6 +154,7 @@ impl Slot {
             "mesh_version": self.mesh.as_ref().map(|_| self.mesh_version),
             "mesh_bytes": self.mesh.as_ref().map(|m| m.len()),
             "draft_id": self.draft.as_ref().map(|_| self.draft_id),
+            "sketches": self.sketches.iter().map(|k| json!({"id": k.id, "rough": k.rough})).collect::<Vec<_>>(),
         })
     }
 
@@ -170,6 +184,8 @@ pub struct Shared {
     /// The draft the page asked for last, not yet built.
     draft_req: Mutex<Option<edit::DraftRequest>>,
     draft_cv: std::sync::Condvar,
+    /// Each sketch's id, unique across tiles.
+    sketch_seq: std::sync::atomic::AtomicU64,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -220,6 +236,7 @@ impl Shared {
             token: edit::token(),
             draft_req: Mutex::new(None),
             draft_cv: std::sync::Condvar::new(),
+            sketch_seq: std::sync::atomic::AtomicU64::new(0),
         };
         me.rescan();
         me
@@ -412,6 +429,29 @@ impl Shared {
 
     fn draft_mesh(&self, i: usize) -> Option<Arc<Vec<u8>>> {
         lock(&self.tiles).get(i)?.draft.clone()
+    }
+
+    fn sketch_mesh(&self, i: usize, id: u64) -> Option<Arc<Vec<u8>>> {
+        lock(&self.tiles)
+            .get(i)?
+            .sketches
+            .iter()
+            .find(|k| k.id == id)
+            .map(|k| Arc::clone(&k.mesh))
+    }
+
+    /// Keep stage `stage`'s sketch for tile `i`, in place of its last.
+    fn add_sketch(&self, i: usize, stage: &str, rough: bool, mesh: Vec<u8>) {
+        let id = self.sketch_seq.fetch_add(1, Ordering::Relaxed) + 1;
+        self.update(i, |t| {
+            t.sketches.retain(|k| k.stage != stage);
+            t.sketches.push(Sketch {
+                stage: stage.to_owned(),
+                id,
+                rough,
+                mesh: Arc::new(mesh),
+            });
+        });
     }
 
     /// The next tile to build: one asked for, else (when `eager`) the first

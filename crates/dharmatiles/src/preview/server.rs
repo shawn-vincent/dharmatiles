@@ -225,6 +225,16 @@ fn one(mut conn: TcpStream, shared: &Shared) {
                 None => respond(&mut conn, "404 Not Found", "text/plain", b"no mesh yet"),
             }
         }
+        ("GET", p) if tile_route(p).is_some_and(|(_, w)| w == "sketch") => {
+            let id = req.param("id").and_then(|v| v.parse().ok());
+            match tile_route(p)
+                .zip(id)
+                .and_then(|((i, _), id)| shared.sketch_mesh(i, id))
+            {
+                Some(m) => respond(&mut conn, "200 OK", "application/octet-stream", &m),
+                None => respond(&mut conn, "404 Not Found", "text/plain", b"no such sketch"),
+            }
+        }
         ("GET", p) if tile_route(p).is_some_and(|(_, w)| w == "text") => {
             match tile_route(p).and_then(|(i, _)| shared.text(i, req.param("file"))) {
                 Some(v) => json(&mut conn, "200 OK", &v),

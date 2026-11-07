@@ -7,6 +7,8 @@
 //! attached every call is a test of one `Option`.
 
 use std::sync::Arc;
+
+use crate::{Material, TriMesh};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// What a build reports.
@@ -31,6 +33,20 @@ pub enum Event<'a> {
 pub trait Reporter: Send + Sync {
     /// One event.
     fn report(&self, event: &Event<'_>);
+
+    /// Does it want sketches?  Making one costs a mesh, so nothing makes
+    /// one unless the reporter says yes.
+    fn sketching(&self) -> bool {
+        false
+    }
+
+    /// A sketch of the current stage: geometry made so far, for a view
+    /// while the build runs, with each triangle's material.  `rough` is a
+    /// stand-in the stage will replace (a cliff's rock boxes); otherwise it
+    /// is the stage's finished parts, not yet joined.  Never printed.
+    fn sketch(&self, mesh: &TriMesh, materials: &[Material], rough: bool) {
+        let _ = (mesh, materials, rough);
+    }
 }
 
 /// The handle elements and the evaluator report through.  Cloning is cheap;
@@ -65,6 +81,19 @@ impl Progress {
     #[must_use]
     pub fn is_on(&self) -> bool {
         self.0.is_some()
+    }
+
+    /// Does the front end want sketches ([`Reporter::sketching`])?
+    #[must_use]
+    pub fn sketching(&self) -> bool {
+        self.0.as_ref().is_some_and(|r| r.sketching())
+    }
+
+    /// Send a sketch of the current stage ([`Reporter::sketch`]).
+    pub fn sketch(&self, mesh: &TriMesh, materials: &[Material], rough: bool) {
+        if let Some(r) = &self.0 {
+            r.sketch(mesh, materials, rough);
+        }
     }
 
     /// Send one event.

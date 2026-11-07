@@ -69,7 +69,7 @@ void main() {
 const FRAG = `
 uniform vec3 uCam; uniform vec3 uDir; uniform float uOrtho; uniform vec3 uL1; uniform vec3 uL2;
 uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uAccent;
-uniform float uMode; uniform float uGhost; // 0 all; 1 the selection only; 2 the rest, faded
+uniform float uMode; uniform float uGhost; // 0 all; 1 the selection only; 2 the rest, faded; 3 all, faded
 varying vec3 vN; varying vec3 vC; varying vec3 vP; varying vec2 vWho;
 float is(vec2 w) {
   vec2 v = floor(vWho + 0.5);
@@ -78,7 +78,7 @@ float is(vec2 w) {
 void main() {
   float sel = is(uSel);
   if (uMode > 0.5 && uMode < 1.5 && sel < 0.5) discard;
-  if (uMode > 1.5 && sel > 0.5) discard;
+  if (uMode > 1.5 && uMode < 2.5 && sel > 0.5) discard;
   vec3 n = normalize(vN);
   vec3 ray = uOrtho > 0.5 ? uDir : vP - uCam;
   if (dot(n, ray) > 0.0) n = -n;
@@ -109,6 +109,11 @@ void main() {
   gl_FragColor = vec4(mod(x, 256.0), floor(x / 256.0) + 16.0 * mod(y, 16.0), floor(y / 16.0), z) / 255.0;
 }`;
 
+// How much of a faded thing shows: the rest beside a selection; an older
+// build's mesh while the new one builds; a stage's finished parts and a
+// rough stand-in in a build's sketch.
+const FADE = 0.45, STALE = 0.3, SKETCH_PARTS = 0.7, SKETCH_ROUGH = 0.35;
+
 export class Viewer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -134,10 +139,22 @@ export class Viewer {
     // into depth alone, then translucent, so only its nearest surface shows
     // and the selection is seen through it.
     this.fade = true;
-    const ghost = { ...this.uniforms, uMode: { value: 2 }, uGhost: { value: 0.22 } };
-    this.ghostDepth = new THREE.ShaderMaterial({ uniforms: ghost, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide, colorWrite: false });
-    this.ghostColour = new THREE.ShaderMaterial({ uniforms: ghost, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+    this.stale = false; // the mesh shown is an older build's: all of it fades
+    const pair = (alpha, mode) => {
+      const u = { ...this.uniforms, uMode: { value: mode }, uGhost: { value: alpha } };
+      return {
+        u,
+        depth: new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide, colorWrite: false }),
+        colour: new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
+      };
+    };
+    this.ghost = pair(FADE, 2);
+    this.ghostDepth = this.ghost.depth;
+    this.ghostColour = this.ghost.colour;
     this.ghosts = [];
+    // while a build runs: each stage's parts, and rough stand-ins, faded
+    this.sketchLooks = { parts: pair(SKETCH_PARTS, 3), rough: pair(SKETCH_ROUGH, 3) };
+    this.sketches = new Map(); // id -> {geometry, meshes}
     this.pickMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: PICK_FRAG, side: THREE.DoubleSide });
     this.pickScene = new THREE.Scene();
     this.pickTarget = new THREE.WebGLRenderTarget(1, 1);
@@ -458,7 +475,45 @@ export class Viewer {
     this.draw();
   }
 
+  /** The sketches of a build running: [{id, rough, payload}], replacing those shown. */
+  setSketches(list) {
+    const want = new Set(list.map((k) => k.id));
+    for (const [id, k] of this.sketches) {
+      if (want.has(id)) continue;
+      this.scene.remove(...k.meshes);
+      k.geometry.dispose();
+      this.sketches.delete(id);
+    }
+    for (const { id, rough, payload } of list) {
+      if (this.sketches.has(id)) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(payload.positions, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(payload.normals, 3));
+      g.setAttribute('paint', new THREE.BufferAttribute(payload.clean, 3, true));
+      g.setAttribute('who', new THREE.BufferAttribute(new Float32Array(2 * payload.triangles * 3), 2));
+      const look = rough ? this.sketchLooks.rough : this.sketchLooks.parts;
+      const meshes = [look.depth, look.colour].map((m, i) => {
+        const gm = new THREE.Mesh(g, m);
+        gm.frustumCulled = false; gm.renderOrder = (rough ? 5 : 3) + i;
+        return gm;
+      });
+      this.scene.add(...meshes);
+      this.sketches.set(id, { geometry: g, meshes });
+    }
+    this.applyFade();
+    this.draw();
+  }
+
+  /** The mesh shown is an older build's (a new one is being built): fade all of it. */
+  setStale(on) {
+    if (this.stale === !!on) return;
+    this.stale = !!on;
+    this.applyFade();
+    this.draw();
+  }
+
   clear() {
+    this.setSketches([]);
     if (this.mesh) { this.scene.remove(this.mesh, ...this.ghosts); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); this.mesh = null; this.pickMesh = null; this.ghosts = []; }
     this.payload = null;
     this.buildGrid();
@@ -673,9 +728,14 @@ export class Viewer {
   setFade(on) { this.fade = !!on; this.applyFade(); this.draw(); }
 
   applyFade() {
-    const on = this.fade && this.uniforms.uSel.value.x >= 0;
-    this.material.uniforms.uMode.value = on ? 1 : 0;
-    for (const g of this.ghosts) g.visible = on;
+    // a build's sketches stand in for the older mesh, which steps aside
+    const sketched = this.sketches.size > 0;
+    const fading = this.fade && this.uniforms.uSel.value.x >= 0;
+    if (this.mesh) this.mesh.visible = !this.stale && !sketched;
+    this.material.uniforms.uMode.value = fading ? 1 : 0;
+    this.ghost.u.uMode.value = this.stale ? 3 : 2;
+    this.ghost.u.uGhost.value = this.stale ? STALE : FADE;
+    for (const g of this.ghosts) g.visible = !sketched && (this.stale || fading);
   }
 
   /** The theme's accent (`--accent`), used to tint selected geometry. */

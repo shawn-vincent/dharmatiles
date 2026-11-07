@@ -16,6 +16,7 @@
   <p class="lede">What changed in each version, newest first. Install the current one with <code>brew install shawn-vincent/dharmatiles/dharmatiles</code>.</p>
 </header>
 <nav class="toc" aria-label="Versions"><div class="eyebrow">Versions</div><ol>
+  <li><a href="#v0.6.0">0.6.0 · 7 Nov 2026</a></li>
   <li><a href="#v0.5.0">0.5.0 · 6 Nov 2026</a></li>
   <li><a href="#v0.4.0">0.4.0 · 6 Nov 2026</a></li>
   <li><a href="#v0.3.0">0.3.0 · 6 Nov 2026</a></li>
@@ -34,6 +35,15 @@
 <article class="doc">
 
 <p>Versions before 0.1.0 were never published; their numbers and dates are given after the fact, from the project's history, and are approximate.</p>
+
+<h2 id="v0.6.0">0.6.0 <small>7 November 2026</small></h2>
+<p>Faster cliffs, and the tile shows while it builds.</p>
+<ul>
+  <li><strong>Cliffs build faster:</strong> the cracks are carved on a 0.1 mm grid instead of 0.05 mm, which no print can tell apart. A 1×1 cliff takes about a quarter less time; cliff geometry, and every cliff's hashes, change slightly.</li>
+  <li><strong>The tile shows while it builds:</strong> the last build fades as soon as a rebuild starts; each stage's parts then appear, faded, as it finishes; a cliff shows its rough blocks within a second. The finished tile replaces them. See <a href="preview.html#live">Live updates</a>.</li>
+  <li><strong>Cliff drafts in about two seconds,</strong> not ten: a draft carves on a coarser grid and leaves the grain off. Large drafts are thinned for the view.</li>
+  <li><strong>The fade behind a selection is lighter:</strong> the rest of the tile is easier to see.</li>
+</ul>
 
 <h2 id="v0.5.0">0.5.0 <small>6 November 2026</small></h2>
 <p>Lines and regions in the property sheet, and the rest of the tile fades behind a selection.</p>

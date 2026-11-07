@@ -532,6 +532,7 @@ pub fn build_with(
             printer: opts.printer,
             against: None,
             foots: &[],
+            draft: opts.draft,
         };
         match element.foot(&c.frame, &ctx) {
             Ok(Some(f)) => foots.push(f),
@@ -540,6 +541,10 @@ pub fn build_with(
         }
     }
     let mut painted = false;
+    // sketches start with the lifted ground, which carries what the
+    // surfaces made before it: a lone pebble is no picture of a tile
+    let mut lifted = !c.steps.contains(&Step::Lift);
+    let mut sketched = 0;
     for (n, step) in c.steps.iter().enumerate() {
         let t_stage = std::time::Instant::now();
         progress.begin(&keys[n].0, &keys[n].1);
@@ -561,6 +566,7 @@ pub fn build_with(
                     printer: opts.printer,
                     against: tile.stack.get(i).and_then(|e| e.against.as_deref()),
                     foots: &foots,
+                    draft: opts.draft,
                 };
                 c.elements[i].build(&mut scene, &ctx).map_err(|e| {
                     let msg = format!("{}: {}", paths[i], e.message);
@@ -573,6 +579,16 @@ pub fn build_with(
                     }
                 })?;
             }
+        }
+        // a front end showing the build as it goes gets what this stage made
+        lifted |= *step == Step::Lift;
+        if lifted
+            && progress.sketching()
+            && scene.parts().len() > sketched
+            && let Ok((mesh, mats)) = scene.soup_since(sketched)
+        {
+            progress.sketch(&mesh, &mats, false);
+            sketched = scene.parts().len();
         }
         progress.end(&keys[n].0);
         stage_secs.push((keys[n].0.clone(), t_stage.elapsed().as_secs_f64()));

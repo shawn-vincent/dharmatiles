@@ -211,6 +211,7 @@ mod tests {
             printer: dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2),
             against: None,
             foots: &[],
+            draft: false,
         };
         OpenLock::default().build(&mut scene, &ctx).unwrap();
         scene.parts()[0].solid.volume()
