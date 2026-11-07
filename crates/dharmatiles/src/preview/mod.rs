@@ -186,7 +186,14 @@ pub struct Shared {
     draft_cv: std::sync::Condvar,
     /// Each sketch's id, unique across tiles.
     sketch_seq: std::sync::atomic::AtomicU64,
+    /// The build caches of the tiles built last, newest first, by path
+    /// and whether they are drafts' (see [`dt_eval::Cache`]).
+    build_caches: Mutex<VecDeque<(String, bool, Arc<dt_eval::Cache>)>>,
 }
+
+/// How many build caches are kept: a cliff's solids are large, so only
+/// the tiles worked on last keep theirs.
+const BUILD_CACHES: usize = 4;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
@@ -237,6 +244,7 @@ impl Shared {
             draft_req: Mutex::new(None),
             draft_cv: std::sync::Condvar::new(),
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
+            build_caches: Mutex::new(VecDeque::new()),
         };
         me.rescan();
         me
@@ -438,6 +446,20 @@ impl Shared {
             .iter()
             .find(|k| k.id == id)
             .map(|k| Arc::clone(&k.mesh))
+    }
+
+    /// The build cache for `path` (a draft's, or a full build's), made
+    /// newest; the oldest beyond [`BUILD_CACHES`] is dropped.
+    fn build_cache(&self, path: &str, draft: bool) -> Arc<dt_eval::Cache> {
+        let mut caches = lock(&self.build_caches);
+        let cache = caches
+            .iter()
+            .position(|(p, d, _)| p == path && *d == draft)
+            .and_then(|k| caches.remove(k))
+            .map_or_else(|| Arc::new(dt_eval::Cache::new()), |(_, _, c)| c);
+        caches.push_front((path.to_owned(), draft, Arc::clone(&cache)));
+        caches.truncate(BUILD_CACHES);
+        cache
     }
 
     /// Keep stage `stage`'s sketch for tile `i`, in place of its last.

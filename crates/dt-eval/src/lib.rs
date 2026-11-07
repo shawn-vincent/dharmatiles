@@ -10,6 +10,7 @@
 //! definitions and defaults resolved, the edge contract read, and what
 //! needs an element not built yet set aside (see its module docs).
 
+mod cache;
 pub mod diag;
 pub mod doc;
 pub mod plan;
@@ -22,6 +23,7 @@ use dt_doc::schema::did_you_mean;
 use dt_elements::{Control, Ctx, Element};
 use dt_kit::{Audit, BuildRecord, Export, Frame, Mask, Material, Printer, Scene, Seed, Stage};
 
+pub use cache::Cache;
 pub use diag::Diag;
 pub use dt_kit::Progress;
 pub use source::{Files, LIB, Library, Memory, Source};
@@ -133,6 +135,9 @@ pub struct Built {
     /// How long each stage took, seconds, in build order (`3:grass`,
     /// `union`, `audit`): the weights the next build's progress bar uses.
     pub stage_secs: Vec<(String, f64)>,
+    /// Steps a [`Cache`] gave, not built (the first ones, in plan order);
+    /// their stages are missing from `stage_secs`.
+    pub reused: usize,
     /// The masonry is brick (a `brick` or `regular-brick` wall): painted
     /// in reds, not stone greys.
     pub brick: bool,
@@ -465,6 +470,24 @@ pub fn build_with(
     opts: &Options,
     progress: &Progress,
 ) -> Result<Built, Vec<Diag>> {
+    build_cached(sources, path, opts, progress, None)
+}
+
+/// [`build_with`], starting from the scene `cache` kept after the last
+/// step this build shares with the build before it, and leaving its own
+/// steps there for the next (see [`Cache`]).  The result is the same as
+/// without the cache, hash for hash.
+///
+/// # Errors
+/// As [`build`].
+#[allow(clippy::too_many_lines)]
+pub fn build_cached(
+    sources: &dyn Source,
+    path: &str,
+    opts: &Options,
+    progress: &Progress,
+    cache: Option<&Cache>,
+) -> Result<Built, Vec<Diag>> {
     let text = sources
         .read(path)
         .map_err(|e| vec![Diag::plain("dt::source", e)])?;
@@ -483,19 +506,19 @@ pub fn build_with(
     let mut scene = Scene::new(c.frame, root);
     scene.set_progress(progress.clone());
     let mut stage_secs: Vec<(String, f64)> = Vec::new();
-    let keys = progress::stage_keys(tile, &c.steps);
+    let keys_of_stages = progress::stage_keys(tile, &c.steps);
     let edge_mm = tile
         .edges
         .iter()
         .find(|(surface, _)| surface == "ground")
         .map(|(_, mm)| mm * c.frame.scale());
     scene.set_edge(edge_mm);
-    scene.set_water_edge(
-        tile.edges
-            .iter()
-            .find(|(surface, _)| surface == "water")
-            .map(|(_, mm)| mm * c.frame.scale()),
-    );
+    let water_edge = tile
+        .edges
+        .iter()
+        .find(|(surface, _)| surface == "water")
+        .map(|(_, mm)| mm * c.frame.scale());
+    scene.set_water_edge(water_edge);
     let mut h = c.steps.iter().fold(0xcbf2_9ce4_8422_2325, |h, s| {
         fnv(
             h,
@@ -508,7 +531,12 @@ pub fn build_with(
     let (masks, mask_of) = masks(tile, &c.frame, &c.areas);
     let hashes: Vec<u64> = masks.iter().map(Mask::content_hash).collect();
     h = mask_of.iter().fold(h, |h, &m| fnv(h, hashes[m]));
-    scene.record("plan", h);
+    // the plan's hash leads the stages, but is not the scene's: a scene a
+    // cache kept serves a build whose later steps differ
+    let plan_stage = Stage {
+        name: "plan".to_owned(),
+        hash: h,
+    };
     let paths = entry_paths(tile);
     // with water, the ground's areas are banked down to each other once the
     // surfaces are painted, before any solid reads the ground
@@ -545,9 +573,42 @@ pub fn build_with(
     // surfaces made before it: a lone pebble is no picture of a tile
     let mut lifted = !c.steps.contains(&Step::Lift);
     let mut sketched = 0;
-    for (n, step) in c.steps.iter().enumerate() {
+    let seeds: Vec<Seed> = (0..c.elements.len())
+        .map(|i| {
+            tile.stack
+                .get(i)
+                .and_then(|e| e.seed)
+                .map_or_else(|| root.path(&paths[i]), Seed::new)
+        })
+        .collect();
+    let area_hash: Vec<u64> = mask_of.iter().map(|&m| hashes[m]).collect();
+    let base = cache::base_key(&c.frame, c.seed, opts, [edge_mm, water_edge], fills, &foots);
+    let keys = cache::step_keys(base, tile, &c.steps, &paths, &seeds, &area_hash);
+    let mut first = 0;
+    if let Some((n, k)) = cache.and_then(|c| c.longest(&keys)) {
+        scene = k.scene;
+        scene.set_progress(progress.clone());
+        painted = k.painted;
+        first = n + 1;
+        // what the cache gave: each stage done at once, and the scene so far
+        // sketched in one piece
+        for (key, label) in &keys_of_stages[..first] {
+            progress.begin(key, label);
+            progress.end(key);
+        }
+        lifted |= c.steps[..first].contains(&Step::Lift);
+        if lifted
+            && progress.sketching()
+            && !scene.parts().is_empty()
+            && let Ok((mesh, mats)) = scene.soup_since(0)
+        {
+            progress.sketch(&mesh, &mats, false);
+            sketched = scene.parts().len();
+        }
+    }
+    for (n, step) in c.steps.iter().enumerate().skip(first) {
         let t_stage = std::time::Instant::now();
-        progress.begin(&keys[n].0, &keys[n].1);
+        progress.begin(&keys_of_stages[n].0, &keys_of_stages[n].1);
         let surface = matches!(*step, Step::Entry(i) if writes[i] == dt_elements::Write::Surface);
         if fills && !painted && !surface {
             painted = true;
@@ -590,8 +651,20 @@ pub fn build_with(
             progress.sketch(&mesh, &mats, false);
             sketched = scene.parts().len();
         }
-        progress.end(&keys[n].0);
-        stage_secs.push((keys[n].0.clone(), t_stage.elapsed().as_secs_f64()));
+        progress.end(&keys_of_stages[n].0);
+        stage_secs.push((keys_of_stages[n].0.clone(), t_stage.elapsed().as_secs_f64()));
+        if let Some(cache) = cache {
+            let mut scene = scene.clone();
+            scene.set_progress(Progress::none());
+            cache.put(
+                n,
+                cache::Kept {
+                    key: keys[n],
+                    scene,
+                    painted,
+                },
+            );
+        }
     }
     let t_stage = std::time::Instant::now();
     progress.begin(progress::UNION, "joining the parts");
@@ -660,7 +733,9 @@ pub fn build_with(
         export,
         materials,
         audit,
-        stages: scene.stages().to_vec(),
+        stages: std::iter::once(plan_stage)
+            .chain(scene.stages().iter().cloned())
+            .collect(),
         record,
         out: out_path(path, &opts.system),
         footprint,
@@ -673,6 +748,7 @@ pub fn build_with(
             bits: g.z.iter().map(|z| z.is_finite()).collect(),
         }),
         stage_secs,
+        reused: first,
         brick,
         entries,
         pieces,

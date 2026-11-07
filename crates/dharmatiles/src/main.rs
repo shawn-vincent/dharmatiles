@@ -128,6 +128,7 @@ fn main() -> ExitCode {
                             threemf,
                             template: template.as_deref(),
                             palette: &palette,
+                            cache: None,
                         },
                         json,
                     ),

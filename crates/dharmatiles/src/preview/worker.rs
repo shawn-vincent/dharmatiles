@@ -127,8 +127,9 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         stage: Mutex::new(String::new()),
     });
     let reporter = dt_eval::Progress::new(latest.clone());
+    let cache = shared.build_cache(&path, false);
     let built = match std::panic::catch_unwind(AssertUnwindSafe(|| {
-        dt_eval::build_with(&rec, &path, opts, &reporter)
+        dt_eval::build_cached(&rec, &path, opts, &reporter, Some(&cache))
     })) {
         Ok(built) => built,
         Err(panic) if panic.is::<Superseded>() => {
@@ -189,8 +190,15 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
                 let _ = f;
                 timings.save();
             }
+            let reused = match b.reused {
+                0 => String::new(),
+                n => format!(
+                    " ({n} of {} steps kept from the last build)",
+                    n + b.stage_secs.len() - 2
+                ),
+            };
             tell!(
-                "built {path}: {} triangles, overhang {:.2} mm², {built_s:.2} s",
+                "built {path}: {} triangles, overhang {:.2} mm², {built_s:.2} s{reused}",
                 b.audit.triangles,
                 b.audit.overhang_mm2
             );

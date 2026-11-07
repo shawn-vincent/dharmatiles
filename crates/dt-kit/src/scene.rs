@@ -343,14 +343,17 @@ pub const BANK_MM: f64 = 7.0;
 /// is also `dt_geom::source::MAX_SLOTS`.
 const SLOTS: u32 = dt_geom::source::MAX_SLOTS;
 
-/// The scene of one build.
+/// The scene of one build.  A clone shares its solids and paints with the
+/// original, so keeping one after each step (a build cache) is cheap.
+#[derive(Clone)]
 pub struct Scene {
     frame: Frame,
     seed: Seed,
     field: Grid,
     painted: Mask,
-    /// Each paint, in order: its area and the full field it painted from.
-    layers: Vec<(Mask, Vec<f64>)>,
+    /// Each paint, in order: its area and the full field it painted from
+    /// (shared, so a kept scene costs little).
+    layers: Vec<std::sync::Arc<(Mask, Vec<f64>)>>,
     settled: bool,
     banked: bool,
     /// Nodes the water covers (lifted as water).
@@ -472,8 +475,10 @@ impl Scene {
             self.field.z[k] = z;
             self.painted.bits[k] = true;
         }
-        self.layers
-            .push((area.clone(), vec![level_mm; self.field.z.len()]));
+        self.layers.push(std::sync::Arc::new((
+            area.clone(),
+            vec![level_mm; self.field.z.len()],
+        )));
     }
 
     /// **paint** a field: set the ground surface to `field` (world mm) over
@@ -485,7 +490,8 @@ impl Scene {
             self.field.z[k] = z;
             self.painted.bits[k] = true;
         }
-        self.layers.push((area.clone(), field.z.clone()));
+        self.layers
+            .push(std::sync::Arc::new((area.clone(), field.z.clone())));
     }
 
     /// The ground surface (world mm): every paint, spread to the nodes no
@@ -593,7 +599,8 @@ impl Scene {
         let k_all = self.field.z.len();
         // the last paint owning each node
         let mut owner = vec![usize::MAX; k_all];
-        for (li, (area, _)) in self.layers.iter().enumerate() {
+        for (li, layer) in self.layers.iter().enumerate() {
+            let area = &layer.0;
             for (k, _) in area.bits.iter().enumerate().filter(|(_, b)| **b) {
                 owner[k] = li;
             }
@@ -897,7 +904,7 @@ impl Scene {
                         (i0..=i1.min(nx - 1)).any(|i| {
                             self.layers[at + 1..]
                                 .iter()
-                                .any(|(m, _)| m.bits[j * nx + i])
+                                .any(|layer| layer.0.bits[j * nx + i])
                         })
                     })
                 });

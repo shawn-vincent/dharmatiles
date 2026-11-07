@@ -22,6 +22,8 @@ pub(crate) struct Extras<'a> {
     /// project.
     pub(crate) template: Option<&'a str>,
     pub(crate) palette: &'a dt_kit::Palette,
+    /// The scenes the tile's last build kept (`watch`), to start from.
+    pub(crate) cache: Option<&'a dt_eval::Cache>,
 }
 
 pub(crate) fn build(
@@ -101,7 +103,7 @@ pub(crate) fn build_one(
     let reporter = tracker
         .as_ref()
         .map_or_else(dt_eval::Progress::none, |(_, pr)| pr.clone());
-    let b = match dt_eval::build_with(sources, p, opts, &reporter) {
+    let b = match dt_eval::build_cached(sources, p, opts, &reporter, extras.cache) {
         Ok(b) => b,
         Err(errs) => {
             if tracker.is_some() {
@@ -158,6 +160,9 @@ pub(crate) fn build_one(
             built_s,
             total_s
         );
+        if b.reused > 0 {
+            tell!("  {} steps kept from the last build", b.reused);
+        }
         for f in &failures {
             tell!("  audit failed: {f}");
         }

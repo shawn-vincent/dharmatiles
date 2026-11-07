@@ -72,10 +72,12 @@ impl Source for Recording {
     }
 }
 
-/// One watched tile: the files its last build read, with their times.
+/// One watched tile: the files its last build read, with their times,
+/// and the scenes it kept (a save rebuilds from the first changed step).
 struct Tile<'a> {
     path: &'a str,
     files: BTreeMap<String, Option<SystemTime>>,
+    cache: dt_eval::Cache,
 }
 
 impl Tile<'_> {
@@ -90,7 +92,13 @@ impl Tile<'_> {
 }
 
 /// Build the tile at `path`, recording what it read.
-fn build<'a>(path: &'a str, opts: &Options, out: &Path, png: bool) -> (u8, Tile<'a>) {
+fn build<'a>(
+    path: &'a str,
+    opts: &Options,
+    out: &Path,
+    png: bool,
+    cache: dt_eval::Cache,
+) -> (u8, Tile<'a>) {
     let rec = Recording::default();
     if !path.starts_with(LIB) || dt_eval::source::library_dir().is_some() {
         // watched even if the build never got to read it
@@ -111,6 +119,7 @@ fn build<'a>(path: &'a str, opts: &Options, out: &Path, png: bool) -> (u8, Tile<
             threemf: false,
             template: None,
             palette: &dt_kit::Palette::default(),
+            cache: Some(&cache),
         },
         false,
     );
@@ -118,7 +127,7 @@ fn build<'a>(path: &'a str, opts: &Options, out: &Path, png: bool) -> (u8, Tile<
         .read
         .into_inner()
         .unwrap_or_else(PoisonError::into_inner);
-    (code, Tile { path, files })
+    (code, Tile { path, files, cache })
 }
 
 /// Build every path, then rebuild on change until Ctrl-C (or, for tests,
@@ -135,7 +144,7 @@ pub fn run(
     let mut code = OK;
     let mut tiles = Vec::new();
     for p in paths {
-        let (c, t) = build(p, opts, out, png);
+        let (c, t) = build(p, opts, out, png, dt_eval::Cache::new());
         code = c;
         builds += 1;
         tiles.push(t);
@@ -157,7 +166,7 @@ pub fn run(
                 continue;
             }
             tell!("\nchanged: {}", changed.join(", "));
-            let (c, fresh) = build(t.path, opts, out, png);
+            let (c, fresh) = build(t.path, opts, out, png, std::mem::take(&mut t.cache));
             code = c;
             *t = fresh;
             builds += 1;

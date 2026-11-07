@@ -369,8 +369,9 @@ pub(super) fn drafts(shared: Arc<Shared>, opts: Options) {
             let Some(r) = req else { continue };
             let src = Overlay(BTreeMap::from([(r.file.clone(), r.text.clone())]));
             let progress = dt_eval::Progress::new(Arc::new(LatestDraft(Arc::clone(&shared))));
+            let cache = shared.build_cache(&r.path, true);
             let built = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                dt_eval::build_with(&src, &r.path, &opts, &progress)
+                dt_eval::build_cached(&src, &r.path, &opts, &progress, Some(&cache))
             }));
             if built.as_ref().is_err_and(|panic| panic.is::<Superseded>()) {
                 continue;
@@ -641,6 +642,7 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
         threemf,
         template: template.as_deref(),
         palette: &palette,
+        cache: None,
     };
     let opts = crate::library::options(system.clone(), None);
     let t0 = std::time::Instant::now();

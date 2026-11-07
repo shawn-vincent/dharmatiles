@@ -16,6 +16,7 @@
   <p class="lede">What changed in each version, newest first. Install the current one with <code>brew install shawn-vincent/dharmatiles/dharmatiles</code>.</p>
 </header>
 <nav class="toc" aria-label="Versions"><div class="eyebrow">Versions</div><ol>
+  <li><a href="#v0.7.0">0.7.0 · 7 Nov 2026</a></li>
   <li><a href="#v0.6.0">0.6.0 · 7 Nov 2026</a></li>
   <li><a href="#v0.5.0">0.5.0 · 6 Nov 2026</a></li>
   <li><a href="#v0.4.0">0.4.0 · 6 Nov 2026</a></li>
@@ -35,6 +36,13 @@
 <article class="doc">
 
 <p>Versions before 0.1.0 were never published; their numbers and dates are given after the fact, from the project's history, and are approximate.</p>
+
+<h2 id="v0.7.0">0.7.0 <small>7 November 2026</small></h2>
+<p>A rebuild starts from what your edit changed.</p>
+<ul>
+  <li><strong>Builds keep what they made:</strong> the preview and <code>watch</code> keep the tile as it stood after each step of the last build, and a rebuild starts from the first step the edit changes. Changing the boulders by a 1×1 cliff rebuilds in about 2 seconds instead of 9; as a draft, at once. The result is the same, hash for hash, as a build from nothing. See <a href="preview.html#live">Live updates</a>.</li>
+  <li><strong>A build cut short by a newer edit</strong> still keeps the steps it finished, for the build that replaces it.</li>
+</ul>
 
 <h2 id="v0.6.0">0.6.0 <small>7 November 2026</small></h2>
 <p>Faster cliffs, and the tile shows while it builds.</p>
