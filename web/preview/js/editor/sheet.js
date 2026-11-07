@@ -1,7 +1,7 @@
 // The property sheet (the lens): the controls of the selection, and edits
 // made there.
 
-import { Lens, kdlString } from '../lens.js';
+import { Lens, kdlString, unquote } from '../lens.js';
 import { byteToIndex } from '../text.js';
 import { $, host, isEntry, state, tile, viewer } from './app.js';
 import { doc, edited, elementNamed, elements, mapNode, renderTextBar, stackItems, texts } from './document.js';
@@ -27,7 +27,20 @@ export const lens = new Lens($('lens'), {
     edited(texts.text, 'lens', `Changed ${name}`);
   },
   makeMine: () => offerMine(),
+  levels: () => levelsHere(),
 });
+/** The levels a value may name here: the standard ones, as this tile sets them, and its own. */
+function levelsHere() {
+  const own = doc.map?.tile;
+  const out = (own?.standard_levels || []).map((l) => ({ name: l.name, value: String(l.value), about: LEVEL_ABOUT[l.name] || 'a standard level' }));
+  for (const c of own?.levels?.controls || []) {
+    const value = unquote(c.text);
+    const i = out.findIndex((l) => l.name === c.name);
+    if (i >= 0) out[i] = { ...out[i], value, about: `${out[i].about}; set by this tile` };
+    else out.push({ name: c.name, value, about: 'this tile’s own level' });
+  }
+  return out;
+}
 /** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty
 const TILE_SCHEMA = {

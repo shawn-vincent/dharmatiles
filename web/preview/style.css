@@ -195,11 +195,11 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 
 /* completion */
 #comp { position: fixed; z-index: 30; width: 340px; max-height: 260px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 4px; }
-#comp .it { display: grid; grid-template-columns: 12px auto minmax(0, 1fr); gap: 9px; align-items: center; padding: 5px 8px; border-radius: var(--r); cursor: pointer; }
-#comp .it.on, #comp .it:hover { background: var(--panel); }
+#comp .it, .value-pop .it { display: grid; grid-template-columns: 12px auto minmax(0, 1fr); gap: 9px; align-items: center; padding: 5px 8px; border-radius: var(--r); cursor: pointer; }
+#comp .it.on, #comp .it:hover, .value-pop .it.on, .value-pop .it:hover { background: var(--panel); }
 #comp .it .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--fam, var(--line-2)); box-shadow: none; }
-#comp .it .nm { font: 600 12.5px var(--f-code); }
-#comp .it .ds { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#comp .it .nm, .value-pop .it .nm { font: 600 12.5px var(--f-code); }
+#comp .it .ds, .value-pop .it .ds { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* the property sheet is the whole right inspector */
 #properties-pane { grid-area: properties; min-height: 0; overflow: hidden; background: var(--panel); }
@@ -225,9 +225,9 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #lens .val.ro .num { border-bottom: 0; cursor: default; }
 #lens .num.active { background: color-mix(in srgb, var(--accent) 25%, transparent); }
 #lens .unit { color: var(--muted); font: 11.5px var(--f-code); }
-#lens .words { display: flex; flex-wrap: wrap; gap: 4px; }
-#lens .words button, #lens .flip { border: 1px solid var(--line); background: none; border-radius: var(--r); padding: 0 6px; font-size: 12px; cursor: pointer; }
-#lens .words button.on, #lens .flip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+#lens .words, .value-pop .words { display: flex; flex-wrap: wrap; gap: 4px; }
+#lens .words button, #lens .flip, .value-pop .words button { border: 1px solid var(--line); background: none; border-radius: var(--r); padding: 0 6px; font-size: 12px; cursor: pointer; }
+#lens .words button.on, #lens .flip.on, .value-pop .words button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 #lens .word-select { width: 100%; min-width: 0; height: 27px; color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 2px 24px 2px 7px; font: 12.5px var(--f-body); cursor: pointer; }
 #lens .word-select:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent); outline-offset: 0; }
 #lens .word-select:disabled { cursor: default; opacity: .7; }
@@ -239,6 +239,13 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #lens .linkish:hover { text-decoration: underline; }
 #lens .more { font-size: 12px; margin-top: 6px; }
 /* a tile's size, picked from a grid under the field (lens.js sizeGrid) */
+/* the helper under a typed value: what it takes, a check, a number or a range, what can go at the caret */
+.value-pop { position: fixed; z-index: 50; display: grid; gap: 6px; padding: 8px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); font-size: 12px; }
+.value-pop .vp-takes { color: var(--muted); }
+.value-pop .vp-check { color: var(--ink); font-weight: 600; }
+.value-pop .vp-check::before { content: "≠ "; color: var(--muted); }
+.value-pop .vp-list { max-height: 200px; overflow: auto; }
+.value-pop .it { grid-template-columns: auto minmax(0, 1fr); }
 .size-grid { position: fixed; z-index: 50; padding: 8px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
 .size-cells { display: grid; gap: 3px; width: max-content; }
 .size-cell { width: 16px; height: 16px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--bg); cursor: pointer; transition: background .06s, border-color .06s; }

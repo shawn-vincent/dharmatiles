@@ -11,6 +11,10 @@
 //                                       `at` (value null: take it out)
 //   api.makeMine()                      offer a copy of a library tile
 
+import { asNumber, asRange, checkValue, formOf, isNumeric, kdlString, unquote, valueItems, written } from './value.js';
+
+export { kdlString, unquote };
+
 const STEP = { mm: 0.1, level: 0.1, degrees: 1, percent: 1, count: 1, 'per square': 0.05, number: 0.05 };
 const PX = { count: 10, degrees: 3, percent: 3 }; // pixels a step takes; 4 otherwise
 const NUM = /-?\d+(?:\.\d+)?/g;
@@ -41,21 +45,6 @@ export function parseValue(raw) {
   if (t === '#true' || t === 'true') return true;
   if (t === '#false' || t === 'false') return false;
   return t.replace(/^#?"|"#?$/g, '');
-}
-
-/** `text` as a KDL v2 string. */
-export function kdlString(text) {
-  const esc = { '"': '\\"', '\\': '\\\\', '\n': '\\n', '\r': '\\r', '\t': '\\t' };
-  return `"${text.replace(/["\\\n\r\t\u0000-\u001f\u007f]/g, (ch) => esc[ch] ?? `\\u{${ch.charCodeAt(0).toString(16)}}`)}"`;
-}
-
-/** A written KDL string's text: quotes off, escapes undone. */
-export function unquote(written) {
-  const t = written.trim();
-  const raw = t.match(/^(#+)"([\s\S]*)"\1$/);
-  if (raw) return raw[2];
-  if (!/^"[\s\S]*"$/.test(t)) return t;
-  return t.slice(1, -1).replace(/\\(u\{([0-9a-fA-F]+)\}|[\s\S])/g, (_, e, hex) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : ({ n: '\n', r: '\r', t: '\t', s: ' ' }[e] ?? e)));
 }
 
 /** Button choices stay direct only when they are certain to fit on one row. */
@@ -180,7 +169,7 @@ export class Lens {
         box.append(b);
       }
       cell.append(box);
-    } else if (words) {
+    } else if (words && !isNumeric(c)) {
       const cur = shown.replace(/^"|"$/g, '');
       if (wordControlNeedsSelect(words)) {
         const select = el('select', 'word-select');
@@ -276,7 +265,7 @@ export class Lens {
         if (!this.moved) return;
         const fine = ev.shiftKey ? 0.1 : 1;
         let x = start + Math.round(dx / (PX[c.unit] ?? 4)) * step * fine;
-        if (c.limits && !/\.\./.test(v.text)) x = Math.min(c.limits[1], Math.max(c.limits[0], x));
+        if (c.limits && !/\.\./.test(v.text)) x = Math.min(c.limits[1] ?? Infinity, Math.max(c.limits[0], x));
         const txt = String(Number(x.toFixed(fine < 1 ? dec + 1 : dec))); // 7, not 7.0
         if (txt === n.textContent) return;
         n.textContent = txt;
@@ -309,7 +298,10 @@ export class Lens {
   typeIn(val, g, c, s, v) {
     const input = el('input', 'edit');
     const text = c.unit === 'text'; // plain words: typed without quotes, written as a KDL string
-    input.value = text ? unquote(v ? v.text : '') : v ? v.text : (c.default ?? '');
+    // a number, range or expression: typed bare, quoted as it is written
+    const num = isNumeric(c);
+    const shownText = v ? v.text : (c.default ?? '');
+    input.value = text || num ? unquote(shownText) : shownText;
     const was = input.value;
     input.spellcheck = false;
     val.replaceWith(input);
@@ -323,17 +315,109 @@ export class Lens {
       if (keep && input.value !== was) {
         const typed = text ? input.value.trim() : null;
         if (text && !typed) this.put(g, c.name, null);
-        else if (s && !c.viaSet) this.api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), text ? kdlString(typed) : input.value.trim(), true);
+        else if (s && !c.viaSet) this.api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), text ? kdlString(typed) : num ? written(input.value) : input.value.trim(), true);
         else this.put(g, c.name, text ? typed : parseValue(input.value));
       }
       this.show(this.model);
     };
+    let pop = null;
     input.onkeydown = (e) => {
+      if (pop?.key(e)) { e.preventDefault(); return; }
       if (e.key === 'Enter') finish(true);
       if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
     };
     input.onblur = () => finish(true);
     if (c.picker === 'size') close = this.sizeGrid(input, () => finish(true));
+    else if (num) { pop = this.valuePop(input, c); close = pop.close; }
+  }
+
+  /**
+   * The helper under a typed value: what the control takes, a first check
+   * of what is typed, a number or a range, and what can go at the caret
+   * (its words; for a level, the named levels).  Arrows pick, Enter or
+   * Tab takes.  Returns {key(event) -> taken, close}.
+   */
+  valuePop(input, c) {
+    const pop = el('div', 'value-pop');
+    const takes = el('div', 'vp-takes', [[c.unit, c.takes].filter(Boolean).join(', '), c.default && `default ${c.default}`].filter(Boolean).join(' · '));
+    const check = el('div', 'vp-check');
+    const forms = el('div', 'words vp-forms');
+    const list = el('div', 'vp-list');
+    list.setAttribute('role', 'listbox');
+    pop.append(takes, check);
+    let one = null, range = null;
+    if (c.ranges) {
+      one = el('button', '', 'one number');
+      range = el('button', '', 'a range');
+      one.onclick = () => { input.value = asNumber(input.value); update(); };
+      range.onclick = () => { input.value = asRange(input.value); update(); };
+      forms.append(one, range);
+      pop.append(forms);
+    }
+    pop.append(list);
+    let s = { items: [] }, i = 0;
+    const take = () => {
+      const it = s.items[i];
+      if (!it) return false;
+      input.value = input.value.slice(0, s.from) + it.insert + input.value.slice(s.to);
+      const at = s.from + it.insert.length;
+      input.setSelectionRange(at, at);
+      update();
+      return true;
+    };
+    const draw = () => {
+      list.replaceChildren();
+      s.items.forEach((it, k) => {
+        const d = el('div', `it${k === i ? ' on' : ''}`);
+        d.setAttribute('role', 'option');
+        d.setAttribute('aria-selected', k === i);
+        d.append(el('span', 'nm', it.label), el('span', 'ds', it.about || it.kind));
+        d.onpointerdown = (e) => { e.preventDefault(); i = k; take(); };
+        list.append(d);
+      });
+      list.hidden = !s.items.length;
+    };
+    const update = () => {
+      s = valueItems(input.value, input.selectionStart ?? input.value.length, c, this.api.levels?.() || []);
+      i = 0;
+      draw();
+      const why = checkValue(input.value, c);
+      check.textContent = why || '';
+      check.hidden = !why;
+      const form = formOf(input.value);
+      one?.classList.toggle('on', form === 'number');
+      range?.classList.toggle('on', form === 'range');
+    };
+    // the field keeps the focus: a click in the helper is not a blur
+    pop.addEventListener('pointerdown', (e) => e.preventDefault());
+    pop.addEventListener('mousedown', (e) => e.preventDefault());
+    const place = () => {
+      const f = input.getBoundingClientRect();
+      pop.style.width = `${Math.max(f.width, 240)}px`;
+      pop.style.left = `${Math.max(4, Math.min(f.left, window.innerWidth - pop.offsetWidth - 4))}px`;
+      const below = f.bottom + 4 + pop.offsetHeight <= window.innerHeight - 4;
+      pop.style.top = `${below ? f.bottom + 4 : Math.max(4, f.top - 4 - pop.offsetHeight)}px`;
+    };
+    input.addEventListener('input', () => { update(); place(); });
+    input.addEventListener('click', () => { update(); place(); });
+    window.addEventListener('scroll', place, true);
+    document.body.append(pop);
+    update();
+    place();
+    return {
+      key: (e) => {
+        if (!s.items.length) return false;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          i = (i + (e.key === 'ArrowDown' ? 1 : s.items.length - 1)) % s.items.length;
+          draw();
+          return true;
+        }
+        // Enter takes a half-typed name; a whole value is written
+        if (e.key === 'Tab' || (e.key === 'Enter' && s.to > s.from)) return take();
+        return false;
+      },
+      close: () => { window.removeEventListener('scroll', place, true); pop.remove(); },
+    };
   }
 
   /**

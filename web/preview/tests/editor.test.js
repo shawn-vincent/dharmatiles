@@ -10,6 +10,7 @@ import { indentSelection, newlineAt, indentFor, braceEnd } from '../js/text.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { rememberView, shortcutViews } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
+import { asNumber, asRange, checkValue, formOf, valueItems, written } from '../js/value.js';
 
 const elements = [
   {
@@ -253,4 +254,65 @@ test('a description is written as a KDL v2 string and read back the same', () =>
   assert.equal(k, '"A \\"pool\\" \\\\ by the bank\\n\\u{1}"');
   assert.equal(unquote(k), s);
   assert.equal(unquote('#"raw "quotes""#'), 'raw "quotes"');
+});
+
+test('a typed value is written bare when KDL takes it bare, else quoted', () => {
+  assert.equal(written('6'), '6');
+  assert.equal(written(' (h)1.2 '), '(h)1.2');
+  assert.equal(written('edge'), 'edge');
+  assert.equal(written('6..15'), '"6..15"');
+  assert.equal(written('ground - 1'), '"ground - 1"');
+  assert.equal(written('30%'), '"30%"');
+  assert.equal(written('inf'), '"inf"');
+});
+
+test('a value switches between one number and a range', () => {
+  assert.equal(formOf('6'), 'number');
+  assert.equal(formOf('6..15'), 'range');
+  assert.equal(formOf('20%..50%'), 'range');
+  assert.equal(formOf('ground - 1'), 'expression');
+  assert.equal(formOf('full'), 'word');
+  assert.equal(asRange('6'), '6..6');
+  assert.equal(asNumber('6..15'), '6');
+  assert.equal(asRange('ground'), 'ground');
+});
+
+const LEVELS = [{ name: 'edge', value: '3.4', about: 'the tile edge' }, { name: 'ground', value: '3.4', about: 'grass' }, { name: 'water', value: '2.6', about: 'water' }];
+
+test('a level offers the named levels at any name in an expression', () => {
+  const level = { unit: 'level' };
+  assert.deepEqual(valueItems('', 0, level, LEVELS).items.map((i) => i.label), ['edge', 'ground', 'water']);
+  const s = valueItems('ground - w', 10, level, LEVELS);
+  assert.deepEqual([s.from, s.to, s.items.map((i) => i.label)], [9, 10, ['water']]);
+  assert.equal(s.items[0].about, '2.6 mm · water');
+  // a number being typed is not a name
+  assert.deepEqual(valueItems('(h)1', 4, level, LEVELS).items, []);
+});
+
+test("a control's words are offered while only a word is typed", () => {
+  const height = { unit: 'mm', words: [{ word: 'full', about: 'up to the wall top' }, { word: 'low', about: 'half' }] };
+  assert.deepEqual(valueItems('', 0, height).items.map((i) => i.label), ['full', 'low']);
+  assert.deepEqual(valueItems('l', 1, height).items.map((i) => i.label), ['low']);
+  // the whole word selected, the caret before it: every word
+  assert.deepEqual(valueItems('full', 0, height).items.map((i) => i.label), ['full', 'low']);
+  assert.deepEqual(valueItems('12 l', 4, height).items, []);
+});
+
+test('a typed number or range is checked against what the control takes', () => {
+  const tree = { unit: 'mm', limits: [20, 120], ranges: true, takes: '20 to 120, or a range' };
+  assert.equal(checkValue('40', tree), null);
+  assert.equal(checkValue('30..50', tree), null);
+  assert.equal(checkValue('150', tree), 'takes 20 to 120, or a range');
+  assert.equal(checkValue('50..30', tree), 'a range is written low end first');
+  assert.equal(checkValue('wall-top * 4', tree), null); // the reader resolves names
+  const cliff = { unit: 'mm', limits: [6, 120], ranges: false };
+  assert.equal(checkValue('30..40', cliff), 'takes one number, not a range');
+  const level = { unit: 'level', limits: [0, null], above: true, takes: 'over 0' };
+  assert.equal(checkValue('0', level), 'takes over 0');
+  assert.equal(checkValue('900', level), null);
+  const ruin = { unit: 'percent', limits: [0, 1], takes: '0% to 100%' };
+  assert.equal(checkValue('40%', ruin), null);
+  assert.equal(checkValue('150%', ruin), 'takes 0% to 100%');
+  assert.equal(checkValue('0.4', ruin), 'a share is written as a percent: 30%');
+  assert.equal(checkValue('2.5', { unit: 'count' }), 'a count is whole');
 });

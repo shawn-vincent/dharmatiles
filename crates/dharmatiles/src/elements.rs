@@ -122,8 +122,10 @@ fn control_json(takes: Option<&[&str]>, path: &str, c: &Control) -> Value {
     json!({
         "name": c.name,
         "unit": c.value.map(unit),
-        // the numbers as a slider would bound them; `takes` says it in words
-        "limits": c.limits.filter(|l| l.max.is_finite()).map(|l| [l.min, l.max]),
+        // [min, max], max null for no high end; `above` refuses min itself;
+        // `takes` says it all in words
+        "limits": c.limits.map(|l| [Some(l.min), l.max.is_finite().then_some(l.max)]),
+        "above": c.limits.is_some_and(|l| l.above),
         "ranges": c.ranges,
         "takes": c.takes(),
         "default": (!c.default.is_empty()).then_some(c.default),
