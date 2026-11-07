@@ -162,7 +162,6 @@ function showBrowser() {
   // scroll the list only: scrollIntoView would scroll the sliding sidebar too
   const ul = $('tiles'), li = ul.querySelector('li.sel');
   if (li) ul.scrollTop = li.offsetTop - ul.offsetTop - (ul.clientHeight - li.offsetHeight) / 2;
-  $('side').scrollLeft = 0;
   $('filter').focus({ preventScroll: true });
 }
 function showEditor() {
