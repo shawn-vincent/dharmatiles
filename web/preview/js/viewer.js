@@ -119,7 +119,7 @@ void main() {
 const FADE = 0.45, STALE = 0.3, SKETCH_PARTS = 0.7, SKETCH_ROUGH = 0.35;
 // Seconds the rest takes to fade when something is selected, and to come
 // back when nothing is.
-const FADE_IN = 0.22, FADE_OUT = 0.18;
+const FADE_IN = 0.12, FADE_OUT = 0.1;
 
 export class Viewer {
   constructor(canvas) {
