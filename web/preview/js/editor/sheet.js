@@ -21,7 +21,7 @@ export const lens = new Lens($('lens'), {
   },
   async set(at, name, value) {
     if (!doc.writable) return offerMine();
-    const r = await host.post('/api/edit', { text: texts.text, at, name, value });
+    const r = await host.edit({ text: texts.text, at, name, value });
     if (r.status !== 200) { doc.note = r.body?.error || 'that change could not be made'; renderTextBar(); return; }
     texts.setText(r.body.text);
     edited(texts.text, 'lens', `Changed ${name}`);
@@ -42,7 +42,7 @@ const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.
 /** A whole-node change to the tile's text (insert or remove), as one step of history. */
 async function tileEdit(body, label) {
   if (!doc.writable) return offerMine();
-  const r = await host.post('/api/edit', { text: texts.text, ...body });
+  const r = await host.edit({ text: texts.text, ...body });
   if (r.status !== 200) { doc.note = r.body?.error || 'that change could not be made'; renderTextBar(); return; }
   texts.setText(r.body.text);
   edited(texts.text, 'lens', label);

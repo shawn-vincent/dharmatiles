@@ -84,7 +84,7 @@ async function insertNode(place, node, { select: sel } = {}) {
   if (!t) return;
   if (!doc.writable) return offerMine();
   if (texts.file !== t.path && !(await loadText(null))) return;
-  const r = await host.post('/api/edit', { op: 'insert', text: texts.text, place, node });
+  const r = await host.edit({ op: 'insert', text: texts.text, place, node });
   if (r.status !== 200) { doc.note = r.body?.error || 'that could not be written'; renderTextBar(); return; }
   texts.setText(r.body.text, byteToIndex(r.body.text, r.body.at));
   if (sel) { state.sel = null; setSel(sel, { from: 'view' }); } else doc.selectAt = r.body.at;
@@ -113,7 +113,7 @@ export function muteAt(byte, label = 'Entry') {
 }
 export async function removeAt(byte, label = 'Entry') {
   if (!doc.writable) return offerMine();
-  const r = await host.post('/api/edit', { op: 'remove', text: texts.text, at: byte });
+  const r = await host.edit({ op: 'remove', text: texts.text, at: byte });
   if (r.status !== 200) { doc.note = r.body?.error || 'that could not be taken out'; renderTextBar(); return; }
   setSel(null);
   texts.setText(r.body.text);

@@ -177,7 +177,7 @@ export async function askDraft() {
   if (drafts.waiting) { drafts.again = true; return; }
   drafts.waiting = true; drafts.again = false;
   drafts.sent += 1;
-  await host.post(`/api/tiles/${t.index}/draft`, { text: texts.text, file: texts.file === t.path ? undefined : texts.file, id: drafts.sent });
+  await host.draft(t.index, { text: texts.text, file: texts.file === t.path ? undefined : texts.file, id: drafts.sent });
   setTimeout(() => { if (drafts.waiting) { drafts.waiting = false; if (drafts.again) askDraft(); } }, 4000); // a draft that never came
 }
 export async function draftArrived(t) {
@@ -207,7 +207,7 @@ async function check() {
   const t = tile();
   if (!t || texts.text == null) return false;
   const text = texts.text, seq = ++doc.checkSeq;
-  const r = await host.post(`/api/tiles/${t.index}/check`, { text, file: texts.file === t.path ? undefined : texts.file });
+  const r = await host.check(t.index, { text, file: texts.file === t.path ? undefined : texts.file });
   if (r.status === 0) return false; // the server is away: not checked yet, and checked again when it is back
   if (seq !== doc.checkSeq || text !== texts.text || !r.body || t !== tile()) return false;
   doc.note = null;
@@ -240,7 +240,7 @@ async function save(now = false) {
   doc.saving = true;
   renderTextBar();
   try {
-    const r = await host.post(`/api/tiles/${t.index}/save`, { text, base: doc.base, file: file === t.path ? undefined : file });
+    const r = await host.save(t.index, { text, base: doc.base, file: file === t.path ? undefined : file });
     doc.note = null;
     if (r.status === 200) { doc.base = text; doc.conflict = null; }
     else if (r.status === 409) doc.conflict = r.body?.text ?? '';

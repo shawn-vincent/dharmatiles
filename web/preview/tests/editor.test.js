@@ -185,7 +185,7 @@ test('a disconnected edit reports a recoverable result instead of rejecting', as
   const original = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('offline'); };
   try {
-    assert.deepEqual(await browserHost().post('/api/edit', {}), {
+    assert.deepEqual(await browserHost().edit({}), {
       status: 0,
       body: { error: 'the editor is disconnected' },
     });

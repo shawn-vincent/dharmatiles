@@ -184,7 +184,7 @@ export function init() {
     const t = tile();
     if (!t) return;
     try {
-      const r = await host.post(`/api/tiles/${t.index}/export`, { where: true });
+      const r = await host.exportTile(t.index, { where: true });
       if (r.status === 200 && t === tile()) { exporting.out = r.body; renderExport(); }
     } catch { /* said when exporting */ }
   });
@@ -193,7 +193,7 @@ export function init() {
     if (!t || exportBlock()) return renderExport();
     exporting.busy = true; exporting.error = null; exporting.files = null; renderExport();
     try {
-      const r = await host.post(`/api/tiles/${t.index}/export`, { system: exporting.system || state.system || 'db', threemf: $('export-3mf').checked });
+      const r = await host.exportTile(t.index, { system: exporting.system || state.system || 'db', threemf: $('export-3mf').checked });
       if (r.status !== 200) exporting.error = r.body?.error || `could not export (${r.status})`;
       else if (!r.body.ok) exporting.error = r.body.errors?.[0]?.message || (r.body.failures?.length ? `Fails the gate: ${r.body.failures[0]}` : 'the build failed');
       else exporting.files = r.body.files || [];
@@ -202,5 +202,5 @@ export function init() {
     exporting.busy = false;
     renderExport();
   };
-  $('export-reveal').onclick = () => { const f = exporting.files?.find((x) => /\.(stl|3mf)$/.test(x)); if (f) host.post('/api/reveal', { path: f }); };
+  $('export-reveal').onclick = () => { const f = exporting.files?.find((x) => /\.(stl|3mf)$/.test(x)); if (f) host.reveal(f); };
 }

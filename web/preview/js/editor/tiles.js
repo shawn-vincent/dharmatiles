@@ -129,8 +129,7 @@ export function startRename() {
     done = true;
     input.disabled = true;
     if (!(await canLeave())) { input.remove(); $('tilebtn').hidden = false; return; }
-    let r;
-    try { r = await host.post(`/api/tiles/${t.index}/rename`, { name }); } catch { r = { status: 0, body: { error: 'the editor is disconnected' } }; }
+    const r = await host.rename(t.index, name);
     if (r.status !== 200 || r.body?.index == null) {
       // stay in the field with the reason, so the name can be fixed
       done = false; input.disabled = false; input.classList.add('bad');
@@ -182,7 +181,7 @@ export function init() {
     $('new-note').textContent = 'Making the tile…';
     let r;
     try {
-      r = await host.post('/api/new', { name: $('new-name').value, size: $('new-size').value });
+      r = await host.newTile($('new-name').value, $('new-size').value);
     } catch {
       r = { status: 0, body: { error: 'the editor is disconnected' } };
     }
@@ -200,7 +199,7 @@ export function init() {
   $('mine-ok').onclick = async () => {
     const t = tile();
     $('mine-ok').disabled = true;
-    const r = await host.post(`/api/tiles/${t.index}/mine`, {});
+    const r = await host.mine(t.index);
     $('mine-ok').disabled = false;
     $('mine').hidden = true;
     if (r.status !== 200 || r.body?.index == null) { doc.note = r.body?.error || 'could not make a copy'; renderTextBar(); return; }
