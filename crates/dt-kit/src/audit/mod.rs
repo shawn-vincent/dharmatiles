@@ -44,7 +44,7 @@ pub struct HangBand {
     pub materials: &'static [Material],
     /// The hard cap, degrees from vertical.
     pub max_deg: f64,
-    /// HangBand area allowed, as a share of those materials' downward-facing
+    /// Band area allowed, as a share of those materials' downward-facing
     /// area.
     pub share: f64,
     /// Area past `max_deg` allowed, as a share of the same downward area.

@@ -540,11 +540,12 @@ impl Surface {
         })
     }
 
-    /// **fill**: the ground under the water `bed` (used where nothing painted any), the water's own surface `top` (world mm at every node; a
-    /// millimetre or more under the ground where there is no water), `wet`
-    /// (the nodes it covers) and `no_edge` (the nodes the ground's edge
-    /// rule leaves alone: the water and its banks meet the edge on their
-    /// own contract). The lift makes the water a layer of its own over the
+    /// **fill**: lay the water over the ground. `bed` is the ground under
+    /// the water (used where nothing painted any), `top` the water's own
+    /// surface (world mm at every node; under the ground where there is no
+    /// water), `wet` the nodes it covers and `no_edge` the nodes the
+    /// ground's edge rule leaves alone (the water and its banks meet the
+    /// edge on their own contract). The lift makes the water a layer of its own over the
     /// ground, so the shore runs exactly where the two surfaces meet; the
     /// shown surface readers see is the higher of the two.
     pub fn fill(&mut self, bed: &crate::Field, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {

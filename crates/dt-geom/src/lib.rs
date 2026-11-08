@@ -7,8 +7,8 @@
 //!   [`filter`]: blurs, grey morphology, quantiles; [`geodesic`]:
 //!   multi-source distance through a mask.
 //! - [`lift`]: the error-bounded adaptive lift; [`stack`]: the terrain
-//!   mesher built on it (layers, forced cells, contour splits, side panels); [`hash`]: a spatial hash;
-//!   [`convex`]: polytopes cut by half-spaces (rock facets and chips);
+//!   mesher built on it (layers, forced cells, contour splits, side
+//!   panels); [`hash`]: a spatial hash; [`convex`]: polytopes cut by half-spaces (rock facets and chips);
 //!   [`vec3`]: the 3-vector helpers.
 //! - [`seed::Seed`], the deterministic path-keyed seed derivation, and the
 //!   seeded stream [`Rng`].

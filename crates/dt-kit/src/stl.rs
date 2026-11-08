@@ -22,15 +22,23 @@ pub struct BuildRecord {
     pub printer: String,
 }
 
+/// `db`, or `db-fine` for the printer `fine`: the printer is left out when
+/// it is `default`.
+#[must_use]
+pub fn target_name(system: &str, printer: &str) -> String {
+    if printer == "default" {
+        system.to_owned()
+    } else {
+        format!("{system}-{printer}")
+    }
+}
+
 impl BuildRecord {
     /// The build target: the system, and the printer unless it is the
     /// default one (`db`, `ol`, `db-fine`).
     #[must_use]
     pub fn target(&self) -> String {
-        match self.printer.as_str() {
-            "default" => self.system.clone(),
-            p => format!("{}-{p}", self.system),
-        }
+        target_name(&self.system, &self.printer)
     }
 
     /// The 80-byte STL header: never starts with `solid` (that marks ASCII

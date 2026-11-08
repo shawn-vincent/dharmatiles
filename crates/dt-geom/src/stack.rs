@@ -34,10 +34,10 @@ use crate::grid::{Grid, LiftError};
 use crate::lift::{Corners, Leaf, centre, plan_leaves};
 
 /// A crossing this close to a node is the node, mm.
-pub const SNAP_MM: f64 = 1e-4;
+const SNAP_MM: f64 = 1e-4;
 
 /// How much a layer must stand over the shown top below it to be shown, mm.
-pub const MIN_MM: f64 = 1e-4;
+const MIN_MM: f64 = 1e-4;
 
 /// How vertices are rounded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -128,11 +128,7 @@ pub fn lift_stack(lat: &Lattice, layers: &[Layer]) -> Result<TriMesh, LiftError>
     }
     let nl = layers.len();
     assert!(nl < 256, "at most 255 layers");
-    let class = if nl == 1 {
-        vec![0u8; n]
-    } else {
-        classes(layers, n)
-    };
+    let class = classes(layers, n);
     let top: Vec<f32> = (0..n).map(|k| layers[class[k] as usize].top[k]).collect();
     if nl > 1 {
         // the bottom layer carries the floor wall: it must be above 0 everywhere

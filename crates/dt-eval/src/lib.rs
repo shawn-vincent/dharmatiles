@@ -93,7 +93,7 @@ impl Options {
     /// files and the build record.
     #[must_use]
     pub fn target(&self) -> String {
-        target_name(&self.system, &self.printer_name)
+        dt_kit::target_name(&self.system, &self.printer_name)
     }
 
     /// Build for the printer profile `name` (see [`printer_profile`]).
@@ -104,16 +104,6 @@ impl Options {
         self.printer = printer_profile(name, home)?;
         self.printer_name = name.to_owned();
         Ok(())
-    }
-}
-
-/// `db`, or `db-fine` for the printer `fine`.
-#[must_use]
-pub fn target_name(system: &str, printer: &str) -> String {
-    if printer == "default" {
-        system.to_owned()
-    } else {
-        format!("{system}-{printer}")
     }
 }
 
@@ -1097,7 +1087,7 @@ mod tests {
     fn a_target_is_the_system_and_a_printer_that_is_not_the_default() {
         let mut o = Options::default();
         assert_eq!(o.target(), "db");
-        assert_eq!(target_name("ol", "default"), "ol");
+        assert_eq!(dt_kit::target_name("ol", "default"), "ol");
         o.use_printer("fine", None).unwrap();
         assert_eq!(o.target(), "db-fine");
         assert_eq!(o.printer.layer_mm, 0.12);
