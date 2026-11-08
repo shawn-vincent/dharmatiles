@@ -1,7 +1,8 @@
 tile size="2x2" seed=1 {
     about "Grass on dirt: a test tile."
     stack {
-        dirt level=edge {
+        base
+        dirt top=dirtEdgeHeight {
             stones none
         }
         grass

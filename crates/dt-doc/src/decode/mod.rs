@@ -17,8 +17,8 @@ use crate::dim::Dim;
 use crate::error::{DocError, Src};
 use crate::known::{DefInfo, Known};
 use crate::model::{
-    Base, DefKind, Definition, Document, EdgeRule, Edges, Level, Line, Param, Printer, Region,
-    Source, Spanned, TileHeader, Use, Within,
+    Base, DefKind, Definition, Document, Level, Line, Param, Printer, Region, Source, Spanned,
+    TileHeader, Use, Within,
 };
 use crate::place::{Corner, Edge, Point};
 use crate::schema::{self, Axis, Control, Kind, MAX_SQUARES, did_you_mean};
@@ -214,7 +214,6 @@ impl<'k> Decoder<'k> {
             levels: Vec::new(),
             definitions: Vec::new(),
             printer: None,
-            edges: None,
             consts: Vec::new(),
             defaults: Vec::new(),
         };
@@ -324,7 +323,6 @@ impl<'k> Decoder<'k> {
             match n.name().value() {
                 "use" | "levels" | "define" | "tile" | "let" | "override" | "defaults" => {}
                 "printer" => doc.printer = self.printer(n),
-                "edges" => doc.edges = self.edges(n, &file_levels),
                 other => {
                     let help = crate::elements::renamed(other)
                         .map(str::to_owned)
@@ -332,8 +330,7 @@ impl<'k> Decoder<'k> {
                             hint(did_you_mean(
                                 other,
                                 [
-                                    "use", "levels", "define", "tile", "printer", "edges", "let",
-                                    "defaults",
+                                    "use", "levels", "define", "tile", "printer", "let", "defaults",
                                 ],
                             ))
                         })
@@ -345,7 +342,7 @@ impl<'k> Decoder<'k> {
                         "dt::unknown-node",
                         n.name().span(),
                         format!("unknown top-level node `{other}`"),
-                        "not use, levels, define, tile, printer or edges",
+                        "not use, levels, define, tile, printer, let, override or defaults",
                     )
                     .help = help;
                 }
@@ -1451,57 +1448,6 @@ impl<'k> Decoder<'k> {
             overhang,
             steepest,
             gap,
-        })
-    }
-
-    fn edges(&mut self, n: &KdlNode, file_levels: &[String]) -> Option<Edges> {
-        let ctx = Ctx {
-            levels: self
-                .known
-                .levels()
-                .iter()
-                .map(|(n, _)| n.clone())
-                .chain(file_levels.iter().cloned())
-                .collect(),
-            ..Ctx::default()
-        };
-        let mut rules = Vec::new();
-        for c in n.iter_children() {
-            let surface = spanned_name(c);
-            if surface.value != "ground" && surface.value != "water" {
-                self.err(
-                    "dt::edges",
-                    surface.span,
-                    format!("the edge contract has no rule for `{}`", surface.value),
-                    "unknown",
-                )
-                .help = Some("it covers `ground` and `water`".to_owned());
-                continue;
-            }
-            let level = c
-                .entries()
-                .iter()
-                .find(|e| e.name().is_some_and(|k| k.value() == "level"));
-            match level {
-                Some(e) => {
-                    if let Some(level) = self.num(e, Axis::Level, None, "edges", "level", &ctx) {
-                        rules.push(EdgeRule { surface, level });
-                    }
-                }
-                None => {
-                    self.err(
-                        "dt::edges",
-                        c.span(),
-                        "an edge rule says where the surface meets the edge",
-                        "no level",
-                    )
-                    .help = Some("write `ground level=edge`".to_owned());
-                }
-            }
-        }
-        Some(Edges {
-            rules,
-            span: n.span(),
         })
     }
 }

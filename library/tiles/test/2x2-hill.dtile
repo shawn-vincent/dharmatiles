@@ -5,7 +5,8 @@
 tile size="2x2" seed=11 {
     about "Dirt raised well above the edge level into a hill, for golden tests."
     stack {
-        dirt level=16 bumps=2 bump-size=40 {
+        base
+        dirt bump-size=40 top="[16 .. 16 + 2]" {
             scatter per-square=6 { pebble size="1..2.2" }
         }
     }

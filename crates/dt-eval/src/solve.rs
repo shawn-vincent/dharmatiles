@@ -22,7 +22,7 @@ use crate::doc::{DefaultBody, PinDecl, Tile};
 use crate::places::Places;
 
 /// Dirt lies at this angle when nothing holds it, degrees.
-pub const DIRT_SLOPE_DEG: f64 = 24.0;
+pub const DIRT_SLOPE_DEG: f64 = dt_elements::dirt::SLOPE_DEG;
 
 /// Water settles over this distance round a pin, mm at the reference square.
 pub const WATER_SETTLE_MM: f64 = 9.0;
@@ -345,10 +345,51 @@ fn mm(v: f64) -> String {
 /// out, a pin with no ground, a layer that can never be thick enough.
 #[allow(clippy::too_many_lines)]
 pub fn solve(tile: &Tile, frame: &Frame, opts: &Options) -> Result<SolveReport, Vec<Diag>> {
+    solve_on(tile, frame, opts, solve_cells(frame))
+}
+
+/// **solve** on the build's own lattice, the one the bodies are made on:
+/// the same code, at the frame's cell, so a band a build fills is the band
+/// `check` solved.
+///
+/// # Errors
+/// As [`solve`].
+pub fn solve_for_build(
+    tile: &Tile,
+    frame: &Frame,
+    opts: &Options,
+) -> Result<SolveReport, Vec<Diag>> {
+    solve_on(tile, frame, opts, frame.cells_per_square)
+}
+
+/// A library constant worked out as one number, mm at the reference (the
+/// edge heights a wall flush with the rim sits on, the calm water level);
+/// `None` if the tile does not see it or it depends on where it is.
+#[must_use]
+pub fn constant(tile: &Tile, name: &str) -> Option<f64> {
+    let h = tile.heights.as_ref()?;
+    let eval = Eval { table: &h.consts };
+    if eval.needs(&Expr::Name(name.to_owned()), 0).ok()?.xy {
+        return None;
+    }
+    let none = Vars {
+        x: Iv::point(0.0),
+        y: Iv::point(0.0),
+        bottom: Iv::point(0.0),
+    };
+    let iv = eval.iv(&Expr::Name(name.to_owned()), &none, 0).ok()?;
+    (iv.width() == 0.0).then_some(iv.lo)
+}
+
+fn solve_on(
+    tile: &Tile,
+    frame: &Frame,
+    opts: &Options,
+    cells: u32,
+) -> Result<SolveReport, Vec<Diag>> {
     let Some(h) = &tile.heights else {
         return Ok(SolveReport::default());
     };
-    let cells = solve_cells(frame);
     let f = Frame {
         cells_per_square: cells,
         ..*frame

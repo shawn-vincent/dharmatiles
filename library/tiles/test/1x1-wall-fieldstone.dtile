@@ -1,6 +1,7 @@
 tile size="1x1" seed=1 {
     about "A fieldstone wall on bare dirt: a test tile."
     stack {
+        base
         dirt
         wall along="north" style=fieldstone
     }

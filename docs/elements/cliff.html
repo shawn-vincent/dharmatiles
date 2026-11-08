@@ -68,7 +68,8 @@
 <p>A cliff on a tile edge stands inside the tile, its face toward the open ground. This is the library's run, with its scree and its dirt bank:</p>
 <pre><code>tile size="2x1" seed=1 {
     stack {
-        dirt level=edge {
+        base
+        dirt top=dirtEdgeHeight {
             bank against=cliff height="1.5..3.5" reach="3..6.5"
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
@@ -86,7 +87,7 @@
 <pre><code>cliff form=canyon                  // bands on the west and east edges
 cliff along=north form=escarpment  // height ramps from 10 to 40 mm along the edge
 cliff form=spire height=50         // a tall tapering stack, standing free</code></pre>
-<p>Both ends of a run finish in the standard end section, so runs butt end to end. Write <code>dirt level=edge</code> under a cliff so the ground at its foot meets the next tile flush.</p>
+<p>Both ends of a run finish in the standard end section, so runs butt end to end. Write <code>dirt top=dirtEdgeHeight</code> under a cliff so the ground at its foot meets the next tile flush.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference cliff -->

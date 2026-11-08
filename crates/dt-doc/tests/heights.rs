@@ -40,7 +40,7 @@ fn tile(stack: &str) -> String {
 
 #[test]
 fn the_library_heights_are_constants() {
-    let k = dt_doc::Known::standard();
+    let k = common::known();
     let names: Vec<&str> = k.consts().iter().map(|c| c.name.value.as_str()).collect();
     for want in [
         "waterBedHeight",

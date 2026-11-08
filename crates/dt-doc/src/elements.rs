@@ -114,30 +114,14 @@ pub static MOSTLY: &[Word] = &[
 /// The kinds a scatter or bank may gather against (`against=`).
 pub static TAGS: &[&str] = &["cliff", "wall", "rock", "tree"];
 
-// ---- ground, dirt, grass ------------------------------------------------
+// ---- dirt, grass --------------------------------------------------------
 
-const BUMPS: Control = c("bumps", Axis::Mm, "how far it rises and falls")
-    .limits(0.0, 15.0)
-    .ranges()
-    .default("0")
-    .subs(&[
-        c("up", Axis::Mm, "how far it rises")
-            .limits(0.0, 15.0)
-            .ranges(),
-        c("down", Axis::Mm, "how far it falls")
-            .limits(0.0, 15.0)
-            .ranges(),
-    ]);
 const BUMP_SIZE: Control = c(
     "bump-size",
     Axis::Mm,
-    "how wide the hills are: broad and rolling, or choppy",
+    "how wide the hills are in its band: broad and rolling, or choppy",
 )
 .limits(5.0, 70.0);
-const LEVEL: Control = c("level", Axis::Level, "where the surface sits")
-    .over(0.0, f64::INFINITY)
-    .default("ground");
-
 static STONES: &[Word] = &[
     // (4, 7) stones per 2×2 is `some`; `many` is provisional.
     w(
@@ -803,17 +787,6 @@ const fn thing(
 /// Every built-in element.
 pub static ELEMENTS: &[Element] = &[
     Element {
-        name: "ground",
-        about: "the bare ground surface; flat at the ground level unless told",
-        role: Role::Surface,
-        place: SURFACE_PLACE,
-        needs: &[],
-        holds_scatter: true,
-        honours: &[],
-        scattered: false,
-        controls: &[LEVEL, BUMPS, BUMP_SIZE],
-    },
-    Element {
         name: "dirt",
         about: "a textured earth surface: clods, grit and pebbles over gentle rises",
         role: Role::Surface,
@@ -823,8 +796,6 @@ pub static ELEMENTS: &[Element] = &[
         honours: &[],
         scattered: false,
         controls: &[
-            LEVEL,
-            BUMPS,
             BUMP_SIZE,
             c("clods", Axis::Word, "lumps of earth on the surface")
                 .words(CLODS)
@@ -953,9 +924,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[],
         scattered: false,
-        controls: &[c("level", Axis::Level, "the calm water level")
-            .over(0.0, f64::INFINITY)
-            .default("water")],
+        controls: &[],
     },
     thing("rock", "one rock", &ROCK, true),
     thing("stone", "a rock with stone sizes, about 1–6 mm", &STONE, true),
@@ -1024,7 +993,7 @@ pub static ELEMENTS: &[Element] = &[
 
 /// Old words, with what replaces them.  Used for hints only.
 pub static RENAMED: &[(&str, &str)] = &[
-    ("hills", "`hills` is now `ground`"),
+    ("hills", "`hills` is now `dirt`"),
     ("meadow", "`meadow` is now `grass`"),
     (
         "scree",
@@ -1172,12 +1141,12 @@ mod tests {
             .unwrap();
         let r = ruin.check("wall", 1.5, 1.5, false).unwrap_err();
         assert_eq!(r.message, "`wall ruin` is 0% to 100%, not 150%");
-        let level = crate::schema::element("ground")
+        let level = crate::schema::element("floor")
             .unwrap()
             .control("level")
             .unwrap();
-        assert!(level.check("ground", 0.0, 0.0, false).is_err());
-        assert!(level.check("ground", 0.1, 0.1, false).is_ok());
+        assert!(level.check("floor", 0.0, 0.0, false).is_err());
+        assert!(level.check("floor", 1.5, 1.5, false).is_ok());
         let cliff = crate::schema::element("cliff")
             .unwrap()
             .control("height")

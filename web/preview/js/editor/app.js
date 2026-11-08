@@ -29,7 +29,7 @@ export const offerMine = () => view.set({ mineOpen: true });
 
 // each element's family, for its colour (the docs site uses the same)
 export const FAMILY = {
-  ground: 'surface', dirt: 'surface', floor: 'surface', water: 'water',
+  dirt: 'surface', floor: 'surface', water: 'water',
   rock: 'thing', stone: 'thing', boulder: 'thing', pebble: 'thing', scatter: 'thing', cliff: 'thing', wall: 'thing',
   grass: 'plant', reeds: 'plant', flowers: 'plant', tree: 'plant',
   dungeonblocks: 'base', openlock: 'base', connector: 'base', stl: 'base',

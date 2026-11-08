@@ -140,9 +140,11 @@ fn a_layer_that_can_never_be_thick_enough_is_refused() {
 }
 
 #[test]
-fn a_cliff_needs_a_top() {
-    let e = refused(&tile("stack { base\n dirt\n cliff }"));
-    assert_eq!(e[0].code, "dt::missing-control");
+fn a_cliff_has_no_band_yet() {
+    // cliffs and floors are pieces bodies: their tops come with step 8, so
+    // check solves only the dirt and the water
+    let c = solved(&tile("stack { base\n dirt\n cliff along=north }"));
+    assert_eq!(c.solved.as_ref().unwrap().bodies.len(), 1);
 }
 
 #[test]
@@ -176,9 +178,9 @@ fn heights_scale_with_the_system() {
 }
 
 #[test]
-fn a_tile_without_the_heights_language_is_not_solved() {
+fn a_tile_with_a_dirt_is_solved_without_writing_any_heights() {
     let c = solved(&tile("stack { dirt }"));
-    assert!(c.solved.is_none());
+    assert!(c.solved.is_some());
     assert!(c.pending().is_empty());
 }
 
@@ -193,14 +195,22 @@ fn a_tile_that_only_names_its_base_builds_as_today() {
 }
 
 #[test]
-fn tops_and_pins_are_checked_but_not_built_yet() {
-    let text = tile("stack { base\n dirt top=6 }");
+fn a_cliffs_top_is_checked_but_not_built_yet() {
+    let text = tile("stack { base\n dirt\n cliff along=north top=\"dirtEdgeHeight + 35\" }");
     let c = solved(&text);
     assert_eq!(c.pending().len(), 1);
     let Err(e) = build(&mem(&text), "t.dtile", &Options::default()) else {
         panic!("built a top that is not built yet");
     };
     assert_eq!(e[0].code, "dt::not-yet");
+}
+
+#[test]
+fn a_dirts_top_and_pins_build() {
+    let text = tile("stack { base\n dirt top=6 { pin top=4 at=center } }");
+    let c = solved(&text);
+    assert!(c.pending().is_empty(), "{:?}", c.pending());
+    assert!(build(&mem(&text), "t.dtile", &Options::default()).is_ok());
 }
 
 #[test]

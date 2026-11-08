@@ -2,6 +2,7 @@
 tile size="1x1" seed=4 {
     about "Drystone flagstones with a fieldstone wall along the north edge."
     stack {
+        base
         dirt
         floor style=fieldstone
         wall along="north" style=fieldstone coping=on-edge seed=6

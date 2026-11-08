@@ -4,8 +4,9 @@
 //! not by adding (a clod or pebble is a new surface that wins where it is
 //! higher, with a soft fillet):
 //!
-//! 1. ground: the level, hills and edge ramp of `ground`, plus a low soil
-//!    roughness (fBm, 1.6 mm);
+//! 1. the calculator: hills in the dirt's band (the smoothest surface
+//!    the band allows, with broad hills over as much of the band as it has
+//!    room for), plus a low soil roughness (fBm, 1.6 mm);
 //! 2. clods (`clod_layer`, :205): patchy, by a 6 mm patch field with a 30%
 //!    floor; each is 1–3 lumpy lobes with a flattish tilted top, partly
 //!    sunk, soft-maxed onto the soil;
@@ -15,8 +16,8 @@
 //!    flattened cap cut by tilted tangent planes and a polygonal skirt
 //!    (the half-space cap), sunk 25–45% and filleted into the soil.
 //!
-//! The texture ramps in over the outer 1 mm, so the rim is exactly the
-//! edge level.
+//! The texture ramps in over the outer 1 mm, so a pinned rim is exactly at
+//! its pin.
 //!
 //! Sizes: the ground's hills, patches and clusters follow the square
 //! (layout); clods, grit and pebbles keep their true mm (default 1), so
@@ -24,11 +25,10 @@
 
 use dt_kit::OnFrame;
 use dt_kit::{
-    Field, Noise, Placed, Plane, Rng, Scale, Scene, Seed, Spread, cap, noise, scatter, smax,
-    smooth01,
+    Band, Banded, Field, Noise, Placed, Plane, Rng, Scale, Scene, Seed, Spread, cap, noise, rim,
+    scatter, smax, smooth01,
 };
 
-use crate::ground::Shape;
 use crate::read;
 use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
 
@@ -52,6 +52,17 @@ pub struct Bank {
 
 /// The height-field resolution, true mm.
 const CELL_MM: f64 = 0.15;
+/// How steeply dirt lies when nothing holds it, degrees: the easing the
+/// solver gives it, and the reach of its hills from a pin.
+pub const SLOPE_DEG: f64 = 24.0;
+/// The most a hill spans, mm at the reference square: a band wider than
+/// this (a bank drawn between two places) is mostly the smooth surface.
+const HILL_MM: f64 = 4.0;
+/// The default `bump-size`: a broad scale, mm.
+const SIZE_MM: f64 = 14.0;
+/// The hills' second noise: its size as a share of the first, and its weight.
+const MID_RATIO: f64 = 5.0 / 14.0;
+const MID_WEIGHT: f64 = 0.15;
 /// Bedded stones per 2×2 (`stones some`).
 const STONES_2X2: (i64, i64) = (4, 7);
 /// The texture ramps in over this rim width, true mm.
@@ -126,8 +137,8 @@ const SQUARE_MM: f64 = 35.0;
 /// The earth on a ground shape.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dirt {
-    /// The ground under it.
-    pub shape: Shape,
+    /// The hills' size (the broad noise's sigma), mm at the reference.
+    pub size_mm: f64,
     /// Clod attempts per mm² at full patch density (`clods`).
     pub clod_density: f64,
     /// Bedded stones per 2×2 tile, drawn from this range (`stones`).
@@ -137,16 +148,20 @@ pub struct Dirt {
 }
 
 impl Dirt {
-    /// From controls: the ground's, and `clods` (a word whose number the
-    /// evaluator passes as `clods.density`).
+    /// From controls: `bump-size`, `clods` (a word whose number the
+    /// evaluator passes as `clods.density`), `stones` and `bank`.
     ///
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut clod_density = CLOD_DENSITY;
+        let mut size_mm = SIZE_MM;
         for c in controls {
             if c.name == "clods.density" {
                 clod_density = read::number(c)?;
+            }
+            if c.name == "bump-size" {
+                size_mm = read::number(c)?;
             }
         }
         let mut stones = STONES_2X2;
@@ -182,7 +197,7 @@ impl Dirt {
             });
         Ok(Self {
             bank,
-            shape: Shape::new("dirt", controls)?,
+            size_mm,
             clod_density,
             stones,
         })
@@ -215,11 +230,50 @@ pub struct Counts {
     pub texture_ok: f64,
 }
 
-/// The dirt surface over the whole tile (world mm), the pebble mask and
-/// the counts.
+/// The dirt's calculator: hills in its band, the surface before any grain.
+#[must_use]
+pub fn hills(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, band: &Band) -> Banded {
+    let s = frame.scale();
+    let broad = noise(
+        frame,
+        seed.key("broad"),
+        Noise::Smooth {
+            sigma_mm: dirt.size_mm,
+        },
+        Scale::Layout,
+    );
+    let mid = noise(
+        frame,
+        seed.key("mid"),
+        Noise::Smooth {
+            sigma_mm: dirt.size_mm * MID_RATIO,
+        },
+        Scale::Layout,
+    );
+    let n = broad.zip(&mid, |a, b| a + MID_WEIGHT * b);
+    dt_kit::span::hills(&n, band, HILL_MM * s, SLOPE_DEG)
+}
+
+/// What a dirt is made on: its area, the planned feet of what it heaps
+/// against, its solved band, and where water lies over it.
+#[derive(Clone, Copy)]
+pub struct Ground<'a> {
+    /// The nodes the dirt covers.
+    pub area: &'a dt_kit::Mask,
+    /// The planned feet of every solid that has one.
+    pub foots: &'a [crate::Foot],
+    /// The solved band.
+    pub band: &'a Band,
+    /// About the height the water laid after it stands at, if any is.
+    pub under: Option<&'a Field>,
+}
+
+/// The dirt surface over the whole tile (world mm), its grain, the pebble
+/// mask and the counts.
 ///
 /// Its stones (`stones`) are rock solids added to the scene, owned by
-/// `owner`, bedded into this field in its area.
+/// `owner`, bedded into this field in its area.  The grain is what the
+/// texture adds to the hills (and, round a stone, takes away).
 ///
 /// # Errors
 /// [`LookError`] if a stone fails to build.
@@ -228,11 +282,34 @@ pub fn surface(
     scene: &mut Scene,
     seed: Seed,
     owner: &str,
-    area: &dt_kit::Mask,
-    foots: &[crate::Foot],
-) -> Result<(Field, Vec<bool>, Counts), LookError> {
+    on: &Ground<'_>,
+) -> Result<(Banded, Field, Vec<bool>, Counts), LookError> {
+    let Ground {
+        area,
+        foots,
+        band,
+        under,
+    } = *on;
     let frame = *scene.frame();
-    let (mut base, rim) = dirt.shape.surface(scene, seed.key("ground"));
+    let shape = hills(dirt, &frame, seed.key("hills"), band);
+    let rim = rim(&frame);
+    let mut base = shape.field().clone();
+    // grain stays off what water covers: where the water's low end stands
+    // over the hills, the texture fades out (a pool's bed is smooth)
+    let keep = under.map_or_else(
+        || Field::new(&frame, 1.0),
+        |u| {
+            let s = frame.scale();
+            base.zip(u, |b, w| 1.0 - smooth01((w - b - 0.2 * s) / (0.8 * s)))
+        },
+    );
+    let stone_area = dt_kit::Mask {
+        nx: area.nx,
+        ny: area.ny,
+        bits: (0..area.bits.len())
+            .map(|k| area.bits[k] && keep.z[k] > 0.5)
+            .collect(),
+    };
     if let Some(b) = &dirt.bank {
         let s = frame.scale();
         for f in foots.iter().filter(|f| f.kind.name() == b.against) {
@@ -249,7 +326,9 @@ pub fn surface(
             }
         }
     }
-    let w_tex = rim.map(|d| smooth01(d / RIM_TEX_MM));
+    let w_tex = rim
+        .map(|d| smooth01(d / RIM_TEX_MM))
+        .zip(&keep, |w, k| w * k);
     let mid = noise(
         &frame,
         seed.key("soil"),
@@ -275,15 +354,22 @@ pub fn surface(
             .collect(),
     );
     let avoid = if dirt.stones.1 > 0 {
-        crate::rock::dirt_stones(scene, owner, seed, &mut z, &rim, dirt.stones, area)?
+        crate::rock::dirt_stones(scene, owner, seed, &mut z, &rim, dirt.stones, &stone_area)?
     } else {
         Vec::new()
     };
-    let (mask, mut counts) = place_pebbles(&frame, seed, &mut z, &ground, &avoid);
+    let (mask, mut counts) = place_pebbles(&frame, seed, &mut z, &ground, &avoid, &keep);
     counts.clods = clods;
     counts.stones = avoid.len();
     counts.texture_ok = texture_ok(&z, &rim);
-    Ok((z, mask, counts))
+    // the grain is nothing at the rim whatever reached it (a pebble's mound
+    // tails off over several mm), so a pinned rim is exactly at its pin
+    let grain = z.with_z(
+        (0..z.z.len())
+            .map(|k| (z.z[k] - shape.field().z[k]) * smooth01(rim.z[k] / RIM_TEX_MM))
+            .collect(),
+    );
+    Ok((shape, grain, mask, counts))
 }
 
 /// Clods soft-maxed onto `base`.
@@ -613,6 +699,7 @@ fn place_pebbles(
     z: &mut Field,
     ground: &Field,
     avoid: &[[f64; 3]],
+    keep: &Field,
 ) -> (Vec<bool>, Counts) {
     let [w, h] = frame.size_mm();
     let area_sq = w * h / (SQUARE_MM * SQUARE_MM);
@@ -643,7 +730,7 @@ fn place_pebbles(
         &mut rng,
         &radii,
         &spread,
-        &|x, y| c.sample(x, y),
+        &|x, y| c.sample(x, y) * keep.sample(x, y),
         avoid,
     );
     let seat = z.blur(PEB_SEAT_SIGMA_MM);
@@ -697,8 +784,29 @@ impl Element for Dirt {
     }
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
-        let (z, stone, counts) = surface(self, scene, ctx.seed, ctx.path, ctx.area, ctx.foots)?;
-        scene.paint_field(ctx.area, &z);
+        let Some(band) = ctx.band else {
+            return Err(LookError::general(
+                "this dirt has no solved top",
+                "write the tile in the heights language: `dirt` takes the library's top, or `dirt top=…`",
+            ));
+        };
+        let on = Ground {
+            area: ctx.area,
+            foots: ctx.foots,
+            band,
+            under: ctx.under,
+        };
+        let (shape, grain, stone, counts) = surface(self, scene, ctx.seed, ctx.path, &on)?;
+        scene
+            .lay(&dt_kit::LayerSpec {
+                owner: ctx.path,
+                material: dt_kit::Material::Earth,
+                fluid: false,
+                mask: ctx.area,
+                shape: &shape,
+                grain: Some(&grain),
+            })
+            .map_err(LookError::build)?;
         scene.mark_stone(ctx.area, &stone);
         #[allow(clippy::cast_precision_loss)]
         for (k, v) in [

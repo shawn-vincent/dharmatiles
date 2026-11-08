@@ -1,7 +1,10 @@
 tile size="3x3" seed=17 {
     about "Nine squares of open water."
     stack {
-        ground level="water - 2.2"
+        base
+        dirt top=waterBedHeight clods=few stones=none {
+            pin top=waterBedHeight at=edges   // the bed meets the rim
+        }
         water
     }
 }

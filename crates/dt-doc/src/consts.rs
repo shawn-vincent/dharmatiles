@@ -174,14 +174,23 @@ mod tests {
     use super::*;
     use crate::{Known, decode};
 
+    const HEIGHTS: &str = include_str!("../../../library/parts/heights.dtile");
+
+    fn standard() -> Known {
+        let mut k = Known::standard();
+        k.add_heights("library/parts/heights.dtile", HEIGHTS)
+            .unwrap();
+        k
+    }
+
     fn tile_consts(text: &str) -> Vec<Const> {
-        let doc = decode("t.dtile", text, &Known::standard()).unwrap();
+        let doc = decode("t.dtile", text, &standard()).unwrap();
         doc.tile().unwrap().consts.clone()
     }
 
     #[test]
     fn override_moves_what_reads_it() {
-        let k = Known::standard();
+        let k = standard();
         let mine =
             tile_consts("tile { let a 2\n override waterSurfaceHeight 3.2\n stack { dirt } }");
         let t = ConstTable::build(k.consts(), &mine);

@@ -3,10 +3,10 @@ source: crates/dt-eval/tests/golden.rs
 expression: hashes(b)
 ---
 04252fa73e78247e  plan
-20d49b1ec159330b  rock:tile/dirt/0
-91c91a1bd6561590  surface
-b5931164cb843738  ground:tile/ground
-c03b0452384e0c11  wall:tile/wall/0
+9e87a762c94418b9  rock:tile/dirt/0
+cbb1295258ec9718  surface
+0c93ae4b489d08dd  ground:tile/ground
+d45bb468aeff49eb  wall:tile/wall/0
 9ad7b1454c0b8fad  connector:tile/connector
-722bcfc1514ed1bc  union
-acd6a0a0b5efe374  export
+18c0fbe173bf5241  union
+e86b2133ec6da7df  export

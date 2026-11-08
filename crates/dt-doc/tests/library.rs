@@ -111,14 +111,14 @@ fn flat_tile_is_one_ground() {
     assert!(t.regions.is_empty() && t.lines.is_empty());
     assert_eq!(t.stack.len(), 1);
     let g = &t.stack[0];
-    assert_eq!(g.what.value, "ground");
+    assert_eq!(g.what.value, "dirt");
     assert_eq!(g.kind, Kind::Surface);
-    // Flat at the edge level, the lowest the ground may sit.
-    assert_eq!(g.controls.len(), 1, "flat: only its level is written");
-    // Its documented default level is `ground`.
-    let level = g.element().unwrap().control("level").unwrap();
-    assert_eq!(level.default, "ground");
-    assert_eq!(level.value, Some(Axis::Level));
+    // Flat at the edge height: its top, and the two words that keep it quiet.
+    assert!(g.top.is_some(), "flat: its top is written");
+    assert_eq!(g.controls.len(), 2, "flat: clods and stones");
+    assert!(t.base.is_some(), "the tile writes its base");
+    let words = g.element().unwrap().control("stones").unwrap();
+    assert_eq!(words.value, Some(Axis::Word));
 }
 
 #[test]
@@ -152,22 +152,6 @@ fn steepest_is_past_overhang_and_within_one_line() {
         "{shown}"
     );
     assert!(flat(&shown).contains("at most 66.0"), "{shown}");
-}
-
-#[test]
-fn edge_contract() {
-    let doc = decode_ok(EDGES);
-    let e = doc.edges.as_ref().unwrap();
-    assert_eq!(e.rules.len(), 2);
-    assert_eq!(e.rules[0].surface.value, "ground");
-    assert_eq!(e.rules[1].surface.value, "water");
-    let env = |n: &str| match n {
-        "edge" => Some(3.4),
-        "water" => Some(2.6),
-        _ => None,
-    };
-    assert_eq!(e.rules[0].level.value.bounds(&env).unwrap(), (3.4, 3.4));
-    assert_eq!(e.rules[1].level.value.bounds(&env).unwrap(), (2.6, 2.6));
 }
 
 #[test]
@@ -250,7 +234,7 @@ fn grass_tree_keeps_every_control() {
     // No region: the whole tile is the default area.
     assert!(t.regions.is_empty());
     let order: Vec<_> = t.stack.iter().map(|e| e.what.value.as_str()).collect();
-    assert_eq!(order, ["ground", "long-grass", "tree"]);
+    assert_eq!(order, ["dirt", "long-grass", "tree"]);
     let kinds: Vec<_> = t.stack.iter().map(|e| e.kind).collect();
     assert_eq!(kinds, [Kind::Surface, Kind::Surface, Kind::Solid]);
 
@@ -325,8 +309,7 @@ fn cliff_run_keeps_every_control() {
             .starts_with("Rock band against the north edge.")
     );
     // FOOT_Z_MM = 4.0
-    assert_eq!(t.levels[0].name.value, "foot");
-    assert_eq!(t.levels[0].value.value.bounds(&none).unwrap(), (4.0, 4.0));
+    assert_eq!(t.consts[0].name.value, "footHeight");
 
     let order: Vec<_> = t.stack.iter().map(|e| e.what.value.as_str()).collect();
     assert_eq!(order, ["dirt", "cliff", "scatter", "scatter"]);
@@ -334,11 +317,8 @@ fn cliff_run_keeps_every_control() {
     // APRON_H_MM (1.5, 3.5), APRON_R_MM (3.0, 6.5)
     let dirt = entry(&t.stack, "dirt");
     assert_eq!(
-        dirt.value("level"),
-        Some(&Value::Num(dt_doc::model::Num {
-            expr: dt_doc::expr::Expr::Name("foot".into()),
-            unit: None
-        }))
+        dirt.top.as_ref().map(|t| &t.value),
+        Some(&dt_doc::expr::Expr::Name("footHeight".into()))
     );
     assert_eq!(
         dirt.sub("bank", "against"),
@@ -447,7 +427,10 @@ fn path_rocks_is_a_divided_tile() {
         path.place.along.as_ref().unwrap().value,
         Along::Line("trail".into())
     );
-    assert!(close(range(path.value("level")), (4.0, 4.0)));
+    assert!(
+        path.value("level").is_none(),
+        "the path is a second dirt, with no level of its own"
+    );
     assert_eq!(path.path, ["tile", "stack", "dirt#2"]);
 
     let cluster = &t.stack[2];

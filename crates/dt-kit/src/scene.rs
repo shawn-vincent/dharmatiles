@@ -399,68 +399,77 @@ pub struct Stage {
 pub const LIFT_TOL_MM: f64 = 0.02;
 /// The widest leaf of the adaptive lift, in cells.
 const LIFT_MAX_CELLS: usize = 32;
-/// The widest bank between areas painted at different levels, mm at the
-/// reference square.
-pub const BANK_MM: f64 = 7.0;
-
 /// Slots per build.
 const SLOTS: u32 = 1 << 16;
 
-/// The ground surface of one build: every paint in order, the banks
-/// between them, the water's fill and bed, the edge contract and the
-/// support things stand on.  Painted first; read once settled.
+/// Where a fluid layer is absent it lies this far under the land, mm at the
+/// 35 mm square (it scales with the system): the stack mesher shows nothing
+/// of a layer at or under the layers below it.
+pub const ABSENT_UNDER_MM: f64 = 1.0;
+
+/// One layer to lay on the terrain: what it is made of, where it exists and
+/// the surface its body made inside its band.
+#[derive(Clone, Copy)]
+pub struct LayerSpec<'a> {
+    /// The stack entry that owns it.
+    pub owner: &'a str,
+    /// Its material; the layer's slot carries it.
+    pub material: Material,
+    /// A fluid fills the empty space under its top, over the land laid
+    /// before it; a land layer is the higher of what is below and its own top.
+    pub fluid: bool,
+    /// Where the layer exists (its region); elsewhere it is absent.
+    pub mask: &'a Mask,
+    /// The body's surface, inside its band by type.
+    pub shape: &'a crate::Banded,
+    /// The material's grain, added to the shape by the kit (a displacement
+    /// of the one surface, not separate solids).
+    pub grain: Option<&'a crate::Field>,
+}
+
+/// One layer laid: its slot, its region and its top (float32 once).
 #[derive(Clone)]
-pub struct Surface {
+struct Laid {
+    slot: Slot,
+    fluid: bool,
+    mask: Mask,
+    top: std::sync::Arc<Vec<f32>>,
+}
+
+/// The terrain of one build: the layers laid in order (land bodies, then
+/// fluids), the land they make together, the edge heights the library
+/// gives, and the support things stand on.  Laid first; read once settled.
+#[derive(Clone)]
+pub struct Terrain {
     frame: Frame,
-    field: Grid,
-    painted: Mask,
-    /// Each paint, in order: its area and the full field it painted from
-    /// (shared, so a kept scene costs little).
-    layers: Vec<std::sync::Arc<(Mask, Vec<f64>)>>,
-    settled: bool,
-    banked: bool,
-    /// Nodes the water covers.
+    layers: Vec<Laid>,
+    /// The higher of every land layer laid, inside its region (zero at first).
+    land: Grid,
+    /// The surface shown: the land, and a fluid over it where it is higher.
+    shown: Grid,
+    any_land: bool,
+    /// Nodes a fluid covers.
     wet: Mask,
-    bed: Option<Grid>,
-    /// The water's own top at every node (world mm), under the ground
-    /// where there is no water (the element says how far): the water layer
-    /// of the lift.
-    water_top: Option<Vec<f32>>,
-    water_edge_mm: Option<f64>,
-    /// Nodes the ground's edge rule leaves alone (water and its banks).
-    no_edge: Mask,
     stone: Mask,
     edge_mm: Option<f64>,
+    water_edge_mm: Option<f64>,
     support: Option<Grid>,
 }
 
-impl Surface {
+impl Terrain {
     fn new(frame: Frame) -> Self {
         let (nx, ny) = frame.nodes();
         Self {
             frame,
-            field: Grid::filled(nx, ny, frame.step_mm(), 0.0),
-            painted: Mask::new(nx, ny, false),
             layers: Vec::new(),
-            settled: false,
-            banked: false,
+            land: Grid::filled(nx, ny, frame.step_mm(), 0.0),
+            shown: Grid::filled(nx, ny, frame.step_mm(), 0.0),
+            any_land: false,
             wet: Mask::new(nx, ny, false),
-            bed: None,
-            water_top: None,
-            water_edge_mm: None,
-            no_edge: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
             edge_mm: None,
+            water_edge_mm: None,
             support: None,
-        }
-    }
-
-    /// Bank once (after the scene has culled what the paints cover).
-    fn bank(&mut self) {
-        self.settle();
-        if !self.banked {
-            self.banked = true;
-            self.banks();
         }
     }
 
@@ -488,183 +497,31 @@ impl Surface {
         self.support.as_ref()
     }
 
-    /// The ground surface as painted (world mm at every node), before the
-    /// lift spreads paint to unpainted nodes; `None` before any paint.
+    /// The surface shown (world mm at every node): the land, and a fluid
+    /// over it where it is higher; `None` before any layer is laid.
     #[must_use]
     pub fn surface_field(&self) -> Option<&Grid> {
-        (self.painted.count() > 0).then_some(&self.field)
+        (!self.layers.is_empty()).then_some(&self.shown)
     }
 
-    /// **paint**: set the ground surface to `level_mm` (already scaled) over
-    /// `area`. Later paints win, so stack order decides which surface paints
-    /// over which.
-    pub fn paint(&mut self, area: &Mask, level_mm: f64) {
-        #[allow(clippy::cast_possible_truncation)]
-        let z = level_mm as f32;
-        for (k, _) in area.bits.iter().enumerate().filter(|(_, b)| **b) {
-            self.field.z[k] = z;
-            self.painted.bits[k] = true;
-        }
-        self.layers.push(std::sync::Arc::new((
-            area.clone(),
-            vec![level_mm; self.field.z.len()],
-        )));
+    /// The land alone (world mm): every land layer laid, the higher of
+    /// them inside its region; `None` before any land is laid.
+    #[must_use]
+    pub fn ground(&self) -> Option<crate::Field> {
+        self.any_land.then(|| crate::Field::from(&self.land))
     }
 
-    /// **paint** a field: set the ground surface to `field` (world mm) over
-    /// `area`. Later paints win.
-    pub fn paint_field(&mut self, area: &Mask, field: &crate::Field) {
-        for (k, _) in area.bits.iter().enumerate().filter(|(_, b)| **b) {
-            #[allow(clippy::cast_possible_truncation)]
-            let z = field.z[k] as f32;
-            self.field.z[k] = z;
-            self.painted.bits[k] = true;
-        }
-        self.layers
-            .push(std::sync::Arc::new((area.clone(), field.z.clone())));
+    /// The land as it lies under the fluids (the bed under the water and
+    /// the bank round it); `None` without a fluid.
+    #[must_use]
+    pub fn bed(&self) -> Option<&Grid> {
+        self.layers.iter().any(|l| l.fluid).then_some(&self.land)
     }
 
-    /// The ground surface (world mm): every paint, spread to the nodes no
-    /// area painted (and banked, once [`Scene::bank`] has run). Read it
-    /// after the surfaces are painted (the scheduler paints every surface
-    /// before any solid); `None` when nothing painted it.
-    pub fn ground(&mut self) -> Option<crate::Field> {
-        if self.painted.count() == 0 {
-            return None;
-        }
-        self.settle();
-        Some(crate::Field {
-            nx: self.field.nx,
-            ny: self.field.ny,
-            step: self.field.step,
-            z: self.field.z.iter().map(|&v| f64::from(v)).collect(),
-        })
-    }
-
-    /// **fill**: lay the water over the ground. `bed` is the ground under
-    /// the water (used where nothing painted any), `top` the water's own
-    /// surface (world mm at every node; under the ground where there is no
-    /// water), `wet` the nodes it covers and `no_edge` the nodes the
-    /// ground's edge rule leaves alone (the water and its banks meet the
-    /// edge on their own contract). The lift makes the water a layer of its own over the
-    /// ground, so the shore runs exactly where the two surfaces meet; the
-    /// shown surface readers see is the higher of the two.
-    pub fn fill(&mut self, bed: &crate::Field, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
-        self.settle();
-        if self.painted.count() == 0 {
-            // nothing was painted: the ground under the water is the water's own default
-            for (o, &v) in self.field.z.iter_mut().zip(&bed.z) {
-                #[allow(clippy::cast_possible_truncation)]
-                let z = v as f32;
-                *o = z;
-            }
-        }
-        if self.bed.is_none() {
-            self.bed = Some(self.field.clone());
-        }
-        let water = self
-            .water_top
-            .get_or_insert_with(|| vec![f32::NEG_INFINITY; top.z.len()]);
-        for k in 0..self.field.z.len() {
-            #[allow(clippy::cast_possible_truncation)]
-            let z = top.z[k] as f32;
-            water[k] = water[k].max(z);
-            self.field.z[k] = self.field.z[k].max(z);
-            self.wet.bits[k] |= wet[k];
-            self.painted.bits[k] |= wet[k];
-            self.no_edge.bits[k] |= no_edge[k];
-        }
-    }
-
-    /// Spread the paint, once.
-    fn settle(&mut self) {
-        if !self.settled {
-            self.settled = true;
-            self.spread_paint();
-        }
-    }
-
-    /// Banks: where an area painted higher meets one painted lower, the
-    /// higher ground runs down to the lower over a bank as wide as the
-    /// step needs (no steeper than the ground's hills, 24° from 1.5 times
-    /// the step, between 1 mm and [`BANK_MM`] at the reference square),
-    /// cross-fading the two surfaces with a smoothstep. The lower side is
-    /// untouched, so a pool keeps its bed and the bank is all on the land. Fields are the full ones each
-    /// paint was given, so texture fades across the bank.
-    fn banks(&mut self) {
-        let n = self.layers.len();
-        if n < 2 {
-            return;
-        }
-        let k_all = self.field.z.len();
-        // the last paint owning each node
-        let mut owner = vec![usize::MAX; k_all];
-        for (li, layer) in self.layers.iter().enumerate() {
-            let area = &layer.0;
-            for (k, _) in area.bits.iter().enumerate().filter(|(_, b)| **b) {
-                owner[k] = li;
-            }
-        }
-        // nodes no area painted (a line's own) belong to the area whose
-        // paint spread to them, as in `spread_paint`
-        let (nx, ny) = (self.field.nx, self.field.ny);
-        let mut queue: std::collections::VecDeque<usize> =
-            (0..k_all).filter(|&k| owner[k] != usize::MAX).collect();
-        while let Some(k) = queue.pop_front() {
-            let (i, j) = (k % nx, k / nx);
-            for m in [
-                (i > 0).then(|| k - 1),
-                (i + 1 < nx).then(|| k + 1),
-                (j > 0).then(|| k - nx),
-                (j + 1 < ny).then(|| k + nx),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                if owner[m] == usize::MAX {
-                    owner[m] = owner[k];
-                    queue.push_back(m);
-                }
-            }
-        }
-        let s = self.frame.scale();
-        let (lo_w, hi_w) = (1.0 * s, BANK_MM * s);
-        let tan = libm::tan(24f64.to_radians());
-        let mut z: Vec<f64> = self.field.z.iter().map(|&v| f64::from(v)).collect();
-        for q in 0..n {
-            let mine: Vec<bool> = owner.iter().map(|&o| o == q).collect();
-            if !mine.iter().any(|&b| b) || mine.iter().all(|&b| b) {
-                continue;
-            }
-            let (d, _) = crate::distance(&self.frame, &mine);
-            let fq = &self.layers[q].1;
-            for k in 0..k_all {
-                let p = owner[k];
-                if p == q || p == usize::MAX || d.z[k] >= hi_w {
-                    continue;
-                }
-                // a spread node's own height is the field's, not its paint's
-                let fp = if self.layers[p].0.bits[k] {
-                    self.layers[p].1[k]
-                } else {
-                    z[k]
-                };
-                let step = fp - fq[k];
-                if step <= 0.0 {
-                    continue;
-                }
-                let w = (1.5 * step / tan).clamp(lo_w, hi_w);
-                if d.z[k] < w {
-                    let t = crate::smooth01(d.z[k] / w);
-                    z[k] = z[k].min(fq[k] + step * t);
-                }
-            }
-        }
-        for (o, v) in self.field.z.iter_mut().zip(z) {
-            #[allow(clippy::cast_possible_truncation)]
-            let f = v as f32;
-            *o = f;
-        }
+    /// The nodes a fluid covers (empty without one).
+    #[must_use]
+    pub const fn wet(&self) -> &Mask {
+        &self.wet
     }
 
     /// Mark surface nodes as stone (pebbles) for the painted preview;
@@ -675,106 +532,72 @@ impl Surface {
         }
     }
 
-    /// The edge contract: the level (world mm) every ground surface meets
-    /// the tile edge at, and never dips below. `None`: no contract.
+    /// The finished surface and its stone marks, for paint
+    /// ([`crate::SurfacePaint::new`]); `None` when nothing is laid.
+    #[must_use]
+    pub fn surface(&self) -> Option<(Grid, Mask)> {
+        (!self.layers.is_empty()).then(|| (self.shown.clone(), self.stone.clone()))
+    }
+
+    /// The height (world mm) the library gives dirt at a tile edge, if the
+    /// tile sees it: what a wall flush with the rim sits on.
     pub const fn set_edge(&mut self, level_mm: Option<f64>) {
         self.edge_mm = level_mm;
     }
 
-    /// The edge level, world mm, if the tile has an edge contract.
+    /// See [`Terrain::set_edge`].
     #[must_use]
     pub const fn edge(&self) -> Option<f64> {
         self.edge_mm
     }
 
-    /// The level (world mm) the water meets every tile edge at, before
-    /// its tide profile (the edge contract's `water` rule).
+    /// The calm water level (world mm) the library gives: the level a
+    /// water layer's waves are drawn about.
     pub const fn set_water_edge(&mut self, level_mm: Option<f64>) {
         self.water_edge_mm = level_mm;
     }
 
-    /// See [`Scene::set_water_edge`].
+    /// See [`Terrain::set_water_edge`].
     #[must_use]
     pub const fn water_edge(&self) -> Option<f64> {
         self.water_edge_mm
     }
 
-    /// The ground as it was before water filled it (world mm): the bed
-    /// under the water and the bank round it; `None` without water.
-    #[must_use]
-    pub const fn bed(&self) -> Option<&Grid> {
-        self.bed.as_ref()
-    }
-
-    /// The nodes the water covers (empty without water).
-    #[must_use]
-    pub const fn wet(&self) -> &Mask {
-        &self.wet
-    }
-
-    /// The finished ground surface and its stone marks, for paint
-    /// ([`crate::SurfacePaint::new`]); `None` when nothing painted it.
-    #[must_use]
-    pub fn surface(&self) -> Option<(dt_geom::Grid, Mask)> {
-        (self.painted.count() > 0).then(|| (self.field.clone(), self.stone.clone()))
-    }
-
-    /// The edge contract, by construction: perimeter nodes exactly at the
-    /// edge level, and nothing below it (rises only), except where the
-    /// water and its banks meet the edge on their own contract.
-    fn hold_edge(&mut self, edge: f64) {
-        let mut z = std::mem::take(&mut self.field.z);
-        self.hold(&mut z, edge);
-        self.field.z = z;
-    }
-
-    /// [`Surface::hold_edge`] on any ground heights `z` of this lattice.
-    fn hold(&self, z: &mut [f32], edge: f64) {
+    /// **lay**: add a layer on top of those laid.  A land layer's surface is
+    /// the higher of the land below and its own, inside its region; a
+    /// fluid's is its own where it exists.
+    #[allow(clippy::needless_range_loop)]
+    fn lay(&mut self, slot: Slot, spec: &LayerSpec<'_>) {
+        let n = self.land.z.len();
+        let shape = spec.shape.field();
+        let grain = spec.grain;
         #[allow(clippy::cast_possible_truncation)]
-        let e = edge as f32;
-        let (nx, ny) = (self.field.nx, self.field.ny);
-        for j in 0..ny {
-            for i in 0..nx {
-                if self.no_edge.bits[j * nx + i] {
-                    continue;
-                }
-                let z = &mut z[j * nx + i];
-                if i == 0 || j == 0 || i == nx - 1 || j == ny - 1 {
-                    *z = e;
-                } else {
-                    *z = z.max(e);
+        let top: Vec<f32> = (0..n)
+            .map(|k| (shape.z[k] + grain.map_or(0.0, |g| g.z[k])) as f32)
+            .collect();
+        if spec.fluid {
+            for k in 0..n {
+                let on = spec.mask.bits[k] && top[k] >= self.land.z[k];
+                self.wet.bits[k] |= on;
+                if on {
+                    self.shown.z[k] = self.shown.z[k].max(top[k]);
                 }
             }
+        } else {
+            for k in 0..n {
+                if spec.mask.bits[k] {
+                    self.land.z[k] = self.land.z[k].max(top[k]);
+                    self.shown.z[k] = self.shown.z[k].max(top[k]);
+                }
+            }
+            self.any_land = true;
         }
-    }
-
-    fn spread_paint(&mut self) {
-        let (nx, ny) = (self.field.nx, self.field.ny);
-        let mut queue: std::collections::VecDeque<usize> =
-            (0..nx * ny).filter(|&k| self.painted.bits[k]).collect();
-        while let Some(k) = queue.pop_front() {
-            let (i, j) = (k % nx, k / nx);
-            let mut n = [None; 4];
-            if i > 0 {
-                n[0] = Some(k - 1);
-            }
-            if i + 1 < nx {
-                n[1] = Some(k + 1);
-            }
-            if j > 0 {
-                n[2] = Some(k - nx);
-            }
-            if j + 1 < ny {
-                n[3] = Some(k + nx);
-            }
-            for m in n.into_iter().flatten() {
-                if !self.painted.bits[m] {
-                    self.painted.bits[m] = true;
-                    self.field.z[m] = self.field.z[k];
-                    queue.push_back(m);
-                }
-            }
-        }
+        self.layers.push(Laid {
+            slot,
+            fluid: spec.fluid,
+            mask: spec.mask.clone(),
+            top: std::sync::Arc::new(top),
+        });
     }
 }
 
@@ -801,11 +624,6 @@ pub struct Standing {
 pub struct Parts {
     frame: Frame,
     parts: Vec<Part>,
-    /// For each part, how many paints came before it. A surface places its
-    /// own solids (dirt's stones) and then paints, so a part belongs to the
-    /// paint after it; a paint after that one over it removes it
-    /// ([`Scene::bank`], [`Scene::lift`]).
-    placed_at: Vec<usize>,
     /// For each part, the original IDs it carries: which part a triangle
     /// of the union came from ([`Scene::trace_parts`]).
     sources: Vec<Vec<u32>>,
@@ -820,7 +638,6 @@ impl Parts {
         Self {
             frame,
             parts: Vec::new(),
-            placed_at: Vec::new(),
             sources: Vec::new(),
             block: IdBlock::reserve(SLOTS),
             next_slot: 0,
@@ -850,8 +667,8 @@ impl Parts {
             .collect()
     }
 
-    /// Add a part placed after `paints` paints; its mesh's hash.
-    fn add(&mut self, tag: Tag, solid: Solid, paints: usize) -> u64 {
+    /// Add a part; its mesh's hash.
+    fn add(&mut self, tag: Tag, solid: Solid) -> u64 {
         let mesh = solid.0.to_tri_mesh();
         let hash = mesh.content_hash();
         let mut ids = mesh.run_original_id;
@@ -859,7 +676,6 @@ impl Parts {
         ids.dedup();
         self.sources.push(ids);
         self.parts.push(Part { tag, solid });
-        self.placed_at.push(paints);
         hash
     }
 
@@ -986,14 +802,14 @@ impl Parts {
     }
 }
 
-/// The scene of one build: its [`Surface`], painted first, and the
-/// [`Parts`] that stand on it.  A clone shares its solids and paints with
+/// The scene of one build: its [`Terrain`], laid first, and the
+/// [`Parts`] that stand on it.  A clone shares its solids and layers with
 /// the original, so keeping one after each step (a build cache) is cheap.
 #[derive(Clone)]
 pub struct Scene {
     frame: Frame,
     seed: Seed,
-    surface: Surface,
+    terrain: Terrain,
     built: Parts,
     notes: Vec<(String, f64)>,
     stages: Vec<Stage>,
@@ -1008,7 +824,7 @@ impl Scene {
         Self {
             frame,
             seed,
-            surface: Surface::new(frame),
+            terrain: Terrain::new(frame),
             built: Parts::new(frame),
             notes: Vec::new(),
             stages: Vec::new(),
@@ -1016,10 +832,10 @@ impl Scene {
         }
     }
 
-    /// The ground surface.
+    /// The terrain.
     #[must_use]
-    pub const fn ground_surface(&self) -> &Surface {
-        &self.surface
+    pub const fn terrain(&self) -> &Terrain {
+        &self.terrain
     }
 
     /// The parts so far, with the "what stands here" query.
@@ -1058,97 +874,91 @@ impl Scene {
     /// others (a wall on a floor) and things that grow round them read
     /// it through [`Scene::support`].
     pub fn stamp(&mut self, footprint: &Mask, top_mm: f64) {
-        self.surface.stamp(footprint, top_mm)
+        self.terrain.stamp(footprint, top_mm)
     }
 
     /// The highest stamped top at each node (world mm, `-∞` where nothing
     /// is stamped), or `None` before any stamp.
     #[must_use]
     pub fn support(&self) -> Option<&Grid> {
-        self.surface.support()
+        self.terrain.support()
     }
 
     /// The ground surface as painted (world mm at every node), before the
     /// lift spreads paint to unpainted nodes; `None` before any paint.
     #[must_use]
     pub fn surface_field(&self) -> Option<&Grid> {
-        self.surface.surface_field()
+        self.terrain.surface_field()
     }
 
-    /// **paint**: set the ground surface to `level_mm` (already scaled) over
-    /// `area`. Later paints win, so stack order decides which surface paints
-    /// over which.
-    pub fn paint(&mut self, area: &Mask, level_mm: f64) {
-        self.surface.paint(area, level_mm)
+    /// **lay**: add a layer to the terrain, in stack order: land bodies
+    /// first, fluids last.  Its slot (and so its material) is reserved here,
+    /// single-threaded; its surface is the body's, inside its band by type.
+    ///
+    /// # Errors
+    /// [`KitError::Slots`] when the build's block is used up.
+    pub fn lay(&mut self, spec: &LayerSpec<'_>) -> Result<(), KitError> {
+        let slot = self.built.slots(1, spec.material)?.get(0);
+        self.terrain.lay(slot, spec);
+        Ok(())
     }
 
-    /// **paint** a field: set the ground surface to `field` (world mm) over
-    /// `area`. Later paints win.
-    pub fn paint_field(&mut self, area: &Mask, field: &crate::Field) {
-        self.surface.paint_field(area, field)
-    }
-
-    /// The ground surface (world mm): every paint, spread to the nodes no
-    /// area painted (and banked, once [`Scene::bank`] has run). Read it
-    /// after the surfaces are painted (the scheduler paints every surface
-    /// before any solid); `None` when nothing painted it.
-    pub fn ground(&mut self) -> Option<crate::Field> {
-        self.surface.ground()
-    }
-
-    /// **fill**: lay the water over the ground ([`Surface::fill`]).
-    pub fn fill(&mut self, bed: &crate::Field, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
-        self.surface.fill(bed, top, wet, no_edge)
+    /// The land alone (world mm): every land layer laid so far. Read it
+    /// after the land is laid (the scheduler lays every land layer before any
+    /// solid); `None` when none is.
+    #[must_use]
+    pub fn ground(&self) -> Option<crate::Field> {
+        self.terrain.ground()
     }
 
     /// Mark surface nodes as stone (pebbles) for the painted preview;
     /// unmark the rest of `area`.
     pub fn mark_stone(&mut self, area: &Mask, stone: &[bool]) {
-        self.surface.mark_stone(area, stone)
+        self.terrain.mark_stone(area, stone)
     }
 
     /// The edge contract: the level (world mm) every ground surface meets
     /// the tile edge at, and never dips below. `None`: no contract.
     pub const fn set_edge(&mut self, level_mm: Option<f64>) {
-        self.surface.set_edge(level_mm)
+        self.terrain.set_edge(level_mm)
     }
 
     /// The edge level, world mm, if the tile has an edge contract.
     #[must_use]
     pub const fn edge(&self) -> Option<f64> {
-        self.surface.edge()
+        self.terrain.edge()
     }
 
     /// The level (world mm) the water meets every tile edge at, before
     /// its tide profile (the edge contract's `water` rule).
     pub const fn set_water_edge(&mut self, level_mm: Option<f64>) {
-        self.surface.set_water_edge(level_mm)
+        self.terrain.set_water_edge(level_mm)
     }
 
     /// See [`Scene::set_water_edge`].
     #[must_use]
     pub const fn water_edge(&self) -> Option<f64> {
-        self.surface.water_edge()
+        self.terrain.water_edge()
     }
 
     /// The ground as it was before water filled it (world mm): the bed
     /// under the water and the bank round it; `None` without water.
     #[must_use]
-    pub const fn bed(&self) -> Option<&Grid> {
-        self.surface.bed()
+    pub fn bed(&self) -> Option<&Grid> {
+        self.terrain.bed()
     }
 
     /// The nodes the water covers (empty without water).
     #[must_use]
     pub const fn wet(&self) -> &Mask {
-        self.surface.wet()
+        self.terrain.wet()
     }
 
     /// The finished ground surface and its stone marks, for paint
     /// ([`crate::SurfacePaint::new`]); `None` when nothing painted it.
     #[must_use]
     pub fn surface(&self) -> Option<(dt_geom::Grid, Mask)> {
-        self.surface.surface()
+        self.terrain.surface()
     }
 
     /// Reserve `n` slots of one material, in sequence.
@@ -1206,14 +1016,6 @@ impl Scene {
         self.built.standing(kinds, above_mm)
     }
 
-    /// **bank** (field blend): run the higher areas down to the lower ones,
-    /// once. The water calls it before it reads the land, so a shore is a
-    /// bank; plain ground keeps its steps (Phase 2).
-    pub fn bank(&mut self) {
-        self.cull_covered();
-        self.surface.bank();
-    }
-
     /// Attach a progress channel (the evaluator does, for a front end that
     /// wants one).  Never read by geometry: a build is the same without it.
     pub fn set_progress(&mut self, progress: crate::Progress) {
@@ -1253,59 +1055,58 @@ impl Scene {
         });
     }
 
-    /// **lift**: the painted surface as one solid from z = 0 (the uniform
-    /// lift), tagged `ground`. Nodes no area painted take the level of the
-    /// nearest painted node (breadth first, so drawn lines take their
-    /// neighbours' level). Does nothing if nothing was painted.
+    /// **lift**: the terrain as one closed solid from z = 0 (the stack
+    /// mesher), a run per layer, tagged `ground`. Does nothing if nothing is
+    /// laid.
     ///
     /// # Errors
     /// [`KitError`] if the surface is not above 0 or the kernel refuses it.
+    #[allow(clippy::needless_range_loop)]
     pub fn lift(&mut self, owner: &str) -> Result<(), KitError> {
-        if self.surface.painted.count() == 0 {
+        if self.terrain.layers.is_empty() {
             return Ok(());
         }
-        self.cull_covered();
-        self.surface.settle();
-        if let Some(edge) = self.surface.edge_mm {
-            self.surface.hold_edge(edge);
-        }
-        self.record("surface", self.surface.field.content_hash());
-        let slot = self.built.slots(1, Material::Earth)?.get(0);
-        let field = &self.surface.field;
-        // the earth: the ground as it was before the water filled it, held
-        // to the edge contract (the water and its banks excepted)
-        let earth = match &self.surface.bed {
-            Some(bed) => {
-                let mut e = bed.z.clone();
-                if let Some(edge) = self.surface.edge_mm {
-                    self.surface.hold(&mut e, edge);
+        self.record("surface", self.terrain.shown.content_hash());
+        let terrain = &self.terrain;
+        let absent = ABSENT_UNDER_MM * self.frame.scale();
+        // the land layers' running top, then each fluid over it (absent
+        // where it has no region: a hair under the land)
+        let n = terrain.land.z.len();
+        let mut land = vec![0.0_f32; n];
+        let mut tops: Vec<(Vec<f32>, u32)> = Vec::new();
+        for l in terrain.layers.iter().filter(|l| !l.fluid) {
+            for k in 0..n {
+                if l.mask.bits[k] {
+                    land[k] = land[k].max(l.top[k]);
                 }
-                e
             }
-            None => field.z.clone(),
-        };
-        // the water: a layer of its own over the earth, wherever its top is
-        // above it
-        let water = match &self.surface.water_top {
-            Some(w) if self.surface.wet.count() > 0 => {
-                Some((w.clone(), self.built.slots(1, Material::Water)?.get(0)))
-            }
-            _ => None,
-        };
-        let mut layers = vec![dt_geom::Layer {
-            top: &earth,
-            id: slot.id,
-        }];
-        if let Some((w, ws)) = &water {
-            layers.push(dt_geom::Layer { top: w, id: ws.id });
+            tops.push((land.clone(), l.slot.id));
         }
+        #[allow(clippy::cast_possible_truncation)]
+        let under = absent as f32;
+        for l in terrain.layers.iter().filter(|l| l.fluid) {
+            let top = (0..n)
+                .map(|k| {
+                    if l.mask.bits[k] {
+                        l.top[k]
+                    } else {
+                        land[k] - under
+                    }
+                })
+                .collect();
+            tops.push((top, l.slot.id));
+        }
+        let layers: Vec<dt_geom::Layer<'_>> = tops
+            .iter()
+            .map(|(top, id)| dt_geom::Layer { top, id: *id })
+            .collect();
         // one closed mesh, a run per layer; vertices rounded to float32 once
         // so the terrain alone survives the STL reload
         let mesh = dt_geom::lift_stack(
             &dt_geom::Lattice {
-                nx: field.nx,
-                ny: field.ny,
-                step: field.step,
+                nx: terrain.land.nx,
+                ny: terrain.land.ny,
+                step: terrain.land.step,
                 tol: LIFT_TOL_MM,
                 max_cells: LIFT_MAX_CELLS,
                 round: dt_geom::Round::F32,
@@ -1324,51 +1125,10 @@ impl Scene {
         Ok(())
     }
 
-    /// Remove each solid a surface placed (before a later paint) that a
-    /// later paint covers within the solid's reach plus a bank's width:
-    /// the ground it sat on is gone, so it would float or bury. Solids
-    /// placed after every paint are never removed.
-    fn cull_covered(&mut self) {
-        let n = self.surface.layers.len();
-        if self.built.placed_at.iter().all(|&p| p + 1 >= n) {
-            return;
-        }
-        let (nx, ny) = self.frame.nodes();
-        let step = self.frame.step_mm();
-        let margin = BANK_MM * self.frame.scale();
-        let mut keep = Vec::with_capacity(self.built.parts.len());
-        for (part, &at) in self.built.parts.iter().zip(&self.built.placed_at) {
-            let covered = at + 1 < n
-                && part.solid.bounds().is_some_and(|(lo, hi)| {
-                    let reach = |a: f64, b: f64| {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                        let idx = |v: f64| libm::round(v / step).max(0.0) as usize;
-                        (idx(a - margin), idx(b + margin))
-                    };
-                    let (i0, i1) = reach(lo[0], hi[0]);
-                    let (j0, j1) = reach(lo[1], hi[1]);
-                    (j0..=j1.min(ny - 1)).any(|j| {
-                        (i0..=i1.min(nx - 1)).any(|i| {
-                            self.surface.layers[at + 1..]
-                                .iter()
-                                .any(|layer| layer.0.bits[j * nx + i])
-                        })
-                    })
-                });
-            keep.push(!covered);
-        }
-        let mut it = keep.iter();
-        self.built.parts.retain(|_| *it.next().unwrap_or(&true));
-        let mut it = keep.iter();
-        self.built.placed_at.retain(|_| *it.next().unwrap_or(&true));
-        let mut it = keep.iter();
-        self.built.sources.retain(|_| *it.next().unwrap_or(&true));
-    }
-
     /// Add a solid an element built, and record its stage hash.
     pub fn add(&mut self, tag: Tag, solid: Solid) {
         let name = format!("{}:{}", tag.kind, tag.owner);
-        let hash = self.built.add(tag, solid, self.surface.layers.len());
+        let hash = self.built.add(tag, solid);
         self.record(&name, hash);
     }
 

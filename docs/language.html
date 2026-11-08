@@ -42,14 +42,16 @@
 <p>The smallest tile in the library:</p>
 <pre><code>// library/tiles/test/1x1-flat.dtile
 tile size="1x1" {
+    about "Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end."
     stack {
-        ground                          // flat, at the ground level (5 mm)
+        base
+        dirt top=dirtEdgeHeight clods=few stones=none   // flat, at the edge height (3.4 mm)
     }
 }</code></pre>
-<p>It names no base. <code>dharmatiles build lib:tiles/test/1x1-flat.dtile</code> builds it for DungeonBlocks, the default system, and adds that base.</p>
+<p>Its stack starts with <code>base</code>, the connector. <code>dharmatiles build lib:tiles/test/1x1-flat.dtile</code> builds it for DungeonBlocks, the default system.</p>
 
 <dl class="defs">
-  <dt>element</dt><dd>Anything a document can write: the document's own (<code>tile</code>, <code>line</code>, <code>region</code>, <code>stack</code>, …) and the built-in terrain (<code>ground</code>, <code>dirt</code>, <code>grass</code>, <code>rock</code>, <code>tree</code>, <code>wall</code>, <code>cliff</code>, …), plus <code>scatter</code>. Each has a page in the <a href="elements/index.html">elements reference</a>.</dd>
+  <dt>element</dt><dd>Anything a document can write: the document's own (<code>tile</code>, <code>line</code>, <code>region</code>, <code>stack</code>, …) and the built-in terrain (<code>dirt</code>, <code>grass</code>, <code>rock</code>, <code>tree</code>, <code>wall</code>, <code>cliff</code>, …), plus <code>scatter</code>. Each has a page in the <a href="elements/index.html">elements reference</a>.</dd>
   <dt>control</dt><dd>A setting of an element, written as a property (<code>height=40</code>) or as a child line (<code>height 40</code>).</dd>
   <dt>group</dt><dd>A control that holds only sub-controls, written as properties on its own line: <code>leaf length=4.5 width=3</code>.</dd>
   <dt>thing</dt><dd>One solid object: a rock, a tree, or a definition whose stack is one thing (an <code>oak</code>).</dd>
@@ -157,8 +159,8 @@ let tallWallHeight     72.3</code></pre>
     water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" { pin top=waterEdgeHeight at=edges }
 }</code></pre>
 <p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The land defaults apply to the first land layer only, so a dirt film on a cliff (<code>dirt top="bottom + [0.6 .. 1.2]"</code>) is not pulled to the rim; the water default applies to every water. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override waterBedHeight 0.4 → 0.8</code>), and each pin's share of its place.</p>
-<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and types, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). A tile that writes a top, a pin or a <code>slope</code> checks and solves; <code>build</code> does not build bands yet and says which lines. A tile that writes none of these builds as before.</p>
-<p>A complete tile that checks and solves:</p>
+<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and types, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it. A cliff's or a thing's <code>top=</code>, and a thing at a line or region, are checked but not built yet, and say so.</p>
+<p>A complete tile that builds:</p>
 <pre><code>tile size="1x1" seed=62 {
     point crossing "(0.65, 0.5)"
     line stream wobble=0.5 { through westCenter eastCenter }
@@ -177,12 +179,12 @@ let tallWallHeight     72.3</code></pre>
 }</code></pre>
 
 <h3 id="edge-contract">The edge contract</h3>
-<p>Every tile also gets <code>library/parts/edges.dtile</code> at its root, without a <code>use</code> line. It says what every tile does at its edges so that neighbours butt with no step:</p>
-<pre><code>edges {
-    ground level=edge           // ground meets every tile edge at the edge level (3.4 mm)
-    water level=water           // water meets it at the water level, with a shared tide
+<p>Every tile also reads <code>library/parts/edges.dtile</code>, without a <code>use</code> line. Its <code>defaults</code> block gives the first dirt, and every water, a top and a pin at the tile's edges, so that neighbours butt with no step:</p>
+<pre><code>defaults {
+    dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
+    water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" { pin top=waterEdgeHeight at=edges }
 }</code></pre>
-<p>So any ground tile butts any other with no step, and any two water tiles meet in the same wave. See <a href="elements/edges.html"><code>edges</code></a>.</p>
+<p>So any dirt tile butts any other with no step, and any two water tiles meet in the same wave. A pin the tile writes later wins over a default where they overlap. See <a href="elements/edges.html"><code>edges</code></a>.</p>
 
 <h2 id="places">4. Edges, points, lines and regions</h2>
 <p>Positions are in squares from the south-west corner, x running east and y running north.</p>
@@ -259,14 +261,14 @@ region knoll { bounded-by foot; fill center }             // the paint bucket, a
 <p><code>mostly=</code> skews a range draw as <code>lo + (hi − lo) × u<sup>k</sup></code>: <code>small</code> is k = 2 , <code>even</code> is k = 1, <code>large</code> is k = ½.</p>
 
 <h3 id="stack-order">Stack order</h3>
-<p>Order is free for solids. Every solid (rocks, trees, walls, cliffs, boulders, scattered or not) is planned before anything grows, and grass and dirt banks grow round every solid wherever they are listed. Order only decides which surface paints over which: a path's dirt listed after the whole-tile dirt paints over it. Each element is a surface, a thing, a run or a scatter, and that decides how it is planned.</p>
+<p>Order is free for solids. Every solid (rocks, trees, walls, cliffs, boulders, scattered or not) is planned before anything grows, and grass and dirt banks grow round every solid wherever they are listed. Order of land bodies is stack order, each one the higher of what is below and its own top: a dirt along a path, listed after the whole-tile dirt, takes the higher of the two there. Each element is a surface, a thing, a run or a scatter, and that decides how it is planned.</p>
 
 <h2 id="elements">6. The elements</h2>
 <p>Each element has a page of its own, with what it makes, a picture, an example and every control it takes, generated from the program: <code>dharmatiles elements NAME</code> prints the same list. Each element leads with a few controls named for what you see. A word in a choice (<code>rock mixed</code>, <code>flow wild</code>) expands to documented numbers; a number is always accepted instead.</p>
 <div class="tbl"><table>
 <thead><tr><th>Kind</th><th>Elements</th></tr></thead>
 <tbody>
-<tr><td>Surfaces</td><td><a href="elements/ground.html"><code>ground</code></a> · <a href="elements/dirt.html"><code>dirt</code></a> · <a href="elements/grass.html"><code>grass</code></a> · <a href="elements/reeds.html"><code>reeds</code></a> · <a href="elements/flowers.html"><code>flowers</code></a> · <a href="elements/water.html"><code>water</code></a> · <a href="elements/floor.html"><code>floor</code></a></td></tr>
+<tr><td>Surfaces</td><td><a href="elements/dirt.html"><code>dirt</code></a> · <a href="elements/grass.html"><code>grass</code></a> · <a href="elements/reeds.html"><code>reeds</code></a> · <a href="elements/flowers.html"><code>flowers</code></a> · <a href="elements/water.html"><code>water</code></a> · <a href="elements/floor.html"><code>floor</code></a></td></tr>
 <tr><td>Things</td><td><a href="elements/rock.html"><code>rock</code></a> · <a href="elements/stone.html"><code>stone</code></a> · <a href="elements/boulder.html"><code>boulder</code></a> · <a href="elements/pebble.html"><code>pebble</code></a> · <a href="elements/tree.html"><code>tree</code></a></td></tr>
 <tr><td>Runs</td><td><a href="elements/wall.html"><code>wall</code></a> · <a href="elements/cliff.html"><code>cliff</code></a></td></tr>
 <tr><td>Placement</td><td><a href="elements/scatter.html"><code>scatter</code></a></td></tr>
@@ -335,10 +337,10 @@ define oak {
 
   × no element or definition is called `hills`
    ╭─[library/tiles/ground/2x2-grass-tree.dtile:8:9]
- 8 │         hills                           // flat, at the ground level (5 mm)
+ 8 │         hills clods=few stones=none
    ·         ──┬──
    ·           ╰── unknown
-  help: `hills` is now `ground`</code></pre>
+  help: `hills` is now `dirt`</code></pre>
 <p>Other mistakes caught the same way: a misspelt control (<code>clumsp</code>, did you mean <code>clumps</code>?), a unit written in (<code>"4.5mm"</code>), an expert control in a tile, a missing <code>along=</code>, <code>side=</code> on a tile edge, and old KDL v1 syntax.</p>
 
 
@@ -373,7 +375,8 @@ use "parts/grass" long-grass
 
 tile size="2x2" seed=84 {
     stack {
-        ground                          // flat, at the ground level (5 mm)
+        base
+        dirt clods=few stones=none
         long-grass                      // grows round the trunk, wherever it is listed
 
         tree height=40 {               // anywhere on the tile; or at="1,1"
@@ -396,7 +399,8 @@ use "parts/grass" lawn
 
 tile size="1x1" seed=64 {
     stack {
-        dirt                                // bare earth at the ground level
+        base
+        dirt                                // bare earth at the ground height
 
         // Along the north edge, then the west edge.  On a tile edge a
         // wall always stands inside, its outer face flush with the edge.
@@ -429,10 +433,11 @@ tile size="2x1" seed=1 {
         standard end section, so runs butt end to end.
         """
 
-    levels foot=4                   // the cliff's own foot level; the standard edge level is 3.4
+    let footHeight 4                // the cliff's own foot height; the library's edge height is 3.4
 
     stack {
-        dirt level=foot {
+        base
+        dirt top=footHeight {
             bank against=cliff height="1.5..3.5" reach="3..6.5"
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
@@ -469,8 +474,8 @@ tile size="1x2" seed=7 {
     region verge { bounded-by trail; fill "0.15,1"; fill "0.85,1" }
 
     stack {
-        dirt                                    // the whole tile, at the ground level
-        dirt along=trail level="ground - 1"     // the path, trodden 1 mm lower
+        dirt                                    // the whole tile, at the ground height
+        dirt along=trail                        // the path, a second dirt along it
 
         scatter in=verge at="0.2,1.4" spread=6 count=5 {   // a cluster
             rock size="4..10" shape=rounded buried="30%"   // shape: or angular, flat
@@ -480,7 +485,7 @@ tile size="1x2" seed=7 {
     }
 }</code></pre>
 <ul>
-  <li>The second <code>dirt</code> paints over the first along the path, 1 mm lower: here order matters, because both are surfaces.</li>
+  <li>The second <code>dirt</code> is laid after the first along the path; each land body is the higher of what is below it and its own top.</li>
   <li><code>verge</code> is the tile less the path: one fill point on each side of the line.</li>
 </ul>
 
@@ -508,11 +513,11 @@ cliff along=north height=55 {
   <li>The whole tile is the default area. A region is flat: its fill points and its <code>within</code> discs, less what it <code>except</code>s. A body, grass or scatter fills a region; a pin or a thing takes any place.</li>
   <li>A stack that uses the heights language is written bottom up: <code>base</code> first, the land in order, <code>water</code> last. Heights are mm above zero; a pin is exact where it is and the later pin wins; the library's defaults are read before the tile.</li>
   <li>Every name is declared once, in camelCase. <code>let</code> adds a name, <code>override</code> replaces a library one, and neither works on the other's names.</li>
-  <li>Stack order is free for solids: every solid is planned first and everything grows round it. Order only decides which surface paints over which.</li>
+  <li>Stack order is free for solids: every solid is planned first and everything grows round it. Land bodies are laid in stack order, each the higher of what is below it and its own top.</li>
   <li>Character controls are words that stand for documented numbers; a number is always accepted too.</li>
   <li>A wall or cliff on a tile edge stands inside the tile.</li>
   <li><code>scatter</code> places many things; a thing on its own is one, placed with <code>at=</code>. An <code>at=</code> may be a range, drawn once from the tile seed; with none, a thing goes anywhere in its area, kept inside the tile and never clipped.</li>
-  <li>Water fills its area up to its level; the shoreline comes from the ground beneath.</li>
+  <li>Water fills its area up to its top; the shoreline comes from the dirt beneath.</li>
   <li>The standard levels (<code>ground</code>, <code>edge</code>, <code>water</code>, <code>wall-top</code>) are always there. A definition adds anywhere and removes only inside itself.</li>
   <li><code>z = 0</code> is the top of the base; the base owns everything below it.</li>
   <li>Materials are named in the document and given colours separately, by a palette.</li>

@@ -13,8 +13,8 @@ export let tools = null; // the bar's tools (below)
 // ---- the map, the bar and its tools ----------------------------------------
 
 const overlay = new Overlay($('over'), viewer);
-const SURFACES = new Set(['ground', 'dirt', 'floor', 'water']);
-const COLOUR = { water: '--water', dirt: '--earth', ground: '--earth', floor: '--stone', grass: '--moss', reeds: '--moss', flowers: '--bloom' };
+const SURFACES = new Set(['dirt', 'floor', 'water']);
+const COLOUR = { water: '--water', dirt: '--earth', floor: '--stone', grass: '--moss', reeds: '--moss', flowers: '--bloom' };
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 /** The ground's heights, from the surfaces the build made. */

@@ -141,10 +141,11 @@ fn insertion_goes_on_the_line_as_a_property() {
     assert!(tree.place.at.is_some());
 
     // On a line with only a name and a comment.
-    let new = insert_property(text, &["tile", "stack", "ground"], "level", 4).unwrap();
-    assert_eq!(
-        changed_lines(text, &new)[0].2,
-        "        ground level=4                          // flat, at the ground level (5 mm)"
+    let new = insert_property(text, &["tile", "stack", "dirt"], "bump-size", 20).unwrap();
+    assert!(
+        changed_lines(text, &new)[0]
+            .2
+            .starts_with("        dirt clods=few stones=none bump-size=20")
     );
     redecode(name, &new);
 
@@ -174,14 +175,10 @@ fn insertion_into_the_second_of_two_same_named_entries() {
     let doc = redecode(name, text);
     let second = &doc.tile().unwrap().stack[1];
     let path: Vec<&str> = second.path.iter().map(String::as_str).collect();
-    let new = set_control(text, &path, "bumps", 1).unwrap();
+    let new = set_control(text, &path, "bump-size", 30).unwrap();
     let lines = changed_lines(text, &new);
     assert_eq!(lines.len(), 1);
-    assert!(
-        lines[0]
-            .2
-            .contains("dirt along=trail level=\"ground - 1\" bumps=1")
-    );
+    assert!(lines[0].2.contains("dirt along=trail bump-size=30"));
     redecode(name, &new);
 }
 

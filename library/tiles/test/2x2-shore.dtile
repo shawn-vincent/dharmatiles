@@ -4,18 +4,21 @@ tile size="2x2" seed=1 {
     about "A meadow meeting water, with reeds: a test tile."
     line shore wobble=11 { through "0.94,0" "0.94,2" }
     region land { bounded-by shore; fill "0.3,1" }
-    region water { bounded-by shore; fill "1.6,1" }
+    region lake { bounded-by shore; fill "1.6,1" }
+    region shoreBand { within 7 of=shore }
     stack {
-        dirt in=land level=edge {
+        base
+        dirt top=dirtEdgeHeight {
+            pin top="[waterBedHeight .. dirtEdgeHeight]" at=shoreBand   // anywhere from the bed to the land
+            pin top=waterBedHeight at=lake   // the bed, written last so it wins
             stones none
         }
         scatter in=land per-square="1.5..2" gap=1.5 {
             rock
         }
         grass in=land bare="15%"
-        ground in=water level="water - 2.2"
-        scatter in=water count=3 { rock size="6..10" }
-        water
+        scatter in=lake count=3 { rock size="6..10" }
         reeds
+        water
     }
 }

@@ -4,7 +4,8 @@ use "parts/grass" long-grass
 
 tile size="2x2" seed=84 {
     stack {
-        ground                          // flat, at the ground level (5 mm)
+        base
+        dirt clods=few stones=none
         long-grass                      // grows round the trunk, wherever it is listed
 
         tree height=40 {               // anywhere on the tile; or at="1,1"

@@ -4,6 +4,7 @@
 tile size="1x1" seed=5 {
     about "A fieldstone wall all round the rim on bare dirt, for golden tests."
     stack {
+        base
         dirt
         wall along="north east south west" style=fieldstone seed=3 {
             height full

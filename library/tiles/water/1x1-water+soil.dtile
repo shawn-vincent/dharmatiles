@@ -5,9 +5,13 @@ tile size="1x1" seed=50 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }
+    region shoreBand { within 7 of=shore }
     stack {
-        dirt in=bank
-        ground in=pool level="water - 2.2"
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
+            pin top=waterBedHeight at=pool   // the bed, written last so it wins
+        }
         scatter in=pool count=2 { rock size="6..10" }
         water
     }

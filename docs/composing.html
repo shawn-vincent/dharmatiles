@@ -70,7 +70,7 @@ tile size="2x2" seed=1 {
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
 <tbody>
-<tr><td>stack order</td><td>the order elements are listed</td><td>—</td><td>Free for solids: they are always planned first. For surfaces, a later surface paints over an earlier one.</td></tr>
+<tr><td>stack order</td><td>the order elements are listed</td><td>—</td><td>Free for solids: they are always planned first. Land bodies are laid in order, each the higher of what is below it and its own top; water goes last.</td></tr>
 <tr><td><code>in=</code></td><td>a region name</td><td>whole tile</td><td>The element acts only inside that region.</td></tr>
 <tr><td><code>along=</code></td><td>an edge, edge path or drawn line</td><td>—</td><td>The element is built along it (a path, a wall, a cliff).</td></tr>
 <tr><td><code>at=</code></td><td>a point or range, in squares</td><td>anywhere</td><td>Where one thing stands. Footprints are kept inside the tile and clear of other solids.</td></tr>
@@ -124,7 +124,7 @@ tile size="2x2" seed=1 {
 <h2 id="how">How it is made</h2>
 <p>The program orders the stack by what each element reads and writes, so the order a tile lists them in does not decide what grows round what.</p>
 <ol>
-  <li><strong>Surfaces.</strong> Ground, dirt and floors paint the ground of their areas; a later surface paints over an earlier one.</li>
+  <li><strong>Surfaces.</strong> Dirt is the ground; floors are laid on it. A later land body is the higher of what is below it and its own top.</li>
   <li><strong>Solids.</strong> Rocks, trees, walls and cliffs claim their footprints and are bedded into the ground, kept inside the tile and clear of each other.</li>
   <li><strong>Growth.</strong> Grass and reeds read the footprints: no blade roots inside one, blades stop just inside a rock's face, and the flow parts round each solid.</li>
   <li><strong>Join and check.</strong> Everything is joined with the base into one body, and the printability gate checks it.</li>

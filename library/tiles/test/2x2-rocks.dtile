@@ -1,7 +1,8 @@
 tile size="2x2" seed=1 {
     about "Rocks scattered on bare dirt: a test tile."
     stack {
-        dirt level=edge {
+        base
+        dirt top=dirtEdgeHeight {
             stones none
         }
         scatter per-square="2.25..3" gap=1.5 {

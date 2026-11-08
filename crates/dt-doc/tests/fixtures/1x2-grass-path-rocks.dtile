@@ -13,8 +13,8 @@ tile size="1x2" seed=7 {
     region verge { bounded-by trail; fill "0.15,1"; fill "0.85,1" }
 
     stack {
-        dirt                                    // the whole tile, at the ground level
-        dirt along=trail level="ground - 1"     // the path, trodden 1 mm lower
+        dirt                                    // the whole tile, at the ground height
+        dirt along=trail                        // the path, a second dirt along it
 
         scatter in=verge at="0.2,1.4" spread=6 count=5 {   // a cluster
             rock size="4..10" shape=rounded buried="30%"   // shape: or angular, flat

@@ -58,10 +58,14 @@ tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }
+    region shoreBand { within 7 of=shore }
     stack {
-        dirt in=bank
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
+            pin top=waterBedHeight at=pool                                // later, so it wins in the pool
+        }
         grass in=bank
-        ground in=pool level="water - 2.2"
         scatter in=pool count=2 { rock size="6..10" }
         water
     }
@@ -71,7 +75,7 @@ tile size="1x1" seed=97 {
 </header>
 
 <h2 id="first">A first tile</h2>
-<p>A <a href="elements/line.html"><code>line</code></a> divides the tile, <a href="elements/region.html">regions</a> name its sides, and the <a href="elements/stack.html"><code>stack</code></a> says what goes where: <a href="elements/dirt.html"><code>dirt</code></a> and <a href="elements/grass.html"><code>grass</code></a> on the bank, a <a href="elements/ground.html"><code>ground</code></a> bed, two rocks and <a href="elements/water.html"><code>water</code></a> in the pool. Sizes are millimetres at the 35 mm square; the OpenLOCK build scales them for you.</p>
+<p>A <a href="elements/line.html"><code>line</code></a> divides the tile, <a href="elements/region.html">regions</a> name its sides, and the <a href="elements/stack.html"><code>stack</code></a> says what goes where: <a href="elements/dirt.html"><code>dirt</code></a> pinned down to the water's bed in the pool, <a href="elements/grass.html"><code>grass</code></a> on the bank, two rocks and <a href="elements/water.html"><code>water</code></a> in the pool. Sizes are millimetres at the 35 mm square; the OpenLOCK build scales them for you.</p>
 <div class="tbl"><table>
   <thead><tr><th>To</th><th>Run</th></tr></thead>
   <tbody>
@@ -119,7 +123,7 @@ cargo build --release                 # a few minutes, once
 
 <h2 id="elements">Elements</h2>
 <div class="lookgrid">
-  <a class="lookcard" href="elements/dirt.html"><img src="elements/img/el-dirt.jpg" alt="" loading="lazy"><span class="lc-t">dirt · ground</span><span class="lc-d">Bare earth with clods, grit and half-sunk pebbles over gentle rises.</span></a>
+  <a class="lookcard" href="elements/dirt.html"><img src="elements/img/el-dirt.jpg" alt="" loading="lazy"><span class="lc-t">dirt</span><span class="lc-d">Bare earth with clods, grit and half-sunk pebbles over gentle rises.</span></a>
   <a class="lookcard" href="elements/grass.html"><img src="elements/img/el-grass.jpg" alt="" loading="lazy"><span class="lc-t">grass · flowers · reeds</span><span class="lc-d">Separate sculpted blades in tufts, parting round patches of bare earth.</span></a>
   <a class="lookcard" href="elements/rock.html"><img src="elements/img/el-rock.jpg" alt="" loading="lazy"><span class="lc-t">rock · stone · boulder · pebble</span><span class="lc-d">Chiselled stones, alone or scattered, bedded in the ground.</span></a>
   <a class="lookcard" href="elements/cliff.html"><img src="elements/img/el-cliff.jpg" alt="" loading="lazy"><span class="lc-t">cliff</span><span class="lc-d">A storey-high band or mass of broken rock, with scree at its foot.</span></a>
@@ -134,7 +138,7 @@ cargo build --release                 # a few minutes, once
 <div class="tbl"><table>
 <thead><tr><th>Works</th><th>Not built yet</th></tr></thead>
 <tbody>
-<tr><td>Every element on the <a href="elements/index.html">elements</a> pages builds: ground, dirt, grass, reeds, flowers, water, rocks and scatter, trees, walls, floors and cliffs.</td><td>A line's <code>width=</code>, and building <code>along=</code> a drawn line (walls, paths, surfaces). <code>check</code> names the lines; <code>build</code> refuses them.</td></tr>
+<tr><td>Every element on the <a href="elements/index.html">elements</a> pages builds: dirt, grass, reeds, flowers, water, rocks and scatter, trees, walls, floors and cliffs.</td><td>A line's <code>width=</code>, and building <code>along=</code> a drawn line (walls, paths, surfaces). <code>check</code> names the lines; <code>build</code> refuses them.</td></tr>
 <tr><td>DungeonBlocks and OpenLOCK bases from one document; STL, a 3MF painted by material (a Bambu Studio project with a template), and PNG views.</td><td>Doors, windows and hatches in walls.</td></tr>
 <tr><td>The <a href="preview.html">preview</a>, <code>watch</code>, and the whole library (<code>build --all</code>, once for each base).</td><td>Prebuilt downloads, and builds for Linux and Windows.</td></tr>
 </tbody></table></div>

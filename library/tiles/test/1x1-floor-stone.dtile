@@ -1,6 +1,7 @@
 tile size="1x1" seed=1 {
     about "A dressed stone floor: a test tile."
     stack {
+        base
         dirt
         floor texture=dressed
     }

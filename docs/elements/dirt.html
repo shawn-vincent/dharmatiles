@@ -14,7 +14,7 @@
   <div class="eyebrow"><i class="fam-mark fam-surface" title="earth: a surface"></i>Element · surface</div>
   <h1>dirt</h1>
   <p class="lede">Textured bare earth: soil clods, grit and half-sunk pebbles over gentle rises. Nearly every tile starts with <code>dirt</code>: on its own it makes a plain earth tile, and under grass, rocks, water and cliffs it is the earth between them. It meets every tile edge at the same level, so any two tiles butt with no step.</p>
-  <p class="small">The plain ground shape, with no texture, is its own element, <a href="ground.html"><code>ground</code></a>. Pebbles written inside dirt are a <a href="scatter.html"><code>scatter</code></a> of <a href="pebble.html"><code>pebble</code></a>.</p>
+  <p class="small">Pebbles written inside dirt are a <a href="scatter.html"><code>scatter</code></a> of <a href="pebble.html"><code>pebble</code></a>.</p>
   <figure class="shot hero-one"><img src="img/el-dirt.jpg" alt="A one-square tile of bare earth: clods, pebbles and a few bedded stones"><figcaption><code>lib:tiles/ground/1x1-soil.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v">any tile size</div></div>
@@ -50,10 +50,11 @@
 <p>The dirt texture is also the exposed ground in every other lab: grass stands on it, water's shore and banks use it, and rocks sit in it.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>The plainest tile is dirt on its own. <code>bumps</code> lifts gentle rises, <code>bump-size</code> sets how wide they are, and <code>clods</code> sets how cloddy the soil is:</p>
+<p>The plainest tile is dirt on its own: the library's top, hills spanning 1 mm over the ground height. <code>top</code> sets how high it may be, <code>bump-size</code> how wide its hills are, and <code>clods</code> how cloddy the soil is:</p>
 <pre><code>tile size="1x1" seed=13 {
     stack {
-        dirt bumps=2.5 bump-size=14 {   // rises up to 2.5 mm, about 14 mm across
+        base
+        dirt top="[groundHeight .. groundHeight + 2.5]" bump-size=14 {   // hills up to 2.5 mm, about 14 mm across
             clods some                  // or: few, many
         }
     }
@@ -68,7 +69,7 @@
     }
 }</code></pre>
 <p>Against a cliff or wall, dirt can heap up in a <code>bank</code>, and a <a href="scatter.html"><code>scatter</code></a> written inside it lands on it (from <code>2x1-cliff</code>):</p>
-<pre><code>dirt level=edge {
+<pre><code>dirt top=dirtEdgeHeight {
     bank against=cliff height="1.5..3.5" reach="3..6.5"
     scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
 }</code></pre>
@@ -86,11 +87,7 @@
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-level"><td><code>level</code></td><td>level, over 0</td><td><code>ground</code></td><td>where the surface sits</td></tr>
-<tr id="c-bumps"><td><code>bumps</code></td><td>mm, 0 to 15, or a range</td><td><code>0</code></td><td>how far it rises and falls</td></tr>
-<tr id="c-bumps-up"><td><code>bumps up</code></td><td>mm, 0 to 15, or a range</td><td>—</td><td>how far it rises</td></tr>
-<tr id="c-bumps-down"><td><code>bumps down</code></td><td>mm, 0 to 15, or a range</td><td>—</td><td>how far it falls</td></tr>
-<tr id="c-bump-size"><td><code>bump-size</code></td><td>mm, 5 to 70</td><td>—</td><td>how wide the hills are: broad and rolling, or choppy</td></tr>
+<tr id="c-bump-size"><td><code>bump-size</code></td><td>mm, 5 to 70</td><td>—</td><td>how wide the hills are in its band: broad and rolling, or choppy</td></tr>
 <tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>clods here and there</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
 <tr id="c-stones"><td><code>stones</code></td><td>word</td><td><code>some</code></td><td>a few stones bedded in the dirt<dl class="words"><dt><code>none</code></dt><dd>bare dirt, no stones</dd><dt><code>some</code></dt><dd>a few bedded stones</dd><dt><code>many</code></dt><dd>a stony patch (provisional)</dd></dl></td></tr>
 <tr id="c-bank"><td><code>bank</code></td><td>group</td><td>—</td><td>earth heaped against a cliff or wall</td></tr>
@@ -116,6 +113,7 @@
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/floors/1x1-floor-stone-wall.dtile"><code>1x1-floor-stone-wall.dtile</code></a> <span class="muted small">lib:tiles/floors/1x1-floor-stone-wall.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/floors/1x1-floor-stone.dtile"><code>1x1-floor-stone.dtile</code></a> <span class="muted small">lib:tiles/floors/1x1-floor-stone.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-flowers.dtile"><code>1x1-grass-flowers.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-flowers.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-tree.dtile"><code>1x1-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-tree.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass.dtile"><code>1x1-grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil+grass-angle.dtile"><code>1x1-soil+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil+grass-angle.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil+grass-corner.dtile"><code>1x1-soil+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil+grass-corner.dtile</span></li>
@@ -127,6 +125,7 @@
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-x+grass.dtile"><code>1x1-soil-corridor-x+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-x+grass.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-u+grass.dtile"><code>1x1-soil-u+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-u+grass.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil.dtile"><code>1x1-soil.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/2x2-grass-tree.dtile"><code>2x2-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/2x2-grass-tree.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-brick-corner.dtile"><code>1x1-wall-brick-corner.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-brick-corner.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-brick.dtile"><code>1x1-wall-brick.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-brick.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-fieldstone-corner.dtile"><code>1x1-wall-fieldstone-corner.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-fieldstone-corner.dtile</span></li>
@@ -152,6 +151,8 @@
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-x+soil.dtile"><code>1x1-water-corridor-x+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-x+soil.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+grass.dtile"><code>1x1-water-u+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+grass.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+soil.dtile"><code>1x1-water-u+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water.dtile"><code>1x1-water.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/3x3-water.dtile"><code>3x3-water.dtile</code></a> <span class="muted small">lib:tiles/water/3x3-water.dtile</span></li>
 </ul>
 <p class="muted small">Generated from <code>dharmatiles elements dirt</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->
@@ -159,15 +160,15 @@
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
   <li><strong>Tile.</strong> Any size in 35 mm squares.</li>
-  <li><strong>Edge level.</strong> Ground meets every tile edge at the edge level: 3.4 mm above the base (<code>library/parts/edges.dtile</code>).</li>
-  <li><strong>Rises only.</strong> Inside the tile the ground only goes up from the edge level. The ground runs from the edge level to about 7.6 mm, with a median near 4.5 mm; the rises fade out over the 9 mm next to the rim, and no slope is steeper than 24°.</li>
+  <li><strong>Edge height.</strong> The library pins the first dirt to <code>dirtEdgeHeight</code>, 3.4 mm above the base, at every tile edge (<code>library/parts/edges.dtile</code>); a pin the tile writes later wins where they overlap.</li>
+  <li><strong>Hills in a band.</strong> The default top is <code>[groundHeight .. groundHeight + 1]</code>: broad hills (<code>bump-size</code>) spanning that band, easing down to the edge pin at the dirt's slope, 24° unless it says otherwise. Where the band is wide (a bank drawn between a bed and the land) the dirt takes the smoothest surface the band allows.</li>
   <li><strong>Pebbles and stones.</strong> Per square: 45–75 small pebbles (0.5–1.5 mm) and 8–13 medium (2.2–4.5 mm). On a 2×2 tile: 4–7 larger stones (4.5–7.5 mm) in 4–7 loose clusters.</li>
-  <li><strong>Flat ground.</strong> Without <code>bumps</code> the ground is flat at its level: 5 mm by default.</li>
+  <li><strong>Flat ground.</strong> A single height for <code>top</code> is flat, exactly: <code>dirt top=groundHeight</code>.</li>
 </ul>
 
 <h3 id="edges">Edges and joining tiles</h3>
 <ul>
-  <li>The texture ramps in over the outer 1 mm, so the ground is exactly at the edge level all round. Any two ground tiles butt with no step.</li>
+  <li>The texture ramps in over the outer 1 mm, so a pinned rim is exactly at its pin all round. Any two dirt tiles butt with no step.</li>
   <li>Grass, water and cliff tiles meet ground at the same edge level; this is the edge contract on the <a href="../standards/tile-system.html#edge-contract">tile system</a> page.</li>
 </ul>
 
@@ -201,7 +202,7 @@
 </div>
 <p class="small muted">The animation is a simplified stand-in for the idea, drawn in your browser; it is not the program's output. What the program does, in order:</p>
 <ol class="small">
-  <li><strong>Ground</strong>: the level, rises and edge ramp of <code>ground</code>, plus a low soil roughness.</li>
+  <li><strong>Hills</strong>: the calculator draws broad hills in the dirt's band, the smoothest surface the band allows plus noise spread over as much of the band as there is room, plus a low soil roughness. Where water covers the dirt the texture below fades out.</li>
   <li><strong>Clods</strong>: patchy, by a 6 mm patch field that never drops below 30%; each clod is 1–3 lumpy lobes with a flattish tilted top, partly sunk and soft-maxed onto the soil.</li>
   <li><strong>Grit</strong>: fine noise and sparse sand grains.</li>
   <li><strong>Pebbles</strong>: dart-thrown into loose clusters biased into low ground, largest first; each a flattened cap cut by tilted planes, sunk 25–45%.</li>

@@ -41,6 +41,10 @@ use crate::source::{LIB, Source, resolve};
 /// The edge contract every tile applies at its root.
 pub const EDGES: &str = "lib:parts/edges.dtile";
 
+/// The library's heights, every tile's constants: read from disk like any
+/// other file, never compiled in.
+pub const HEIGHTS: &str = "lib:parts/heights.dtile";
+
 /// A line's wobble follows smooth noise of this sigma along it, mm at the
 /// reference square.
 const LINE_WOBBLE_SIGMA_MM: f64 = 9.0;
@@ -247,9 +251,6 @@ pub struct Tile {
     pub seed: u64,
     /// Levels in mm: the standard ones, the file's, then the tile's own.
     pub levels: Vec<(String, f64)>,
-    /// The edge contract: the level, mm, each surface meets every tile
-    /// edge at.
-    pub edges: Vec<(String, f64)>,
     /// Straight lines, by name, as points in squares.
     pub lines: BTreeMap<String, Vec<[f64; 2]>>,
     /// The wobbled lines as drawn (points in squares) and their wobble,
@@ -474,6 +475,11 @@ impl Reader<'_> {
             }
         };
         let mut known = Known::standard();
+        if path != HEIGHTS {
+            // every file sees the library's heights
+            let heights = self.load(HEIGHTS, None)?;
+            known.add_consts(&heights.doc);
+        }
         let mut ok = true;
         self.loading.push(path.to_owned());
         for u in &uses {
@@ -552,7 +558,6 @@ impl Reader<'_> {
             cols: header.cols,
             rows: header.rows,
             seed,
-            edges: self.edges(&standard),
             levels,
             lines: BTreeMap::new(),
             wobbles: BTreeMap::new(),
@@ -574,8 +579,15 @@ impl Reader<'_> {
         for p in &def.points {
             self.points.insert(p.name.value.clone(), [p.x, p.y]);
         }
-        let library = Known::standard();
-        let consts = ConstTable::build(library.consts(), &def.consts);
+        let library = self.load(HEIGHTS, None)?;
+        let library_consts: Vec<dt_doc::model::Const> = library
+            .doc
+            .consts
+            .iter()
+            .filter(|c| c.kind == dt_doc::model::ConstKind::Let)
+            .cloned()
+            .collect();
+        let consts = ConstTable::build(&library_consts, &def.consts);
         for l in &def.lines {
             if let Some(w) = l.width.as_ref() {
                 t.pending.push(not_yet(src, w.span, "a line's width is"));
@@ -679,9 +691,7 @@ impl Reader<'_> {
         self.expand(&def.stack, &scope, &mut stack, &mut pending);
         t.stack = stack;
         t.pending.extend(pending);
-        if uses_heights(def) {
-            t.heights = Some(self.heights(file, def, consts, &mut t.pending));
-        }
+        t.heights = Some(self.heights(file, def, consts, &mut t.pending));
         Some(t)
     }
 
@@ -714,9 +724,7 @@ impl Reader<'_> {
         let mut things = Vec::new();
         for e in &def.stack {
             let el = match &e.callee {
-                Callee::Element(el) if matches!(el.name, "dirt" | "water" | "cliff" | "floor") => {
-                    el
-                }
+                Callee::Element(el) if matches!(el.name, "dirt" | "water") => el,
                 _ => {
                     // a thing, a coat or a part: its top and an `at=` that
                     // is a line or a region are not built yet
@@ -739,15 +747,6 @@ impl Reader<'_> {
                     continue;
                 }
             };
-            if let Some(t) = &e.top {
-                pending.push(not_yet(src, t.span, &format!("`top=` on `{}` is", el.name)));
-            }
-            for p in &e.pins {
-                pending.push(not_yet(src, p.span, "a `pin` is"));
-            }
-            if let Some(sl) = &e.slope {
-                pending.push(not_yet(src, sl.span, "`slope` is"));
-            }
             bodies.push(BodyDecl {
                 element: el.name.to_owned(),
                 label: e.label.as_ref().map(|l| l.value.clone()),
@@ -787,35 +786,6 @@ impl Reader<'_> {
             defaults,
             things,
         }
-    }
-
-    /// The edge contract, levels in mm.
-    fn edges(&mut self, standard: &[(String, f64)]) -> Vec<(String, f64)> {
-        let Some(f) = self.load(EDGES, None) else {
-            return Vec::new();
-        };
-        let Some(edges) = &f.doc.edges else {
-            self.errors.push(Diag::plain(
-                "dt::edges",
-                format!("`{EDGES}` holds no `edges` contract"),
-            ));
-            return Vec::new();
-        };
-        let levels = self.levels(&f.src, standard, &f.doc.levels);
-        let mut out = Vec::new();
-        for r in &edges.rules {
-            match r.level.value.mm(&levels) {
-                Ok(mm) => out.push((r.surface.value.clone(), mm)),
-                Err(msg) => self.errors.push(Diag::at(
-                    &f.src,
-                    r.level.span,
-                    "dt::edges",
-                    msg,
-                    "not one level",
-                )),
-            }
-        }
-        out
     }
 
     /// Inline `entries` into `out`: built elements become [`Entry`]s, what
@@ -1345,14 +1315,6 @@ fn bind(v: &Spanned<Value>, src: &Src, scope: &Scope) -> Bound {
 /// range, which no built element takes yet).
 fn default_value(c: &'static Control, levels: &[(String, f64)]) -> Option<dt_elements::Value> {
     element_value(&c.default_value()?, levels).ok()
-}
-
-/// Whether a tile uses the heights language at all.
-fn uses_heights(def: &Definition) -> bool {
-    def.base.is_some()
-        || !def.consts.is_empty()
-        || !def.points.is_empty()
-        || def.stack.iter().any(model::Entry::uses_heights)
 }
 
 fn thing(e: &model::Entry) -> ThingDecl {

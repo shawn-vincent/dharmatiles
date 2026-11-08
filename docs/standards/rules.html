@@ -41,7 +41,7 @@
 <ul class="rules">
   <li>A <strong>tile</strong> is the whole printed piece; a <strong>square</strong> is one grid unit (35 mm for DungeonBlocks, 25.4 mm for OpenLOCK); a <strong>cell</strong> is one subdivision of the heightmap. A square is never called a tile, and densities are per square.</li>
   <li>DungeonBlocks is the default base; OpenLOCK is the other. One document builds for either, and every size it writes scales with the square.</li>
-  <li>The ground meets every tile edge at the <code>edge</code> level, 3.4 mm, so any two tiles sit side by side. The other standard levels are <code>ground</code> 5 mm, <code>water</code> 2.6 mm and <code>wall-top</code> 33.1 mm.</li>
+  <li>Dirt meets every tile edge at <code>dirtEdgeHeight</code>, 3.4 mm, and water at <code>waterEdgeHeight</code>, so any two tiles sit side by side: the library pins both at <code>edges</code> (<code>library/parts/edges.dtile</code>), and a tile's own pin wins where it writes one. The standard levels, for a floor's <code>level=</code>, are <code>edge</code> 3.4 mm, <code>ground</code> 5 mm, <code>water</code> 2.6 mm and <code>wall-top</code> 33.1 mm.</li>
   <li><code>z = 0</code> is the top of the base; the base owns everything below it.</li>
   <li>Nothing is clipped at the tile edge: a thing near the edge is moved or shrunk back until it fits inside.</li>
   <li>A tile is named by its file and nothing else: the <code>tile</code> node takes no name, and seeds are keyed by the seed and the stack, never the file name, so renaming a tile never changes it.</li>

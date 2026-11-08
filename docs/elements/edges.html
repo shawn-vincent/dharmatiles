@@ -13,7 +13,7 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · library file</div>
   <h1>edges</h1>
-  <p class="lede">The edge contract: what every tile does at its edges, so that neighbouring tiles butt with no step. Every tile uses it without a <code>use</code> line.</p>
+  <p class="lede">The edge contract: the top and the edge pin every dirt and water starts with, so that neighbouring tiles butt with no step. Every tile reads it without a <code>use</code> line.</p>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>
@@ -23,18 +23,19 @@
 <article class="doc">
 <h2 id="use">Writing it</h2>
 <pre><code>// library/parts/edges.dtile
-edges {
-    ground level=edge           // ground meets every tile edge at the edge level (3.4 mm)
-    water level=water           // water meets it at the water level, with a shared tide
+defaults {
+    dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
+    water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" { pin top=waterEdgeHeight at=edges }
 }</code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Line</th><th>Means</th></tr></thead>
 <tbody>
-<tr><td><code>ground</code></td><td>Every surface meets the tile edge at the <code>edge</code> level, 3.4 mm.</td></tr>
-<tr><td><code>water</code></td><td>Water meets the tile edge at the <code>water</code> level, 2.6 mm, plus a shared tide: 0.6 sin(2π(s − 13.125)/17.5) mm along each edge, so two water tiles butt any way round.</td></tr>
+<tr><td><code>dirt</code></td><td>The first dirt meets every tile edge at <code>dirtEdgeHeight</code>, 3.4 mm; its top is <code>[groundHeight .. groundHeight + 1]</code>.</td></tr>
+<tr><td><code>water</code></td><td>Water meets the tile edge at <code>waterEdgeHeight</code>: <code>waterSurfaceHeight</code>, 2.6 mm, plus 0.6 mm of a shared tide, <code>cos(720 (x + y))</code>, two waves a square, so two water tiles butt any way round.</td></tr>
+<tr><td><code>floor</code></td><td>A built floor meets the edge at <code>floorEdgeHeight</code>, flush with its top, 7.4 mm.</td></tr>
 </tbody></table></div>
-<p>The same contract is also written in the heights language, as the <code>defaults</code> block of the same file: the top and the pin at <code>edges</code> every <code>dirt</code>, <code>floor</code> and <code>water</code> body starts with (<code>dirtEdgeHeight</code>, <code>floorEdgeHeight</code>, <code>waterEdgeHeight</code>). A tile's own top replaces a default top, and its pins win over the default pin. See <a href="pin.html">pin</a> and <a href="../language.html#heights">heights</a>.</p>
+<p>The heights are the constants of <code>library/parts/heights.dtile</code>; a tile may <code>override</code> them (and the edge note says it no longer butts a standard tile).</p>
 <h2 id="notes">Notes</h2>
 <p>Runs on an edge (walls, cliffs) end in the standard end section, so runs butt together too. See <a href="../standards/tile-system.html#edge-contract">how tiles meet</a>.</p>
 </article>

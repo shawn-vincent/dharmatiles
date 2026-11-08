@@ -4,6 +4,7 @@
 tile size="1x1" seed=1 {
     about "Drystone flagstones on one square, for golden tests."
     stack {
+        base
         dirt
         floor style=fieldstone
     }

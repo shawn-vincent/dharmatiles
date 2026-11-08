@@ -1,6 +1,7 @@
 tile size="1x1" seed=1 {
     about "A full square of grass on dirt."
     stack {
+        base
         dirt
         grass
     }

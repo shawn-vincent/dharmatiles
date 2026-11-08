@@ -36,8 +36,9 @@
 <pre><code>tile size="2x1" {
     levels foot=4                       // this tile's own
     stack {
-        ground level="water - 2.2"      // an expression on a standard level
-        dirt level=edge
+        base
+        dirt
+        floor level="ground + 2"        // an expression on a standard level: a floor's top
     }
 }</code></pre>
 <h2 id="reference">Reference</h2>

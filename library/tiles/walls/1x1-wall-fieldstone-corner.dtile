@@ -4,6 +4,7 @@ use "parts/grass" lawn
 
 tile size="1x1" seed=64 {
     stack {
+        base
         dirt                                // bare earth at the ground level
 
         // Along the north edge, then the west edge.  On a tile edge a

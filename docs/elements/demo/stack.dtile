@@ -1,15 +1,14 @@
 // The stack page's picture: the home page's pond, built one stack line at
-// a time (cargo xtask pictures builds it with its first 1 to 6 lines). The plain
-// `ground` first paints the whole tile, so no step shows an unpainted area.
+// a time (cargo xtask pictures builds it with its first 1 to 4 lines; the
+// `base` line is left out, so each picture is the terrain the stack so far makes).
 tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }
+    region shoreBand { within 7 of=shore }
     stack {
-        ground
-        dirt in=bank
+        dirt { pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand; pin top=waterBedHeight at=pool }
         grass in=bank
-        ground in=pool level="water - 2.2"
         scatter in=pool count=2 { rock size="6..10" }
         water
     }

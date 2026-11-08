@@ -5,6 +5,7 @@ tile size="1x1" seed=106 {
     region path { bounded-by north-margin south-margin; fill "0.75,0.5" }
     region meadow { bounded-by north-margin south-margin; fill "0.08,0.08"; fill "0.08,0.92" }
     stack {
+        base
         dirt
         grass in=meadow
     }

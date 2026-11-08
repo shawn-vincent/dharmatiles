@@ -266,10 +266,14 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
     std::thread::sleep(Duration::from_millis(50));
     let line = text
         .lines()
-        .position(|l| l.contains("ground level=edge"))
-        .expect("the flat tile writes `ground level=edge`")
+        .position(|l| l.contains("dirt top=dirtEdgeHeight"))
+        .expect("the flat tile writes `dirt top=dirtEdgeHeight`")
         + 1;
-    std::fs::write(&doc, text.replace("ground level=edge", "gruond level=edge")).unwrap();
+    std::fs::write(
+        &doc,
+        text.replace("dirt top=dirtEdgeHeight", "dirtt top=dirtEdgeHeight"),
+    )
+    .unwrap();
     let t = wait_for(&r, "failure", |t| t["status"] == "failed");
     let e = &t["errors"][0];
     assert_eq!(e["file"], path.as_str());

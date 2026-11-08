@@ -27,11 +27,11 @@
 region pool { bounded-by shore; fill "0.5,0.25" }
 region bank { bounded-by shore; fill "0.5,0.75" }
 stack {
-    dirt in=bank
-    reeds in=bank            // stand along the shore, leaning out over the pool
+    base
+    dirt { pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand; pin top=waterBedHeight at=pool }
     grass in=bank
-    ground in=pool level="water - 2.2"
-    water
+    reeds in=bank            // stand along the shore, leaning out over the pool
+    water                    // last: nothing is written after water
 }</code></pre>
 <p>Reeds stand along the shore: where the region they are in meets <a href="water.html"><code>water</code></a>. Each clump is several stems, each leaning toward the water.</p>
 <h2 id="reference">Reference</h2>

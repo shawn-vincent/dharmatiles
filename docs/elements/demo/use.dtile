@@ -5,6 +5,7 @@ use "parts/grass" lawn
 
 tile size="1x1" seed=12 {
     stack {
+        base
         dirt
         oak height=40
         lawn

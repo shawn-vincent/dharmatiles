@@ -12,9 +12,13 @@ const TILE: &str = r#"tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }
+    region shoreBand { within 7 of=shore }
     stack {
-        dirt in=bank
-        ground in=pool level="water - 2.2"
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand
+            pin top=waterBedHeight at=pool
+        }
         scatter in=pool count=2 { rock size="6..10" }
         water
     }
@@ -32,15 +36,14 @@ fn every_triangle_has_its_entry() {
     let mut rocks: BTreeMap<u16, usize> = BTreeMap::new();
     for (e, p) in b.entries.iter().zip(&b.pieces) {
         *count.entry(*e).or_default() += 1;
-        if *e == 2 {
+        if *e == 1 {
             *rocks.entry(*p).or_default() += 1;
         }
     }
     eprintln!("entries {count:?} rock pieces {rocks:?}");
     assert!(!count.contains_key(&NO_ENTRY), "{count:?}");
-    // dirt, scatter, water, then the connector (the pool's ground shows
-    // only where it rises past the water, which depends on the seed)
-    for e in [0, 2, 3, 4] {
+    // dirt, scatter, water, then the connector
+    for e in [0, 1, 2, 3] {
         assert!(
             count.contains_key(&e),
             "entry {e} has no triangles: {count:?}"

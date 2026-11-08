@@ -2,6 +2,7 @@
 tile size="1x1" seed=2 {
     about "A regular-brick wall with battlements."
     stack {
+        base
         dirt
         wall along="north" style=regular-brick top=battlements seed=8
     }

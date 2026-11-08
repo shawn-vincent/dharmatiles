@@ -8,6 +8,7 @@ tile size="1x1" seed=6 {
     region middle { bounded-by a b; fill "0.5,0.5" }
     region east { bounded-by b; fill "0.9,0.5" }
     stack {
+        base
         dirt
         lawn in=west                                 // its defaults
         lawn in=middle cover="35%" clearings=6       // two params set

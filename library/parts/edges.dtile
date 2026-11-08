@@ -1,22 +1,10 @@
-// The edge contract: what every tile does at its edges, so that neighbouring
-// tiles butt with no step. Every tile uses it at the root of its document,
-// without a `use` line.
-
-edges {
-    ground level=edge           // ground meets every tile edge at the edge level (3.4 mm)
-    // water meets every tile edge at the water level (2.6 mm) plus the
-    // shared tide: 0.6 sin(2π(s − 13.125)/17.5) mm along each edge (s in
-    // mm from the edge's start), crests at the square corners and edge
-    // centres, so two water tiles butt any way round
-    water level=water
-}
-
-// The same contract in the heights language: the tops and pins every body of
-// these elements starts with.  They are read before the tile's own lines, so
-// a tile's top replaces the default top and its pins win over the default
-// pin wherever they overlap.  The land defaults apply to the first land layer
-// only; the water default to every water.  (`floor` becomes `flagstones` and
-// `planks` when floors are split by material.)
+// The edge contract: the tops and pins every body of these elements starts
+// with, so that neighbouring tiles butt with no step at their edges.  They
+// are read before the tile's own lines, so a tile's top replaces the default
+// top and its pins win over the default pin wherever they overlap.  The land
+// defaults apply to the first land layer only; the water default to every
+// water.  (`floor` becomes `flagstones` and `planks` when floors are split by
+// material.)
 defaults {
     dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
     floor top=floorHeight                          { pin top=floorEdgeHeight at=edges }

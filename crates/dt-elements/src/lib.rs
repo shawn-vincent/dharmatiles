@@ -5,7 +5,7 @@
 //! scheduler in dt-eval can order the stack and refuse reads nothing can
 //! satisfy; then it builds into the scene ([`Element::build`]).
 //!
-//! Surfaces: [`ground`], [`dirt`], [`water`], [`floor`]. Solids: [`rock`]
+//! Layers of the terrain: [`dirt`], [`water`]. Solids: [`floor`], [`rock`]
 //! and its kin, [`grass`], [`reeds`], [`flowers`], [`cliff`], [`wall`],
 //! [`tree`]. Bases: [`connector`] (DungeonBlocks) and [`openlock`].
 
@@ -15,7 +15,6 @@ pub mod dirt;
 pub mod floor;
 pub mod flowers;
 pub mod grass;
-pub mod ground;
 pub mod openlock;
 mod read;
 pub mod reeds;
@@ -185,6 +184,14 @@ pub struct Ctx<'a> {
     /// plan pass that runs before anything is built, so a bank or scatter
     /// listed before the cliff can still lean on it.
     pub foots: &'a [Foot],
+    /// The band the solver gave the body this entry is, on the build's
+    /// lattice (a dirt's or a water's top, pins applied); `None` for
+    /// everything else.
+    pub band: Option<&'a dt_kit::Band>,
+    /// For a dirt: about the height the water laid over it stands at, at
+    /// every node (negative infinity where none does), so its grain keeps
+    /// off the bed. `None` for anything else.
+    pub under: Option<&'a dt_kit::Field>,
     /// A draft for the editor's view while a value is dragged: an element
     /// whose cost is in fixed-millimetre detail (a cliff's carving) may
     /// make it coarser.  Never printed.
@@ -264,7 +271,6 @@ type Builder = fn(&str, &[Control], &[Child]) -> Result<Box<dyn Element>, LookEr
 /// Every built element: its name and how it is built.  An element not
 /// listed is not built yet.
 static ELEMENTS: &[(&str, Builder)] = &[
-    ("ground", |_, c, _| Ok(Box::new(ground::Ground::new(c)?))),
     ("dirt", |_, c, _| Ok(Box::new(dirt::Dirt::new(c)?))),
     ("water", |_, c, _| Ok(Box::new(water::Water::new(c)?))),
     ("scatter", |_, c, ch| {

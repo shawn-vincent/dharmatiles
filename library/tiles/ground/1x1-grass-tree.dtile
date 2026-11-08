@@ -4,7 +4,8 @@ use "parts/grass" long-grass
 
 tile size="1x1" seed=42 {
     stack {
-        ground                          // flat, at the ground level (5 mm)
+        base
+        dirt clods=few stones=none
         scatter per-square=3 gap=7 {    // rocks first: grass grows round them
             boulder size="7..9" shape=angular
         }

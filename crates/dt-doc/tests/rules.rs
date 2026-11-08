@@ -40,17 +40,17 @@ fn sizes_are_mm_and_h_is_opt_in() {
 #[test]
 fn levels_are_named_or_mm_or_expressions() {
     for text in [
-        "tile { stack { dirt level=ground } }",
-        "tile { stack { dirt level=wall-top } }",
-        "tile { stack { dirt level=4 } }",
-        "tile { stack { dirt level=\"ground - 1\" } }",
-        "tile { levels foot=4; stack { dirt level=foot } }",
-        "tile { levels path=\"ground - 1\"; stack { dirt level=path } }",
+        "tile { stack { floor level=ground } }",
+        "tile { stack { floor level=wall-top } }",
+        "tile { stack { floor level=4 } }",
+        "tile { stack { floor level=\"ground - 1\" } }",
+        "tile { levels foot=4; stack { floor level=foot } }",
+        "tile { levels path=\"ground - 1\"; stack { floor level=path } }",
     ] {
         snippet(text);
     }
     assert_fails(
-        "tile { stack { dirt level=grund } }",
+        "tile { stack { floor level=grund } }",
         "dt::unknown-name",
         "did you mean `ground`?",
     );
@@ -67,10 +67,10 @@ fn levels_are_named_or_mm_or_expressions() {
 #[test]
 fn standard_levels_need_no_use_line() {
     let k = dt_doc::Known::standard();
-    dt_doc::decode("t.dtile", "tile { stack { dirt level=edge } }", &k).unwrap();
+    dt_doc::decode("t.dtile", "tile { stack { floor level=edge } }", &k).unwrap();
     // Without the prelude the names are unknown.
     let bare = dt_doc::Known::new();
-    assert!(dt_doc::decode("t.dtile", "tile { stack { dirt level=edge } }", &bare).is_err());
+    assert!(dt_doc::decode("t.dtile", "tile { stack { floor level=edge } }", &bare).is_err());
 }
 
 #[test]
@@ -79,17 +79,17 @@ fn standard_levels_are_in_mm_and_listed_for_an_unknown_name() {
     let mm = |n: &str| k.levels().iter().find(|(k, _)| k == n).map(|(_, v)| *v);
     assert_eq!(mm("ground"), Some(5.0));
     assert_eq!(mm("wall-top"), Some(33.1));
-    let e = dt_doc::decode("t.dtile", "tile { stack { dirt level=lava } }", &k).unwrap_err();
+    let e = dt_doc::decode("t.dtile", "tile { stack { floor level=lava } }", &k).unwrap_err();
     let help = e[0].help.as_deref().unwrap();
     assert!(help.contains("wall-top (33.1 mm)"), "{help}");
     // a near miss is suggested on its own
-    let e = dt_doc::decode("t.dtile", "tile { stack { dirt level=grund } }", &k).unwrap_err();
+    let e = dt_doc::decode("t.dtile", "tile { stack { floor level=grund } }", &k).unwrap_err();
     assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
 }
 
 #[test]
 fn a_tile_may_override_a_standard_level() {
-    snippet("tile { levels ground=6; stack { dirt level=ground } }");
+    snippet("tile { levels ground=6; stack { floor level=ground } }");
 }
 
 // ---- every written size scales; recorded as metadata ---------
@@ -175,9 +175,9 @@ fn groups_are_child_lines() {
             .unwrap(),
         (0.4, 0.4)
     );
-    // bumps: a value, or up/down.
-    first("tile { stack { ground bumps=3 } }");
-    first("tile { stack { ground { bumps up=3 down=1 } } }");
+    // a group: on the line, or as a child
+    first("tile { stack { dirt { bank against=cliff height=2 } } }");
+    first("tile { stack { tree { crown width=30 } } }");
 }
 
 // ---- units are not written ----------------------------------------
@@ -287,7 +287,7 @@ fn skew_is_mostly_not_caret() {
 #[test]
 fn old_words_say_what_replaced_them() {
     for (text, want) in [
-        ("tile { stack { hills } }", "`hills` is now `ground`"),
+        ("tile { stack { hills } }", "`hills` is now `dirt`"),
         ("tile { stack { meadow } }", "`meadow` is now `grass`"),
         (
             "tile { stack { wall along=north family=brick } }",
@@ -381,7 +381,7 @@ fn regions_only_on_divided_tiles() {
 
 #[test]
 fn a_tile_is_1x1_unless_it_says() {
-    let doc = snippet("tile { stack { ground } }");
+    let doc = snippet("tile { stack { dirt } }");
     let h = doc.tile().unwrap().header().unwrap();
     assert_eq!((h.cols, h.rows, h.seed), (1, 1, None));
     let doc = snippet("tile size=\"3x2\" seed=9 { }");
@@ -656,7 +656,7 @@ fn definitions_are_typed_by_what_their_parameters_fill() {
         "`d` needs `h`",
     );
     // Calls in any order within a file; loops refused.
-    snippet("tile { stack { b } }\ndefine b { stack { a } }\ndefine a { stack { ground } }");
+    snippet("tile { stack { b } }\ndefine b { stack { a } }\ndefine a { stack { dirt } }");
     assert_fails(
         "define a { stack { b } }\ndefine b { stack { a } }",
         "dt::loop",
@@ -709,21 +709,17 @@ fn the_r6_snippets_decode() {
 
 #[test]
 fn ids_are_plain_names_and_unique_among_same_named_siblings() {
-    let e = first("tile { stack { ground id=low } }");
+    let e = first("tile { stack { dirt id=low } }");
     assert_eq!(e.place.id.unwrap().value, "low");
-    snippet("tile { stack { ground id=a; tree id=a } }");
+    snippet("tile { stack { dirt id=a; tree id=a } }");
     assert_fails(
-        "tile { stack { ground id=x; ground id=x } }",
+        "tile { stack { dirt id=x; dirt id=x } }",
         "dt::id",
         "already has `id=x`",
     );
-    assert_fails(
-        "tile { stack { ground id=\"a/b\" } }",
-        "dt::id",
-        "plain name",
-    );
-    assert_fails("tile { stack { ground id=\"0\" } }", "dt::id", "plain name");
-    assert_fails("tile { stack { ground id=\"\" } }", "dt::id", "plain name");
+    assert_fails("tile { stack { dirt id=\"a/b\" } }", "dt::id", "plain name");
+    assert_fails("tile { stack { dirt id=\"0\" } }", "dt::id", "plain name");
+    assert_fails("tile { stack { dirt id=\"\" } }", "dt::id", "plain name");
 }
 
 #[test]
@@ -744,13 +740,13 @@ fn seeds_run_from_0_to_i64_max() {
     let (e, _) = fails("tile seed=-5 { }");
     assert_eq!(e[0].code, "dt::seed");
     assert_eq!(e[0].span.offset(), "tile seed=".len());
-    assert_fails("tile { stack { ground seed=-1 } }", "dt::seed", "not -1");
+    assert_fails("tile { stack { dirt seed=-1 } }", "dt::seed", "not -1");
     assert_fails("tile seed=1.5 { }", "dt::seed", "is a whole number");
 }
 
 #[test]
 fn an_unclosed_brace_is_one_error() {
-    let (e, shown) = fails("tile size=\"1x1\" {\n stack {\n  ground\n }\n");
+    let (e, shown) = fails("tile size=\"1x1\" {\n stack {\n  dirt\n }\n");
     assert_eq!(e.len(), 1, "{shown}");
     assert!(shown.contains("No closing '}'"), "{shown}");
 }
@@ -758,12 +754,12 @@ fn an_unclosed_brace_is_one_error() {
 #[test]
 fn a_tile_is_named_by_its_file() {
     assert_fails(
-        "tile meadow size=\"1x1\" { stack { ground } }",
+        "tile meadow size=\"1x1\" { stack { dirt } }",
         "dt::tile-name",
         "its file name is its name",
     );
     assert_fails(
-        "tile \"My Pond\" { stack { ground } }",
+        "tile \"My Pond\" { stack { dirt } }",
         "dt::tile-name",
         "rename the file",
     );

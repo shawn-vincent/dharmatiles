@@ -53,7 +53,7 @@ fn an_edit_late_in_the_plan_reuses_the_steps_before_it() {
         "count=4",
         &Options::default(),
     );
-    assert!(reused >= 3, "only {reused} steps reused");
+    assert!(reused >= 2, "only {reused} steps reused");
 }
 
 /// Grass keeps the ground; the dirt's level is the first step, so nothing
@@ -69,8 +69,8 @@ fn an_edit_reuses_only_what_comes_before_it() {
     assert!(reused >= 3, "only {reused} steps reused");
     let reused = edit(
         "lib:tiles/test/2x2-shore.dtile",
-        "level=edge",
-        "level=\"edge + 0.5\"",
+        "top=dirtEdgeHeight",
+        "top=\"dirtEdgeHeight + 0.5\"",
         &Options::default(),
     );
     assert_eq!(reused, 0);

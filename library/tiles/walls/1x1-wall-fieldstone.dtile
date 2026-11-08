@@ -4,6 +4,7 @@ use "parts/grass" lawn
 
 tile size="1x1" seed=63 {
     stack {
+        base
         dirt                                // bare earth at the ground level
 
         // On a tile edge a wall always stands inside, its outer face

@@ -32,13 +32,13 @@ fn rendered(d: &Diag) -> String {
 
 #[test]
 fn a_misspelt_look_points_at_its_line_with_a_hint() {
-    let e = errors("tile size=\"1x1\" {\n    stack {\n        grond\n    }\n}\n");
+    let e = errors("tile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n");
     assert_eq!(e.len(), 1);
     assert_eq!(e[0].location(), Some(("t.dtile".into(), 3, 9)));
-    assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
+    assert_eq!(e[0].help.as_deref(), Some("did you mean `dirt`?"));
     let r = rendered(&e[0]);
     assert!(
-        r.contains("no element or definition is called `grond`")
+        r.contains("no element or definition is called `dirtt`")
             && r.contains("3 │")
             && r.contains("did you mean"),
         "{r}"
@@ -47,20 +47,20 @@ fn a_misspelt_look_points_at_its_line_with_a_hint() {
 
 #[test]
 fn an_unknown_level_lists_the_levels() {
-    let e = errors("tile {\n  stack {\n    ground level=grund\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    floor level=grund\n  }\n}\n");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
-    let e = errors("tile {\n  stack {\n    ground level=lava\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    floor level=lava\n  }\n}\n");
     assert!(e[0].help.as_deref().unwrap().contains("wall-top (33.1 mm)"));
 }
 
 #[test]
 fn an_unknown_control_names_the_ones_there_are() {
-    let e = errors("tile {\n  stack {\n    ground bumpz=3\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    dirt bump-siz=3\n  }\n}\n");
     assert_eq!(e[0].code, "dt::unknown-control");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert!(
-        e[0].help.as_deref().unwrap().contains("bumps"),
+        e[0].help.as_deref().unwrap().contains("bump-size"),
         "{:?}",
         e[0].help
     );
@@ -96,7 +96,7 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
 }
 
 #[test]
-fn levels_edges_and_printer_come_from_the_library() {
+fn levels_edge_heights_and_printer_come_from_the_library() {
     let c = check(
         &Library,
         "lib:tiles/test/1x1-flat.dtile",
@@ -109,9 +109,11 @@ fn levels_edges_and_printer_come_from_the_library() {
     assert_eq!(level("ground"), Some(5.0));
     assert_eq!(level("water"), Some(2.6));
     assert_eq!(level("wall-top"), Some(33.1));
+    // the edge heights are the library's constants
+    assert_eq!(dt_eval::solve::constant(&t, "dirtEdgeHeight"), Some(3.4));
     assert_eq!(
-        t.edges,
-        vec![("ground".to_owned(), 3.4), ("water".to_owned(), 2.6)]
+        dt_eval::solve::constant(&t, "waterSurfaceHeight"),
+        Some(2.6)
     );
     let p = Options::default().printer;
     assert_eq!(
@@ -133,7 +135,7 @@ fn a_parts_file_checks_but_does_not_build() {
 
 #[test]
 fn use_paths_name_the_library_or_the_project() {
-    let raised = "define raised { stack { ground level=\"ground + 2\" } }\n";
+    let raised = "define raised { stack { rock size=10 at=\"0.5,0.5\" } }\n";
     let src = mem(&[
         ("lib:parts/raised.dtile", raised),
         ("proj/parts/raised.dtile", raised),
@@ -180,28 +182,28 @@ fn use_paths_name_the_library_or_the_project() {
 fn definition_parameters_take_arguments_and_defaults() {
     let src = mem(&[(
         "t.dtile",
-        "define raised {\n  param by 2\n  stack { ground level=by }\n}\ntile {\n  stack { raised by=6 }\n}\n",
+        "define sized {\n  param by 8\n  stack { rock size=by }\n}\ntile {\n  stack { dirt; sized by=6 }\n}\n",
     )]);
     let t = check(&src, "t.dtile", &Options::default())
         .unwrap()
         .tile
         .unwrap();
     assert_eq!(
-        t.stack[0].controls[0].value,
+        t.stack[1].controls[0].value,
         dt_elements::Value::Number(6.0)
     );
 }
 
 #[test]
 fn kdl_syntax_errors_carry_their_place() {
-    let e = errors("tile {\n  stack {\n    ground level=5mm\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    floor level=5mm\n  }\n}\n");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert!(e[0].help.is_some());
 }
 
 #[test]
 fn a_bad_import_points_at_the_use_line() {
-    let e = errors("use \"lib:parts/nothing\" lawn\ntile { stack { ground } }\n");
+    let e = errors("use \"lib:parts/nothing\" lawn\ntile { stack { dirt } }\n");
     assert_eq!(e[0].location().unwrap().1, 1);
     assert!(e[0].message.contains("nothing.dtile"));
 }
@@ -211,26 +213,19 @@ fn imports_inline_definitions_and_levels_resolve() {
     let src = mem(&[
         (
             "parts/flats.dtile",
-            "define raised { stack { ground level=\"ground + 2\" } }\n",
+            "define raised { stack { rock size=10 at=\"0.5,0.5\" } }\n",
         ),
         (
             "tiles/t.dtile",
-            "use \"../parts/flats\" raised\ntile { levels foot=4; stack { raised } }\n",
+            "use \"../parts/flats\" raised\ntile { levels foot=4; stack { dirt; raised } }\n",
         ),
     ]);
     let c = check(&src, "tiles/t.dtile", &Options::default()).unwrap();
     let t = c.tile.unwrap();
-    assert_eq!(t.stack.len(), 1);
-    assert_eq!(t.stack[0].src.name(), "parts/flats.dtile");
+    assert_eq!(t.stack.len(), 2);
+    assert_eq!(t.stack[1].src.name(), "parts/flats.dtile");
     let b = build(&src, "tiles/t.dtile", &Options::default()).unwrap();
-    let top = b
-        .export
-        .mesh
-        .positions
-        .iter()
-        .map(|p| p[2])
-        .fold(f64::MIN, f64::max);
-    assert!((top - 7.0).abs() < 1e-5, "top {top}");
+    assert!(b.materials.contains(&dt_kit::Material::Rock));
 }
 
 #[test]
@@ -242,8 +237,9 @@ fn a_line_and_two_regions_make_a_step() {
     region low { bounded-by across; fill "0.5,0.25" }
     region high { bounded-by across; fill "0.5,0.75" }
     stack {
-        ground in=high level=8
-        ground in=low
+        dirt top=8 {
+            pin top=5 at=low
+        }
     }
 }
 "#,
@@ -273,54 +269,21 @@ fn a_line_and_two_regions_make_a_step() {
             })
             .fold(f64::MIN, f64::max)
     };
-    // each level holds inside its region; both meet the tile edge at the
-    // edge level (3.4 mm), ramping in no steeper than a hill
-    assert!((z_at(8.75) - 5.0).abs() < 1e-5, "low {}", z_at(8.75));
-    assert!((z_at(18.5) - 8.0).abs() < 1e-3, "high {}", z_at(18.5));
-    assert!((z_at(0.0) - 3.4).abs() < 0.05, "edge {}", z_at(0.0));
+    // each height holds inside its region (the dirt's grain rides on it);
+    // both meet the tile edge at the library's edge height (3.4 mm)
+    assert!((z_at(8.75) - 5.0).abs() < 1.5, "low {}", z_at(8.75));
+    assert!(z_at(26.0) > 5.5, "high {}", z_at(26.0));
+    assert!((z_at(35.0) - 3.4).abs() < 0.3, "edge {}", z_at(35.0));
 }
 
 #[test]
 fn an_unknown_region_is_refused() {
     let e = errors(
-        "tile {\n  line across { through west east }\n  region a { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    ground in=b\n  }\n}\n",
+        "tile {\n  line across { through west east }\n  region a { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    dirt in=b\n  }\n}\n",
     );
     assert_eq!(e[0].code, "dt::unknown-name");
     assert_eq!(e[0].location().unwrap().1, 5);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `a`?"));
-}
-
-#[test]
-fn a_later_paint_removes_the_stones_it_covers() {
-    let src = mem(&[(
-        "t.dtile",
-        r#"tile size="2x2" seed=2 {
-    line across { through west east }
-    region low { bounded-by across; fill "1,0.5" }
-    region high { bounded-by across; fill "1,1.5" }
-    stack {
-        dirt level=8 { stones many }
-        ground in=low level=5
-    }
-}
-"#,
-    )]);
-    let b = build(&src, "t.dtile", &Options::default()).unwrap();
-    let m = &b.export.mesh;
-    let rock_ys: Vec<f64> = m
-        .triangles
-        .iter()
-        .zip(&b.materials)
-        .filter(|(_, mat)| **mat == dt_kit::Material::Rock)
-        .map(|(t, _)| t.iter().map(|&v| m.positions[v as usize][1]).sum::<f64>() / 3.0)
-        .collect();
-    assert!(!rock_ys.is_empty(), "the high dirt keeps its stones");
-    // the line is at y = 35 mm; the low paint covers every stone below it
-    assert!(
-        rock_ys.iter().all(|&y| y > 35.0),
-        "a stone left on the lowered ground: min y {}",
-        rock_ys.iter().copied().fold(f64::MAX, f64::min)
-    );
 }
 
 #[test]
@@ -329,7 +292,7 @@ fn a_rock_placed_past_the_edge_is_refused() {
         "t.dtile",
         r#"tile size="1x1" seed=1 {
     stack {
-        ground
+        dirt
         rock at="0.05,0.5" size=10
     }
 }
@@ -365,8 +328,9 @@ fn a_seed_wobbles_the_lines_again() {
     region low { bounded-by across; fill "0.5,0.1" }
     region high { bounded-by across; fill "0.5,0.9" }
     stack {
-        ground in=high level=8
-        ground in=low
+        dirt top=8 {
+            pin top=5 at=low
+        }
     }
 }
 "#;

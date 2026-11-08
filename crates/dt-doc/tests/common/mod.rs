@@ -44,10 +44,15 @@ pub const ALL: [(&str, &str); 10] = [
 ];
 pub const TILES: [(&str, &str); 5] = [FLAT, GRASS_TREE, WALL_CORNER, CLIFF_RUN, PATH_ROCKS];
 
+/// The library's heights, as the tests read them.
+pub const HEIGHTS: &str = include_str!("../../../../library/parts/heights.dtile");
+
 /// What every tile sees: the standard levels and the shared parts,
 /// registered under the keys their `use` lines name.
 pub fn known() -> Known {
     let mut k = Known::standard();
+    k.add_heights("library/parts/heights.dtile", HEIGHTS)
+        .unwrap_or_else(|e| panic!("{e}"));
     for (key, (name, text)) in [("parts/grass", GRASS), ("parts/trees", TREES)] {
         let doc = decode(name, text, &k).unwrap_or_else(|e| panic!("{name}: {}", render(&e)));
         k.add(key, &doc);
@@ -159,8 +164,8 @@ pub const CASES: [Case; 10] = [
         slug: "old-vocabulary",
         title: "Old words",
         tile: GRASS_TREE,
-        from: "ground ",
-        to: "hills  ",
+        from: "dirt ",
+        to: "hills ",
     },
     Case {
         slug: "thing-count",

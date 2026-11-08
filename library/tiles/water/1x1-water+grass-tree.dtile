@@ -7,8 +7,13 @@ tile size="1x1" seed=53 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }
+    region shoreBand { within 7 of=shore }
     stack {
-        dirt in=bank
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
+            pin top=waterBedHeight at=pool   // the bed, written last so it wins
+        }
         scatter in=bank per-square=3 gap=7 {    // rocks first: grass grows round them
             boulder size="7..9" shape=angular
         }
@@ -18,7 +23,6 @@ tile size="1x1" seed=53 {
             leaf length=4.5 width=3
         }
         long-grass in=bank                       // grows round the trunk and rocks
-        ground in=pool level="water - 2.2"
         scatter in=pool count=3 { rock size="5..9" }
         water
     }

@@ -14,7 +14,7 @@
   <div class="eyebrow"><i class="fam-mark fam-water" title="water"></i>Element · surface</div>
   <h1>water</h1>
   <p class="lede">Sculpted still water: broad swells rolling off the shore, short chop round rocks, and calm toward the tile edge, where every water tile meets its neighbour in the same shared tide. Water fills its area up to the water level wherever the ground is lower.</p>
-  <p class="small">Water needs a bed under it: <a href="ground.html"><code>ground</code></a> set below the water level. Reeds at the shore are their own element, <a href="reeds.html"><code>reeds</code></a>.</p>
+  <p class="small">Water needs a bed under it: <a href="dirt.html"><code>dirt</code></a> pinned below the water. Reeds at the shore are their own element, <a href="reeds.html"><code>reeds</code></a>.</p>
   <figure class="shot hero-one"><img src="img/el-water.jpg" alt="A one-square tile of blue water with sculpted swells"><figcaption><code>lib:tiles/water/1x1-water.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v">any tile size; waves 2–16 mm long</div></div>
@@ -56,11 +56,12 @@
 <p>Reeds are deliberately simple: 5–9 chunky blades per clump with a pointed-oval cross-section, 8–13 mm tall, rising from one base and curving gently outward to a fairly blunt point. They stand no more than about 40° from vertical.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A pool is a bed of <a href="ground.html"><code>ground</code></a> below the water level, then <code>water</code>, which fills everything lower than its level:</p>
+<p>A pool is a bed of <a href="dirt.html"><code>dirt</code></a> pinned below the water's top, then <code>water</code>, written last, which fills everything lower than its top:</p>
 <pre><code>tile size="1x1" seed=7 {
     stack {
-        ground level="water - 2.2"      // the bed, 2.2 mm under the water
-        water                           // fills to the water level, 2.6 mm
+        base
+        dirt top=waterBedHeight { pin top=waterBedHeight at=edges }   // the bed, 2.2 mm under the water
+        water                                                          // fills to its top, about 2.6 mm
     }
 }</code></pre>
 <p>A shore is a line dividing the tile into a pool and a bank. Rocks in the pool send chop and leave a wake:</p>
@@ -68,15 +69,19 @@
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
     region bank { bounded-by shore; fill "0.5,0.75" }
+    region shoreBand { within 7 of=shore }
     stack {
-        dirt in=bank
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // a bank drawn between the bed and the land
+            pin top=waterBedHeight at=pool                                // later, so it wins in the pool
+        }
         grass in=bank
-        ground in=pool level="water - 2.2"
         scatter in=pool count=2 { rock size="6..10" }
         water
     }
 }</code></pre>
-<p>The waves come from what is around the water: the land sends swells, each rock sends chop. There is nothing to tune; <code>level</code> moves the calm surface.</p>
+<p>The waves come from what is around the water: the land sends swells, each rock sends chop. They are drawn inside the water's band, scaled to fit it, so a narrower <code>top</code> gives shorter ripples and a single height a still pond.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference water -->
@@ -86,11 +91,7 @@
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>
 <h3 id="controls">Controls</h3>
-<div class="tbl"><table class="controls">
-<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
-<tbody>
-<tr id="c-level"><td><code>level</code></td><td>level, over 0</td><td><code>water</code></td><td>the calm water level</td></tr>
-</tbody></table></div>
+<p>None: <code>water</code> takes no controls.</p>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-angle.dtile"><code>1x1-water+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-angle.dtile</span></li>
@@ -142,7 +143,7 @@
 <h3 id="rules">Rules</h3>
 <p>What this element always does. A change to one of these is a change to the element.</p>
 <ul class="rules">
-  <li>Water covers its whole area up to its level; the shoreline comes from the ground beneath it.</li>
+  <li>Water covers its whole area up to its top; the shoreline comes from the dirt beneath it.</li>
   <li>The water is a layer of the terrain over the ground, not a skin: the shore is cut exactly where the water's top meets the ground, and where the water meets a tile's side the side shows its whole depth in water colour.</li>
   <li>Waves come from the obstacles: land sends strong ones, rocks weak ones, reeds small rings. Each kind of object sends its own range of wavelengths.</li>
   <li>A source's waves grow less clear with distance; open corners are very faint sources.</li>

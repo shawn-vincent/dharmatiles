@@ -40,8 +40,6 @@ pub struct Document {
     pub definitions: Vec<Definition>,
     /// A `printer` profile (library/printers/*.dtile).
     pub printer: Option<Printer>,
-    /// The edge contract (library/parts/edges.dtile).
-    pub edges: Option<Edges>,
     /// File-level `let` constants (library/parts/heights.dtile).
     pub consts: Vec<Const>,
     /// A `defaults { … }` block: the tops and pins every body of its
@@ -590,24 +588,4 @@ pub struct Printer {
     pub steepest: Spanned<f64>,
     /// The narrowest gap that stays open, mm.
     pub gap: Spanned<f64>,
-}
-
-/// The edge contract: what every tile does at its edges so neighbours
-/// butt (library/parts/edges.dtile).  The evaluator applies it at the root
-/// of every tile.
-#[derive(Debug, Clone)]
-pub struct Edges {
-    /// One rule per surface.
-    pub rules: Vec<EdgeRule>,
-    /// The whole node.
-    pub span: SourceSpan,
-}
-
-/// `ground level=edge`: a surface meets every tile edge at this level.
-#[derive(Debug, Clone)]
-pub struct EdgeRule {
-    /// The surface (`ground`).
-    pub surface: Spanned<String>,
-    /// Where it meets the edge.
-    pub level: Spanned<Num>,
 }

@@ -357,7 +357,7 @@ fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
         Err(e) => return e,
     };
     let text = format!(
-        "tile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        ground level=edge\n    }}\n}}\n"
+        "tile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        base\n        dirt\n    }}\n}}\n"
     );
     match home(shared).and_then(|h| write_new(&h, &stem, &text)) {
         Ok(dest) => listed(shared, &dest),
@@ -730,7 +730,7 @@ mod tests {
         assert!(path.ends_with("Shore - first try.dtile"), "{path}");
         let text = std::fs::read_to_string(path).unwrap();
         assert!(text.contains("tile size=\"2x1\""));
-        assert!(text.contains("ground level=edge"));
+        assert!(text.contains("base\n        dirt\n"));
         dt_eval::check(&dt_eval::Files, path, &Options::default()).unwrap();
         assert!(made["id"].is_string());
         let _ = std::fs::remove_dir_all(&dir);

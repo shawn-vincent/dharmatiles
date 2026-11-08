@@ -5,6 +5,7 @@
 tile size="1x1" seed=1 {
     about "A ruined, crenellated cut-stone corner on bare dirt, for golden tests."
     stack {
+        base
         dirt
         wall along="north west" style=cut-stone {
             top battlements

@@ -9,10 +9,11 @@ tile size="2x1" seed=1 {
         standard end section, so runs butt end to end.
         """
 
-    levels foot=4                   // rockpile's foot; the standard edge level is 3.4
+    let footHeight 4                // rockpile's foot; the library's edge height is 3.4
 
     stack {
-        dirt level=foot {
+        base
+        dirt top=footHeight {
             bank against=cliff height="1.5..3.5" reach="3..6.5"
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }

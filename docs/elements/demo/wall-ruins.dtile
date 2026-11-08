@@ -4,6 +4,7 @@ use "parts/grass" lawn
 tile size="1x1" seed=5 {
     about "A ruined cut-stone wall on a lawn."
     stack {
+        base
         dirt
         wall along="north" style=cut-stone ruin="70%" seed=3
         lawn

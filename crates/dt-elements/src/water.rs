@@ -1,8 +1,11 @@
 //! Water: swell-chaos, the loved water.
 //!
-//! The water fills its area up to its level wherever the ground is lower,
-//! and is lifted with the ground as one surface whose top over the water
-//! is the water material. Its relief is waves sent out by emitters:
+//! The water is a fluid layer of the terrain: it fills its area up to its
+//! top wherever the land is lower, and is lifted with the land as one
+//! surface whose top over the water is the water material. Its top is a
+//! band (a low and a high at every node, the edge pin applied); its
+//! calculator draws the waves inside it. Its relief is waves sent out by
+//! emitters:
 //!
 //! - the **land** (its border with the water) sends broad rolling swells
 //!   (5–16 mm) that wrap round rocks: distances are geodesic through the
@@ -16,10 +19,11 @@
 //! every physical emitter the waves hand over to an interference "chaos"
 //! of all of them. Troughs are compressed softly above −1.1 mm (the bed is
 //! 2.2 mm down), a small lip rises at every shore, and the relief fades to
-//! calm within 4 mm of the tile edge, where the shared tide profile takes
-//! over: the edge contract, `level + 0.6·sin(2π(s − org)/λ)` along every
-//! edge, λ half a square, crests at square corners and edge centres, so any
-//! two water tiles butt with the same shape.
+//! calm within 4 mm of the tile edge, where the band's pin takes over: the
+//! library's edge pin holds the water at `waterEdgeHeight` along every
+//! edge (two waves a square, crests at square corners and edge centres),
+//! so any two water tiles butt with the same shape. Waves are scaled to
+//! fit the band, never clipped by it.
 //!
 //! Built at the scene's grid (0.2 mm); two quirks are kept on purpose: its geodesic
 //! distances are 1.25 times true (it weighs 0.2 mm steps as 0.25 mm), and
@@ -27,9 +31,10 @@
 //! final 0.06 mm blur is below the grid and is left out.
 
 use dt_kit::OnFrame;
-use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smooth01};
+use dt_kit::{
+    Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smax, smooth01,
+};
 
-use crate::read;
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
 const CELL_MM: f64 = 0.2;
@@ -43,9 +48,9 @@ const RIM_FADE_MM: f64 = 4.0;
 const DIST_SMOOTH_MM: f64 = 1.0;
 const TIDE_SIGMA_MM: f64 = 9.0;
 const TIDE_RMS_MM: f64 = 0.35;
-/// The edge contract's tide amplitude, mm at the reference square.
-pub const TIDE_EDGE_AMP_MM: f64 = 0.6;
 const TIDE_EDGE_FADE_MM: f64 = 9.0;
+/// How softly the waves meet the ends of the band, mm at the reference square.
+const SOFT_STOP_MM: f64 = 0.3;
 const LIP_MM: f64 = 0.3;
 const LIP_D_MM: f64 = 0.6;
 /// The relief fades to calm over this much true distance from the shore.
@@ -53,9 +58,6 @@ const LIP_D_MM: f64 = 0.6;
 /// about 0.6 mm at the first water cell, so a crest could meet the bank
 /// as a step; over true distance the water runs up to the bank.
 const SHORE_FADE_MM: f64 = 1.0;
-/// Where there is no water its layer lies this far under the ground, mm at
-/// the 35 mm square (it scales with the system): the layer is absent there.
-const ABSENT_UNDER_MM: f64 = 1.0;
 // emitters: strength, decay mm
 const LAND: (f64, f64) = (1.0, 34.0);
 const ROCK: (f64, f64) = (0.55, 10.0);
@@ -84,31 +86,16 @@ const ENCLOSE_CUT: f64 = 0.75;
 const ROUND_K: f64 = 0.45;
 const ROUND_SIGMAS_MM: [f64; 4] = [2.0, 4.0, 8.0, 16.0];
 
-/// The `water` element.
-pub struct Water {
-    level_mm: f64,
-}
+/// The `water` element: it has no controls; its top and pins are the tile's.
+pub struct Water;
 
 impl Water {
-    /// From its controls.
+    /// From its controls (it has none).
     ///
     /// # Errors
-    /// [`LookError`] for a bad level.
-    pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        let mut level_mm = f64::NAN;
-        for c in controls {
-            if c.name == "level" {
-                level_mm = read::number(c)?;
-            }
-        }
-        if level_mm.is_nan() {
-            return Err(LookError::control(
-                "level",
-                "water needs a level".into(),
-                "write level=water".into(),
-            ));
-        }
-        Ok(Self { level_mm })
+    /// Never: kept so every element is built the same way.
+    pub fn new(_controls: &[Control]) -> Result<Self, LookError> {
+        Ok(Self)
     }
 }
 
@@ -277,8 +264,8 @@ fn dilate4(m: &[bool], nx: usize, ny: usize) -> Vec<bool> {
         .collect()
 }
 
-/// The tide: interior swell noise, forced to the edge profile at the
-/// tile edges (`tide_field` :375).
+/// The tide: interior swell noise, calm toward the tile edges, where the
+/// band's pin takes over.
 fn tide(frame: &dt_kit::Frame, seed: Seed) -> Field {
     let s = frame.scale();
     let [w, h] = frame.size_mm();
@@ -291,26 +278,24 @@ fn tide(frame: &dt_kit::Frame, seed: Seed) -> Field {
         Scale::Layout,
     );
     Field::from_fn(frame, |x, y| {
-        let (dx, dy) = (x.min(w - x), y.min(h - y));
-        let (wy, wx) = (1.0 / dy.max(1e-6), 1.0 / dx.max(1e-6));
-        let edge = (wy * profile(frame, x) + wx * profile(frame, y)) / (wy + wx);
-        let b = edge_fade(s, dx.min(dy));
-        (1.0 - b) * TIDE_RMS_MM * s * inner.sample(x, y) + b * edge
+        let b = edge_fade(s, x.min(w - x).min(y.min(h - y)));
+        (1.0 - b) * TIDE_RMS_MM * s * inner.sample(x, y)
     })
 }
 
-/// How far the edge contract holds at `d` mm from the nearest tile edge:
-/// 1 at the edge, fading to 0 over the tide's edge fade.
+/// How far the edge holds at `d` mm from the nearest tile edge: 1 at the
+/// edge, fading to 0 over the tide's edge fade.
 fn edge_fade(s: f64, d: f64) -> f64 {
     smooth01(1.0 - d / (TIDE_EDGE_FADE_MM * s))
 }
 
-/// The edge contract's tide profile at position `t` (mm) along an edge.
-#[must_use]
-pub fn profile(frame: &dt_kit::Frame, t: f64) -> f64 {
+/// The library's tide profile at position `t` (mm) along an edge, the
+/// shape `waterEdgeHeight` gives: the build measures the water's edge
+/// against it.
+fn profile(frame: &dt_kit::Frame, t: f64) -> f64 {
     let lam = frame.square_mm / 2.0;
     let org = frame.square_mm * 0.5 - lam * 0.25;
-    TIDE_EDGE_AMP_MM * frame.scale() * libm::sin(std::f64::consts::TAU * (t - org) / lam)
+    0.6 * frame.scale() * libm::sin(std::f64::consts::TAU * (t - org) / lam)
 }
 
 /// What the build measured (its notes).
@@ -336,24 +321,31 @@ impl Element for Water {
     }
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
+        let Some(band) = ctx.band else {
+            return Err(LookError::general(
+                "this water has no solved top",
+                "write the tile in the heights language: `water` takes the library's top, or `water top=…`",
+            ));
+        };
         let frame = *scene.frame();
         let s = frame.scale();
-        let wl = self.level_mm * s;
         let (nx, ny) = frame.nodes();
         let nn = nx * ny;
-        scene.bank();
-        let land = scene
-            .ground()
-            .unwrap_or_else(|| Field::new(&frame, wl - 2.2 * s));
-        let rock_mask = scene.footprint(dt_kit::Kind::Rock, wl).bits;
+        // the calm level the waves are drawn about: the library's, held to
+        // the band where it has a narrower one
+        let calm = scene.water_edge().unwrap_or(2.6 * s);
+        let (lo, hi) = (band.lo(), band.hi());
+        let wlk: Vec<f64> = (0..nn).map(|k| calm.clamp(lo.z[k], hi.z[k])).collect();
+        let land = scene.ground().unwrap_or_else(|| Field::new(&frame, 0.0));
+        let rock_mask = scene.footprint(dt_kit::Kind::Rock, calm).bits;
         let soft = land.blur(LAND_BLUR_MM);
         let land_mask: Vec<bool> = (0..nn)
-            .map(|k| (soft.z[k] > wl || !ctx.area.bits[k]) && !rock_mask[k])
+            .map(|k| (soft.z[k] > wlk[k] || !ctx.area.bits[k]) && !rock_mask[k])
             .collect();
         let water: Vec<bool> = (0..nn).map(|k| !land_mask[k] && !rock_mask[k]).collect();
         if !water.iter().any(|&b| b) {
             return Err(LookError::build(
-                "the water has nowhere to go: the ground is above its level everywhere in its area",
+                "the water has nowhere to go: the land is above its top everywhere in its area",
             ));
         }
         let wm =
@@ -386,43 +378,63 @@ impl Element for Water {
         };
         let sources = emitters(&frame, &land, &masks, &mut sm, &mut rng);
         let z = relief(&frame, seed, &mut rng, &sources, &water, &d);
-        // the surface: water over the ground where it is higher
         let tide = tide(&frame, seed.key("tide"));
-        let edge_wl = scene.water_edge().unwrap_or(wl);
-        // a water level off the edge contract's eases to it near the edges
-        let [tw, th] = frame.size_mm();
-        let level = Field::from_fn(&frame, |x, y| {
-            let d = x.min(tw - x).min(y).min(th - y);
-            wl + edge_fade(s, d) * (edge_wl - wl)
-        });
-        // the water's own surface, kept apart from the ground: the stack mesher
-        // lifts it as a layer of its own and cuts the shore where it meets
-        // the ground. Where there is no water it lies `ABSENT_UNDER_MM` (scaled) under.
-        let mut top = vec![0.0; nn];
-        let mut wet = vec![false; nn];
+        // the waves are scaled to fit the band (never clipped by it): the
+        // crests to the room above the calm level, the troughs to the room
+        // below it
+        let crest = (0..nn)
+            .filter(|&k| water[k])
+            .map(|k| z[k])
+            .fold(1e-9, f64::max);
+        let trough = SWELL_TROUGH_MM * s;
+        let mut raw = vec![0.0; nn];
+        let mut present = vec![false; nn];
         for k in 0..nn {
-            let wz = if on_edge(k, nx, ny) && water[k] {
-                // the contract, exactly
-                edge_wl + profile(&frame, along_edge(&land, k))
-            } else {
-                let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
-                level.z[k] + z[k] * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k]
-            };
-            wet[k] = water[k] && wz >= land.z[k];
-            top[k] = if ctx.area.bits[k] && (water[k] || rock_mask[k]) {
-                wz
-            } else {
-                land.z[k] - ABSENT_UNDER_MM * s
-            };
+            let up = ((hi.z[k] - wlk[k]) / crest).clamp(0.0, 1.0);
+            let down = ((wlk[k] - lo.z[k]) / trough).clamp(0.0, 1.0);
+            let wave = if z[k] >= 0.0 { z[k] * up } else { z[k] * down };
+            let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
+            let v = wlk[k] + wave * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k];
+            // a soft stop at the band's ends, so no wave is sliced flat
+            raw[k] = -smax(
+                -smax(v, lo.z[k], SOFT_STOP_MM * s),
+                -hi.z[k],
+                SOFT_STOP_MM * s,
+            );
+            present[k] = ctx.area.bits[k] && (water[k] || rock_mask[k]);
         }
-        // the ground's edge rule leaves the water and its banks alone
-        let (dw, _) = distance(&frame, &wet);
-        let bank = dt_kit::BANK_MM * s;
-        let no_edge: Vec<bool> = (0..nn).map(|k| wet[k] || dw.z[k] < bank).collect();
-        let top_f = land.with_z(top);
-        let shown = land.with_z((0..nn).map(|k| top_f.z[k].max(land.z[k])).collect());
-        let st = stats(&frame, &shown, &z, &water, &wet, &rim_f, edge_wl);
-        scene.fill(&land, &top_f, &wet, &no_edge);
+        // the water's own surface, inside its band by type; the stack mesher
+        // lifts it as a layer of its own and cuts the shore where it meets
+        // the land
+        let top = band.fit(&land.with_z(raw));
+        let wet: Vec<bool> = (0..nn)
+            .map(|k| water[k] && top.field().z[k] >= land.z[k])
+            .collect();
+        let shown = land.with_z((0..nn).map(|k| top.field().z[k].max(land.z[k])).collect());
+        let st = stats(
+            &frame,
+            &shown,
+            &z,
+            &water,
+            &wet,
+            &rim_f,
+            scene.water_edge().unwrap_or(calm),
+        );
+        let area = dt_kit::Mask {
+            nx,
+            ny,
+            bits: present,
+        };
+        scene
+            .lay(&dt_kit::LayerSpec {
+                owner: ctx.path,
+                material: dt_kit::Material::Water,
+                fluid: true,
+                mask: &area,
+                shape: &top,
+                grain: None,
+            })
+            .map_err(LookError::build)?;
         for (k, v) in [
             ("relief_min", st.relief.0),
             ("relief_max", st.relief.1),

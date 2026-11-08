@@ -43,9 +43,8 @@
 </div>
 
 <h2 id="surface">Surfaces</h2>
-<p>Each paints the ground of its area. Later surfaces paint over earlier ones.</p>
+<p>Land is laid bottom up in stack order, each body the higher of what is below it and its own top; water, a fluid, is written last and fills what is lower than its top.</p>
 <div class="elements">
-  <a class="fam-surface" href="ground.html"><img src="img/el-ground.jpg" alt="" loading="lazy"><code>ground</code><span>the bare ground shape, flat unless told</span></a>
   <a class="fam-surface" href="dirt.html"><img src="img/el-dirt.jpg" alt="" loading="lazy"><code>dirt</code><span>textured earth: clods, grit and half-sunk pebbles</span></a>
   <a class="fam-plant" href="grass.html"><img src="img/el-grass.jpg" alt="" loading="lazy"><code>grass</code><span>separate sculpted blades in tufts, parting round bare patches</span></a>
   <a class="fam-plant" href="reeds.html"><img src="img/el-reeds.jpg" alt="" loading="lazy"><code>reeds</code><span>clumps of tapered reeds at the waterline</span></a>
@@ -88,7 +87,7 @@
 <p>Documents that set up the program rather than describe a tile.</p>
 <div class="elements">
   <a class="fam-doc" href="printer.html"><code>printer</code><span>the printer profile: the floors nothing prints below</span></a>
-  <a class="fam-doc" href="edges.html"><code>edges</code><span>the edge contract: how every tile meets its neighbours</span></a>
+  <a class="fam-doc" href="edges.html"><code>edges</code><span>the edge contract: the defaults every dirt and water starts with</span></a>
   <a class="fam-doc" href="palette.html"><code>palette</code><span>the paint: a colour per material, and acrylic ramps</span></a>
 </div>
 </div>

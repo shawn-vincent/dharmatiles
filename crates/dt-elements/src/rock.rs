@@ -1003,6 +1003,10 @@ impl Element for Scatter {
 ///
 /// # Errors
 /// As [`make_stone`].
+/// How far a dirt's bedded stones keep from the border of its area, mm at
+/// the reference square.
+const AREA_CLEAR_MM: f64 = 7.0;
+
 pub fn dirt_stones(
     scene: &mut Scene,
     owner: &str,
@@ -1045,15 +1049,15 @@ pub fn dirt_stones(
         gap: GAP,
         factor: 1.0,
     };
-    // clear of the area's border by a bank's width and a stone: a lower
-    // neighbour banks this ground down after the stones are bedded
+    // clear of the area's border by a bank's width and a stone: the ground
+    // beside the area may fall away from it
     let outside: Vec<bool> = area.bits.iter().map(|b| !b).collect();
     let clear = if outside.iter().any(|&b| b) {
         Some(dt_kit::distance(&frame, &outside).0)
     } else {
         None
     };
-    let keep = dt_kit::BANK_MM * frame.scale() + D_MM.1 / 2.0;
+    let keep = AREA_CLEAR_MM * frame.scale() + D_MM.1 / 2.0;
     let inside = |x: f64, y: f64| {
         let (i, j) = z.node(x, y);
         let k = j * area.nx + i;

@@ -1,7 +1,8 @@
 tile size="2x2" seed=84 {
     about "One 40 mm tree on bare earth, anywhere on a 2×2 tile."
     stack {
-        dirt bumps=2 bump-size=14 {
+        base
+        dirt bump-size=14 top="[groundHeight .. groundHeight + 2]" {
             clods some
         }
         tree height=40 {

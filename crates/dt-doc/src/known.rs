@@ -18,13 +18,6 @@ pub const PRELUDE: &str = include_str!("../../../library/parts/levels.dtile");
 /// The name the prelude is reported under.
 pub const PRELUDE_NAME: &str = "library/parts/levels.dtile";
 
-/// The text of library/parts/heights.dtile, compiled in: the library's
-/// `let` constants, visible to every tile.
-pub const HEIGHTS: &str = include_str!("../../../library/parts/heights.dtile");
-
-/// The name the heights are reported under.
-pub const HEIGHTS_NAME: &str = "library/parts/heights.dtile";
-
 /// What a call needs to know about a definition in another file.
 #[derive(Debug, Clone)]
 pub struct DefInfo {
@@ -80,7 +73,8 @@ impl Known {
         Self::default()
     }
 
-    /// The standard levels from the compiled-in prelude, and nothing else.
+    /// The standard levels from the compiled-in prelude, and nothing else:
+    /// the library's heights come from [`Known::add_heights`].
     ///
     /// # Panics
     /// If the compiled-in prelude doesn't decode (a test guards this).
@@ -91,10 +85,20 @@ impl Known {
             .unwrap_or_else(|e| panic!("the prelude must decode: {e:?}"));
         k.add_levels(&doc)
             .unwrap_or_else(|e| panic!("the prelude's levels must resolve: {e}"));
-        let heights = crate::decode(HEIGHTS_NAME, HEIGHTS, &k)
-            .unwrap_or_else(|e| panic!("the library heights must decode: {e:?}"));
-        k.add_consts(&heights);
         k
+    }
+
+    /// Decode the library's heights (library/parts/heights.dtile, read from
+    /// disk by the caller: nothing of the library is compiled in but the
+    /// levels) and make their `let` constants visible to every file.
+    ///
+    /// # Errors
+    /// The heights file does not decode.
+    pub fn add_heights(&mut self, name: &str, text: &str) -> Result<(), String> {
+        let doc = crate::decode(name, text, self)
+            .map_err(|e| format!("the library heights must decode: {e:?}"))?;
+        self.add_consts(&doc);
+        Ok(())
     }
 
     /// Make a file's file-level `let` constants visible to every file.

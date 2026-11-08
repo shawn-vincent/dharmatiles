@@ -6,10 +6,14 @@ tile size="1x1" seed=64 {
     line shore-inner wobble=1.5 { through "0,0.57" "0.46,0.54" "0.43,1" }
     region channel { bounded-by shore-outer shore-inner; fill "0.2,0.5" }
     region bank { bounded-by shore-outer shore-inner; fill "0.82,0.18"; fill "0.18,0.88" }
+    region shoreBand { within 7 of=shore-outer; within 7 of=shore-inner }
     stack {
-        dirt in=bank
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
+            pin top=waterBedHeight at=channel   // the bed, written last so it wins
+        }
         grass in=bank
-        ground in=channel level="water - 2.2"
         rock in=channel size="6..10"
         water
     }

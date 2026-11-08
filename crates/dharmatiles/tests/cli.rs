@@ -82,9 +82,7 @@ fn elements_lists_every_element() {
     let o = Command::new(EXE).arg("elements").output().unwrap();
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8(o.stdout).unwrap();
-    for name in [
-        "ground", "dirt", "grass", "tree", "wall", "cliff", "scatter",
-    ] {
+    for name in ["dirt", "grass", "tree", "wall", "cliff", "scatter"] {
         assert!(
             text.lines().any(|l| l.starts_with(name)),
             "no `{name}` in\n{text}"
@@ -92,42 +90,39 @@ fn elements_lists_every_element() {
     }
     assert!(
         text.lines()
-            .any(|l| l.starts_with("ground") && l.contains("built")),
+            .any(|l| l.starts_with("dirt") && l.contains("built")),
         "{text}"
     );
 }
 
 #[test]
-fn elements_ground_lists_its_controls() {
+fn elements_dirt_lists_its_controls() {
     let o = Command::new(EXE)
-        .args(["elements", "ground"])
+        .args(["elements", "dirt"])
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8(o.stdout).unwrap();
-    assert!(text.starts_with("ground: "), "{text}");
-    let level = text
+    assert!(text.starts_with("dirt: "), "{text}");
+    let size = text
         .lines()
-        .find(|l| l.trim_start().starts_with("level "))
+        .find(|l| l.trim_start().starts_with("bump-size "))
         .unwrap();
-    assert!(level.contains("ground"), "{level}");
-    let bumps = text
-        .lines()
-        .find(|l| l.trim_start().starts_with("bumps "))
-        .unwrap();
-    assert!(bumps.contains("mm, 0 to 15, or a range"), "{bumps}");
-    assert!(text.contains("up="), "{text}");
+    assert!(size.contains("mm, 5 to 70"), "{size}");
+    // the old forms are gone
+    assert!(!text.lines().any(|l| l.trim_start().starts_with("level ")));
+    assert!(!text.lines().any(|l| l.trim_start().starts_with("bumps ")));
 }
 
 #[test]
 fn an_unknown_look_is_an_error_with_a_hint() {
     let o = Command::new(EXE)
-        .args(["elements", "grond"])
+        .args(["elements", "dirtt"])
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(1));
     let err = String::from_utf8(o.stderr).unwrap();
-    assert!(err.contains("did you mean `ground`?"), "{err}");
+    assert!(err.contains("did you mean `dirt`?"), "{err}");
 
     let o = Command::new(EXE)
         .args(["elements", "nope", "--json"])
@@ -152,17 +147,21 @@ fn elements_dirt_json_has_units_limits_defaults_and_subs() {
     assert!(v["built"].is_boolean());
     let controls = v["controls"].as_array().unwrap();
     let find = |n: &str| controls.iter().find(|c| c["name"] == n).unwrap();
-    let bumps = find("bumps");
-    assert_eq!(bumps["unit"], "mm");
-    assert_eq!(bumps["limits"], serde_json::json!([0.0, 15.0]));
-    assert_eq!(bumps["default"], "0");
-    let subs: Vec<_> = bumps["subs"]
+    let size = find("bump-size");
+    assert_eq!(size["unit"], "mm");
+    assert_eq!(size["limits"], serde_json::json!([5.0, 70.0]));
+    assert!(
+        controls
+            .iter()
+            .all(|c| c["name"] != "level" && c["name"] != "bumps")
+    );
+    let bank: Vec<_> = find("bank")["subs"]
         .as_array()
         .unwrap()
         .iter()
         .map(|s| s["name"].as_str().unwrap())
         .collect();
-    assert_eq!(subs, ["up", "down"]);
+    assert_eq!(bank, ["against", "height", "reach"]);
     let clods = find("clods");
     assert_eq!(clods["unit"], "word");
     assert_eq!(clods["default"], "some");
@@ -180,10 +179,10 @@ fn watch_rebuilds_when_a_used_file_changes() {
     let d = scratch("watch");
     let parts = d.join("p.dtile");
     let tile = d.join("t.dtile");
-    std::fs::write(&parts, "define raised { stack { ground level=6 } }\n").unwrap();
+    std::fs::write(&parts, "define raised { stack { rock size=6 } }\n").unwrap();
     std::fs::write(
         &tile,
-        "use \"./p\" raised\ntile size=\"1x1\" seed=1 {\n    stack {\n        raised\n    }\n}\n",
+        "use \"./p\" raised\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n        raised\n    }\n}\n",
     )
     .unwrap();
     let mut child = Command::new(EXE)
@@ -227,7 +226,7 @@ fn watch_rebuilds_when_a_used_file_changes() {
     wait_for("watching ", &mut seen);
     // a coarse file clock (1 s) still sees the edit
     std::thread::sleep(std::time::Duration::from_millis(1100));
-    std::fs::write(&parts, "define raised { stack { ground level=7 } }\n").unwrap();
+    std::fs::write(&parts, "define raised { stack { rock size=7 } }\n").unwrap();
     wait_for("changed:", &mut seen);
     wait_for("built ", &mut seen);
     let status = child.wait().unwrap();
