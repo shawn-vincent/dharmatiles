@@ -1,12 +1,11 @@
 ---
 source: crates/dt-eval/tests/golden.rs
-assertion_line: 130
 expression: hashes(b)
 ---
 b794272489d6027d  plan
 ee19f3441aa27051  surface
-5c9c1e67ae66a217  ground:tile/ground
+9b5ab78e0628e672  ground:tile/ground
 3177490e64e0a3ce  tree:tile/tree/0
 9ad7b1454c0b8fad  connector:tile/connector
-ee9f88245f552193  union
-6e1ae7007bdabd6d  export
+7a7f606ab443799e  union
+a6def63017de3c14  export

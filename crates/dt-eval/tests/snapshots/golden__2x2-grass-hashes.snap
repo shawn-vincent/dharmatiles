@@ -1,11 +1,10 @@
 ---
 source: crates/dt-eval/tests/golden.rs
-assertion_line: 130
 expression: hashes(b)
 ---
 4cb9b472f975d51a  plan
 9c0bfcf68eeb44a6  surface
-6c78bddd02974e01  ground:tile/ground
+904424cee7d8ed9a  ground:tile/ground
 f30aebfabf1651d0  grass:tile/grass/0
 daf273b7da3726d6  grass:tile/grass/0
 4c89205a2fc0a7f3  grass:tile/grass/0
@@ -66,5 +65,5 @@ f2def7652d66e58f  grass:tile/grass/0
 fe4207a58481b41a  grass:tile/grass/0
 3d01e18fe49d90f0  grass:tile/grass/0
 349265e945ab781e  connector:tile/connector
-4325d528e7c290fd  union
-aeff1866bc8aa703  export
+f3bee97bc77a7897  union
+9c4129c359e5bdbd  export

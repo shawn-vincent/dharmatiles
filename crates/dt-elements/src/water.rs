@@ -392,6 +392,9 @@ impl Element for Water {
             let d = x.min(tw - x).min(y).min(th - y);
             wl + edge_fade(s, d) * (edge_wl - wl)
         });
+        // the water's own surface, kept apart from the ground: the stack mesher
+        // lifts it as a layer of its own and cuts the shore where it meets
+        // the ground. Where there is no water it lies a millimetre under.
         let mut top = vec![0.0; nn];
         let mut wet = vec![false; nn];
         for k in 0..nn {
@@ -403,10 +406,10 @@ impl Element for Water {
                 level.z[k] + z[k] * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k]
             };
             wet[k] = water[k] && wz >= land.z[k];
-            top[k] = if ctx.area.bits[k] {
-                wz.max(land.z[k])
+            top[k] = if ctx.area.bits[k] && (water[k] || rock_mask[k]) {
+                wz
             } else {
-                land.z[k]
+                land.z[k] - s
             };
         }
         // the ground's edge rule leaves the water and its banks alone
@@ -414,8 +417,9 @@ impl Element for Water {
         let bank = dt_kit::BANK_MM * s;
         let no_edge: Vec<bool> = (0..nn).map(|k| wet[k] || dw.z[k] < bank).collect();
         let top_f = land.with_z(top);
-        let st = stats(&frame, &top_f, &z, &water, &wet, &rim_f, edge_wl);
-        scene.fill(&top_f, &wet, &no_edge);
+        let shown = land.with_z((0..nn).map(|k| top_f.z[k].max(land.z[k])).collect());
+        let st = stats(&frame, &shown, &z, &water, &wet, &rim_f, edge_wl);
+        scene.fill(&land, &top_f, &wet, &no_edge);
         for (k, v) in [
             ("relief_min", st.relief.0),
             ("relief_max", st.relief.1),

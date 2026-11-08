@@ -254,13 +254,23 @@ fn a_line_and_two_regions_make_a_step() {
         "{:?}",
         b.audit
     );
+    // the surface's height along x = 17.5 (a flat stretch is a few large
+    // triangles, so read the surface, not its vertices)
     let z_at = |y: f64| {
-        b.export
-            .mesh
-            .positions
+        let m = &b.export.mesh;
+        m.triangles
             .iter()
-            .filter(|p| (p[1] - y).abs() < 0.5 && p[2] > 0.0)
-            .map(|p| p[2])
+            .filter_map(|t| {
+                let [a, b, c] = t.map(|i| m.positions[i as usize]);
+                let d = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+                if d.abs() < 1e-12 {
+                    return None;
+                }
+                let l1 = ((b[1] - c[1]) * (17.5 - c[0]) + (c[0] - b[0]) * (y - c[1])) / d;
+                let l2 = ((c[1] - a[1]) * (17.5 - c[0]) + (a[0] - c[0]) * (y - c[1])) / d;
+                let l3 = 1.0 - l1 - l2;
+                (l1.min(l2).min(l3) >= -1e-9).then(|| l1 * a[2] + l2 * b[2] + l3 * c[2])
+            })
             .fold(f64::MIN, f64::max)
     };
     // each level holds inside its region; both meet the tile edge at the

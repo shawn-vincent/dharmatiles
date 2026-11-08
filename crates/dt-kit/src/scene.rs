@@ -406,11 +406,6 @@ pub const BANK_MM: f64 = 7.0;
 /// Slots per build.
 const SLOTS: u32 = 1 << 16;
 
-/// How deep the water's own leaf reaches under its top, mm at the
-/// reference square: where the water meets the tile's side, a line of
-/// water this deep over the earth.
-pub const WATER_SKIN_MM: f64 = 0.3;
-
 /// The ground surface of one build: every paint in order, the banks
 /// between them, the water's fill and bed, the edge contract and the
 /// support things stand on.  Painted first; read once settled.
@@ -424,9 +419,12 @@ pub struct Surface {
     layers: Vec<std::sync::Arc<(Mask, Vec<f64>)>>,
     settled: bool,
     banked: bool,
-    /// Nodes the water covers (lifted as water).
+    /// Nodes the water covers.
     wet: Mask,
     bed: Option<Grid>,
+    /// The water's own top at every node (world mm), a millimetre under
+    /// the ground where there is no water: the water layer of the lift.
+    water_top: Option<Vec<f32>>,
     water_edge_mm: Option<f64>,
     /// Nodes the ground's edge rule leaves alone (water and its banks).
     no_edge: Mask,
@@ -447,6 +445,7 @@ impl Surface {
             banked: false,
             wet: Mask::new(nx, ny, false),
             bed: None,
+            water_top: None,
             water_edge_mm: None,
             no_edge: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
@@ -541,19 +540,34 @@ impl Surface {
         })
     }
 
-    /// **fill**: set the surface to `top` (world mm) where `wet` (the
-    /// water's own solid top, lifted as water), and leave the nodes in
-    /// `no_edge` out of the ground's edge rule (the water and its banks
-    /// meet the edge on their own contract).
-    pub fn fill(&mut self, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
+    /// **fill**: the ground under the water `bed` (used where nothing painted any), the water's own surface `top` (world mm at every node; a
+    /// millimetre or more under the ground where there is no water), `wet`
+    /// (the nodes it covers) and `no_edge` (the nodes the ground's edge
+    /// rule leaves alone: the water and its banks meet the edge on their
+    /// own contract). The lift makes the water a layer of its own over the
+    /// ground, so the shore runs exactly where the two surfaces meet; the
+    /// shown surface readers see is the higher of the two.
+    pub fn fill(&mut self, bed: &crate::Field, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
         self.settle();
+        if self.painted.count() == 0 {
+            // nothing was painted: the ground under the water is the water's own default
+            for (o, &v) in self.field.z.iter_mut().zip(&bed.z) {
+                #[allow(clippy::cast_possible_truncation)]
+                let z = v as f32;
+                *o = z;
+            }
+        }
         if self.bed.is_none() {
             self.bed = Some(self.field.clone());
         }
+        let water = self
+            .water_top
+            .get_or_insert_with(|| vec![f32::NEG_INFINITY; top.z.len()]);
         for k in 0..self.field.z.len() {
             #[allow(clippy::cast_possible_truncation)]
             let z = top.z[k] as f32;
-            self.field.z[k] = z;
+            water[k] = water[k].max(z);
+            self.field.z[k] = self.field.z[k].max(z);
             self.wet.bits[k] |= wet[k];
             self.painted.bits[k] |= wet[k];
             self.no_edge.bits[k] |= no_edge[k];
@@ -707,6 +721,13 @@ impl Surface {
     /// edge level, and nothing below it (rises only), except where the
     /// water and its banks meet the edge on their own contract.
     fn hold_edge(&mut self, edge: f64) {
+        let mut z = std::mem::take(&mut self.field.z);
+        self.hold(&mut z, edge);
+        self.field.z = z;
+    }
+
+    /// [`Surface::hold_edge`] on any ground heights `z` of this lattice.
+    fn hold(&self, z: &mut [f32], edge: f64) {
         #[allow(clippy::cast_possible_truncation)]
         let e = edge as f32;
         let (nx, ny) = (self.field.nx, self.field.ny);
@@ -715,7 +736,7 @@ impl Surface {
                 if self.no_edge.bits[j * nx + i] {
                     continue;
                 }
-                let z = &mut self.field.z[j * nx + i];
+                let z = &mut z[j * nx + i];
                 if i == 0 || j == 0 || i == nx - 1 || j == ny - 1 {
                     *z = e;
                 } else {
@@ -1073,12 +1094,9 @@ impl Scene {
         self.surface.ground()
     }
 
-    /// **fill**: set the surface to `top` (world mm) where `wet` (the
-    /// water's own solid top, lifted as water), and leave the nodes in
-    /// `no_edge` out of the ground's edge rule (the water and its banks
-    /// meet the edge on their own contract).
-    pub fn fill(&mut self, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
-        self.surface.fill(top, wet, no_edge)
+    /// **fill**: lay the water over the ground ([`Surface::fill`]).
+    pub fn fill(&mut self, bed: &crate::Field, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
+        self.surface.fill(bed, top, wet, no_edge)
     }
 
     /// Mark surface nodes as stone (pebbles) for the painted preview;
@@ -1252,9 +1270,35 @@ impl Scene {
         self.record("surface", self.surface.field.content_hash());
         let slot = self.built.slots(1, Material::Earth)?.get(0);
         let field = &self.surface.field;
-        // the terrain: one layer through the stack mesher (positions as the
-        // adaptive lift makes them; the float32 rounding comes with the
-        // water layer)
+        // the earth: the ground as it was before the water filled it, held
+        // to the edge contract (the water and its banks excepted)
+        let earth = match &self.surface.bed {
+            Some(bed) => {
+                let mut e = bed.z.clone();
+                if let Some(edge) = self.surface.edge_mm {
+                    self.surface.hold(&mut e, edge);
+                }
+                e
+            }
+            None => field.z.clone(),
+        };
+        // the water: a layer of its own over the earth, wherever its top is
+        // above it
+        let water = match &self.surface.water_top {
+            Some(w) if self.surface.wet.count() > 0 => {
+                Some((w.clone(), self.built.slots(1, Material::Water)?.get(0)))
+            }
+            _ => None,
+        };
+        let mut layers = vec![dt_geom::Layer {
+            top: &earth,
+            id: slot.id,
+        }];
+        if let Some((w, ws)) = &water {
+            layers.push(dt_geom::Layer { top: w, id: ws.id });
+        }
+        // one closed mesh, a run per layer; vertices rounded to float32 once
+        // so the terrain alone survives the STL reload
         let mesh = dt_geom::lift_stack(
             &dt_geom::Lattice {
                 nx: field.nx,
@@ -1262,39 +1306,12 @@ impl Scene {
                 step: field.step,
                 tol: LIFT_TOL_MM,
                 max_cells: LIFT_MAX_CELLS,
-                round: dt_geom::Round::None,
+                round: dt_geom::Round::F32,
             },
-            &[dt_geom::Layer {
-                top: &field.z,
-                id: slot.id,
-            }],
+            &layers,
         )
         .map_err(|e| KitError::Surface(e.to_string()))?;
-        let solid = leaf(slot, &mesh)?;
-        if self.surface.wet.count() > 0 {
-            // the water: a skin of the lifted top over the wet nodes, as
-            // its own leaf, so every triangle's material is its slot's
-            let water_slot = self.built.slots(1, Material::Water)?.get(0);
-            let cut = |m: &TriMesh| leaf(water_slot, m).map(|s| s.0);
-            let [above, below, half] = self.water_cutters()?.map(|m| cut(&m?));
-            let above = above?;
-            // the land stops half the skin under the top, inside the water:
-            // the two overlap, as every part overlaps what it stands on
-            // (faces that only touch would leave slivers)
-            let water = solid.0.intersection(&above.difference(&below?));
-            let land = relabel(slot, &solid.0.difference(&above.difference(&half?)))?;
-            let water = relabel(water_slot, &water)?;
-            for part in [land, water] {
-                self.add(
-                    Tag {
-                        kind: Kind::Ground,
-                        owner: owner.to_owned(),
-                    },
-                    part,
-                );
-            }
-            return Ok(());
-        }
+        let solid = Solid(dt_geom::Solid::from_tri_mesh(&mesh).map_err(KitError::Mesh)?);
         self.add(
             Tag {
                 kind: Kind::Ground,
@@ -1303,50 +1320,6 @@ impl Scene {
             solid,
         );
         Ok(())
-    }
-
-    /// The solids that cut the water's skin from the lifted top: the
-    /// first stands over every wet node, the second reaches
-    /// [`WATER_SKIN_MM`] under the top there (and over everything else),
-    /// so the first less the second is the skin; the third, half as deep,
-    /// is what the land loses.  Their floors sit under the
-    /// tile's at different depths and they reach a little past its sides,
-    /// so no face of one lies on a face of another (coplanar faces would
-    /// leave slivers).
-    fn water_cutters(&self) -> Result<[Result<TriMesh, KitError>; 3], KitError> {
-        const LOW: f32 = 1e-3;
-        let (field, wet) = (&self.surface.field, &self.surface.wet);
-        let hi = field.z.iter().copied().fold(0.0_f32, f32::max) + 1.0;
-        #[allow(clippy::cast_possible_truncation)]
-        let skin = (WATER_SKIN_MM * self.frame.scale()) as f32;
-        let above = field.with_z(wet.bits.iter().map(|&w| if w { hi } else { LOW }).collect());
-        let under = |depth: f32| {
-            field.with_z(
-                field
-                    .z
-                    .iter()
-                    .zip(&wet.bits)
-                    .map(|(&z, &w)| if w { z - depth } else { hi + 1.0 })
-                    .collect(),
-            )
-        };
-        let [w, h] = self.frame.size_mm();
-        let lift = |g: &Grid, floor: f32| {
-            let raised = g.map(|z| z + floor);
-            let mut m = dt_geom::lift_adaptive(&raised, LIFT_TOL_MM, LIFT_MAX_CELLS)
-                .map_err(|e| KitError::Surface(e.to_string()))?;
-            for p in &mut m.positions {
-                p[0] = 0.5 * w + (p[0] - 0.5 * w) * 1.001;
-                p[1] = 0.5 * h + (p[1] - 0.5 * h) * 1.001;
-                p[2] -= f64::from(floor);
-            }
-            Ok(m)
-        };
-        Ok([
-            lift(&above, 1.0),
-            lift(&under(skin), 2.0),
-            lift(&under(0.5 * skin), 3.0),
-        ])
     }
 
     /// Remove each solid a surface placed (before a later paint) that a

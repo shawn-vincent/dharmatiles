@@ -1,6 +1,6 @@
 ---
 source: crates/dt-eval/tests/golden.rs
-expression: hashes(&b)
+expression: hashes(b)
 ---
 a509398f984dfe21  plan
 52fae91179b6103c  rock:tile/dirt/0
@@ -8,7 +8,7 @@ a509398f984dfe21  plan
 81d31b75c6fbc268  rock:tile/dirt/0
 cfad8b2c76438fff  rock:tile/dirt/0
 8070c574425424f7  surface
-eca2206498b65ae6  ground:tile/ground
+bb6ddb5935660bb4  ground:tile/ground
 349265e945ab781e  connector:tile/connector
-6f0ab63f6e356741  union
-cd083b32a70c3649  export
+bb60ff06bb592df0  union
+e0f8fda77169c2b0  export
