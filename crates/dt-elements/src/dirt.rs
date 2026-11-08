@@ -22,6 +22,7 @@
 //! (layout); clods, grit and pebbles keep their true mm (default 1), so
 //! their counts follow the tile's area.
 
+use dt_kit::OnFrame;
 use dt_kit::{
     Field, Noise, Placed, Plane, Rng, Scale, Scene, Seed, Spread, cap, noise, scatter, smax,
     smooth01,
@@ -434,7 +435,7 @@ fn grit(frame: &dt_kit::Frame, seed: Seed) -> Field {
     )
     .map(|v| GRIT_AMP_MM * v);
     let [w, h] = frame.size_mm();
-    let mut bumps = g.map(|_| 0.0);
+    let mut bumps = g.map(|_| 0.0_f64);
     let mut rng = Rng::new(seed.key("grains"));
     for _ in 0..rng.poisson(GRAIN_DENSITY * w * h) {
         let (cx, cy) = (rng.uniform(0.0, w), rng.uniform(0.0, h));

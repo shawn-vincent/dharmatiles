@@ -63,13 +63,11 @@ mod threemf;
 pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded, draft};
 pub use bambu::{bambu_project, project_settings};
 pub use dt_geom::Convex;
-pub use dt_geom::{
-    Footprint, blur as blur_grid, dilate as dilate_grid, distance_nearest, erode as erode_grid,
-};
+pub use dt_geom::{Footprint, distance_nearest};
 pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
 pub use field::{
-    Field, Noise, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at, rim,
-    scatter, smax, smooth01,
+    Field, Noise, OnFrame, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at,
+    rim, scatter, smax, smooth01,
 };
 pub use outline::Outline;
 pub use paint::paint_mesh;

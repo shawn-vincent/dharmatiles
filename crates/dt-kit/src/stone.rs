@@ -175,6 +175,7 @@ pub fn solid(slot: Slot, mesh: &TriMesh) -> Result<Solid, KitError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::OnFrame;
 
     #[test]
     fn grain_keeps_a_closed_stone_on_its_base() {

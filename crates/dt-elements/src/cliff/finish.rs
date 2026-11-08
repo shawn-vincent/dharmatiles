@@ -91,7 +91,7 @@ pub fn columns(
     let bb: Vec<[f64; 4]> = polys.iter().map(|p| bounds(p)).collect();
     let a: Vec<usize> = placed
         .iter()
-        .map(|p| p.cells.v.iter().filter(|&&b| b).count())
+        .map(|p| p.cells.z.iter().filter(|&&b| b).count())
         .collect();
     let mut par: Vec<usize> = (0..n).collect();
     fn find(par: &mut [usize], mut i: usize) -> usize {
@@ -108,8 +108,8 @@ pub fn columns(
                 && bb[i][1] < bb[j][3]
                 && bb[j][1] < bb[i][3]
             {
-                let ov = (0..placed[i].cells.v.len())
-                    .filter(|&q| placed[i].cells.v[q] && placed[j].cells.v[q])
+                let ov = (0..placed[i].cells.z.len())
+                    .filter(|&q| placed[i].cells.z[q] && placed[j].cells.z[q])
                     .count();
                 if ov as f64 >= COLUMN_SHARE * a[i].max(a[j]) as f64 {
                     let (x, y) = (find(&mut par, i), find(&mut par, j));

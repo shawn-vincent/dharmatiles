@@ -26,6 +26,7 @@
 //! its noise is Gaussian-filtered white noise of the same sigmas. The
 //! final 0.06 mm blur is below the grid and is left out.
 
+use dt_kit::OnFrame;
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smooth01};
 
 use crate::read;

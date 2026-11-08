@@ -448,7 +448,7 @@ impl Scene {
         Self {
             frame,
             seed,
-            field: Grid::new(nx, ny, frame.step_mm(), 0.0),
+            field: Grid::filled(nx, ny, frame.step_mm(), 0.0),
             painted: Mask::new(nx, ny, false),
             layers: Vec::new(),
             settled: false,
@@ -481,7 +481,7 @@ impl Scene {
         let step = self.frame.step_mm();
         let s = self
             .support
-            .get_or_insert_with(|| Grid::new(nx, ny, step, f32::NEG_INFINITY));
+            .get_or_insert_with(|| Grid::filled(nx, ny, step, f32::NEG_INFINITY));
         #[allow(clippy::cast_possible_truncation)]
         let z = top_mm as f32;
         for (k, _) in footprint.bits.iter().enumerate().filter(|(_, b)| **b) {

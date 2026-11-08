@@ -8,11 +8,14 @@
 //! per square has `cols * n + 1` nodes across, so its edge nodes lie exactly
 //! on the tile edge.
 
-use crate::TriMesh;
+use crate::{Footprint, TriMesh};
 
-/// Values on a lattice of nodes, row-major (`j` outer).
+/// Values on a lattice of nodes, row-major (`j` outer): a painted height
+/// (`Grid<f32>`, what is lifted), a field of numbers (`Grid<f64>`, the
+/// kit's `Field`), flags or labels.  Positions are mm, `step` apart; a
+/// grid counted in cells has `step` 1, and its mm methods work in cells.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Grid {
+pub struct Grid<T = f32> {
     /// Nodes across (x).
     pub nx: usize,
     /// Nodes up (y).
@@ -20,13 +23,13 @@ pub struct Grid {
     /// Node spacing in mm.
     pub step: f64,
     /// `nx * ny` values.
-    pub z: Vec<f32>,
+    pub z: Vec<T>,
 }
 
-impl Grid {
+impl<T: Copy> Grid<T> {
     /// A grid with every node set to `value`.
     #[must_use]
-    pub fn new(nx: usize, ny: usize, step: f64, value: f32) -> Self {
+    pub fn filled(nx: usize, ny: usize, step: f64, value: T) -> Self {
         Self {
             nx,
             ny,
@@ -41,6 +44,102 @@ impl Grid {
         j * self.nx + i
     }
 
+    /// The value at node `(i, j)`.
+    #[must_use]
+    #[inline]
+    pub fn at(&self, i: usize, j: usize) -> T {
+        self.z[j * self.nx + i]
+    }
+
+    /// Set node `(i, j)`.
+    #[inline]
+    pub fn set(&mut self, i: usize, j: usize, v: T) {
+        self.z[j * self.nx + i] = v;
+    }
+
+    /// The same lattice with every value `f` of this one's.
+    #[must_use]
+    pub fn map<U: Copy>(&self, f: impl Fn(T) -> U) -> Grid<U> {
+        self.with_z(self.z.iter().map(|&v| f(v)).collect())
+    }
+
+    /// Combine with another grid on the same lattice, node by node.
+    #[must_use]
+    pub fn zip<U: Copy, V: Copy>(&self, other: &Grid<U>, f: impl Fn(T, U) -> V) -> Grid<V> {
+        self.with_z(
+            self.z
+                .iter()
+                .zip(&other.z)
+                .map(|(&a, &b)| f(a, b))
+                .collect(),
+        )
+    }
+
+    /// A grid on the same lattice with values `z`.
+    #[must_use]
+    pub fn with_z<U>(&self, z: Vec<U>) -> Grid<U> {
+        debug_assert_eq!(z.len(), self.z.len());
+        Grid {
+            nx: self.nx,
+            ny: self.ny,
+            step: self.step,
+            z,
+        }
+    }
+
+    /// The x of column `i`, mm.
+    #[must_use]
+    pub fn x(&self, i: usize) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        let x = i as f64 * self.step;
+        x
+    }
+
+    /// The y of row `j`, mm.
+    #[must_use]
+    pub fn y(&self, j: usize) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        let y = j as f64 * self.step;
+        y
+    }
+
+    /// The node at or below `(x, y)` mm, clamped to the lattice.
+    #[must_use]
+    pub fn node(&self, x: f64, y: f64) -> (usize, usize) {
+        let k = |v: f64, n: usize| {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let k = libm::floor(v / self.step).max(0.0) as usize;
+            k.min(n - 1)
+        };
+        (k(x, self.nx), k(y, self.ny))
+    }
+
+    /// The nodes within `r` mm of `(x, y)`, as index ranges `(i0..i1, j0..j1)`.
+    #[must_use]
+    pub fn window(
+        &self,
+        x: f64,
+        y: f64,
+        r: f64,
+    ) -> (std::ops::Range<usize>, std::ops::Range<usize>) {
+        let lo = |v: f64, n: usize| {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let k = libm::ceil((v - r) / self.step).max(0.0) as usize;
+            k.min(n)
+        };
+        let hi = |v: f64, n: usize| {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let k = (libm::floor((v + r) / self.step) + 1.0).max(0.0) as usize;
+            k.min(n)
+        };
+        (
+            lo(x, self.nx)..hi(x, self.nx),
+            lo(y, self.ny)..hi(y, self.ny),
+        )
+    }
+}
+
+impl Grid<f32> {
     /// A 64-bit FNV-1a hash of the exact values (a stage hash).
     #[must_use]
     pub fn content_hash(&self) -> u64 {
@@ -50,6 +149,206 @@ impl Grid {
         h.u64(self.step.to_bits());
         self.z.iter().for_each(|v| h.u64(u64::from(v.to_bits())));
         h.finish()
+    }
+}
+
+impl From<&Grid<f32>> for Grid<f64> {
+    /// A painted surface as a field of numbers.
+    fn from(g: &Grid<f32>) -> Self {
+        g.map(f64::from)
+    }
+}
+
+impl Grid<f64> {
+    /// The bilinear value at `(x, y)` mm (clamped to the lattice).
+    #[must_use]
+    pub fn sample(&self, x: f64, y: f64) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        let (mx, my) = ((self.nx - 1) as f64, (self.ny - 1) as f64);
+        let (u, v) = (
+            (x / self.step).clamp(0.0, mx),
+            (y / self.step).clamp(0.0, my),
+        );
+        let (fu, fv) = (libm::floor(u), libm::floor(v));
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let (i, j) = (fu as usize, fv as usize);
+        let (i1, j1) = ((i + 1).min(self.nx - 1), (j + 1).min(self.ny - 1));
+        let (tu, tv) = (u - fu, v - fv);
+        let a = self.at(i, j) * (1.0 - tu) + self.at(i1, j) * tu;
+        let b = self.at(i, j1) * (1.0 - tu) + self.at(i1, j1) * tu;
+        a * (1.0 - tv) + b * tv
+    }
+
+    /// Gaussian blur of `sigma` mm (scipy's `gaussian_filter`, reflected
+    /// ends; recursive past 32 nodes).
+    #[must_use]
+    pub fn blur(&self, sigma_mm: f64) -> Self {
+        let s = sigma_mm / self.step;
+        let z = if s > 32.0 {
+            crate::filter::blur_recursive(&self.z, self.nx, self.ny, s)
+        } else {
+            crate::filter::blur(&self.z, self.nx, self.ny, s)
+        };
+        self.with_z(z)
+    }
+
+    /// Grey dilation over a disc of `r` mm.
+    #[must_use]
+    pub fn dilate(&self, r_mm: f64) -> Self {
+        self.with_z(crate::filter::dilate(
+            &self.z,
+            self.nx,
+            self.ny,
+            Footprint::Disc(r_mm / self.step),
+        ))
+    }
+
+    /// Grey erosion over a disc of `r` mm.
+    #[must_use]
+    pub fn erode(&self, r_mm: f64) -> Self {
+        self.with_z(crate::filter::erode(
+            &self.z,
+            self.nx,
+            self.ny,
+            Footprint::Disc(r_mm / self.step),
+        ))
+    }
+
+    /// The relief range (max − min) over the square window of side `w` mm
+    /// round each node: the printable-texture measure.
+    #[must_use]
+    pub fn range(&self, w_mm: f64) -> Self {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let r = libm::round(0.5 * w_mm / self.step) as usize;
+        let hi = crate::filter::dilate(&self.z, self.nx, self.ny, Footprint::Square(r));
+        let lo = crate::filter::erode(&self.z, self.nx, self.ny, Footprint::Square(r));
+        self.with_z(hi.iter().zip(&lo).map(|(a, b)| a - b).collect())
+    }
+
+    /// numpy's linear quantile of the values where `keep` holds (all
+    /// values when `keep` is `None`).
+    #[must_use]
+    pub fn quantile(&self, q: f64, keep: Option<&[bool]>) -> f64 {
+        match keep {
+            None => crate::filter::quantile(&self.z, q),
+            Some(k) => {
+                let v: Vec<f64> = self
+                    .z
+                    .iter()
+                    .zip(k)
+                    .filter(|(_, k)| **k)
+                    .map(|(v, _)| *v)
+                    .collect();
+                crate::filter::quantile(&v, q)
+            }
+        }
+    }
+
+    /// The slope along x and along y (rise per mm) at every node, with
+    /// numpy's `gradient` (central differences inside, one-sided at the
+    /// ends; 0 across a single node).
+    #[must_use]
+    pub fn gradient(&self) -> (Self, Self) {
+        let (nx, ny, h) = (self.nx, self.ny, self.step);
+        let mut gx = vec![0.0; nx * ny];
+        let mut gy = vec![0.0; nx * ny];
+        for j in 0..ny {
+            let (j0, j1) = (j.saturating_sub(1), (j + 1).min(ny - 1));
+            for i in 0..nx {
+                let (i0, i1) = (i.saturating_sub(1), (i + 1).min(nx - 1));
+                let k = j * nx + i;
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    gx[k] = (self.at(i1, j) - self.at(i0, j)) / ((i1 - i0).max(1) as f64 * h);
+                    gy[k] = (self.at(i, j1) - self.at(i, j0)) / ((j1 - j0).max(1) as f64 * h);
+                }
+            }
+        }
+        (self.with_z(gx), self.with_z(gy))
+    }
+
+    /// The steepest slope (rise per mm), from [`Grid::gradient`].
+    #[must_use]
+    pub fn max_slope(&self) -> f64 {
+        let (gx, gy) = self.gradient();
+        gx.z.iter()
+            .zip(&gy.z)
+            .fold(0.0, |m: f64, (x, y)| m.max(libm::sqrt(x * x + y * y)))
+    }
+}
+
+impl Grid<bool> {
+    /// The distance in nodes from every node to the nearest set one
+    /// (infinite with none set), and that node's index.
+    #[must_use]
+    pub fn distance(&self) -> (Grid<f64>, Vec<Option<usize>>) {
+        let (d, near) = distance_nearest(&self.z, self.nx, self.ny);
+        (self.with_z(d), near)
+    }
+
+    /// The set nodes grown by the 4-neighbour cross, `n` times.
+    #[must_use]
+    pub fn grow4(&self, n: usize) -> Self {
+        let mut cur = self.clone();
+        for _ in 0..n {
+            let mut next = cur.clone();
+            for j in 0..self.ny {
+                for i in 0..self.nx {
+                    if cur.at(i, j) {
+                        continue;
+                    }
+                    let hit = (i > 0 && cur.at(i - 1, j))
+                        || (i + 1 < self.nx && cur.at(i + 1, j))
+                        || (j > 0 && cur.at(i, j - 1))
+                        || (j + 1 < self.ny && cur.at(i, j + 1));
+                    if hit {
+                        next.set(i, j, true);
+                    }
+                }
+            }
+            cur = next;
+        }
+        cur
+    }
+
+    /// The 4-connected pieces of the set nodes, labelled 1, 2, … in
+    /// row-major order of their first node (0 elsewhere), and how many.
+    #[must_use]
+    pub fn label(&self) -> (Grid<u32>, u32) {
+        let mut labels = self.map(|_| 0u32);
+        let mut n = 0;
+        let mut stack = Vec::new();
+        for j in 0..self.ny {
+            for i in 0..self.nx {
+                if !self.at(i, j) || labels.at(i, j) != 0 {
+                    continue;
+                }
+                n += 1;
+                labels.set(i, j, n);
+                stack.push((i, j));
+                while let Some((a, b)) = stack.pop() {
+                    let mut go = |x: usize, y: usize| {
+                        if self.at(x, y) && labels.at(x, y) == 0 {
+                            labels.set(x, y, n);
+                            stack.push((x, y));
+                        }
+                    };
+                    if a > 0 {
+                        go(a - 1, b);
+                    }
+                    if a + 1 < self.nx {
+                        go(a + 1, b);
+                    }
+                    if b > 0 {
+                        go(a, b - 1);
+                    }
+                    if b + 1 < self.ny {
+                        go(a, b + 1);
+                    }
+                }
+            }
+        }
+        (labels, n)
     }
 }
 
@@ -258,7 +557,7 @@ mod tests {
 
     #[test]
     fn lift_is_watertight() {
-        let mut g = Grid::new(5, 4, 0.5, 2.0);
+        let mut g = Grid::<f32>::filled(5, 4, 0.5, 2.0);
         g.z[7] = 3.0;
         let m = lift(&g).unwrap();
         assert!(m.is_watertight());
@@ -267,7 +566,7 @@ mod tests {
 
     #[test]
     fn lift_refuses_zero() {
-        let mut g = Grid::new(3, 3, 1.0, 1.0);
+        let mut g = Grid::<f32>::filled(3, 3, 1.0, 1.0);
         g.z[4] = 0.0;
         assert_eq!(lift(&g), Err(LiftError::BelowBase { at: (1, 1), z: 0.0 }));
     }

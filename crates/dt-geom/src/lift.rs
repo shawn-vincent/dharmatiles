@@ -335,7 +335,7 @@ mod tests {
     use super::*;
 
     pub(super) fn bumpy(nx: usize, ny: usize) -> Grid {
-        let mut g = Grid::new(nx, ny, 0.25, 3.0);
+        let mut g = Grid::<f32>::filled(nx, ny, 0.25, 3.0);
         for j in 0..ny {
             for i in 0..nx {
                 let (x, y) = (i as f64 * 0.25, j as f64 * 0.25);

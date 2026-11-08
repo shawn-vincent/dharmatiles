@@ -7,7 +7,7 @@
 use dt_kit::{Piece, form, hung};
 
 use super::form::{FOOT, GRID_MM};
-use super::util::{Field, dilate_disc};
+use super::util::{Cells, Field, Grid, cell_grid};
 use crate::LookError;
 use dt_kit::smooth01;
 
@@ -29,11 +29,11 @@ const DIRT_LOW_MM: f64 = 5.0;
 const DIRT_SINK_MM: f64 = 0.3;
 const DIRT_PLUG_MM: (f64, f64) = (1.5, 3.0);
 
-fn edges(z: &Field, step: f64) -> super::util::Mask {
+fn edges(z: &Field, step: f64) -> Cells {
     let (nx, ny) = (z.nx, z.ny);
-    let sm = super::util::blur(z, 0.5 / GRID_MM);
+    let sm = z.blur(0.5 / GRID_MM);
     let tan = DIRT_SLOPE_DEG.to_radians().tan();
-    let mut e = super::util::Mask::new(nx, ny, false);
+    let mut e = cell_grid(nx, ny, false);
     for j in 0..ny {
         for i in 0..nx {
             let (i0, i1) = (i.saturating_sub(1), (i + 1).min(nx - 1));
@@ -65,11 +65,12 @@ fn edges(z: &Field, step: f64) -> super::util::Mask {
 }
 
 fn closing(z: &Field, r_mm: f64) -> Field {
-    let c = super::util::erode_disc(&dilate_disc(z, r_mm / GRID_MM), r_mm / GRID_MM);
-    Field {
+    let c = z.dilate(r_mm / GRID_MM).erode(r_mm / GRID_MM);
+    Grid {
         nx: z.nx,
         ny: z.ny,
-        v: z.v.iter().zip(&c.v).map(|(a, b)| a.max(*b)).collect(),
+        step: 1.0,
+        z: z.z.iter().zip(&c.z).map(|(a, b)| a.max(*b)).collect(),
     }
 }
 
@@ -95,77 +96,82 @@ pub fn dirt_top(
         }
     }
     let hits = rm.first_hits(&org, &vec![[0.0, 0.0, -1.0]; org.len()]);
-    let mut z = Field::new(nx, ny, FOOT - 1.0);
+    let mut z = cell_grid(nx, ny, FOOT - 1.0);
     for (q, h) in hits.iter().enumerate() {
         if let Some(h) = h {
-            z.v[q] = h.point[2];
+            z.z[q] = h.point[2];
         }
     }
     let b = {
-        let e = super::util::erode_disc(&z, 1.0);
-        Field {
+        let e = z.erode(1.0);
+        Grid {
             nx,
             ny,
-            v: e.v.iter().map(|v| v - DIRT_SINK_MM).collect(),
+            step: 1.0,
+            z: e.z.iter().map(|v| v - DIRT_SINK_MM).collect(),
         }
     };
     let zc = closing(&z, 0.5 * DIRT_PLUG_MM.0);
     let ed = edges(&zc, DIRT_PLUG_MM.0);
-    let not_edge = super::util::Mask {
+    let not_edge = Grid {
         nx,
         ny,
-        v: ed.v.iter().map(|&e| !e).collect(),
+        step: 1.0,
+        z: ed.z.iter().map(|&e| !e).collect(),
     };
     let inner = edt_in_mm(&not_edge);
     for q in 0..nx * ny {
-        if inner.v[q] >= DIRT_PLUG_MM.0 && zc.v[q] - z.v[q] < DIRT_PLUG_MM.1 {
-            z.v[q] = zc.v[q];
+        if inner.z[q] >= DIRT_PLUG_MM.0 && zc.z[q] - z.z[q] < DIRT_PLUG_MM.1 {
+            z.z[q] = zc.z[q];
         }
     }
-    let blurred = super::util::blur(&z, DIRT_BLUR_MM / GRID_MM);
-    let base = Field {
+    let blurred = z.blur(DIRT_BLUR_MM / GRID_MM);
+    let base = Grid {
         nx,
         ny,
-        v: blurred.v.iter().zip(&z.v).map(|(a, b)| a.min(*b)).collect(),
+        step: 1.0,
+        z: blurred.z.iter().zip(&z.z).map(|(a, b)| a.min(*b)).collect(),
     };
     let zcl = closing(&z, DIRT_FILL_MM);
-    let zf = Field {
+    let zf = Grid {
         nx,
         ny,
-        v: zcl
-            .v
+        step: 1.0,
+        z: zcl
+            .z
             .iter()
-            .zip(&base.v)
+            .zip(&base.z)
             .map(|(a, b)| a.min(b + DIRT_FILL_DEPTH_MM))
             .collect(),
     };
     let lip = edges(&zf, DIRT_STEP_MM);
-    let not_lip = super::util::Mask {
+    let not_lip = Grid {
         nx,
         ny,
-        v: lip.v.iter().map(|&e| !e).collect(),
+        step: 1.0,
+        z: lip.z.iter().map(|&e| !e).collect(),
     };
     let dl = super::util::edt_in(&not_lip);
-    let mut d = Field::new(nx, ny, 0.0);
+    let mut d = cell_grid(nx, ny, 0.0_f64);
     let mut any = false;
     for j in 0..ny {
         for i in 0..nx {
             let q = j * nx + i;
-            let ramp = smooth01((dl.v[q] - 1.5) * GRID_MM / DIRT_RAMP_MM);
+            let ramp = smooth01((dl.z[q] - 1.5) * GRID_MM / DIRT_RAMP_MM);
             let p = [(i as f64 + 0.5) * GRID_MM, (j as f64 + 0.5) * GRID_MM, 0.0];
             let rel = 0.5 + 0.5 * form::fbm3(p, seed, 2.0, 2);
             let mut thick =
-                ((zf.v[q] - base.v[q]).max(0.0) + DIRT_FILM_MM.0 + DIRT_FILM_MM.1 * rel.max(0.0))
+                ((zf.z[q] - base.z[q]).max(0.0) + DIRT_FILM_MM.0 + DIRT_FILM_MM.1 * rel.max(0.0))
                     * ramp;
-            thick *= smooth01((z.v[q] - FOOT - DIRT_LOW_MM) / 3.0);
-            d.v[q] = if lip.v[q] {
-                b.v[q] - 0.05
+            thick *= smooth01((z.z[q] - FOOT - DIRT_LOW_MM) / 3.0);
+            d.z[q] = if lip.z[q] {
+                b.z[q] - 0.05
             } else if thick > 0.02 {
-                (base.v[q] + thick).max(z.v[q] + 0.12)
+                (base.z[q] + thick).max(z.z[q] + 0.12)
             } else {
-                base.v[q] + thick
+                base.z[q] + thick
             };
-            any |= d.v[q] > z.v[q];
+            any |= d.z[q] > z.z[q];
         }
     }
     if !any {
@@ -173,12 +179,12 @@ pub fn dirt_top(
     }
     let zb = FOOT - 2.0;
     let up = hung(
-        &d.v.iter()
-            .map(|&v| v.max(zb + 0.05) - zb)
-            .collect::<Vec<_>>(),
-        nx,
-        ny,
-        GRID_MM,
+        &Field {
+            nx,
+            ny,
+            step: GRID_MM,
+            z: d.z.iter().map(|&v| v.max(zb + 0.05) - zb).collect(),
+        },
         0.04,
     )
     .map_err(LookError::build)?;
@@ -194,7 +200,16 @@ pub fn dirt_top(
             under_d[j * px + i] = b.at(a, c) - (zb - 1.0);
         }
     }
-    let mut un = hung(&under_d, px, py, GRID_MM, 0.04).map_err(LookError::build)?;
+    let mut un = hung(
+        &Field {
+            nx: px,
+            ny: py,
+            step: GRID_MM,
+            z: under_d,
+        },
+        0.04,
+    )
+    .map_err(LookError::build)?;
     for p in &mut un.positions {
         *p = [
             p[0] - 0.5 * GRID_MM + OFF.0,
@@ -218,11 +233,12 @@ pub fn dirt_top(
     Ok(Some(piece))
 }
 
-fn edt_in_mm(m: &super::util::Mask) -> Field {
+fn edt_in_mm(m: &Cells) -> Field {
     let e = super::util::edt_in(m);
-    Field {
+    Grid {
         nx: e.nx,
         ny: e.ny,
-        v: e.v.iter().map(|x| x * GRID_MM).collect(),
+        step: 1.0,
+        z: e.z.iter().map(|x| x * GRID_MM).collect(),
     }
 }

@@ -3,14 +3,13 @@
 //! Cracks are thin, straight, block-splitting; they run from an edge, a
 //! joint or another crack to one of those, never fade or dead-end.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
-use dt_kit::{Rng, blur_grid};
+use dt_kit::Rng;
 
 use super::lines::Line;
 use super::stack::Placed;
-use super::util::{Draw, Field, G, P2, edt_out, norm2};
+use super::util::{Draw, Field, Grid, P2, cell_grid, norm2};
 
 pub const RELIEF_GRID_MM: f64 = 0.1;
 const CRACK_PER_MM2: f64 = 0.06;
@@ -565,8 +564,8 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
     let nu = (sp.l / g) as usize + 2;
     let nz = ((sp.z1 - sp.z0) / g) as usize + 2;
     let at = |i: usize, j: usize| [i as f64 * g, sp.z0 + j as f64 * g];
-    let mut gg = Field::new(nu, nz, 0.0);
-    let mut cut = G::new(nu, nz, false);
+    let mut gg = cell_grid(nu, nz, 0.0_f64);
+    let mut cut = cell_grid(nu, nz, false);
     for cs in &cracks {
         let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
         for p in &cs.pts {
@@ -614,7 +613,7 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
                     let w = 0.5 * wscale * f;
                     let v = -dep * ((w - dc) / g + 0.5).clamp(0.0, 1.0);
                     let q = j * nu + i;
-                    gg.v[q] = gg.v[q].min(v);
+                    gg.z[q] = gg.z[q].min(v);
                 }
             }
         }
@@ -630,42 +629,37 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         }
     }
     // the sub-faces
-    let free = G {
+    let free = Grid {
         nx: nu,
         ny: nz,
-        v: cut.v.iter().map(|&c| !c).collect(),
+        step: 1.0,
+        z: cut.z.iter().map(|&c| !c).collect(),
     };
-    let (labels, n_labels) = super::util::label(&free);
+    let (labels, n_labels) = free.label();
     let near = {
-        let bg = labels.map(|x| x == 0);
-        let (_, idx) = dt_kit::distance_nearest(
-            &labels.v.iter().map(|&x| x != 0).collect::<Vec<_>>(),
-            nu,
-            nz,
-        );
-        let _ = bg;
+        let (_, idx) = labels.map(|x| x != 0).distance();
         idx
     };
-    let mut labels_near = G::new(nu, nz, 0usize);
+    let mut labels_near = cell_grid(nu, nz, 0usize);
     for q in 0..nu * nz {
-        labels_near.v[q] = if labels.v[q] != 0 {
-            labels.v[q] as usize
+        labels_near.z[q] = if labels.z[q] != 0 {
+            labels.z[q] as usize
         } else {
-            near[q].map_or(0, |k| labels.v[k] as usize)
+            near[q].map_or(0, |k| labels.z[k] as usize)
         };
     }
     let nl = n_labels as usize + 1;
     let th: Vec<f64> = (0..nl)
         .map(|_| rng.uniform(0.0, std::f64::consts::TAU))
         .collect();
-    let mut pgrid = Field::new(nu, nz, 0.0);
+    let mut pgrid = cell_grid(nu, nz, 0.0_f64);
     let (mut lo, mut hi) = (vec![f64::INFINITY; nl], vec![f64::NEG_INFINITY; nl]);
     for j in 0..nz {
         for i in 0..nu {
             let q = j * nu + i;
-            let l = labels_near.v[q];
+            let l = labels_near.z[q];
             let p = libm::cos(th[l]) * (i as f64 * g) + libm::sin(th[l]) * (sp.z0 + j as f64 * g);
-            pgrid.v[q] = p;
+            pgrid.z[q] = p;
             lo[l] = lo[l].min(p);
             hi[l] = hi[l].max(p);
         }
@@ -681,10 +675,10 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
                 .min(FACET_MM.2 / (hi[l] - lo[l]).max(1e-3))
         })
         .collect();
-    let mut tt = Field::new(nu, nz, 0.0);
+    let mut tt = cell_grid(nu, nz, 0.0_f64);
     for q in 0..nu * nz {
-        let l = labels_near.v[q];
-        tt.v[q] = k[l] * (pgrid.v[q] - lo[l]);
+        let l = labels_near.z[q];
+        tt.z[q] = k[l] * (pgrid.z[q] - lo[l]);
     }
     // set back FACET_MM[0:2], further across each split
     let mut lines: Vec<(Line, f64)> = cracks
@@ -767,12 +761,11 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
             bset[q] = bset[q].max(bset[p] + d).min(deep);
         }
     }
-    let mut f = Field::new(nu, nz, 0.0);
+    let mut f = cell_grid(nu, nz, 0.0_f64);
     for q in 0..nu * nz {
-        f.v[q] = -(bset[labels_near.v[q]] + tt.v[q]);
+        f.z[q] = -(bset[labels_near.z[q]] + tt.z[q]);
     }
-    f.v = blur_grid(&f.v, nu, nz, FACET_SEAM_MM / g);
-    let _ = (edt_out, HashSet::<u8>::new);
+    f = f.blur(FACET_SEAM_MM / g);
     Face {
         p0: sp.p0,
         t: sp.t,

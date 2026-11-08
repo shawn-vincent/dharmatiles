@@ -11,7 +11,7 @@ use dt_kit::vec3::dot;
 use dt_kit::{KitError, Piece, TriMesh, hung, tri_normal};
 
 use super::faces::{Face, RELIEF_GRID_MM};
-use super::util::{Field, G, Mask, blur, edt_in};
+use super::util::{Cells, Field, cell_grid, edt_in};
 use dt_kit::smooth01;
 
 const CRACK_GRID_MM: f64 = 0.1;
@@ -39,9 +39,9 @@ fn sample(f: &Field, x: f64, y: f64, constant: bool) -> f64 {
     a * (1.0 - fy) + b * fy
 }
 
-fn fill_holes(m: &Mask) -> Mask {
+fn fill_holes(m: &Cells) -> Cells {
     // flood the background from the border; whatever is not reached is filled
-    let mut seen = Mask::new(m.nx, m.ny, false);
+    let mut seen = cell_grid(m.nx, m.ny, false);
     let mut st: Vec<(usize, usize)> = Vec::new();
     for i in 0..m.nx {
         for j in [0, m.ny - 1] {
@@ -207,10 +207,10 @@ pub fn relief(
         let hits = rm.first_hits(&origins, &dirs);
         let nrm_of = |tri: u32| tri_normal(&t.positions, t.triangles[tri as usize]);
         let nn = origins.len();
-        let mut front = Field::new(n_us, n_zs, f64::NAN);
-        let mut al = Field::new(n_us, n_zs, 0.0);
-        let mut nzf = Field::new(n_us, n_zs, 0.0);
-        let mut back = Field::new(n_us, n_zs, f64::NAN);
+        let mut front = cell_grid(n_us, n_zs, f64::NAN);
+        let mut al = cell_grid(n_us, n_zs, 0.0_f64);
+        let mut nzf = cell_grid(n_us, n_zs, 0.0_f64);
+        let mut back = cell_grid(n_us, n_zs, f64::NAN);
         let mut o2 = Vec::new();
         let mut idx2 = Vec::new();
         for k in 0..nn {
@@ -223,10 +223,10 @@ pub fn relief(
                     ],
                     d3,
                 );
-                front.v[k] = d;
+                front.z[k] = d;
                 let nrm = nrm_of(h.triangle);
-                al.v[k] = dot(nrm, m3);
-                nzf.v[k] = nrm[2];
+                al.z[k] = dot(nrm, m3);
+                nzf.z[k] = nrm[2];
                 o2.push([
                     h.point[0] + d3[0] * 1e-4,
                     h.point[1] + d3[1] * 1e-4,
@@ -249,39 +249,39 @@ pub fn relief(
                         ],
                         d3,
                     );
-                    back.v[k] = d;
+                    back.z[k] = d;
                 }
             }
         }
         let hit = front.map(|v| !v.is_nan());
-        let mut w = Field::new(n_us, n_zs, 0.0);
+        let mut w = cell_grid(n_us, n_zs, 0.0_f64);
         for k in 0..nn {
-            if hit.v[k] && nzf.v[k] > -0.85 {
-                w.v[k] = smooth01((al.v[k] - 0.35) / 0.3);
+            if hit.z[k] && nzf.z[k] > -0.85 {
+                w.z[k] = smooth01((al.z[k] - 0.35) / 0.3);
             }
         }
         let m_raw = w.map(|v| v > 0.5);
         let mask = fill_holes(&m_raw);
-        if mask.v.iter().filter(|&&b| b).count() < 50 {
+        if mask.z.iter().filter(|&&b| b).count() < 50 {
             continue;
         }
         // distance in from its edges (padded by a cell of background)
-        let mut padded = Mask::new(n_us + 2, n_zs + 2, false);
+        let mut padded = cell_grid(n_us + 2, n_zs + 2, false);
         for j in 0..n_zs {
             for i in 0..n_us {
                 padded.set(i + 1, j + 1, mask.at(i, j));
             }
         }
         let ep = edt_in(&padded);
-        let mut e = Field::new(n_us, n_zs, 0.0);
+        let mut e = cell_grid(n_us, n_zs, 0.0_f64);
         for j in 0..n_zs {
             for i in 0..n_us {
                 e.set(i, j, ep.at(i + 1, j + 1) * g);
             }
         }
         // G, F sampled from the face
-        let mut gg = Field::new(n_us, n_zs, 0.0);
-        let mut ff = Field::new(n_us, n_zs, 0.0);
+        let mut gg = cell_grid(n_us, n_zs, 0.0_f64);
+        let mut ff = cell_grid(n_us, n_zs, 0.0_f64);
         for j in 0..n_zs {
             for i in 0..n_us {
                 let (cxu, cz) = (us[i] / RELIEF_GRID_MM, (zs[j] - fc.z0) / RELIEF_GRID_MM);
@@ -295,7 +295,7 @@ pub fn relief(
             for j in 0..n_zs {
                 for i in 0..n_us {
                     let q = j * n_us + i;
-                    let fr = if front.v[q].is_nan() { 0.0 } else { front.v[q] };
+                    let fr = if front.z[q].is_nan() { 0.0 } else { front.z[q] };
                     let mut off = smooth01(RELIEF_OFF_MM - (sm + libm::cos(a) * (1.0 - fr)).abs());
                     if !fc.rim {
                         let x = origins[q][0] + fr * d3[0];
@@ -303,18 +303,18 @@ pub fn relief(
                         let bd = x.min(cw - x).min(y.min(ch - y));
                         off *= smooth01(bd - 1.0);
                     }
-                    ff.v[q] *= off;
-                    gg.v[q] *= off;
+                    ff.z[q] *= off;
+                    gg.z[q] *= off;
                 }
             }
         }
         // nearest hit cell for every cell
-        let (_, near) = dt_kit::distance_nearest(&hit.v, n_us, n_zs);
+        let (_, near) = hit.distance();
         let fnear = |f: &Field| -> Field {
             let mut o = f.clone();
             for q in 0..nn {
                 if let Some(k) = near[q] {
-                    o.v[q] = f.v[k];
+                    o.z[q] = f.z[k];
                 }
             }
             o
@@ -326,7 +326,7 @@ pub fn relief(
             .collect();
         let base = if core.is_none() && k.len() > 50 {
             let c = fit(&us, &zs, &k, &front);
-            let mut b = Field::new(n_us, n_zs, 0.0);
+            let mut b = cell_grid(n_us, n_zs, 0.0_f64);
             for j in 0..n_zs {
                 for i in 0..n_us {
                     b.set(i, j, c[0] + c[1] * us[i] + c[2] * zs[j]);
@@ -334,73 +334,74 @@ pub fn relief(
             }
             b
         } else {
-            blur(&front_n, 0.4 / g)
+            front_n.blur(0.4 / g)
         };
         let room = {
-            let mut r = Field::new(n_us, n_zs, 0.0);
+            let mut r = cell_grid(n_us, n_zs, 0.0_f64);
             for q in 0..nn {
-                let bf = back.v[q] - front.v[q];
+                let bf = back.z[q] - front.z[q];
                 let v = if bf.is_nan() { f64::INFINITY } else { bf };
-                r.v[q] = (v - CRACK_WALL_MM).max(0.0);
+                r.z[q] = (v - CRACK_WALL_MM).max(0.0);
             }
             r
         };
         let cut = if a != 0.0 {
-            let mut c0 = Field::new(n_us, n_zs, 0.0);
+            let mut c0 = cell_grid(n_us, n_zs, 0.0_f64);
             for q in 0..nn {
-                let fr = front.v[q];
-                let v = (fr - (fr - base.v[q] + ff.v[q]).min(0.0).max(-room.v[q]) - CUT_SHORT_MM)
+                let fr = front.z[q];
+                let v = (fr - (fr - base.z[q] + ff.z[q]).min(0.0).max(-room.z[q]) - CUT_SHORT_MM)
                     .max(f64::MIN);
-                c0.v[q] = v;
+                c0.z[q] = v;
             }
             let c0 = fnear(&Field {
-                v: c0
-                    .v
+                z: c0
+                    .z
                     .iter()
                     .enumerate()
-                    .map(|(q, &v)| if hit.v[q] { v } else { f64::NAN })
+                    .map(|(q, &v)| if hit.z[q] { v } else { f64::NAN })
                     .collect(),
                 ..c0
             });
             let edge = e.map(|v| if v < 1.0 { 1.0 } else { 0.0 });
-            let wide = blur(&edge, CUT_BLUR_MM.1 / g).map(|v| (2.0 * v).clamp(0.0, 1.0));
-            let fine = blur(&c0, CUT_BLUR_MM.0 / g);
-            let coarse = blur(&c0, CUT_BLUR_MM.1 / g);
-            let mut o = Field::new(n_us, n_zs, 0.0);
+            let wide = edge
+                .blur(CUT_BLUR_MM.1 / g)
+                .map(|v| (2.0 * v).clamp(0.0, 1.0));
+            let fine = c0.blur(CUT_BLUR_MM.0 / g);
+            let coarse = c0.blur(CUT_BLUR_MM.1 / g);
+            let mut o = cell_grid(n_us, n_zs, 0.0_f64);
             for q in 0..nn {
-                o.v[q] = (fine.v[q] + wide.v[q] * (coarse.v[q] - fine.v[q])).max(0.02);
+                o.z[q] = (fine.z[q] + wide.z[q] * (coarse.z[q] - fine.z[q])).max(0.02);
             }
             o
         } else {
-            let mut gw = Field::new(n_us, n_zs, 0.0);
+            let mut gw = cell_grid(n_us, n_zs, 0.0_f64);
             for q in 0..nn {
-                gw.v[q] = -w.v[q] * gg.v[q];
+                gw.z[q] = -w.z[q] * gg.z[q];
             }
-            let gb = blur(&gw, CUT_BLUR_MM.0 / g);
-            let mut crack = Field::new(n_us, n_zs, 0.0);
+            let gb = gw.blur(CUT_BLUR_MM.0 / g);
+            let mut crack = cell_grid(n_us, n_zs, 0.0_f64);
             for q in 0..nn {
-                crack.v[q] = gb.v[q].min(room.v[q]);
+                crack.z[q] = gb.z[q].min(room.z[q]);
             }
             let crack = fnear(&crack);
             let fr = &front_n;
-            let mut o = Field::new(n_us, n_zs, 0.0);
+            let mut o = cell_grid(n_us, n_zs, 0.0_f64);
             for q in 0..nn {
-                o.v[q] = if crack.v[q] > 0.01 {
-                    fr.v[q] + crack.v[q] - CUT_SHORT_MM * (1.0 - smooth01(crack.v[q] / 0.2))
+                o.z[q] = if crack.z[q] > 0.01 {
+                    fr.z[q] + crack.z[q] - CUT_SHORT_MM * (1.0 - smooth01(crack.z[q] / 0.2))
                 } else {
                     0.02
                 };
             }
             o
         };
-        let hm = hung(&cut.v, n_us, n_zs, g, 0.01)?;
+        let hm = hung(&Field { step: g, ..cut }, 0.01)?;
         let cutter = place_hung(&hm, (us[0], zs[0]), p0, t3, Z_UP, d3);
         let out = rock.minus(&[cutter])?;
         if !out.is_empty() {
             rock = out;
         }
     }
-    let _ = G::<u8>::new(0, 0, 0);
     Ok(rock)
 }
 

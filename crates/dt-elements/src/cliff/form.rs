@@ -3,9 +3,9 @@
 //! Heights are above the foot (0). Lengths that size masses scale with `s`
 //! (the system's scale, 1 on DungeonBlocks); details never do.
 
-use dt_kit::{Rng, blur_grid};
+use dt_kit::Rng;
 
-use super::util::{Draw, Field, G, Mask, lerp};
+use super::util::{Cells, Draw, Field, Grid, cell_grid, lerp};
 
 pub const GRID_MM: f64 = 0.25;
 pub const FOOT: f64 = 0.0;
@@ -189,7 +189,7 @@ pub struct Form {
     pub ztop: Option<f64>,
     pub round: bool,
     pub mass: f64,
-    pub along_y: Option<Mask>,
+    pub along_y: Option<Cells>,
     pub kind_p: Option<[f64; 5]>,
     /// (axis, high side) of the tile-boundary planes the cliff stands against.
     pub rims: Vec<(usize, bool)>,
@@ -215,13 +215,13 @@ pub fn grid_dims(w: f64, h: f64) -> (usize, usize) {
 pub fn make_form(rng: &mut Rng, ask: &Ask, w: f64, h: f64, s: f64) -> Form {
     let sp = spec(ask.form);
     let (nx, ny) = grid_dims(w, h);
-    let mut t = Field::new(nx, ny, FOOT);
+    let mut t = cell_grid(nx, ny, FOOT);
     let hgt = ask.height.map_or(sp.height, |v| (v, v));
     let hgt = (hgt.0 * s, hgt.1 * s);
     let mut along_y = None;
     let mut rims = Vec::new();
     if sp.band {
-        let mut ay = Mask::new(nx, ny, false);
+        let mut ay = cell_grid(nx, ny, false);
         for wall in sp.walls {
             let (axis, high) = match *wall {
                 "back" => (1, true),
@@ -232,9 +232,9 @@ pub fn make_form(rng: &mut Rng, ask: &Ask, w: f64, h: f64, s: f64) -> Form {
             rims.push((axis, high));
             let tw = band(rng, &sp, ask, hgt, (nx, ny), (w, h), wall, s);
             for k in 0..nx * ny {
-                if tw.v[k] > t.v[k] {
-                    ay.v[k] = *wall == "left" || *wall == "right";
-                    t.v[k] = tw.v[k];
+                if tw.z[k] > t.z[k] {
+                    ay.z[k] = *wall == "left" || *wall == "right";
+                    t.z[k] = tw.z[k];
                 }
             }
         }
@@ -299,7 +299,7 @@ fn band(
         }
     };
     let _ = alongx;
-    let mut t = Field::new(nx, ny, FOOT);
+    let mut t = cell_grid(nx, ny, FOOT);
     let ramp: Option<(f64, f64)> = if (hgt.0 - hgt.1).abs() < 1e-9 {
         None
     } else if rng.random() < 0.5 {
@@ -400,14 +400,14 @@ fn band(
                 }
                 for q in 0..nx * ny {
                     if aa[q] >= a2 && aa[q] < b2 && dd[q] <= d2 {
-                        t.v[q] = z2;
+                        t.z[q] = z2;
                     }
                 }
             }
         }
         for q in 0..nx * ny {
             if aa[q] >= a && aa[q] < b && dd[q] <= d_top {
-                t.v[q] = zt;
+                t.z[q] = zt;
             }
         }
     }
@@ -415,30 +415,31 @@ fn band(
     for q in 0..nx * ny {
         let a = aa[q];
         if a < end_mm || a > l - end_mm {
-            t.v[q] = if dd[q] <= end_depth { top_at(a) } else { FOOT };
+            t.z[q] = if dd[q] <= end_depth { top_at(a) } else { FOOT };
         }
     }
     t
 }
 
 fn wobble(rng: &mut Rng, nx: usize, ny: usize, sigma_mm: f64) -> Field {
-    let mut g = Field::new(nx, ny, 0.0);
-    for v in &mut g.v {
+    let mut g = cell_grid(nx, ny, 0.0_f64);
+    for v in &mut g.z {
         *v = rng.normal(0.0, 1.0);
     }
-    let v = blur_grid(&g.v, nx, ny, sigma_mm / GRID_MM);
+    let v = g.blur(sigma_mm / GRID_MM).z;
     let n = v.len() as f64;
     let mean = v.iter().sum::<f64>() / n;
     let sd = libm::sqrt(v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n);
-    Field {
+    Grid {
         nx,
         ny,
-        v: v.iter().map(|x| (x - mean) / (sd + 1e-12)).collect(),
+        step: 1.0,
+        z: v.iter().map(|x| (x - mean) / (sd + 1e-12)).collect(),
     }
 }
 
 fn rings(rng: &mut Rng, sp: &Spec, height: f64, nx: usize, ny: usize, w: f64, h: f64) -> Field {
-    let mut t = Field::new(nx, ny, FOOT);
+    let mut t = cell_grid(nx, ny, FOOT);
     let sc = w.min(h) / 70.0;
     let k = sp.centres.map_or(1, |c| rng.count(c));
     let mut centres: Vec<([f64; 2], f64)> = Vec::new();
@@ -505,7 +506,7 @@ fn rings(rng: &mut Rng, sp: &Spec, height: f64, nx: usize, ny: usize, w: f64, h:
                         let th = libm::atan2(y - c[1], x - c[0]).rem_euclid(std::f64::consts::TAU);
                         if th >= a && th < b && libm::hypot(x - c[0], y - c[1]) <= r {
                             let q = j * nx + i;
-                            t.v[q] = t.v[q].max(z);
+                            t.z[q] = t.z[q].max(z);
                         }
                     }
                 }
@@ -525,10 +526,10 @@ fn rings(rng: &mut Rng, sp: &Spec, height: f64, nx: usize, ny: usize, w: f64, h:
                     .iter()
                     .map(|(c, r)| libm::hypot(x - c[0], y - c[1]) / (r * r_scale))
                     .fold(f64::INFINITY, f64::min);
-                rb *= 1.0 + BASE_RAGGED * wob.v[q];
-                let z = (z0 + RING_STEP_MM * libm::round(wz.v[q])).max(FOOT + MIN_H_MM);
+                rb *= 1.0 + BASE_RAGGED * wob.z[q];
+                let z = (z0 + RING_STEP_MM * libm::round(wz.z[q])).max(FOOT + MIN_H_MM);
                 if rb <= 1.0 {
-                    t.v[q] = t.v[q].max(z);
+                    t.z[q] = t.z[q].max(z);
                 }
             }
         }
@@ -577,6 +578,6 @@ impl Zones {
 }
 
 #[allow(dead_code)]
-fn _unused(_: G<u8>) {
+fn _unused(_: Grid<u8>) {
     let _ = lerp((0.0, 1.0), 0.5);
 }

@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn a_flat_slab_passes() {
-        let m = lift(&Grid::new(21, 21, 0.5, 2.0)).unwrap();
+        let m = lift(&Grid::<f32>::filled(21, 21, 0.5, 2.0)).unwrap();
         let (e, a) = audit(&m, [10.0, 10.0], &fdm());
         assert!(a.watertight);
         assert_eq!((a.bodies, a.holes), (1, 0));

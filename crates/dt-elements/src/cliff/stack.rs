@@ -7,9 +7,7 @@
 use dt_kit::Rng;
 
 use super::form::{FOOT, Form, GRID_MM, MIN_H_MM, ZONE_FLOOR, Zones};
-use super::util::{
-    Draw, Field, G, Mask, P2, bin_dilate, blur, edt_in, label, lerp, min_side, trace_outline,
-};
+use super::util::{Cells, Draw, Field, Grid, P2, cell_grid, edt_in, lerp, min_side, trace_outline};
 
 /// kind: (p, along, depth, height (None: ground to top), bridge, tilt deg)
 #[allow(clippy::type_complexity)]
@@ -93,7 +91,7 @@ const ROUND_SMOOTH_MM: f64 = 3.0;
 /// A resting rock: footprint cells, underside, top plane.
 #[derive(Clone)]
 pub struct Placed {
-    pub cells: Mask,
+    pub cells: Cells,
     pub z0: f64,
     /// z = c + a x + b y
     pub top: (f64, f64, f64),
@@ -115,33 +113,36 @@ const FOOTPRINT_SIMPLIFY_MM: f64 = 0.45;
 const MIN_WALL_MM: f64 = 1.2;
 
 /// The footprint's outline, straightened.
-pub fn footprint_polygon(cells: &Mask) -> Vec<P2> {
+pub fn footprint_polygon(cells: &Cells) -> Vec<P2> {
     // open away arms narrower than a wall (they would stand as fins)
-    let n = cells.v.iter().filter(|&&b| b).count();
+    let n = cells.z.iter().filter(|&&b| b).count();
     let mut m = cells.clone();
     let r = (0.5 * MIN_WALL_MM / GRID_MM).round() as usize;
     if r > 0 && n > 0 {
-        let inv = G {
+        let inv = Grid {
             nx: m.nx,
             ny: m.ny,
-            v: m.v.iter().map(|&b| !b).collect(),
+            step: 1.0,
+            z: m.z.iter().map(|&b| !b).collect(),
         };
         let grown = bin_dilate_sq(&inv, r);
-        let eroded = G {
+        let eroded = Grid {
             nx: m.nx,
             ny: m.ny,
-            v: grown.v.iter().map(|&b| !b).collect(),
+            step: 1.0,
+            z: grown.z.iter().map(|&b| !b).collect(),
         };
         let opened = bin_dilate_sq(&eroded, r);
-        let k = opened.v.iter().filter(|&&b| b).count();
+        let k = opened.z.iter().filter(|&&b| b).count();
         // the opening can only remove cells of the footprint
-        let opened = G {
+        let opened = Grid {
             nx: m.nx,
             ny: m.ny,
-            v: opened
-                .v
+            step: 1.0,
+            z: opened
+                .z
                 .iter()
-                .zip(&cells.v)
+                .zip(&cells.z)
                 .map(|(&a, &b)| a && b)
                 .collect(),
         };
@@ -154,7 +155,7 @@ pub fn footprint_polygon(cells: &Mask) -> Vec<P2> {
     super::util::ccw(s)
 }
 
-fn bin_dilate_sq(m: &Mask, r: usize) -> Mask {
+fn bin_dilate_sq(m: &Cells, r: usize) -> Cells {
     // square structuring element: separable max
     let mut a = m.clone();
     for j in 0..m.ny {
@@ -179,19 +180,19 @@ pub fn sunk(sv_min: f64) -> f64 {
     sv_min - if sv_min > FOOT { SINK_MM } else { 0.0 }
 }
 
-fn cells_min_side(cells: &Mask) -> f64 {
-    if !cells.v.iter().any(|&b| b) {
+fn cells_min_side(cells: &Cells) -> f64 {
+    if !cells.z.iter().any(|&b| b) {
         return 0.0;
     }
     min_side(&trace_outline(cells, GRID_MM))
 }
 
-fn count(m: &Mask) -> usize {
-    m.v.iter().filter(|&&b| b).count()
+fn count(m: &Cells) -> usize {
+    m.z.iter().filter(|&&b| b).count()
 }
 
 /// Rectangle grown from the site one row at a time, only into `ok`.
-fn grow(rng: &mut Rng, ok: &Mask, ij: (usize, usize), w: f64, d: f64) -> Mask {
+fn grow(rng: &mut Rng, ok: &Cells, ij: (usize, usize), w: f64, d: f64) -> Cells {
     let (nx, ny) = (ok.nx, ok.ny);
     let mut bd = [ij.0 as i64, ij.0 as i64 + 1, ij.1 as i64, ij.1 as i64 + 1];
     let goal = [w / GRID_MM, d / GRID_MM];
@@ -223,7 +224,7 @@ fn grow(rng: &mut Rng, ok: &Mask, ij: (usize, usize), w: f64, d: f64) -> Mask {
             }
         }
     }
-    let mut cells = Mask::new(nx, ny, false);
+    let mut cells = cell_grid(nx, ny, false);
     for j in bd[2]..bd[3] {
         for i in bd[0]..bd[1] {
             cells.set(i as usize, j as usize, true);
@@ -234,17 +235,17 @@ fn grow(rng: &mut Rng, ok: &Mask, ij: (usize, usize), w: f64, d: f64) -> Mask {
 
 #[allow(clippy::too_many_arguments)]
 fn grow_turned(
-    ok: &Mask,
+    ok: &Cells,
     site: (f64, f64),
     ij: (usize, usize),
     w: f64,
     d: f64,
     yaw: f64,
     e: f64,
-) -> Mask {
+) -> Cells {
     let (c, s) = (libm::cos(yaw), libm::sin(yaw));
     let o = e.min(0.5 * d);
-    let mut rect = Mask::new(ok.nx, ok.ny, false);
+    let mut rect = cell_grid(ok.nx, ok.ny, false);
     for j in 0..ok.ny {
         for i in 0..ok.nx {
             if !ok.at(i, j) {
@@ -261,15 +262,15 @@ fn grow_turned(
             }
         }
     }
-    let (labels, _) = label(&rect);
+    let (labels, _) = rect.label();
     let l = labels.at(ij.0, ij.1);
     if l == 0 {
-        return Mask::new(ok.nx, ok.ny, false);
+        return cell_grid(ok.nx, ok.ny, false);
     }
     labels.map(|x| x == l)
 }
 
-fn jut(rng: &mut Rng, cells: &Mask, want: &Mask, s: &Field) -> Mask {
+fn jut(rng: &mut Rng, cells: &Cells, want: &Cells, s: &Field) -> Cells {
     let (nx, ny) = (cells.nx, cells.ny);
     let (mut i0, mut i1, mut j0, mut j1) = (usize::MAX, 0, usize::MAX, 0);
     for j in 0..ny {
@@ -360,17 +361,18 @@ fn fit_plane(pts: &[(f64, f64, f64)], xm: f64, ym: f64) -> [f64; 3] {
 
 fn merge_crumb(
     rocks: &mut [Placed],
-    cells: &Mask,
+    cells: &Cells,
     s: &mut Field,
     ztop: Option<f64>,
     min_h: f64,
 ) -> bool {
     let ring = {
-        let d = bin_dilate(cells, 2);
-        G {
+        let d = cells.grow4(2);
+        Grid {
             nx: d.nx,
             ny: d.ny,
-            v: d.v.iter().zip(&cells.v).map(|(&a, &b)| a && !b).collect(),
+            step: 1.0,
+            z: d.z.iter().zip(&cells.z).map(|(&a, &b)| a && !b).collect(),
         }
     };
     let idx: Vec<(usize, usize)> = (0..cells.ny)
@@ -429,11 +431,12 @@ pub struct Stacked {
 pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: usize) -> Stacked {
     let (nx, ny) = (form.t.nx, form.t.ny);
     let t = &form.t;
-    let mut s = Field::new(nx, ny, FOOT - 1.0);
-    let mut want = G {
+    let mut s = cell_grid(nx, ny, FOOT - 1.0);
+    let mut want = Grid {
         nx,
         ny,
-        v: t.v.iter().map(|&z| z > FOOT).collect(),
+        step: 1.0,
+        z: t.z.iter().map(|&z| z > FOOT).collect(),
     };
     let mut rocks: Vec<Placed> = Vec::new();
     let mut probs: Vec<f64> = (0..5)
@@ -441,22 +444,23 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
         .collect();
     let ps: f64 = probs.iter().sum();
     probs.iter_mut().for_each(|p| *p /= ps);
-    let mut noise = Field::new(nx, ny, 0.0);
-    for v in &mut noise.v {
+    let mut noise = cell_grid(nx, ny, 0.0_f64);
+    for v in &mut noise.z {
         *v = rng.random() * 1.5;
     }
-    let mut retry = G::new(nx, ny, 0i32);
-    let h_cliff = t.v.iter().copied().fold(f64::NEG_INFINITY, f64::max) - FOOT;
+    let mut retry = cell_grid(nx, ny, 0i32);
+    let h_cliff = t.z.iter().copied().fold(f64::NEG_INFINITY, f64::max) - FOOT;
     let mut last_w = 0.0f64;
     let (edt, phi) = if form.round {
         let e = edt_in(&want);
-        let e = Field {
+        let e = Grid {
             nx,
             ny,
-            v: e.v.iter().map(|x| x * GRID_MM).collect(),
+            step: 1.0,
+            z: e.z.iter().map(|x| x * GRID_MM).collect(),
         };
-        let sm = blur(&e, ROUND_SMOOTH_MM / GRID_MM);
-        let mut phi = Field::new(nx, ny, 0.0);
+        let sm = e.blur(ROUND_SMOOTH_MM / GRID_MM);
+        let mut phi = cell_grid(nx, ny, 0.0_f64);
         for j in 0..ny {
             for i in 0..nx {
                 let g = |a: usize, b: usize| sm.at(a, b);
@@ -478,8 +482,8 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
         for j in 0..ny {
             for i in 0..nx {
                 let q = j * nx + i;
-                if want.v[q] && t.v[q] - s.v[q] > MIN_DEFICIT_MM {
-                    let k = s.v[q] + noise.v[q];
+                if want.z[q] && t.z[q] - s.z[q] > MIN_DEFICIT_MM {
+                    let k = s.z[q] + noise.z[q];
                     if k < key {
                         key = k;
                         site = Some((i, j));
@@ -516,14 +520,14 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
         let yaw = phi.as_ref().map_or(0.0, |p| {
             p.at(si, sj) + ROUND_YAW_DEG.to_radians() * rng.normal(0.0, 1.0)
         });
-        let mut cells = Mask::new(nx, ny, false);
+        let mut cells = cell_grid(nx, ny, false);
         let (mut area, mut side) = (0.0, 0.0);
         for attempt in 0..4 {
-            let mut room = Mask::new(nx, ny, false);
+            let mut room = cell_grid(nx, ny, false);
             for q in 0..nx * ny {
-                room.v[q] = want.v[q]
-                    && s.v[q] <= s.at(si, sj) + bridge + 3.0 * f64::from(attempt)
-                    && t.v[q] - s.v[q] > 0.3;
+                room.z[q] = want.z[q]
+                    && s.z[q] <= s.at(si, sj) + bridge + 3.0 * f64::from(attempt)
+                    && t.z[q] - s.z[q] > 0.3;
             }
             cells = if let Some(e) = &edt {
                 grow_turned(&room, (sp[0], sp[1]), (si, sj), w, d, yaw, e.at(si, sj))
@@ -544,15 +548,15 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             let mut ok = merge_crumb(&mut rocks, &cells, &mut s, form.ztop, 0.5 * MIN_H_MM);
             if !ok {
                 let rmax = (0..nx * ny)
-                    .filter(|&q| cells.v[q])
-                    .map(|q| retry.v[q])
+                    .filter(|&q| cells.z[q])
+                    .map(|q| retry.z[q])
                     .max()
                     .unwrap_or(0);
                 if is_top && rmax < CRUMB_RETRY {
                     for q in 0..nx * ny {
-                        if cells.v[q] {
-                            retry.v[q] += 1;
-                            noise.v[q] += CRUMB_RETRY_MM;
+                        if cells.z[q] {
+                            retry.z[q] += 1;
+                            noise.z[q] += CRUMB_RETRY_MM;
                         }
                     }
                     continue;
@@ -563,8 +567,8 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             }
             if !ok && (area < THIN_AREA_MM2 || side < MIN_SIDE_MM * 0.6) {
                 for q in 0..nx * ny {
-                    if cells.v[q] {
-                        want.v[q] = false;
+                    if cells.z[q] {
+                        want.z[q] = false;
                     }
                 }
                 continue;
@@ -575,8 +579,8 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
         }
         if !form.round {
             let cmax = (0..nx * ny)
-                .filter(|&q| cells.v[q])
-                .map(|q| s.v[q])
+                .filter(|&q| cells.z[q])
+                .map(|q| s.z[q])
                 .fold(f64::NEG_INFINITY, f64::max);
             if cmax <= FOOT && rng.random() < JUT_P {
                 cells = jut(rng, &cells, &want, &s);
@@ -644,15 +648,15 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             h = hc;
         }
         // stagger: no top level with its neighbours' (that is how courses appear)
-        let dil2 = bin_dilate(&cells, 2);
+        let dil2 = cells.grow4(2);
         let ring: Vec<usize> = (0..nx * ny)
-            .filter(|&q| dil2.v[q] && !cells.v[q] && s.v[q] > FOOT + 0.5)
+            .filter(|&q| dil2.z[q] && !cells.z[q] && s.z[q] > FOOT + 0.5)
             .collect();
-        let dilc = bin_dilate(&cells, (COURSE_MM / GRID_MM) as usize);
-        let near: Vec<bool> = (0..nx * ny).map(|q| dilc.v[q] && !cells.v[q]).collect();
+        let dilc = cells.grow4((COURSE_MM / GRID_MM) as usize);
+        let near: Vec<bool> = (0..nx * ny).map(|q| dilc.z[q] && !cells.z[q]).collect();
         let mut joints: Vec<Vec<(usize, f64)>> = Vec::new();
         for r in &rocks {
-            let q: Vec<usize> = (0..nx * ny).filter(|&q| r.cells.v[q] && near[q]).collect();
+            let q: Vec<usize> = (0..nx * ny).filter(|&q| r.cells.z[q] && near[q]).collect();
             if q.len() >= 4 {
                 let zr: Vec<(usize, f64)> = q
                     .iter()
@@ -681,7 +685,7 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             if !ring.is_empty() {
                 let near_n = ring
                     .iter()
-                    .filter(|&&k| (top_at(hh, k) - s.v[k]).abs() < STAGGER_MM)
+                    .filter(|&&k| (top_at(hh, k) - s.z[k]).abs() < STAGGER_MM)
                     .count();
                 if near_n as f64 / ring.len() as f64 > STAGGER_SHARE {
                     return true;
@@ -703,7 +707,7 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             h = finish(rng, h + dv);
         }
         let c_top = c + h - a * xm - b * ym;
-        let mut bed = Field::new(nx, ny, f64::NAN);
+        let mut bed = cell_grid(nx, ny, f64::NAN);
         let mut svmin = f64::INFINITY;
         for j in 0..ny {
             for i in 0..nx {
@@ -742,7 +746,7 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
 /// the support grid rises by its top only there.
 pub fn reconcile(rocks: &mut [Placed], form: &Form, s: &mut Field) {
     let (nx, ny) = (s.nx, s.ny);
-    s.v.fill(FOOT - 1.0);
+    s.z.fill(FOOT - 1.0);
     for r in rocks.iter_mut() {
         let poly = r.poly();
         if poly.len() < 3 {
@@ -757,7 +761,7 @@ pub fn reconcile(rocks: &mut [Placed], form: &Form, s: &mut Field) {
             ((b[1] / GRID_MM).floor().max(0.0)) as usize,
             ((b[3] / GRID_MM).ceil() as usize).min(ny),
         );
-        let mut cells = Mask::new(nx, ny, false);
+        let mut cells = cell_grid(nx, ny, false);
         for j in j0..j1 {
             for i in i0..i1 {
                 if r.cells.at(i, j)
@@ -770,10 +774,10 @@ pub fn reconcile(rocks: &mut [Placed], form: &Form, s: &mut Field) {
                 }
             }
         }
-        if !cells.v.iter().any(|&c| c) {
+        if !cells.z.iter().any(|&c| c) {
             continue;
         }
-        let mut bed = Field::new(nx, ny, f64::NAN);
+        let mut bed = cell_grid(nx, ny, f64::NAN);
         let mut svmin = f64::INFINITY;
         for j in j0..j1 {
             for i in i0..i1 {

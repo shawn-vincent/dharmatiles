@@ -9,10 +9,10 @@
 //! [`Piece::into_solid`] and [`crate::union`].
 
 use dt_geom::vec3::{cross, dot, sub, unit};
-use dt_geom::{BoolOp, Grid, TriMesh};
+use dt_geom::{BoolOp, TriMesh};
 
-use crate::KitError;
 use crate::scene::{Slot, Solid};
+use crate::{Field, KitError};
 
 /// A solid under construction, in one slot.
 #[derive(Clone)]
@@ -327,11 +327,8 @@ pub fn welded(m: &TriMesh) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
 /// # Errors
 /// [`KitError::Surface`] when the grid cannot be lifted.
 #[allow(clippy::cast_possible_truncation)]
-pub fn hung(depth: &[f64], nx: usize, ny: usize, step: f64, tol: f64) -> Result<TriMesh, KitError> {
-    let mut g = Grid::new(nx, ny, step, 0.0);
-    for (o, &d) in g.z.iter_mut().zip(depth) {
-        *o = d.max(1e-3) as f32;
-    }
+pub fn hung(depth: &Field, tol: f64) -> Result<TriMesh, KitError> {
+    let g = depth.map(|d| d.max(1e-3) as f32);
     dt_geom::lift_adaptive(&g, tol, usize::MAX).map_err(|e| KitError::Surface(e.to_string()))
 }
 

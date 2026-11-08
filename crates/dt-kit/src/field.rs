@@ -14,53 +14,35 @@
 //! print-scale details (grit, clods, pebbles) keep their true mm
 //! ([`Scale::Print`], default 1).
 
-use dt_geom::{Footprint, Rng, Seed, SpatialHash};
+use dt_geom::{Grid, Rng, Seed, SpatialHash};
 use rayon::prelude::*;
 
 use crate::Frame;
 
-/// Values at every node of a frame's lattice, in world mm.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Field {
-    /// Nodes across.
-    pub nx: usize,
-    /// Nodes up.
-    pub ny: usize,
-    /// Node spacing, mm.
-    pub step: f64,
-    /// `nx * ny` values, row-major (`j` outer).
-    pub z: Vec<f64>,
-}
+/// Values at every node of a frame's lattice, in world mm: dt-geom's
+/// [`Grid`] of numbers, with its morphology (blur, dilate, erode, range,
+/// quantile, gradient) and sampling.
+pub type Field = Grid<f64>;
 
-impl From<&crate::Grid> for Field {
-    /// A grid (a painted surface, `f32`) as a field.
-    fn from(g: &crate::Grid) -> Self {
-        Self {
-            nx: g.nx,
-            ny: g.ny,
-            step: g.step,
-            z: g.z.iter().map(|&v| f64::from(v)).collect(),
-        }
-    }
-}
-
-impl Field {
+/// A field made on a frame's lattice: `Field::new(&frame, 0.0)`.
+pub trait OnFrame: Sized {
     /// A field of `value` on the frame's lattice.
     #[must_use]
-    pub fn new(frame: &Frame, value: f64) -> Self {
-        let (nx, ny) = frame.nodes();
-        Self {
-            nx,
-            ny,
-            step: frame.step_mm(),
-            z: vec![value; nx * ny],
-        }
-    }
+    fn new(frame: &Frame, value: f64) -> Self;
 
     /// A field from a function of position (mm).
     #[must_use]
-    pub fn from_fn(frame: &Frame, f: impl Fn(f64, f64) -> f64 + Sync) -> Self {
-        let mut out = Self::new(frame, 0.0);
+    fn from_fn(frame: &Frame, f: impl Fn(f64, f64) -> f64 + Sync) -> Self;
+}
+
+impl OnFrame for Field {
+    fn new(frame: &Frame, value: f64) -> Self {
+        let (nx, ny) = frame.nodes();
+        Grid::filled(nx, ny, frame.step_mm(), value)
+    }
+
+    fn from_fn(frame: &Frame, f: impl Fn(f64, f64) -> f64 + Sync) -> Self {
+        let mut out = <Self as OnFrame>::new(frame, 0.0);
         let (nx, step) = (out.nx, out.step);
         out.z.par_chunks_mut(nx).enumerate().for_each(|(j, row)| {
             #[allow(clippy::cast_precision_loss)]
@@ -72,216 +54,6 @@ impl Field {
             }
         });
         out
-    }
-
-    /// The same lattice with every value `f` of this one's.
-    #[must_use]
-    pub fn map(&self, f: impl Fn(f64) -> f64) -> Self {
-        Self {
-            z: self.z.iter().map(|&v| f(v)).collect(),
-            ..*self
-        }
-    }
-
-    /// Combine with another field on the same lattice, node by node.
-    #[must_use]
-    pub fn zip(&self, other: &Self, f: impl Fn(f64, f64) -> f64) -> Self {
-        Self {
-            z: self
-                .z
-                .iter()
-                .zip(&other.z)
-                .map(|(&a, &b)| f(a, b))
-                .collect(),
-            ..*self
-        }
-    }
-
-    /// A field on the same lattice with values `z`.
-    #[must_use]
-    pub fn with_z(&self, z: Vec<f64>) -> Self {
-        debug_assert_eq!(z.len(), self.z.len());
-        Self {
-            nx: self.nx,
-            ny: self.ny,
-            step: self.step,
-            z,
-        }
-    }
-
-    /// The x of column `i`, mm.
-    #[must_use]
-    pub fn x(&self, i: usize) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
-        let x = i as f64 * self.step;
-        x
-    }
-
-    /// The y of row `j`, mm.
-    #[must_use]
-    pub fn y(&self, j: usize) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
-        let y = j as f64 * self.step;
-        y
-    }
-
-    /// The value at node `(i, j)`.
-    #[must_use]
-    pub fn at(&self, i: usize, j: usize) -> f64 {
-        self.z[j * self.nx + i]
-    }
-
-    /// The node at or below `(x, y)` mm, clamped to the lattice.
-    #[must_use]
-    pub fn node(&self, x: f64, y: f64) -> (usize, usize) {
-        let k = |v: f64, n: usize| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let k = libm::floor(v / self.step).max(0.0) as usize;
-            k.min(n - 1)
-        };
-        (k(x, self.nx), k(y, self.ny))
-    }
-
-    /// The bilinear value at `(x, y)` mm (clamped to the tile).
-    #[must_use]
-    pub fn sample(&self, x: f64, y: f64) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
-        let (mx, my) = ((self.nx - 1) as f64, (self.ny - 1) as f64);
-        let (u, v) = (
-            (x / self.step).clamp(0.0, mx),
-            (y / self.step).clamp(0.0, my),
-        );
-        let (fu, fv) = (libm::floor(u), libm::floor(v));
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let (i, j) = (fu as usize, fv as usize);
-        let (i1, j1) = ((i + 1).min(self.nx - 1), (j + 1).min(self.ny - 1));
-        let (tu, tv) = (u - fu, v - fv);
-        let a = self.at(i, j) * (1.0 - tu) + self.at(i1, j) * tu;
-        let b = self.at(i, j1) * (1.0 - tu) + self.at(i1, j1) * tu;
-        a * (1.0 - tv) + b * tv
-    }
-
-    /// The nodes within `r` mm of `(x, y)`, as index ranges `(i0..i1, j0..j1)`.
-    #[must_use]
-    pub fn window(
-        &self,
-        x: f64,
-        y: f64,
-        r: f64,
-    ) -> (std::ops::Range<usize>, std::ops::Range<usize>) {
-        let lo = |v: f64, n: usize| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let k = libm::ceil((v - r) / self.step).max(0.0) as usize;
-            k.min(n)
-        };
-        let hi = |v: f64, n: usize| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let k = (libm::floor((v + r) / self.step) + 1.0).max(0.0) as usize;
-            k.min(n)
-        };
-        (
-            lo(x, self.nx)..hi(x, self.nx),
-            lo(y, self.ny)..hi(y, self.ny),
-        )
-    }
-
-    // ---- morphology ----------------------------------------------------
-
-    /// **morphology**: Gaussian blur of `sigma` mm (scipy's
-    /// `gaussian_filter`, reflected ends; recursive past 32 nodes).
-    #[must_use]
-    pub fn blur(&self, sigma_mm: f64) -> Self {
-        let s = sigma_mm / self.step;
-        let z = if s > 32.0 {
-            dt_geom::blur_recursive(&self.z, self.nx, self.ny, s)
-        } else {
-            dt_geom::blur(&self.z, self.nx, self.ny, s)
-        };
-        Self { z, ..*self }
-    }
-
-    /// **morphology**: grey dilation over a disc of `r` mm.
-    #[must_use]
-    pub fn dilate(&self, r_mm: f64) -> Self {
-        Self {
-            z: dt_geom::dilate(&self.z, self.nx, self.ny, Footprint::Disc(r_mm / self.step)),
-            ..*self
-        }
-    }
-
-    /// **morphology**: grey erosion over a disc of `r` mm.
-    #[must_use]
-    pub fn erode(&self, r_mm: f64) -> Self {
-        Self {
-            z: dt_geom::erode(&self.z, self.nx, self.ny, Footprint::Disc(r_mm / self.step)),
-            ..*self
-        }
-    }
-
-    /// **morphology**: the relief range (max − min) over the square window
-    /// of side `w` mm round each node: the printable-texture measure.
-    #[must_use]
-    pub fn range(&self, w_mm: f64) -> Self {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let r = libm::round(0.5 * w_mm / self.step) as usize;
-        let hi = dt_geom::dilate(&self.z, self.nx, self.ny, Footprint::Square(r));
-        let lo = dt_geom::erode(&self.z, self.nx, self.ny, Footprint::Square(r));
-        Self {
-            z: hi.iter().zip(&lo).map(|(a, b)| a - b).collect(),
-            ..*self
-        }
-    }
-
-    /// **morphology**: numpy's linear quantile of the values where `keep`
-    /// holds (all values when `keep` is `None`).
-    #[must_use]
-    pub fn quantile(&self, q: f64, keep: Option<&[bool]>) -> f64 {
-        match keep {
-            None => dt_geom::quantile(&self.z, q),
-            Some(k) => {
-                let v: Vec<f64> = self
-                    .z
-                    .iter()
-                    .zip(k)
-                    .filter(|(_, k)| **k)
-                    .map(|(v, _)| *v)
-                    .collect();
-                dt_geom::quantile(&v, q)
-            }
-        }
-    }
-
-    /// **morphology**: the slope along x and along y (rise per mm) at
-    /// every node, with numpy's `gradient` (central differences inside,
-    /// one-sided at the ends; 0 across a single node).
-    #[must_use]
-    pub fn gradient(&self) -> (Self, Self) {
-        let (nx, ny, h) = (self.nx, self.ny, self.step);
-        let mut gx = vec![0.0; nx * ny];
-        let mut gy = vec![0.0; nx * ny];
-        for j in 0..ny {
-            let (j0, j1) = (j.saturating_sub(1), (j + 1).min(ny - 1));
-            for i in 0..nx {
-                let (i0, i1) = (i.saturating_sub(1), (i + 1).min(nx - 1));
-                let k = j * nx + i;
-                #[allow(clippy::cast_precision_loss)]
-                {
-                    gx[k] = (self.at(i1, j) - self.at(i0, j)) / ((i1 - i0).max(1) as f64 * h);
-                    gy[k] = (self.at(i, j1) - self.at(i, j0)) / ((j1 - j0).max(1) as f64 * h);
-                }
-            }
-        }
-        (self.with_z(gx), self.with_z(gy))
-    }
-
-    /// **morphology**: the steepest slope (rise per mm), from
-    /// [`Field::gradient`].
-    #[must_use]
-    pub fn max_slope(&self) -> f64 {
-        let (gx, gy) = self.gradient();
-        gx.z.iter()
-            .zip(&gy.z)
-            .fold(0.0, |m: f64, (x, y)| m.max(libm::sqrt(x * x + y * y)))
     }
 }
 

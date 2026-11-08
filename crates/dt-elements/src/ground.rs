@@ -14,6 +14,7 @@
 //! [`Shape`] is shared with [`crate::dirt`], which builds on the same
 //! ground.
 
+use dt_kit::OnFrame;
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, noise, rim, smax, smooth01};
 
 use crate::read;

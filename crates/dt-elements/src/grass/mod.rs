@@ -35,6 +35,7 @@ mod lat;
 
 pub(crate) use blade::ring_mesh;
 use dt_kit::Kind;
+use dt_kit::OnFrame;
 use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, distance, form};
 use rayon::prelude::*;
 

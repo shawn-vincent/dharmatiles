@@ -17,7 +17,7 @@ use super::finish::{
 use super::form::{FOOT, Form, GRID_MM};
 use super::relief::relief;
 use super::stack::{Placed, SINK_MM};
-use super::util::{Field, P2, bounds, norm2, point_in, ring_dist, trace_outline};
+use super::util::{Field, Grid, P2, bounds, cell_grid, norm2, point_in, ring_dist, trace_outline};
 use dt_kit::smooth01;
 
 const JOINT_MM: (f64, f64) = (0.8, 1.2);
@@ -115,23 +115,23 @@ fn chamfer_corners(
 fn seat_bed(r: &Placed) -> Field {
     let nmax = r
         .bed
-        .v
+        .z
         .iter()
         .copied()
         .filter(|v| !v.is_nan())
         .fold(f64::NEG_INFINITY, f64::max);
     let mut filled = r.bed.clone();
-    for (q, v) in filled.v.iter_mut().enumerate() {
-        if !r.cells.v[q] {
+    for (q, v) in filled.z.iter_mut().enumerate() {
+        if !r.cells.z[q] {
             *v = nmax;
         }
     }
     let rad = 0.5 * SEAT_SPAN_MM / GRID_MM;
-    let closed = super::util::erode_disc(&super::util::dilate_disc(&filled, rad), rad);
+    let closed = filled.dilate(rad).erode(rad);
     let mut out = r.bed.clone();
-    for q in 0..out.v.len() {
-        out.v[q] = if r.cells.v[q] {
-            r.bed.v[q].max(closed.v[q])
+    for q in 0..out.z.len() {
+        out.z[q] = if r.cells.z[q] {
+            r.bed.z[q].max(closed.z[q])
         } else {
             f64::NAN
         };
@@ -148,7 +148,7 @@ fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Pie
     };
     let (lo, hi) = (lo3[2], hi3[2]);
     let bed = seat_bed(r);
-    let mut bv: Vec<f64> = bed.v.iter().copied().filter(|v| !v.is_nan()).collect();
+    let mut bv: Vec<f64> = bed.z.iter().copied().filter(|v| !v.is_nan()).collect();
     bv.sort_by(f64::total_cmp);
     if bv.is_empty() {
         return Ok(rock);
@@ -176,7 +176,7 @@ fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Pie
         ((b1[0] - b0[0]) / res).ceil() as usize + 2,
         ((b1[1] - b0[1]) / res).ceil() as usize + 2,
     );
-    let mut m = super::util::Mask::new(nx, ny, false);
+    let mut m = cell_grid(nx, ny, false);
     for j in 0..ny {
         for i in 0..nx {
             let p = [
@@ -198,11 +198,11 @@ fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Pie
         .collect();
     // bed under every point (nearest footprint cell)
     let valid = bed.map(|v| !v.is_nan());
-    let (_, near) = dt_kit::distance_nearest(&valid.v, bed.nx, bed.ny);
+    let (_, near) = valid.distance();
     let bed_at = |p: P2| -> f64 {
         let i = ((p[0] / GRID_MM) as i64).clamp(0, bed.nx as i64 - 1) as usize;
         let j = ((p[1] / GRID_MM) as i64).clamp(0, bed.ny as i64 - 1) as usize;
-        near[j * bed.nx + i].map_or(seat_mid, |k| bed.v[k])
+        near[j * bed.nx + i].map_or(seat_mid, |k| bed.z[k])
     };
     let bb = bounds(&ring);
     let (x0, y0, x1, y1) = (bb[0] - 0.6, bb[1] - 0.6, bb[2] + 0.6, bb[3] + 0.6);
@@ -255,13 +255,14 @@ fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Pie
     }
     if !opens.is_empty() && own.iter().any(|&b| b) {
         // eroded own cells (disc of 0.5 mm = 2 cells)
-        let ownm = super::util::Mask {
+        let ownm = Grid {
             nx: bed.nx,
             ny: bed.ny,
-            v: own.to_vec(),
+            step: 1.0,
+            z: own.to_vec(),
         };
         let owf = ownm.map(|b| if b { 1.0 } else { 0.0 });
-        let er = super::util::erode_disc(&owf, 0.5 / GRID_MM);
+        let er = owf.erode(0.5 / GRID_MM);
         for k in 0..q.len() {
             if !inside[k] {
                 continue;
@@ -281,7 +282,15 @@ fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Pie
     }
     let zh = hi + 1.0;
     let depth: Vec<f64> = under.iter().map(|&u| zh - u).collect();
-    let mut keep = hung(&depth, gx, gy, SEAT_GRID_MM, 0.01)?;
+    let mut keep = hung(
+        &Field {
+            nx: gx,
+            ny: gy,
+            step: SEAT_GRID_MM,
+            z: depth,
+        },
+        0.01,
+    )?;
     for p in &mut keep.positions {
         *p = [x0 + p[0], y0 + p[1], zh - p[2]];
     }
@@ -808,10 +817,10 @@ pub fn rock_piece(
                 for j in 0..ny {
                     for i in 0..nx {
                         let q = j * nx + i;
-                        if o.cells.v[q] && r.cells.v[q] && !r.bed.v[q].is_nan() {
+                        if o.cells.z[q] && r.cells.z[q] && !r.bed.z[q].is_nan() {
                             let zt =
                                 o.top_z((i as f64 + 0.5) * GRID_MM, (j as f64 + 0.5) * GRID_MM);
-                            if (zt - r.bed.v[q]).abs() < 0.5 {
+                            if (zt - r.bed.z[q]).abs() < 0.5 {
                                 own[q] = true;
                             }
                         }
@@ -824,7 +833,7 @@ pub fn rock_piece(
             .map_err(|e| KitError::Shape(format!("stone {ri} seat: {e}")))?;
         zbase = r
             .bed
-            .v
+            .z
             .iter()
             .copied()
             .filter(|v| !v.is_nan())
@@ -895,10 +904,9 @@ mod tests {
     use dt_kit::Convex;
 
     fn run(beds: [f64; 3]) -> (f64, f64) {
-        use super::super::util::Mask;
         let (nx, ny) = (200, 200);
-        let mut cells = Mask::new(nx, ny, false);
-        let mut bed = Field::new(nx, ny, f64::NAN);
+        let mut cells = cell_grid(nx, ny, false);
+        let mut bed = cell_grid(nx, ny, f64::NAN);
         for j in 40..64 {
             for i in 40..88 {
                 cells.set(i, j, true);
@@ -942,10 +950,9 @@ mod tests {
     /// A narrow stone sinks into its bed (its underside is the seat's V).
     #[test]
     fn a_narrow_stone_sinks_into_its_bed() {
-        use super::super::util::Mask;
         let (nx, ny) = (200, 200);
-        let mut cells = Mask::new(nx, ny, false);
-        let mut bed = Field::new(nx, ny, f64::NAN);
+        let mut cells = cell_grid(nx, ny, false);
+        let mut bed = cell_grid(nx, ny, f64::NAN);
         for j in 40..49 {
             for i in 40..50 {
                 cells.set(i, j, true);

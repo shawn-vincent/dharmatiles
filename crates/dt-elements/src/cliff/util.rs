@@ -1,7 +1,7 @@
 //! Small helpers the cliff shares: draws, 2D grids, polygons, segments.
 //! Grids are row-major, `j * nx + i`, i along x (dt-geom's convention).
 
-use dt_kit::{Footprint, Rng, distance_nearest};
+use dt_kit::Rng;
 
 /// Draws the kit's `Rng` does not offer.
 pub trait Draw {
@@ -44,37 +44,17 @@ pub fn lerp(lo_hi: (f64, f64), u: f64) -> f64 {
     lo_hi.0 + (lo_hi.1 - lo_hi.0) * u
 }
 
-/// A scalar grid, `nx` by `ny`.
-#[derive(Clone, Debug)]
-pub struct G<T> {
-    pub nx: usize,
-    pub ny: usize,
-    pub v: Vec<T>,
-}
+/// Cliff's grids count cells: dt-kit's [`Grid`] with step 1, so its mm
+/// methods (blur, dilate, erode, distance) take cells.
+pub use dt_kit::Grid;
+/// Numbers per cell (the kit's `Field`, counted in cells).
+pub type Field = Grid<f64>;
+/// Flags per cell.
+pub type Cells = Grid<bool>;
 
-impl<T: Copy> G<T> {
-    pub fn new(nx: usize, ny: usize, x: T) -> Self {
-        Self {
-            nx,
-            ny,
-            v: vec![x; nx * ny],
-        }
-    }
-    #[inline]
-    pub fn at(&self, i: usize, j: usize) -> T {
-        self.v[j * self.nx + i]
-    }
-    #[inline]
-    pub fn set(&mut self, i: usize, j: usize, x: T) {
-        self.v[j * self.nx + i] = x;
-    }
-    pub fn map<U: Copy>(&self, f: impl Fn(T) -> U) -> G<U> {
-        G {
-            nx: self.nx,
-            ny: self.ny,
-            v: self.v.iter().map(|&x| f(x)).collect(),
-        }
-    }
+/// A grid of `nx` by `ny` cells, every one `x`.
+pub fn cell_grid<T: Copy>(nx: usize, ny: usize, x: T) -> Grid<T> {
+    Grid::filled(nx, ny, 1.0, x)
 }
 
 /// Cell-centre coordinates of cell (i, j).
@@ -83,118 +63,15 @@ pub fn cx(i: usize, grid_mm: f64) -> f64 {
     (i as f64 + 0.5) * grid_mm
 }
 
-pub type Mask = G<bool>;
-pub type Field = G<f64>;
+/// Distances in cells, with "none set" as 1e9 rather than infinite.
+fn far(d: Field) -> Field {
+    d.map(|x| if x.is_finite() { x } else { 1e9 })
+}
 
 /// Distance (in cells) from every cell to the nearest `false` cell, as
 /// scipy's `distance_transform_edt` of the mask.
-pub fn edt_in(m: &Mask) -> Field {
-    let inv: Vec<bool> = m.v.iter().map(|&b| !b).collect();
-    let (d, _) = distance_nearest(&inv, m.nx, m.ny);
-    Field {
-        nx: m.nx,
-        ny: m.ny,
-        v: d.into_iter()
-            .map(|x| if x.is_finite() { x } else { 1e9 })
-            .collect(),
-    }
-}
-
-/// Distance (cells) from every cell to the nearest `true` cell.
-pub fn edt_out(m: &Mask) -> Field {
-    let (d, _) = distance_nearest(&m.v, m.nx, m.ny);
-    Field {
-        nx: m.nx,
-        ny: m.ny,
-        v: d.into_iter()
-            .map(|x| if x.is_finite() { x } else { 1e9 })
-            .collect(),
-    }
-}
-
-/// Grey dilation / erosion over a disc of radius `r` cells.
-pub fn dilate_disc(f: &Field, r: f64) -> Field {
-    Field {
-        nx: f.nx,
-        ny: f.ny,
-        v: dt_kit::dilate_grid(&f.v, f.nx, f.ny, Footprint::Disc(r)),
-    }
-}
-pub fn erode_disc(f: &Field, r: f64) -> Field {
-    Field {
-        nx: f.nx,
-        ny: f.ny,
-        v: dt_kit::erode_grid(&f.v, f.nx, f.ny, Footprint::Disc(r)),
-    }
-}
-pub fn blur(f: &Field, sigma_cells: f64) -> Field {
-    Field {
-        nx: f.nx,
-        ny: f.ny,
-        v: dt_kit::blur_grid(&f.v, f.nx, f.ny, sigma_cells),
-    }
-}
-
-/// Binary dilation by the 4-neighbour cross, `n` times.
-pub fn bin_dilate(m: &Mask, n: usize) -> Mask {
-    let mut cur = m.clone();
-    for _ in 0..n {
-        let mut next = cur.clone();
-        for j in 0..m.ny {
-            for i in 0..m.nx {
-                if cur.at(i, j) {
-                    continue;
-                }
-                let hit = (i > 0 && cur.at(i - 1, j))
-                    || (i + 1 < m.nx && cur.at(i + 1, j))
-                    || (j > 0 && cur.at(i, j - 1))
-                    || (j + 1 < m.ny && cur.at(i, j + 1));
-                if hit {
-                    next.set(i, j, true);
-                }
-            }
-        }
-        cur = next;
-    }
-    cur
-}
-
-/// 4-connected labels (0 = background).
-pub fn label(m: &Mask) -> (G<u32>, u32) {
-    let mut labels = G::new(m.nx, m.ny, 0u32);
-    let mut n = 0;
-    let mut stack = Vec::new();
-    for j in 0..m.ny {
-        for i in 0..m.nx {
-            if !m.at(i, j) || labels.at(i, j) != 0 {
-                continue;
-            }
-            n += 1;
-            labels.set(i, j, n);
-            stack.push((i, j));
-            while let Some((a, b)) = stack.pop() {
-                let mut go = |x: usize, y: usize| {
-                    if m.at(x, y) && labels.at(x, y) == 0 {
-                        labels.set(x, y, n);
-                        stack.push((x, y));
-                    }
-                };
-                if a > 0 {
-                    go(a - 1, b);
-                }
-                if a + 1 < m.nx {
-                    go(a + 1, b);
-                }
-                if b > 0 {
-                    go(a, b - 1);
-                }
-                if b + 1 < m.ny {
-                    go(a, b + 1);
-                }
-            }
-        }
-    }
-    (labels, n)
+pub fn edt_in(m: &Cells) -> Field {
+    far(m.map(|b| !b).distance().0)
 }
 
 // ---- polygons ------------------------------------------------------------
@@ -377,7 +254,7 @@ pub fn seg_dist(p: P2, a: P2, b: P2) -> f64 {
 
 /// The outer boundary of a cell set (cells of `grid_mm`), traced along cell
 /// edges, as a counter-clockwise ring in mm. The largest loop.
-pub fn trace_outline(m: &Mask, grid_mm: f64) -> Vec<P2> {
+pub fn trace_outline(m: &Cells, grid_mm: f64) -> Vec<P2> {
     use std::collections::HashMap;
     // directed boundary edges, interior on the left (ccw)
     let mut next: HashMap<(i64, i64), Vec<(i64, i64)>> = HashMap::new();
