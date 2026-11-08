@@ -264,19 +264,15 @@ fn fan_error(z: &impl Fn(usize, usize) -> f64, g: &Grid, verts: &Corners, l: Lea
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     #![allow(clippy::unwrap_used, clippy::cast_precision_loss)]
     use super::*;
     use crate::TriMesh;
-    use crate::stack::{Lattice, Layer, Round, lift_stack};
+    use crate::stack::{Lattice, Layer, Round, Sides, lift_stack};
 
-    /// The adaptive lift of one layer: no node more than `tol` mm from the
-    /// surface, no leaf wider than `max_cells` cells.
-    pub(crate) fn lift_adaptive(
-        g: &Grid,
-        tol: f64,
-        max_cells: usize,
-    ) -> Result<TriMesh, LiftError> {
+    /// The adaptive lift of one layer with flat faces: no node more than
+    /// `tol` mm from the surface, no leaf wider than `max_cells` cells.
+    fn lift_adaptive(g: &Grid, tol: f64, max_cells: usize) -> Result<TriMesh, LiftError> {
         let lat = Lattice {
             nx: g.nx,
             ny: g.ny,
@@ -285,7 +281,7 @@ pub(crate) mod tests {
             max_cells,
             round: Round::None,
         };
-        lift_stack(&lat, &[Layer { top: &g.z, id: 0 }])
+        lift_stack(&lat, &[Layer::new(&g.z, 0)], &Sides::flat())
     }
 
     pub(super) fn bumpy(nx: usize, ny: usize) -> Grid {

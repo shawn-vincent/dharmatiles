@@ -106,6 +106,13 @@ impl Frame {
     pub fn scale(&self) -> f64 {
         self.square_mm / REFERENCE_SQUARE_MM
     }
+
+    /// The plan round of the tile's four vertical corners on this system,
+    /// mm ([`CORNER_ROUND_MM`] scaled).
+    #[must_use]
+    pub fn corner_round_mm(&self) -> f64 {
+        CORNER_ROUND_MM * self.scale()
+    }
 }
 
 /// What a solid is made of; decides its paint in renders (and, later,
@@ -395,9 +402,9 @@ pub struct Stage {
 }
 
 /// How far round a node the grain's greatest height is looked for, mm at the
-/// 35 mm square (true mm: the grain is set in by what stands near it).
+/// 35 mm square (it scales with the system, like the grain it looks for).
 const GRAIN_REACH_MM: f64 = 6.0;
-/// The sigma that height is smoothed by, mm at the 35 mm square.
+/// The sigma that height is smoothed by, mm at the 35 mm square (scaled).
 const GRAIN_SMOOTH_MM: f64 = 3.0;
 /// The lift's error bound, mm: no surface node is further than this from
 /// the triangulated top (a tenth of a 0.2 mm layer).
@@ -407,19 +414,19 @@ pub const LIFT_TOL_MM: f64 = 0.02;
 pub const SIDE_WAVE_MM: f64 = 1.0;
 /// The size of a lump of side relief, mm.
 const SIDE_LUMP_MM: f64 = 1.8;
-/// Side relief turns round a corner over this distance, mm: it is set back
-/// behind both planes at the corner and behind its own alone beyond.
-const SIDE_CORNER_BLEND_MM: f64 = 2.0;
-/// The tile's four vertical corners are rounded in plan by this, mm.
+/// The tile's four vertical corners are rounded in plan by this, mm at the
+/// 35 mm square; it scales with the system like every size
+/// ([`Frame::corner_round_mm`]). The terrain's lift and the base share it.
 pub const CORNER_ROUND_MM: f64 = 0.5;
 /// The widest leaf of the adaptive lift, in cells.
 const LIFT_MAX_CELLS: usize = 32;
 /// Slots per build.
 const SLOTS: u32 = 1 << 16;
 
-/// Where a fluid layer is absent it lies this far under the land, mm at the
-/// 35 mm square (it scales with the system): the stack mesher shows nothing
-/// of a layer at or under the layers below it.
+/// Where a fluid layer is absent its top lies this far under the land, mm at
+/// the 35 mm square (it scales with the system): the stack mesher puts the
+/// layer's boundary where the top, interpolated to it, meets the layer
+/// below's. Whether a layer shows is its `present` flags, not this gap.
 pub const ABSENT_UNDER_MM: f64 = 1.0;
 
 /// The most grain reaches under a surface over a layer `thick` mm thick,
@@ -491,9 +498,12 @@ pub struct Relief<'a> {
     pub floor: Option<&'a crate::Field>,
 }
 
-/// One layer laid: its slot, its region and its top (float32 once).
+/// One layer laid: its slot, its region and the top the lift takes
+/// (float32 once): a land layer's is the land as it stood once the layer
+/// was laid (the higher of every land layer so far inside its region), a
+/// fluid's its own surface where it exists.
 #[derive(Clone)]
-struct Laid {
+pub(crate) struct Laid {
     slot: Slot,
     fluid: bool,
     side: Option<SideSpec>,
@@ -620,7 +630,10 @@ impl Terrain {
                 stands.z[k] = 0.0;
             }
         }
-        let height = stands.dilate(GRAIN_REACH_MM).blur(GRAIN_SMOOTH_MM);
+        let scale = self.frame.scale();
+        let height = stands
+            .dilate(GRAIN_REACH_MM * scale)
+            .blur(GRAIN_SMOOTH_MM * scale);
         for k in (0..n).filter(|&k| spec.mask.bits[k]) {
             let s = shape.z[k] + spec.raise.map_or(0.0, |r| r.z[k]);
             let below = if spec.fluid {
@@ -662,8 +675,7 @@ impl Terrain {
             let r = spec.round_mm;
             #[allow(clippy::cast_possible_truncation)]
             for k in (0..n).filter(|&k| spec.mask.bits[k] && rim.z[k] < r) {
-                let d = rim.z[k];
-                let drop = r - libm::sqrt((r * r - (r - d) * (r - d)).max(0.0));
+                let drop = dt_geom::rim_profile(rim.z[k], r);
                 let thick = f64::from(top[k]) - f64::from(self.land.z[k]);
                 let taper = crate::smooth01((thick - spec.skin_mm) / spec.skin_mm.max(1e-9));
                 top[k] -= (drop * taper) as f32;
@@ -686,6 +698,8 @@ impl Terrain {
             }
             self.any_land = true;
         }
+        // what the lift takes of a land layer is the land as it now stands
+        let top = if spec.fluid { top } else { self.land.z.clone() };
         self.layers.push(Laid {
             slot,
             fluid: spec.fluid,
@@ -1149,95 +1163,13 @@ impl Scene {
     ///
     /// # Errors
     /// [`KitError`] if the surface is not above 0 or the kernel refuses it.
-    #[allow(clippy::needless_range_loop)]
     pub fn lift(&mut self, owner: &str, printer: &crate::Printer) -> Result<(), KitError> {
         if self.terrain.layers.is_empty() {
             return Ok(());
         }
         self.record("surface", self.terrain.shown.content_hash());
-        let terrain = &self.terrain;
-        let absent = ABSENT_UNDER_MM * self.frame.scale();
-        // the land layers' running top, then each fluid over it (absent
-        // where it has no region: a hair under the land)
-        let n = terrain.land.z.len();
-        let mut land = vec![0.0_f32; n];
-        let mut tops: Vec<(Vec<f32>, u32)> = Vec::new();
-        for l in terrain.layers.iter().filter(|l| !l.fluid) {
-            for k in 0..n {
-                if l.mask.bits[k] {
-                    land[k] = land[k].max(l.top[k]);
-                }
-            }
-            tops.push((land.clone(), l.slot.id));
-        }
-        #[allow(clippy::cast_possible_truncation)]
-        let under = absent as f32;
-        for l in terrain.layers.iter().filter(|l| l.fluid) {
-            let top = (0..n)
-                .map(|k| {
-                    if l.mask.bits[k] {
-                        l.top[k]
-                    } else {
-                        land[k] - under
-                    }
-                })
-                .collect();
-            tops.push((top, l.slot.id));
-        }
-        let layers: Vec<dt_geom::Layer<'_>> = tops
-            .iter()
-            .map(|(top, id)| dt_geom::Layer { top, id: *id })
-            .collect();
-        // each layer's side relief, in the order of the layers (land, then
-        // fluids)
-        type Shape = Box<dyn Fn([f64; 3]) -> f64 + Sync>;
-        let shapes: Vec<Option<(f64, Shape)>> = terrain
-            .layers
-            .iter()
-            .filter(|l| !l.fluid)
-            .chain(terrain.layers.iter().filter(|l| l.fluid))
-            .map(|l| {
-                l.side.map(|s| {
-                    let seed = s.seed;
-                    let f: Shape = Box::new(move |p| crumble(seed, p));
-                    (s.depth_mm, f)
-                })
-            })
-            .collect();
-        let relief: Vec<Option<dt_geom::LayerRelief<'_>>> = shapes
-            .iter()
-            .map(|o| {
-                o.as_ref().map(|(depth, f)| dt_geom::LayerRelief {
-                    depth: *depth,
-                    shape: f.as_ref(),
-                })
-            })
-            .collect();
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let sides = dt_geom::Sides {
-            relief: &relief,
-            column_nodes: (libm::round(SIDE_WAVE_MM / terrain.land.step) as usize).max(1),
-            row_mm: 1.6 * printer.layer_mm,
-            fade_mm: 2.0 * printer.layer_mm,
-            overhang_deg: printer.overhang_deg,
-            corner_round_mm: CORNER_ROUND_MM,
-            corner_blend_mm: SIDE_CORNER_BLEND_MM,
-        };
-        // one closed mesh, a run per layer; vertices rounded to float32 once
-        // so the terrain alone survives the STL reload
-        let mesh = dt_geom::lift_stack_sides(
-            &dt_geom::Lattice {
-                nx: terrain.land.nx,
-                ny: terrain.land.ny,
-                step: terrain.land.step,
-                tol: LIFT_TOL_MM,
-                max_cells: LIFT_MAX_CELLS,
-                round: dt_geom::Round::F32,
-            },
-            &layers,
-            Some(&sides),
-        )
-        .map_err(|e| KitError::Lift(e.to_string()))?;
+        let t = &self.terrain;
+        let mesh = lift_layers(&t.layers, &t.land, self.frame, printer)?;
         let solid = Solid(dt_geom::Solid::from_tri_mesh(&mesh).map_err(KitError::Mesh)?);
         self.add(
             Tag {
@@ -1275,6 +1207,101 @@ impl Scene {
     }
 }
 
+/// The layers laid, as one closed mesh from z = 0: the land layers then the
+/// fluids (each in the order laid), a run per layer, each layer's side
+/// relief taken from the layer itself. `land` is the lattice (its size and
+/// the land as laid, where a fluid lies under it where it is absent).
+/// Vertices are rounded to float32 once so the terrain alone survives the
+/// STL reload.
+fn lift_layers(
+    laid: &[Laid],
+    land: &Grid,
+    frame: Frame,
+    printer: &crate::Printer,
+) -> Result<TriMesh, KitError> {
+    let ordered: Vec<&Laid> = laid
+        .iter()
+        .filter(|l| !l.fluid)
+        .chain(laid.iter().filter(|l| l.fluid))
+        .collect();
+    // where a fluid is absent its top lies this far under the last land
+    // laid: only where the stack mesher puts the layer's boundary on an
+    // edge it crosses (what shows is the layer's `present`, not the gap)
+    #[allow(clippy::cast_possible_truncation)]
+    let under = (ABSENT_UNDER_MM * frame.scale()) as f32;
+    let final_land: &[f32] = ordered
+        .iter()
+        .rfind(|l| !l.fluid)
+        .map_or(&[], |l| l.top.as_slice());
+    let tops: Vec<std::borrow::Cow<'_, [f32]>> = ordered
+        .iter()
+        .map(|l| {
+            if l.fluid {
+                std::borrow::Cow::Owned(
+                    (0..land.z.len())
+                        .map(|k| {
+                            if l.mask.bits[k] {
+                                l.top[k]
+                            } else {
+                                final_land.get(k).copied().unwrap_or(0.0) - under
+                            }
+                        })
+                        .collect(),
+                )
+            } else {
+                std::borrow::Cow::Borrowed(l.top.as_slice())
+            }
+        })
+        .collect();
+    type Shape = Box<dyn Fn([f64; 3]) -> f64 + Sync>;
+    let shapes: Vec<Option<(f64, Shape)>> = ordered
+        .iter()
+        .map(|l| {
+            l.side.map(|s| {
+                let seed = s.seed;
+                let f: Shape = Box::new(move |p| crumble(seed, p));
+                (s.depth_mm, f)
+            })
+        })
+        .collect();
+    let layers: Vec<dt_geom::Layer<'_>> = ordered
+        .iter()
+        .zip(&tops)
+        .zip(&shapes)
+        .map(|((l, top), shape)| dt_geom::Layer {
+            top,
+            id: l.slot.id,
+            present: Some(&l.mask.bits),
+            relief: shape.as_ref().map(|(depth, f)| dt_geom::LayerRelief {
+                depth: *depth,
+                shape: f.as_ref(),
+            }),
+        })
+        .collect();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let sides = dt_geom::Sides {
+        column_nodes: (libm::round(SIDE_WAVE_MM / land.step) as usize).max(1),
+        row_mm: 1.6 * printer.layer_mm,
+        fade_mm: 2.0 * printer.layer_mm,
+        overhang_deg: printer.overhang_deg,
+        corner_round_mm: frame.corner_round_mm(),
+        corner_blend_mm: dt_geom::CORNER_BLEND_MM,
+    };
+    dt_geom::lift_stack(
+        &dt_geom::Lattice {
+            nx: land.nx,
+            ny: land.ny,
+            step: land.step,
+            tol: LIFT_TOL_MM,
+            max_cells: LIFT_MAX_CELLS,
+            round: dt_geom::Round::F32,
+        },
+        &layers,
+        &sides,
+    )
+    .map_err(|e| KitError::Lift(e.to_string()))
+}
+
 /// The shape of the relief on a tile's side: 0 on the plane to 1 at its
 /// depth, grain like the top's, a function of the point alone so it runs
 /// on round the corners. A good share of the face stays near the plane.
@@ -1296,6 +1323,7 @@ pub(crate) fn relabel(slot: Slot, s: &dt_geom::Solid) -> Result<Solid, KitError>
 
 #[cfg(test)]
 mod tests {
+    use super::Relief;
     use super::{Frame, LayerSpec, Material, Scene, SideSpec};
     use crate::{Band, Field, OnFrame, Seed};
 
@@ -1351,6 +1379,157 @@ mod tests {
         assert!(thin.z.iter().all(|&z| (z - 0.5).abs() < 1e-6));
         let (_, thick) = flat(1.2, 0.2, 0.6);
         assert!((thick.z[0] - 1.0).abs() < 1e-6);
+    }
+
+    /// The dirt of a flat 3.4 mm shape with `relief` as its grain (weight
+    /// `weight` at every node), as the scene lays it.
+    fn grained(
+        shape_z: impl Fn(f64, f64) -> f64,
+        relief: impl Fn(f64, f64) -> f64,
+        weight: f64,
+        round: f64,
+    ) -> (Scene, LayerSpecParts) {
+        let frame = Frame::dungeonblocks(1, 1);
+        let (nx, ny) = frame.nodes();
+        let at = |f: &dyn Fn(f64, f64) -> f64| -> Field {
+            Field::new(&frame, 0.0).with_z(
+                (0..nx * ny)
+                    .map(|k| {
+                        f(
+                            (k % nx) as f64 * frame.step_mm(),
+                            (k / nx) as f64 * frame.step_mm(),
+                        )
+                    })
+                    .collect(),
+            )
+        };
+        let hi = at(&shape_z);
+        let band = Band::new(hi.clone(), hi.clone()).unwrap();
+        let shape = band.fit(&hi);
+        let parts = LayerSpecParts {
+            shape,
+            relief: at(&relief),
+            weight: at(&|_, _| weight),
+        };
+        let mut scene = Scene::new(frame, Seed::new(1));
+        let mask = scene.whole();
+        {
+            let grain = Relief {
+                relief: &parts.relief,
+                weight: &parts.weight,
+                floor: None,
+            };
+            scene
+                .lay(&LayerSpec {
+                    owner: "dirt",
+                    material: Material::Earth,
+                    fluid: false,
+                    mask: &mask,
+                    shape: &parts.shape,
+                    raise: None,
+                    grain: Some(&grain),
+                    skin_mm: 0.6,
+                    round_mm: round,
+                    side: None,
+                })
+                .unwrap();
+        }
+        (scene, parts)
+    }
+
+    struct LayerSpecParts {
+        shape: crate::Banded,
+        relief: Field,
+        weight: Field,
+    }
+
+    /// Grain never stands above the shape the band holds, at any node, the
+    /// rim and the corners included, whatever the relief does there.
+    #[test]
+    fn laid_grain_never_rises_above_the_shape() {
+        let wave = |x: f64, y: f64| 0.6 * (x * 0.9).sin() * (y * 1.3).cos() + 0.3 * (x * 4.0).sin();
+        let shape_z = |x: f64, y: f64| 3.4 + 0.5 * (x * 0.2).sin() + 0.1 * y;
+        for round in [0.0, 0.2] {
+            let (scene, parts) = grained(shape_z, wave, 1.0, round);
+            let top = scene.surface_field().unwrap();
+            let shape = parts.shape.field();
+            for k in 0..top.z.len() {
+                assert!(
+                    f64::from(top.z[k]) <= shape.z[k] + 1e-5,
+                    "node {k}: top {} over shape {}",
+                    top.z[k],
+                    shape.z[k]
+                );
+            }
+        }
+    }
+
+    /// The edge height is a ceiling: with grain that would stand over it
+    /// everywhere, nothing stands over 3.4 mm, and the grain's high points
+    /// reach it (the surface is set in just as far as the grain beside it
+    /// stands, rim included).
+    #[test]
+    fn the_edge_height_is_a_ceiling_the_grain_reaches() {
+        let bumps = |x: f64, y: f64| 0.5 * (0.5 + 0.5 * (x * 3.0).sin() * (y * 2.5).cos());
+        let (scene, _) = grained(|_, _| 3.4, bumps, 1.0, 0.0);
+        let top = scene.surface_field().unwrap();
+        let max = top.z.iter().fold(f32::MIN, |a, &b| a.max(b));
+        assert!(max <= 3.4 + 1e-5, "{max}");
+        assert!(max >= 3.4 - 1e-3, "{max}");
+        let (nx, ny) = Frame::dungeonblocks(1, 1).nodes();
+        for k in (0..nx * ny)
+            .filter(|k| k % nx == 0 || k % nx == nx - 1 || *k < nx || *k >= nx * (ny - 1))
+        {
+            assert!(top.z[k] <= 3.4 + 1e-5, "rim node {k}");
+        }
+    }
+
+    /// The set-in is local: far from a stand of grain the surface is not
+    /// moved, near it it is moved by about the grain's height.
+    #[test]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn the_set_in_is_local_to_the_grain() {
+        let spike = |x: f64, y: f64| {
+            if (x - 5.0).hypot(y - 5.0) < 1.5 {
+                0.4
+            } else {
+                0.0
+            }
+        };
+        let frame = Frame::dungeonblocks(1, 1);
+        let (nx, ny) = frame.nodes();
+        // asked before the layer is laid, as a bedded stone asks
+        let (_, parts) = grained(|_, _| 3.4, spike, 1.0, 0.0);
+        let scene = Scene::new(frame, Seed::new(1));
+        let mask = scene.whole();
+        let grain = Relief {
+            relief: &parts.relief,
+            weight: &parts.weight,
+            floor: None,
+        };
+        let off = scene.grain_offset(&LayerSpec {
+            owner: "dirt",
+            material: Material::Earth,
+            fluid: false,
+            mask: &mask,
+            shape: &parts.shape,
+            raise: None,
+            grain: Some(&grain),
+            skin_mm: 0.6,
+            round_mm: 0.0,
+            side: None,
+        });
+        let node = |x: f64, y: f64| {
+            let s = frame.step_mm();
+            (libm::round(y / s) as usize) * nx + libm::round(x / s) as usize
+        };
+        assert!(off.z[node(5.0, 5.0)] > 0.3, "{}", off.z[node(5.0, 5.0)]);
+        assert!(
+            off.z[node(30.0, 30.0)] < 1e-3,
+            "{}",
+            off.z[node(30.0, 30.0)]
+        );
+        assert_eq!(off.z.len(), nx * ny);
     }
 
     #[test]

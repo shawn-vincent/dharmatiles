@@ -47,6 +47,8 @@ pub use raster::{Mask, draw_line, fill, fill_polygons};
 pub use rays::{Hit, ObvhsRays, Ray};
 pub use seed::{Rng, Seed};
 pub use source::{IdBlock, batch_in_order};
-pub use stack::{Lattice, Layer, LayerRelief, Round, Sides, lift_stack, lift_stack_sides};
+pub use stack::{
+    CORNER_BLEND_MM, Lattice, Layer, LayerRelief, Round, Sides, lift_stack, rim_profile,
+};
 
 pub use solid::Solid;

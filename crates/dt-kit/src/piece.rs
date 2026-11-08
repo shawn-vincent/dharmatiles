@@ -318,7 +318,7 @@ pub fn hung(depth: &Field, tol: f64) -> Result<TriMesh, KitError> {
         max_cells: usize::MAX,
         round: dt_geom::Round::None,
     };
-    dt_geom::lift_stack(&lat, &[dt_geom::Layer { top: &z, id: 0 }])
+    dt_geom::lift_stack(&lat, &[dt_geom::Layer::new(&z, 0)], &dt_geom::Sides::flat())
         .map_err(|e| KitError::Lift(e.to_string()))
 }
 
