@@ -22,15 +22,16 @@
 //! Placement: a quarter of the placements are
 //! clusters of 2 to 4 stones; placements go largest first, 1.5 mm apart
 //! (`gap`) and 1 mm inside the rim, 400 darts each. Each stone is seated
-//! into the ground below it (dt-kit's `seat`): 0.25 mm under the lowest
-//! node within 0.85 of its radius, and at least 0.55 mm under the median
-//! there (0.3 + 0.25 mm below a flat 4 mm floor).
+//! into the land below it (dt-kit's `Land::seat`, on the land as laid, grain
+//! and all): 0.25 mm under the lowest node its foot can touch, and at least
+//! 0.55 mm under the median there. It is measured after: `seat_gap_max` is
+//! the most any foot hovers over the land, `seat_gap_stones` how many do.
 
 use dt_kit::Kind;
 use dt_kit::vec3::{cross, dot, norm, sub};
 use dt_kit::{
-    Convex, Field, Grain, Material, Placed, Rng, Scene, Seed, Spread, Tag, TriMesh, grain, hull,
-    scatter, seat, solid,
+    Convex, Disc, Field, Grain, Material, Placed, Rng, Scene, SeatRule, Seed, Spread, Tag, TriMesh,
+    grain, hull, scatter, solid,
 };
 
 use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
@@ -78,8 +79,13 @@ const DART_TRIES: u32 = 400;
 /// The size skew when `mostly` is not written.
 const WIDTH_EXP: f64 = 1.4;
 // seat
-const SEAT_BELOW_MIN_MM: f64 = 0.25;
-const SEAT_BELOW_MEDIAN_MM: f64 = 0.55;
+const SEAT_RULE: SeatRule = SeatRule {
+    below_min: 0.25,
+    below_median: 0.55,
+};
+/// A foot more than this far over the land is hovering: the lift's error
+/// bound.
+const HOVER_TOL_MM: f64 = dt_kit::LIFT_TOL_MM;
 
 /// One rock before its grain: a convex polytope, base at z = 0, centred
 /// near the origin, at the size it is built.
@@ -567,6 +573,8 @@ struct Tally {
     chips: Vec<u32>,
     chip_loss: f64,
     widths: Vec<f64>,
+    hover_max: f64,
+    hovering: usize,
 }
 
 /// Build placed items into the scene: grain, seat on `ground`, add as
@@ -579,7 +587,7 @@ fn add_items(
     tally: &mut Tally,
 ) -> Result<(), LookError> {
     let s = scene.frame().scale();
-    let ground = scene.land();
+    let slack = scene.frame().step_mm();
     let n: usize = items.iter().map(|(it, _, _)| it.stones.len()).sum();
     #[allow(clippy::cast_possible_truncation)]
     let slots = scene
@@ -588,6 +596,10 @@ fn add_items(
     let g = Grain::default();
     let mut k = 0u32;
     let ticks = scene.progress().counter("stones", n, 0.0, 1.0);
+    // seated on the land as it is laid, grain and all; a tile with no land
+    // under it is the base
+    let land = scene.land_view();
+    let mut built = Vec::with_capacity(n);
     for (item, at, yaw) in items {
         tally.placements += 1;
         tally.clusters += usize::from(item.stones.len() > 1);
@@ -596,26 +608,24 @@ fn add_items(
             let st = stone.scaled(s, 1.0);
             let o = [off[0] * s, off[1] * s];
             let p = [at[0] + cs * o[0] - sn * o[1], at[1] + sn * o[0] + cs * o[1]];
-            let r = st.radius();
-            let mut z0 = ground.as_ref().map_or(0.0, |gr| {
-                seat(gr, p, r, SEAT_BELOW_MIN_MM, SEAT_BELOW_MEDIAN_MM)
-            });
+            // the disc a cell wider than the stone, so the land under every
+            // cell its foot touches is seen
+            let disc = Disc {
+                at: p,
+                r: st.radius() + slack,
+            };
+            let mut z0 = land.as_ref().map_or(0.0, |l| l.seat(disc, SEAT_RULE).z);
             if item.bury.1 > 0.0 {
                 let mut br = Rng::new(seed.key("bury").index(u64::from(k)));
                 z0 -= br.uniform(item.bury.0, item.bury.1) * st.width;
             }
             let mesh = grain(&st.convex, &g, seed.index(u64::from(k)).value())
                 .map_err(LookError::build)?;
-            let sol = solid(slots.get(k), &mesh)
-                .map_err(LookError::build)?
-                .turn(*yaw, 1.0)
-                .translate([p[0], p[1], z0]);
-            scene.add(
-                Tag {
-                    kind: Kind::Rock,
-                    owner: owner.to_owned(),
-                },
-                sol,
+            built.push(
+                solid(slots.get(k), &mesh)
+                    .map_err(LookError::build)?
+                    .turn(*yaw, 1.0)
+                    .translate([p[0], p[1], z0]),
             );
             tally.facets.push(stone.facets);
             tally.chips.push(stone.chips);
@@ -624,6 +634,23 @@ fn add_items(
             k += 1;
             ticks.tick();
         }
+    }
+    // how each foot rests on the land: the gap under it
+    if let Some(land) = &land {
+        for sol in &built {
+            let gap = land.hover(sol);
+            tally.hover_max = tally.hover_max.max(gap);
+            tally.hovering += usize::from(gap > HOVER_TOL_MM);
+        }
+    }
+    for sol in built {
+        scene.add(
+            Tag {
+                kind: Kind::Rock,
+                owner: owner.to_owned(),
+            },
+            sol,
+        );
     }
     Ok(())
 }
@@ -649,6 +676,8 @@ fn note(scene: &mut Scene, t: &Tally) {
             t.widths.iter().copied().fold(f64::INFINITY, f64::min),
         ),
         ("width_max", t.widths.iter().copied().fold(0.0, f64::max)),
+        ("seat_gap_max", t.hover_max),
+        ("seat_gap_stones", t.hovering as f64),
     ] {
         scene.note(k, v);
     }
@@ -1086,7 +1115,15 @@ pub fn dirt_stones(
                     * dt_kit::smooth01((rim.z[kk] - RIM_TEX_MM) / 1.0);
             }
         }
-        let z0 = seat(z, p.at, r, 0.25, SINK * st.height());
+        let z0 = dt_kit::seat_on(
+            z,
+            Disc { at: p.at, r },
+            SeatRule {
+                below_min: 0.25,
+                below_median: SINK * st.height(),
+            },
+        )
+        .z;
         #[allow(clippy::cast_possible_truncation)]
         let k32 = k as u32;
         let mesh = grain(

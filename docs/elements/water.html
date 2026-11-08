@@ -27,7 +27,7 @@
     <dl class="defs">
       <dt>water level</dt><dd>The calm surface height, 2.6 mm above the base's top. Waves rise and fall around it.</dd>
       <dt>swell</dt><dd>A long, low, rounded wave, 5–16 mm from crest to crest.</dd>
-      <dt>chop</dt><dd>Short, sharper waves, 2–4.5 mm apart, mostly around rocks.</dd>
+      <dt>chop</dt><dd>Short, sharper waves, 2–4.5 mm apart, round the rocks and reeds that stand in the water.</dd>
       <dt>emitter</dt><dd>Anything the waves come from: the land, a rock, a reed, or a faint source at an open-water corner.</dd>
       <dt>bank</dt><dd>The slope where land runs down into the water.</dd>
       <dt>edge profile</dt><dd>The fixed wave shape every water tile has along its edges, so two tiles meet with no step.</dd>
@@ -131,7 +131,7 @@
 <tr><td>Meadow ground (shore)</td><td class="num">≥ 3.4</td><td>Hills, with grass on top.</td></tr>
 <tr><td>Reeds</td><td class="num">8–13 tall</td><td>A tall reed can push the tile onto the tall base peg.</td></tr>
 </tbody></table></div>
-<p>Wave spacing depends on what sends them: land 5–16 mm, rocks 2–4.5 mm, open-water corners 5–14 mm, reeds 1.8–3 mm.</p>
+<p>Wave spacing depends on what sends them: land 5–16 mm, rocks and reeds 2–4.5 mm, open-water corners 5–14 mm.</p>
 
 <h3 id="edges">Edges and joining tiles</h3>
 <ul>
@@ -180,7 +180,7 @@
 <p class="small muted">The animation is a simplified stand-in for the idea, drawn in your browser; it is not the program's output. What the program does, in order:</p>
 <ol class="small">
   <li><strong>Fill</strong>: water fills its area up to its level wherever the ground is lower, and is lifted with the ground as one surface.</li>
-  <li><strong>Emitters</strong>: the land's border with the water sends broad swells (5–16 mm), with distances measured through the water so they wrap round rocks; each rock in the water sends short chop (2–4.5 mm) and leaves a wake on the side away from the land; open corners of the tile send weak long swell.</li>
+  <li><strong>Emitters</strong>: the land's border with the water sends broad swells (5–16 mm), with distances measured through the water so they wrap round rocks; each thing standing in the water (a rock, a clump of reeds) sends short chop (2–4.5 mm) from its real section at the calm level and leaves a wake on the side away from the land; a rock or reed that does not reach the surface sends none; open corners of the tile send weak long swell.</li>
   <li><strong>Blend</strong>: near a strong emitter its own waves rule (blend exponent 8); far from every emitter the waves become an interference chaos of all of them.</li>
   <li><strong>Shape</strong>: troughs are compressed softly above −1.1 mm (the bed is 2.2 mm down), and a small lip rises at every shore.</li>
   <li><strong>Edges</strong>: the relief calms within 4 mm of the tile edge, where the shared tide takes over: every water tile meets its neighbour with the same shape.</li>

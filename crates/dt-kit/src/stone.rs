@@ -12,7 +12,7 @@ use dt_geom::{Convex, TriMesh};
 
 use crate::piece::welded;
 use crate::scene::{Slot, Solid, leaf};
-use crate::{Field, KitError, smooth01};
+use crate::{KitError, smooth01};
 
 /// **hull**: the convex hull of `points` (mm), as a closed mesh.
 ///
@@ -135,35 +135,6 @@ pub fn grain(stone: &Convex, g: &Grain, seed: u64) -> Result<TriMesh, KitError> 
     })
 }
 
-/// **seat**: the height to set a stone's base at, centred at `at` with
-/// footprint radius `r` (mm), so that it sits in `ground`: `below_min`
-/// under the lowest node within `r` (so no dip or slope exposes its flat
-/// base: 0.85 r would leave the base's rim showing on a
-/// bank), and at least `below_median` under their median (the bed).
-/// Never below 0, the tile's base.
-#[must_use]
-pub fn seat(ground: &Field, at: [f64; 2], r: f64, below_min: f64, below_median: f64) -> f64 {
-    let reach = r;
-    let mut under = Vec::new();
-    let (i0, j0) = ground.node(at[0] - reach, at[1] - reach);
-    let (i1, j1) = ground.node(at[0] + reach, at[1] + reach);
-    for j in j0..=j1 {
-        for i in i0..=i1 {
-            let (dx, dy) = (ground.x(i) - at[0], ground.y(j) - at[1]);
-            if dx * dx + dy * dy <= reach * reach {
-                under.push(ground.at(i, j));
-            }
-        }
-    }
-    if under.is_empty() {
-        under.push(ground.sample(at[0], at[1]));
-    }
-    under.sort_by(f64::total_cmp);
-    let lo = under[0];
-    let med = under[under.len() / 2];
-    (lo - below_min).min(med - below_median).max(0.0)
-}
-
 /// **solid**: a stone's closed mesh as a solid in `slot` (rule 2).
 ///
 /// # Errors
@@ -175,7 +146,6 @@ pub fn solid(slot: Slot, mesh: &TriMesh) -> Result<Solid, KitError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::OnFrame;
 
     #[test]
     fn grain_keeps_a_closed_stone_on_its_base() {
@@ -203,18 +173,5 @@ mod tests {
         assert!(moved);
         // same seed, same stone
         assert_eq!(m, grain(&c, &Grain::default(), 7).unwrap());
-    }
-
-    #[test]
-    fn a_seat_beds_below_the_lowest_dip() {
-        let f = crate::Frame::dungeonblocks(1, 1);
-        let g = Field::from_fn(&f, |x, _| 4.0 + 0.01 * x);
-        let z = seat(&g, [17.5, 17.5], 5.0, 0.25, 0.55);
-        assert!((z - (4.175 - 0.55)).abs() < 0.02, "{z}");
-        let steep = Field::from_fn(&f, |x, _| 4.0 + 0.5 * x);
-        let z = seat(&steep, [17.5, 17.5], 5.0, 0.25, 0.55);
-        assert!(z <= 4.0 + 0.5 * 12.5 - 0.25 + 0.15, "{z}");
-        let flat = Field::new(&f, 0.2);
-        assert!(seat(&flat, [17.5, 17.5], 5.0, 0.25, 0.55).abs() < 1e-12);
     }
 }

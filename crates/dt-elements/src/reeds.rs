@@ -1,8 +1,9 @@
 //! Reeds: clumps of tapered stems at the waterline, leaning toward the
 //! water.
 //!
-//! A clump roots where the ground (the bed, under the water) is within a
-//! hand's breadth of the water level; its stems rise from a near-common
+//! A clump roots where the land is within a hand's breadth of the water's
+//! calm level (a height window on the land: it reads the land and the
+//! library's calm height, never the water); its stems rise from a near-common
 //! base and fan outward, each a chunky lemon-sectioned blade tapering to a
 //! blunt point, bent gently outward (offset grows with the square of the
 //! height, so it stands vertical at its base).
@@ -19,13 +20,13 @@
 )]
 
 use dt_kit::Kind;
-use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, form};
+use dt_kit::{Material, Rng, Scene, Tag, TriMesh, form};
 
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Write};
 
 const REED_SEP_MM: f64 = 12.0;
-/// Ground height relative to the water level where reeds root.
+/// Land height relative to the calm water level where reeds root.
 const BAND_MM: (f64, f64) = (-1.1, 0.2);
 const SPREAD_MM: f64 = 0.35;
 const FAN_DEG: (f64, f64) = (14.0, 34.0);
@@ -136,7 +137,7 @@ impl Element for Reeds {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Reeds),
-            reads: vec![Read::Solids(Kind::Terrain), Read::IfAny(Kind::Rock)],
+            reads: Vec::new(),
             cell_mm: None,
         }
     }
@@ -145,16 +146,16 @@ impl Element for Reeds {
         let frame = *scene.frame();
         let s = frame.scale();
         let [w, h] = frame.size_mm();
-        let (Some(bed), Some(wl)) = (scene.bed(), ctx.calm_mm) else {
+        let (Some(land), Some(wl)) = (scene.land_view(), ctx.calm_mm) else {
             return Err(LookError::general(
                 "reeds have no water to stand in",
                 "put a `water` in the stack",
             ));
         };
-        let bed = Field::from(bed);
+        let bed = land.field();
         let (nx, _) = frame.nodes();
         let mut rng = Rng::new(ctx.seed.key("reeds"));
-        let ground = |x: f64, y: f64| bed.sample(x.clamp(0.0, w), y.clamp(0.0, h));
+        let ground = |x: f64, y: f64| land.top(x.clamp(0.0, w), y.clamp(0.0, h));
         // candidate roots in the shallows, inside the area
         let mut cand: Vec<[f64; 2]> = (0..4000)
             .map(|_| {

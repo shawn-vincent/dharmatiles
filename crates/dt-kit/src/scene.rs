@@ -1015,6 +1015,14 @@ impl Scene {
         self.terrain.land()
     }
 
+    /// **the land view**: the land as laid and what stands on it (see
+    /// [`crate::Land`]); `None` before any land is laid.
+    #[must_use]
+    pub fn land_view(&self) -> Option<crate::Land<'_>> {
+        let top = self.terrain.land()?;
+        Some(crate::Land::new(self.frame, top, self.built.parts()))
+    }
+
     /// Mark surface nodes as stone (pebbles) for the painted preview;
     /// unmark the rest of `area`.
     pub fn mark_stone(&mut self, area: &Mask, stone: &[bool]) {

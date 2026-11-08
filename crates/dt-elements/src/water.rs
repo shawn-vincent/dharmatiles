@@ -8,10 +8,13 @@
 //! emitters:
 //!
 //! - the **land** (its border with the water) sends broad rolling swells
-//!   (5–16 mm) that wrap round rocks: distances are geodesic through the
+//!   (5–16 mm) that wrap round the things in it: distances are geodesic through the
 //!   water, and their corners round off with distance;
-//! - each **rock** standing in the water sends short chop (2–4.5 mm), with
-//!   a wake on the side away from the land;
+//! - each **thing** standing in the water (a rock, a clump of reeds: what
+//!   really crosses its surface, `Land::things_at` the calm level) sends
+//!   short chop (2–4.5 mm) from the shape of its own section, with a wake
+//!   on the side away from the land; a thing that does not reach the surface
+//!   sends none;
 //! - open **corners** of the tile (or far emitters, when fewer than two
 //!   corners are open) send weak long swell.
 //!
@@ -62,7 +65,7 @@ const LIP_D_MM: f64 = 0.6;
 const SHORE_FADE_MM: f64 = 1.0;
 // emitters: strength, decay mm
 const LAND: (f64, f64) = (1.0, 34.0);
-const ROCK: (f64, f64) = (0.55, 10.0);
+const THING: (f64, f64) = (0.55, 10.0);
 const CORNER: (f64, f64) = (0.30, 70.0);
 const FAR_SRC_N: usize = 3;
 const FAR_SRC_MM: f64 = 220.0;
@@ -73,13 +76,13 @@ const CHAOS_ORDER: (f64, f64) = (0.12, 0.45);
 const CHAOS_FAR_AMP: f64 = 0.7;
 // swell bands: λ lo, λ hi, growth /mm; components
 const BAND_LAND: ((f64, f64, f64), usize) = ((5.0, 16.0, 0.012), 4);
-const BAND_ROCK: ((f64, f64, f64), usize) = ((2.0, 4.5, 0.035), 3);
+const BAND_THING: ((f64, f64, f64), usize) = ((2.0, 4.5, 0.035), 3);
 const BAND_CORNER: ((f64, f64, f64), usize) = ((5.0, 14.0, 0.0), 3);
 const SWELL_AMP_EXP: f64 = 1.4;
 const SWELL_LONG_SHARPEN: f64 = 0.15;
 const SWELL_SHORT_SHARPEN: f64 = 0.9;
 const SWELL_AMP_MM: f64 = 0.8;
-const SWELL_ROCK_GAIN: f64 = 1.15;
+const SWELL_THING_GAIN: f64 = 1.15;
 const SWELL_WAKE: f64 = 0.9;
 /// The deepest trough below calm water, mm (a soft floor).
 pub const SWELL_TROUGH_MM: f64 = 1.1;
@@ -112,7 +115,7 @@ struct Source {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Land,
-    Rock,
+    Thing,
     Corner,
 }
 
@@ -317,7 +320,10 @@ impl Element for Water {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Fill,
-            reads: vec![Read::IfAny(dt_kit::Kind::Rock)],
+            reads: vec![
+                Read::IfAny(dt_kit::Kind::Rock),
+                Read::IfAny(dt_kit::Kind::Reeds),
+            ],
             cell_mm: Some(crate::CellMm::mm(CELL_MM)),
         }
     }
@@ -344,12 +350,15 @@ impl Element for Water {
         let (lo, hi) = (band.lo(), band.hi());
         let wlk: Vec<f64> = (0..nn).map(|k| calm.clamp(lo.z[k], hi.z[k])).collect();
         let land = scene.land().unwrap_or_else(|| Field::new(&frame, 0.0));
-        let rock_mask = scene.footprint(dt_kit::Kind::Rock, calm).bits;
+        // what really stands in the water at its surface
+        let thing_mask = scene
+            .land_view()
+            .map_or_else(|| vec![false; nn], |l| l.things_at(calm).bits);
         let soft = land.blur(LAND_BLUR_MM);
         let land_mask: Vec<bool> = (0..nn)
-            .map(|k| (soft.z[k] > wlk[k] || !ctx.area.bits[k]) && !rock_mask[k])
+            .map(|k| (soft.z[k] > wlk[k] || !ctx.area.bits[k]) && !thing_mask[k])
             .collect();
-        let water: Vec<bool> = (0..nn).map(|k| !land_mask[k] && !rock_mask[k]).collect();
+        let water: Vec<bool> = (0..nn).map(|k| !land_mask[k] && !thing_mask[k]).collect();
         if !water.iter().any(|&b| b) {
             return Err(LookError::build(
                 "the water has nowhere to go: the land is above its top everywhere in its area",
@@ -380,7 +389,7 @@ impl Element for Water {
         let mut rng = Rng::new(seed.key("swell"));
         let masks = Masks {
             land: &land_mask,
-            rock: &rock_mask,
+            things: &thing_mask,
             water: &water,
         };
         let sources = emitters(&frame, &land, &masks, &mut sm, &mut rng);
@@ -408,7 +417,7 @@ impl Element for Water {
                 -hi.z[k],
                 SOFT_STOP_MM * s,
             );
-            present[k] = ctx.area.bits[k] && (water[k] || rock_mask[k]);
+            present[k] = ctx.area.bits[k] && (water[k] || thing_mask[k]);
         }
         // the water's own surface, inside its band by type; the stack mesher
         // lifts it as a layer of its own and cuts the shore where it meets
@@ -452,15 +461,15 @@ impl Element for Water {
     }
 }
 
-/// The water's masks: land (higher ground and outside its area), rocks
+/// The water's masks: land (higher ground and outside its area), the things
 /// standing in it, and the water itself.
 struct Masks<'a> {
     land: &'a [bool],
-    rock: &'a [bool],
+    things: &'a [bool],
     water: &'a [bool],
 }
 
-/// The emitters: the land and the rocks (geodesic through the water), the
+/// The emitters: the land and the things (geodesic through the water), the
 /// open corners, and far sources when fewer than two corners are open.
 /// Physical emitters first, then the corners and far sources.
 fn emitters(
@@ -475,7 +484,7 @@ fn emitters(
     let nn = nx * ny;
     let mut sources: Vec<Source> = Vec::new();
     let wdil = dilate4(m.water, nx, ny);
-    for (kind, src, (st, dec)) in [(Kind::Land, m.land, LAND), (Kind::Rock, m.rock, ROCK)] {
+    for (kind, src, (st, dec)) in [(Kind::Land, m.land, LAND), (Kind::Thing, m.things, THING)] {
         if !src.iter().any(|&b| b) {
             continue;
         }
@@ -582,7 +591,7 @@ fn relief(
     for (si, src) in sources.iter().enumerate() {
         let (band, grow) = match src.kind {
             Kind::Land => (BAND_LAND, CHAOS_WOBBLE_GROW),
-            Kind::Rock => (BAND_ROCK, CHAOS_WOBBLE_GROW),
+            Kind::Thing => (BAND_THING, CHAOS_WOBBLE_GROW),
             Kind::Corner => (BAND_CORNER, 0.5 * CHAOS_WOBBLE_GROW),
         };
         let mut wt: Vec<f64> = src
@@ -591,9 +600,9 @@ fn relief(
             .iter()
             .map(|&dk| src.strength * libm::exp(-dk / src.decay))
             .collect();
-        if src.kind == Kind::Rock {
+        if src.kind == Kind::Thing {
             for v in &mut wt {
-                *v *= SWELL_ROCK_GAIN;
+                *v *= SWELL_THING_GAIN;
             }
             if let Some((lx, ly)) = &land_grad {
                 let (rx, ry) = src.d.gradient();

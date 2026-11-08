@@ -48,6 +48,7 @@ mod band;
 mod field;
 pub mod form;
 pub mod graph;
+mod land;
 mod outline;
 mod paint;
 mod piece;
@@ -77,6 +78,7 @@ pub use field::{
     Field, Noise, OnFrame, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at,
     rim, scatter, smax, smooth01,
 };
+pub use land::{Disc, Land, Seat, SeatRule, THINGS, seat_on};
 pub use outline::Outline;
 pub use paint::paint_mesh;
 pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
@@ -90,7 +92,7 @@ pub use scene::{
 pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
 pub use stand::{Stand, Stood, stand};
 pub use stl::{BuildRecord, stl, target_name};
-pub use stone::{Grain, grain, hull, seat, solid};
+pub use stone::{Grain, grain, hull, solid};
 pub use threemf::{Palette, RAMPS, Ramp, threemf};
 
 /// Why a kit operation failed.
