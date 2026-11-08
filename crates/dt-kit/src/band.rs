@@ -563,7 +563,15 @@ pub fn solve_traced(own: &Band, pins: &[Pin], ease: Ease) -> Result<Solved, Refu
     // a weight that rounds to 1 away from every place: that pin's band
     let mut exact: Vec<Option<(f64, f64)>> = vec![None; n];
     for (i, p) in pins.iter().enumerate() {
-        let (dist, near) = distance_nearest(&p.place.bits, nx, ny);
+        // a pin reaches out from where it wins: a later pin over its whole
+        // place leaves it nothing to ease from (its tail would pull the
+        // surface up beside the pin that covers it)
+        let wins: Vec<bool> = owner.iter().map(|&o| o == Some(i)).collect();
+        let (dist, near) = if wins.contains(&true) {
+            distance_nearest(&wins, nx, ny)
+        } else {
+            (vec![f64::INFINITY; n], vec![None; n])
+        };
         for k in 0..n {
             if owner[k].is_some() {
                 continue;
@@ -1068,6 +1076,25 @@ mod tests {
 
     /// bodies.html, "Pins": the later pin wins where places overlap. The
     /// ford, written after the stream's bed, wins on the ford.
+    #[test]
+    fn a_pin_covered_all_over_leaves_no_tail() {
+        // a rim pin at 3.4 is written first and a later pin holds the same
+        // strip at 0.4: nothing is left of the first to ease from, so the
+        // surface beside the strip never heads for 3.4
+        let strip = mask(1, |_, y| y < 1e-9);
+        let own = flat(1, 0.4, 0.4);
+        let first = pin(1, strip.clone(), 3.4, 3.4);
+        let second = pin(1, strip, 0.4, 0.4);
+        let b = solve(&own, &[first, second], Ease::Slope(24.0)).unwrap();
+        for y in [0.5, 1.0, 2.0] {
+            assert!(
+                near_iv(at(&b, 1, 10.0, y), 0.4, 0.4),
+                "{:?}",
+                at(&b, 1, 10.0, y)
+            );
+        }
+    }
+
     #[test]
     fn the_later_pin_wins_a_ford() {
         let own = flat(2, 5.0, 6.0);
