@@ -39,13 +39,10 @@ use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, distance, form};
 use rayon::prelude::*;
 
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 use flow::Swaths;
 use fronds::Surface;
 use lat::Lat;
-
-/// The controls `grass` takes.
-pub const CONTROLS: &[&str] = &["length", "height", "clearings", "cover", "bare", "flow"];
 
 /// Field resolution of the flow, mm.
 const FIELD_RES_MM: f64 = 0.25;
@@ -85,7 +82,6 @@ impl Grass {
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("grass", controls, CONTROLS)?;
         let mut g = Self {
             length: (3.5, 6.5),
             height: (1.5, 2.0),

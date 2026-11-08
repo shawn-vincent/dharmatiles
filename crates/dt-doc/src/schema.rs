@@ -125,6 +125,9 @@ pub struct Control {
     pub limits: Option<Limits>,
     /// True when it takes a range (`size="6..15"`), drawn from per thing.
     pub ranges: bool,
+    /// Part of the language, not built yet: `check` accepts it, a build
+    /// refuses it.  A sub-control of a planned control is planned too.
+    pub planned: bool,
     /// The default, as an author would write it; empty if none.
     pub default: &'static str,
     /// One line of help.
@@ -446,6 +449,12 @@ pub struct Element {
     pub needs: &'static [PlaceWord],
     /// True when a `scatter` may sit inside it (`dirt { scatter … }`).
     pub holds_scatter: bool,
+    /// The place words its build honours so far, `in=` aside (every
+    /// element acts in its region); the rest of [`Element::place`] is
+    /// planned.
+    pub honours: &'static [PlaceWord],
+    /// True when a `scatter` may scatter it (built so far).
+    pub scattered: bool,
     /// Its controls.
     pub controls: &'static [Control],
 }
@@ -455,6 +464,26 @@ impl Element {
     #[must_use]
     pub fn control(&'static self, name: &str) -> Option<&'static Control> {
         self.controls.iter().find(|c| c.name == name)
+    }
+
+    /// Whether a build takes the control at `path` (`height`, or
+    /// `crown/width` for a sub-control): one the schema has, not planned.
+    #[must_use]
+    pub fn takes(&'static self, path: &str) -> bool {
+        let mut parts = path.splitn(2, '/');
+        let Some(c) = parts.next().and_then(|n| self.control(n)) else {
+            return false;
+        };
+        match parts.next() {
+            None => !c.planned,
+            Some(sub) => !c.planned && c.sub(sub).is_some_and(|s| !s.planned),
+        }
+    }
+
+    /// Whether its build honours the place word `w` (`in=` always).
+    #[must_use]
+    pub fn honours(&self, w: PlaceWord) -> bool {
+        w == PlaceWord::In || self.honours.contains(&w)
     }
 
     /// Solid or surface; `Mixed` for a scatter, whose kind is its

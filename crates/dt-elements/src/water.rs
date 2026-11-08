@@ -29,10 +29,7 @@
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smooth01};
 
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Write, only};
-
-/// The controls `water` takes.
-pub const CONTROLS: &[&str] = &["level"];
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
 const CELL_MM: f64 = 0.2;
 const BANK_GRID_WEIGHT: f64 = 1.25;
@@ -94,7 +91,6 @@ impl Water {
     /// # Errors
     /// [`LookError`] for a bad level.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("water", controls, CONTROLS)?;
         let mut level_mm = f64::NAN;
         for c in controls {
             if c.name == "level" {

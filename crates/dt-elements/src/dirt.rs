@@ -29,21 +29,7 @@ use dt_kit::{
 
 use crate::ground::Shape;
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
-
-/// The controls `dirt` takes (`bank` comes with walls and cliffs).
-pub const CONTROLS: &[&str] = &[
-    "level",
-    "bumps",
-    "bumps/up",
-    "bumps/down",
-    "bump-size",
-    "clods",
-    "stones",
-    "bank/against",
-    "bank/height",
-    "bank/reach",
-];
+use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
 
 // the bank heaped against a cliff
 const APRON_H_MM: (f64, f64) = (1.5, 3.5);
@@ -156,7 +142,6 @@ impl Dirt {
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("dirt", controls, CONTROLS)?;
         let mut clod_density = CLOD_DENSITY;
         for c in controls {
             if c.name == "clods.density" {

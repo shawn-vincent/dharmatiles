@@ -29,29 +29,11 @@ pub(crate) mod rubble;
 use dt_kit::{Kind, Scene};
 
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write};
 #[cfg(test)]
 use chassis::percentile;
 pub(crate) use chassis::{Run, build, cell_seed, finish_build, run};
 use layout::Bond;
-
-/// The controls `wall` takes (dt-doc's vocabulary, sub-controls as
-/// `group/sub`).
-pub const CONTROLS: &[&str] = &[
-    "style",
-    "height",
-    "thickness",
-    "stones/height",
-    "stones/length",
-    "stones/texture",
-    "joints/width",
-    "joints/depth",
-    "edges/rounding",
-    "coping",
-    "bond",
-    "ruin",
-    "top",
-];
 
 /// The official wall top above the datum, mm at the reference.
 const WALL_TOP_MM: f64 = 33.1;
@@ -222,7 +204,6 @@ impl Wall {
     /// [`LookError`] for a control it does not take or a value out of
     /// range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("wall", controls, CONTROLS)?;
         let get = |n: &str| controls.iter().find(|c| c.name == n);
         let family = match get("style") {
             Some(c) => match read::word(c)? {

@@ -16,11 +16,7 @@ use dt_kit::Scene;
 
 use crate::read;
 use crate::wall::{self, Family, Height, Mason};
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
-
-/// The controls `floor` takes (dt-doc's vocabulary, sub-controls as
-/// `group/sub`).
-pub const CONTROLS: &[&str] = &["style", "texture", "slabs", "level"];
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write};
 
 /// The `floor` element.
 #[derive(Clone, Debug, PartialEq)]
@@ -36,7 +32,6 @@ impl Floor {
     /// [`LookError`] for a control it does not take or a value out of
     /// range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("floor", controls, CONTROLS)?;
         let get = |n: &str| controls.iter().find(|c| c.name == n);
         let fieldstone = match get("style") {
             Some(c) => read::word(c)? == "fieldstone",

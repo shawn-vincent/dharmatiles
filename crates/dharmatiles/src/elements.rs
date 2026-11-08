@@ -1,6 +1,6 @@
 //! `dharmatiles elements [NAME]`: the elements a stack holds and their controls, from
-//! dt-doc's schema tables, with what this build takes so far (dt-elements'
-//! `takes`).
+//! dt-doc's schema tables, with what this build takes so far (the
+//! schema's planned controls aside).
 
 use std::fmt::Write as _;
 
@@ -78,22 +78,27 @@ fn unit(a: Axis) -> &'static str {
 
 /// Whether this build takes `path` (`bumps`, or `bumps/up` for a
 /// sub-control).  A group counts as taken when any of its subs is.
-fn taken(takes: Option<&[&str]>, path: &str, c: &Control) -> bool {
-    takes.is_some_and(|t| {
-        t.contains(&path)
+fn taken(built: Option<&'static Element>, path: &str, c: &Control) -> bool {
+    built.is_some_and(|l| {
+        l.takes(path)
             || (c.is_group()
                 && c.subs
                     .iter()
-                    .any(|s| t.contains(&format!("{path}/{}", s.name).as_str())))
+                    .any(|s| l.takes(&format!("{path}/{}", s.name))))
     })
 }
 
-fn summary_json(l: &Element) -> Value {
+/// The element, if this build builds it.
+fn built(l: &'static Element) -> Option<&'static Element> {
+    dt_elements::built().any(|n| n == l.name).then_some(l)
+}
+
+fn summary_json(l: &'static Element) -> Value {
     json!({
         "name": l.name,
         "role": role(l.role),
         "about": l.about,
-        "built": dt_elements::takes(l.name).is_some(),
+        "built": built(l).is_some(),
     })
 }
 
@@ -103,7 +108,7 @@ pub(crate) fn all_json() -> Value {
 }
 
 fn element_json(l: &'static Element) -> Value {
-    let takes = dt_elements::takes(l.name);
+    let takes = built(l);
     let mut v = summary_json(l);
     v["ok"] = json!(true);
     v["place"] = json!(l.place.iter().map(|p| p.as_str()).collect::<Vec<_>>());
@@ -118,7 +123,7 @@ fn element_json(l: &'static Element) -> Value {
     v
 }
 
-fn control_json(takes: Option<&[&str]>, path: &str, c: &Control) -> Value {
+fn control_json(takes: Option<&'static Element>, path: &str, c: &Control) -> Value {
     json!({
         "name": c.name,
         "unit": c.value.map(unit),
@@ -150,7 +155,7 @@ fn word_json(w: &Word) -> Value {
 fn list() {
     let wn = ELEMENTS.iter().map(|l| l.name.len()).max().unwrap_or(0);
     for l in ELEMENTS {
-        let built = if dt_elements::takes(l.name).is_some() {
+        let built = if built(l).is_some() {
             "built"
         } else {
             "not yet"
@@ -175,7 +180,13 @@ struct Row {
     words: &'static [Word],
 }
 
-fn rows(takes: Option<&[&str]>, path: &str, c: &'static Control, depth: usize, out: &mut Vec<Row>) {
+fn rows(
+    takes: Option<&'static Element>,
+    path: &str,
+    c: &'static Control,
+    depth: usize,
+    out: &mut Vec<Row>,
+) {
     let mut kind = c
         .value
         .map_or_else(|| "group".to_owned(), |a| unit(a).to_owned());
@@ -211,7 +222,7 @@ fn rows(takes: Option<&[&str]>, path: &str, c: &'static Control, depth: usize, o
 }
 
 fn show(l: &'static Element) {
-    let takes = dt_elements::takes(l.name);
+    let takes = built(l);
     say!("{}: {}", l.name, l.about);
     let mut facts = vec![role(l.role).to_owned()];
     if !l.place.is_empty() {
@@ -283,15 +294,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_sub_control_is_taken_by_its_path() {
+    fn a_planned_control_is_not_taken() {
+        let cliff = schema::element("cliff").expect("cliff");
+        let rock = cliff.control("rock").expect("rock");
+        assert!(taken(Some(cliff), "rock", rock));
+        assert!(!taken(
+            Some(cliff),
+            "rock/columns",
+            rock.sub("columns").expect("columns")
+        ));
+        assert!(!taken(
+            Some(cliff),
+            "scree",
+            cliff.control("scree").expect("scree")
+        ));
         let dirt = schema::element("dirt").expect("dirt");
-        let bumps = dirt.control("bumps").expect("bumps");
-        let up = bumps.sub("up").expect("up");
-        let takes: &[&str] = &["level", "bumps/up"];
-        assert!(taken(Some(takes), "bumps/up", up));
-        assert!(!taken(Some(takes), "bumps", bumps));
-        assert!(!taken(None, "level", dirt.control("level").expect("level")));
         let bank = dirt.control("bank").expect("bank");
-        assert!(taken(Some(&["bank/height"]), "bank", bank));
+        assert!(taken(Some(dirt), "bank", bank));
+        assert!(!taken(None, "bank", bank));
     }
 }

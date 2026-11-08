@@ -44,23 +44,9 @@ use dt_kit::Kind;
 use dt_kit::{Material, Rng, Scene, Support, Tag, smooth01};
 use rayon::prelude::*;
 
-use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
 use form::{Ask, FormName};
 use stone::{ColState, Env};
-
-/// The controls `cliff` takes.
-pub const CONTROLS: &[&str] = &[
-    "height",
-    "depth",
-    "rock",
-    "stone-size",
-    "top",
-    "form",
-    "ledges",
-    "ledges/height",
-    "shattered/patches",
-    "shattered/width",
-];
 
 type ColResult = Result<(Vec<(usize, dt_kit::Piece)>, usize), dt_kit::KitError>;
 
@@ -87,7 +73,6 @@ impl Cliff {
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("cliff", controls, CONTROLS)?;
         let mut c = Self {
             height: None,
             depth: None,

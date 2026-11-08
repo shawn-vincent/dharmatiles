@@ -24,18 +24,7 @@ use dt_kit::Kind;
 use dt_kit::{Field, Material, Rng, Scene, Spread, Tag, TriMesh, form, scatter, signed_volume};
 
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Write, only};
-
-/// The controls `flowers` takes.
-pub const CONTROLS: &[&str] = &[
-    "per-square",
-    "petals",
-    "radius",
-    "centre",
-    "stem",
-    "dome",
-    "petal",
-];
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
 const AZ: usize = 16;
 const EL: usize = 8;
@@ -60,7 +49,6 @@ impl Flowers {
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("flowers", controls, CONTROLS)?;
         let mut f = Self {
             per_square: 4.0,
             petals: 5,

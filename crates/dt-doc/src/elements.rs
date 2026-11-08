@@ -16,6 +16,7 @@ const fn c(name: &'static str, value: Axis, about: &'static str) -> Control {
         expert: false,
         limits: None,
         ranges: false,
+        planned: false,
         default: "",
         about,
     }
@@ -31,6 +32,7 @@ const fn group(name: &'static str, subs: &'static [Control], about: &'static str
         expert: false,
         limits: None,
         ranges: false,
+        planned: false,
         default: "",
         about,
     }
@@ -78,6 +80,11 @@ impl Control {
             max: hi,
             above: true,
         });
+        self
+    }
+    /// Part of the language, not built yet.
+    const fn planned(mut self) -> Self {
+        self.planned = true;
         self
     }
     /// Takes a range as well as one number.
@@ -200,7 +207,9 @@ const fn rock_controls(size: &'static str) -> [Control; 5] {
             .default(size),
         c("mostly", Axis::Word, "skews the size range").words(MOSTLY),
         c("shape", Axis::Word, "river stones, broken rock, flat slabs").words(ROCK_SHAPE),
-        c("wear", Axis::Word, "sharp, or chipped and rounded edges").words(WEAR),
+        c("wear", Axis::Word, "sharp, or chipped and rounded edges")
+            .words(WEAR)
+            .planned(),
         c(
             "buried",
             Axis::Share,
@@ -657,11 +666,11 @@ static CLIFF: &[Control] = &[
     .words(ROCK_MIX)
     .default("mixed")
     .subs(&[
-        c("columns", Axis::Number, "weight of tall upright stones"),
-        c("blocks", Axis::Number, "weight of chunky blocks"),
-        c("slabs", Axis::Number, "weight of thin tilted slabs"),
-        c("odd", Axis::Number, "weight of irregular lumps"),
-        c("monoliths", Axis::Number, "weight of ground-to-top stones"),
+        c("columns", Axis::Number, "weight of tall upright stones").planned(),
+        c("blocks", Axis::Number, "weight of chunky blocks").planned(),
+        c("slabs", Axis::Number, "weight of thin tilted slabs").planned(),
+        c("odd", Axis::Number, "weight of irregular lumps").planned(),
+        c("monoliths", Axis::Number, "weight of ground-to-top stones").planned(),
     ]),
     c(
         "stone-size",
@@ -691,6 +700,7 @@ static CLIFF: &[Control] = &[
         "dirt heaped against the face: how high (a range)",
     )
     .ranges()
+    .planned()
     .default("1.5..3.5"),
     c(
         "bank-reach",
@@ -698,24 +708,28 @@ static CLIFF: &[Control] = &[
         "dirt heaped against the face: how far out (a range)",
     )
     .ranges()
+    .planned()
     .default("3..6.5"),
     c(
         "scree",
         Axis::PerSquare,
         "fallen stones along each square of the foot",
     )
+    .planned()
     .default("55"),
     c(
         "boulders",
         Axis::PerSquare,
         "big fallen blocks along each square of the foot",
     )
+    .planned()
     .default("2.5"),
     c(
         "grit",
         Axis::PerSquare,
         "small stones half-buried in the bank, per square of the foot",
     )
+    .planned()
     .default("45"),
     c("top", Axis::Word, "earth lodged on the flat top")
         .words(&[
@@ -741,7 +755,8 @@ static SCATTER: &[Control] = &[
         "spread",
         Axis::Mm,
         "with at=: a cluster within this distance of it",
-    ),
+    )
+    .planned(),
     c(
         "reach",
         Axis::Mm,
@@ -751,9 +766,12 @@ static SCATTER: &[Control] = &[
         "clumps",
         Axis::PerSquare,
         "gathers them into clumps; default spread evenly",
-    ),
+    )
+    .planned(),
     c("gap", Axis::Mm, "least space between neighbours"),
-    c("mostly", Axis::Word, "skews every child's size range").words(MOSTLY),
+    c("mostly", Axis::Word, "skews every child's size range")
+        .words(MOSTLY)
+        .planned(),
 ];
 
 // ---- the table ----------------------------------------------------------
@@ -762,7 +780,13 @@ const SURFACE_PLACE: &[PlaceWord] = &[PlaceWord::In, PlaceWord::Along];
 const THING_PLACE: &[PlaceWord] = &[PlaceWord::In, PlaceWord::At];
 const RUN_PLACE: &[PlaceWord] = &[PlaceWord::In, PlaceWord::Along, PlaceWord::Side];
 
-const fn thing(name: &'static str, about: &'static str, controls: &'static [Control]) -> Element {
+/// A thing placed with `at=`; `scattered` when a scatter may hold it yet.
+const fn thing(
+    name: &'static str,
+    about: &'static str,
+    controls: &'static [Control],
+    scattered: bool,
+) -> Element {
     Element {
         name,
         about,
@@ -770,6 +794,8 @@ const fn thing(name: &'static str, about: &'static str, controls: &'static [Cont
         place: THING_PLACE,
         needs: &[],
         holds_scatter: false,
+        honours: &[PlaceWord::At],
+        scattered,
         controls,
     }
 }
@@ -783,6 +809,8 @@ pub static ELEMENTS: &[Element] = &[
         place: SURFACE_PLACE,
         needs: &[],
         holds_scatter: true,
+        honours: &[],
+        scattered: false,
         controls: &[LEVEL, BUMPS, BUMP_SIZE],
     },
     Element {
@@ -792,6 +820,8 @@ pub static ELEMENTS: &[Element] = &[
         place: SURFACE_PLACE,
         needs: &[],
         holds_scatter: true,
+        honours: &[],
+        scattered: false,
         controls: &[
             LEVEL,
             BUMPS,
@@ -824,6 +854,8 @@ pub static ELEMENTS: &[Element] = &[
         place: SURFACE_PLACE,
         needs: &[],
         holds_scatter: true,
+        honours: &[],
+        scattered: false,
         controls: &[
             c("length", Axis::Mm, "blade length along the ground")
                 .over(0.0, f64::INFINITY)
@@ -862,6 +894,8 @@ pub static ELEMENTS: &[Element] = &[
         place: &[PlaceWord::In],
         needs: &[],
         holds_scatter: false,
+        honours: &[],
+        scattered: false,
         controls: &[
             c("clumps", Axis::Count, "how many clumps along the shore")
                 .limits(0.0, 30.0)
@@ -884,6 +918,8 @@ pub static ELEMENTS: &[Element] = &[
         place: SURFACE_PLACE,
         needs: &[],
         holds_scatter: false,
+        honours: &[],
+        scattered: false,
         controls: &[
             c("per-square", Axis::PerSquare, "how many flowers a square")
                 .limits(0.0, 40.0)
@@ -915,27 +951,26 @@ pub static ELEMENTS: &[Element] = &[
         place: &[PlaceWord::In],
         needs: &[],
         holds_scatter: false,
+        honours: &[],
+        scattered: false,
         controls: &[c("level", Axis::Level, "the calm water level")
             .over(0.0, f64::INFINITY)
             .default("water")],
     },
-    thing("rock", "one rock", &ROCK),
-    thing("stone", "a rock with stone sizes, about 1–6 mm", &STONE),
+    thing("rock", "one rock", &ROCK, true),
+    thing("stone", "a rock with stone sizes, about 1–6 mm", &STONE, true),
     thing(
         "boulder",
         "a rock with boulder sizes, about 4.5–8 mm",
-        &BOULDER,
-    ),
+        &BOULDER, true),
     thing(
         "pebble",
         "a rock with pebble sizes, about 1–2.2 mm",
-        &PEBBLE,
-    ),
+        &PEBBLE, true),
     thing(
         "tree",
         "a space-colonisation tree with foliage clumps and leaves",
-        TREE,
-    ),
+        TREE, false),
     Element {
         name: "wall",
         about: "a masonry wall; on a tile edge it stands inside the tile",
@@ -943,6 +978,8 @@ pub static ELEMENTS: &[Element] = &[
         place: RUN_PLACE,
         needs: &[PlaceWord::Along],
         holds_scatter: false,
+        honours: &[PlaceWord::Along],
+        scattered: false,
         controls: WALL,
     },
     Element {
@@ -952,6 +989,8 @@ pub static ELEMENTS: &[Element] = &[
         place: &[PlaceWord::In],
         needs: &[],
         holds_scatter: false,
+        honours: &[],
+        scattered: false,
         controls: FLOOR,
     },
     Element {
@@ -961,6 +1000,8 @@ pub static ELEMENTS: &[Element] = &[
         place: RUN_PLACE,
         needs: &[],
         holds_scatter: false,
+        honours: &[PlaceWord::Along],
+        scattered: false,
         controls: CLIFF,
     },
     Element {
@@ -975,6 +1016,8 @@ pub static ELEMENTS: &[Element] = &[
         ],
         needs: &[],
         holds_scatter: false,
+        honours: &[PlaceWord::Against],
+        scattered: false,
         controls: SCATTER,
     },
 ];

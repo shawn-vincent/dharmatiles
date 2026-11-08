@@ -33,12 +33,7 @@ use dt_kit::{
     scatter, seat, solid,
 };
 
-use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
-
-/// The controls a rock thing takes (`wear` comes later).
-pub const CONTROLS: &[&str] = &["size", "mostly", "shape", "buried"];
-/// The controls `scatter` takes so far.
-pub const SCATTER_CONTROLS: &[&str] = &["count", "per-square", "gap", "reach"];
+use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -522,7 +517,6 @@ impl Thing {
     /// # Errors
     /// [`LookError`] for a control it does not take or a bad size.
     pub fn new(kind: &str, controls: &[Control], weight: f64) -> Result<Self, LookError> {
-        only(kind, controls, CONTROLS)?;
         let mut t = Self {
             kind: kind.to_owned(),
             size: (6.0, 15.0),
@@ -875,7 +869,6 @@ impl Scatter {
     /// # Errors
     /// [`LookError`] for a child that is not a rock thing, or bad controls.
     pub fn new(controls: &[Control], children: &[crate::Child]) -> Result<Self, LookError> {
-        only("scatter", controls, SCATTER_CONTROLS)?;
         let range = |v: &Value| match v {
             Value::Number(a) => Some((*a, *a)),
             Value::Range(a, b) => Some((*a, *b)),

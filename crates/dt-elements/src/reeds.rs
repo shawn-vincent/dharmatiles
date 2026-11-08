@@ -22,10 +22,7 @@ use dt_kit::Kind;
 use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, form};
 
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Write, only};
-
-/// The controls `reeds` takes.
-pub const CONTROLS: &[&str] = &["clumps", "stems", "height"];
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
 const REED_SEP_MM: f64 = 12.0;
 /// Ground height relative to the water level where reeds root.
@@ -55,7 +52,6 @@ impl Reeds {
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("reeds", controls, CONTROLS)?;
         let mut r = Self {
             clumps: (3, 5),
             stems: (5, 9),

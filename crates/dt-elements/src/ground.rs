@@ -17,10 +17,7 @@
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, noise, rim, smax, smooth01};
 
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Write, only};
-
-/// The controls `ground` takes.
-pub const CONTROLS: &[&str] = &["level", "bumps", "bumps/up", "bumps/down", "bump-size"];
+use crate::{Control, Ctx, Element, LookError, Plan, Write};
 
 /// The hill constants (mm at the reference square unless noted).
 const PLAIN_FRAC: f64 = 0.35;
@@ -212,7 +209,6 @@ impl Ground {
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("ground", controls, CONTROLS)?;
         Ok(Self {
             shape: Shape::new("ground", controls)?,
         })

@@ -619,14 +619,14 @@ impl Reader<'_> {
             };
             match &e.callee {
                 Callee::Element(element) => {
-                    let Some(takes) = dt_elements::takes(element.name) else {
+                    if !dt_elements::built().any(|n| n == element.name) {
                         pending.push(not_yet(
                             src,
                             e.what.span,
                             &format!("element `{}`", element.name),
                         ));
                         continue;
-                    };
+                    }
                     let mut ok = true;
                     // inside a definition the decoder leaves a required
                     // place word to the call; it must arrive from there
@@ -655,22 +655,21 @@ impl Reader<'_> {
                             self.errors.push(d);
                         }
                     }
-                    let honours = dt_elements::places(element.name);
                     // along= a path of edges and at= a point, for the elements
                     // that place by them; the rest is not built yet
                     let mut path = None;
                     let mut point = None;
-                    let against = if honours.contains(&"against") {
+                    let against = if element.honours(PlaceWord::Against) {
                         e.place.against.as_ref().map(|a| a.value.clone())
                     } else {
                         None
                     };
                     let mut unplaced = vec![("side=", e.place.side.as_ref().map(|s| s.span))];
-                    if !honours.contains(&"against") {
+                    if !element.honours(PlaceWord::Against) {
                         unplaced.push(("against=", e.place.against.as_ref().map(|s| s.span)));
                     }
                     match &along {
-                        Some(a) if honours.contains(&"along") => match &a.value {
+                        Some(a) if element.honours(PlaceWord::Along) => match &a.value {
                             Along::Edges(edges) => path = Some(edge_path(edges, self.dims)),
                             Along::Line(_) => unplaced.push(("along= a drawn line", Some(a.span))),
                         },
@@ -682,7 +681,7 @@ impl Reader<'_> {
                         _ => {}
                     }
                     match &at {
-                        Some(p) if honours.contains(&"at") => {
+                        Some(p) if element.honours(PlaceWord::At) => {
                             match p.value.bounds(self.dims.0, self.dims.1) {
                                 Ok(((x0, x1), (y0, y1))) => point = Some([[x0, x1], [y0, y1]]),
                                 Err(msg) => self
@@ -715,12 +714,12 @@ impl Reader<'_> {
                             continue;
                         }
                         let built = match &c.callee {
-                            Callee::Element(cl) if dt_elements::holds(element.name, cl.name) => {
-                                dt_elements::takes(cl.name).map(|t| (*cl, t))
+                            Callee::Element(cl) if element.name == "scatter" && cl.scattered => {
+                                Some(*cl)
                             }
                             _ => None,
                         };
-                        let Some((cl, ctakes)) = built else {
+                        let Some(cl) = built else {
                             ok = false;
                             pending.push(not_yet(
                                 src,
@@ -745,7 +744,7 @@ impl Reader<'_> {
                                 ));
                             }
                         }
-                        match self.controls(c, cl, ctakes, scope, pending) {
+                        match self.controls(c, cl, scope, pending) {
                             Some(controls) => children.push(Child {
                                 what: c.what.clone(),
                                 controls,
@@ -754,7 +753,7 @@ impl Reader<'_> {
                             None => ok = false,
                         }
                     }
-                    let controls = self.controls(e, element, takes, scope, pending);
+                    let controls = self.controls(e, element, scope, pending);
                     if ok && let Some(controls) = controls {
                         let inner = Scope {
                             area: area.clone(),
@@ -861,7 +860,6 @@ impl Reader<'_> {
         &mut self,
         e: &model::Entry,
         element: &'static Element,
-        takes: &[&str],
         scope: &Scope,
         pending: &mut Vec<Diag>,
     ) -> Option<Vec<Setting>> {
@@ -883,7 +881,7 @@ impl Reader<'_> {
             for sub in &s.subs {
                 let name = format!("{}/{}", s.name.value, sub.name.value);
                 match &sub.value {
-                    Some(v) if takes.contains(&name.as_str()) => {
+                    Some(v) if element.takes(&name) => {
                         items.push(Item {
                             name,
                             owner: &s.name.value,
@@ -933,7 +931,7 @@ impl Reader<'_> {
                     self.errors.push(*why);
                     continue;
                 }
-                if !takes.contains(&name.as_str()) {
+                if !element.takes(&name) {
                     // a control written at its default changes nothing
                     let default = control.and_then(|c| default_value(c, &scope.levels));
                     if default.as_ref() != Some(&value) {
@@ -950,7 +948,7 @@ impl Reader<'_> {
             }
         }
         for c in element.controls {
-            if takes.contains(&c.name)
+            if element.takes(c.name)
                 && e.control(c.name).is_none()
                 && let Some(raw) = c.default_value()
                 && let Ok(value) = element_value(&raw, &scope.levels)

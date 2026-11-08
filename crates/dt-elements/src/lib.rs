@@ -255,171 +255,46 @@ pub trait Element: Send + Sync {
     }
 }
 
-/// How a row builds its element: the name as written (a rock row serves four
-/// names), the controls and the children.
+/// Builds an element from the name as written (a rock row serves four
+/// names), its controls and its children.  What each takes, where it may
+/// be placed and what a scatter may hold are the schema's
+/// (`dt_doc::schema`); the evaluator passes only those.
 type Builder = fn(&str, &[Control], &[Child]) -> Result<Box<dyn Element>, LookError>;
 
-/// One built element: everything the rest of the program asks about it.
-struct Row {
-    /// The name as written in a stack.
-    name: &'static str,
-    /// The controls it takes (a word's numbers, `clods.density`, come with
-    /// their control).
-    controls: &'static [&'static str],
-    /// The place words it honours (`along`, `at`, `against`).
-    places: &'static [&'static str],
-    /// Whether a `scatter` may hold it.
-    scatterable: bool,
-    /// Builds it.
-    build: Builder,
-}
-
-/// Every built element, one row each. An element not listed is not built yet.
-static ELEMENTS: &[Row] = &[
-    Row {
-        name: "ground",
-        controls: ground::CONTROLS,
-        places: &[],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(ground::Ground::new(c)?)),
-    },
-    Row {
-        name: "dirt",
-        controls: dirt::CONTROLS,
-        places: &[],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(dirt::Dirt::new(c)?)),
-    },
-    Row {
-        name: "water",
-        controls: water::CONTROLS,
-        places: &[],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(water::Water::new(c)?)),
-    },
-    Row {
-        name: "scatter",
-        controls: rock::SCATTER_CONTROLS,
-        places: &["against"],
-        scatterable: false,
-        build: |_, c, ch| Ok(Box::new(rock::Scatter::new(c, ch)?)),
-    },
-    Row {
-        name: "rock",
-        controls: rock::CONTROLS,
-        places: &["at"],
-        scatterable: true,
-        build: |n, c, _| Ok(Box::new(rock::Single::new(n, c)?)),
-    },
-    Row {
-        name: "stone",
-        controls: rock::CONTROLS,
-        places: &["at"],
-        scatterable: true,
-        build: |n, c, _| Ok(Box::new(rock::Single::new(n, c)?)),
-    },
-    Row {
-        name: "boulder",
-        controls: rock::CONTROLS,
-        places: &["at"],
-        scatterable: true,
-        build: |n, c, _| Ok(Box::new(rock::Single::new(n, c)?)),
-    },
-    Row {
-        name: "pebble",
-        controls: rock::CONTROLS,
-        places: &["at"],
-        scatterable: true,
-        build: |n, c, _| Ok(Box::new(rock::Single::new(n, c)?)),
-    },
-    Row {
-        name: "wall",
-        controls: wall::CONTROLS,
-        places: &["along"],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(wall::Wall::new(c)?)),
-    },
-    Row {
-        name: "floor",
-        controls: floor::CONTROLS,
-        places: &[],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(floor::Floor::new(c)?)),
-    },
-    Row {
-        name: "tree",
-        controls: tree::CONTROLS,
-        places: &["at"],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(tree::Tree::new(c)?)),
-    },
-    Row {
-        name: "grass",
-        controls: grass::CONTROLS,
-        places: &[],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(grass::Grass::new(c)?)),
-    },
-    Row {
-        name: "reeds",
-        controls: reeds::CONTROLS,
-        places: &[],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(reeds::Reeds::new(c)?)),
-    },
-    Row {
-        name: "cliff",
-        controls: cliff::CONTROLS,
-        places: &["along"],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(cliff::Cliff::new(c)?)),
-    },
-    Row {
-        name: "flowers",
-        controls: flowers::CONTROLS,
-        places: &[],
-        scatterable: false,
-        build: |_, c, _| Ok(Box::new(flowers::Flowers::new(c)?)),
-    },
+/// Every built element: its name and how it is built.  An element not
+/// listed is not built yet.
+static ELEMENTS: &[(&str, Builder)] = &[
+    ("ground", |_, c, _| Ok(Box::new(ground::Ground::new(c)?))),
+    ("dirt", |_, c, _| Ok(Box::new(dirt::Dirt::new(c)?))),
+    ("water", |_, c, _| Ok(Box::new(water::Water::new(c)?))),
+    ("scatter", |_, c, ch| {
+        Ok(Box::new(rock::Scatter::new(c, ch)?))
+    }),
+    ("rock", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
+    ("stone", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
+    ("boulder", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
+    ("pebble", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
+    ("wall", |_, c, _| Ok(Box::new(wall::Wall::new(c)?))),
+    ("floor", |_, c, _| Ok(Box::new(floor::Floor::new(c)?))),
+    ("tree", |_, c, _| Ok(Box::new(tree::Tree::new(c)?))),
+    ("grass", |_, c, _| Ok(Box::new(grass::Grass::new(c)?))),
+    ("reeds", |_, c, _| Ok(Box::new(reeds::Reeds::new(c)?))),
+    ("cliff", |_, c, _| Ok(Box::new(cliff::Cliff::new(c)?))),
+    ("flowers", |_, c, _| Ok(Box::new(flowers::Flowers::new(c)?))),
 ];
-
-fn row(name: &str) -> Option<&'static Row> {
-    ELEMENTS.iter().find(|r| r.name == name)
-}
-
-/// The controls a built element takes so far, or `None` for an element not built
-/// yet.  The evaluator passes an element only these (written, or their
-/// defaults from dt-doc's schema).
-#[must_use]
-pub fn takes(name: &str) -> Option<&'static [&'static str]> {
-    row(name).map(|r| r.controls)
-}
-
-/// Whether an element `name` can hold the child `child` yet.
-#[must_use]
-pub fn holds(name: &str, child: &str) -> bool {
-    name == "scatter" && row(child).is_some_and(|r| r.scatterable)
-}
-
-/// The place words a built element honours (`along`, `at`); the evaluator
-/// sets every other one aside as not built yet.
-#[must_use]
-pub fn places(name: &str) -> &'static [&'static str] {
-    row(name).map_or(&[], |r| r.places)
-}
 
 /// The element `name` with its controls and children (a scatter's things).
 ///
 /// # Errors
-/// [`LookError`] for an unknown element, a control it does not take, or a
-/// child it cannot hold.
+/// [`LookError`] for an unknown element, or one its controls or children
+/// cannot build.
 pub fn element_with(
     name: &str,
     controls: &[Control],
     children: &[Child],
 ) -> Result<Box<dyn Element>, LookError> {
-    match row(name) {
-        Some(r) => (r.build)(name, controls, children),
+    match ELEMENTS.iter().find(|(n, _)| *n == name) {
+        Some((_, build)) => build(name, controls, children),
         None => Err(LookError {
             control: None,
             message: format!("unknown element `{name}`"),
@@ -430,7 +305,7 @@ pub fn element_with(
 
 /// The names of every built element, in table order.
 pub fn built() -> impl Iterator<Item = &'static str> {
-    ELEMENTS.iter().map(|r| r.name)
+    ELEMENTS.iter().map(|(n, _)| *n)
 }
 
 /// The connector for a system: `db` (DungeonBlocks) or `ol` (OpenLOCK).
@@ -446,20 +321,4 @@ pub fn connector(system: &str) -> Result<Box<dyn Element>, LookError> {
             "the systems are db (DungeonBlocks) and ol (OpenLOCK)",
         )),
     }
-}
-
-/// Refuse any control not in `known` (a word's numbers, `clods.density`,
-/// come with their control).
-fn only(element: &str, controls: &[Control], known: &[&str]) -> Result<(), LookError> {
-    for c in controls {
-        let base = c.name.split('.').next().unwrap_or(&c.name);
-        if !known.contains(&base) {
-            return Err(LookError::control(
-                &c.name,
-                format!("`{element}` has no control `{}`", c.name),
-                format!("{element} takes: {}", known.join(", ")),
-            ));
-        }
-    }
-    Ok(())
 }

@@ -35,31 +35,9 @@ use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
 use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write};
 use site::{crumbs, fill_pockets, ground_drop, place};
 pub(crate) use site::{drop_crumbs, ground_box};
-
-/// The controls `tree` takes (dt-doc's vocabulary, sub-controls as
-/// `group/sub`).
-pub const CONTROLS: &[&str] = &[
-    "height",
-    "trunk/height",
-    "trunk/width",
-    "crown/width",
-    "crown/shape",
-    "crown/clumps",
-    "crown/clump-size",
-    "crown/branching",
-    "leaves",
-    "leaf/length",
-    "leaf/width",
-    "branch/split",
-    "branch/eagerness",
-    "branch/target",
-    "branch/balance",
-    "branch/exponent",
-    "branch/min-radius",
-];
 
 // The tree's fixed numbers, mm at the 35 mm square.
 
@@ -172,7 +150,6 @@ impl Tree {
     /// [`LookError`] for a control it does not take or a value out of
     /// range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("tree", controls, CONTROLS)?;
         let mut p = Params::default();
         // the word's numbers first, then the expert knobs over them
         let mut ordered: Vec<&Control> = controls
