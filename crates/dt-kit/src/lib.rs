@@ -44,6 +44,7 @@
 
 mod audit;
 mod bambu;
+mod band;
 mod field;
 pub mod form;
 pub mod graph;
@@ -55,6 +56,7 @@ pub mod rays;
 mod render;
 mod scene;
 mod shape;
+pub mod span;
 mod stand;
 mod stl;
 mod stone;
@@ -64,8 +66,12 @@ pub use audit::{
     Audit, Dropped, Export, Hang, HangBand, Printer, audit, audit_banded, draft, fit, hang,
 };
 pub use bambu::{bambu_project, project_settings};
+pub use band::{
+    Band, Banded, Ease, Layer, Lint, Pin, Refusal, Shadowed, Solved, Steep, drop_mm, lints, solve,
+    solve_traced,
+};
 pub use dt_geom::Convex;
-pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
+pub use dt_geom::{Grid, Iv, Mask, Rng, Seed, TriMesh, vec3};
 pub use dt_geom::{Structuring, distance_nearest};
 pub use field::{
     Field, Noise, OnFrame, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at,

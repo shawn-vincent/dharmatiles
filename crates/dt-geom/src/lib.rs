@@ -10,6 +10,7 @@
 //!   mesher built on it (layers, forced cells, contour splits, side
 //!   panels); [`hash`]: a spatial hash; [`convex`]: polytopes cut by half-spaces (rock facets and chips);
 //!   [`vec3`]: the 3-vector helpers.
+//! - [`iv::Iv`]: intervals and their arithmetic, for ranges in heights.
 //! - [`seed::Seed`], the deterministic path-keyed seed derivation, and the
 //!   seeded stream [`Rng`].
 //! - [`Solid`] (booleans, hull, refine, transform, slice), Manifold's
@@ -23,6 +24,7 @@ pub mod filter;
 pub mod geodesic;
 pub mod grid;
 pub mod hash;
+pub mod iv;
 pub mod lift;
 pub mod mesh;
 pub mod noise;
@@ -39,6 +41,7 @@ pub use filter::{Structuring, blur, blur_recursive, dilate, erode, quantile};
 pub use geodesic::geodesic;
 pub use grid::{Grid, LiftError, distance, distance_nearest, lift};
 pub use hash::SpatialHash;
+pub use iv::Iv;
 pub use lift::lift_adaptive;
 pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, MeshError, TriMesh, half_space};
 pub use raster::{Mask, draw_line, fill, fill_polygons};
