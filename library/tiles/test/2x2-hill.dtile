@@ -1,0 +1,12 @@
+// A hill: dirt level well above the edge level, so the ground rises from
+// the rim to a broad crown. The golden test for a tall, steep-sided
+// ground surface meeting the tile rim.
+
+tile size="2x2" seed=11 {
+    about "Dirt raised well above the edge level into a hill, for golden tests."
+    stack {
+        dirt level=16 bumps=2 bump-size=40 {
+            scatter per-square=6 { pebble size="1..2.2" }
+        }
+    }
+}

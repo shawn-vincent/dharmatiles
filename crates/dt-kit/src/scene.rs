@@ -333,6 +333,7 @@ impl Solid {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Slot {
     pub(crate) id: u32,
+    pub(crate) material: Material,
 }
 
 /// Consecutive slots, all of one material, handed out in sequence.
@@ -341,6 +342,7 @@ pub struct Slots {
     block: IdBlock,
     first: u32,
     len: u32,
+    material: Material,
 }
 
 impl Slot {
@@ -349,6 +351,12 @@ impl Slot {
     #[must_use]
     pub fn id(&self) -> u32 {
         self.id
+    }
+
+    /// What its solids are made of: fixed when the slot was reserved.
+    #[must_use]
+    pub fn material(&self) -> Material {
+        self.material
     }
 }
 
@@ -363,6 +371,7 @@ impl Slots {
         let s = self.first + i;
         Slot {
             id: self.block.id(s),
+            material: self.material,
         }
     }
 }
@@ -843,6 +852,7 @@ impl Parts {
             block: self.block,
             first: self.next_slot,
             len: n,
+            material,
         };
         self.next_slot += n;
         self.materials.extend((0..n).map(|_| material));

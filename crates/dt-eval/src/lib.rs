@@ -787,9 +787,9 @@ impl<'a> Plan<'a> {
         progress.begin(progress::AUDIT, "checking printability");
         let footprint = c.frame.size_mm();
         // the band every element gets: the printer's overhang to its steepest
-        let band = dt_kit::Band {
+        let band = dt_kit::HangBand {
             max_deg: opts.printer.steepest_deg,
-            ..dt_kit::Band::DEFAULT
+            ..dt_kit::HangBand::DEFAULT
         };
         let (export, audit) = if opts.draft {
             // the base is the same in every draft: its sockets are not flagged

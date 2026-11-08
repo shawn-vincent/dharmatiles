@@ -33,6 +33,8 @@ const TILES: &[&str] = &[
     "lib:tiles/test/1x1-wall-cut-stone-corner.dtile",
     "lib:tiles/test/1x1-wall-fieldstone.dtile",
     "lib:tiles/test/1x1-floor-stone.dtile",
+    "lib:tiles/test/1x1-wall-rim.dtile",
+    "lib:tiles/test/2x2-hill.dtile",
 ];
 
 fn build_at(path: &str, threads: usize) -> Built {
@@ -82,13 +84,16 @@ fn metrics(b: &Built) -> String {
         (600, 475),
     );
     format!(
-        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\nvoids_filled: {}\noverhang_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\n",
+        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\nvoids_filled: {}\npinches_moved: {}\nslivers: {}\ncollapsed: {}\noverhang_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\n",
         a.triangles,
         a.volume_mm3,
         a.watertight,
         a.bodies,
         a.dropped.len(),
         a.voids.len(),
+        a.pinches_moved,
+        a.slivers.len(),
+        a.collapsed,
         a.overhang_mm2,
         a.holes,
         img.red_pixels(),
@@ -161,6 +166,7 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
     for path in [
         "lib:tiles/ground/1x1-soil.dtile",
         "lib:tiles/test/2x2-dirt.dtile",
+        "lib:tiles/test/2x2-hill.dtile",
     ] {
         let b = built(path);
         let a = &b.audit;
@@ -231,6 +237,7 @@ fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
     for path in [
         "lib:tiles/test/1x1-wall-cut-stone-corner.dtile",
         "lib:tiles/test/1x1-wall-fieldstone.dtile",
+        "lib:tiles/test/1x1-wall-rim.dtile",
         "lib:tiles/test/1x1-floor-stone.dtile",
     ] {
         let b = built(path);

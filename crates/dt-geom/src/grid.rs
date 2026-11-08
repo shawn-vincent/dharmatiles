@@ -8,7 +8,7 @@
 //! per square has `cols * n + 1` nodes across, so its edge nodes lie exactly
 //! on the tile edge.
 
-use crate::{Footprint, TriMesh};
+use crate::{Structuring, TriMesh};
 
 /// Values on a lattice of nodes, row-major (`j` outer): a painted height
 /// (`Grid<f32>`, what is lifted), a field of numbers (`Grid<f64>`, the
@@ -199,7 +199,7 @@ impl Grid<f64> {
             &self.z,
             self.nx,
             self.ny,
-            Footprint::Disc(r_mm / self.step),
+            Structuring::Disc(r_mm / self.step),
         ))
     }
 
@@ -210,7 +210,7 @@ impl Grid<f64> {
             &self.z,
             self.nx,
             self.ny,
-            Footprint::Disc(r_mm / self.step),
+            Structuring::Disc(r_mm / self.step),
         ))
     }
 
@@ -220,8 +220,8 @@ impl Grid<f64> {
     pub fn range(&self, w_mm: f64) -> Self {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let r = libm::round(0.5 * w_mm / self.step) as usize;
-        let hi = crate::filter::dilate(&self.z, self.nx, self.ny, Footprint::Square(r));
-        let lo = crate::filter::erode(&self.z, self.nx, self.ny, Footprint::Square(r));
+        let hi = crate::filter::dilate(&self.z, self.nx, self.ny, Structuring::Square(r));
+        let lo = crate::filter::erode(&self.z, self.nx, self.ny, Structuring::Square(r));
         self.with_z(hi.iter().zip(&lo).map(|(a, b)| a - b).collect())
     }
 

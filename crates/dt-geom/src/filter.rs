@@ -165,14 +165,14 @@ fn recursive_line(
 
 /// A structuring element for [`dilate`] and [`erode`], in nodes.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Footprint {
+pub enum Structuring {
     /// Every node within this distance.
     Disc(f64),
     /// A `2r + 1` square.
     Square(usize),
 }
 
-impl Footprint {
+impl Structuring {
     /// Half-width of each row of the footprint, from `-r` to `r`.
     fn chords(self) -> Vec<usize> {
         match self {
@@ -233,7 +233,7 @@ fn running(line: &[f64], w: usize, max: bool, out: &mut [f64]) {
     }
 }
 
-fn morph(v: &[f64], nx: usize, ny: usize, fp: Footprint, max: bool) -> Vec<f64> {
+fn morph(v: &[f64], nx: usize, ny: usize, fp: Structuring, max: bool) -> Vec<f64> {
     let chords = fp.chords();
     let r = chords.len() / 2;
     let mut widths: Vec<usize> = chords.clone();
@@ -283,13 +283,13 @@ fn morph(v: &[f64], nx: usize, ny: usize, fp: Footprint, max: bool) -> Vec<f64> 
 /// Grey dilation: every node takes the largest value under the footprint
 /// (nodes outside the lattice are ignored).
 #[must_use]
-pub fn dilate(v: &[f64], nx: usize, ny: usize, fp: Footprint) -> Vec<f64> {
+pub fn dilate(v: &[f64], nx: usize, ny: usize, fp: Structuring) -> Vec<f64> {
     morph(v, nx, ny, fp, true)
 }
 
 /// Grey erosion: every node takes the smallest value under the footprint.
 #[must_use]
-pub fn erode(v: &[f64], nx: usize, ny: usize, fp: Footprint) -> Vec<f64> {
+pub fn erode(v: &[f64], nx: usize, ny: usize, fp: Structuring) -> Vec<f64> {
     morph(v, nx, ny, fp, false)
 }
 
@@ -384,9 +384,9 @@ mod tests {
         let (nx, ny) = (23, 17);
         let v: Vec<f64> = (0..nx * ny).map(|k| ((k * 37) % 29) as f64).collect();
         for fp in [
-            Footprint::Disc(3.2),
-            Footprint::Square(2),
-            Footprint::Disc(0.0),
+            Structuring::Disc(3.2),
+            Structuring::Square(2),
+            Structuring::Disc(0.0),
         ] {
             let d = dilate(&v, nx, ny, fp);
             let e = erode(&v, nx, ny, fp);
@@ -397,11 +397,11 @@ mod tests {
                         for ii in 0..nx {
                             let (dx, dy) = (ii as f64 - i as f64, jj as f64 - j as f64);
                             let inside = match fp {
-                                Footprint::Disc(r) => {
+                                Structuring::Disc(r) => {
                                     dy.abs() <= r.floor()
                                         && dx.abs() <= (r * r - dy * dy).max(0.0).sqrt().floor()
                                 }
-                                Footprint::Square(r) => {
+                                Structuring::Square(r) => {
                                     dx.abs() <= r as f64 && dy.abs() <= r as f64
                                 }
                             };

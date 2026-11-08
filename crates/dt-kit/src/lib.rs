@@ -61,12 +61,12 @@ mod stone;
 mod threemf;
 
 pub use audit::{
-    Audit, Band, Dropped, Export, Hang, Printer, audit, audit_banded, draft, fit, hang,
+    Audit, Dropped, Export, Hang, HangBand, Printer, audit, audit_banded, draft, fit, hang,
 };
 pub use bambu::{bambu_project, project_settings};
 pub use dt_geom::Convex;
-pub use dt_geom::{Footprint, distance_nearest};
 pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
+pub use dt_geom::{Structuring, distance_nearest};
 pub use field::{
     Field, Noise, OnFrame, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at,
     rim, scatter, smax, smooth01,

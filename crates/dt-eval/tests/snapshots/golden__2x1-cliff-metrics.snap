@@ -8,6 +8,9 @@ watertight: true
 bodies: 189
 dropped: 0
 voids_filled: 186
+pinches_moved: 7848
+slivers: 2
+collapsed: 2
 overhang_mm2: 0.358
 holes: 0
 render_red_pixels: 0

@@ -33,7 +33,7 @@ pub mod source;
 pub mod vec3;
 
 pub use convex::Convex;
-pub use filter::{Footprint, blur, blur_recursive, dilate, erode, quantile};
+pub use filter::{Structuring, blur, blur_recursive, dilate, erode, quantile};
 pub use geodesic::geodesic;
 pub use grid::{Grid, LiftError, distance, distance_nearest, lift};
 pub use hash::SpatialHash;

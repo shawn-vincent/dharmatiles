@@ -39,19 +39,19 @@ use repair::{canonical, contains, keep_largest, quantise, separate_pinches};
 /// small patches over 65°, like the band"): up to `over_share` of the same
 /// downward area; more than that fails.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Band {
+pub struct HangBand {
     /// The materials the band covers; empty: every material.
     pub materials: &'static [Material],
     /// The hard cap, degrees from vertical.
     pub max_deg: f64,
-    /// Band area allowed, as a share of those materials' downward-facing
+    /// HangBand area allowed, as a share of those materials' downward-facing
     /// area.
     pub share: f64,
     /// Area past `max_deg` allowed, as a share of the same downward area.
     pub over_share: f64,
 }
 
-impl Band {
+impl HangBand {
     /// The band every element gets: 55–65° up to 0.1% of the downward area,
     /// and over 65° up to another 0.1%.
     pub const DEFAULT: Self = Self {
@@ -191,7 +191,7 @@ impl Audit {
             f.push(format!(
                 "{:.2} mm² of overhang (over {}°; budget {:.2} mm²)",
                 self.overhang_mm2,
-                Band::DEFAULT.max_deg,
+                HangBand::DEFAULT.max_deg,
                 self.overhang_budget_mm2.max(printer.overhang_budget_mm2)
             ));
         }
@@ -200,7 +200,7 @@ impl Audit {
                 "{:.2} mm² in the band ({}–{}°; budget {:.2} mm²)",
                 self.band_mm2,
                 printer.overhang_deg,
-                Band::DEFAULT.max_deg,
+                HangBand::DEFAULT.max_deg,
                 self.band_budget_mm2
             ));
         }
@@ -239,10 +239,10 @@ pub struct Export {
 /// height in mm (for see-through holes).
 #[must_use]
 pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export, Audit) {
-    audit_banded(input, footprint, printer, &[], Some(&Band::DEFAULT))
+    audit_banded(input, footprint, printer, &[], Some(&HangBand::DEFAULT))
 }
 
-/// [`audit`] with an element's tolerance [`Band`]; `materials` holds each
+/// [`audit`] with an element's tolerance [`HangBand`]; `materials` holds each
 /// input triangle's material.
 #[must_use]
 pub fn audit_banded(
@@ -250,7 +250,7 @@ pub fn audit_banded(
     footprint: [f64; 2],
     printer: &Printer,
     materials: &[Material],
-    band: Option<&Band>,
+    band: Option<&HangBand>,
 ) -> (Export, Audit) {
     let mut m = canonical(input);
     let pinches_moved = separate_pinches(&mut m);
@@ -601,13 +601,13 @@ mod tests {
     #[test]
     fn a_band_tolerates_its_materials_up_to_its_cap() {
         use crate::scene::Material;
-        let band = Band {
+        let band = HangBand {
             materials: &[Material::Leaf],
             max_deg: 65.0,
             share: 1.0,
             over_share: 0.0,
         };
-        let at = |deg: f64, mat: Material, band: Option<&Band>| {
+        let at = |deg: f64, mat: Material, band: Option<&HangBand>| {
             let m = leaning(deg);
             let mats = vec![mat; m.triangles.len()];
             audit_banded(&m, [10.0, 10.0], &fdm(), &mats, band).1
@@ -623,11 +623,11 @@ mod tests {
         assert!(b.overhang_mm2 > 1.0 && b.band_mm2 == 0.0, "{b:?}");
         assert!(!b.failures(&fdm()).is_empty());
         // over the budget fails
-        let tight = Band { share: 0.0, ..band };
+        let tight = HangBand { share: 0.0, ..band };
         let c = at(60.0, Material::Leaf, Some(&tight));
         assert!(!c.failures(&fdm()).is_empty());
         // past the cap within `over_share` passes, red but allowed
-        let loose = Band {
+        let loose = HangBand {
             over_share: 1.0,
             ..band
         };
