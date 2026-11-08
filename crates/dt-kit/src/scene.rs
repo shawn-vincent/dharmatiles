@@ -2,7 +2,7 @@
 //! by area) and the tagged solids elements add, with the source-ID block and
 //! material table of `dt_geom::source`.
 
-use dt_geom::{BoolOp, Grid, IdBlock, Mask, Materials, Seed, TriMesh, batch_in_order};
+use dt_geom::{BoolOp, Grid, IdBlock, Mask, Seed, TriMesh, batch_in_order};
 
 use crate::KitError;
 
@@ -328,12 +328,11 @@ impl Solid {
     }
 }
 
-/// One source slot: an original ID and its own face-ID range
-/// (`dt_geom::source` rule 1). Copy it into parallel work.
+/// One source slot: an original ID, of one material (`dt_geom::source`
+/// rule 1). Copy it into parallel work.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Slot {
     pub(crate) id: u32,
-    pub(crate) face_base: u32,
 }
 
 /// Consecutive slots, all of one material, handed out in sequence.
@@ -364,7 +363,6 @@ impl Slots {
         let s = self.first + i;
         Slot {
             id: self.block.id(s),
-            face_base: self.block.face_base(s),
         }
     }
 }
@@ -396,9 +394,13 @@ const LIFT_MAX_CELLS: usize = 32;
 /// reference square.
 pub const BANK_MM: f64 = 7.0;
 
-/// Slots per build. A leaf's face IDs come from its slot's range, so this
-/// is also `dt_geom::source::MAX_SLOTS`.
-const SLOTS: u32 = dt_geom::source::MAX_SLOTS;
+/// Slots per build.
+const SLOTS: u32 = 1 << 16;
+
+/// How deep the water's own leaf reaches under its top, mm at the
+/// reference square: where the water meets the tile's side, a line of
+/// water this deep over the earth.
+pub const WATER_SKIN_MM: f64 = 0.3;
 
 /// The ground surface of one build: every paint in order, the banks
 /// between them, the water's fill and bed, the edge contract and the
@@ -777,7 +779,8 @@ pub struct Parts {
     sources: Vec<Vec<u32>>,
     block: IdBlock,
     next_slot: u32,
-    materials: Materials<Material>,
+    /// Each slot's material, by slot.
+    materials: Vec<Material>,
 }
 
 impl Parts {
@@ -789,7 +792,7 @@ impl Parts {
             sources: Vec::new(),
             block: IdBlock::reserve(SLOTS),
             next_slot: 0,
-            materials: Materials::default(),
+            materials: Vec::new(),
         }
     }
 
@@ -842,9 +845,7 @@ impl Parts {
             len: n,
         };
         self.next_slot += n;
-        for i in 0..n {
-            self.materials.set_id(s.get(i).id, material);
-        }
+        self.materials.extend((0..n).map(|_| material));
         Ok(s)
     }
 
@@ -907,9 +908,12 @@ impl Parts {
 
     /// Each triangle's material, traced through the kernel's ids.
     fn material_of(&self, mesh: &TriMesh) -> Result<Vec<Material>, KitError> {
-        self.materials
-            .trace(mesh)
-            .into_iter()
+        let ids = mesh.triangle_original_ids().ok_or(KitError::Untraced)?;
+        ids.iter()
+            .map(|&id| {
+                let slot = self.block.slot(id)?;
+                self.materials.get(slot as usize).copied()
+            })
             .collect::<Option<Vec<_>>>()
             .ok_or(KitError::Untraced)
     }
@@ -1241,35 +1245,28 @@ impl Scene {
         let slot = self.built.slots(1, Material::Earth)?.get(0);
         let solid = leaf(slot, &mesh)?;
         if self.surface.wet.count() > 0 {
-            // the top over the water is water, face by face
-            let out = solid.0.to_tri_mesh();
-            let (nx, step) = (self.surface.field.nx, self.surface.field.step);
-            let wet = &self.surface.wet;
-            let face = |t: usize| {
-                let [a, b, c] = out.triangles[t].map(|i| out.positions[i as usize]);
-                let n = crate::shape::normal(a, b, c);
-                let (x, y) = ((a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0);
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let (i, j) = (
-                    libm::round(x / step).max(0.0) as usize,
-                    libm::round(y / step).max(0.0) as usize,
+            // the water: a skin of the lifted top over the wet nodes, as
+            // its own leaf, so every triangle's material is its slot's
+            let water_slot = self.built.slots(1, Material::Water)?.get(0);
+            let cut = |m: &TriMesh| leaf(water_slot, m).map(|s| s.0);
+            let [above, below, half] = self.water_cutters()?.map(|m| cut(&m?));
+            let above = above?;
+            // the land stops half the skin under the top, inside the water:
+            // the two overlap, as every part overlaps what it stands on
+            // (faces that only touch would leave slivers)
+            let water = solid.0.intersection(&above.difference(&below?));
+            let land = relabel(slot, &solid.0.difference(&above.difference(&half?)))?;
+            let water = relabel(water_slot, &water)?;
+            for part in [land, water] {
+                self.add(
+                    Tag {
+                        kind: Kind::Ground,
+                        owner: owner.to_owned(),
+                    },
+                    part,
                 );
-                let k = j.min(wet.ny - 1) * nx + i.min(nx - 1);
-                if n[2] > 0.05 && wet.bits[k] {
-                    Material::Water
-                } else {
-                    Material::Earth
-                }
-            };
-            let before = self.built.materials.conflicts;
-            self.built.materials.set_faces(&out, face);
-            let conflicts = self.built.materials.conflicts - before;
-            if conflicts > 0 {
-                // faces that straddle the water line: the first triangle's
-                // material holds for the whole face (so every triangle keeps a material)
-                #[allow(clippy::cast_precision_loss)]
-                self.note("material_conflicts", conflicts as f64);
             }
+            return Ok(());
         }
         self.add(
             Tag {
@@ -1279,6 +1276,50 @@ impl Scene {
             solid,
         );
         Ok(())
+    }
+
+    /// The solids that cut the water's skin from the lifted top: the
+    /// first stands over every wet node, the second reaches
+    /// [`WATER_SKIN_MM`] under the top there (and over everything else),
+    /// so the first less the second is the skin; the third, half as deep,
+    /// is what the land loses.  Their floors sit under the
+    /// tile's at different depths and they reach a little past its sides,
+    /// so no face of one lies on a face of another (coplanar faces would
+    /// leave slivers).
+    fn water_cutters(&self) -> Result<[Result<TriMesh, KitError>; 3], KitError> {
+        const LOW: f32 = 1e-3;
+        let (field, wet) = (&self.surface.field, &self.surface.wet);
+        let hi = field.z.iter().copied().fold(0.0_f32, f32::max) + 1.0;
+        #[allow(clippy::cast_possible_truncation)]
+        let skin = (WATER_SKIN_MM * self.frame.scale()) as f32;
+        let above = field.with_z(wet.bits.iter().map(|&w| if w { hi } else { LOW }).collect());
+        let under = |depth: f32| {
+            field.with_z(
+                field
+                    .z
+                    .iter()
+                    .zip(&wet.bits)
+                    .map(|(&z, &w)| if w { z - depth } else { hi + 1.0 })
+                    .collect(),
+            )
+        };
+        let [w, h] = self.frame.size_mm();
+        let lift = |g: &Grid, floor: f32| {
+            let raised = g.map(|z| z + floor);
+            let mut m = dt_geom::lift_adaptive(&raised, LIFT_TOL_MM, LIFT_MAX_CELLS)
+                .map_err(|e| KitError::Surface(e.to_string()))?;
+            for p in &mut m.positions {
+                p[0] = 0.5 * w + (p[0] - 0.5 * w) * 1.001;
+                p[1] = 0.5 * h + (p[1] - 0.5 * h) * 1.001;
+                p[2] -= f64::from(floor);
+            }
+            Ok(m)
+        };
+        Ok([
+            lift(&above, 1.0),
+            lift(&under(skin), 2.0),
+            lift(&under(0.5 * skin), 3.0),
+        ])
     }
 
     /// Remove each solid a surface placed (before a later paint) that a
@@ -1355,10 +1396,7 @@ pub(crate) fn leaf(slot: Slot, mesh: &TriMesh) -> Result<Solid, KitError> {
 }
 
 pub(crate) fn relabel(slot: Slot, s: &dt_geom::Solid) -> Result<Solid, KitError> {
-    Ok(Solid(
-        s.with_original_id(slot.id, slot.face_base)
-            .map_err(KitError::Mesh)?,
-    ))
+    Ok(Solid(s.with_original_id(slot.id).map_err(KitError::Mesh)?))
 }
 
 #[cfg(test)]

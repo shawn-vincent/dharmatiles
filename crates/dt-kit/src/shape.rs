@@ -138,14 +138,6 @@ pub fn signed_volume(m: &TriMesh) -> f64 {
         .sum()
 }
 
-/// The unit normal of triangle `a b c` (zero for a degenerate one).
-#[must_use]
-pub(crate) fn normal(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> [f64; 3] {
-    use dt_geom::vec3::{cross, sub, unit};
-    // a zero cross product is already [0; 3]
-    unit(cross(sub(b, a), sub(c, a)))
-}
-
 /// **wobble**: a polyline (mm) resampled every `step` mm and pushed
 /// sideways by smooth noise of `sigma` mm along its length, scaled so the
 /// largest push is `amount` mm, and tapered to nothing within `sigma` of

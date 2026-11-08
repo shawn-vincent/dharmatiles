@@ -9,7 +9,7 @@
 //! from a keyed [`Seed`], never a shared RNG; parallel work writes to its
 //! own slot and is collected in index order; source IDs follow
 //! `dt_geom::source` (a reserved block, leaves relabelled by index, cuts
-//! with IDs we give them, a material table keyed by original and face ID).
+//! with IDs we give them, one material per slot).
 //! Manifold's own parallelism (TBB) is whatever the build has; the default
 //! build has it on. Its thread count is not set here.
 
@@ -19,7 +19,7 @@
     clippy::float_cmp
 )]
 
-use dt_geom::{BoolOp, Bounds, Fnv, IdBlock, Materials, Seed, Solid, TriMesh, batch_in_order};
+use dt_geom::{BoolOp, Bounds, Fnv, IdBlock, Seed, Solid, TriMesh, batch_in_order};
 use rayon::prelude::*;
 
 const N: usize = 384; // grid cells per side
@@ -156,9 +156,14 @@ const GROUND: u32 = 0;
 const STONE: u32 = 1;
 const MOSS: u32 = 2;
 
-/// A rock's own material field: moss above `c.z + 0.3 r`, stone below.
-fn rock_material(c: [f64; 3], r: f64, p: [f64; 3]) -> u32 {
-    if p[2] > c[2] + 0.3 * r { MOSS } else { STONE }
+/// Each slot's material: the slab ground, then per rock a mossy body and
+/// two stone cuts.
+fn material(slot: u32) -> u32 {
+    match slot {
+        0 => GROUND,
+        s if (s - 1) % 3 == 0 => MOSS,
+        _ => STONE,
+    }
 }
 
 fn centroid(m: &TriMesh, t: usize) -> [f64; 3] {
@@ -213,7 +218,7 @@ fn pipeline(root: Seed) -> Hashes {
     let ground_z = 0.0;
     let n_rocks = points.len().min(24);
     let block = IdBlock::reserve(1 + 3 * n_rocks as u32);
-    let built: Vec<(Solid, Materials)> = points[..n_rocks]
+    let built: Vec<Solid> = points[..n_rocks]
         .par_iter()
         .enumerate()
         .map(|(i, p)| {
@@ -233,26 +238,18 @@ fn pipeline(root: Seed) -> Hashes {
             };
             let slot = 1 + 3 * i as u32;
             let (body, bottom, top) = (block.id(slot), block.id(slot + 1), block.id(slot + 2));
-            // rule 2: relabel the leaf, then record its materials from it
+            // rule 2: relabel the leaf; rule 3: cuts carry their own slots
             let leaf = Solid::level_set(&sdf, b, 0.3)
-                .with_original_id(body, block.face_base(slot))
+                .with_original_id(body)
                 .unwrap();
-            let lm = leaf.to_tri_mesh();
-            let mut mats = Materials::default();
-            mats.set_faces(&lm, |t| rock_material(c, r, centroid(&lm, t)));
-            // rule 3 + the cut-face rule: cuts take the rock's base material
-            mats.set_id(bottom, STONE);
-            mats.set_id(top, STONE);
-            let rock = leaf
-                .trim_by_plane_with_id([0.0, 0.0, 1.0], ground_z - 0.2, bottom)
+            leaf.trim_by_plane_with_id([0.0, 0.0, 1.0], ground_z - 0.2, bottom)
                 .unwrap()
                 .trim_by_plane_with_id([0.0, 0.0, -1.0], -(c[2] + 0.6 * r), top)
-                .unwrap();
-            (rock, mats)
+                .unwrap()
         })
         .collect();
     let mut rh = Fnv::default();
-    for (r, _) in &built {
+    for r in &built {
         rh.u64(r.to_tri_mesh().content_hash());
     }
     let side = N as f64 * CELL;
@@ -271,23 +268,17 @@ fn pipeline(root: Seed) -> Hashes {
         run_original_id: vec![block.id(0)],
         ..Default::default()
     };
-    let mut mats = Materials::default();
-    mats.set_id(block.id(0), GROUND);
     let mut parts = vec![Solid::from_tri_mesh(&slab).unwrap()];
-    for (rock, m) in built {
-        parts.push(rock);
-        mats.merge(m);
-    }
+    parts.extend(built);
     // rule 5: combine in index order (checked in debug builds)
     let all = batch_in_order(&parts, BoolOp::Union);
     let um = all.to_tri_mesh();
     assert!(um.is_watertight());
 
-    // every output triangle traces to a material, and the material is
-    // right: a rock body's agrees with a fresh sample of its field (within
-    // a grid cell of the moss line), a cut face lies on its plane.
-    let traced = mats.trace(&um);
+    // every output triangle traces to a slot and so a material, and a cut
+    // face lies on its plane.
     let ids = um.triangle_original_ids().unwrap();
+    let traced: Vec<Option<u32>> = ids.iter().map(|&id| block.slot(id).map(material)).collect();
     let (mut untraced, mut body, mut body_agree, mut cut_off_plane) = (0, 0, 0, 0);
     let mut mh = Fnv::default();
     for (t, m) in traced.iter().enumerate() {
@@ -312,8 +303,7 @@ fn pipeline(root: Seed) -> Hashes {
         match (slot - 1) % 3 {
             0 => {
                 body += 1;
-                let line = c[2] + 0.3 * r;
-                body_agree += usize::from(m == rock_material(c, r, q) || (q[2] - line).abs() < 0.3);
+                body_agree += usize::from(m == MOSS);
             }
             1 => cut_off_plane += usize::from((q[2] - (ground_z - 0.2)).abs() > 1e-9 || m != STONE),
             _ => cut_off_plane += usize::from((q[2] - (c[2] + 0.6 * r)).abs() > 1e-9 || m != STONE),
@@ -330,7 +320,6 @@ fn pipeline(root: Seed) -> Hashes {
         "cut-face triangles off their plane or not stone"
     );
     assert!(top_cut > 0, "no top cut face survived the union");
-    assert_eq!(mats.conflicts, 0, "a face sampled with two materials");
 
     Hashes {
         noise: hash_f64s(&height),

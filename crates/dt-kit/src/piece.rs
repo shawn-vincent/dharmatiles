@@ -19,8 +19,6 @@ use crate::{Field, KitError};
 pub struct Piece {
     s: dt_geom::Solid,
     id: u32,
-    base: u32,
-    used: u32,
 }
 
 /// What a cut must not undercut: a union of meshes, asked only for volume.
@@ -44,24 +42,13 @@ impl Support {
 }
 
 impl Piece {
-    fn lift(&mut self, m: &TriMesh) -> Result<dt_geom::Solid, KitError> {
-        let n = u32::try_from(m.triangles.len()).map_err(|_| KitError::Slots)?;
+    fn lift(&self, m: &TriMesh) -> Result<dt_geom::Solid, KitError> {
         let s = dt_geom::Solid::from_tri_mesh(m).map_err(KitError::Mesh)?;
-        let off = self
-            .used
-            .min(dt_geom::source::FACE_STRIDE.saturating_sub(n + 1));
-        self.used = (off + n).min(dt_geom::source::FACE_STRIDE - 1);
-        s.with_original_id(self.id, self.base + off)
-            .map_err(KitError::Mesh)
+        s.with_original_id(self.id).map_err(KitError::Mesh)
     }
 
     fn with(&self, s: dt_geom::Solid) -> Self {
-        Self {
-            s,
-            id: self.id,
-            base: self.base,
-            used: self.used,
-        }
+        Self { s, id: self.id }
     }
 
     /// A piece from a closed mesh, in `slot`.
@@ -72,8 +59,6 @@ impl Piece {
         let mut p = Self {
             s: empty(),
             id: slot.id,
-            base: slot.face_base,
-            used: 0,
         };
         p.s = p.lift(m)?;
         Ok(p)
@@ -140,7 +125,7 @@ impl Piece {
         if cutters.is_empty() {
             return Ok(self.clone());
         }
-        let mut me = self.clone();
+        let me = self.clone();
         let parts: Result<Vec<_>, _> = cutters.iter().map(|m| me.lift(m)).collect();
         let parts = parts?;
         let c = dt_geom::Solid::batch(&parts, BoolOp::Union);
@@ -152,7 +137,7 @@ impl Piece {
     /// # Errors
     /// [`KitError::Mesh`] if `m` is not a closed manifold.
     pub fn plus(&self, m: &TriMesh) -> Result<Self, KitError> {
-        let mut me = self.clone();
+        let me = self.clone();
         let c = me.lift(m)?;
         Ok(me.with(self.s.union(&c)))
     }
@@ -162,7 +147,7 @@ impl Piece {
     /// # Errors
     /// [`KitError::Mesh`] if `m` is not a closed manifold.
     pub fn within(&self, m: &TriMesh) -> Result<Self, KitError> {
-        let mut me = self.clone();
+        let me = self.clone();
         let c = me.lift(m)?;
         Ok(me.with(self.s.intersection(&c)))
     }
@@ -197,12 +182,8 @@ impl Piece {
             triangles: tri,
             ..TriMesh::default()
         };
-        let mut me = Self {
-            used: 0,
-            ..self.clone()
-        };
-        let s = me.lift(&m)?;
-        Ok(me.with(s))
+        let s = self.lift(&m)?;
+        Ok(self.with(s))
     }
 
     /// This with its own cross-section at `z_slice` extruded from `z0` to

@@ -235,32 +235,26 @@ impl Solid {
         })
     }
 
-    /// A leaf solid relabelled so every triangle carries original ID `id`,
-    /// and triangle `t` face ID `face_base + t`.
+    /// A leaf solid relabelled so every triangle carries original ID `id`.
     ///
     /// This is the one allowed round trip through [`TriMesh`]: it re-imports
     /// the mesh with a single run. Use it on a single-source leaf (a level
-    /// set, an imported mesh) before any material is recorded for it, and
-    /// record materials from the result. Face IDs must not repeat across
-    /// the leaves of one combine: a backend may renumber
-    /// some face IDs in a large batch union when two sources share them.
-    /// manifold-csg's C API cannot import face IDs, so Manifold recomputes them (coplanar groups) and `face_base` is unused;
-    /// the C++ kernel keeps them apart by source on its own.
+    /// set, an imported mesh). manifold-csg's C API cannot import face
+    /// IDs; Manifold recomputes them (coplanar groups), so none are given.
     ///
     /// # Errors
-    /// [`MeshError::Backend`] if `face_base + t` overflows `u32`, or if the
-    /// kernel refuses its own export (it should not).
-    pub fn with_original_id(&self, id: u32, face_base: u32) -> Result<Self, MeshError> {
+    /// [`MeshError::Backend`] if the mesh has more than `u32` triangles, or
+    /// if the kernel refuses its own export (it should not).
+    pub fn with_original_id(&self, id: u32) -> Result<Self, MeshError> {
         let mut m = self.to_tri_mesh();
         if m.triangles.is_empty() {
             return Ok(self.clone());
         }
-        let too_big = || MeshError::Backend("leaf too large for its face-ID range".into());
-        let n = u32::try_from(m.triangles.len()).map_err(|_| too_big())?;
-        face_base.checked_add(n).ok_or_else(too_big)?;
+        let n = u32::try_from(m.triangles.len())
+            .map_err(|_| MeshError::Backend("leaf too large".into()))?;
         m.run_index = vec![0, n * 3];
         m.run_original_id = vec![id];
-        m.face_id = (0..n).map(|t| face_base + t).collect();
+        m.face_id = (0..n).collect();
         Self::from_tri_mesh(&m)
     }
 

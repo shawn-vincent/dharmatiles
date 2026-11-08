@@ -42,6 +42,6 @@ pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, MeshError, TriMesh, half_spac
 pub use raster::{Mask, draw_line, fill, fill_polygons};
 pub use rays::{Hit, ObvhsRays, Ray};
 pub use seed::{Rng, Seed};
-pub use source::{IdBlock, Materials, batch_in_order};
+pub use source::{IdBlock, batch_in_order};
 
 pub use solid::Solid;
