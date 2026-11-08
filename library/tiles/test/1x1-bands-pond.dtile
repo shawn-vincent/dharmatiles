@@ -1,0 +1,21 @@
+// 1x1-water+soil in the heights language: water in the lower half, a dirt bank in the upper.
+// The hollow is written, not inferred: the dirt is pinned at the water's bed in the pool, with
+// a wide band over the bank that leaves the shore free to fall from the land to the bed.
+
+tile size="1x1" seed=50 {
+    about "Water in the lower half, a dirt bank in the upper, with a wandering shore: the heights language, migrated by hand."
+
+    line shore wobble=5 { through "(0, 0.38)" "(1, 0.42)" }
+    region pool { bounded-by shore; fill "(0.5, 0.25)" }
+    region shoreBand { within 5 of=shore }
+
+    stack {
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
+            pin top=waterBedHeight at=pool                                // later, so it wins in the pool
+        }
+        scatter count=2 at=pool { rock size="6..10" }
+        water at=shoreBand
+    }
+}

@@ -167,6 +167,7 @@ cliff form=spire height=50         // a tall tapering stack, standing free</code
   <li>Seams between stacked stones read as grooves. Cracks are thin, run their full width and depth to an edge, joint or other crack, and carry on round a convex corner onto the next face.</li>
   <li>The fine grain is strong enough to read and to drybrush at print scale.</li>
   <li>Run ends are a standard section, so runs meet end to end; a few millimetres of mismatch reads as one more joint.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. A cliff has no default top: write one, such as <code>top="dirtEdgeHeight + 35"</code>. Cliffs do not ease; their stones step. <code>check</code> reads and solves these; <code>build</code> does not build tops and pins yet. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

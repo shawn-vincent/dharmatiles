@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>let</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
+  <h1>let</h1>
+  <p class="lede">A named height, length or number. <code>let</code> adds a name to a tile; <code>override</code> replaces one of the library's heights for that tile. Names are camelCase, since a hyphen subtracts, and every name is declared once.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>tile size="1x1" seed=31 {
+    let knollTop  "groundHeight + 4"
+    let hump      "groundHeight + [1 .. 2]"   // a range: a little rise, its height left free
+    override waterBedHeight 0.8               // deeper water, everywhere on this tile
+    stack { base; dirt { pin top=knollTop at=center } }
+}</code></pre>
+<p>A constant's value is an expression of the constants declared before it: numbers, names, <code>x</code> and <code>y</code> (squares) and <code>bottom</code> (the surface under a body), <code>+ - * /</code>, a range in brackets <code>[a .. b]</code> anywhere, and the functions <code>sin cos</code> (degrees), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Trigonometry is computed in the program, so a build gives the same bits on every machine.</p>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Library height</th><th>mm</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>waterBedHeight</code></td><td>0.4</td><td>The bottom of standing water: two print layers.</td></tr>
+<tr><td><code>waterSurfaceHeight</code></td><td>2.6</td><td>Calm water.</td></tr>
+<tr><td><code>waterEdgeHeight</code></td><td><code>waterSurfaceHeight + 0.6 * cos(720 * (x + y))</code></td><td>Water at a tile edge: two waves a square, so water tiles butt any way round.</td></tr>
+<tr><td><code>dirtEdgeHeight</code></td><td>3.4</td><td>Where dirt meets a tile edge.</td></tr>
+<tr><td><code>groundHeight</code></td><td>5</td><td>Open land.</td></tr>
+<tr><td><code>floorHeight</code></td><td>7.4</td><td>A built floor's top.</td></tr>
+<tr><td><code>floorEdgeHeight</code></td><td><code>floorHeight</code></td><td>Where a built floor meets a tile edge: flush.</td></tr>
+<tr><td><code>shortWallHeight</code></td><td>16.55</td><td>Half the wall top.</td></tr>
+<tr><td><code>wallHeight</code></td><td>33.1</td><td>The standard wall top.</td></tr>
+<tr><td><code>tallWallHeight</code></td><td>72.3</td><td>The tall wall top.</td></tr>
+</tbody></table></div>
+<p>They come from <code>library/parts/heights.dtile</code>, and every tile sees them without a <code>use</code> line.</p>
+<h2 id="notes">Notes</h2>
+<p><strong>One namespace.</strong> The library's constants, a tile's lets, its points, lines and regions, and the built-in places are one set of names. Declaring a name that exists, of any kind, is refused (<code>dt::name</code>), and the message offers <code>override</code> when the name is a constant. Only a constant can be replaced; built-in places and element names cannot.</p>
+<p><strong>An override holds for the whole tile</strong>, library expressions included: overriding <code>waterSurfaceHeight</code> moves <code>waterEdgeHeight</code> with it. An override of a name that does not exist is refused, with a nearby name if there is one, so a misspelt override is caught instead of doing nothing. Overriding an edge height means the tile no longer meets standard tiles without a step. <code>dharmatiles check --explain</code> lists each override (<code>override waterBedHeight 0.4 → 0.8</code>).</p>
+<p><strong>Types.</strong> Numbers in mm take their meaning where they are used: in a top a height above zero, in <code>within</code> a length; both scale with the system. <code>x</code> and <code>y</code> are squares, so <code>groundHeight + x</code> is refused (<code>dt::type</code>); scale them inside <code>sin</code> or <code>cos</code>, as the tide does. A range is a set: <code>[0 .. 1] - [0 .. 1]</code> is <code>[-1 .. 1]</code>.</p>
+</article>
+</div>
+</body>
+</html>

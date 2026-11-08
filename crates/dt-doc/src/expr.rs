@@ -97,6 +97,14 @@ pub enum Expr {
         /// High end.
         hi: Box<Expr>,
     },
+    /// A function call, `cos(720 * x)`: `sin`, `cos` (degrees), `abs`,
+    /// `min`, `max`, `clamp` and `smooth`.  Only in [`parse_v2`] values.
+    Call {
+        /// The function.
+        name: String,
+        /// Its arguments.
+        args: Vec<Expr>,
+    },
 }
 
 /// A parse failure, with the byte range inside the expression text.
@@ -118,9 +126,12 @@ enum Tok {
     DotDot,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
+    Comma,
 }
 
-fn lex(src: &str) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
+fn lex(src: &str, v2: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
     let b = src.as_bytes();
     let mut out = Vec::new();
     let mut i = 0;
@@ -170,7 +181,10 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
             continue;
         }
         if c.is_ascii_alphabetic() || c == b'_' {
-            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || b[i] == b'-') {
+            // Names written in camelCase (v2) never hold a hyphen: it subtracts.
+            while i < b.len()
+                && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || (b[i] == b'-' && !v2))
+            {
                 i += 1;
             }
             // A trailing '-' belongs to arithmetic, not the name.
@@ -197,6 +211,18 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
                 i += 1;
                 Tok::RParen
             }
+            b'[' if v2 => {
+                i += 1;
+                Tok::LBracket
+            }
+            b']' if v2 => {
+                i += 1;
+                Tok::RBracket
+            }
+            b',' if v2 => {
+                i += 1;
+                Tok::Comma
+            }
             _ => {
                 let ch = src[i..].chars().next().unwrap_or('?');
                 return Err(ExprError {
@@ -215,6 +241,7 @@ struct Parser<'a> {
     toks: &'a [(Tok, usize, usize)],
     pos: usize,
     len: usize,
+    v2: bool,
 }
 
 const SKEW_HELP: &str =
@@ -244,6 +271,9 @@ impl Parser<'_> {
         let lo = self.sum()?;
         if self.peek() != Some(&Tok::DotDot) {
             return Ok(lo);
+        }
+        if self.v2 {
+            return self.err("a range is written in brackets: [low .. high]");
         }
         self.pos += 1;
         let hi = self.sum()?;
@@ -299,7 +329,27 @@ impl Parser<'_> {
             }
             Some(Tok::Name(n)) => {
                 self.pos += 1;
+                if self.v2 && self.peek() == Some(&Tok::LParen) {
+                    return self.call(n);
+                }
                 Ok(Expr::Name(n))
+            }
+            Some(Tok::LBracket) => {
+                self.pos += 1;
+                let lo = self.sum()?;
+                if self.peek() != Some(&Tok::DotDot) {
+                    return self.err("a range has two ends: [low .. high]");
+                }
+                self.pos += 1;
+                let hi = self.sum()?;
+                if self.peek() != Some(&Tok::RBracket) {
+                    return self.err("missing `]`");
+                }
+                self.pos += 1;
+                Ok(Expr::Range {
+                    lo: Box::new(lo),
+                    hi: Box::new(hi),
+                })
             }
             Some(Tok::LParen) => {
                 self.pos += 1;
@@ -318,16 +368,52 @@ impl Parser<'_> {
     }
 }
 
+impl Parser<'_> {
+    /// `name(` arguments `)`: the name is already read.
+    fn call(&mut self, name: String) -> Result<Expr, ExprError> {
+        self.pos += 1; // the `(`
+        let mut args = Vec::new();
+        if self.peek() != Some(&Tok::RParen) {
+            loop {
+                args.push(self.sum()?);
+                match self.peek() {
+                    Some(Tok::Comma) => self.pos += 1,
+                    Some(Tok::RParen) => break,
+                    _ => return self.err("expected `,` or `)`"),
+                }
+            }
+        }
+        self.pos += 1; // the `)`
+        Ok(Expr::Call { name, args })
+    }
+}
+
 /// Parse an expression string.
 ///
 /// # Errors
 /// Returns the first problem with its byte range inside `src`.
 pub fn parse(src: &str) -> Result<Expr, ExprError> {
-    let toks = lex(src)?;
+    parse_with(src, false)
+}
+
+/// Parse a height or length of the heights language: names are camelCase
+/// (a hyphen subtracts), a range is `[low .. high]` anywhere, and the
+/// functions `sin cos abs min max clamp smooth` are called with
+/// parentheses.
+///
+/// # Errors
+/// Returns the first problem with its byte range inside `src`.
+pub fn parse_v2(src: &str) -> Result<Expr, ExprError> {
+    parse_with(src, true)
+}
+
+fn parse_with(src: &str, v2: bool) -> Result<Expr, ExprError> {
+    let toks = lex(src, v2)?;
     let mut p = Parser {
         toks: &toks,
         pos: 0,
         len: src.len(),
+        v2,
     };
     let e = p.value()?;
     if p.pos < toks.len() {
@@ -338,6 +424,79 @@ pub fn parse(src: &str) -> Result<Expr, ExprError> {
         };
     }
     Ok(e)
+}
+
+/// The functions of the heights language: name and argument count.
+pub const FUNCTIONS: [(&str, usize); 7] = [
+    ("sin", 1),
+    ("cos", 1),
+    ("abs", 1),
+    ("min", 2),
+    ("max", 2),
+    ("clamp", 3),
+    ("smooth", 1),
+];
+
+/// The sine of an angle in degrees, from `+ - * /` only (a Taylor series
+/// on the quarter wave), so a build gives the same bits on every platform.
+#[must_use]
+pub fn sin_deg(deg: f64) -> f64 {
+    let mut r = deg % 360.0;
+    if r > 180.0 {
+        r -= 360.0;
+    } else if r < -180.0 {
+        r += 360.0;
+    }
+    if r > 90.0 {
+        r = 180.0 - r;
+    } else if r < -90.0 {
+        r = -180.0 - r;
+    }
+    let x = r * (std::f64::consts::PI / 180.0);
+    let x2 = x * x;
+    // x - x^3/3! + x^5/5! - ... through x^19/19!
+    let mut term = x;
+    let mut sum = x;
+    let mut n = 1.0;
+    for _ in 0..9 {
+        term = -term * x2 / ((n + 1.0) * (n + 2.0));
+        sum += term;
+        n += 2.0;
+    }
+    sum
+}
+
+/// The cosine of an angle in degrees (see [`sin_deg`]).
+#[must_use]
+pub fn cos_deg(deg: f64) -> f64 {
+    sin_deg(deg + 90.0)
+}
+
+/// Smoothstep of `t` clamped to 0..1.
+#[must_use]
+pub fn smooth(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+fn call_f64(name: &str, a: &[f64]) -> Result<f64, String> {
+    let want = FUNCTIONS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .ok_or_else(|| format!("unknown function `{name}`"))?
+        .1;
+    if a.len() != want {
+        return Err(format!("`{name}` takes {want} value(s), not {}", a.len()));
+    }
+    Ok(match name {
+        "sin" => sin_deg(a[0]),
+        "cos" => cos_deg(a[0]),
+        "abs" => a[0].abs(),
+        "min" => a[0].min(a[1]),
+        "max" => a[0].max(a[1]),
+        "clamp" => a[0].max(a[1]).min(a[2]),
+        _ => smooth(a[0]),
+    })
 }
 
 impl Expr {
@@ -400,6 +559,7 @@ impl Expr {
                 lhs.visit(f);
                 rhs.visit(f);
             }
+            Expr::Call { args, .. } => args.iter().for_each(|a| a.visit(f)),
         }
     }
 
@@ -433,6 +593,13 @@ impl Expr {
             Expr::Range { lo, hi } => {
                 let (a, b) = (lo.sample(env, u)?, hi.sample(env, u)?);
                 a + (b - a) * u
+            }
+            Expr::Call { name, args } => {
+                let vals = args
+                    .iter()
+                    .map(|a| a.sample(env, u))
+                    .collect::<Result<Vec<_>, _>>()?;
+                call_f64(name, &vals)?
             }
         })
     }
@@ -468,6 +635,16 @@ impl fmt::Display for Expr {
                 write!(f, "({lhs} {c} {rhs})")
             }
             Expr::Range { lo, hi } => write!(f, "{lo}..{hi}"),
+            Expr::Call { name, args } => {
+                write!(f, "{name}(")?;
+                for (i, a) in args.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{a}")?;
+                }
+                f.write_str(")")
+            }
         }
     }
 }
@@ -581,5 +758,40 @@ mod tests {
             let e = parse(s).unwrap();
             assert_eq!(parse(&e.to_string()).unwrap(), e, "{s}");
         }
+    }
+
+    #[test]
+    fn heights_language() {
+        let e = parse_v2("groundHeight + [1 .. 2]").unwrap();
+        assert!(e.is_range());
+        assert_eq!(e.names(), vec!["groundHeight"]);
+        // a hyphen subtracts, it is never part of a name
+        let e = parse_v2("groundHeight-2").unwrap();
+        assert_eq!(e.names(), vec!["groundHeight"]);
+        let env = |n: &str| (n == "groundHeight").then_some(5.0);
+        assert!(close(e.sample(&env, 0.0).unwrap(), 3.0));
+        // a bare range is refused, with the brackets named
+        let err = parse_v2("1 .. 2").unwrap_err();
+        assert!(err.message.contains("brackets"), "{err:?}");
+        assert!(parse_v2("[1 .. 2").is_err());
+        assert!(parse_v2("[1]").is_err());
+        let e = parse_v2("clamp(x, 0, 1) + max(1, 2)").unwrap();
+        let env = |n: &str| (n == "x").then_some(3.0);
+        assert!(close(e.sample(&env, 0.0).unwrap(), 3.0));
+        assert!(parse_v2("sin(1, 2)").unwrap().sample(&none, 0.0).is_err());
+        assert!(parse_v2("tan(1)").unwrap().sample(&none, 0.0).is_err());
+    }
+
+    #[test]
+    fn trigonometry_is_ours() {
+        for k in -20..=20 {
+            let d = f64::from(k) * 37.5;
+            let (s, c) = (sin_deg(d), cos_deg(d));
+            assert!((s - d.to_radians().sin()).abs() < 1e-12, "sin {d}");
+            assert!((c - d.to_radians().cos()).abs() < 1e-12, "cos {d}");
+        }
+        assert_eq!(sin_deg(0.0), 0.0);
+        assert!((cos_deg(720.0) - 1.0).abs() < 1e-15);
+        assert!((cos_deg(360.0 * 3.5) + 1.0).abs() < 1e-15);
     }
 }

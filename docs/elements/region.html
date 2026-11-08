@@ -23,9 +23,11 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble=5 { through "0,0.38" "1,0.42" }
-region pool { bounded-by shore; fill "0.5,0.25" }
-region bank { bounded-by shore; fill "0.5,0.75" }
+<pre><code>line shore wobble=5 { through "(0, 0.38)" "(1, 0.42)" }
+region pool { bounded-by shore; fill "(0.5, 0.25)" }
+region bank { bounded-by shore; fill "(0.5, 0.75)" }
+region reach { within 5 of=shore }          // a strip beside the line
+region dry { except pool }                  // everything but the pool
 stack {
     dirt in=bank
     water                    // fills its area up to the water level
@@ -36,10 +38,12 @@ stack {
 <tbody>
 <tr><td><code>region NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>in=</code>. <strong>Required.</strong></td></tr>
 <tr><td><code>bounded-by</code></td><td>line names</td><td>—</td><td>The lines that bound it.</td></tr>
-<tr><td><code>fill</code></td><td>a point</td><td>—</td><td>A point inside it. Several fill points on different sides of a line join those areas into one region.</td></tr>
+<tr><td><code>fill</code></td><td>a point</td><td>—</td><td>A point inside it, <code>"(x, y)"</code> or a point's name. Several fill points on different sides of a line join those areas into one region.</td></tr>
+<tr><td><code>within MM of=PLACE</code></td><td>a length, a place</td><td>—</td><td>Everything within that distance of a point, a line or a region: a disc round a point, a strip beside a line, a ring round a region (the region itself included). The length scales with the system. A range in it (drawn along an edge) is read but not built yet.</td></tr>
+<tr><td><code>except</code></td><td>region names</td><td>—</td><td>Takes those regions out. A region that only excepts starts from the whole tile.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>The whole tile is the default area, so an undivided tile needs no region. There is no union, intersection or difference: several fill points do that job. A region nothing fills is an error.</p>
+<p>The whole tile is the default area, so an undivided tile needs no region. The words add together: the fills, then each <code>within</code>, then <code>except</code> takes away. A region is flat, a footprint and nothing else; how high a body is over it is the body's <code>top</code> and <code>pin</code>. Bodies, grass and <code>scatter</code> take a region with <code>at=</code> (or <code>in=</code>); a point or a line is refused (<code>dt::type</code>). A region whose fill points all lie on its lines is an error.</p>
 </article>
 </div>
 </body>

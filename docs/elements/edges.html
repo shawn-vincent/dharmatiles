@@ -34,6 +34,7 @@ edges {
 <tr><td><code>ground</code></td><td>Every surface meets the tile edge at the <code>edge</code> level, 3.4 mm.</td></tr>
 <tr><td><code>water</code></td><td>Water meets the tile edge at the <code>water</code> level, 2.6 mm, plus a shared tide: 0.6 sin(2π(s − 13.125)/17.5) mm along each edge, so two water tiles butt any way round.</td></tr>
 </tbody></table></div>
+<p>The same contract is also written in the heights language, as the <code>defaults</code> block of the same file: the top and the pin at <code>edges</code> every <code>dirt</code>, <code>floor</code> and <code>water</code> body starts with (<code>dirtEdgeHeight</code>, <code>floorEdgeHeight</code>, <code>waterEdgeHeight</code>). A tile's own top replaces a default top, and its pins win over the default pin. See <a href="pin.html">pin</a> and <a href="../language.html#heights">heights</a>.</p>
 <h2 id="notes">Notes</h2>
 <p>Runs on an edge (walls, cliffs) end in the standard end section, so runs butt together too. See <a href="../standards/tile-system.html#edge-contract">how tiles meet</a>.</p>
 </article>

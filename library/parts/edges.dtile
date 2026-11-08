@@ -10,3 +10,15 @@ edges {
     // centres, so two water tiles butt any way round
     water level=water
 }
+
+// The same contract in the heights language: the tops and pins every body of
+// these elements starts with.  They are read before the tile's own lines, so
+// a tile's top replaces the default top and its pins win over the default
+// pin wherever they overlap.  The land defaults apply to the first land layer
+// only; the water default to every water.  (`floor` becomes `flagstones` and
+// `planks` when floors are split by material.)
+defaults {
+    dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
+    floor top=floorHeight                          { pin top=floorEdgeHeight at=edges }
+    water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" { pin top=waterEdgeHeight at=edges }
+}

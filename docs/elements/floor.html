@@ -60,6 +60,7 @@
   <li>A floor replaces the ground: no soil on top of it.</li>
   <li>Its slabs carry a texture made for drybrushing.</li>
   <li>Floors and walls share one stone engine.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. A floor starts with the top <code>floorHeight</code> and a pin at <code>edges</code> at <code>floorEdgeHeight</code>, flush with the edge. <code>check</code> reads and solves these; <code>build</code> does not build tops and pins yet. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
 </ul>
 
 <h2 id="notes">Notes</h2>

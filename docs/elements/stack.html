@@ -47,9 +47,12 @@
 <tr><td><code>seed=</code></td><td>a whole number</td><td>—</td><td>Pins this entry's randomness while the tile seed changes everything else.</td></tr>
 <tr><td><code>id=</code></td><td>a name</td><td>—</td><td>Names the entry among same-named siblings, for edits and diagnostics.</td></tr>
 <tr><td><code>weight=</code></td><td>a number</td><td>1</td><td>Only on a child of a <a href="scatter.html"><code>scatter</code></a>: its share of the mix.</td></tr>
-<tr><td>place words</td><td></td><td></td><td><code>in=</code>, <code>along=</code>, <code>at=</code>, <code>against=</code>, <code>side=</code>: each element page lists the ones it takes.</td></tr>
+<tr><td>place words</td><td></td><td></td><td><code>in=</code>, <code>along=</code>, <code>at=</code>, <code>against=</code>, <code>side=</code>: each element page lists the ones it takes. <code>at=</code> also takes a place by name or <code>"(x, y)"</code>: a body, grass or scatter takes a region, a thing or a pin any place.</td></tr>
+<tr><td><code>top=</code></td><td>a height or a range</td><td>—</td><td>On a body (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>floor</code>): the band it fills. On a thing: its height limit. Heights are mm above zero; see <a href="let.html">let</a>.</td></tr>
+<tr><td>a name</td><td>a name</td><td>—</td><td>After a body's element, <code>dirt hillDirt</code>: its name in messages.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
+<p>A stack may start with <a href="base.html"><code>base</code></a>, and a tile that uses the heights language is written bottom up: the base first, the land in order, things and grass in any order, <code>water</code> last. The pins of a body go in its block: <a href="pin.html"><code>pin top=… at=…</code></a>.</p>
 <p>The build plans the stack by what each element reads and writes: surfaces first, then the ground is lifted, then solids, and surfaces that grow round solids after them. A stack that asks for something nothing makes is refused with an error at the entry. The preview lists the stack under the tile's name, each entry linked to its page here.</p>
 </article>
 </div>

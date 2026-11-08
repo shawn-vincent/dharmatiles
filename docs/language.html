@@ -126,6 +126,56 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 }</code></pre>
 <p>A tile adds its own with <code>levels foot=4</code>. Levels scale with the system like every other size. See <a href="elements/levels.html"><code>levels</code></a>.</p>
 
+<h3 id="heights">Heights: let, override, tops and pins</h3>
+<p>Heights are written in one way everywhere: millimetres above zero, the top of the <a href="elements/base.html">base</a>. A number (<code>top=8</code>), a named height, or an expression of them. Named heights are <code>let</code> constants in camelCase, since a hyphen would read as subtraction; the library's are in <code>library/parts/heights.dtile</code> and every tile sees them:</p>
+<pre><code>let waterBedHeight     0.4     // the bottom of standing water: two print layers
+let waterSurfaceHeight 2.6     // calm water
+let waterEdgeHeight    "waterSurfaceHeight + 0.6 * cos(720 * (x + y))"   // the tide at a tile edge
+let dirtEdgeHeight     3.4     // where dirt meets a tile edge
+let groundHeight       5       // open land
+let floorHeight        7.4     // a built floor's top
+let floorEdgeHeight    floorHeight
+let shortWallHeight    16.55
+let wallHeight         33.1
+let tallWallHeight     72.3</code></pre>
+<p>A tile adds its own names with <code>let</code> and replaces a library one with <code>override</code> (<code>override waterBedHeight 0.8</code> deepens the water's bed everywhere on the tile, and moves every library height that reads it). Every name is declared once, of any kind: a <code>let</code> on a name that exists, or an <code>override</code> of one that does not, is refused (<code>dt::name</code>), and the message gives the other keyword or the nearest name. See <a href="elements/let.html"><code>let</code></a>.</p>
+<p>A height may use numbers, names, <code>x</code> and <code>y</code> (squares), <code>bottom</code> (the surface under this body, or under the thing), <code>+ - * /</code>, a range in brackets anywhere (<code>groundHeight + [1 .. 2]</code>), and the functions <code>sin</code> and <code>cos</code> (degrees), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Measures are checked: <code>groundHeight + x</code> adds squares to millimetres and is refused (<code>dt::type</code>).</p>
+<p>A <em>body</em> of the stack (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>floor</code>) says how high it may be with its <code>top=</code>, a band: a single height fixes the surface, a range leaves it room. A <a href="elements/pin.html"><code>pin</code></a> holds the band to a height at a place; where pins overlap the later one wins, and the library's defaults (below) are read first. The stack is written bottom up: <a href="elements/base.html"><code>base</code></a> first, the land in order, things and grass in any order, <code>water</code> last.</p>
+<pre><code>stack {
+    base
+    dirt top="[groundHeight .. groundHeight + 2.5]" {
+        slope 30                                  // how steeply this dirt lies; 24 by default
+        pin top=knollTop at=knoll
+    }
+    grass at=meadow
+    water at=banks                                // last: a fluid fills round whatever stands
+}</code></pre>
+<p><strong>Defaults.</strong> <code>library/parts/edges.dtile</code> also holds the tops and pins every body starts with, read before the tile's own lines:</p>
+<pre><code>defaults {
+    dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
+    floor top=floorHeight                          { pin top=floorEdgeHeight at=edges }
+    water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" { pin top=waterEdgeHeight at=edges }
+}</code></pre>
+<p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The land defaults apply to the first land layer only, so a dirt film on a cliff (<code>dirt top="bottom + [0.6 .. 1.2]"</code>) is not pulled to the rim; the water default applies to every water. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override waterBedHeight 0.4 → 0.8</code>), and each pin's share of its place.</p>
+<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and types, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). A tile that writes a top, a pin or a <code>slope</code> checks and solves; <code>build</code> does not build bands yet and says which lines. A tile that writes none of these builds as before.</p>
+<p>A complete tile that checks and solves:</p>
+<pre><code>tile size="1x1" seed=62 {
+    point crossing "(0.65, 0.5)"
+    line stream wobble=0.5 { through westCenter eastCenter }
+    region banks { within 11.5 of=stream }
+    region bed   { within 1.5 of=stream }
+    stack {
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=banks       // anywhere from the bed to the land
+            pin top="[waterBedHeight .. waterBedHeight + 0.3]" at=bed     // later, so it wins inside the bed
+        }
+        rock size="6..10" at=crossing
+        grass
+        water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" at=banks
+    }
+}</code></pre>
+
 <h3 id="edge-contract">The edge contract</h3>
 <p>Every tile also gets <code>library/parts/edges.dtile</code> at its root, without a <code>use</code> line. It says what every tile does at its edges so that neighbours butt with no step:</p>
 <pre><code>edges {
@@ -156,6 +206,21 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <p>The whole tile is the default area, so an undivided tile needs no region. A region exists only when lines divide the tile. It is the paint-bucket model from the design conversation: name the lines that bound it, then drop one or more fill points.</p>
 <pre><code>region verge { bounded-by trail; fill "0.15,1"; fill "0.85,1" }</code></pre>
 <p>Several fill points on different sides of a line join areas without union, intersection or difference. Elements act inside a region with <code>in=verge</code>.</p>
+
+<h3 id="named-places">Places by name</h3>
+<p>A place is a point, a line or a region, all flat: they say where, never how high. Every tile has them built in, named in camelCase:</p>
+<div class="tbl"><table>
+<thead><tr><th>Kind</th><th>Declared</th><th>Built in on every tile</th></tr></thead>
+<tbody>
+<tr><td>point</td><td><code>point knoll "(0.28, 0.72)"</code></td><td><code>northWestCorner northCenter northEastCorner westCenter center eastCenter southWestCorner southCenter southEastCorner</code></td></tr>
+<tr><td>line</td><td><code>line stream wobble=4 { through … }</code>, <code>closed=#true</code> for a loop</td><td><code>northEdge eastEdge southEdge westEdge</code>, and <code>edges</code> for all four</td></tr>
+<tr><td>region</td><td><code>region meadow { … }</code></td><td><code>tile</code>, the whole tile (which is also what no <code>at=</code> means)</td></tr>
+</tbody></table></div>
+<p>A place is written as a name or as a literal point <code>"(x, y)"</code> in squares from the south-west corner; today's <code>"x,y"</code> still reads. A region is its fill points and its discs less what it excepts:</p>
+<pre><code>region banks { within 4.5 of=stream }                     // a disc round a point, a strip beside a line, a ring round a region
+region verge { except path }                              // a region that only excepts is the whole tile less those
+region knoll { bounded-by foot; fill center }             // the paint bucket, as before</code></pre>
+<p>One place property, <code>at=</code>, names where a line goes. A body, <code>grass</code> or <code>scatter</code> fills a region: given a point or a line it is refused (<code>dt::type</code>). A pin or a thing takes any place. With no <code>at=</code> a line covers the whole tile. See <a href="elements/point.html"><code>point</code></a>, <a href="elements/line.html"><code>line</code></a> and <a href="elements/region.html"><code>region</code></a>.</p>
 
 <h2 id="placement">5. Placement and scatter</h2>
 <h3 id="place-words">Place words</h3>
@@ -276,6 +341,26 @@ define oak {
   help: `hills` is now `ground`</code></pre>
 <p>Other mistakes caught the same way: a misspelt control (<code>clumsp</code>, did you mean <code>clumps</code>?), a unit written in (<code>"4.5mm"</code>), an expert control in a tile, a missing <code>along=</code>, <code>side=</code> on a tile edge, and old KDL v1 syntax.</p>
 
+
+<h3 id="refusals">Refusals of the heights language</h3>
+<p>Three phases, each as early as it can know. The static ones are found reading the document; the solve ones when <code>check</code> works out the bands. Every refusal gives the place, the values and what would fit.</p>
+<div class="tbl"><table>
+<thead><tr><th>Code</th><th>Phase</th><th>When, and an example</th></tr></thead>
+<tbody>
+<tr><td><code>dt::name</code></td><td>static</td><td>A name declared twice, a <code>let</code> on a name that exists, an <code>override</code> of one that does not, a built-in place or element name reused, a name that is not camelCase.<br><code>`groundHeight` is already declared</code> — help: <code>override groundHeight …</code> replaces it for this tile</td></tr>
+<tr><td><code>dt::type</code></td><td>static</td><td>Measures that do not agree, or a place of the wrong kind.<br><code>`dirt` fills a region, and `northEdge` is a line</code>; <code>`top`: a sum mixes a plain number and squares (x or y)</code></td></tr>
+<tr><td><code>dt::unknown-name</code>, <code>dt::place</code></td><td>static</td><td>A height or a place that nothing declares, with the nearest name.<br><code>no place is called `southCentre`</code> — help: did you mean `southCenter`?</td></tr>
+<tr><td><code>dt::pin</code></td><td>static</td><td>A pin without <code>top=</code> or <code>at=</code>, or a pin on something that is not a body.<br><code>a pin needs at=</code></td></tr>
+<tr><td><code>dt::base-order</code></td><td>static</td><td><code>base</code> anywhere but first, or a second one.<br><code>the base is the first line of the stack</code></td></tr>
+<tr><td><code>dt::fluid-order</code></td><td>static</td><td>Anything written after a fluid.<br><code>`rock` is written after the water</code> — help: move it above the water</td></tr>
+<tr><td><code>dt::empty</code></td><td>solve</td><td>A pin whose place covers nothing.<br><code>this pin's place `nowhere` covers nothing</code></td></tr>
+<tr><td><code>dt::thin</code></td><td>solve</td><td>A layer that can never be as thick as the printer's skin (three layers).<br><code>the dirt is at most 0.30 mm thick at (17.50, 17.50) mm, under the 0.60 mm the printer's skin needs</code></td></tr>
+<tr><td><code>dt::missing-control</code></td><td>solve</td><td>A body with no top and no default, such as a cliff.</td></tr>
+<tr><td><code>dt::steep</code></td><td>note</td><td>Pins force dirt past its slope.<br><code>the dirt is forced to 43.8°, steeper than its 24° slope: 5.33 mm up to 5.59 mm over 0.27 mm</code></td></tr>
+<tr><td><code>dt::shadowed</code></td><td>note</td><td>A pin that wins nowhere because later pins cover all of its place.</td></tr>
+<tr><td><code>dt::edge</code></td><td>note</td><td>Where the tile's own pins move a body off the library's edge height, so it no longer butts a standard tile.<br><code>the dirt meets the tile's edge at a height of its own … along the south edge 0.00 to 1.00 (squares)</code></td></tr>
+</tbody></table></div>
+<p>A note does not stop the build; <code>check</code> prints it after the tile's line. The pins named in a note are the ones that cause it.</p>
 
 <h2 id="examples">9. Worked examples</h2>
 <p>Whole tiles, each with what it shows. Every one builds as written: copy it into a <code>.dtile</code> file and run <code>dharmatiles preview</code> on it.</p>
@@ -419,8 +504,10 @@ cliff along=north height=55 {
   <li>Sizes are millimetres at the 35 mm DungeonBlocks square; heights are millimetres or named levels. Units are not written: <code>4.5</code>, never <code>"4.5mm"</code> (<code>(mm)4.5</code> is an optional check).</li>
   <li>Every size a tile writes scales with the system, like a photocopy; hidden printability floors keep it printable. Print-scale detail (grain, blades, leaves) keeps its printed size.</li>
   <li>Ranges and percents are quoted: <code>size="6..10"</code>, <code>cover="35%"</code>.</li>
-  <li>Points are quoted pairs in squares (<code>"0.5,1"</code>), or a corner or edge word.</li>
-  <li>The whole tile is the default area. Regions come only from lines and fill points; there is no union, intersection or difference of regions.</li>
+  <li>Points are quoted pairs in squares (<code>"(0.5, 1)"</code>), a point's name, or a corner or edge word.</li>
+  <li>The whole tile is the default area. A region is flat: its fill points and its <code>within</code> discs, less what it <code>except</code>s. A body, grass or scatter fills a region; a pin or a thing takes any place.</li>
+  <li>A stack that uses the heights language is written bottom up: <code>base</code> first, the land in order, <code>water</code> last. Heights are mm above zero; a pin is exact where it is and the later pin wins; the library's defaults are read before the tile.</li>
+  <li>Every name is declared once, in camelCase. <code>let</code> adds a name, <code>override</code> replaces a library one, and neither works on the other's names.</li>
   <li>Stack order is free for solids: every solid is planned first and everything grows round it. Order only decides which surface paints over which.</li>
   <li>Character controls are words that stand for documented numbers; a number is always accepted too.</li>
   <li>A wall or cliff on a tile edge stands inside the tile.</li>

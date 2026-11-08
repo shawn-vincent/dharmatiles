@@ -13,6 +13,7 @@ default = ["manifold-parallel"]
 manifold-parallel = ["dt-kit/manifold-parallel", "dt-elements/manifold-parallel"]
 [dependencies]
 dt-doc.workspace = true
+dt-geom.workspace = true
 dt-kit.workspace = true
 dt-elements.workspace = true
 kdl.workspace = true

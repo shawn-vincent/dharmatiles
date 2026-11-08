@@ -1,0 +1,14 @@
+---
+source: crates/dt-eval/tests/heights.rs
+expression: summary(&c)
+---
+cells per square: 128
+notes: ["dt::steep", "dt::edge"]
+dirt (16641 nodes)
+  pin top=dirtEdgeHeight at=edges wins 446/512
+  pin top="groundHeight - [0.8 .. 1.2]" at=path wins 4559/4559
+  y=1.00  3.40  3.40  3.80..4.20  3.40  3.40
+  y=0.75  3.40  5.00..5.99  3.80..4.20  3.83..4.24  3.40
+  y=0.50  3.40  5.00..6.00  3.80..4.20  3.83..4.25  3.40
+  y=0.25  3.40  4.63..5.45  3.80..4.20  4.69..5.53  3.40
+  y=0.00  3.40  3.40  3.80..4.20  3.40  3.40

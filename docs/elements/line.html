@@ -27,8 +27,10 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble=5 { through "0,0.38" "1,0.42" }
-line trail width=9 wobble=3 { through south "0.65,1" north }</code></pre>
+<pre><code>line shore wobble=5 { through "(0, 0.38)" "(1, 0.42)" }
+line trail width=9 wobble=3 { through south "0.65,1" north }
+line ring closed=#true wobble=2 { through "(0.3, 0.3)" "(0.7, 0.3)" "(0.5, 0.7)" }
+line stream { through westCenter eastCenter }       // the built-in points, by name</code></pre>
 <p class="callout">Not built yet: <code>width=</code> and <code>along=</code> are read and checked, but <code>dharmatiles build</code> refuses a tile that uses them (<code>check</code> says which lines). For now a line divides regions.</p>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
@@ -37,7 +39,8 @@ line trail width=9 wobble=3 { through south "0.65,1" north }</code></pre>
 <tr><td><code>line NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>bounded-by</code> and <code>along=</code>. <strong>Required.</strong></td></tr>
 <tr><td><code>width=</code></td><td>mm</td><td>—</td><td>Makes the line a strip of this width; an element <code>along=</code> it covers the strip.</td></tr>
 <tr><td><code>wobble=</code></td><td>mm</td><td>0</td><td>Lets the line wander up to this far off its points, keyed by the tile seed and the line's name.</td></tr>
-<tr><td><code>through</code></td><td>points</td><td>—</td><td>The points, in order: <code>"x,y"</code> in squares, an edge word (its middle) or a corner word. <strong>Required.</strong></td></tr>
+<tr><td><code>closed=</code></td><td>#true or #false</td><td>#false</td><td>A loop: the last point joins the first (at least three points). The inside of a closed line is a region with <code>fill</code>.</td></tr>
+<tr><td><code>through</code></td><td>points</td><td>—</td><td>The points, in order: <code>"(x, y)"</code> or <code>"x,y"</code> in squares, a point's name (<a href="point.html">built in or declared</a>), an edge word (its middle) or a corner word. <strong>Required.</strong></td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
 <p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. Along a tile edge there is no side: a wall or cliff on an edge always stands inside the tile. Edges, corners and points are in <a href="../language.html#places">the language guide</a>.</p>

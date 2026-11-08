@@ -147,6 +147,7 @@
   <li>Waves come from the obstacles: land sends strong ones, rocks weak ones, reeds small rings. Each kind of object sends its own range of wavelengths.</li>
   <li>A source's waves grow less clear with distance; open corners are very faint sources.</li>
   <li>Ripples are smoother at the shore and round rocks, and stroke ends fade like ripples.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. Every water starts with the library's top, <code>[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]</code>, and a pin at <code>edges</code> at <code>waterEdgeHeight</code>, the tide. Water is a fluid: it is written last in the stack (<code>dt::fluid-order</code>). It eases over 9 mm round a pin. <code>check</code> reads and solves these; <code>build</code> does not build tops and pins yet. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

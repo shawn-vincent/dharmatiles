@@ -13,8 +13,10 @@
 mod cache;
 pub mod diag;
 pub mod doc;
+pub mod places;
 pub mod plan;
 pub mod progress;
+pub mod solve;
 pub mod source;
 
 use std::path::{Path, PathBuf};
@@ -331,9 +333,25 @@ pub struct Checked {
     areas: Vec<Option<usize>>,
     frame: Frame,
     seed: u64,
+    /// The Solve phase, for a tile that uses the heights language: its
+    /// bodies' bands, and the lints that came with them.
+    pub solved: Option<solve::SolveReport>,
 }
 
 impl Checked {
+    /// Lints and notes from the Solve phase: the tile checks, but look here.
+    #[must_use]
+    pub fn notes(&self) -> &[Diag] {
+        self.solved.as_ref().map_or(&[], |s| s.notes.as_slice())
+    }
+
+    /// What `check --explain` says: the defaults applied, each pin's share of
+    /// its place, and each override.
+    #[must_use]
+    pub fn explain(&self) -> &[String] {
+        self.solved.as_ref().map_or(&[], |s| s.explain.as_slice())
+    }
+
     /// What the tile asks for that is not built yet (check accepts it,
     /// build refuses it).
     #[must_use]
@@ -376,6 +394,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             areas: Vec::new(),
             frame: Frame::dungeonblocks(1, 1),
             seed: 0,
+            solved: None,
         });
     };
     if let Some(seed) = opts.seed {
@@ -480,6 +499,16 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         vec![d.help("remove the read, or add what it reads to the stack")]
     })?;
     let seed = opts.seed.unwrap_or(tile.seed);
+    // the Solve phase: bands and pins, no meshes
+    let solved = if tile.heights.is_some() {
+        Some(solve::solve(
+            &tile,
+            &Frame::for_system(&opts.system, tile.cols, tile.rows),
+            opts,
+        )?)
+    } else {
+        None
+    };
     Ok(Checked {
         file: read.file,
         tile: Some(tile),
@@ -489,6 +518,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         areas,
         frame,
         seed,
+        solved,
     })
 }
 
@@ -517,12 +547,14 @@ fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usiz
 
 /// A region's nodes, by paint bucket from its fill points.
 fn region_mask(tile: &Tile, frame: &Frame, r: &doc::Region) -> Mask {
-    let lines: Vec<Vec<[f64; 2]>> = r
-        .bounded_by
-        .iter()
-        .filter_map(|l| tile.lines.get(&l.value).cloned())
-        .collect();
-    dt_kit::area(frame, &lines, &r.fills)
+    // regions that name each other round a loop cover nothing (the solve
+    // reports it)
+    places::Places::new(tile, frame)
+        .region(r)
+        .unwrap_or_else(|_| {
+            let (nx, ny) = frame.nodes();
+            Mask::new(nx, ny, false)
+        })
 }
 
 /// One error for each region an element acts in that covers no ground: its

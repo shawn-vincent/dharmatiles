@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::model::{Definition, Document};
+use crate::model::{Const, ConstKind, Definition, Document};
 use crate::schema::{Control, Kind};
 
 /// The text of library/parts/levels.dtile, compiled in.
@@ -17,6 +17,13 @@ pub const PRELUDE: &str = include_str!("../../../library/parts/levels.dtile");
 
 /// The name the prelude is reported under.
 pub const PRELUDE_NAME: &str = "library/parts/levels.dtile";
+
+/// The text of library/parts/heights.dtile, compiled in: the library's
+/// `let` constants, visible to every tile.
+pub const HEIGHTS: &str = include_str!("../../../library/parts/heights.dtile");
+
+/// The name the heights are reported under.
+pub const HEIGHTS_NAME: &str = "library/parts/heights.dtile";
 
 /// What a call needs to know about a definition in another file.
 #[derive(Debug, Clone)]
@@ -63,6 +70,7 @@ impl From<&Definition> for DefInfo {
 pub struct Known {
     files: BTreeMap<String, BTreeMap<String, DefInfo>>,
     levels: Vec<(String, f64)>,
+    consts: Vec<Const>,
 }
 
 impl Known {
@@ -83,7 +91,25 @@ impl Known {
             .unwrap_or_else(|e| panic!("the prelude must decode: {e:?}"));
         k.add_levels(&doc)
             .unwrap_or_else(|e| panic!("the prelude's levels must resolve: {e}"));
+        let heights = crate::decode(HEIGHTS_NAME, HEIGHTS, &k)
+            .unwrap_or_else(|e| panic!("the library heights must decode: {e:?}"));
+        k.add_consts(&heights);
         k
+    }
+
+    /// Make a file's file-level `let` constants visible to every file.
+    pub fn add_consts(&mut self, doc: &Document) {
+        for c in &doc.consts {
+            if c.kind == ConstKind::Let {
+                self.consts.push(c.clone());
+            }
+        }
+    }
+
+    /// The library's constants (`groundHeight` …), in the order written.
+    #[must_use]
+    pub fn consts(&self) -> &[Const] {
+        &self.consts
     }
 
     /// Make a file's file-level levels visible to every file (the

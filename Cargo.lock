@@ -409,6 +409,7 @@ version = "0.9.0"
 dependencies = [
  "dt-doc",
  "dt-elements",
+ "dt-geom",
  "dt-kit",
  "insta",
  "kdl",

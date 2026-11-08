@@ -3,23 +3,26 @@
 //! Decoding goes on past a mistake, so a file's mistakes come together.
 
 mod entry;
+mod heights;
 mod syntax;
 mod value;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use kdl::{KdlDocument, KdlEntry, KdlNode};
+use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
 use miette::{NamedSource, SourceSpan};
 
+use crate::dim::Dim;
 use crate::error::{DocError, Src};
 use crate::known::{DefInfo, Known};
 use crate::model::{
-    DefKind, Definition, Document, EdgeRule, Edges, Level, Line, Param, Printer, Region, Source,
-    Spanned, TileHeader, Use,
+    Base, DefKind, Definition, Document, EdgeRule, Edges, Level, Line, Param, Printer, Region,
+    Source, Spanned, TileHeader, Use, Within,
 };
 use crate::place::{Corner, Edge, Point};
 use crate::schema::{self, Axis, Control, Kind, MAX_SQUARES, did_you_mean};
+use heights::{Mode, PlaceKind};
 
 /// Decode one KDL v2 file.  `name` labels the source in diagnostics.
 ///
@@ -76,6 +79,11 @@ pub(crate) struct Ctx {
     pub levels: Vec<String>,
     pub lines: Vec<String>,
     pub regions: Vec<String>,
+    /// The heights language's constants visible here, with what each
+    /// measures: the library's, then the tile's own in order.
+    pub consts: Vec<(String, Dim)>,
+    /// Every place by name: the built-in ones and the declared ones.
+    pub places: Vec<(String, PlaceKind)>,
     /// The tile's size, inside a tile.
     pub size: Option<(u32, u32)>,
     /// Inside a `tile` (expert controls are refused) or a `define`.
@@ -94,6 +102,8 @@ pub(crate) struct Decoder<'k> {
     pub imported: HashMap<String, (DefInfo, String)>,
     /// While decoding a define: each parameter → the control it fills.
     pub param_controls: HashMap<String, &'static Control>,
+    /// The `base` line of the stack last decoded.
+    pub stack_base: Option<Base>,
 }
 
 /// The span of an entry's value (an entry's span covers `name=value`).
@@ -156,6 +166,7 @@ impl<'k> Decoder<'k> {
             local: HashMap::new(),
             imported: HashMap::new(),
             param_controls: HashMap::new(),
+            stack_base: None,
         }
     }
 
@@ -204,6 +215,8 @@ impl<'k> Decoder<'k> {
             definitions: Vec::new(),
             printer: None,
             edges: None,
+            consts: Vec::new(),
+            defaults: Vec::new(),
         };
         for n in kdl.nodes() {
             if n.name().value() == "define"
@@ -258,6 +271,38 @@ impl<'k> Decoder<'k> {
         }
         decoded.sort_by_key(|(i, _)| *i);
         doc.definitions = decoded.into_iter().map(|(_, d)| d).collect();
+
+        // File-level constants (the library's heights), then the defaults
+        // that read them.
+        // (a file's own `let`s are declarations of its own, so they are not
+        // checked against the library's: the library's heights file is one)
+        let mut file_ctx = Ctx {
+            places: heights::builtin_places(),
+            in_tile: true,
+            ..Ctx::default()
+        };
+        for n in kdl.nodes() {
+            if matches!(n.name().value(), "let" | "override")
+                && let Some(c) = self.const_node(n, &mut file_ctx, &[])
+            {
+                doc.consts.push(c);
+            }
+        }
+        let mut defaults_ctx = Ctx {
+            consts: self.library_consts(),
+            ..file_ctx
+        };
+        for c in &doc.consts {
+            if !defaults_ctx.consts.iter().any(|(k, _)| *k == c.name.value) {
+                defaults_ctx.consts.push((c.name.value.clone(), c.dim));
+            }
+        }
+        for n in kdl.nodes() {
+            if n.name().value() == "defaults" {
+                let path = vec!["defaults".to_owned()];
+                doc.defaults.extend(self.entries(n, &defaults_ctx, &path));
+            }
+        }
         if doc
             .definitions
             .iter()
@@ -277,7 +322,7 @@ impl<'k> Decoder<'k> {
 
         for n in kdl.nodes() {
             match n.name().value() {
-                "use" | "levels" | "define" | "tile" => {}
+                "use" | "levels" | "define" | "tile" | "let" | "override" | "defaults" => {}
                 "printer" => doc.printer = self.printer(n),
                 "edges" => doc.edges = self.edges(n, &file_levels),
                 other => {
@@ -286,7 +331,10 @@ impl<'k> Decoder<'k> {
                         .or_else(|| {
                             hint(did_you_mean(
                                 other,
-                                ["use", "levels", "define", "tile", "printer", "edges"],
+                                [
+                                    "use", "levels", "define", "tile", "printer", "edges", "let",
+                                    "defaults",
+                                ],
                             ))
                         })
                         .or_else(|| {
@@ -554,8 +602,11 @@ impl<'k> Decoder<'k> {
             about: None,
             params: Vec::new(),
             levels: Vec::new(),
+            consts: Vec::new(),
+            points: Vec::new(),
             lines: Vec::new(),
             regions: Vec::new(),
+            base: None,
             stack: Vec::new(),
             summary: Kind::Surface,
             thing: false,
@@ -599,6 +650,35 @@ impl<'k> Decoder<'k> {
             }
         }
 
+        // The heights language: place names first (a name may be used before
+        // it is declared), then the constants in order, each using earlier ones.
+        ctx.consts = self.library_consts();
+        let taken = self.declare_places(body, &mut ctx);
+        for n in body.nodes() {
+            match n.name().value() {
+                "let" | "override" if !is_tile => {
+                    self.err(
+                        "dt::unknown-node",
+                        n.name().span(),
+                        format!("a part has no `{}`", n.name().value()),
+                        "in a define",
+                    )
+                    .help = Some("constants belong to a tile".to_owned());
+                }
+                "let" | "override" => {
+                    if let Some(c) = self.const_node(n, &mut ctx, &taken) {
+                        def.consts.push(c);
+                    }
+                }
+                "point" => {
+                    if let Some(p) = self.point_node(n, &ctx) {
+                        def.points.push(p);
+                    }
+                }
+                _ => {}
+            }
+        }
+
         self.param_controls.clear();
         let step = if is_tile {
             "tile".to_owned()
@@ -632,6 +712,7 @@ impl<'k> Decoder<'k> {
                     let l = self.levels(n, &ctx);
                     def.levels.extend(l);
                 }
+                "let" | "override" | "point" => {}
                 "line" => {
                     if let Some(l) = self.line(n, &ctx) {
                         def.lines.push(l);
@@ -655,9 +736,15 @@ impl<'k> Decoder<'k> {
                     }
                     let path = vec![step.clone(), "stack".to_owned()];
                     def.stack.extend(self.entries(n, &ctx, &path));
+                    if let Some(b) = self.stack_base.take() {
+                        def.base = Some(b);
+                    }
                 }
                 other => {
-                    let words = ["param", "about", "levels", "line", "region", "stack"];
+                    let words = [
+                        "param", "about", "levels", "let", "override", "point", "line", "region",
+                        "stack",
+                    ];
                     let help = crate::elements::renamed(other)
                         .map(str::to_owned)
                         .or_else(|| hint(did_you_mean(other, words)))
@@ -672,7 +759,7 @@ impl<'k> Decoder<'k> {
                             "unknown node `{other}` in a {}",
                             if is_tile { "tile" } else { "definition" }
                         ),
-                        "not about, levels, line, region or stack",
+                        "not about, levels, let, override, point, line, region or stack",
                     )
                     .help = help;
                 }
@@ -832,6 +919,7 @@ impl<'k> Decoder<'k> {
             through: Vec::new(),
             width: None,
             wobble: None,
+            closed: false,
             span: n.span(),
         };
         let mut set = |this: &mut Self, key: &str, kspan: SourceSpan, e: &KdlEntry| {
@@ -841,7 +929,12 @@ impl<'k> Decoder<'k> {
                 other => {
                     let help = crate::elements::renamed(other)
                         .map(str::to_owned)
-                        .or_else(|| hint(did_you_mean(other, ["width", "wobble", "through"])));
+                        .or_else(|| {
+                            hint(did_you_mean(
+                                other,
+                                ["width", "wobble", "closed", "through"],
+                            ))
+                        });
                     this.err(
                         "dt::unknown-control",
                         kspan,
@@ -863,8 +956,33 @@ impl<'k> Decoder<'k> {
             }
             *slot = this.num(e, Axis::Mm, None, "line", key, ctx);
         };
+        let mut closed: Option<bool> = None;
+        let mut set_closed = |this: &mut Self, kspan: SourceSpan, e: &KdlEntry| {
+            if closed.is_some() {
+                this.err(
+                    "dt::duplicate",
+                    kspan,
+                    "`closed` is set twice",
+                    "again here",
+                );
+                return;
+            }
+            match e.value() {
+                KdlValue::Bool(b) => closed = Some(*b),
+                _ => {
+                    this.err(
+                        "dt::value",
+                        value_span(e),
+                        "`closed` is #true or #false",
+                        "not a switch",
+                    )
+                    .help = Some("write `line ring closed=#true { through … }`".to_owned());
+                }
+            }
+        };
         for e in n.entries().iter().skip(1) {
             match e.name() {
+                Some(k) if k.value() == "closed" => set_closed(self, k.span(), e),
                 Some(k) => set(self, k.value(), k.span(), e),
                 None => {
                     self.err(
@@ -895,6 +1013,10 @@ impl<'k> Decoder<'k> {
                             .to_owned(),
                     );
                 }
+            } else if let [e] = c.entries()
+                && c.name().value() == "closed"
+            {
+                set_closed(self, c.name().span(), e);
             } else if let [e] = c.entries() {
                 set(self, c.name().value(), c.name().span(), e);
             } else {
@@ -907,6 +1029,19 @@ impl<'k> Decoder<'k> {
                 )
                 .help = hint(did_you_mean(other, ["through", "width", "wobble"]));
             }
+        }
+        line.closed = closed.unwrap_or(false);
+        if line.closed
+            && line.through.len() < 3
+            && n.iter_children().any(|c| c.name().value() == "through")
+        {
+            self.err(
+                "dt::line",
+                line.name.span,
+                "a closed line passes through at least three points",
+                format!("{} point(s)", line.through.len()),
+            )
+            .help = Some("a loop needs a corner to turn: add a point, or open the line".to_owned());
         }
         if line.through.is_empty() && !n.iter_children().any(|c| c.name().value() == "through") {
             self.err(
@@ -926,10 +1061,56 @@ impl<'k> Decoder<'k> {
             name,
             bounded_by: Vec::new(),
             fills: Vec::new(),
+            within: Vec::new(),
+            except: Vec::new(),
             span: n.span(),
         };
         for c in n.iter_children() {
             match c.name().value() {
+                "within" => {
+                    if let Some(w) = self.within_node(c, ctx) {
+                        region.within.push(w);
+                    }
+                }
+                "except" => {
+                    for e in c.entries() {
+                        let span = value_span(e);
+                        match arg_str(e) {
+                            Some(r) if ctx.regions.iter().any(|x| x == r) || r == "tile" => {
+                                region.except.push(Spanned {
+                                    value: r.to_owned(),
+                                    span,
+                                });
+                            }
+                            Some(r) => {
+                                let help =
+                                    hint(did_you_mean(r, ctx.regions.iter().map(String::as_str)))
+                                        .unwrap_or_else(|| {
+                                            format!("declare it first: `region {r} {{ … }}`")
+                                        });
+                                self.err(
+                                    "dt::unknown-name",
+                                    span,
+                                    format!("there is no region called `{r}`"),
+                                    "not a region here",
+                                )
+                                .help = Some(help);
+                            }
+                            None => {
+                                self.err(
+                                    "dt::region",
+                                    span,
+                                    "`except` names regions",
+                                    "not a name",
+                                );
+                            }
+                        }
+                    }
+                    if c.entries().is_empty() {
+                        self.err("dt::region", c.span(), "`except` takes regions", "none")
+                            .help = Some("write `except path`".to_owned());
+                    }
+                }
                 "bounded-by" => {
                     for e in c.entries() {
                         let span = value_span(e);
@@ -979,7 +1160,12 @@ impl<'k> Decoder<'k> {
                 other => {
                     let help = crate::elements::renamed(other)
                         .map(str::to_owned)
-                        .or_else(|| hint(did_you_mean(other, ["bounded-by", "fill"])));
+                        .or_else(|| {
+                            hint(did_you_mean(
+                                other,
+                                ["bounded-by", "fill", "within", "except"],
+                            ))
+                        });
                     self.err(
                         "dt::unknown-node",
                         c.name().span(),
@@ -990,9 +1176,11 @@ impl<'k> Decoder<'k> {
                 }
             }
         }
-        if region.bounded_by.is_empty()
-            && !n.iter_children().any(|c| c.name().value() == "bounded-by")
-        {
+        // a region is its bucket fills and its discs, less what it excepts; one
+        // that only excepts starts from the whole tile
+        let shaped = !region.within.is_empty() || !region.except.is_empty();
+        let has = |w: &str| n.iter_children().any(|c| c.name().value() == w);
+        if region.bounded_by.is_empty() && !has("bounded-by") && !shaped {
             self.err(
                 "dt::region",
                 region.name.span,
@@ -1004,7 +1192,7 @@ impl<'k> Decoder<'k> {
                     .to_owned(),
             );
         }
-        if region.fills.is_empty() && !n.iter_children().any(|c| c.name().value() == "fill") {
+        if region.fills.is_empty() && !has("fill") && (!shaped || has("bounded-by")) {
             self.err(
                 "dt::region",
                 region.name.span,
@@ -1014,6 +1202,50 @@ impl<'k> Decoder<'k> {
             .help = Some("the paint bucket starts from `fill \"x,y\"`".to_owned());
         }
         Some(region)
+    }
+
+    /// `within MM of=PLACE`: a disc round a point, a strip beside a line, a
+    /// ring round a region.
+    fn within_node(&mut self, c: &KdlNode, ctx: &Ctx) -> Option<Within> {
+        let help = "write `within 4.5 of=stream`: a distance in mm, round a place";
+        let mut mm = None;
+        let mut of = None;
+        for e in c.entries() {
+            match e.name().map(|k| k.value()) {
+                None if mm.is_none() => {
+                    mm = self
+                        .height_expr(e, ctx, "a distance", Mode::Length)
+                        .map(|(x, _)| x);
+                    mm.as_ref()?;
+                }
+                Some("of") if of.is_none() => {
+                    of = Some(self.place_value(e, ctx, "of")?.0);
+                }
+                _ => {
+                    self.err(
+                        "dt::region",
+                        e.span(),
+                        "`within` is a distance and `of=` a place",
+                        "unexpected",
+                    )
+                    .help = Some(help.to_owned());
+                    return None;
+                }
+            }
+        }
+        match (mm, of) {
+            (Some(mm), Some(of)) => Some(Within { mm, of }),
+            _ => {
+                self.err(
+                    "dt::region",
+                    c.span(),
+                    "`within` needs a distance and `of=`",
+                    "incomplete",
+                )
+                .help = Some(help.to_owned());
+                None
+            }
+        }
     }
 
     /// A point argument, checked against the tile's size.
@@ -1037,6 +1269,23 @@ impl<'k> Decoder<'k> {
             );
             return None;
         };
+        // a built-in or declared point, by name
+        if let Some((n, k)) = ctx.places.iter().find(|(n, _)| n == s.trim()) {
+            if *k == PlaceKind::Point {
+                return Some(Spanned {
+                    value: Point::Named(n.clone()),
+                    span,
+                });
+            }
+            self.err(
+                "dt::type",
+                span,
+                format!("`{control}` is a point, and `{n}` is {}", k.describe()),
+                "not a point",
+            )
+            .help = Some("a point is a name from `point`, or \"(x, y)\" in squares".to_owned());
+            return None;
+        }
         let p = match crate::place::parse_point(s) {
             Ok(p) => p,
             Err(err) => {

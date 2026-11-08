@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>base</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
+  <h1>base</h1>
+  <p class="lede">The connector, DungeonBlocks or OpenLOCK: everything below height 0. A stack that has a base starts with it.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>stack {
+    base
+    dirt
+    grass
+    water
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<p><code>base</code> takes no settings. Which connector it is, DungeonBlocks or OpenLOCK, is the build target (<code>--system</code>), not the tile, so one tile builds for either.</p>
+<h2 id="notes">Notes</h2>
+<p>The stack is written bottom up and is exactly what is printed. <code>base</code> is the first line, or the tile is refused (<code>dt::base-order</code>); the land follows in stack order, things and grass in any order, and fluids (<code>water</code>) last: anything written after a fluid is refused (<code>dt::fluid-order</code>). A tile that does not use the heights language keeps the order it had. Heights are measured from zero, the base's top, on which the first layer rests; with no base line a tile rests on zero all the same, as it always has.</p>
+</article>
+</div>
+</body>
+</html>

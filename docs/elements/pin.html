@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>pin</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
+  <h1>pin</h1>
+  <p class="lede">Holds a body's top to a height, or a range of heights, at a place. A pin is exact where it is; between pins the body is free, and fills its band its own way.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>dirt {
+    slope 30
+    pin top=dirtEdgeHeight at=edges               // exact at every rim
+    pin knollTop top=knollTop at=knoll            // a point
+    pin top="[waterBedHeight .. groundHeight + 1]" at=banks   // anywhere from the bed to the land
+    pin top="[waterBedHeight .. waterBedHeight + 0.3]" at=bed // later, so it wins inside the bed
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Takes</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>pin NAME</code></td><td>a name</td><td>Optional, for messages.</td></tr>
+<tr><td><code>top=</code></td><td>a height or a range</td><td>The band at the place: a single height holds it exactly; a range <code>[low .. high]</code> leaves the body free inside it. <strong>Required.</strong> In it, <code>x</code> and <code>y</code> are the nearest point of the place, so a pin along an edge is a function along the edge.</td></tr>
+<tr><td><code>at=</code></td><td>any place</td><td>A name or a literal point; a point, a line or a region. <strong>Required.</strong></td></tr>
+</tbody></table></div>
+<h2 id="notes">Notes</h2>
+<p>Pins go inside a body's block (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>floor</code>). Where pins overlap, the later one wins. The library's defaults are read before the tile, so a pin the tile writes always wins over a default. A pin says where and how high, nothing else: how the body meets it is the body's (dirt eases toward it no steeper than its slope, water settles over 9 mm, cliffs and floors step).</p>
+<p><code>check</code> solves the bands and notes what it finds: a pin that wins nowhere because later pins cover all of its place (<code>dt::shadowed</code>), dirt forced steeper than its slope (<code>dt::steep</code>, with both heights and the distance), a pin whose place is empty (<code>dt::empty</code>, refused), and a stretch where the tile's own pins move the rim off the library's edge height (<code>dt::edge</code>). <code>check --explain</code> gives each pin's share of its place where it wins. Building a tile with tops and pins is not done yet: <code>build</code> refuses it and says which lines.</p>
+</article>
+</div>
+</body>
+</html>

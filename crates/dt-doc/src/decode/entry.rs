@@ -7,13 +7,13 @@ use miette::SourceSpan;
 use super::value::describe;
 use super::{Ctx, Decoder, spanned_name, sub_span, value_span};
 use crate::elements::{TAGS, renamed};
-use crate::model::{Callee, Entry, Form, Place, Setting, Spanned, Value};
+use crate::model::{Base, Callee, Entry, Form, Place, Setting, Spanned, Value};
 use crate::place::{self, Along, Side};
 use crate::schema::{self, Control, Kind, PlaceWord, Role, did_you_mean};
 
 /// Where an entry sits, which limits what it may be.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Parent {
+pub(super) enum Parent {
     /// Directly in a `stack`.
     Stack,
     /// A child of a `scatter`: a thing.
@@ -65,12 +65,31 @@ impl Decoder<'_> {
             return Vec::new();
         };
         let steps = step_names(kids.nodes());
-        let out: Vec<Entry> = kids
-            .nodes()
-            .iter()
-            .zip(steps)
-            .filter_map(|(n, step)| self.entry(n, ctx, Parent::Stack, path, step))
-            .collect();
+        let mut base: Option<Base> = None;
+        let mut out: Vec<Entry> = Vec::new();
+        for (n, step) in kids.nodes().iter().zip(steps) {
+            if n.name().value() == "base" {
+                match self.base_node(n, out.len()) {
+                    Some(b) if base.is_some() => {
+                        self.err(
+                            "dt::base-order",
+                            b.span,
+                            "a stack has one base",
+                            "a second base",
+                        );
+                    }
+                    Some(b) => base = Some(b),
+                    None => {}
+                }
+            } else if let Some(e) = self.entry(n, ctx, Parent::Stack, path, step) {
+                out.push(e);
+            }
+        }
+        if ctx.in_tile {
+            let heights = base.is_some() || out.iter().any(Entry::uses_heights);
+            self.check_stack_order(base.as_ref(), &out, heights);
+            self.stack_base = base;
+        }
         // `id=` names an entry among its same-named siblings (its seed
         // path): two alike would share a seed.
         for (k, e) in out.iter().enumerate() {
@@ -125,6 +144,11 @@ impl Decoder<'_> {
             place: Place::default(),
             controls: Vec::new(),
             children: Vec::new(),
+            top: None,
+            at_place: None,
+            pins: Vec::new(),
+            slope: None,
+            label: None,
             path,
             span: node.span(),
         };
@@ -151,6 +175,9 @@ impl Decoder<'_> {
 
         for e in node.entries() {
             let Some(key) = e.name() else {
+                if self.heights_label(&mut entry, e) {
+                    continue;
+                }
                 let help = match (element, e.value().as_string()) {
                     (Some(l), Some(s)) => l
                         .controls
@@ -173,6 +200,9 @@ impl Decoder<'_> {
                 value: key.value().to_owned(),
                 span: key.span(),
             };
+            if self.heights_property(&mut entry, &key, e, ctx, parent) {
+                continue;
+            }
             if self.place_word(&mut entry, &key, e, ctx, parent) {
                 continue;
             }
@@ -182,6 +212,9 @@ impl Decoder<'_> {
         let kids: &[KdlNode] = node.children().map_or(&[], |c| c.nodes());
         let steps = step_names(kids);
         for (c, step) in kids.iter().zip(steps) {
+            if self.heights_child(&mut entry, c, ctx) {
+                continue;
+            }
             let key = spanned_name(c);
             let target = self.target(&entry, &key.value);
             let is_scatter = key.value == "scatter";

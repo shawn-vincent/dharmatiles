@@ -15,6 +15,7 @@
 
 use miette::SourceSpan;
 
+use crate::dim::Dim;
 use crate::expr::{Expr, Unit};
 use crate::place::{Along, Point, Side};
 use crate::schema::{self, Control, Element, Kind, Word};
@@ -41,6 +42,11 @@ pub struct Document {
     pub printer: Option<Printer>,
     /// The edge contract (library/parts/edges.dtile).
     pub edges: Option<Edges>,
+    /// File-level `let` constants (library/parts/heights.dtile).
+    pub consts: Vec<Const>,
+    /// A `defaults { … }` block: the tops and pins every body of its
+    /// element starts with (library/parts/edges.dtile).
+    pub defaults: Vec<Entry>,
 }
 
 impl Document {
@@ -127,10 +133,16 @@ pub struct Definition {
     pub params: Vec<Param>,
     /// Levels local to this definition (`levels foot=4`).
     pub levels: Vec<Level>,
+    /// `let` and `override` constants, in written order.
+    pub consts: Vec<Const>,
+    /// Declared `point`s.
+    pub points: Vec<PointDecl>,
     /// Drawn lines.
     pub lines: Vec<Line>,
-    /// Fill-point regions (only on divided tiles).
+    /// Regions.
     pub regions: Vec<Region>,
+    /// The stack's `base` line, if it has one.
+    pub base: Option<Base>,
     /// The stack, in written order.  Order matters among surfaces only.
     pub stack: Vec<Entry>,
     /// Solid, surface or both, from the stack.
@@ -200,6 +212,8 @@ pub struct Line {
     pub width: Option<Spanned<Num>>,
     /// How far it wanders off its points, mm.
     pub wobble: Option<Spanned<Num>>,
+    /// `closed=#true`: the last point joins the first.
+    pub closed: bool,
     /// The whole node.
     pub span: SourceSpan,
 }
@@ -214,6 +228,97 @@ pub struct Region {
     pub bounded_by: Vec<Spanned<String>>,
     /// Fill points.
     pub fills: Vec<Spanned<Point>>,
+    /// `within MM of=PLACE`: a disc, a strip or a ring.
+    pub within: Vec<Within>,
+    /// `except REGION…`: taken out.
+    pub except: Vec<Spanned<String>>,
+    /// The whole node.
+    pub span: SourceSpan,
+}
+
+/// A place as written: a name (built in or declared) or a literal point.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlaceRef {
+    /// `center`, `stream`, `northEdge`, `tile`.
+    Name(String),
+    /// `"(0.3, 0.7)"`, in squares from the south-west corner.
+    Point(f64, f64),
+}
+
+impl std::fmt::Display for PlaceRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlaceRef::Name(n) => f.write_str(n),
+            PlaceRef::Point(x, y) => write!(f, "({x}, {y})"),
+        }
+    }
+}
+
+/// `within 4.5 of=stream`: every place within a distance of a place.
+#[derive(Debug, Clone)]
+pub struct Within {
+    /// The distance, mm at the 35 mm square.  A range is drawn along the
+    /// edge by the kit (not available yet).
+    pub mm: Spanned<Expr>,
+    /// The place it is round.
+    pub of: Spanned<PlaceRef>,
+}
+
+/// `let` adds a constant; `override` replaces a library one for this tile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConstKind {
+    /// `let NAME VALUE`.
+    Let,
+    /// `override NAME VALUE`.
+    Override,
+}
+
+/// A named height, length or number: `let groundHeight 5`.
+#[derive(Debug, Clone)]
+pub struct Const {
+    /// `let` or `override`.
+    pub kind: ConstKind,
+    /// Its name.
+    pub name: Spanned<String>,
+    /// Its value, an expression of earlier names.
+    pub value: Spanned<Expr>,
+    /// What the value measures.
+    pub dim: Dim,
+    /// The whole node.
+    pub span: SourceSpan,
+}
+
+/// `point knoll "(0.28, 0.72)"`.
+#[derive(Debug, Clone)]
+pub struct PointDecl {
+    /// Its name.
+    pub name: Spanned<String>,
+    /// Across, squares.
+    pub x: f64,
+    /// Up, squares.
+    pub y: f64,
+    /// The whole node.
+    pub span: SourceSpan,
+}
+
+/// The stack's `base` line: the connector, which must come first.
+#[derive(Debug, Clone, Copy)]
+pub struct Base {
+    /// How many entries were written before it.
+    pub index: usize,
+    /// The node.
+    pub span: SourceSpan,
+}
+
+/// `pin [NAME] top=BAND at=PLACE`: a body's band held to a height at a place.
+#[derive(Debug, Clone)]
+pub struct Pin {
+    /// Its optional name.
+    pub name: Option<Spanned<String>>,
+    /// The band, a height or a range.
+    pub top: Spanned<Expr>,
+    /// Where it holds.
+    pub at: Spanned<PlaceRef>,
     /// The whole node.
     pub span: SourceSpan,
 }
@@ -264,6 +369,18 @@ pub struct Entry {
     pub controls: Vec<Setting>,
     /// A scatter's things, or the scatters inside a surface.
     pub children: Vec<Entry>,
+    /// `top=`: a body's band, or a thing's height limit.
+    pub top: Option<Spanned<Expr>>,
+    /// `at=` as the heights language writes it (a name or `"(x, y)"`).
+    /// An area-filler's region is also in `place.region`, and a point in
+    /// `place.at`, so today's build reads them.
+    pub at_place: Option<Spanned<PlaceRef>>,
+    /// `pin` lines in a body's block.
+    pub pins: Vec<Pin>,
+    /// `slope DEG` in a body's block: how steeply it lies.
+    pub slope: Option<Spanned<f64>>,
+    /// The optional name written after the element (`dirt hillDirt`).
+    pub label: Option<Spanned<String>>,
     /// The path that addresses this node in [`crate::edit`], such as
     /// `["tile", "stack", "scatter#2", "boulder"]`.
     pub path: Vec<String>,
@@ -272,6 +389,17 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// True when the entry uses the heights language: a top, pins, a slope,
+    /// a name, or `at=` by name.
+    #[must_use]
+    pub fn uses_heights(&self) -> bool {
+        self.top.is_some()
+            || !self.pins.is_empty()
+            || self.slope.is_some()
+            || self.at_place.is_some()
+            || self.label.is_some()
+    }
+
     /// The built-in element, if this calls one.
     #[must_use]
     pub fn element(&self) -> Option<&'static Element> {

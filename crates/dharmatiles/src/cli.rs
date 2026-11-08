@@ -71,6 +71,10 @@ pub(crate) enum Command {
         /// One JSON report on stdout.
         #[arg(long)]
         json: bool,
+        /// List the library defaults applied, each pin's share of its place,
+        /// and each override.
+        #[arg(long)]
+        explain: bool,
     },
     /// List the elements a stack can hold, or one element's controls.
     Elements {

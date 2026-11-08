@@ -17,7 +17,9 @@
 //! This crate has no geometry dependency, so `dharmatiles check`, an
 //! editor or the browser can use it without building Manifold.
 
+pub mod consts;
 pub mod decode;
+pub mod dim;
 pub mod edit;
 pub mod elements;
 pub mod error;

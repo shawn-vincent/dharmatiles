@@ -27,7 +27,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use dt_doc::Known;
-use dt_doc::model::{self, Callee, Definition, Document, Spanned, Use, Value};
+use dt_doc::consts::ConstTable;
+use dt_doc::expr::Expr;
+use dt_doc::model::{self, Callee, Definition, Document, PlaceRef, Spanned, Use, Value};
 use dt_doc::place::{Along, Edge, Point};
 use dt_doc::schema::{Control, Element, PlaceWord, Role};
 use dt_kit::Seed;
@@ -110,7 +112,8 @@ pub struct Child {
     pub weight: f64,
 }
 
-/// A region: lines (by name) and fill points (squares).
+/// A region: lines (by name) and fill points (squares), discs round places,
+/// less the regions it excepts.
 #[derive(Clone, Debug)]
 pub struct Region {
     /// Its name.
@@ -119,7 +122,117 @@ pub struct Region {
     pub bounded_by: Vec<Spanned<String>>,
     /// Fill points, in squares from the south-west corner.
     pub fills: Vec<[f64; 2]>,
+    /// `within MM of=PLACE`: a distance in mm at the reference square, and
+    /// the place it is round.
+    pub within: Vec<Within>,
+    /// `except REGION…`.
+    pub except: Vec<String>,
     /// Where its name is written (in the tile's text).
+    pub span: SourceSpan,
+}
+
+/// A distance round a place.
+#[derive(Clone, Debug)]
+pub struct Within {
+    /// Mm at the reference square (a range is taken at its middle: its
+    /// footprint is drawn by the build, not available yet).
+    pub mm: f64,
+    /// The place it is round.
+    pub of: PlaceRef,
+    /// Where it is written.
+    pub span: SourceSpan,
+}
+
+/// Where a pin or a default was written.
+#[derive(Clone, Debug)]
+pub struct Provenance {
+    /// The file's path.
+    pub path: String,
+    /// The text.
+    pub src: Src,
+    /// True for a library default.
+    pub default: bool,
+}
+
+/// One pin: a place and a band.
+#[derive(Clone, Debug)]
+pub struct PinDecl {
+    /// Its name, if written.
+    pub name: Option<String>,
+    /// The band.
+    pub top: Expr,
+    /// Where the band is written.
+    pub top_span: SourceSpan,
+    /// The place.
+    pub at: PlaceRef,
+    /// Where the place is written.
+    pub at_span: SourceSpan,
+    /// The whole pin line.
+    pub span: SourceSpan,
+    /// Where it comes from.
+    pub from: Provenance,
+}
+
+/// A body of the stack (dirt, water, cliff or floor) as written.
+#[derive(Clone, Debug)]
+pub struct BodyDecl {
+    /// The element.
+    pub element: String,
+    /// Its name, if written.
+    pub label: Option<String>,
+    /// Its top, if written.
+    pub top: Option<(Expr, SourceSpan)>,
+    /// The region it fills: `None` is the whole tile.
+    pub region: Option<String>,
+    /// Its `slope`, degrees.
+    pub slope: Option<f64>,
+    /// Its pins, in order.
+    pub pins: Vec<PinDecl>,
+    /// Its element's name in the text.
+    pub span: SourceSpan,
+}
+
+/// The tops and pins a library default gives every body of an element.
+#[derive(Clone, Debug)]
+pub struct DefaultBody {
+    /// The element.
+    pub element: String,
+    /// The default top.
+    pub top: Option<(Expr, SourceSpan)>,
+    /// The default pins.
+    pub pins: Vec<PinDecl>,
+    /// Where it is written.
+    pub from: Provenance,
+}
+
+/// What the heights language adds to a tile.
+#[derive(Clone, Debug)]
+pub struct Heights {
+    /// Constants: the library's, the tile's, overrides applied.
+    pub consts: ConstTable,
+    /// Every point by name, built in and declared, in squares.
+    pub points: BTreeMap<String, [f64; 2]>,
+    /// Which lines are closed.
+    pub closed: Vec<String>,
+    /// The tile's bodies, in stack order.
+    pub bodies: Vec<BodyDecl>,
+    /// The library's defaults.
+    pub defaults: Vec<DefaultBody>,
+    /// Where each stack entry that is not a body (things, coats) sits, for
+    /// order notes and `top=` on things.
+    pub things: Vec<ThingDecl>,
+}
+
+/// A thing or a coat in the stack, for the checks that read its top.
+#[derive(Clone, Debug)]
+pub struct ThingDecl {
+    /// The element or definition.
+    pub element: String,
+    /// Its top (a height limit), if written.
+    pub top: Option<(Expr, SourceSpan)>,
+    /// Its `at=`, if written.
+    pub at: Option<PlaceRef>,
+    /// Where it is written.
     pub span: SourceSpan,
 }
 
@@ -144,6 +257,9 @@ pub struct Tile {
     pub wobbles: BTreeMap<String, (Vec<[f64; 2]>, f64)>,
     /// Regions.
     pub regions: Vec<Region>,
+    /// The heights language: constants, bodies, pins, defaults; `None` for
+    /// a tile that uses none of it.
+    pub heights: Option<Heights>,
     /// The entries that call built elements, definitions inlined.
     pub stack: Vec<Entry>,
     /// What the document asks for that is not built yet: one error each,
@@ -224,6 +340,7 @@ pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
         entries: 0,
         top: None,
         dims: (1.0, 1.0),
+        points: BTreeMap::new(),
     };
     let Some(file) = r.load(path, None) else {
         return Err(r.errors);
@@ -300,6 +417,8 @@ struct Reader<'s> {
     top: Option<(Src, SourceSpan)>,
     /// The tile's squares across and up, for edge paths and points.
     dims: (f64, f64),
+    /// Every point of the tile by name (built in and declared), squares.
+    points: BTreeMap<String, [f64; 2]>,
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A
@@ -438,6 +557,7 @@ impl Reader<'_> {
             lines: BTreeMap::new(),
             wobbles: BTreeMap::new(),
             regions: Vec::new(),
+            heights: None,
             stack: Vec::new(),
             pending: Vec::new(),
             src: Arc::clone(src),
@@ -445,6 +565,17 @@ impl Reader<'_> {
         };
         let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
         self.dims = (cols, rows);
+        self.points = BTreeMap::new();
+        for n in dt_doc::place::BUILTIN_POINTS {
+            if let Some((x, y)) = dt_doc::place::builtin_point(n, cols, rows) {
+                self.points.insert(n.to_owned(), [x, y]);
+            }
+        }
+        for p in &def.points {
+            self.points.insert(p.name.value.clone(), [p.x, p.y]);
+        }
+        let library = Known::standard();
+        let consts = ConstTable::build(library.consts(), &def.consts);
         for l in &def.lines {
             if let Some(w) = l.width.as_ref() {
                 t.pending.push(not_yet(src, w.span, "a line's width is"));
@@ -466,12 +597,15 @@ impl Reader<'_> {
             };
             let mut pts = Vec::new();
             for p in &l.through {
-                match fixed_point(&p.value, cols, rows) {
+                match fixed_point(&p.value, cols, rows, &self.points) {
                     Some(xy) => pts.push(xy),
                     None => t
                         .pending
                         .push(not_yet(src, p.span, "a point drawn from a range is")),
                 }
+            }
+            if l.closed && pts.len() > 1 {
+                pts.push(pts[0]);
             }
             if wobble > 0.0 {
                 t.wobbles
@@ -483,7 +617,7 @@ impl Reader<'_> {
         for r in &def.regions {
             let mut fills = Vec::new();
             for p in &r.fills {
-                match fixed_point(&p.value, cols, rows) {
+                match fixed_point(&p.value, cols, rows, &self.points) {
                     Some(xy) => fills.push(xy),
                     None => {
                         t.pending
@@ -491,10 +625,41 @@ impl Reader<'_> {
                     }
                 }
             }
+            let mut within = Vec::new();
+            for w in &r.within {
+                let range = w.mm.value.is_range();
+                if range {
+                    t.pending
+                        .push(not_yet(src, w.mm.span, "a footprint range in `within` is"));
+                }
+                match consts.scalar(&w.mm.value, 0.5, &|_| None) {
+                    Ok(mm) if mm >= 0.0 && mm.is_finite() => within.push(Within {
+                        mm,
+                        of: w.of.value.clone(),
+                        span: w.of.span,
+                    }),
+                    Ok(_) => self.errors.push(Diag::at(
+                        src,
+                        w.mm.span,
+                        "dt::value",
+                        "a distance is not negative",
+                        "here",
+                    )),
+                    Err(msg) => self.errors.push(Diag::at(
+                        src,
+                        w.mm.span,
+                        "dt::value",
+                        format!("can't work out this distance: {msg}"),
+                        "here",
+                    )),
+                }
+            }
             t.regions.push(Region {
                 name: r.name.value.clone(),
                 bounded_by: r.bounded_by.clone(),
                 fills,
+                within,
+                except: r.except.iter().map(|e| e.value.clone()).collect(),
                 span: r.name.span,
             });
         }
@@ -514,7 +679,110 @@ impl Reader<'_> {
         self.expand(&def.stack, &scope, &mut stack, &mut pending);
         t.stack = stack;
         t.pending.extend(pending);
+        if uses_heights(def) {
+            t.heights = Some(self.heights(file, def, consts, &mut t.pending));
+        }
         Some(t)
+    }
+
+    /// What the heights language wrote in the tile: its bodies, pins and
+    /// the library's defaults.  What `build` does not do yet goes to
+    /// `pending`.
+    fn heights(
+        &mut self,
+        file: &Arc<File>,
+        def: &Definition,
+        consts: ConstTable,
+        pending: &mut Vec<Diag>,
+    ) -> Heights {
+        let src = &file.src;
+        let from = Provenance {
+            path: file.path.clone(),
+            src: Arc::clone(src),
+            default: false,
+        };
+        let pin = |p: &model::Pin, from: &Provenance| PinDecl {
+            name: p.name.as_ref().map(|n| n.value.clone()),
+            top: p.top.value.clone(),
+            top_span: p.top.span,
+            at: p.at.value.clone(),
+            at_span: p.at.span,
+            span: p.span,
+            from: from.clone(),
+        };
+        let mut bodies = Vec::new();
+        let mut things = Vec::new();
+        for e in &def.stack {
+            let Callee::Element(el) = &e.callee else {
+                things.push(thing(e));
+                continue;
+            };
+            if !matches!(el.name, "dirt" | "water" | "cliff" | "floor") {
+                if let Some(t) = &e.top {
+                    pending.push(not_yet(src, t.span, &format!("`top=` on `{}` is", el.name)));
+                }
+                if let Some(a) = e
+                    .at_place
+                    .as_ref()
+                    .filter(|_| e.place.at.is_none() && e.place.region.is_none())
+                {
+                    pending.push(not_yet(
+                        src,
+                        a.span,
+                        &format!("`at=` a line or region on `{}` is", el.name),
+                    ));
+                }
+                things.push(thing(e));
+                continue;
+            }
+            if let Some(t) = &e.top {
+                pending.push(not_yet(src, t.span, &format!("`top=` on `{}` is", el.name)));
+            }
+            for p in &e.pins {
+                pending.push(not_yet(src, p.span, "a `pin` is"));
+            }
+            if let Some(sl) = &e.slope {
+                pending.push(not_yet(src, sl.span, "`slope` is"));
+            }
+            bodies.push(BodyDecl {
+                element: el.name.to_owned(),
+                label: e.label.as_ref().map(|l| l.value.clone()),
+                top: e.top.as_ref().map(|t| (t.value.clone(), t.span)),
+                region: e.place.region.as_ref().map(|r| r.value.clone()),
+                slope: e.slope.as_ref().map(|s| s.value),
+                pins: e.pins.iter().map(|p| pin(p, &from)).collect(),
+                span: e.what.span,
+            });
+        }
+        let mut defaults = Vec::new();
+        if let Some(f) = self.load(EDGES, None) {
+            let dfrom = Provenance {
+                path: f.path.clone(),
+                src: Arc::clone(&f.src),
+                default: true,
+            };
+            for d in &f.doc.defaults {
+                defaults.push(DefaultBody {
+                    element: d.what.value.clone(),
+                    top: d.top.as_ref().map(|t| (t.value.clone(), t.span)),
+                    pins: d.pins.iter().map(|p| pin(p, &dfrom)).collect(),
+                    from: dfrom.clone(),
+                });
+            }
+        }
+        Heights {
+            consts,
+            points: self.points.clone(),
+            closed: def
+                .lines
+                .iter()
+                .filter(|l| l.closed)
+                .map(|l| l.name.value.clone())
+                .collect(),
+            bodies,
+            defaults,
+            things,
+        }
     }
 
     /// The edge contract, levels in mm.
@@ -682,7 +950,15 @@ impl Reader<'_> {
                     }
                     match &at {
                         Some(p) if element.honours(PlaceWord::At) => {
-                            match p.value.bounds(self.dims.0, self.dims.1) {
+                            let bounds = match &p.value {
+                                Point::Named(n) => self
+                                    .points
+                                    .get(n)
+                                    .map(|q| ((q[0], q[0]), (q[1], q[1])))
+                                    .ok_or_else(|| format!("no point is called `{n}`")),
+                                v => v.bounds(self.dims.0, self.dims.1),
+                            };
+                            match bounds {
                                 Ok(((x0, x1), (y0, y1))) => point = Some([[x0, x1], [y0, y1]]),
                                 Err(msg) => self
                                     .errors
@@ -1067,8 +1343,33 @@ fn default_value(c: &'static Control, levels: &[(String, f64)]) -> Option<dt_ele
     element_value(&c.default_value()?, levels).ok()
 }
 
+/// Whether a tile uses the heights language at all.
+fn uses_heights(def: &Definition) -> bool {
+    def.base.is_some()
+        || !def.consts.is_empty()
+        || !def.points.is_empty()
+        || def.stack.iter().any(model::Entry::uses_heights)
+}
+
+fn thing(e: &model::Entry) -> ThingDecl {
+    ThingDecl {
+        element: e.what.value.clone(),
+        top: e.top.as_ref().map(|t| (t.value.clone(), t.span)),
+        at: e.at_place.as_ref().map(|a| a.value.clone()),
+        span: e.what.span,
+    }
+}
+
 /// A point in squares, if it is not drawn from a range.
-fn fixed_point(p: &dt_doc::place::Point, cols: f64, rows: f64) -> Option<[f64; 2]> {
+fn fixed_point(
+    p: &dt_doc::place::Point,
+    cols: f64,
+    rows: f64,
+    named: &BTreeMap<String, [f64; 2]>,
+) -> Option<[f64; 2]> {
+    if let dt_doc::place::Point::Named(n) = p {
+        return named.get(n).copied();
+    }
     if p.is_range() {
         return None;
     }

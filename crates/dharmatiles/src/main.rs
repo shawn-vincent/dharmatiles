@@ -75,7 +75,11 @@ fn main() -> ExitCode {
         palette: None,
     });
     let code = match command {
-        Command::Check { paths, json } => check::check(&paths, json),
+        Command::Check {
+            paths,
+            json,
+            explain,
+        } => check::check(&paths, json, explain),
         Command::Build {
             paths,
             all,

@@ -149,6 +149,9 @@ pub enum Point {
     Corner(Corner),
     /// An edge word: the middle of that edge.
     Edge(Edge),
+    /// A built-in point (`northCenter`, `center`) or a declared `point`,
+    /// by name; the evaluator knows where it is.
+    Named(String),
 }
 
 impl Point {
@@ -169,6 +172,7 @@ impl Point {
                 let (x, y) = e.middle(cols, rows);
                 ((x, x), (y, y))
             }
+            Point::Named(n) => return Err(format!("the point `{n}` has no fixed place yet")),
         })
     }
 
@@ -185,8 +189,59 @@ impl fmt::Display for Point {
             Point::Pair { x, y } => write!(f, "{x},{y}"),
             Point::Corner(c) => f.write_str(c.as_str()),
             Point::Edge(e) => f.write_str(e.as_str()),
+            Point::Named(n) => f.write_str(n),
         }
     }
+}
+
+/// The nine built-in points of a tile, camelCase, west to east and south
+/// to north: `southWestCorner southCenter southEastCorner westCenter
+/// center eastCenter northWestCorner northCenter northEastCorner`.
+pub const BUILTIN_POINTS: [&str; 9] = [
+    "southWestCorner",
+    "southCenter",
+    "southEastCorner",
+    "westCenter",
+    "center",
+    "eastCenter",
+    "northWestCorner",
+    "northCenter",
+    "northEastCorner",
+];
+
+/// The built-in lines: the four edges, and all four together.
+pub const BUILTIN_LINES: [&str; 5] = ["northEdge", "eastEdge", "southEdge", "westEdge", "edges"];
+
+/// The built-in region: the whole tile.
+pub const BUILTIN_REGION: &str = "tile";
+
+/// A built-in point, in squares on a `cols` × `rows` tile.
+#[must_use]
+pub fn builtin_point(name: &str, cols: f64, rows: f64) -> Option<(f64, f64)> {
+    let ix = BUILTIN_POINTS.iter().position(|n| *n == name)?;
+    let x = [0.0, cols / 2.0, cols][ix % 3];
+    let y = [0.0, rows / 2.0, rows][ix / 3];
+    Some((x, y))
+}
+
+/// A built-in line as a polyline in squares on a `cols` × `rows` tile; the
+/// four edges together (`edges`) close the loop.
+#[must_use]
+pub fn builtin_line(name: &str, cols: f64, rows: f64) -> Option<Vec<[f64; 2]>> {
+    Some(match name {
+        "northEdge" => vec![[0.0, rows], [cols, rows]],
+        "eastEdge" => vec![[cols, 0.0], [cols, rows]],
+        "southEdge" => vec![[0.0, 0.0], [cols, 0.0]],
+        "westEdge" => vec![[0.0, 0.0], [0.0, rows]],
+        "edges" => vec![
+            [0.0, 0.0],
+            [cols, 0.0],
+            [cols, rows],
+            [0.0, rows],
+            [0.0, 0.0],
+        ],
+        _ => return None,
+    })
 }
 
 /// Which side of a drawn line a thing stands on, walking the line.
@@ -244,6 +299,14 @@ fn perr(message: impl Into<String>, start: usize, end: usize) -> PlaceError {
 /// # Errors
 /// What is wrong, with the byte range inside `s`.
 pub fn parse_point(s: &str) -> Result<Point, PlaceError> {
+    // "(x, y)": the pair may be written in parentheses
+    let open = s.len() - s.trim_start().len();
+    let t = s.trim();
+    if t.starts_with('(') && t.ends_with(')') && t.contains(',') {
+        let inner = &t[1..t.len() - 1];
+        return parse_point(inner)
+            .map_err(|e| perr(e.message, e.start + open + 1, e.end + open + 1));
+    }
     let t = s.trim();
     if let Some(c) = Corner::parse(t) {
         return Ok(Point::Corner(c));

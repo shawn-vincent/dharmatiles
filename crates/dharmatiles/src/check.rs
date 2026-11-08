@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::{ERROR, OK, errors_json, report};
 
-pub(crate) fn check(paths: &[String], json: bool) -> u8 {
+pub(crate) fn check(paths: &[String], json: bool, explain: bool) -> u8 {
     let mut code = OK;
     let mut reports = Vec::new();
     for p in paths {
@@ -42,12 +42,29 @@ pub(crate) fn check(paths: &[String], json: bool) -> u8 {
                             c.file.doc.definitions.len()
                         ),
                     }
+                    for d in c.notes() {
+                        let at = d
+                            .location()
+                            .map(|(f, l, c)| format!("{f}:{l}:{c}: "))
+                            .unwrap_or_default();
+                        tell!("  note [{}] {at}{}", d.code, d.message);
+                        if let Some(h) = &d.help {
+                            tell!("    help: {h}");
+                        }
+                    }
+                    if explain {
+                        for line in c.explain() {
+                            tell!("  {line}");
+                        }
+                    }
                 }
                 reports.push(json!({
                     "path": p,
                     "ok": true,
                     "tile": c.tile.as_ref().map(|t| format!("{}x{}", t.cols, t.rows)),
                     "pending": errors_json(pending),
+                    "notes": errors_json(c.notes()),
+                    "explain": if explain { json!(c.explain()) } else { json!(null) },
                 }));
             }
             Err(errs) => {
