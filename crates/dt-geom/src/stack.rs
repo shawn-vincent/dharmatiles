@@ -97,171 +97,202 @@ struct Column {
     rows: Vec<u32>,
 }
 
-/// The stack lift.
-///
-/// # Errors
-/// [`LiftError`] when the lattice is smaller than 2 × 2, a field has the
-/// wrong length, or a shown node (or a bottom layer's node) is not above 0.
-///
-/// # Panics
-/// Never for valid input: `layers` must hold at least one layer and at
-/// most 255.
-#[allow(
-    clippy::too_many_lines,
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::float_cmp,
-    clippy::many_single_char_names
-)]
-pub fn lift_stack(lat: &Lattice, layers: &[Layer]) -> Result<TriMesh, LiftError> {
-    let Lattice {
-        nx,
-        ny,
-        step,
-        tol,
-        max_cells,
-        round,
-    } = *lat;
-    let n = nx * ny;
-    if nx < 2 || ny < 2 || layers.is_empty() || layers.iter().any(|l| l.top.len() != n) {
-        return Err(LiftError::TooSmall);
-    }
-    let nl = layers.len();
-    assert!(nl < 256, "at most 255 layers");
-    let class = classes(layers, n);
-    let top: Vec<f32> = (0..n).map(|k| layers[class[k] as usize].top[k]).collect();
-    if nl > 1 {
-        // the bottom layer carries the floor wall: it must be above 0 everywhere
-        for (k, &z) in layers[0].top.iter().enumerate() {
-            if !(z.is_finite() && z > 0.0) {
-                return Err(LiftError::BelowBase {
-                    at: (k % nx, k / nx),
-                    z,
-                });
-            }
+fn u(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+/// The stack mesher's state: the shown layer at every node, the vertices
+/// made so far (a node's vertex once, a boundary crossing once per grid
+/// edge) and the triangles of each layer. Its steps run in the order
+/// [`lift_stack`] names them, and each takes vertices in that order, so the
+/// mesh is the same whatever the thread count.
+struct Mesher<'l, 'a> {
+    layers: &'l [Layer<'a>],
+    nx: usize,
+    ny: usize,
+    step: f64,
+    round: Round,
+    /// The shown layer at every node.
+    class: Vec<u8>,
+    /// The shown top at every node.
+    top: Vec<f32>,
+    /// A node's vertex, `u32::MAX` until made.
+    index: Vec<u32>,
+    positions: Vec<[f64; 3]>,
+    /// The vertex where the boundary crosses grid edge `(a, b)`, `a < b`.
+    cuts: HashMap<(usize, usize), u32>,
+    /// The triangles of each layer.
+    tris: Vec<Vec<[u32; 3]>>,
+}
+
+impl<'l, 'a> Mesher<'l, 'a> {
+    /// Step 0: the shown layer and top at every node, and the checks.
+    fn new(lat: &Lattice, layers: &'l [Layer<'a>]) -> Result<Self, LiftError> {
+        let (nx, ny) = (lat.nx, lat.ny);
+        let n = nx * ny;
+        if nx < 2 || ny < 2 || layers.is_empty() || layers.iter().any(|l| l.top.len() != n) {
+            return Err(LiftError::TooSmall);
         }
-    }
-    let g = Grid {
-        nx,
-        ny,
-        step,
-        z: top.clone(),
-    };
-    // a leaf is forced to a single cell where its nodes show several layers:
-    // summed-area tables of the nodes showing each layer above the first
-    let sw = nx + 1;
-    let sats: Vec<Vec<u32>> = (1..nl)
-        .map(|layer| {
-            let mut sat = vec![0u32; sw * (ny + 1)];
-            for j in 0..ny {
-                for i in 0..nx {
-                    sat[(j + 1) * sw + i + 1] = u32::from(usize::from(class[j * nx + i]) == layer)
-                        + sat[j * sw + i + 1]
-                        + sat[(j + 1) * sw + i]
-                        - sat[j * sw + i];
+        let nl = layers.len();
+        assert!(nl < 256, "at most 255 layers");
+        let class = classes(layers, n);
+        let top: Vec<f32> = (0..n).map(|k| layers[class[k] as usize].top[k]).collect();
+        if nl > 1 {
+            // the bottom layer carries the floor wall: it must be above 0 everywhere
+            for (k, &z) in layers[0].top.iter().enumerate() {
+                if !(z.is_finite() && z > 0.0) {
+                    return Err(LiftError::BelowBase {
+                        at: (k % nx, k / nx),
+                        z,
+                    });
                 }
             }
-            sat
-        })
-        .collect();
-    let force = |l: Leaf| {
-        let area = ((l.i1 - l.i0 + 1) * (l.j1 - l.j0 + 1)) as u32;
-        sats.iter().any(|sat| {
-            let c = sat[(l.j1 + 1) * sw + l.i1 + 1] + sat[l.j0 * sw + l.i0]
-                - sat[l.j0 * sw + l.i1 + 1]
-                - sat[(l.j1 + 1) * sw + l.i0];
-            c > 0 && c < area
-        })
-    };
-    let leaves = plan_leaves(&g, tol, max_cells, &force)?;
-    let verts = Corners::new(nx, ny, &leaves);
-
-    let rd = |v: f64| match round {
-        Round::None => v,
-        Round::F32 => f64::from(v as f32),
-    };
-    let u = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
-    let node_xy = |k: usize| [(k % nx) as f64 * step, (k / nx) as f64 * step];
-
-    let mut index = vec![u32::MAX; n];
-    let mut positions: Vec<[f64; 3]> = Vec::new();
-    let mut cuts: HashMap<(usize, usize), u32> = HashMap::new();
-    let mut tris: Vec<Vec<[u32; 3]>> = vec![Vec::new(); nl];
-
-    let mut vid = |k: usize, positions: &mut Vec<[f64; 3]>| -> u32 {
-        if index[k] == u32::MAX {
-            index[k] = u(positions.len());
-            let p = node_xy(k);
-            positions.push([rd(p[0]), rd(p[1]), f64::from(top[k])]);
         }
-        index[k]
-    };
-    // the vertex where the boundary crosses grid edge (a, b), a < b
-    let mut cut = |a: usize,
-                   b: usize,
-                   positions: &mut Vec<[f64; 3]>,
-                   vid: &mut dyn FnMut(usize, &mut Vec<[f64; 3]>) -> u32|
-     -> u32 {
+        Ok(Self {
+            layers,
+            nx,
+            ny,
+            step: lat.step,
+            round: lat.round,
+            class,
+            top,
+            index: vec![u32::MAX; n],
+            positions: Vec::new(),
+            cuts: HashMap::new(),
+            tris: vec![Vec::new(); nl],
+        })
+    }
+
+    /// A position rounded as the lattice says.
+    #[allow(clippy::cast_possible_truncation)]
+    fn rd(&self, v: f64) -> f64 {
+        match self.round {
+            Round::None => v,
+            Round::F32 => f64::from(v as f32),
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn node_xy(&self, k: usize) -> [f64; 2] {
+        [
+            (k % self.nx) as f64 * self.step,
+            (k / self.nx) as f64 * self.step,
+        ]
+    }
+
+    /// Step 1: the leaves of the adaptive lift of the shown top, a leaf
+    /// forced to a single cell where its nodes show several layers
+    /// (summed-area tables of the nodes showing each layer above the first).
+    #[allow(clippy::cast_possible_truncation)]
+    fn plan(&self, tol: f64, max_cells: usize) -> Result<(Grid, Vec<Leaf>), LiftError> {
+        let (nx, ny) = (self.nx, self.ny);
+        let g = Grid {
+            nx,
+            ny,
+            step: self.step,
+            z: self.top.clone(),
+        };
+        let sw = nx + 1;
+        let sats: Vec<Vec<u32>> = (1..self.layers.len())
+            .map(|layer| {
+                let mut sat = vec![0u32; sw * (ny + 1)];
+                for j in 0..ny {
+                    for i in 0..nx {
+                        sat[(j + 1) * sw + i + 1] =
+                            u32::from(usize::from(self.class[j * nx + i]) == layer)
+                                + sat[j * sw + i + 1]
+                                + sat[(j + 1) * sw + i]
+                                - sat[j * sw + i];
+                    }
+                }
+                sat
+            })
+            .collect();
+        let force = |l: Leaf| {
+            let area = ((l.i1 - l.i0 + 1) * (l.j1 - l.j0 + 1)) as u32;
+            sats.iter().any(|sat| {
+                let c = sat[(l.j1 + 1) * sw + l.i1 + 1] + sat[l.j0 * sw + l.i0]
+                    - sat[l.j0 * sw + l.i1 + 1]
+                    - sat[(l.j1 + 1) * sw + l.i0];
+                c > 0 && c < area
+            })
+        };
+        let leaves = plan_leaves(&g, tol, max_cells, &force)?;
+        Ok((g, leaves))
+    }
+
+    /// The vertex of node `k`, made on first use.
+    fn vid(&mut self, k: usize) -> u32 {
+        if self.index[k] == u32::MAX {
+            self.index[k] = u(self.positions.len());
+            let p = self.node_xy(k);
+            self.positions
+                .push([self.rd(p[0]), self.rd(p[1]), f64::from(self.top[k])]);
+        }
+        self.index[k]
+    }
+
+    /// The vertex where the boundary crosses grid edge `(a, b)`, shared by
+    /// both triangles of the edge; one within [`SNAP_MM`] of a node is that
+    /// node.
+    fn cut(&mut self, a: usize, b: usize) -> u32 {
         let (a, b) = if a < b { (a, b) } else { (b, a) };
-        if let Some(&v) = cuts.get(&(a, b)) {
+        if let Some(&v) = self.cuts.get(&(a, b)) {
             return v;
         }
+        let layers = self.layers;
         let (lo, hi) = (
-            class[a].min(class[b]) as usize,
-            class[a].max(class[b]) as usize,
+            self.class[a].min(self.class[b]) as usize,
+            self.class[a].max(self.class[b]) as usize,
         );
         let d = |k: usize| f64::from(layers[hi].top[k]) - f64::from(layers[lo].top[k]);
         let (da, db) = (d(a), d(b));
         let t = (da / (da - db)).clamp(0.0, 1.0);
         let t = if t.is_finite() { t } else { 0.5 };
-        let (pa, pb) = (node_xy(a), node_xy(b));
+        let (pa, pb) = (self.node_xy(a), self.node_xy(b));
         let len = libm::hypot(pb[0] - pa[0], pb[1] - pa[1]);
         let v = if t * len < SNAP_MM {
-            vid(a, positions)
+            self.vid(a)
         } else if (1.0 - t) * len < SNAP_MM {
-            vid(b, positions)
+            self.vid(b)
         } else {
             let z = f64::from(layers[lo].top[a])
                 + t * (f64::from(layers[lo].top[b]) - f64::from(layers[lo].top[a]));
-            let v = u(positions.len());
-            positions.push([
-                rd(pa[0] + t * (pb[0] - pa[0])),
-                rd(pa[1] + t * (pb[1] - pa[1])),
-                rd(z),
-            ]);
+            let v = u(self.positions.len());
+            let p = [
+                self.rd(pa[0] + t * (pb[0] - pa[0])),
+                self.rd(pa[1] + t * (pb[1] - pa[1])),
+                self.rd(z),
+            ];
+            self.positions.push(p);
             v
         };
-        cuts.insert((a, b), v);
+        self.cuts.insert((a, b), v);
         v
-    };
+    }
 
-    let push = |t: [u32; 3], layer: u8, tris: &mut Vec<Vec<[u32; 3]>>| {
+    /// A triangle of `layer`, unless it is degenerate.
+    fn push(&mut self, t: [u32; 3], layer: u8) {
         if t[0] != t[1] && t[1] != t[2] && t[0] != t[2] {
-            tris[layer as usize].push(t);
+            self.tris[layer as usize].push(t);
         }
-    };
-    // a triangle of grid nodes, cut along the boundary if it crosses it
-    let mut emit = |nodes: [usize; 3],
-                    positions: &mut Vec<[f64; 3]>,
-                    vid: &mut dyn FnMut(usize, &mut Vec<[f64; 3]>) -> u32,
-                    tris: &mut Vec<Vec<[u32; 3]>>| {
-        let c = nodes.map(|k| class[k]);
-        let v: [u32; 3] = [
-            vid(nodes[0], positions),
-            vid(nodes[1], positions),
-            vid(nodes[2], positions),
-        ];
+    }
+
+    /// A triangle of grid nodes, cut along the boundary if it crosses it.
+    fn emit(&mut self, nodes: [usize; 3]) {
+        let c = nodes.map(|k| self.class[k]);
+        let v: [u32; 3] = [self.vid(nodes[0]), self.vid(nodes[1]), self.vid(nodes[2])];
         if c[0] == c[1] && c[1] == c[2] {
-            push(v, c[0], tris);
+            self.push(v, c[0]);
         } else if c[0] != c[1] && c[1] != c[2] && c[0] != c[2] {
             // three layers: a corner at each node, the middle to the highest
-            let m01 = cut(nodes[0], nodes[1], positions, vid);
-            let m12 = cut(nodes[1], nodes[2], positions, vid);
-            let m20 = cut(nodes[2], nodes[0], positions, vid);
-            push([v[0], m01, m20], c[0], tris);
-            push([v[1], m12, m01], c[1], tris);
-            push([v[2], m20, m12], c[2], tris);
-            push([m01, m12, m20], c[0].max(c[1]).max(c[2]), tris);
+            let m01 = self.cut(nodes[0], nodes[1]);
+            let m12 = self.cut(nodes[1], nodes[2]);
+            let m20 = self.cut(nodes[2], nodes[0]);
+            self.push([v[0], m01, m20], c[0]);
+            self.push([v[1], m12, m01], c[1]);
+            self.push([v[2], m20, m12], c[2]);
+            self.push([m01, m12, m20], c[0].max(c[1]).max(c[2]));
         } else {
             // two layers: rotate so the lone node is first
             let lone = if c[1] == c[2] {
@@ -272,144 +303,181 @@ pub fn lift_stack(lat: &Lattice, layers: &[Layer]) -> Result<TriMesh, LiftError>
                 2
             };
             let (x, y, z) = (lone, (lone + 1) % 3, (lone + 2) % 3);
-            let cxy = cut(nodes[x], nodes[y], positions, vid);
-            let cxz = cut(nodes[x], nodes[z], positions, vid);
-            push([v[x], cxy, cxz], c[x], tris);
-            push([cxy, v[y], v[z]], c[y], tris);
-            push([cxy, v[z], cxz], c[y], tris);
+            let cxy = self.cut(nodes[x], nodes[y]);
+            let cxz = self.cut(nodes[x], nodes[z]);
+            self.push([v[x], cxy, cxz], c[x]);
+            self.push([cxy, v[y], v[z]], c[y]);
+            self.push([cxy, v[z], cxz], c[y]);
         }
-    };
+    }
 
-    for &l in &leaves {
-        let ring = verts.ring(l);
-        let nodes: Vec<usize> = ring.iter().map(|&(i, j)| j * nx + i).collect();
-        if nodes.len() == 4 {
-            emit(
-                [nodes[0], nodes[1], nodes[2]],
-                &mut positions,
-                &mut vid,
-                &mut tris,
-            );
-            emit(
-                [nodes[0], nodes[2], nodes[3]],
-                &mut positions,
-                &mut vid,
-                &mut tris,
-            );
-        } else {
-            // a leaf with more is uniform (a mixed one is a cell): a fan
-            let layer = class[nodes[0]];
-            let ids: Vec<u32> = nodes.iter().map(|&k| vid(k, &mut positions)).collect();
-            let c = centre(&g, l);
-            let cv = u(positions.len());
-            positions.push([rd(c[0]), rd(c[1]), rd(c[2])]);
-            for k in 0..ids.len() {
-                tris[layer as usize].push([cv, ids[k], ids[(k + 1) % ids.len()]]);
+    /// Step 2, the top: every leaf, a cell as two triangles and a larger
+    /// uniform leaf as a fan from its centre.
+    fn top_surface(&mut self, g: &Grid, leaves: &[Leaf], verts: &Corners) {
+        let nx = self.nx;
+        for &l in leaves {
+            let ring = verts.ring(l);
+            let nodes: Vec<usize> = ring.iter().map(|&(i, j)| j * nx + i).collect();
+            if nodes.len() == 4 {
+                self.emit([nodes[0], nodes[1], nodes[2]]);
+                self.emit([nodes[0], nodes[2], nodes[3]]);
+            } else {
+                // a leaf with more is uniform (a mixed one is a cell): a fan
+                let layer = self.class[nodes[0]];
+                let ids: Vec<u32> = nodes.iter().map(|&k| self.vid(k)).collect();
+                let c = centre(g, l);
+                let cv = u(self.positions.len());
+                let p = [self.rd(c[0]), self.rd(c[1]), self.rd(c[2])];
+                self.positions.push(p);
+                for k in 0..ids.len() {
+                    self.tris[layer as usize].push([cv, ids[k], ids[(k + 1) % ids.len()]]);
+                }
             }
         }
     }
 
-    // the rim, counter-clockwise from (0, 0): one column per node, and one
-    // per boundary crossing that is not a node
-    let whole = Leaf {
-        i0: 0,
-        j0: 0,
-        i1: nx - 1,
-        j1: ny - 1,
-    };
-    let ring: Vec<usize> = verts.ring(whole).iter().map(|&(i, j)| j * nx + i).collect();
-    let mut rim: Vec<Column> = Vec::new();
-    for k in 0..ring.len() {
-        let (a, b) = (ring[k], ring[(k + 1) % ring.len()]);
-        let t = vid(a, &mut positions);
-        let p = node_xy(a);
-        let vis = f64::from(top[a]);
-        // row 0 is the floor (made below); row l + 1 the top of layer l
-        let mut rows = vec![0u32];
-        let mut h = 0.0_f64;
-        for (l, layer) in layers.iter().enumerate() {
-            let hl = if l >= class[a] as usize {
-                vis
-            } else {
-                h.max(f64::from(layer.top[a]).min(vis))
-            };
-            let v = if hl >= vis {
-                t
-            } else if hl == h && l > 0 {
-                rows[l]
-            } else {
-                let v = u(positions.len());
-                positions.push([rd(p[0]), rd(p[1]), hl]);
-                v
-            };
-            rows.push(v);
-            h = hl;
-        }
-        rim.push(Column {
-            xy: [rd(p[0]), rd(p[1])],
-            rows,
-        });
-        if class[a] != class[b] {
-            let c = cut(a, b, &mut positions, &mut vid);
-            // a crossing snapped onto a node is that node: not a second column
-            if c != vid(a, &mut positions) && c != vid(b, &mut positions) {
-                let q = positions[c as usize];
-                let mut rows = vec![0u32];
-                rows.extend(std::iter::repeat_n(c, nl));
-                rim.push(Column {
-                    xy: [q[0], q[1]],
-                    rows,
-                });
+    /// Step 3, the rim columns, counter-clockwise from (0, 0): one column
+    /// per node, and one per boundary crossing that is not a node.
+    #[allow(clippy::float_cmp)]
+    fn rim_columns(&mut self, verts: &Corners) -> Vec<Column> {
+        let nl = self.layers.len();
+        let whole = Leaf {
+            i0: 0,
+            j0: 0,
+            i1: self.nx - 1,
+            j1: self.ny - 1,
+        };
+        let ring: Vec<usize> = verts
+            .ring(whole)
+            .iter()
+            .map(|&(i, j)| j * self.nx + i)
+            .collect();
+        let mut rim: Vec<Column> = Vec::new();
+        for k in 0..ring.len() {
+            let (a, b) = (ring[k], ring[(k + 1) % ring.len()]);
+            let t = self.vid(a);
+            let p = self.node_xy(a);
+            let vis = f64::from(self.top[a]);
+            // row 0 is the floor (made below); row l + 1 the top of layer l
+            let mut rows = vec![0u32];
+            let mut h = 0.0_f64;
+            for (l, layer) in self.layers.iter().enumerate() {
+                let hl = if l >= self.class[a] as usize {
+                    vis
+                } else {
+                    h.max(f64::from(layer.top[a]).min(vis))
+                };
+                let v = if hl >= vis {
+                    t
+                } else if hl == h && l > 0 {
+                    rows[l]
+                } else {
+                    let v = u(self.positions.len());
+                    let q = [self.rd(p[0]), self.rd(p[1]), hl];
+                    self.positions.push(q);
+                    v
+                };
+                rows.push(v);
+                h = hl;
+            }
+            rim.push(Column {
+                xy: [self.rd(p[0]), self.rd(p[1])],
+                rows,
+            });
+            if self.class[a] != self.class[b] {
+                let c = self.cut(a, b);
+                // a crossing snapped onto a node is that node: not a second column
+                if c != self.vid(a) && c != self.vid(b) {
+                    let q = self.positions[c as usize];
+                    let mut rows = vec![0u32];
+                    rows.extend(std::iter::repeat_n(c, nl));
+                    rim.push(Column {
+                        xy: [q[0], q[1]],
+                        rows,
+                    });
+                }
             }
         }
-    }
-    // floor: the rim at z = 0 and a fan from the middle
-    let base = u(positions.len());
-    for c in &rim {
-        positions.push([c.xy[0], c.xy[1], 0.0]);
-    }
-    let mid = u(positions.len());
-    positions.push([
-        rd(0.5 * (nx - 1) as f64 * step),
-        rd(0.5 * (ny - 1) as f64 * step),
-        0.0,
-    ]);
-    let m = rim.len();
-    for k in 0..m {
-        let k1 = (k + 1) % m;
-        let (b0, b1) = (base + u(k), base + u(k1));
-        for l in 0..nl {
-            // the panel of layer l: from row l up to row l + 1
-            let (lo0, lo1) = if l == 0 {
-                (b0, b1)
-            } else {
-                (rim[k].rows[l], rim[k1].rows[l])
-            };
-            let (hi0, hi1) = (rim[k].rows[l + 1], rim[k1].rows[l + 1]);
-            let layer = u8::try_from(l).unwrap_or(u8::MAX);
-            push([hi0, lo0, lo1], layer, &mut tris);
-            push([hi0, lo1, hi1], layer, &mut tris);
-        }
-        tris[0].push([mid, b1, b0]);
+        rim
     }
 
-    let mut out = TriMesh {
-        positions,
-        ..TriMesh::default()
-    };
-    out.run_index = vec![0];
-    for (l, t) in tris.iter().enumerate() {
-        out.triangles.extend(t.iter().copied());
-        if !t.is_empty() {
-            out.run_original_id.push(layers[l].id);
-            out.run_index.push(u(out.triangles.len() * 3));
+    /// Step 4, the floor and the side panels: the rim at z = 0 with a fan
+    /// from the middle, and between two columns a panel per layer.
+    #[allow(clippy::cast_precision_loss)]
+    fn floor_and_sides(&mut self, rim: &[Column]) {
+        let nl = self.layers.len();
+        let base = u(self.positions.len());
+        for c in rim {
+            self.positions.push([c.xy[0], c.xy[1], 0.0]);
+        }
+        let mid = u(self.positions.len());
+        let centre = [
+            self.rd(0.5 * (self.nx - 1) as f64 * self.step),
+            self.rd(0.5 * (self.ny - 1) as f64 * self.step),
+            0.0,
+        ];
+        self.positions.push(centre);
+        let m = rim.len();
+        for k in 0..m {
+            let k1 = (k + 1) % m;
+            let (b0, b1) = (base + u(k), base + u(k1));
+            for l in 0..nl {
+                // the panel of layer l: from row l up to row l + 1
+                let (lo0, lo1) = if l == 0 {
+                    (b0, b1)
+                } else {
+                    (rim[k].rows[l], rim[k1].rows[l])
+                };
+                let (hi0, hi1) = (rim[k].rows[l + 1], rim[k1].rows[l + 1]);
+                let layer = u8::try_from(l).unwrap_or(u8::MAX);
+                self.push([hi0, lo0, lo1], layer);
+                self.push([hi0, lo1, hi1], layer);
+            }
+            self.tris[0].push([mid, b1, b0]);
         }
     }
-    if round == Round::F32 {
-        // a float32 import carries about 1e-7 of the tile's size
-        out.tolerance = 1e-7 * step * (nx.max(ny) - 1) as f64;
+
+    /// Step 5: one run per layer that made triangles, in layer order.
+    #[allow(clippy::cast_precision_loss)]
+    fn finish(self) -> TriMesh {
+        let mut out = TriMesh {
+            positions: self.positions,
+            ..TriMesh::default()
+        };
+        out.run_index = vec![0];
+        for (l, t) in self.tris.iter().enumerate() {
+            out.triangles.extend(t.iter().copied());
+            if !t.is_empty() {
+                out.run_original_id.push(self.layers[l].id);
+                out.run_index.push(u(out.triangles.len() * 3));
+            }
+        }
+        if self.round == Round::F32 {
+            // a float32 import carries about 1e-7 of the tile's size
+            out.tolerance = 1e-7 * self.step * (self.nx.max(self.ny) - 1) as f64;
+        }
+        out
     }
-    Ok(out)
+}
+
+/// The stack lift: the leaves of the shown top ([`Mesher::plan`]), the top
+/// surface, the rim columns, the floor and side panels, one run per layer.
+///
+/// # Errors
+/// [`LiftError`] when the lattice is smaller than 2 × 2, a field has the
+/// wrong length, or a shown node (or a bottom layer's node) is not above 0.
+///
+/// # Panics
+/// Never for valid input: `layers` must hold at least one layer and at
+/// most 255.
+pub fn lift_stack(lat: &Lattice, layers: &[Layer]) -> Result<TriMesh, LiftError> {
+    let mut m = Mesher::new(lat, layers)?;
+    let (g, leaves) = m.plan(lat.tol, lat.max_cells)?;
+    let verts = Corners::new(lat.nx, lat.ny, &leaves);
+    m.top_surface(&g, &leaves, &verts);
+    let rim = m.rim_columns(&verts);
+    m.floor_and_sides(&rim);
+    Ok(m.finish())
 }
 
 #[cfg(test)]
