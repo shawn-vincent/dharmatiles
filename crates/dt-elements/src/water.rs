@@ -37,6 +37,8 @@ use dt_kit::{
 
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
+/// Water settles over this distance round a pin, mm at the reference square.
+pub const SETTLE_MM: f64 = 9.0;
 const CELL_MM: f64 = 0.2;
 const BANK_GRID_WEIGHT: f64 = 1.25;
 /// Deviation from thresholding the raw ground: the land
@@ -333,7 +335,12 @@ impl Element for Water {
         let nn = nx * ny;
         // the calm level the waves are drawn about: the library's, held to
         // the band where it has a narrower one
-        let calm = scene.water_edge().unwrap_or(2.6 * s);
+        let Some(calm) = ctx.calm_mm else {
+            return Err(LookError::general(
+                "this water has no calm level",
+                "the library's heights define `waterSurfaceHeight`",
+            ));
+        };
         let (lo, hi) = (band.lo(), band.hi());
         let wlk: Vec<f64> = (0..nn).map(|k| calm.clamp(lo.z[k], hi.z[k])).collect();
         let land = scene.ground().unwrap_or_else(|| Field::new(&frame, 0.0));
@@ -411,15 +418,7 @@ impl Element for Water {
             .map(|k| water[k] && top.field().z[k] >= land.z[k])
             .collect();
         let shown = land.with_z((0..nn).map(|k| top.field().z[k].max(land.z[k])).collect());
-        let st = stats(
-            &frame,
-            &shown,
-            &z,
-            &water,
-            &wet,
-            &rim_f,
-            scene.water_edge().unwrap_or(calm),
-        );
+        let st = stats(&frame, &shown, &z, &water, &wet, &rim_f, calm);
         let area = dt_kit::Mask {
             nx,
             ny,

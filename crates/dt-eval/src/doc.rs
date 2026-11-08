@@ -11,8 +11,8 @@
 //! - `use` keys resolve through the [`Source`]: a bare path or `lib:` is
 //!   the bundled library, `./` and `../` are the project, relative to the
 //!   using file;
-//! - levels resolve to mm: on top of dt-doc's standard levels (the
-//!   prelude, already in mm), the file's, the tile's, a definition's;
+//! - a tile's `let`s that are one number resolve to mm, for the element
+//!   controls and line wobbles that name them;
 //! - definitions are inlined, with their parameters bound to the caller's
 //!   arguments or their defaults;
 //! - every control a built element takes is filled in: as written, or its
@@ -180,6 +180,8 @@ pub struct PinDecl {
 /// A body of the stack (dirt, water, cliff or floor) as written.
 #[derive(Clone, Debug)]
 pub struct BodyDecl {
+    /// Its place in the tile's stack ([`Tile::stack`]).
+    pub entry: usize,
     /// The element.
     pub element: String,
     /// Its name, if written.
@@ -210,7 +212,7 @@ pub struct DefaultBody {
 }
 
 /// What the heights language adds to a tile.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Heights {
     /// Constants: the library's, the tile's, overrides applied.
     pub consts: ConstTable,
@@ -249,8 +251,6 @@ pub struct Tile {
     pub rows: u32,
     /// The root seed (1 if none is written).
     pub seed: u64,
-    /// Levels in mm: the standard ones, the file's, then the tile's own.
-    pub levels: Vec<(String, f64)>,
     /// Straight lines, by name, as points in squares.
     pub lines: BTreeMap<String, Vec<[f64; 2]>>,
     /// The wobbled lines as drawn (points in squares) and their wobble,
@@ -260,7 +260,7 @@ pub struct Tile {
     pub regions: Vec<Region>,
     /// The heights language: constants, bodies, pins, defaults; `None` for
     /// a tile that uses none of it.
-    pub heights: Option<Heights>,
+    pub heights: Heights,
     /// The entries that call built elements, definitions inlined.
     pub stack: Vec<Entry>,
     /// What the document asks for that is not built yet: one error each,
@@ -327,7 +327,7 @@ pub fn use_path(from: &str, u: &Use) -> String {
 }
 
 /// Read the document at `path` and its imports.  A tile is flattened
-/// into a [`Tile`]; any other file (parts, printers, levels, edges) is
+/// into a [`Tile`]; any other file (parts, printers, heights, edges) is
 /// only decoded.
 ///
 /// # Errors
@@ -397,7 +397,8 @@ struct Bound {
 struct Scope {
     file: Arc<File>,
     params: BTreeMap<String, Bound>,
-    levels: Vec<(String, f64)>,
+    /// The tile's scalar `let`s in mm (library heights included).
+    lets: Vec<(String, f64)>,
     area: Option<Spanned<String>>,
     /// Place words a definition call passes to the elements inside it.
     at: Option<Spanned<Point>>,
@@ -474,7 +475,7 @@ impl Reader<'_> {
                 return None;
             }
         };
-        let mut known = Known::standard();
+        let mut known = Known::new();
         if path != HEIGHTS {
             // every file sees the library's heights
             let heights = self.load(HEIGHTS, None)?;
@@ -509,38 +510,20 @@ impl Reader<'_> {
         }
     }
 
-    /// `levels` on top of `base`, each resolved against those before it.
-    fn levels<'a>(
-        &mut self,
-        src: &Src,
-        base: &[(String, f64)],
-        levels: impl IntoIterator<Item = &'a model::Level>,
-    ) -> Vec<(String, f64)> {
-        let mut out = base.to_vec();
-        for l in levels {
-            match l.value.value.mm(&out) {
-                Ok(mm) => {
-                    out.retain(|(n, _)| *n != l.name.value);
-                    out.push((l.name.value.clone(), mm));
-                }
-                Err(msg) => self.errors.push(Diag::at(
-                    src,
-                    l.value.span,
-                    "dt::levels",
-                    msg,
-                    "not one number",
-                )),
-            }
-        }
-        out
-    }
-
     fn tile(&mut self, file: &Arc<File>) -> Option<Tile> {
         let def = file.doc.tile()?;
         let header = def.header()?;
         let src = &file.src;
-        let standard = Known::standard().levels().to_vec();
-        let levels = self.levels(src, &standard, file.doc.levels.iter().chain(&def.levels));
+        let library = self.load(HEIGHTS, None)?;
+        let library_consts: Vec<dt_doc::model::Const> = library
+            .doc
+            .consts
+            .iter()
+            .filter(|c| c.kind == dt_doc::model::ConstKind::Let)
+            .cloned()
+            .collect();
+        let consts = ConstTable::build(&library_consts, &def.consts);
+        let lets = lets_mm(&consts);
         let seed = match header.seed {
             None => 1,
             Some(s) => u64::try_from(s).unwrap_or_else(|_| {
@@ -558,11 +541,10 @@ impl Reader<'_> {
             cols: header.cols,
             rows: header.rows,
             seed,
-            levels,
             lines: BTreeMap::new(),
             wobbles: BTreeMap::new(),
             regions: Vec::new(),
-            heights: None,
+            heights: Heights::default(),
             stack: Vec::new(),
             pending: Vec::new(),
             src: Arc::clone(src),
@@ -579,20 +561,11 @@ impl Reader<'_> {
         for p in &def.points {
             self.points.insert(p.name.value.clone(), [p.x, p.y]);
         }
-        let library = self.load(HEIGHTS, None)?;
-        let library_consts: Vec<dt_doc::model::Const> = library
-            .doc
-            .consts
-            .iter()
-            .filter(|c| c.kind == dt_doc::model::ConstKind::Let)
-            .cloned()
-            .collect();
-        let consts = ConstTable::build(&library_consts, &def.consts);
         for l in &def.lines {
             if let Some(w) = l.width.as_ref() {
                 t.pending.push(not_yet(src, w.span, "a line's width is"));
             }
-            let wobble = match l.wobble.as_ref().map(|w| (w, w.value.mm(&t.levels))) {
+            let wobble = match l.wobble.as_ref().map(|w| (w, w.value.mm(&lets))) {
                 None => 0.0,
                 Some((_, Ok(v))) if v.is_finite() && (0.0..=35.0).contains(&v) => v,
                 Some((w, got)) => {
@@ -678,7 +651,7 @@ impl Reader<'_> {
         let scope = Scope {
             file: Arc::clone(file),
             params: BTreeMap::new(),
-            levels: t.levels.clone(),
+            lets,
             area: None,
             at: None,
             along: None,
@@ -691,7 +664,7 @@ impl Reader<'_> {
         self.expand(&def.stack, &scope, &mut stack, &mut pending);
         t.stack = stack;
         t.pending.extend(pending);
-        t.heights = Some(self.heights(file, def, consts, &mut t.pending));
+        t.heights = self.heights(file, def, consts, &t.stack, &mut t.pending);
         Some(t)
     }
 
@@ -703,6 +676,7 @@ impl Reader<'_> {
         file: &Arc<File>,
         def: &Definition,
         consts: ConstTable,
+        stack: &[Entry],
         pending: &mut Vec<Diag>,
     ) -> Heights {
         let src = &file.src;
@@ -747,7 +721,16 @@ impl Reader<'_> {
                     continue;
                 }
             };
+            // the entry this body is, found by where it is written
+            let Some(entry) = stack
+                .iter()
+                .position(|s| s.span == e.span && Arc::ptr_eq(&s.src, src))
+            else {
+                pending.push(not_yet(src, e.what.span, "a dirt or water here is"));
+                continue;
+            };
             bodies.push(BodyDecl {
+                entry,
                 element: el.name.to_owned(),
                 label: e.label.as_ref().map(|l| l.value.clone()),
                 top: e.top.as_ref().map(|t| (t.value.clone(), t.span)),
@@ -1064,15 +1047,10 @@ impl Reader<'_> {
                             params.insert(p.name.value.clone(), a);
                         }
                     }
-                    let levels = self.levels(
-                        &file.src,
-                        &scope.levels,
-                        file.doc.levels.iter().chain(&def.levels),
-                    );
                     let inner = Scope {
                         file: Arc::clone(&file),
                         params,
-                        levels,
+                        lets: scope.lets.clone(),
                         area,
                         at,
                         along,
@@ -1167,7 +1145,7 @@ impl Reader<'_> {
             } in items
             {
                 let b = bind(v, src, scope);
-                let value = match value(&b, &scope.levels) {
+                let value = match value(&b, &scope.lets) {
                     Ok(v) => v,
                     Err(why) => {
                         ok = false;
@@ -1183,7 +1161,7 @@ impl Reader<'_> {
                 }
                 if !element.takes(&name) {
                     // a control written at its default changes nothing
-                    let default = control.and_then(|c| default_value(c, &scope.levels));
+                    let default = control.and_then(|c| default_value(c, &scope.lets));
                     if default.as_ref() != Some(&value) {
                         ok = false;
                         pending.push(not_yet(
@@ -1201,7 +1179,7 @@ impl Reader<'_> {
             if element.takes(c.name)
                 && e.control(c.name).is_none()
                 && let Some(raw) = c.default_value()
-                && let Ok(value) = element_value(&raw, &scope.levels)
+                && let Ok(value) = element_value(&raw, &scope.lets)
             {
                 push_setting(&mut out, c.name, &raw, value, e.what.span, src);
             }
@@ -1270,25 +1248,19 @@ fn push_setting(
 
 /// A written value for a built element: a range stays a range (the element
 /// draws from it).
-fn value(b: &Bound, levels: &[(String, f64)]) -> Result<dt_elements::Value, Box<Diag>> {
-    element_value(&b.value.value, levels)
+fn value(b: &Bound, lets: &[(String, f64)]) -> Result<dt_elements::Value, Box<Diag>> {
+    element_value(&b.value.value, lets)
         .map_err(|msg| Box::new(Diag::at(&b.src, b.value.span, "dt::value", msg, "here")))
 }
 
 /// A value as a built element takes it: one number in mm, or a word.
-fn element_value(v: &Value, levels: &[(String, f64)]) -> Result<dt_elements::Value, String> {
+fn element_value(v: &Value, lets: &[(String, f64)]) -> Result<dt_elements::Value, String> {
     match v {
         Value::Num(n) if n.expr.is_range() => {
-            let env = |name: &str| {
-                levels
-                    .iter()
-                    .rev()
-                    .find(|(k, _)| k == name)
-                    .map(|(_, v)| *v)
-            };
+            let env = |name: &str| lets.iter().rev().find(|(k, _)| k == name).map(|(_, v)| *v);
             n.bounds(&env).map(|(a, b)| dt_elements::Value::Range(a, b))
         }
-        Value::Num(n) => n.mm(levels).map(dt_elements::Value::Number),
+        Value::Num(n) => n.mm(lets).map(dt_elements::Value::Number),
         Value::Word(w) => Ok(dt_elements::Value::Word(w.word.to_owned())),
         Value::Bool(v) => Ok(dt_elements::Value::Word(
             if *v { "#true" } else { "#false" }.to_owned(),
@@ -1313,8 +1285,8 @@ fn bind(v: &Spanned<Value>, src: &Src, scope: &Scope) -> Bound {
 
 /// A control's schema default, resolved; `None` without one (or for a
 /// range, which no built element takes yet).
-fn default_value(c: &'static Control, levels: &[(String, f64)]) -> Option<dt_elements::Value> {
-    element_value(&c.default_value()?, levels).ok()
+fn default_value(c: &'static Control, lets: &[(String, f64)]) -> Option<dt_elements::Value> {
+    element_value(&c.default_value()?, lets).ok()
 }
 
 fn thing(e: &model::Entry) -> ThingDecl {
@@ -1369,4 +1341,17 @@ pub fn edge_path(edges: &[Edge], (cols, rows): (f64, f64)) -> Vec<[f64; 2]> {
     }
     out.extend(order.iter().map(|&e| walk(e).1));
     out
+}
+
+/// The tile's constants that are one number (no `x` or `y`), in mm: what an
+/// element control or a line's wobble may name.
+fn lets_mm(consts: &ConstTable) -> Vec<(String, f64)> {
+    consts
+        .entries()
+        .iter()
+        .filter_map(|e| {
+            let mm = consts.scalar(&e.expr, 0.5, &|_| None).ok()?;
+            Some((e.name.clone(), mm))
+        })
+        .collect()
 }

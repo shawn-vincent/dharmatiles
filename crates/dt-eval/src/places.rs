@@ -87,7 +87,7 @@ impl<'a> Places<'a> {
                 if n == BUILTIN_REGION {
                     return Ok(Mask::new(nx, ny, true));
                 }
-                if let Some(xy) = self.tile.heights.as_ref().and_then(|h| h.points.get(n)) {
+                if let Some(xy) = self.tile.heights.points.get(n) {
                     return Ok(self.point(*xy));
                 }
                 if BUILTIN_POINTS.contains(&n.as_str())

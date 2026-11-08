@@ -177,7 +177,7 @@ mod tests {
     const HEIGHTS: &str = include_str!("../../../library/parts/heights.dtile");
 
     fn standard() -> Known {
-        let mut k = Known::standard();
+        let mut k = Known::new();
         k.add_heights("library/parts/heights.dtile", HEIGHTS)
             .unwrap();
         k

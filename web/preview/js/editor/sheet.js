@@ -1,7 +1,7 @@
 // The property sheet (the lens): the controls of the selection, and edits
 // made there.
 
-import { Lens, kdlString, unquote } from '../lens.js';
+import { Lens, kdlString } from '../lens.js';
 import { byteToIndex } from '../text.js';
 import { $, host, offerMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, undo } from './document.js';
@@ -25,17 +25,13 @@ export const lens = new Lens($('lens'), {
   makeMine: () => offerMine(),
   levels: () => levelsHere(),
 });
-/** The levels a value may name here: the standard ones, as this tile sets them, and its own. */
+/** The heights a value may name here: the library's, as this tile sets them, and its own `let`s. */
 function levelsHere() {
   const own = doc.get().map?.tile;
-  const out = (own?.standard_levels || []).map((l) => ({ name: l.name, value: String(l.value), about: LEVEL_ABOUT[l.name] || 'a standard level' }));
-  for (const c of own?.levels?.controls || []) {
-    const value = unquote(c.text);
-    const i = out.findIndex((l) => l.name === c.name);
-    if (i >= 0) out[i] = { ...out[i], value, about: `${out[i].about}; set by this tile` };
-    else out.push({ name: c.name, value, about: 'this tile’s own level' });
-  }
-  return out;
+  const about = { library: 'a library height', override: 'a library height this tile overrides', tile: 'this tile’s own height' };
+  return (own?.heights || [])
+    .filter((h) => h.value != null)
+    .map((h) => ({ name: h.name, value: String(Math.round(h.value * 1000) / 1000), about: about[h.from] || 'a height' }));
 }
 /** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty
@@ -56,12 +52,6 @@ async function tileEdit(body, label) {
   edited(r.body.text, 'lens', label);
   return true;
 }
-const LEVEL_ABOUT = {
-  edge: 'where the ground meets the tile edge; neighbouring tiles line up on it',
-  ground: 'grass and soil regions',
-  water: 'the calm water surface',
-  'wall-top': 'the top of a wall',
-};
 function renderTileLens() {
   const t = tile(), own = doc.get().map?.tile;
   if (!t || !own || doc.get().file !== t.path) { lens.hide(); return; }
@@ -77,33 +67,10 @@ function renderTileLens() {
       ? about && tileEdit({ op: 'remove', at: about.at }, 'Took out the description')
       : about ? null : tileEdit({ op: 'insert', place: 'tile', node: `about ${kdlString(String(value))}` }, 'Described the tile')),
   });
-  // the tile's levels: the standard ones it can override, and its own
-  const lv = own.levels;
-  if (!lv?.block) {
-    groups.push({
-      heading: 'Levels (mm)',
-      at: lv?.at ?? own.at,
-      schema: {
-        controls: (own.standard_levels || []).map((l) => ({
-          name: l.name, unit: 'mm', default: String(l.value),
-          about: `${LEVEL_ABOUT[l.name] || 'a standard level'}; ${l.value} mm unless this tile says otherwise`,
-        })),
-      },
-      written: (lv?.controls || []).map(asWritten),
-      set: (name, value) => {
-        if (lv) {
-          if (value == null && lv.controls.length === 1 && lv.controls[0].name === name) return tileEdit({ op: 'remove', at: lv.at }, `Took out level ${name}`);
-          return setControl(lv.at, name, value);
-        }
-        if (value == null) return null;
-        return tileEdit({ op: 'insert', place: 'tile', node: `levels ${name}=${typeof value === 'number' ? value : kdlString(String(value))}` }, `Set level ${name}`);
-      },
-    });
-  }
   const actions = doc.get().writable ? [
     { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
   ] : [];
-  const note = lv?.block ? 'The tile. Its levels are written as a block: change them in the text.' : 'The tile. Select something on it to change that instead.';
+  const note = 'The tile. Select something on it to change that instead.';
   lens.show({ title: stem(t), kind: 'tile', href: 'https://shawn-vincent.github.io/dharmatiles/language.html', note, groups, actions });
 }
 /** A run of written text (a line's points, a region's lines) as a lens setting. */

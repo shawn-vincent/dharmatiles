@@ -4,12 +4,12 @@
 //! by hand into the typed model in [`model`], keeping source spans so
 //! every mistake is reported through miette at the text that caused it,
 //! with a hint.  Authors write mm at the DungeonBlocks
-//! reference and named levels, name tile edges, give points as quoted
+//! reference and named heights (`let`), name tile edges, give points as quoted
 //! pairs, use words for character, and say how many with a `scatter`.
 //!
 //! - [`decode`] reads one file; [`uses`] reads only its `use` lines.
-//! - [`Known`] holds what a file can see: the standard levels (the
-//!   prelude, [`known::PRELUDE`]) and the files it `use`s.
+//! - [`Known`] holds what a file can see: the library's heights
+//!   and the files it `use`s.
 //! - [`schema`] and [`elements`] hold every element's controls and words.
 //! - [`edit`] changes, inserts and removes controls without disturbing
 //!   anything else in the file.

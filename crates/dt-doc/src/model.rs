@@ -34,8 +34,6 @@ pub struct Spanned<T> {
 pub struct Document {
     /// `use "parts/grass" lawn long-grass` lines, in order.
     pub uses: Vec<Use>,
-    /// A file-level `levels` table (library/parts/levels.dtile).
-    pub levels: Vec<Level>,
     /// `define` and `tile` nodes, in file order.
     pub definitions: Vec<Definition>,
     /// A `printer` profile (library/printers/*.dtile).
@@ -129,8 +127,6 @@ pub struct Definition {
     pub about: Option<String>,
     /// `param` nodes.
     pub params: Vec<Param>,
-    /// Levels local to this definition (`levels foot=4`).
-    pub levels: Vec<Level>,
     /// `let` and `override` constants, in written order.
     pub consts: Vec<Const>,
     /// Declared `point`s.
@@ -188,15 +184,6 @@ pub struct Param {
     /// The control the parameter fills inside the definition (`grass
     /// length=length` makes `length` grass's length), if one was found.
     pub control: Option<&'static Control>,
-}
-
-/// A named level: where a surface sits, in mm above the tile base.
-#[derive(Debug, Clone)]
-pub struct Level {
-    /// Its name.
-    pub name: Spanned<String>,
-    /// Its value: mm, `(h)`, or an expression of other levels.
-    pub value: Spanned<Num>,
 }
 
 /// A drawn line: `line trail width=9 wobble=3 { through south "0.65,1" north }`.
@@ -499,25 +486,19 @@ impl Num {
         })
     }
 
-    /// One number in mm at the reference, its names resolved as levels
-    /// (the last of a name in `levels` wins).
+    /// One number in mm at the reference, its names resolved as the tile's
+    /// `let`s (`lets`, in mm).
     ///
     /// # Errors
-    /// A range (one number is needed), or a name `levels` lacks.
-    pub fn mm(&self, levels: &[(String, f64)]) -> Result<f64, String> {
+    /// A range (one number is needed), or a name `lets` lacks.
+    pub fn mm(&self, lets: &[(String, f64)]) -> Result<f64, String> {
         if self.expr.is_range() {
             return Err(format!(
                 "`{}` is a range; one number is needed here",
                 self.expr
             ));
         }
-        let env = |name: &str| {
-            levels
-                .iter()
-                .rev()
-                .find(|(k, _)| k == name)
-                .map(|(_, v)| *v)
-        };
+        let env = |name: &str| lets.iter().rev().find(|(k, _)| k == name).map(|(_, v)| *v);
         self.sample(&env, 0.0)
     }
 

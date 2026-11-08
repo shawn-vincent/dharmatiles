@@ -165,8 +165,13 @@ fn elements_dirt_json_has_units_limits_defaults_and_subs() {
     let clods = find("clods");
     assert_eq!(clods["unit"], "word");
     assert_eq!(clods["default"], "some");
-    assert_eq!(clods["words"][1]["word"], "some");
-    assert!(clods["words"][1]["sets"]["density"].is_number());
+    let some = clods["words"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|w| w["word"] == "some")
+        .unwrap();
+    assert!(some["sets"]["density"].is_number());
     assert!(find("bank")["unit"].is_null());
     for c in controls {
         assert!(c["taken"].is_boolean(), "{c}");

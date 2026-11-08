@@ -18,7 +18,7 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#document">1. What a tile document is</a></li>
   <li><a href="#syntax">2. Syntax basics</a></li>
-  <li><a href="#units">3. Units, levels and scaling</a></li>
+  <li><a href="#units">3. Units, heights and scaling</a></li>
   <li><a href="#places">4. Edges, points, lines and regions</a></li>
   <li><a href="#placement">5. Placement and scatter</a></li>
   <li><a href="#elements">6. The elements</a></li>
@@ -34,11 +34,11 @@
 <p>A tile document is one <code>.dtile</code> file holding exactly one <code>tile</code> node. The tile has a size and a seed, and a body with (its file name is its name: <code>tile</code> takes none):</p>
 <ul>
   <li><code>about</code>: optional free text, one string;</li>
-  <li><code>levels</code>: optional named heights this tile adds or overrides;</li>
+  <li><code>let</code> and <code>override</code>: optional named heights this tile adds or replaces;</li>
   <li><code>line</code> and <code>region</code>: only for tiles divided into areas;</li>
   <li><code>stack</code>: exactly one, listing the elements and definitions that make the tile.</li>
 </ul>
-<p>Above the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes and may hold file-level <code>levels</code>. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>edges</code> (the edge contract). Anything else at the top level is an error.</p>
+<p>Above the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>edges</code> (the edge contract). Anything else at the top level is an error.</p>
 <p>The smallest tile in the library:</p>
 <pre><code>// library/tiles/test/1x1-flat.dtile
 tile size="1x1" {
@@ -79,7 +79,7 @@ sum    := prod ( ("+" | "-") prod )*
 prod   := unary ( ("*" | "/") unary )*
 unary  := "-" unary | atom
 atom   := number "%"? | name | "(" sum ")"</code></pre>
-<p>A name is a parameter of the enclosing definition or, where a level is expected, a named level: <code>level="ground - 1"</code>, <code>level="wall-top / 2"</code>. There are no calls, loops or assignments. <code>%</code> is the only suffix.</p>
+<p>A name is a parameter of the enclosing definition or, where a height is expected, a <code>let</code> name: <code>level="groundHeight - 1"</code>, <code>level="wallHeight / 2"</code>. There are no calls, loops or assignments. <code>%</code> is the only suffix.</p>
 
 <h3 id="entry">What every stack entry takes</h3>
 <ul>
@@ -89,7 +89,7 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
   <li>The place words its element accepts (<a href="#placement">section 5</a>).</li>
 </ul>
 
-<h2 id="units">3. Units, levels and scaling</h2>
+<h2 id="units">3. Units, heights and scaling</h2>
 <p class="callout">The rule for an author is one sentence: <strong>write sizes in millimetres for a 35 mm square; other systems scale them for you.</strong></p>
 <p>No unit is ever written. Each control knows what it measures:</p>
 <div class="tbl"><table>
@@ -118,15 +118,9 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <p>Elements apply these after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
 
 <h3 id="levels">level and height</h3>
-<p><code>level</code> is where a surface sits. <code>height</code> is how tall a thing stands above what it stands on: mm (<code>cliff height=35</code>), a word (<code>wall … height full</code>, up to the wall-top level), or a share of the thing it belongs to (<code>ledges 1 height="40%"</code>).</p>
-<p>The standard levels are a prelude every file sees without a <code>use</code> line. They come from <code>library/parts/levels.dtile</code>:</p>
-<pre><code>levels {
-    edge     3.4      // ground meets the tile edge here
-    ground   5        // today's grass and soil regions
-    water    2.6      // the calm water surface
-    wall-top 33.1     // the official wall top
-}</code></pre>
-<p>A tile adds its own with <code>levels foot=4</code>. Levels scale with the system like every other size. See <a href="elements/levels.html"><code>levels</code></a>.</p>
+<p><code>level</code> is where a surface sits. <code>height</code> is how tall a thing stands above what it stands on: mm (<code>cliff height=35</code>), a word (<code>wall … height full</code>, up to <code>wallHeight</code>), or a share of the thing it belongs to (<code>ledges 1 height="40%"</code>).</p>
+<p>Named heights are <code>let</code> constants. The library's come from <code>library/parts/heights.dtile</code> and every file sees them without a <code>use</code> line: <code>dirtEdgeHeight</code> 3.4 mm, <code>groundHeight</code> 5, <code>waterSurfaceHeight</code> 2.6, <code>wallHeight</code> 33.1 and the rest of that file.</p>
+<p>A tile adds its own with <code>let foot 4</code> and replaces a library one with <code>override</code>. A <code>level</code> or a line's <code>wobble</code> may name any of them (those that depend on <code>x</code> or <code>y</code> excepted). Heights scale with the system like every other size. See <a href="elements/let.html"><code>let</code></a>.</p>
 
 <h3 id="heights">Heights: let, override, tops and pins</h3>
 <p>Heights are written in one way everywhere: millimetres above zero, the top of the <a href="elements/base.html">base</a>. A number (<code>top=8</code>), a named height, or an expression of them. Named heights are <code>let</code> constants in camelCase, since a hyphen would read as subtraction; the library's are in <code>library/parts/heights.dtile</code> and every tile sees them:</p>
@@ -274,7 +268,7 @@ region knoll { bounded-by foot; fill center }             // the paint bucket, a
 <tr><td>Placement</td><td><a href="elements/scatter.html"><code>scatter</code></a></td></tr>
 <tr><td>Bases (added by the build)</td><td><a href="elements/dungeonblocks.html"><code>dungeonblocks</code></a> · <a href="elements/openlock.html"><code>openlock</code></a></td></tr>
 </tbody></table></div>
-<p>The document's own elements are <a href="elements/tile.html"><code>tile</code></a>, <a href="elements/levels.html"><code>levels</code></a>, <a href="elements/line.html"><code>line</code></a>, <a href="elements/region.html"><code>region</code></a>, <a href="elements/stack.html"><code>stack</code></a>, <a href="elements/use.html"><code>use</code></a> and <a href="elements/define.html"><code>define</code></a>.</p>
+<p>The document's own elements are <a href="elements/tile.html"><code>tile</code></a>, <a href="elements/let.html"><code>let</code></a>, <a href="elements/line.html"><code>line</code></a>, <a href="elements/region.html"><code>region</code></a>, <a href="elements/stack.html"><code>stack</code></a>, <a href="elements/use.html"><code>use</code></a> and <a href="elements/define.html"><code>define</code></a>.</p>
 
 <h2 id="parts">7. Parts: use, define, param</h2>
 <p>Parts files hold definitions that tiles bring in by name. A <code>use</code> line names the file and the definitions it brings in, so a reader knows where every name came from:</p>
@@ -405,7 +399,7 @@ tile size="1x1" seed=64 {
         // Along the north edge, then the west edge.  On a tile edge a
         // wall always stands inside, its outer face flush with the edge.
         wall along="north west" style=fieldstone seed=14 {
-            height full                     // up to the wall-top level (33.1 mm)
+            height full                     // up to wallHeight (33.1 mm)
             thickness 7
             coping loose                    // or: on-edge
 
@@ -455,7 +449,7 @@ tile size="2x1" seed=1 {
     }
 }</code></pre>
 <ul>
-  <li><code>levels foot=4</code> adds a level for this tile. It goes when rockpile moves to the 3.4 mm edge level (Q6).</li>
+  <li><code>let foot 4</code> adds a height for this tile.</li>
   <li>The dirt is listed before the cliff and still banks <code>against=cliff</code>. Its pebbles are scattered on the dirt.</li>
   <li>Scree is stones and boulders scattered against the cliff; they take their fragment shapes from the cliff's rock.</li>
 </ul>
@@ -506,7 +500,7 @@ cliff along=north height=55 {
 <h2 id="rules">Rules of the language</h2>
 <ul class="rules">
   <li>A tile is a declarative document, not a program: KDL v2 underneath, saved as a <code>.dtile</code> file.</li>
-  <li>Sizes are millimetres at the 35 mm DungeonBlocks square; heights are millimetres or named levels. Units are not written: <code>4.5</code>, never <code>"4.5mm"</code> (<code>(mm)4.5</code> is an optional check).</li>
+  <li>Sizes are millimetres at the 35 mm DungeonBlocks square; heights are millimetres or <code>let</code> names. Units are not written: <code>4.5</code>, never <code>"4.5mm"</code> (<code>(mm)4.5</code> is an optional check).</li>
   <li>Every size a tile writes scales with the system, like a photocopy; hidden printability floors keep it printable. Print-scale detail (grain, blades, leaves) keeps its printed size.</li>
   <li>Ranges and percents are quoted: <code>size="6..10"</code>, <code>cover="35%"</code>.</li>
   <li>Points are quoted pairs in squares (<code>"(0.5, 1)"</code>), a point's name, or a corner or edge word.</li>
@@ -518,7 +512,7 @@ cliff along=north height=55 {
   <li>A wall or cliff on a tile edge stands inside the tile.</li>
   <li><code>scatter</code> places many things; a thing on its own is one, placed with <code>at=</code>. An <code>at=</code> may be a range, drawn once from the tile seed; with none, a thing goes anywhere in its area, kept inside the tile and never clipped.</li>
   <li>Water fills its area up to its top; the shoreline comes from the dirt beneath.</li>
-  <li>The standard levels (<code>ground</code>, <code>edge</code>, <code>water</code>, <code>wall-top</code>) are always there. A definition adds anywhere and removes only inside itself.</li>
+  <li>The library's heights (<code>groundHeight</code>, <code>dirtEdgeHeight</code>, <code>waterSurfaceHeight</code>, <code>wallHeight</code> and the rest) are always there.</li>
   <li><code>z = 0</code> is the top of the base; the base owns everything below it.</li>
   <li>Materials are named in the document and given colours separately, by a palette.</li>
   <li>Controls sit on the element's line as properties, or as child lines.</li>

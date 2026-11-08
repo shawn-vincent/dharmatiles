@@ -82,16 +82,16 @@ tile size="2x2" seed=1 {
 </tbody></table></div>
 <p>How rocks and grass meet is fixed and has no control: rock tops stand at least max(1.5 mm, 0.45 × rock height) above the grass; grass is half height at a rock's face, back to full height 1.2 mm out; about 35% of rocks get an apron; bare earth is filled to 20% with natural-size patches. The full language is on the <a href="language.html#placement">language page</a>.</p>
 
-<h3 id="levels">Levels</h3>
+<h3 id="levels">Heights</h3>
 <div class="tbl"><table>
-<thead><tr><th>Level</th><th>Height above the base</th><th>Used for</th></tr></thead>
+<thead><tr><th>Name</th><th>Height above the base</th><th>Used for</th></tr></thead>
 <tbody>
-<tr><td><code>edge</code></td><td>3.4 mm</td><td>Where ground meets every tile edge.</td></tr>
-<tr><td><code>ground</code></td><td>5 mm</td><td>The library's grass and soil regions.</td></tr>
-<tr><td><code>water</code></td><td>2.6 mm</td><td>The water surface beside a shore.</td></tr>
-<tr><td><code>wall-top</code></td><td>33.1 mm</td><td>The DungeonBlocks wall top.</td></tr>
+<tr><td><code>dirtEdgeHeight</code></td><td>3.4 mm</td><td>Where dirt meets every tile edge.</td></tr>
+<tr><td><code>groundHeight</code></td><td>5 mm</td><td>Open land: the library's grass and soil.</td></tr>
+<tr><td><code>waterSurfaceHeight</code></td><td>2.6 mm</td><td>The calm water surface beside a shore.</td></tr>
+<tr><td><code>wallHeight</code></td><td>33.1 mm</td><td>The DungeonBlocks wall top.</td></tr>
 </tbody></table></div>
-<p>Every tile gets these from <code>library/parts/levels.dtile</code> without a <code>use</code> line. A tile's own <code>levels</code> line can add or override names.</p>
+<p>Every tile gets these, and the others in <code>library/parts/heights.dtile</code>, without a <code>use</code> line. A tile's own <code>let</code> adds names and <code>override</code> replaces one.</p>
 
 <h3 id="edges">Edges and joining tiles</h3>
 <p>Every tile obeys one edge contract, so any two tiles butt with no step:</p>

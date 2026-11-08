@@ -394,7 +394,7 @@ pub(crate) fn run(
         counts.chips += feet.len();
         units.extend(feet.into_iter().map(Unit::Mesh));
     }
-    let solid = solidify(scene, &units, &run, m.laid)?;
+    let solid = solidify(scene, &units, &run, m.laid, ctx.edge_mm)?;
     // crumbs the union leaves (a sliver where a tiny closer meets the
     // core's rounding) would be dropped by the gate as lost parts
     let (solid, _) = crate::tree::drop_crumbs(scene, solid, Material::Masonry, true)?;
@@ -424,9 +424,9 @@ pub(crate) fn solidify(
     units: &[Unit],
     run: &Run,
     laid: bool,
+    edge: Option<f64>,
 ) -> Result<Solid, LookError> {
     let n = u32::try_from(units.len()).map_err(LookError::build)?;
-    let edge = scene.edge();
     let slots = scene
         .slots(n + 1, Material::Masonry)
         .map_err(LookError::build)?;

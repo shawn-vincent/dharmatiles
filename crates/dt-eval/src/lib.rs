@@ -499,21 +499,15 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         vec![d.help("remove the read, or add what it reads to the stack")]
     })?;
     let seed = opts.seed.unwrap_or(tile.seed);
-    // the Solve phase: bands and pins, no meshes
-    let solved = if tile.heights.is_some() {
-        Some(solve::solve(
-            &tile,
-            &Frame::for_system(&opts.system, tile.cols, tile.rows),
-            opts,
-        )?)
-    } else {
-        None
-    };
+    // the Solve phase: bands and pins, no meshes, on the lattice the build
+    // makes its bodies on: `check` and `build` share this one solve
+    let writes: Vec<dt_elements::Write> = plans.iter().map(|p| p.writes).collect();
+    let solved = Some(solve::solve(&tile, &frame, opts, &writes)?);
     Ok(Checked {
         file: read.file,
         tile: Some(tile),
         steps,
-        writes: plans.iter().map(|p| p.writes).collect(),
+        writes,
         elements,
         areas,
         frame,
@@ -697,17 +691,11 @@ struct Plan<'a> {
     jobs: Vec<Job>,
     /// The planned feet of every solid that has one.
     foots: Vec<dt_elements::Foot>,
-    /// The bodies, solved on the build's lattice, and which of them each
-    /// element is (by its place in the stack).
-    solved: solve::SolveReport,
-    body_of: Vec<Option<usize>>,
+    /// The bodies, solved once on the build's lattice (`check`'s solve).
+    solved: &'a solve::SolveReport,
     /// For each dirt: where the water laid after it certainly stands, and
     /// how low (see `Ctx::under`).
     under: Vec<Option<dt_kit::Field>>,
-    /// Where dirt meets a tile edge and the calm water level, mm (the
-    /// library's constants, scaled).
-    edge_mm: Option<f64>,
-    water_edge: Option<f64>,
     fills: bool,
     /// Each step's progress key and label.
     stages: Vec<(String, String)>,
@@ -728,21 +716,9 @@ struct Ran {
 impl<'a> Plan<'a> {
     fn new(c: &'a Checked, tile: &'a Tile, opts: &'a Options) -> Result<Self, Vec<Diag>> {
         let root = Seed::new(c.seed);
-        let edge = |name: &str| solve::constant(tile, name).map(|mm| mm * c.frame.scale());
-        let solved = solve::solve_for_build(tile, &c.frame, opts)?;
-        // the k-th dirt or water of the stack is the k-th body solved
-        let mut bodies = 0;
-        let body_of: Vec<Option<usize>> = (0..c.elements.len())
-            .map(|i| {
-                tile.stack
-                    .get(i)
-                    .filter(|e| matches!(e.what.value.as_str(), "dirt" | "water"))
-                    .map(|_| {
-                        bodies += 1;
-                        bodies - 1
-                    })
-            })
-            .collect();
+        let Some(solved) = c.solved.as_ref() else {
+            return Err(build_error("the tile was not solved".to_owned()));
+        };
         let (masks, mask_of) = masks(tile, &c.frame, &c.areas);
         let hashes: Vec<u64> = masks.iter().map(Mask::content_hash).collect();
         let order = c.steps.iter().fold(0xcbf2_9ce4_8422_2325, |h, s| {
@@ -768,7 +744,7 @@ impl<'a> Plan<'a> {
                 path,
                 mask,
                 area_hash: hashes[mask],
-                band_hash: body_of[i].map_or(0, |b| {
+                band_hash: solved.by_entry[i].map_or(0, |b| {
                     let band = &solved.bodies[b].band;
                     band.lo()
                         .z
@@ -788,9 +764,6 @@ impl<'a> Plan<'a> {
             foots: Vec::new(),
             under: Vec::new(),
             solved,
-            body_of,
-            edge_mm: edge("dirtEdgeHeight"),
-            water_edge: edge("waterSurfaceHeight"),
             fills: c.writes.contains(&dt_elements::Write::Fill),
             stages: progress::stage_keys(tile, &c.steps),
             plan_stage: Stage {
@@ -827,15 +800,16 @@ impl<'a> Plan<'a> {
     /// What water laid after dirt `i` covers: about the height it stands at
     /// (the calm level held to its band), where its region puts it over the dirt.
     fn under_of(&self, i: usize) -> Option<dt_kit::Field> {
-        let b = self.body_of[i]?;
-        if self.tile.stack.get(i)?.what.value != "dirt" {
+        let b = self.solved.by_entry[i]?;
+        if self.solved.bodies[b].role != solve::Role::Land {
             return None;
         }
+        let calm = self.solved.calm_mm?;
         let first = &self.solved.bodies[b].band;
         let mut out: Option<dt_kit::Field> = None;
-        for (j, body) in self.body_of.iter().enumerate().skip(i + 1) {
+        for (j, body) in self.solved.by_entry.iter().enumerate().skip(i + 1) {
             let Some(w) = *body else { continue };
-            if self.solved.bodies[w].element != "water" {
+            if self.solved.bodies[w].role != solve::Role::Fluid {
                 continue;
             }
             let (lo, hi) = (
@@ -846,7 +820,6 @@ impl<'a> Plan<'a> {
             let f =
                 out.get_or_insert_with(|| first.lo().with_z(vec![f64::NEG_INFINITY; lo.z.len()]));
             // the calm level held to the band: about where the water stands
-            let calm = self.water_edge.unwrap_or(0.0);
             for k in 0..lo.z.len() {
                 if region.bits[k] {
                     f.z[k] = f.z[k].max(calm.clamp(lo.z[k], hi.z[k]));
@@ -869,7 +842,9 @@ impl<'a> Plan<'a> {
             printer: *self.opts.printer,
             against: entry.and_then(|e| e.against.as_deref()),
             foots: &self.foots,
-            band: self.body_of[i].map(|b| &self.solved.bodies[b].band),
+            band: self.solved.by_entry[i].map(|b| &self.solved.bodies[b].band),
+            edge_mm: self.solved.edge_mm,
+            calm_mm: self.solved.calm_mm,
             under: self.under.get(i).and_then(Option::as_ref),
             draft: self.opts.draft,
         }
@@ -880,8 +855,6 @@ impl<'a> Plan<'a> {
         let (c, tile) = (self.c, self.tile);
         let mut scene = Scene::new(c.frame, Seed::new(c.seed));
         scene.set_progress(progress.clone());
-        scene.set_edge(self.edge_mm);
-        scene.set_water_edge(self.water_edge);
         let mut stage_secs = Vec::new();
         let mut painted = false;
         // sketches start with the lifted ground, which carries what the
@@ -892,7 +865,7 @@ impl<'a> Plan<'a> {
             &c.frame,
             c.seed,
             self.opts,
-            [self.edge_mm, self.water_edge],
+            [self.solved.edge_mm, self.solved.calm_mm],
             self.fills,
             &self.foots,
         );
@@ -1056,7 +1029,7 @@ impl<'a> Plan<'a> {
             record,
             out: out_path(path, &opts.target()),
             footprint,
-            edge_mm: self.edge_mm,
+            edge_mm: self.solved.edge_mm,
             notes: scene.notes().to_vec(),
             surface: scene.surface(),
             covered: scene.support().map(|g| dt_kit::Mask {

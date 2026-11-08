@@ -214,6 +214,8 @@ mod tests {
             foots: &[],
             band: None,
             under: None,
+            edge_mm: None,
+            calm_mm: None,
             draft: false,
         };
         OpenLock::default().build(&mut scene, &ctx).unwrap();

@@ -437,8 +437,7 @@ struct Laid {
 }
 
 /// The terrain of one build: the layers laid in order (land bodies, then
-/// fluids), the land they make together, the edge heights the library
-/// gives, and the support things stand on.  Laid first; read once settled.
+/// fluids), the land they make together, and the support things stand on.  Laid first; read once settled.
 #[derive(Clone)]
 pub struct Terrain {
     frame: Frame,
@@ -451,8 +450,6 @@ pub struct Terrain {
     /// Nodes a fluid covers.
     wet: Mask,
     stone: Mask,
-    edge_mm: Option<f64>,
-    water_edge_mm: Option<f64>,
     support: Option<Grid>,
 }
 
@@ -467,8 +464,6 @@ impl Terrain {
             any_land: false,
             wet: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
-            edge_mm: None,
-            water_edge_mm: None,
             support: None,
         }
     }
@@ -537,30 +532,6 @@ impl Terrain {
     #[must_use]
     pub fn surface(&self) -> Option<(Grid, Mask)> {
         (!self.layers.is_empty()).then(|| (self.shown.clone(), self.stone.clone()))
-    }
-
-    /// The height (world mm) the library gives dirt at a tile edge, if the
-    /// tile sees it: what a wall flush with the rim sits on.
-    pub const fn set_edge(&mut self, level_mm: Option<f64>) {
-        self.edge_mm = level_mm;
-    }
-
-    /// See [`Terrain::set_edge`].
-    #[must_use]
-    pub const fn edge(&self) -> Option<f64> {
-        self.edge_mm
-    }
-
-    /// The calm water level (world mm) the library gives: the level a
-    /// water layer's waves are drawn about.
-    pub const fn set_water_edge(&mut self, level_mm: Option<f64>) {
-        self.water_edge_mm = level_mm;
-    }
-
-    /// See [`Terrain::set_water_edge`].
-    #[must_use]
-    pub const fn water_edge(&self) -> Option<f64> {
-        self.water_edge_mm
     }
 
     /// **lay**: add a layer on top of those laid.  A land layer's surface is
@@ -915,30 +886,6 @@ impl Scene {
     /// unmark the rest of `area`.
     pub fn mark_stone(&mut self, area: &Mask, stone: &[bool]) {
         self.terrain.mark_stone(area, stone)
-    }
-
-    /// The edge contract: the level (world mm) every ground surface meets
-    /// the tile edge at, and never dips below. `None`: no contract.
-    pub const fn set_edge(&mut self, level_mm: Option<f64>) {
-        self.terrain.set_edge(level_mm)
-    }
-
-    /// The edge level, world mm, if the tile has an edge contract.
-    #[must_use]
-    pub const fn edge(&self) -> Option<f64> {
-        self.terrain.edge()
-    }
-
-    /// The level (world mm) the water meets every tile edge at, before
-    /// its tide profile (the edge contract's `water` rule).
-    pub const fn set_water_edge(&mut self, level_mm: Option<f64>) {
-        self.terrain.set_water_edge(level_mm)
-    }
-
-    /// See [`Scene::set_water_edge`].
-    #[must_use]
-    pub const fn water_edge(&self) -> Option<f64> {
-        self.terrain.water_edge()
     }
 
     /// The ground as it was before water filled it (world mm): the bed

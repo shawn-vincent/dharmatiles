@@ -17,8 +17,8 @@ use crate::dim::Dim;
 use crate::error::{DocError, Src};
 use crate::known::{DefInfo, Known};
 use crate::model::{
-    Base, DefKind, Definition, Document, Level, Line, Param, Printer, Region, Source, Spanned,
-    TileHeader, Use, Within,
+    Base, DefKind, Definition, Document, Line, Param, Printer, Region, Source, Spanned, TileHeader,
+    Use, Within,
 };
 use crate::place::{Corner, Edge, Point};
 use crate::schema::{self, Axis, Control, Kind, MAX_SQUARES, did_you_mean};
@@ -76,7 +76,6 @@ pub fn uses(name: &str, text: &str) -> Result<Vec<Use>, Vec<DocError>> {
 #[derive(Default, Clone)]
 pub(crate) struct Ctx {
     pub params: Vec<String>,
-    pub levels: Vec<String>,
     pub lines: Vec<String>,
     pub regions: Vec<String>,
     /// The heights language's constants visible here, with what each
@@ -211,7 +210,6 @@ impl<'k> Decoder<'k> {
     fn document(&mut self, kdl: &KdlDocument) -> Document {
         let mut doc = Document {
             uses: Vec::new(),
-            levels: Vec::new(),
             definitions: Vec::new(),
             printer: None,
             consts: Vec::new(),
@@ -224,22 +222,13 @@ impl<'k> Decoder<'k> {
                 self.local_names.insert(name.to_owned());
             }
         }
-        // `use` lines and file-level levels first: definitions see them.
-        let mut file_levels: Vec<String> = Vec::new();
+        // `use` lines first: definitions see them.
         for n in kdl.nodes() {
-            match n.name().value() {
-                "use" => {
-                    if let Some(u) = self.use_line(n) {
-                        self.import(&u);
-                        doc.uses.push(u);
-                    }
-                }
-                "levels" => {
-                    let l = self.levels(n, &Ctx::default());
-                    file_levels.extend(l.iter().map(|l| l.name.value.clone()));
-                    doc.levels.extend(l);
-                }
-                _ => {}
+            if n.name().value() == "use"
+                && let Some(u) = self.use_line(n)
+            {
+                self.import(&u);
+                doc.uses.push(u);
             }
         }
 
@@ -261,7 +250,7 @@ impl<'k> Decoder<'k> {
             let Some((_, node)) = defs.iter().find(|(j, _)| *j == i) else {
                 continue;
             };
-            if let Some(d) = self.definition(node, &file_levels) {
+            if let Some(d) = self.definition(node) {
                 if matches!(d.kind, DefKind::Define) {
                     self.local.insert(d.name.value.clone(), DefInfo::from(&d));
                 }
@@ -321,7 +310,7 @@ impl<'k> Decoder<'k> {
 
         for n in kdl.nodes() {
             match n.name().value() {
-                "use" | "levels" | "define" | "tile" | "let" | "override" | "defaults" => {}
+                "use" | "define" | "tile" | "let" | "override" | "defaults" => {}
                 "printer" => doc.printer = self.printer(n),
                 other => {
                     let help = crate::elements::renamed(other)
@@ -329,9 +318,7 @@ impl<'k> Decoder<'k> {
                         .or_else(|| {
                             hint(did_you_mean(
                                 other,
-                                [
-                                    "use", "levels", "define", "tile", "printer", "let", "defaults",
-                                ],
+                                ["use", "define", "tile", "printer", "let", "defaults"],
                             ))
                         })
                         .or_else(|| {
@@ -342,7 +329,7 @@ impl<'k> Decoder<'k> {
                         "dt::unknown-node",
                         n.name().span(),
                         format!("unknown top-level node `{other}`"),
-                        "not use, levels, define, tile, printer, let, override or defaults",
+                        "not use, define, tile, printer, let, override or defaults",
                     )
                     .help = help;
                 }
@@ -506,69 +493,7 @@ impl<'k> Decoder<'k> {
         }
     }
 
-    fn levels(&mut self, node: &KdlNode, ctx: &Ctx) -> Vec<Level> {
-        let mut out = Vec::new();
-        // Levels may refer to each other and to the standard ones.
-        let mut inner = ctx.clone();
-        inner
-            .levels
-            .extend(self.known.levels().iter().map(|(n, _)| n.clone()));
-        inner.levels.extend(
-            node.entries()
-                .iter()
-                .filter_map(|e| e.name())
-                .map(|i| i.value().to_owned()),
-        );
-        inner
-            .levels
-            .extend(node.iter_children().map(|c| c.name().value().to_owned()));
-        let mut add = |this: &mut Self, name: Spanned<String>, e: &KdlEntry| {
-            if Edge::parse(&name.value).is_some() && name.value != "edge" {
-                this.err(
-                    "dt::levels",
-                    name.span,
-                    format!("`{}` is a tile edge, not a level name", name.value),
-                    "an edge word",
-                );
-                return;
-            }
-            if let Some(value) = this.num(e, Axis::Level, None, "levels", &name.value, &inner) {
-                out.push(Level { name, value });
-            }
-        };
-        for e in node.entries() {
-            match e.name() {
-                Some(n) => {
-                    let name = Spanned {
-                        value: n.value().to_owned(),
-                        span: n.span(),
-                    };
-                    add(self, name, e);
-                }
-                None => {
-                    self.err("dt::levels", e.span(), "levels are named", "no name")
-                        .help = Some("write `levels foot=4`, in mm".to_owned());
-                }
-            }
-        }
-        for child in node.iter_children() {
-            match child.entries() {
-                [e] if e.name().is_none() => add(self, spanned_name(child), e),
-                _ => {
-                    self.err(
-                        "dt::levels",
-                        child.span(),
-                        "a level takes one value",
-                        "here",
-                    )
-                    .help = Some("write `water 2.6`, in mm".to_owned());
-                }
-            }
-        }
-        out
-    }
-
-    fn definition(&mut self, node: &KdlNode, file_levels: &[String]) -> Option<Definition> {
+    fn definition(&mut self, node: &KdlNode) -> Option<Definition> {
         let is_tile = node.name().value() == "tile";
         // A tile is named by its file: the node is just `tile`.
         let name = if is_tile {
@@ -598,7 +523,6 @@ impl<'k> Decoder<'k> {
             kind,
             about: None,
             params: Vec::new(),
-            levels: Vec::new(),
             consts: Vec::new(),
             points: Vec::new(),
             lines: Vec::new(),
@@ -616,13 +540,6 @@ impl<'k> Decoder<'k> {
 
         // Names first, so references don't depend on order.
         let mut ctx = Ctx {
-            levels: self
-                .known
-                .levels()
-                .iter()
-                .map(|(n, _)| n.clone())
-                .chain(file_levels.iter().cloned())
-                .collect(),
             size,
             in_tile: is_tile,
             ..Ctx::default()
@@ -633,16 +550,6 @@ impl<'k> Decoder<'k> {
                 ("param", Some(p)) => ctx.params.push(p),
                 ("line", Some(l)) => ctx.lines.push(l),
                 ("region", Some(r)) => ctx.regions.push(r),
-                ("levels", _) => {
-                    ctx.levels.extend(
-                        n.entries()
-                            .iter()
-                            .filter_map(|e| e.name())
-                            .map(|i| i.value().to_owned()),
-                    );
-                    ctx.levels
-                        .extend(n.iter_children().map(|c| c.name().value().to_owned()));
-                }
                 _ => {}
             }
         }
@@ -705,10 +612,6 @@ impl<'k> Decoder<'k> {
                         self.err("dt::about", n.span(), "`about` takes one string", "here");
                     }
                 },
-                "levels" => {
-                    let l = self.levels(n, &ctx);
-                    def.levels.extend(l);
-                }
                 "let" | "override" | "point" => {}
                 "line" => {
                     if let Some(l) = self.line(n, &ctx) {
@@ -739,8 +642,7 @@ impl<'k> Decoder<'k> {
                 }
                 other => {
                     let words = [
-                        "param", "about", "levels", "let", "override", "point", "line", "region",
-                        "stack",
+                        "param", "about", "let", "override", "point", "line", "region", "stack",
                     ];
                     let help = crate::elements::renamed(other)
                         .map(str::to_owned)
@@ -756,7 +658,7 @@ impl<'k> Decoder<'k> {
                             "unknown node `{other}` in a {}",
                             if is_tile { "tile" } else { "definition" }
                         ),
-                        "not about, levels, let, override, point, line, region or stack",
+                        "not about, let, override, point, line, region or stack",
                     )
                     .help = help;
                 }
@@ -951,7 +853,13 @@ impl<'k> Decoder<'k> {
                 );
                 return;
             }
-            *slot = this.num(e, Axis::Mm, None, "line", key, ctx);
+            // a wobble is a length that may name a `let`
+            let axis = if key == "wobble" {
+                Axis::Level
+            } else {
+                Axis::Mm
+            };
+            *slot = this.num(e, axis, None, "line", key, ctx);
         };
         let mut closed: Option<bool> = None;
         let mut set_closed = |this: &mut Self, kspan: SourceSpan, e: &KdlEntry| {

@@ -145,7 +145,7 @@ impl Element for Reeds {
         let frame = *scene.frame();
         let s = frame.scale();
         let [w, h] = frame.size_mm();
-        let (Some(bed), Some(wl)) = (scene.bed(), scene.water_edge()) else {
+        let (Some(bed), Some(wl)) = (scene.bed(), ctx.calm_mm) else {
             return Err(LookError::general(
                 "reeds have no water to stand in",
                 "put a `water` in the stack",

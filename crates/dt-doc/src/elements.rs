@@ -1009,7 +1009,8 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("family", "`family` is now `style`"),
     ("self", "`self=` is now `in=`"),
     ("near", "`near=` is now `against=`"),
-    ("heights", "`heights` is now `levels`, in mm"),
+    ("heights", "`heights` is now `let`: `let foot 4`, in mm"),
+    ("levels", "`levels` is now `let`: `let foot 4`, in mm"),
     ("cols", "a tile's size is `size=\"2x1\"`, columns first"),
     ("rows", "a tile's size is `size=\"2x1\"`, columns first"),
     ("tips", "a tree's branch ends are `crown clumps=…`"),
@@ -1092,14 +1093,7 @@ mod tests {
 
     #[test]
     fn every_number_default_is_one_its_control_takes() {
-        let known = crate::Known::standard();
-        let level = |name: &str| {
-            known
-                .levels()
-                .iter()
-                .find(|(k, _)| k == name)
-                .map(|(_, v)| *v)
-        };
+        let level = |_: &str| None;
         for (owner, k) in every_control() {
             let Some(crate::model::Value::Num(n)) = k.default_value() else {
                 continue;

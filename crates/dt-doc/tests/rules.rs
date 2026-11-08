@@ -38,58 +38,38 @@ fn sizes_are_mm_and_h_is_opt_in() {
 }
 
 #[test]
-fn levels_are_named_or_mm_or_expressions() {
+fn heights_are_named_or_mm_or_expressions() {
     for text in [
-        "tile { stack { floor level=ground } }",
-        "tile { stack { floor level=wall-top } }",
+        "tile { stack { floor level=groundHeight } }",
+        "tile { stack { floor level=wallHeight } }",
         "tile { stack { floor level=4 } }",
-        "tile { stack { floor level=\"ground - 1\" } }",
-        "tile { levels foot=4; stack { floor level=foot } }",
-        "tile { levels path=\"ground - 1\"; stack { floor level=path } }",
+        "tile { stack { floor level=\"groundHeight - 1\" } }",
+        "tile { let foot 4; stack { floor level=foot } }",
+        "tile { let path \"groundHeight - 1\"; stack { floor level=path } }",
+        "tile { override groundHeight 6; stack { floor level=groundHeight } }",
     ] {
         snippet(text);
     }
     assert_fails(
-        "tile { stack { floor level=grund } }",
+        "tile { stack { floor level=grundHeight } }",
         "dt::unknown-name",
-        "did you mean `ground`?",
+        "did you mean `groundHeight`?",
     );
-    // A level name is not a size.
+    // A height name is not a size.
     assert_fails(
-        "tile { stack { tree height=ground } }",
+        "tile { stack { tree height=groundHeight } }",
         "dt::unknown-name",
-        "no parameter is called `ground`",
+        "no parameter is called `groundHeight`",
     );
 }
 
-// ---- the standard levels are a prelude ----------------------------
-
 #[test]
-fn standard_levels_need_no_use_line() {
-    let k = dt_doc::Known::standard();
-    dt_doc::decode("t.dtile", "tile { stack { floor level=edge } }", &k).unwrap();
-    // Without the prelude the names are unknown.
-    let bare = dt_doc::Known::new();
-    assert!(dt_doc::decode("t.dtile", "tile { stack { floor level=edge } }", &bare).is_err());
-}
-
-#[test]
-fn standard_levels_are_in_mm_and_listed_for_an_unknown_name() {
-    let k = dt_doc::Known::standard();
-    let mm = |n: &str| k.levels().iter().find(|(k, _)| k == n).map(|(_, v)| *v);
-    assert_eq!(mm("ground"), Some(5.0));
-    assert_eq!(mm("wall-top"), Some(33.1));
-    let e = dt_doc::decode("t.dtile", "tile { stack { floor level=lava } }", &k).unwrap_err();
-    let help = e[0].help.as_deref().unwrap();
-    assert!(help.contains("wall-top (33.1 mm)"), "{help}");
-    // a near miss is suggested on its own
-    let e = dt_doc::decode("t.dtile", "tile { stack { floor level=grund } }", &k).unwrap_err();
-    assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
-}
-
-#[test]
-fn a_tile_may_override_a_standard_level() {
-    snippet("tile { levels ground=6; stack { floor level=ground } }");
+fn the_old_levels_block_points_at_let() {
+    assert_fails(
+        "tile { levels foot=4; stack { dirt } }",
+        "dt::unknown-node",
+        "`levels` is now `let`",
+    );
 }
 
 // ---- every written size scales; recorded as metadata ---------
@@ -300,7 +280,7 @@ fn old_words_say_what_replaced_them() {
         ),
         ("tile { stack { scree } }", "scatter against=cliff"),
         ("tile cols=2 { }", "size=\\\"2x1\\\""),
-        ("heights { edge 3.4 }", "`heights` is now `levels`"),
+        ("heights { edge 3.4 }", "`heights` is now `let`"),
     ] {
         let (_, shown) = fails(text);
         let want = want.replace("\\\"", "\"");

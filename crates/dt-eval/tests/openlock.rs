@@ -61,7 +61,8 @@ fn passes(path: &str, system: &str) {
         assert!((ratio - RATIO).abs() < 1e-12, "{path}: {ratio}");
     }
     // the edge level is a photocopy too
-    if let (Some(e), Some((_, d))) = (b.edge_mm, tile.levels.iter().find(|(n, _)| n == "edge")) {
+    if let Some(e) = b.edge_mm {
+        let d = 3.4;
         assert!((e / d - RATIO).abs() < 1e-9, "{path}: edge {e} against {d}");
     }
     // the base is 8 mm under the whole tile

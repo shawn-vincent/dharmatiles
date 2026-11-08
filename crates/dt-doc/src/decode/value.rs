@@ -261,22 +261,26 @@ impl Decoder<'_> {
             .help = Some(k.map_or_else(|| format!("write `{name}` as a plain number"), describe));
             return None;
         }
-        // Names: parameters, and levels where a level is expected.
+        // Names: parameters, and the tile's `let`s where a height is expected.
         for n in x.names() {
             let ok = ctx.params.iter().any(|p| p == n)
-                || (axis == Axis::Level && ctx.levels.iter().any(|l| l == n));
+                || (axis == Axis::Level
+                    && ctx
+                        .consts
+                        .iter()
+                        .any(|(l, d)| l == n && *d != crate::dim::Dim::Squares));
             if ok {
                 continue;
             }
             let mut cands: Vec<&str> = ctx.params.iter().map(String::as_str).collect();
             if axis == Axis::Level {
-                cands.extend(ctx.levels.iter().map(String::as_str));
+                cands.extend(ctx.consts.iter().map(|(l, _)| l.as_str()));
             }
             if let Some(k) = k {
                 cands.extend(k.words.iter().map(|w| w.word));
             }
             let what = if axis == Axis::Level {
-                "level or parameter"
+                "height or parameter"
             } else if k.is_some_and(|k| !k.words.is_empty()) {
                 "word or parameter"
             } else {
@@ -287,14 +291,10 @@ impl Decoder<'_> {
                 near,
                 k.map_or_else(|| format!("`{name}` is {}", axis.describe()), describe),
             );
-            let standard = self.known.levels();
-            if axis == Axis::Level && near.is_none() && !standard.is_empty() {
-                let list: Vec<String> = standard
-                    .iter()
-                    .map(|(l, mm)| format!("{l} ({mm} mm)"))
-                    .collect();
+            if axis == Axis::Level && near.is_none() && !ctx.consts.is_empty() {
+                let list: Vec<&str> = ctx.consts.iter().map(|(l, _)| l.as_str()).collect();
                 help = format!(
-                    "{help}; standard levels: {}; a tile adds its own with `levels name=mm`",
+                    "{help}; heights: {}; a tile adds its own with `let name mm`",
                     list.join(", ")
                 );
             }

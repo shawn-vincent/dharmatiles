@@ -14,21 +14,13 @@
 use dt_doc::consts::ConstTable;
 use dt_doc::expr::{BinOp, Expr, sin_deg, smooth};
 use dt_doc::model::PlaceRef;
+use dt_elements::Write;
 use dt_kit::{Band, Ease, Field, Frame, Iv, Lint, Mask, Pin, Refusal, lints, solve_traced};
 
 use crate::Options;
 use crate::diag::Diag;
 use crate::doc::{DefaultBody, PinDecl, Tile};
 use crate::places::Places;
-
-/// Dirt lies at this angle when nothing holds it, degrees.
-pub const DIRT_SLOPE_DEG: f64 = dt_elements::dirt::SLOPE_DEG;
-
-/// Water settles over this distance round a pin, mm at the reference square.
-pub const WATER_SETTLE_MM: f64 = 9.0;
-
-/// The most nodes across the solve's lattice: a large tile solves coarser.
-const MAX_NODES_ACROSS: u32 = 480;
 
 /// The deepest chain of constants naming each other.
 const DEPTH: usize = 64;
@@ -50,9 +42,23 @@ pub struct PinReport {
     pub wins: usize,
 }
 
+/// What a body is to the bodies round it, from what its element writes
+/// ([`dt_elements::Plan::writes`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Role {
+    /// Land: it lies on the surface so far and raises it where it is higher.
+    Land,
+    /// A fluid: it fills what lies below its top inside its region.
+    Fluid,
+}
+
 /// One solved body.
 #[derive(Clone, Debug)]
 pub struct SolvedBody {
+    /// Its place in the tile's stack.
+    pub entry: usize,
+    /// Land or a fluid.
+    pub role: Role,
     /// The element.
     pub element: String,
     /// Its name, if written.
@@ -85,18 +91,18 @@ pub struct SolveReport {
     pub cells_per_square: u32,
     /// The bodies, in stack order.
     pub bodies: Vec<SolvedBody>,
+    /// For each stack entry (the connector last), the body it is.
+    pub by_entry: Vec<Option<usize>>,
+    /// Where the first land body meets a tile edge, mm: its solved band at
+    /// the rim (the lowest, where the tile's own pins move part of it);
+    /// `None` when no land reaches an edge.
+    pub edge_mm: Option<f64>,
+    /// The calm water level, mm, when the tile has a fluid.
+    pub calm_mm: Option<f64>,
     /// Lints and notes: the tile solves, but look here.
     pub notes: Vec<Diag>,
     /// What `check --explain` says.
     pub explain: Vec<String>,
-}
-
-/// Cells per square for the solve: the frame's, fewer on a large tile.
-fn solve_cells(frame: &Frame) -> u32 {
-    let longest = frame.cols.max(frame.rows).max(1);
-    frame
-        .cells_per_square
-        .min((MAX_NODES_ACROSS / longest).max(16))
 }
 
 fn node_xy(k: usize, nx: usize, per: f64) -> (f64, f64) {
@@ -337,63 +343,32 @@ fn mm(v: f64) -> String {
     format!("{v:.2} mm")
 }
 
-/// **solve**: the Solve phase of `check` for a tile that uses the heights
-/// language.
+/// **solve**: the Solve phase, on `frame`'s own lattice, the one the
+/// bodies are made on, so a band a build fills is the band `check` solved.
+/// `writes[i]` is what stack entry `i`'s element writes: a fluid fills
+/// (water), anything else a body is land.
 ///
 /// # Errors
 /// What cannot be solved: an unknown place, a height that cannot be worked
 /// out, a pin with no ground, a layer that can never be thick enough.
-#[allow(clippy::too_many_lines)]
-pub fn solve(tile: &Tile, frame: &Frame, opts: &Options) -> Result<SolveReport, Vec<Diag>> {
-    solve_on(tile, frame, opts, solve_cells(frame))
-}
-
-/// **solve** on the build's own lattice, the one the bodies are made on:
-/// the same code, at the frame's cell, so a band a build fills is the band
-/// `check` solved.
-///
-/// # Errors
-/// As [`solve`].
-pub fn solve_for_build(
+pub fn solve(
     tile: &Tile,
     frame: &Frame,
     opts: &Options,
+    writes: &[Write],
 ) -> Result<SolveReport, Vec<Diag>> {
-    solve_on(tile, frame, opts, frame.cells_per_square)
+    solve_on(tile, frame, opts, writes)
 }
 
-/// A library constant worked out as one number, mm at the reference (the
-/// edge heights a wall flush with the rim sits on, the calm water level);
-/// `None` if the tile does not see it or it depends on where it is.
-#[must_use]
-pub fn constant(tile: &Tile, name: &str) -> Option<f64> {
-    let h = tile.heights.as_ref()?;
-    let eval = Eval { table: &h.consts };
-    if eval.needs(&Expr::Name(name.to_owned()), 0).ok()?.xy {
-        return None;
-    }
-    let none = Vars {
-        x: Iv::point(0.0),
-        y: Iv::point(0.0),
-        bottom: Iv::point(0.0),
-    };
-    let iv = eval.iv(&Expr::Name(name.to_owned()), &none, 0).ok()?;
-    (iv.width() == 0.0).then_some(iv.lo)
-}
-
+#[allow(clippy::too_many_lines)]
 fn solve_on(
     tile: &Tile,
-    frame: &Frame,
+    f: &Frame,
     opts: &Options,
-    cells: u32,
+    writes: &[Write],
 ) -> Result<SolveReport, Vec<Diag>> {
-    let Some(h) = &tile.heights else {
-        return Ok(SolveReport::default());
-    };
-    let f = Frame {
-        cells_per_square: cells,
-        ..*frame
-    };
+    let h = &tile.heights;
+    let cells = f.cells_per_square;
     let (nx, ny) = f.nodes();
     let g = Ground {
         nx,
@@ -403,11 +378,12 @@ fn solve_on(
         scale: f.square_mm / dt_kit::REFERENCE_SQUARE_MM,
         eval: Eval { table: &h.consts },
     };
-    let places = Places::new(tile, &f);
+    let places = Places::new(tile, f);
     let mut errors = Vec::new();
     let mut notes = Vec::new();
     let mut explain = Vec::new();
     let mut bodies: Vec<SolvedBody> = Vec::new();
+    let mut regions: Vec<Mask> = Vec::new();
     // the surface so far: the higher of every body laid, inside its region
     let mut under = Band::flat(nx, ny, g.step, 0.0, 0.0);
     let mut under_lo = Field::filled(nx, ny, g.step, 0.0);
@@ -420,7 +396,7 @@ fn solve_on(
     }
 
     for b in &h.bodies {
-        let land = b.element != "water";
+        let land = writes.get(b.entry) != Some(&Write::Fill);
         let default: Option<&DefaultBody> = h
             .defaults
             .iter()
@@ -521,10 +497,10 @@ fn solve_on(
         if !ok {
             continue;
         }
-        let ease = match b.element.as_str() {
-            "dirt" => Ease::Slope(b.slope.unwrap_or(DIRT_SLOPE_DEG)),
-            "water" => Ease::Settle(WATER_SETTLE_MM * g.scale),
-            _ => Ease::Step,
+        let ease = if land {
+            Ease::Slope(b.slope.unwrap_or(dt_elements::dirt::SLOPE_DEG))
+        } else {
+            Ease::Settle(dt_elements::water::SETTLE_MM * g.scale)
         };
         let solved = match solve_traced(&own, &pins, ease) {
             Ok(s) => s,
@@ -741,7 +717,10 @@ fn solve_on(
                 under = b;
             }
         }
+        regions.push(region.clone());
         bodies.push(SolvedBody {
+            entry: b.entry,
+            role: if land { Role::Land } else { Role::Fluid },
             element: b.element.clone(),
             label: b.label.clone(),
             band: solved.band,
@@ -752,10 +731,44 @@ fn solve_on(
             per: g.per,
         });
     }
+    // the rim: where the first land body meets an edge, as it was solved
+    let on_rim = |k: usize| {
+        let (i, j) = (k % nx, k / nx);
+        i == 0 || j == 0 || i == nx - 1 || j == ny - 1
+    };
+    let edge_mm = bodies
+        .iter()
+        .zip(&regions)
+        .find(|(b, _)| b.role == Role::Land)
+        .and_then(|(b, region)| {
+            (0..nx * ny)
+                .filter(|&k| on_rim(k) && region.bits[k])
+                .map(|k| b.band.at(k).lo)
+                .reduce(f64::min)
+        });
+    let calm_mm = bodies
+        .iter()
+        .any(|b| b.role == Role::Fluid)
+        .then(|| {
+            h.consts
+                .scalar(&Expr::Name("waterSurfaceHeight".to_owned()), 0.5, &|_| None)
+                .ok()
+                .map(|v| v * g.scale)
+        })
+        .flatten();
+    let mut by_entry = vec![None; writes.len()];
+    for (i, b) in bodies.iter().enumerate() {
+        if let Some(slot) = by_entry.get_mut(b.entry) {
+            *slot = Some(i);
+        }
+    }
     if errors.is_empty() {
         Ok(SolveReport {
             cells_per_square: cells,
             bodies,
+            by_entry,
+            edge_mm,
+            calm_mm,
             notes,
             explain,
         })

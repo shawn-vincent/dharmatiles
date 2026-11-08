@@ -67,35 +67,6 @@ fn every_library_file_decodes() {
 }
 
 #[test]
-fn the_prelude_is_levels_kdl() {
-    // The compiled-in prelude is the library file, byte for byte.
-    assert_eq!(dt_doc::known::PRELUDE, LEVELS.1);
-    let doc = decode_ok(LEVELS);
-    let got: Vec<(&str, f64)> = doc
-        .levels
-        .iter()
-        .map(|l| {
-            (
-                l.name.value.as_str(),
-                l.value.value.bounds(&none).unwrap().0,
-            )
-        })
-        .collect();
-    assert_eq!(
-        got,
-        [
-            ("edge", 3.4),
-            ("ground", 5.0),
-            ("water", 2.6),
-            ("wall-top", 33.1)
-        ]
-    );
-    let k = dt_doc::Known::standard();
-    let names: Vec<&str> = k.levels().iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(names, ["edge", "ground", "water", "wall-top"]);
-}
-
-#[test]
 fn flat_tile_is_one_ground() {
     let doc = decode_ok(FLAT);
     let t = tile(&doc);

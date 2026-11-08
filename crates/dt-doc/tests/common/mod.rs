@@ -14,7 +14,6 @@ macro_rules! lib {
     };
 }
 
-pub const LEVELS: (&str, &str) = lib!("parts/levels.dtile");
 pub const EDGES: (&str, &str) = lib!("parts/edges.dtile");
 pub const GRASS: (&str, &str) = lib!("parts/grass.dtile");
 pub const TREES: (&str, &str) = lib!("parts/trees.dtile");
@@ -30,8 +29,7 @@ pub const PATH_ROCKS: (&str, &str) = (
 );
 
 /// Every file under library/, plus that fixture.
-pub const ALL: [(&str, &str); 10] = [
-    LEVELS,
+pub const ALL: [(&str, &str); 9] = [
     EDGES,
     GRASS,
     TREES,
@@ -47,10 +45,10 @@ pub const TILES: [(&str, &str); 5] = [FLAT, GRASS_TREE, WALL_CORNER, CLIFF_RUN, 
 /// The library's heights, as the tests read them.
 pub const HEIGHTS: &str = include_str!("../../../../library/parts/heights.dtile");
 
-/// What every tile sees: the standard levels and the shared parts,
+/// What every tile sees: the library's heights and the shared parts,
 /// registered under the keys their `use` lines name.
 pub fn known() -> Known {
-    let mut k = Known::standard();
+    let mut k = Known::new();
     k.add_heights("library/parts/heights.dtile", HEIGHTS)
         .unwrap_or_else(|e| panic!("{e}"));
     for (key, (name, text)) in [("parts/grass", GRASS), ("parts/trees", TREES)] {

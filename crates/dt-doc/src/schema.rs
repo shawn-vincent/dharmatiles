@@ -71,7 +71,7 @@ impl Axis {
     pub fn describe(self) -> &'static str {
         match self {
             Axis::Mm => "a size in mm",
-            Axis::Level => "a level: a named level, mm, or an expression like \"ground - 1\"",
+            Axis::Level => "a height: mm, a `let` name, or an expression like \"groundHeight - 1\"",
             Axis::Deg => "an angle in degrees",
             Axis::Share => "a share, written as a percent such as \"30%\"",
             Axis::Count => "a count",

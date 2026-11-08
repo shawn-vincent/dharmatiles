@@ -46,12 +46,12 @@ fn a_misspelt_look_points_at_its_line_with_a_hint() {
 }
 
 #[test]
-fn an_unknown_level_lists_the_levels() {
-    let e = errors("tile {\n  stack {\n    floor level=grund\n  }\n}\n");
+fn an_unknown_height_lists_the_heights() {
+    let e = errors("tile {\n  stack {\n    floor level=grundHeight\n  }\n}\n");
     assert_eq!(e[0].location().unwrap().1, 3);
-    assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
+    assert_eq!(e[0].help.as_deref(), Some("did you mean `groundHeight`?"));
     let e = errors("tile {\n  stack {\n    floor level=lava\n  }\n}\n");
-    assert!(e[0].help.as_deref().unwrap().contains("wall-top (33.1 mm)"));
+    assert!(e[0].help.as_deref().unwrap().contains("wallHeight"));
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
 }
 
 #[test]
-fn levels_edge_heights_and_printer_come_from_the_library() {
+fn heights_and_printer_come_from_the_library() {
     let c = check(
         &Library,
         "lib:tiles/test/1x1-flat.dtile",
@@ -104,17 +104,14 @@ fn levels_edge_heights_and_printer_come_from_the_library() {
     )
     .unwrap();
     let t = c.tile.unwrap();
-    let level = |n: &str| t.levels.iter().find(|(k, _)| k == n).map(|(_, v)| *v);
-    assert_eq!(level("edge"), Some(3.4));
-    assert_eq!(level("ground"), Some(5.0));
-    assert_eq!(level("water"), Some(2.6));
-    assert_eq!(level("wall-top"), Some(33.1));
-    // the edge heights are the library's constants
-    assert_eq!(dt_eval::solve::constant(&t, "dirtEdgeHeight"), Some(3.4));
-    assert_eq!(
-        dt_eval::solve::constant(&t, "waterSurfaceHeight"),
-        Some(2.6)
-    );
+    let height = |n: &str| {
+        let e = t.heights.consts.get(n)?;
+        t.heights.consts.scalar(&e.expr, 0.5, &|_| None).ok()
+    };
+    assert_eq!(height("dirtEdgeHeight"), Some(3.4));
+    assert_eq!(height("groundHeight"), Some(5.0));
+    assert_eq!(height("waterSurfaceHeight"), Some(2.6));
+    assert_eq!(height("wallHeight"), Some(33.1));
     let p = Options::default().printer;
     assert_eq!(
         (p.line_mm, p.layer_mm, p.overhang_deg, p.gap_mm),
@@ -209,7 +206,7 @@ fn a_bad_import_points_at_the_use_line() {
 }
 
 #[test]
-fn imports_inline_definitions_and_levels_resolve() {
+fn imports_inline_definitions_and_lets_resolve() {
     let src = mem(&[
         (
             "parts/flats.dtile",
@@ -217,7 +214,7 @@ fn imports_inline_definitions_and_levels_resolve() {
         ),
         (
             "tiles/t.dtile",
-            "use \"../parts/flats\" raised\ntile { levels foot=4; stack { dirt; raised } }\n",
+            "use \"../parts/flats\" raised\ntile { let foot 4; stack { dirt; raised } }\n",
         ),
     ]);
     let c = check(&src, "tiles/t.dtile", &Options::default()).unwrap();
