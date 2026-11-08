@@ -76,6 +76,13 @@ pub(crate) enum Command {
         #[arg(long)]
         explain: bool,
     },
+    /// Carry tiles written in the old forms (`ground`, `level=`, `bumps=`) to
+    /// the heights language, in place; a tile already in it is left alone.
+    Migrate {
+        /// Tile documents.
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+    },
     /// List the elements a stack can hold, or one element's controls.
     Elements {
         /// An element's name: list its controls with units, ranges and defaults.

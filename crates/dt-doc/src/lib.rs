@@ -25,6 +25,7 @@ pub mod elements;
 pub mod error;
 pub mod expr;
 pub mod known;
+pub mod migrate;
 pub mod model;
 pub mod place;
 pub mod schema;

@@ -138,6 +138,28 @@ fn main() -> ExitCode {
                 json,
             )
         }
+        Command::Migrate { paths } => {
+            let mut code = 0;
+            for p in &paths {
+                let done = std::fs::read_to_string(p)
+                    .map_err(|e| e.to_string())
+                    .and_then(|text| dt_doc::migrate::heights(&text).map_err(|e| e.to_string()))
+                    .and_then(|new| match new {
+                        Some(new) => std::fs::write(p, new)
+                            .map(|()| "migrated")
+                            .map_err(|e| e.to_string()),
+                        None => Ok("unchanged"),
+                    });
+                match done {
+                    Ok(what) => tell!("{what} {}", p.display()),
+                    Err(e) => {
+                        tell!("error: {}: {e}", p.display());
+                        code = ERROR;
+                    }
+                }
+            }
+            code
+        }
         Command::Elements { name, json } => elements::run(name.as_deref(), json),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
         Command::Audit {
