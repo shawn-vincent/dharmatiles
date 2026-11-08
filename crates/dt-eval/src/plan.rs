@@ -7,8 +7,11 @@
 //! - a surface reads nothing (surfaces are painted before any solid);
 //! - a fill (water) reads the surfaces, and the solids it names;
 //! - a read of a kind waits for every entry that writes one (the ground's
-//!   writer is the lift); a read of every solid (the connector's) waits
-//!   for everything else.
+//!   writer is the lift, when a surface paints); a read of every solid
+//!   (the connector's) waits for everything else.
+//!
+//! The lift is a step of every plan: a fill alone paints what it lifts,
+//! and with nothing painted it lifts nothing.
 //!
 //! The order is one stable topological sort: at each step the first node
 //! ready, surfaces first in stack order, then what the lift needs, the
@@ -95,25 +98,19 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
                             && !is(j, Write::Surface)
                             && !plans[j].reads.contains(&Read::AllSolids)
                     }));
-                    if lifted {
-                        waits[i].push(lift);
-                    }
+                    waits[i].push(lift);
                 }
             }
         }
     }
-    if lifted {
-        waits[lift] = (0..n)
-            .filter(|&i| is(i, Write::Surface) || is(i, Write::Fill))
-            .collect();
-    }
+    // the lift is always a step (a fill alone paints the surface it
+    // lifts); it is the ground's writer only when a surface paints
+    waits[lift] = (0..n)
+        .filter(|&i| is(i, Write::Surface) || is(i, Write::Fill))
+        .collect();
     // what the lift needs, all the way down
     let mut needed = vec![false; n + 1];
-    let mut todo = if lifted {
-        waits[lift].clone()
-    } else {
-        Vec::new()
-    };
+    let mut todo = waits[lift].clone();
     while let Some(v) = todo.pop() {
         if !needed[v] {
             needed[v] = true;
@@ -133,7 +130,7 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
         };
         (class, v)
     };
-    let mut left: Vec<usize> = (0..n).chain(lifted.then_some(lift)).collect();
+    let mut left: Vec<usize> = (0..=n).collect();
     left.sort_by_key(|&v| rank(v));
     let mut done = vec![false; n + 1];
     let mut steps = Vec::with_capacity(left.len());
@@ -277,6 +274,11 @@ mod tests {
                 Step::Entry(3),
                 Step::Entry(0)
             ])
+        );
+        // water alone: it fills, then the lift lifts it
+        assert_eq!(
+            schedule(&[p(Write::Fill, &[Read::IfAny(Kind::Rock)])]),
+            Ok(vec![Step::Entry(0), Step::Lift])
         );
         // no rocks: the water waits for nothing
         let bare = [
