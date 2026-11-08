@@ -55,10 +55,11 @@
     stack {
         base
         dirt top="[groundHeight .. groundHeight + 2.5]" bump-size=14 {   // hills up to 2.5 mm, about 14 mm across
-            clods some                  // or: few, many
+            clods some                  // or: none, few, many
         }
     }
 }</code></pre>
+<p>With <code>clods=none stones=none</code> the dirt is plain: its hills alone, with no soil roughness, clods, grit, pebbles or stones. A pond's bed, or ground a tree or a wall stands on, can be written so.</p>
 <p>Under other elements, write <code>dirt</code> first and let the rest stand on it. Restrict it to a <a href="region.html">region</a> with <code>in=</code>:</p>
 <pre><code>tile size="1x1" seed=42 {
     line margin wobble=5 { through "0.48,1" "0.52,0" }
@@ -88,7 +89,7 @@
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr id="c-bump-size"><td><code>bump-size</code></td><td>mm, 5 to 70</td><td>—</td><td>how wide the hills are in its band: broad and rolling, or choppy</td></tr>
-<tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>clods here and there</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
+<tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>none</code></dt><dd>no clods (with <code>stones=none</code>: plain, untextured dirt)</dd><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>clods here and there</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
 <tr id="c-stones"><td><code>stones</code></td><td>word</td><td><code>some</code></td><td>a few stones bedded in the dirt<dl class="words"><dt><code>none</code></dt><dd>bare dirt, no stones</dd><dt><code>some</code></dt><dd>a few bedded stones</dd><dt><code>many</code></dt><dd>a stony patch (provisional)</dd></dl></td></tr>
 <tr id="c-bank"><td><code>bank</code></td><td>group</td><td>—</td><td>earth heaped against a cliff or wall</td></tr>
 <tr id="c-bank-against"><td><code>bank against</code></td><td>tag</td><td>—</td><td>what the bank leans on <strong>Required.</strong></td></tr>
@@ -176,6 +177,7 @@
 <p>What this element always does. A change to one of these is a change to the element.</p>
 <ul class="rules">
   <li>Plain earth with clods, grit and half-sunk pebbles: no footprints, no cracks.</li>
+  <li>Pebbles stay off ground steeper than about 22 to 34 degrees (a bank), and off the rim; with <code>clods=none stones=none</code> there is no texture at all.</li>
   <li>Strong contrast between cloddy and smooth patches, and texture everywhere that shows at 0.2 mm layers.</li>
   <li>Pebbles big enough to read at tabletop distance.</li>
   <li>No frame or rim at the tile edge.</li>

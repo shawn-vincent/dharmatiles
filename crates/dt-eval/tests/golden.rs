@@ -162,6 +162,39 @@ fn the_flat_tile_meets_the_exit_criteria() {
     assert!(close(lo[2], -(5.7 + 5.2) - 0.0), "peg tip {}", lo[2]);
 }
 
+/// The dirt's rim pin is exact: every vertex on the tile's boundary above
+/// the base is at the edge height, 3.4 mm, to float32 accuracy, whatever
+/// grain (clods, grit, pebbles and their mounds, stones) the dirt carries.
+#[test]
+fn a_pinned_rim_is_exact() {
+    for path in [
+        "lib:tiles/test/2x2-dirt.dtile",
+        "lib:tiles/test/2x2-dirt-stones.dtile",
+        "lib:tiles/ground/1x1-soil.dtile",
+    ] {
+        let b = built(path);
+        let [w, h] = b.footprint;
+        let mut seen = 0;
+        for p in &b.export.mesh.positions {
+            let on_rim = p[0].abs() < 1e-6
+                || (p[0] - w).abs() < 1e-6
+                || p[1].abs() < 1e-6
+                || (p[1] - h).abs() < 1e-6;
+            if on_rim && p[2] > 0.01 {
+                seen += 1;
+                assert!(
+                    (p[2] - 3.4).abs() < 1e-5,
+                    "{path}: rim vertex ({}, {}) is {} mm, not 3.4",
+                    p[0],
+                    p[1],
+                    p[2]
+                );
+            }
+        }
+        assert!(seen > 100, "{path}: only {seen} rim vertices were checked");
+    }
+}
+
 #[test]
 fn the_dirt_tiles_meet_the_exit_criteria() {
     for path in [

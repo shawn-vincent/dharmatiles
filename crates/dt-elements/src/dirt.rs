@@ -126,6 +126,10 @@ const PEB_FLAT: (f64, f64) = (2.0, 3.5);
 const PEB_GAP_MM: f64 = 0.25;
 const PEB_SOFT_MM: (f64, f64) = (0.08, 0.22);
 const PEB_MOUND: f64 = 0.2;
+/// Pebbles are left off ground steeper than this: it fades out between the
+/// two angles, measured on the ground blurred by the second value (mm).
+const PEB_SIT_DEG: (f64, f64) = (22.0, 34.0);
+const PEB_SIT_BLUR_MM: f64 = 1.0;
 const PEB_SEAT_SIGMA_MM: f64 = 0.5;
 const PEB_TRIES: u32 = 60;
 /// The printable-texture rule's window and layer, mm.
@@ -148,6 +152,13 @@ pub struct Dirt {
 }
 
 impl Dirt {
+    /// Whether this dirt has no texture: no clods and no stones (`clods
+    /// none stones none`), so no grit or pebbles either.
+    #[must_use]
+    pub fn is_plain(&self) -> bool {
+        self.clod_density <= 0.0 && self.stones.1 <= 0
+    }
+
     /// From controls: `bump-size`, `clods` (a word whose number the
     /// evaluator passes as `clods.density`), `stones` and `bank`.
     ///
@@ -292,6 +303,12 @@ pub fn surface(
     } = *on;
     let frame = *scene.frame();
     let shape = hills(dirt, &frame, seed.key("hills"), band);
+    if dirt.is_plain() {
+        // `clods none` and `stones none`: the hills alone, no grain
+        let none = Field::new(&frame, 0.0);
+        let mask = vec![false; none.z.len()];
+        return Ok((shape, none, mask, Counts::default()));
+    }
     let rim = rim(&frame);
     let mut base = shape.field().clone();
     // grain stays off what water covers: where the water's low end stands
@@ -326,9 +343,8 @@ pub fn surface(
             }
         }
     }
-    let w_tex = rim
-        .map(|d| smooth01(d / RIM_TEX_MM))
-        .zip(&keep, |w, k| w * k);
+    let w_rim = rim.map(|d| smooth01(d / RIM_TEX_MM));
+    let w_tex = w_rim.zip(&keep, |w, k| w * k);
     let mid = noise(
         &frame,
         seed.key("soil"),
@@ -358,15 +374,13 @@ pub fn surface(
     } else {
         Vec::new()
     };
-    let (mask, mut counts) = place_pebbles(&frame, seed, &mut z, &ground, &avoid, &keep);
+    let (mask, mut counts) = place_pebbles(&frame, seed, &mut z, &ground, &avoid, &keep, &w_rim);
     counts.clods = clods;
     counts.stones = avoid.len();
     counts.texture_ok = texture_ok(&z, &rim);
-    // the grain is nothing at the rim whatever reached it (a pebble's mound
-    // tails off over several mm), so a pinned rim is exactly at its pin
     let grain = z.with_z(
         (0..z.z.len())
-            .map(|k| (z.z[k] - shape.field().z[k]) * smooth01(rim.z[k] / RIM_TEX_MM))
+            .map(|k| z.z[k] - shape.field().z[k])
             .collect(),
     );
     Ok((shape, grain, mask, counts))
@@ -700,6 +714,7 @@ fn place_pebbles(
     ground: &Field,
     avoid: &[[f64; 3]],
     keep: &Field,
+    w_rim: &Field,
 ) -> (Vec<bool>, Counts) {
     let [w, h] = frame.size_mm();
     let area_sq = w * h / (SQUARE_MM * SQUARE_MM);
@@ -725,12 +740,22 @@ fn place_pebbles(
         gap: PEB_GAP_MM,
         factor: 1.0,
     };
+    // a pebble sits on ground it can lie on: none on a face steeper than
+    // PEB_SIT_DEG (the ground seen over about a pebble's width)
+    let (gx, gy) = ground.blur(PEB_SIT_BLUR_MM).gradient();
+    let (lo_t, hi_t) = (
+        libm::tan(PEB_SIT_DEG.0.to_radians()),
+        libm::tan(PEB_SIT_DEG.1.to_radians()),
+    );
+    let sits = gx.zip(&gy, |a, b| {
+        1.0 - smooth01((libm::hypot(a, b) - lo_t) / (hi_t - lo_t))
+    });
     let placed = scatter(
         frame,
         &mut rng,
         &radii,
         &spread,
-        &|x, y| c.sample(x, y) * keep.sample(x, y),
+        &|x, y| c.sample(x, y) * keep.sample(x, y) * sits.sample(x, y),
         avoid,
     );
     let seat = z.blur(PEB_SEAT_SIGMA_MM);
@@ -754,7 +779,8 @@ fn place_pebbles(
                 let k = j * z.nx + i;
                 if med {
                     let d2 = (qx * qx + qy * qy) / (mound * mound);
-                    z.z[k] += PEB_MOUND * peb.hp * libm::exp(-d2 * 1.4);
+                    // none at the rim: a mound's tail must not lift a pinned edge
+                    z.z[k] += w_rim.z[k] * PEB_MOUND * peb.hp * libm::exp(-d2 * 1.4);
                 }
                 let hh = peb.height(qx, qy);
                 let top = if hh > 0.0 { g0 - sink + hh } else { NONE };

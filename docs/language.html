@@ -45,7 +45,7 @@ tile size="1x1" {
     about "Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end."
     stack {
         base
-        dirt top=dirtEdgeHeight clods=few stones=none   // flat, at the edge height (3.4 mm)
+        dirt top=dirtEdgeHeight clods=none stones=none   // flat, at the edge height (3.4 mm)
     }
 }</code></pre>
 <p>Its stack starts with <code>base</code>, the connector. <code>dharmatiles build lib:tiles/test/1x1-flat.dtile</code> builds it for DungeonBlocks, the default system.</p>
@@ -156,7 +156,7 @@ let tallWallHeight     72.3</code></pre>
 <pre><code>defaults {
     dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
     floor top=floorHeight                          { pin top=floorEdgeHeight at=edges }
-    water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" { pin top=waterEdgeHeight at=edges }
+    water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" { pin top=waterEdgeHeight at=edges }
 }</code></pre>
 <p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The land defaults apply to the first land layer only, so a dirt film on a cliff (<code>dirt top="bottom + [0.6 .. 1.2]"</code>) is not pulled to the rim; the water default applies to every water. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override waterBedHeight 0.4 → 0.8</code>), and each pin's share of its place.</p>
 <p><strong>What <code>check</code> does with them.</strong> Besides reading the names and types, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it. A cliff's or a thing's <code>top=</code>, and a thing at a line or region, are checked but not built yet, and say so.</p>
@@ -174,7 +174,7 @@ let tallWallHeight     72.3</code></pre>
         }
         rock size="6..10" at=crossing
         grass
-        water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" at=banks
+        water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" at=banks
     }
 }</code></pre>
 
@@ -182,7 +182,7 @@ let tallWallHeight     72.3</code></pre>
 <p>Every tile also reads <code>library/parts/edges.dtile</code>, without a <code>use</code> line. Its <code>defaults</code> block gives the first dirt, and every water, a top and a pin at the tile's edges, so that neighbours butt with no step:</p>
 <pre><code>defaults {
     dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
-    water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" { pin top=waterEdgeHeight at=edges }
+    water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" { pin top=waterEdgeHeight at=edges }
 }</code></pre>
 <p>So any dirt tile butts any other with no step, and any two water tiles meet in the same wave. A pin the tile writes later wins over a default where they overlap. See <a href="elements/edges.html"><code>edges</code></a>.</p>
 
@@ -337,7 +337,7 @@ define oak {
 
   × no element or definition is called `hills`
    ╭─[library/tiles/ground/2x2-grass-tree.dtile:8:9]
- 8 │         hills clods=few stones=none
+ 8 │         hills clods=none stones=none
    ·         ──┬──
    ·           ╰── unknown
   help: `hills` is now `dirt`</code></pre>
@@ -376,7 +376,7 @@ use "parts/grass" long-grass
 tile size="2x2" seed=84 {
     stack {
         base
-        dirt clods=few stones=none
+        dirt clods=none stones=none
         long-grass                      // grows round the trunk, wherever it is listed
 
         tree height=40 {               // anywhere on the tile; or at="1,1"

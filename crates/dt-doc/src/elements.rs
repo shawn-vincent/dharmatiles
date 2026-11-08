@@ -138,7 +138,13 @@ static STONES: &[Word] = &[
 ];
 
 static CLODS: &[Word] = &[
-    // a clod density of 0.7 is `some`; few and many are provisional.
+    // a clod density of 0.7 is `some`; few and many are provisional. `none`
+    // with `stones none` is plain dirt: no texture at all.
+    w(
+        "none",
+        "no clods (with `stones=none`: plain, untextured dirt)",
+        &[("density", 0.0)],
+    ),
     w(
         "few",
         "a scatter of clods (provisional)",

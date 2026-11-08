@@ -17,6 +17,6 @@ tile size="1x1" seed=62 {
         }
         rock size="6..10" at=crossing
         grass
-        water top="[waterSurfaceHeight - 0.75 .. waterSurfaceHeight + 2.2]" at=banks
+        water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" at=banks
     }
 }

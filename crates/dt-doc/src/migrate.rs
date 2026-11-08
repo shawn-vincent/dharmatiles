@@ -13,8 +13,8 @@
 //!   is the space the bank rule used to draw; the dirt's `in=` goes, since
 //!   the dirt now covers the whole tile;
 //! - `ground` with no `in=` under water becomes `dirt top=waterBedHeight`
-//!   pinned at the edges; any other `ground` is a quiet `dirt` (`clods=few
-//!   stones=none`);
+//!   pinned at the edges; any other `ground` is a quiet `dirt` (`clods=none
+//!   stones=none`: no texture at all);
 //! - the stack gains `base` as its first line.
 //!
 //! Level names become the library's heights: `edge` is `dirtEdgeHeight`,
@@ -258,7 +258,7 @@ pub fn heights(text: &str) -> Result<Option<String>, EditError> {
                     });
                 }
                 if is_ground {
-                    props.push("clods=few".to_owned());
+                    props.push("clods=none".to_owned());
                     props.push("stones=none".to_owned());
                 }
                 let inner = brace.map(|b| {
@@ -366,7 +366,7 @@ mod tests {
         let old = "tile size=\"1x1\" seed=1 {\n    stack {\n        ground level=edge\n    }\n}\n";
         let new = heights(old).unwrap().unwrap();
         assert!(
-            new.contains("dirt top=dirtEdgeHeight clods=few stones=none"),
+            new.contains("dirt top=dirtEdgeHeight clods=none stones=none"),
             "{new}"
         );
     }
