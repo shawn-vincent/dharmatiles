@@ -67,6 +67,10 @@ const MID_WEIGHT: f64 = 0.15;
 const STONES_2X2: (i64, i64) = (4, 7);
 /// The texture ramps in over this rim width, true mm.
 const RIM_TEX_MM: f64 = 1.0;
+/// The surface is set in for the grain gradually from the rim, over this
+/// width (true mm), so the dip from the held rim is gentle (about 30° for
+/// the grain's height), not a trench.
+const SET_IN_MM: f64 = 4.0;
 /// Below any surface: a lobe or pebble that is not there.
 const NONE: f64 = -1e9;
 
@@ -277,6 +281,30 @@ pub struct Ground<'a> {
     pub band: &'a Band,
     /// About the height the water laid after it stands at, if any is.
     pub under: Option<&'a Field>,
+    /// The printer's skin, mm.
+    pub skin_mm: f64,
+}
+
+/// What the dirt made on its band: the hills, the earth heaped beyond them,
+/// the grain's relief and where the surface is set in to hold it, the pebble
+/// mask and the counts.
+pub struct Made {
+    /// The hills, inside the band.
+    pub shape: Banded,
+    /// Earth heaped on the hills beyond the band (a bank against a cliff).
+    pub raise: Field,
+    /// The grain's relief over the hills and the heap, mm.
+    pub relief: Field,
+    /// Where the surface is set in, 0 to 1: not at the rim, which is held
+    /// exactly, and not under water.
+    pub weight: Field,
+    /// The lowest the grain may take the surface (just over the water that
+    /// will lie on it), if water will.
+    pub floor: Option<Field>,
+    /// The surface nodes that are pebbles.
+    pub stone: Vec<bool>,
+    /// What was counted.
+    pub counts: Counts,
 }
 
 /// The dirt surface over the whole tile (world mm), its grain, the pebble
@@ -294,20 +322,28 @@ pub fn surface(
     seed: Seed,
     owner: &str,
     on: &Ground<'_>,
-) -> Result<(Banded, Field, Vec<bool>, Counts), LookError> {
+) -> Result<Made, LookError> {
     let Ground {
         area,
         foots,
         band,
         under,
+        skin_mm,
     } = *on;
     let frame = *scene.frame();
     let shape = hills(dirt, &frame, seed.key("hills"), band);
     if dirt.is_plain() {
         // `clods none` and `stones none`: the hills alone, no grain
         let none = Field::new(&frame, 0.0);
-        let mask = vec![false; none.z.len()];
-        return Ok((shape, none, mask, Counts::default()));
+        return Ok(Made {
+            shape,
+            raise: none.clone(),
+            relief: none.clone(),
+            weight: none.clone(),
+            floor: None,
+            stone: vec![false; none.z.len()],
+            counts: Counts::default(),
+        });
     }
     let rim = rim(&frame);
     let mut base = shape.field().clone();
@@ -343,6 +379,11 @@ pub fn surface(
             }
         }
     }
+    let raise = base.with_z(
+        (0..base.z.len())
+            .map(|k| base.z[k] - shape.field().z[k])
+            .collect(),
+    );
     let w_rim = rim.map(|d| smooth01(d / RIM_TEX_MM));
     let w_tex = w_rim.zip(&keep, |w, k| w * k);
     let mid = noise(
@@ -369,21 +410,50 @@ pub fn surface(
             })
             .collect(),
     );
-    let avoid = if dirt.stones.1 > 0 {
-        crate::rock::dirt_stones(scene, owner, seed, &mut z, &rim, dirt.stones, &stone_area)?
+    let (avoid, bedded) = if dirt.stones.1 > 0 {
+        crate::rock::dirt_stones(scene, seed, &mut z, &rim, dirt.stones, &stone_area)?
     } else {
-        Vec::new()
+        (Vec::new(), Vec::new())
     };
     let (mask, mut counts) = place_pebbles(&frame, seed, &mut z, &ground, &avoid, &keep, &w_rim);
     counts.clods = clods;
     counts.stones = avoid.len();
     counts.texture_ok = texture_ok(&z, &rim);
-    let grain = z.with_z(
-        (0..z.z.len())
-            .map(|k| z.z[k] - shape.field().z[k])
-            .collect(),
-    );
-    Ok((shape, grain, mask, counts))
+    let relief = z.with_z((0..z.z.len()).map(|k| z.z[k] - base.z[k]).collect());
+    let weight = rim.zip(&keep, |d, k| smooth01(d / SET_IN_MM) * k);
+    // dry ground stays dry: the grain never takes it under the water's level
+    let floor = under.map(|u| u.map(|w| w + 0.2 * frame.scale()));
+    // the grain sets the surface in, so a bedded stone sits as far lower
+    if !bedded.is_empty() {
+        let grain = dt_kit::Relief {
+            relief: &relief,
+            weight: &weight,
+            skin_mm,
+            floor: floor.as_ref(),
+        };
+        let off = scene.grain_offset(&dt_kit::LayerSpec {
+            owner,
+            material: dt_kit::Material::Earth,
+            fluid: false,
+            mask: area,
+            shape: &shape,
+            raise: Some(&raise),
+            grain: Some(&grain),
+        });
+        for b in bedded {
+            let lower = off.sample(b.at[0], b.at[1]);
+            b.add(scene, owner, lower);
+        }
+    }
+    Ok(Made {
+        shape,
+        raise,
+        relief,
+        weight,
+        floor,
+        stone: mask,
+        counts,
+    })
 }
 
 /// Clods soft-maxed onto `base`.
@@ -821,8 +891,23 @@ impl Element for Dirt {
             foots: ctx.foots,
             band,
             under: ctx.under,
+            skin_mm: 3.0 * ctx.printer.layer_mm,
         };
-        let (shape, grain, stone, counts) = surface(self, scene, ctx.seed, ctx.path, &on)?;
+        let Made {
+            shape,
+            raise,
+            relief,
+            weight,
+            floor,
+            stone,
+            counts,
+        } = surface(self, scene, ctx.seed, ctx.path, &on)?;
+        let grain = dt_kit::Relief {
+            relief: &relief,
+            weight: &weight,
+            skin_mm: 3.0 * ctx.printer.layer_mm,
+            floor: floor.as_ref(),
+        };
         scene
             .lay(&dt_kit::LayerSpec {
                 owner: ctx.path,
@@ -830,6 +915,7 @@ impl Element for Dirt {
                 fluid: false,
                 mask: ctx.area,
                 shape: &shape,
+                raise: Some(&raise),
                 grain: Some(&grain),
             })
             .map_err(LookError::build)?;

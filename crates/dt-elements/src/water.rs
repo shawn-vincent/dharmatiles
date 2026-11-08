@@ -431,6 +431,7 @@ impl Element for Water {
                 fluid: true,
                 mask: &area,
                 shape: &top,
+                raise: None,
                 grain: None,
             })
             .map_err(LookError::build)?;

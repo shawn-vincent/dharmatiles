@@ -407,6 +407,12 @@ const SLOTS: u32 = 1 << 16;
 /// of a layer at or under the layers below it.
 pub const ABSENT_UNDER_MM: f64 = 1.0;
 
+/// The most grain reaches under a surface over a layer `thick` mm thick,
+/// mm: half the thickness, and never through the skin at the bottom.
+fn grain_cap(thick: f64, skin_mm: f64) -> f64 {
+    (0.5 * thick).min(thick - skin_mm).max(0.0)
+}
+
 /// One layer to lay on the terrain: what it is made of, where it exists and
 /// the surface its body made inside its band.
 #[derive(Clone, Copy)]
@@ -422,9 +428,37 @@ pub struct LayerSpec<'a> {
     pub mask: &'a Mask,
     /// The body's surface, inside its band by type.
     pub shape: &'a crate::Banded,
-    /// The material's grain, added to the shape by the kit (a displacement
-    /// of the one surface, not separate solids).
-    pub grain: Option<&'a crate::Field>,
+    /// Earth heaped on the shape beyond its band (a bank against a cliff),
+    /// added as it is.
+    pub raise: Option<&'a crate::Field>,
+    /// The material's grain, set into the surface by the kit (a
+    /// displacement of the one surface, not separate solids).
+    pub grain: Option<&'a Relief<'a>>,
+}
+
+/// A material's grain as the kit sets it in: its relief over the surface, and where the surface
+/// is set in to hold it.
+///
+/// The kit moves the surface in by the relief's greatest height and adds the
+/// relief back, so the grain never rises above the surface the band holds.
+/// It is capped at half the layer's thickness and at the printer's skin, and
+/// is never taken into the layer below (the base for the first land layer).
+/// Vertical displacement: the normal of gentle ground is near vertical.
+#[derive(Clone, Copy)]
+pub struct Relief<'a> {
+    /// The relief at every node, mm: up where it stands, down where it is
+    /// cut in. Zero where there is no grain.
+    pub relief: &'a crate::Field,
+    /// Where the surface is set in, 0 to 1: zero where the surface is held
+    /// exactly (a pin, the rim) or covered by water.
+    pub weight: &'a crate::Field,
+    /// The printer's skin, mm: the grain never reaches into the bottom skin
+    /// of the layer.
+    pub skin_mm: f64,
+    /// The grain never takes the surface under this (mm at every node, or
+    /// `-inf`): where water will lie over the land, a little above the water,
+    /// so dry ground stays dry.
+    pub floor: Option<&'a crate::Field>,
 }
 
 /// One layer laid: its slot, its region and its top (float32 once).
@@ -534,6 +568,36 @@ impl Terrain {
         (!self.layers.is_empty()).then(|| (self.shown.clone(), self.stone.clone()))
     }
 
+    /// How far a layer's grain sets its surface in at every node, and the
+    /// most the grain reaches under it (both mm, zero where it has none):
+    /// the surface moves in by the relief's greatest height (where the
+    /// weight is whole), capped.
+    fn set_in(&self, spec: &LayerSpec<'_>) -> (Vec<f64>, Vec<f64>) {
+        let n = self.land.z.len();
+        let (mut off, mut cap) = (vec![0.0; n], vec![0.0; n]);
+        let Some(g) = spec.grain else {
+            return (off, cap);
+        };
+        let shape = spec.shape.field();
+        let height = (0..n)
+            .filter(|&k| spec.mask.bits[k] && g.weight.z[k] > 0.5)
+            .fold(0.0_f64, |m, k| m.max(g.relief.z[k]));
+        for k in (0..n).filter(|&k| spec.mask.bits[k]) {
+            let s = shape.z[k] + spec.raise.map_or(0.0, |r| r.z[k]);
+            let below = if spec.fluid {
+                0.0
+            } else {
+                f64::from(self.land.z[k])
+            };
+            cap[k] = grain_cap(s - below, g.skin_mm);
+            if let Some(f) = g.floor {
+                cap[k] = cap[k].min((s - f.z[k]).max(0.0));
+            }
+            off[k] = height.min(cap[k]) * g.weight.z[k];
+        }
+        (off, cap)
+    }
+
     /// **lay**: add a layer on top of those laid.  A land layer's surface is
     /// the higher of the land below and its own, inside its region; a
     /// fluid's is its own where it exists.
@@ -541,10 +605,16 @@ impl Terrain {
     fn lay(&mut self, slot: Slot, spec: &LayerSpec<'_>) {
         let n = self.land.z.len();
         let shape = spec.shape.field();
-        let grain = spec.grain;
+        let (off, cap) = self.set_in(spec);
         #[allow(clippy::cast_possible_truncation)]
         let top: Vec<f32> = (0..n)
-            .map(|k| (shape.z[k] + grain.map_or(0.0, |g| g.z[k])) as f32)
+            .map(|k| {
+                let s = shape.z[k] + spec.raise.map_or(0.0, |r| r.z[k]);
+                spec.grain.filter(|_| spec.mask.bits[k]).map_or(s, |g| {
+                    // never above the surface, never more than the cap under it
+                    (s - off[k] + g.relief.z[k]).clamp(s - cap[k], s)
+                }) as f32
+            })
             .collect();
         if spec.fluid {
             for k in 0..n {
@@ -872,6 +942,15 @@ impl Scene {
         let slot = self.built.slots(1, spec.material)?.get(0);
         self.terrain.lay(slot, spec);
         Ok(())
+    }
+
+    /// How far a layer's grain would set its surface in at every node, mm
+    /// (see [`Relief`]): what lies on the grain (a stone bedded into the
+    /// dirt) sits that much lower.
+    #[must_use]
+    pub fn grain_offset(&self, spec: &LayerSpec<'_>) -> crate::Field {
+        let (off, _) = self.terrain.set_in(spec);
+        <crate::Field as crate::OnFrame>::new(&self.frame, 0.0).with_z(off)
     }
 
     /// The land alone (world mm): every land layer laid so far. Read it

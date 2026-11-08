@@ -477,7 +477,13 @@ pub(crate) fn solidify(
     // the union handed its faces to either material. (Standing walls
     // stand inside the tile and never reach its side.)
     let z_lo = if laid {
-        edge.unwrap_or(0.0)
+        // the earth's grain may dip a little under the edge level: the slabs
+        // reach down to its lowest, so none lies over a hollow
+        edge.map_or(0.0, |e| {
+            scene
+                .land()
+                .map_or(e, |l| l.z.iter().copied().fold(e, f64::min) - 0.05)
+        })
     } else {
         lo[2] - 10.0
     };

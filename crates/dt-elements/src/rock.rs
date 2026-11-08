@@ -1009,13 +1009,12 @@ const AREA_CLEAR_MM: f64 = 7.0;
 
 pub fn dirt_stones(
     scene: &mut Scene,
-    owner: &str,
     seed: Seed,
     z: &mut Field,
     rim: &Field,
     per_2x2: (i64, i64),
     area: &dt_kit::Mask,
-) -> Result<Vec<[f64; 3]>, LookError> {
+) -> Result<(Vec<[f64; 3]>, Vec<Bedded>), LookError> {
     const D_MM: (f64, f64) = (4.5, 7.5);
     const SINK: f64 = 0.4;
     const Z_SCALE: f64 = 0.65;
@@ -1071,6 +1070,7 @@ pub fn dirt_stones(
         .map_err(LookError::build)?;
     let g = Grain::default();
     let mut discs = Vec::new();
+    let mut bedded = Vec::new();
     for (k, p) in placed.iter().enumerate() {
         let (st, yaw) = &stones[p.index];
         let r = p.r;
@@ -1099,16 +1099,37 @@ pub fn dirt_stones(
             .map_err(LookError::build)?
             .turn(*yaw, 1.0)
             .translate([x, y, z0]);
+        bedded.push(Bedded {
+            solid: sol,
+            at: [x, y],
+            z: z0,
+        });
+        discs.push([x, y, r]);
+    }
+    Ok((discs, bedded))
+}
+
+/// A bedded stone not yet added: the solid stands at the height it was
+/// seated at, and sits lower by what the grain sets its ground in by.
+pub struct Bedded {
+    solid: dt_kit::Solid,
+    /// Where it stands, mm.
+    pub at: [f64; 2],
+    /// The height it was seated at, mm.
+    pub z: f64,
+}
+
+impl Bedded {
+    /// Add the stone to the scene, `lower` mm under its seat.
+    pub fn add(self, scene: &mut Scene, owner: &str, lower: f64) {
         scene.add(
             Tag {
                 kind: Kind::Rock,
                 owner: owner.to_owned(),
             },
-            sol,
+            self.solid.translate([0.0, 0.0, -lower]),
         );
-        discs.push([x, y, r]);
     }
-    Ok(discs)
 }
 
 #[cfg(test)]
