@@ -377,7 +377,8 @@
 <tr><td>The mesh carries, for each triangle, which stack entry made it (a table of owner paths and an index per triangle).</td><td>Solid tags and the per-triangle source ids the materials already use.</td></tr>
 <tr><td>The plan for the page: lines as polylines, regions as masks, fill points, footprints, each entry's reads and writes, and the spans of every node.</td><td><code>dt-eval::check</code> and <code>dt-doc</code>'s spans.</td></tr>
 <tr><td>An edit call: a list of edits in, the new text and its changed ranges out.</td><td><code>dt-doc</code>'s <code>edit.rs</code>; adding and removing a node, and <code>/-</code>, are new.</td></tr>
-<tr><td>Building from text the page sends, without writing the file, for drafts and sweeps.</td><td>The preview's build worker.</td></tr>
+<tr><td>Building from text the page sends, without writing the file, for drafts and sweeps. A draft is one request, answered with its mesh; a newer draft of the same tile takes the place of an older one.</td><td>The preview's build queue, which holds every build (drafts first, then the tiles asked for, then the tiles whose files changed).</td></tr>
+<tr><td>The page told of every change as it happens, and caught up after a drop. A tile is named by an id that does not change while its file keeps its path; each change has a revision, and a stream that reconnects says the last one it saw.</td><td>The preview's event stream.</td></tr>
 <tr><td>Writing the file, refused if it changed since the page read it.</td><td>The file watcher.</td></tr>
 <tr><td>Draft builds and per-entry rebuilds.</td><td>The stack's slot order, which already fixes every solid's id.</td></tr>
 <tr><td>The assistant: a streamed conversation with the provider, the tools, the key in settings.</td><td>The MCP server's tools.</td></tr>
