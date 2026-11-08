@@ -33,6 +33,9 @@ use crate::TriMesh;
 use crate::grid::{Grid, LiftError};
 use crate::lift::{Corners, Leaf, centre, plan_leaves};
 
+/// A side's faces are held this far inside the overhang angle, degrees.
+const OVERHANG_MARGIN_DEG: f64 = 1.5;
+
 /// A crossing this close to a node is the node, mm.
 const SNAP_MM: f64 = 1e-4;
 
@@ -73,6 +76,44 @@ pub struct Lattice {
     pub max_cells: usize,
     /// How positions are rounded.
     pub round: Round,
+}
+
+fn smooth01(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// The relief of one layer's side panel.
+#[derive(Clone, Copy)]
+pub struct LayerRelief<'a> {
+    /// The most the face is set back behind its plane, mm.
+    pub depth: f64,
+    /// The relief's shape, 0 (on the plane) to 1 (set back by `depth`), by
+    /// side (0 south, 1 east, 2 north, 3 west, each walked counter-clockwise),
+    /// distance along it from its start, mm, and height, mm.
+    pub shape: &'a (dyn Fn(usize, f64, f64) -> f64 + Sync),
+}
+
+/// How the tile's four sides are made: each a height field over its
+/// vertical plane (a displacement behind the plane and never past it), on
+/// columns shared with the top's rim.
+#[derive(Clone, Copy)]
+pub struct Sides<'a> {
+    /// The relief of each layer's panel (`None`: a flat face); by layer.
+    pub relief: &'a [Option<LayerRelief<'a>>],
+    /// Nodes per column along a side: the rim's leaves are no wider.
+    pub column_nodes: usize,
+    /// The rows a panel's relief is sampled at are about this far apart, mm.
+    pub row_mm: f64,
+    /// A layer's relief fades to its boundaries over this height, mm.
+    pub fade_mm: f64,
+    /// No face leans out over the one below it by more than this, degrees
+    /// from vertical.
+    pub overhang_deg: f64,
+    /// The relief rises from zero at each corner over this distance, mm.
+    pub corner_ramp_mm: f64,
+    /// The four vertical corners are rounded in plan by this, mm.
+    pub corner_round_mm: f64,
 }
 
 /// The shown layer at every node.
@@ -123,6 +164,8 @@ struct Mesher<'l, 'a> {
     cuts: HashMap<(usize, usize), u32>,
     /// The triangles of each layer.
     tris: Vec<Vec<[u32; 3]>>,
+    /// The corners' plan round, mm (0: square corners).
+    corner_round: f64,
 }
 
 impl<'l, 'a> Mesher<'l, 'a> {
@@ -162,6 +205,7 @@ impl<'l, 'a> Mesher<'l, 'a> {
             positions: Vec::new(),
             cuts: HashMap::new(),
             tris: vec![Vec::new(); nl],
+            corner_round: 0.0,
         })
     }
 
@@ -176,17 +220,50 @@ impl<'l, 'a> Mesher<'l, 'a> {
 
     #[allow(clippy::cast_precision_loss)]
     fn node_xy(&self, k: usize) -> [f64; 2] {
-        [
-            (k % self.nx) as f64 * self.step,
-            (k / self.nx) as f64 * self.step,
-        ]
+        let (i, j) = (k % self.nx, k / self.nx);
+        let p = [i as f64 * self.step, j as f64 * self.step];
+        let r = self.corner_round;
+        if r <= 0.0 || (i != 0 && i != self.nx - 1 && j != 0 && j != self.ny - 1) {
+            return p;
+        }
+        // a rim node near a corner moves in along the corner's arc: the
+        // corner itself to the arc's middle, its neighbours by the arc's
+        // set-back at their distance (the rounded corner of a plan)
+        let (ti, tj) = (
+            i.min(self.nx - 1 - i) as f64 * self.step,
+            j.min(self.ny - 1 - j) as f64 * self.step,
+        );
+        let sx = if i == 0 { 1.0 } else { -1.0 };
+        let sy = if j == 0 { 1.0 } else { -1.0 };
+        let setback = |t: f64| {
+            if t >= r {
+                0.0
+            } else {
+                r - libm::sqrt((r * r - (r - t) * (r - t)).max(0.0))
+            }
+        };
+        let on_x = i == 0 || i == self.nx - 1;
+        let on_y = j == 0 || j == self.ny - 1;
+        if on_x && on_y {
+            let d = r * (1.0 - core::f64::consts::FRAC_1_SQRT_2);
+            [p[0] + sx * d, p[1] + sy * d]
+        } else if on_y {
+            [p[0], p[1] + sy * setback(ti)]
+        } else {
+            [p[0] + sx * setback(tj), p[1]]
+        }
     }
 
     /// Step 1: the leaves of the adaptive lift of the shown top, a leaf
     /// forced to a single cell where its nodes show several layers
     /// (summed-area tables of the nodes showing each layer above the first).
     #[allow(clippy::cast_possible_truncation)]
-    fn plan(&self, tol: f64, max_cells: usize) -> Result<(Grid, Vec<Leaf>), LiftError> {
+    fn plan(
+        &self,
+        tol: f64,
+        max_cells: usize,
+        sides: Option<&Sides<'_>>,
+    ) -> Result<(Grid, Vec<Leaf>), LiftError> {
         let (nx, ny) = (self.nx, self.ny);
         let g = Grid {
             nx,
@@ -210,7 +287,23 @@ impl<'l, 'a> Mesher<'l, 'a> {
                 sat
             })
             .collect();
+        // the rim's leaves are no wider than a column, and the corner's
+        // are single cells (its round is made of rim nodes)
+        let column = sides.map_or(usize::MAX, |s| s.column_nodes.max(1));
+        let round_nodes = sides.map_or(0, |s| {
+            usize::try_from(libm::ceil(s.corner_round_mm / self.step) as i64).unwrap_or(0)
+        });
         let force = |l: Leaf| {
+            let (south, north) = (l.j0 == 0, l.j1 == ny - 1);
+            let (west, east) = (l.i0 == 0, l.i1 == nx - 1);
+            if sides.is_some()
+                && (((south || north) && l.i1 - l.i0 > column)
+                    || ((west || east) && l.j1 - l.j0 > column)
+                    || ((l.i0 < round_nodes || l.i1 + round_nodes >= nx)
+                        && (l.j0 < round_nodes || l.j1 + round_nodes >= ny)))
+            {
+                return true;
+            }
             let area = ((l.i1 - l.i0 + 1) * (l.j1 - l.j0 + 1)) as u32;
             sats.iter().any(|sat| {
                 let c = sat[(l.j1 + 1) * sw + l.i1 + 1] + sat[l.j0 * sw + l.i0]
@@ -439,6 +532,218 @@ impl<'l, 'a> Mesher<'l, 'a> {
         }
     }
 
+    /// Steps 3 and 4 with side panels: the rim columns, each a vertex per
+    /// layer boundary and rows between them where a layer has relief, the
+    /// floor, and between two columns a panel per layer, zipped so the
+    /// columns' different rows meet without a T-junction.
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::float_cmp,
+        clippy::too_many_lines,
+        clippy::many_single_char_names
+    )]
+    fn side_panels(&mut self, verts: &Corners, sides: &Sides<'_>) {
+        let nl = self.layers.len();
+        let whole = Leaf {
+            i0: 0,
+            j0: 0,
+            i1: self.nx - 1,
+            j1: self.ny - 1,
+        };
+        let ring: Vec<usize> = verts
+            .ring(whole)
+            .iter()
+            .map(|&(i, j)| j * self.nx + i)
+            .collect();
+        let (w, h) = (
+            (self.nx - 1) as f64 * self.step,
+            (self.ny - 1) as f64 * self.step,
+        );
+        let slope = libm::tan((sides.overhang_deg - OVERHANG_MARGIN_DEG).to_radians());
+        let normal = [[0.0, 1.0], [-1.0, 0.0], [0.0, -1.0], [1.0, 0.0]];
+        let (nx, ny) = (self.nx, self.ny);
+        let side_of = move |a: usize, b: usize| {
+            let (ia, ja, ib, jb) = (a % nx, a / nx, b % nx, b / nx);
+            if ja == 0 && jb == 0 {
+                0
+            } else if ia == nx - 1 && ib == nx - 1 {
+                1
+            } else if ja == ny - 1 && jb == ny - 1 {
+                2
+            } else {
+                3
+            }
+        };
+        // the position along a side, from its start, and its length
+        let along = |side: usize, p: [f64; 2]| -> (f64, f64) {
+            match side {
+                0 => (p[0], w),
+                1 => (p[1], h),
+                2 => (w - p[0], w),
+                _ => (h - p[1], h),
+            }
+        };
+        struct Col {
+            /// Vertices of each layer's strip, from its lower boundary up.
+            strips: Vec<Vec<u32>>,
+            floor: u32,
+        }
+        let mut cols: Vec<Col> = Vec::new();
+        let m = ring.len();
+        for k in 0..m {
+            let (a, b) = (ring[k], ring[(k + 1) % m]);
+            let side = side_of(a, b);
+            let prev = side_of(ring[(k + m - 1) % m], a);
+            let t_vertex = self.vid(a);
+            let p = self.node_xy(a);
+            let vis = f64::from(self.top[a]);
+            let xy = [self.rd(p[0]), self.rd(p[1])];
+            // heights of the layer boundaries at this column
+            let mut hs = vec![0.0_f64];
+            for (l, layer) in self.layers.iter().enumerate() {
+                let hl = if l >= self.class[a] as usize {
+                    vis
+                } else {
+                    hs[l].max(f64::from(layer.top[a]).min(vis))
+                };
+                hs.push(hl);
+            }
+            let floor = u(self.positions.len());
+            self.positions.push([xy[0], xy[1], 0.0]);
+            // a corner belongs to both its sides: no relief there
+            let corner = (a % self.nx == 0 || a % self.nx == self.nx - 1)
+                && (a / self.nx == 0 || a / self.nx == self.ny - 1);
+            let own = if corner { prev } else { side };
+            let (t, len) = along(own, [xy[0], xy[1]]);
+            let cf = if corner {
+                0.0
+            } else {
+                smooth01(t.min(len - t) / sides.corner_ramp_mm.max(1e-9))
+            };
+            let mut strips: Vec<Vec<u32>> = Vec::with_capacity(nl);
+            // vertices top-down are needed for the slope pass: build the
+            // heights and relief first, bottom-up
+            struct Row {
+                z: f64,
+                u: f64,
+            }
+            let mut flat: Vec<(usize, Vec<Row>)> = Vec::new();
+            for l in 0..nl {
+                let (lo, hi) = (hs[l], hs[l + 1]);
+                let rel = sides.relief.get(l).copied().flatten();
+                let n = match rel {
+                    Some(_) if hi - lo > 1e-6 => {
+                        ((hi - lo) / sides.row_mm).ceil().max(1.0) as usize
+                    }
+                    _ => 1,
+                };
+                let f = sides.fade_mm.min(0.5 * (hi - lo)).max(1e-9);
+                let rows: Vec<Row> = (0..=n)
+                    .map(|q| {
+                        let z = lo + (hi - lo) * q as f64 / n as f64;
+                        let u = match rel {
+                            Some(r) if q > 0 && q < n && cf > 0.0 => {
+                                let s = (r.shape)(own, t, z).clamp(0.0, 1.0);
+                                let fz = smooth01((z - lo) / f) * smooth01((hi - z) / f);
+                                r.depth * s * cf * fz
+                            }
+                            _ => 0.0,
+                        };
+                        Row { z, u }
+                    })
+                    .collect();
+                flat.push((l, rows));
+            }
+            // one pass down the column: no face leans out over the one
+            // below by more than the overhang
+            let mut next: Option<(f64, f64)> = None; // (z, u) of the vertex above
+            for (_, rows) in flat.iter_mut().rev() {
+                for row in rows.iter_mut().rev() {
+                    if let Some((z, uu)) = next
+                        && row.z < z
+                    {
+                        row.u = row.u.min(uu + slope * (z - row.z));
+                    }
+                    next = Some((row.z, row.u));
+                }
+            }
+            let n_out = normal[own];
+            for (l, rows) in &flat {
+                let mut ids = Vec::with_capacity(rows.len());
+                for (q, row) in rows.iter().enumerate() {
+                    let id = if *l == 0 && q == 0 {
+                        floor
+                    } else if q == 0 {
+                        // the layer's lower boundary is the one below's upper
+                        strips[l - 1][strips[l - 1].len() - 1]
+                    } else if row.z >= vis && q == rows.len() - 1 {
+                        t_vertex
+                    } else if q == rows.len() - 1 && row.z == rows[q - 1].z && *l > 0 {
+                        ids[q - 1]
+                    } else {
+                        let v = u(self.positions.len());
+                        self.positions.push([
+                            self.rd(xy[0] + row.u * n_out[0]),
+                            self.rd(xy[1] + row.u * n_out[1]),
+                            self.rd(row.z),
+                        ]);
+                        v
+                    };
+                    ids.push(id);
+                }
+                strips.push(ids);
+            }
+            cols.push(Col { strips, floor });
+            if self.class[a] != self.class[b] {
+                let c = self.cut(a, b);
+                if c != self.vid(a) && c != self.vid(b) {
+                    let q = self.positions[c as usize];
+                    let floor = u(self.positions.len());
+                    self.positions.push([q[0], q[1], 0.0]);
+                    let mut strips = vec![vec![floor, c]];
+                    strips.extend((1..nl).map(|_| vec![c]));
+                    cols.push(Col { strips, floor });
+                }
+            }
+        }
+        let mid = u(self.positions.len());
+        let centre = [
+            self.rd(0.5 * (self.nx - 1) as f64 * self.step),
+            self.rd(0.5 * (self.ny - 1) as f64 * self.step),
+            0.0,
+        ];
+        self.positions.push(centre);
+        let mc = cols.len();
+        for k in 0..mc {
+            let k1 = (k + 1) % mc;
+            for l in 0..nl {
+                let (a, b) = (&cols[k].strips[l], &cols[k1].strips[l]);
+                let layer = u8::try_from(l).unwrap_or(u8::MAX);
+                let (n0, n1) = (a.len() - 1, b.len() - 1);
+                let (mut i, mut j) = (0usize, 0usize);
+                while i < n0 || j < n1 {
+                    let advance_a = if i == n0 {
+                        false
+                    } else if j == n1 {
+                        true
+                    } else {
+                        (i + 1) * n1 <= (j + 1) * n0
+                    };
+                    if advance_a {
+                        self.push([a[i + 1], a[i], b[j]], layer);
+                        i += 1;
+                    } else {
+                        self.push([a[i], b[j], b[j + 1]], layer);
+                        j += 1;
+                    }
+                }
+            }
+            self.tris[0].push([mid, cols[k1].floor, cols[k].floor]);
+        }
+    }
+
     /// Step 5: one run per layer that made triangles, in layer order.
     #[allow(clippy::cast_precision_loss)]
     fn finish(self) -> TriMesh {
@@ -470,12 +775,33 @@ impl<'l, 'a> Mesher<'l, 'a> {
 /// wrong length, or a shown node (or a bottom layer's node) is not above 0,
 /// or there are more than 255 layers.
 pub fn lift_stack(lat: &Lattice, layers: &[Layer]) -> Result<TriMesh, LiftError> {
+    lift_stack_sides(lat, layers, None)
+}
+
+/// [`lift_stack`] with the tile's sides made as panels ([`Sides`]): a height
+/// field over each vertical plane, on columns shared with the top's rim.
+/// `None` is flat faces straight down to z = 0.
+///
+/// # Errors
+/// As [`lift_stack`].
+pub fn lift_stack_sides(
+    lat: &Lattice,
+    layers: &[Layer],
+    sides: Option<&Sides<'_>>,
+) -> Result<TriMesh, LiftError> {
     let mut m = Mesher::new(lat, layers)?;
-    let (g, leaves) = m.plan(lat.tol, lat.max_cells)?;
+    if let Some(s) = sides {
+        m.corner_round = s.corner_round_mm;
+    }
+    let (g, leaves) = m.plan(lat.tol, lat.max_cells, sides)?;
     let verts = Corners::new(lat.nx, lat.ny, &leaves);
     m.top_surface(&g, &leaves, &verts);
-    let rim = m.rim_columns(&verts);
-    m.floor_and_sides(&rim);
+    if let Some(s) = sides {
+        m.side_panels(&verts, s);
+    } else {
+        let rim = m.rim_columns(&verts);
+        m.floor_and_sides(&rim);
+    }
     Ok(m.finish())
 }
 
@@ -630,6 +956,113 @@ mod tests {
         assert!(o.is_watertight());
         let ids = o.triangle_original_ids().unwrap();
         assert!(ids.contains(&7) && ids.contains(&9));
+    }
+
+    fn lumps(side: usize, t: f64, z: f64) -> f64 {
+        // sharp, deep, uneven lumps: the worst case for the one pass
+        let a = (t * 2.7 + side as f64).sin() * (z * 3.9).cos();
+        if a > 0.0 { 1.0 } else { 0.0 }
+    }
+
+    fn sides<'a>(relief: &'a [Option<LayerRelief<'a>>]) -> Sides<'a> {
+        Sides {
+            relief,
+            column_nodes: 4,
+            row_mm: 0.3,
+            fade_mm: 0.4,
+            overhang_deg: 55.0,
+            corner_ramp_mm: 1.5,
+            corner_round_mm: 0.5,
+        }
+    }
+
+    fn with_sides(round: Round) -> (TriMesh, usize, usize) {
+        let (nx, ny, e, w) = two_layers();
+        let relief = [
+            Some(LayerRelief {
+                depth: 0.6,
+                shape: &lumps,
+            }),
+            None,
+        ];
+        let m = lift_stack_sides(
+            &lat(nx, ny, round),
+            &[Layer { top: &e, id: 7 }, Layer { top: &w, id: 9 }],
+            Some(&sides(&relief)),
+        )
+        .unwrap();
+        (m, nx, ny)
+    }
+
+    /// Side panels close the mesh, keep the layers' runs and survive the
+    /// float32 reload and a union.
+    #[test]
+    fn side_panels_are_watertight_painted_and_survive_the_float32_reload() {
+        let (m, ..) = with_sides(Round::F32);
+        assert!(m.is_watertight());
+        assert_eq!(m.run_original_id, vec![7, 9]);
+        assert_eq!(reload(&m).positions, m.positions);
+        let out = Solid::from_tri_mesh(&m).unwrap().to_tri_mesh();
+        assert!(out.is_watertight());
+        assert_eq!(out.run_original_id.len(), 2);
+    }
+
+    /// Relief only sets a face back: nothing is past a plane, the floor and
+    /// the corner columns are where the base needs them, and no face leans
+    /// out over the one below past the overhang.
+    #[test]
+    fn side_relief_stays_behind_the_plane_and_under_the_overhang() {
+        let (m, nx, ny) = with_sides(Round::F32);
+        let (w, h) = ((nx - 1) as f64 * 0.25, (ny - 1) as f64 * 0.25);
+        for p in &m.positions {
+            assert!(
+                p[0] >= 0.0 && p[0] <= w && p[1] >= 0.0 && p[1] <= h,
+                "{p:?}"
+            );
+            if p[2] == 0.0 && (p[0], p[1]) != (0.5 * w, 0.5 * h) {
+                // the floor's ring is the plane (the corners rounded in)
+                assert!(
+                    p[0] < 0.51
+                        || p[0] > w - 0.51
+                        || p[1] == 0.0
+                        || p[1] == h
+                        || p[0] == 0.0
+                        || p[0] == w,
+                    "{p:?}"
+                );
+            }
+        }
+        // some of each face is set back, so the relief is really there
+        let set_back = m
+            .positions
+            .iter()
+            .filter(|p| p[2] > 0.3 && p[1] > 0.05 && p[1] < 0.7 && p[0] > 2.0 && p[0] < w - 2.0)
+            .count();
+        assert!(set_back > 20);
+        // no triangle whose three vertices are above the floor faces down
+        // more than the overhang allows
+        let limit = -libm::sin(55.0_f64.to_radians());
+        for t in &m.triangles {
+            let [a, b, c] = t.map(|i| m.positions[i as usize]);
+            if a[2].min(b[2]).min(c[2]) <= 0.0 {
+                continue;
+            }
+            let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+            let n = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            if len > 1e-9 {
+                assert!(
+                    n[2] / len >= limit - 1e-6,
+                    "{a:?} {b:?} {c:?}: {}",
+                    n[2] / len
+                );
+            }
+        }
     }
 
     /// A shore that lands exactly on nodes adds no second rim vertex and no

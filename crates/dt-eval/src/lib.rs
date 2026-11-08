@@ -895,7 +895,7 @@ impl<'a> Plan<'a> {
             progress.begin(key, label);
             match *step {
                 Step::Lift => scene
-                    .lift("tile/terrain")
+                    .lift("tile/terrain", &self.opts.printer)
                     .map_err(|e| build_error(e.to_string()))?,
                 Step::Entry(i) => c.elements[i].build(&mut scene, &self.ctx(i)).map_err(|e| {
                     let msg = format!("{}: {}", self.jobs[i].path, e.message);

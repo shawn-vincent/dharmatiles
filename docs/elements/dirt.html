@@ -170,6 +170,7 @@
 <h3 id="edges">Edges and joining tiles</h3>
 <ul>
   <li>The texture ramps in over the outer 1 mm, so a pinned rim is exactly at its pin all round. Any two dirt tiles butt with no step.</li>
+  <li>The edge-round belongs to the dirt: 0.2 mm at the 35 mm square, a drop of the top at the rim cut from the sharp corner at the edge height (so the ground on the edge is at the edge height less 0.2 mm), mitred at the tile's corners and tapering to none on dirt thinner than the printer's skin. It only lowers the top. The tile's four vertical corners are rounded 0.5 mm in plan.</li>
   <li>The surface is set in for the grain: the kit moves the hills down by the grain's greatest height and adds the grain back, so a clod, a pebble or a bank never stands above the surface the band holds. The set-in is capped at half the dirt's thickness and never reaches into the printer's skin at the bottom (or the base), and it is eased in over the outer 4 mm of the rim, so the land sits lower than its band by up to the grain's height. It stops short of any water laid over the dirt, so dry ground stays dry.</li>
   <li>Grass, water and cliff tiles meet ground at the same edge level; this is the edge contract on the <a href="../standards/tile-system.html#edge-contract">tile system</a> page.</li>
 </ul>
@@ -209,7 +210,7 @@
   <li><strong>Clods</strong>: patchy, by a 6 mm patch field that never drops below 30%; each clod is 1–3 lumpy lobes with a flattish tilted top, partly sunk and soft-maxed onto the soil.</li>
   <li><strong>Grit</strong>: fine noise and sparse sand grains.</li>
   <li><strong>Pebbles</strong>: dart-thrown into loose clusters biased into low ground, largest first; each a flattened cap cut by tilted planes, sunk 25–45%.</li>
-  <li><strong>Edge</strong>: the texture ramps in over the outer 1 mm, so the rim is exactly the edge level and tiles butt flush.</li>
+  <li><strong>Edge</strong>: the texture ramps in over the outer 1 mm, so the rim is exactly the edge level and tiles butt flush; the kit then cuts the edge-round from the sharp corner.</li>
   <li><strong>Printable texture</strong>: every patch keeps at least 0.2 mm of relief in any 1.5 mm window, so a drybrush finds it.</li>
 </ol>
 <p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-elements/src/dirt.rs"><code>crates/dt-elements/src/dirt.rs</code></a>.</p>

@@ -65,6 +65,7 @@
   <li><strong>Editing the water refreshes the dirt under it:</strong> the cache key of a dirt step includes the water laid over it.</li>
   <li><strong>The library's heights are read from disk:</strong> <code>library/parts/heights.dtile</code> is no longer compiled into the program.</li>
   <li><strong>Grain is set into the surface:</strong> a dirt's clods, grit and pebbles no longer rise above the surface its band holds. The kit moves the surface down by the grain's greatest height and adds the grain back (capped at half the thickness and by the printer's skin, kept off water and off the rim), so the land sits lower than before by about the grain's height, bedded stones with it. A floor over dirt reaches down to the earth's lowest point.</li>
+  <li><strong>Dirt has an edge-round:</strong> a 0.2 mm drop of the top along the rim, cut from the sharp corner at the edge height (so the ground on the edge is at 3.2 mm, and two dirt tiles meet in a faint groove), mitred at the corners and tapering to none on dirt thinner than the printer's skin. The tile's four vertical corners are rounded 0.5 mm in plan on the terrain. The tile's sides are built as panels on columns shared with the top's rim, still flat. Water and floors have no round.</li>
 </ul>
 
 <h2 id="v0.9.0">0.9.0 <small>7 November 2026</small></h2>

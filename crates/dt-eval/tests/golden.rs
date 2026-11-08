@@ -8,7 +8,11 @@
 //! snapshot is shared by macOS and Linux; Windows checks the metrics
 //! snapshot and the render gate only.
 
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss
+)]
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -162,11 +166,15 @@ fn the_flat_tile_meets_the_exit_criteria() {
     assert!(close(lo[2], -(5.7 + 5.2) - 0.0), "peg tip {}", lo[2]);
 }
 
-/// The dirt's rim pin is exact: every vertex on the tile's boundary above
-/// the base is at the edge height, 3.4 mm, to float32 accuracy, whatever
-/// grain (clods, grit, pebbles and their mounds, stones) the dirt carries.
+/// The edge contract: dirt meets the tile's plane at a sharp corner at the
+/// edge height, 3.4 mm, and the edge-round (0.2 mm) is cut from that corner.
+/// So the top of every rim column is the edge height less the round, to
+/// float32 accuracy, whatever grain (clods, grit, pebbles and their mounds,
+/// stones) the dirt carries.
 #[test]
-fn a_pinned_rim_is_exact() {
+fn the_rim_is_cut_from_the_sharp_corner_at_the_edge_height() {
+    const EDGE: f64 = 3.4;
+    const ROUND: f64 = 0.2;
     for path in [
         "lib:tiles/test/2x2-dirt.dtile",
         "lib:tiles/test/2x2-dirt-stones.dtile",
@@ -174,24 +182,29 @@ fn a_pinned_rim_is_exact() {
     ] {
         let b = built(path);
         let [w, h] = b.footprint;
-        let mut seen = 0;
+        let key = |p: &[f64; 3]| ((p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64);
+        let mut tops: HashMap<(i64, i64), f64> = HashMap::new();
         for p in &b.export.mesh.positions {
             let on_rim = p[0].abs() < 1e-6
                 || (p[0] - w).abs() < 1e-6
                 || p[1].abs() < 1e-6
                 || (p[1] - h).abs() < 1e-6;
             if on_rim && p[2] > 0.01 {
-                seen += 1;
-                assert!(
-                    (p[2] - 3.4).abs() < 1e-5,
-                    "{path}: rim vertex ({}, {}) is {} mm, not 3.4",
-                    p[0],
-                    p[1],
-                    p[2]
-                );
+                let e = tops.entry(key(p)).or_insert(f64::MIN);
+                *e = e.max(p[2]);
             }
         }
-        assert!(seen > 100, "{path}: only {seen} rim vertices were checked");
+        assert!(tops.len() > 100, "{path}: only {} rim columns", tops.len());
+        for ((x, y), z) in &tops {
+            assert!(
+                (z - (EDGE - ROUND)).abs() < 1e-5,
+                "{path}: the rim column at ({}, {}) is {} mm, not {}",
+                *x as f64 / 1e4,
+                *y as f64 / 1e4,
+                z,
+                EDGE - ROUND
+            );
+        }
     }
 }
 
@@ -212,18 +225,29 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
         let tex = note("texture_ok").unwrap();
         assert!(tex >= 0.97, "{path}: printable texture {tex}");
         assert!(note("clods").unwrap() > 0.0 && note("pebbles_small").unwrap() > 0.0);
-        // the edge contract: every top vertex on the tile edge at the
-        // edge level, and nothing of the ground below it
+        // the edge contract: the top of every column on the tile edge is
+        // the edge level less the dirt's round (0.2 mm), and no vertex of
+        // the ground on the edge is above the edge level
         let edge = b.edge_mm.unwrap();
         let [w, h] = b.footprint;
+        let mut tops: HashMap<(i64, i64), f64> = HashMap::new();
         for p in &b.export.mesh.positions {
             let on_edge = p[0].abs() < 1e-6
                 || p[1].abs() < 1e-6
                 || (p[0] - w).abs() < 1e-4
                 || (p[1] - h).abs() < 1e-4;
             if on_edge && p[2] > 0.0 {
-                assert!((p[2] - edge).abs() < 1e-5, "{path}: edge vertex {p:?}");
+                assert!(p[2] < edge + 1e-5, "{path}: edge vertex {p:?}");
+                let k = ((p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64);
+                let e = tops.entry(k).or_insert(f64::MIN);
+                *e = e.max(p[2]);
             }
+        }
+        for (k, z) in &tops {
+            assert!(
+                (z - (edge - 0.2)).abs() < 1e-5,
+                "{path}: edge column {k:?} tops at {z}"
+            );
         }
     }
 }

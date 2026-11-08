@@ -4,9 +4,9 @@ expression: hashes(b)
 ---
 04252fa73e78247e  plan
 6f26fb266088b253  rock:tile/dirt/0
-8a0538e53b9bb20a  surface
-5f19e4abc69c0b43  terrain:tile/terrain
+7a1a2a744fdf78a0  surface
+74ae232f36566b66  terrain:tile/terrain
 f7920a9db3a46b44  wall:tile/wall/0
 9ad7b1454c0b8fad  connector:tile/connector
-9f9c6bbc9c350bc0  union
-57ce48154dfce240  export
+26978a120b4800c5  union
+0d94c484a9cbc499  export

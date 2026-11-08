@@ -433,6 +433,9 @@ impl Element for Water {
                 shape: &top,
                 raise: None,
                 grain: None,
+                skin_mm: 0.0,
+                round_mm: 0.0,
+                side: None,
             })
             .map_err(LookError::build)?;
         for (k, v) in [

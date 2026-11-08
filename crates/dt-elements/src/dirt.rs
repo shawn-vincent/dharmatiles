@@ -67,6 +67,9 @@ const MID_WEIGHT: f64 = 0.15;
 const STONES_2X2: (i64, i64) = (4, 7);
 /// The texture ramps in over this rim width, true mm.
 const RIM_TEX_MM: f64 = 1.0;
+/// Dirt's edge-round, mm at the 35 mm square: a drop of the top at the rim,
+/// cut from the sharp corner at the edge height.
+const EDGE_ROUND_MM: f64 = 0.2;
 /// The surface is set in for the grain gradually from the rim, over this
 /// width (true mm), so the dip from the held rim is gentle (about 30° for
 /// the grain's height), not a trench.
@@ -428,7 +431,6 @@ pub fn surface(
         let grain = dt_kit::Relief {
             relief: &relief,
             weight: &weight,
-            skin_mm,
             floor: floor.as_ref(),
         };
         let off = scene.grain_offset(&dt_kit::LayerSpec {
@@ -439,6 +441,9 @@ pub fn surface(
             shape: &shape,
             raise: Some(&raise),
             grain: Some(&grain),
+            skin_mm,
+            round_mm: 0.0,
+            side: None,
         });
         for b in bedded {
             let lower = off.sample(b.at[0], b.at[1]);
@@ -905,7 +910,6 @@ impl Element for Dirt {
         let grain = dt_kit::Relief {
             relief: &relief,
             weight: &weight,
-            skin_mm: 3.0 * ctx.printer.layer_mm,
             floor: floor.as_ref(),
         };
         scene
@@ -917,6 +921,9 @@ impl Element for Dirt {
                 shape: &shape,
                 raise: Some(&raise),
                 grain: Some(&grain),
+                skin_mm: 3.0 * ctx.printer.layer_mm,
+                round_mm: EDGE_ROUND_MM * scene.frame().scale(),
+                side: None,
             })
             .map_err(LookError::build)?;
         scene.mark_stone(ctx.area, &stone);

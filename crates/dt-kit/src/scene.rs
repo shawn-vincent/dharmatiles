@@ -397,6 +397,16 @@ pub struct Stage {
 /// The lift's error bound, mm: no surface node is further than this from
 /// the triangulated top (a tenth of a 0.2 mm layer).
 pub const LIFT_TOL_MM: f64 = 0.02;
+/// The wavelength of the relief on the tile's sides, true mm: the columns
+/// of a side panel (and of the top's rim) are this far apart.
+pub const SIDE_WAVE_MM: f64 = 1.0;
+/// The size of a lump of side relief, mm.
+const SIDE_LUMP_MM: f64 = 2.4;
+/// The relief of a side rises from zero at each corner over this, mm, so the
+/// lateral slope stays under 1 for the deepest relief.
+const SIDE_CORNER_RAMP_MM: f64 = 1.5;
+/// The tile's four vertical corners are rounded in plan by this, mm.
+pub const CORNER_ROUND_MM: f64 = 0.5;
 /// The widest leaf of the adaptive lift, in cells.
 const LIFT_MAX_CELLS: usize = 32;
 /// Slots per build.
@@ -434,6 +444,24 @@ pub struct LayerSpec<'a> {
     /// The material's grain, set into the surface by the kit (a
     /// displacement of the one surface, not separate solids).
     pub grain: Option<&'a Relief<'a>>,
+    /// The printer's skin, mm: the thinnest layer that prints as its colour.
+    pub skin_mm: f64,
+    /// The material's edge-round, mm: a drop of the top near the rim, cut
+    /// from the sharp corner at the edge height, tapered to none on a layer
+    /// thinner than the skin, mitred at corners. Zero for none.
+    pub round_mm: f64,
+    /// The relief of the tile's sides in this material, or `None` for a
+    /// smooth face.
+    pub side: Option<SideSpec>,
+}
+
+/// The relief a material gives the tile's sides, below the edge-round.
+#[derive(Clone, Copy, Debug)]
+pub struct SideSpec {
+    /// How far a face is set back behind its plane at most, mm.
+    pub depth_mm: f64,
+    /// The relief's own seed.
+    pub seed: Seed,
 }
 
 /// A material's grain as the kit sets it in: its relief over the surface, and where the surface
@@ -452,9 +480,6 @@ pub struct Relief<'a> {
     /// Where the surface is set in, 0 to 1: zero where the surface is held
     /// exactly (a pin, the rim) or covered by water.
     pub weight: &'a crate::Field,
-    /// The printer's skin, mm: the grain never reaches into the bottom skin
-    /// of the layer.
-    pub skin_mm: f64,
     /// The grain never takes the surface under this (mm at every node, or
     /// `-inf`): where water will lie over the land, a little above the water,
     /// so dry ground stays dry.
@@ -466,6 +491,7 @@ pub struct Relief<'a> {
 struct Laid {
     slot: Slot,
     fluid: bool,
+    side: Option<SideSpec>,
     mask: Mask,
     top: std::sync::Arc<Vec<f32>>,
 }
@@ -589,7 +615,7 @@ impl Terrain {
             } else {
                 f64::from(self.land.z[k])
             };
-            cap[k] = grain_cap(s - below, g.skin_mm);
+            cap[k] = grain_cap(s - below, spec.skin_mm);
             if let Some(f) = g.floor {
                 cap[k] = cap[k].min((s - f.z[k]).max(0.0));
             }
@@ -607,7 +633,7 @@ impl Terrain {
         let shape = spec.shape.field();
         let (off, cap) = self.set_in(spec);
         #[allow(clippy::cast_possible_truncation)]
-        let top: Vec<f32> = (0..n)
+        let mut top: Vec<f32> = (0..n)
             .map(|k| {
                 let s = shape.z[k] + spec.raise.map_or(0.0, |r| r.z[k]);
                 spec.grain.filter(|_| spec.mask.bits[k]).map_or(s, |g| {
@@ -616,6 +642,20 @@ impl Terrain {
                 }) as f32
             })
             .collect();
+        if spec.round_mm > 0.0 && !spec.fluid {
+            // the edge-round: a drop near the rim, cut from the sharp corner
+            // (the distance to the nearest edge, so it is mitred at a corner)
+            let rim = crate::rim(&self.frame);
+            let r = spec.round_mm;
+            #[allow(clippy::cast_possible_truncation)]
+            for k in (0..n).filter(|&k| spec.mask.bits[k] && rim.z[k] < r) {
+                let d = rim.z[k];
+                let drop = r - libm::sqrt((r * r - (r - d) * (r - d)).max(0.0));
+                let thick = f64::from(top[k]) - f64::from(self.land.z[k]);
+                let taper = crate::smooth01((thick - spec.skin_mm) / spec.skin_mm.max(1e-9));
+                top[k] -= (drop * taper) as f32;
+            }
+        }
         if spec.fluid {
             for k in 0..n {
                 let on = spec.mask.bits[k] && top[k] >= self.land.z[k];
@@ -636,6 +676,7 @@ impl Terrain {
         self.layers.push(Laid {
             slot,
             fluid: spec.fluid,
+            side: spec.side,
             mask: spec.mask.clone(),
             top: std::sync::Arc::new(top),
         });
@@ -1088,7 +1129,7 @@ impl Scene {
     /// # Errors
     /// [`KitError`] if the surface is not above 0 or the kernel refuses it.
     #[allow(clippy::needless_range_loop)]
-    pub fn lift(&mut self, owner: &str) -> Result<(), KitError> {
+    pub fn lift(&mut self, owner: &str, printer: &crate::Printer) -> Result<(), KitError> {
         if self.terrain.layers.is_empty() {
             return Ok(());
         }
@@ -1126,9 +1167,44 @@ impl Scene {
             .iter()
             .map(|(top, id)| dt_geom::Layer { top, id: *id })
             .collect();
+        // each layer's side relief, in the order of the layers (land, then
+        // fluids)
+        type Shape = Box<dyn Fn(usize, f64, f64) -> f64 + Sync>;
+        let shapes: Vec<Option<(f64, Shape)>> = terrain
+            .layers
+            .iter()
+            .filter(|l| !l.fluid)
+            .chain(terrain.layers.iter().filter(|l| l.fluid))
+            .map(|l| {
+                l.side.map(|s| {
+                    let seed = s.seed;
+                    let f: Shape = Box::new(move |side, t, z| crumble(seed, side, t, z));
+                    (s.depth_mm, f)
+                })
+            })
+            .collect();
+        let relief: Vec<Option<dt_geom::LayerRelief<'_>>> = shapes
+            .iter()
+            .map(|o| {
+                o.as_ref().map(|(depth, f)| dt_geom::LayerRelief {
+                    depth: *depth,
+                    shape: f.as_ref(),
+                })
+            })
+            .collect();
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let sides = dt_geom::Sides {
+            relief: &relief,
+            column_nodes: (libm::round(SIDE_WAVE_MM / terrain.land.step) as usize).max(1),
+            row_mm: 1.6 * printer.layer_mm,
+            fade_mm: 2.0 * printer.layer_mm,
+            overhang_deg: printer.overhang_deg,
+            corner_ramp_mm: SIDE_CORNER_RAMP_MM,
+            corner_round_mm: CORNER_ROUND_MM,
+        };
         // one closed mesh, a run per layer; vertices rounded to float32 once
         // so the terrain alone survives the STL reload
-        let mesh = dt_geom::lift_stack(
+        let mesh = dt_geom::lift_stack_sides(
             &dt_geom::Lattice {
                 nx: terrain.land.nx,
                 ny: terrain.land.ny,
@@ -1138,6 +1214,7 @@ impl Scene {
                 round: dt_geom::Round::F32,
             },
             &layers,
+            Some(&sides),
         )
         .map_err(|e| KitError::Lift(e.to_string()))?;
         let solid = Solid(dt_geom::Solid::from_tri_mesh(&mesh).map_err(KitError::Mesh)?);
@@ -1177,6 +1254,15 @@ impl Scene {
     }
 }
 
+/// The shape of the relief on a tile's side: 0 on the plane to 1 at its
+/// depth, lumps of earth with level ground between (more than a third of the
+/// face stays on the plane).
+fn crumble(seed: Seed, side: usize, t: f64, z: f64) -> f64 {
+    let s = seed.key("side").index(side as u64).value();
+    let n = dt_geom::noise::fbm(s, SIDE_LUMP_MM, 2, t, z);
+    crate::smooth01((n + 0.12) / 0.6)
+}
+
 /// A leaf solid from a mesh, relabelled with its slot (rule 2).
 pub(crate) fn leaf(slot: Slot, mesh: &TriMesh) -> Result<Solid, KitError> {
     let s = dt_geom::Solid::from_tri_mesh(mesh).map_err(KitError::Mesh)?;
@@ -1189,7 +1275,62 @@ pub(crate) fn relabel(slot: Slot, s: &dt_geom::Solid) -> Result<Solid, KitError>
 
 #[cfg(test)]
 mod tests {
-    use super::Frame;
+    use super::{Frame, LayerSpec, Material, Scene, SideSpec};
+    use crate::{Band, Field, OnFrame, Seed};
+
+    /// A flat layer at `top` over the whole tile, laid with a round of
+    /// `round` mm, and the surface it makes.
+    fn flat(top: f64, round: f64, skin: f64) -> (Frame, Field) {
+        let frame = Frame::dungeonblocks(1, 1);
+        let (nx, ny) = frame.nodes();
+        let band = Band::flat(nx, ny, frame.step_mm(), top, top);
+        let shape = band.fit(&Field::new(&frame, top));
+        let mask = Scene::new(frame, Seed::new(1)).whole();
+        let mut scene = Scene::new(frame, Seed::new(1));
+        scene
+            .lay(&LayerSpec {
+                owner: "dirt",
+                material: Material::Earth,
+                fluid: false,
+                mask: &mask,
+                shape: &shape,
+                raise: None,
+                grain: None,
+                skin_mm: skin,
+                round_mm: round,
+                side: None::<SideSpec>,
+            })
+            .unwrap();
+        let g = scene.surface_field().unwrap();
+        (
+            frame,
+            Field::new(&frame, 0.0).with_z(g.z.iter().map(|&z| f64::from(z)).collect()),
+        )
+    }
+
+    #[test]
+    fn the_edge_round_is_cut_from_the_sharp_corner() {
+        let (frame, f) = flat(3.4, 0.2, 0.6);
+        let (nx, ny) = frame.nodes();
+        for j in 0..ny {
+            for i in 0..nx {
+                let z = f.z[j * nx + i];
+                let on_rim = i == 0 || j == 0 || i == nx - 1 || j == ny - 1;
+                // the rim nodes carry the drop (mitred at a corner: the same),
+                // and nothing else is touched
+                let want = if on_rim { 3.2 } else { 3.4 };
+                assert!((z - want).abs() < 1e-6, "({i}, {j}) is {z}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_edge_round_tapers_to_none_on_dirt_thinner_than_the_skin() {
+        let (_, thin) = flat(0.5, 0.2, 0.6);
+        assert!(thin.z.iter().all(|&z| (z - 0.5).abs() < 1e-6));
+        let (_, thick) = flat(1.2, 0.2, 0.6);
+        assert!((thick.z[0] - 1.0).abs() < 1e-6);
+    }
 
     #[test]
     #[cfg(target_pointer_width = "64")]
