@@ -657,14 +657,9 @@ fn note(scene: &mut Scene, t: &Tally) {
 /// Discs (x, y, r) round every rock already in the scene.
 fn rocks_in(scene: &Scene) -> Vec<[f64; 3]> {
     scene
-        .parts()
+        .stands(&[Kind::Rock])
         .iter()
-        .filter(|p| p.tag.kind == Kind::Rock)
-        .filter_map(|p| p.solid.bounds())
-        .map(|(lo, hi)| {
-            let c = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
-            [c[0], c[1], 0.5 * (hi[0] - lo[0]).max(hi[1] - lo[1])]
-        })
+        .map(|s| [s.at[0], s.at[1], s.r])
         .collect()
 }
 

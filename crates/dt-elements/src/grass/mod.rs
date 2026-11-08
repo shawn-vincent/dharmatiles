@@ -36,7 +36,7 @@ mod lat;
 pub(crate) use blade::ring_mesh;
 use dt_kit::Kind;
 use dt_kit::OnFrame;
-use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, distance, form};
+use dt_kit::{Field, Material, Rng, Scene, Standing, Tag, TriMesh, distance, form};
 use rayon::prelude::*;
 
 use crate::read;
@@ -199,7 +199,7 @@ impl Element for Grass {
             count,
             s,
         );
-        let things = standing_things(scene);
+        let things = scene.stands(&[Kind::Rock, Kind::Tree, Kind::Wall]);
         if pool {
             let aprons = apron_shapes(&mut rng, &flow0, &things);
             lenses = fill_bare_earth(&lenses, &aprons, &blocker, &outside, &frame, self.bare);
@@ -388,7 +388,7 @@ fn raw_node(frame: &dt_kit::Frame, x: f64, y: f64) -> (usize, usize) {
 /// Each standing thing at least as wide as the shortest blade, as a circle
 /// the flow wraps: centre, a ring a little wider than the thing.
 fn obstacle_circles(
-    things: &[Thing],
+    things: &[Standing],
     blocker: &dt_kit::Mask,
     frame: &dt_kit::Frame,
     flow: &flow::Flow,
@@ -421,29 +421,6 @@ fn obstacle_circles(
     out
 }
 
-/// Something standing on the ground: where, how wide.
-struct Thing {
-    kind: Kind,
-    at: [f64; 2],
-    r: f64,
-}
-
-fn standing_things(scene: &Scene) -> Vec<Thing> {
-    scene
-        .parts()
-        .iter()
-        .filter(|p| [Kind::Rock, Kind::Tree, Kind::Wall].contains(&p.tag.kind))
-        .filter_map(|p| {
-            let (lo, hi) = p.solid.bounds()?;
-            Some(Thing {
-                kind: p.tag.kind,
-                at: [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0],
-                r: 0.5 * (hi[0] - lo[0]).max(hi[1] - lo[1]),
-            })
-        })
-        .collect()
-}
-
 /// Candidate clearings per square when a bare target asks for them.
 const POOL_PER_SQ: f64 = 8.0;
 const APRON_PROB: f64 = 0.35;
@@ -453,7 +430,7 @@ const APRON_STRETCH: (f64, f64) = (1.2, 1.9);
 const APRON_OFFSET: (f64, f64) = (0.6, 1.0);
 
 /// One-sided bare-earth patches (wake or scour) for a minority of rocks.
-fn apron_shapes(rng: &mut Rng, flow: &flow::Flow, things: &[Thing]) -> flow::Shapes {
+fn apron_shapes(rng: &mut Rng, flow: &flow::Flow, things: &[Standing]) -> flow::Shapes {
     let mut out = flow::Shapes::default();
     for t in things.iter().filter(|t| t.kind == Kind::Rock) {
         if rng.random() >= APRON_PROB {

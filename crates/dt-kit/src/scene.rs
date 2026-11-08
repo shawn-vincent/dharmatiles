@@ -400,12 +400,12 @@ pub const BANK_MM: f64 = 7.0;
 /// is also `dt_geom::source::MAX_SLOTS`.
 const SLOTS: u32 = dt_geom::source::MAX_SLOTS;
 
-/// The scene of one build.  A clone shares its solids and paints with the
-/// original, so keeping one after each step (a build cache) is cheap.
+/// The ground surface of one build: every paint in order, the banks
+/// between them, the water's fill and bed, the edge contract and the
+/// support things stand on.  Painted first; read once settled.
 #[derive(Clone)]
-pub struct Scene {
+pub struct Surface {
     frame: Frame,
-    seed: Seed,
     field: Grid,
     painted: Mask,
     /// Each paint, in order: its area and the full field it painted from
@@ -421,33 +421,14 @@ pub struct Scene {
     no_edge: Mask,
     stone: Mask,
     edge_mm: Option<f64>,
-    notes: Vec<(String, f64)>,
-    parts: Vec<Part>,
-    /// For each part, how many paints came before it. A surface places its
-    /// own solids (dirt's stones) and then paints, so a part belongs to the
-    /// paint after it; a paint after that one over it removes it
-    /// ([`Scene::cull_covered`]).
-    placed_at: Vec<usize>,
-    /// For each part, the original IDs it carries: which part a triangle
-    /// of the union came from ([`Scene::trace_parts`]).
-    sources: Vec<Vec<u32>>,
-    block: IdBlock,
-    next_slot: u32,
-    materials: Materials<Material>,
-    stages: Vec<Stage>,
     support: Option<Grid>,
-    progress: crate::Progress,
 }
 
-impl Scene {
-    /// An empty scene. Reserves its source-ID block, so call it in
-    /// sequence, not from parallel tasks.
-    #[must_use]
-    pub fn new(frame: Frame, seed: Seed) -> Self {
+impl Surface {
+    fn new(frame: Frame) -> Self {
         let (nx, ny) = frame.nodes();
         Self {
             frame,
-            seed,
             field: Grid::filled(nx, ny, frame.step_mm(), 0.0),
             painted: Mask::new(nx, ny, false),
             layers: Vec::new(),
@@ -459,16 +440,16 @@ impl Scene {
             no_edge: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
             edge_mm: None,
-            notes: Vec::new(),
-            parts: Vec::new(),
-            placed_at: Vec::new(),
-            sources: Vec::new(),
-            block: IdBlock::reserve(SLOTS),
-            next_slot: 0,
-            materials: Materials::default(),
-            stages: Vec::new(),
             support: None,
-            progress: crate::Progress::none(),
+        }
+    }
+
+    /// Bank once (after the scene has culled what the paints cover).
+    fn bank(&mut self) {
+        self.settle();
+        if !self.banked {
+            self.banked = true;
+            self.banks();
         }
     }
 
@@ -501,25 +482,6 @@ impl Scene {
     #[must_use]
     pub fn surface_field(&self) -> Option<&Grid> {
         (self.painted.count() > 0).then_some(&self.field)
-    }
-
-    /// The frame.
-    #[must_use]
-    pub const fn frame(&self) -> &Frame {
-        &self.frame
-    }
-
-    /// The tile's root seed.
-    #[must_use]
-    pub const fn seed(&self) -> Seed {
-        self.seed
-    }
-
-    /// The whole tile as an area.
-    #[must_use]
-    pub fn whole(&self) -> Mask {
-        let (nx, ny) = self.frame.nodes();
-        Mask::new(nx, ny, true)
     }
 
     /// **paint**: set the ground surface to `level_mm` (already scaled) over
@@ -587,57 +549,11 @@ impl Scene {
         }
     }
 
-    /// The nodes inside every solid of `kind` at height `z`: their
-    /// footprint, from a slice of each (the query "footprint by tag").
-    #[must_use]
-    pub fn footprint(&self, kind: Kind, z: f64) -> Mask {
-        let (nx, ny) = self.frame.nodes();
-        let mut out = Mask::new(nx, ny, false);
-        for p in self.parts.iter().filter(|p| p.tag.kind == kind) {
-            let m = dt_geom::fill_polygons(nx, ny, self.frame.step_mm(), &p.solid.slice(z));
-            out.bits.iter_mut().zip(m.bits).for_each(|(o, b)| *o |= b);
-        }
-        out
-    }
-
-    /// The nodes inside any solid of the given kinds `above_mm` over its
-    /// own lowest point: where things stand (a rock's outline where it
-    /// meets the ground, a trunk, a wall's foot). Grass roots no blade
-    /// there and stops its blades against it.
-    #[must_use]
-    pub fn standing(&self, kinds: &[Kind], above_mm: f64) -> Mask {
-        let (nx, ny) = self.frame.nodes();
-        let mut out = Mask::new(nx, ny, false);
-        for p in self.parts.iter().filter(|p| kinds.contains(&p.tag.kind)) {
-            let Some(b) = p.solid.bounds() else { continue };
-            let m = dt_geom::fill_polygons(
-                nx,
-                ny,
-                self.frame.step_mm(),
-                &p.solid.slice(b.0[2] + above_mm),
-            );
-            out.bits.iter_mut().zip(m.bits).for_each(|(o, b)| *o |= b);
-        }
-        out
-    }
-
     /// Spread the paint, once.
     fn settle(&mut self) {
         if !self.settled {
             self.settled = true;
             self.spread_paint();
-        }
-    }
-
-    /// **bank** (field blend): run the higher areas down to the lower ones,
-    /// once. The water calls it before it reads the land, so a shore is a
-    /// bank; plain ground keeps its steps (Phase 2).
-    pub fn bank(&mut self) {
-        self.cull_covered();
-        self.settle();
-        if !self.banked {
-            self.banked = true;
-            self.banks();
         }
     }
 
@@ -769,118 +685,11 @@ impl Scene {
         &self.wet
     }
 
-    /// Attach a progress channel (the evaluator does, for a front end that
-    /// wants one).  Never read by geometry: a build is the same without it.
-    pub fn set_progress(&mut self, progress: crate::Progress) {
-        self.progress = progress;
-    }
-
-    /// The progress channel, to report through (an element with a natural loop
-    /// takes `scene.progress().counter(..)` and ticks it).  Reports nothing
-    /// unless a front end attached one.
-    #[must_use]
-    pub fn progress(&self) -> crate::Progress {
-        self.progress.clone()
-    }
-
-    /// Record an element's number for the build record (counts and the like).
-    pub fn note(&mut self, name: &str, value: f64) {
-        self.notes.push((name.to_owned(), value));
-    }
-
-    /// The numbers elements noted, in order.
-    #[must_use]
-    pub fn notes(&self) -> &[(String, f64)] {
-        &self.notes
-    }
-
     /// The finished ground surface and its stone marks, for paint
     /// ([`crate::SurfacePaint::new`]); `None` when nothing painted it.
     #[must_use]
     pub fn surface(&self) -> Option<(dt_geom::Grid, Mask)> {
         (self.painted.count() > 0).then(|| (self.field.clone(), self.stone.clone()))
-    }
-
-    /// Reserve `n` slots of one material, in sequence.
-    ///
-    /// # Errors
-    /// [`KitError::Slots`] when the build's block is used up.
-    pub fn slots(&mut self, n: u32, material: Material) -> Result<Slots, KitError> {
-        if self.next_slot + n > SLOTS {
-            return Err(KitError::Slots);
-        }
-        let s = Slots {
-            block: self.block,
-            first: self.next_slot,
-            len: n,
-        };
-        self.next_slot += n;
-        for i in 0..n {
-            self.materials.set_id(s.get(i).id, material);
-        }
-        Ok(s)
-    }
-
-    /// **lift**: the painted surface as one solid from z = 0 (the uniform
-    /// lift), tagged `ground`. Nodes no area painted take the level of the
-    /// nearest painted node (breadth first, so drawn lines take their
-    /// neighbours' level). Does nothing if nothing was painted.
-    ///
-    /// # Errors
-    /// [`KitError`] if the surface is not above 0 or the kernel refuses it.
-    pub fn lift(&mut self, owner: &str) -> Result<(), KitError> {
-        if self.painted.count() == 0 {
-            return Ok(());
-        }
-        self.cull_covered();
-        self.settle();
-        if let Some(edge) = self.edge_mm {
-            self.hold_edge(edge);
-        }
-        self.record("surface", self.field.content_hash());
-        let mesh = dt_geom::lift_adaptive(&self.field, LIFT_TOL_MM, LIFT_MAX_CELLS)
-            .map_err(|e| KitError::Surface(e.to_string()))?;
-        let slot = self.slots(1, Material::Earth)?.get(0);
-        let solid = leaf(slot, &mesh)?;
-        if self.wet.count() > 0 {
-            // the top over the water is water, face by face
-            let out = solid.0.to_tri_mesh();
-            let (nx, step) = (self.field.nx, self.field.step);
-            let wet = &self.wet;
-            let face = |t: usize| {
-                let [a, b, c] = out.triangles[t].map(|i| out.positions[i as usize]);
-                let n = crate::shape::normal(a, b, c);
-                let (x, y) = ((a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0);
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let (i, j) = (
-                    libm::round(x / step).max(0.0) as usize,
-                    libm::round(y / step).max(0.0) as usize,
-                );
-                let k = j.min(wet.ny - 1) * nx + i.min(nx - 1);
-                if n[2] > 0.05 && wet.bits[k] {
-                    Material::Water
-                } else {
-                    Material::Earth
-                }
-            };
-            let before = self.materials.conflicts;
-            self.materials.set_faces(&out, face);
-            let conflicts = self.materials.conflicts - before;
-            if conflicts > 0 {
-                // faces that straddle the water line: the first triangle's
-                // material holds for the whole face (so every triangle keeps a material)
-                #[allow(clippy::cast_precision_loss)]
-                self.note("material_conflicts", conflicts as f64);
-            }
-        }
-        self.add(
-            Tag {
-                kind: Kind::Ground,
-                owner: owner.to_owned(),
-            },
-            solid,
-        );
-        Ok(())
     }
 
     /// The edge contract, by construction: perimeter nodes exactly at the
@@ -933,58 +742,110 @@ impl Scene {
             }
         }
     }
+}
 
-    /// Remove each solid a surface placed (before a later paint) that a
-    /// later paint covers within the solid's reach plus a bank's width:
-    /// the ground it sat on is gone, so it would float or bury. Solids
-    /// placed after every paint are never removed.
-    fn cull_covered(&mut self) {
-        let n = self.layers.len();
-        if self.placed_at.iter().all(|&p| p + 1 >= n) {
-            return;
+/// Something standing in the scene, by its bounds: where it is and how
+/// far it reaches across.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Standing {
+    /// What it is.
+    pub kind: Kind,
+    /// The middle of its bounds, mm.
+    pub at: [f64; 2],
+    /// Half its wider side across, mm.
+    pub r: f64,
+    /// Its bounds.
+    pub lo: [f64; 3],
+    /// See `lo`.
+    pub hi: [f64; 3],
+}
+
+/// The solids of one build, in the order they were added, with the slots
+/// and materials their triangles trace back to.  Append only (but for
+/// what a later paint covers).
+#[derive(Clone)]
+pub struct Parts {
+    frame: Frame,
+    parts: Vec<Part>,
+    /// For each part, how many paints came before it. A surface places its
+    /// own solids (dirt's stones) and then paints, so a part belongs to the
+    /// paint after it; a paint after that one over it removes it
+    /// ([`Scene::bank`], [`Scene::lift`]).
+    placed_at: Vec<usize>,
+    /// For each part, the original IDs it carries: which part a triangle
+    /// of the union came from ([`Scene::trace_parts`]).
+    sources: Vec<Vec<u32>>,
+    block: IdBlock,
+    next_slot: u32,
+    materials: Materials<Material>,
+}
+
+impl Parts {
+    fn new(frame: Frame) -> Self {
+        Self {
+            frame,
+            parts: Vec::new(),
+            placed_at: Vec::new(),
+            sources: Vec::new(),
+            block: IdBlock::reserve(SLOTS),
+            next_slot: 0,
+            materials: Materials::default(),
         }
-        let (nx, ny) = self.frame.nodes();
-        let step = self.frame.step_mm();
-        let margin = BANK_MM * self.frame.scale();
-        let mut keep = Vec::with_capacity(self.parts.len());
-        for (part, &at) in self.parts.iter().zip(&self.placed_at) {
-            let covered = at + 1 < n
-                && part.solid.bounds().is_some_and(|(lo, hi)| {
-                    let reach = |a: f64, b: f64| {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                        let idx = |v: f64| libm::round(v / step).max(0.0) as usize;
-                        (idx(a - margin), idx(b + margin))
-                    };
-                    let (i0, i1) = reach(lo[0], hi[0]);
-                    let (j0, j1) = reach(lo[1], hi[1]);
-                    (j0..=j1.min(ny - 1)).any(|j| {
-                        (i0..=i1.min(nx - 1)).any(|i| {
-                            self.layers[at + 1..]
-                                .iter()
-                                .any(|layer| layer.0.bits[j * nx + i])
-                        })
-                    })
-                });
-            keep.push(!covered);
-        }
-        let mut it = keep.iter();
-        self.parts.retain(|_| *it.next().unwrap_or(&true));
-        let mut it = keep.iter();
-        self.placed_at.retain(|_| *it.next().unwrap_or(&true));
-        let mut it = keep.iter();
-        self.sources.retain(|_| *it.next().unwrap_or(&true));
     }
 
-    /// Add a solid an element built, and record its stage hash.
-    pub fn add(&mut self, tag: Tag, solid: Solid) {
+    /// **what stands here**: every part of the given kinds, by its bounds,
+    /// in build order.  Grass, flowers, water and rocks ask this (or its
+    /// rasters, [`Parts::footprint`] and [`Parts::standing`]) for what is
+    /// already there.
+    #[must_use]
+    pub fn stands(&self, kinds: &[Kind]) -> Vec<Standing> {
+        self.parts
+            .iter()
+            .filter(|p| kinds.contains(&p.tag.kind))
+            .filter_map(|p| {
+                let (lo, hi) = p.solid.bounds()?;
+                Some(Standing {
+                    kind: p.tag.kind,
+                    at: [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0],
+                    r: 0.5 * (hi[0] - lo[0]).max(hi[1] - lo[1]),
+                    lo,
+                    hi,
+                })
+            })
+            .collect()
+    }
+
+    /// Add a part placed after `paints` paints; its mesh's hash.
+    fn add(&mut self, tag: Tag, solid: Solid, paints: usize) -> u64 {
         let mesh = solid.0.to_tri_mesh();
-        self.record(&format!("{}:{}", tag.kind, tag.owner), mesh.content_hash());
+        let hash = mesh.content_hash();
         let mut ids = mesh.run_original_id;
         ids.sort_unstable();
         ids.dedup();
         self.sources.push(ids);
         self.parts.push(Part { tag, solid });
-        self.placed_at.push(self.layers.len());
+        self.placed_at.push(paints);
+        hash
+    }
+
+    /// Reserve `n` slots of one material, in sequence.
+    ///
+    /// # Errors
+    /// [`KitError::Slots`] when the build's block is used up.
+    pub fn slots(&mut self, n: u32, material: Material) -> Result<Slots, KitError> {
+        if self.next_slot + n > SLOTS {
+            return Err(KitError::Slots);
+        }
+        let s = Slots {
+            block: self.block,
+            first: self.next_slot,
+            len: n,
+        };
+        self.next_slot += n;
+        for i in 0..n {
+            self.materials.set_id(s.get(i).id, material);
+        }
+        Ok(s)
     }
 
     /// **top**: the highest z of every solid so far (0 if none).
@@ -1023,20 +884,6 @@ impl Scene {
         )
     }
 
-    /// The stage hashes so far, in order.
-    #[must_use]
-    pub fn stages(&self) -> &[Stage] {
-        &self.stages
-    }
-
-    /// Record a stage hash.
-    pub fn record(&mut self, name: &str, hash: u64) {
-        self.stages.push(Stage {
-            name: name.to_owned(),
-            hash,
-        });
-    }
-
     /// Every part's mesh from `first` on, side by side, not joined, with
     /// each triangle's material: from 0, a draft's mesh; from a stage's
     /// first part, a sketch of what it added while the build runs.
@@ -1058,6 +905,430 @@ impl Scene {
         Ok((mesh, materials))
     }
 
+    /// Each triangle's material, traced through the kernel's ids.
+    fn material_of(&self, mesh: &TriMesh) -> Result<Vec<Material>, KitError> {
+        self.materials
+            .trace(mesh)
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .ok_or(KitError::Untraced)
+    }
+
+    /// The nodes inside every solid of `kind` at height `z`: their
+    /// footprint, from a slice of each (the query "footprint by tag").
+    #[must_use]
+    pub fn footprint(&self, kind: Kind, z: f64) -> Mask {
+        let (nx, ny) = self.frame.nodes();
+        let mut out = Mask::new(nx, ny, false);
+        for p in self.parts.iter().filter(|p| p.tag.kind == kind) {
+            let m = dt_geom::fill_polygons(nx, ny, self.frame.step_mm(), &p.solid.slice(z));
+            out.bits.iter_mut().zip(m.bits).for_each(|(o, b)| *o |= b);
+        }
+        out
+    }
+
+    /// The nodes inside any solid of the given kinds `above_mm` over its
+    /// own lowest point: where things stand (a rock's outline where it
+    /// meets the ground, a trunk, a wall's foot). Grass roots no blade
+    /// there and stops its blades against it.
+    #[must_use]
+    pub fn standing(&self, kinds: &[Kind], above_mm: f64) -> Mask {
+        let (nx, ny) = self.frame.nodes();
+        let mut out = Mask::new(nx, ny, false);
+        for p in self.parts.iter().filter(|p| kinds.contains(&p.tag.kind)) {
+            let Some(b) = p.solid.bounds() else { continue };
+            let m = dt_geom::fill_polygons(
+                nx,
+                ny,
+                self.frame.step_mm(),
+                &p.solid.slice(b.0[2] + above_mm),
+            );
+            out.bits.iter_mut().zip(m.bits).for_each(|(o, b)| *o |= b);
+        }
+        out
+    }
+}
+
+/// The scene of one build: its [`Surface`], painted first, and the
+/// [`Parts`] that stand on it.  A clone shares its solids and paints with
+/// the original, so keeping one after each step (a build cache) is cheap.
+#[derive(Clone)]
+pub struct Scene {
+    frame: Frame,
+    seed: Seed,
+    surface: Surface,
+    built: Parts,
+    notes: Vec<(String, f64)>,
+    stages: Vec<Stage>,
+    progress: crate::Progress,
+}
+
+impl Scene {
+    /// An empty scene. Reserves its source-ID block, so call it in
+    /// sequence, not from parallel tasks.
+    #[must_use]
+    pub fn new(frame: Frame, seed: Seed) -> Self {
+        Self {
+            frame,
+            seed,
+            surface: Surface::new(frame),
+            built: Parts::new(frame),
+            notes: Vec::new(),
+            stages: Vec::new(),
+            progress: crate::Progress::none(),
+        }
+    }
+
+    /// The ground surface.
+    #[must_use]
+    pub const fn ground_surface(&self) -> &Surface {
+        &self.surface
+    }
+
+    /// The parts so far, with the "what stands here" query.
+    #[must_use]
+    pub const fn built(&self) -> &Parts {
+        &self.built
+    }
+
+    /// **what stands here**: see [`Parts::stands`].
+    #[must_use]
+    pub fn stands(&self, kinds: &[Kind]) -> Vec<Standing> {
+        self.built.stands(kinds)
+    }
+
+    /// The frame.
+    #[must_use]
+    pub const fn frame(&self) -> &Frame {
+        &self.frame
+    }
+
+    /// The tile's root seed.
+    #[must_use]
+    pub const fn seed(&self) -> Seed {
+        self.seed
+    }
+
+    /// The whole tile as an area.
+    #[must_use]
+    pub fn whole(&self) -> Mask {
+        let (nx, ny) = self.frame.nodes();
+        Mask::new(nx, ny, true)
+    }
+
+    /// **stamp**: a solid's footprint and top (world mm): the support
+    /// under it rises to `top_mm` (never falls). Things that stand on
+    /// others (a wall on a floor) and things that grow round them read
+    /// it through [`Scene::support`].
+    pub fn stamp(&mut self, footprint: &Mask, top_mm: f64) {
+        self.surface.stamp(footprint, top_mm)
+    }
+
+    /// The highest stamped top at each node (world mm, `-∞` where nothing
+    /// is stamped), or `None` before any stamp.
+    #[must_use]
+    pub fn support(&self) -> Option<&Grid> {
+        self.surface.support()
+    }
+
+    /// The ground surface as painted (world mm at every node), before the
+    /// lift spreads paint to unpainted nodes; `None` before any paint.
+    #[must_use]
+    pub fn surface_field(&self) -> Option<&Grid> {
+        self.surface.surface_field()
+    }
+
+    /// **paint**: set the ground surface to `level_mm` (already scaled) over
+    /// `area`. Later paints win, so stack order decides which surface paints
+    /// over which.
+    pub fn paint(&mut self, area: &Mask, level_mm: f64) {
+        self.surface.paint(area, level_mm)
+    }
+
+    /// **paint** a field: set the ground surface to `field` (world mm) over
+    /// `area`. Later paints win.
+    pub fn paint_field(&mut self, area: &Mask, field: &crate::Field) {
+        self.surface.paint_field(area, field)
+    }
+
+    /// The ground surface (world mm): every paint, spread to the nodes no
+    /// area painted (and banked, once [`Scene::bank`] has run). Read it
+    /// after the surfaces are painted (the scheduler paints every surface
+    /// before any solid); `None` when nothing painted it.
+    pub fn ground(&mut self) -> Option<crate::Field> {
+        self.surface.ground()
+    }
+
+    /// **fill**: set the surface to `top` (world mm) where `wet` (the
+    /// water's own solid top, lifted as water), and leave the nodes in
+    /// `no_edge` out of the ground's edge rule (the water and its banks
+    /// meet the edge on their own contract).
+    pub fn fill(&mut self, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
+        self.surface.fill(top, wet, no_edge)
+    }
+
+    /// Mark surface nodes as stone (pebbles) for the painted preview;
+    /// unmark the rest of `area`.
+    pub fn mark_stone(&mut self, area: &Mask, stone: &[bool]) {
+        self.surface.mark_stone(area, stone)
+    }
+
+    /// The edge contract: the level (world mm) every ground surface meets
+    /// the tile edge at, and never dips below. `None`: no contract.
+    pub const fn set_edge(&mut self, level_mm: Option<f64>) {
+        self.surface.set_edge(level_mm)
+    }
+
+    /// The edge level, world mm, if the tile has an edge contract.
+    #[must_use]
+    pub const fn edge(&self) -> Option<f64> {
+        self.surface.edge()
+    }
+
+    /// The level (world mm) the water meets every tile edge at, before
+    /// its tide profile (the edge contract's `water` rule).
+    pub const fn set_water_edge(&mut self, level_mm: Option<f64>) {
+        self.surface.set_water_edge(level_mm)
+    }
+
+    /// See [`Scene::set_water_edge`].
+    #[must_use]
+    pub const fn water_edge(&self) -> Option<f64> {
+        self.surface.water_edge()
+    }
+
+    /// The ground as it was before water filled it (world mm): the bed
+    /// under the water and the bank round it; `None` without water.
+    #[must_use]
+    pub const fn bed(&self) -> Option<&Grid> {
+        self.surface.bed()
+    }
+
+    /// The nodes the water covers (empty without water).
+    #[must_use]
+    pub const fn wet(&self) -> &Mask {
+        self.surface.wet()
+    }
+
+    /// The finished ground surface and its stone marks, for paint
+    /// ([`crate::SurfacePaint::new`]); `None` when nothing painted it.
+    #[must_use]
+    pub fn surface(&self) -> Option<(dt_geom::Grid, Mask)> {
+        self.surface.surface()
+    }
+
+    /// Reserve `n` slots of one material, in sequence.
+    ///
+    /// # Errors
+    /// [`KitError::Slots`] when the build's block is used up.
+    pub fn slots(&mut self, n: u32, material: Material) -> Result<Slots, KitError> {
+        self.built.slots(n, material)
+    }
+
+    /// **top**: the highest z of every solid so far (0 if none).
+    #[must_use]
+    pub fn top(&self) -> f64 {
+        self.built.top()
+    }
+
+    /// The parts so far, in build order.
+    #[must_use]
+    pub fn parts(&self) -> &[Part] {
+        self.built.parts()
+    }
+
+    /// Which part (an index into [`Scene::parts`]) each triangle of `mesh`
+    /// (the [`Scene::union`]) came from, by its original ID; `u32::MAX`
+    /// when none did.  The editor finds a triangle's stack entry this way.
+    #[must_use]
+    pub fn trace_parts(&self, mesh: &TriMesh) -> Vec<u32> {
+        self.built.trace_parts(mesh)
+    }
+
+    /// Every part's mesh from `first` on, side by side, not joined, with
+    /// each triangle's material: from 0, a draft's mesh; from a stage's
+    /// first part, a sketch of what it added while the build runs.
+    /// Overlaps stay overlapping; the view hides them, a printer would not.
+    ///
+    /// # Errors
+    /// [`KitError::Untraced`] if a triangle's material is unknown.
+    pub fn soup_since(&self, first: usize) -> Result<(TriMesh, Vec<Material>), KitError> {
+        self.built.soup_since(first)
+    }
+
+    /// The nodes inside every solid of `kind` at height `z`: their
+    /// footprint, from a slice of each (the query "footprint by tag").
+    #[must_use]
+    pub fn footprint(&self, kind: Kind, z: f64) -> Mask {
+        self.built.footprint(kind, z)
+    }
+
+    /// The nodes inside any solid of the given kinds `above_mm` over its
+    /// own lowest point: where things stand (a rock's outline where it
+    /// meets the ground, a trunk, a wall's foot). Grass roots no blade
+    /// there and stops its blades against it.
+    #[must_use]
+    pub fn standing(&self, kinds: &[Kind], above_mm: f64) -> Mask {
+        self.built.standing(kinds, above_mm)
+    }
+
+    /// **bank** (field blend): run the higher areas down to the lower ones,
+    /// once. The water calls it before it reads the land, so a shore is a
+    /// bank; plain ground keeps its steps (Phase 2).
+    pub fn bank(&mut self) {
+        self.cull_covered();
+        self.surface.bank();
+    }
+
+    /// Attach a progress channel (the evaluator does, for a front end that
+    /// wants one).  Never read by geometry: a build is the same without it.
+    pub fn set_progress(&mut self, progress: crate::Progress) {
+        self.progress = progress;
+    }
+
+    /// The progress channel, to report through (an element with a natural loop
+    /// takes `scene.progress().counter(..)` and ticks it).  Reports nothing
+    /// unless a front end attached one.
+    #[must_use]
+    pub fn progress(&self) -> crate::Progress {
+        self.progress.clone()
+    }
+
+    /// Record an element's number for the build record (counts and the like).
+    pub fn note(&mut self, name: &str, value: f64) {
+        self.notes.push((name.to_owned(), value));
+    }
+
+    /// The numbers elements noted, in order.
+    #[must_use]
+    pub fn notes(&self) -> &[(String, f64)] {
+        &self.notes
+    }
+
+    /// The stage hashes so far, in order.
+    #[must_use]
+    pub fn stages(&self) -> &[Stage] {
+        &self.stages
+    }
+
+    /// Record a stage hash.
+    pub fn record(&mut self, name: &str, hash: u64) {
+        self.stages.push(Stage {
+            name: name.to_owned(),
+            hash,
+        });
+    }
+
+    /// **lift**: the painted surface as one solid from z = 0 (the uniform
+    /// lift), tagged `ground`. Nodes no area painted take the level of the
+    /// nearest painted node (breadth first, so drawn lines take their
+    /// neighbours' level). Does nothing if nothing was painted.
+    ///
+    /// # Errors
+    /// [`KitError`] if the surface is not above 0 or the kernel refuses it.
+    pub fn lift(&mut self, owner: &str) -> Result<(), KitError> {
+        if self.surface.painted.count() == 0 {
+            return Ok(());
+        }
+        self.cull_covered();
+        self.surface.settle();
+        if let Some(edge) = self.surface.edge_mm {
+            self.surface.hold_edge(edge);
+        }
+        self.record("surface", self.surface.field.content_hash());
+        let mesh = dt_geom::lift_adaptive(&self.surface.field, LIFT_TOL_MM, LIFT_MAX_CELLS)
+            .map_err(|e| KitError::Surface(e.to_string()))?;
+        let slot = self.built.slots(1, Material::Earth)?.get(0);
+        let solid = leaf(slot, &mesh)?;
+        if self.surface.wet.count() > 0 {
+            // the top over the water is water, face by face
+            let out = solid.0.to_tri_mesh();
+            let (nx, step) = (self.surface.field.nx, self.surface.field.step);
+            let wet = &self.surface.wet;
+            let face = |t: usize| {
+                let [a, b, c] = out.triangles[t].map(|i| out.positions[i as usize]);
+                let n = crate::shape::normal(a, b, c);
+                let (x, y) = ((a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0);
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let (i, j) = (
+                    libm::round(x / step).max(0.0) as usize,
+                    libm::round(y / step).max(0.0) as usize,
+                );
+                let k = j.min(wet.ny - 1) * nx + i.min(nx - 1);
+                if n[2] > 0.05 && wet.bits[k] {
+                    Material::Water
+                } else {
+                    Material::Earth
+                }
+            };
+            let before = self.built.materials.conflicts;
+            self.built.materials.set_faces(&out, face);
+            let conflicts = self.built.materials.conflicts - before;
+            if conflicts > 0 {
+                // faces that straddle the water line: the first triangle's
+                // material holds for the whole face (so every triangle keeps a material)
+                #[allow(clippy::cast_precision_loss)]
+                self.note("material_conflicts", conflicts as f64);
+            }
+        }
+        self.add(
+            Tag {
+                kind: Kind::Ground,
+                owner: owner.to_owned(),
+            },
+            solid,
+        );
+        Ok(())
+    }
+
+    /// Remove each solid a surface placed (before a later paint) that a
+    /// later paint covers within the solid's reach plus a bank's width:
+    /// the ground it sat on is gone, so it would float or bury. Solids
+    /// placed after every paint are never removed.
+    fn cull_covered(&mut self) {
+        let n = self.surface.layers.len();
+        if self.built.placed_at.iter().all(|&p| p + 1 >= n) {
+            return;
+        }
+        let (nx, ny) = self.frame.nodes();
+        let step = self.frame.step_mm();
+        let margin = BANK_MM * self.frame.scale();
+        let mut keep = Vec::with_capacity(self.built.parts.len());
+        for (part, &at) in self.built.parts.iter().zip(&self.built.placed_at) {
+            let covered = at + 1 < n
+                && part.solid.bounds().is_some_and(|(lo, hi)| {
+                    let reach = |a: f64, b: f64| {
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        let idx = |v: f64| libm::round(v / step).max(0.0) as usize;
+                        (idx(a - margin), idx(b + margin))
+                    };
+                    let (i0, i1) = reach(lo[0], hi[0]);
+                    let (j0, j1) = reach(lo[1], hi[1]);
+                    (j0..=j1.min(ny - 1)).any(|j| {
+                        (i0..=i1.min(nx - 1)).any(|i| {
+                            self.surface.layers[at + 1..]
+                                .iter()
+                                .any(|layer| layer.0.bits[j * nx + i])
+                        })
+                    })
+                });
+            keep.push(!covered);
+        }
+        let mut it = keep.iter();
+        self.built.parts.retain(|_| *it.next().unwrap_or(&true));
+        let mut it = keep.iter();
+        self.built.placed_at.retain(|_| *it.next().unwrap_or(&true));
+        let mut it = keep.iter();
+        self.built.sources.retain(|_| *it.next().unwrap_or(&true));
+    }
+
+    /// Add a solid an element built, and record its stage hash.
+    pub fn add(&mut self, tag: Tag, solid: Solid) {
+        let name = format!("{}:{}", tag.kind, tag.owner);
+        let hash = self.built.add(tag, solid, self.surface.layers.len());
+        self.record(&name, hash);
+    }
+
     /// **union**: every part combined in build order (`batch_in_order`),
     /// exported once, with each triangle's material. Ends the scene's
     /// time in the kernel; the export is what the audit takes.
@@ -1066,22 +1337,14 @@ impl Scene {
     /// [`KitError::Untraced`] if a triangle has no material, or the
     /// kernel's status.
     pub fn union(&mut self) -> Result<(TriMesh, Vec<Material>), KitError> {
-        let solids: Vec<dt_geom::Solid> = self.parts.iter().map(|p| p.solid.0.clone()).collect();
+        let solids: Vec<dt_geom::Solid> =
+            self.built.parts.iter().map(|p| p.solid.0.clone()).collect();
         let all = batch_in_order(&solids, BoolOp::Union);
         all.status().map_err(KitError::Mesh)?;
         let mesh = all.to_tri_mesh();
         self.record("union", mesh.content_hash());
-        let materials = self.material_of(&mesh)?;
+        let materials = self.built.material_of(&mesh)?;
         Ok((mesh, materials))
-    }
-
-    /// Each triangle's material, traced through the kernel's ids.
-    fn material_of(&self, mesh: &TriMesh) -> Result<Vec<Material>, KitError> {
-        self.materials
-            .trace(mesh)
-            .into_iter()
-            .collect::<Option<Vec<_>>>()
-            .ok_or(KitError::Untraced)
     }
 }
 
