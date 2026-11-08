@@ -17,6 +17,11 @@ use dt_geom::{Mask, fill_polygons};
 
 use crate::{Field, Frame, Kind, Part, Solid};
 
+/// The steepest ground, degrees, that things settle on: a pebble is left
+/// off ground steeper than this (it fades out from 22 degrees) and
+/// a grass blade leans no further from the ground's gradient than this slope.
+pub const STEEPEST_GROUND_DEG: f64 = 34.0;
+
 /// What stands, as opposed to what is laid or grows over: the kinds
 /// [`Land::things_at`] sections.
 pub const THINGS: [Kind; 5] = [

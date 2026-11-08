@@ -20,7 +20,6 @@ const TERRAIN_FOLLOW: f64 = 0.3;
 const MEANDER_WAVELENGTH_MM: f64 = 15.0;
 const MEANDER_AMP_SIGMA_MM: f64 = 12.0;
 const MEANDER_PHASE_SIGMA_MM: f64 = 14.0;
-const MAX_GROUND_SLOPE_DEG: f64 = 34.0;
 // 3 swaths
 pub const SWATH_SPACING_MM: f64 = 11.0;
 const SWATH_LATERAL_ASPECT: f64 = 0.65;
@@ -193,7 +192,7 @@ pub fn make_direction(
     let amp_n = ground.noise(seed.key("amp"), MEANDER_AMP_SIGMA_MM * s);
     let ph_n = ground.noise(seed.key("phase"), MEANDER_PHASE_SIGMA_MM * s);
     let (gx, gy) = ground.gradient();
-    let tan_max = libm::tan(MAX_GROUND_SLOPE_DEG.to_radians());
+    let tan_max = libm::tan(dt_kit::STEEPEST_GROUND_DEG.to_radians());
     let n = ground.z.len();
     let mut vx = vec![0.0; n];
     let mut vy = vec![0.0; n];

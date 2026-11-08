@@ -78,7 +78,7 @@ pub use field::{
     Field, Noise, OnFrame, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at,
     rim, scatter, smax, smooth01,
 };
-pub use land::{Disc, Land, Seat, SeatRule, THINGS, seat_on};
+pub use land::{Disc, Land, STEEPEST_GROUND_DEG, Seat, SeatRule, THINGS, seat_on};
 pub use outline::Outline;
 pub use paint::paint_mesh;
 pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};

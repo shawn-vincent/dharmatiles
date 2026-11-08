@@ -73,6 +73,12 @@ const EDGE_ROUND_MM: f64 = 0.2;
 /// The relief of dirt's sides, mm at the 35 mm square (never under the
 /// printer's one line).
 const SIDE_RELIEF_MM: f64 = 0.6;
+/// Dry ground stays this far over the water's level, mm at the 35 mm square
+/// (about one printer layer; it scales with the system with every size, so
+/// a system's tiles are the same model scaled): the grain fades out where the
+/// water's low end stands within it of the hills, and never takes the surface
+/// under it.
+const DRY_MARGIN_MM: f64 = 0.2;
 /// Below any surface: a lobe or pebble that is not there.
 const NONE: f64 = -1e9;
 
@@ -134,7 +140,7 @@ const PEB_SOFT_MM: (f64, f64) = (0.08, 0.22);
 const PEB_MOUND: f64 = 0.2;
 /// Pebbles are left off ground steeper than this: it fades out between the
 /// two angles, measured on the ground blurred by the second value (mm).
-const PEB_SIT_DEG: (f64, f64) = (22.0, 34.0);
+const PEB_SIT_DEG: (f64, f64) = (22.0, dt_kit::STEEPEST_GROUND_DEG);
 const PEB_SIT_BLUR_MM: f64 = 1.0;
 const PEB_SEAT_SIGMA_MM: f64 = 0.5;
 const PEB_TRIES: u32 = 60;
@@ -249,7 +255,7 @@ pub struct Counts {
 
 /// The dirt's calculator: hills in its band, the surface before any grain.
 #[must_use]
-pub fn hills(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, band: &Band) -> Banded {
+pub fn hills(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, band: &Band) -> dt_kit::span::Hills {
     let s = frame.scale();
     let broad = noise(
         frame,
@@ -268,7 +274,7 @@ pub fn hills(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, band: &Band) -> Ban
         Scale::Layout,
     );
     let n = broad.zip(&mid, |a, b| a + MID_WEIGHT * b);
-    dt_kit::span::hills(&n, band, HILL_MM * s, SLOPE_DEG)
+    dt_kit::span::hills(&n, band, HILL_MM * s, SLOPE_DEG, s)
 }
 
 /// What a dirt is made on: its area, the planned feet of what it heaps
@@ -309,6 +315,31 @@ pub struct Made {
     pub counts: Counts,
 }
 
+/// The dirt as a layer of earth on the land, before its edge-round and its
+/// sides: what a stone bedded into the grain asks the scene how far the grain
+/// sets in ([`Scene::grain_offset`]), and what the dirt lays ([`Scene::lay`]).
+fn earth<'a>(
+    owner: &'a str,
+    area: &'a dt_kit::Mask,
+    shape: &'a Banded,
+    raise: &'a Field,
+    grain: &'a dt_kit::Relief<'a>,
+    skin_mm: f64,
+) -> dt_kit::LayerSpec<'a> {
+    dt_kit::LayerSpec {
+        owner,
+        material: dt_kit::Material::Earth,
+        fluid: false,
+        mask: area,
+        shape,
+        raise: Some(raise),
+        grain: Some(grain),
+        skin_mm,
+        round_mm: 0.0,
+        side: None,
+    }
+}
+
 /// The dirt surface over the whole tile (world mm), its grain, the pebble
 /// mask and the counts.
 ///
@@ -333,7 +364,11 @@ pub fn surface(
         skin_mm,
     } = *on;
     let frame = *scene.frame();
-    let shape = hills(dirt, &frame, seed.key("hills"), band);
+    let dt_kit::span::Hills { shape, converged } = hills(dirt, &frame, seed.key("hills"), band);
+    if !converged {
+        // the surface is still in its band; the plate under it did not settle
+        scene.note("relax_unconverged", 1.0);
+    }
     if dirt.is_plain() {
         // `clods none` and `stones none`: the hills alone, no grain
         let none = Field::new(&frame, 0.0);
@@ -355,7 +390,9 @@ pub fn surface(
         || Field::new(&frame, 1.0),
         |u| {
             let s = frame.scale();
-            base.zip(u, |b, w| 1.0 - smooth01((w - b - 0.2 * s) / (0.8 * s)))
+            base.zip(u, |b, w| {
+                1.0 - smooth01((w - b - DRY_MARGIN_MM * s) / (0.8 * s))
+            })
         },
     );
     let stone_area = dt_kit::Mask {
@@ -425,7 +462,7 @@ pub fn surface(
     let relief = z.with_z((0..z.z.len()).map(|k| z.z[k] - base.z[k]).collect());
     let weight = keep.clone();
     // dry ground stays dry: the grain never takes it under the water's level
-    let floor = under.map(|u| u.map(|w| w + 0.2 * frame.scale()));
+    let floor = under.map(|u| u.map(|w| w + DRY_MARGIN_MM * frame.scale()));
     // the grain sets the surface in, so a bedded stone sits as far lower
     if !bedded.is_empty() {
         let grain = dt_kit::Relief {
@@ -433,18 +470,7 @@ pub fn surface(
             weight: &weight,
             floor: floor.as_ref(),
         };
-        let off = scene.grain_offset(&dt_kit::LayerSpec {
-            owner,
-            material: dt_kit::Material::Earth,
-            fluid: false,
-            mask: area,
-            shape: &shape,
-            raise: Some(&raise),
-            grain: Some(&grain),
-            skin_mm,
-            round_mm: 0.0,
-            side: None,
-        });
+        let off = scene.grain_offset(&earth(owner, area, &shape, &raise, &grain, skin_mm));
         for b in bedded {
             let lower = off.sample(b.at[0], b.at[1]);
             b.add(scene, owner, lower);
@@ -914,19 +940,19 @@ impl Element for Dirt {
         };
         scene
             .lay(&dt_kit::LayerSpec {
-                owner: ctx.path,
-                material: dt_kit::Material::Earth,
-                fluid: false,
-                mask: ctx.area,
-                shape: &shape,
-                raise: Some(&raise),
-                grain: Some(&grain),
-                skin_mm: 3.0 * ctx.printer.layer_mm,
                 round_mm: EDGE_ROUND_MM * scene.frame().scale(),
                 side: Some(dt_kit::SideSpec {
                     depth_mm: (SIDE_RELIEF_MM * scene.frame().scale()).max(ctx.printer.line_mm),
                     seed: ctx.seed.key("side"),
                 }),
+                ..earth(
+                    ctx.path,
+                    ctx.area,
+                    &shape,
+                    &raise,
+                    &grain,
+                    3.0 * ctx.printer.layer_mm,
+                )
             })
             .map_err(LookError::build)?;
         scene.mark_stone(ctx.area, &stone);
