@@ -8,15 +8,17 @@ use super::*;
 struct LatestBuild {
     tracker: Option<Arc<Tracker>>,
     files: BTreeMap<String, Option<SystemTime>>,
-    /// Where sketches go (none in tests), with the tile's index.
-    sketches: Option<(Arc<Shared>, usize)>,
+    /// Where sketches go (none in tests), with the tile's id.
+    sketches: Option<(Arc<Shared>, TileId)>,
+    /// Set when the build is moot: its tile left the list.
+    cancel: Arc<AtomicBool>,
     /// The stage running now, which a sketch belongs to.
     stage: Mutex<String>,
 }
 
 impl LatestBuild {
     fn changed(&self) -> bool {
-        self.files.iter().any(|(f, at)| mtime(f) != *at)
+        self.cancel.load(Ordering::Relaxed) || self.files.iter().any(|(f, at)| mtime(f) != *at)
     }
 }
 
@@ -38,7 +40,7 @@ impl dt_kit::Reporter for LatestBuild {
     }
 
     fn sketch(&self, mesh: &dt_kit::TriMesh, materials: &[dt_kit::Material], rough: bool) {
-        let Some((shared, i)) = &self.sketches else {
+        let Some((shared, id)) = &self.sketches else {
             return;
         };
         if self.changed() {
@@ -46,29 +48,33 @@ impl dt_kit::Reporter for LatestBuild {
         }
         let bytes = payload::sketch(mesh, materials, rough, &shared.palette());
         let stage = lock(&self.stage).clone();
-        shared.add_sketch(*i, &stage, rough, bytes);
+        shared.add_sketch(id, &stage, rough, bytes);
     }
 }
 
-/// Build tile `i`: plan pass, then geometry, pushing each result.
-pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
-    let Some(path) = lock(&shared.tiles).get(i).map(|t| t.path.clone()) else {
+/// Build tile `id`: plan pass, then geometry, pushing each result.
+pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, opts: &Options) {
+    let Some(path) = lock(&shared.tiles)
+        .iter()
+        .find(|t| t.id == id)
+        .map(|t| t.path.clone())
+    else {
         return;
     };
-    shared.update(i, |t| {
+    shared.update(id, |t| {
         t.status = State::Building;
         t.errors.clear();
         t.progress = None;
         t.sketches.clear();
     });
     if path.to_ascii_lowercase().ends_with(".stl") {
-        return rebuild_stl(shared, i, opts, &path);
+        return rebuild_stl(shared, id, opts, &path);
     }
     let rec = Recording::watching(&path);
     let t0 = Instant::now();
     let finish_err = |rec: Recording, errs: &[Diag]| {
         let errors = errors_json(errs);
-        shared.update(i, |t| {
+        shared.update(id, |t| {
             t.status = State::Failed;
             t.progress = None;
             t.sketches.clear();
@@ -93,7 +99,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         })
     });
     if let Some(p) = &plan {
-        shared.update(i, |t| t.plan = Some(p.clone()));
+        shared.update(id, |t| t.plan = Some(p.clone()));
     }
     // the progress bar: stages weighted by what the last build of this
     // tile measured, else by the elements' defaults
@@ -112,13 +118,14 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
     ));
     drop(checked);
     let tracker = (stages.len() > 1).then(|| {
-        let sink = shared.sink(i);
+        let sink = shared.sink(id);
         Arc::new(Tracker::new(stages, Box::new(move |s| sink(s))))
     });
     let latest = Arc::new(LatestBuild {
         tracker: tracker.clone(),
         files: watched(&rec, shared),
-        sketches: Some((Arc::clone(shared), i)),
+        sketches: Some((Arc::clone(shared), id.to_owned())),
+        cancel,
         stage: Mutex::new(String::new()),
     });
     let reporter = dt_eval::Progress::new(latest.clone());
@@ -129,7 +136,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         Ok(built) => built,
         Err(panic) if panic.is::<Superseded>() => {
             tell!("cancelled superseded build of {path}");
-            shared.update(i, |t| {
+            shared.update(id, |t| {
                 t.progress = None;
                 t.files = latest.files.clone();
             });
@@ -142,7 +149,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
     };
     if latest.changed() {
         tell!("discarded superseded build of {path}");
-        shared.update(i, |t| {
+        shared.update(id, |t| {
             t.progress = None;
             t.files = latest.files.clone();
         });
@@ -168,7 +175,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
             ));
             if latest.changed() {
                 tell!("discarded superseded view of {path}");
-                shared.update(i, |t| {
+                shared.update(id, |t| {
                     t.progress = None;
                     t.files = latest.files.clone();
                 });
@@ -196,7 +203,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
                 b.audit.triangles,
                 b.audit.overhang_mm2
             );
-            shared.update(i, |t| {
+            shared.update(id, |t| {
                 t.status = State::Ready;
                 t.progress = None;
                 t.sketches.clear();
@@ -223,11 +230,11 @@ fn watched(rec: &Recording, shared: &Shared) -> BTreeMap<String, Option<std::tim
 /// An STL file: the gate runs on it as a slicer would read it, and its
 /// overhangs are painted (the earth colour for everything else).  Lets you
 /// look at any printable mesh, not only a document's.
-pub(super) fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str) {
+pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str) {
     let t0 = Instant::now();
     let files = BTreeMap::from([(path.to_owned(), mtime(path))]);
     let fail = |msg: String| {
-        shared.update(i, |t| {
+        shared.update(id, |t| {
             t.status = State::Failed;
             t.errors = errors_json(&[Diag::plain("dt::source", msg)]);
             t.files = files.clone();
@@ -268,7 +275,7 @@ pub(super) fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str)
         },
         "build_s": t0.elapsed().as_secs_f64(),
     });
-    shared.update(i, |t| {
+    shared.update(id, |t| {
         t.status = State::Ready;
         t.plan = Some(plan);
         t.record = Some(record);
@@ -278,15 +285,76 @@ pub(super) fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str)
     });
 }
 
-/// The worker: build what is wanted, then what changed, until `stop`.
-pub fn work(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
-    while !stop.load(Ordering::Relaxed) {
-        shared.rescan_due();
-        match shared.pick(eager) {
-            Some(i) => rebuild(shared, i, opts),
-            None => std::thread::sleep(POLL),
+/// A draft: the text the page holds, built quickly (see
+/// [`dt_eval::Options::draft`]) and answered to whoever asked.  A newer draft
+/// of the same tile, or the tile leaving the list, stops it at its next
+/// progress report.
+fn draft(shared: &Arc<Shared>, d: &queue::Draft, opts: &Options) {
+    use queue::Outcome;
+    let opts = Options {
+        draft: true,
+        ..opts.clone()
+    };
+    let src = edit::Overlay(BTreeMap::from([(d.file.clone(), d.text.clone())]));
+    let progress = dt_eval::Progress::new(Arc::new(Cancelled(Arc::clone(&d.cancel))));
+    let cache = shared.build_cache(&d.path, true);
+    // the build and its encoding together: a panic in either must not end
+    // the lane, or builds stop for the rest of the run
+    let made = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let b = dt_eval::build_cached(&src, &d.path, &opts, &progress, Some(&cache))?;
+        Ok::<_, Vec<Diag>>(payload::from_draft(
+            &b,
+            opts.printer.overhang_deg,
+            &shared.palette(),
+        ))
+    }));
+    let outcome = match made {
+        Err(panic) if panic.is::<Superseded>() => Outcome::Superseded,
+        Err(_) => {
+            tell!("the draft of {} panicked (a bug in an element)", d.path);
+            Outcome::Failed
+        }
+        // a mistake in the text: the check shows it, the last mesh stays
+        Ok(Err(_)) => Outcome::Mistake,
+        Ok(Ok(_)) if d.cancel.load(Ordering::Relaxed) => Outcome::Superseded,
+        Ok(Ok(mesh)) => Outcome::Mesh(Arc::new(mesh)),
+    };
+    let _ = d.reply.send(outcome);
+}
+
+/// A draft's reporter: stops the build once its token is set.
+struct Cancelled(Arc<AtomicBool>);
+
+impl dt_kit::Reporter for Cancelled {
+    fn report(&self, _event: &dt_kit::Event<'_>) {
+        if self.0.load(Ordering::Relaxed) {
+            std::panic::resume_unwind(Box::new(Superseded));
         }
     }
+}
+
+/// One worker lane: take jobs from the queue until `stop`.
+fn lane(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
+    while !stop.load(Ordering::Relaxed) {
+        shared.rescan_due();
+        let Some(job) = shared.next_job(eager) else {
+            continue;
+        };
+        match &job {
+            queue::Job::Draft(d) => draft(shared, d, opts),
+            queue::Job::Full(id, cancel) => rebuild(shared, id, Arc::clone(cancel), opts),
+        }
+        shared.finish(&job);
+    }
+}
+
+/// The workers: two lanes on one queue, so a draft never waits for a full
+/// build (and no two full builds run at once), until `stop`.
+pub fn work(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
+    std::thread::scope(|s| {
+        s.spawn(|| lane(shared, opts, eager, stop));
+        lane(shared, opts, eager, stop);
+    });
 }
 
 #[cfg(test)]
@@ -300,6 +368,7 @@ mod tests {
             tracker: None,
             files: BTreeMap::from([(missing, Some(SystemTime::UNIX_EPOCH))]),
             sketches: None,
+            cancel: Arc::new(AtomicBool::new(false)),
             stage: Mutex::new(String::new()),
         };
         assert!(latest.changed());

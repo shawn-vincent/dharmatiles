@@ -7,26 +7,27 @@
 //!   end of the stack, or before it) and says at which byte; with
 //!   `op: remove` it takes out the node at `at`.  Nothing is written to
 //!   disk: the page saves the result.
-//! - `/api/tiles/N/check` `{text, file?}`: read and plan the tile with
+//! - `/api/tiles/ID/check` `{text, file?}`: read and plan the tile with
 //!   `text` in place of its document (or of `file`, one it uses): the
 //!   errors, the stack and the map (see `map`), under a second, for the
 //!   text pane and the overlay as you type.
-//! - `/api/tiles/N/save` `{text, base, file?}`: write the document (or a
+//! - `/api/tiles/ID/save` `{text, base, file?}`: write the document (or a
 //!   file it uses) when what is on disk is still `base`; else `409` with
 //!   what is there.  Library files are never written.  The worker sees the
 //!   new file and rebuilds.
-//! - `/api/tiles/N/mine`: copy a library tile into My tiles, its `use`s
-//!   pointing back at the library, and return the copy's index.
-//! - `/api/tiles/N/rename` `{name}`: rename the tile's file in its folder
+//! - `/api/tiles/ID/mine`: copy a library tile into My tiles, its `use`s
+//!   pointing back at the library, and return the copy's id and state.
+//! - `/api/tiles/ID/rename` `{name}`: rename the tile's file in its folder
 //!   (a tile's file name is its name), never over another file, and
-//!   return the new path and index.  Library tiles are not renamed.
+//!   return the new path, id and state (a new path is a new id).  Library
+//!   tiles are not renamed.
 //! - `/api/new` `{name, size}`: make a flat, printable tile called `name`
 //!   in My tiles, never over another file.
-//! - `/api/tiles/N/draft` `{text, file?, id}`: build a draft of the tile
-//!   from `text` (see `dt_eval::Options::draft`), on a thread of its own so
-//!   a full build never holds it up.  Only the latest asked for is built;
-//!   when it is ready the tile's `draft_id` says so, and
-//!   `GET /api/tiles/N/mesh?draft=1` serves it.  Nothing is written.
+//! - `/api/tiles/ID/draft` `{text, file?}`: build a draft of the tile from
+//!   `text` (see `dt_eval::Options::draft`) ahead of any full build, and
+//!   answer with its mesh: `200` and the binary buffer, `422` when the text
+//!   has a mistake, `409` when a newer draft of the tile took its place.
+//!   Nothing is written.
 
 use std::collections::BTreeMap;
 use std::hash::{BuildHasher, Hasher};
@@ -34,7 +35,9 @@ use std::path::{Path, PathBuf};
 
 use dt_eval::Source;
 
+use super::queue::Outcome;
 use super::roots::personal_home;
+use super::route::{Reply, tile_route};
 use super::*;
 
 /// 128 random bits, hex: the run's token.
@@ -54,7 +57,7 @@ pub(super) fn token() -> String {
 }
 
 /// The text of a file, overlaid on the disk: the document being edited.
-struct Overlay(BTreeMap<String, String>);
+pub(super) struct Overlay(pub BTreeMap<String, String>);
 
 impl Source for Overlay {
     fn read(&self, path: &str) -> Result<String, String> {
@@ -70,32 +73,28 @@ fn bad(msg: impl Into<String>) -> (&'static str, Value) {
 }
 
 /// Route one editor call.
-pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> (&'static str, Value) {
+pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     let Ok(v) = serde_json::from_slice::<Value>(body) else {
-        return bad("the body is not JSON");
+        return bad("the body is not JSON").into();
     };
     if path == "/api/edit" {
-        return edit(&v);
+        return edit(&v).into();
     }
     if path == "/api/new" {
-        return new_tile(shared, &v);
+        return new_tile(shared, &v).into();
     }
     if path == "/api/reveal" {
-        return reveal(&v);
+        return reveal(&v).into();
     }
-    let Some((i, what)) = path
-        .strip_prefix("/api/tiles/")
-        .and_then(|r| r.split_once('/'))
-        .and_then(|(n, w)| Some((n.parse::<usize>().ok()?, w)))
-    else {
-        return ("404 Not Found", json!({ "error": "no such call" }));
+    let Some((id, what)) = tile_route(path) else {
+        return ("404 Not Found", json!({ "error": "no such call" })).into();
     };
     let Some((tile, files)) = lock(&shared.tiles)
-        .get(i)
-        .filter(|t| !t.gone)
+        .iter()
+        .find(|t| t.id == id)
         .map(|t| (t.path.clone(), t.files.clone()))
     else {
-        return ("404 Not Found", json!({ "error": "no such tile" }));
+        return ("404 Not Found", json!({ "error": "no such tile" })).into();
     };
     // only the tile's document, or a file its last build read
     let file = match v["file"].as_str() {
@@ -105,30 +104,47 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> (&'static str, V
             return (
                 "403 Forbidden",
                 json!({ "error": "not a file of this tile" }),
-            );
+            )
+                .into();
         }
     };
     match what {
-        "check" => check(shared, &tile, &file, &v),
-        "save" => save(&file, &v),
-        "mine" => mine(shared, &tile, &files),
-        "rename" => rename(shared, &tile, &v),
-        "export" => export(shared, &tile, &v),
-        "draft" => {
-            let (Some(text), Some(id)) = (v["text"].as_str(), v["id"].as_u64()) else {
-                return bad("give the text and an id");
-            };
-            *lock(&shared.draft_req) = Some(DraftRequest {
-                tile: i,
-                path: tile,
-                file,
-                text: text.to_owned(),
-                id,
-            });
-            shared.draft_cv.notify_one();
-            ("202 Accepted", json!({ "ok": true }))
-        }
-        _ => ("404 Not Found", json!({ "error": "no such call" })),
+        "check" => check(shared, &tile, &file, &v).into(),
+        "save" => save(&file, &v).into(),
+        "mine" => mine(shared, &tile, &files).into(),
+        "rename" => rename(shared, &tile, &v).into(),
+        "export" => export(shared, &tile, &v).into(),
+        "draft" => draft(shared, id, &tile, &file, &v),
+        _ => ("404 Not Found", json!({ "error": "no such call" })).into(),
+    }
+}
+
+/// A draft: queued ahead of the full builds and waited for, so the reply is
+/// the mesh itself.
+fn draft(shared: &Shared, id: &str, tile: &str, file: &str, v: &Value) -> Reply {
+    let Some(text) = v["text"].as_str() else {
+        return bad("give the text").into();
+    };
+    match shared
+        .submit_draft(id, tile, file, text)
+        .recv_timeout(Duration::from_secs(120))
+    {
+        Ok(Outcome::Mesh(mesh)) => Reply::Bytes(mesh),
+        Ok(Outcome::Mistake) => (
+            "422 Unprocessable Entity",
+            json!({ "error": "the text has a mistake" }),
+        )
+            .into(),
+        Ok(Outcome::Superseded) => (
+            "409 Conflict",
+            json!({ "superseded": true, "error": "a newer draft took its place" }),
+        )
+            .into(),
+        Ok(Outcome::Failed) | Err(_) => (
+            "500 Internal Server Error",
+            json!({ "error": "the draft could not be built" }),
+        )
+            .into(),
     }
 }
 
@@ -206,19 +222,21 @@ fn write_new(dir: &Path, stem: &str, text: &str) -> Result<PathBuf, (&'static st
     ))
 }
 
-/// After a file appears or moves: list it, start its build, say where.
+/// After a file appears or moves: list it, start its build, say where and
+/// which tile it is (with its state, so the page can show it before the
+/// event that lists it arrives).
 fn listed(shared: &Shared, dest: &Path) -> (&'static str, Value) {
-    if shared.rescan() {
-        shared.broadcast(&shared.snapshot());
-    }
+    shared.rescan();
     let path = dest.to_string_lossy().into_owned();
-    let index = lock(&shared.tiles)
-        .iter()
-        .position(|t| t.path == path && !t.gone);
-    if let Some(i) = index {
-        shared.want(i);
+    let id = tile_id(&path);
+    let tile = shared.summary(&id);
+    if tile.is_some() {
+        shared.want(&id);
     }
-    ("200 OK", json!({ "path": path, "index": index }))
+    (
+        "200 OK",
+        json!({ "path": path, "id": tile.as_ref().map(|_| id), "tile": tile }),
+    )
 }
 
 fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
@@ -326,80 +344,6 @@ fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
         Ok(dest) => listed(shared, &dest),
         Err(e) => e,
     }
-}
-
-/// A draft the page asked for.
-pub(super) struct DraftRequest {
-    tile: usize,
-    path: String,
-    file: String,
-    text: String,
-    id: u64,
-}
-
-/// A newer drag request makes the draft currently being computed worthless.
-struct LatestDraft(Arc<Shared>);
-
-impl dt_kit::Reporter for LatestDraft {
-    fn report(&self, _event: &dt_kit::Event<'_>) {
-        if lock(&self.0.draft_req).is_some() {
-            std::panic::resume_unwind(Box::new(Superseded));
-        }
-    }
-}
-
-/// The draft thread: builds the latest draft asked for, one at a time.
-pub(super) fn drafts(shared: Arc<Shared>, opts: Options) {
-    let opts = Options {
-        draft: true,
-        ..opts
-    };
-    std::thread::spawn(move || {
-        loop {
-            let req = {
-                let mut slot = lock(&shared.draft_req);
-                while slot.is_none() {
-                    slot = shared
-                        .draft_cv
-                        .wait(slot)
-                        .unwrap_or_else(PoisonError::into_inner);
-                }
-                slot.take()
-            };
-            let Some(r) = req else { continue };
-            let src = Overlay(BTreeMap::from([(r.file.clone(), r.text.clone())]));
-            let progress = dt_eval::Progress::new(Arc::new(LatestDraft(Arc::clone(&shared))));
-            let cache = shared.build_cache(&r.path, true);
-            // the build and its encoding together: a panic in either must
-            // not end the thread, or drafts stop for the rest of the run
-            let made = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                let b = dt_eval::build_cached(&src, &r.path, &opts, &progress, Some(&cache))?;
-                Ok::<_, Vec<Diag>>(payload::from_draft(
-                    &b,
-                    opts.printer.overhang_deg,
-                    &shared.palette(),
-                ))
-            }));
-            let mesh = match made {
-                Err(panic) if panic.is::<Superseded>() => continue,
-                Err(_) => {
-                    tell!("the draft of {} panicked (a bug in an element)", r.path);
-                    continue;
-                }
-                // a mistake in the text: the check shows it, the last draft stays
-                Ok(Err(_)) => continue,
-                Ok(Ok(mesh)) => Arc::new(mesh),
-            };
-            // a newer request already waiting makes this one moot
-            if lock(&shared.draft_req).is_some() {
-                continue;
-            }
-            shared.update(r.tile, |t| {
-                t.draft = Some(mesh);
-                t.draft_id = r.id;
-            });
-        }
-    });
 }
 
 /// A KDL value from JSON: whole numbers stay whole.
@@ -775,7 +719,7 @@ mod tests {
         assert!(text.contains("tile size=\"2x1\""));
         assert!(text.contains("ground level=edge"));
         dt_eval::check(&dt_eval::Files, path, &Options::default()).unwrap();
-        assert!(made["index"].is_number());
+        assert!(made["id"].is_string());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -796,7 +740,7 @@ mod tests {
         let lake = moved["path"].as_str().unwrap().to_owned();
         assert!(lake.ends_with("Still lake.dtile"), "{lake}");
         assert!(!Path::new(&pond).exists());
-        assert!(moved["index"].is_number());
+        assert!(moved["id"].is_string());
 
         let (status, _) = rename(&shared, &marsh, &json!({ "name": "Still lake" }));
         assert_eq!(status, "409 Conflict");

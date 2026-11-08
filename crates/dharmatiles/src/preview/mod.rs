@@ -7,14 +7,22 @@
 //! |---|---|
 //! | `GET /` and assets | the viewer |
 //! | `GET /api/tiles` | every tile's state as JSON |
-//! | `GET /api/tiles/N/mesh` | the tile's mesh as one binary buffer ([`payload`]); `?draft=1` its draft |
-//! | `GET /api/tiles/N/sketch?id=K` | one stage's sketch of a running build |
-//! | `GET /api/tiles/N/text` | the tile's document (or `?file=` one it read) for the text pane |
-//! | `POST /api/tiles/N/build` | build a tile that has not been built yet |
-//! | `GET /api/events` | server-sent events: a snapshot, then one event per state change |
+//! | `GET /api/tiles/ID/mesh` | the tile's mesh as one binary buffer ([`payload`]) |
+//! | `GET /api/tiles/ID/sketch?id=K` | one stage's sketch of a running build |
+//! | `GET /api/tiles/ID/text` | the tile's document (or `?file=` one it read) for the text pane |
+//! | `POST /api/tiles/ID/build` | build a tile that has not been built yet |
+//! | `POST /api/tiles/ID/draft` | build the posted text quickly; the reply is its mesh |
+//! | `GET /api/events?epoch=E&since=N` | server-sent events: a snapshot (or, resuming, what changed since revision N), then one event per change |
 //! | `GET /api/session` | this run's token, which every other `POST` must carry |
 //! | `GET /api/elements` | the elements and their controls |
 //! | `POST /api/…` | the editor's calls: check, draft, save, rename, new, export… ([`edit`]) |
+//!
+//! A tile is named by its id: a hash of its path, the same for as long as
+//! the path is listed (and across runs), never a position in the list.
+//! Every change to the list or a tile has a revision number; an event
+//! stream that drops resumes from its last one.  One queue holds every
+//! build: drafts first, then the tiles asked for, then the tiles whose
+//! files changed.  A newer draft of a tile supersedes the older.
 //!
 //! The tiles come from roots: the files named on the command line (built
 //! at once), folders (every tile document under them, built when chosen)
@@ -23,13 +31,16 @@
 //! are rescanned every second: new tiles join the list, deleted ones leave
 //! it.
 //!
-//! A worker thread builds the tiles one at a time and, as `watch` does,
-//! polls the modification time of every file a build read, rebuilding the
+//! Worker threads take the queue's jobs (one full build at a time, a draft
+//! beside it) and, as `watch` does, poll the modification time of every file a build read, rebuilding the
 //! tile when one changes.  Each build pushes the plan pass first (the
 //! tile's size and stack, from `check`, before any geometry), then
 //! the finished mesh.  Errors are pushed with their file, line and column.
 
 mod assets;
+mod http;
+mod queue;
+mod route;
 
 /// Where a tile's build stands.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -88,21 +99,34 @@ pub const FIRST_PORT: u16 = 7878;
 const ENCODE: &str = "encode";
 /// How often folders are rescanned for new and deleted tiles.
 const RESCAN: Duration = Duration::from_secs(1);
+/// How many changes the event log remembers for a stream that resumes.
+const LOG: usize = 1024;
 /// Private unwind payload used for cooperative latest-edit-wins cancellation.
 /// `resume_unwind` avoids printing an alarming panic for an expected abort.
 #[derive(Debug)]
 struct Superseded;
+
+/// A tile's name for the page: 16 hex digits of a hash of its path.  The
+/// same path is the same id for as long as it is listed, and across runs.
+type TileId = String;
+
+fn tile_id(path: &str) -> TileId {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in path.bytes() {
+        h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{h:016x}")
+}
+
 /// One served tile.
 pub struct Slot {
+    id: TileId,
     path: String,
     /// Its name: the file name, without `.dtile`.
     name: String,
     /// The root it is listed under, and its group there.
     root: usize,
     group: Option<String>,
-    /// Its file has gone from its folder: off the list, never built.  The
-    /// slot stays so every other tile keeps its index.
-    gone: bool,
     status: State,
     plan: Option<Value>,
     record: Option<Value>,
@@ -113,10 +137,6 @@ pub struct Slot {
     progress: Option<Value>,
     /// Files the last build read, with their times.
     files: BTreeMap<String, Option<SystemTime>>,
-    /// The last draft (see `edit::drafts`): its mesh, and the page's id
-    /// for the text it was built from.
-    draft: Option<Arc<Vec<u8>>>,
-    draft_id: u64,
     /// While it builds: what each stage has made so far, for the page to
     /// show as it goes (see [`worker`]).  Gone when the build ends.
     sketches: Vec<Sketch>,
@@ -145,11 +165,11 @@ impl Slot {
             .trim_end_matches(".dtile")
             .to_owned();
         Self {
+            id: tile_id(path),
             path: path.to_owned(),
             name,
             root,
             group,
-            gone: false,
             status: State::Idle,
             plan: None,
             record: None,
@@ -158,20 +178,17 @@ impl Slot {
             mesh_version: 0,
             progress: None,
             files: BTreeMap::new(),
-            draft: None,
-            draft_id: 0,
             sketches: Vec::new(),
         }
     }
 
-    fn summary(&self, index: usize) -> Value {
+    fn summary(&self) -> Value {
         json!({
-            "index": index,
+            "id": self.id,
             "path": self.path,
             "name": self.name,
             "root": self.root,
             "group": self.group,
-            "gone": self.gone,
             "status": self.status.as_str(),
             "plan": self.plan,
             "record": self.record,
@@ -179,13 +196,45 @@ impl Slot {
             "progress": self.progress,
             "mesh_version": self.mesh.as_ref().map(|_| self.mesh_version),
             "mesh_bytes": self.mesh.as_ref().map(|m| m.len()),
-            "draft_id": self.draft.as_ref().map(|_| self.draft_id),
             "sketches": self.sketches.iter().map(|k| json!({"id": k.id, "rough": k.rough})).collect::<Vec<_>>(),
         })
     }
 
     fn changed(&self) -> bool {
-        !self.gone && self.status != State::Idle && self.files.iter().any(|(f, t)| mtime(f) != *t)
+        self.status != State::Idle && self.files.iter().any(|(f, t)| mtime(f) != *t)
+    }
+}
+
+/// What changed, as the event log remembers it.
+enum Change {
+    Tile(TileId),
+    /// Tiles joined or left the list.
+    List,
+}
+
+/// The listeners and the changes they have been sent.  Every change to
+/// the list or a tile takes the next revision; progress events ride on
+/// the current one.  Locked after the tiles (never before).
+struct Events {
+    rev: u64,
+    log: VecDeque<(u64, Change)>,
+    clients: Vec<Sender<String>>,
+}
+
+impl Events {
+    fn send(&mut self, msg: &Value) {
+        let msg = msg.to_string();
+        self.clients.retain(|tx| tx.send(msg.clone()).is_ok());
+    }
+
+    /// Note a change, and say which revision it is.
+    fn bump(&mut self, change: Change) -> u64 {
+        self.rev += 1;
+        self.log.push_back((self.rev, change));
+        if self.log.len() > LOG {
+            self.log.pop_front();
+        }
+        self.rev
     }
 }
 
@@ -195,8 +244,13 @@ pub struct Shared {
     overhang_deg: f64,
     steepest_deg: f64,
     tiles: Mutex<Vec<Slot>>,
-    clients: Mutex<Vec<Sender<String>>>,
-    wanted: Mutex<VecDeque<usize>>,
+    events: Mutex<Events>,
+    /// This run: a stream from another run cannot resume, whatever its
+    /// revision.
+    epoch: String,
+    /// Every build waiting or running, and the signal that one arrived.
+    queue: Mutex<queue::Queue>,
+    queue_cv: std::sync::Condvar,
     /// Where measured stage durations are kept between builds.
     cache: Option<std::path::PathBuf>,
     /// A palette document the paint is read from at each build.
@@ -205,11 +259,8 @@ pub struct Shared {
     roots: Vec<Root>,
     /// When the folders were last rescanned.
     scanned: Mutex<Option<Instant>>,
-    /// This run's secret: the editor's calls carry it (see `server`).
+    /// This run's secret: the editor's calls carry it (see `route`).
     token: String,
-    /// The draft the page asked for last, not yet built.
-    draft_req: Mutex<Option<edit::DraftRequest>>,
-    draft_cv: std::sync::Condvar,
     /// Each sketch's id, unique across tiles.
     sketch_seq: std::sync::atomic::AtomicU64,
     /// The build caches of the tiles built last, newest first, by path
@@ -260,15 +311,19 @@ impl Shared {
             overhang_deg,
             steepest_deg,
             tiles: Mutex::new(tiles),
-            clients: Mutex::new(Vec::new()),
-            wanted: Mutex::new(VecDeque::new()),
+            events: Mutex::new(Events {
+                rev: 1,
+                log: VecDeque::new(),
+                clients: Vec::new(),
+            }),
+            epoch: edit::token()[..12].to_owned(),
+            queue: Mutex::new(queue::Queue::default()),
+            queue_cv: std::sync::Condvar::new(),
             cache: None,
             palette: None,
             roots,
             scanned: Mutex::new(None),
             token: edit::token(),
-            draft_req: Mutex::new(None),
-            draft_cv: std::sync::Condvar::new(),
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
             build_caches: Mutex::new(VecDeque::new()),
         };
@@ -316,48 +371,53 @@ impl Shared {
         self
     }
 
-    /// Tell every listening browser `msg`.
-    fn broadcast(&self, msg: &Value) {
-        let msg = msg.to_string();
-        lock(&self.clients).retain(|tx| tx.send(msg.clone()).is_ok());
-    }
-
-    /// The callback a tracker for tile `i` reports through.
-    fn sink(self: &Arc<Self>, i: usize) -> impl Fn(&Status) + Send + Sync + use<> {
+    /// The callback a tracker for tile `id` reports through.
+    fn sink(self: &Arc<Self>, id: &str) -> impl Fn(&Status) + Send + Sync + use<> {
         let me = Arc::clone(self);
-        move |s| me.progress(i, s)
+        let id = id.to_owned();
+        move |s| me.progress(&id, s)
     }
 
     /// A tile's progress: remembered for a browser that connects later,
     /// and sent now.  The tracker calls this about ten times a second.
-    fn progress(&self, i: usize, status: &Status) {
+    fn progress(&self, id: &str, status: &Status) {
         let body = json!({
             "fraction": status.fraction, "label": status.label, "key": status.key,
             "count": status.count, "elapsed_s": status.elapsed_s,
             "eta_s": status.eta_s, "estimate_s": status.estimate_s,
         });
-        if let Some(slot) = lock(&self.tiles).get_mut(i) {
+        let mut tiles = lock(&self.tiles);
+        if let Some(slot) = tiles.iter_mut().find(|t| t.id == id) {
             slot.progress = Some(body.clone());
+            let mut ev = lock(&self.events);
+            let rev = ev.rev;
+            ev.send(&json!({"type": "progress", "rev": rev, "id": id, "progress": body}));
         }
-        self.broadcast(&json!({"type": "progress", "index": i, "progress": body}));
     }
 
-    /// Every tile's state, as the `/api/tiles` body and the first event.
-    fn snapshot(&self) -> Value {
-        let tiles = lock(&self.tiles);
+    /// Every tile's state: the `/api/tiles` body and the first event.
+    fn snapshot_of(&self, tiles: &[Slot], rev: u64) -> Value {
         json!({
             "type": "snapshot",
+            "rev": rev,
+            "epoch": self.epoch,
             "system": self.system,
             "overhang_deg": self.overhang_deg,
             "steepest_deg": self.steepest_deg,
             "roots": self.roots.iter().enumerate().map(|(i, r)| r.json(i)).collect::<Vec<_>>(),
-            "tiles": tiles.iter().enumerate().map(|(i, t)| t.summary(i)).collect::<Vec<_>>(),
+            "tiles": tiles.iter().map(Slot::summary).collect::<Vec<_>>(),
         })
     }
 
+    fn snapshot(&self) -> Value {
+        let tiles = lock(&self.tiles);
+        let rev = lock(&self.events).rev;
+        self.snapshot_of(&tiles, rev)
+    }
+
     /// Rescan the folders and the library once [`RESCAN`] has passed:
-    /// new tiles join the list, deleted ones leave it (and come back if
-    /// the file does).  Every browser is told the new list.
+    /// new tiles join the list, deleted ones leave it (and come back,
+    /// under the same id, if the file does).  Every browser is told.
     fn rescan_due(&self) {
         let due = {
             let mut last = lock(&self.scanned);
@@ -367,12 +427,13 @@ impl Shared {
             }
             due
         };
-        if due && self.rescan() {
-            self.broadcast(&self.snapshot());
+        if due {
+            self.rescan();
         }
     }
 
-    /// Rescan every root now.  True when the list changed.
+    /// Rescan every root now, telling every browser the new list when it
+    /// changed.  True when it did.
     fn rescan(&self) -> bool {
         let found: Vec<(usize, Vec<String>)> = self
             .roots
@@ -380,68 +441,117 @@ impl Shared {
             .enumerate()
             .filter_map(|(r, root)| Some((r, root.scan()?)))
             .collect();
-        let mut tiles = lock(&self.tiles);
-        let mut changed = false;
-        for (r, paths) in found {
-            let have: std::collections::BTreeSet<&str> = paths.iter().map(String::as_str).collect();
-            for t in tiles.iter_mut().filter(|t| t.root == r) {
-                let gone = !have.contains(t.path.as_str());
-                changed |= t.gone != gone;
-                t.gone = gone;
-            }
-            for p in &paths {
-                if !tiles.iter().any(|t| t.root == r && &t.path == p) {
-                    tiles.push(Slot::in_root(p, r, self.roots[r].group(p)));
-                    changed = true;
+        let mut removed = Vec::new();
+        let changed = {
+            let mut tiles = lock(&self.tiles);
+            let before = tiles.len();
+            for (r, paths) in found {
+                let have: std::collections::BTreeSet<&str> =
+                    paths.iter().map(String::as_str).collect();
+                tiles.retain(|t| {
+                    let keep = t.root != r || have.contains(t.path.as_str());
+                    if !keep {
+                        removed.push(t.id.clone());
+                    }
+                    keep
+                });
+                for p in &paths {
+                    if !tiles.iter().any(|t| t.root == r && &t.path == p) {
+                        tiles.push(Slot::in_root(p, r, self.roots[r].group(p)));
+                    }
                 }
             }
+            let changed = tiles.len() != before || !removed.is_empty();
+            if changed {
+                let mut ev = lock(&self.events);
+                let rev = ev.bump(Change::List);
+                let snap = self.snapshot_of(&tiles, rev);
+                ev.send(&snap);
+            }
+            changed
+        };
+        for id in &removed {
+            self.forget(id);
         }
         changed
     }
 
-    /// Change tile `i` and tell every listening browser.
-    fn update(&self, i: usize, f: impl FnOnce(&mut Slot)) {
-        let summary = {
-            let mut tiles = lock(&self.tiles);
-            let Some(slot) = tiles.get_mut(i) else { return };
-            f(slot);
-            slot.summary(i)
+    /// Change tile `id` and tell every listening browser; a tile that is
+    /// not listed is left alone.
+    fn update(&self, id: &str, f: impl FnOnce(&mut Slot)) {
+        let mut tiles = lock(&self.tiles);
+        let Some(slot) = tiles.iter_mut().find(|t| t.id == id) else {
+            return;
         };
-        self.broadcast(&json!({"type": "tile", "tile": summary}));
+        f(slot);
+        let summary = slot.summary();
+        let mut ev = lock(&self.events);
+        let rev = ev.bump(Change::Tile(id.to_owned()));
+        ev.send(&json!({"type": "tile", "rev": rev, "tile": summary}));
     }
 
-    /// A new listener, whose first message is the snapshot.  The clients
-    /// lock is held across both steps so no update falls between them.
-    fn subscribe(&self) -> std::sync::mpsc::Receiver<String> {
+    /// The tile `id` as the page reads it, for a call that makes or moves
+    /// one (the reply carries it, so the page need not wait for an event).
+    fn summary(&self, id: &str) -> Option<Value> {
+        lock(&self.tiles)
+            .iter()
+            .find(|t| t.id == id)
+            .map(Slot::summary)
+    }
+
+    /// A new listener.  With the epoch and last revision of a stream that
+    /// dropped, and the log still holding everything since, it is sent
+    /// only what changed (one event per tile, as it is now); otherwise
+    /// the snapshot.  Locked so no change falls between the first message
+    /// and the rest.
+    fn subscribe(&self, from: &route::Resume) -> std::sync::mpsc::Receiver<String> {
         let (tx, rx) = std::sync::mpsc::channel();
-        let mut clients = lock(&self.clients);
-        let _ = tx.send(self.snapshot().to_string());
-        clients.push(tx);
+        let tiles = lock(&self.tiles);
+        let mut ev = lock(&self.events);
+        let mut resumed = false;
+        if let (Some(e), Some(since)) = (&from.epoch, from.since)
+            && *e == self.epoch
+            && since <= ev.rev
+            && (since == ev.rev || ev.log.front().is_some_and(|(r, _)| *r <= since + 1))
+        {
+            let mut ids = Vec::new();
+            let mut list = false;
+            for (_, c) in ev.log.iter().filter(|(r, _)| *r > since) {
+                match c {
+                    Change::List => list = true,
+                    Change::Tile(id) if !ids.contains(id) => ids.push(id.clone()),
+                    Change::Tile(_) => {}
+                }
+            }
+            if !list {
+                let rev = ev.rev;
+                let _ = tx
+                    .send(json!({"type": "resumed", "rev": rev, "epoch": self.epoch}).to_string());
+                for id in ids {
+                    if let Some(t) = tiles.iter().find(|t| t.id == id) {
+                        let _ = tx.send(
+                            json!({"type": "tile", "rev": rev, "tile": t.summary()}).to_string(),
+                        );
+                    }
+                }
+                resumed = true;
+            }
+        }
+        if !resumed {
+            let rev = ev.rev;
+            let _ = tx.send(self.snapshot_of(&tiles, rev).to_string());
+        }
+        ev.clients.push(tx);
         rx
     }
 
-    /// Ask for tile `i` to be built next (a no-op once it has been built).
-    fn want(&self, i: usize) -> bool {
-        let idle = lock(&self.tiles)
-            .get(i)
-            .filter(|t| !t.gone)
-            .map(|t| t.status == State::Idle);
-        if idle == Some(true) {
-            let mut w = lock(&self.wanted);
-            if !w.contains(&i) {
-                w.push_back(i);
-            }
-        }
-        idle.is_some()
-    }
-
-    /// A file of tile `i` for the text pane: the tile's own document, or
+    /// A file of tile `id` for the text pane: the tile's own document, or
     /// (`file`) one its last build read, and whether it may be written
     /// (library files never are).  Nothing else on disk is served.
-    fn text(&self, i: usize, file: Option<&str>) -> Option<Value> {
+    fn text(&self, id: &str, file: Option<&str>) -> Option<Value> {
         let path = {
             let tiles = lock(&self.tiles);
-            let t = tiles.get(i)?;
+            let t = tiles.iter().find(|t| t.id == id)?;
             match file {
                 None => t.path.clone(),
                 Some(f) if f == t.path || t.files.contains_key(f) => f.to_owned(),
@@ -457,20 +567,17 @@ impl Shared {
         Some(serde_json::json!({ "file": path, "text": text, "writable": writable }))
     }
 
-    fn mesh(&self, i: usize) -> Option<Arc<Vec<u8>>> {
-        lock(&self.tiles).get(i)?.mesh.clone()
+    fn mesh(&self, id: &str) -> Option<Arc<Vec<u8>>> {
+        lock(&self.tiles).iter().find(|t| t.id == id)?.mesh.clone()
     }
 
-    fn draft_mesh(&self, i: usize) -> Option<Arc<Vec<u8>>> {
-        lock(&self.tiles).get(i)?.draft.clone()
-    }
-
-    fn sketch_mesh(&self, i: usize, id: u64) -> Option<Arc<Vec<u8>>> {
+    fn sketch_mesh(&self, id: &str, sketch: u64) -> Option<Arc<Vec<u8>>> {
         lock(&self.tiles)
-            .get(i)?
+            .iter()
+            .find(|t| t.id == id)?
             .sketches
             .iter()
-            .find(|k| k.id == id)
+            .find(|k| k.id == sketch)
             .map(|k| Arc::clone(&k.mesh))
     }
 
@@ -488,41 +595,18 @@ impl Shared {
         cache
     }
 
-    /// Keep stage `stage`'s sketch for tile `i`, in place of its last.
-    fn add_sketch(&self, i: usize, stage: &str, rough: bool, mesh: Vec<u8>) {
-        let id = self.sketch_seq.fetch_add(1, Ordering::Relaxed) + 1;
-        self.update(i, |t| {
+    /// Keep stage `stage`'s sketch for tile `id`, in place of its last.
+    fn add_sketch(&self, id: &str, stage: &str, rough: bool, mesh: Vec<u8>) {
+        let sketch = self.sketch_seq.fetch_add(1, Ordering::Relaxed) + 1;
+        self.update(id, |t| {
             t.sketches.retain(|k| k.stage != stage);
             t.sketches.push(Sketch {
                 stage: stage.to_owned(),
-                id,
+                id: sketch,
                 rough,
                 mesh: Arc::new(mesh),
             });
         });
-    }
-
-    /// The next tile to build: one asked for, else (when `eager`) the first
-    /// named file not built yet, else one whose files changed.  Folder and
-    /// library tiles are built only when asked for.
-    fn pick(&self, eager: bool) -> Option<usize> {
-        if let Some(i) = lock(&self.wanted).pop_front() {
-            return Some(i);
-        }
-        let tiles = lock(&self.tiles);
-        let named = |t: &Slot| {
-            self.roots
-                .get(t.root)
-                .is_none_or(|r| r.kind == RootKind::Files)
-        };
-        if eager
-            && let Some(i) = tiles
-                .iter()
-                .position(|t| t.status == State::Idle && !t.gone && named(t))
-        {
-            return Some(i);
-        }
-        tiles.iter().position(Slot::changed)
     }
 }
 
@@ -587,10 +671,7 @@ pub fn run(
     let url = format!("http://{addr}/");
     tell!("preview: {url}  (Ctrl-C to stop)");
     for (i, r) in shared.roots.iter().enumerate() {
-        let n = lock(&shared.tiles)
-            .iter()
-            .filter(|t| !t.gone && t.root == i)
-            .count();
+        let n = lock(&shared.tiles).iter().filter(|t| t.root == i).count();
         match &r.kind {
             RootKind::Dir(d) if !d.is_dir() => tell!(
                 "{}: {} (not there yet; tiles saved there will show up)",
@@ -610,7 +691,6 @@ pub fn run(
         None => tell!("library: the copy built into this program"),
     }
     server::spawn(listener, Arc::clone(&shared));
-    edit::drafts(Arc::clone(&shared), opts.clone());
     if open {
         open_browser(&url);
     }
