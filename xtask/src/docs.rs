@@ -23,15 +23,7 @@ const SOURCE: &str = "https://github.com/shawn-vincent/dharmatiles/blob/main/";
 /// Fill every page under `docs/elements/`; with `check`, change nothing
 /// and fail if any page is stale.
 pub fn run(root: &Path, check: bool) -> Result<(), String> {
-    let bin = root.join("target/release/dharmatiles");
-    let out = Command::new("cargo")
-        .args(["build", "--release", "-q", "-p", "dharmatiles"])
-        .current_dir(root)
-        .status()
-        .map_err(|e| format!("cargo build: {e}"))?;
-    if !out.success() {
-        return Err("cargo build failed".into());
-    }
+    let bin = crate::program(root, true)?;
     let json = Command::new(&bin)
         .args(["elements", "--json"])
         .output()
