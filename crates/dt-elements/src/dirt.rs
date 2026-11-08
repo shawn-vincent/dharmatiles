@@ -65,7 +65,7 @@ const MID_RATIO: f64 = 5.0 / 14.0;
 const MID_WEIGHT: f64 = 0.15;
 /// Bedded stones per 2×2 (`stones some`).
 const STONES_2X2: (i64, i64) = (4, 7);
-/// The texture ramps in over this rim width, true mm.
+/// The clods and pebbles keep this far from the rim, true mm.
 const RIM_TEX_MM: f64 = 1.0;
 /// Dirt's edge-round, mm at the 35 mm square: a drop of the top at the rim,
 /// cut from the sharp corner at the edge height.
@@ -73,10 +73,6 @@ const EDGE_ROUND_MM: f64 = 0.2;
 /// The relief of dirt's sides, mm at the 35 mm square (never under the
 /// printer's one line).
 const SIDE_RELIEF_MM: f64 = 0.6;
-/// The surface is set in for the grain gradually from the rim, over this
-/// width (true mm), so the dip from the held rim is gentle (about 30° for
-/// the grain's height), not a trench.
-const SET_IN_MM: f64 = 4.0;
 /// Below any surface: a lobe or pebble that is not there.
 const NONE: f64 = -1e9;
 
@@ -390,7 +386,8 @@ pub fn surface(
             .map(|k| base.z[k] - shape.field().z[k])
             .collect(),
     );
-    let w_rim = rim.map(|d| smooth01(d / RIM_TEX_MM));
+    // the grain runs on to the rim and over the edge-round: no fade
+    let w_rim = rim.map(|_| 1.0);
     let w_tex = w_rim.zip(&keep, |w, k| w * k);
     let mid = noise(
         &frame,
@@ -426,7 +423,7 @@ pub fn surface(
     counts.stones = avoid.len();
     counts.texture_ok = texture_ok(&z, &rim);
     let relief = z.with_z((0..z.z.len()).map(|k| z.z[k] - base.z[k]).collect());
-    let weight = rim.zip(&keep, |d, k| smooth01(d / SET_IN_MM) * k);
+    let weight = keep.clone();
     // dry ground stays dry: the grain never takes it under the water's level
     let floor = under.map(|u| u.map(|w| w + 0.2 * frame.scale()));
     // the grain sets the surface in, so a bedded stone sits as far lower

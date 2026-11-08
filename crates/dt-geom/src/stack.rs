@@ -88,10 +88,10 @@ fn smooth01(t: f64) -> f64 {
 pub struct LayerRelief<'a> {
     /// The most the face is set back behind its plane, mm.
     pub depth: f64,
-    /// The relief's shape, 0 (on the plane) to 1 (set back by `depth`), by
-    /// side (0 south, 1 east, 2 north, 3 west, each walked counter-clockwise),
-    /// distance along it from its start, mm, and height, mm.
-    pub shape: &'a (dyn Fn(usize, f64, f64) -> f64 + Sync),
+    /// The relief's shape, 0 (on the plane) to 1 (set back by `depth`), at
+    /// a point of the tile's side (x, y, z mm). A function of the point
+    /// alone, so it runs on round every corner without a seam.
+    pub shape: &'a (dyn Fn([f64; 3]) -> f64 + Sync),
 }
 
 /// How the tile's four sides are made: each a height field over its
@@ -110,10 +110,12 @@ pub struct Sides<'a> {
     /// No face leans out over the one below it by more than this, degrees
     /// from vertical.
     pub overhang_deg: f64,
-    /// The relief rises from zero at each corner over this distance, mm.
-    pub corner_ramp_mm: f64,
     /// The four vertical corners are rounded in plan by this, mm.
     pub corner_round_mm: f64,
+    /// Near a corner a face is set back behind both planes: the setback
+    /// turns from its own plane's to the diagonal's over this distance from
+    /// the corner, mm, so the relief runs on round the corner as one surface.
+    pub corner_blend_mm: f64,
 }
 
 /// The shown layer at every node.
@@ -557,34 +559,7 @@ impl<'l, 'a> Mesher<'l, 'a> {
             .iter()
             .map(|&(i, j)| j * self.nx + i)
             .collect();
-        let (w, h) = (
-            (self.nx - 1) as f64 * self.step,
-            (self.ny - 1) as f64 * self.step,
-        );
         let slope = libm::tan((sides.overhang_deg - OVERHANG_MARGIN_DEG).to_radians());
-        let normal = [[0.0, 1.0], [-1.0, 0.0], [0.0, -1.0], [1.0, 0.0]];
-        let (nx, ny) = (self.nx, self.ny);
-        let side_of = move |a: usize, b: usize| {
-            let (ia, ja, ib, jb) = (a % nx, a / nx, b % nx, b / nx);
-            if ja == 0 && jb == 0 {
-                0
-            } else if ia == nx - 1 && ib == nx - 1 {
-                1
-            } else if ja == ny - 1 && jb == ny - 1 {
-                2
-            } else {
-                3
-            }
-        };
-        // the position along a side, from its start, and its length
-        let along = |side: usize, p: [f64; 2]| -> (f64, f64) {
-            match side {
-                0 => (p[0], w),
-                1 => (p[1], h),
-                2 => (w - p[0], w),
-                _ => (h - p[1], h),
-            }
-        };
         struct Col {
             /// Vertices of each layer's strip, from its lower boundary up.
             strips: Vec<Vec<u32>>,
@@ -594,8 +569,6 @@ impl<'l, 'a> Mesher<'l, 'a> {
         let m = ring.len();
         for k in 0..m {
             let (a, b) = (ring[k], ring[(k + 1) % m]);
-            let side = side_of(a, b);
-            let prev = side_of(ring[(k + m - 1) % m], a);
             let t_vertex = self.vid(a);
             let p = self.node_xy(a);
             let vis = f64::from(self.top[a]);
@@ -612,16 +585,36 @@ impl<'l, 'a> Mesher<'l, 'a> {
             }
             let floor = u(self.positions.len());
             self.positions.push([xy[0], xy[1], 0.0]);
-            // a corner belongs to both its sides: no relief there
-            let corner = (a % self.nx == 0 || a % self.nx == self.nx - 1)
-                && (a / self.nx == 0 || a / self.nx == self.ny - 1);
-            let own = if corner { prev } else { side };
-            let (t, len) = along(own, [xy[0], xy[1]]);
-            let cf = if corner {
-                0.0
-            } else {
-                smooth01(t.min(len - t) / sides.corner_ramp_mm.max(1e-9))
-            };
+            // how the face is set back at this column: behind its own plane
+            // by the relief's depth, and near a corner behind the other
+            // plane too (by the depth times a blend that is whole at the
+            // corner), so the relief turns the corner as one surface
+            let (ix, iy) = (a % self.nx, a / self.nx);
+            let (on_x, on_y) = (ix == 0 || ix == self.nx - 1, iy == 0 || iy == self.ny - 1);
+            let blend = |dist: f64| smooth01(1.0 - dist / sides.corner_blend_mm.max(1e-9));
+            let to_x = ix.min(self.nx - 1 - ix) as f64 * self.step;
+            let to_y = iy.min(self.ny - 1 - iy) as f64 * self.step;
+            let (gx, gy) = (
+                if on_x { 1.0 } else { blend(to_x) },
+                if on_y { 1.0 } else { blend(to_y) },
+            );
+            let (sx, sy) = (
+                if ix == 0 || (!on_x && ix < self.nx / 2) {
+                    1.0
+                } else {
+                    -1.0
+                },
+                if iy == 0 || (!on_y && iy < self.ny / 2) {
+                    1.0
+                } else {
+                    -1.0
+                },
+            );
+            // the setback is `u` along the face's own normal, turning to the
+            // diagonal at a corner and drawing in to 0.7 `u` there: its run
+            // is never more than `u`, and the corner's is a little less so
+            // what stands over it overhangs it no more than a side
+            let reach = libm::hypot(gx, gy);
             let mut strips: Vec<Vec<u32>> = Vec::with_capacity(nl);
             // vertices top-down are needed for the slope pass: build the
             // heights and relief first, bottom-up
@@ -644,10 +637,10 @@ impl<'l, 'a> Mesher<'l, 'a> {
                     .map(|q| {
                         let z = lo + (hi - lo) * q as f64 / n as f64;
                         let u = match rel {
-                            Some(r) if q > 0 && q < n && cf > 0.0 => {
-                                let s = (r.shape)(own, t, z).clamp(0.0, 1.0);
+                            Some(r) if q > 0 && q < n => {
+                                let s = (r.shape)([xy[0], xy[1], z]).clamp(0.0, 1.0);
                                 let fz = smooth01((z - lo) / f) * smooth01((hi - z) / f);
-                                r.depth * s * cf * fz
+                                r.depth * s * fz
                             }
                             _ => 0.0,
                         };
@@ -669,7 +662,6 @@ impl<'l, 'a> Mesher<'l, 'a> {
                     next = Some((row.z, row.u));
                 }
             }
-            let n_out = normal[own];
             for (l, rows) in &flat {
                 let mut ids = Vec::with_capacity(rows.len());
                 for (q, row) in rows.iter().enumerate() {
@@ -685,8 +677,8 @@ impl<'l, 'a> Mesher<'l, 'a> {
                     } else {
                         let v = u(self.positions.len());
                         self.positions.push([
-                            self.rd(xy[0] + row.u * n_out[0]),
-                            self.rd(xy[1] + row.u * n_out[1]),
+                            self.rd(xy[0] + row.u * gx / (reach * reach) * sx),
+                            self.rd(xy[1] + row.u * gy / (reach * reach) * sy),
                             self.rd(row.z),
                         ]);
                         v
@@ -958,9 +950,9 @@ mod tests {
         assert!(ids.contains(&7) && ids.contains(&9));
     }
 
-    fn lumps(side: usize, t: f64, z: f64) -> f64 {
+    fn lumps(p: [f64; 3]) -> f64 {
         // sharp, deep, uneven lumps: the worst case for the one pass
-        let a = (t * 2.7 + side as f64).sin() * (z * 3.9).cos();
+        let a = (p[0] * 2.7 + p[1] * 1.9).sin() * (p[2] * 3.9).cos();
         if a > 0.0 { 1.0 } else { 0.0 }
     }
 
@@ -971,8 +963,8 @@ mod tests {
             row_mm: 0.3,
             fade_mm: 0.4,
             overhang_deg: 55.0,
-            corner_ramp_mm: 1.5,
             corner_round_mm: 0.5,
+            corner_blend_mm: 1.5,
         }
     }
 

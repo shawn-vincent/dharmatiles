@@ -275,7 +275,11 @@ fn a_line_and_two_regions_make_a_step() {
         "high {}",
         z_at(26.0)
     );
-    assert!((z_at(35.0) - 3.4).abs() < 0.3, "edge {}", z_at(35.0));
+    assert!(
+        z_at(35.0) <= 3.4 + 1e-5 && z_at(35.0) > 3.4 - 2.0,
+        "edge {}",
+        z_at(35.0)
+    );
 }
 
 #[test]

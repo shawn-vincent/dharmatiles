@@ -166,13 +166,14 @@ fn the_flat_tile_meets_the_exit_criteria() {
     assert!(close(lo[2], -(5.7 + 5.2) - 0.0), "peg tip {}", lo[2]);
 }
 
-/// The edge contract: dirt meets the tile's plane at a sharp corner at the
-/// edge height, 3.4 mm, and the edge-round (0.2 mm) is cut from that corner.
-/// So the top of every rim column is the edge height less the round, to
-/// float32 accuracy, whatever grain (clods, grit, pebbles and their mounds,
-/// stones) the dirt carries.
+/// The edge contract: the edge height, 3.4 mm, is the most a dirt rim
+/// reaches. The grain runs on to the rim and over the edge-round (0.2 mm,
+/// cut from the sharp corner at the edge height), set into the surface, so
+/// the rim is that height less the round at its high points and the grain's
+/// depth below it elsewhere, and never above. Neighbouring tiles touch at
+/// their high points.
 #[test]
-fn the_rim_is_cut_from_the_sharp_corner_at_the_edge_height() {
+fn the_edge_height_is_the_most_the_rim_reaches() {
     const EDGE: f64 = 3.4;
     const ROUND: f64 = 0.2;
     for path in [
@@ -181,40 +182,54 @@ fn the_rim_is_cut_from_the_sharp_corner_at_the_edge_height() {
         "lib:tiles/ground/1x1-soil.dtile",
     ] {
         let b = built(path);
-        let [w, h] = b.footprint;
-        // the ground's surface: every node on the edge is the edge level less
-        // the round (the corner too: the round is mitred there)
         let (surface, _) = b.surface.as_ref().unwrap();
         let (nx, ny) = (surface.nx, surface.ny);
-        let mut on_edge = 0;
+        let mut rim: Vec<f64> = Vec::new();
         for j in 0..ny {
             for i in 0..nx {
                 if i == 0 || j == 0 || i == nx - 1 || j == ny - 1 {
-                    on_edge += 1;
-                    let z = f64::from(surface.z[j * nx + i]);
-                    assert!(
-                        (z - (EDGE - ROUND)).abs() < 1e-5,
-                        "{path}: the edge node ({i}, {j}) is {z} mm, not {}",
-                        EDGE - ROUND
-                    );
+                    rim.push(f64::from(surface.z[j * nx + i]));
                 }
             }
         }
-        assert!(on_edge > 100);
-        // and in the mesh nothing on the edge stands above that
-        let mut top = f64::MIN;
+        assert!(rim.len() > 100);
+        let top = rim.iter().copied().fold(f64::MIN, f64::max);
+        // nothing above the edge height, less the round, to float32
+        assert!(top <= EDGE - ROUND + 1e-5, "{path}: the rim tops at {top}");
+        // and the rim does reach up near it: the grain is set into the
+        // surface, so its high points meet the ceiling
+        let near = rim.iter().filter(|&&z| z > EDGE - ROUND - 1.5).count();
+        println!(
+            "{path}: rim top {top:.3}, within 1.5 mm {}/{}",
+            near,
+            rim.len()
+        );
+        assert!(
+            top > EDGE - ROUND - 0.5,
+            "{path}: the rim only reaches {top}"
+        );
+        // most of the rim is within the grain's depth (1.5 mm) of the
+        // ceiling, not far below it
+        assert!(
+            near * 100 >= rim.len() * 80,
+            "{path}: only {near} of {} rim nodes are within the grain's depth",
+            rim.len()
+        );
+        // and in the mesh nothing on the rim stands above the ceiling
+        let [w, h] = b.footprint;
+        let mut mesh_top = f64::MIN;
         for p in &b.export.mesh.positions {
             let on_rim = p[0].abs() < 1e-6
                 || (p[0] - w).abs() < 1e-6
                 || p[1].abs() < 1e-6
                 || (p[1] - h).abs() < 1e-6;
             if on_rim && p[2] > 0.01 {
-                top = top.max(p[2]);
+                mesh_top = mesh_top.max(p[2]);
             }
         }
         assert!(
-            (top - (EDGE - ROUND)).abs() < 1e-5,
-            "{path}: the edge tops at {top} mm"
+            mesh_top <= EDGE + 1e-5,
+            "{path}: the edge tops at {mesh_top} mm"
         );
     }
 }
@@ -258,7 +273,7 @@ fn the_dirt_sides_are_relief_behind_the_plane() {
                 let len = if side % 2 == 0 { w } else { h };
                 let c = v.iter().map(dist).sum::<f64>() / 3.0;
                 let a = v.iter().map(along).sum::<f64>() / 3.0;
-                if c > 1.2 || a < 1.6 || a > len - 1.6 {
+                if c > 1.2 || a < 0.7 || a > len - 0.7 {
                     continue;
                 }
                 let u = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
@@ -352,7 +367,7 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
             }
         }
         assert!(
-            (top - (edge - 0.2)).abs() < 1e-5,
+            top <= edge + 1e-5 && top > edge - 0.2 - 0.6,
             "{path}: the edge tops at {top}"
         );
     }

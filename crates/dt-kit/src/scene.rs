@@ -394,6 +394,11 @@ pub struct Stage {
     pub hash: u64,
 }
 
+/// How far round a node the grain's greatest height is looked for, mm at the
+/// 35 mm square (true mm: the grain is set in by what stands near it).
+const GRAIN_REACH_MM: f64 = 6.0;
+/// The sigma that height is smoothed by, mm at the 35 mm square.
+const GRAIN_SMOOTH_MM: f64 = 3.0;
 /// The lift's error bound, mm: no surface node is further than this from
 /// the triangulated top (a tenth of a 0.2 mm layer).
 pub const LIFT_TOL_MM: f64 = 0.02;
@@ -401,10 +406,10 @@ pub const LIFT_TOL_MM: f64 = 0.02;
 /// of a side panel (and of the top's rim) are this far apart.
 pub const SIDE_WAVE_MM: f64 = 1.0;
 /// The size of a lump of side relief, mm.
-const SIDE_LUMP_MM: f64 = 2.4;
-/// The relief of a side rises from zero at each corner over this, mm, so the
-/// lateral slope stays under 1 for the deepest relief.
-const SIDE_CORNER_RAMP_MM: f64 = 1.5;
+const SIDE_LUMP_MM: f64 = 1.8;
+/// Side relief turns round a corner over this distance, mm: it is set back
+/// behind both planes at the corner and behind its own alone beyond.
+const SIDE_CORNER_BLEND_MM: f64 = 2.0;
 /// The tile's four vertical corners are rounded in plan by this, mm.
 pub const CORNER_ROUND_MM: f64 = 0.5;
 /// The widest leaf of the adaptive lift, in cells.
@@ -605,9 +610,17 @@ impl Terrain {
             return (off, cap);
         };
         let shape = spec.shape.field();
-        let height = (0..n)
-            .filter(|&k| spec.mask.bits[k] && g.weight.z[k] > 0.5)
-            .fold(0.0_f64, |m, k| m.max(g.relief.z[k]));
+        // the grain's greatest height near each node (the highest within
+        // GRAIN_REACH_MM, smoothed), so the surface is set in only as far as
+        // the grain beside it stands: its high points meet the surface the
+        // band holds everywhere, the rim included, and the land follows it
+        let mut stands = g.relief.clone();
+        for k in 0..n {
+            if !(spec.mask.bits[k] && g.weight.z[k] > 0.5) {
+                stands.z[k] = 0.0;
+            }
+        }
+        let height = stands.dilate(GRAIN_REACH_MM).blur(GRAIN_SMOOTH_MM);
         for k in (0..n).filter(|&k| spec.mask.bits[k]) {
             let s = shape.z[k] + spec.raise.map_or(0.0, |r| r.z[k]);
             let below = if spec.fluid {
@@ -619,7 +632,7 @@ impl Terrain {
             if let Some(f) = g.floor {
                 cap[k] = cap[k].min((s - f.z[k]).max(0.0));
             }
-            off[k] = height.min(cap[k]) * g.weight.z[k];
+            off[k] = height.z[k].min(cap[k]) * g.weight.z[k];
         }
         (off, cap)
     }
@@ -1169,7 +1182,7 @@ impl Scene {
             .collect();
         // each layer's side relief, in the order of the layers (land, then
         // fluids)
-        type Shape = Box<dyn Fn(usize, f64, f64) -> f64 + Sync>;
+        type Shape = Box<dyn Fn([f64; 3]) -> f64 + Sync>;
         let shapes: Vec<Option<(f64, Shape)>> = terrain
             .layers
             .iter()
@@ -1178,7 +1191,7 @@ impl Scene {
             .map(|l| {
                 l.side.map(|s| {
                     let seed = s.seed;
-                    let f: Shape = Box::new(move |side, t, z| crumble(seed, side, t, z));
+                    let f: Shape = Box::new(move |p| crumble(seed, p));
                     (s.depth_mm, f)
                 })
             })
@@ -1199,8 +1212,8 @@ impl Scene {
             row_mm: 1.6 * printer.layer_mm,
             fade_mm: 2.0 * printer.layer_mm,
             overhang_deg: printer.overhang_deg,
-            corner_ramp_mm: SIDE_CORNER_RAMP_MM,
             corner_round_mm: CORNER_ROUND_MM,
+            corner_blend_mm: SIDE_CORNER_BLEND_MM,
         };
         // one closed mesh, a run per layer; vertices rounded to float32 once
         // so the terrain alone survives the STL reload
@@ -1255,12 +1268,12 @@ impl Scene {
 }
 
 /// The shape of the relief on a tile's side: 0 on the plane to 1 at its
-/// depth, lumps of earth with level ground between (more than a third of the
-/// face stays on the plane).
-fn crumble(seed: Seed, side: usize, t: f64, z: f64) -> f64 {
-    let s = seed.key("side").index(side as u64).value();
-    let n = dt_geom::noise::fbm(s, SIDE_LUMP_MM, 2, t, z);
-    crate::smooth01((n + 0.12) / 0.6)
+/// depth, grain like the top's, a function of the point alone so it runs
+/// on round the corners. A good share of the face stays near the plane.
+fn crumble(seed: Seed, p: [f64; 3]) -> f64 {
+    let s = seed.key("side").value();
+    let n = dt_geom::noise::fbm3(s, SIDE_LUMP_MM, 3, p);
+    crate::smooth01((n + 0.45) / 0.9)
 }
 
 /// A leaf solid from a mesh, relabelled with its slot (rule 2).
