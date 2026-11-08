@@ -1,21 +1,22 @@
-//! The plan-then-build scheduler.
+//! The plan-then-build scheduler: one dependency graph, one sort.
 //!
-//! Every stack entry first says what it writes and reads ([`Plan`]). The
-//! order follows from that, not from where things are listed:
-//! stack order is free for solids; it only decides which surface paints
-//! over which.
+//! Every stack entry first says what it writes and reads ([`Plan`]). Each
+//! is a node of the graph, and so is the lift, which reads every surface
+//! and every fill and writes the ground solid:
 //!
-//! 1. surfaces, painted in stack order;
-//! 2. fills (water), each after the solids it reads, and those solids
-//!    (with what they read in turn) before it;
-//! 3. the lift of the painted, filled surface into the `ground` solid;
-//! 4. the other solids, each after every writer of what it reads (stable
-//!    in stack order otherwise); a read of every solid (the connector's)
-//!    comes after all the others.
+//! - a surface reads nothing (surfaces are painted before any solid);
+//! - a fill (water) reads the surfaces, and the solids it names;
+//! - a read of a kind waits for every entry that writes one (the ground's
+//!   writer is the lift); a read of every solid (the connector's) waits
+//!   for everything else.
+//!
+//! The order is one stable topological sort: at each step the first node
+//! ready, surfaces first in stack order, then what the lift needs, the
+//! lift, and the rest in stack order. So stack order is free for solids;
+//! it only decides which surface paints over which.
 //!
 //! A read nothing in the tile writes, a cycle, or a surface that reads a
-//! solid (surfaces are painted before any solid exists) is refused here,
-//! before anything is built.
+//! solid is refused here, before anything is built.
 
 use dt_elements::{Kind, Plan, Read, Write};
 
@@ -55,98 +56,100 @@ pub enum Refusal {
 /// # Errors
 /// [`Refusal`] for a read that cannot be satisfied.
 pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
-    let mut steps = Vec::with_capacity(plans.len() + 1);
-    let mut solids = Vec::new();
-    let mut surfaces = 0;
-    for (i, p) in plans.iter().enumerate() {
-        match p.writes {
-            Write::Surface if !p.reads.is_empty() => {
-                return Err(Refusal::SurfaceReadsSolid { entry: i });
-            }
-            Write::Surface => {
-                steps.push(Step::Entry(i));
-                surfaces += 1;
-            }
-            Write::Solid(_) | Write::Fill => solids.push(i),
-        }
+    let n = plans.len();
+    let lift = n; // the lift's node
+    let is = |i: usize, w: Write| plans[i].writes == w;
+    let surfaces: Vec<usize> = (0..n).filter(|&i| is(i, Write::Surface)).collect();
+    if let Some(&i) = surfaces.iter().find(|&&i| !plans[i].reads.is_empty()) {
+        return Err(Refusal::SurfaceReadsSolid { entry: i });
     }
-    let lifted = surfaces > 0;
-    // must[i]: the entries i waits for
-    let mut must: Vec<Vec<usize>> = vec![Vec::new(); plans.len()];
-    for &i in &solids {
+    let lifted = !surfaces.is_empty();
+    // what each kind of solid is written by
+    let writers = |kind: Kind, me: usize| -> Vec<usize> {
+        let mut w: Vec<usize> = (0..n)
+            .filter(|&j| j != me && is(j, Write::Solid(kind)))
+            .collect();
+        if kind == Kind::Ground && lifted {
+            w.push(lift);
+        }
+        w
+    };
+    // waits[v]: the nodes v waits for
+    let mut waits: Vec<Vec<usize>> = vec![Vec::new(); n + 1];
+    for i in 0..n {
+        if is(i, Write::Fill) {
+            waits[i].extend(&surfaces);
+        }
         for r in &plans[i].reads {
             match *r {
                 Read::Solids(kind) | Read::IfAny(kind) => {
-                    let writers: Vec<usize> = solids
-                        .iter()
-                        .copied()
-                        .filter(|&j| j != i && plans[j].writes == Write::Solid(kind))
-                        .collect();
-                    // the lifted ground is a solid every tile with a surface has
-                    let ground = kind == Kind::Ground && lifted;
-                    if writers.is_empty() && !ground && matches!(r, Read::Solids(_)) {
+                    let w = writers(kind, i);
+                    if w.is_empty() && matches!(r, Read::Solids(_)) {
                         return Err(Refusal::NoWriter { entry: i, kind });
                     }
-                    must[i].extend(writers);
+                    waits[i].extend(w);
                 }
-                Read::AllSolids => must[i].extend(
-                    solids
-                        .iter()
-                        .copied()
-                        .filter(|&j| j != i && !plans[j].reads.contains(&Read::AllSolids)),
-                ),
+                Read::AllSolids => {
+                    waits[i].extend((0..n).filter(|&j| {
+                        j != i
+                            && !is(j, Write::Surface)
+                            && !plans[j].reads.contains(&Read::AllSolids)
+                    }));
+                    if lifted {
+                        waits[i].push(lift);
+                    }
+                }
             }
         }
     }
-    // before the lift: the fills and everything they wait for
-    let mut early = vec![false; plans.len()];
-    let mut todo: Vec<usize> = solids
-        .iter()
-        .copied()
-        .filter(|&i| plans[i].writes == Write::Fill)
-        .collect();
-    while let Some(i) = todo.pop() {
-        if !early[i] {
-            early[i] = true;
-            todo.extend(&must[i]);
-        }
-    }
-    // a fill and what it waits for come before the lift that makes the
-    // ground, so none of them can read the ground
-    let reads_ground = |i: usize| {
-        plans[i].reads.iter().any(|r| {
-            matches!(
-                r,
-                Read::Solids(Kind::Ground) | Read::IfAny(Kind::Ground) | Read::AllSolids
-            )
-        })
-    };
-    let early_ground: Vec<usize> = (0..plans.len())
-        .filter(|&i| early[i] && reads_ground(i))
-        .collect();
-    if lifted && !early_ground.is_empty() {
-        return Err(Refusal::Cycle {
-            entries: early_ground,
-        });
-    }
-    let mut done = vec![false; plans.len()];
-    for pass in [true, false] {
-        let mut left: Vec<usize> = solids
-            .iter()
-            .copied()
-            .filter(|&i| early[i] == pass)
+    if lifted {
+        waits[lift] = (0..n)
+            .filter(|&i| is(i, Write::Surface) || is(i, Write::Fill))
             .collect();
-        while !left.is_empty() {
-            let Some(k) = left.iter().position(|&i| must[i].iter().all(|&j| done[j])) else {
-                return Err(Refusal::Cycle { entries: left });
-            };
-            let i = left.remove(k);
-            done[i] = true;
-            steps.push(Step::Entry(i));
+    }
+    // what the lift needs, all the way down
+    let mut needed = vec![false; n + 1];
+    let mut todo = if lifted {
+        waits[lift].clone()
+    } else {
+        Vec::new()
+    };
+    while let Some(v) = todo.pop() {
+        if !needed[v] {
+            needed[v] = true;
+            todo.extend(&waits[v]);
         }
-        if pass {
-            steps.push(Step::Lift);
-        }
+    }
+    // surfaces, what the lift needs, the lift, the rest; each in stack order
+    let rank = |v: usize| -> (u8, usize) {
+        let class = if v == lift {
+            2
+        } else if is(v, Write::Surface) {
+            0
+        } else if needed[v] {
+            1
+        } else {
+            3
+        };
+        (class, v)
+    };
+    let mut left: Vec<usize> = (0..n).chain(lifted.then_some(lift)).collect();
+    left.sort_by_key(|&v| rank(v));
+    let mut done = vec![false; n + 1];
+    let mut steps = Vec::with_capacity(left.len());
+    while !left.is_empty() {
+        let Some(k) = left.iter().position(|&v| waits[v].iter().all(|&w| done[w])) else {
+            return Err(Refusal::Cycle {
+                entries: left.into_iter().filter(|&v| v != lift).collect(),
+            });
+        };
+        let v = left.remove(k);
+        done[v] = true;
+        steps.push(if v == lift {
+            Step::Lift
+        } else {
+            Step::Entry(v)
+        });
     }
     Ok(steps)
 }
@@ -249,7 +252,9 @@ mod tests {
         ];
         assert_eq!(
             schedule(&rock_on_ground),
-            Err(Refusal::Cycle { entries: vec![2] })
+            Err(Refusal::Cycle {
+                entries: vec![1, 2]
+            })
         );
     }
 
