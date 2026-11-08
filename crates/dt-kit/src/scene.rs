@@ -424,6 +424,8 @@ pub struct Surface {
     stone: Mask,
     edge_mm: Option<f64>,
     support: Option<Grid>,
+    /// SPIKE: the water's own top at every node (unclamped by the land).
+    water_top: Option<Vec<f64>>,
 }
 
 impl Surface {
@@ -443,6 +445,7 @@ impl Surface {
             stone: Mask::new(nx, ny, false),
             edge_mm: None,
             support: None,
+            water_top: None,
         }
     }
 
@@ -1223,6 +1226,134 @@ impl Scene {
         });
     }
 
+    /// SPIKE: the water's own top at every node (world mm).
+    pub fn set_water_top(&mut self, top: &[f64]) {
+        self.surface.water_top = Some(top.to_vec());
+    }
+
+    /// SPIKE: the terrain as one painted mesh through the stack mesher.
+    fn lift_stack(&mut self, owner: &str) -> Result<(), KitError> {
+        let t0 = std::time::Instant::now();
+        let (nx, ny) = (self.surface.field.nx, self.surface.field.ny);
+        let wet = self.surface.wet.count() > 0 && self.surface.water_top.is_some();
+        // the earth: the ground as it was under the water, held to the edge
+        // contract the way the lift holds it
+        let base: &Grid = if wet {
+            self.surface.bed.as_ref().unwrap_or(&self.surface.field)
+        } else {
+            &self.surface.field
+        };
+        let mut e: Vec<f32> = base.z.clone();
+        if let Some(edge) = self.surface.edge_mm {
+            #[allow(clippy::cast_possible_truncation)]
+            let ef = edge as f32;
+            for j in 0..ny {
+                for i in 0..nx {
+                    if wet && self.surface.no_edge.bits[j * nx + i] {
+                        continue;
+                    }
+                    if !wet && self.surface.no_edge.bits[j * nx + i] {
+                        continue;
+                    }
+                    let z = &mut e[j * nx + i];
+                    if i == 0 || j == 0 || i == nx - 1 || j == ny - 1 {
+                        *z = ef;
+                    } else {
+                        *z = z.max(ef);
+                    }
+                }
+            }
+        }
+        let w: Option<Vec<f32>> = wet.then(|| {
+            #[allow(clippy::cast_possible_truncation)]
+            self.surface
+                .water_top
+                .as_ref()
+                .map(|v| v.iter().map(|&x| x as f32).collect())
+                .unwrap_or_default()
+        });
+        if let Some(edge) = self.surface.edge_mm {
+            self.surface.hold_edge(edge);
+        }
+        self.record("surface", self.surface.field.content_hash());
+        let earth = self.built.slots(1, Material::Earth)?.get(0);
+        let water = if wet {
+            self.built.slots(1, Material::Water)?.get(0)
+        } else {
+            earth
+        };
+        let mesh = dt_geom::stack_lift(
+            nx,
+            ny,
+            self.surface.field.step,
+            &e,
+            w.as_deref(),
+            [earth.id, water.id],
+            LIFT_TOL_MM,
+            LIFT_MAX_CELLS,
+        )
+        .map_err(|e| KitError::Surface(e.to_string()))?;
+        // the float32 reload: positions merged by their float32 bits
+        let mut seen = std::collections::HashMap::new();
+        let mut remap = Vec::with_capacity(mesh.positions.len());
+        let mut pos = Vec::new();
+        for p in &mesh.positions {
+            #[allow(clippy::cast_possible_truncation)]
+            let key = [(p[0] as f32).to_bits(), (p[1] as f32).to_bits(), (p[2] as f32).to_bits()];
+            let id = *seen.entry(key).or_insert_with(|| {
+                pos.push(*p);
+                u32::try_from(pos.len() - 1).unwrap_or(0)
+            });
+            remap.push(id);
+        }
+        let reload = TriMesh {
+            positions: pos,
+            triangles: mesh
+                .triangles
+                .iter()
+                .map(|t| t.map(|v| remap[v as usize]))
+                .collect(),
+            ..TriMesh::default()
+        };
+        if !reload.is_watertight() {
+            let mut es: std::collections::HashMap<(u32, u32), i32> =
+                std::collections::HashMap::new();
+            for t in &reload.triangles {
+                for k in 0..3 {
+                    *es.entry((t[k], t[(k + 1) % 3])).or_insert(0) += 1;
+                }
+            }
+            let mut shown = 0;
+            for (&(a, b), &c) in &es {
+                if (c != 1 || es.get(&(b, a)) != Some(&1)) && shown < 8 {
+                    shown += 1;
+                    eprintln!(
+                        "[stack] bad edge x{c} {:?} -> {:?} (twin {:?})",
+                        reload.positions[a as usize],
+                        reload.positions[b as usize],
+                        es.get(&(b, a))
+                    );
+                }
+            }
+        }
+        eprintln!(
+            "[stack] terrain: {} triangles, {} runs, watertight after f32 reload: {}, {:.3}s",
+            mesh.triangles.len(),
+            mesh.run_original_id.len(),
+            reload.is_watertight(),
+            t0.elapsed().as_secs_f64()
+        );
+        let solid = Solid(dt_geom::Solid::from_tri_mesh(&mesh).map_err(KitError::Mesh)?);
+        self.add(
+            Tag {
+                kind: Kind::Ground,
+                owner: owner.to_owned(),
+            },
+            solid,
+        );
+        Ok(())
+    }
+
     /// **lift**: the painted surface as one solid from z = 0 (the uniform
     /// lift), tagged `ground`. Nodes no area painted take the level of the
     /// nearest painted node (breadth first, so drawn lines take their
@@ -1236,6 +1367,9 @@ impl Scene {
         }
         self.cull_covered();
         self.surface.settle();
+        if std::env::var_os("DT_STACK").is_some() {
+            return self.lift_stack(owner);
+        }
         if let Some(edge) = self.surface.edge_mm {
             self.surface.hold_edge(edge);
         }

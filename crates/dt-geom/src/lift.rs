@@ -22,11 +22,11 @@ use crate::TriMesh;
 use crate::grid::{Grid, LiftError};
 
 #[derive(Clone, Copy, Debug)]
-struct Leaf {
-    i0: usize,
-    j0: usize,
-    i1: usize,
-    j1: usize,
+pub(crate) struct Leaf {
+    pub i0: usize,
+    pub j0: usize,
+    pub i1: usize,
+    pub j1: usize,
 }
 
 impl Leaf {
@@ -41,7 +41,7 @@ impl Leaf {
         }
     }
 
-    const fn is_cell(&self) -> bool {
+    pub(crate) const fn is_cell(&self) -> bool {
         self.i1 - self.i0 == 1 && self.j1 - self.j0 == 1
     }
 }
@@ -53,6 +53,18 @@ impl Leaf {
 /// # Errors
 /// [`LiftError`] if the grid is smaller than 2 × 2 or a node is not above 0.
 pub fn lift_adaptive(g: &Grid, tol: f64, max_cells: usize) -> Result<TriMesh, LiftError> {
+    let leaves = plan_leaves(g, tol, max_cells, &|_| false)?;
+    Ok(assemble(g, &leaves))
+}
+
+/// The leaves of the adaptive lift; `force` makes a leaf a single cell
+/// (the stack mesher forces every cell a material boundary crosses).
+pub(crate) fn plan_leaves(
+    g: &Grid,
+    tol: f64,
+    max_cells: usize,
+    force: &(dyn Fn(Leaf) -> bool + Sync),
+) -> Result<Vec<Leaf>, LiftError> {
     let (nx, ny) = (g.nx, g.ny);
     if nx < 2 || ny < 2 || g.z.len() != nx * ny {
         return Err(LiftError::TooSmall);
@@ -77,7 +89,7 @@ pub fn lift_adaptive(g: &Grid, tol: f64, max_cells: usize) -> Result<TriMesh, Li
     }];
     while let Some(l) = todo.pop() {
         let big = l.i1 - l.i0 > max_cells || l.j1 - l.j0 > max_cells;
-        if !l.is_cell() && (big || bilinear_error(&z, l) > tol) {
+        if !l.is_cell() && (big || force(l) || bilinear_error(&z, l) > tol) {
             todo.extend(l.split());
         } else {
             leaves.push(l);
@@ -90,7 +102,10 @@ pub fn lift_adaptive(g: &Grid, tol: f64, max_cells: usize) -> Result<TriMesh, Li
         let verts = Corners::new(nx, ny, &leaves);
         let split: Vec<bool> = leaves
             .par_iter()
-            .map(|l| !l.is_cell() && (verts.crowded(*l) || fan_error(&z, g, &verts, *l) > tol))
+            .map(|l| {
+                !l.is_cell()
+                    && (force(*l) || verts.crowded(*l) || fan_error(&z, g, &verts, *l) > tol)
+            })
             .collect();
         if !split.contains(&true) {
             break;
@@ -102,7 +117,7 @@ pub fn lift_adaptive(g: &Grid, tol: f64, max_cells: usize) -> Result<TriMesh, Li
             .collect();
     }
     leaves.sort_unstable_by_key(|l| (l.j0, l.i0));
-    Ok(assemble(g, &leaves))
+    Ok(leaves)
 }
 
 /// Max |z − bilinear patch of the corners| over the leaf's nodes.
@@ -126,13 +141,13 @@ fn bilinear_error(z: &impl Fn(usize, usize) -> f64, l: Leaf) -> f64 {
 
 /// The leaf corners, by row and by column, so a leaf can list every
 /// vertex on its sides.
-struct Corners {
+pub(crate) struct Corners {
     rows: Vec<Vec<usize>>,
     cols: Vec<Vec<usize>>,
 }
 
 impl Corners {
-    fn new(nx: usize, ny: usize, leaves: &[Leaf]) -> Self {
+    pub(crate) fn new(nx: usize, ny: usize, leaves: &[Leaf]) -> Self {
         let mut rows = vec![Vec::new(); ny];
         let mut cols = vec![Vec::new(); nx];
         for l in leaves {
@@ -161,7 +176,7 @@ impl Corners {
     }
 
     /// The leaf's boundary nodes, counter-clockwise from (i0, j0), each once.
-    fn ring(&self, l: Leaf) -> Vec<(usize, usize)> {
+    pub(crate) fn ring(&self, l: Leaf) -> Vec<(usize, usize)> {
         let span = |v: &[usize], a: usize, b: usize| -> Vec<usize> {
             let s = v.partition_point(|&x| x < a);
             let e = v.partition_point(|&x| x <= b);
@@ -193,7 +208,7 @@ impl Corners {
 }
 
 /// The fan centre of a leaf: its middle, on the grid's bilinear surface.
-fn centre(g: &Grid, l: Leaf) -> [f64; 3] {
+pub(crate) fn centre(g: &Grid, l: Leaf) -> [f64; 3] {
     #[allow(clippy::cast_precision_loss)]
     let (ci, cj) = (0.5 * (l.i0 + l.i1) as f64, 0.5 * (l.j0 + l.j1) as f64);
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]

@@ -332,6 +332,7 @@ impl Element for Cliff {
     }
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
+        let t0 = std::time::Instant::now();
         let progress = scene.progress();
         let frame = *scene.frame();
         let Planned {
@@ -357,6 +358,7 @@ impl Element for Cliff {
         // the foot: the lowest ground under the tile
         let foot = ground.z.iter().copied().fold(f64::INFINITY, f64::min);
         progress.fraction("planning the pile", 0.01);
+        eprintln!("[cliff] after planning the pile {:.2}s", t0.elapsed().as_secs_f64());
         let placed = st.rocks;
         if placed.is_empty() {
             return Ok(());
@@ -387,6 +389,7 @@ impl Element for Cliff {
                 .map_err(|e| LookError::build(format!("plan column: {e}")))?;
         }
         progress.fraction("dressing columns", 0.03);
+        eprintln!("[cliff] after dressing columns {:.2}s", t0.elapsed().as_secs_f64());
         let core_mesh = core::core_mesh(&st.s, &cols, &placed)
             .map_err(|e| LookError::build(format!("core mesh: {e}")))?;
         let m = f2.matrix(foot);
@@ -418,6 +421,7 @@ impl Element for Cliff {
         };
         let col_seed = ctx.seed.key("cliff-columns");
         progress.fraction("planning faces and cracks", 0.04);
+        eprintln!("[cliff] after planning faces and cracks {:.2}s", t0.elapsed().as_secs_f64());
         let ticks = progress.counter("stones", placed.len(), 0.04, 0.14);
         let results: Vec<ColResult> = cols
             .par_iter()
@@ -460,6 +464,7 @@ impl Element for Cliff {
             })
             .collect();
         progress.fraction("stones finished", 0.14);
+        eprintln!("[cliff] after stones finished {:.2}s", t0.elapsed().as_secs_f64());
         let mut pieces: Vec<(usize, dt_kit::Piece)> = Vec::new();
         let mut tops = 0;
         for r in results {
@@ -483,6 +488,7 @@ impl Element for Cliff {
         let core = core::core_piece(slots.get(1), &core_mesh, &fm)
             .map_err(|e| LookError::build(format!("core piece: {e}")))?;
         progress.fraction("carving the core", 0.15);
+        eprintln!("[cliff] after carving the core {:.2}s", t0.elapsed().as_secs_f64());
         let core = relief::relief(
             core,
             &all_faces,
@@ -492,14 +498,79 @@ impl Element for Cliff {
         )
         .map_err(LookError::build)?;
         progress.fraction("graining the core", 0.72);
+        eprintln!("[cliff] after graining the core {:.2}s", t0.elapsed().as_secs_f64());
         let core = if ctx.draft {
             core
         } else {
             stone::grain(&core, env.seed, form::FOOT).map_err(LookError::build)?
         };
         progress.fraction("cleaning up the core", 0.85);
+        eprintln!("[cliff] after cleaning up the core {:.2}s", t0.elapsed().as_secs_f64());
         let core = core.parts_over(1e9).map_err(LookError::build)?;
+        let mut core = core;
+        if std::env::var_os("DT_STACK").is_some() {
+            // SPIKE (M0): the cliff's hand-set band is [foot, the form's top],
+            // kept a little wide at the footprint's edge; a stone that
+            // pokes above it is cut to it (a top cut by a height field)
+            let t_fit = std::time::Instant::now();
+            let (nx, ny) = (fm.t.nx, fm.t.ny);
+            let g = form::GRID_MM;
+            let mut cap = vec![1e3f64; (nx + 2) * (ny + 2)];
+            for j in 0..ny + 2 {
+                for i in 0..nx + 2 {
+                    let (ci, cj) = (i as isize - 1, j as isize - 1);
+                    let mut hi = f64::MIN;
+                    for dj in -2isize..=2 {
+                        for di in -2isize..=2 {
+                            let (a, b) = (ci + di, cj + dj);
+                            if a >= 0 && b >= 0 && (a as usize) < nx && (b as usize) < ny {
+                                hi = hi.max(fm.t.z[b as usize * nx + a as usize]);
+                            }
+                        }
+                    }
+                    if hi > form::FOOT {
+                        cap[j * (nx + 2) + i] = hi;
+                    }
+                }
+            }
+            let field = dt_kit::Field {
+                nx: nx + 2,
+                ny: ny + 2,
+                step: g,
+                z: cap.iter().map(|c| c + 5.0).collect(),
+            };
+            let mut band = dt_kit::hung(&field, 0.0).map_err(LookError::build)?;
+            for p in &mut band.positions {
+                p[0] -= 0.5 * g;
+                p[1] -= 0.5 * g;
+                p[2] -= 5.0;
+            }
+            let over = |m: &dt_kit::TriMesh| {
+                m.positions.iter().any(|p| {
+                    let i = ((p[0] / g).floor().max(0.0) as usize).min(nx - 1);
+                    let j = ((p[1] / g).floor().max(0.0) as usize).min(ny - 1);
+                    p[2] > cap[(j + 1) * (nx + 2) + i + 1] + 0.05
+                })
+            };
+            let mut cut = 0;
+            for (_, p) in &mut pieces {
+                if over(&p.mesh()) {
+                    *p = p.within(&band).map_err(LookError::build)?;
+                    cut += 1;
+                }
+            }
+            if over(&core.mesh()) {
+                core = core.within(&band).map_err(LookError::build)?;
+                cut += 1;
+            }
+            eprintln!(
+                "[cliff] band fit: {cut} of {} pieces cut to the form's top in {:.2}s",
+                pieces.len() + 1,
+                t_fit.elapsed().as_secs_f64()
+            );
+        }
         progress.fraction("dirt on the tops", 0.90);
+        eprintln!("[cliff] after dirt on the tops {:.2}s", t0.elapsed().as_secs_f64());
         if self.top_dirt {
             let mut pile = dt_kit::TriMesh::default();
             for mesh in pieces.iter().map(|p| p.1.mesh()).chain([core.mesh()]) {
@@ -526,6 +597,7 @@ impl Element for Cliff {
             }
         }
         progress.fraction("placing stones", 0.98);
+        eprintln!("[cliff] after placing stones {:.2}s", t0.elapsed().as_secs_f64());
         let n_stones = pieces.len();
         for (_, p) in pieces {
             let solid = p.transformed(&m).into_solid();

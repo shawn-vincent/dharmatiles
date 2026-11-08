@@ -29,6 +29,7 @@ pub mod raster;
 pub mod rays;
 pub mod seed;
 pub mod solid;
+pub mod stack;
 pub mod source;
 pub mod vec3;
 
@@ -38,6 +39,7 @@ pub use geodesic::geodesic;
 pub use grid::{Grid, LiftError, distance, distance_nearest, lift};
 pub use hash::SpatialHash;
 pub use lift::lift_adaptive;
+pub use stack::stack_lift;
 pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, MeshError, TriMesh, half_space};
 pub use raster::{Mask, draw_line, fill, fill_polygons};
 pub use rays::{Hit, ObvhsRays, Ray};

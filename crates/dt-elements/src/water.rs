@@ -394,6 +394,7 @@ impl Element for Water {
         });
         let mut top = vec![0.0; nn];
         let mut wet = vec![false; nn];
+        let mut spike_w = vec![0.0; nn];
         for k in 0..nn {
             let wz = if on_edge(k, nx, ny) && water[k] {
                 // the contract, exactly
@@ -402,6 +403,7 @@ impl Element for Water {
                 let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
                 level.z[k] + z[k] * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k]
             };
+            spike_w[k] = if ctx.area.bits[k] { wz } else { land.z[k] - 1.0 };
             wet[k] = water[k] && wz >= land.z[k];
             top[k] = if ctx.area.bits[k] {
                 wz.max(land.z[k])
@@ -416,6 +418,7 @@ impl Element for Water {
         let top_f = land.with_z(top);
         let st = stats(&frame, &top_f, &z, &water, &wet, &rim_f, edge_wl);
         scene.fill(&top_f, &wet, &no_edge);
+        scene.set_water_top(&spike_w);
         for (k, v) in [
             ("relief_min", st.relief.0),
             ("relief_max", st.relief.1),
