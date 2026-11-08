@@ -1,10 +1,6 @@
 // The title, the gate and the build record.
 
-import { $, isEntry, state, tile, viewer } from './app.js';
-import { loadText, markText } from './document.js';
-import { renderTitle } from './export.js';
-import { hovForView } from './selection.js';
-import { renderList } from './tiles.js';
+import { $ } from './app.js';
 
 // ---- the title, the gate and the record ---------------------------------------
 
@@ -25,12 +21,4 @@ export function row(dl, k, v, cls = '') {
   const dt = document.createElement('dt'); dt.textContent = k;
   const dd = document.createElement('dd'); dd.textContent = v; if (cls) dd.className = cls;
   dl.append(dt, dd);
-}
-export function renderAll() {
-  renderList();
-  renderTitle();
-  viewer.setHighlight(isEntry(state.sel) ? state.sel : null, hovForView());
-  const t = tile();
-  if (t) loadText(state.textFor && state.textFor[0] === t.index && state.textFor[1] !== t.path ? state.textFor[1] : null);
-  markText();
 }

@@ -1,12 +1,12 @@
 // Export: the same build as `dharmatiles build`, written to out/.
 
-import { $, host, state, tile, viewer } from './app.js';
-import { browsing, showBrowser } from './chrome.js';
-import { dirty, doc, drafts, loadText, texts } from './document.js';
-import { renameable, rootOf, stem } from './tiles.js';
+import { $, host, viewer } from './app.js';
+import { openFile } from './document.js';
+import { dirty, doc, progressOf, renameable, rootOf, server, stem, tile, view } from './stores.js';
 import { fmt, row, showProgress } from './title.js';
 
 let timer = 0;
+const buildStart = new Map(); // tile id -> when its build was first seen under way
 
 // ---- export: the same build as `dharmatiles build`, written to out/ ----------
 
@@ -16,7 +16,7 @@ function exportBlock() {
   const t = tile();
   if (!t) return 'Choose a tile first.';
   if (t.status === 'building' || t.status === 'idle') return 'Wait for the build to finish.';
-  if (doc.writable && dirty()) return 'Save your changes first: export builds the file as saved.';
+  if (doc.get().writable && dirty()) return 'Save your changes first: export builds the file as saved.';
   if (!t.record) return 'The tile has no good build yet: fix the mistakes first.';
   if (t.record.audit.failures.length) return `It fails the printability gate: ${t.record.audit.failures[0]}. Fix the geometry first.`;
   return null;
@@ -25,7 +25,7 @@ function renderExport() {
   const t = tile();
   $('export').hidden = !t;
   const why = exporting.busy ? null : exportBlock();
-  const sys = exporting.system || state.system || 'db';
+  const sys = exporting.system || server.get().system || 'db';
   for (const b of $('export-system').children) b.classList.toggle('on', b.dataset.sys === sys);
   $('export-go').disabled = !!why || exporting.busy;
   $('export-go').textContent = exporting.busy ? 'Exporting…' : $('export-3mf').checked ? 'Export STL and 3MF' : 'Export STL';
@@ -49,8 +49,8 @@ function renderExport() {
   $('export-reveal').hidden = !exporting.files;
 }
 
-export function renderTitle() {
-  const t = tile();
+function renderTitle() {
+  const t = tile(), { live, ever, system, overhangDeg, steepestDeg } = server.get();
   $('empty').hidden = !!t;
   const status = $('status'), errs = $('errors'), dl = $('record'), gate = $('gate');
   dl.replaceChildren();
@@ -60,15 +60,14 @@ export function renderTitle() {
   $('show-worst').hidden = true;
   // waiting has one look, whether for a build or for the server: the chip's
   // pulsing dot and the status strip (and in the view, the faded tile)
-  const away = !state.live;
-  const awayLabel = state.ever ? 'reconnecting…' : 'connecting…';
+  const away = !live;
+  const awayLabel = ever ? 'reconnecting…' : 'connecting…';
   if (!t) {
     status.hidden = true; errs.hidden = true; $('export').hidden = true;
     gate.hidden = !away;
     if (away) { gate.className = 'busy'; $('gatetext').textContent = awayLabel; }
     $('tilename').textContent = ''; $('tilewhere').textContent = 'Tiles'; $('tileplan').textContent = '';
     $('forward').hidden = true;
-    if (!browsing()) showBrowser();
     $('progress').style.width = '0';
     document.title = 'dharmatiles';
     return;
@@ -80,7 +79,7 @@ export function renderTitle() {
   $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile's properties; double-click or F2 to rename` : `${t.path}\nClick for the tile's properties`;
   document.title = `${stem(t)} · dharmatiles`;
   const p = t.plan;
-  $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares · ${state.system === 'ol' ? 'OpenLOCK' : 'DungeonBlocks'}` : '';
+  $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares · ${system === 'ol' ? 'OpenLOCK' : 'DungeonBlocks'}` : '';
   // building…
   const building = t.status === 'building' || t.status === 'idle';
   const busy = building || away, busyLabel = away ? awayLabel : 'building';
@@ -89,21 +88,22 @@ export function renderTitle() {
     $('bar-fill').style.width = '0%';
     $('status-text').textContent = 'Waiting for dharmatiles preview…';
   } else if (building) {
-    if (!state.buildStart.has(t.index)) state.buildStart.set(t.index, performance.now());
+    if (!buildStart.has(t.id)) buildStart.set(t.id, performance.now());
     // before the first progress event there is only the clock
     const tick = () => {
-      if (t.progress) return showProgress(t.progress);
+      const p = progressOf(t.id);
+      if (p) return showProgress(p);
       $('bar-fill').style.width = '0%';
       $('status-text').textContent = t.status === 'idle'
         ? 'Waiting to build…'
-        : `Building… ${((performance.now() - state.buildStart.get(t.index)) / 1000).toFixed(1)} s`;
+        : `Building… ${((performance.now() - buildStart.get(t.id)) / 1000).toFixed(1)} s`;
     };
     tick(); timer = setInterval(tick, 100);
     status.hidden = false;
   } else {
     status.hidden = true;
     $('progress').style.width = '0';
-    state.buildStart.delete(t.index);
+    buildStart.delete(t.id);
   }
   // errors: file:line:col, the old mesh stays behind them; a click shows the line
   errs.hidden = !t.errors.length;
@@ -115,7 +115,7 @@ export function renderTitle() {
     const m = document.createElement('div'); m.textContent = e.message;
     d.append(w, m);
     if (e.help) { const h = document.createElement('div'); h.className = 'help'; h.textContent = e.help; d.append(h); }
-    if (e.file && e.line) d.onclick = () => loadText(e.file === t.path ? null : e.file).then(() => texts.reveal(e.line));
+    if (e.file && e.line) d.onclick = () => openFile(e.file === t.path ? null : e.file, e.line);
     errs.append(d);
   }
   const r = t.record;
@@ -133,7 +133,7 @@ export function renderTitle() {
   const fails = a.failures.length > 0;
   if (!busy) gate.className = fails ? 'fail' : (a.band_mm2 > 0 || a.overhang_mm2 > 0) ? 'warn' : '';
   $('gatetext').textContent = busy ? busyLabel : fails ? 'fails the gate' : 'passes';
-  if (drafts.shown) {
+  if (view.get().draft) {
     const tag = document.createElement('span');
     tag.className = 'tag'; tag.textContent = 'draft';
     tag.title = 'The view shows a quick draft; the verdict is the last full build\u2019s';
@@ -148,12 +148,12 @@ export function renderTitle() {
     const show = $('show-worst');
     show.hidden = false;
     show.textContent = worst.kind === 'red'
-      ? `Inspect largest face past ${state.steepestDeg}°`
-      : `Inspect largest face at ${state.overhangDeg}–${state.steepestDeg}°`;
+      ? `Inspect largest face past ${steepestDeg}°`
+      : `Inspect largest face at ${overhangDeg}–${steepestDeg}°`;
   }
   row(dl, 'Triangles', a.triangles.toLocaleString());
   row(dl, 'Watertight', a.watertight ? 'Yes' : 'No', a.watertight ? 'ok' : 'bad');
-  const lo = state.overhangDeg, hi = state.steepestDeg;
+  const lo = overhangDeg, hi = steepestDeg;
   const used = (area, budget) => budget == null ? `${fmt(area)} mm²` : `${fmt(area)} / ${fmt(budget)} mm²`;
   row(dl, `Band ${lo}–${hi}° (orange)`, used(a.band_mm2, a.band_budget_mm2),
       a.band_mm2 > (a.band_budget_mm2 ?? 0) ? 'bad' : a.band_mm2 > 0 ? 'warn' : 'ok');
@@ -173,6 +173,15 @@ export function renderTitle() {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
+  server.subscribe(['tiles', 'roots', 'live', 'ever', 'system', 'overhangDeg', 'steepestDeg'], renderTitle);
+  view.subscribe(['tileId', 'draft', 'shown'], renderTitle);
+  doc.subscribe(['base', 'writable', 'saving'], renderTitle);
+  doc.subscribe(['text'], renderExport); // the export button waits for a save
+  server.subscribe(['progress'], () => {
+    const t = tile(), p = t && progressOf(t.id);
+    if (p && t.status === 'building') showProgress(p);
+  });
+  renderTitle();
   try { exporting.system = localStorage.getItem('dt-export-system'); } catch { /* ignore */ }
   try { $('export-3mf').checked = localStorage.getItem('dt-export-3mf') === '1'; } catch { /* ignore */ }
   for (const b of $('export-system').children) {
@@ -184,8 +193,8 @@ export function init() {
     const t = tile();
     if (!t) return;
     try {
-      const r = await host.exportTile(t.index, { where: true });
-      if (r.status === 200 && t === tile()) { exporting.out = r.body; renderExport(); }
+      const r = await host.exportTile(t.id, { where: true });
+      if (r.status === 200 && t.id === tile()?.id) { exporting.out = r.body; renderExport(); }
     } catch { /* said when exporting */ }
   });
   $('export-go').onclick = async () => {
@@ -193,7 +202,7 @@ export function init() {
     if (!t || exportBlock()) return renderExport();
     exporting.busy = true; exporting.error = null; exporting.files = null; renderExport();
     try {
-      const r = await host.exportTile(t.index, { system: exporting.system || state.system || 'db', threemf: $('export-3mf').checked });
+      const r = await host.exportTile(t.id, { system: exporting.system || server.get().system || 'db', threemf: $('export-3mf').checked });
       if (r.status !== 200) exporting.error = r.body?.error || `could not export (${r.status})`;
       else if (!r.body.ok) exporting.error = r.body.errors?.[0]?.message || (r.body.failures?.length ? `Fails the gate: ${r.body.failures[0]}` : 'the build failed');
       else exporting.files = r.body.files || [];

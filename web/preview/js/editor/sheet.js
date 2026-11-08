@@ -3,35 +3,31 @@
 
 import { Lens, kdlString, unquote } from '../lens.js';
 import { byteToIndex } from '../text.js';
-import { $, host, isEntry, state, tile, viewer } from './app.js';
-import { doc, edited, elementNamed, elements, mapNode, renderTextBar, stackItems, texts } from './document.js';
-import { drawOverlay, muteAt, removeAt } from './map.js';
-import { setSel } from './selection.js';
-import { offerMine, startRename, stem } from './tiles.js';
+import { $, host, offerMine, toast } from './app.js';
+import { askDraft, edited, replaceBytes, undo } from './document.js';
+import { doc, elementNamed, isEntry, isMark, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
+import { startRename } from './tiles.js';
 
 // ---- the lens ---------------------------------------------------------------
 
+/** A control written on the node at byte `at`, or taken out (`value` null). */
+async function setControl(at, name, value) {
+  if (!doc.get().writable) return offerMine();
+  const r = await host.edit({ text: doc.get().text, at, name, value });
+  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); return; }
+  edited(r.body.text, 'lens', `Changed ${name}`);
+}
+
 export const lens = new Lens($('lens'), {
-  writable: () => doc.writable,
-  replace(start, len, text, end) {
-    const t = texts.text;
-    const i = byteToIndex(t, start), j = byteToIndex(t, start + len);
-    texts.setText(t.slice(0, i) + text + t.slice(j));
-    edited(texts.text, end ? 'lens' : 'drag');
-  },
-  async set(at, name, value) {
-    if (!doc.writable) return offerMine();
-    const r = await host.edit({ text: texts.text, at, name, value });
-    if (r.status !== 200) { doc.note = r.body?.error || 'that change could not be made'; renderTextBar(); return; }
-    texts.setText(r.body.text);
-    edited(texts.text, 'lens', `Changed ${name}`);
-  },
+  writable: () => doc.get().writable,
+  replace: replaceBytes,
+  set: setControl,
   makeMine: () => offerMine(),
   levels: () => levelsHere(),
 });
 /** The levels a value may name here: the standard ones, as this tile sets them, and its own. */
 function levelsHere() {
-  const own = doc.map?.tile;
+  const own = doc.get().map?.tile;
   const out = (own?.standard_levels || []).map((l) => ({ name: l.name, value: String(l.value), about: LEVEL_ABOUT[l.name] || 'a standard level' }));
   for (const c of own?.levels?.controls || []) {
     const value = unquote(c.text);
@@ -54,11 +50,10 @@ const TILE_SCHEMA = {
 const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] });
 /** A whole-node change to the tile's text (insert or remove), as one step of history. */
 async function tileEdit(body, label) {
-  if (!doc.writable) return offerMine();
-  const r = await host.edit({ text: texts.text, ...body });
-  if (r.status !== 200) { doc.note = r.body?.error || 'that change could not be made'; renderTextBar(); return; }
-  texts.setText(r.body.text);
-  edited(texts.text, 'lens', label);
+  if (!doc.get().writable) return offerMine();
+  const r = await host.edit({ text: doc.get().text, ...body });
+  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); return; }
+  edited(r.body.text, 'lens', label);
   return true;
 }
 const LEVEL_ABOUT = {
@@ -68,8 +63,8 @@ const LEVEL_ABOUT = {
   'wall-top': 'the top of a wall',
 };
 function renderTileLens() {
-  const t = tile(), own = doc.map?.tile;
-  if (!t || !own || texts.file !== t.path) { lens.hide(); return; }
+  const t = tile(), own = doc.get().map?.tile;
+  if (!t || !own || doc.get().file !== t.path) { lens.hide(); return; }
   const groups = [{ at: own.at, schema: TILE_SCHEMA, written: own.controls.map(asWritten) }];
   // the description: `about "…"` in the tile's body
   const about = own.about, av = about?.value;
@@ -98,14 +93,14 @@ function renderTileLens() {
       set: (name, value) => {
         if (lv) {
           if (value == null && lv.controls.length === 1 && lv.controls[0].name === name) return tileEdit({ op: 'remove', at: lv.at }, `Took out level ${name}`);
-          return lens.api.set(lv.at, name, value);
+          return setControl(lv.at, name, value);
         }
         if (value == null) return null;
         return tileEdit({ op: 'insert', place: 'tile', node: `levels ${name}=${typeof value === 'number' ? value : kdlString(String(value))}` }, `Set level ${name}`);
       },
     });
   }
-  const actions = doc.writable ? [
+  const actions = doc.get().writable ? [
     { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
   ] : [];
   const note = lv?.block ? 'The tile. Its levels are written as a block: change them in the text.' : 'The tile. Select something on it to change that instead.';
@@ -118,13 +113,13 @@ async function renameMark(kind, old, name) {
   const next = String(name ?? '').trim();
   if (!next || next === old) return;
   if (await tileEdit({ op: 'rename', mark: kind, old, new: next }, `Renamed ${kind} ${old} to ${next}`)) {
-    state.sel = kind === 'line' ? { line: next } : { region: next };
+    view.set({ sel: markSel(kind, next) });
   }
 }
 /** The sheet of a drawn line or a region: its name, its controls, its points. */
 function renderMarkLens(kind, m) {
   const t = tile(), sh = m?.sheet;
-  if (!t || !sh || texts.file !== t.path) { lens.hide(); return; }
+  if (!t || !sh || doc.get().file !== t.path) { lens.hide(); return; }
   const nameRow = { name: 'name', unit: 'word', required: true, viaSet: true, about: `what the tile calls this ${kind}; renaming it renames every ${kind === 'line' ? '`bounded-by` and `along=`' : '`in=`'} that names it` };
   const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0] }];
   let controls, set;
@@ -138,9 +133,9 @@ function renderMarkLens(kind, m) {
     written.push(...sh.controls.map(asWritten));
     const th = runWritten('through', sh.through);
     if (th) written.push(th);
-    set = (name, value) => (name === 'name' ? renameMark('line', m.name, value) : lens.api.set(sh.at, name, value));
+    set = (name, value) => (name === 'name' ? renameMark('line', m.name, value) : setControl(sh.at, name, value));
   } else {
-    const lines = (doc.map?.lines || []).map((l) => ({ word: l.name, about: `bounded by the line ${l.name}` }));
+    const lines = (doc.get().map?.lines || []).map((l) => ({ word: l.name, about: `bounded by the line ${l.name}` }));
     controls = [
       nameRow,
       { name: 'bounded-by', unit: 'several', words: lines, required: true, about: 'the lines that divide the tile into this region and the rest' },
@@ -151,29 +146,31 @@ function renderMarkLens(kind, m) {
       if (name === 'name') return renameMark('region', m.name, value);
       if (name === 'bounded-by') {
         const run = sh.bounded_by;
-        if (!value.length) { doc.note = 'a region needs at least one line'; renderTextBar(); return null; }
+        if (!value.length) { doc.set({ note: 'a region needs at least one line' }); return null; }
         if (!run?.span) return null;
-        return lens.api.replace(run.span[0], run.span[1], value.join(' '), true);
+        return replaceBytes(run.span[0], run.span[1], value.join(' '), true);
       }
       return null;
     };
   }
-  const actions = doc.writable ? [{ label: 'Delete', title: `Delete this ${kind} from the text`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && setSel(null)) }] : [];
+  const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the text`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
   lens.show({
     title: m.name, kind, href: `https://shawn-vincent.github.io/dharmatiles/language.html#${kind === 'line' ? 'lines' : 'regions'}`,
     groups: [{ at: sh.at, schema: { controls }, written, set }], actions,
   });
 }
-export function renderLens() {
-  const s = state.sel;
-  if (s && (s.line != null || s.region != null)) { renderMarkLens(s.line != null ? 'line' : 'region', mapNode(s)); return; }
-  const it = isEntry(s) ? stackItems()[s.entry] : null;
-  if (!s || s.tile) { renderTileLens(); return; }
-  if (!it || it.element === 'connector' || !it.span || it.file !== texts.file || !elements.length) { lens.hide(); return; }
+function renderLens() {
+  const s = view.get().sel;
+  if (isMark(s)) { renderMarkLens(s.kind, mapNode(s)); return; }
+  const it = isEntry(s) ? stackItems()[s.id] : null;
+  const elements = server.get().elements;
+  if (!s || s.kind === 'tile') { renderTileLens(); return; }
+  const { file, writable } = doc.get();
+  if (!it || it.element === 'connector' || !it.span || it.file !== file || !elements.length) { lens.hide(); return; }
   const groups = [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
   for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
   const actions = [];
-  if (it.file === texts.file && doc.writable) {
+  if (it.file === file && writable) {
     actions.push(
       { label: 'Hide', title: `Hide ${it.label} without deleting it`, run: () => muteAt(it.span[0], it.label) },
       { label: 'Delete', title: `Delete ${it.label} from the document`, run: () => removeAt(it.span[0], it.label) },
@@ -182,7 +179,36 @@ export function renderLens() {
   lens.show({ title: it.label, kind: it.what || it.element, href: it.href, groups, actions });
 }
 
+/** Comment a stack entry out (`/-`), with a way back. */
+function muteAt(byte, label = 'Entry') {
+  if (!doc.get().writable) return offerMine();
+  const t = doc.get().text, i = byteToIndex(t, byte);
+  if (isEntry(view.get().sel)) view.set({ sel: null });
+  edited(`${t.slice(0, i)}/- ${t.slice(i)}`, 'view', `Hid ${label}`);
+  askDraft();
+  toast(`${label} hidden`, () => undo(-1));
+}
+/** Take a stack entry out of the text, with a way back. */
+async function removeAt(byte, label = 'Entry') {
+  if (!doc.get().writable) return offerMine();
+  const r = await host.edit({ op: 'remove', text: doc.get().text, at: byte });
+  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be taken out' }); return; }
+  view.set({ sel: null });
+  edited(r.body.text, 'view', `Deleted ${label}`);
+  askDraft();
+  toast(`${label} removed`, () => undo(-1));
+}
+
 /** Wire this part of the page (once, at load). */
 export function init() {
-  viewer.onRender = () => drawOverlay();
+  view.subscribe(['sel', 'tileId'], renderLens);
+  doc.subscribe(['stack', 'map', 'file', 'writable', 'tileId'], renderLens);
+  server.subscribe(['elements'], renderLens);
+  // before the text is checked the sheet reads the build's plan: not redrawn for builds that change nothing it shows
+  let plan = null;
+  server.subscribe(['tiles'], () => {
+    const now = doc.get().stack ? null : JSON.stringify(tile()?.plan?.stack);
+    if (now !== plan) { plan = now; renderLens(); }
+  });
+  renderLens();
 }

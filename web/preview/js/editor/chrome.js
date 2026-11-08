@@ -5,11 +5,8 @@
 import { Layout } from '../layout.js';
 import { rememberView, shortcutViews } from '../view-presets.js';
 import { VIEWS } from '../viewer.js';
-import { $, state, tile, viewer } from './app.js';
-import { renderHistory, texts, undo } from './document.js';
-import { tools } from './map.js';
-import { frameSel, setSel } from './selection.js';
-import { renderList, startRename } from './tiles.js';
+import { $, pickView, viewer } from './app.js';
+import { server, tile, view } from './stores.js';
 
 // ---- the view's controls: views and the display menu -------------------
 
@@ -28,7 +25,7 @@ function viewButton(name) {
   return b;
 }
 
-export function showActiveView(name) {
+function showActiveView(name) {
   document.querySelectorAll('button.view').forEach((b) => {
     const on = b.dataset.view === name;
     b.classList.toggle('on', on);
@@ -38,16 +35,15 @@ export function showActiveView(name) {
 
 function renderViewShortcuts() {
   $('views').replaceChildren(...shortcutViews(recentViews).map(viewButton).filter(Boolean));
-  showActiveView(state.activeView);
+  showActiveView(view.get().activeView);
 }
-export function pickView(name, animate = true) {
-  state.view = name;
-  state.activeView = name;
+/** The camera goes to preset `name` (asked for with app.js's pickView). */
+function applyPick({ name, animate }) {
+  view.set({ mode: name, activeView: name });
   recentViews = rememberView(recentViews, name);
   try { localStorage.setItem('dt-preview-recent-views', JSON.stringify(recentViews)); } catch { /* private mode */ }
   renderViewShortcuts();
   viewer.setView(name, animate);
-  showActiveView(name);
 }
 const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 // paint on or off (grey plastic): remembered in the browser
@@ -57,44 +53,44 @@ function setPaint(on) {
   try { localStorage.setItem('dt-preview-paint', on ? '1' : '0'); } catch { /* ignore */ }
 }
 
-// popovers: one open at a time; Esc or a click outside closes it
+// popovers: one open at a time (`view.popover`); Esc or a click outside closes it
 const popovers = [
   ['dispbtn', 'display'], ['gate', 'record-card'], ['export', 'export-card'],
   ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
 ];
-function openPopover(id) {
+const openPopover = (id) => view.set({ popover: view.get().popover === id ? null : id });
+function renderPopovers() {
+  const open = view.get().popover;
   for (const [btn, pop] of popovers) {
-    const open = pop === id && $(pop).hidden;
-    $(pop).hidden = !open;
-    $(btn).setAttribute('aria-expanded', open);
+    $(pop).hidden = pop !== open;
+    $(btn).setAttribute('aria-expanded', pop === open);
   }
-  if ((id === 'undo-history' || id === 'redo-history') && !$(id).hidden) renderHistory(true);
 }
-export const closePopovers = () => {
-  let any = false;
-  for (const [btn, pop] of popovers) { any ||= !$(pop).hidden; $(pop).hidden = true; $(btn).setAttribute('aria-expanded', false); }
+/** Close the open popover; true if there was one. */
+const closePopovers = () => {
+  const any = view.get().popover != null;
+  view.set({ popover: null });
   return any;
 };
 
 // ---- the sidebar's two pages: the tile browser, and the editor beside it ----
 
-export const browsing = () => !$('side').classList.contains('editing');
-export function showBrowser() {
+const browsing = () => view.get().page === 'browse';
+function renderPage() {
+  if (!browsing()) {
+    $('side').classList.add('editing');
+    $('browser').inert = true; $('editpage').inert = false;
+    return;
+  }
   layout.showSide();
   $('side').classList.remove('editing');
   $('browser').inert = false; $('editpage').inert = true;
-  const t = tile();
-  if (t && t.root !== state.root && state.roots[t.root] && !$('filter').value) state.root = t.root;
-  renderList();
+  const t = tile(), { roots } = server.get();
+  if (t && t.root !== view.get().root && roots[t.root] && !$('filter').value) view.set({ root: t.root });
   // scroll the list only: scrollIntoView would scroll the sliding sidebar too
   const ul = $('tiles'), li = ul.querySelector('li.sel');
   if (li) ul.scrollTop = li.offsetTop - ul.offsetTop - (ul.clientHeight - li.offsetHeight) / 2;
   $('filter').focus({ preventScroll: true });
-}
-export function showEditor() {
-  if (!tile()) return;
-  $('side').classList.add('editing');
-  $('browser').inert = true; $('editpage').inert = false;
 }
 
 // light or dark: the system's setting until the button is used; then the choice is remembered
@@ -140,7 +136,7 @@ const showKeys = () => { closePopovers(); $('keys').showModal(); };
 /** ⌘1/⌘2/⌘3: put the keyboard in the text, the view or the properties (showing the pane first). */
 function focusPane(n) {
   const st = layout.state;
-  if (n === 1) { if (st.hideText) layout.toggle('text'); texts.focus(); }
+  if (n === 1) { if (st.hideText) layout.toggle('text'); $('code').querySelector('.cm-content')?.focus(); }
   if (n === 2) $('canvas').focus();
   if (n === 3) {
     if (st.hideProps) layout.toggle('props');
@@ -161,7 +157,18 @@ export function init() {
   } catch { /* private mode or an older malformed value */ }
   VIEWS.forEach(([name]) => $('allviews').append(viewButton(name)));
   renderViewShortcuts();
-  viewer.onUserViewChange = () => { state.activeView = null; showActiveView(null); };
+  viewer.onUserViewChange = () => view.set({ activeView: null });
+  view.subscribe(['pick'], ({ pick }) => applyPick(pick));
+  view.subscribe(['activeView'], ({ activeView }) => showActiveView(activeView));
+  view.subscribe(['popover'], renderPopovers);
+  view.subscribe(['page'], renderPage);
+  // no tile shown: the browser is the page
+  view.subscribe(['tileId'], () => { if (view.get().tileId == null) view.set({ page: 'browse' }); });
+  // the gate's legend names the angles the program checks against
+  server.subscribe(['overhangDeg', 'steepestDeg'], ({ overhangDeg, steepestDeg }) => {
+    $('lg-orange').textContent = `${overhangDeg}–${steepestDeg}°: allowed within budget`;
+    $('lg-red').textContent = `Over ${steepestDeg}°: small patches allowed, more fails`;
+  });
   toggle('t-overhang', (on) => viewer.setOverhang(on));
   $('t-paint').onchange = (e) => setPaint(e.target.checked);
   try { if (localStorage.getItem('dt-preview-paint') === '0') setPaint(false); } catch { /* ignore */ }
@@ -172,13 +179,13 @@ export function init() {
   try { if (localStorage.getItem('dt-fade') === '0') { $('t-fade').checked = false; viewer.setFade(false); } } catch { /* ignore */ }
   for (const [btn, pop] of popovers) $(btn).onclick = (e) => { e.stopPropagation(); openPopover(pop); };
   $('choose').onclick = () => {
-    const lib = state.roots.findIndex((r) => r.kind === 'library');
-    if (lib >= 0) state.root = lib;
-    showBrowser();
+    const lib = server.get().roots.findIndex((r) => r.kind === 'library');
+    if (lib >= 0) view.set({ root: lib });
+    view.set({ page: 'browse' });
+    renderPage();
   };
-  $('back').onclick = showBrowser;
-  $('forward').onclick = showEditor;
-  $('tilebtn').onclick = () => setSel({ tile: true });
+  $('back').onclick = () => { view.set({ page: 'browse' }); renderPage(); };
+  $('forward').onclick = () => { if (tile()) view.set({ page: 'edit' }); };
   addEventListener('pointerdown', (e) => {
     if (popovers.some(([b, p]) => $(p).contains(e.target) || $(b).contains(e.target))) return;
     closePopovers();
@@ -197,18 +204,12 @@ export function init() {
     if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && ['1', '2', '3'].includes(e.key)) {
       e.preventDefault(); focusPane(Number(e.key)); return;
     }
-    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.isContentEditable && tools?.key(e)) { e.preventDefault(); return; }
+    if (e.defaultPrevented) return; // a tool (map.js) or the undo (document.js) took it
     if (e.key === 'Escape') {
-      if (!$('mine').hidden) { $('mine').hidden = true; return; }
+      if (view.get().mineOpen) { view.set({ mineOpen: false }); return; }
       if (closePopovers()) return;
-      if (browsing() && tile() && !$('side').hidden) { showEditor(); return; }
-      setSel(null);
-      return;
-    }
-    // one undo for the whole page: typing and changes made in the view
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.target.tagName !== 'INPUT' && (e.key === 'z' || e.key === 'Z' || e.key === 'y')) {
-      e.preventDefault();
-      undo(e.key === 'y' || e.shiftKey ? 1 : -1);
+      if (browsing() && tile() && !$('side').hidden) { view.set({ page: 'edit' }); return; }
+      view.set({ sel: null }); // selection.js reflects it
       return;
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
@@ -223,9 +224,7 @@ export function init() {
     if (e.key === 'x') flip('t-fade');
     if (e.key === 't') toggleTheme();
     if (e.key === 'p') setProjection(!viewer.isOrtho);
-    if (e.key === 'f' && state.sel) frameSel();
     if (e.key === 'a' || e.key === '/') { e.preventDefault(); $('place-in').focus(); }
-    if (e.key === 'F2') { e.preventDefault(); startRename(); }
     if (e.key === '[') layout.toggle('text');
     if (e.key === ']') layout.toggle('props');
     if (e.key === '\\') layout.toggle('both');

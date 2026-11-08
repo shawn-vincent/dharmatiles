@@ -1,11 +1,10 @@
 // The tile menu: listing and filtering the tiles, a new tile, renaming one,
 // and making a library tile your own.
 
-import { $, host, state, tile } from './app.js';
-import { closePopovers, showEditor } from './chrome.js';
-import { canLeave, carryHistory, doc, renderTextBar } from './document.js';
-import { whenTile } from './live.js';
+import { $, host } from './app.js';
+import { canLeave, carryHistory } from './document.js';
 import { select } from './open.js';
+import { doc, inRoot, renameable, rootOf, server, stem, tile, view, whenListed } from './stores.js';
 
 // ---- the tile menu -----------------------------------------------------
 
@@ -13,47 +12,44 @@ function dotClass(t) {
   const over = t.record && (t.record.audit.overhang_mm2 > 0 || t.record.audit.band_mm2 > 0);
   return `dot ${t.status}${over && t.status === 'ready' ? ' over' : ''}`;
 }
-// the file stem (`2x1-cliff`, `1x1-water+grass-tree`): the menu's name for a tile, whatever the document calls it
-export const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.(dtile|stl)$/i, '') + (/\.stl$/i.test(t.path) ? '.stl' : '');
-export const inRoot = (r) => state.tiles.filter((t) => t.root === r && !t.gone);
-export const rootOf = (r) => state.roots[r] || { kind: 'files', label: 'Files', path: null };
 let testsOpen = false; // the library's "Test tiles" starts collapsed
 
 // the switcher: one button per root (the personal home, the library, each folder named)
 function renderRoots() {
-  const nav = $('roots');
+  const nav = $('roots'), { roots } = server.get(), current = view.get().root;
   nav.replaceChildren();
-  nav.hidden = state.roots.length < 2;
-  state.roots.forEach((r, i) => {
+  nav.hidden = roots.length < 2;
+  roots.forEach((r, i) => {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'root' + (i === state.root ? ' on' : '');
-    b.setAttribute('aria-pressed', i === state.root);
+    b.type = 'button'; b.className = 'root' + (i === current ? ' on' : '');
+    b.setAttribute('aria-pressed', i === current);
     b.title = r.path || r.label;
     b.innerHTML = '<span></span> <span class="n"></span>';
     b.firstChild.textContent = r.label;
     b.lastChild.textContent = inRoot(i).length;
-    b.onclick = () => { state.root = i; renderList(); };
+    b.onclick = () => view.set({ root: i });
     nav.append(b);
   });
 }
 
-export function renderList() {
+function renderList() {
   renderRoots();
+  const { tileId, root: current } = view.get();
   const q = $('filter').value.trim().toLowerCase();
   const ul = $('tiles');
   ul.replaceChildren();
   const matches = (t) => !q || stem(t).toLowerCase().includes(q) || t.path.toLowerCase().includes(q);
   const row = (t) => {
     const li = document.createElement('li');
-    li.className = t.index === state.selected ? 'sel' : '';
-    li.tabIndex = 0; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', t.index === state.selected);
+    li.className = t.id === tileId ? 'sel' : '';
+    li.tabIndex = 0; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', t.id === tileId);
     li.title = t.path;
     li.innerHTML = '<span></span><span class="name"></span>';
     li.firstChild.className = dotClass(t);
     li.querySelector('.name').textContent = stem(t);
     li.onclick = async () => {
-      if (t.index === state.selected) { showEditor(); return; }
-      if ((await select(t.index)) !== false) showEditor();
+      if (t.id === view.get().tileId) { view.set({ page: 'edit' }); return; }
+      if ((await select(t.id)) !== false) view.set({ page: 'edit' });
     };
     li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
     return li;
@@ -68,8 +64,8 @@ export function renderList() {
     }
     ul.append(g);
   };
-  const root = rootOf(state.root);
-  const all = inRoot(state.root);
+  const root = rootOf(current);
+  const all = inRoot(current);
   if (!all.length) {
     const li = document.createElement('li'); li.className = 'note';
     li.textContent = root.kind === 'dir'
@@ -91,7 +87,7 @@ export function renderList() {
     ul.append(row(t));
   }
   if (tests.length) {
-    const open = testsOpen || !!q || tests.some((t) => t.index === state.selected);
+    const open = testsOpen || !!q || tests.some((t) => t.id === tileId);
     header(`Test tiles (${tests.length})`, () => { testsOpen = !open; renderList(); }, open);
     if (open) for (const t of tests) ul.append(row(t));
   }
@@ -100,7 +96,7 @@ export function renderList() {
 // A first tile: valid, printable ground in My tiles, ready for the same
 // text/lens/direct edits as every other tile.
 function openNewTile() {
-  closePopovers();
+  view.set({ popover: null });
   const dlg = $('new-dialog');
   $('new-note').textContent = 'Starts as printable flat ground. Everything about it is ordinary text you can change.';
   dlg.showModal();
@@ -110,11 +106,10 @@ function openNewTile() {
 
 // ---- renaming: a tile's file name is its name ---------------------------
 
-export const renameable = (t) => !!t && !t.path.startsWith('lib:') && /\.dtile$/i.test(t.path) && rootOf(t.root).kind === 'dir';
 export function startRename() {
   const t = tile();
   if (!renameable(t) || $('rename')) return;
-  closePopovers();
+  view.set({ popover: null });
   const input = document.createElement('input');
   input.id = 'rename'; input.type = 'text'; input.value = stem(t); input.maxLength = 80;
   input.setAttribute('aria-label', 'Rename the tile'); input.spellcheck = false; input.autocomplete = 'off';
@@ -125,23 +120,23 @@ export function startRename() {
   const finish = async (commit) => {
     if (done) return;
     const name = input.value.trim();
-    if (!commit || !name || name === stem(t)) { done = true; input.remove(); $('tilebtn').hidden = false; if (doc.note) { doc.note = null; renderTextBar(); } return; }
+    if (!commit || !name || name === stem(t)) { done = true; input.remove(); $('tilebtn').hidden = false; doc.set({ note: null }); return; }
     done = true;
     input.disabled = true;
     if (!(await canLeave())) { input.remove(); $('tilebtn').hidden = false; return; }
-    const r = await host.rename(t.index, name);
-    if (r.status !== 200 || r.body?.index == null) {
+    const r = await host.rename(t.id, name);
+    if (r.status !== 200 || r.body?.id == null) {
       // stay in the field with the reason, so the name can be fixed
       done = false; input.disabled = false; input.classList.add('bad');
       input.title = r.body?.error || 'The tile could not be renamed.';
-      doc.note = input.title; renderTextBar(); input.focus();
+      doc.set({ note: input.title }); input.focus();
       return;
     }
     input.remove(); $('tilebtn').hidden = false;
-    doc.note = null;
+    doc.set({ note: null });
     carryHistory();
-    const i = r.body.index;
-    if (await whenTile(i)) await select(i, true);
+    const id = r.body.id;
+    if (await whenListed(id)) await select(id, true);
   };
   input.onkeydown = (e) => {
     e.stopPropagation();
@@ -154,18 +149,22 @@ export function startRename() {
 
 // ---- make it mine -----------------------------------------------------------
 
-export function offerMine() {
-  const t = tile();
-  if (!t || !t.path.startsWith('lib:')) return;
-  $('mine').hidden = false;
-  $('mine-ok').focus();
+/** The make-it-mine question follows `view.mineOpen`; only a library tile has one. */
+function showMine() {
+  const open = view.get().mineOpen, t = tile();
+  if (open && !t?.path.startsWith('lib:')) { view.set({ mineOpen: false }); return; }
+  $('mine').hidden = !open;
+  if (open) $('mine-ok').focus();
 }
 
 /** Wire this part of the page (once, at load). */
 export function init() {
+  server.subscribe(['tiles', 'roots'], () => { if (view.get().page === 'browse') renderList(); });
+  view.subscribe(['tileId', 'root', 'page'], () => { if (view.get().page === 'browse') renderList(); });
+  view.subscribe(['mineOpen'], showMine);
   $('filter').oninput = renderList;
   $('filter').onkeydown = (e) => {
-    if (e.key === 'Escape' && tile()) { e.preventDefault(); e.stopPropagation(); showEditor(); return; }
+    if (e.key === 'Escape' && tile()) { e.preventDefault(); e.stopPropagation(); view.set({ page: 'edit' }); return; }
     if (e.key !== 'Enter') return;
     const first = $('tiles').querySelector('li:not(.group):not(.note)');
     first?.click();
@@ -186,25 +185,27 @@ export function init() {
       r = { status: 0, body: { error: 'the editor is disconnected' } };
     }
     ok.disabled = false;
-    if (r.status !== 200 || r.body?.index == null) {
+    if (r.status !== 200 || r.body?.id == null) {
       $('new-note').textContent = r.body?.error || 'The tile could not be made.';
       return;
     }
     $('new-dialog').close();
-    const i = r.body.index;
-    if (await whenTile(i)) select(i, true);
+    if (await whenListed(r.body.id)) select(r.body.id, true);
   };
-  $('tilebtn').ondblclick = (e) => { e.preventDefault(); closePopovers(); startRename(); };
-  $('mine-cancel').onclick = () => { $('mine').hidden = true; };
+  $('tilebtn').ondblclick = (e) => { e.preventDefault(); startRename(); };
+  addEventListener('keydown', (e) => {
+    const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+    if (e.key === 'F2' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); startRename(); }
+  });
+  $('mine-cancel').onclick = () => view.set({ mineOpen: false });
   $('mine-ok').onclick = async () => {
     const t = tile();
     $('mine-ok').disabled = true;
-    const r = await host.mine(t.index);
+    const r = await host.mine(t.id);
     $('mine-ok').disabled = false;
-    $('mine').hidden = true;
-    if (r.status !== 200 || r.body?.index == null) { doc.note = r.body?.error || 'could not make a copy'; renderTextBar(); return; }
-    // the copy joins the list with the next snapshot
-    const i = r.body.index;
-    if (await whenTile(i)) select(i);
+    view.set({ mineOpen: false });
+    if (r.status !== 200 || r.body?.id == null) { doc.set({ note: r.body?.error || 'could not make a copy' }); return; }
+    // the copy joins the list with the next event
+    if (await whenListed(r.body.id)) select(r.body.id);
   };
 }
