@@ -142,14 +142,22 @@ impl Element for Grass {
         let seat = raw.erode(SEAT_ERODE_MM * s).blur(SEAT_BLUR_MM);
         let flat = raw.blur(FLOW_BLUR_MM * s);
         let seed = ctx.seed;
-        let mut rng = Rng::new(seed.key("grass"));
+        // each stage draws from its own stream, so a draw added to one
+        // never moves another
+        let draws = |stage: &str| Rng::new(seed.key(stage).key("draws"));
 
         // 1 the flow, on a lattice that reaches past the tile
         let res = FIELD_RES_MM;
         let lat = flow::lattice(w, h, res);
         let ground: Lat = lat.like(|x, y| flat.sample(x.clamp(0.0, w), y.clamp(0.0, h)));
-        let flow0 = flow::make_direction(seed.key("flow"), &mut rng, &ground, s, self.meander);
-        let sw = Swaths::new(seed.key("swath"), &mut rng, w, h, &flow0, s);
+        let flow0 = flow::make_direction(
+            seed.key("flow"),
+            &mut draws("flow"),
+            &ground,
+            s,
+            self.meander,
+        );
+        let sw = Swaths::new(seed.key("swath"), &mut draws("swath"), w, h, &flow0, s);
 
         // where grass may stand: its area, not under water
         let wet = scene.wet().clone();
@@ -178,7 +186,8 @@ impl Element for Grass {
         let count = if self.clearings <= 0.0 {
             0
         } else {
-            let per = rng.uniform(LENSES_PER_SQ.0, LENSES_PER_SQ.1) * self.clearings / 1.5;
+            let per =
+                draws("clearings").uniform(LENSES_PER_SQ.0, LENSES_PER_SQ.1) * self.clearings / 1.5;
             ((per * n_sq * share).round() as usize).max(1)
         };
         let (count, pool) = if self.bare > 0.0 {
@@ -190,7 +199,7 @@ impl Element for Grass {
         };
         let mut lenses = flow::place_lenses(
             seed.key("lenses"),
-            &mut rng,
+            &mut draws("lenses"),
             &|x, y| flat.sample(x.clamp(0.0, w), y.clamp(0.0, h)),
             &area_at,
             &flow0,
@@ -201,13 +210,13 @@ impl Element for Grass {
         );
         let things = scene.stands(&[Kind::Rock, Kind::Tree, Kind::Wall]);
         if pool {
-            let aprons = apron_shapes(&mut rng, &flow0, &things);
+            let aprons = apron_shapes(&mut draws("aprons"), &flow0, &things);
             lenses = fill_bare_earth(&lenses, &aprons, &blocker, &outside, &frame, self.bare);
         }
         let wrap = obstacle_circles(&things, &blocker, &frame, &flow0, self.length.0 * s);
         let flow = flow::finish_flow(
             seed.key("rim"),
-            &mut rng,
+            &mut draws("rim"),
             &flow0,
             &lenses.combine(usize::MAX, &wrap),
             w,
@@ -283,8 +292,16 @@ impl Element for Grass {
         // 4 fronds
         let len = (self.length.0 * s, self.length.1 * s);
         let hgt = (self.height.0 * s, self.height.1 * s);
-        let (frs, strands) =
-            fronds::plan(&mut rng, &surf, &sw, &flow, (w, h), len, hgt, self.cover);
+        let (frs, strands) = fronds::plan(
+            &mut draws("fronds"),
+            &surf,
+            &sw,
+            &flow,
+            (w, h),
+            len,
+            hgt,
+            self.cover,
+        );
 
         // 5 blades, in parallel, gathered in order
         let seat_at = |x: f64, y: f64| seat.sample(x, y);

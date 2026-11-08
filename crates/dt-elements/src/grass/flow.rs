@@ -285,11 +285,6 @@ impl Swaths {
             axis.push(a);
             perp.push([-a[1], a[0]]);
         }
-        // one draw per swath, unused, kept so every later draw from `rng`
-        // (and so the grass) stays as it is
-        for _ in 0..n {
-            let _ = rng.random();
-        }
         let grid = Lat::new(-m, -m, w + m, h + m, 0.25, 0.0);
         let warp_n = grid.noise(seed.key("warp"), SWATH_WARP_SIGMA_MM * s);
         let warp = warp_n.with(warp_n.z.iter().map(|v| SWATH_WARP_MM * s * v).collect());
