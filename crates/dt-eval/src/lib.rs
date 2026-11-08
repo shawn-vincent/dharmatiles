@@ -680,6 +680,10 @@ pub(crate) struct Job {
     /// The hash of the solved band it is built in (0 if it has none), so a
     /// cache never serves a body whose pins changed.
     pub band_hash: u64,
+    /// The hash of what lies over it (the water laid after a dirt, see
+    /// `Ctx::under`; 0 if nothing), so editing the water never serves a
+    /// stale dirt.
+    pub under_hash: u64,
 }
 
 /// What a build works out before any step runs.
@@ -772,6 +776,7 @@ impl<'a> Plan<'a> {
                         .chain(&band.hi().z)
                         .fold(0xcbf2_9ce4_8422_2325, |h, v| fnv(h, v.to_bits()))
                 }),
+                under_hash: 0,
             })
             .collect();
         let mut plan = Self {
@@ -810,6 +815,12 @@ impl<'a> Plan<'a> {
         }
         plan.foots = foots;
         plan.under = (0..c.elements.len()).map(|i| plan.under_of(i)).collect();
+        for (job, under) in plan.jobs.iter_mut().zip(&plan.under) {
+            job.under_hash = under.as_ref().map_or(0, |u| {
+                u.z.iter()
+                    .fold(0xcbf2_9ce4_8422_2325, |h, v| fnv(h, v.to_bits()))
+            });
+        }
         Ok(plan)
     }
 
