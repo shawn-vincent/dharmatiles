@@ -1,122 +1,130 @@
-// Opening a tile: choosing it, the camera before its mesh is in, and loading
-// the mesh.
+// Opening a tile: choosing it, and keeping the 3D view on it: its plan, its
+// mesh (or a draft in its place), its camera.  Follows the server store (the
+// tile's builds) and the view store (which tile).
 
 import { NO_ENTRY, parsePayload } from '../payload.js';
-import { $, host, isEntry, state, tile, viewer } from './app.js';
-import { showBuild, sketchCache } from './build.js';
-import { pickView, showActiveView } from './chrome.js';
-import { canLeave, clearDocumentHistory, closeComp, drafts, stackItems, texts } from './document.js';
-import { surfaceHeights } from './map.js';
-import { lens, renderLens } from './sheet.js';
-import { renderAll } from './title.js';
+import { host, pickView, viewer } from './app.js';
+import { beginFollow, endFollow, followBuild } from './build.js';
+import { canLeave } from './document.js';
+import { inRoot, isEntry, server, stackItems, tile, tileById, view } from './stores.js';
 
 // ---- choosing a tile ---------------------------------------------------
-// ---- the camera before a tile's mesh is in --------------------------------
-// The view starts on a 1×1 tile, and while a tile builds it follows what is
-// known of its size: the plan's footprint, then each sketch the build sends.
-// The finished mesh frames it; moving the view yourself stops the following.
 
-const ONE_SQUARE = { lo: [0, 0, 0], hi: [35, 35, 8] };
-let following = null; // {i, b}: the tile followed and the bounds last framed
-export function followBuild() {
-  const t = tile();
-  if (!following || !t || following.i !== t.index) return;
-  const [w, h] = t.plan?.size_mm || [35, 35];
-  const b = { lo: [0, 0, 0], hi: [w, h, 8] };
-  for (const k of viewer.sketchBounds?.() || []) {
-    for (let a = 0; a < 3; a++) { b.lo[a] = Math.min(b.lo[a], k.lo[a]); b.hi[a] = Math.max(b.hi[a], k.hi[a]); }
-  }
-  // a small change is not worth a camera move
-  const size = (x) => Math.hypot(...x.hi.map((v, a) => v - x.lo[a]));
-  const was = following.b;
-  if (was && Math.abs(size(b) - size(was)) < 0.08 * size(was)
-    && b.lo.every((v, a) => Math.abs(v - was.lo[a]) < 2) && b.hi.every((v, a) => Math.abs(v - was.hi[a]) < 2)) return;
-  following.b = b;
-  viewer.setView(state.view, true, b);
-}
+const cameras = new Map(); // tile path -> its saved camera and active preset
+let at = null;             // the tile the view is set up for
+let started = false;       // the first list of tiles has been looked at
 
-export async function select(i, guarded = false) {
-  if (!guarded && i !== state.selected && !(await canLeave())) return false;
-  closeComp(); lens.hide();
-  if (state.selected >= 0 && viewer.payload) {
-    state.cameras.set(tile().path, { camera: viewer.getCamera(), activeView: state.activeView });
+/** Show tile `id` (null: none); false if unsaved changes were kept instead. */
+export async function select(id, guarded = false) {
+  const cur = view.get();
+  if (!guarded && id !== cur.tileId && !(await canLeave())) return false;
+  const t = tileById(id);
+  if (cur.tileId != null && viewer.payload && tile()) {
+    cameras.set(tile().path, { camera: viewer.getCamera(), activeView: view.get().activeView });
   }
-  if (i !== state.selected) {
-    state.sel = null; state.hov = null; state.activeView = null;
-    $('tilebtn').classList.remove('sel');
-    showActiveView(null);
-  }
-  state.selected = i;
-  viewer.clear();
-  viewer.setPlan(null);
-  state.loaded.delete(i);
-  const t = state.tiles[i];
-  if (!t || t.gone) {
-    state.selected = -1;
-    history.replaceState(null, '', `#root=${state.root}`);
-    texts.clear(); state.textFor = null; clearDocumentHistory();
-    renderAll();
-    return true;
-  }
-  state.root = t.root;
-  history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
-  // no mesh to frame yet and no view of yours kept: follow the build
-  following = t.mesh_version == null && !state.cameras.get(t.path) ? { i, b: null } : null;
-  if (t.plan) viewer.setPlan(t.plan);
-  followBuild();
-  if (t.mesh_version != null) loadMesh(i, t.mesh_version);
-  renderAll();
-  // a build already running: what it has sent so far, not only what comes next
-  showBuild(t);
+  const to = t ? t.id : null;
+  view.set(to === cur.tileId ? {} : { tileId: to, sel: null, hov: null, activeView: null, textFile: null });
   return true;
 }
 
-export function countPieces(p) {
-  state.pieces = new Map();
+/** The pieces each entry's geometry has, from the mesh's triangles. */
+function countPieces(p) {
+  const pieces = new Map();
   for (let t = 0; t < p.triangles; t++) {
     const e = p.entry[t];
-    if (e !== NO_ENTRY) state.pieces.set(e, Math.max(state.pieces.get(e) || 0, p.piece[t] + 1));
+    if (e !== NO_ENTRY) pieces.set(e, Math.max(pieces.get(e) || 0, p.piece[t] + 1));
   }
+  return pieces;
+}
+
+/** A plan that differs from the one the view has. */
+const planChanged = (p) => !!p && JSON.stringify(p) !== JSON.stringify(viewer.plan);
+
+/** The view starts afresh on tile `t` (or on none). */
+function reset(t) {
+  viewer.clear();
+  viewer.setPlan(null);
+  view.set({ shown: null, draft: null });
+  endFollow(null);
+  if (!t) {
+    history.replaceState(null, '', `#root=${view.get().root}`);
+    return;
+  }
+  view.set({ root: t.root });
+  history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
+  // no mesh to frame yet and no view of yours kept: follow the build
+  if (t.mesh_version == null && !cameras.get(t.path)) beginFollow(t.id);
+  if (t.plan) viewer.setPlan(t.plan);
+  followBuild();
+}
+
+/** The first list: the tile in the address, else the first root with tiles. */
+function pickFirst() {
+  const { tiles, roots } = server.get();
+  const want = decodeURIComponent((location.hash.match(/tile=([^&]+)/) || [])[1] || '');
+  const wantRoot = (location.hash.match(/root=(\d+)/) || [])[1];
+  const wanted = want ? tiles.find((t) => t.path === want) : null;
+  if (wanted) return select(wanted.id, true);
+  const all = roots.length ? roots.map((_, i) => i) : [0];
+  const root = wantRoot != null && roots[wantRoot] ? Number(wantRoot) : (all.find((r) => inRoot(r).length) ?? all[0]);
+  view.set({ root });
+  return select(inRoot(root)[0]?.id ?? null, true);
+}
+
+/** The tile shown, kept in step with what the server says of it. */
+function follow() {
+  const { ready, epoch } = server.get(), { tileId } = view.get();
+  if (!ready) return;
+  if (!started) { started = true; pickFirst(); return; }
+  const t = tile();
+  const first = inRoot(view.get().root)[0];
+  // the tile shown was deleted, or none was and one has come: the first one left in its root
+  if ((tileId != null && !t) || (tileId == null && first)) { select(first?.id ?? null, true); return; }
+  if (tileId !== at) { at = tileId; reset(t); }
+  if (!t) return;
+  // a rescan or a reconnect: keep the view, catch up on a newer plan or mesh
+  if (planChanged(t.plan)) { viewer.setPlan(t.plan); followBuild(); }
+  const shown = view.get().shown;
+  if (t.mesh_version != null && !(shown && shown.id === t.id && shown.epoch === epoch && shown.version === t.mesh_version)) loadMesh(t);
 }
 
 let loadToken = 0;
-export async function loadMesh(i, version) {
-  const token = ++loadToken;
+async function loadMesh(t) {
+  const token = ++loadToken, { epoch } = server.get(), version = t.mesh_version;
   try {
-    const buf = await host.fetchMesh(i);
-    if (token !== loadToken || i !== state.selected) return;
+    const buf = await host.fetchMesh(t.id);
+    if (token !== loadToken || t.id !== view.get().tileId) return;
     const first = !viewer.payload;
     const p = parsePayload(buf);
-    viewer.setMesh(p);
-    countPieces(p);
-    surfaceHeights(p);
-    drafts.shown = false;
-    state.loaded.set(i, version);
-    sketchCache.clear(); viewer.setSketches([]);
-    showBuild(state.tiles[i]);
+    viewer.setMesh(p); // the new mesh swaps in place: the camera is kept
+    view.set({ pieces: countPieces(p), shown: { id: t.id, epoch, version }, draft: null });
     if (first) {
-      const saved = state.cameras.get(state.tiles[i].path);
+      const saved = cameras.get(t.path);
       if (saved) {
         viewer.setCamera(saved.camera);
-        state.activeView = saved.activeView;
-        showActiveView(state.activeView);
-      } else pickView(state.view, following?.i === i);
+        view.set({ activeView: saved.activeView });
+      } else pickView(view.get().mode, endFollow(t.id));
     }
-    if (following?.i === i) following = null;
+    endFollow(t.id);
     // a selection the new build no longer has goes
-    if (isEntry(state.sel) && state.sel.entry >= stackItems().length) state.sel = null;
-    renderLens();
-    renderAll();
+    const sel = view.get().sel;
+    if (isEntry(sel) && sel.id >= stackItems().length) view.set({ sel: null });
   } catch (e) {
     console.error(e);
   }
 }
 
+/** A draft of the text the page holds stands in for the build's mesh. */
+function showDraft() {
+  const d = view.get().draft;
+  if (!d || d.tileId !== view.get().tileId) return;
+  viewer.setMesh(d.payload);
+  view.set({ pieces: countPieces(d.payload) });
+}
+
 /** Wire this part of the page (once, at load). */
 export function init() {
-  viewer.setView(state.view, false, ONE_SQUARE);
-  {
-    const user = viewer.onUserViewChange;
-    viewer.onUserViewChange = () => { following = null; user?.(); };
-  }
+  view.subscribe(['tileId'], follow);
+  server.subscribe(['tiles', 'ready', 'epoch'], follow);
+  view.subscribe(['draft'], showDraft);
 }

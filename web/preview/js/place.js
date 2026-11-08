@@ -294,7 +294,7 @@ export class Tools {
       const name = fresh('area-1', (this.api.map()?.regions || []).map((r) => r.name));
       this.stop();
       const fill = `"${num(p.q[0])},${num(p.q[1])}"`;
-      await this.api.insert('tile', `region ${name} { bounded-by ${lines.join(' ')}; fill ${fill} }`, { select: { region: name } });
+      await this.api.insert('tile', `region ${name} { bounded-by ${lines.join(' ')}; fill ${fill} }`, { select: { kind: 'region', id: name } });
     }
   }
 
@@ -306,7 +306,7 @@ export class Tools {
     const name = fresh(t.extra && !t.extra.includes('=') ? t.extra.split(/\s+/)[0] : 'line-1', (this.api.map()?.lines || []).map((l) => l.name));
     const extra = t.extra.includes('=') ? ` ${t.extra}` : '';
     this.stop();
-    await this.api.insert('tile', `line ${name}${extra} { through ${pts.map(written).join(' ')} }`, { select: { line: name } });
+    await this.api.insert('tile', `line ${name}${extra} { through ${pts.map(written).join(' ')} }`, { select: { kind: 'line', id: name } });
   }
 
   // ---- handles ------------------------------------------------------------

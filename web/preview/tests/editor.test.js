@@ -316,3 +316,72 @@ test('a typed number or range is checked against what the control takes', () => 
   assert.equal(checkValue('0.4', ruin), 'a share is written as a percent: 30%');
   assert.equal(checkValue('2.5', { unit: 'count' }), 'a count is whole');
 });
+
+// ---- the editor's stores ----------------------------------------------------
+
+test('a store tells only those who named a key that changed', async () => {
+  const { createStore } = await import('../js/editor/stores.js');
+  const s = createStore({ a: 1, b: 2 });
+  const seen = [];
+  const stop = s.subscribe(['a'], (st, keys) => seen.push(['a', st.a, keys]));
+  s.subscribe(null, (st, keys) => seen.push(['all', keys]));
+  s.set({ b: 3 });
+  s.set({ a: 1 }); // no change: nobody is told
+  s.set({ a: 5, b: 3 });
+  stop();
+  s.set({ a: 6 });
+  assert.deepEqual(seen, [['all', ['b']], ['a', 5, ['a']], ['all', ['a']], ['all', ['a']]]);
+  assert.equal(s.get().a, 6);
+});
+
+test('the selection is one shape, and the same thing selected twice is the same', async () => {
+  const { entrySel, markSel, same, isEntry, isMark } = await import('../js/editor/stores.js');
+  assert.ok(same(entrySel(2), entrySel(2, null)));
+  assert.ok(!same(entrySel(2), entrySel(2, 0)));
+  assert.ok(!same(markSel('line', 'a'), markSel('region', 'a')));
+  assert.ok(same({ kind: 'tile', id: 'x' }, { kind: 'tile', id: 'y' }));
+  assert.ok(same(null, null) && !same(null, entrySel(0)));
+  assert.ok(isEntry(entrySel(0)) && isMark(markSel('line', 'a')) && !isMark(entrySel(0)));
+});
+
+test('a tile just made is waited for until the server lists it', async () => {
+  const { server, whenListed, tileById } = await import('../js/editor/stores.js');
+  server.set({ tiles: [{ id: 'a' }] });
+  assert.equal(await whenListed('a'), true);
+  const later = whenListed('b');
+  server.set({ tiles: [{ id: 'a' }, { id: 'b' }] });
+  assert.equal(await later, true);
+  assert.equal(tileById('b').id, 'b');
+  assert.equal(tileById('nope'), null);
+});
+
+test('a dropped stream is opened again with its epoch and last revision', () => {
+  const urls = [];
+  const sources = [];
+  const original = globalThis.EventSource;
+  const realTimeout = globalThis.setTimeout;
+  globalThis.EventSource = class {
+    constructor(url) { urls.push(url); this.close = () => {}; sources.push(this); }
+  };
+  globalThis.setTimeout = (fn) => { fn(); return 0; };
+  try {
+    const got = [];
+    browserHost().connect({
+      onSnapshot: (m) => got.push(['snapshot', m.rev]),
+      onTile: (t) => got.push(['tile', t.id]),
+      onProgress: (id) => got.push(['progress', id]),
+      onState: (s) => got.push(s),
+    });
+    const send = (m) => sources[sources.length - 1].onmessage({ data: JSON.stringify(m) });
+    send({ type: 'snapshot', rev: 4, epoch: 'e1', tiles: [] });
+    send({ type: 'tile', rev: 7, tile: { id: 'a' } });
+    send({ type: 'progress', rev: 7, id: 'a', progress: {} });
+    sources[0].onerror();
+    assert.deepEqual(urls, ['/api/events', '/api/events?epoch=e1&since=7']);
+    send({ type: 'resumed', rev: 9, epoch: 'e1' });
+    assert.deepEqual(got, ['live', ['snapshot', 4], ['tile', 'a'], ['progress', 'a'], 'offline', 'live']);
+  } finally {
+    globalThis.EventSource = original;
+    globalThis.setTimeout = realTimeout;
+  }
+});
