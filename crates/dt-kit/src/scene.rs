@@ -1250,9 +1250,26 @@ impl Scene {
             self.surface.hold_edge(edge);
         }
         self.record("surface", self.surface.field.content_hash());
-        let mesh = dt_geom::lift_adaptive(&self.surface.field, LIFT_TOL_MM, LIFT_MAX_CELLS)
-            .map_err(|e| KitError::Surface(e.to_string()))?;
         let slot = self.built.slots(1, Material::Earth)?.get(0);
+        let field = &self.surface.field;
+        // the terrain: one layer through the stack mesher (positions as the
+        // adaptive lift makes them; the float32 rounding comes with the
+        // water layer)
+        let mesh = dt_geom::lift_stack(
+            &dt_geom::Lattice {
+                nx: field.nx,
+                ny: field.ny,
+                step: field.step,
+                tol: LIFT_TOL_MM,
+                max_cells: LIFT_MAX_CELLS,
+                round: dt_geom::Round::None,
+            },
+            &[dt_geom::Layer {
+                top: &field.z,
+                id: slot.id,
+            }],
+        )
+        .map_err(|e| KitError::Surface(e.to_string()))?;
         let solid = leaf(slot, &mesh)?;
         if self.surface.wet.count() > 0 {
             // the water: a skin of the lifted top over the wet nodes, as

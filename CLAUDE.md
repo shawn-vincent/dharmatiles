@@ -55,7 +55,7 @@ Six crates under `crates/`:
 
 | Crate | Role |
 |---|---|
-| `dt-geom` | Kernels: mesh backend (Manifold via `manifold-csg`), rays (obvhs), keyed seeds and noise, grids, distance transform, adaptive lift, convex hulls. No element knowledge. |
+| `dt-geom` | Kernels: mesh backend (Manifold via `manifold-csg`), rays (obvhs), the terrain's stack mesher (`stack`, built on the adaptive lift), keyed seeds and noise, grids, distance transform, adaptive lift, convex hulls. No element knowledge. |
 | `dt-kit` | The vocabulary elements are written in: `Scene` of tagged solids, `Field` and its morphology, `scatter`, `loft`, `extrude`, `carve`, `union`, forms (level sets, hulls, relief), graphs (trees), `stand`, rays, the audit gate (`audit`), the STL writer with its build record, the CPU preview renderer. |
 | `dt-elements` | The built-in elements, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `scatter`), `water`, `grass`, `reeds`, `flowers`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
 | `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the element schema (`elements.rs`), edits. |
