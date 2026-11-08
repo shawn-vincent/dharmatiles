@@ -361,10 +361,10 @@ impl Shared {
     fn set_target(&self, system: Option<&str>, printer: Option<&str>) -> Result<(), String> {
         let now = self.options();
         let system = system.unwrap_or(&now.system);
-        let printer = printer.unwrap_or(&now.printer_name);
+        let printer = printer.unwrap_or(&now.printer.name);
         let mut next = crate::library::options_in(system, printer, None, self.home.as_deref())?;
         next.engine = now.engine.clone();
-        if next.system == now.system && next.printer_name == now.printer_name {
+        if next.system == now.system && next.printer.name == now.printer.name {
             return Ok(());
         }
         if let Some(h) = &self.home {
@@ -449,7 +449,7 @@ impl Shared {
             "rev": rev,
             "epoch": self.epoch,
             "system": target.system,
-            "printer": target.printer_name,
+            "printer": target.printer.name,
             "printers": dt_eval::printer_names(self.home.as_deref())
                 .into_iter()
                 .map(|(n, k)| json!({"name": n, "mine": k == dt_eval::ProfileKind::Mine}))

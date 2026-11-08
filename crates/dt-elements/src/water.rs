@@ -53,6 +53,9 @@ const LIP_D_MM: f64 = 0.6;
 /// about 0.6 mm at the first water cell, so a crest could meet the bank
 /// as a step; over true distance the water runs up to the bank.
 const SHORE_FADE_MM: f64 = 1.0;
+/// Where there is no water its layer lies this far under the ground, mm at
+/// the 35 mm square (it scales with the system): the layer is absent there.
+const ABSENT_UNDER_MM: f64 = 1.0;
 // emitters: strength, decay mm
 const LAND: (f64, f64) = (1.0, 34.0);
 const ROCK: (f64, f64) = (0.55, 10.0);
@@ -394,7 +397,7 @@ impl Element for Water {
         });
         // the water's own surface, kept apart from the ground: the stack mesher
         // lifts it as a layer of its own and cuts the shore where it meets
-        // the ground. Where there is no water it lies a millimetre under.
+        // the ground. Where there is no water it lies `ABSENT_UNDER_MM` (scaled) under.
         let mut top = vec![0.0; nn];
         let mut wet = vec![false; nn];
         for k in 0..nn {
@@ -409,7 +412,7 @@ impl Element for Water {
             top[k] = if ctx.area.bits[k] && (water[k] || rock_mask[k]) {
                 wz
             } else {
-                land.z[k] - s
+                land.z[k] - ABSENT_UNDER_MM * s
             };
         }
         // the ground's edge rule leaves the water and its banks alone

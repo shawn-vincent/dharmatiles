@@ -422,8 +422,9 @@ pub struct Surface {
     /// Nodes the water covers.
     wet: Mask,
     bed: Option<Grid>,
-    /// The water's own top at every node (world mm), a millimetre under
-    /// the ground where there is no water: the water layer of the lift.
+    /// The water's own top at every node (world mm), under the ground
+    /// where there is no water (the element says how far): the water layer
+    /// of the lift.
     water_top: Option<Vec<f32>>,
     water_edge_mm: Option<f64>,
     /// Nodes the ground's edge rule leaves alone (water and its banks).

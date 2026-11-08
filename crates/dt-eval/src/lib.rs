@@ -72,12 +72,8 @@ pub struct Options {
     pub system: String,
     /// Replaces the tile's seed (the CLI's `--seed`).
     pub seed: Option<u64>,
-    /// The printer the audit checks against.
-    pub printer: Printer,
-    /// The printer profile's name: `default`, another of
-    /// `library/printers/`, or one of the user's own (see
-    /// [`printer_profile`]).
-    pub printer_name: String,
+    /// The printer the audit checks against, with its name.
+    pub printer: Profile,
     /// Engine version for the build record.
     pub engine: String,
     /// A draft for the editor's view while a value is dragged: coarser
@@ -87,13 +83,37 @@ pub struct Options {
     pub draft: bool,
 }
 
+/// A printer profile in use: the gate's numbers and the name they were read
+/// under (`default`, another of `library/printers/`, or one of the user's
+/// own, see [`printer_profile`]). Reads as its [`Printer`].
+#[derive(Clone, PartialEq)]
+pub struct Profile {
+    /// The profile's name.
+    pub name: String,
+    gate: Printer,
+}
+
+impl std::ops::Deref for Profile {
+    type Target = Printer;
+    fn deref(&self) -> &Printer {
+        &self.gate
+    }
+}
+
+impl std::fmt::Debug for Profile {
+    /// As the printer alone: the build cache keys on it.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.gate.fmt(f)
+    }
+}
+
 impl Options {
     /// The build target: the base system, and the printer unless it is the
     /// default one (`db`, `ol`, `db-fine`). It names the output folder and
     /// files and the build record.
     #[must_use]
     pub fn target(&self) -> String {
-        dt_kit::target_name(&self.system, &self.printer_name)
+        dt_kit::target_name(&self.system, &self.printer.name)
     }
 
     /// Build for the printer profile `name` (see [`printer_profile`]).
@@ -101,8 +121,10 @@ impl Options {
     /// # Errors
     /// Why there is no such profile, or it does not decode.
     pub fn use_printer(&mut self, name: &str, home: Option<&Path>) -> Result<(), Vec<Diag>> {
-        self.printer = printer_profile(name, home)?;
-        self.printer_name = name.to_owned();
+        self.printer = Profile {
+            name: name.to_owned(),
+            gate: printer_profile(name, home)?,
+        };
         Ok(())
     }
 }
@@ -197,8 +219,10 @@ impl Default for Options {
         Self {
             system: "db".to_owned(),
             seed: None,
-            printer,
-            printer_name: "default".to_owned(),
+            printer: Profile {
+                name: "default".to_owned(),
+                gate: printer,
+            },
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
             draft: false,
         }
@@ -736,7 +760,7 @@ impl<'a> Plan<'a> {
             seed: job.seed,
             along: entry.and_then(|e| e.along.as_deref()),
             at: entry.and_then(|e| e.at),
-            printer: self.opts.printer,
+            printer: *self.opts.printer,
             against: entry.and_then(|e| e.against.as_deref()),
             foots: &self.foots,
             draft: self.opts.draft,
@@ -918,7 +942,7 @@ impl<'a> Plan<'a> {
             document_hash: doc::text_hash(text),
             seed: c.seed,
             system: opts.system.clone(),
-            printer: opts.printer_name.clone(),
+            printer: opts.printer.name.clone(),
         };
         Ok(Built {
             export,

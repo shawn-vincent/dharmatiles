@@ -131,7 +131,7 @@ fn target(shared: &Shared, v: &Value) -> (&'static str, Value) {
             let o = shared.options();
             (
                 "200 OK",
-                json!({ "ok": true, "system": o.system, "printer": o.printer_name }),
+                json!({ "ok": true, "system": o.system, "printer": o.printer.name }),
             )
         }
         Err(e) => bad(&e),
