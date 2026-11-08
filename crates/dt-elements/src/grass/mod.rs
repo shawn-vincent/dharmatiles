@@ -34,6 +34,39 @@ mod fronds;
 mod lat;
 
 pub(crate) use blade::ring_mesh;
+
+/// How far inside the tile's plane a blade that reached it is kept, mm.
+const PLANE_CLEAR_MM: f64 = 1e-3;
+
+/// No blade crosses the tile's vertical plane (the rule the side relief
+/// follows, so tiles never jam in clips or on a board): a blade whose width
+/// or lean reaches past it is moved in until it just clears it.
+fn inside_plane(mut m: TriMesh, w: f64, h: f64) -> TriMesh {
+    let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
+    for p in &m.positions {
+        for a in 0..2 {
+            lo[a] = lo[a].min(p[a]);
+            hi[a] = hi[a].max(p[a]);
+        }
+    }
+    let size = [w, h];
+    let shift: [f64; 2] = std::array::from_fn(|a| {
+        if lo[a] < PLANE_CLEAR_MM {
+            PLANE_CLEAR_MM - lo[a]
+        } else if hi[a] > size[a] - PLANE_CLEAR_MM {
+            size[a] - PLANE_CLEAR_MM - hi[a]
+        } else {
+            0.0
+        }
+    });
+    if shift != [0.0; 2] {
+        for p in &mut m.positions {
+            p[0] += shift[0];
+            p[1] += shift[1];
+        }
+    }
+    m
+}
 use dt_kit::Kind;
 use dt_kit::OnFrame;
 use dt_kit::{Field, Material, Rng, Scene, Standing, Tag, TriMesh, distance, form};
@@ -313,7 +346,7 @@ impl Element for Grass {
             .par_iter()
             .enumerate()
             .map(|(i, f)| {
-                let m = blade::mesh(f, &seat_at, &raw_at, hair(i));
+                let m = blade::mesh(f, &seat_at, &raw_at, hair(i)).map(|m| inside_plane(m, w, h));
                 ticks.tick();
                 m
             })

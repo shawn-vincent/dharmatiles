@@ -266,10 +266,15 @@ fn a_line_and_two_regions_make_a_step() {
             })
             .fold(f64::MIN, f64::max)
     };
-    // each height holds inside its region (the dirt's grain rides on it);
-    // both meet the tile edge at the library's edge height (3.4 mm)
+    // each height holds inside its region (the dirt's grain is set into it,
+    // so the land sits up to the grain's height under its band); both meet
+    // the tile edge at the library's edge height (3.4 mm)
     assert!((z_at(8.75) - 5.0).abs() < 1.5, "low {}", z_at(8.75));
-    assert!(z_at(26.0) > 5.5, "high {}", z_at(26.0));
+    assert!(
+        z_at(26.0) > 4.5 && z_at(26.0) > z_at(8.75),
+        "high {}",
+        z_at(26.0)
+    );
     assert!((z_at(35.0) - 3.4).abs() < 0.3, "edge {}", z_at(35.0));
 }
 

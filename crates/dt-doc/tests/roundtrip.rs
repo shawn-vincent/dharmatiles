@@ -188,7 +188,7 @@ fn removal_in_either_form() {
     let path = ["tile", "stack", "wall"];
     // A property on the line.
     let new = remove_control(text, &path, "seed").unwrap();
-    assert_eq!(new, text.replace(" seed=14", ""));
+    assert_eq!(new, text.replace(" seed=15", ""));
     redecode(name, &new);
     // A child line, with the comment block above the next line kept.
     let new = remove_control(text, &path, "coping").unwrap();

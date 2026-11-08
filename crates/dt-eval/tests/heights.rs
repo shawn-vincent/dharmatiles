@@ -229,7 +229,8 @@ fn regions_that_within_and_except() {
     let d = &c.solved.as_ref().unwrap().bodies[0];
     // 4.5 mm either side of x = 0.5 on a 35 mm square: 9 mm of 35
     let path = &d.pins[1];
-    let across = path.place_nodes as f64 / 128.0 / 128.0;
+    let nodes = f64::from(c.solved.as_ref().unwrap().cells_per_square) + 1.0;
+    let across = path.place_nodes as f64 / nodes / nodes;
     assert!((across - 9.0 / 35.0).abs() < 0.02, "{across}");
     assert!(close(d.at(0.5, 0.5).lo, 4.0));
 }

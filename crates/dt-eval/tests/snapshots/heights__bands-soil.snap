@@ -2,13 +2,13 @@
 source: crates/dt-eval/tests/heights.rs
 expression: summary(&c)
 ---
-cells per square: 128
+cells per square: 234
 notes: []
-dirt (16641 nodes)
-  pin top=dirtEdgeHeight at=edges wins 512/512
+dirt (55225 nodes)
+  pin top=dirtEdgeHeight at=edges wins 936/936
   pin knoll top=knollTop at=knoll wins 1/1
   y=1.00  3.40  3.40  3.40  3.40  3.40
   y=0.75  3.40  5.00..6.00  5.00..6.00  5.00..6.00  3.40
-  y=0.50  3.40  5.00..6.00  5.00..6.00  6.13..6.75  3.40
+  y=0.50  3.40  5.00..6.00  5.00..6.00  6.07..6.71  3.40
   y=0.25  3.40  5.00..6.00  5.00..6.00  5.00..6.00  3.40
   y=0.00  3.40  3.40  3.40  3.40  3.40

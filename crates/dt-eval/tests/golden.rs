@@ -182,28 +182,139 @@ fn the_rim_is_cut_from_the_sharp_corner_at_the_edge_height() {
     ] {
         let b = built(path);
         let [w, h] = b.footprint;
-        let key = |p: &[f64; 3]| ((p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64);
-        let mut tops: HashMap<(i64, i64), f64> = HashMap::new();
+        // the ground's surface: every node on the edge is the edge level less
+        // the round (the corner too: the round is mitred there)
+        let (surface, _) = b.surface.as_ref().unwrap();
+        let (nx, ny) = (surface.nx, surface.ny);
+        let mut on_edge = 0;
+        for j in 0..ny {
+            for i in 0..nx {
+                if i == 0 || j == 0 || i == nx - 1 || j == ny - 1 {
+                    on_edge += 1;
+                    let z = f64::from(surface.z[j * nx + i]);
+                    assert!(
+                        (z - (EDGE - ROUND)).abs() < 1e-5,
+                        "{path}: the edge node ({i}, {j}) is {z} mm, not {}",
+                        EDGE - ROUND
+                    );
+                }
+            }
+        }
+        assert!(on_edge > 100);
+        // and in the mesh nothing on the edge stands above that
+        let mut top = f64::MIN;
         for p in &b.export.mesh.positions {
             let on_rim = p[0].abs() < 1e-6
                 || (p[0] - w).abs() < 1e-6
                 || p[1].abs() < 1e-6
                 || (p[1] - h).abs() < 1e-6;
             if on_rim && p[2] > 0.01 {
-                let e = tops.entry(key(p)).or_insert(f64::MIN);
-                *e = e.max(p[2]);
+                top = top.max(p[2]);
             }
         }
-        assert!(tops.len() > 100, "{path}: only {} rim columns", tops.len());
-        for ((x, y), z) in &tops {
+        assert!(
+            (top - (EDGE - ROUND)).abs() < 1e-5,
+            "{path}: the edge tops at {top} mm"
+        );
+    }
+}
+
+#[test]
+fn the_dirt_sides_are_relief_behind_the_plane() {
+    for path in [
+        "lib:tiles/ground/1x1-soil.dtile",
+        "lib:tiles/test/2x2-dirt.dtile",
+        "lib:tiles/test/2x2-hill.dtile",
+    ] {
+        let b = built(path);
+        let [w, h] = b.footprint;
+        let m = &b.export.mesh;
+        // nothing of the tile (the base's own parts sit under z = 0) is past
+        // a plane
+        for p in &m.positions {
+            if p[2] >= 0.0 {
+                assert!(
+                    p[0] >= -1e-6 && p[0] <= w + 1e-6 && p[1] >= -1e-6 && p[1] <= h + 1e-6,
+                    "{path}: {p:?} is past a plane"
+                );
+            }
+        }
+        // each face: the projected area of the side's triangles that lies
+        // within 0.1 mm of the plane, away from the corners
+        for side in 0..4 {
+            let (mut near, mut all) = (0.0, 0.0);
+            for t in &m.triangles {
+                let v = t.map(|i| m.positions[i as usize]);
+                if v.iter().any(|p| p[2] < 0.0) {
+                    continue;
+                }
+                let dist = |p: &[f64; 3]| match side {
+                    0 => p[1],
+                    1 => w - p[0],
+                    2 => h - p[1],
+                    _ => p[0],
+                };
+                let along = |p: &[f64; 3]| if side % 2 == 0 { p[0] } else { p[1] };
+                let len = if side % 2 == 0 { w } else { h };
+                let c = v.iter().map(dist).sum::<f64>() / 3.0;
+                let a = v.iter().map(along).sum::<f64>() / 3.0;
+                if c > 1.2 || a < 1.6 || a > len - 1.6 {
+                    continue;
+                }
+                let u = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
+                let q = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
+                let n = [
+                    u[1] * q[2] - u[2] * q[1],
+                    u[2] * q[0] - u[0] * q[2],
+                    u[0] * q[1] - u[1] * q[0],
+                ];
+                // the part of its area facing out through the plane
+                let out = match side {
+                    0 => -n[1],
+                    1 => n[0],
+                    2 => n[1],
+                    _ => -n[0],
+                } / 2.0;
+                if out > 0.0 {
+                    all += out;
+                    if c < 0.1 {
+                        near += out;
+                    }
+                }
+            }
+            assert!(all > 0.0, "{path}: side {side} has no face");
             assert!(
-                (z - (EDGE - ROUND)).abs() < 1e-5,
-                "{path}: the rim column at ({}, {}) is {} mm, not {}",
-                *x as f64 / 1e4,
-                *y as f64 / 1e4,
-                z,
-                EDGE - ROUND
+                near / all >= 0.15,
+                "{path}: only {:.0}% of side {side} is within 0.1 mm of the plane",
+                100.0 * near / all
             );
+        }
+        // no face above the floor leans out past the overhang (55 degrees)
+        let limit = -55.0_f64.to_radians().sin();
+        for t in &m.triangles {
+            let v = t.map(|i| m.positions[i as usize]);
+            let near = v
+                .iter()
+                .all(|p| p[2] > 0.01 && p[0].min(w - p[0]).min(p[1]).min(h - p[1]) < 0.7);
+            if !near {
+                continue;
+            }
+            let u = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
+            let q = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
+            let n = [
+                u[1] * q[2] - u[2] * q[1],
+                u[2] * q[0] - u[0] * q[2],
+                u[0] * q[1] - u[1] * q[0],
+            ];
+            let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            if len > 1e-9 {
+                // the stones are bedded and not part of a face; a face is the
+                // earth's
+                assert!(
+                    n[2] / len >= limit - 1e-6,
+                    "{path}: {v:?} faces down past 55 degrees"
+                );
+            }
         }
     }
 }
@@ -230,25 +341,20 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
         // the ground on the edge is above the edge level
         let edge = b.edge_mm.unwrap();
         let [w, h] = b.footprint;
-        let mut tops: HashMap<(i64, i64), f64> = HashMap::new();
+        let mut top = f64::MIN;
         for p in &b.export.mesh.positions {
             let on_edge = p[0].abs() < 1e-6
                 || p[1].abs() < 1e-6
                 || (p[0] - w).abs() < 1e-4
                 || (p[1] - h).abs() < 1e-4;
             if on_edge && p[2] > 0.0 {
-                assert!(p[2] < edge + 1e-5, "{path}: edge vertex {p:?}");
-                let k = ((p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64);
-                let e = tops.entry(k).or_insert(f64::MIN);
-                *e = e.max(p[2]);
+                top = top.max(p[2]);
             }
         }
-        for (k, z) in &tops {
-            assert!(
-                (z - (edge - 0.2)).abs() < 1e-5,
-                "{path}: edge column {k:?} tops at {z}"
-            );
-        }
+        assert!(
+            (top - (edge - 0.2)).abs() < 1e-5,
+            "{path}: the edge tops at {top}"
+        );
     }
 }
 

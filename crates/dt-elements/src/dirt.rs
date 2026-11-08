@@ -70,6 +70,9 @@ const RIM_TEX_MM: f64 = 1.0;
 /// Dirt's edge-round, mm at the 35 mm square: a drop of the top at the rim,
 /// cut from the sharp corner at the edge height.
 const EDGE_ROUND_MM: f64 = 0.2;
+/// The relief of dirt's sides, mm at the 35 mm square (never under the
+/// printer's one line).
+const SIDE_RELIEF_MM: f64 = 0.6;
 /// The surface is set in for the grain gradually from the rim, over this
 /// width (true mm), so the dip from the held rim is gentle (about 30° for
 /// the grain's height), not a trench.
@@ -923,7 +926,10 @@ impl Element for Dirt {
                 grain: Some(&grain),
                 skin_mm: 3.0 * ctx.printer.layer_mm,
                 round_mm: EDGE_ROUND_MM * scene.frame().scale(),
-                side: None,
+                side: Some(dt_kit::SideSpec {
+                    depth_mm: (SIDE_RELIEF_MM * scene.frame().scale()).max(ctx.printer.line_mm),
+                    seed: ctx.seed.key("side"),
+                }),
             })
             .map_err(LookError::build)?;
         scene.mark_stone(ctx.area, &stone);

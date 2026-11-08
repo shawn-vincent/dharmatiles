@@ -10,7 +10,7 @@ expression: hashes(b)
 5844a84f9b5ff3f7  rock:tile/dirt/0
 c6999364177204d3  rock:tile/dirt/0
 8b0a3b2dbe6a5f7e  surface
-b48502baeb0b600a  terrain:tile/terrain
+a44b4cf8390bbc32  terrain:tile/terrain
 c5425b58bb98b89c  rock:tile/scatter/0
 ce061ce93d7e5cc8  rock:tile/scatter/0
 f2e3c4c83a6f5962  rock:tile/scatter/0
@@ -51,5 +51,5 @@ f51d8310ed5ac1be  rock:tile/scatter/0
 a6ffdf185bff16c0  rock:tile/scatter/0
 0311e3bd1a864162  rock:tile/scatter/0
 349265e945ab781e  connector:tile/connector
-4d6c8c467f1bd19a  union
-54a8612c5dd38918  export
+c03a9f0b64d021c3  union
+25d091273e8f49d8  export
