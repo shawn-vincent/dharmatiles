@@ -208,7 +208,7 @@ pub fn threemf(
         " <metadata name=\"Application\">dharmatiles {}</metadata>\n <metadata name=\"Title\">{}</metadata>\n <metadata name=\"Description\">system {}, seed {}, document {:016x}</metadata>",
         escape(&record.engine),
         escape(&record.document),
-        escape(&record.system),
+        escape(&record.target()),
         record.seed,
         record.document_hash
     );
@@ -445,6 +445,7 @@ mod tests {
             document_hash: 1,
             seed: 2,
             system: "db".into(),
+            printer: "default".into(),
         };
         let z = threemf(&mesh, &mats, &rec, &Palette::default());
         assert_eq!(&z[..4], b"PK\x03\x04");

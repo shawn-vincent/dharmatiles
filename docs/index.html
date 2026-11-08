@@ -80,7 +80,7 @@ tile size="1x1" seed=97 {
     <tr><td>Watch it in the browser as you edit</td><td><code>dharmatiles preview my-pond.dtile --open</code></td></tr>
     <tr><td>Browse your tiles and the library</td><td><code>dharmatiles</code> on its own, or <code>dharmatiles preview --open</code> (your tiles live in <code>~/dharmatiles</code>, or set <code>DT_HOME</code>; name folders to browse those instead)</td></tr>
     <tr><td>Check it without building</td><td><code>dharmatiles check my-pond.dtile</code></td></tr>
-    <tr><td>Build every library tile</td><td><code>dharmatiles build --all --system both</code></td></tr>
+    <tr><td>Build every library tile</td><td><code>dharmatiles build --all</code> (add <code>--system ol</code> for OpenLOCK)</td></tr>
     <tr><td>List the elements and their controls</td><td><code>dharmatiles elements</code>, <code>dharmatiles elements cliff</code></td></tr>
   </tbody>
 </table></div>
@@ -99,7 +99,7 @@ cargo build --release                 # a few minutes, once
   <li><strong>Start from a library tile.</strong> Copy one that is close to what you want: <code>cp library/tiles/water/1x1-water+grass.dtile my-pond.dtile</code>. The <a href="elements/index.html">elements</a> pages list which library tiles use each element.</li>
   <li><strong>Open the preview.</strong> <code>dharmatiles preview my-pond.dtile --open</code> shows the tile in your browser, painted, with overhangs in red. It rebuilds every time you save, and shows a mistake at its line.</li>
   <li><strong>Edit.</strong> Change a control, add an element, move a line. Each element's page lists every control it takes; the preview's stack line links each entry to its page. Change <code>seed=</code> for another version of the same tile.</li>
-  <li><strong>Build.</strong> <code>dharmatiles build my-pond.dtile</code> for DungeonBlocks, <code>--system ol</code> for OpenLOCK, <code>--3mf</code> for a 3MF painted by material, ready for a multi-colour printer (a Bambu Studio project with its filament slots when you give it a template).</li>
+  <li><strong>Build.</strong> <code>dharmatiles build my-pond.dtile</code> for DungeonBlocks, <code>--system ol</code> for OpenLOCK, <code>--printer fine</code> for another printer profile, <code>--3mf</code> for a 3MF painted by material, ready for a multi-colour printer (a Bambu Studio project with its filament slots when you give it a template).</li>
   <li><strong>Print</strong> base down, no supports.</li>
 </ol>
 
@@ -136,7 +136,7 @@ cargo build --release                 # a few minutes, once
 <tbody>
 <tr><td>Every element on the <a href="elements/index.html">elements</a> pages builds: ground, dirt, grass, reeds, flowers, water, rocks and scatter, trees, walls, floors and cliffs.</td><td>A line's <code>width=</code>, and building <code>along=</code> a drawn line (walls, paths, surfaces). <code>check</code> names the lines; <code>build</code> refuses them.</td></tr>
 <tr><td>DungeonBlocks and OpenLOCK bases from one document; STL, a 3MF painted by material (a Bambu Studio project with a template), and PNG views.</td><td>Doors, windows and hatches in walls.</td></tr>
-<tr><td>The <a href="preview.html">preview</a>, <code>watch</code>, and the whole library (<code>build --all --system both</code>).</td><td>Prebuilt downloads, and builds for Linux and Windows.</td></tr>
+<tr><td>The <a href="preview.html">preview</a>, <code>watch</code>, and the whole library (<code>build --all</code>, once for each base).</td><td>Prebuilt downloads, and builds for Linux and Windows.</td></tr>
 </tbody></table></div>
 
 <h2 id="extras">Extras</h2>

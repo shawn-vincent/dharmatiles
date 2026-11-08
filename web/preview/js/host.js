@@ -18,6 +18,7 @@
 //   mine(id)                                copy a library tile to My tiles: {path, id}
 //   newTile(name, size)                     a new tile in My tiles: {path, id}
 //   edit(body)                              a text edit (a control set, a node inserted or removed)
+//   setTarget({system?, printer?})          choose the build target (base system, printer profile) for every build
 //   exportTile(id, body)                    write STL / 3MF ({where: true} asks where it would go)
 //   reveal(path)                            show a written file in the file manager
 //
@@ -101,6 +102,7 @@ export function browserHost() {
     mine: (id) => call(tile(id, 'mine'), {}),
     newTile: (name, size) => call('/api/new', { name, size }),
     edit: (body) => call('/api/edit', body),
+    setTarget: (body) => call('/api/target', body),
     exportTile: (id, body) => call(tile(id, 'export'), body),
     reveal: (path) => call('/api/reveal', { path }),
   };

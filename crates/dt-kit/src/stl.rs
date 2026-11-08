@@ -18,16 +18,32 @@ pub struct BuildRecord {
     pub seed: u64,
     /// The connector system, `db` or `ol`.
     pub system: String,
+    /// The printer profile's name (`default`, or another).
+    pub printer: String,
 }
 
 impl BuildRecord {
+    /// The build target: the system, and the printer unless it is the
+    /// default one (`db`, `ol`, `db-fine`).
+    #[must_use]
+    pub fn target(&self) -> String {
+        match self.printer.as_str() {
+            "default" => self.system.clone(),
+            p => format!("{}-{p}", self.system),
+        }
+    }
+
     /// The 80-byte STL header: never starts with `solid` (that marks ASCII
     /// STL), padded with spaces.
     #[must_use]
     pub fn header(&self) -> [u8; 80] {
         let line = format!(
             "dharmatiles {} {} seed={} doc={:016x} {}",
-            self.engine, self.system, self.seed, self.document_hash, self.document
+            self.engine,
+            self.target(),
+            self.seed,
+            self.document_hash,
+            self.document
         );
         let mut h = [b' '; 80];
         let n = line.len().min(80);

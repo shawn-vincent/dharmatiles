@@ -245,6 +245,8 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
             "document_hash": format!("{:016x}", b.record.document_hash),
             "seed": b.record.seed,
             "system": b.record.system,
+            "printer": b.record.printer,
+            "target": b.record.target(),
         },
         "audit": {
             "triangles": a.triangles,

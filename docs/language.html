@@ -108,9 +108,11 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <pre><code>printer default {
     line     0.45       // one extruded line, mm: the thinnest wall that prints
     layer    0.2        // one layer, mm
-    overhang 55         // the steepest overhang that prints, degrees from vertical
+    overhang 55         // what every element aims for, degrees from vertical
+    steepest 65         // small patches up to here
     gap      0.2        // the narrowest gap that stays open, mm
 }</code></pre>
+<p>Other profiles sit beside it in <code>library/printers/</code> (<code>fine</code>), and your own in a <code>printers/</code> folder beside your tiles; <code>--printer</code> chooses one. A profile holds the printer's floors only: the base system is chosen with <code>--system</code>, and edge and corner rounding belong to materials.</p>
 <p>Elements apply these after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
 
 <h3 id="levels">level and height</h3>

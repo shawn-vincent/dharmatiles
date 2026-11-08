@@ -413,7 +413,7 @@ pub fn bambu_project(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<model unit=\"millimeter\" xml:lang=\"en-US\" {NS}>\n <metadata name=\"Application\">BambuStudio-02.09.01.70</metadata>\n <metadata name=\"BambuStudio:3mfVersion\">1</metadata>\n <metadata name=\"Title\">{t}</metadata>\n <metadata name=\"Description\">dharmatiles {e}: system {s}, seed {seed}, document {h:016x}; filaments {f}</metadata>\n <resources>\n  <object id=\"2\" p:UUID=\"00000001-61cb-4c03-9d28-80fed5dfa1dc\" type=\"model\">\n   <components>\n    <component p:path=\"/3D/Objects/object_1.model\" objectid=\"1\" p:UUID=\"00010000-b206-40ff-9872-83e8017abed1\" transform=\"1 0 0 0 1 0 0 0 1 0 0 0\"/>\n   </components>\n  </object>\n </resources>\n <build p:UUID=\"2c7c17d8-22b5-4d84-8835-1976022ea369\">\n  <item objectid=\"2\" p:UUID=\"00000002-b1ec-4553-aec9-835e5b724bb4\" transform=\"1 0 0 0 1 0 0 0 1 {x:.5} {y:.5} {z:.5}\" printable=\"1\"/>\n </build>\n</model>\n",
         t = esc(&name),
         e = esc(&record.engine),
-        s = esc(&record.system),
+        s = esc(&record.target()),
         seed = record.seed,
         h = record.document_hash,
         f = fil

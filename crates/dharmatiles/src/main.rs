@@ -68,7 +68,8 @@ fn main() -> ExitCode {
     // no command: browse your tiles and the library in the browser
     let command = cli.command.unwrap_or(Command::Preview {
         paths: Vec::new(),
-        system: "db".to_owned(),
+        system: None,
+        printer: None,
         port: None,
         open: true,
         palette: None,
@@ -79,6 +80,7 @@ fn main() -> ExitCode {
             paths,
             all,
             system,
+            printer,
             seed,
             out,
             png,
@@ -109,31 +111,28 @@ fn main() -> ExitCode {
             };
             let paths = if all { library_tiles() } else { paths };
             let out = out_dir(out);
-            let systems: Vec<&str> = if system == "both" {
-                vec!["db", "ol"]
-            } else {
-                vec![system.as_str()]
+            let opts = match options(&system, &printer, seed) {
+                Ok(o) => o,
+                Err(e) => {
+                    tell!("error: {e}");
+                    return ExitCode::from(ERROR);
+                }
             };
-            systems.iter().fold(OK, |code, sys| {
-                build::worse(
-                    code,
-                    build::build(
-                        &paths,
-                        &options((*sys).to_owned(), seed),
-                        &out,
-                        Extras {
-                            progress: !json && std::io::IsTerminal::is_terminal(&std::io::stderr()),
-                            tile_no: None,
-                            png,
-                            threemf,
-                            template: template.as_deref(),
-                            palette: &palette,
-                            cache: None,
-                        },
-                        json,
-                    ),
-                )
-            })
+            build::build(
+                &paths,
+                &opts,
+                &out,
+                Extras {
+                    progress: !json && std::io::IsTerminal::is_terminal(&std::io::stderr()),
+                    tile_no: None,
+                    png,
+                    threemf,
+                    template: template.as_deref(),
+                    palette: &palette,
+                    cache: None,
+                },
+                json,
+            )
         }
         Command::Elements { name, json } => elements::run(name.as_deref(), json),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
@@ -146,24 +145,32 @@ fn main() -> ExitCode {
         Command::Preview {
             paths,
             system,
+            printer,
             port,
             open,
             palette,
-        } => preview::run(&paths, &options(system, None), port, open, palette),
+        } => match library::preview_options(system.as_deref(), printer.as_deref()) {
+            Ok(o) => preview::run(&paths, &o, port, open, palette),
+            Err(e) => {
+                tell!("error: {e}");
+                ERROR
+            }
+        },
         Command::Watch {
             paths,
             system,
+            printer,
             seed,
             out,
             png,
             max_builds,
-        } => watch::run(
-            &paths,
-            &options(system, seed),
-            &out_dir(out),
-            png,
-            max_builds,
-        ),
+        } => match options(&system, &printer, seed) {
+            Ok(o) => watch::run(&paths, &o, &out_dir(out), png, max_builds),
+            Err(e) => {
+                tell!("error: {e}");
+                ERROR
+            }
+        },
     };
     ExitCode::from(code)
 }

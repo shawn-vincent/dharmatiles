@@ -26,19 +26,13 @@ impl Drop for Running {
 
 fn start(paths: &[&str], eager: bool) -> Running {
     let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
-    let opts = Options::default();
-    let shared = Arc::new(Shared::new(
-        &paths,
-        "db",
-        opts.printer.overhang_deg,
-        opts.printer.steepest_deg,
-    ));
+    let shared = Arc::new(Shared::new(&paths));
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let addr = listener.local_addr().unwrap();
     server::spawn(listener, Arc::clone(&shared));
     let stop = Arc::new(AtomicBool::new(false));
     let (s, st) = (Arc::clone(&shared), Arc::clone(&stop));
-    std::thread::spawn(move || work(&s, &opts, eager, &st));
+    std::thread::spawn(move || work(&s, eager, &st));
     Running { addr, stop }
 }
 
@@ -304,7 +298,7 @@ fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
         "1x1-grass"
     );
     assert_eq!(Slot::new("my/tiles/a.dtile").name, "a");
-    let _ = Shared::new(&[], "db", 55.0, 65.0).snapshot();
+    let _ = Shared::new(&[]).snapshot();
 }
 
 #[test]
@@ -396,7 +390,7 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
         Root::new("My tiles", RootKind::Dir(dir.clone())),
         Root::new("Library", RootKind::Library("tiles/test/".to_owned())),
     ];
-    let shared = Shared::with_roots(roots, &[], "db", 55.0, 65.0);
+    let shared = Shared::with_roots(roots, &[], &Options::default());
     let listed = |s: &Shared| -> Vec<(String, Value, Value)> {
         let v = s.snapshot();
         v["tiles"]
@@ -713,7 +707,7 @@ fn a_draft_is_a_request_answered_with_its_mesh() {
 
 #[test]
 fn a_newer_draft_of_a_tile_supersedes_the_older() {
-    let shared = Shared::new(&[FLAT.to_owned()], "db", 55.0, 65.0);
+    let shared = Shared::new(&[FLAT.to_owned()]);
     let id = tile_id(FLAT);
     let first = shared.submit_draft(&id, FLAT, FLAT, "tile {}");
     let second = shared.submit_draft(&id, FLAT, FLAT, "tile { }");
@@ -738,7 +732,7 @@ fn a_newer_draft_of_a_tile_supersedes_the_older() {
 #[test]
 fn routes_answer_without_a_socket() {
     use route::{Reply, route};
-    let shared = Shared::new(&[FLAT.to_owned()], "db", 55.0, 65.0);
+    let shared = Shared::new(&[FLAT.to_owned()]);
     let id = tile_id(FLAT);
     let json = |r: Reply| match r {
         Reply::Json(s, v) => (s, v),
@@ -800,7 +794,7 @@ fn a_stream_resumes_from_its_last_revision_or_starts_over() {
     let text = dt_eval::Library.read(FLAT).unwrap();
     std::fs::write(dir.join("a.dtile"), &text).unwrap();
     let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
-    let shared = Shared::with_roots(roots, &[], "db", 55.0, 65.0);
+    let shared = Shared::with_roots(roots, &[], &Options::default());
     let id = tile_id(&dir.join("a.dtile").to_string_lossy());
     let resume = |epoch: &str, since: u64| route::Resume {
         epoch: Some(epoch.to_owned()),
@@ -969,21 +963,30 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
     let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
     let token = token["token"].as_str().unwrap().to_owned();
     let call = |p: &str, body: Value| post(&r, p, Some(&token), None, &body.to_string());
-    // a system that is not one is refused
-    let (h, _) = call(
-        &format!("/api/tiles/{}/export", id0(&r)),
+    // a target that is not one is refused
+    for bad in [
         serde_json::json!({ "system": "lego" }),
-    );
-    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+        serde_json::json!({ "printer": "no-such-printer" }),
+        serde_json::json!({ "system": "both" }),
+    ] {
+        let (h, _) = call("/api/target", bad);
+        assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+    }
+    assert_eq!(tiles(&r)["system"], "db");
+    assert_eq!(tiles(&r)["printer"], "default");
     // where it would go, without building
     let (_, v) = call(
         &format!("/api/tiles/{}/export", id0(&r)),
         serde_json::json!({ "where": true }),
     );
     assert_eq!(v["out"], dir.join("out").to_string_lossy().as_ref(), "{v}");
+    // the export is for the target the title bar's chip chose
+    let (h, _) = call("/api/target", serde_json::json!({ "system": "ol" }));
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    assert_eq!(tiles(&r)["system"], "ol");
     let (h, v) = call(
         &format!("/api/tiles/{}/export", id0(&r)),
-        serde_json::json!({ "system": "ol" }),
+        serde_json::json!({}),
     );
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
     assert_eq!(v["ok"], true, "{v}");
@@ -1120,4 +1123,63 @@ fn a_build_sends_sketches_as_it_goes_and_drops_them_when_done() {
     }
     // the flat tile's ground and its base, at least
     assert!(sketched >= 2, "sketches seen in {sketched} updates");
+}
+
+#[test]
+fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
+    let dir = std::env::temp_dir().join(format!("dt-target-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("printers")).unwrap();
+    std::fs::write(
+        dir.join("printers/mine.dtile"),
+        "printer mine {\n line 0.5\n layer 0.2\n overhang 50\n steepest 62\n gap 0.2\n}\n",
+    )
+    .unwrap();
+    let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
+    let shared = Shared::with_roots(roots, &[], &Options::default()).with_home(dir.clone());
+    // the page is told the printers there are: the library's and yours
+    let snap = shared.snapshot();
+    let names: Vec<(&str, bool)> = snap["printers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (p["name"].as_str().unwrap(), p["mine"].as_bool().unwrap()))
+        .collect();
+    assert!(names.contains(&("default", false)), "{names:?}");
+    assert!(names.contains(&("fine", false)), "{names:?}");
+    assert!(names.contains(&("mine", true)), "{names:?}");
+    assert_eq!(snap["printer"], "default");
+    // one tile has been built
+    let id = shared.snapshot()["tiles"].as_array().map(|t| t.len());
+    assert_eq!(id, Some(0));
+    {
+        let mut tiles = lock(&shared.tiles);
+        let mut t = Slot::new("lib:tiles/test/1x1-flat.dtile");
+        t.status = State::Ready;
+        tiles.push(t);
+    }
+    assert!(shared.set_target(None, Some("mine")).is_ok());
+    let snap = shared.snapshot();
+    assert_eq!(snap["printer"], "mine");
+    assert_eq!(snap["system"], "db");
+    // the gate's angles are the chosen printer's
+    assert!((snap["overhang_deg"].as_f64().unwrap() - 50.0).abs() < 1e-9);
+    assert!((snap["steepest_deg"].as_f64().unwrap() - 62.0).abs() < 1e-9);
+    // the built tile is stale: it builds again for the new target
+    assert!(lock(&shared.tiles).iter().all(|t| t.stale && t.changed()));
+    assert_eq!(shared.options().target(), "db-mine");
+    // and the choice is in the home, for the next run
+    let (sys, printer) = crate::library::remembered_target(&dir);
+    assert_eq!(
+        (sys.as_deref(), printer.as_deref()),
+        (Some("db"), Some("mine"))
+    );
+    assert!(shared.set_target(Some("ol"), None).is_ok());
+    assert_eq!(shared.options().target(), "ol-mine");
+    assert!(shared.set_target(Some("lego"), None).is_err());
+    assert!(shared.set_target(None, Some("../mine")).is_err());
+    // a profile of yours that has gone: the remembered target falls back
+    std::fs::remove_file(dir.join("printers/mine.dtile")).unwrap();
+    let o = crate::library::options_in("db", "default", None, Some(&dir)).unwrap();
+    assert_eq!(o.target(), "db");
 }

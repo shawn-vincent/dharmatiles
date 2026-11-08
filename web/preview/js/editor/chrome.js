@@ -55,7 +55,7 @@ function setPaint(on) {
 
 // popovers: one open at a time (`view.popover`); Esc or a click outside closes it
 const popovers = [
-  ['dispbtn', 'display'], ['gate', 'record-card'], ['export', 'export-card'],
+  ['dispbtn', 'display'], ['gate', 'record-card'], ['export', 'export-card'], ['target', 'target-card'],
   ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
 ];
 const openPopover = (id) => view.set({ popover: view.get().popover === id ? null : id });

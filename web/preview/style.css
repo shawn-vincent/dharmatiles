@@ -107,11 +107,26 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .menu-find input { min-width: 0; }
 .card { position: absolute; z-index: 20; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 12px 14px; }
 /* the gate's record and the export card drop down over the view, never over a pane */
-#record-card, #export-card { top: 50px; right: 10px; width: 320px; max-height: calc(100% - 64px); overflow: auto; }
-#export-card { display: flex; flex-direction: column; gap: 10px; }
-#export-card[hidden] { display: none; }
-#export-card .cap { color: var(--muted); font: 600 10.5px/1 var(--f-body); letter-spacing: .09em; text-transform: uppercase; }
-#export-card .seg { width: 100%; } #export-card .seg > button { flex: 1; }
+#record-card, #export-card, #target-card { top: 50px; right: 10px; width: 320px; max-height: calc(100% - 64px); overflow: auto; }
+#export-card, #target-card { display: flex; flex-direction: column; gap: 10px; }
+#export-card[hidden], #target-card[hidden] { display: none; }
+#export-card .cap, #target-card .cap { color: var(--muted); font: 600 10.5px/1 var(--f-body); letter-spacing: .09em; text-transform: uppercase; }
+#export-card .seg, #target-card .seg { width: 100%; } #export-card .seg > button, #target-card .seg > button { flex: 1; }
+#export-target { margin: 0; color: var(--muted); font-size: 12.5px; }
+/* the build target: one chip in the title bar, base system and printer */
+#target { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--raised); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 12.5px; white-space: nowrap; color: var(--ink); }
+#target:hover, #target[aria-expanded="true"] { border-color: var(--line-2); background: var(--panel); }
+#target #target-printer { color: var(--muted); }
+#target .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--muted); flex: none; }
+#target-printers { display: flex; flex-direction: column; gap: 2px; margin: 0 -6px; }
+#target-printers button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 6px 8px; color: var(--ink); background: none; border: 0; border-radius: var(--r); text-align: left; cursor: pointer; font-size: 13px; }
+#target-printers button:hover, #target-printers button:focus-visible { background: var(--panel); }
+#target-printers button.on { color: var(--accent); font-weight: 600; }
+#target-printers button.on::after { content: "✓"; }
+#target-printers .own { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 500; }
+#target-note { margin: 0; color: var(--muted); font-size: 12.5px; }
+#target-note code { font: 11.5px var(--f-code); }
+#target-card.bad #target-note { color: var(--err); }
 #export-why { margin: 0; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
 #export-why.bad { color: var(--ink); }
 #export-why code { font: 11.5px var(--f-code); }
@@ -312,6 +327,7 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 
 /* ---- smaller screens: the panes narrow, then flow under the view ---- */
 @media (max-width: 1200px) { #tileplan, .history-label { display: none; } }
+@media (max-width: 760px) { #target #target-printer, #target .dot { display: none; } }
 @media (max-width: 900px) {
   body { overflow: auto; }
   #app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px 62vh auto auto; grid-template-areas: "title" "view" "properties" "side"; }

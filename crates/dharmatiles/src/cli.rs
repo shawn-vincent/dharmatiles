@@ -27,9 +27,14 @@ pub(crate) enum Command {
         /// Build every tile of the bundled library (not the test tiles).
         #[arg(long)]
         all: bool,
-        /// Connector system: `db`, `ol`, or `both`.
+        /// Base system: `db` (DungeonBlocks) or `ol` (OpenLOCK).
         #[arg(long, default_value = "db")]
         system: String,
+        /// Printer profile: a name from `library/printers/` or from
+        /// `printers/` beside your tiles (`$DT_HOME`, else `~/dharmatiles`).
+        /// Output goes to `out/<system>[-<printer>]/`.
+        #[arg(long, default_value = "default")]
+        printer: String,
         /// Replace each tile's seed.
         #[arg(long)]
         seed: Option<u64>,
@@ -106,9 +111,13 @@ pub(crate) enum Command {
         /// follow new and deleted files.  None: your home (`$DT_HOME`, else
         /// ~/dharmatiles) and the library, with a switch between them.
         paths: Vec<String>,
-        /// Connector system: `db` or `ol`.
-        #[arg(long, default_value = "db")]
-        system: String,
+        /// Base system: `db` or `ol`.  Default: the one the title bar's chip
+        /// last chose (remembered in `$DT_HOME`), else `db`.
+        #[arg(long)]
+        system: Option<String>,
+        /// Printer profile; see `build`.  Default: the chip's, else `default`.
+        #[arg(long)]
+        printer: Option<String>,
         /// Port on 127.0.0.1 (default: the first free one from 7878).
         #[arg(long)]
         port: Option<u16>,
@@ -127,9 +136,12 @@ pub(crate) enum Command {
         /// is inside the program).
         #[arg(required = true)]
         paths: Vec<String>,
-        /// Connector system.
+        /// Base system: `db` or `ol`.
         #[arg(long, default_value = "db")]
         system: String,
+        /// Printer profile; see `build`.
+        #[arg(long, default_value = "default")]
+        printer: String,
         /// Replace each tile's seed.
         #[arg(long)]
         seed: Option<u64>,

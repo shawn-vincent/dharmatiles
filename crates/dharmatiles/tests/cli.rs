@@ -280,3 +280,64 @@ fn watch_of_a_library_tile_watches_its_file_on_disk() {
     assert!(watching, "never started watching:\n{}", seen.join("\n"));
     assert!(d.join("db/test/1x1-flat-db.stl").exists());
 }
+
+#[test]
+fn a_build_is_for_one_target_named_in_its_paths_and_record() {
+    let d = scratch("target");
+    // your own profile, beside your tiles, found by name
+    let home = d.join("home");
+    std::fs::create_dir_all(home.join("printers")).unwrap();
+    std::fs::write(
+        home.join("printers/mine.dtile"),
+        "printer mine {\n line 0.5\n layer 0.2\n overhang 55\n steepest 65\n gap 0.2\n}\n",
+    )
+    .unwrap();
+    let build = |args: &[&str]| {
+        Command::new(EXE)
+            .args(["build", "lib:tiles/test/1x1-flat.dtile", "--json", "--out"])
+            .arg(d.join("out"))
+            .args(args)
+            .env("DT_HOME", &home)
+            .output()
+            .unwrap()
+    };
+    // the default printer: the paths are the system's alone
+    let o = build(&[]);
+    assert_eq!(o.status.code(), Some(0));
+    assert!(d.join("out/db/test/1x1-flat-db.stl").is_file());
+    // another printer, the library's and the user's own, and the other system
+    for (args, folder, file, target) in [
+        (
+            ["--printer", "fine"],
+            "db-fine",
+            "1x1-flat-db-fine.stl",
+            "db-fine",
+        ),
+        (
+            ["--printer", "mine"],
+            "db-mine",
+            "1x1-flat-db-mine.stl",
+            "db-mine",
+        ),
+        (["--system", "ol"], "ol", "1x1-flat-ol.stl", "ol"),
+    ] {
+        let o = build(&args);
+        assert_eq!(o.status.code(), Some(0), "{args:?}");
+        assert!(
+            d.join("out").join(folder).join("test").join(file).is_file(),
+            "{args:?}"
+        );
+        let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+        assert_eq!(v["tiles"][0]["record"]["target"], target, "{v}");
+    }
+    // one build is one target: there is no `both`, and no such printer
+    for args in [
+        ["--system", "both"],
+        ["--printer", "nope"],
+        ["--printer", "../x"],
+    ] {
+        let o = build(&args);
+        assert_eq!(o.status.code(), Some(1), "{args:?}");
+        assert!(!o.stderr.is_empty(), "{args:?}");
+    }
+}

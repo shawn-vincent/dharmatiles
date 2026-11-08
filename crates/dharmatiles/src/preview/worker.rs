@@ -63,6 +63,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     };
     shared.update(id, |t| {
         t.status = State::Building;
+        t.stale = false;
         t.errors.clear();
         t.progress = None;
         t.sketches.clear();
@@ -334,15 +335,17 @@ impl dt_kit::Reporter for Cancelled {
 }
 
 /// One worker lane: take jobs from the queue until `stop`.
-fn lane(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
+fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
     while !stop.load(Ordering::Relaxed) {
         shared.rescan_due();
         let Some(job) = shared.next_job(eager) else {
             continue;
         };
+        // the target the page chose now, for this job
+        let opts = shared.options();
         match &job {
-            queue::Job::Draft(d) => draft(shared, d, opts),
-            queue::Job::Full(id, cancel) => rebuild(shared, id, Arc::clone(cancel), opts),
+            queue::Job::Draft(d) => draft(shared, d, &opts),
+            queue::Job::Full(id, cancel) => rebuild(shared, id, Arc::clone(cancel), &opts),
         }
         shared.finish(&job);
     }
@@ -350,10 +353,10 @@ fn lane(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
 
 /// The workers: two lanes on one queue, so a draft never waits for a full
 /// build (and no two full builds run at once), until `stop`.
-pub fn work(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
+pub fn work(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
     std::thread::scope(|s| {
-        s.spawn(|| lane(shared, opts, eager, stop));
-        lane(shared, opts, eager, stop);
+        s.spawn(|| lane(shared, eager, stop));
+        lane(shared, eager, stop);
     });
 }
 

@@ -18,7 +18,7 @@ export function init() {
     },
     onSnapshot: (m) => server.set({
       tiles: m.tiles.map(withoutProgress), progress: progressOf(m.tiles), roots: m.roots || [],
-      system: m.system, overhangDeg: m.overhang_deg, steepestDeg: m.steepest_deg ?? m.overhang_deg + 10,
+      system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhang_deg, steepestDeg: m.steepest_deg ?? m.overhang_deg + 10,
       epoch: m.epoch, ready: true,
     }),
     onProgress: (id, p) => server.set({ progress: { ...server.get().progress, [id]: p } }),

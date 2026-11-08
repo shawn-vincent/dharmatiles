@@ -53,7 +53,7 @@ dharmatiles                                   # browse your tiles (~/dharmatiles
 dharmatiles preview my-tile.dtile --open      # live painted view; rebuilds on every save
 dharmatiles build my-tile.dtile               # -> out/db/my-tile-db.stl
 dharmatiles build my-tile.dtile --system ol   # for OpenLOCK
-dharmatiles build --all --system both         # every library tile
+dharmatiles build --all                       # every library tile (one target per run: --system, --printer)
 dharmatiles check my-tile.dtile               # read and plan only
 dharmatiles elements                          # the elements and their controls
 ```

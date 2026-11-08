@@ -74,6 +74,10 @@ pub struct Options {
     pub seed: Option<u64>,
     /// The printer the audit checks against.
     pub printer: Printer,
+    /// The printer profile's name: `default`, another of
+    /// `library/printers/`, or one of the user's own (see
+    /// [`printer_profile`]).
+    pub printer_name: String,
     /// Engine version for the build record.
     pub engine: String,
     /// A draft for the editor's view while a value is dragged: coarser
@@ -81,6 +85,110 @@ pub struct Options {
     /// without the union, and the gate's verdict left out (each face is
     /// flagged by its angle alone, see [`dt_kit::draft`]).  Never written.
     pub draft: bool,
+}
+
+impl Options {
+    /// The build target: the base system, and the printer unless it is the
+    /// default one (`db`, `ol`, `db-fine`). It names the output folder and
+    /// files and the build record.
+    #[must_use]
+    pub fn target(&self) -> String {
+        target_name(&self.system, &self.printer_name)
+    }
+
+    /// Build for the printer profile `name` (see [`printer_profile`]).
+    ///
+    /// # Errors
+    /// Why there is no such profile, or it does not decode.
+    pub fn use_printer(&mut self, name: &str, home: Option<&Path>) -> Result<(), Vec<Diag>> {
+        self.printer = printer_profile(name, home)?;
+        self.printer_name = name.to_owned();
+        Ok(())
+    }
+}
+
+/// `db`, or `db-fine` for the printer `fine`.
+#[must_use]
+pub fn target_name(system: &str, printer: &str) -> String {
+    if printer == "default" {
+        system.to_owned()
+    } else {
+        format!("{system}-{printer}")
+    }
+}
+
+/// Where a printer profile is kept.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProfileKind {
+    /// `library/printers/`, shipped with the program.
+    Library,
+    /// `printers/` beside the user's own tiles (`$DT_HOME`).
+    Mine,
+}
+
+/// A printer profile's name is a file name: letters, digits, `-` and `_`.
+fn profile_name_ok(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Every printer profile there is: the library's and those in
+/// `<home>/printers/`, by name, a profile of yours replacing the
+/// library's of the same name.
+#[must_use]
+pub fn printer_names(home: Option<&Path>) -> Vec<(String, ProfileKind)> {
+    let mut found: std::collections::BTreeMap<String, ProfileKind> =
+        std::collections::BTreeMap::new();
+    let mut scan = |dir: PathBuf, kind: ProfileKind| {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.extension().is_some_and(|x| x == "dtile")
+                && let Some(n) = p.file_stem().and_then(|n| n.to_str())
+                && profile_name_ok(n)
+            {
+                found.insert(n.to_owned(), kind);
+            }
+        }
+    };
+    if let Some(lib) = source::library_dir() {
+        scan(lib.join("printers"), ProfileKind::Library);
+    }
+    if let Some(h) = home {
+        scan(h.join("printers"), ProfileKind::Mine);
+    }
+    found.into_iter().collect()
+}
+
+/// The printer profile called `name`: `<home>/printers/<name>.dtile` if
+/// there is one, else `lib:printers/<name>.dtile`.
+///
+/// # Errors
+/// Why there is no such profile, or it does not decode.
+pub fn printer_profile(name: &str, home: Option<&Path>) -> Result<Printer, Vec<Diag>> {
+    if !profile_name_ok(name) {
+        return Err(vec![
+            Diag::plain("dt::printer", format!("`{name}` is not a printer name"))
+                .help("a printer name is letters, digits, `-` and `_`"),
+        ]);
+    }
+    let mine = home.map(|h| h.join("printers").join(format!("{name}.dtile")));
+    if let Some(f) = mine.filter(|f| f.is_file()) {
+        return doc::printer(&Files, &f.to_string_lossy());
+    }
+    let lib = format!("lib:printers/{name}.dtile");
+    if source::library_file(&lib).is_some_and(|f| f.is_file()) {
+        return doc::printer(&Library, &lib);
+    }
+    let have: Vec<String> = printer_names(home).into_iter().map(|(n, _)| n).collect();
+    Err(vec![
+        Diag::plain("dt::printer", format!("no printer profile `{name}`"))
+            .help(format!("the profiles are: {}", have.join(", "))),
+    ])
 }
 
 /// Cells per square in a draft (a full build has 128, or finer where an
@@ -100,6 +208,7 @@ impl Default for Options {
             system: "db".to_owned(),
             seed: None,
             printer,
+            printer_name: "default".to_owned(),
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
             draft: false,
         }
@@ -819,6 +928,7 @@ impl<'a> Plan<'a> {
             document_hash: doc::text_hash(text),
             seed: c.seed,
             system: opts.system.clone(),
+            printer: opts.printer_name.clone(),
         };
         Ok(Built {
             export,
@@ -828,7 +938,7 @@ impl<'a> Plan<'a> {
                 .chain(scene.stages().iter().cloned())
                 .collect(),
             record,
-            out: out_path(path, &opts.system),
+            out: out_path(path, &opts.target()),
             footprint,
             edge_mm: self.edge_mm,
             notes: scene.notes().to_vec(),
@@ -982,6 +1092,45 @@ fn out_path(path: &str, system: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_target_is_the_system_and_a_printer_that_is_not_the_default() {
+        let mut o = Options::default();
+        assert_eq!(o.target(), "db");
+        assert_eq!(target_name("ol", "default"), "ol");
+        o.use_printer("fine", None).unwrap();
+        assert_eq!(o.target(), "db-fine");
+        assert_eq!(o.printer.layer_mm, 0.12);
+        assert_eq!(
+            out_path("lib:tiles/test/1x1-flat.dtile", &o.target()),
+            PathBuf::from("db-fine/test/1x1-flat-db-fine.stl")
+        );
+        let e = o.use_printer("nope", None).unwrap_err();
+        assert!(e[0].message.contains("no printer profile"), "{e:?}");
+        assert!(o.use_printer("../x", None).is_err());
+        assert!(o.use_printer("", None).is_err());
+        // a failed choice changes nothing
+        assert_eq!(o.target(), "db-fine");
+    }
+
+    #[test]
+    fn your_printers_come_first_and_the_library_ones_are_listed() {
+        let home = std::env::temp_dir().join(format!("dt-printers-{}", std::process::id()));
+        std::fs::create_dir_all(home.join("printers")).unwrap();
+        let mine =
+            "printer fine {\n line 0.6\n layer 0.3\n overhang 50\n steepest 60\n gap 0.3\n}\n";
+        std::fs::write(home.join("printers/fine.dtile"), mine).unwrap();
+        std::fs::write(home.join("printers/other.dtile"), mine).unwrap();
+        std::fs::write(home.join("printers/not a name.dtile"), mine).unwrap();
+        let names = printer_names(Some(&home));
+        let get = |n: &str| names.iter().find(|(m, _)| m == n).map(|(_, k)| *k);
+        assert_eq!(get("default"), Some(ProfileKind::Library));
+        assert_eq!(get("fine"), Some(ProfileKind::Mine));
+        assert_eq!(get("other"), Some(ProfileKind::Mine));
+        assert_eq!(get("not a name"), None);
+        assert_eq!(printer_profile("fine", Some(&home)).unwrap().layer_mm, 0.3);
+        assert_eq!(printer_profile("fine", None).unwrap().layer_mm, 0.12);
+    }
 
     #[test]
     fn out_paths_mirror_the_library() {

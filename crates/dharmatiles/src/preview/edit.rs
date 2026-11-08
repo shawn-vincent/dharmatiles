@@ -86,6 +86,9 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     if path == "/api/reveal" {
         return reveal(&v).into();
     }
+    if path == "/api/target" {
+        return target(shared, &v).into();
+    }
     let Some((id, what)) = tile_route(path) else {
         return ("404 Not Found", json!({ "error": "no such call" })).into();
     };
@@ -116,6 +119,22 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "export" => export(shared, &tile, &v).into(),
         "draft" => draft(shared, id, &tile, &file, &v),
         _ => ("404 Not Found", json!({ "error": "no such call" })).into(),
+    }
+}
+
+/// Choose the build target: `system` (`db` or `ol`) and/or `printer` (a
+/// profile's name), for every build from now on; the tiles built so far
+/// are built again.
+fn target(shared: &Shared, v: &Value) -> (&'static str, Value) {
+    match shared.set_target(v["system"].as_str(), v["printer"].as_str()) {
+        Ok(()) => {
+            let o = shared.options();
+            (
+                "200 OK",
+                json!({ "ok": true, "system": o.system, "printer": o.printer_name }),
+            )
+        }
+        Err(e) => bad(&e),
     }
 }
 
@@ -435,13 +454,10 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
         return bad("give the text");
     };
     let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
-    let opts = Options {
-        system: shared.system.clone(),
-        ..Options::default()
-    };
+    let opts = shared.options();
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
-            let stack = c.tile.as_ref().map(|t| stack::items(t, &shared.system));
+            let stack = c.tile.as_ref().map(|t| stack::items(t, &opts.system));
             let own = src.read(tile).unwrap_or_default();
             (
                 "200 OK",
@@ -552,14 +568,10 @@ fn mine(
 }
 
 /// Export: the same build as `dharmatiles build` (the saved file, through
-/// the gate), written to [`export_dir`].  With `where`, only says where.  `system` is `db` or `ol`
-/// (default: the preview's); `threemf` adds the painted 3MF.
+/// the gate), written to [`export_dir`].  With `where`, only says where.
+/// It builds for the target the page chose (the title bar's chip);
+/// `threemf` adds the painted 3MF.
 fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
-    let system = match v["system"].as_str() {
-        None => shared.system.clone(),
-        Some(s @ ("db" | "ol")) => s.to_owned(),
-        Some(_) => return bad("system is db or ol"),
-    };
     let threemf = v["threemf"].as_bool().unwrap_or(false);
     let template = if threemf {
         match crate::bambu::template(None) {
@@ -595,7 +607,8 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
         palette: &palette,
         cache: None,
     };
-    let opts = crate::library::options(system.clone(), None);
+    let opts = shared.options();
+    let target = opts.target();
     let t0 = std::time::Instant::now();
     let mut b = match dt_eval::build_with(&dt_eval::Files, tile, &opts, &dt_eval::Progress::none())
     {
@@ -607,13 +620,13 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
             );
         }
     };
-    // a file of yours goes to out/<system>/<name>-<system>.stl, not under
+    // a file of yours goes to out/<target>/<name>-<target>.stl, not under
     // the folders it sits in (a library tile mirrors the library, as build does)
     if !tile.starts_with("lib:") {
         let stem = Path::new(tile)
             .file_stem()
             .map_or_else(|| "tile".to_owned(), |s| s.to_string_lossy().into_owned());
-        b.out = PathBuf::from(&system).join(format!("{stem}-{system}.stl"));
+        b.out = PathBuf::from(&target).join(format!("{stem}-{target}.stl"));
     }
     let built_s = t0.elapsed().as_secs_f64();
     let failures = b.audit.failures(&opts.printer);
@@ -707,7 +720,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
-        let shared = Shared::with_roots(roots, &[], "db", 55.0, 65.0);
+        let shared = Shared::with_roots(roots, &[], &dt_eval::Options::default());
         let (status, made) = new_tile(
             &shared,
             &json!({ "name": "Shore / first try", "size": "2x1" }),
@@ -729,7 +742,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
-        let shared = Shared::with_roots(roots, &[], "db", 55.0, 65.0);
+        let shared = Shared::with_roots(roots, &[], &dt_eval::Options::default());
         let pond = new_tile(&shared, &json!({ "name": "Pond" })).1;
         let marsh = new_tile(&shared, &json!({ "name": "Marsh" })).1;
         let pond = pond["path"].as_str().unwrap().to_owned();

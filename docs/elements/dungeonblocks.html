@@ -24,8 +24,8 @@
 <h2 id="use">Building for it</h2>
 <pre><code>dharmatiles build my-tile.dtile                   # DungeonBlocks, the default
 dharmatiles build my-tile.dtile --system db
-dharmatiles build --all --system both             # every library tile, both bases</code></pre>
-<p>A document never names its base. The same document builds for either system; every size in it scales with the square.</p>
+dharmatiles build --all                           # every library tile</code></pre>
+<p>A document never names its base. The same document builds for either system; every size in it scales with the square. One build is one target: the base system and a <a href="../standards/printing.html#profile">printer profile</a>, <code>--printer</code> beside <code>--system</code>; the output goes to <code>out/db/</code>, or <code>out/db-fine/</code> for the printer <code>fine</code>.</p>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Part</th><th>mm</th></tr></thead>

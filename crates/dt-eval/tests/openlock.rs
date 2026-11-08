@@ -8,7 +8,7 @@
 //!
 //! Every library tile on both systems is a release check, not a test run:
 //! `cargo test --release -p dt-eval --test openlock -- --ignored`
-//! (or `dharmatiles build --all --system both`).
+//! (or `dharmatiles build --all --system ol`).
 
 #![allow(clippy::unwrap_used)]
 

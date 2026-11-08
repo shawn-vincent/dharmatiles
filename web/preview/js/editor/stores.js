@@ -35,7 +35,7 @@ export function createStore(initial) {
 }
 
 export const server = createStore({
-  tiles: [], roots: [], elements: [], system: 'db', overhangDeg: 55, steepestDeg: 65,
+  tiles: [], roots: [], elements: [], system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
   live: false,    // the event stream is open and in step
   ever: false,    // it has been, once: so a loss reads 'reconnecting…', not 'connecting…'
   ready: false,   // the first list of tiles is in

@@ -137,6 +137,8 @@ pub struct Slot {
     progress: Option<Value>,
     /// Files the last build read, with their times.
     files: BTreeMap<String, Option<SystemTime>>,
+    /// Built for a target that is not the chosen one any more.
+    stale: bool,
     /// While it builds: what each stage has made so far, for the page to
     /// show as it goes (see [`worker`]).  Gone when the build ends.
     sketches: Vec<Sketch>,
@@ -178,6 +180,7 @@ impl Slot {
             mesh_version: 0,
             progress: None,
             files: BTreeMap::new(),
+            stale: false,
             sketches: Vec::new(),
         }
     }
@@ -201,7 +204,7 @@ impl Slot {
     }
 
     fn changed(&self) -> bool {
-        self.status != State::Idle && self.files.iter().any(|(f, t)| mtime(f) != *t)
+        self.status != State::Idle && (self.stale || self.files.iter().any(|(f, t)| mtime(f) != *t))
     }
 }
 
@@ -240,9 +243,12 @@ impl Events {
 
 /// What the server and the worker share.
 pub struct Shared {
-    system: String,
-    overhang_deg: f64,
-    steepest_deg: f64,
+    /// The build target the page chose: base system and printer, as the
+    /// options every build is made with (see [`Shared::set_target`]).
+    target: Mutex<Options>,
+    /// Where the user's own printers live and the chosen target is
+    /// remembered (`$DT_HOME`); none in the tests that must not touch it.
+    home: Option<std::path::PathBuf>,
     tiles: Mutex<Vec<Slot>>,
     events: Mutex<Events>,
     /// This run: a stream from another run cannot resume, whatever its
@@ -277,28 +283,22 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Shared {
-    /// Serve `paths` for connector `system` (the tests' server).
+    /// Serve `paths` for the default target (the tests' server).
     #[cfg(test)]
     #[must_use]
-    pub fn new(paths: &[String], system: &str, overhang_deg: f64, steepest_deg: f64) -> Self {
+    pub fn new(paths: &[String]) -> Self {
         let roots = if paths.is_empty() {
             Vec::new()
         } else {
             vec![Root::new("Files", RootKind::Files)]
         };
-        Self::with_roots(roots, paths, system, overhang_deg, steepest_deg)
+        Self::with_roots(roots, paths, &Options::default())
     }
 
-    /// Serve `roots` for connector `system`: `files` (listed under the
+    /// Serve `roots` for the build target `opts`: `files` (listed under the
     /// first [`RootKind::Files`] root) and every tile in the others.
     #[must_use]
-    pub fn with_roots(
-        roots: Vec<Root>,
-        files: &[String],
-        system: &str,
-        overhang_deg: f64,
-        steepest_deg: f64,
-    ) -> Self {
+    pub fn with_roots(roots: Vec<Root>, files: &[String], opts: &Options) -> Self {
         let files_root = roots.iter().position(|r| r.kind == RootKind::Files);
         let tiles = files_root.map_or_else(Vec::new, |r| {
             files
@@ -307,9 +307,8 @@ impl Shared {
                 .collect()
         });
         let me = Self {
-            system: system.to_owned(),
-            overhang_deg,
-            steepest_deg,
+            target: Mutex::new(opts.clone()),
+            home: None,
             tiles: Mutex::new(tiles),
             events: Mutex::new(Events {
                 rev: 1,
@@ -337,6 +336,53 @@ impl Shared {
     pub fn with_palette(mut self, file: std::path::PathBuf) -> Self {
         self.palette = Some(file);
         self
+    }
+
+    /// Read the user's printers from, and remember the chosen target in,
+    /// `home` (`$DT_HOME`).
+    fn with_home(mut self, home: std::path::PathBuf) -> Self {
+        self.home = Some(home);
+        self
+    }
+
+    /// The options every build is made with: the chosen target.
+    fn options(&self) -> Options {
+        lock(&self.target).clone()
+    }
+
+    /// Choose the build target: the base system and the printer (either
+    /// may be left as it is).  Every tile built so far is built again for
+    /// it, the page is sent the new state, and the choice is remembered in
+    /// the user's home.
+    ///
+    /// # Errors
+    /// In words: a system that is not `db` or `ol`, a printer that is not
+    /// there.
+    fn set_target(&self, system: Option<&str>, printer: Option<&str>) -> Result<(), String> {
+        let now = self.options();
+        let system = system.unwrap_or(&now.system);
+        let printer = printer.unwrap_or(&now.printer_name);
+        let mut next = crate::library::options_in(system, printer, None, self.home.as_deref())?;
+        next.engine = now.engine.clone();
+        if next.system == now.system && next.printer_name == now.printer_name {
+            return Ok(());
+        }
+        if let Some(h) = &self.home {
+            crate::library::remember_target(h, system, printer);
+        }
+        *lock(&self.target) = next;
+        let mut tiles = lock(&self.tiles);
+        for t in tiles.iter_mut().filter(|t| t.status != State::Idle) {
+            t.stale = true;
+        }
+        let mut ev = lock(&self.events);
+        let rev = ev.bump(Change::List);
+        let snap = self.snapshot_of(&tiles, rev);
+        ev.send(&snap);
+        drop(ev);
+        drop(tiles);
+        self.queue_cv.notify_all();
+        Ok(())
     }
 
     fn with_palette_opt(self, f: Option<std::path::PathBuf>) -> Self {
@@ -397,13 +443,19 @@ impl Shared {
 
     /// Every tile's state: the `/api/tiles` body and the first event.
     fn snapshot_of(&self, tiles: &[Slot], rev: u64) -> Value {
+        let target = self.options();
         json!({
             "type": "snapshot",
             "rev": rev,
             "epoch": self.epoch,
-            "system": self.system,
-            "overhang_deg": self.overhang_deg,
-            "steepest_deg": self.steepest_deg,
+            "system": target.system,
+            "printer": target.printer_name,
+            "printers": dt_eval::printer_names(self.home.as_deref())
+                .into_iter()
+                .map(|(n, k)| json!({"name": n, "mine": k == dt_eval::ProfileKind::Mine}))
+                .collect::<Vec<_>>(),
+            "overhang_deg": target.printer.overhang_deg,
+            "steepest_deg": target.printer.steepest_deg,
             "roots": self.roots.iter().enumerate().map(|(i, r)| r.json(i)).collect::<Vec<_>>(),
             "tiles": tiles.iter().map(Slot::summary).collect::<Vec<_>>(),
         })
@@ -658,15 +710,10 @@ pub fn run(
     let (roots, files) = roots_for(paths);
     let cache = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).out;
     let shared = Arc::new(
-        Shared::with_roots(
-            roots,
-            &files,
-            &opts.system,
-            opts.printer.overhang_deg,
-            opts.printer.steepest_deg,
-        )
-        .with_cache(Timings::file_in(&cache))
-        .with_palette_opt(palette),
+        Shared::with_roots(roots, &files, opts)
+            .with_home(roots::personal_home())
+            .with_cache(Timings::file_in(&cache))
+            .with_palette_opt(palette),
     );
     let url = format!("http://{addr}/");
     tell!("preview: {url}  (Ctrl-C to stop)");
@@ -694,7 +741,7 @@ pub fn run(
     if open {
         open_browser(&url);
     }
-    work(&shared, opts, true, &AtomicBool::new(false));
+    work(&shared, true, &AtomicBool::new(false));
     crate::OK
 }
 

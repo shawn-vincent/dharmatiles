@@ -44,6 +44,9 @@
 <p>In the source, not yet in a numbered version.</p>
 <ul>
   <li><strong>The selection is outlined:</strong> what you select in the editor's 3D view has an accent-coloured outline round its whole shape, drawn through whatever stands in front of it, so a rock behind a tree still shows where it is. It follows the view as you orbit.</li>
+  <li><strong>The build target:</strong> one build is one target, the base system and a printer profile. <code>--printer NAME</code> sits beside <code>--system</code> on <code>build</code>, <code>watch</code> and <code>preview</code>; a profile is a file in <code>library/printers/</code> (the library now has <code>default</code> and <code>fine</code>) or in a <code>printers/</code> folder beside your tiles. Output goes to <code>out/&lt;system&gt;/</code>, or <code>out/&lt;system&gt;-&lt;printer&gt;/</code> for a printer that is not the default, and the build record, the STL header and the 3MF name the target. The default target builds byte for byte what it did.</li>
+  <li><strong>A chip for the build target in the editor:</strong> the title bar shows the base system and the printer; click it to change either. Every built tile builds again for the new target, the gate uses the chosen printer's angles, and the choice is remembered in your home folder. The Export card's system switch is gone: Export builds for the chip's target.</li>
+  <li><strong>No <code>--system both</code>:</strong> it is removed. Build once for each system.</li>
 </ul>
 
 <h2 id="v0.9.0">0.9.0 <small>7 November 2026</small></h2>

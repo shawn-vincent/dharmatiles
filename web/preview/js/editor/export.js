@@ -4,13 +4,14 @@ import { $, host, viewer } from './app.js';
 import { openFile } from './document.js';
 import { dirty, doc, progressOf, renameable, rootOf, server, stem, tile, view } from './stores.js';
 import { fmt, row, showProgress } from './title.js';
+import { targetLabel } from './target.js';
 
 let timer = 0;
 const buildStart = new Map(); // tile id -> when its build was first seen under way
 
 // ---- export: the same build as `dharmatiles build`, written to out/ ----------
 
-const exporting = { system: null, busy: false, files: null, error: null, out: null };
+const exporting = { busy: false, files: null, error: null, out: null };
 /** Why export is not possible now, or null. */
 function exportBlock() {
   const t = tile();
@@ -25,8 +26,7 @@ function renderExport() {
   const t = tile();
   $('export').hidden = !t;
   const why = exporting.busy ? null : exportBlock();
-  const sys = exporting.system || server.get().system || 'db';
-  for (const b of $('export-system').children) b.classList.toggle('on', b.dataset.sys === sys);
+  $('export-target').textContent = `For ${targetLabel(server.get())}: change it from the chip in the title bar.`;
   $('export-go').disabled = !!why || exporting.busy;
   $('export-go').textContent = exporting.busy ? 'Exporting…' : $('export-3mf').checked ? 'Export STL and 3MF' : 'Export STL';
   const p = $('export-why');
@@ -50,7 +50,7 @@ function renderExport() {
 }
 
 function renderTitle() {
-  const t = tile(), { live, ever, system, overhangDeg, steepestDeg } = server.get();
+  const t = tile(), { live, ever, overhangDeg, steepestDeg } = server.get();
   $('empty').hidden = !!t;
   const status = $('status'), errs = $('errors'), dl = $('record'), gate = $('gate');
   dl.replaceChildren();
@@ -79,7 +79,7 @@ function renderTitle() {
   $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile's properties; double-click or F2 to rename` : `${t.path}\nClick for the tile's properties`;
   document.title = `${stem(t)} · dharmatiles`;
   const p = t.plan;
-  $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares · ${system === 'ol' ? 'OpenLOCK' : 'DungeonBlocks'}` : '';
+  $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares` : '';
   // building…
   const building = t.status === 'building' || t.status === 'idle';
   const busy = building || away, busyLabel = away ? awayLabel : 'building';
@@ -173,7 +173,7 @@ function renderTitle() {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  server.subscribe(['tiles', 'roots', 'live', 'ever', 'system', 'overhangDeg', 'steepestDeg'], renderTitle);
+  server.subscribe(['tiles', 'roots', 'live', 'ever', 'system', 'printer', 'overhangDeg', 'steepestDeg'], renderTitle);
   view.subscribe(['tileId', 'draft', 'shown'], renderTitle);
   doc.subscribe(['base', 'writable', 'saving'], renderTitle);
   doc.subscribe(['text'], renderExport); // the export button waits for a save
@@ -182,11 +182,9 @@ export function init() {
     if (p && t.status === 'building') showProgress(p);
   });
   renderTitle();
-  try { exporting.system = localStorage.getItem('dt-export-system'); } catch { /* ignore */ }
   try { $('export-3mf').checked = localStorage.getItem('dt-export-3mf') === '1'; } catch { /* ignore */ }
-  for (const b of $('export-system').children) {
-    b.onclick = () => { exporting.system = b.dataset.sys; exporting.files = null; try { localStorage.setItem('dt-export-system', b.dataset.sys); } catch { /* ignore */ } renderExport(); };
-  }
+  // a new target makes what was written the target before no longer the answer
+  server.subscribe(['system', 'printer'], () => { exporting.files = null; renderExport(); });
   $('export-3mf').onchange = (e) => { try { localStorage.setItem('dt-export-3mf', e.target.checked ? '1' : '0'); } catch { /* ignore */ } exporting.files = null; renderExport(); };
   $('export').addEventListener('click', async () => {
     exporting.files = null; exporting.error = null; exporting.out = null; renderExport();
@@ -202,7 +200,7 @@ export function init() {
     if (!t || exportBlock()) return renderExport();
     exporting.busy = true; exporting.error = null; exporting.files = null; renderExport();
     try {
-      const r = await host.exportTile(t.id, { system: exporting.system || server.get().system || 'db', threemf: $('export-3mf').checked });
+      const r = await host.exportTile(t.id, { threemf: $('export-3mf').checked });
       if (r.status !== 200) exporting.error = r.body?.error || `could not export (${r.status})`;
       else if (!r.body.ok) exporting.error = r.body.errors?.[0]?.message || (r.body.failures?.length ? `Fails the gate: ${r.body.failures[0]}` : 'the build failed');
       else exporting.files = r.body.files || [];

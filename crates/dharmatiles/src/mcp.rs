@@ -129,7 +129,8 @@ fn handle(msg: &Value) -> Option<Value> {
 
 fn tools() -> Value {
     let path = json!({"type": "string", "description": "A tile document: a file, or `lib:tiles/…` in the bundled library"});
-    let system = json!({"type": "string", "enum": ["db", "ol"], "description": "Connector system: db (DungeonBlocks) or ol (OpenLOCK)"});
+    let system = json!({"type": "string", "enum": ["db", "ol"], "description": "Base system: db (DungeonBlocks) or ol (OpenLOCK)"});
+    let printer = json!({"type": "string", "description": "Printer profile name (library/printers/ or your own printers/ folder; default: default)"});
     let seed = json!({"type": "integer", "description": "Replace the tile's seed"});
     json!([
         {"name": "check_document", "description": "Read and plan a tile document without building geometry; returns its errors (with file, line and help) or its stack.",
@@ -141,9 +142,9 @@ fn tools() -> Value {
         {"name": "list_tiles", "description": "The library tiles that ship with dharmatiles (`lib:tiles/…` paths).",
          "inputSchema": {"type": "object", "properties": {}}},
         {"name": "build_tile", "description": "Build a tile to STL through the printability gate; returns the audit (watertight, overhang mm², dropped parts), timings and the files written.",
-         "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "seed": seed, "out": {"type": "string", "description": "Output folder (default out/)"}, "threemf": {"type": "boolean", "description": "Also write a 3MF with materials"}, "palette": {"type": "string", "description": "A palette document (material \"#rrggbb\" lines) to paint the 3MF with"}}, "required": ["path"]}},
+         "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "printer": printer, "seed": seed, "out": {"type": "string", "description": "Output folder (default out/)"}, "threemf": {"type": "boolean", "description": "Also write a 3MF with materials"}, "palette": {"type": "string", "description": "A palette document (material \"#rrggbb\" lines) to paint the 3MF with"}}, "required": ["path"]}},
         {"name": "render_preview", "description": "Build a tile and return its painted preview (overhang faces red).",
-         "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "seed": seed, "view": {"type": "string", "enum": ["painted", "top", "low", "close"], "description": "Which of the four views (default painted)"}}, "required": ["path"]}},
+         "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "printer": printer, "seed": seed, "view": {"type": "string", "enum": ["painted", "top", "low", "close"], "description": "Which of the four views (default painted)"}}, "required": ["path"]}},
         {"name": "audit_mesh", "description": "Run the printability gate on a binary STL file: watertight, bodies, overhang over 65 degrees (the 55-65 band is reported apart), see-through holes.",
          "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "description": "An STL file"}, "width_mm": {"type": "number"}, "height_mm": {"type": "number"}}, "required": ["path"]}},
     ])
@@ -178,6 +179,9 @@ fn call(name: &str, a: &Value) -> Value {
     let mut opts = Vec::new();
     if let Some(sys) = arg(a, "system") {
         opts.extend([s("--system"), s(sys)]);
+    }
+    if let Some(p) = arg(a, "printer") {
+        opts.extend([s("--printer"), s(p)]);
     }
     if let Some(seed) = a.get("seed").and_then(Value::as_u64) {
         opts.extend([s("--seed"), seed.to_string()]);

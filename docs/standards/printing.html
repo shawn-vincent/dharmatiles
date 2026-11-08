@@ -34,7 +34,7 @@
 <article class="doc">
 
 <h2 id="profile">Printer settings</h2>
-<p>The tiles are designed for one printer profile. Any FDM printer that can hold these settings will do.</p>
+<p>The tiles are designed for one printer profile, <code>default</code>. Any FDM printer that can hold these settings will do.</p>
 <div class="tbl"><table>
 <thead><tr><th>Setting</th><th>Value</th></tr></thead>
 <tbody>
@@ -44,6 +44,7 @@
 <tr><td>Layer height</td><td>0.2 mm</td></tr>
 <tr><td>Overhang the tiles stay within</td><td>55° from vertical as the target; up to 65° in small patches; past 65° also in small patches; more than that fails</td></tr>
 </tbody></table></div>
+<p>A profile is a short document, <code>library/printers/default.dtile</code>: <code>line</code>, <code>layer</code>, <code>overhang</code>, <code>steepest</code> and <code>gap</code>. It is the printer's floors and the gate's angles, and nothing else: the base system (DungeonBlocks or OpenLOCK) is chosen beside it, and edge and corner rounding belong to materials, not to printers. For another printer, name another profile: <code>library/printers/</code> also holds <code>fine</code> (a 0.25 mm nozzle, 0.12 mm layers), and your own go in a <code>printers/</code> folder beside your tiles (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>), one <code>.dtile</code> file each, named like the file. <code>dharmatiles build my-tile.dtile --printer fine</code> builds for it, and the preview's title bar has a chip for the choice. One build is one target, the base system and the printer: its files go to <code>out/&lt;system&gt;/</code>, or <code>out/&lt;system&gt;-&lt;printer&gt;/</code> for a printer that is not the default, and its build record names both.</p>
 <p>The library is sliced in Bambu Studio. Grass can also be printed in resin: the same blade shapes are smoothed so the layer steps melt away.</p>
 
 <h2 id="overhang">No supports: a 55° target, small patches past it</h2>

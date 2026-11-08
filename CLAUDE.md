@@ -13,9 +13,9 @@ dharmatiles is a pure Rust program (the `dharmatiles` binary). The only other co
 ```bash
 cargo build --release                      # the dharmatiles binary: target/release/dharmatiles
 dharmatiles build lib:tiles/ground/1x1-grass.dtile          # one library tile  -> out/db/ground/1x1-grass-db.stl
-dharmatiles build my-tile.dtile --system ol --png            # a file, for OpenLOCK, with four preview PNGs (overhang red)
+dharmatiles build my-tile.dtile --system ol --png            # a file, for OpenLOCK, with four preview PNGs (overhang red); --printer NAME picks a profile from library/printers/ or $DT_HOME/printers/
 dharmatiles build my-tile.dtile --3mf                        # also a 3MF painted by material; a Bambu Studio project when ~/dharmatiles/bambu.3mf (or --bambu-template) exists
-dharmatiles build --all --system both                      # every library tile, both systems -> out/{db,ol}/<group>/
+dharmatiles build --all [--system ol] [--printer fine]       # every library tile for one target -> out/<system>[-<printer>]/<group>/ (one build is one target; there is no `both`)
 dharmatiles check my-tile.dtile                              # read and plan only
 dharmatiles elements [name]                                # the elements and their controls
 dharmatiles watch my-tile.dtile                              # rebuild on every save
@@ -24,6 +24,7 @@ dharmatiles                                                 # no command = previ
 
 cargo test --release --workspace            # all tests (insta golden hashes included), under 5 minutes
 cargo test --release -p dt-eval --test openlock -- --ignored   # release check: every library tile through the gate on both systems
+cargo test --release -p dt-eval --test baseline -- --ignored   # every library tile on DungeonBlocks against tests/baseline/library-db.tsv (hash, triangles, repairs, overhang); DT_BASELINE=write rewrites it
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
 cargo xtask sheet <tile|name> [--seeds …]   # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
