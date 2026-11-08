@@ -267,3 +267,37 @@ fn the_base_is_first_and_fluids_are_last() {
     // today's tiles, with no heights, keep their order
     snippet(&tile("stack { dirt\n water\n rock size=3 }"));
 }
+
+#[test]
+fn a_thing_stands_at_a_literal_point_or_a_name_and_a_body_has_a_name() {
+    let doc = snippet(&tile(
+        "point spot \"(0.25, 0.75)\"\n stack { base\n dirt hillDirt\n rock size=4 at=\"(0.4, 0.6)\"\n rock size=4 at=spot }",
+    ));
+    let t = doc.tile().unwrap();
+    assert_eq!(t.stack[0].label.as_ref().unwrap().value, "hillDirt");
+    let (a, b) = (&t.stack[1], &t.stack[2]);
+    assert!(matches!(
+        a.place.at.as_ref().unwrap().value,
+        dt_doc::place::Point::Pair { .. }
+    ));
+    assert_eq!(
+        a.at_place.as_ref().unwrap().value,
+        PlaceRef::Point(0.4, 0.6)
+    );
+    assert_eq!(
+        b.at_place.as_ref().unwrap().value,
+        PlaceRef::Name("spot".to_owned())
+    );
+    // today's quoted pair still reads
+    snippet(&tile("stack { rock size=4 at=\"0.4,0.6\" }"));
+}
+
+#[test]
+fn a_cliffs_own_top_words_stay_its_own() {
+    let doc = snippet(&tile(
+        "stack { cliff along=north top=dirt\n cliff along=south top=\"dirtEdgeHeight + 35\" }",
+    ));
+    let t = doc.tile().unwrap();
+    assert!(t.stack[0].top.is_none() && t.stack[0].control("top").is_some());
+    assert!(t.stack[1].top.is_some());
+}

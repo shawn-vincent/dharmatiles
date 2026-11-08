@@ -204,6 +204,14 @@ fn tops_and_pins_are_checked_but_not_built_yet() {
 }
 
 #[test]
+fn a_things_top_and_place_are_checked_but_not_built_yet() {
+    let c = solved(&tile(
+        "region canopy { within 15 of=center }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=canopy }",
+    ));
+    assert_eq!(c.pending().len(), 2, "{:?}", c.pending());
+}
+
+#[test]
 fn regions_that_within_and_except() {
     let c = solved(&tile(
         "line trail { through southCenter northCenter }\n region path { within 4.5 of=trail }\n region verge { except path }\n stack { base\n dirt { pin top=4 at=path } }",

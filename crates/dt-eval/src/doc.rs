@@ -713,28 +713,32 @@ impl Reader<'_> {
         let mut bodies = Vec::new();
         let mut things = Vec::new();
         for e in &def.stack {
-            let Callee::Element(el) = &e.callee else {
-                things.push(thing(e));
-                continue;
+            let el = match &e.callee {
+                Callee::Element(el) if matches!(el.name, "dirt" | "water" | "cliff" | "floor") => {
+                    el
+                }
+                _ => {
+                    // a thing, a coat or a part: its top and an `at=` that
+                    // is a line or a region are not built yet
+                    let name = e.what.value.as_str();
+                    if let Some(t) = &e.top {
+                        pending.push(not_yet(src, t.span, &format!("`top=` on `{name}` is")));
+                    }
+                    if let Some(a) = e
+                        .at_place
+                        .as_ref()
+                        .filter(|_| e.place.at.is_none() && e.place.region.is_none())
+                    {
+                        pending.push(not_yet(
+                            src,
+                            a.span,
+                            &format!("`at=` a line or region on `{name}` is"),
+                        ));
+                    }
+                    things.push(thing(e));
+                    continue;
+                }
             };
-            if !matches!(el.name, "dirt" | "water" | "cliff" | "floor") {
-                if let Some(t) = &e.top {
-                    pending.push(not_yet(src, t.span, &format!("`top=` on `{}` is", el.name)));
-                }
-                if let Some(a) = e
-                    .at_place
-                    .as_ref()
-                    .filter(|_| e.place.at.is_none() && e.place.region.is_none())
-                {
-                    pending.push(not_yet(
-                        src,
-                        a.span,
-                        &format!("`at=` a line or region on `{}` is", el.name),
-                    ));
-                }
-                things.push(thing(e));
-                continue;
-            }
             if let Some(t) = &e.top {
                 pending.push(not_yet(src, t.span, &format!("`top=` on `{}` is", el.name)));
             }
