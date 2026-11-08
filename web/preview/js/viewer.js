@@ -109,6 +109,44 @@ void main() {
   gl_FragColor = vec4(mod(e, 256.0), floor(e / 256.0), mod(v.y, 256.0), floor(v.y / 256.0)) / 255.0;
 }`;
 
+// The outline's mask: the selection alone, drawn with no depth test, so
+// the outline follows its whole shape, through whatever stands in front.
+const MASK_FRAG = `
+uniform vec2 uSel;
+varying vec2 vWho;
+void main() {
+  vec2 v = floor(vWho + 0.5);
+  if (uSel.x < 0.0 || v.x != uSel.x + 1.0 || (uSel.y >= 0.0 && v.y != uSel.y)) discard;
+  gl_FragColor = vec4(1.0);
+}`;
+
+// The outline: a ring of samples round each pixel outside the mask; the
+// nearer the mask, the stronger. uPx is one device pixel in texture units,
+// uWidth the line's width in device pixels.
+const OUTLINE_VERT = `
+varying vec2 vUv;
+void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const OUTLINE_FRAG = `
+uniform sampler2D uMask; uniform vec2 uPx; uniform float uWidth; uniform vec3 uAccent;
+varying vec2 vUv;
+void main() {
+  float inside = texture2D(uMask, vUv).r;
+  float near = 0.0;
+  for (int r = 1; r <= 3; r++) {
+    float d = uWidth * float(r) / 3.0;
+    float w = 1.0 - smoothstep(uWidth - 0.75, uWidth + 0.75, d);
+    for (int k = 0; k < 16; k++) {
+      float a = 6.2831853 * (float(k) + 0.5 * float(r)) / 16.0;
+      near = max(near, texture2D(uMask, vUv + vec2(cos(a), sin(a)) * d * uPx).r * w);
+    }
+  }
+  float alpha = near * (1.0 - inside);
+  if (alpha < 0.01) discard;
+  gl_FragColor = vec4(uAccent, alpha);
+}`;
+// The outline's width, CSS pixels.
+const OUTLINE_PX = 2.5;
+
 // The point pass: each fragment writes where it is, x and y in 12 bits
 // each and z in 8, across the mesh's bounds.
 const POINT_FRAG = `
@@ -189,6 +227,21 @@ export class Viewer {
     this.pickScene = new THREE.Scene();
     this.pickTarget = new THREE.WebGLRenderTarget(1, 1);
     this.pickBytes = new Uint8Array(4);
+    // the selection's outline: its mask, then one full-screen pass
+    this.maskScene = new THREE.Scene();
+    this.maskMaterial = new THREE.ShaderMaterial({
+      uniforms: { uSel: this.uniforms.uSel }, vertexShader: VERT, fragmentShader: MASK_FRAG, side: THREE.DoubleSide, depthTest: false, depthWrite: false,
+    });
+    this.maskTarget = new THREE.WebGLRenderTarget(1, 1, { samples: 4, depthBuffer: false });
+    this.outlineUniforms = { uMask: { value: this.maskTarget.texture }, uPx: { value: new THREE.Vector2(1, 1) }, uWidth: { value: OUTLINE_PX }, uAccent: this.uniforms.uAccent };
+    this.outlineScene = new THREE.Scene();
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+      uniforms: this.outlineUniforms, vertexShader: OUTLINE_VERT, fragmentShader: OUTLINE_FRAG, transparent: true, depthTest: false, depthWrite: false,
+    }));
+    quad.frustumCulled = false;
+    this.outlineScene.add(quad);
+    this.outlineCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.maskMesh = null;
     this.pointUniforms = { uLo: { value: new THREE.Vector3() }, uSpan: { value: new THREE.Vector3(1, 1, 1) } };
     this.pointMaterial = new THREE.ShaderMaterial({ uniforms: this.pointUniforms, vertexShader: VERT, fragmentShader: POINT_FRAG, side: THREE.DoubleSide });
     this.mesh = null;
@@ -207,6 +260,11 @@ export class Viewer {
     if (!w || !h) return;
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     this.renderer.setSize(w, h, false);
+    const dpr = window.devicePixelRatio || 1;
+    const bw = Math.max(1, Math.round(w * dpr)), bh = Math.max(1, Math.round(h * dpr));
+    this.maskTarget.setSize(bw, bh);
+    this.outlineUniforms.uPx.value.set(1 / bw, 1 / bh);
+    this.outlineUniforms.uWidth.value = OUTLINE_PX * dpr;
     this.persp.aspect = w / h;
     this.persp.updateProjectionMatrix();
     this.fitOrtho();
@@ -486,7 +544,7 @@ export class Viewer {
     // who made each triangle, on its three corners
     const who = ownerVertices(payload.entry, payload.piece);
     g.setAttribute('who', new THREE.BufferAttribute(who, 2));
-    if (this.mesh) { this.scene.remove(this.mesh, ...this.ghosts); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); }
+    if (this.mesh) { this.scene.remove(this.mesh, ...this.ghosts); this.pickScene.remove(this.pickMesh); this.maskScene.remove(this.maskMesh); this.mesh.geometry.dispose(); }
     this.mesh = new THREE.Mesh(g, this.material);
     this.mesh.frustumCulled = false;
     this.scene.add(this.mesh);
@@ -500,6 +558,9 @@ export class Viewer {
     this.pickMesh = new THREE.Mesh(g, this.pickMaterial);
     this.pickMesh.frustumCulled = false;
     this.pickScene.add(this.pickMesh);
+    this.maskMesh = new THREE.Mesh(g, this.maskMaterial);
+    this.maskMesh.frustumCulled = false;
+    this.maskScene.add(this.maskMesh);
     this.payload = payload;
     this.buildGrid();
     this.draw();
@@ -572,7 +633,7 @@ export class Viewer {
 
   clear() {
     this.setSketches([]);
-    if (this.mesh) { this.scene.remove(this.mesh, ...this.ghosts); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); this.mesh = null; this.pickMesh = null; this.ghosts = []; }
+    if (this.mesh) { this.scene.remove(this.mesh, ...this.ghosts); this.pickScene.remove(this.pickMesh); this.maskScene.remove(this.maskMesh); this.mesh.geometry.dispose(); this.mesh = null; this.pickMesh = null; this.maskMesh = null; this.ghosts = []; }
     this.payload = null;
     this.buildGrid();
     this.draw();
@@ -931,6 +992,23 @@ export class Viewer {
     this.uniforms.uL1.value.copy(dirv(18, azim - 20));
     this.uniforms.uL2.value.copy(dirv(elev - 20, azim + 110));
     this.renderer.render(this.scene, this.camera);
+    this.renderOutline();
     this.onRender?.();
+  }
+
+  /** The selection's outline over the frame: its whole shape, through what stands in front. */
+  renderOutline() {
+    if (!this.maskMesh || this.uniforms.uSel.value.x < 0 || this.stale || this.sketches.size > 0) return;
+    const r = this.renderer;
+    const clear = r.getClearAlpha(), auto = r.autoClear;
+    r.setRenderTarget(this.maskTarget);
+    r.setClearColor(0x000000, 0);
+    r.clear();
+    r.render(this.maskScene, this.camera);
+    r.setRenderTarget(null);
+    r.setClearColor(0x000000, clear);
+    r.autoClear = false;
+    r.render(this.outlineScene, this.outlineCamera);
+    r.autoClear = auto;
   }
 }
