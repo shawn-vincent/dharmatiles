@@ -29,6 +29,7 @@ cargo fmt --check
 cargo xtask sheet <tile|name> [--seeds …]   # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
 cargo xtask pictures [group …]              # rebuild the element pages' pictures from docs/elements/demo/
 cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the element schema
+cargo xtask release 0.10.0 "<summary>"      # number the changelog's Unreleased entry, bump Cargo.toml, check, commit, tag v0.10.0, push
 ```
 
 `lib:` paths read `library/` from disk: this checkout's when run inside it (new and edited library tiles count at once, no rebuild), else `$DT_LIBRARY`, else the copy installed beside the program. Nothing is compiled in.
@@ -60,7 +61,7 @@ Six crates under `crates/`:
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each element reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
 | `dharmatiles` | The CLI. |
 
-Also: `xtask/` (`docs`, `pictures`, `sheet`), `library/` (`.dtile` documents: `tiles/`, `parts/`, `printers/`, `palettes/`), `web/preview/` (the preview's page), `docs/` (the site, HTML), `extras/` (Python, not part of the program).
+Also: `xtask/` (`docs`, `pictures`, `release`, `sheet`), `library/` (`.dtile` documents: `tiles/`, `parts/`, `printers/`, `palettes/`), `web/preview/` (the preview's page), `docs/` (the site, HTML), `extras/` (Python, not part of the program).
 
 ### How a build runs
 
@@ -97,7 +98,7 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 - **KDL is v2 only.**
 - **One visual system.** The docs site and the preview share `docs/assets/theme.css` (tokens, self-hosted fonts, lotus, controls); the preview serves it from inside the program. New colours, fonts or controls go there, never into one page or the preview alone. Red and orange mean overhang only; tiles are shown on the plate (#D9E0EB). See `docs/standards/visual-system.html`.
 - **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images.
-- **The site is current state only.** It says what the program is and does now: the reference, the specification and the rules. No decision logs, histories, rulings with dates, lab write-ups or reference-photo galleries; git history holds how we got here. The one exception is the changelog, `docs/changelog.html`, a hand-written static page (no feed, nothing generated); changes go under its **Unreleased** entry at the top as they land; only when Shawn asks for a release does that entry get a number and date and `version` in `Cargo.toml` get bumped. When a rule changes, update `docs/standards/rules.html` (project-wide), the element page's Rules list, or the language guide's rules, in place. The Rust code is the reference for how things are implemented; pages link to it rather than restate it.
+- **The site is current state only.** It says what the program is and does now: the reference, the specification and the rules. No decision logs, histories, rulings with dates, lab write-ups or reference-photo galleries; git history holds how we got here. The one exception is the changelog, `docs/changelog.html`, a hand-written static page (no feed, nothing generated); changes go under its **Unreleased** entry at the top as they land; only when Shawn asks for a release does that entry get a number and date and `version` in `Cargo.toml` get bumped, always with `cargo xtask release <version> "<summary>"`, which also tags every release `v<version>` (`--no-tests` while a known test failure stands). When a rule changes, update `docs/standards/rules.html` (project-wide), the element page's Rules list, or the language guide's rules, in place. The Rust code is the reference for how things are implemented; pages link to it rather than restate it.
 - **The site is the tile language's reference.** `docs/language.html` is the guide; `docs/elements/<name>.html` is one page per element (every node a document can write). The code uses the same word: the `Element` trait, the `dt-elements` crate, the element schema in `dt-doc/src/elements.rs`. Each element page's controls block is generated: run `cargo xtask docs` after changing an element's schema, and add a page for any new element (the generator refuses an element without one). The preview links each stack entry to its element page.
 - **Pronouns:** use they/them for Shawn.
 - **Contact sheets:** make one with `cargo xtask sheet` and look at it yourself at full resolution before calling an element done. Element pictures come from `cargo xtask pictures`; look at them too.

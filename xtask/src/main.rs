@@ -6,8 +6,9 @@ use std::process::{Command, ExitCode};
 mod docs;
 mod image;
 mod pictures;
+mod release;
 
-const USAGE: &str = "usage: cargo xtask <command>
+const USAGE: &str = r#"usage: cargo xtask <command>
 
 commands:
   sheet <tile> [--seeds 1 2 3 4] [--dev]
@@ -25,7 +26,13 @@ commands:
   docs [--check]
            fill each docs/elements/ page's generated reference block from
            the element schema; --check changes nothing and fails if stale
-  help     show this message";
+  release <version> "<summary>" [--no-tests] [--no-push]
+           number a release: the changelog's Unreleased entry becomes
+           <version>, dated today and led by <summary>; Cargo.toml's
+           version is bumped; fmt, clippy, docs --check and the tests run
+           (--no-tests skips the tests); then one commit, the tag
+           v<version>, and a push of both (--no-push keeps them local)
+  help     show this message"#;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -33,6 +40,7 @@ fn main() -> ExitCode {
         Some("sheet") => sheet(&args[1..]),
         Some("pictures") => pictures::run(&root(), &args[1..]),
         Some("docs") => docs::run(&root(), args.iter().any(|a| a == "--check")),
+        Some("release") => release::run_release(&root(), &args[1..]),
         Some("help" | "-h" | "--help") => {
             println!("{USAGE}");
             return ExitCode::SUCCESS;
