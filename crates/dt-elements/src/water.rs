@@ -343,7 +343,7 @@ impl Element for Water {
         };
         let (lo, hi) = (band.lo(), band.hi());
         let wlk: Vec<f64> = (0..nn).map(|k| calm.clamp(lo.z[k], hi.z[k])).collect();
-        let land = scene.ground().unwrap_or_else(|| Field::new(&frame, 0.0));
+        let land = scene.land().unwrap_or_else(|| Field::new(&frame, 0.0));
         let rock_mask = scene.footprint(dt_kit::Kind::Rock, calm).bits;
         let soft = land.blur(LAND_BLUR_MM);
         let land_mask: Vec<bool> = (0..nn)

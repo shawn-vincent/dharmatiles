@@ -133,7 +133,7 @@ fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
 #[test]
 fn a_value_out_of_range_once_its_names_resolve_is_refused_when_read() {
     // a level names other levels: only the reader knows what it comes to
-    let e = errors("tile { stack { floor level=\"ground - 50\" } }\n");
+    let e = errors("tile { stack { floor level=\"groundHeight - 50\" } }\n");
     assert!(
         e[0].message.starts_with("`floor level` is 1 to 30, not -4"),
         "{}",

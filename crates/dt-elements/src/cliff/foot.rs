@@ -22,7 +22,7 @@ const DIRT_FILL_MM: f64 = 3.0;
 const DIRT_FILL_DEPTH_MM: f64 = 1.5;
 const DIRT_FILM_MM: (f64, f64) = (0.1, 0.5);
 const DIRT_STEP_MM: f64 = 0.5;
-const DIRT_SLOPE_DEG: f64 = 35.0;
+const FOOT_SLOPE_DEG: f64 = 35.0;
 const DIRT_RAMP_MM: f64 = 1.5;
 const DIRT_BLUR_MM: f64 = 0.4;
 const DIRT_LOW_MM: f64 = 5.0;
@@ -32,7 +32,7 @@ const DIRT_PLUG_MM: (f64, f64) = (1.5, 3.0);
 fn edges(z: &Field, step: f64) -> Cells {
     let (nx, ny) = (z.nx, z.ny);
     let sm = z.blur(0.5 / GRID_MM);
-    let tan = DIRT_SLOPE_DEG.to_radians().tan();
+    let tan = FOOT_SLOPE_DEG.to_radians().tan();
     let mut e = cell_grid(nx, ny, false);
     for j in 0..ny {
         for i in 0..nx {

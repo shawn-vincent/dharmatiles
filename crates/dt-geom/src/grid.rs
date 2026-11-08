@@ -364,6 +364,8 @@ pub enum LiftError {
         /// Its value.
         z: f32,
     },
+    /// More layers than the mesher numbers (255).
+    TooManyLayers(usize),
 }
 
 impl std::fmt::Display for LiftError {
@@ -376,6 +378,7 @@ impl std::fmt::Display for LiftError {
                     "the surface is at {z} mm at node {at:?}: it must be above 0"
                 )
             }
+            Self::TooManyLayers(n) => write!(f, "{n} layers: at most 255 can be stacked"),
         }
     }
 }

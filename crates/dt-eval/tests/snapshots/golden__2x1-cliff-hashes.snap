@@ -6,7 +6,7 @@ expression: hashes(b)
 82ddcea48c90d3f3  rock:tile/dirt/0
 7cc916ba23292bd3  rock:tile/dirt/0
 c27cbae51e82a770  surface
-306bcc81007d5225  ground:tile/ground
+306bcc81007d5225  terrain:tile/terrain
 ff120c8a616fc74c  rock:tile/scatter/0
 e366a691c8d991a8  rock:tile/scatter/0
 1008ba63a15506bd  rock:tile/scatter/0

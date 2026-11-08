@@ -136,7 +136,7 @@ impl Element for Reeds {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Reeds),
-            reads: vec![Read::Solids(Kind::Ground), Read::IfAny(Kind::Rock)],
+            reads: vec![Read::Solids(Kind::Terrain), Read::IfAny(Kind::Rock)],
             cell_mm: None,
         }
     }

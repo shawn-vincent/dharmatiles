@@ -93,9 +93,10 @@ pub struct SolveReport {
     pub bodies: Vec<SolvedBody>,
     /// For each stack entry (the connector last), the body it is.
     pub by_entry: Vec<Option<usize>>,
-    /// Where the first land body meets a tile edge, mm: its solved band at
-    /// the rim (the lowest, where the tile's own pins move part of it);
-    /// `None` when no land reaches an edge.
+    /// Where the first land body meets a tile edge, mm: its solved band
+    /// where the library's edge pin holds the rim; `None` when that pin
+    /// holds no rim node (no land reaches an edge, or the tile's own pins
+    /// cover it all).
     pub edge_mm: Option<f64>,
     /// The calm water level, mm, when the tile has a fluid.
     pub calm_mm: Option<f64>,
@@ -383,7 +384,7 @@ fn solve_on(
     let mut notes = Vec::new();
     let mut explain = Vec::new();
     let mut bodies: Vec<SolvedBody> = Vec::new();
-    let mut regions: Vec<Mask> = Vec::new();
+    let mut edge_mm: Option<f64> = None;
     // the surface so far: the higher of every body laid, inside its region
     let mut under = Band::flat(nx, ny, g.step, 0.0, 0.0);
     let mut under_lo = Field::filled(nx, ny, g.step, 0.0);
@@ -621,6 +622,18 @@ fn solve_on(
             .iter()
             .position(|p| p.from.default && p.at == PlaceRef::Name("edges".into()))
         {
+            if land && edge_mm.is_none() {
+                // where the library's edge pin holds the rim, as solved
+                edge_mm = (0..nx * ny)
+                    .filter(|&k| {
+                        let (i, j) = (k % nx, k / nx);
+                        (i == 0 || j == 0 || i == nx - 1 || j == ny - 1)
+                            && region.bits[k]
+                            && solved.owner[k] == Some(edge)
+                    })
+                    .map(|k| solved.band.at(k).lo)
+                    .reduce(f64::min);
+            }
             let off: Vec<usize> = (0..nx * ny)
                 .filter(|&k| {
                     let (i, j) = (k % nx, k / nx);
@@ -717,7 +730,6 @@ fn solve_on(
                 under = b;
             }
         }
-        regions.push(region.clone());
         bodies.push(SolvedBody {
             entry: b.entry,
             role: if land { Role::Land } else { Role::Fluid },
@@ -731,21 +743,6 @@ fn solve_on(
             per: g.per,
         });
     }
-    // the rim: where the first land body meets an edge, as it was solved
-    let on_rim = |k: usize| {
-        let (i, j) = (k % nx, k / nx);
-        i == 0 || j == 0 || i == nx - 1 || j == ny - 1
-    };
-    let edge_mm = bodies
-        .iter()
-        .zip(&regions)
-        .find(|(b, _)| b.role == Role::Land)
-        .and_then(|(b, region)| {
-            (0..nx * ny)
-                .filter(|&k| on_rim(k) && region.bits[k])
-                .map(|k| b.band.at(k).lo)
-                .reduce(f64::min)
-        });
     let calm_mm = bodies
         .iter()
         .any(|b| b.role == Role::Fluid)

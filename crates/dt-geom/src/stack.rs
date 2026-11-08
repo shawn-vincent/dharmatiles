@@ -85,7 +85,7 @@ fn classes(layers: &[Layer], n: usize) -> Vec<u8> {
                     c = l;
                 }
             }
-            u8::try_from(c).unwrap_or(u8::MAX)
+            u8::try_from(c).unwrap_or(0)
         })
         .collect()
 }
@@ -134,7 +134,9 @@ impl<'l, 'a> Mesher<'l, 'a> {
             return Err(LiftError::TooSmall);
         }
         let nl = layers.len();
-        assert!(nl < 256, "at most 255 layers");
+        if nl > usize::from(u8::MAX) {
+            return Err(LiftError::TooManyLayers(nl));
+        }
         let class = classes(layers, n);
         let top: Vec<f32> = (0..n).map(|k| layers[class[k] as usize].top[k]).collect();
         if nl > 1 {
@@ -465,11 +467,8 @@ impl<'l, 'a> Mesher<'l, 'a> {
 ///
 /// # Errors
 /// [`LiftError`] when the lattice is smaller than 2 × 2, a field has the
-/// wrong length, or a shown node (or a bottom layer's node) is not above 0.
-///
-/// # Panics
-/// Never for valid input: `layers` must hold at least one layer and at
-/// most 255.
+/// wrong length, or a shown node (or a bottom layer's node) is not above 0,
+/// or there are more than 255 layers.
 pub fn lift_stack(lat: &Lattice, layers: &[Layer]) -> Result<TriMesh, LiftError> {
     let mut m = Mesher::new(lat, layers)?;
     let (g, leaves) = m.plan(lat.tol, lat.max_cells)?;
@@ -514,29 +513,6 @@ mod tests {
             *p = p.map(|v| f64::from(v as f32));
         }
         f
-    }
-
-    #[test]
-    fn one_layer_is_the_adaptive_lift() {
-        let (nx, ny) = (61, 47);
-        let e = field(nx, ny, |x, y| {
-            3.0 + 0.5 * (x * 0.4).sin() * (y * 0.3).cos() + (0.6 - (x - 9.0).abs()).max(0.0)
-        });
-        let g = Grid {
-            nx,
-            ny,
-            step: 0.25,
-            z: e.clone(),
-        };
-        let old = crate::lift_adaptive(&g, 0.02, 16).unwrap();
-        let new = lift_stack(&lat(nx, ny, Round::None), &[Layer { top: &e, id: 5 }]).unwrap();
-        assert_eq!(new.positions, old.positions);
-        assert_eq!(new.triangles, old.triangles);
-        assert_eq!(new.run_original_id, vec![5]);
-        assert_eq!(
-            new.run_index,
-            vec![0, u32::try_from(old.triangles.len() * 3).unwrap()]
-        );
     }
 
     #[test]
@@ -605,7 +581,7 @@ mod tests {
             &[Layer { top: &e, id: 7 }, Layer { top: &w, id: 9 }],
         )
         .unwrap();
-        let old = crate::lift_adaptive(
+        let old = crate::lift::tests::lift_adaptive(
             &Grid {
                 nx,
                 ny,

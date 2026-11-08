@@ -579,7 +579,7 @@ fn add_items(
     tally: &mut Tally,
 ) -> Result<(), LookError> {
     let s = scene.frame().scale();
-    let ground = scene.ground();
+    let ground = scene.land();
     let n: usize = items.iter().map(|(it, _, _)| it.stones.len()).sum();
     #[allow(clippy::cast_possible_truncation)]
     let slots = scene

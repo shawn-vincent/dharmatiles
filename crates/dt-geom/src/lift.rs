@@ -18,7 +18,6 @@
 
 use rayon::prelude::*;
 
-use crate::TriMesh;
 use crate::grid::{Grid, LiftError};
 
 #[derive(Clone, Copy, Debug)]
@@ -44,17 +43,6 @@ impl Leaf {
     pub(crate) const fn is_cell(&self) -> bool {
         self.i1 - self.i0 == 1 && self.j1 - self.j0 == 1
     }
-}
-
-/// The lift with an error bound: no node of `g` is more than `tol` mm
-/// from the top surface, and no leaf is wider than `max_cells` cells.
-/// `tol = 0` still merges exactly flat areas.
-///
-/// # Errors
-/// [`LiftError`] if the grid is smaller than 2 × 2 or a node is not above 0.
-pub fn lift_adaptive(g: &Grid, tol: f64, max_cells: usize) -> Result<TriMesh, LiftError> {
-    let leaves = plan_leaves(g, tol, max_cells, &|_| false)?;
-    Ok(assemble(g, &leaves))
 }
 
 /// The leaves of the adaptive lift. `force` makes a leaf a single cell
@@ -275,81 +263,30 @@ fn fan_error(z: &impl Fn(usize, usize) -> f64, g: &Grid, verts: &Corners, l: Lea
     e
 }
 
-/// The closed mesh of conforming leaves.
-fn assemble(g: &Grid, leaves: &[Leaf]) -> TriMesh {
-    let (nx, ny) = (g.nx, g.ny);
-    let verts = Corners::new(nx, ny, leaves);
-    let mut index = vec![u32::MAX; nx * ny];
-    let mut positions: Vec<[f64; 3]> = Vec::new();
-    let mut triangles: Vec<[u32; 3]> = Vec::new();
-    let u = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
-    let mut vid = |i: usize, j: usize, positions: &mut Vec<[f64; 3]>| {
-        let k = j * nx + i;
-        if index[k] == u32::MAX {
-            index[k] = u(positions.len());
-            #[allow(clippy::cast_precision_loss)]
-            positions.push([i as f64 * g.step, j as f64 * g.step, f64::from(g.z[k])]);
-        }
-        index[k]
-    };
-    for &l in leaves {
-        let ring = verts.ring(l);
-        let ids: Vec<u32> = ring
-            .iter()
-            .map(|&(i, j)| vid(i, j, &mut positions))
-            .collect();
-        if ids.len() == 4 {
-            triangles.push([ids[0], ids[1], ids[2]]);
-            triangles.push([ids[0], ids[2], ids[3]]);
-        } else {
-            let c = u(positions.len());
-            positions.push(centre(g, l));
-            for k in 0..ids.len() {
-                triangles.push([c, ids[k], ids[(k + 1) % ids.len()]]);
-            }
-        }
-    }
-    // the perimeter, counter-clockwise from (0, 0), each vertex once
-    let whole = Leaf {
-        i0: 0,
-        j0: 0,
-        i1: nx - 1,
-        j1: ny - 1,
-    };
-    let ring = verts.ring(whole);
-    let tops: Vec<u32> = ring
-        .iter()
-        .map(|&(i, j)| vid(i, j, &mut positions))
-        .collect();
-    let base = u(positions.len());
-    for &(i, j) in &ring {
-        #[allow(clippy::cast_precision_loss)]
-        positions.push([i as f64 * g.step, j as f64 * g.step, 0.0]);
-    }
-    let centre = u(positions.len());
-    #[allow(clippy::cast_precision_loss)]
-    let half = |n: usize| 0.5 * (n - 1) as f64 * g.step;
-    positions.push([half(nx), half(ny), 0.0]);
-    let n = u(ring.len());
-    for k in 0..n {
-        let k1 = (k + 1) % n;
-        let (t0, t1) = (tops[k as usize], tops[k1 as usize]);
-        let (b0, b1) = (base + k, base + k1);
-        triangles.push([t0, b0, b1]);
-        triangles.push([t0, b1, t1]);
-        triangles.push([centre, b1, b0]);
-    }
-    TriMesh {
-        positions,
-        triangles,
-        ..TriMesh::default()
-    }
-}
-
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     #![allow(clippy::unwrap_used, clippy::cast_precision_loss)]
     use super::*;
+    use crate::TriMesh;
+    use crate::stack::{Lattice, Layer, Round, lift_stack};
+
+    /// The adaptive lift of one layer: no node more than `tol` mm from the
+    /// surface, no leaf wider than `max_cells` cells.
+    pub(crate) fn lift_adaptive(
+        g: &Grid,
+        tol: f64,
+        max_cells: usize,
+    ) -> Result<TriMesh, LiftError> {
+        let lat = Lattice {
+            nx: g.nx,
+            ny: g.ny,
+            step: g.step,
+            tol,
+            max_cells,
+            round: Round::None,
+        };
+        lift_stack(&lat, &[Layer { top: &g.z, id: 0 }])
+    }
 
     pub(super) fn bumpy(nx: usize, ny: usize) -> Grid {
         let mut g = Grid::<f32>::filled(nx, ny, 0.25, 3.0);

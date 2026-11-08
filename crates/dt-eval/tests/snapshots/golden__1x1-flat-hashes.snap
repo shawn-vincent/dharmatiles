@@ -4,7 +4,7 @@ expression: hashes(b)
 ---
 e67f8108c6297d09  plan
 d79658c185cd552b  surface
-735144dc7fe70217  ground:tile/ground
+735144dc7fe70217  terrain:tile/terrain
 9fd12c9bda20b6e3  connector:tile/connector
 9185c16908853426  union
 e65e6d026dcb3544  export

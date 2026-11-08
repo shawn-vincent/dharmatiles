@@ -72,7 +72,7 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
         let mut w: Vec<usize> = (0..n)
             .filter(|&j| j != me && is(j, Write::Solid(kind)))
             .collect();
-        if kind == Kind::Ground && lifted {
+        if kind == Kind::Terrain && lifted {
             w.push(lift);
         }
         w
@@ -169,7 +169,7 @@ mod tests {
             p(Write::Solid(Kind::Connector), &[Read::AllSolids]),
             p(Write::Solid(Kind::Grass), &[Read::Solids(Kind::Rock)]),
             p(Write::Surface, &[]),
-            p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Ground)]),
+            p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Terrain)]),
         ];
         assert_eq!(
             schedule(&plans),
@@ -188,7 +188,7 @@ mod tests {
         let plans = [
             p(Write::Solid(Kind::Wall), &[Read::IfAny(Kind::Floor)]),
             p(Write::Surface, &[]),
-            p(Write::Solid(Kind::Floor), &[Read::Solids(Kind::Ground)]),
+            p(Write::Solid(Kind::Floor), &[Read::Solids(Kind::Terrain)]),
         ];
         assert_eq!(
             schedule(&plans),
@@ -234,18 +234,18 @@ mod tests {
             p(Write::Solid(Kind::Wall), &[Read::IfAny(Kind::Floor)]),
         ];
         assert!(schedule(&optional).is_ok());
-        let no_ground = [p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Ground)])];
+        let no_ground = [p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Terrain)])];
         assert!(schedule(&no_ground).is_err());
         let fill_on_ground = [
             p(Write::Surface, &[]),
-            p(Write::Fill, &[Read::Solids(Kind::Ground)]),
+            p(Write::Fill, &[Read::Solids(Kind::Terrain)]),
         ];
         assert!(schedule(&fill_on_ground).is_err());
         // a fill's prerequisite cannot read the ground either
         let rock_on_ground = [
             p(Write::Surface, &[]),
             p(Write::Fill, &[Read::IfAny(Kind::Rock)]),
-            p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Ground)]),
+            p(Write::Solid(Kind::Rock), &[Read::Solids(Kind::Terrain)]),
         ];
         assert_eq!(
             schedule(&rock_on_ground),
@@ -261,7 +261,7 @@ mod tests {
             p(Write::Solid(Kind::Connector), &[Read::AllSolids]),
             p(Write::Fill, &[Read::IfAny(Kind::Rock)]),
             p(Write::Surface, &[]),
-            p(Write::Solid(Kind::Tree), &[Read::Solids(Kind::Ground)]),
+            p(Write::Solid(Kind::Tree), &[Read::Solids(Kind::Terrain)]),
             p(Write::Solid(Kind::Rock), &[]),
         ];
         assert_eq!(

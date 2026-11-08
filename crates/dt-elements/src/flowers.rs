@@ -216,7 +216,7 @@ impl Element for Flowers {
         Plan {
             writes: Write::Solid(Kind::Flowers),
             reads: vec![
-                Read::Solids(Kind::Ground),
+                Read::Solids(Kind::Terrain),
                 Read::IfAny(Kind::Rock),
                 Read::IfAny(Kind::Tree),
                 Read::IfAny(Kind::Wall),

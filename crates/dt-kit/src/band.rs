@@ -216,12 +216,6 @@ impl Banded {
     pub fn field(&self) -> &Field {
         &self.0
     }
-
-    /// The surface, by value.
-    #[must_use]
-    pub fn into_field(self) -> Field {
-        self.0
-    }
 }
 
 fn same_lattice(a: &Field, b: &Field) -> bool {
@@ -305,12 +299,6 @@ impl Band {
             lo: self.lo.z[k],
             hi: self.hi.z[k],
         }
-    }
-
-    /// The band's thickness, `hi - lo`, at every node.
-    #[must_use]
-    pub fn thickness(&self) -> Field {
-        self.hi.zip(&self.lo, |h, l| h - l)
     }
 
     /// Whether `other` lies on this band's lattice.
@@ -711,31 +699,6 @@ fn steepest(solved: &Solved, limit_deg: f64) -> Option<Steep> {
         pins: [solved.lead[a], solved.lead[c]],
         pairs,
     })
-}
-
-/// A layer of the terrain stack: the slot its run is traced by (which fixes
-/// its material, fluid or not) and its surface, inside its band by type.
-///
-/// **The absent layer rule.** Where the surface lies at or under the shown
-/// top of the layers below it, the layer is absent there: the mesher shows
-/// nothing of it and gives it no side panel (see [`Banded`]). So a body
-/// outside its region has no layer, and a layer cannot be hidden by
-/// anything but a band that lets it lie low.
-#[derive(Clone, Debug)]
-pub struct Layer {
-    /// The run's slot.
-    pub slot: crate::Slot,
-    /// The surface.
-    pub shape: Banded,
-}
-
-impl Layer {
-    /// The surface in float32, as `dt_geom::lift_stack` takes it.
-    #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn top_f32(&self) -> Vec<f32> {
-        self.shape.field().z.iter().map(|&v| v as f32).collect()
-    }
 }
 
 #[cfg(test)]
@@ -1193,7 +1156,7 @@ mod tests {
         assert!(near(by, 0.3));
         assert_eq!(e.code(), "dt::band");
         assert!(e.to_string().contains("0.30 mm outside"), "{e}");
-        assert!(own.check(&own.fit(&surface).into_field(), 0.0).is_ok());
+        assert!(own.check(&own.fit(&surface).field().clone(), 0.0).is_ok());
         // dt::thin: a layer on [1, 1.3] over a bottom [1, 1] with a 0.6 mm skin
         let top = flat(1, 1.0, 1.3);
         let bottom = flat(1, 1.0, 1.0);
@@ -1231,47 +1194,6 @@ mod tests {
         assert!(band.check(fit.field(), 0.0).is_ok());
         // where the band is a point the surface is fixed
         assert_eq!(fit.field().z[0], 5.0);
-    }
-
-    #[test]
-    fn into_band_reaches_both_ends() {
-        let region = mask(1, |x, y| x >= 5.0 && y >= 5.0 && x <= 30.0 && y <= 30.0);
-        let band = flat(1, 5.0, 7.5);
-        let noise =
-            Field::from_fn_for_test(71, 71, STEP, |x, y| libm::sin(x / 3.0) * libm::cos(y / 4.0));
-        let s = into_band_for_test(&noise, &band, &region);
-        let inside: Vec<f64> = s
-            .field()
-            .z
-            .iter()
-            .zip(&region.bits)
-            .filter(|&(_, &m)| m)
-            .map(|(&v, _)| v)
-            .collect();
-        let (lo, hi) = (
-            inside.iter().copied().fold(f64::INFINITY, f64::min),
-            inside.iter().copied().fold(f64::NEG_INFINITY, f64::max),
-        );
-        assert!(near(lo, 5.0) && near(hi, 7.5), "{lo} {hi}");
-        assert!(band.check(s.field(), 0.0).is_ok());
-        // where the band has no room the surface sits on it
-        let thin = Band::from_fn(71, 71, STEP, |x, _| {
-            if x < 10.0 {
-                Iv::point(6.0)
-            } else {
-                Iv::new(5.0, 7.5)
-            }
-        });
-        let s = into_band_for_test(&noise, &thin, &region);
-        assert_eq!(s.field().z[node(1, 7.0, 10.0)], 6.0);
-        // nothing to span: the middle
-        let flat_noise = Field::filled(71, 71, STEP, 3.0);
-        let s = into_band_for_test(&flat_noise, &band, &region);
-        assert!(near(s.field().z[node(1, 10.0, 10.0)], 6.25));
-    }
-
-    fn into_band_for_test(n: &Field, b: &Band, m: &Mask) -> Banded {
-        crate::span::into_band(n, b, m)
     }
 
     trait FromFn {

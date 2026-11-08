@@ -42,7 +42,6 @@ pub use geodesic::geodesic;
 pub use grid::{Grid, LiftError, distance, distance_nearest, lift};
 pub use hash::SpatialHash;
 pub use iv::Iv;
-pub use lift::lift_adaptive;
 pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, MeshError, TriMesh, half_space};
 pub use raster::{Mask, draw_line, fill, fill_polygons};
 pub use rays::{Hit, ObvhsRays, Ray};

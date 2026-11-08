@@ -190,7 +190,7 @@ impl Material {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Kind {
     /// The lifted surface.
-    Ground,
+    Terrain,
     /// The base under z = 0.
     Connector,
     /// Rocks, stones, boulders and pebbles.
@@ -216,7 +216,7 @@ pub enum Kind {
 impl Kind {
     /// Every kind.
     pub const ALL: [Self; 11] = [
-        Self::Ground,
+        Self::Terrain,
         Self::Connector,
         Self::Rock,
         Self::Grass,
@@ -233,7 +233,7 @@ impl Kind {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Self::Ground => "ground",
+            Self::Terrain => "terrain",
             Self::Connector => "connector",
             Self::Rock => "rock",
             Self::Grass => "grass",
@@ -502,7 +502,7 @@ impl Terrain {
     /// The land alone (world mm): every land layer laid, the higher of
     /// them inside its region; `None` before any land is laid.
     #[must_use]
-    pub fn ground(&self) -> Option<crate::Field> {
+    pub fn land(&self) -> Option<crate::Field> {
         self.any_land.then(|| crate::Field::from(&self.land))
     }
 
@@ -878,8 +878,8 @@ impl Scene {
     /// after the land is laid (the scheduler lays every land layer before any
     /// solid); `None` when none is.
     #[must_use]
-    pub fn ground(&self) -> Option<crate::Field> {
-        self.terrain.ground()
+    pub fn land(&self) -> Option<crate::Field> {
+        self.terrain.land()
     }
 
     /// Mark surface nodes as stone (pebbles) for the painted preview;
@@ -1060,11 +1060,11 @@ impl Scene {
             },
             &layers,
         )
-        .map_err(|e| KitError::Surface(e.to_string()))?;
+        .map_err(|e| KitError::Lift(e.to_string()))?;
         let solid = Solid(dt_geom::Solid::from_tri_mesh(&mesh).map_err(KitError::Mesh)?);
         self.add(
             Tag {
-                kind: Kind::Ground,
+                kind: Kind::Terrain,
                 owner: owner.to_owned(),
             },
             solid,

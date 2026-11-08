@@ -67,7 +67,7 @@ pub use audit::{
 };
 pub use bambu::{bambu_project, project_settings};
 pub use band::{
-    Band, Banded, Ease, Layer, Lint, Pin, Refusal, Shadowed, Solved, Steep, drop_mm, lints, solve,
+    Band, Banded, Ease, Lint, Pin, Refusal, Shadowed, Solved, Steep, drop_mm, lints, solve,
     solve_traced,
 };
 pub use dt_geom::Convex;
@@ -98,7 +98,7 @@ pub enum KitError {
     /// The mesh kernel refused or failed.
     Mesh(dt_geom::MeshError),
     /// The ground surface cannot be lifted.
-    Surface(String),
+    Lift(String),
     /// A shape's inputs are wrong.
     Shape(String),
     /// More leaves than the build's source-ID block holds.
@@ -111,7 +111,7 @@ impl std::fmt::Display for KitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Mesh(e) => write!(f, "{e}"),
-            Self::Surface(e) => write!(f, "ground surface: {e}"),
+            Self::Lift(e) => write!(f, "lifting the terrain: {e}"),
             Self::Shape(e) => f.write_str(e),
             Self::Slots => f.write_str("too many solids for one build"),
             Self::Untraced => f.write_str("a triangle of the union has no material"),

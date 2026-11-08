@@ -308,12 +308,7 @@ pub struct Read {
 /// FNV-1a of a document's text (the build record's document hash).
 #[must_use]
 pub fn text_hash(text: &str) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in text.bytes() {
-        h ^= u64::from(b);
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    h
+    crate::hash::bytes(crate::hash::OFFSET, text.as_bytes())
 }
 
 /// The path a `use` line in `from` names: the library for a bare or

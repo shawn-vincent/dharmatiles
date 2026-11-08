@@ -544,7 +544,7 @@ impl Element for Tree {
         Plan {
             writes: Write::Solid(Kind::Tree),
             reads: vec![
-                Read::Solids(Kind::Ground),
+                Read::Solids(Kind::Terrain),
                 Read::IfAny(Kind::Wall),
                 Read::IfAny(Kind::Floor),
             ],

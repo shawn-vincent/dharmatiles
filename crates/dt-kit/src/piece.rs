@@ -306,11 +306,20 @@ pub fn welded(m: &TriMesh) -> (Vec<[f64; 3]>, Vec<[u32; 3]>) {
 /// and its seats are such height fields, moved into place by the caller.
 ///
 /// # Errors
-/// [`KitError::Surface`] when the grid cannot be lifted.
+/// [`KitError::Lift`] when the grid cannot be lifted.
 #[allow(clippy::cast_possible_truncation)]
 pub fn hung(depth: &Field, tol: f64) -> Result<TriMesh, KitError> {
-    let g = depth.map(|d| d.max(1e-3) as f32);
-    dt_geom::lift_adaptive(&g, tol, usize::MAX).map_err(|e| KitError::Surface(e.to_string()))
+    let z: Vec<f32> = depth.z.iter().map(|&d| d.max(1e-3) as f32).collect();
+    let lat = dt_geom::Lattice {
+        nx: depth.nx,
+        ny: depth.ny,
+        step: depth.step,
+        tol,
+        max_cells: usize::MAX,
+        round: dt_geom::Round::None,
+    };
+    dt_geom::lift_stack(&lat, &[dt_geom::Layer { top: &z, id: 0 }])
+        .map_err(|e| KitError::Lift(e.to_string()))
 }
 
 /// Unit normal of a triangle.

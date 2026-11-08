@@ -192,9 +192,9 @@ pub struct Ctx<'a> {
     /// every node (negative infinity where none does), so its grain keeps
     /// off the bed. `None` for anything else.
     pub under: Option<&'a dt_kit::Field>,
-    /// Where the first land body meets a tile edge, mm: its solved pins at
-    /// the rim (the lowest, where a pin of the tile's own moves part of it).
-    /// `None` when no land reaches an edge.  What a laid floor is cut at.
+    /// Where the first land body meets a tile edge, mm: its solved band
+    /// where the library's edge pin holds the rim.  `None` when none does.
+    /// What a laid floor is cut at.
     pub edge_mm: Option<f64>,
     /// The calm water level, mm (the library's `waterSurfaceHeight`, scaled)
     /// when the tile has a water; what waves are drawn about and reeds

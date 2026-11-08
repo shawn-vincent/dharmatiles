@@ -90,13 +90,7 @@ impl Cache {
     }
 }
 
-/// FNV-1a over bytes, then the length (so `"ab","c"` is not `"a","bc"`).
-fn mix(h: u64, bytes: &[u8]) -> u64 {
-    let h = bytes.iter().fold(h, |h, &b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
-    });
-    (h ^ bytes.len() as u64).wrapping_mul(0x0000_0100_0000_01b3)
-}
+use crate::hash::field as mix;
 
 fn mix_f64s(h: u64, v: &[f64]) -> u64 {
     let h = v.iter().fold(h, |h, x| mix(h, &x.to_bits().to_le_bytes()));
@@ -119,7 +113,7 @@ pub(crate) fn base_key(
     );
     foots
         .iter()
-        .fold(mix(0xcbf2_9ce4_8422_2325, text.as_bytes()), |h, f| {
+        .fold(mix(crate::hash::OFFSET, text.as_bytes()), |h, f| {
             let h = mix(h, format!("{}|{:?}|{}", f.kind, f.squares, f.nx).as_bytes());
             let h = mix_f64s(mix_f64s(mix_f64s(h, &f.dist), &f.zone), &f.end);
             f.cells

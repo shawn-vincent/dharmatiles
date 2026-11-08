@@ -8,7 +8,7 @@ a509398f984dfe21  plan
 7f5ea6f09037059a  rock:tile/dirt/0
 cfad8b2c76438fff  rock:tile/dirt/0
 0387f2d2bf04a004  surface
-7e9bd7ee9337f3a3  ground:tile/ground
+7e9bd7ee9337f3a3  terrain:tile/terrain
 349265e945ab781e  connector:tile/connector
 3f85c16629232c44  union
 f4b722abdbc636ec  export

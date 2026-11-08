@@ -60,7 +60,7 @@ pub fn hang(part: &TriMesh, on: &[TriMesh], printer: &Printer) -> Result<Hang, K
     let (past, red) = (slices.flag(&mesh, printer), slices.flag(&mesh, &steep));
     let mine = mesh
         .triangle_original_ids()
-        .ok_or_else(|| KitError::Surface("a union without sources".into()))?;
+        .ok_or_else(|| KitError::Lift("a union without sources".into()))?;
     let mut h = Hang::default();
     for (k, a) in face_areas(&mesh).into_iter().enumerate() {
         if mine[k] != id {

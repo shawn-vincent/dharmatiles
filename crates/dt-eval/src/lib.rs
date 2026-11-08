@@ -13,6 +13,7 @@
 mod cache;
 pub mod diag;
 pub mod doc;
+mod hash;
 pub mod places;
 pub mod plan;
 pub mod progress;
@@ -597,10 +598,6 @@ fn masks(tile: &Tile, frame: &Frame, areas: &[Option<usize>]) -> (Vec<Mask>, Vec
     (out, index)
 }
 
-fn fnv(h: u64, v: u64) -> u64 {
-    (h ^ v).wrapping_mul(0x0000_0100_0000_01b3)
-}
-
 /// **build**: `path` for `opts.system`, through the audit gate.
 ///
 /// # Errors
@@ -721,8 +718,8 @@ impl<'a> Plan<'a> {
         };
         let (masks, mask_of) = masks(tile, &c.frame, &c.areas);
         let hashes: Vec<u64> = masks.iter().map(Mask::content_hash).collect();
-        let order = c.steps.iter().fold(0xcbf2_9ce4_8422_2325, |h, s| {
-            fnv(
+        let order = c.steps.iter().fold(hash::OFFSET, |h, s| {
+            hash::step(
                 h,
                 match s {
                     Step::Entry(i) => *i as u64,
@@ -730,7 +727,7 @@ impl<'a> Plan<'a> {
                 },
             )
         });
-        let plan_hash = mask_of.iter().fold(order, |h, &m| fnv(h, hashes[m]));
+        let plan_hash = mask_of.iter().fold(order, |h, &m| hash::step(h, hashes[m]));
         let jobs = entry_paths(tile)
             .into_iter()
             .zip(&mask_of)
@@ -750,7 +747,7 @@ impl<'a> Plan<'a> {
                         .z
                         .iter()
                         .chain(&band.hi().z)
-                        .fold(0xcbf2_9ce4_8422_2325, |h, v| fnv(h, v.to_bits()))
+                        .fold(hash::OFFSET, |h, v| hash::step(h, v.to_bits()))
                 }),
                 under_hash: 0,
             })
@@ -791,7 +788,7 @@ impl<'a> Plan<'a> {
         for (job, under) in plan.jobs.iter_mut().zip(&plan.under) {
             job.under_hash = under.as_ref().map_or(0, |u| {
                 u.z.iter()
-                    .fold(0xcbf2_9ce4_8422_2325, |h, v| fnv(h, v.to_bits()))
+                    .fold(hash::OFFSET, |h, v| hash::step(h, v.to_bits()))
             });
         }
         Ok(plan)
@@ -898,7 +895,7 @@ impl<'a> Plan<'a> {
             progress.begin(key, label);
             match *step {
                 Step::Lift => scene
-                    .lift("tile/ground")
+                    .lift("tile/terrain")
                     .map_err(|e| build_error(e.to_string()))?,
                 Step::Entry(i) => c.elements[i].build(&mut scene, &self.ctx(i)).map_err(|e| {
                     let msg = format!("{}: {}", self.jobs[i].path, e.message);

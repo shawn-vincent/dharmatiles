@@ -100,7 +100,7 @@ impl Element for Floor {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Floor),
-            reads: vec![Read::Solids(Kind::Ground)],
+            reads: vec![Read::Solids(Kind::Terrain)],
             cell_mm: None,
         }
     }
