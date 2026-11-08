@@ -60,7 +60,9 @@ mod stl;
 mod stone;
 mod threemf;
 
-pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded, draft};
+pub use audit::{
+    Audit, Band, Dropped, Export, Hang, Printer, audit, audit_banded, draft, fit, hang,
+};
 pub use bambu::{bambu_project, project_settings};
 pub use dt_geom::Convex;
 pub use dt_geom::{Footprint, distance_nearest};

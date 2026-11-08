@@ -6,6 +6,8 @@
 //! pinches, quantise to float32 and merge by position, split into bodies
 //! and keep the largest (reporting the rest), then check watertightness,
 //! overhang and see-through holes on what is written.
+//!
+//! [`hang`] asks the same overhang rule of one part while it is made.
 
 use std::collections::HashMap;
 
@@ -17,8 +19,11 @@ use crate::scene::Material;
 use crate::shape::signed_volume;
 use dt_geom::vec3::{cross, dist, sub};
 
+mod hang;
 mod overhang;
 mod repair;
+
+pub use hang::{Hang, fit, hang};
 
 use overhang::Slices;
 use repair::{canonical, contains, keep_largest, quantise, separate_pinches};
@@ -460,7 +465,7 @@ mod tests {
         }
     }
 
-    fn cube(lo: [f64; 3], hi: [f64; 3]) -> TriMesh {
+    pub(super) fn cube(lo: [f64; 3], hi: [f64; 3]) -> TriMesh {
         TriMesh {
             positions: (0..8)
                 .map(|i| {
@@ -477,7 +482,7 @@ mod tests {
     }
 
     /// library/printers/default.dtile's numbers.
-    fn fdm() -> Printer {
+    pub(super) fn fdm() -> Printer {
         Printer::new(0.45, 0.2, 55.0, 0.2)
     }
 
