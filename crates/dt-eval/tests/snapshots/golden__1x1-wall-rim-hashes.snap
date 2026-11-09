@@ -7,6 +7,6 @@ a1d1f895971af744  rock:tile/dirt/0
 4bbddc6a1f1d0cf5  surface
 3a36e35599115044  terrain:tile/terrain
 5a42209d362be80c  wall:tile/wall/0
-9ad7b1454c0b8fad  connector:tile/connector
-e12484f7828c279a  union
-c8c7462281335cf8  export
+a9f0c2c38831617d  connector:tile/connector
+fd8d666581c49d30  union
+a30bdb9b33604db0  export

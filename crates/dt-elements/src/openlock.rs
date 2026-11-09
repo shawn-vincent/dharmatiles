@@ -15,7 +15,9 @@
 //! DungeonBlocks peg it has one height.
 
 use dt_kit::Kind;
-use dt_kit::{Material, Outline, Scene, Tag, carve, extrude};
+use dt_kit::{Frame, Material, Outline, Scene, Tag, carve, extrude};
+
+use crate::base::{self, Box3, KeepOut};
 
 use crate::{Ctx, Element, LookError, Plan, Read, Write};
 
@@ -122,6 +124,49 @@ impl OpenLock {
     }
 }
 
+impl OpenLock {
+    /// What a cut into this base may not reach, keeping `wall_mm` (the
+    /// printer's wall) from it: the base walls round the footprint, and
+    /// every clip socket and retention slot with that wall round it. A cut
+    /// may go through the slab to the table anywhere else.
+    #[must_use]
+    pub fn keep_out(&self, frame: &Frame, wall_mm: f64) -> Vec<KeepOut> {
+        let [w, h] = frame.size_mm();
+        let bottom = -self.depth_mm;
+        let mut out = Vec::new();
+        let mut keep = |min: [f64; 3], max: [f64; 3], what| {
+            out.push(KeepOut {
+                at: Box3 { min, max },
+                what,
+            });
+        };
+        let wall = "the base walls";
+        keep([0.0, 0.0, bottom], [wall_mm, h, 0.0], wall);
+        keep([w - wall_mm, 0.0, bottom], [w, h, 0.0], wall);
+        keep([0.0, 0.0, bottom], [w, wall_mm, 0.0], wall);
+        keep([0.0, h - wall_mm, bottom], [w, h, 0.0], wall);
+        let (z0, z1) = (
+            bottom + self.socket_floor_mm - wall_mm,
+            bottom + self.socket_floor_mm + self.socket_mm + wall_mm,
+        );
+        for c in self.sockets(frame.cols, frame.rows, frame.square_mm, w, h) {
+            let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+            for p in &c {
+                for k in 0..2 {
+                    lo[k] = lo[k].min(p[k]);
+                    hi[k] = hi[k].max(p[k]);
+                }
+            }
+            keep(
+                [lo[0] - wall_mm, lo[1] - wall_mm, z0],
+                [hi[0] + wall_mm, hi[1] + wall_mm, z1],
+                "a clip socket or retention slot",
+            );
+        }
+        out
+    }
+}
+
 impl Element for OpenLock {
     fn plan(&self) -> Plan {
         Plan {
@@ -147,9 +192,8 @@ impl Element for OpenLock {
         let slots = scene
             .slots(n, Material::Connector)
             .map_err(LookError::build)?;
-        let slab = Outline {
-            contours: vec![vec![[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]]],
-        };
+        // the slab is the tile's footprint at zero, corners rounded
+        let slab = base::footprint(&f);
         let body = extrude(slots.get(0), &slab, 0.0, bottom, 0.0).map_err(LookError::build)?;
         let mut cuts = Vec::with_capacity(cutters.len() + 1);
         for (k, c) in cutters.into_iter().enumerate() {
@@ -167,13 +211,13 @@ impl Element for OpenLock {
             )
             .map_err(LookError::build)?,
         );
-        let base = carve(&body, &cuts).map_err(LookError::build)?;
+        let slab = carve(&body, &cuts).map_err(LookError::build)?;
         scene.add(
             Tag {
                 kind: Kind::Connector,
                 owner: ctx.path.to_owned(),
             },
-            base,
+            slab,
         );
         Ok(())
     }
@@ -231,6 +275,33 @@ mod tests {
             let v = base_volume(c, r);
             assert!((v - py).abs() / py < 0.002, "{c}x{r}: {v} vs {py}");
         }
+    }
+
+    #[test]
+    fn a_cut_clears_the_clips_and_the_walls() {
+        let f = Frame::openlock(1, 1);
+        let keep = OpenLock::default().keep_out(&f, 0.9);
+        let cut = |x: f64, y: f64, half: f64, z0: f64| base::Box3 {
+            min: [x - half, y - half, z0],
+            max: [x + half, y + half, 1.0],
+        };
+        // the middle, through to the table (z = -8): clear of everything
+        // (retention slots reach 9 mm in, the socket 7)
+        assert!(base::refuse_cut(&keep, &cut(12.7, 12.7, 2.0, -8.0)).is_none());
+        // into a base wall, and into a socket's mouth
+        assert!(base::refuse_cut(&keep, &cut(0.5, 12.7, 1.0, -3.0)).is_some());
+        assert!(base::refuse_cut(&keep, &cut(12.7, 4.0, 1.0, -6.0)).is_some());
+        // a socket has its band of height: a wall's thickness above it a
+        // shallow cut over it is clear
+        assert!(base::refuse_cut(&keep, &cut(12.7, 4.0, 1.0, -1.0)).is_none());
+    }
+
+    #[test]
+    fn the_slab_is_the_rounded_footprint() {
+        // 3018.506 mm³ less the four corners' cut-off, 0.36² (1 - π/4)
+        // times the 8 mm depth, 0.0279 mm³ each, to the polygon
+        let v = base_volume(1, 1);
+        assert!((v - 3018.506).abs() / 3018.506 < 0.002, "{v}");
     }
 
     #[test]

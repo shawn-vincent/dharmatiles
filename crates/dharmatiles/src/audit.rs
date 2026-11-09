@@ -21,7 +21,15 @@ pub(crate) fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, jso
     };
     let footprint = stl_footprint(&mesh, width, height);
     let printer = Options::default().printer;
-    let (_, a) = dt_kit::audit(&mesh, footprint, &printer);
+    let round = stl_corner_round(footprint);
+    let (_, a) = dt_kit::audit_rounded(
+        &mesh,
+        footprint,
+        round,
+        &printer,
+        &[],
+        Some(&dt_kit::HangBand::DEFAULT),
+    );
     let failures = a.failures(&printer);
     if json {
         say!(
@@ -86,6 +94,18 @@ pub(crate) fn stl_footprint(
         width.unwrap_or_else(|| tile(hi[0] - lo[0])),
         height.unwrap_or_else(|| tile(hi[1] - lo[1])),
     ]
+}
+
+/// The plan round of an STL's four vertical corners: the tile's, on the
+/// standard (35 mm or 25.4 mm squares) its footprint is whole squares of.
+pub(crate) fn stl_corner_round(footprint: [f64; 2]) -> f64 {
+    let whole = |sq: f64| {
+        footprint
+            .iter()
+            .all(|e| (e / sq - libm::round(e / sq)).abs() < 1e-3)
+    };
+    let sq = if whole(35.0) { 35.0 } else { 25.4 };
+    dt_kit::CORNER_ROUND_MM * sq / 35.0
 }
 
 /// A binary STL's triangles, vertices merged by position (as a slicer

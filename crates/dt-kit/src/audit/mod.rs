@@ -252,6 +252,22 @@ pub fn audit_banded(
     materials: &[Material],
     band: Option<&HangBand>,
 ) -> (Export, Audit) {
+    audit_rounded(input, footprint, 0.0, printer, materials, band)
+}
+
+/// [`audit_banded`] for a footprint whose four vertical corners are rounded
+/// in plan by `round_mm` ([`crate::Frame::corner_round_mm`]): the corner's
+/// cut-off sliver is outside the tile, so a ray there is no see-through
+/// hole. Every other ray inside the footprint still counts.
+#[must_use]
+pub fn audit_rounded(
+    input: &TriMesh,
+    footprint: [f64; 2],
+    round_mm: f64,
+    printer: &Printer,
+    materials: &[Material],
+    band: Option<&HangBand>,
+) -> (Export, Audit) {
     let mut m = canonical(input);
     let pinches_moved = separate_pinches(&mut m);
     let (m, source, collapsed) = quantise(&m);
@@ -281,7 +297,7 @@ pub fn audit_banded(
     let slices = Slices::cut(&m, printer);
     let (mut overhang, holes) = slices.as_ref().map_or_else(
         || (vec![false; m.triangles.len()], 0),
-        |sl| (sl.flag(&m, printer), sl.holes(footprint)),
+        |sl| (sl.flag(&m, printer), sl.holes(footprint, round_mm)),
     );
     let areas = face_areas(&m);
     let mut in_band = vec![false; overhang.len()];
@@ -484,6 +500,52 @@ mod tests {
     /// library/printers/default.dtile's numbers.
     pub(super) fn fdm() -> Printer {
         Printer::new(0.45, 0.2, 55.0, 0.2)
+    }
+
+    /// A 10 mm square plate 2 mm thick whose four corners are rounded in
+    /// plan by `r`: a prism on a ring of arc points.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    fn rounded_plate(r: f64) -> TriMesh {
+        let n = 24;
+        let mut ring = Vec::new();
+        for (k, c) in [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+            .iter()
+            .enumerate()
+        {
+            let centre = [r + c[0] * (10.0 - 2.0 * r), r + c[1] * (10.0 - 2.0 * r)];
+            for i in 0..=n {
+                let a = (180.0 + 90.0 * k as f64 + 90.0 * i as f64 / n as f64).to_radians();
+                ring.push([centre[0] + r * a.cos(), centre[1] + r * a.sin()]);
+            }
+        }
+        let m = ring.len() as u32;
+        let mut t = TriMesh::default();
+        for z in [0.0, 2.0] {
+            t.positions.extend(ring.iter().map(|p| [p[0], p[1], z]));
+        }
+        for k in 1..m - 1 {
+            t.triangles.push([0, k + 1, k]);
+            t.triangles.push([m, m + k, m + k + 1]);
+        }
+        for j in 0..m {
+            let j1 = (j + 1) % m;
+            t.triangles.push([j, j1, m + j1]);
+            t.triangles.push([j, m + j1, m + j]);
+        }
+        t
+    }
+
+    #[test]
+    fn a_rounded_corner_is_outside_the_tile_not_a_hole() {
+        let plate = rounded_plate(1.0);
+        let (_, sharp) = audit(&plate, [10.0, 10.0], &fdm());
+        assert!(
+            sharp.holes > 0,
+            "a square footprint sees the corners as holes"
+        );
+        let (_, round) = audit_rounded(&plate, [10.0, 10.0], 1.0, &fdm(), &[], None);
+        assert_eq!(round.holes, 0);
+        assert!(round.watertight);
     }
 
     #[test]

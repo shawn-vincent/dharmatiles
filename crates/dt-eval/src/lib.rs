@@ -268,7 +268,7 @@ pub struct Built {
     /// in reds, not stone greys.
     pub brick: bool,
     /// The stack entry each written triangle came from (an index into the
-    /// tile's stack; the stack's length is the base; [`NO_ENTRY`] none).
+    /// tile's stack; the stack's length is the base, if the tile has one; [`NO_ENTRY`] none).
     /// The lifted ground goes to the surface entry that painted it.
     pub entries: Vec<u16>,
     /// Which of its entry's solids each written triangle came from (the
@@ -468,12 +468,16 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             .map_or(frame, |c| frame.with_cell(c.get()))
     };
     errors.extend(empty_regions(&tile, &frame, &areas));
-    match dt_elements::connector(&opts.system) {
-        Ok(c) => {
-            elements.push(c);
-            areas.push(None);
+    // the connector comes only from a `base` line; with none the tile has
+    // no base, printed flat from zero up
+    if tile.has_base {
+        match dt_elements::connector(&opts.system) {
+            Ok(c) => {
+                elements.push(c);
+                areas.push(None);
+            }
+            Err(le) => errors.push(Diag::plain("dt::system", le.message).maybe_help(le.help)),
         }
-        Err(le) => errors.push(Diag::plain("dt::system", le.message).maybe_help(le.help)),
     }
     if !errors.is_empty() {
         return Err(errors);
@@ -992,7 +996,14 @@ impl<'a> Plan<'a> {
             let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
             dt_kit::draft(mesh, &opts.printer, &skip)
         } else {
-            dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band))
+            dt_kit::audit_rounded(
+                &mesh,
+                footprint,
+                c.frame.corner_round_mm(),
+                &opts.printer,
+                &mats,
+                Some(&band),
+            )
         };
         progress.end(progress::AUDIT);
         stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
@@ -1140,7 +1151,9 @@ fn entry_paths(tile: &Tile) -> Vec<String> {
             }
         })
         .collect();
-    out.push("tile/connector".to_owned());
+    if tile.has_base {
+        out.push("tile/connector".to_owned());
+    }
     out
 }
 

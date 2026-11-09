@@ -9,6 +9,7 @@
 //! and its kin, [`grass`], [`reeds`], [`flowers`], [`cliff`], [`wall`],
 //! [`tree`]. Bases: [`connector`] (DungeonBlocks) and [`openlock`].
 
+pub mod base;
 pub mod cliff;
 pub mod connector;
 pub mod dirt;
@@ -320,6 +321,29 @@ pub fn element_with(
 /// The names of every built element, in table order.
 pub fn built() -> impl Iterator<Item = &'static str> {
     ELEMENTS.iter().map(|(n, _)| *n)
+}
+
+/// What a cut into the base of `system` may not reach ([`base::KeepOut`]),
+/// keeping `wall_mm` from the connector's sides; `content_top_mm` picks the
+/// DungeonBlocks peg. Data for the `dt::connector` check, which has no
+/// caller until cuts exist.
+///
+/// # Errors
+/// [`LookError`] for an unknown system.
+pub fn keep_out(
+    system: &str,
+    frame: &dt_kit::Frame,
+    content_top_mm: f64,
+    wall_mm: f64,
+) -> Result<Vec<base::KeepOut>, LookError> {
+    match system {
+        "db" => Ok(connector::DungeonBlocks::default().keep_out(frame, content_top_mm, wall_mm)),
+        "ol" => Ok(openlock::OpenLock::default().keep_out(frame, wall_mm)),
+        _ => Err(LookError::general(
+            format!("no connector for system `{system}`"),
+            "the systems are db (DungeonBlocks) and ol (OpenLOCK)",
+        )),
+    }
 }
 
 /// The connector for a system: `db` (DungeonBlocks) or `ol` (OpenLOCK).

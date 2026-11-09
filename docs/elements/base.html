@@ -13,7 +13,7 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>base</h1>
-  <p class="lede">The connector, DungeonBlocks or OpenLOCK: everything below height 0. A stack that has a base starts with it.</p>
+  <p class="lede">The connector, DungeonBlocks or OpenLOCK: everything below height 0. A stack that has a base starts with it; a stack without one has no base.</p>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>
@@ -31,7 +31,9 @@
 <h2 id="reference">Reference</h2>
 <p><code>base</code> takes no settings. Which connector it is, DungeonBlocks or OpenLOCK, is the build target (<code>--system</code>), not the tile, so one tile builds for either.</p>
 <h2 id="notes">Notes</h2>
-<p>The stack is written bottom up and is exactly what is printed. <code>base</code> is the first line, or the tile is refused (<code>dt::base-order</code>); the land follows in stack order, things and grass in any order, and fluids (<code>water</code>) last: anything written after a fluid is refused (<code>dt::fluid-order</code>). A tile that does not use the heights language keeps the order it had. Heights are measured from zero, the base's top, on which the first layer rests; with no base line a tile rests on zero all the same, as it always has.</p>
+<p>The stack is written bottom up and is exactly what is printed. <code>base</code> is the first line, or the tile is refused (<code>dt::base-order</code>); the land follows in stack order, things and grass in any order, and fluids (<code>water</code>) last: anything written after a fluid is refused (<code>dt::fluid-order</code>). A tile that does not use the heights language keeps the order it had. Heights are measured from zero, the base's top, on which the first layer rests.</p>
+<p>With no <code>base</code> line the tile has no base: no connector is built, and the tile is printed flat on the bed from zero up, on either system. Its sides run down to zero, its corners keep their round to the bed, and the connector rules do not apply.</p>
+<p>The base takes the tile's footprint at zero, with the four vertical corners rounded as the terrain's are (0.5 mm at the 35 mm square, 0.36 mm on OpenLOCK), so the terrain stands flush on it with no ledge: the base's corner polygon lies outside the terrain's by less than 0.02 mm, the lift's error bound. On DungeonBlocks each square's flare turns the tile's corners with it; on OpenLOCK the slab does, and the clip sockets and retention slots (all of which keep clear of the corners) are unchanged.</p>
 </article>
 </div>
 </body>

@@ -53,7 +53,7 @@ mod preview;
 mod progress;
 mod watch;
 
-pub(crate) use audit::{read_stl, stl_footprint};
+pub(crate) use audit::{read_stl, stl_corner_round, stl_footprint};
 pub(crate) use build::{Extras, build_one, errors_json, report, tile_json};
 pub(crate) use library::{all_library_tiles, library_tiles};
 use library::{disk_library, options, out_dir};

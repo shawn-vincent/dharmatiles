@@ -9,6 +9,6 @@ ab79bc82e1764e4e  rock:tile/dirt/0
 8376ed9a05804079  rock:tile/dirt/0
 39042bc2b9727b78  surface
 1a71cbc4de2465bc  terrain:tile/terrain
-349265e945ab781e  connector:tile/connector
-3171fe66d9b4919c  union
-1976b11ed5155ba9  export
+bd4e8354cae9053e  connector:tile/connector
+29d3bf1073c8efcd  union
+64693a4f7ddcba77  export

@@ -65,7 +65,9 @@ fn passes(path: &str, system: &str) {
         let d = 3.4;
         assert!((e / d - RATIO).abs() < 1e-9, "{path}: edge {e} against {d}");
     }
-    // the base is 8 mm under the whole tile
+    // the base is 8 mm under the whole tile; a tile with no base line has
+    // none and is flat on the bed
+    let want = if tile.has_base { -8.0 } else { 0.0 };
     let lo = b
         .export
         .mesh
@@ -73,7 +75,7 @@ fn passes(path: &str, system: &str) {
         .iter()
         .map(|p| p[2])
         .fold(f64::INFINITY, f64::min);
-    assert!((lo + 8.0).abs() < 1e-3, "{path}: bottom at {lo}");
+    assert!((lo - want).abs() < 1e-3, "{path}: bottom at {lo}");
 }
 
 #[test]

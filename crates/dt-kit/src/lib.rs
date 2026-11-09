@@ -64,7 +64,8 @@ mod stone;
 mod threemf;
 
 pub use audit::{
-    Audit, Dropped, Export, Hang, HangBand, Printer, audit, audit_banded, draft, fit, hang,
+    Audit, Dropped, Export, Hang, HangBand, Printer, audit, audit_banded, audit_rounded, draft,
+    fit, hang,
 };
 pub use bambu::{bambu_project, project_settings};
 pub use band::{
@@ -85,7 +86,7 @@ pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
 pub use progress::{Counter, Event, Progress, Reporter};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
-    ABSENT_UNDER_MM, Frame, Kind, LIFT_TOL_MM, LayerSpec, Material, Part, Parts,
+    ABSENT_UNDER_MM, CORNER_ROUND_MM, Frame, Kind, LIFT_TOL_MM, LayerSpec, Material, Part, Parts,
     REFERENCE_SQUARE_MM, Relief, Scene, SideSpec, Slot, Slots, Solid, Stage, Standing, Tag,
     Terrain,
 };

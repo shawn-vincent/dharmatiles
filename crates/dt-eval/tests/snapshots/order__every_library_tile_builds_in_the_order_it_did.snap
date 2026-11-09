@@ -47,6 +47,7 @@ lib:tiles/test/1x1-cliff.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3), E
 lib:tiles/test/1x1-flat.dtile: [Entry(0), Lift, Entry(1)]
 lib:tiles/test/1x1-floor-fieldstone.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tiles/test/1x1-floor-stone.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
+lib:tiles/test/1x1-no-base.dtile: [Entry(0), Lift]
 lib:tiles/test/1x1-tree.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tiles/test/1x1-wall-brick.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tiles/test/1x1-wall-cut-stone-corner.dtile: [Entry(0), Lift, Entry(1), Entry(2)]

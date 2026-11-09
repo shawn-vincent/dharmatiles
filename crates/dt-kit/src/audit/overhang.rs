@@ -205,20 +205,50 @@ impl Slices {
             .collect()
     }
 
-    /// The rays inside `footprint` that hit nothing.
-    pub(super) fn holes(&self, footprint: [f64; 2]) -> usize {
+    /// The rays inside `footprint` (its corners rounded in plan by `round`
+    /// mm) that hit nothing.
+    pub(super) fn holes(&self, footprint: [f64; 2], round: f64) -> usize {
         let Self {
             x0, y0, g, nx, ny, ..
         } = *self;
         let hit_any = &self.hit_any;
+        // a ray past a corner's arc (the polygon of rim nodes on it lies
+        // inside it by at most the lift's error bound) is outside the tile
+        let outside_arc = |x: f64, y: f64| {
+            let cx = if x < round {
+                round
+            } else if x > footprint[0] - round {
+                footprint[0] - round
+            } else {
+                return false;
+            };
+            let cy = if y < round {
+                round
+            } else if y > footprint[1] - round {
+                footprint[1] - round
+            } else {
+                return false;
+            };
+            (x - cx).hypot(y - cy) > round - ROUND_SLACK_MM
+        };
         (0..nx * ny)
             .filter(|&col| {
                 let (x, y) = (x0 + (col % nx) as f64 * g, y0 + (col / nx) as f64 * g);
-                !hit_any[col] && x < footprint[0] && y < footprint[1] && x > 0.0 && y > 0.0
+                !hit_any[col]
+                    && x < footprint[0]
+                    && y < footprint[1]
+                    && x > 0.0
+                    && y > 0.0
+                    && !outside_arc(x, y)
             })
             .count()
     }
 }
+
+/// How far inside a rounded corner's arc a ray still counts as outside the
+/// tile, mm: the rim's nodes lie on the arc, so its chords fall inside it by
+/// less than this (the lift's error bound, `LIFT_TOL_MM`).
+const ROUND_SLACK_MM: f64 = 0.02;
 
 /// Vertical-ray hits of one triangle: `(column, z)` for every lattice
 /// column strictly inside its projection, or on an edge by the top-left

@@ -249,7 +249,14 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         },
     };
     let footprint = crate::stl_footprint(&mesh, None, None);
-    let (export, a) = dt_kit::audit(&mesh, footprint, &opts.printer);
+    let (export, a) = dt_kit::audit_rounded(
+        &mesh,
+        footprint,
+        crate::stl_corner_round(footprint),
+        &opts.printer,
+        &[],
+        Some(&dt_kit::HangBand::DEFAULT),
+    );
     let failures = a.failures(&opts.printer);
     let materials = vec![dt_kit::Material::Earth; export.mesh.triangles.len()];
     let mut painted = dt_kit::paint(&materials, &a.overhang);

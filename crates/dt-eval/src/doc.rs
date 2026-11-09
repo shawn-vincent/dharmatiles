@@ -261,6 +261,9 @@ pub struct Tile {
     /// The heights language: constants, bodies, pins, defaults; `None` for
     /// a tile that uses none of it.
     pub heights: Heights,
+    /// The stack has a `base` line: the connector of the build target goes
+    /// under zero. Without one the tile has no base and prints flat from zero.
+    pub has_base: bool,
     /// The entries that call built elements, definitions inlined.
     pub stack: Vec<Entry>,
     /// What the document asks for that is not built yet: one error each,
@@ -540,6 +543,7 @@ impl Reader<'_> {
             wobbles: BTreeMap::new(),
             regions: Vec::new(),
             heights: Heights::default(),
+            has_base: def.base.is_some(),
             stack: Vec::new(),
             pending: Vec::new(),
             src: Arc::clone(src),

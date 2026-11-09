@@ -48,7 +48,7 @@ tile size="1x1" {
         dirt top=dirtEdgeHeight clods=none stones=none   // flat, at the edge height (3.4 mm)
     }
 }</code></pre>
-<p>Its stack starts with <code>base</code>, the connector. <code>dharmatiles build lib:tiles/test/1x1-flat.dtile</code> builds it for DungeonBlocks, the default system.</p>
+<p>Its stack starts with <code>base</code>, the connector; a stack with no <code>base</code> line has no base, and prints flat on the bed from zero. <code>dharmatiles build lib:tiles/test/1x1-flat.dtile</code> builds it for DungeonBlocks, the default system.</p>
 
 <dl class="defs">
   <dt>element</dt><dd>Anything a document can write: the document's own (<code>tile</code>, <code>line</code>, <code>region</code>, <code>stack</code>, …) and the built-in terrain (<code>dirt</code>, <code>grass</code>, <code>rock</code>, <code>tree</code>, <code>wall</code>, <code>cliff</code>, …), plus <code>scatter</code>. Each has a page in the <a href="elements/index.html">elements reference</a>.</dd>

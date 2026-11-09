@@ -6,6 +6,6 @@ expression: hashes(b)
 3adc1726b5fad5b4  surface
 251025c074070752  terrain:tile/terrain
 bc8f2a04a81f287e  tree:tile/tree/0
-9ad7b1454c0b8fad  connector:tile/connector
-447a6402d8a188a2  union
-917737e719e72b7b  export
+a9f0c2c38831617d  connector:tile/connector
+c06365fe4aa216c1  union
+918fc892f02dd772  export

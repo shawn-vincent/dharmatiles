@@ -23,6 +23,7 @@ use rayon::prelude::*;
 
 const TILES: &[&str] = &[
     "lib:tiles/test/1x1-flat.dtile",
+    "lib:tiles/test/1x1-no-base.dtile",
     "lib:tiles/ground/1x1-soil.dtile",
     "lib:tiles/test/2x2-dirt.dtile",
     "lib:tiles/test/2x2-rocks.dtile",
@@ -164,6 +165,39 @@ fn the_flat_tile_meets_the_exit_criteria() {
     assert!(close(lo[0], 0.0) && close(hi[0], 35.0) && close(lo[1], 0.0) && close(hi[1], 35.0));
     assert!(hi[2] >= 3.4 && hi[2] < 5.5, "top {}", hi[2]);
     assert!(close(lo[2], -(5.7 + 5.2) - 0.0), "peg tip {}", lo[2]);
+}
+
+/// No `base` line, no base: no connector part, no stack entry for it, the
+/// tile printed flat from zero up and the audit passing, on both systems;
+/// with a base line the same tile has the connector under zero.
+#[test]
+fn no_base_line_means_no_base() {
+    let min_z = |b: &Built| {
+        b.export
+            .mesh
+            .positions
+            .iter()
+            .fold(f64::INFINITY, |lo, p| lo.min(p[2]))
+    };
+    for system in ["db", "ol"] {
+        let opts = Options {
+            system: system.to_owned(),
+            ..Options::default()
+        };
+        let none = build(&Library, "lib:tiles/test/1x1-no-base.dtile", &opts).unwrap();
+        assert!(none.audit.failures(&opts.printer).is_empty(), "{system}");
+        assert!(none.audit.watertight && none.audit.holes == 0);
+        assert!(min_z(&none).abs() < 1e-6, "{system}: flat from zero");
+        assert!(
+            none.materials
+                .iter()
+                .all(|m| *m != dt_kit::Material::Connector),
+            "{system}: a connector part"
+        );
+        let some = build(&Library, "lib:tiles/test/1x1-flat.dtile", &opts).unwrap();
+        assert!(min_z(&some) < -7.0, "{system}: the base is under zero");
+        assert!(some.audit.failures(&opts.printer).is_empty(), "{system}");
+    }
 }
 
 /// The edge contract: the edge height, 3.4 mm, is the most a dirt rim

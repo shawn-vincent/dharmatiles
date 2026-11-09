@@ -11,9 +11,10 @@
 //! the connector reads every solid and is built last.
 
 use dt_kit::Kind;
-use dt_kit::{Material, Outline, Scene, Solid, Tag, carve, extrude, loft, union};
+use dt_kit::{Frame, Material, Outline, Scene, Solid, Tag, carve, extrude, loft, union};
 use rayon::prelude::*;
 
+use crate::base::{self, Box3, KeepOut};
 use crate::{Ctx, Element, LookError, Plan, Read, Write};
 
 /// The DungeonBlocks constants, mm.
@@ -73,17 +74,30 @@ impl DungeonBlocks {
         }
     }
 
-    /// The four rings of one peg, top to bottom (`make_base`).
-    fn rings(&self, x: f64, y: f64, s: f64, peg: f64) -> Vec<Vec<[f64; 3]>> {
+    /// The four rings of one peg, top to bottom (`make_base`). The top ring
+    /// is the square's part of the tile's footprint at zero, so a corner of
+    /// the tile (`round`) is rounded by `arc`; the lower rings keep the same
+    /// round, so the flare and the column turn the corner with it.
+    fn rings(
+        &self,
+        at: [f64; 2],
+        s: f64,
+        peg: f64,
+        arc: &[[f64; 2]],
+        round: [bool; 4],
+    ) -> Vec<Vec<[f64; 3]>> {
         let col_inset = (s - self.column_mm) / 2.0;
         let bevel_inset = (s - (self.column_mm - 2.0 * self.bevel_mm)) / 2.0;
         let ring = |i: f64, z: f64| {
-            vec![
-                [x + i, y + i, z],
-                [x + s - i, y + i, z],
-                [x + s - i, y + s - i, z],
-                [x + i, y + s - i, z],
-            ]
+            base::ring(
+                [at[0] + i, at[1] + i],
+                [at[0] + s - i, at[1] + s - i],
+                arc,
+                round,
+            )
+            .into_iter()
+            .map(|p| [p[0], p[1], z])
+            .collect()
         };
         vec![
             ring(0.0, 0.0),
@@ -91,6 +105,44 @@ impl DungeonBlocks {
             ring(col_inset, -(peg - self.bevel_mm + self.flare_mm)),
             ring(bevel_inset, -(peg + self.flare_mm)),
         ]
+    }
+
+    /// What a cut into this base may not reach, on `frame` with content up
+    /// to `content_top_mm` (which picks the peg), keeping `wall_mm` (the
+    /// printer's wall) from the connector's sides: for each square, the
+    /// flare and the column's sides, and the column's floor (the logo's
+    /// depth and a skin), so a pit stays inside the column, about 9 mm deep
+    /// on the short peg and 15 mm on the tall.
+    #[must_use]
+    pub fn keep_out(&self, frame: &Frame, content_top_mm: f64, wall_mm: f64) -> Vec<KeepOut> {
+        let s = frame.square_mm;
+        let tip = self.peg_mm(content_top_mm) + self.flare_mm;
+        let core = (s - self.column_mm) / 2.0 + wall_mm;
+        let floor = -tip + self.logo_depth_mm * 2.0;
+        let mut out = Vec::new();
+        for c in 0..frame.cols {
+            for r in 0..frame.rows {
+                let (x, y) = (f64::from(c) * s, f64::from(r) * s);
+                let (x1, y1) = (x + s, y + s);
+                let mut keep = |min: [f64; 3], max: [f64; 3], what| {
+                    out.push(KeepOut {
+                        at: Box3 { min, max },
+                        what,
+                    });
+                };
+                let side = "the flare and the peg column's sides";
+                keep([x, y, -tip], [x + core, y1, 0.0], side);
+                keep([x1 - core, y, -tip], [x1, y1, 0.0], side);
+                keep([x + core, y, -tip], [x1 - core, y + core, 0.0], side);
+                keep([x + core, y1 - core, -tip], [x1 - core, y1, 0.0], side);
+                keep(
+                    [x + core, y + core, -tip],
+                    [x1 - core, y1 - core, floor],
+                    "the peg column's floor",
+                );
+            }
+        }
+        out
     }
 }
 
@@ -134,6 +186,7 @@ impl Element for DungeonBlocks {
         let logo = Outline::svg_path(LOGO, LOGO_TOL).map_err(LookError::build)?;
         let (groove, lotus) = logo_parts(&logo);
         let logo_side = (self.column_mm - 2.0 * self.bevel_mm) * 0.80;
+        let arc = base::arc(&f);
         let squares: Vec<(u32, u32)> = (0..f.cols)
             .flat_map(|c| (0..f.rows).map(move |r| (c, r)))
             .collect();
@@ -150,8 +203,9 @@ impl Element for DungeonBlocks {
             .map(|(k, &(c, r))| {
                 let k = u32::try_from(k).unwrap_or(u32::MAX);
                 let (x, y) = (f64::from(c) * s, f64::from(r) * s);
-                let body =
-                    loft(slots.get(3 * k), &self.rings(x, y, s, peg)).map_err(LookError::build)?;
+                let round = base::tile_corners(&f, c, r);
+                let rings = self.rings([x, y], s, peg, &arc, round);
+                let body = loft(slots.get(3 * k), &rings).map_err(LookError::build)?;
                 let (cx, cy) = (x + s / 2.0, y + s / 2.0);
                 let (z0, z1) = (tip - LOGO_EPS_MM, tip + self.logo_depth_mm);
                 let g = groove.placed(LOGO_VIEWBOX, cx, cy, logo_side);
@@ -188,6 +242,53 @@ mod tests {
         assert_eq!(db.peg_mm(5.0), 5.7);
         assert_eq!(db.peg_mm(15.0), 5.7);
         assert_eq!(db.peg_mm(15.1), 11.4);
+    }
+
+    #[test]
+    fn a_pit_stays_inside_the_column() {
+        let db = DungeonBlocks::default();
+        let f = Frame::dungeonblocks(1, 1);
+        let wall = 0.9;
+        let pit = |half: f64, z: f64| base::Box3 {
+            min: [17.5 - half, 17.5 - half, z],
+            max: [17.5 + half, 17.5 + half, 3.0],
+        };
+        for (top, deep, too_deep) in [(5.0, 9.0, 10.0), (20.0, 15.0, 16.0)] {
+            let keep = db.keep_out(&f, top, wall);
+            // a pit well inside the column, about 9 mm (short) or 15 mm
+            // (tall) deep, is allowed; deeper reaches the floor
+            assert!(base::refuse_cut(&keep, &pit(8.0, -deep)).is_none(), "{top}");
+            assert!(
+                base::refuse_cut(&keep, &pit(8.0, -too_deep)).is_some(),
+                "{top}"
+            );
+            // a pit as wide as the column reaches its sides, and one the
+            // width of the flare its outside
+            assert!(base::refuse_cut(&keep, &pit(12.5, -3.0)).is_some());
+            assert!(base::refuse_cut(&keep, &pit(17.4, -1.0)).is_some());
+        }
+        // a cut above zero is never refused
+        let keep = db.keep_out(&f, 5.0, wall);
+        let above = base::Box3 {
+            min: [0.0; 3],
+            max: [35.0, 35.0, 4.0],
+        };
+        assert!(base::refuse_cut(&keep, &above).is_none());
+    }
+
+    #[test]
+    fn the_top_ring_follows_the_tiles_round_corners() {
+        let db = DungeonBlocks::default();
+        let rings = db.rings(
+            [0.0, 0.0],
+            35.0,
+            5.7,
+            &base::arc(&Frame::dungeonblocks(1, 1)),
+            [true, false, false, false],
+        );
+        assert!(rings.iter().all(|r| r.len() == rings[0].len()));
+        assert!(!rings[0].iter().any(|p| p[0] == 0.0 && p[1] == 0.0));
+        assert!(rings[0].iter().any(|p| p[0] == 35.0 && p[1] == 35.0));
     }
 
     #[test]
