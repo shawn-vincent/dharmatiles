@@ -22,7 +22,8 @@
 //! The slabs stand on the land under them (they reach down to its lowest
 //! point, or to zero, the base, with no land), so none is left over a
 //! hollow; where the land is higher than a slab the land shows, the surface
-//! being the higher of what is below and the body's own top. A floor
+//! being the higher of what is below and the body's own top. The plan lays a
+//! floor after the surfaces and before the lift (`Write::Laid`). A floor
 //! meets the tile edge flush at its own height, with its faces at the plane
 //! keeping the material's grain and never passing it: a slab or board on the
 //! boundary stands a hair past the plane and is cut there (its top edge is
@@ -39,7 +40,7 @@ use dt_kit::{Field, Kind, Mask, Noise, Scale, Scene, noise};
 
 use crate::read::Settings;
 use crate::wall::{self, Family, Height, Laid, Mason};
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Span, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Span, Write};
 
 /// The steepest a slab or board tilts, degrees.
 const TILT_MAX_DEG: f64 = 4.0;
@@ -195,9 +196,10 @@ impl Planks {
 
 fn plan() -> Plan {
     Plan {
-        writes: Write::Solid(Kind::Floor),
-        // it stands on the land if the tile has any; zero, the base, if not
-        reads: vec![Read::IfAny(Kind::Terrain)],
+        // it stands on the land the surfaces laid (zero, the base, if the
+        // tile has none), so it is laid before the lift
+        writes: Write::Laid(Kind::Floor),
+        reads: vec![],
         cell_mm: None,
     }
 }

@@ -189,6 +189,10 @@ pub enum Write {
     Surface,
     /// A solid of this kind.
     Solid(Kind),
+    /// A solid of this kind laid with the land it stands on: after every
+    /// surface and fill, before the lift (a floor), so the lift sees it
+    /// and it reads no lifted ground.
+    Laid(Kind),
     /// The surface again, filled over what it reads (water): after the
     /// solids it reads and before the lift, which lifts it with the ground.
     Fill,

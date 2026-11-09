@@ -5,6 +5,8 @@
 //! and every fill and writes the ground solid:
 //!
 //! - a surface reads nothing (surfaces are painted before any solid);
+//! - a solid laid with the land (a floor) waits for the surfaces and the
+//!   lift waits for it, so it stands on the land and the lift sees it;
 //! - a fill (water) reads the surfaces, and the solids it names;
 //! - a read of a kind waits for every entry that writes one (the ground's
 //!   writer is the lift, when a surface paints); a read of every solid
@@ -62,6 +64,11 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
     let n = plans.len();
     let lift = n; // the lift's node
     let is = |i: usize, w: Write| plans[i].writes == w;
+    // a solid of `kind`, however it is laid
+    let is_solid = |i: usize, kind: Kind| is(i, Write::Solid(kind)) || is(i, Write::Laid(kind));
+    let laid: Vec<usize> = (0..n)
+        .filter(|&i| matches!(plans[i].writes, Write::Laid(_)))
+        .collect();
     let surfaces: Vec<usize> = (0..n).filter(|&i| is(i, Write::Surface)).collect();
     if let Some(&i) = surfaces.iter().find(|&&i| !plans[i].reads.is_empty()) {
         return Err(Refusal::SurfaceReadsSolid { entry: i });
@@ -69,9 +76,7 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
     let lifted = !surfaces.is_empty();
     // what each kind of solid is written by
     let writers = |kind: Kind, me: usize| -> Vec<usize> {
-        let mut w: Vec<usize> = (0..n)
-            .filter(|&j| j != me && is(j, Write::Solid(kind)))
-            .collect();
+        let mut w: Vec<usize> = (0..n).filter(|&j| j != me && is_solid(j, kind)).collect();
         if kind == Kind::Terrain && lifted {
             w.push(lift);
         }
@@ -80,7 +85,7 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
     // waits[v]: the nodes v waits for
     let mut waits: Vec<Vec<usize>> = vec![Vec::new(); n + 1];
     for i in 0..n {
-        if is(i, Write::Fill) {
+        if is(i, Write::Fill) || matches!(plans[i].writes, Write::Laid(_)) {
             waits[i].extend(&surfaces);
         }
         for r in &plans[i].reads {
@@ -107,6 +112,7 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
     // lifts); it is the ground's writer only when a surface paints
     waits[lift] = (0..n)
         .filter(|&i| is(i, Write::Surface) || is(i, Write::Fill))
+        .chain(laid)
         .collect();
     // what the lift needs, all the way down
     let mut needed = vec![false; n + 1];
@@ -184,21 +190,27 @@ mod tests {
     }
 
     #[test]
-    fn a_wall_waits_for_the_floor_it_stands_on() {
+    fn a_floor_is_laid_before_the_lift_and_a_wall_stands_on_it() {
         let plans = [
             p(Write::Solid(Kind::Wall), &[Read::IfAny(Kind::Floor)]),
             p(Write::Surface, &[]),
-            p(Write::Solid(Kind::Floor), &[Read::Solids(Kind::Terrain)]),
+            p(Write::Laid(Kind::Floor), &[]),
         ];
         assert_eq!(
             schedule(&plans),
             Ok(vec![
                 Step::Entry(1),
-                Step::Lift,
                 Step::Entry(2),
+                Step::Lift,
                 Step::Entry(0)
             ])
         );
+        // laid before the lift, it cannot read the lifted ground
+        let cycle = [
+            p(Write::Surface, &[]),
+            p(Write::Laid(Kind::Floor), &[Read::Solids(Kind::Terrain)]),
+        ];
+        assert!(matches!(schedule(&cycle), Err(Refusal::Cycle { .. })));
     }
 
     #[test]
