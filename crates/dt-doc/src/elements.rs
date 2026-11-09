@@ -193,6 +193,7 @@ const fn rock_controls(size: &'static str) -> [Control; 4] {
             Axis::Share,
             "how much of each rock is under the ground",
         )
+        .limits(0.0, 1.0)
         .weighted(),
     ]
 }

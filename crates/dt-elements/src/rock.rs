@@ -35,7 +35,7 @@ use dt_kit::{
 };
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Dist, Draw, Element, LookError, Op, Plan, Write};
+use crate::{Control, Ctx, Draw, Element, LookError, Plan, Write};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -514,18 +514,25 @@ pub fn is_thing(name: &str) -> bool {
     matches!(name, "rock" | "stone" | "boulder" | "pebble")
 }
 
-/// A share written as a percent (`40`) or a fraction (`0.4`), as a
-/// fraction: each end of a range is read on its own, a sum as a whole.
-fn share(d: Draw) -> Draw {
-    let one = |x: f64| if x > 1.0 { x / 100.0 } else { x };
-    match d {
-        Draw::Range(r) => Draw::Range(Dist::new(one(r.lo), one(r.hi), r.weighting)),
-        Draw::Num(x) => Draw::Num(one(x)),
-        other if other.hi() > 1.0 => {
-            Draw::Bin(Op::Div, Box::new(other), Box::new(Draw::Num(100.0)))
-        }
-        other => other,
+/// A share as the fraction the checked percent form lowers to.  A bare
+/// number never reaches here from a document (`dt::percent` refuses it
+/// when it is read); a value outside 0% to 100% is refused rather than
+/// read as a percent.
+fn share(d: Draw) -> Result<Draw, LookError> {
+    if d.lo() < 0.0 || d.hi() > 1.0 {
+        let mut e = LookError::control(
+            "buried",
+            format!(
+                "`buried` is a share from 0% to 100%, not {}% to {}%",
+                d.lo() * 100.0,
+                d.hi() * 100.0
+            ),
+            "write a percent such as \"30%\" or \"20%..50%\"".into(),
+        );
+        e.code = Some("dt::percent");
+        return Err(e);
     }
+    Ok(d)
 }
 
 impl Thing {
@@ -544,7 +551,7 @@ impl Thing {
         let s = Settings::new(controls);
         t.size = s.dist_or("size", t.size)?;
         if let Some(r) = s.dist("buried")? {
-            t.buried = share(r);
+            t.buried = share(r)?;
         }
         if let Some(w) = s.word("shape")? {
             t.mix = match w {
@@ -1170,6 +1177,21 @@ impl Bedded {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn buried_is_a_share_never_a_loose_percent() {
+        let c = |v: f64| Control {
+            name: "buried".into(),
+            value: crate::Value::Number(v),
+        };
+        let ok = Thing::new("rock", &[c(0.3)], 1.0).unwrap();
+        assert_eq!(ok.buried, Draw::flat(0.3, 0.3));
+        // 1 is 100%; 40 is not read as 40%
+        assert!(Thing::new("rock", &[c(1.0)], 1.0).is_ok());
+        let e = Thing::new("rock", &[c(40.0)], 1.0).unwrap_err();
+        assert_eq!(e.code, Some("dt::percent"));
+        assert!(e.help.unwrap().contains("percent"));
+    }
 
     #[test]
     fn a_stone_is_faceted_chipped_and_grounded() {

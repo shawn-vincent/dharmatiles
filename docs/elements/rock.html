@@ -83,7 +83,7 @@ rock at=pool                       // one rock, anywhere in the pool region</cod
 <tr id="c-size"><td><code>size</code></td><td>mm, over 0, up to 200, or a range, or a weighted range</td><td><code>6..15</code></td><td>rock width</td></tr>
 <tr id="c-shape"><td><code>shape</code></td><td>word</td><td>—</td><td>river stones, broken rock, flat slabs<dl class="words"><dt><code>rounded</code></dt><dd>river stones</dd><dt><code>angular</code></dt><dd>broken rock</dd><dt><code>flat</code></dt><dd>flat slabs</dd></dl></td></tr>
 <tr id="c-wear"><td><code>wear</code></td><td>word</td><td>—</td><td>sharp, or chipped and rounded edges <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span><dl class="words"><dt><code>crisp</code></dt><dd>sharp edges</dd><dt><code>worn</code></dt><dd>chipped and rounded edges</dd></dl></td></tr>
-<tr id="c-buried"><td><code>buried</code></td><td>percent, a number, a range or a weighted range</td><td>—</td><td>how much of each rock is under the ground</td></tr>
+<tr id="c-buried"><td><code>buried</code></td><td>percent, 0% to 100%, or a range, or a weighted range</td><td>—</td><td>how much of each rock is under the ground</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
@@ -142,6 +142,7 @@ rock at=pool                       // one rock, anywhere in the pool region</cod
   <li>Three scales of texture: rough faces, chipped corners and a fine grain. The largest faces stay small.</li>
   <li>Large stones carry engraved cracks a wash can pool in.</li>
   <li>Stones stand bedded in the dirt around them.</li>
+  <li><code>buried</code> is a share written as a percent, <code>buried="20%..50%"</code> (weighted forms too), from 0% to 100%. A bare number is refused with <code>dt::percent</code>; it is never read as a percent.</li>
   <li>A rock is seated on the land as it is laid, grain included: its foot is under the lowest land it can touch, so no gap shows under it (the build notes <code>seat_gap_max</code> and <code>seat_gap_stones</code> measure it).</li>
 </ul>
 
