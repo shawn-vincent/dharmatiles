@@ -22,7 +22,7 @@
 use dt_kit::Kind;
 use dt_kit::{Material, Rng, Scene, Tag, TriMesh, form};
 
-use crate::read;
+use crate::read::Settings;
 use crate::{Control, Ctx, Element, LookError, Plan, Write};
 
 const REED_SEP_MM: f64 = 12.0;
@@ -58,14 +58,10 @@ impl Reeds {
             stems: (5, 9),
             height: (8.0, 13.0),
         };
-        for c in controls {
-            match c.name.as_str() {
-                "clumps" => r.clumps = read::counts(c)?,
-                "stems" => r.stems = read::counts(c)?,
-                "height" => r.height = read::span(c)?,
-                _ => {}
-            }
-        }
+        let s = Settings::new(controls);
+        r.clumps = s.counts_or("clumps", r.clumps)?;
+        r.stems = s.counts_or("stems", r.stems)?;
+        r.height = s.span_or("height", r.height)?;
         Ok(r)
     }
 }

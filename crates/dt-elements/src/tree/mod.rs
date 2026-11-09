@@ -34,7 +34,7 @@ use dt_kit::graph::{self, Colonise, TubeStyle};
 use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
-use crate::read;
+use crate::read::Settings;
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write};
 use site::{crumbs, fill_pockets, ground_drop, place};
 pub(crate) use site::{drop_crumbs, ground_box};
@@ -129,17 +129,12 @@ pub struct Tree {
 }
 
 /// `leaves`: whether there are leaves, and clumps.
-fn leaves_word(c: &Control) -> Result<(bool, bool), LookError> {
-    Ok(match read::word(c)? {
+fn leaves_word(w: &str) -> (bool, bool) {
+    match w {
         "on" => (true, true),
         "clumps-only" => (false, true),
         _ => (false, false),
-    })
-}
-
-/// A size, or a range of them, kept as written (drawn when the tree grows).
-fn length(c: &Control) -> Result<Value, LookError> {
-    read::span(c).map(|_| c.value.clone())
+    }
 }
 
 impl Tree {
@@ -151,55 +146,59 @@ impl Tree {
     /// range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut p = Params::default();
-        // the word's numbers first, then the expert knobs over them
-        let mut ordered: Vec<&Control> = controls
-            .iter()
-            .filter(|c| !c.name.starts_with("branch/"))
-            .collect();
-        ordered.extend(controls.iter().filter(|c| c.name.starts_with("branch/")));
-        for c in ordered {
-            match c.name.as_str() {
-                "height" => p.height = length(c)?,
-                "trunk/height" => p.trunk = length(c)?,
-                "trunk/width" => p.trunk_width = Some(length(c)?),
-                "crown/width" => p.width = length(c)?,
-                "crown/clump-size" => p.clump_size = length(c)?,
-                "leaf/length" => p.leaf_length = length(c)?,
-                "leaf/width" => p.leaf_width = length(c)?,
-                "crown/clumps" => {
-                    let v = read::number(c)?;
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    {
-                        p.clumps = v.round() as usize;
-                    }
-                }
-                "crown/shape.top-pointiness" => p.shape.top_pointiness = read::number(c)?,
-                "crown/shape.top-curve" => p.shape.top_curve = read::number(c)?,
-                "crown/shape.bottom-pointiness" => p.shape.bottom_pointiness = read::number(c)?,
-                "crown/shape.bottom-curve" => p.shape.bottom_curve = read::number(c)?,
-                "crown/branching.split" | "branch/split" => {
-                    p.split_deg = read::number(c)?;
-                }
-                "crown/branching.eagerness" | "branch/eagerness" => {
-                    p.eagerness = read::number(c)?;
-                }
-                "crown/branching.target" | "branch/target" => {
-                    p.target = read::number(c)?;
-                }
-                "crown/branching.balance" | "branch/balance" => {
-                    p.balance = read::number(c)?;
-                }
-                "crown/branching.exponent" | "branch/exponent" => {
-                    p.exponent = read::number(c)?;
-                }
-                "crown/branching.min-radius" | "branch/min-radius" => {
-                    p.min_radius = read::number(c)?;
-                }
-                "leaves.leaves" => p.leaves = read::number(c)? > 0.5,
-                "leaves.clumps" => p.clumps_on = read::number(c)? > 0.5,
-                "leaves" => (p.leaves, p.clumps_on) = leaves_word(c)?,
-                _ => {}
+        let s = Settings::new(controls);
+        if let Some(v) = s.length("height")? {
+            p.height = v;
+        }
+        if let Some(v) = s.length("trunk/height")? {
+            p.trunk = v;
+        }
+        p.trunk_width = s.length("trunk/width")?.or(p.trunk_width);
+        if let Some(v) = s.length("crown/width")? {
+            p.width = v;
+        }
+        if let Some(v) = s.length("crown/clump-size")? {
+            p.clump_size = v;
+        }
+        if let Some(v) = s.length("leaf/length")? {
+            p.leaf_length = v;
+        }
+        if let Some(v) = s.length("leaf/width")? {
+            p.leaf_width = v;
+        }
+        if let Some(v) = s.number("crown/clumps")? {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            {
+                p.clumps = v.round() as usize;
             }
+        }
+        let sh = &mut p.shape;
+        sh.top_pointiness = s.number_or("crown/shape.top-pointiness", sh.top_pointiness)?;
+        sh.top_curve = s.number_or("crown/shape.top-curve", sh.top_curve)?;
+        sh.bottom_pointiness =
+            s.number_or("crown/shape.bottom-pointiness", sh.bottom_pointiness)?;
+        sh.bottom_curve = s.number_or("crown/shape.bottom-curve", sh.bottom_curve)?;
+        // the branching word's numbers, and the expert `branch/…` knobs
+        // over them (a parts file's)
+        let knob = |p: &str| [format!("branch/{p}"), format!("crown/branching.{p}")];
+        let branch = |name: &str, now: f64| -> Result<f64, LookError> {
+            let [expert, word] = knob(name);
+            Ok(s.number_of(&[&expert, &word])?.unwrap_or(now))
+        };
+        p.split_deg = branch("split", p.split_deg)?;
+        p.eagerness = branch("eagerness", p.eagerness)?;
+        p.target = branch("target", p.target)?;
+        p.balance = branch("balance", p.balance)?;
+        p.exponent = branch("exponent", p.exponent)?;
+        p.min_radius = branch("min-radius", p.min_radius)?;
+        if let Some(w) = s.word("leaves")? {
+            (p.leaves, p.clumps_on) = leaves_word(w);
+        }
+        if let Some(v) = s.number("leaves.leaves")? {
+            p.leaves = v > 0.5;
+        }
+        if let Some(v) = s.number("leaves.clumps")? {
+            p.clumps_on = v > 0.5;
         }
         Ok(Self { p })
     }

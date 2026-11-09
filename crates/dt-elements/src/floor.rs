@@ -37,7 +37,7 @@
 use dt_kit::span::hills;
 use dt_kit::{Field, Kind, Mask, Noise, Scale, Scene, noise};
 
-use crate::read;
+use crate::read::Settings;
 use crate::wall::{self, Family, Height, Laid, Mason};
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
@@ -79,12 +79,15 @@ pub struct Planks {
     even: bool,
 }
 
-fn whole(c: &Control, name: &str) -> Result<u32, LookError> {
-    let v = read::number(c)?;
+/// How many across a square: a whole number of at least one, or `default`.
+fn whole(s: &Settings, name: &str, default: u32) -> Result<u32, LookError> {
+    let Some(v) = s.number(name)? else {
+        return Ok(default);
+    };
     if v.fract() != 0.0 || v < 1.0 {
         return Err(LookError::control(
             name,
-            format!("{name} must be a whole number, not {}", c.value),
+            format!("{name} must be a whole number, not {v}"),
             format!("write how many across a square, such as {name}=2"),
         ));
     }
@@ -99,11 +102,8 @@ impl Flagstones {
     /// [`LookError`] for a control it does not take or a value out of
     /// range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        let get = |n: &str| controls.iter().find(|c| c.name == n);
-        let fieldstone = match get("style") {
-            Some(c) => read::word(c)? == "fieldstone",
-            None => false,
-        };
+        let s = Settings::new(controls);
+        let fieldstone = s.word("style")? == Some("fieldstone");
         let mut m = if fieldstone {
             // the fieldstone wall's own stone sizes, laid flat
             Mason::new(Family::Fieldstone)
@@ -126,29 +126,22 @@ impl Flagstones {
         } else {
             m.edge_pad = BLOCK_PAD_MM;
         }
-        let mut slabs = 1;
-        for c in controls {
-            match c.name.as_str() {
-                "texture" => {
-                    let w = read::word(c)?;
-                    if let Some(t) = wall::texture(w) {
-                        if fieldstone {
-                            m.relief = Some(t.2);
-                        } else {
-                            m.texture(t);
-                        }
-                    }
-                    if w == "worn" {
-                        // weathered: the worn edge takes a round of its own
-                        // at the plane
-                        m.edge_pad = 0.0;
-                        m.edge_pull = 0.0;
-                    }
+        if let Some(w) = s.word("texture")? {
+            if let Some(t) = wall::texture(w) {
+                if fieldstone {
+                    m.relief = Some(t.2);
+                } else {
+                    m.texture(t);
                 }
-                "slabs" => slabs = whole(c, "slabs")?,
-                _ => {}
+            }
+            if w == "worn" {
+                // weathered: the worn edge takes a round of its own
+                // at the plane
+                m.edge_pad = 0.0;
+                m.edge_pull = 0.0;
             }
         }
+        let slabs = whole(&s, "slabs", 1)?;
         Ok(Self { mason: m, slabs })
     }
 }
@@ -184,22 +177,14 @@ impl Planks {
         m.texture(tex);
         m.grain = grain;
         m.checks = checks;
-        let mut boards = 8;
-        let mut even = false;
-        for c in controls {
-            match c.name.as_str() {
-                "style" => even = read::word(c)? == "even",
-                "texture" => {
-                    if let Some((tex, grain, checks)) = plank_texture(read::word(c)?) {
-                        m.texture(tex);
-                        m.grain = grain;
-                        m.checks = checks;
-                    }
-                }
-                "boards" => boards = whole(c, "boards")?,
-                _ => {}
-            }
+        let s = Settings::new(controls);
+        let even = s.word("style")? == Some("even");
+        if let Some((tex, grain, checks)) = s.word("texture")?.and_then(plank_texture) {
+            m.texture(tex);
+            m.grain = grain;
+            m.checks = checks;
         }
+        let boards = whole(&s, "boards", 8)?;
         Ok(Self {
             mason: m,
             boards,

@@ -29,8 +29,8 @@ use dt_kit::{
     scatter, smax, smooth01,
 };
 
-use crate::read;
-use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
+use crate::read::Settings;
+use crate::{Control, Ctx, Element, LookError, Plan, Write};
 
 /// The height-field resolution, true mm.
 const CELL_MM: f64 = 0.15;
@@ -166,22 +166,18 @@ impl Dirt {
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut clod_density = CLOD_DENSITY;
         let mut size_mm = SIZE_MM;
-        for c in controls {
-            if c.name == "clods.density" {
-                clod_density = read::number(c)?;
-            }
-            if c.name == "bump-size" {
-                size_mm = read::number(c)?;
-            }
-        }
+        let s = Settings::new(controls);
+        clod_density = s.number_or("clods.density", clod_density)?;
+        size_mm = s.number_or("bump-size", size_mm)?;
         let mut stones = STONES_2X2;
-        for c in controls {
-            #[allow(clippy::cast_possible_truncation)]
-            match (c.name.as_str(), &c.value) {
-                // the numbers behind the `stones` word
-                ("stones.min", Value::Number(v)) => stones.0 = libm::round(*v) as i64,
-                ("stones.max", Value::Number(v)) => stones.1 = libm::round(*v) as i64,
-                _ => {}
+        // the numbers behind the `stones` word
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            if let Some(v) = s.number("stones.min")? {
+                stones.0 = libm::round(v) as i64;
+            }
+            if let Some(v) = s.number("stones.max")? {
+                stones.1 = libm::round(v) as i64;
             }
         }
         stones.1 = stones.1.max(stones.0);

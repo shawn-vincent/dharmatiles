@@ -23,7 +23,7 @@ use dt_kit::Kind;
 
 use dt_kit::{Field, Material, Rng, Scene, Spread, Tag, TriMesh, form, scatter, signed_volume};
 
-use crate::read;
+use crate::read::Settings;
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
 const AZ: usize = 16;
@@ -58,18 +58,16 @@ impl Flowers {
             dome: 1.0,
             petal: 0.5,
         };
-        for c in controls {
-            match c.name.as_str() {
-                "per-square" => f.per_square = read::number(c)?,
-                "petals" => f.petals = read::number(c)?.round() as usize,
-                "radius" => f.outer = read::number(c)?,
-                "centre" => f.centre = read::number(c)?,
-                "stem" => f.stem = read::number(c)?,
-                "dome" => f.dome = read::number(c)?,
-                "petal" => f.petal = read::number(c)?,
-                _ => {}
-            }
+        let s = Settings::new(controls);
+        f.per_square = s.number_or("per-square", f.per_square)?;
+        if let Some(n) = s.number("petals")? {
+            f.petals = n.round() as usize;
         }
+        f.outer = s.number_or("radius", f.outer)?;
+        f.centre = s.number_or("centre", f.centre)?;
+        f.stem = s.number_or("stem", f.stem)?;
+        f.dome = s.number_or("dome", f.dome)?;
+        f.petal = s.number_or("petal", f.petal)?;
         if f.outer <= f.centre {
             return Err(LookError {
                 control: Some("radius".into()),

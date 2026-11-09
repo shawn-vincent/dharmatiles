@@ -28,7 +28,7 @@ pub(crate) mod rubble;
 
 use dt_kit::{Kind, Scene};
 
-use crate::read;
+use crate::read::Settings;
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write};
 #[cfg(test)]
 use chassis::percentile;
@@ -222,63 +222,51 @@ impl Wall {
     /// [`LookError`] for a control it does not take or a value out of
     /// range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        let get = |n: &str| controls.iter().find(|c| c.name == n);
-        let family = match get("style") {
-            Some(c) => match read::word(c)? {
-                "fieldstone" => Family::Fieldstone,
-                "brick" => Family::Brick,
-                "regular-brick" => Family::RegularBrick,
-                _ => Family::CutStone,
-            },
-            None => Family::CutStone,
+        let s = Settings::new(controls);
+        let family = match s.word("style")? {
+            Some("fieldstone") => Family::Fieldstone,
+            Some("brick") => Family::Brick,
+            Some("regular-brick") => Family::RegularBrick,
+            _ => Family::CutStone,
         };
         let mut m = Mason::new(family);
-        let mut depth_set = false;
-        for c in controls {
-            match c.name.as_str() {
-                "height" => {
-                    m.height = match &c.value {
-                        Value::Word(w) if w == "full" => Height::Top(WALL_TOP_MM),
-                        Value::Word(w) if w == "low" => Height::Top(LOW_TOP_MM),
-                        _ => Height::Rel(read::number(c)?),
-                    }
-                }
-                "thickness" => m.across = read::number(c)?,
-                "stones/height" => m.course = read::span(c)?,
-                "stones/length" => m.bay = read::span(c)?,
-                "stones/texture" => {
-                    let w = read::word(c)?;
-                    if let Some(t) = texture(w) {
-                        if family == Family::Fieldstone {
-                            // fieldstone keeps its pebble roundings; the
-                            // preset sets the relief only
-                            m.relief = Some(t.2);
-                        } else {
-                            m.texture(t);
-                        }
-                    }
-                }
-                "joints/width" => m.joint = read::number(c)?,
-                "joints/depth" => {
-                    m.reveal = read::number(c)?;
-                    depth_set = true;
-                }
-                "edges/rounding" => m.rounding = read::span(c)?,
-                "coping" => m.coping_on_edge = read::word(c)? == "on-edge",
-                "bond" => {
-                    m.bond = if read::word(c)? == "running" {
-                        Bond::Running
-                    } else {
-                        Bond::Irregular
-                    }
-                }
-                "ruin" => {
-                    // a share, written as a percent: the element reads 0..1
-                    m.ruin = read::number(c)?;
-                }
-                "top" => m.battlements = read::word(c)? == "battlements",
-                _ => {}
+        // `full` and `low` are wall tops; a number is a share of the band
+        m.height = match s.value("height") {
+            Some(Value::Word(w)) if w == "full" => Height::Top(WALL_TOP_MM),
+            Some(Value::Word(w)) if w == "low" => Height::Top(LOW_TOP_MM),
+            _ => s.number("height")?.map_or(m.height, Height::Rel),
+        };
+        m.across = s.number_or("thickness", m.across)?;
+        m.course = s.span_or("stones/height", m.course)?;
+        m.bay = s.span_or("stones/length", m.bay)?;
+        if let Some(t) = s.word("stones/texture")?.and_then(texture) {
+            if family == Family::Fieldstone {
+                // fieldstone keeps its pebble roundings; the
+                // preset sets the relief only
+                m.relief = Some(t.2);
+            } else {
+                m.texture(t);
             }
+        }
+        m.joint = s.number_or("joints/width", m.joint)?;
+        let depth = s.number("joints/depth")?;
+        let depth_set = depth.is_some();
+        m.reveal = depth.unwrap_or(m.reveal);
+        m.rounding = s.span_or("edges/rounding", m.rounding)?;
+        if let Some(w) = s.word("coping")? {
+            m.coping_on_edge = w == "on-edge";
+        }
+        if let Some(w) = s.word("bond")? {
+            m.bond = if w == "running" {
+                Bond::Running
+            } else {
+                Bond::Irregular
+            };
+        }
+        // a share, written as a percent: the element reads 0..1
+        m.ruin = s.number_or("ruin", m.ruin)?;
+        if let Some(w) = s.word("top")? {
+            m.battlements = w == "battlements";
         }
         // the mortar core sits a joint's depth in from both faces; the
         // units are bedded on it. A core thinner than MIN_CORE_MM (or none)

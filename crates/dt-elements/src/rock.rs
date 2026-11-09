@@ -34,7 +34,8 @@ use dt_kit::{
     grain, hull, scatter, solid,
 };
 
-use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
+use crate::read::{Settings, range_of};
+use crate::{Control, Ctx, Element, LookError, Plan, Write};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -531,29 +532,20 @@ impl Thing {
             weight,
             buried: (0.0, 0.0),
         };
-        for c in controls {
-            match (c.name.as_str(), &c.value) {
-                ("size", Value::Range(a, b)) => t.size = (*a, *b),
-                ("size", Value::Number(a)) => t.size = (*a, *a),
-                ("buried", v) => {
-                    let share = |x: f64| if x > 1.0 { x / 100.0 } else { x };
-                    t.buried = match v {
-                        Value::Number(a) => (share(*a), share(*a)),
-                        Value::Range(a, b) => (share(*a), share(*b)),
-                        Value::Word(_) => (0.0, 0.0),
-                    };
-                }
-                ("mostly.exponent", Value::Number(e)) => t.exponent = *e,
-                ("shape", Value::Word(w)) => {
-                    t.mix = match w.as_str() {
-                        "rounded" => [0.85, 0.15, 0.0, 0.0],
-                        "angular" => [0.0, 0.0, 0.45, 0.55],
-                        "flat" => [0.0, 1.0, 0.0, 0.0],
-                        _ => FAMILIES,
-                    }
-                }
-                _ => {}
-            }
+        let s = Settings::new(controls);
+        t.size = s.span_or("size", t.size)?;
+        if let Some(v) = s.value("buried") {
+            let share = |x: f64| if x > 1.0 { x / 100.0 } else { x };
+            t.buried = range_of(v).map_or((0.0, 0.0), |(a, b)| (share(a), share(b)));
+        }
+        t.exponent = s.number_or("mostly.exponent", t.exponent)?;
+        if let Some(w) = s.word("shape")? {
+            t.mix = match w {
+                "rounded" => [0.85, 0.15, 0.0, 0.0],
+                "angular" => [0.0, 0.0, 0.45, 0.55],
+                "flat" => [0.0, 1.0, 0.0, 0.0],
+                _ => FAMILIES,
+            };
         }
         Ok(t)
     }
@@ -905,11 +897,7 @@ impl Scatter {
     /// # Errors
     /// [`LookError`] for a child that is not a rock thing, or bad controls.
     pub fn new(controls: &[Control], children: &[crate::Child]) -> Result<Self, LookError> {
-        let range = |v: &Value| match v {
-            Value::Number(a) => Some((*a, *a)),
-            Value::Range(a, b) => Some((*a, *b)),
-            Value::Word(_) => None,
-        };
+        let set = Settings::new(controls);
         let mut s = Self {
             count: None,
             per_square: PER_SQUARE,
@@ -917,23 +905,13 @@ impl Scatter {
             reach: SCREE_REACH_MM,
             things: Vec::new(),
         };
-        for c in controls {
-            match c.name.as_str() {
-                "count" => s.count = range(&c.value),
-                "per-square" => s.per_square = range(&c.value).unwrap_or(PER_SQUARE),
-                "reach" => {
-                    if let Value::Number(r) = c.value {
-                        s.reach = r;
-                    }
-                }
-                "gap" => {
-                    if let Value::Number(g) = c.value {
-                        s.gap = g;
-                    }
-                }
-                _ => {}
-            }
-        }
+        s.count = set.value("count").and_then(range_of);
+        s.per_square = set
+            .value("per-square")
+            .and_then(range_of)
+            .unwrap_or(PER_SQUARE);
+        s.reach = set.number_or("reach", s.reach)?;
+        s.gap = set.number_or("gap", s.gap)?;
         for ch in children {
             if !is_thing(&ch.name) {
                 return Err(LookError::general(

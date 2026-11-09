@@ -51,6 +51,7 @@ use dt_kit::Kind;
 use dt_kit::{Band, Field as Lattice, Material, OnFrame, Rng, Scene, Support, Tag};
 use rayon::prelude::*;
 
+use crate::read::Settings;
 use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
 use stone::{ColState, Env};
 
@@ -109,41 +110,42 @@ impl Cliff {
             plan: Memo::default(),
         };
         let mut w = [f64::NAN; 5];
-        for k in controls {
-            match (k.name.as_str(), &k.value) {
-                ("stone-size", Value::Word(s)) => {
-                    c.size = match s.as_str() {
-                        "rubble" => 1.0 / 1.35,
-                        "broken" => 1.15 / 1.35,
-                        _ => 1.0,
-                    };
+        let s = Settings::new(controls);
+        match s.value("stone-size") {
+            Some(Value::Word(s)) => {
+                c.size = match s.as_str() {
+                    "rubble" => 1.0 / 1.35,
+                    "broken" => 1.15 / 1.35,
+                    _ => 1.0,
+                };
+            }
+            Some(Value::Number(v)) => {
+                c.size = if *v >= 1.0 {
+                    *v / 1.35
+                } else {
+                    (1.0 + 0.35 * v.clamp(0.0, 1.0)) / 1.35
                 }
-                ("stone-size", Value::Number(v)) => {
-                    c.size = if *v >= 1.0 {
-                        *v / 1.35
-                    } else {
-                        (1.0 + 0.35 * v.clamp(0.0, 1.0)) / 1.35
-                    }
-                }
-                ("rock", Value::Word(s)) => {
-                    if let Some(i) = KIND_NAMES.iter().position(|n| n == s) {
-                        w = [0.0; 5];
-                        w[i] = 1.0;
-                    }
-                }
-                (n, Value::Number(v)) if n.starts_with("rock.") => {
-                    if let Some(i) = KIND_NAMES.iter().position(|k| n.ends_with(k)) {
-                        w[i] = v.max(0.0);
-                    }
-                }
-                ("ledges/height", Value::Number(v)) => c.ledge_height = Some(*v),
-                ("ledges", Value::Number(v)) => c.ledges = v.clamp(0.0, 2.0).round() as u32,
-                ("shattered/patches", Value::Number(v)) => c.patches = Some(*v),
-                ("shattered/width", Value::Number(v)) => c.patch_width = Some((*v, *v)),
-                ("shattered/width", Value::Range(a, b)) => c.patch_width = Some((*a, *b)),
-                _ => {}
+            }
+            _ => {}
+        }
+        // the `rock` word, then the numbers behind it (`rock.<kind>`) over it
+        if let Some(name) = s.word("rock")?
+            && let Some(i) = KIND_NAMES.iter().position(|n| *n == name)
+        {
+            w = [0.0; 5];
+            w[i] = 1.0;
+        }
+        for (i, kind) in KIND_NAMES.iter().enumerate() {
+            if let Some(v) = s.number(&format!("rock.{kind}"))? {
+                w[i] = v.max(0.0);
             }
         }
+        c.ledge_height = s.number("ledges/height")?.or(c.ledge_height);
+        if let Some(v) = s.number("ledges")? {
+            c.ledges = v.clamp(0.0, 2.0).round() as u32;
+        }
+        c.patches = s.number("shattered/patches")?.or(c.patches);
+        c.patch_width = s.span("shattered/width")?.or(c.patch_width);
         if w.iter().any(|x| !x.is_nan()) {
             let w: [f64; 5] = w.map(|x| if x.is_nan() { 0.0 } else { x });
             if w.iter().sum::<f64>() > 0.0 {

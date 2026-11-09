@@ -72,7 +72,7 @@ use dt_kit::OnFrame;
 use dt_kit::{Field, Material, Rng, Scene, Standing, Tag, TriMesh, distance, form};
 use rayon::prelude::*;
 
-use crate::read;
+use crate::read::Settings;
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 use flow::Swaths;
 use fronds::Surface;
@@ -124,20 +124,13 @@ impl Grass {
             bare: 0.0,
             meander: (10.0, 30.0),
         };
-        let (mut lo, mut hi) = (None, None);
-        for c in controls {
-            match c.name.as_str() {
-                "length" => g.length = read::span(c)?,
-                "height" => g.height = read::span(c)?,
-                "clearings" => g.clearings = read::number(c)?,
-                "cover" => g.cover = read::number(c)?,
-                "bare" => g.bare = read::number(c)?,
-                "flow.meander-min" => lo = Some(read::number(c)?),
-                "flow.meander-max" => hi = Some(read::number(c)?),
-                _ => {}
-            }
-        }
-        if let (Some(a), Some(b)) = (lo, hi) {
+        let s = Settings::new(controls);
+        g.length = s.span_or("length", g.length)?;
+        g.height = s.span_or("height", g.height)?;
+        g.clearings = s.number_or("clearings", g.clearings)?;
+        g.cover = s.number_or("cover", g.cover)?;
+        g.bare = s.number_or("bare", g.bare)?;
+        if let (Some(a), Some(b)) = (s.number("flow.meander-min")?, s.number("flow.meander-max")?) {
             g.meander = (a, b.max(a));
         }
         Ok(g)
