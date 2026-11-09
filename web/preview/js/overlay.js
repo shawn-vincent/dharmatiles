@@ -3,8 +3,30 @@
 // selected region with its name and fill points; every line and region
 // while a tool is held.  Nothing selected, nothing drawn.  The tools draw here too: a footprint under the pointer, the
 // line being drawn, the box being dragged, and the handles of the
-// selection.  Points are in squares; heights come from the surfaces the
-// build made, so the drawing lies on the ground, not on the datum.
+// selection.  Points are in squares; lines and tools lie on the ground (heights from
+// the surfaces the build made); regions lie at level zero.
+
+/**
+ * A region's lattice cells as flat triangles (x, y in mm, z 0: the caller sets the height): one quad per run of set nodes in a row, clipped to the tile.
+ * Returns a Float32Array of 9 numbers per triangle; `sq` is mm per square.
+ */
+export function regionTriangles(r, m, sq = m.sq ?? 35) {
+  const out = [];
+  const step = 1 / m.cells;
+  for (let j = 0; j < r.ny; j++) {
+    let i = 0;
+    while (i < r.nx) {
+      if (r.bits[j * r.nx + i] !== '1') { i++; continue; }
+      const a = i;
+      while (i < r.nx && r.bits[j * r.nx + i] === '1') i++;
+      const x0 = Math.max(0, (a - 0.5) * step) * sq, x1 = Math.min(m.cols, (i - 0.5) * step) * sq;
+      const y0 = Math.max(0, (j - 0.5) * step) * sq, y1 = Math.min(m.rows, (j + 0.5) * step) * sq;
+      if (x1 <= x0 || y1 <= y0) continue;
+      out.push(x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y0, 0, x1, y1, 0, x0, y1, 0);
+    }
+  }
+  return new Float32Array(out);
+}
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 
@@ -74,6 +96,39 @@ export class Overlay {
     return this.viewer.project([x, y, this.heightAt(x, y) + up]);
   }
 
+  /** Where point `q` in squares falls on the canvas at level zero, where regions lie. */
+  atZero(q) {
+    return this.viewer.project([q[0] * this.sq, q[1] * this.sq, this.viewer.plan?.datum_z ?? 0]);
+  }
+
+  /**
+   * The regions are meshes in the 3D scene at level zero, not drawings on
+   * the canvas: the selected one opaque in the accent (the viewer fades
+   * the tile round it), or all of them faint while a tool is held.
+   */
+  drawRegions(scene) {
+    const m = this.map, v = this.viewer;
+    const z = v.plan?.datum_z ?? 0;
+    const want = [];
+    if (m && scene.show !== false) {
+      for (const r of m.regions) {
+        const sel = scene.selRegion === r.name;
+        if (!sel && !scene.all) continue;
+        want.push({ r, sel });
+      }
+    }
+    const focus = want.some((w) => w.sel);
+    const items = (focus ? want.filter((w) => w.sel) : want).map(({ r, sel }) => ({
+      positions: regionTriangles(r, m, this.sq),
+      color: sel ? css('--accent') : scene.tints?.[r.name] || css('--plate-ink'),
+      alpha: 0.16,
+    }));
+    const key = JSON.stringify([items.map((i) => [i.color, i.positions.length, i.positions.reduce((a, x, n) => a + x * ((n % 97) + 1), 0)]), focus, z, m && [m.cols, m.rows, m.cells]]);
+    if (key === this.regionKey) return;
+    this.regionKey = key;
+    v.setRegionLayer(items.length ? { focus, z, items } : null);
+  }
+
   /** How strongly to draw: 1 looking straight down (the map), fainter as the view tilts. */
   strength() {
     const d = this.viewer.pose().dir;
@@ -107,6 +162,7 @@ export class Overlay {
     // The map shows only what is being worked on: the selected line or
     // region, or all of them while a tool that draws or places is held.
     // Nothing selected, nothing drawn.
+    this.drawRegions(scene);
     if (m && scene.show !== false) {
       const all = !!scene.all;
       c.save();
@@ -114,29 +170,6 @@ export class Overlay {
       const edge = [[0, 0], [m.cols, 0], [m.cols, m.rows], [0, m.rows]].map((q) => this.at(q, 0.1));
       c.beginPath(); edge.forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y))); c.closePath();
       c.clip();
-      // regions: every run of lattice nodes in one path, filled once
-      for (const r of m.regions) {
-        const sel = scene.selRegion === r.name;
-        if (!sel && !all) continue;
-        c.fillStyle = sel ? accent : scene.tints?.[r.name] || ink;
-        c.globalAlpha = sel ? 0.3 : 0.16 * k;
-        const step = 1 / m.cells;
-        c.beginPath();
-        for (let j = 0; j < r.ny; j++) {
-          let i = 0;
-          while (i < r.nx) {
-            if (r.bits[j * r.nx + i] !== '1') { i++; continue; }
-            const a = i;
-            while (i < r.nx && r.bits[j * r.nx + i] === '1') i++;
-            const x0 = Math.max(0, (a - 0.5) * step), x1 = Math.min(m.cols, (i - 0.5) * step);
-            const y0 = Math.max(0, (j - 0.5) * step), y1 = Math.min(m.rows, (j + 0.5) * step);
-            [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map((q) => this.at(q, 0.1))
-              .forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
-            c.closePath();
-          }
-        }
-        c.fill('nonzero');
-      }
       c.globalAlpha = 1;
       // lines: the wobble's band, then the line
       for (const l of m.lines) {
@@ -170,7 +203,7 @@ export class Overlay {
         if (scene.selRegion !== r.name) continue;
         for (const f of r.fills) {
           if (!f.at) continue;
-          const p = this.at(f.at);
+          const p = this.atZero(f.at);
           this.tag(p.x, p.y - 8, r.name, true);
           c.fillStyle = accent;
           c.beginPath(); c.arc(p.x, p.y, 3, 0, 7); c.fill();

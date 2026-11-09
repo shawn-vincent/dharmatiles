@@ -161,7 +161,7 @@ void main() {
 // How much of a faded thing shows: the rest beside a selection; an older
 // build's mesh while the new one builds; a stage's finished parts and a
 // rough stand-in in a build's sketch.
-const FADE = 0.45, STALE = 0.3, SKETCH_PARTS = 0.7, SKETCH_ROUGH = 0.35;
+const FADE = 0.45, REGION_FADE = 0.16, STALE = 0.3, SKETCH_PARTS = 0.7, SKETCH_ROUGH = 0.35;
 // What stands for work still going (a rough stand-in, or the old build
 // before anything new has come) breathes: its alpha swings this share
 // either way, once every PULSE_S seconds.
@@ -206,6 +206,7 @@ export class Viewer {
     this.fx = { rest: 1, keep: 1, leave: 1, lift: 1, drop: 1 };
     this.fxTarget = { ...this.fx };
     this.fadeTween = null;
+    this.regionLayer = null; // {focus, group}: the selected region flat at zero, or every region faint (setRegionLayer)
     const pair = (alpha, mode) => {
       const u = { ...this.uniforms, uMode: { value: mode }, uGhost: { value: alpha } };
       return {
@@ -856,7 +857,9 @@ export class Viewer {
     const can = this.fade && !this.stale && !sketched;
     u.uTintSel.value = can ? 0 : 1;
     const same = (a, b) => a.x === b.x && a.y === b.y;
-    const selecting = can && sel.x >= 0;
+    // a selected region is the selected item: nothing in the tile stands out, all of it fades deeper
+    const focus = !!this.regionLayer?.focus;
+    const selecting = can && (sel.x >= 0 || focus);
     const hovering = can && hov.x >= 0 && !same(hov, sel);
     // where a thing stands now, whichever slot holds it
     const now = (w) => (same(w, keep) ? fx.keep : same(w, leave) ? fx.leave : same(w, lift) ? fx.lift : same(w, drop) ? fx.drop : fx.rest);
@@ -876,16 +879,17 @@ export class Viewer {
       if (want) { lift.copy(want); fx.lift = from; } else lift.set(-1, -1);
       moved = true;
     }
-    const rest = selecting ? FADE : hovering ? HOVER_REST : 1;
+    const deep = focus ? REGION_FADE : FADE;
+    const rest = selecting ? deep : hovering ? HOVER_REST : 1;
     const target = { rest, keep: 1, leave: rest, lift: selecting ? HOVER_LIFT : 1, drop: rest };
     const t = this.fxTarget;
     // a selection's change takes a selection's time; a hover's, a hover's
-    const selChange = selMoved || (t.rest !== rest && (t.rest === FADE || rest === FADE));
+    const selChange = selMoved || (t.rest !== rest && (t.rest === FADE || rest === FADE || t.rest === REGION_FADE || rest === REGION_FADE));
     const retarget = Object.keys(target).some((k) => t[k] !== target[k]);
     if (!can || reduceMotion()) this.fadeTo(target, 0);
     // a hover moves less than a selection: timed against its own full move
     else if (moved || retarget) {
-      if (selChange) this.fadeTo(target, selecting ? FADE_IN : FADE_OUT, 1 - FADE);
+      if (selChange) this.fadeTo(target, selecting ? FADE_IN : FADE_OUT, 1 - deep);
       else this.fadeTo(target, HOVER_S, Math.max(1 - HOVER_REST, HOVER_LIFT - FADE));
     }
     this.showFade();
@@ -930,11 +934,13 @@ export class Viewer {
       this.ghost.u.uGhost.value = STALE;
       for (const g of rest) g.visible = !sketched;
       if (litDepth) litDepth.visible = litColour.visible = false;
+      this.styleRegions();
       return;
     }
     // something stands out of the fade, or is on its way in or out
     const u = this.uniforms, fx = this.fx;
-    const on = !sketched && [u.uKeep, u.uLeave, u.uLift, u.uDrop].some((w) => w.value.x >= 0);
+    const focus = !!this.regionLayer?.focus && this.fade;
+    const on = !sketched && (focus || [u.uKeep, u.uLeave, u.uLift, u.uDrop].some((w) => w.value.x >= 0));
     if (this.mesh) this.mesh.visible = !sketched && !on;
     this.ghost.u.uGhost.value = fx.rest;
     u.uKeepA.value = fx.keep;
@@ -942,6 +948,55 @@ export class Viewer {
     u.uLiftA.value = fx.lift;
     u.uDropA.value = fx.drop;
     for (const g of this.ghosts) g.visible = on;
+    this.styleRegions();
+  }
+
+  /**
+   * The map's regions in the 3D scene, flat at level zero (the datum).
+   * `layer`: {focus (one region is selected: opaque, the rest of the tile
+   * fades), z (mm), items: [{positions (Float32Array of triangles), color, alpha}]}; null for none.
+   * Seen through the faded tile, depth-tested against it; with the fade
+   * off (or a stale mesh) it can't be seen inside the solid, so it is
+   * drawn over the tile instead.
+   */
+  setRegionLayer(layer) {
+    if (this.regionLayer?.group) {
+      this.scene.remove(this.regionLayer.group);
+      for (const m of this.regionLayer.group.children) { m.geometry.dispose(); m.material.dispose(); }
+    }
+    this.regionLayer = null;
+    if (layer?.items?.length) {
+      const group = new THREE.Group();
+      for (const it of layer.items) {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(it.positions, 3));
+        const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: it.color, side: THREE.DoubleSide, transparent: true }));
+        m.frustumCulled = false;
+        m.userData.alpha = it.alpha;
+        group.add(m);
+      }
+      group.position.z = layer.z;
+      this.scene.add(group);
+      this.regionLayer = { focus: !!layer.focus, group };
+    }
+    this.applyFade();
+    this.draw();
+  }
+
+  /** Opaque and in depth order before the fade for the selected region; faint and over everything otherwise. */
+  styleRegions() {
+    const L = this.regionLayer;
+    if (!L) return;
+    const seen = L.focus && this.fade && !this.stale && this.sketches.size === 0;
+    for (const m of L.group.children) {
+      const mat = m.material;
+      mat.depthTest = seen;
+      mat.depthWrite = seen;
+      mat.opacity = L.focus ? (seen ? 1 : 0.55) : m.userData.alpha;
+      mat.transparent = !(L.focus && seen);
+      m.renderOrder = seen ? 0 : 9;
+      mat.needsUpdate = true;
+    }
   }
 
   /** The theme's accent (`--accent`), used to tint selected geometry. */
