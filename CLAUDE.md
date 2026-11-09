@@ -27,7 +27,7 @@ cargo test --release -p dt-eval --test openlock -- --ignored   # release check: 
 cargo test --release -p dt-eval --test baseline -- --ignored   # every library tile on DungeonBlocks against tests/baseline/library-db.tsv (hash, triangles, repairs, overhang); DT_BASELINE=write rewrites it
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
-cargo xtask sheet <tile|name> [--seeds …]   # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
+cargo xtask sheet <tile|name> [--seeds …] [--system ol]  # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
 cargo xtask pictures [group …]              # rebuild the element pages' pictures from docs/elements/demo/
 cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the element schema
 cargo xtask release 0.10.0 "<summary>"      # number the changelog's Unreleased entry, bump Cargo.toml, check, commit, tag v0.10.0, push

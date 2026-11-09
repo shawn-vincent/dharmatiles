@@ -93,7 +93,7 @@ pub fn run(root: &Path, only: &[String]) -> Result<(), String> {
                 .into_owned(),
         };
         let dir = tmp.join(stem);
-        crate::build_views(&exe, &doc, None, &dir)?;
+        crate::build_views(&exe, &doc, None, None, &dir)?;
         let png = crate::find_pngs(&dir)
             .into_iter()
             .find(|p| p.to_string_lossy().ends_with(&format!("-db-{which}.png")))

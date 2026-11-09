@@ -401,11 +401,10 @@ pub struct Stage {
     pub hash: u64,
 }
 
-/// How far round a node the grain's greatest height is looked for, true mm
-/// (it does not scale with the system: scaled, OpenLOCK's
-/// `test/1x1-cliff-escarpment` goes over the overhang budget).
+/// How far round a node the grain's greatest height is looked for, mm at the
+/// 35 mm square (it scales with the system, like the grain it looks for).
 const GRAIN_REACH_MM: f64 = 6.0;
-/// The sigma that height is smoothed by, true mm.
+/// The sigma that height is smoothed by, mm at the 35 mm square (scaled).
 const GRAIN_SMOOTH_MM: f64 = 3.0;
 /// The lift's error bound, mm: no surface node is further than this from
 /// the triangulated top (a tenth of a 0.2 mm layer).
@@ -699,7 +698,10 @@ impl Terrain {
                 stands.z[k] = 0.0;
             }
         }
-        let height = stands.dilate(GRAIN_REACH_MM).blur(GRAIN_SMOOTH_MM);
+        let scale = self.frame.scale();
+        let height = stands
+            .dilate(GRAIN_REACH_MM * scale)
+            .blur(GRAIN_SMOOTH_MM * scale);
         for k in (0..n).filter(|&k| spec.mask.bits[k]) {
             let s = shape.z[k];
             let below = if spec.fluid {

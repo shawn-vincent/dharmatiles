@@ -11,10 +11,10 @@ mod release;
 const USAGE: &str = r#"usage: cargo xtask <command>
 
 commands:
-  sheet <tile> [--seeds 1 2 3 4] [--dev]
+  sheet <tile> [--seeds 1 2 3 4] [--system db|ol] [--dev]
            build a tile at each seed and lay its four views (painted, top,
            low, 20 mm close-up) out as one contact sheet, a row per seed:
-           out/sheet/<tile>/contact-sheet.png. <tile> is a path, a lib:
+           out/sheet/<tile>[-<system>]/contact-sheet.png. <tile> is a path, a lib:
            path, or a short name for a test tile (flat, dirt, dirt-stones,
            rocks, water, grass, tree, wall-cut-stone, wall-brick,
            wall-regular-brick, wall-fieldstone, floor-stone,
@@ -92,12 +92,21 @@ fn program(root: &Path, release: bool) -> Result<PathBuf, String> {
 
 /// `dharmatiles build <tile> --png [--seed s] --out <dir>`. Exit 3 (the
 /// audit failed) still writes the STL and the views, so it counts.
-fn build_views(exe: &Path, tile: &str, seed: Option<&str>, dir: &Path) -> Result<(), String> {
+fn build_views(
+    exe: &Path,
+    tile: &str,
+    seed: Option<&str>,
+    system: Option<&str>,
+    dir: &Path,
+) -> Result<(), String> {
     let _ = std::fs::remove_dir_all(dir);
     let mut cmd = Command::new(exe);
     cmd.args(["build", tile, "--png"]);
     if let Some(s) = seed {
         cmd.args(["--seed", s]);
+    }
+    if let Some(sys) = system {
+        cmd.args(["--system", sys]);
     }
     let status = cmd
         .arg("--out")
@@ -146,16 +155,24 @@ fn sheet(args: &[String]) -> Result<(), String> {
             .collect(),
         None => ["1", "2", "3", "4"].map(String::from).to_vec(),
     };
+    let system = args
+        .iter()
+        .position(|a| a == "--system")
+        .and_then(|i| args.get(i + 1))
+        .map(String::as_str);
     let root = root();
     let exe = program(&root, !args.iter().any(|a| a == "--dev"))?;
-    let stem = Path::new(&tile)
+    let mut stem = Path::new(&tile)
         .file_stem()
         .map_or_else(|| name.clone(), |s| s.to_string_lossy().into_owned());
+    if let Some(sys) = system {
+        stem = format!("{stem}-{sys}");
+    }
     let out = root.join("out").join("sheet").join(&stem);
     let mut rows = Vec::new();
     for s in &seeds {
         let dir = out.join(format!("s{s}"));
-        build_views(&exe, &tile, Some(s), &dir)?;
+        build_views(&exe, &tile, Some(s), system, &dir)?;
         let pngs = find_pngs(&dir);
         let row = VIEWS
             .iter()
