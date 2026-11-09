@@ -7,7 +7,8 @@ use dt_kit::{Piece, Rng, Slot, Support};
 use super::faces::{Column, Cut, OpenFace};
 use super::form::{Form, GRID_MM, Zones};
 use super::stack::Placed;
-use super::util::{Field, P2, Z_UP, area, bounds, centroid, hull2, norm2};
+use super::util::{P2, Z_UP, area, bounds, centroid, hull2, norm2};
+use dt_kit::Field;
 
 pub const COLUMN_SHARE: f64 = 0.6;
 const STONE_STEP_MM: (f64, f64) = (0.2, 1.0);

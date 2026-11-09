@@ -4,9 +4,9 @@
 //! Heights are above the foot (0). Lengths that size masses scale with `s`
 //! (the system's scale, 1 on DungeonBlocks); details never do.
 
-use dt_kit::{Band, Field as Lattice, Frame, Mask, Rng};
+use dt_kit::{Band, Field, Frame, Mask, Rng};
 
-use super::util::{Cells, Field, cell_grid, edt_in};
+use super::util::{Cells, cell_grid, edt_in};
 
 pub const GRID_MM: f64 = 0.25;
 // The pile is planned in its own heights: its ground is 0, and the stones
@@ -67,7 +67,7 @@ pub struct Ask<'a> {
     /// Its solved band.
     pub band: &'a Band,
     /// The body's heaved shape inside the band (world mm), on the lattice.
-    pub shape: &'a Lattice,
+    pub shape: &'a Field,
     /// The lowest the land under the cliff reaches (world mm): heights are
     /// counted from it.
     pub foot: f64,

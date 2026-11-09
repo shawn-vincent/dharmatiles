@@ -9,7 +9,8 @@ use dt_kit::Rng;
 
 use super::lines::Line;
 use super::stack::Placed;
-use super::util::{Draw, Field, Grid, P2, cell_grid, norm2};
+use super::util::{Draw, Grid, P2, cell_grid, norm2};
+use dt_kit::Field;
 
 pub const RELIEF_GRID_MM: f64 = 0.1;
 const CRACK_PER_MM2: f64 = 0.06;

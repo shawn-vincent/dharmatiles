@@ -43,8 +43,6 @@ pub fn lerp(lo_hi: (f64, f64), u: f64) -> f64 {
 /// Cliff's grids count cells: dt-kit's [`Grid`] with step 1, so its mm
 /// methods (blur, dilate, erode, distance) take cells.
 pub use dt_kit::Grid;
-/// Numbers per cell (the kit's `Field`, counted in cells).
-pub type Field = Grid<f64>;
 /// Flags per cell.
 pub type Cells = Grid<bool>;
 
@@ -60,13 +58,13 @@ pub fn cx(i: usize, grid_mm: f64) -> f64 {
 }
 
 /// Distances in cells, with "none set" as 1e9 rather than infinite.
-fn far(d: Field) -> Field {
+fn far(d: dt_kit::Field) -> dt_kit::Field {
     d.map(|x| if x.is_finite() { x } else { 1e9 })
 }
 
 /// Distance (in cells) from every cell to the nearest `false` cell, as
 /// scipy's `distance_transform_edt` of the mask.
-pub fn edt_in(m: &Cells) -> Field {
+pub fn edt_in(m: &Cells) -> dt_kit::Field {
     far(m.map(|b| !b).distance().0)
 }
 

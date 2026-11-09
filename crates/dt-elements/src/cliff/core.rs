@@ -14,7 +14,8 @@ use dt_kit::{Frame, KitError, Mask, hung, rays::RayMesh};
 use super::faces::Column;
 use super::form::{Form, GRID_MM};
 use super::stack::Placed;
-use super::util::{Field, bounds};
+use super::util::bounds;
+use dt_kit::Field;
 
 const CORE_SET_MM: f64 = 2.0;
 const CORE_RIM_MM: f64 = 2.8;
@@ -116,7 +117,7 @@ pub fn core_mask(
     for j in 0..ny {
         for i in 0..nx {
             let (x, y) = (i as f64 * step, j as f64 * step);
-            let Some(c) = super::node_cell(x, y, s.nx, s.ny) else {
+            let Some(c) = super::pile::node_cell(x, y, s.nx, s.ny) else {
                 continue;
             };
             let inside = x > rims[0] && x < w - rims[1] && y > rims[2] && y < h - rims[3];

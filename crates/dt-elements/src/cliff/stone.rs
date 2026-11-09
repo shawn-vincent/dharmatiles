@@ -17,10 +17,8 @@ use super::finish::{
 use super::form::{Form, GRID_MM};
 use super::relief::relief;
 use super::stack::{Placed, SINK_MM};
-use super::util::{
-    Field, Grid, P2, Z_UP, bounds, cell_grid, norm2, point_in, ring_dist, trace_outline,
-};
-use dt_kit::smooth01;
+use super::util::{Grid, P2, Z_UP, bounds, cell_grid, norm2, point_in, ring_dist, trace_outline};
+use dt_kit::{Field, smooth01};
 
 /// A stone the cuts leave with less than this is not made, mm³.
 const SCRAP_MM3: f64 = 12.0;
@@ -52,7 +50,7 @@ pub struct Env<'a> {
     /// A draft: carve on coarser grids and leave the grain off.
     pub draft: bool,
     /// The band's high (world mm): no grain stands over it.
-    pub high: &'a dt_kit::Field,
+    pub high: &'a Field,
     /// The foot the stones' heights are counted from, world mm.
     pub foot: f64,
 }
@@ -501,7 +499,7 @@ pub fn grain(
     rock: &Piece,
     seed: u64,
     z0: f64,
-    cap: Option<(&dt_kit::Field, f64)>,
+    cap: Option<(&Field, f64)>,
 ) -> Result<Piece, KitError> {
     let base = rock.mesh();
     if base.positions.is_empty() {

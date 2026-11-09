@@ -8,7 +8,8 @@ use dt_kit::Rng;
 
 use super::fit::Fit;
 use super::form::{Form, GRID_MM, MIN_H_MM, ZONE_FLOOR, Zones};
-use super::util::{Cells, Draw, Field, Grid, P2, cell_grid, edt_in, lerp, min_side, trace_outline};
+use super::util::{Cells, Draw, Grid, P2, cell_grid, edt_in, lerp, min_side, trace_outline};
+use dt_kit::Field;
 
 /// kind: (p, along, depth, height (None: ground to top), bridge, tilt deg)
 #[allow(clippy::type_complexity)]
