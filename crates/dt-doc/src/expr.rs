@@ -302,6 +302,11 @@ struct Parser<'a> {
     pos: usize,
     len: usize,
     v2: bool,
+    /// A control value with two bare ranges or more, or one beside a bracket
+    /// or a call: `..` binds tighter than `+ - * /`, so `1..2 + 3..4` is two
+    /// ranges added.  Off, a bare range reaches over sums, as ever
+    /// (`1..2 + 3` is `1..5`).
+    tight: bool,
 }
 
 const SKEW_HELP: &str =
@@ -337,6 +342,9 @@ impl Parser<'_> {
     }
 
     fn value(&mut self) -> Result<Expr, ExprError> {
+        if self.tight {
+            return self.sum();
+        }
         let lo = self.sum()?;
         if self.peek() != Some(&Tok::DotDot) {
             return Ok(lo);
@@ -368,11 +376,11 @@ impl Parser<'_> {
     }
 
     fn prod(&mut self) -> Result<Expr, ExprError> {
-        let mut lhs = self.unary()?;
+        let mut lhs = self.operand()?;
         while let Some(Tok::Op(c @ ('*' | '/'))) = self.peek() {
             let op = if *c == '*' { BinOp::Mul } else { BinOp::Div };
             self.pos += 1;
-            let rhs = self.unary()?;
+            let rhs = self.operand()?;
             lhs = Expr::Bin {
                 op,
                 lhs: Box::new(lhs),
@@ -380,6 +388,20 @@ impl Parser<'_> {
             };
         }
         Ok(lhs)
+    }
+
+    /// A factor; when `..` binds tight, `a..b` too.
+    fn operand(&mut self) -> Result<Expr, ExprError> {
+        let lo = self.unary()?;
+        if !self.tight || self.peek() != Some(&Tok::DotDot) {
+            return Ok(lo);
+        }
+        self.pos += 1;
+        let hi = self.unary()?;
+        Ok(Expr::Range {
+            lo: Box::new(lo),
+            hi: Box::new(hi),
+        })
     }
 
     fn unary(&mut self) -> Result<Expr, ExprError> {
@@ -410,12 +432,12 @@ impl Parser<'_> {
                 }
                 Ok(Expr::Name(n))
             }
-            Some(Tok::LBracket) if self.v2 => self.bracket_range(),
-            Some(Tok::LBracket | Tok::RBracket | Tok::Comma) if !self.v2 => {
-                let ch = match self.peek() {
-                    Some(Tok::LBracket) => '[',
-                    Some(Tok::RBracket) => ']',
-                    _ => ',',
+            Some(Tok::LBracket) => self.bracket_range(),
+            Some(Tok::RBracket | Tok::Comma) if !self.v2 => {
+                let ch = if self.peek() == Some(&Tok::RBracket) {
+                    ']'
+                } else {
+                    ','
                 };
                 self.err(format!("unexpected `{ch}`"))
             }
@@ -465,6 +487,18 @@ impl Parser<'_> {
     /// `[ low .. high ]`, at the `[`.
     fn bracket_range(&mut self) -> Result<Expr, ExprError> {
         self.pos += 1;
+        // the ends are sums; a bare `..` inside brackets is the brackets' own
+        let tight = std::mem::replace(&mut self.tight, false);
+        let ends = self.bracket_ends();
+        self.tight = tight;
+        let (lo, hi) = ends?;
+        Ok(Expr::Range {
+            lo: Box::new(lo),
+            hi: Box::new(hi),
+        })
+    }
+
+    fn bracket_ends(&mut self) -> Result<(Expr, Expr), ExprError> {
         let lo = self.sum()?;
         if self.peek() != Some(&Tok::DotDot) {
             return self.err("a range has two ends: [low .. high]");
@@ -475,14 +509,19 @@ impl Parser<'_> {
             return self.err("missing `]`");
         }
         self.pos += 1;
-        Ok(Expr::Range {
-            lo: Box::new(lo),
-            hi: Box::new(hi),
-        })
+        Ok((lo, hi))
     }
 
     /// A weighting call, `low(1..6, 4)`: the name is read, the `(` is next.
     fn weighted(&mut self, name: String) -> Result<Expr, ExprError> {
+        // inside the call a bare `..` is the call's range and a comma ends an argument
+        let tight = std::mem::replace(&mut self.tight, false);
+        let e = self.weighted_call(name);
+        self.tight = tight;
+        e
+    }
+
+    fn weighted_call(&mut self, name: String) -> Result<Expr, ExprError> {
         let want = WEIGHTINGS
             .iter()
             .find(|(w, _)| *w == name)
@@ -604,6 +643,28 @@ pub fn parse_v2(src: &str) -> Result<Expr, ExprError> {
     parse_with(src, true)
 }
 
+/// True when a control value holds two bare ranges or more, or one beside
+/// a bracket or a call: see [`Parser::tight`].
+fn binds_tight(toks: &[(Tok, usize, usize)]) -> bool {
+    let (mut depth, mut bare, mut other) = (0usize, 0usize, false);
+    for (i, (t, ..)) in toks.iter().enumerate() {
+        match t {
+            Tok::LParen | Tok::LBracket => {
+                depth += 1;
+                other |= *t == Tok::LBracket
+                    || matches!(
+                        i.checked_sub(1).and_then(|j| toks.get(j)),
+                        Some((Tok::Name(_), ..))
+                    );
+            }
+            Tok::RParen | Tok::RBracket => depth = depth.saturating_sub(1),
+            Tok::DotDot if depth == 0 => bare += 1,
+            _ => {}
+        }
+    }
+    bare >= 2 || (bare == 1 && other)
+}
+
 fn parse_with(src: &str, v2: bool) -> Result<Expr, ExprError> {
     let toks = lex(src, v2)?;
     let mut p = Parser {
@@ -611,13 +672,15 @@ fn parse_with(src: &str, v2: bool) -> Result<Expr, ExprError> {
         pos: 0,
         len: src.len(),
         v2,
+        tight: !v2 && binds_tight(&toks),
     };
     let e = p.value()?;
     if p.pos < toks.len() {
         return match p.peek() {
-            Some(Tok::DotDot) => p.err("only one `..` is allowed: a range has two ends"),
+            Some(Tok::DotDot) => p.err(
+                "only one `..` is allowed in a range: a range has two ends, and ranges added are each written once",
+            ),
             Some(Tok::Op('^')) => p.err(SKEW_HELP),
-            Some(Tok::LBracket) if !v2 => p.err("unexpected `[`"),
             Some(Tok::RBracket) if !v2 => p.err("unexpected `]`"),
             Some(Tok::Comma) if !v2 => p.err("unexpected `,`"),
             _ => p.err("unexpected text after the value"),
@@ -919,6 +982,18 @@ impl Expr {
     }
 }
 
+/// An operand of arithmetic: a range is bracketed, so it reads back as one.
+struct Operand<'a>(&'a Expr);
+
+impl fmt::Display for Operand<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Expr::Range { lo, hi } => write!(f, "[{lo} .. {hi}]"),
+            e => write!(f, "{e}"),
+        }
+    }
+}
+
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -930,7 +1005,7 @@ impl fmt::Display for Expr {
                 Ok(())
             }
             Expr::Name(n) => write!(f, "{n}"),
-            Expr::Neg(e) => write!(f, "-{e}"),
+            Expr::Neg(e) => write!(f, "-{}", Operand(e)),
             Expr::Bin { op, lhs, rhs } => {
                 let c = match op {
                     BinOp::Add => '+',
@@ -938,7 +1013,7 @@ impl fmt::Display for Expr {
                     BinOp::Mul => '*',
                     BinOp::Div => '/',
                 };
-                write!(f, "({lhs} {c} {rhs})")
+                write!(f, "({} {c} {})", Operand(lhs), Operand(rhs))
             }
             Expr::Range { lo, hi } => write!(f, "{lo}..{hi}"),
             Expr::Weighted { name, args, range } => {
@@ -1170,13 +1245,7 @@ mod tests {
             assert!(err.message.contains("unknown function `bel`"));
             assert!(err.help.unwrap().contains("flat, low, high, bell or peak"));
         }
-        // the rest of the grammar stays as it was in a control value
-        assert!(
-            parse("[1 .. 6]")
-                .unwrap_err()
-                .message
-                .contains("unexpected `[`")
-        );
+        // a list is not here yet in a control value
         assert!(
             parse("1, 2")
                 .unwrap_err()
@@ -1184,6 +1253,70 @@ mod tests {
                 .contains("unexpected `,`")
         );
         assert!(parse("low(1..6").is_err());
+    }
+
+    #[test]
+    fn a_control_value_reads_brackets_and_sums_like_a_height() {
+        // brackets anywhere, as in the heights language
+        let e = parse("[1 .. 6]").unwrap();
+        assert_eq!(e, parse("1..6").unwrap());
+        assert_eq!(e.bounds(&none).unwrap(), (1.0, 6.0));
+        let e = parse("low([1 .. 6], 3)").unwrap();
+        assert!(matches!(e, Expr::Weighted { .. }));
+        // each range in a sum is its own range, bare or bracketed or mixed
+        for src in [
+            "[1 .. 2] + [3 .. 4]",
+            "1..2 + 3..4",
+            "[1 .. 2] + 3..4",
+            "1..2 + [3 .. 4]",
+            "flat(1..2) + flat(3..4)",
+        ] {
+            let e = parse(src).unwrap();
+            assert_eq!(e.range_count(), 2, "{src}");
+            assert_eq!(e.bounds(&none).unwrap(), (4.0, 6.0), "{src}");
+            // and reads back as the same two ranges
+            assert_eq!(parse(&e.to_string()).unwrap().range_count(), 2, "{src}");
+        }
+        assert_eq!(parse("1..2 - 3..4").unwrap().range_count(), 2);
+        assert_eq!(
+            parse("2 * 1..3 + 0..1").unwrap().bounds(&none).unwrap(),
+            (2.0, 7.0)
+        );
+        assert_eq!(
+            parse("-1..1 + 5..6").unwrap().bounds(&none).unwrap(),
+            (4.0, 7.0)
+        );
+        assert_eq!(
+            parse("1..2 * 3 + 0..1").unwrap().bounds(&none).unwrap(),
+            (3.0, 7.0)
+        );
+        // the sum inside a bracket's ends and a call's range is the bracket's own
+        assert_eq!(
+            parse("[1 + 1 .. 2 + 2] + 1..2")
+                .unwrap()
+                .bounds(&none)
+                .unwrap(),
+            (3.0, 6.0)
+        );
+        assert_eq!(parse("low(1..6, 3) + 1..2").unwrap().range_count(), 2);
+        // one bare range still reaches over a sum, as it always did
+        assert_eq!(
+            parse("1..2 + 3").unwrap().bounds(&none).unwrap(),
+            (1.0, 5.0)
+        );
+        assert_eq!(
+            parse("8..14 * 2").unwrap().bounds(&none).unwrap(),
+            (8.0, 28.0)
+        );
+        // mistakes
+        assert!(
+            parse("[1 .. 2")
+                .unwrap_err()
+                .message
+                .contains("missing `]`")
+        );
+        assert!(parse("[1, 2]").is_err());
+        assert!(parse("1..2..3 + 1..2").is_err());
     }
 
     #[test]

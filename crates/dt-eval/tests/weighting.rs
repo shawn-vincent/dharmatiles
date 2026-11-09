@@ -248,12 +248,21 @@ fn two_ranges_in_one_control_roll_apart() {
     assert_ne!(two, one);
     // editing one value moves nothing drawn after it: the ground is the same
     assert_eq!(two[0], one[0]);
-    // a plain sum written out builds too
-    let text = tile(
-        "",
-        "        dirt\n        rock size=\"flat(3..5) + flat(3..5)\"",
+    // a plain sum written out builds too, in every spelling
+    for sum in [
+        "flat(3..5) + flat(3..5)",
+        "[3 .. 5] + [3 .. 5]",
+        "3..5 + 3..5",
+        "[3 .. 5] + 3..5",
+    ] {
+        let text = tile("", &format!("        dirt\n        rock size=\"{sum}\""));
+        assert_eq!(hash(&text), two, "{sum}");
+    }
+    // a bracket reads anywhere in a control value, as in a height
+    assert_eq!(
+        hash(&tile("", "        dirt\n        rock size=\"[6 .. 10]\"")),
+        one
     );
-    assert_eq!(hash(&text), two);
 }
 
 #[test]
