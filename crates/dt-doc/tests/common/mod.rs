@@ -155,7 +155,7 @@ pub const CASES: [Case; 10] = [
         slug: "unquoted-range",
         title: "A range without quotes",
         tile: CLIFF_RUN,
-        from: "size=\"1..6\"",
+        from: "size=\"low(1..6, 11)\"",
         to: "size=1..6",
     },
     Case {

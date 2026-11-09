@@ -221,11 +221,21 @@ fn edits_compose() {
     let (name, text) = CLIFF_RUN;
     let a = set_control(text, &["tile", "stack", "cliff"], "ledges", 2).unwrap();
     let b = set_control(&a, &["tile", "stack", "scatter#2"], "perSquare", 3).unwrap();
-    let c = set_control(&b, &["tile", "stack", "scatter", "stone"], "mostly", "even").unwrap();
+    let c = set_control(
+        &b,
+        &["tile", "stack", "scatter", "stone"],
+        "shape",
+        "angular",
+    )
+    .unwrap();
     let lines = changed_lines(text, &c);
     assert_eq!(lines.len(), 3);
     assert!(lines[0].2.contains("ledges=2"), "{}", lines[0].2);
-    assert!(lines[1].2.contains("{ stone size=\"1..6\" mostly=even }"));
+    assert!(
+        lines[1]
+            .2
+            .contains("{ stone size=\"low(1..6, 11)\" shape=angular }")
+    );
     assert!(lines[2].2.contains("perSquare=3 { boulder"));
     // The multi-line `about` string survives.
     assert!(c.contains("        Rock band against the north edge. Both ends finish in the\n"));

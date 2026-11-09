@@ -75,7 +75,7 @@ impl Axis {
 }
 
 /// A word that stands for documented numbers: `rock mixed`,
-/// `crown branching=normal`, `mostly=small`.  The decoded model keeps
+/// `crown branching=normal`, `rock shape=angular`.  The decoded model keeps
 /// the word and these numbers, so a GUI can show both.
 #[derive(Debug, PartialEq)]
 pub struct Word {
@@ -115,6 +115,9 @@ pub struct Control {
     pub limits: Option<Limits>,
     /// True when it takes a range (`size="6..15"`), drawn from per thing.
     pub ranges: bool,
+    /// True when it also takes a weighted range (`size="low(1..6, 4)"`):
+    /// the odds along the range.  Implies `ranges`.
+    pub weighted: bool,
     /// Part of the language, not built yet: `check` accepts it, a build
     /// refuses it.  A sub-control of a planned control is planned too.
     pub planned: bool,
@@ -166,11 +169,13 @@ impl Control {
             }
         };
         let limits = self.limits.map(|l| l.describe(shown));
-        match (limits, self.ranges) {
-            (Some(l), true) => Some(format!("{l}, or a range")),
-            (Some(l), false) => Some(l),
-            (None, true) => Some("a number or a range".to_owned()),
-            (None, false) => None,
+        match (limits, self.ranges, self.weighted) {
+            (Some(l), true, true) => Some(format!("{l}, or a range, or a weighted range")),
+            (None, true, true) => Some("a number, a range or a weighted range".to_owned()),
+            (Some(l), true, false) => Some(format!("{l}, or a range")),
+            (Some(l), false, _) => Some(l),
+            (None, true, false) => Some("a number or a range".to_owned()),
+            (None, false, _) => None,
         }
     }
 

@@ -248,16 +248,30 @@ fn shares_are_percents_and_sizes_are_not() {
 }
 
 #[test]
-fn skew_is_mostly_not_caret() {
-    let e = first("tile { stack { scatter count=3 mostly=large { stone size=\"1..6\" } } }");
-    assert_eq!(
-        e.value("mostly").unwrap().word().unwrap().sets,
-        &[("exponent", 0.5)]
-    );
+fn a_range_is_weighted_by_a_function_not_caret_or_mostly() {
     assert_fails(
         "tile { stack { scatter count=3 { stone size=\"1..6^2\" } } }",
         "dt::expr",
-        "mostly=small",
+        "low(1..6, 4)",
+    );
+    // `mostly=` is gone, on a thing and on a scatter, as a property or a line
+    for text in [
+        "tile { stack { scatter count=3 { stone size=\"1..6\" mostly=small } } }",
+        "tile { stack { scatter count=3 mostly=large { stone size=\"1..6\" } } }",
+        "tile { stack { rock mostly=even } }",
+        "tile { stack { stone { mostly small } } }",
+    ] {
+        assert_fails(text, "dt::unknown-control", "size=\"low(1..6, 11)\"");
+    }
+    let e = first("tile { stack { scatter count=3 { stone size=\"low(1..6, 11)\" } } }");
+    assert!(
+        e.children[0]
+            .value("size")
+            .unwrap()
+            .num()
+            .unwrap()
+            .expr
+            .is_range()
     );
 }
 
@@ -528,9 +542,8 @@ fn a_thing_is_one() {
 
 #[test]
 fn scatter_owns_placement_and_mixes_by_weight() {
-    let e = first(
-        "tile { stack { scatter perSquare=6 mostly=small { boulder size=\"2..8\" weight=2; pebble } } }",
-    );
+    let e =
+        first("tile { stack { scatter perSquare=6 { boulder size=\"2..8\" weight=2; pebble } } }");
     assert_eq!(e.children.len(), 2);
     assert_eq!(e.children[0].place.weight.as_ref().unwrap().value, 2.0);
     assert!(e.children[1].place.weight.is_none());

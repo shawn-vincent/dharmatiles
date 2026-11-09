@@ -16,6 +16,7 @@ const fn c(name: &'static str, value: Axis, about: &'static str) -> Control {
         expert: false,
         limits: None,
         ranges: false,
+        weighted: false,
         planned: false,
         default: "",
         about,
@@ -32,6 +33,7 @@ const fn group(name: &'static str, subs: &'static [Control], about: &'static str
         expert: false,
         limits: None,
         ranges: false,
+        weighted: false,
         planned: false,
         default: "",
         about,
@@ -88,6 +90,13 @@ impl Control {
         self.ranges = true;
         self
     }
+    /// Takes a weighted range as well (`low(1..6, 4)`): it draws, and its
+    /// element reads the odds.
+    const fn weighted(mut self) -> Self {
+        self.ranges = true;
+        self.weighted = true;
+        self
+    }
     const fn default(mut self, d: &'static str) -> Self {
         self.default = d;
         self
@@ -95,17 +104,6 @@ impl Control {
 }
 
 // ---- shared words -------------------------------------------------------
-
-/// `mostly=`: skews a range draw, `lo + (hi - lo) * u^exponent`.
-pub static MOSTLY: &[Word] = &[
-    w(
-        "small",
-        "skewed toward the low end (exponent 2)",
-        &[("exponent", 2.0)],
-    ),
-    w("even", "a uniform draw", &[("exponent", 1.0)]),
-    w("large", "leaning toward the high end", &[("exponent", 0.5)]),
-];
 
 /// The kinds a scatter or bank may gather against (`against=`).
 pub static TAGS: &[&str] = &["cliff", "wall", "rock", "tree"];
@@ -185,13 +183,12 @@ static WEAR: &[Word] = &[
     w("worn", "chipped and rounded edges", &[]),
 ];
 
-const fn rock_controls(size: &'static str) -> [Control; 5] {
+const fn rock_controls(size: &'static str) -> [Control; 4] {
     [
         c("size", Axis::Mm, "rock width")
             .over(0.0, 200.0)
-            .ranges()
+            .weighted()
             .default(size),
-        c("mostly", Axis::Word, "skews the size range").words(MOSTLY),
         c("shape", Axis::Word, "river stones, broken rock, flat slabs").words(ROCK_SHAPE),
         c("wear", Axis::Word, "sharp, or chipped and rounded edges")
             .words(WEAR)
@@ -206,10 +203,10 @@ const fn rock_controls(size: &'static str) -> [Control; 5] {
 }
 
 // default rock widths: 6 to 15 mm
-static ROCK: [Control; 5] = rock_controls("6..15");
-static STONE: [Control; 5] = rock_controls("1..6");
-static BOULDER: [Control; 5] = rock_controls("4.5..8");
-static PEBBLE: [Control; 5] = rock_controls("1..2.2");
+static ROCK: [Control; 4] = rock_controls("6..15");
+static STONE: [Control; 4] = rock_controls("1..6");
+static BOULDER: [Control; 4] = rock_controls("4.5..8");
+static PEBBLE: [Control; 4] = rock_controls("1..2.2");
 
 // ---- tree ---------------------------------------------------------------
 
@@ -317,7 +314,7 @@ static TREE: &[Control] = &[
                 .default("30"),
             c("width", Axis::Mm, "trunk thickness at the ground")
                 .limits(0.5, 40.0)
-                .ranges(),
+                .weighted(),
         ],
         "the bare trunk",
     ),
@@ -326,7 +323,7 @@ static TREE: &[Control] = &[
         &[
             c("width", Axis::Mm, "crown width")
                 .limits(2.0, 200.0)
-                .ranges()
+                .weighted()
                 .default("30"),
             c("shape", Axis::Word, "silhouette")
                 .words(CROWN_SHAPE)
@@ -368,7 +365,7 @@ static TREE: &[Control] = &[
                 .default("4.5"),
             c("width", Axis::Mm, "leaf width")
                 .limits(0.5, 20.0)
-                .ranges()
+                .weighted()
                 .default("3"),
         ],
         "one leaf",
@@ -486,7 +483,7 @@ static WALL: &[Control] = &[
         "edges",
         &[c("rounding", Axis::Mm, "how worn the stone corners are")
             .limits(0.0, 5.0)
-            .ranges()],
+            .weighted()],
         "the stone corners",
     ),
     c("coping", Axis::Word, "what tops a drystone wall").words(&[
@@ -660,13 +657,13 @@ static CLIFF: &[Control] = &[
 static SCATTER: &[Control] = &[
     c("count", Axis::Count, "how many, in total")
         .limits(0.0, 10_000.0)
-        .ranges(),
+        .weighted(),
     c(
         "perSquare",
         Axis::PerSquare,
         "how many per square of the area, or of length along a line",
     )
-    .ranges(),
+    .weighted(),
     c(
         "spread",
         Axis::Mm,
@@ -685,9 +682,6 @@ static SCATTER: &[Control] = &[
     )
     .planned(),
     c("gap", Axis::Mm, "least space between neighbours"),
-    c("mostly", Axis::Word, "skews every child's size range")
-        .words(MOSTLY)
-        .planned(),
 ];
 
 // ---- the table ----------------------------------------------------------
@@ -784,15 +778,15 @@ pub static ELEMENTS: &[Element] = &[
         controls: &[
             c("clumps", Axis::Count, "how many clumps along the shore")
                 .limits(0.0, 30.0)
-                .ranges()
+                .weighted()
                 .default("3..5"),
             c("stems", Axis::Count, "stems in a clump")
                 .limits(1.0, 30.0)
-                .ranges()
+                .weighted()
                 .default("5..9"),
             c("height", Axis::Mm, "how tall a stem stands")
                 .over(0.0, f64::INFINITY)
-                .ranges()
+                .weighted()
                 .default("8..13"),
         ],
         ..Element::BASE
@@ -952,6 +946,10 @@ pub static RENAMED: &[(&str, &str)] = &[
         "grass controls go on the `grass` line: `grass length=… curl=…`",
     ),
     ("organic", "a line's wobble is `line name width=… wobble=…`"),
+    (
+        "mostly",
+        "write the weighting on the size: `size=\"low(1..6, 11)\"` for mostly=small, `high(1..6)` for large, the plain range for even; `dharmatiles migrate` rewrites old tiles",
+    ),
     ("lines", "a region is `bounded-by` its lines"),
 ];
 

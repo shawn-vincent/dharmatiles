@@ -126,11 +126,165 @@ struct Edit {
 pub fn heights(text: &str) -> Result<Option<String>, EditError> {
     let names = control_names(text)?;
     let text = names.as_deref().unwrap_or(text);
+    let sizes = mostly(text)?;
+    let text = sizes.as_deref().unwrap_or(text);
     let floors = floors(text)?;
     let now = floors.as_deref().unwrap_or(text);
     let cliffs = cliffs(now)?;
     let now = cliffs.as_deref().unwrap_or(now);
-    Ok(heights_only(now)?.or(cliffs).or(floors).or(names))
+    Ok(heights_only(now)?.or(cliffs).or(floors).or(sizes).or(names))
+}
+
+/// The rock family: the things `mostly=` skewed.
+const ROCKS: [&str; 4] = ["rock", "stone", "boulder", "pebble"];
+
+/// `mostly=` is gone: its word becomes a weighting written on the size.
+/// `size="1..6" mostly=small` is `size="low(1..6, 11)"`, `large` is
+/// `high(1..6)` and `even` the plain range.  A `mostly` on a scatter was never
+/// built: it goes to each child thing that has none of its own.  A thing
+/// that writes `mostly` and no size gets its element's default size.  Every
+/// other byte is as written.  `Ok(None)` when no `mostly` is written.
+///
+/// # Errors
+/// If the text is not KDL.
+pub fn mostly(text: &str) -> Result<Option<String>, EditError> {
+    /// The word a node writes, as a property or as a child line.
+    fn word(n: &KdlNode) -> Option<String> {
+        if let Some(e) = n.entry("mostly") {
+            return num_text(e.value());
+        }
+        let c = n
+            .children()?
+            .nodes()
+            .iter()
+            .find(|c| c.name().value() == "mostly")?;
+        num_text(c.entries().first()?.value())
+    }
+
+    /// Delete the `mostly` a node writes.
+    fn remove(text: &str, n: &KdlNode, edits: &mut Vec<Edit>) {
+        if let Some(e) = n.entry("mostly") {
+            let s = e.span().offset();
+            let start = if text[..s].ends_with(' ') { s - 1 } else { s };
+            edits.push(Edit {
+                start,
+                end: s + e.span().len(),
+                with: String::new(),
+            });
+        }
+        if let Some(kids) = n.children() {
+            for c in kids.nodes().iter().filter(|c| c.name().value() == "mostly") {
+                let (co, cl) = (c.span().offset(), c.span().len());
+                let (ls, le) = (line_start(text, co), line_end(text, co + cl));
+                let alone = text[ls..co].trim().is_empty() && text[co + cl..le].trim().is_empty();
+                let (start, end) = if alone { (ls, le) } else { (co, co + cl) };
+                edits.push(Edit {
+                    start,
+                    end,
+                    with: String::new(),
+                });
+            }
+        }
+    }
+
+    /// Weight the size of one thing by `word`.
+    fn weigh(n: &KdlNode, word: &str, edits: &mut Vec<Edit>) {
+        let make = |range: &str| -> Option<String> {
+            match word {
+                "small" => Some(format!("low({range}, 11)")),
+                "large" => Some(format!("high({range})")),
+                _ => None,
+            }
+        };
+        // where the size is written: a property, or a child line
+        let child = n
+            .children()
+            .and_then(|k| k.nodes().iter().find(|c| c.name().value() == "size"));
+        let written = n
+            .entry("size")
+            .map(|e| (e.span().offset(), e.span().len(), e.value(), "size="))
+            .or_else(|| {
+                let c = child?;
+                let e = c.entries().first()?;
+                Some((e.span().offset(), e.span().len(), e.value(), ""))
+            });
+        match written {
+            Some((off, len, v, key)) => {
+                let Some(range) = v.as_string().map(str::trim) else {
+                    return; // one number: nothing to weigh
+                };
+                if !range.contains("..") {
+                    return;
+                }
+                if let Some(new) = make(range) {
+                    edits.push(Edit {
+                        start: off,
+                        end: off + len,
+                        with: format!("{key}\"{new}\""),
+                    });
+                }
+            }
+            None => {
+                let Some(default) = crate::schema::element(n.name().value())
+                    .and_then(|l| l.controls.iter().find(|c| c.name == "size"))
+                    .map(|c| c.default)
+                else {
+                    return;
+                };
+                let Some(new) = make(default) else { return };
+                // after the name, on its line
+                let at = n.name().span().offset() + n.name().span().len();
+                edits.push(Edit {
+                    start: at,
+                    end: at,
+                    with: format!(" size=\"{new}\""),
+                });
+            }
+        }
+    }
+
+    fn walk(text: &str, nodes: &[KdlNode], edits: &mut Vec<Edit>) {
+        for n in nodes {
+            let name = n.name().value();
+            if ROCKS.contains(&name) {
+                if let Some(w) = word(n) {
+                    weigh(n, &w, edits);
+                    remove(text, n, edits);
+                }
+            } else if name == "scatter"
+                && let Some(w) = word(n)
+            {
+                if let Some(kids) = n.children() {
+                    for c in kids
+                        .nodes()
+                        .iter()
+                        .filter(|c| ROCKS.contains(&c.name().value()))
+                    {
+                        if word(c).is_none() {
+                            weigh(c, &w, edits);
+                        }
+                    }
+                }
+                remove(text, n, edits);
+            }
+            if let Some(kids) = n.children() {
+                walk(text, kids.nodes(), edits);
+            }
+        }
+    }
+
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut edits = Vec::new();
+    walk(text, doc.nodes(), &mut edits);
+    if edits.is_empty() {
+        return Ok(None);
+    }
+    edits.sort_by_key(|e| std::cmp::Reverse((e.start, e.end)));
+    let mut out = text.to_owned();
+    for e in edits {
+        out.replace_range(e.start..e.end, &e.with);
+    }
+    Ok(Some(out))
 }
 
 /// Rewrite the hyphenated control names of the old spelling
@@ -1004,6 +1158,19 @@ mod tests {
         assert!(control_names(&new).unwrap().is_none());
         // the migration entry point carries them too
         assert_eq!(heights(old).unwrap().unwrap().matches("-").count(), 0);
+    }
+
+    #[test]
+    fn mostly_becomes_a_weighting_on_the_size() {
+        let old = "tile size=\"1x1\" { // keep\n    stack {\n        scatter perSquare=55 reach=4 { stone size=\"1..6\" mostly=small }   // a note\n        scatter perSquare=6 { boulder size=\"2..8\" mostly=even; pebble size=\"1..2\" mostly=large }\n        rock mostly=small\n        rock size=4 mostly=small\n        stone {\n            size \"1..6\"\n            mostly small\n        }\n        scatter perSquare=2 mostly=small { boulder size=\"2..8\"; stone size=\"1..6\" mostly=large }\n    }\n}\n";
+        let new = mostly(old).unwrap().unwrap();
+        assert_eq!(
+            new,
+            "tile size=\"1x1\" { // keep\n    stack {\n        scatter perSquare=55 reach=4 { stone size=\"low(1..6, 11)\" }   // a note\n        scatter perSquare=6 { boulder size=\"2..8\"; pebble size=\"high(1..2)\" }\n        rock size=\"low(6..15, 11)\"\n        rock size=4\n        stone {\n            size \"low(1..6, 11)\"\n        }\n        scatter perSquare=2 { boulder size=\"low(2..8, 11)\"; stone size=\"high(1..6)\" }\n    }\n}\n"
+        );
+        assert!(mostly(&new).unwrap().is_none());
+        // the migration entry point carries it too
+        assert!(heights(old).unwrap().unwrap().find("mostly").is_none());
     }
 
     #[test]

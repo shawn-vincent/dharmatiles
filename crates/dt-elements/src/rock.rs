@@ -35,7 +35,7 @@ use dt_kit::{
 };
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Dist, Element, LookError, Plan, Span, Weighting, Write};
+use crate::{Control, Ctx, Dist, Element, LookError, Plan, Span, Write};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -77,8 +77,6 @@ const MIN_STONE_MM: f64 = 4.0;
 const CLUSTER_DIST: (f64, f64) = (0.35, 0.6);
 const RIM_MM: f64 = 1.0;
 const DART_TRIES: u32 = 400;
-/// The size skew when `mostly` is not written.
-const WIDTH_EXP: f64 = 1.4;
 // seat
 const SEAT_RULE: SeatRule = SeatRule {
     below_min: 0.25,
@@ -493,16 +491,14 @@ pub fn make_item(
     })
 }
 
-/// What one rock thing is: its kind, size range (reference mm), skew and
-/// family mix, and its weight in a scatter.
+/// What one rock thing is: its kind, size range (reference mm) with its
+/// odds, family mix, and its weight in a scatter.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Thing {
     /// `rock`, `stone`, `boulder` or `pebble`.
     pub kind: String,
     /// Its size range, and the odds along it.
     pub size: Dist,
-    /// `lo + (hi − lo)·u^exponent`.
-    pub exponent: f64,
     /// Dome, slab, block, wedge weights.
     pub mix: [f64; 4],
     /// Its share of a scatter's mix.
@@ -527,7 +523,6 @@ impl Thing {
         let mut t = Self {
             kind: kind.to_owned(),
             size: Dist::flat(6.0, 15.0),
-            exponent: WIDTH_EXP,
             mix: FAMILIES,
             weight,
             buried: Span::point(0.0),
@@ -538,7 +533,6 @@ impl Thing {
             let share = |x: f64| if x > 1.0 { x / 100.0 } else { x };
             t.buried = Span::new(share(r.lo), share(r.hi));
         }
-        t.exponent = s.number_or("mostly.exponent", t.exponent)?;
         if let Some(w) = s.word("shape")? {
             t.mix = match w {
                 "rounded" => [0.85, 0.15, 0.0, 0.0],
@@ -550,15 +544,9 @@ impl Thing {
         Ok(t)
     }
 
+    /// One draw of the size: flat unless the size is weighted.
     fn draw(&self, rng: &mut Rng) -> f64 {
-        // a weighting written on the size is the odds; a plain range keeps
-        // the family's skew until it is removed
-        if matches!(self.size.weighting, Weighting::Flat) {
-            let (lo, hi) = (self.size.lo, self.size.hi);
-            lo + (hi - lo) * libm::pow(rng.random(), self.exponent)
-        } else {
-            self.size.draw(rng)
-        }
+        self.size.draw(rng)
     }
 }
 

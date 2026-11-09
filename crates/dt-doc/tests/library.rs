@@ -340,9 +340,14 @@ fn cliff_run_keeps_every_control() {
     assert_eq!(num(stones.value("reach")), 4.0);
     let stone = &stones.children[0];
     assert!(close(range(stone.value("size")), (1.0, 6.0)));
-    assert_eq!(
-        stone.value("mostly").unwrap().word().unwrap().sets,
-        &[("exponent", 2.0)]
+    // `mostly=small` of the old language, as the migration writes it
+    assert!(
+        matches!(
+            &stone.value("size").unwrap().num().unwrap().expr,
+            dt_doc::expr::Expr::Weighted { name, args, .. } if name == "low" && args == &[11.0]
+        ),
+        "{:?}",
+        stone.value("size")
     );
     assert_eq!(stones.kind, Kind::Solid);
     assert_eq!(stones.path, ["tile", "stack", "scatter"]);

@@ -305,7 +305,7 @@ struct Parser<'a> {
 }
 
 const SKEW_HELP: &str =
-    "a range is skewed with `mostly=small`, `even` or `large` beside it, not with `^`";
+    "a range is weighted by a function round it, as in `low(1..6, 4)`, not with `^`";
 
 impl Parser<'_> {
     fn peek(&self) -> Option<&Tok> {
@@ -1005,9 +1005,9 @@ mod tests {
     }
 
     #[test]
-    fn skew_points_at_mostly() {
+    fn skew_points_at_a_weighting() {
         let err = parse("1..6^2").unwrap_err();
-        assert!(err.message.contains("mostly=small"), "{err:?}");
+        assert!(err.message.contains("low(1..6, 4)"), "{err:?}");
         assert_eq!((err.start, err.end), (4, 5));
     }
 
@@ -1059,7 +1059,7 @@ mod tests {
         assert!(err.message.contains(')'));
 
         let err = parse("2 ^ 3").unwrap_err();
-        assert!(err.message.contains("mostly"));
+        assert!(err.message.contains("low(1..6, 4)"));
 
         let err = parse("").unwrap_err();
         assert!(err.message.contains("expected a value"));
