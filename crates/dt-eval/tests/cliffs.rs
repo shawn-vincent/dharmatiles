@@ -18,6 +18,8 @@ const PEBBLE_MAX_MM: f64 = 4.5;
 /// The film's band over the stone's top, mm (the tile writes `bottom + [0.6 .. 1.2]`).
 const FILM_MIN_MM: f64 = 0.6;
 const FILM_MAX_MM: f64 = 1.2;
+/// How far the film's face stands over its band, mm: the depth of its grain.
+const FILM_GRAIN_MM: f64 = 0.6;
 /// How far the rock under a film triangle may differ from the highest rock
 /// in the 3 x 3 cells round it: the cells are 0.25 mm and a top's slope under
 /// a film is under 35 degrees, so about 0.75 * 0.7; and the float32 round.
@@ -191,15 +193,15 @@ fn a_film_lies_only_on_stones_that_stand_and_is_a_layer_of_its_band() {
     // never over the band's high (grain is held under it) ...
     let highest = gaps.last().copied().unwrap();
     assert!(
-        highest <= FILM_MAX_MM + 0.05,
-        "a film triangle {highest} mm over the stone's top, band high {FILM_MAX_MM}"
+        highest <= FILM_MAX_MM + FILM_GRAIN_MM + 0.05,
+        "a film triangle {highest} mm over the stone's top, band high {FILM_MAX_MM} and grain {FILM_GRAIN_MM}"
     );
     // ... and the film as a whole is a layer of that band: its middle lies
     // between nothing and the band's high (grain pits take it below the
     // band's low, by design; a half of it is over half the least thickness)
     let median = gaps[gaps.len() / 2];
     assert!(
-        median > 0.5 * FILM_MIN_MM - CELL_SLOPE_MM && median < FILM_MAX_MM,
+        median > 0.5 * FILM_MIN_MM - CELL_SLOPE_MM && median < FILM_MAX_MM + FILM_GRAIN_MM,
         "median film {median} mm over the stone"
     );
     // none lies where no stone stands, and all but the film's own edge (a
@@ -306,13 +308,14 @@ fn a_film_keeps_its_skin_over_the_stone_whatever_its_grain() {
             t[0]
         );
         assert!(
-            t[t.len() - 1] <= FILM_MAX_MM + 0.05,
-            "{name}: the film is {} mm over the stone at its thickest, band high {FILM_MAX_MM}",
+            t[t.len() - 1] <= FILM_MAX_MM + FILM_GRAIN_MM + 0.05,
+            "{name}: the film is {} mm over the stone at its thickest, band high {FILM_MAX_MM} and grain {FILM_GRAIN_MM}",
             t[t.len() - 1]
         );
         // and grain is still there: the film is not a flat sheet at its low
+        // (the middle eight tenths of it spread over a quarter millimetre)
         let (p10, p90) = (t[t.len() / 10], t[t.len() * 9 / 10]);
-        assert!(p90 - p10 > 0.1, "{name}: the film has grain: {p10}..{p90}");
+        assert!(p90 - p10 > 0.25, "{name}: the film has grain: {p10}..{p90}");
     }
 }
 

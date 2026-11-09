@@ -63,6 +63,12 @@ const SIDE_RELIEF_MM: f64 = 0.6;
 const DRY_MARGIN_MM: f64 = 0.2;
 /// Below any surface: a lobe or pebble that is not there.
 const NONE: f64 = -1e9;
+/// How much deeper than its band a film's face stands, mm at the reference
+/// square: the depth of its grain's pits (clods stand 0.75 mm), so the
+/// skin is the pits' floor and the band's low is the skin over the stone.
+const FILM_GRAIN_MM: f64 = 0.6;
+/// How far in from its outline a film reaches its full lift, mm (scaled).
+const FILM_FADE_MM: f64 = 2.5;
 
 // 1 soil roughness
 const SOIL_MID_MM: f64 = 1.6;
@@ -848,6 +854,7 @@ struct Film {
 /// envelope the solver held them to. `None` for any other dirt.
 fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band, skin_mm: f64) -> Option<Film> {
     let rest = scene.rest()?;
+    let frame = scene.frame();
     let below = ctx.below?;
     // it is a film when its region holds pieces' tops
     let on_rest: Vec<usize> = (0..ctx.area.bits.len())
@@ -866,14 +873,32 @@ fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band, skin_mm: f64) -> Option<Fi
     let mut fhi = hi.clone();
     let mut area = ctx.area.clone();
     let mut floor = lo.map(|_| f64::NEG_INFINITY);
+    // the film's face stands the grain's depth over its band, so its pits
+    // reach down to the skin and no further (the floor under them is not a
+    // flat the whole face is cut to); the lift and the band's width fade in
+    // from the outline, so the edge meets the stone at the skin, a low step
+    let (reach, _) = dt_kit::distance(
+        frame,
+        &ctx.area
+            .bits
+            .iter()
+            .zip(&rest.flat.bits)
+            .map(|(&a, &f)| !(a && f))
+            .collect::<Vec<_>>(),
+    );
+    let (depth, fade) = (FILM_GRAIN_MM * frame.scale(), FILM_FADE_MM * frame.scale());
     for k in 0..area.bits.len() {
         if !ctx.area.bits[k] {
             continue;
         }
         if rest.flat.bits[k] {
             let top = rest.tops[k];
-            flo.z[k] = top + (lo.z[k] - below.lo().z[k]);
-            fhi.z[k] = top + (hi.z[k] - below.hi().z[k]);
+            let t = smooth01(reach.z[k] / fade);
+            flo.z[k] = top + (lo.z[k] - below.lo().z[k]) + depth * t;
+            // the band narrows to the skin at the outline: the edge is a step
+            // of the skin and no more, and the face climbs from it
+            let high = top + (hi.z[k] - below.hi().z[k]) + depth * t;
+            fhi.z[k] = flo.z[k] + (high - flo.z[k]) * t;
             floor.z[k] = top + skin_mm;
         } else {
             area.bits[k] = false;
