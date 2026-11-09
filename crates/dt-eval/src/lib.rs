@@ -32,6 +32,7 @@ pub use cache::Cache;
 pub use diag::Diag;
 pub use doc::{Region, Tile, Within};
 pub use dt_kit::Progress;
+pub use lower::{RangeRefusal, Ranged, ranged, weighting_flaw};
 pub use source::{Files, LIB, Library, Memory, Source};
 
 use crate::plan::{Refusal, Step};

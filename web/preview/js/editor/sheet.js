@@ -3,7 +3,7 @@
 
 import { Lens, kdlString } from '../lens.js';
 import { byteToIndex } from '../text.js';
-import { failed } from '../problems.js';
+import { failed, showError } from '../problems.js';
 import { $, host, offerMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, undo } from './document.js';
 import { doc, elementNamed, isEntry, isMark, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
@@ -29,6 +29,15 @@ export const lens = new Lens($('lens'), {
     const r = await host.checkValue(element, control, typed);
     if (failed(`Could not check what was typed for ${control}`, r)) return null;
     return r.body?.message ?? null; // offline: nothing to say yet; the edit is checked again when it is sent
+  },
+  // the gallery's curves are the program's: a failure goes to the error panel,
+  // a value the program refuses ({ok: false, message}) is for the gallery to show
+  weighting: async (query) => {
+    const r = await host.weightings(query);
+    // the program refuses a value with 200 and {ok: false}; any error status is the page asking wrongly
+    if (failed('Could not read the weighting curves', r)) return null;
+    if (r.status >= 400) { showError('Could not read the weighting curves', r.body?.error || `the program answered ${r.status}`); return null; }
+    return r.status === 0 ? null : r.body;
   },
 });
 /** The lens for the selection: an entry's controls (a scatter's and each of its things'). */

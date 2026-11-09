@@ -136,7 +136,7 @@ fn weightings_json(l: &Element) -> Value {
 /// One weighting function: how it is written, each number after the range
 /// with its default and limits (`most` null for no limit; `above` refuses
 /// `least` itself), and the numbers it takes any number of.
-fn weighting_json(f: &dt_kit::WeightingFn) -> Value {
+pub(crate) fn weighting_json(f: &dt_kit::WeightingFn) -> Value {
     let finite = |x: f64| x.is_finite().then_some(x);
     json!({
         "name": f.name,

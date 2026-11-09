@@ -15,6 +15,7 @@
 //! | `GET /api/events?epoch=E&since=N` | server-sent events: a snapshot (or, resuming, what changed since revision N), then one event per change |
 //! | `GET /api/session` | this run's token, which every other `POST` must carry |
 //! | `GET /api/elements` | the elements and their controls |
+//! | `GET /api/weightings?range=` / `?text=` | the weighting functions, each with its curve ([`crate::weightings`]) |
 //! | `POST /api/…` | the editor's calls: check, draft, save, rename, new, export… ([`edit`]) |
 //!
 //! A tile is named by its id: a hash of its path, the same for as long as

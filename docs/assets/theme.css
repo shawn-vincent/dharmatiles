@@ -138,6 +138,12 @@
 .switch input:checked::after { transform: translateX(12px); background: var(--on-accent); }
 .switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* a slider, driven by the pointer (js/gallery.js uses it where the field must keep the focus) */
+.slide { position: relative; height: 18px; cursor: ew-resize; touch-action: none; user-select: none; }
+.slide-rail { position: absolute; left: 0; right: 0; top: 8px; height: 3px; border-radius: 2px; background: var(--line-2); }
+.slide-thumb { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); border: 2px solid var(--raised); box-shadow: 0 0 0 1px var(--accent); transition: box-shadow .12s var(--ease); }
+.slide:hover .slide-thumb, .slide.on .slide-thumb { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 0 1px var(--accent); }
+
 kbd { font: 500 10.5px/1 var(--f-code); color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--r); padding: 2px 4px; background: var(--bg); }
 
 input[type="search"], input[type="text"], .field {

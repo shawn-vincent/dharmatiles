@@ -561,6 +561,43 @@ impl Weighting {
         }
     }
 
+    /// How likely each of `bins` equal slices of the range is, as a multiple
+    /// of a flat range's share (a flat range is all 1s; the mean is 1).
+    /// `None` for a list, which has values and no slices (see
+    /// [`Weighting::masses`]).  What the editor draws as the curve.
+    #[must_use]
+    pub fn density(&self, bins: usize) -> Option<Vec<f64>> {
+        if matches!(self, Self::List(_)) || bins == 0 {
+            return None;
+        }
+        #[allow(clippy::cast_precision_loss)]
+        let n = bins as f64;
+        let mut at = 0.0;
+        Some(
+            (1..=bins)
+                .map(|i| {
+                    #[allow(clippy::cast_precision_loss)]
+                    let x = i as f64 / n;
+                    let d = self.cdf(x) - self.cdf(at);
+                    at = x;
+                    // rounding in a cdf must not draw a hollow
+                    (d * n).max(0.0)
+                })
+                .collect(),
+        )
+    }
+
+    /// For a list: each value's position along the range (0 to 1) and its
+    /// share of the draws (they add to 1).  `None` for every other weighting.
+    #[must_use]
+    pub fn masses(&self) -> Option<Vec<(f64, f64)>> {
+        let Self::List(items) = self else {
+            return None;
+        };
+        let total: f64 = items.iter().map(|i| i.1).sum();
+        Some(items.iter().map(|&(t, w)| (t, w / total)).collect())
+    }
+
     /// The share of the range at or below position `x` (0 to 1), for a
     /// weighting that has a density; a list has none.
     fn cdf(&self, x: f64) -> f64 {
@@ -1880,5 +1917,57 @@ mod tests {
                 assert!(d >= a.least && d <= a.most, "{} {}", f.name, a.name);
             }
         }
+    }
+
+    #[test]
+    fn density_is_the_curve_the_editor_draws() {
+        // a flat range is all 1s, and every density averages 1
+        let flat = Weighting::Flat.density(64).unwrap();
+        assert!(flat.iter().all(|d| (d - 1.0).abs() < 1e-12));
+        for w in [
+            Weighting::Low(4.0),
+            Weighting::High(4.0),
+            Weighting::Bell {
+                spread: 0.2,
+                at: 0.5,
+            },
+            Weighting::Peak {
+                spread: 0.5,
+                at: 0.3,
+            },
+            Weighting::Ends { k: 2.0, at: 0.5 },
+            Weighting::steps(&[1.0, 3.0, 2.0]).unwrap(),
+        ] {
+            let d = w.density(64).unwrap();
+            let mean = d.iter().sum::<f64>() / 64.0;
+            assert!((mean - 1.0).abs() < 1e-9, "{w:?} {mean}");
+            assert!(d.iter().all(|x| *x >= 0.0));
+        }
+        // low: the low end is `ratio` times as likely as the high end
+        let low = Weighting::Low(4.0).density(64).unwrap();
+        assert!((low[0] / low[63] - 4.0).abs() < 0.2);
+        // high is its mirror
+        let high = Weighting::High(4.0).density(64).unwrap();
+        for (a, b) in low.iter().zip(high.iter().rev()) {
+            assert!((a - b).abs() < 1e-9);
+        }
+        // a bell peaks in the middle; steps are flat inside a bin
+        let bell = Weighting::Bell {
+            spread: 0.2,
+            at: 0.5,
+        }
+        .density(64)
+        .unwrap();
+        assert!(bell[32] > bell[0] * 10.0);
+        let steps = Weighting::steps(&[1.0, 3.0]).unwrap().density(8).unwrap();
+        assert!((steps[0] - steps[3]).abs() < 1e-9 && (steps[4] / steps[0] - 3.0).abs() < 1e-9);
+        // a list has values and shares instead
+        let list = Dist::list(&[(1.0, Some(3.0)), (2.0, None)])
+            .unwrap()
+            .weighting;
+        assert!(list.density(64).is_none());
+        let m = list.masses().unwrap();
+        assert_eq!(m, [(0.0, 0.75), (1.0, 0.25)]);
+        assert!(Weighting::Flat.masses().is_none());
     }
 }

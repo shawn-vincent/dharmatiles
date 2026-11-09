@@ -12,11 +12,16 @@
 //   api.makeMine()                      offer a copy of a library tile
 //   api.checkValue(element, control, typed) -> Promise<string|null>
 //                                       the program's check of a typed value
+//   api.weighting(query) -> Promise<reply|null>
+//                                       the program's weighting curves (gallery.js)
 
+import { weightGallery } from './gallery.js';
 import { asNumber, asRange, debounce, formOf, isNumeric, kdlString, unquote, valueItems, written } from './value.js';
 
 // how long typing pauses before the program is asked about the value
 const CHECK_PAUSE_MS = 200;
+// and before the weighting curves are asked for
+const GALLERY_PAUSE_MS = 120;
 
 export { kdlString, unquote };
 
@@ -344,17 +349,34 @@ export class Lens {
     input.focus();
     input.select();
     let done = false, close = null;
+    // the gallery's changes land in the source as they are made (as a drag's
+    // do): the span the value has now, and the sheet is held, not redrawn
+    // under the field, until the edit ends
+    const live = { start: s && v ? s.span[0] + bytes(s.text.slice(0, v.at)) : 0, len: v ? bytes(v.text) : 0, wrote: false };
+    const write = num && s && v && !c.viaSet && !text ? (typed) => {
+      const out = written(typed);
+      this.drag ??= { len: 0, x: 0 };
+      this.api.replace(live.start, live.len, out, false);
+      live.len = bytes(out);
+      live.wrote = true;
+    } : null;
     const finish = (keep) => {
       if (done) return;
       done = true;
       close?.();
-      if (keep && input.value !== was) {
+      if (live.wrote) {
+        // the source holds what was last written; it ends as one step of history, or is put back
+        this.drag = null;
+        this.api.replace(live.start, live.len, keep ? written(input.value) : v.text, true);
+      } else if (keep && input.value !== was) {
         const typed = text ? input.value.trim() : null;
         if (text && !typed) this.put(g, c.name, null);
         else if (s && !c.viaSet) this.api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), text ? kdlString(typed) : num ? written(input.value) : input.value.trim(), true);
         else this.put(g, c.name, text ? typed : parseValue(input.value));
       }
-      this.show(this.model);
+      const held = this.pending;
+      this.pending = null;
+      this.show(held ?? this.model);
     };
     let pop = null;
     input.onkeydown = (e) => {
@@ -364,7 +386,7 @@ export class Lens {
     };
     input.onblur = () => finish(true);
     if (c.picker === 'size') close = this.sizeGrid(input, () => finish(true));
-    else if (num) { pop = this.valuePop(input, c, g.schema?.name); close = pop.close; }
+    else if (num) { pop = this.valuePop(input, c, g.schema?.name, write); close = pop.close; }
   }
 
   /**
@@ -373,7 +395,7 @@ export class Lens {
    * and what can go at the caret (its words).  Arrows pick, Enter or Tab
    * takes.  Returns {key(event) -> taken, close}.
    */
-  valuePop(input, c, element) {
+  valuePop(input, c, element, write = null) {
     const pop = el('div', 'value-pop');
     const takes = el('div', 'vp-takes', [[c.unit, c.takes].filter(Boolean).join(', '), c.default && `default ${c.default}`].filter(Boolean).join(' · '));
     const check = el('div', 'vp-check');
@@ -381,14 +403,32 @@ export class Lens {
     const list = el('div', 'vp-list');
     list.setAttribute('role', 'listbox');
     pop.append(takes, check);
-    let one = null, range = null;
+    let one = null, range = null, weighted = null, gallery = null;
     if (c.ranges) {
       one = el('button', '', 'one number');
       range = el('button', '', 'a range');
       one.onclick = () => { input.value = asNumber(input.value); update(); };
       range.onclick = () => { input.value = asRange(input.value); update(); };
       forms.append(one, range);
-      pop.append(forms);
+      // a draw takes odds along its range: the gallery of weighting functions
+      if (c.weighted && this.api.weighting) {
+        weighted = el('button', '', 'weighted');
+        weighted.onclick = () => {
+          if (formOf(input.value) === 'number') input.value = asRange(input.value);
+          update();
+          // from a plain range: lean low, then the gallery and its sliders take over
+          if (gallery.function === null || gallery.function === 'flat') gallery.pickWeighted();
+        };
+        forms.append(weighted);
+        gallery = weightGallery({
+          api: this.api,
+          input,
+          change: () => { update(false); write?.(input.value); },
+          refuse: (message) => { check.textContent = message; check.hidden = false; },
+          resized: () => place(),
+        });
+        pop.append(forms, gallery.node);
+      } else pop.append(forms);
     }
     pop.append(list);
     let s = { items: [] }, i = 0, asked = 0;
@@ -400,6 +440,8 @@ export class Lens {
         check.hidden = !why;
       });
     }, CHECK_PAUSE_MS);
+    // the program's curves for what is typed, asked once the typing pauses
+    const galleryLater = debounce(() => gallery?.refresh().then(() => weighted?.classList.toggle('on', gallery.function !== null && gallery.function !== 'flat')), GALLERY_PAUSE_MS);
     const take = () => {
       const it = s.items[i];
       if (!it) return false;
@@ -421,7 +463,7 @@ export class Lens {
       });
       list.hidden = !s.items.length;
     };
-    const update = () => {
+    const update = (again = true) => {
       s = valueItems(input.value, input.selectionStart ?? input.value.length, c);
       i = 0;
       draw();
@@ -431,13 +473,19 @@ export class Lens {
       const form = formOf(input.value);
       one?.classList.toggle('on', form === 'number');
       range?.classList.toggle('on', form === 'range');
+      if (gallery) {
+        gallery.open(form === 'range' || form === 'expression');
+        if (again) galleryLater();
+        const w = gallery.function;
+        weighted.classList.toggle('on', form !== 'number' && w !== null && w !== 'flat');
+      }
     };
     // the field keeps the focus: a click in the helper is not a blur
     pop.addEventListener('pointerdown', (e) => e.preventDefault());
     pop.addEventListener('mousedown', (e) => e.preventDefault());
     const place = () => {
       const f = input.getBoundingClientRect();
-      pop.style.width = `${Math.max(f.width, 240)}px`;
+      pop.style.width = `${Math.max(f.width, gallery && !gallery.node.hidden ? 300 : 240)}px`;
       pop.style.left = `${Math.max(4, Math.min(f.left, window.innerWidth - pop.offsetWidth - 4))}px`;
       const below = f.bottom + 4 + pop.offsetHeight <= window.innerHeight - 4;
       pop.style.top = `${below ? f.bottom + 4 : Math.max(4, f.top - 4 - pop.offsetHeight)}px`;
@@ -460,7 +508,7 @@ export class Lens {
         if (e.key === 'Tab' || (e.key === 'Enter' && s.to > s.from)) return take();
         return false;
       },
-      close: () => { askLater.cancel(); window.removeEventListener('scroll', place, true); pop.remove(); },
+      close: () => { askLater.cancel(); galleryLater.cancel(); gallery?.close(); window.removeEventListener('scroll', place, true); pop.remove(); },
     };
   }
 

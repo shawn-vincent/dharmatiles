@@ -11,6 +11,7 @@
 //   elements() -> [element]                 the element schema
 //
 // The editor's calls, each -> {status, body} (status 0 when disconnected):
+//   weightings(query)                       the weighting functions over a range, or one value, with the program's curves (a read; no token)
 //   check(id, {text, file?})                what the text would build
 //   checkValue(element, control, typed)     what the reader refuses in a typed value: {message, label, help} (message null when it takes it)
 //   draft(id, {text, file?})                a quick build of the text: {status, buffer} (the mesh), 409 when a newer draft took its place
@@ -61,6 +62,20 @@ export function browserHost() {
         body: JSON.stringify(body),
       });
       if (bytes && r.ok) return { status: r.status, buffer: await r.arrayBuffer() };
+      const raw = await r.text();
+      try { return { status: r.status, body: JSON.parse(raw) }; } catch (e) {
+        if (r.ok) throw new Error(`${path}: the program answered ${r.status} with something that is not JSON`, { cause: e });
+        return { status: r.status, body: { error: raw || `the program answered ${r.status}` } };
+      }
+    } catch (e) {
+      if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
+      throw e;
+    }
+  };
+  // One read of the program with a query: {status, body}, as a call is.
+  const read = async (path, query) => {
+    try {
+      const r = await fetch(`${path}?${new URLSearchParams(query)}`, { cache: 'no-store' });
       const raw = await r.text();
       try { return { status: r.status, body: JSON.parse(raw) }; } catch (e) {
         if (r.ok) throw new Error(`${path}: the program answered ${r.status} with something that is not JSON`, { cause: e });
@@ -126,6 +141,7 @@ export function browserHost() {
       return r.json();
     },
     check: (id, body) => call(tile(id, 'check'), body),
+    weightings: (query) => read('/api/weightings', query),
     checkValue: (element, control, typed) => call('/api/check-value', { element, control, typed }),
     draft: (id, body) => call(tile(id, 'draft'), body, true),
     save: (id, body) => call(tile(id, 'save'), body),

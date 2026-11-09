@@ -412,9 +412,14 @@ fn check_value(v: &Value) -> (&'static str, Value) {
     let flaw = dt_doc::schema::element(element)
         .and_then(|e| e.control(control))
         .and_then(|c| dt_doc::decode::check_text(c, element, typed));
+    // the reader's check first; then the weighting's numbers against their
+    // limits, which the reader only meets when the value is lowered
     let body = match flaw {
         Some(r) => json!({ "message": r.message, "label": r.label, "help": r.help }),
-        None => json!({ "message": null }),
+        None => match dt_eval::weighting_flaw(typed) {
+            Some(w) => json!({ "message": w.message, "label": "here", "help": w.help }),
+            None => json!({ "message": null }),
+        },
     };
     ("200 OK", body)
 }

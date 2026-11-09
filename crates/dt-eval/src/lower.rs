@@ -384,6 +384,99 @@ fn scale(p: Part, k: f64) -> Part {
     }
 }
 
+/// One range as the editor's gallery reads it: its ends and odds, and how
+/// it is written (the function and its numbers after the range).
+#[derive(Clone, Debug)]
+pub struct Ranged {
+    /// The range with its odds.
+    pub dist: Dist,
+    /// The function: `flat` for a plain range, `list`, `mix` or one of the calls.
+    pub function: String,
+    /// The numbers after the range (the weights, for a list or a mix).
+    pub args: Vec<f64>,
+}
+
+/// Why a written value is not one range with its odds: the diagnostic the
+/// program gives it.
+#[derive(Clone, Debug)]
+pub struct RangeRefusal {
+    /// The diagnostic code, such as `dt::range`.
+    pub code: String,
+    /// What is wrong.
+    pub message: String,
+    /// What to write.
+    pub help: Option<String>,
+}
+
+fn not_a_range(message: impl Into<String>, help: &str) -> RangeRefusal {
+    RangeRefusal {
+        code: "dt::value".to_owned(),
+        message: message.into(),
+        help: Some(help.to_owned()),
+    }
+}
+
+/// Read `src`, a control's value, as one range with its odds.  The gallery
+/// asks the program this for every curve it draws, so the odds are never
+/// worked out in the page.
+///
+/// # Errors
+/// The value does not parse, is not one range (a number, a sum, a name), or
+/// its weighting is refused (`dt::range`, `dt::weighting`) as a document's
+/// would be.
+pub fn ranged(src: &str) -> Result<Ranged, RangeRefusal> {
+    let e = dt_doc::expr::parse(src.trim()).map_err(|e| {
+        not_a_range(
+            format!("`{}` does not read as a value: {}", src.trim(), e.message),
+            "write a range such as 1..6, or a weighted one such as low(1..6, 4)",
+        )
+    })?;
+    let lets = Lets::default();
+    let part = lower(&e, &lets, 0).map_err(|r| RangeRefusal {
+        code: r.code.to_owned(),
+        message: r.message,
+        help: r.help,
+    })?;
+    let Part::Dist(dist) = part else {
+        return Err(not_a_range(
+            format!("`{}` is not one range", src.trim()),
+            "the gallery weights one range such as 1..6",
+        ));
+    };
+    let (function, args) = match &e {
+        Expr::Weighted { name, args, .. } => (name.clone(), args.clone()),
+        Expr::List { items } => (
+            "list".to_owned(),
+            items.iter().map(|i| i.1.unwrap_or(1.0)).collect(),
+        ),
+        _ => ("flat".to_owned(), Vec::new()),
+    };
+    Ok(Ranged {
+        dist,
+        function,
+        args,
+    })
+}
+
+/// What is wrong with the weighting in a typed value, if anything: a
+/// number past its limits (`dt::range`), a list that repeats a value or any
+/// other `dt::weighting` refusal, as a build would say.  `None` for a
+/// value that does not parse (the reader's check says so) or that names
+/// things only the document knows.
+#[must_use]
+pub fn weighting_flaw(src: &str) -> Option<RangeRefusal> {
+    let e = dt_doc::expr::parse(src.trim()).ok()?;
+    if e.range_count() == 0 {
+        return None;
+    }
+    let r = lower(&e, &Lets::default(), 0).err()?;
+    (r.hard && matches!(r.code, "dt::range" | "dt::weighting")).then(|| RangeRefusal {
+        code: r.code.to_owned(),
+        message: r.message,
+        help: r.help,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -474,5 +567,38 @@ mod tests {
         let mut l = lets(&[]);
         l.draws.push(("a".into(), parse_v2("[1 .. a]").unwrap()));
         assert!(lower(&Expr::Name("a".into()), &l, 0).is_err());
+    }
+
+    #[test]
+    fn the_gallery_reads_one_range_and_says_what_it_is() {
+        let r = ranged("low(1..6, 12.5)").unwrap();
+        assert_eq!((r.function.as_str(), r.args.clone()), ("low", vec![12.5]));
+        assert_eq!(r.dist.written(), "low(1..6, 12.5)");
+        let r = ranged("1..6").unwrap();
+        assert_eq!(r.function, "flat");
+        let r = ranged("[6:4, 7, 10:3]").unwrap();
+        assert_eq!((r.function.as_str(), r.args), ("list", vec![4.0, 1.0, 3.0]));
+        // out of limits: the same refusal a document gets
+        let e = ranged("low(1..6, -2)").unwrap_err();
+        assert_eq!(e.code, "dt::range");
+        assert_eq!(e.message, "low's ratio must be above 0, not -2");
+        assert_eq!(ranged("[1:4, 2:5, 2:1]").unwrap_err().code, "dt::weighting");
+        // not one range
+        assert!(ranged("6").is_err());
+        assert!(ranged("1..2 + 3..4").is_err());
+        assert!(ranged("(").is_err());
+    }
+
+    #[test]
+    fn the_editors_check_names_a_weighting_past_its_limits() {
+        assert!(weighting_flaw("low(1..6, 3)").is_none());
+        let e = weighting_flaw("bell(1..6, 9)").unwrap();
+        assert_eq!(e.code, "dt::range");
+        assert_eq!(e.message, "bell's spread must be from 0.05 to 1, not 9");
+        assert_eq!(weighting_flaw("[1, 1]").unwrap().code, "dt::weighting");
+        // a plain number, a plain range, an unreadable value: the reader's to say
+        assert!(weighting_flaw("6").is_none());
+        assert!(weighting_flaw("1..6").is_none());
+        assert!(weighting_flaw("(").is_none());
     }
 }

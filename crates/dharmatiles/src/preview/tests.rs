@@ -613,6 +613,11 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     assert_eq!(v["message"], "`tree size` is 20 mm to 120 mm, not 150 mm");
     assert!(cv("size", "40").1["message"].is_null());
     assert!(cv("no-such-control", "150").1["message"].is_null());
+    // a weighting's strength outside its limits is the program's dt::range
+    // message, as a build would say it
+    let m = cv("size", "low(20..60, -2)").1["message"].clone();
+    assert_eq!(m, "low's ratio must be above 0, not -2");
+    assert!(cv("size", "low(20..60, 3)").1["message"].is_null());
     // save: only over the text it was edited from
     let s = serde_json::json!({ "text": edited, "base": "something else" }).to_string();
     let (h, v) = post(
@@ -1468,4 +1473,103 @@ fn the_map_marks_every_point_a_line_or_region_refers_to() {
     );
     assert_eq!(m[1]["at"], serde_json::json!([1.0, 1.0]));
     assert_eq!(m[2]["at"], serde_json::json!([1.2, 0.3]));
+}
+
+fn curve_of(r: &Running, path: &str) -> (String, Value) {
+    let (h, b) = get(r, path);
+    (h, serde_json::from_slice(&b).unwrap_or(Value::Null))
+}
+
+#[test]
+fn the_weightings_route_serves_the_programs_curves() {
+    let r = start(&[], false);
+    // every function over a range, each at its defaults, curves sampled by the program
+    let (h, v) = curve_of(&r, "/api/weightings?range=1..6");
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
+    let names: Vec<&str> = v["functions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "flat", "low", "high", "bell", "peak", "ends", "steps", "list", "mix"
+        ]
+    );
+    let f = |n: &str| {
+        v["functions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["name"] == n)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(f("low")["text"], "low(1..6, 4)");
+    assert_eq!(f("flat")["text"], "1..6");
+    let low = f("low")["curve"]["values"].as_array().unwrap().clone();
+    assert_eq!(low.len(), 64);
+    // the low end is 4 times as likely as the high end (a ratio of end to end)
+    let (first, last) = (low[0].as_f64().unwrap(), low[63].as_f64().unwrap());
+    assert!(
+        first > last && (first / last - 4.0).abs() < 0.2,
+        "{first} {last}"
+    );
+    // a flat range is all 1s, and every curve averages 1
+    for n in ["flat", "low", "bell", "peak", "ends", "steps", "mix"] {
+        let c = f(n)["curve"]["values"].as_array().unwrap().clone();
+        let mean = c.iter().map(|x| x.as_f64().unwrap()).sum::<f64>() / 64.0;
+        assert!((mean - 1.0).abs() < 1e-9, "{n} {mean}");
+    }
+    assert!(
+        f("flat")["curve"]["values"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|x| x == 1.0)
+    );
+    // a list has values and shares, not a curve; the shares add to 1
+    let list = f("list");
+    assert_eq!(list["curve"]["kind"], "masses");
+    let total: f64 = list["curve"]["values"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m[1].as_f64().unwrap())
+        .sum();
+    assert!((total - 1.0).abs() < 1e-9);
+    // the limits come with it
+    assert_eq!(f("bell")["args"][0]["name"], "spread");
+    assert_eq!(f("bell")["args"][0]["least"], 0.05);
+}
+
+#[test]
+fn the_weightings_route_reads_a_value_and_refuses_with_the_programs_words() {
+    let r = start(&[], false);
+    let (_, v) = curve_of(&r, "/api/weightings?fn=low&range=1..6&args=12.5");
+    assert_eq!(v["ok"], true);
+    assert_eq!(v["text"], "low(1..6, 12.5)");
+    assert_eq!(v["function"], "low");
+    assert_eq!(v["numbers"][0], 12.5);
+    // a typed value, canonical
+    let (_, v) = curve_of(&r, "/api/weightings?text=bell(1..6%2C%200.3)");
+    assert_eq!(v["text"], "bell(1..6, 0.3, 0.5)");
+    // out of limits: the dt::range message, not a failure
+    let (h, v) = curve_of(&r, "/api/weightings?fn=low&range=1..6&args=-2");
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    assert_eq!(v["ok"], false);
+    assert_eq!(v["code"], "dt::range");
+    assert_eq!(v["message"], "low's ratio must be above 0, not -2");
+    assert!(v["help"].as_str().unwrap().contains("leans low"));
+    // a value listed twice: dt::weighting
+    let (_, v) = curve_of(&r, "/api/weightings?text=%5B1%3A4%2C%202%3A5%2C%202%3A1%5D");
+    assert_eq!(v["code"], "dt::weighting");
+    // not understood: a 400 with the reason
+    let (h, v) = curve_of(&r, "/api/weightings");
+    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+    assert!(v["error"].is_string());
+    let (h, _) = curve_of(&r, "/api/weightings?fn=wobble&range=1..6");
+    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
 }

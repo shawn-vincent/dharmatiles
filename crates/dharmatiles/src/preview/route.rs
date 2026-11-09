@@ -102,6 +102,10 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         ("GET", "/api/test-panic", _) => panic!("a test panic in a route"),
         ("GET", "/api/session", _) => Reply::Json(OK, json!({ "token": shared.token })),
         ("GET", "/api/elements", _) => Reply::Json(OK, crate::elements::all_json()),
+        ("GET", "/api/weightings", _) => {
+            let (status, body) = crate::weightings::answer(&|k| req.param(k).map(str::to_owned));
+            Reply::Json(status, body)
+        }
         ("GET", "/api/tiles", _) => Reply::Json(OK, shared.snapshot()),
         ("GET", _, Some((id, "mesh"))) => bytes(shared.mesh(id), "no mesh yet"),
         ("GET", _, Some((id, "sketch"))) => bytes(

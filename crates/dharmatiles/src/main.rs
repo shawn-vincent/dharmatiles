@@ -56,6 +56,7 @@ mod mcp;
 mod preview;
 mod progress;
 mod watch;
+mod weightings;
 
 pub(crate) use audit::{read_stl, stl_corner_round, stl_footprint};
 pub(crate) use build::{Extras, build_one, errors_json, report, tile_json};
