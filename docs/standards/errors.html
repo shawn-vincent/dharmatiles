@@ -24,6 +24,7 @@
   <li><a href="#kinds">Two kinds of error</a></li>
   <li><a href="#tell">Telling them apart</a></li>
   <li><a href="#where">Where errors are handled</a></li>
+  <li><a href="#exit">Exit codes</a></li>
   <li><a href="#rust">In the Rust code</a></li>
   <li><a href="#preview">In the preview</a></li>
   <li><a href="#silence">The few allowed silences</a></li>
@@ -41,7 +42,7 @@
 <tr><td>Examples</td><td>An unknown control (<code>dt::unknown-control</code>), a value out of range, a read nothing in the stack writes, a tile that fails the printability gate, an old form that needs <code>dharmatiles migrate</code></td><td>A panic in an element, a Manifold failure, an I/O error writing an STL, a malformed reply from the preview's server, a build worker that died</td></tr>
 <tr><td>Who fixes it</td><td>You, by editing the tile</td><td>A developer</td></tr>
 <tr><td>How it is shown</td><td>A diagnostic with its code, the place in the file, and a help line saying what to write instead; in the preview, beside the line and in the error panel</td><td>Prominently and plainly: what failed, the error's own words, and the details (the chain of causes, the panic message and location) available to copy</td></tr>
-<tr><td>Exit code</td><td>1 when the document is refused; 3 when the tile builds but fails the printability gate</td><td>1, after the message, panics included; never a 0. When a run has both, the error wins: 1</td></tr>
+<tr><td>Exit code</td><td>1 when the document is refused; 3 when the tile builds but fails the printability gate</td><td>1 for a failure that is not a bug (a file that cannot be read or written); 101 for a bug (a panic); never a 0</td></tr>
 </tbody>
 </table></div>
 
@@ -69,13 +70,27 @@
 </tbody>
 </table></div>
 
+<h2 id="exit">Exit codes</h2>
+<p>The command line follows Rust's own convention, the one the Rust compiler uses: 1 when your input is wrong, 101 when the program has a bug.</p>
+<div class="tbl"><table>
+<thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Built, and passed the printability gate</td></tr>
+<tr><td>1</td><td>Refused or failed: a document error, a file that cannot be read or written</td></tr>
+<tr><td>2</td><td>The command line itself is wrong (an unknown flag, a missing argument)</td></tr>
+<tr><td>3</td><td>Built, but failed the printability gate</td></tr>
+<tr><td>101</td><td>A bug: a panic, anywhere, including one caught while building the library</td></tr>
+</tbody>
+</table></div>
+<p>When a run has more than one outcome (<code>build --all</code>), the worst wins: 101, then 1, then 3, then 0.</p>
+
 <h2 id="rust">In the Rust code</h2>
 <ul class="rules">
   <li>Return <code>Result</code> and use <code>?</code>. Add context where it helps (which tile, which element, which file) rather than replacing the error.</li>
   <li>Document errors are <code>miette</code> diagnostics with a <code>dt::</code> code, the span, and a help line. A new refusal gets a new code, not a reused vague one.</li>
   <li>No <code>let _ =</code>, <code>.ok()</code>, <code>unwrap_or_default()</code> or <code>unwrap_or(…)</code> on a result that can fail for real. Writing into a <code>String</code> cannot fail, so <code>let _ = write!(s, …)</code> there is fine.</li>
   <li><code>unwrap</code> and <code>expect</code> only for what cannot happen; an <code>expect</code> message says why it cannot. Anything a document or a file can cause is a <code>Result</code>.</li>
-  <li>A panic is a bug. It is never part of the plan, and a caught panic is still reported. The command line catches any panic that reaches <code>main</code> and exits 1 with its message.</li>
+  <li>A panic is a bug. It is never part of the plan, and a caught panic is still reported, saying it is a bug in dharmatiles, with its message and where it happened.</li>
 </ul>
 
 <h2 id="preview">In the preview</h2>
