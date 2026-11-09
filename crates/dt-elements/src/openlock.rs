@@ -6,8 +6,12 @@
 //! on its output; no code is copied. The OpenLOCK tile system is by
 //! Printable Scenery.
 //!
-//! The base is an 8 mm slab under the whole tile. Every square on the tile
-//! perimeter has a clip socket in its outer edge: a T-shaped slot (14 mm at
+//! The base is an 8 mm slab under the whole tile. Sockets sit on the grid
+//! lines between squares, as on OpenSCAD-OpenLock's parts: along a side
+//! n squares long, one at each of its n - 1 interior lines, or one at the
+//! middle when n is 1 (a 2×2 has one per side, a 4×2 three along its long
+//! sides and one at the middle of its short ones). Each socket is a clip
+//! socket in the tile's outer edge: a T-shaped slot (14 mm at
 //! the mouth, stepping to 12 and 10 mm, 7 mm deep), 4.2 mm tall from 1.4 mm
 //! above the bottom, and behind it a pocket for the clip's head, centred on
 //! the socket: 18 mm along the edge, 4.7 mm deep (6.0 to 10.7 mm in from the
@@ -97,6 +101,19 @@ struct Cutter {
     z1: f64,
 }
 
+/// Where the sockets sit along a side `n` squares long of `s` mm squares,
+/// from its start: on the `n - 1` interior grid lines (the squares' joins),
+/// or at the middle when the side is one square. A tile of any size then
+/// meets its neighbour socket to socket on the same 12.7 mm-grid lines
+/// as the OpenSCAD-OpenLock parts E, R, S, SA and SB.
+fn socket_centres(n: u32, s: f64) -> Vec<f64> {
+    if n <= 1 {
+        vec![s / 2.0]
+    } else {
+        (1..n).map(|i| f64::from(i) * s).collect()
+    }
+}
+
 impl OpenLock {
     /// Every cutter for a `w` × `h` mm tile of `cols` × `rows` squares of
     /// `s` mm: on each perimeter square the T slot, the pocket behind it and
@@ -125,8 +142,7 @@ impl OpenLock {
             self.pocket_start_mm + self.pocket_depth_mm,
         );
         for (n, map) in edges {
-            for i in 0..n {
-                let c = (f64::from(i) + 0.5) * s;
+            for c in socket_centres(n, s) {
                 out.push(Cutter {
                     outline: T_POLY.iter().map(|p| map(c, p[0], p[1])).collect(),
                     z0: self.socket_floor_mm,
@@ -317,7 +333,7 @@ mod tests {
         let v = base_volume(1, 1);
         assert!((v - 2747.328).abs() / 2747.328 < 0.002, "1x1: {v}");
         let v = base_volume(2, 2);
-        assert!((v - 15000.303).abs() / 15000.303 < 0.002, "2x2: {v}");
+        assert!((v - 17404.475).abs() / 17404.475 < 0.002, "2x2: {v}");
     }
 
     #[test]
@@ -344,9 +360,35 @@ mod tests {
 
     #[test]
     fn interior_square_boundaries_stay_solid() {
-        // a 2×1 tile: 2 sockets each on north and south, 1 each on east and
-        // west, three cutters each
+        // a 2×1 tile: one socket each on north and south (on the join), one
+        // each on east and west (the middle of the one-square side)
         let c = OpenLock::default().sockets(2, 1, 25.4, 50.8, 25.4);
-        assert_eq!(c.len(), 6 * 3);
+        assert_eq!(c.len(), 4 * 3);
+    }
+
+    #[test]
+    fn sockets_sit_on_the_interior_grid_lines() {
+        assert_eq!(socket_centres(1, 25.4), vec![12.7]);
+        assert_eq!(socket_centres(2, 25.4), vec![25.4]);
+        let four = socket_centres(4, 25.4);
+        assert!(
+            four.iter()
+                .zip([25.4, 50.8, 76.2])
+                .all(|(a, b)| (a - b).abs() < 1e-9)
+        );
+        let ol = OpenLock::default();
+        // sockets per tile: (cols, rows) -> sides of cols-1 (or 1) twice and rows-1 (or 1) twice
+        for (cols, rows, n) in [
+            (1, 1, 4),
+            (2, 1, 4),
+            (2, 2, 4),
+            (4, 2, 8),
+            (1, 3, 6),
+            (3, 3, 8),
+        ] {
+            let s = 25.4;
+            let c = ol.sockets(cols, rows, s, f64::from(cols) * s, f64::from(rows) * s);
+            assert_eq!(c.len(), n * 3, "{cols}x{rows}");
+        }
     }
 }
