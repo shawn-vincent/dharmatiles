@@ -641,11 +641,11 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         idx
     };
     let mut labels_near = cell_grid(nu, nz, 0usize);
-    for q in 0..nu * nz {
-        labels_near.z[q] = if labels.z[q] != 0 {
-            labels.z[q] as usize
+    for ((out, &l), n) in labels_near.z.iter_mut().zip(&labels.z).zip(&near) {
+        *out = if l != 0 {
+            l as usize
         } else {
-            near[q].map_or(0, |k| labels.z[k] as usize)
+            n.map_or(0, |k| labels.z[k] as usize)
         };
     }
     let nl = n_labels as usize + 1;

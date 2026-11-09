@@ -145,7 +145,7 @@ pub(crate) fn cells(m: &Mason, run: &Run, courses: &Courses, rng: &mut Rng) -> (
         for c in &mut cells {
             c.is_top = false;
         }
-        cells.extend(coping_cells(&run.segs, run.thickness, hc, h, s, rng));
+        cells.extend(coping_cells(&run.segs, run.across, hc, h, s, rng));
     }
     let cap_z0 = cells
         .iter()
@@ -451,12 +451,12 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
     let corner = (PROUD_DEEP.1 + 0.1) * s;
     let (mut ov0, mut ov1) = (ov0, ov1);
     if !run.laid && !c.coping {
-        if c.seg > 0 && c.end0 == End::Joint && libm::fabs(c.t0 - run.thickness) < 1e-6 {
+        if c.seg > 0 && c.end0 == End::Joint && libm::fabs(c.t0 - run.across) < 1e-6 {
             ov0 += corner;
         }
         if c.seg + 1 < run.segs.len()
             && c.end1 == End::Joint
-            && libm::fabs(c.t1 - (g.len - run.thickness)) < 1e-6
+            && libm::fabs(c.t1 - (g.len - run.across)) < 1e-6
         {
             ov1 += corner;
         }
@@ -795,9 +795,9 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
         }
     };
     let y0 = recess(&mut r);
-    let mut y1 = run.thickness - recess(&mut r);
+    let mut y1 = run.across - recess(&mut r);
     if run.laid {
-        y1 = run.thickness + 1.0;
+        y1 = run.across + 1.0;
     }
     let ctr = centroid(&ring);
     let a = [
@@ -838,8 +838,8 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
         if run.on_edge(c.seg, [c.t0, 0.0], [c.t1, 0.0]) {
             y0 = y0.max(swell);
         }
-        if run.on_edge(c.seg, [c.t0, run.thickness], [c.t1, run.thickness]) {
-            y1 = y1.min(run.thickness - swell);
+        if run.on_edge(c.seg, [c.t0, run.across], [c.t1, run.across]) {
+            y1 = y1.min(run.across - swell);
         }
     }
     let under = if c.is_bottom || run.laid || c.coping {

@@ -508,14 +508,11 @@ fn solve_on(
         if !ok {
             continue;
         }
-        let ease = if let (true, true, Some(slope)) = (land, pieces, b.slope) {
-            // a pieces body steps between its pins, unless it is told how
-            // steeply its pieces stand
-            Ease::Slope(slope)
-        } else if land && pieces {
+        let ease = if land && pieces {
             // a floor's slabs and a cliff's stones step: a pin holds its
-            // place, nothing eases
-            Ease::Step
+            // place, nothing eases, unless the body is told how steeply its
+            // pieces stand
+            b.slope.map_or(Ease::Step, Ease::Slope)
         } else if land {
             Ease::Slope(b.slope.unwrap_or(dt_elements::dirt::SLOPE_DEG))
         } else {
@@ -620,9 +617,7 @@ fn solve_on(
                     );
                 }
                 Lint::Steep(_) => {}
-                // a default pin the tile covers with its own is the way a tile
-                // overrides it: nothing to say
-                Lint::Shadowed(sh) if decls[sh.pin].from.default => {}
+                Lint::Shadowed(sh) if is_default_pin(decls[sh.pin]) => {}
                 Lint::Shadowed(sh) => {
                     let p = decls[sh.pin];
                     let by: Vec<String> =
@@ -816,6 +811,14 @@ fn solve_on(
     } else {
         Err(errors)
     }
+}
+
+/// A pin the library's defaults supply. A tile overrides one by covering it
+/// with a pin of its own, so being shadowed is what it is for: `dt::shadowed`
+/// is said of the tile's own pins only (the language guide says so, and a
+/// test in `tests/heights.rs` holds it).
+fn is_default_pin(p: &PinDecl) -> bool {
+    p.from.default
 }
 
 fn pin_label(p: &PinDecl) -> String {

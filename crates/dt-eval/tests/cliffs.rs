@@ -11,6 +11,20 @@ fn mem(text: &str) -> Memory {
     Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect())
 }
 
+/// The library's dirt edge height, mm: the ground round a pile.
+const EDGE_MM: f64 = 3.4;
+/// The tallest pebble bedded in that ground, mm (`pebble size` tops at 4.5).
+const PEBBLE_MAX_MM: f64 = 4.5;
+/// The film's band over the stone's top, mm (the tile writes `bottom + [0.6 .. 1.2]`).
+const FILM_MIN_MM: f64 = 0.6;
+const FILM_MAX_MM: f64 = 1.2;
+/// How far the rock under a film triangle may differ from the highest rock
+/// in the 3 x 3 cells round it: the cells are 0.25 mm and a top's slope under
+/// a film is under 35 degrees, so about 0.75 * 0.7; and the float32 round.
+const CELL_SLOPE_MM: f64 = 0.6;
+/// A vertex this near the tile's plane is on it, mm.
+const FLAT_MM: f64 = 0.1;
+
 /// A free-standing pile on the library's dirt, with the film or without it.
 fn mound(film: bool) -> String {
     format!(
@@ -68,7 +82,7 @@ fn top_of(b: &Built, material: Material, disc: Option<([f64; 2], f64)>) -> f64 {
 fn every_stone_top_stands_in_its_band_and_the_pile_reaches_it() {
     let b = built(&mound(false));
     assert!(b.audit.failures(&Options::default().printer).is_empty());
-    let edge = 3.4;
+    let edge = EDGE_MM;
     // nothing passes the band's highest high (the build refuses a stone
     // over its own band: a bug in the body)
     assert!(
@@ -133,24 +147,27 @@ fn table(film: bool) -> String {
 }
 
 #[test]
-fn a_film_lies_only_on_stones_that_stand_and_is_thick_enough() {
+fn a_film_lies_only_on_stones_that_stand_and_is_a_layer_of_its_band() {
     let (bare, filmed) = (built(&table(false)), built(&table(true)));
     let rock = rock_tops(&bare);
     let cell = |v: f64| (v / 0.25).round() as i32;
     let (mut film, mut over, mut bare) = (0_usize, 0_usize, 0_usize);
+    let mut gaps: Vec<f64> = Vec::new();
     for (t, m) in filmed.export.mesh.triangles.iter().zip(&filmed.materials) {
         if *m != Material::Earth {
             continue;
         }
         let ps = t.map(|i| filmed.export.mesh.positions[i as usize]);
         let c = [0, 1, 2].map(|k| (ps[0][k] + ps[1][k] + ps[2][k]) / 3.0);
-        // the ground round the pile is under 8 mm: higher earth is film
-        if c[2] < 8.0 {
+        // the ground round the pile is under its edge height and a pebble:
+        // higher earth is film
+        if c[2] < EDGE_MM + PEBBLE_MAX_MM {
             continue;
         }
         film += 1;
-        // a stone stands under it, within the film's thickness (0.6 to 1.2 mm
-        // over the stone's top, less the grain)
+        // a stone stands under it: the film is the band's thickness over
+        // its top, grain pits cut into it, so it lies between a cell's slope
+        // under the stone's top and the band's high over it
         let near = (-1..=1)
             .flat_map(|di| (-1..=1).map(move |dj| (di, dj)))
             .filter_map(|(di, dj)| rock.get(&(cell(c[0]) + di, cell(c[1]) + dj)))
@@ -158,12 +175,29 @@ fn a_film_lies_only_on_stones_that_stand_and_is_thick_enough() {
             .fold(f64::MIN, f64::max);
         if near <= f64::MIN {
             bare += 1;
+            continue;
         }
-        if near > f64::MIN && c[2] - near > -0.5 && c[2] - near < 2.5 {
+        gaps.push(c[2] - near);
+        if c[2] - near >= -CELL_SLOPE_MM && c[2] - near <= FILM_MAX_MM + CELL_SLOPE_MM {
             over += 1;
         }
     }
+    gaps.sort_by(f64::total_cmp);
     assert!(film > 100, "the film is laid: {film}");
+    // never over the band's high (grain is held under it) ...
+    let highest = gaps.last().copied().unwrap();
+    assert!(
+        highest <= FILM_MAX_MM + 0.05,
+        "a film triangle {highest} mm over the stone's top, band high {FILM_MAX_MM}"
+    );
+    // ... and the film as a whole is a layer of that band: its middle lies
+    // between nothing and the band's high (grain pits take it below the
+    // band's low, by design; a half of it is over half the least thickness)
+    let median = gaps[gaps.len() / 2];
+    assert!(
+        median > 0.5 * FILM_MIN_MM - CELL_SLOPE_MM && median < FILM_MAX_MM,
+        "median film {median} mm over the stone"
+    );
     // none lies where no stone stands, and all but the film's own edge (a
     // wall a lip's width from the stone's top) lie within its thickness of one
     assert_eq!(bare, 0, "film triangles over no stone at all");
@@ -177,10 +211,11 @@ fn a_film_lies_only_on_stones_that_stand_and_is_thick_enough() {
 /// The share of the side's vertices (above the base, under `z_max`) within
 /// 0.1 mm of the plane, and the number of 3 mm windows of the side that are
 /// flat: every vertex in the window on the plane.
-fn side_grain(b: &Built, axis: usize, high: bool, z_max: f64) -> (f64, usize, usize) {
+fn side_grain(b: &Built, axis: usize, high: bool, z_max: f64) -> (f64, usize, usize, f64) {
     let [w, h] = b.footprint;
     let size = [w, h];
     let (mut near, mut on) = (0_u32, 0_u32);
+    let mut depths: Vec<f64> = Vec::new();
     let mut windows: std::collections::HashMap<(i32, i32), (bool, u32)> = Default::default();
     for p in &b.export.mesh.positions {
         if p[2] < 0.5 || p[2] > z_max {
@@ -191,7 +226,8 @@ fn side_grain(b: &Built, axis: usize, high: bool, z_max: f64) -> (f64, usize, us
             continue;
         }
         near += 1;
-        let flat = d < 0.1;
+        depths.push(d);
+        let flat = d < FLAT_MM;
         if flat {
             on += 1;
         }
@@ -203,10 +239,13 @@ fn side_grain(b: &Built, axis: usize, high: bool, z_max: f64) -> (f64, usize, us
         e.1 += 1;
     }
     let flat_windows = windows.values().filter(|(f, n)| *f && *n > 20).count();
+    let mean = depths.iter().sum::<f64>() / depths.len().max(1) as f64;
+    let var = depths.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / depths.len().max(1) as f64;
     (
         f64::from(on) / f64::from(near.max(1)),
         flat_windows,
         windows.len(),
+        var.sqrt(),
     )
 }
 
@@ -220,13 +259,21 @@ fn the_tiles_outer_sides_carry_grain_all_the_way_up() {
         // the crag stands on the north (and west) sides; every side, the
         // foot of the stones included, is grained like the top
         for (axis, high) in [(0, false), (0, true), (1, false), (1, true)] {
-            let (share, flat, total) = side_grain(&b, axis, high, 9.0);
+            let (share, flat, total, spread) = side_grain(&b, axis, high, 9.0);
+            // a face on the plane has every vertex within FLAT_MM of it, so
+            // its depths spread by at most FLAT_MM / 2; grain spreads them by
+            // more than twice that (0.2 to 0.3 mm in the library's cliffs)
             assert!(
-                share <= 0.97,
-                "{path} side {axis}{high}: a flat face, {share}"
+                spread > FLAT_MM,
+                "{path} side {axis}{high}: depths spread {spread} mm, a flat face's is at most {}",
+                FLAT_MM / 2.0
             );
             assert!(
-                flat * 10 <= total.max(1),
+                share <= 0.6,
+                "{path} side {axis}{high}: a flat face, {share}"
+            );
+            assert_eq!(
+                flat, 0,
                 "{path} side {axis}{high}: {flat} of {total} windows are flat"
             );
         }
@@ -270,6 +317,19 @@ fn every_old_cliff_form_migrates_to_a_tile_that_checks_clean() {
             "{form}: {:?}\n{new}",
             c.notes()
         );
+        // and it builds, on the quick setting (the gate is for full builds):
+        // there are stones, and they are rock
+        let draft = Options {
+            draft: true,
+            ..Options::default()
+        };
+        let b = build(&mem(&new), "t.dtile", &draft)
+            .unwrap_or_else(|e| panic!("{form} does not build\n{new}\n{e:#?}"));
+        assert!(note(&b, "cliff_stones") > 0.0, "{form}: no stones\n{new}");
+        assert!(
+            top_of(&b, Material::Rock, None) > EDGE_MM + 3.0,
+            "{form}: no pile\n{new}"
+        );
     }
 }
 
@@ -282,13 +342,20 @@ fn the_ledges_and_the_shattered_controls_still_parse() {
     check(&mem(&text), "t.dtile", &Options::default()).unwrap();
 }
 
+fn note(b: &Built, name: &str) -> f64 {
+    b.notes
+        .iter()
+        .find(|(k, _)| k == name)
+        .map(|(_, v)| *v)
+        .unwrap()
+}
+
 #[test]
 fn a_band_that_holds_a_stone_down_does_not_stack_it_on_itself() {
     // the spire's lumps have wide bands one over the other: a stone standing
     // over two of them is held to the lower one's high, and the stack once
     // placed that same stone again and again at its site (dozens of
     // coincident solids, a union that never finished)
-    let start = std::time::Instant::now();
     let b = build(
         &Library,
         "lib:tiles/cliffs/1x1-cliff-spire.dtile",
@@ -296,8 +363,8 @@ fn a_band_that_holds_a_stone_down_does_not_stack_it_on_itself() {
     )
     .unwrap();
     assert!(b.audit.failures(&Options::default().printer).is_empty());
-    assert!(start.elapsed().as_secs() < 120, "{:?}", start.elapsed());
-    // no two stones are the same solid: the written mesh has no coincident
-    // pairs of large faces, so repairs stay few
-    assert!(b.audit.pinches_moved < 20_000, "{}", b.audit.pinches_moved);
+    // the property: no stone is the same solid as another (the build drops
+    // repeats as a guard and counts them)
+    assert_eq!(note(&b, "cliff_repeated_stones"), 0.0);
+    assert!(note(&b, "cliff_stones") > 0.0);
 }

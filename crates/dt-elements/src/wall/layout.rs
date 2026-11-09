@@ -189,7 +189,7 @@ fn running_cuts(t0: f64, t1: f64, brick: f64, offset: f64) -> Vec<f64> {
 /// The layout's inputs.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Courses {
-    pub thickness: f64,
+    pub across: f64,
     pub height: f64,
     pub course: (f64, f64),
     pub bay: (f64, f64),
@@ -200,7 +200,7 @@ pub(crate) struct Courses {
 /// `_layout`: courses × bays × quoin alternation → cells. Wall
 /// ends are always textured faces.
 pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
-    let t = c.thickness;
+    let t = c.across;
     let running = c.bond == Bond::Running;
     let heights = if running {
         running_heights(c.height, c.course.0, c.course.1)
@@ -399,9 +399,9 @@ impl Envelope {
 }
 
 /// A cell's plan rectangle `[x0, y0, x1, y1]`.
-fn plan(segs: &[Seg], c: &Cell, thickness: f64) -> [f64; 4] {
+fn plan(segs: &[Seg], c: &Cell, across: f64) -> [f64; 4] {
     let g = &segs[c.seg];
-    let p = [g.at(c.t0, 0.0), g.at(c.t1, thickness)];
+    let p = [g.at(c.t0, 0.0), g.at(c.t1, across)];
     [
         p[0][0].min(p[1][0]),
         p[0][1].min(p[1][1]),
@@ -416,7 +416,7 @@ fn plan(segs: &[Seg], c: &Cell, thickness: f64) -> [f64; 4] {
 pub(crate) fn ruin_cells(
     cells: Vec<Cell>,
     segs: &[Seg],
-    thickness: f64,
+    across: f64,
     height: f64,
     ruin: f64,
     scale: f64,
@@ -442,7 +442,7 @@ pub(crate) fn ruin_cells(
         // segment: corner blocks of one segment stand on the other's;
         // its top at this one's bottom)
         let unsupported = gone.iter().any(|g| {
-            let (a, b) = (plan(segs, g, thickness), plan(segs, &c, thickness));
+            let (a, b) = (plan(segs, g, across), plan(segs, &c, across));
             (g.z1 - c.z0).abs() < 0.6
                 && a[0].max(b[0]) < a[2].min(b[2]) - 0.5
                 && a[1].max(b[1]) < a[3].min(b[3]) - 0.5
@@ -471,7 +471,7 @@ mod tests {
         let segs = corner();
         let mut rng = Rng::new(dt_kit::Seed::new(3));
         let c = Courses {
-            thickness: 7.0,
+            across: 7.0,
             height: 28.0,
             course: (5.5, 8.5),
             bay: (11.0, 20.0),
@@ -512,7 +512,7 @@ mod tests {
         let segs = segments(&[[35.0, 35.0], [0.0, 35.0]]).unwrap();
         let mut rng = Rng::new(dt_kit::Seed::new(1));
         let c = Courses {
-            thickness: 7.0,
+            across: 7.0,
             height: 28.8,
             course: (3.2, 3.2),
             bay: (8.5, 8.5),

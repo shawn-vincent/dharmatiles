@@ -464,6 +464,22 @@ pub struct Element {
 }
 
 impl Element {
+    /// What a table entry starts from: no required place words, nothing held,
+    /// scattered or honoured, not a pieces body. An entry writes what differs
+    /// and takes `..Element::BASE`.
+    pub const BASE: Self = Self {
+        name: "",
+        about: "",
+        role: Role::Thing,
+        place: &[],
+        needs: &[],
+        holds_scatter: false,
+        honours: &[],
+        scattered: false,
+        pieces: false,
+        controls: &[],
+    };
+
     /// A control by name.
     #[must_use]
     pub fn control(&'static self, name: &str) -> Option<&'static Control> {

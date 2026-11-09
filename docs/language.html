@@ -354,7 +354,7 @@ define oak {
 <tr><td><code>dt::thin</code></td><td>solve</td><td>A layer that can never be as thick as the printer's skin (three layers).<br><code>the dirt is at most 0.30 mm thick at (17.50, 17.50) mm, under the 0.60 mm the printer's skin needs</code></td></tr>
 <tr><td><code>dt::missing-control</code></td><td>solve</td><td>A body with no top and no default, such as a cliff.</td></tr>
 <tr><td><code>dt::steep</code></td><td>note</td><td>Pins force dirt past its slope.<br><code>the dirt is forced to 43.8°, steeper than its 24° slope: 5.33 mm up to 5.59 mm over 0.27 mm</code></td></tr>
-<tr><td><code>dt::shadowed</code></td><td>note</td><td>A pin that wins nowhere because later pins cover all of its place.</td></tr>
+<tr><td><code>dt::shadowed</code></td><td>note</td><td>A pin of the tile’s own that wins nowhere because later pins cover all of its place. A pin the library supplies is never reported: covering it is how a tile overrides it.</td></tr>
 <tr><td><code>dt::edge</code></td><td>note</td><td>Where the tile's own pins move a body off the library's edge height, so it no longer butts a standard tile.<br><code>the dirt meets the tile's edge at a height of its own … along the south edge 0.00 to 1.00 (squares)</code></td></tr>
 </tbody></table></div>
 <p>A note does not stop the build; <code>check</code> prints it after the tile's line. The pins named in a note are the ones that cause it.</p>

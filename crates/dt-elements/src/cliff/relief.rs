@@ -105,8 +105,9 @@ fn fit(us: &[f64], zs: &[f64], k: &[(usize, usize)], front: &Field) -> [f64; 3] 
         for r in 0..3 {
             if r != col {
                 let f = m[r][col] / m[col][col];
-                for c in col..4 {
-                    m[r][c] -= f * m[col][c];
+                let pivot = m[col];
+                for (v, p) in m[r].iter_mut().zip(pivot).skip(col) {
+                    *v -= f * p;
                 }
             }
         }
@@ -281,12 +282,12 @@ pub fn relief(
         // G, F sampled from the face
         let mut gg = cell_grid(n_us, n_zs, 0.0_f64);
         let mut ff = cell_grid(n_us, n_zs, 0.0_f64);
-        for j in 0..n_zs {
-            for i in 0..n_us {
-                let (cxu, cz) = (us[i] / RELIEF_GRID_MM, (zs[j] - fc.z0) / RELIEF_GRID_MM);
+        for (j, &zj) in zs.iter().enumerate().take(n_zs) {
+            for (i, &ui) in us.iter().enumerate().take(n_us) {
+                let (cxu, cz) = (ui / RELIEF_GRID_MM, (zj - fc.z0) / RELIEF_GRID_MM);
                 gg.set(i, j, sample(&fc.g, cxu, cz, true));
                 let mut fv = sample(&fc.f, cxu, cz, false);
-                fv *= smooth01(us[i].min(fc.l - us[i]) / FACET_END_MM);
+                fv *= smooth01(ui.min(fc.l - ui) / FACET_END_MM);
                 ff.set(i, j, fv);
             }
         }
@@ -311,9 +312,9 @@ pub fn relief(
         let (_, near) = hit.distance();
         let fnear = |f: &Field| -> Field {
             let mut o = f.clone();
-            for q in 0..nn {
-                if let Some(k) = near[q] {
-                    o.z[q] = f.z[k];
+            for (z, n) in o.z.iter_mut().zip(&near) {
+                if let Some(k) = *n {
+                    *z = f.z[k];
                 }
             }
             o
@@ -326,9 +327,9 @@ pub fn relief(
         let base = if core.is_none() && k.len() > 50 {
             let c = fit(&us, &zs, &k, &front);
             let mut b = cell_grid(n_us, n_zs, 0.0_f64);
-            for j in 0..n_zs {
-                for i in 0..n_us {
-                    b.set(i, j, c[0] + c[1] * us[i] + c[2] * zs[j]);
+            for (j, &zj) in zs.iter().enumerate().take(n_zs) {
+                for (i, &ui) in us.iter().enumerate().take(n_us) {
+                    b.set(i, j, c[0] + c[1] * ui + c[2] * zj);
                 }
             }
             b

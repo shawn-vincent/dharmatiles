@@ -120,7 +120,7 @@ impl Flagstones {
             m
         };
         m.laid = true;
-        m.thickness = DEPTH_MM;
+        m.across = DEPTH_MM;
         if fieldstone {
             m.edge_pull = FIELDSTONE_PULL_MM;
         } else {
@@ -173,7 +173,7 @@ impl Planks {
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut m = Mason::new(Family::Slab);
         m.laid = true;
-        m.thickness = DEPTH_MM;
+        m.across = DEPTH_MM;
         m.joint = 0.3;
         m.reveal = 1.0;
         m.face_recess = 0.0;
@@ -324,7 +324,7 @@ fn lay(
     // the pieces' own stamp replaces the flat one
     let none = Mask::new(nx, ny, false);
     wall::finish_build(scene, ctx, Kind::Floor, solid, counts, &none, 0.0);
-    scene.stamp_heights(&tops);
+    scene.stamp_heights(&tops, dt_kit::Under::Bedding);
     Ok(())
 }
 

@@ -86,7 +86,11 @@ pub(crate) enum Height {
 pub(crate) struct Mason {
     pub family: Family,
     pub laid: bool,
-    pub thickness: f64,
+    /// How far the mass reaches across the run (wall-local q), author mm at
+    /// the reference: the `thickness` control of a standing wall, the depth of
+    /// a laid slab (its height once laid on its side). Not named `thickness`:
+    /// the same number means two things by `laid`.
+    pub across: f64,
     pub height: Height,
     pub course: (f64, f64),
     pub bay: (f64, f64),
@@ -126,7 +130,7 @@ impl Mason {
         let base = Self {
             family,
             laid: false,
-            thickness: 7.0,
+            across: 7.0,
             height: Height::Top(WALL_TOP_MM),
             course: (5.5, 8.5),
             bay: (11.0, 20.0),
@@ -239,7 +243,7 @@ impl Wall {
                         _ => Height::Rel(read::number(c)?),
                     }
                 }
-                "thickness" => m.thickness = read::number(c)?,
+                "thickness" => m.across = read::number(c)?,
                 "stones/height" => m.course = read::span(c)?,
                 "stones/length" => m.bay = read::span(c)?,
                 "stones/texture" => {
@@ -284,14 +288,14 @@ impl Wall {
         // cannot have); a family's default depth is made shallower to fit
         // (they asked for a thin wall, and its joints follow).
         if family != Family::Fieldstone {
-            let deepest = 0.5 * (m.thickness - MIN_CORE_MM);
+            let deepest = 0.5 * (m.across - MIN_CORE_MM);
             if m.reveal > deepest {
                 if depth_set {
                     return Err(LookError::control(
                         "joints/depth",
                         format!(
                             "joints {} mm deep leave no mortar core in a wall {} mm thick, so the stones would float",
-                            m.reveal, m.thickness
+                            m.reveal, m.across
                         ),
                         format!(
                             "make joints depth at most {:.2} mm, or the wall thicker than {:.2} mm",
@@ -372,7 +376,7 @@ mod tests {
             c("thickness", Value::Number(2.0)),
         ])
         .unwrap();
-        assert!(w.mason.thickness - 2.0 * w.mason.reveal >= MIN_CORE_MM - 1e-12);
+        assert!(w.mason.across - 2.0 * w.mason.reveal >= MIN_CORE_MM - 1e-12);
         // a depth the author wrote that leaves no core is refused
         let e = Wall::new(&[
             c("thickness", Value::Number(7.0)),

@@ -716,12 +716,10 @@ const fn thing(
         about,
         role: Role::Thing,
         place: THING_PLACE,
-        needs: &[],
-        holds_scatter: false,
         honours: &[PlaceWord::At],
         scattered,
-        pieces: false,
         controls,
+        ..Element::BASE
     }
 }
 
@@ -732,11 +730,7 @@ pub static ELEMENTS: &[Element] = &[
         about: "a textured earth surface: clods, grit and pebbles over gentle rises",
         role: Role::Surface,
         place: SURFACE_PLACE,
-        needs: &[],
         holds_scatter: true,
-        honours: &[],
-        scattered: false,
-        pieces: false,
         controls: &[
             BUMP_SIZE,
             c("clods", Axis::Word, "lumps of earth on the surface")
@@ -750,17 +744,14 @@ pub static ELEMENTS: &[Element] = &[
             .words(STONES)
             .default("some"),
         ],
+        ..Element::BASE
     },
     Element {
         name: "grass",
         about: "separate sculpted blades in tufts",
         role: Role::Surface,
         place: SURFACE_PLACE,
-        needs: &[],
         holds_scatter: true,
-        honours: &[],
-        scattered: false,
-        pieces: false,
         controls: &[
             c("length", Axis::Mm, "blade length along the ground")
                 .over(0.0, f64::INFINITY)
@@ -791,17 +782,13 @@ pub static ELEMENTS: &[Element] = &[
                 .words(FLOW)
                 .default("wavy"),
         ],
+        ..Element::BASE
     },
     Element {
         name: "reeds",
         about: "clumps of tapered reeds at the waterline, leaning toward the water",
         role: Role::Surface,
         place: &[PlaceWord::In],
-        needs: &[],
-        holds_scatter: false,
-        honours: &[],
-        scattered: false,
-        pieces: false,
         controls: &[
             c("clumps", Axis::Count, "how many clumps along the shore")
                 .limits(0.0, 30.0)
@@ -816,17 +803,13 @@ pub static ELEMENTS: &[Element] = &[
                 .ranges()
                 .default("8..13"),
         ],
+        ..Element::BASE
     },
     Element {
         name: "flowers",
         about: "wildflowers: a thin dome on a column, ringed by petal domes on cones",
         role: Role::Surface,
         place: SURFACE_PLACE,
-        needs: &[],
-        holds_scatter: false,
-        honours: &[],
-        scattered: false,
-        pieces: false,
         controls: &[
             c("per-square", Axis::PerSquare, "how many flowers a square")
                 .limits(0.0, 40.0)
@@ -850,18 +833,15 @@ pub static ELEMENTS: &[Element] = &[
                 .limits(0.2, 4.0)
                 .default("0.5"),
         ],
+        ..Element::BASE
     },
     Element {
         name: "water",
         about: "still water with swells round its shores and rocks: fills its area up to its level",
         role: Role::Surface,
         place: &[PlaceWord::In],
-        needs: &[],
-        holds_scatter: false,
-        honours: &[],
-        scattered: false,
-        pieces: false,
         controls: &[],
+        ..Element::BASE
     },
     thing("rock", "one rock", &ROCK, true),
     thing("stone", "a rock with stone sizes, about 1–6 mm", &STONE, true),
@@ -883,47 +863,36 @@ pub static ELEMENTS: &[Element] = &[
         role: Role::Run,
         place: RUN_PLACE,
         needs: &[PlaceWord::Along],
-        holds_scatter: false,
         honours: &[PlaceWord::Along],
-        scattered: false,
-        pieces: false,
         controls: WALL,
+        ..Element::BASE
     },
     Element {
         name: "flagstones",
         about: "a floor of stone slabs, a wall laid on its side; each slab's height and tilt is drawn inside its band",
         role: Role::Surface,
         place: &[PlaceWord::In],
-        needs: &[],
-        holds_scatter: false,
-        honours: &[],
-        scattered: false,
         pieces: true,
         controls: FLAGSTONES,
+        ..Element::BASE
     },
     Element {
         name: "planks",
         about: "a floor of wooden boards; each board's height and tilt is drawn inside its band",
         role: Role::Surface,
         place: &[PlaceWord::In],
-        needs: &[],
-        holds_scatter: false,
-        honours: &[],
-        scattered: false,
         pieces: true,
         controls: PLANKS,
+        ..Element::BASE
     },
     Element {
         name: "cliff",
         about: "a cliff of stacked rock: stones stacked so their tops span the band, in its region",
         role: Role::Surface,
         place: SURFACE_PLACE,
-        needs: &[],
-        holds_scatter: false,
-        honours: &[],
-        scattered: false,
         pieces: true,
         controls: CLIFF,
+        ..Element::BASE
     },
     Element {
         name: "scatter",
@@ -935,12 +904,9 @@ pub static ELEMENTS: &[Element] = &[
             PlaceWord::Against,
             PlaceWord::At,
         ],
-        needs: &[],
-        holds_scatter: false,
         honours: &[PlaceWord::Against],
-        scattered: false,
-        pieces: false,
         controls: SCATTER,
+        ..Element::BASE
     },
 ];
 

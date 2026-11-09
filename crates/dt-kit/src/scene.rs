@@ -101,6 +101,31 @@ impl Frame {
         self
     }
 
+    /// The nodes inside the box `lo..hi` (mm) grown by `grow` mm, as the
+    /// column and row ranges: `(i0..i1, j0..j1)`, empty where the box is
+    /// off the tile.
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    pub fn node_range(
+        &self,
+        lo: [f64; 2],
+        hi: [f64; 2],
+        grow: f64,
+    ) -> (std::ops::Range<usize>, std::ops::Range<usize>) {
+        let (nx, ny) = self.nodes();
+        let step = self.step_mm();
+        let range = |a: f64, b: f64, n: usize| {
+            let first = ((a - grow) / step).ceil().max(0.0).min(n as f64) as usize;
+            let end = (((b + grow) / step).floor().max(-1.0) + 1.0).min(n as f64) as usize;
+            first..end.max(first)
+        };
+        (range(lo[0], hi[0], nx), range(lo[1], hi[1], ny))
+    }
+
     /// How much an author's mm grow or shrink on this system.
     #[must_use]
     pub fn scale(&self) -> f64 {
@@ -523,10 +548,21 @@ pub struct Terrain {
     wet: Mask,
     stone: Mask,
     support: Option<Grid>,
-    /// Nodes whose stamped support is not painted as bedding (a cliff's
-    /// stones stand on earth that looks like earth).
-    unbedded: Vec<bool>,
+    /// How the support at each node is painted, set by the first stamp
+    /// there.
+    under: Vec<Under>,
     rest: Option<Rest>,
+}
+
+/// How the ground under what is stamped on it is painted.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Under {
+    /// The flat bedding colour (a floor's slabs stand on it).
+    #[default]
+    Bedding,
+    /// The earth's own paint, sides and ground in its grain (a cliff's
+    /// stones stand on earth that looks like earth).
+    Earth,
 }
 
 /// What a pieces body's tops give a layer laid on it (a dirt film on
@@ -554,7 +590,7 @@ impl Terrain {
             wet: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
             support: None,
-            unbedded: Vec::new(),
+            under: vec![Under::Bedding; nx * ny],
             rest: None,
         }
     }
@@ -565,65 +601,47 @@ impl Terrain {
     }
 
     /// **stamp**: a solid's footprint and top (world mm): the support
-    /// under it rises to `top_mm` (never falls). Things that stand on
-    /// others (a wall on a floor) and things that grow round them read
-    /// it through [`Scene::support`].
+    /// under it rises to `top_mm` (never falls), painted as bedding. Things
+    /// that stand on others (a wall on a floor) and things that grow round
+    /// them read it through [`Scene::support`].
     pub fn stamp(&mut self, footprint: &Mask, top_mm: f64) {
-        let (nx, ny) = self.frame.nodes();
-        let step = self.frame.step_mm();
-        let s = self
-            .support
-            .get_or_insert_with(|| Grid::filled(nx, ny, step, f32::NEG_INFINITY));
-        #[allow(clippy::cast_possible_truncation)]
-        let z = top_mm as f32;
         for (k, _) in footprint.bits.iter().enumerate().filter(|(_, b)| **b) {
-            s.z[k] = s.z[k].max(z);
+            self.raise(k, top_mm, Under::Bedding);
         }
     }
 
     /// **stamp_heights**: a pieces body's tops, one per node (world mm,
-    /// `-∞` where it has none): the support rises to each, never falls.
-    pub fn stamp_heights(&mut self, tops: &[f64]) {
+    /// `-∞` where it has none): the support rises to each, never falls. A
+    /// node nothing has stamped before takes `under` as its paint; a stamped
+    /// one keeps the paint of the first stamp.
+    pub fn stamp_heights(&mut self, tops: &[f64], under: Under) {
+        for (k, &t) in tops.iter().enumerate().filter(|(_, t)| t.is_finite()) {
+            self.raise(k, t, under);
+        }
+    }
+
+    fn raise(&mut self, k: usize, top_mm: f64, under: Under) {
         let (nx, ny) = self.frame.nodes();
         let step = self.frame.step_mm();
         let s = self
             .support
             .get_or_insert_with(|| Grid::filled(nx, ny, step, f32::NEG_INFINITY));
-        for (k, &t) in tops.iter().enumerate().filter(|(_, t)| t.is_finite()) {
-            #[allow(clippy::cast_possible_truncation)]
-            let z = t as f32;
-            s.z[k] = s.z[k].max(z);
+        if s.z[k] == f32::NEG_INFINITY {
+            self.under[k] = under;
         }
+        #[allow(clippy::cast_possible_truncation)]
+        let z = top_mm as f32;
+        s.z[k] = s.z[k].max(z);
     }
 
-    /// **stamp_heights_bare**: like [`Terrain::stamp_heights`], but the
-    /// earth under it keeps its own paint, the sides and ground in the
-    /// earth's grain, not the flat bedding colour of a floor's.
-    pub fn stamp_heights_bare(&mut self, tops: &[f64]) {
-        if self.unbedded.is_empty() {
-            self.unbedded = vec![false; tops.len()];
-        }
-        for (k, t) in tops.iter().enumerate() {
-            if t.is_finite()
-                && self
-                    .support
-                    .as_ref()
-                    .is_none_or(|s| s.z[k] == f32::NEG_INFINITY)
-            {
-                self.unbedded[k] = true;
-            }
-        }
-        self.stamp_heights(tops);
-    }
-
-    /// Where the support is painted as bedding: stamped, and not bare.
+    /// Where the support is painted as bedding: stamped, and not earth.
     #[must_use]
     pub fn bedded(&self) -> Option<Vec<bool>> {
         let s = self.support.as_ref()?;
         Some(
             s.z.iter()
-                .enumerate()
-                .map(|(k, z)| z.is_finite() && !self.unbedded.get(k).copied().unwrap_or(false))
+                .zip(&self.under)
+                .map(|(z, u)| z.is_finite() && *u == Under::Bedding)
                 .collect(),
         )
     }
@@ -1055,15 +1073,10 @@ impl Scene {
     }
 
     /// **stamp_heights**: a pieces body's tops, one per node (`-∞` where it
-    /// has none); see [`Terrain::stamp_heights`].
-    pub fn stamp_heights(&mut self, tops: &[f64]) {
-        self.terrain.stamp_heights(tops);
-    }
-
-    /// **stamp_heights_bare**: as [`Scene::stamp_heights`], with the earth
-    /// under it painted as earth, not as bedding.
-    pub fn stamp_heights_bare(&mut self, tops: &[f64]) {
-        self.terrain.stamp_heights_bare(tops);
+    /// has none), and how the ground under them is painted; see
+    /// [`Terrain::stamp_heights`].
+    pub fn stamp_heights(&mut self, tops: &[f64], under: Under) {
+        self.terrain.stamp_heights(tops, under);
     }
 
     /// Where the support is painted as bedding.

@@ -26,14 +26,12 @@
 //! Details (cracks, joints, chips, grain) are printability sizes and never
 //! scale; masses scale with the system's square.
 
+// Lattice and grid arithmetic here converts between float positions and
+// indices throughout, on values that are small and checked in range.
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    clippy::too_many_lines,
-    clippy::similar_names,
-    clippy::many_single_char_names,
-    clippy::needless_range_loop
+    clippy::cast_sign_loss
 )]
 
 mod chips;
@@ -71,6 +69,26 @@ pub struct Cliff {
     patch_width: Option<(f64, f64)>,
     ledges: u32,
     ledge_height: Option<f64>,
+    /// The pile planned for this build, kept from the plan pass (a scatter
+    /// reads the foot) to the build, which starts from the same plan.
+    plan: Memo,
+}
+
+/// A pile plan kept under the key of everything that decided it. Cloning a
+/// cliff clones no plan.
+#[derive(Default)]
+struct Memo(std::sync::Mutex<Option<(u64, std::sync::Arc<Planned>)>>);
+
+impl Clone for Memo {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+impl std::fmt::Debug for Memo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Memo")
+    }
 }
 
 const KIND_NAMES: [&str; 5] = ["columns", "blocks", "slabs", "odd", "monoliths"];
@@ -88,6 +106,7 @@ impl Cliff {
             patch_width: None,
             ledges: 1,
             ledge_height: None,
+            plan: Memo::default(),
         };
         let mut w = [f64::NAN; 5];
         for k in controls {
@@ -139,7 +158,45 @@ impl Cliff {
     /// Everything that decides where the stones stand, with no geometry:
     /// the plan pass (a scatter reads its foot) and the build both start
     /// here, from the same seed.
-    fn pile_plan(&self, frame: &dt_kit::Frame, ctx: &Ctx<'_>) -> Result<Planned, LookError> {
+    fn pile_plan(
+        &self,
+        frame: &dt_kit::Frame,
+        ctx: &Ctx<'_>,
+    ) -> Result<std::sync::Arc<Planned>, LookError> {
+        let key = Self::plan_key(frame, ctx);
+        let mut kept = self
+            .plan
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((k, p)) = kept.as_ref()
+            && *k == key
+        {
+            return Ok(p.clone());
+        }
+        let planned = std::sync::Arc::new(self.plan_pile(frame, ctx)?);
+        *kept = Some((key, planned.clone()));
+        Ok(planned)
+    }
+
+    /// Everything the plan reads: the frame, the seed, the land, the area and
+    /// the band, hashed.
+    fn plan_key(frame: &dt_kit::Frame, ctx: &Ctx<'_>) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        format!("{frame:?}").hash(&mut h);
+        ctx.seed.value().hash(&mut h);
+        ctx.land_mm.to_bits().hash(&mut h);
+        ctx.area.content_hash().hash(&mut h);
+        if let Some(b) = ctx.band {
+            for v in b.lo().z.iter().chain(&b.hi().z) {
+                v.to_bits().hash(&mut h);
+            }
+        }
+        h.finish()
+    }
+
+    fn plan_pile(&self, frame: &dt_kit::Frame, ctx: &Ctx<'_>) -> Result<Planned, LookError> {
         let s = frame.scale();
         let sq = frame.square_mm;
         let Some(band) = ctx.band else {
@@ -213,7 +270,8 @@ impl Element for Cliff {
     }
 
     fn foot(&self, frame: &dt_kit::Frame, ctx: &Ctx<'_>) -> Result<Option<crate::Foot>, LookError> {
-        let Planned { zone, st, .. } = self.pile_plan(frame, ctx)?;
+        let planned = self.pile_plan(frame, ctx)?;
+        let (zone, st) = (&planned.zone, &planned.st);
         let (nx, ny) = frame.nodes();
         let step = frame.step_mm();
         let mut rock = vec![false; nx * ny];
@@ -223,16 +281,13 @@ impl Element for Cliff {
                 let (x, y) = (i as f64 * step, j as f64 * step);
                 let q = j * nx + i;
                 if let Some(c) = node_cell(x, y, st.s.nx, st.s.ny) {
-                    rock[q] = st.s.z[c] > form::FOOT + core::ROCK_MIN_MM;
+                    rock[q] = st.s.z[c] > core::ROCK_MIN_MM;
                 }
                 wts[q] = 0.5 + (zone.at(x) - form::ZONE_FLOOR) / (1.0 - form::ZONE_FLOOR);
             }
         }
         let (d, _) = dt_kit::distance(frame, &rock);
-        let dist: Vec<f64> =
-            d.z.iter()
-                .map(|&v| if v.is_finite() { v } else { f64::MAX })
-                .collect();
+        let dist = d.z;
         let mut cells = Vec::new();
         for j in 1..ny - 1 {
             for i in 1..nx - 1 {
@@ -261,22 +316,18 @@ impl Element for Cliff {
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let progress = scene.progress();
         let frame = *scene.frame();
-        let Planned {
-            fm,
-            zone,
-            st,
-            mut rng,
-            foot,
-        } = self.pile_plan(&frame, ctx)?;
+        let planned = self.pile_plan(&frame, ctx)?;
+        let (fm, zone, st, foot) = (&planned.fm, &planned.zone, &planned.st, planned.foot);
+        let mut rng = planned.rng.clone();
         let Some(band) = ctx.band else {
             return Err(LookError::general("this cliff has no solved top", ""));
         };
         progress.fraction("planning the pile", 0.01);
-        let placed = st.rocks;
+        let placed = &st.rocks;
         if placed.is_empty() {
             return Ok(());
         }
-        let mut cols = finish::columns(&mut rng, &placed, &fm, &st.s, &zone);
+        let mut cols = finish::columns(&mut rng, placed, fm, &st.s, zone);
         let nslots = placed.len() as u32 + 3;
         let slots = scene
             .slots(nslots, Material::Rock)
@@ -298,25 +349,25 @@ impl Element for Cliff {
             }
         }
         for c in &mut cols {
-            finish::plan_column(&mut rng, c, &placed, &fm, plan_slot)
+            finish::plan_column(&mut rng, c, placed, fm, plan_slot)
                 .map_err(|e| LookError::build(format!("plan column: {e}")))?;
         }
         progress.fraction("dressing columns", 0.03);
-        let core_field = core::core_field(&st.s, &cols, &placed);
+        let core_field = core::core_field(&st.s, &cols, placed);
         let core_mesh = core::core_mesh(&core_field)
             .map_err(|e| LookError::build(format!("core mesh: {e}")))?;
         let m = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, foot];
         if progress.sketching() {
-            let rough = rough_pile(&core_mesh, &placed, foot);
+            let rough = rough_pile(&core_mesh, placed, foot);
             progress.sketch(&rough, &vec![Material::Rock; rough.triangles.len()], true);
         }
         let mut frng = Rng::new(ctx.seed.key("cliff-faces"));
-        faces::plan_faces(&mut frng, &mut cols, &placed);
+        faces::plan_faces(&mut frng, &mut cols, placed);
         // support cones of resting stones, for the cleaving guard
         let cones: Vec<Option<dt_kit::TriMesh>> = placed
             .iter()
             .map(|r| {
-                if r.z0 > form::FOOT {
+                if r.z0 > 0.0 {
                     finish::support_cone(r)
                 } else {
                     None
@@ -326,9 +377,9 @@ impl Element for Cliff {
         let core_support =
             Support::new(std::slice::from_ref(&core_mesh)).map_err(LookError::build)?;
         let env = Env {
-            form: &fm,
+            form: fm,
             s: &st.s,
-            placed: &placed,
+            placed,
             seed: ctx.seed.key("cliff-grain").value(),
             draft: ctx.draft,
             high: band.hi(),
@@ -391,9 +442,10 @@ impl Element for Cliff {
         // solids that coincide (the same size and place to 0.05 mm), which a union of the pile never
         // finishes. Only the first of each is kept; the rest were the same rock.
         let mut seen = std::collections::HashSet::new();
+        let stacked = pieces.len();
         pieces.retain(|(_, p)| {
             let m = p.mesh();
-            let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
+            let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
             for v in &m.positions {
                 for k in 0..3 {
                     lo[k] = lo[k].min(v[k]);
@@ -403,14 +455,22 @@ impl Element for Cliff {
             let key = |x: f64| (x * 20.0).round() as i64;
             seen.insert((m.triangles.len(), lo.map(key), hi.map(key)))
         });
+        let repeated = stacked - pieces.len();
         // a stone that stands over the band is a bug in the body
         let fit = dt_kit::pieces::Pieces::new(band, &frame);
+        // a draft carves on grids `DRAFT_COARSE` times the print's: its stones
+        // may stand that far over the band's high, and are never written
+        let band_tol = if ctx.draft {
+            stone::DRAFT_COARSE * faces::RELIEF_GRID_MM
+        } else {
+            dt_kit::pieces::BAND_TOL_MM
+        };
         for (_, p) in &pieces {
             let mut mesh = p.mesh();
             for v in &mut mesh.positions {
                 v[2] += foot;
             }
-            fit.admits(&mesh)
+            fit.admits_within(&mesh, band_tol)
                 .map_err(|e| LookError::band(&e, "a cliff stone"))?;
         }
         progress.fraction("laying the core", 0.90);
@@ -418,7 +478,7 @@ impl Element for Cliff {
             .iter()
             .map(|(_, p)| dt_kit::rays::RayMesh::new(&p.mesh()))
             .collect();
-        Self::lay_core(scene, ctx, &fm, &core_field, &st.s, foot, &meshes)?;
+        Self::lay_core(scene, ctx, fm, &core_field, &st.s, foot, &meshes)?;
         progress.fraction("placing stones", 0.98);
         let n_stones = pieces.len();
         for (_, p) in pieces {
@@ -432,6 +492,7 @@ impl Element for Cliff {
             );
         }
         scene.note("cliff_stones", n_stones as f64);
+        scene.note("cliff_repeated_stones", repeated as f64);
         scene.note("cliff_top_cracks", tops as f64);
         Ok(())
     }
@@ -461,7 +522,7 @@ impl Cliff {
             }
         }
         core::draw_back_from_faces(&frame, &mut mask, &z, foot, stones);
-        let flat = film::film_ground(&frame, &tops, ctx.area, &mask);
+        let flat = film::film_ground(&frame, &tops, ctx.area, &mask, frame.scale());
         if mask.bits.iter().any(|&b| b) {
             let field = Lattice::new(&frame, 0.0).with_z(z);
             let band = Band::point(&field);
@@ -480,7 +541,7 @@ impl Cliff {
                 })
                 .map_err(LookError::build)?;
         }
-        scene.stamp_heights_bare(&tops);
+        scene.stamp_heights(&tops, dt_kit::Under::Earth);
         scene.set_rest(dt_kit::Rest {
             tops,
             flat,

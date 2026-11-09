@@ -104,7 +104,8 @@ pub(crate) struct Run {
     pub base: f64,
     /// Height (standing) or strip depth in plan (laid), mm.
     pub height: f64,
-    pub thickness: f64,
+    /// [`Mason::across`] scaled to true mm.
+    pub across: f64,
     pub laid: bool,
     pub tile: [f64; 2],
     pub scale: f64,
@@ -116,7 +117,7 @@ impl Run {
         let g = &self.segs[k];
         if self.laid {
             let w = g.at(p[0], p[2]);
-            [w[0], w[1], self.thickness - p[1]]
+            [w[0], w[1], self.across - p[1]]
         } else {
             let w = g.at(p[0], p[1]);
             [w[0], w[1], self.seat + p[2]]
@@ -267,7 +268,7 @@ pub(crate) fn run(
     let s = frame.scale();
     let tile = frame.size_mm();
     let segs = layout::segments(spine).map_err(LookError::build)?;
-    let thickness = m.thickness * s;
+    let across = m.across * s;
     let seed = ctx.seed;
 
     // ---- seat (standing) or the strip (laid)
@@ -278,7 +279,7 @@ pub(crate) fn run(
         let fp = footprint(scene, &segs, h);
         (0.0, 0.0, h, fp)
     } else {
-        let fp = footprint(scene, &segs, thickness);
+        let fp = footprint(scene, &segs, across);
         let mine: Vec<usize> = (0..fp.bits.len())
             .filter(|&k| fp.bits[k] && ctx.area.bits[k])
             .collect();
@@ -320,7 +321,7 @@ pub(crate) fn run(
         seat,
         base,
         height,
-        thickness,
+        across,
         laid: m.laid,
         tile,
         scale: s,
@@ -329,7 +330,7 @@ pub(crate) fn run(
     // ---- cells
     let mut lrng = Rng::new(seed.key("layout"));
     let courses = Courses {
-        thickness,
+        across,
         height,
         course: (m.course.0 * s, m.course.1 * s),
         bay: (m.bay.0 * s, m.bay.1 * s),
@@ -363,7 +364,7 @@ pub(crate) fn run(
     }
     let mut env: Option<Vec<Envelope>> = None;
     if m.ruin > 0.0 && !m.laid {
-        let (c, e) = layout::ruin_cells(cells, &run.segs, thickness, height, m.ruin, s, &mut lrng);
+        let (c, e) = layout::ruin_cells(cells, &run.segs, across, height, m.ruin, s, &mut lrng);
         cells = c;
         env = Some(e);
     }
@@ -393,7 +394,7 @@ pub(crate) fn run(
         for (k, g) in run.segs.iter().enumerate() {
             let mut core = |t0: f64, t1: f64, z0: f64, z1: f64| -> Result<(), LookError> {
                 if t1 - t0 > 2.0 * round && z1 - z0 > 2.0 * round {
-                    let mesh = rubble::rounded_box([t0, rv, z0], [t1, thickness - rv, z1], round)
+                    let mesh = rubble::rounded_box([t0, rv, z0], [t1, across - rv, z1], round)
                         .map_err(LookError::build)?;
                     units.push(Unit::Mesh(run.place(k, mesh)));
                 }
@@ -503,7 +504,7 @@ pub(crate) fn run(
     } else {
         solid
     };
-    let top = if m.laid { thickness } else { seat + height };
+    let top = if m.laid { across } else { seat + height };
     Ok((solid, counts, fp, top, placed))
 }
 
@@ -706,7 +707,7 @@ pub(crate) fn blocks(
     let jw = m.joint * s;
     let j2 = jw / 2.0;
     let fr = m.face_recess * s;
-    let t = run.thickness;
+    let t = run.across;
     // missing units: bricks (never bottom, top, quoins or ends) and slabs,
     // never two stacked
     let mut order: Vec<usize> = (0..cells.len()).collect();
@@ -964,7 +965,7 @@ fn hearting(
     seed: Seed,
 ) -> Result<Vec<TriMesh>, LookError> {
     let s = run.scale;
-    let (t, h) = (run.thickness, run.height);
+    let (t, h) = (run.across, run.height);
     // drystone sets the chips deeper: its stones' faces curl back toward
     // the cracks, and a chip must never show past them
     let sb = if m.family == Family::Fieldstone {
@@ -1014,7 +1015,7 @@ fn hearting(
 /// tile (none is planed at the boundary).
 fn foot_rubble(m: &Mason, run: &Run, scene: &Scene, seed: Seed) -> Result<Vec<TriMesh>, LookError> {
     let s = run.scale;
-    let t = run.thickness;
+    let t = run.across;
     let mut rng = Rng::new(seed.key("foot"));
     let mut out = Vec::new();
     let grid = scene.surface_field();

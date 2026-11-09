@@ -14,7 +14,7 @@ use super::faces::{CRACK_DEPTH_MM, CRACK_SLOT_MM, Column, Face};
 use super::finish::{
     COLUMN_STEP_MAX, Cutter, SEAT_SLOPE_DEG, occupied, offset_poly, open_faces, prism,
 };
-use super::form::{FOOT, Form, GRID_MM};
+use super::form::{Form, GRID_MM};
 use super::relief::relief;
 use super::stack::{Placed, SINK_MM};
 use super::util::{
@@ -870,7 +870,7 @@ pub fn rock_piece(
     }
     let mut rock = cutter.solid;
     let mut zbase = zb;
-    if zb > FOOT {
+    if zb > 0.0 {
         // sits on rock: seated on the bed (not under its open faces where
         // its own column's stone carries it)
         let (nx, ny) = (r.cells.nx, r.cells.ny);

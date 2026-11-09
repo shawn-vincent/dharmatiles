@@ -41,6 +41,7 @@ impl Plane {
 #[derive(Clone, Copy)]
 pub struct Pieces<'a> {
     band: &'a Band,
+    frame: Frame,
     nx: usize,
     ny: usize,
     step: f64,
@@ -53,6 +54,7 @@ impl<'a> Pieces<'a> {
         let (nx, ny) = frame.nodes();
         Self {
             band,
+            frame: *frame,
             nx,
             ny,
             step: frame.step_mm(),
@@ -68,16 +70,10 @@ impl<'a> Pieces<'a> {
         clippy::cast_precision_loss
     )]
     pub fn nodes(&self, lo: [f64; 2], hi: [f64; 2], grow: f64) -> Vec<usize> {
-        let range = |a: f64, b: f64, n: usize| {
-            let first = ((a - grow) / self.step).ceil().max(0.0);
-            let last = ((b + grow) / self.step).floor().min((n - 1) as f64);
-            (first as usize, last as usize)
-        };
-        let (i0, i1) = range(lo[0], hi[0], self.nx);
-        let (j0, j1) = range(lo[1], hi[1], self.ny);
+        let (is, js) = self.frame.node_range(lo, hi, grow);
         let mut out = Vec::new();
-        for j in j0..=j1 {
-            for i in i0..=i1 {
+        for j in js {
+            for i in is.clone() {
                 out.push(j * self.nx + i);
             }
         }
@@ -223,8 +219,17 @@ impl<'a> Pieces<'a> {
     ///
     /// # Errors
     /// [`Refusal::Band`] at the vertex farthest over the band.
-    #[allow(clippy::cast_precision_loss)]
     pub fn admits(&self, mesh: &TriMesh) -> Result<(), Refusal> {
+        self.admits_within(mesh, BAND_TOL_MM)
+    }
+
+    /// As [`Pieces::admits`], with `tol_mm` of room over the high: a draft
+    /// carves on coarser grids than a print, and is never written.
+    ///
+    /// # Errors
+    /// [`Refusal::Band`] at the vertex farthest over the band.
+    #[allow(clippy::cast_precision_loss)]
+    pub fn admits_within(&self, mesh: &TriMesh, tol_mm: f64) -> Result<(), Refusal> {
         let w = (self.nx - 1) as f64 * self.step;
         let h = (self.ny - 1) as f64 * self.step;
         let mut worst: Option<([f64; 3], f64)> = None;
@@ -233,7 +238,7 @@ impl<'a> Pieces<'a> {
                 continue;
             }
             let by = p[2] - self.high_at([p[0], p[1]]);
-            if by > BAND_TOL_MM && worst.is_none_or(|(_, b)| by > b) {
+            if by > tol_mm && worst.is_none_or(|(_, b)| by > b) {
                 worst = Some((*p, by));
             }
         }

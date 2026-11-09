@@ -9,7 +9,8 @@ use dt_kit::{Band, Field as Lattice, Frame, Mask, Rng};
 use super::util::{Cells, Field, cell_grid, edt_in};
 
 pub const GRID_MM: f64 = 0.25;
-pub const FOOT: f64 = 0.0;
+// The pile is planned in its own heights: its ground is 0, and the stones
+// are raised to the land they stand on (`foot`) as they are laid.
 
 pub const MIN_H_MM: f64 = 3.5;
 /// Past this a band has room (a thinner one is a pin).
@@ -98,9 +99,9 @@ pub fn make_form(rng: &mut Rng, ask: &Ask<'_>) -> Form {
         let j = ((y / step).round().max(0.0) as usize).min(ly - 1);
         j * lx + i
     };
-    let mut t = cell_grid(nx, ny, FOOT);
-    let mut lo = cell_grid(nx, ny, FOOT);
-    let mut hi = cell_grid(nx, ny, FOOT);
+    let mut t = cell_grid(nx, ny, 0.0);
+    let mut lo = cell_grid(nx, ny, 0.0);
+    let mut hi = cell_grid(nx, ny, 0.0);
     let mut want = cell_grid(nx, ny, false);
     for j in 0..ny {
         for i in 0..nx {
@@ -123,7 +124,7 @@ pub fn make_form(rng: &mut Rng, ask: &Ask<'_>) -> Form {
             hi.z[q] = hh - ask.foot;
             if ask.mask.bits[node(x, y)] {
                 let top = ask.shape.sample(x, y) - ask.foot;
-                if top > FOOT + MIN_H_MM {
+                if top > MIN_H_MM {
                     t.z[q] = top;
                     want.z[q] = true;
                 }
@@ -204,7 +205,7 @@ fn shelves(
     let s = ask.s;
     let (nx, ny) = (want.nx, want.ny);
     let dist = edt_in(want);
-    let hi = t.z.iter().copied().fold(FOOT, f64::max);
+    let hi = t.z.iter().copied().fold(0.0, f64::max);
     if hi < SHELF_MIN_TOP_MM {
         return;
     }
@@ -264,7 +265,7 @@ fn shelves(
             let tz = ask
                 .ledge_height
                 .map_or_else(|| rng.uniform(TIER_Z.0, TIER_Z.1), |h| h.clamp(0.1, 0.9));
-            let z_mid = FOOT + tz * (hi - FOOT);
+            let z_mid = tz * hi;
             let mut k_steps = rng.int(TIER_STEPS.0, TIER_STEPS.1);
             k_steps = k_steps
                 .min(((b - a) / (MIN_STEP_MM * s)).floor() as i64)
@@ -286,7 +287,7 @@ fn shelves(
                 .iter()
                 .map(|&c0| {
                     let z = (z_mid + rng.uniform(-TIER_STEP_MM, TIER_STEP_MM))
-                        .clamp(FOOT + MIN_H_MM + 1.0, hi - MIN_H_MM - 1.0);
+                        .clamp(MIN_H_MM + 1.0, hi - MIN_H_MM - 1.0);
                     (c0, z)
                 })
                 .collect();

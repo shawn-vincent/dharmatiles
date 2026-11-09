@@ -42,6 +42,11 @@ const TILES: &[&str] = &[
     "lib:tiles/test/1x1-planks.dtile",
     "lib:tiles/test/1x1-wall-rim.dtile",
     "lib:tiles/test/2x2-hill.dtile",
+    // a stone floor with a wall standing on it: what laying floors before
+    // the lift must leave as it is
+    "lib:tiles/floors/1x1-floor-stone-wall.dtile",
+    // a cove of water cut into dirt: a hollow in the land under a fluid
+    "lib:tiles/water/1x1-water-u+soil.dtile",
 ];
 
 fn build_at(path: &str, threads: usize) -> Built {

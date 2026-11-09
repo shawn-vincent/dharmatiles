@@ -7,7 +7,7 @@
 use dt_kit::Rng;
 
 use super::fit::Fit;
-use super::form::{FOOT, Form, GRID_MM, MIN_H_MM, ZONE_FLOOR, Zones};
+use super::form::{Form, GRID_MM, MIN_H_MM, ZONE_FLOOR, Zones};
 use super::util::{Cells, Draw, Field, Grid, P2, cell_grid, edt_in, lerp, min_side, trace_outline};
 
 /// kind: (p, along, depth, height (None: ground to top), bridge, tilt deg)
@@ -178,7 +178,7 @@ fn bin_dilate_sq(m: &Cells, r: usize) -> Cells {
 }
 
 pub fn sunk(sv_min: f64) -> f64 {
-    sv_min - if sv_min > FOOT { SINK_MM } else { 0.0 }
+    sv_min - if sv_min > 0.0 { SINK_MM } else { 0.0 }
 }
 
 fn cells_min_side(cells: &Cells) -> f64 {
@@ -301,7 +301,7 @@ fn jut(rng: &mut Rng, cells: &Cells, want: &Cells, s: &Field) -> Cells {
         let mut blocked = false;
         for j in cl.1.clone() {
             for i in cl.0.clone() {
-                if want.at(i, j) || s.at(i, j) > FOOT {
+                if want.at(i, j) || s.at(i, j) > 0.0 {
                     blocked = true;
                 }
             }
@@ -351,8 +351,9 @@ fn fit_plane(pts: &[(f64, f64, f64)], xm: f64, ym: f64) -> [f64; 3] {
         for r in 0..3 {
             if r != col {
                 let f = m[r][col] / m[col][col];
-                for c in col..4 {
-                    m[r][c] -= f * m[col][c];
+                let pivot = m[col];
+                for (v, p) in m[r].iter_mut().zip(pivot).skip(col) {
+                    *v -= f * p;
                 }
             }
         }
@@ -441,12 +442,12 @@ pub fn stack(
 ) -> Result<Stacked, dt_kit::Refusal> {
     let (nx, ny) = (form.t.nx, form.t.ny);
     let t = &form.t;
-    let mut s = cell_grid(nx, ny, FOOT - 1.0);
+    let mut s = cell_grid(nx, ny, -1.0);
     let mut want = Grid {
         nx,
         ny,
         step: 1.0,
-        z: t.z.iter().map(|&z| z > FOOT).collect(),
+        z: t.z.iter().map(|&z| z > 0.0).collect(),
     };
     // a cell the band jumps across holds no stone (and takes none of the
     // stacking's turns)
@@ -466,7 +467,7 @@ pub fn stack(
         *v = rng.random() * 1.5;
     }
     let mut retry = cell_grid(nx, ny, 0i32);
-    let h_cliff = t.z.iter().copied().fold(f64::NEG_INFINITY, f64::max) - FOOT;
+    let h_cliff = t.z.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let mut last_w = 0.0f64;
     let (edt, phi) = if form.free_standing {
         let e = edt_in(&want);
@@ -517,12 +518,11 @@ pub fn stack(
         let sp = [super::util::cx(si, GRID_MM), super::util::cx(sj, GRID_MM)];
         let mut kind = rng.pick(&probs);
         let is_top = form.ztop.is_some_and(|zt| t.at(si, sj) >= zt - 1e-6);
-        if kind == 4 && !(is_top && s.at(si, sj) <= FOOT) {
+        if kind == 4 && !(is_top && s.at(si, sj) <= 0.0) {
             kind = 0;
         }
         let (_, _, al, dp, hr, bridge, tilt) = KINDS[kind];
-        let lo = 1.0
-            + SIZE_LOW_GAIN * (0.5 - ((s.at(si, sj) - FOOT) / h_cliff.max(1.0)).clamp(0.0, 1.0));
+        let lo = 1.0 + SIZE_LOW_GAIN * (0.5 - (s.at(si, sj) / h_cliff.max(1.0)).clamp(0.0, 1.0));
         let mut w = rng.uniform(al.0, al.1) * s_scale * form.mass * lo;
         let mut d = rng.uniform(dp.0, dp.1) * s_scale * form.mass * lo;
         let u = (zone.at(sp[0]) - ZONE_FLOOR) / (1.0 - ZONE_FLOOR);
@@ -614,7 +614,7 @@ pub fn stack(
                 .filter(|&q| cells.z[q])
                 .map(|q| s.z[q])
                 .fold(f64::NEG_INFINITY, f64::max);
-            if cmax <= FOOT && rng.random() < JUT_P {
+            if cmax <= 0.0 && rng.random() < JUT_P {
                 cells = jut(rng, &cells, &want, &s);
             }
         }
@@ -682,7 +682,7 @@ pub fn stack(
         // stagger: no top level with its neighbours' (that is how courses appear)
         let dil2 = cells.grow4(2);
         let ring: Vec<usize> = (0..nx * ny)
-            .filter(|&q| dil2.z[q] && !cells.z[q] && s.z[q] > FOOT + super::core::ROCK_MIN_MM)
+            .filter(|&q| dil2.z[q] && !cells.z[q] && s.z[q] > super::core::ROCK_MIN_MM)
             .collect();
         let dilc = cells.grow4((COURSE_MM / GRID_MM) as usize);
         let near: Vec<bool> = (0..nx * ny).map(|q| dilc.z[q] && !cells.z[q]).collect();
@@ -778,7 +778,7 @@ pub fn stack(
 /// the support grid rises by its top only there.
 pub fn reconcile(rocks: &mut [Placed], form: &Form, s: &mut Field) {
     let (nx, ny) = (s.nx, s.ny);
-    s.z.fill(FOOT - 1.0);
+    s.z.fill(-1.0);
     for r in rocks.iter_mut() {
         let poly = r.poly();
         if poly.len() < 3 {
@@ -823,7 +823,7 @@ pub fn reconcile(rocks: &mut [Placed], form: &Form, s: &mut Field) {
                 }
                 // the support's real top sits a little under its plane (grain, chips): a
                 // stone must still reach into it, however narrow
-                let under = if s.at(i, j) > FOOT {
+                let under = if s.at(i, j) > 0.0 {
                     s.at(i, j) - SUPPORT_MARGIN_MM
                 } else {
                     s.at(i, j)

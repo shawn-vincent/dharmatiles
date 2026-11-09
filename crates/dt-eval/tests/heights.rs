@@ -121,6 +121,15 @@ fn a_pin_covered_by_a_later_one_is_shadowed() {
 }
 
 #[test]
+fn a_pin_that_covers_a_library_default_pin_says_nothing() {
+    // the default edge pin is covered whole by the tile's own: that is how a
+    // tile overrides it, so there is no `dt::shadowed` note; the tile's own
+    // covered pin still gets one (the test above)
+    let c = solved(&tile("stack { base\n dirt { pin top=7 at=edges } }"));
+    assert!(!codes(&c).contains(&"dt::shadowed"), "{:?}", c.notes());
+}
+
+#[test]
 fn a_pin_with_no_ground_is_refused() {
     // a region the tile's lines never enclose
     let e = refused(&tile(

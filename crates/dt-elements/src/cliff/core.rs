@@ -12,7 +12,7 @@
 use dt_kit::{Frame, KitError, Mask, hung, rays::RayMesh};
 
 use super::faces::Column;
-use super::form::{FOOT, Form, GRID_MM};
+use super::form::{Form, GRID_MM};
 use super::stack::Placed;
 use super::util::{Field, bounds};
 
@@ -43,15 +43,15 @@ pub fn core_field(s: &Field, cols: &[Column], placed: &[Placed]) -> Field {
         if r > 0.5 && (b[2] - b[0]).min(b[3] - b[1]) >= CORE_DEEP_MM {
             let mut cells = vec![false; nx * ny];
             for &st in &col.stones {
-                for q in 0..nx * ny {
-                    cells[q] |= placed[st].cells.z[q];
+                for (c, &p) in cells.iter_mut().zip(&placed[st].cells.z) {
+                    *c |= p;
                 }
             }
             let rr = (CORE_SET_MM + r) / GRID_MM;
             let e = s.erode(rr);
-            for q in 0..nx * ny {
-                if cells[q] {
-                    c.z[q] = c.z[q].min(e.z[q]);
+            for ((z, &e), &on) in c.z.iter_mut().zip(&e.z).zip(&cells) {
+                if on {
+                    *z = z.min(e);
                 }
             }
         }
@@ -73,7 +73,7 @@ pub fn rim_mm(f: &Form, ax: usize, hi: bool) -> f64 {
 /// A mesh of the core field, for the cleaving guard.
 pub fn core_mesh(c: &Field) -> Result<dt_kit::TriMesh, KitError> {
     let (nx, ny) = (c.nx, c.ny);
-    let zb = FOOT - 1.5;
+    let zb = -1.5;
     let depth: Vec<f64> =
         c.z.iter()
             .map(|&v| (v - CORE_DROP_MM).max(zb + 0.05) - zb)
@@ -121,7 +121,7 @@ pub fn core_mask(
             };
             let inside = x > rims[0] && x < w - rims[1] && y > rims[2] && y < h - rims[3];
             let ct = core_field.z[c] - CORE_DROP_MM;
-            if inside && ct > FOOT + CORE_MIN_TOP_MM {
+            if inside && ct > CORE_MIN_TOP_MM {
                 mask.bits[j * nx + i] = true;
                 z[j * nx + i] = ct + foot;
             }
@@ -151,19 +151,19 @@ pub fn draw_back_from_faces(
     let (to_core, near_core) = dt_kit::distance(frame, &mask.bits);
     let mut pts: Vec<[f64; 3]> = Vec::new();
     let mut spans: Vec<(usize, usize, usize)> = Vec::new();
-    for k in 0..nx * ny {
+    for (k, near) in near_core.iter().enumerate().take(nx * ny) {
         if to_core.z[k] > 2.0 * CORE_CLEAR_MM {
             continue;
         }
-        let Some(src) = near_core[k] else { continue };
+        let Some(src) = *near else { continue };
         let (x, y) = ((k % nx) as f64 * step, (k / nx) as f64 * step);
         let from = pts.len();
         let mut zz = z[src] - foot - CORE_MIN_TOP_MM;
-        while zz > FOOT + ROCK_MIN_MM {
+        while zz > ROCK_MIN_MM {
             pts.push([x, y, zz]);
             zz -= CORE_LEVELS_MM;
         }
-        pts.push([x, y, FOOT + ROCK_MIN_MM]);
+        pts.push([x, y, ROCK_MIN_MM]);
         spans.push((k, from, pts.len()));
     }
     let mut hit = vec![false; pts.len()];
@@ -211,6 +211,70 @@ pub fn draw_back_from_faces(
         let (d, _) = dt_kit::distance(frame, &bad);
         for k in 0..nx * ny {
             mask.bits[k] &= d.z[k] >= CORE_DRAW_BACK_MM;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cliff::util::cell_grid;
+
+    /// A form standing against some tile sides, with a pile 10 mm high
+    /// everywhere: only the rims decide where the core stands.
+    fn pile(frame: &Frame, rims: Vec<(usize, bool)>) -> (Form, Field) {
+        let [w, h] = frame.size_mm();
+        let (nx, ny) = ((w / GRID_MM).ceil() as usize, (h / GRID_MM).ceil() as usize);
+        let field = cell_grid(nx, ny, 10.0);
+        let form = Form {
+            w,
+            h,
+            t: field.clone(),
+            lo: field.clone(),
+            hi: field.clone(),
+            ztop: None,
+            free_standing: rims.is_empty(),
+            mass: 1.0,
+            along_y: cell_grid(nx, ny, false),
+            kind_p: None,
+            rims,
+        };
+        (form, field)
+    }
+
+    #[test]
+    fn the_core_stands_inside_the_rims_and_nearer_where_the_pile_ends() {
+        for frame in [Frame::dungeonblocks(1, 1), Frame::openlock(2, 1)] {
+            let (nx, ny) = frame.nodes();
+            let [w, h] = frame.size_mm();
+            // the cliff stands against the north and west sides
+            let rims = vec![(0, false), (1, true)];
+            let (fm, field) = pile(&frame, rims);
+            let (mask, z) = core_mask(&frame, &fm, &field, &field, 0.0);
+            let step = frame.step_mm();
+            let (mut west, mut east, mut south, mut north) =
+                (f64::INFINITY, f64::INFINITY, f64::INFINITY, f64::INFINITY);
+            for j in 0..ny {
+                for i in 0..nx {
+                    if !mask.bits[j * nx + i] {
+                        continue;
+                    }
+                    let (x, y) = (i as f64 * step, j as f64 * step);
+                    west = west.min(x);
+                    east = east.min(w - x);
+                    south = south.min(y);
+                    north = north.min(h - y);
+                    assert!(z[j * nx + i] > 0.0);
+                }
+            }
+            // the faces on the rims stand CORE_RIM_MM back, the ends nearer
+            assert!(west > CORE_RIM_MM, "west {west}");
+            assert!(north > CORE_RIM_MM, "north {north}");
+            assert!(east > CORE_END_RIM_MM && east < CORE_RIM_MM, "east {east}");
+            assert!(
+                south > CORE_END_RIM_MM && south < CORE_RIM_MM,
+                "south {south}"
+            );
         }
     }
 }

@@ -244,8 +244,8 @@ impl Ctx<'_> {
 pub struct Foot {
     /// What it is.
     pub kind: Kind,
-    /// Per ground node, row-major: distance from the solid in mm (huge
-    /// where it is nowhere near).
+    /// Per ground node, row-major: distance from the solid in mm (infinite
+    /// where there is no solid).
     pub dist: Vec<f64>,
     /// Ground cells touching the solid: position, outward direction, weight.
     pub cells: Vec<([f64; 2], [f64; 2], f64)>,
