@@ -286,9 +286,9 @@ pub(crate) fn run(
         if mine.is_empty() {
             return Err(LookError::general(
                 format!(
-                    "this {kind}'s footprint misses its area: it stands outside its in= region"
+                    "this {kind}'s footprint misses its area: it stands outside its at= region"
                 ),
-                "put the wall along an edge its region touches, or drop in=",
+                "put the wall along an edge its region touches, or drop at=",
             ));
         }
         let ter = |k: usize| scene.surface_field().map_or(0.0, |g| f64::from(g.z[k]));

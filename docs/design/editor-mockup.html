@@ -353,10 +353,10 @@ const rng2 = r => `"${fmt(r[0])}..${fmt(r[1])}"`;
 function entryLines(e) {
   const I = '        ', m = e.muted ? '/-' : '';
   switch (e.type) {
-    case 'dirt': return [I + m + `dirt${e.in ? ' in=' + e.in : ''}` + (e.bumps !== DEF.bumps ? ` bumps=${fmt(e.bumps)}` : '')];
-    case 'grass': return [I + m + `grass${e.in ? ' in=' + e.in : ''}` + (e.cover !== DEF.cover ? ` cover="${fmt(e.cover)}%"` : '') + (String(e.height) !== DEF.height ? ` height=${rng2(e.height)}` : '')];
+    case 'dirt': return [I + m + `dirt${e.in ? ' at=' + e.in : ''}` + (e.bumps !== DEF.bumps ? ` bumps=${fmt(e.bumps)}` : '')];
+    case 'grass': return [I + m + `grass${e.in ? ' at=' + e.in : ''}` + (e.cover !== DEF.cover ? ` cover="${fmt(e.cover)}%"` : '') + (String(e.height) !== DEF.height ? ` height=${rng2(e.height)}` : '')];
     case 'ground': return [I + m + (e.in ? `ground in=${e.in} level="water - ${fmt(e.depth)}"` : 'ground')];
-    case 'scatter': return [I + m + `scatter${e.in ? ' in=' + e.in : ''} count=${e.count} {`, I + `    rock size=${rng2(e.size)}`, I + '}'];
+    case 'scatter': return [I + m + `scatter${e.in ? ' at=' + e.in : ''} count=${e.count} {`, I + `    rock size=${rng2(e.size)}`, I + '}'];
     case 'water': return [I + m + 'water' + (e.level !== DEF.level ? ` level=${fmt(e.level)}` : '')];
     case 'tree': return [I + m + `tree at=${pt(e.at)} height=${fmt(e.height)}`];
     default: return [I + m + `${e.type} at=${pt(e.at)}` + (e.size !== ELEMENTS[e.type].size ? ` size=${fmt(e.size)}` : '')];
@@ -851,7 +851,7 @@ function lensSpec(k) {
   const R = (name, kind, get, set, o = {}) => ({ name, kind, get, set, ...o });
   if (k === 'tile') return { title: `tile ${doc.name}`, el: 'tile', rows: [R('seed', 'seed', s => s.seed, (s, v) => s.seed = v)], more: [['size', '"1x1"'], ['system', 'from the command']] };
   if (k === 'line:shore') return { title: 'line shore', el: 'line', rows: [R('wobble', 'num', s => s.shore.wobble, (s, v) => s.shore.wobble = v, { min: 0, max: 12, step: .5, unit: 'mm' })], note: 'Drag the accent points on the plate.', more: [['width', 'none']] };
-  if (k.startsWith('region:')) return { title: k.replace(':', ' '), el: 'region', rows: [], note: `Bounded by shore, filled from one point. Elements act in it with in=${k.slice(7)}.` };
+  if (k.startsWith('region:')) return { title: k.replace(':', ' '), el: 'region', rows: [], note: `Bounded by shore, filled from one point. Elements act in it with at=${k.slice(7)}.` };
   const [ids, sub] = k.slice(2).split('/'), id = +ids, e = entry(doc, id); if (!e) return null;
   const E = f => s => f(entry(s, id)), Es = f => (s, v) => f(entry(s, id), v);
   switch (e.type) {

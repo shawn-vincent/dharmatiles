@@ -5,10 +5,10 @@ use kdl::{KdlEntry, KdlNode, KdlValue};
 use miette::SourceSpan;
 
 use super::value::describe;
-use super::{Ctx, Decoder, spanned_name, sub_span, value_span};
-use crate::elements::{TAGS, renamed};
+use super::{Ctx, Decoder, spanned_name, value_span};
+use crate::elements::renamed;
 use crate::model::{Base, Callee, Entry, Form, Place, Setting, Spanned, Value};
-use crate::place::{self, Along, Side};
+use crate::place::{Along, Side};
 use crate::schema::{self, Control, Kind, PlaceWord, Role, did_you_mean};
 
 /// Where an entry sits, which limits what it may be.
@@ -464,29 +464,18 @@ impl Decoder<'_> {
         let Some(pw) = PlaceWord::parse(word) else {
             return false;
         };
-        // The element's own controls win: a dirt bank's `against` is a sub.
+        // `at` is the word for every kind of place; an element takes the
+        // kinds its schema lists
         let allowed = match entry.element() {
-            Some(l) => l.place.contains(&pw),
+            Some(l) => match pw {
+                PlaceWord::Side => l.place.contains(&PlaceWord::Side),
+                _ => l.place.iter().any(|w| *w != PlaceWord::Side),
+            },
             None => true,
         };
         if !allowed {
-            let l = entry.element().map_or(Role::Thing, |l| l.role);
-            let help = match (pw, l) {
-                (PlaceWord::At, Role::Run) => {
-                    format!("a {owner} is built along= an edge or a line")
-                }
-                (PlaceWord::Along, Role::Thing) => {
-                    format!(
-                        "one {owner} stands at= a point; several along a line are `scatter along=… {{ {owner} }}`"
-                    )
-                }
-                (PlaceWord::Against, _) => format!(
-                    "against= gathers things at a foot: `scatter against=cliff {{ {owner} }}`"
-                ),
-                (PlaceWord::Side, _) => "side= is for things built along a drawn line".to_owned(),
-                (PlaceWord::At, Role::Surface) => format!(
-                    "a {owner} covers its area: the whole tile, `in=` a region, or `along=` a line"
-                ),
+            let help = match pw {
+                PlaceWord::Side => "side= is for things built along a drawn line".to_owned(),
                 _ => format!("`{owner}` doesn't take `{word}=`"),
             };
             self.err(
@@ -498,7 +487,7 @@ impl Decoder<'_> {
             .help = Some(help);
             return true;
         }
-        if parent == Parent::Scatter && matches!(pw, PlaceWord::At | PlaceWord::In) {
+        if parent == Parent::Scatter && pw == PlaceWord::At {
             self.err(
                 "dt::place",
                 key.span,
@@ -509,98 +498,6 @@ impl Decoder<'_> {
             return true;
         }
         match pw {
-            PlaceWord::In => {
-                if entry.place.region.is_some() {
-                    dup(self);
-                    return true;
-                }
-                match arg_value_str(e) {
-                    Some(r) if ctx.regions.iter().any(|x| x == r) => {
-                        entry.place.region = Some(Spanned {
-                            value: r.to_owned(),
-                            span,
-                        });
-                    }
-                    Some(r) => {
-                        let help = did_you_mean(r, ctx.regions.iter().map(String::as_str))
-                            .map(|m| format!("did you mean `{m}`?"))
-                            .unwrap_or_else(|| {
-                                if ctx.regions.is_empty() {
-                                    "this tile has no regions: the whole tile is the default area, so leave `in=` out".to_owned()
-                                } else {
-                                    format!("regions here: {}", ctx.regions.join(", "))
-                                }
-                            });
-                        self.err(
-                            "dt::unknown-name",
-                            span,
-                            format!("there is no region called `{r}`"),
-                            "not a region here",
-                        )
-                        .help = Some(help);
-                    }
-                    None => {
-                        self.err("dt::place", span, "`in=` names a region", "not a name");
-                    }
-                }
-            }
-            PlaceWord::Along => {
-                if entry.place.along.is_some() {
-                    dup(self);
-                    return true;
-                }
-                let Some(s) = arg_value_str(e) else {
-                    self.err(
-                        "dt::place",
-                        span,
-                        "`along=` names an edge, an edge path or a line",
-                        "not a name",
-                    )
-                    .help = Some(
-                        "write `along=north`, `along=\"north west\"` or `along=trail`".to_owned(),
-                    );
-                    return true;
-                };
-                match place::parse_edges(s) {
-                    Ok(Some(edges)) => {
-                        entry.place.along = Some(Spanned {
-                            value: Along::Edges(edges),
-                            span,
-                        });
-                    }
-                    Ok(None) if ctx.lines.iter().any(|l| l == s) => {
-                        entry.place.along = Some(Spanned {
-                            value: Along::Line(s.to_owned()),
-                            span,
-                        });
-                    }
-                    Ok(None) => {
-                        let mut cands: Vec<&str> = ctx.lines.iter().map(String::as_str).collect();
-                        cands.extend(place::Edge::ALL.iter().map(|e| e.as_str()));
-                        let help = did_you_mean(s, cands.iter().copied()).map_or_else(
-                            || "an edge (north, south, east, west), an edge path such as \"north west\", or a drawn line".to_owned(),
-                            |m| format!("did you mean `{m}`?"),
-                        );
-                        self.err(
-                            "dt::unknown-name",
-                            span,
-                            format!("`{s}` is not an edge or a line"),
-                            "not an edge or line",
-                        )
-                        .help = Some(help);
-                    }
-                    Err(err) => {
-                        let at = self.inner_at(e, s);
-                        self.err(
-                            "dt::place",
-                            sub_span(span, at + err.start, at + err.end),
-                            format!("can't read `along`: {}", err.message),
-                            "here",
-                        )
-                        .help = Some("an edge path walks round the tile: \"north west\", \"north west south\"".to_owned());
-                    }
-                }
-            }
             PlaceWord::Side => {
                 if entry.place.side.is_some() {
                     dup(self);
@@ -623,40 +520,8 @@ impl Decoder<'_> {
                     }
                 }
             }
-            PlaceWord::At => {
-                if entry.place.at.is_some() {
-                    dup(self);
-                    return true;
-                }
-                entry.place.at = self.point(e, "at", ctx);
-            }
-            PlaceWord::Against => {
-                if entry.place.against.is_some() {
-                    dup(self);
-                    return true;
-                }
-                match arg_value_str(e) {
-                    Some(t) if TAGS.contains(&t) => {
-                        entry.place.against = Some(Spanned {
-                            value: t.to_owned(),
-                            span,
-                        });
-                    }
-                    other => {
-                        let t = other.unwrap_or("");
-                        self.err(
-                            "dt::unknown-name",
-                            span,
-                            format!("`{t}` is not a kind of thing"),
-                            "unknown kind",
-                        )
-                        .help = Some(did_you_mean(t, TAGS.iter().copied()).map_or_else(
-                            || format!("things gather against: {}", TAGS.join(", ")),
-                            |m| format!("did you mean `{m}`?"),
-                        ));
-                    }
-                }
-            }
+            PlaceWord::At => self.at_word(entry, key, e, ctx),
+            PlaceWord::In | PlaceWord::Along | PlaceWord::Against => {}
         }
         true
     }
@@ -910,7 +775,11 @@ impl Decoder<'_> {
             let mut names: Vec<&str> = controls.iter().map(|k| k.name).collect();
             names.extend(params.iter().copied());
             if let Some(l) = entry.element() {
-                names.extend(l.place.iter().map(|p| p.as_str()));
+                for p in l.place.iter().map(|p| p.as_str()) {
+                    if !names.contains(&p) {
+                        names.push(p);
+                    }
+                }
             }
             names.push("seed");
             did_you_mean(name, names.iter().copied())
@@ -939,7 +808,7 @@ impl Decoder<'_> {
         let element = entry.element();
         if let Some(l) = element {
             // inside a definition a place word may come from the call
-            // (`ruin-corner along=north`): the evaluator passes it down,
+            // (`ruin-corner at=north`): the evaluator passes it down,
             // and the element refuses at build if it never arrives
             let needs = if ctx.in_tile { l.needs } else { &[] };
             for need in needs {
@@ -958,7 +827,7 @@ impl Decoder<'_> {
                         format!("this {owner} has no `{}=`", need.as_str()),
                     )
                     .help = Some(format!(
-                        "write `{owner} along=north …`: an edge, an edge path such as \"north west\", or a drawn line"
+                        "write `{owner} at=north …`: an edge, an edge path such as \"north west\", or a drawn line"
                     ));
                 }
             }
@@ -989,8 +858,8 @@ impl Decoder<'_> {
         }
         if entry.place.side.is_some() && entry.place.along.is_none() {
             let s = entry.place.side.as_ref().map_or(span, |s| s.span);
-            self.err("dt::place", s, "`side=` needs `along=` a line", "no line")
-                .help = Some("write `along=trail side=left`".to_owned());
+            self.err("dt::place", s, "`side=` needs `at=` a line", "no line")
+                .help = Some("write `at=trail side=left`".to_owned());
         }
         if let Callee::Definition(d) = &entry.callee
             && let Some(info) = self.def_info(d).cloned()
@@ -1063,23 +932,12 @@ impl Decoder<'_> {
                         "one",
                     )
                     .help = Some(
-                        "place one thing with at= (or no at= for anywhere): `rock at=\"1,1\"`"
+                        "place one thing with at= (or no at= for anywhere): `rock at=\"(1, 1)\"`"
                             .to_owned(),
                     );
                 }
             }
             (None, Some(_)) => {}
-        }
-        if let Some(s) = entry.control("spread")
-            && entry.place.at.is_none()
-        {
-            self.err(
-                "dt::scatter",
-                s.name.span,
-                "`spread` clusters round an `at=` point",
-                "no at=",
-            )
-            .help = Some("write `scatter at=\"1,1\" spread=6 count=5 { … }`".to_owned());
         }
         if let Some(s) = entry.control("reach")
             && entry.place.against.is_none()
@@ -1087,10 +945,10 @@ impl Decoder<'_> {
             self.err(
                 "dt::scatter",
                 s.name.span,
-                "`reach` is how far out from the foot of what it is `against=`",
-                "no against=",
+                "`reach` is how far out from the foot of what it is `at=foot(…)`",
+                "no foot",
             )
-            .help = Some("write `scatter against=cliff reach=4 …`".to_owned());
+            .help = Some("write `scatter at=\"foot(cliff)\" reach=4 …`".to_owned());
         }
         if entry.children.is_empty() {
             self.err(

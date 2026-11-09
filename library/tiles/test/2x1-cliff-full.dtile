@@ -31,7 +31,7 @@ tile size="2x1" seed=1 {
         dirt top="bottom + [0.6 .. 1.2]" at=crag
 
         // scree: fallen stones gathered at the cliff's foot
-        scatter against=cliff perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-        scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
+        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
     }
 }

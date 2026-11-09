@@ -148,7 +148,7 @@ pub const CASES: [Case; 10] = [
         slug: "missing-along",
         title: "A wall with nowhere to stand",
         tile: WALL_CORNER,
-        from: "wall along=\"north west\" style",
+        from: "wall at=\"north west\" style",
         to: "wall style",
     },
     Case {

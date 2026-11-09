@@ -1,11 +1,11 @@
 dt::syntax
 
   × `1..6` must be quoted
-    ╭─[library/tiles/test/2x1-cliff-full.dtile:34:65]
+    ╭─[library/tiles/test/2x1-cliff-full.dtile:34:68]
  33 │         // scree: fallen stones gathered at the cliff's foot
- 34 │         scatter against=cliff perSquare=55 reach=4 { stone size=1..6 }
-    ·                                                                 ──┬─
-    ·                                                                   ╰── not a KDL number
- 35 │         scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
+ 34 │         scatter at="foot(cliff)" perSquare=55 reach=4 { stone size=1..6 }
+    ·                                                                    ──┬─
+    ·                                                                      ╰── not a KDL number
+ 35 │         scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
     ╰────
   help: ranges, percents, points and sizes are written as strings: "1..6"

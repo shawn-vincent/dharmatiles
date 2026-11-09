@@ -5,7 +5,7 @@
 //! coordinate may be a range (`"0.6..1.4,0.6..1.4"`), drawn once from the
 //! tile seed.  A corner word (`north-west`) or an edge word (`north`, the
 //! middle of that edge) stands in for a point.  An edge path is one or
-//! more edge words, quoted when there are several (`along="north west"`).
+//! more edge words, quoted when there are several (`at="north west"`).
 
 use std::fmt;
 
@@ -271,7 +271,7 @@ impl Side {
     }
 }
 
-/// What `along=` names.
+/// What a line `at=` names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Along {
     /// One tile edge, or a path of edges that meet at corners

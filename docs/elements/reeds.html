@@ -29,8 +29,8 @@ region bank { boundedBy shore; fill "0.5,0.75" }
 stack {
     base
     dirt { pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand; pin top=waterBedHeight at=pool }
-    grass in=bank
-    reeds in=bank            // stand along the shore, leaning out over the pool
+    grass at=bank
+    reeds at=bank            // stand along the shore, leaning out over the pool
     water                    // last: nothing is written after water
 }</code></pre>
 <p>Reeds stand along the shore: where the region they are in meets <a href="water.html"><code>water</code></a>. Each clump is several stems, each leaning toward the water.</p>
@@ -38,7 +38,7 @@ stack {
 <!-- gen:reference reeds -->
 <div class="facts">
   <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
-  <div><div class="k">Place words</div><div class="v"><code>in=</code></div></div>
+  <div><div class="k">Place</div><div class="v"><code>at=</code> region</div></div>
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>
 <h3 id="controls">Controls</h3>

@@ -1092,7 +1092,7 @@ impl<'k> Decoder<'k> {
                 "no `boundedBy`",
             )
             .help = Some(
-                "the whole tile is already the default area: drop the region and its `in=`, or write `boundedBy trail`"
+                "the whole tile is already the default area: drop the region and its `at=`, or write `boundedBy trail`"
                     .to_owned(),
             );
         }

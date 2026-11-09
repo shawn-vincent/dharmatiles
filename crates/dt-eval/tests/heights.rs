@@ -150,10 +150,10 @@ fn a_layer_that_can_never_be_thick_enough_is_refused() {
 
 #[test]
 fn a_cliff_written_in_the_old_form_has_no_band_to_solve() {
-    // `along=` is the old form's word, with no top or region of its own for
+    // `at=` a line is the old form's word, with no top or region of its own for
     // check to solve (`dharmatiles migrate` writes it as a band); only the
     // dirt is solved
-    let c = solved(&tile("stack { base\n dirt\n cliff along=north }"));
+    let c = solved(&tile("stack { base\n dirt\n cliff at=north }"));
     assert_eq!(c.solved.as_ref().unwrap().bodies.len(), 1);
 }
 
@@ -226,6 +226,11 @@ fn a_dirts_top_and_pins_build() {
 fn a_things_top_and_place_are_checked_but_not_built_yet() {
     let c = solved(&tile(
         "region canopy { within 15 of=center }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=canopy }",
+    ));
+    // the region is built (a thing at a region stands in it); the top is not
+    assert_eq!(c.pending().len(), 1, "{:?}", c.pending());
+    let c = solved(&tile(
+        "line trail { through southCenter northCenter }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=trail }",
     ));
     assert_eq!(c.pending().len(), 2, "{:?}", c.pending());
 }

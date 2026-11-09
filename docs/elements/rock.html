@@ -58,7 +58,7 @@
 <h2 id="use">Using it in a tile</h2>
 <p>A thing is one of itself. Place one rock with <code>at=</code> (a point in squares; a range is drawn once from the seed), or leave <code>at=</code> out to let it land anywhere in its area:</p>
 <pre><code>rock at="0.5,0.5" size="6..10"     // one rock, there
-rock in=pool                       // one rock, anywhere in the pool region</code></pre>
+rock at=pool                       // one rock, anywhere in the pool region</code></pre>
 <p>Many rocks are a <a href="scatter.html"><code>scatter</code></a>:</p>
 <pre><code>tile size="2x2" seed=1 {
     stack {
@@ -67,13 +67,13 @@ rock in=pool                       // one rock, anywhere in the pool region</cod
         scatter perSquare="2.25..3" gap=1.5 { rock }
     }
 }</code></pre>
-<p>Scattered <code>against=cliff</code>, stones and boulders gather at the cliff's foot as scree. Every rock is seated into the ground under it, and grass grows round it wherever the grass is listed.</p>
+<p>Scattered <code>at="foot(cliff)"</code>, stones and boulders gather at the cliff's foot as scree. Every rock is seated into the ground under it, and grass grows round it wherever the grass is listed.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference rock -->
 <div class="facts">
   <div><div class="k">Kind</div><div class="v">a thing: one solid, standing on the surface</div></div>
-  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>at=</code></div></div>
+  <div><div class="k">Place</div><div class="v"><code>at=</code> region, point</div></div>
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>
 <h3 id="controls">Controls</h3>

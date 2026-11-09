@@ -4,9 +4,9 @@
 //   at the start of a node   element names, the document's definitions, the
 //                            language's own words (stack, region, line…)
 //   on a node's line         its element's controls not yet written, and
-//                            the place words (in=, at=, along=…)
+//                            the place words (at=, side=…)
 //   after `name=`            the control's words, or the document's regions
-//                            (in=) and lines and edges (along=)
+//                            (at=: regions, lines and edges)
 
 const WORDS = [
   ['stack', 'the entries, in build order'], ['region', 'an area bounded by lines'], ['line', 'a line through points'],
@@ -14,18 +14,19 @@ const WORDS = [
   ['about', 'a sentence about the tile'], ['through', 'the points a line passes'], ['boundedBy', 'the lines round a region'], ['fill', 'a point inside a region'],
 ];
 const PLACE = [
-  ['in', 'the region it acts in'], ['at', 'where it stands, in squares'], ['along', 'a line or edge it follows'],
-  ['against', 'the kind of thing it gathers at'], ['seed', 'pins its look while the tile seed changes'], ['id', 'its name among siblings'], ['weight', 'its share of a scatter'],
+  ['at', 'where it goes: a point, a line, a region or foot(cliff)'], ['side', 'which side of its line it stands'],
+  ['seed', 'pins its look while the tile seed changes'], ['id', 'its name among siblings'], ['weight', 'its share of a scatter'],
 ];
 const EDGES = ['north', 'south', 'east', 'west'];
 
-/** The names the document makes: definitions, regions and lines. */
+/** The names the document makes: definitions, regions, lines and points. */
 function names(text) {
   const grab = (re) => [...text.matchAll(re)].map((m) => m[1]);
   return {
     defs: [...grab(/^\s*define\s+([\w+\-.]+)/gm), ...[...text.matchAll(/^\s*use\s+"[^"]*"\s+([^\n/]*)/gm)].flatMap((m) => m[1].trim().split(/\s+/).filter(Boolean))],
     regions: grab(/\bregion\s+([\w+\-.]+)/g),
     lines: grab(/\bline\s+([\w+\-.]+)/g),
+    points: grab(/\bpoint\s+([\w+\-.]+)/g),
   };
 }
 
@@ -50,10 +51,14 @@ export function suggest(caret, text, elements, force = false) {
     const [, ctl, quote, word] = val;
     const node = seg.trim().split(/\s+/)[0];
     let items = [];
-    if (ctl === 'in') items = n.regions.map((r) => ({ label: r, insert: r, about: 'a region', kind: 'region' }));
-    else if (ctl === 'along') items = [...n.lines.map((l) => ({ label: l, insert: l, about: 'a line', kind: 'line' })), ...EDGES.map((e) => ({ label: e, insert: e, about: 'a tile edge', kind: 'edge' }))];
-    else if (ctl === 'against') items = elements.map((e) => ({ label: e.name, insert: e.name, about: e.about, kind: e.role }));
-    else {
+    if (ctl === 'at') {
+      items = [
+        ...n.regions.map((r) => ({ label: r, insert: r, about: 'a region', kind: 'region' })),
+        ...n.lines.map((l) => ({ label: l, insert: l, about: 'a line', kind: 'line' })),
+        ...EDGES.map((e) => ({ label: e, insert: e, about: 'a tile edge', kind: 'edge' })),
+        ...n.points.map((q) => ({ label: q, insert: q, about: 'a point', kind: 'point' })),
+      ];
+    } else {
       const c = el(node)?.controls.find((x) => x.name === ctl);
       items = (c?.words || []).map((w) => ({ label: w.word, insert: w.word, about: w.about, kind: 'word' }));
     }

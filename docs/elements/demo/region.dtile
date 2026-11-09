@@ -10,8 +10,8 @@ tile size="1x1" seed=8 {
     stack {
         base
         dirt { pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand; pin top=waterBedHeight at=pool }
-        floor in=yard slabs=4
-        grass in=bank
+        flagstones at=yard slabs=4
+        grass at=bank
         water
     }
 }

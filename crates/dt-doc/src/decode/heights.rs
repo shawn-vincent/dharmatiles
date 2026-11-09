@@ -328,7 +328,8 @@ impl Decoder<'_> {
                 *k,
             )),
             None => {
-                let names: Vec<&str> = ctx.places.iter().map(|(k, _)| k.as_str()).collect();
+                let mut names: Vec<&str> = ctx.places.iter().map(|(k, _)| k.as_str()).collect();
+                names.extend(Edge::ALL.iter().map(|e| e.as_str()));
                 let help = did_you_mean(t, names.iter().copied())
                     .map(|m| format!("did you mean `{m}`?"))
                     .unwrap_or_else(|| {
@@ -663,86 +664,268 @@ impl Decoder<'_> {
                 self.slope_value(entry, e);
                 true
             }
-            "at" if parent != Parent::Scatter => {
-                let new = e.value().as_string().is_some_and(|s| {
-                    let t = s.trim();
-                    t.starts_with('(') || (is_ident(t) && Edge::parse(t).is_none())
-                });
-                if !new {
-                    return false;
-                }
-                if entry.at_place.is_some()
-                    || entry.place.at.is_some()
-                    || entry.place.region.is_some()
-                {
-                    self.err("dt::duplicate", key.span, "`at` is set twice", "again here");
-                    return true;
-                }
-                let Some((r, kind)) = self.place_value(e, ctx, "at") else {
-                    return true;
-                };
-                self.apply_at(entry, r, kind);
-                true
-            }
             _ => false,
         }
     }
 
-    /// An entry's `at=` once the place is known: bodies and area-fillers
-    /// take a region (so today's `in=` reads it too), things any place.
-    fn apply_at(&mut self, entry: &mut Entry, r: Spanned<PlaceRef>, kind: PlaceKind) {
-        let owner = entry.what.value.clone();
-        match self.class_of(entry) {
-            Class::Body | Class::Area => {
-                if kind != PlaceKind::Region {
-                    self.err(
-                        "dt::type",
-                        r.span,
-                        format!(
-                            "`{owner}` fills a region, and `{}` is {}",
-                            r.value,
-                            kind.describe()
-                        ),
-                        "needs a region",
-                    )
-                    .help = Some(format!(
-                        "declare a region (`region {} {{ within 4 of={} }}`) and write `at=` that, or leave `at=` out for the whole tile",
-                        if let PlaceRef::Name(n) = &r.value {
-                            format!("{n}Area")
-                        } else {
-                            "area".to_owned()
+    /// `at=`: the one word for where an entry goes.  It takes a point, a
+    /// line (a name, an edge or an edge path) or a region, or
+    /// `foot(cliff)`, the band at a kind of thing's foot; each element
+    /// takes the kinds [`schema::Element::place`] lists and refuses the
+    /// rest with `dt::type`.
+    #[allow(clippy::too_many_lines)]
+    pub(super) fn at_word(
+        &mut self,
+        entry: &mut Entry,
+        key: &Spanned<String>,
+        e: &KdlEntry,
+        ctx: &Ctx,
+    ) {
+        use crate::place::Along;
+        use crate::schema::PlaceWord as W;
+        let span = value_span(e);
+        if entry.at_place.is_some()
+            || entry.place.at.is_some()
+            || entry.place.region.is_some()
+            || entry.place.along.is_some()
+            || entry.place.against.is_some()
+        {
+            self.err("dt::duplicate", key.span, "`at` is set twice", "again here")
+                .help = Some(
+                "an entry has one place: build the one you mean with `within`, `except` and `boundedBy`"
+                    .to_owned(),
+            );
+            return;
+        }
+        let class = self.class_of(entry);
+        let (can_region, can_line, can_point, can_foot, pending_line) = match entry.element() {
+            Some(l) => (
+                l.place.contains(&W::In),
+                l.place.contains(&W::Along),
+                l.place.contains(&W::At),
+                l.place.contains(&W::Against),
+                l.role == Role::Thing,
+            ),
+            None => (true, true, class == Class::Thing, true, false),
+        };
+        let Some(s) = e.value().as_string() else {
+            if can_point {
+                entry.place.at = self.point(e, "at", ctx);
+            } else {
+                self.err(
+                    "dt::place",
+                    span,
+                    "`at` is a place: a name, \"(x, y)\", an edge or `foot(cliff)`",
+                    "not a place",
+                );
+            }
+            return;
+        };
+        let t = s.trim();
+
+        // the band at a kind of thing's foot
+        if let Some(inner) = t.strip_prefix("foot(").and_then(|r| r.strip_suffix(')')) {
+            let kind = inner.trim();
+            if !crate::elements::TAGS.contains(&kind) {
+                self.err(
+                    "dt::unknown-name",
+                    span,
+                    format!("`{kind}` is not a kind of thing"),
+                    "unknown kind",
+                )
+                .help = Some(
+                    did_you_mean(kind, crate::elements::TAGS.iter().copied()).map_or_else(
+                        || {
+                            format!(
+                                "things gather at the foot of: {}",
+                                crate::elements::TAGS.join(", ")
+                            )
                         },
-                        r.value
-                    ));
-                    return;
-                }
-                if let PlaceRef::Name(n) = &r.value {
-                    entry.place.region = Some(Spanned {
-                        value: n.clone(),
-                        span: r.span,
+                        |m| format!("did you mean `{m}`?"),
+                    ),
+                );
+            } else if !can_foot {
+                self.place_refusal(entry, span, t, "the foot of a thing", can_line);
+            } else {
+                entry.place.against = Some(Spanned {
+                    value: kind.to_owned(),
+                    span,
+                });
+            }
+            return;
+        }
+
+        // an edge, or a path of edges round the tile
+        let edge_like = t
+            .split_whitespace()
+            .next()
+            .is_some_and(|w| w.chars().all(|c| c.is_ascii_alphabetic()));
+        match if edge_like {
+            place::parse_edges(t)
+        } else {
+            Ok(None)
+        } {
+            Ok(Some(edges)) => {
+                // one edge word on a thing is the middle of that edge
+                if edges.len() == 1 && can_point && !can_line {
+                    entry.place.at = self.point(e, "at", ctx);
+                } else if can_line {
+                    entry.place.along = Some(Spanned {
+                        value: Along::Edges(edges),
+                        span,
                     });
+                } else {
+                    self.place_refusal(entry, span, t, "a line", can_line);
+                }
+                return;
+            }
+            Ok(None) => {}
+            Err(err) => {
+                let at = self.inner_at(e, s);
+                self.err(
+                    "dt::place",
+                    sub_span(span, at + err.start, at + err.end),
+                    format!("can't read `at`: {}", err.message),
+                    "here",
+                )
+                .help = Some(
+                    "an edge path walks round the tile: \"north west\", \"north west south\""
+                        .to_owned(),
+                );
+                return;
+            }
+        }
+
+        // a name, or a literal point in brackets
+        if t.starts_with('(') || is_ident(t) {
+            let Some((r, kind)) = self.place_value(e, ctx, "at") else {
+                return;
+            };
+            match kind {
+                PlaceKind::Point => {
+                    if !can_point {
+                        self.place_refusal(entry, span, t, "a point", can_line);
+                        return;
+                    }
+                    match &r.value {
+                        PlaceRef::Point(x, y) => {
+                            entry.place.at = Some(Spanned {
+                                value: place::Point::Pair {
+                                    x: Expr::num(*x),
+                                    y: Expr::num(*y),
+                                },
+                                span: r.span,
+                            });
+                        }
+                        PlaceRef::Name(n) => {
+                            entry.place.at = Some(Spanned {
+                                value: place::Point::Named(n.clone()),
+                                span: r.span,
+                            });
+                        }
+                    }
+                    entry.at_place = Some(r);
+                }
+                PlaceKind::Region => {
+                    if !can_region {
+                        self.place_refusal(entry, span, t, "a region", can_line);
+                        return;
+                    }
+                    if let PlaceRef::Name(n) = &r.value
+                        && (class != Class::Thing || n != BUILTIN_REGION)
+                    {
+                        entry.place.region = Some(Spanned {
+                            value: n.clone(),
+                            span: r.span,
+                        });
+                    }
+                    entry.at_place = Some(r);
+                }
+                PlaceKind::Line => {
+                    let PlaceRef::Name(n) = &r.value else {
+                        return;
+                    };
+                    if can_line {
+                        let along = match n.as_str() {
+                            "northEdge" => Along::Edges(vec![Edge::North]),
+                            "eastEdge" => Along::Edges(vec![Edge::East]),
+                            "southEdge" => Along::Edges(vec![Edge::South]),
+                            "westEdge" => Along::Edges(vec![Edge::West]),
+                            "edges" => {
+                                Along::Edges(vec![Edge::North, Edge::East, Edge::South, Edge::West])
+                            }
+                            _ => Along::Line(n.clone()),
+                        };
+                        entry.place.along = Some(Spanned {
+                            value: along,
+                            span: r.span,
+                        });
+                    } else if pending_line && !BUILTIN_LINES.contains(&n.as_str()) {
+                        // checked here; the evaluator says it is not built yet
+                        entry.at_place = Some(r);
+                    } else {
+                        self.place_refusal(entry, span, t, "a line", can_line);
+                    }
                 }
             }
-            Class::Thing => match &r.value {
-                PlaceRef::Point(x, y) => {
-                    entry.place.at = Some(Spanned {
-                        value: place::Point::Pair {
-                            x: Expr::num(*x),
-                            y: Expr::num(*y),
-                        },
-                        span: r.span,
-                    });
-                }
-                PlaceRef::Name(n) if kind == PlaceKind::Point => {
-                    entry.place.at = Some(Spanned {
-                        value: place::Point::Named(n.clone()),
-                        span: r.span,
-                    });
-                }
-                PlaceRef::Name(_) => {}
-            },
+            return;
         }
-        entry.at_place = Some(r);
+
+        // today's quoted pair, or a corner word
+        if can_point {
+            entry.place.at = self.point(e, "at", ctx);
+        } else {
+            self.place_refusal(entry, span, t, "a point", can_line);
+        }
+    }
+
+    /// An `at=` this entry's element can't take: `dt::type`, with the kinds
+    /// it does take.
+    fn place_refusal(
+        &mut self,
+        entry: &Entry,
+        span: miette::SourceSpan,
+        shown: &str,
+        kind: &str,
+        can_line: bool,
+    ) {
+        let owner = entry.what.value.clone();
+        let takes = match entry.element() {
+            Some(l) if l.role == Role::Thing => "stands at a point or fills a region",
+            Some(l) if l.role == Role::Run => "is built along a line or fills a region",
+            Some(_) if can_line => "fills a region or follows a line",
+            Some(_) => "fills a region",
+            None if self.class_of(entry) == Class::Thing => "stands at a point or fills a region",
+            None => "fills a region or follows a line",
+        };
+        let run = entry.element().is_some_and(|l| l.role == Role::Run);
+        let name = if is_ident(shown) {
+            shown.to_owned()
+        } else {
+            "<place>".to_owned()
+        };
+        let help = if kind == "the foot of a thing" {
+            "`foot(cliff)` gathers things at a foot: `scatter at=\"foot(cliff)\" perSquare=20 { stone }`"
+                .to_owned()
+        } else if kind == "a line" && entry.element().is_some_and(|l| l.role == Role::Thing) {
+            format!(
+                "one {owner} stands at a point; several along a line are `scatter at=<line> perSquare=… {{ {owner} }}`"
+            )
+        } else if run {
+            "a wall is built along a line: `at=north`, an edge path such as \"north west\", or a drawn line"
+                .to_owned()
+        } else {
+            format!(
+                "declare a region round it (`region {name}Area {{ within 5 of={name} }}`) and write `at=` that, or leave `at=` out for the whole tile"
+            )
+        };
+        self.err(
+            "dt::type",
+            span,
+            format!("`{owner}` {takes}, and `{shown}` is {kind}"),
+            "not a place it takes",
+        )
+        .help = Some(help);
     }
 
     fn slope_value(&mut self, entry: &mut Entry, e: &KdlEntry) {

@@ -655,14 +655,14 @@ pub fn remove_node_at(text: &str, offset: usize) -> Result<String, EditError> {
 /// What a tile draws and names: a `line` or a `region`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mark {
-    /// `line <name> { through … }`, named by `boundedBy` and `along=`.
+    /// `line <name> { through … }`, named by `boundedBy` and `at=`.
     Line,
-    /// `region <name> { … }`, named by `in=`.
+    /// `region <name> { … }`, named by `at=`.
     Region,
 }
 
 /// Rename the tile's line or region `old` to `new`, and every place the
-/// tile names it: a line in `boundedBy` and `along=`, a region in `in=`.
+/// tile names it: a line in `boundedBy` and `at=`, a region in `at=`.
 /// Only those names change, each written as it was (quoted or bare);
 /// everything else stays byte for byte.
 ///
@@ -739,7 +739,7 @@ pub fn rename_mark(text: &str, mark: Mark, old: &str, new: &str) -> Result<Strin
             }
             let refers = match (mark, e.name().map(|k| k.value())) {
                 (Mark::Line, None) => n.name().value() == "boundedBy",
-                (Mark::Line, Some("along")) | (Mark::Region, Some("in")) => true,
+                (_, Some("at")) => true,
                 _ => false,
             };
             // the definition's own name is already in
@@ -767,7 +767,7 @@ pub fn rename_mark(text: &str, mark: Mark, old: &str, new: &str) -> Result<Strin
 mod place_tests {
     use super::*;
 
-    const T: &str = "tile size=\"1x1\" {\n    line shore { through \"0,0.38\" east }\n    stack {\n        dirt in=bank // hi\n        rock at=\"0.5,0.5\"\n    }\n}\n";
+    const T: &str = "tile size=\"1x1\" {\n    line shore { through \"0,0.38\" east }\n    stack {\n        dirt at=bank // hi\n        rock at=\"0.5,0.5\"\n    }\n}\n";
 
     #[test]
     fn a_new_entry_goes_at_the_end_of_the_stack() {
@@ -778,9 +778,9 @@ mod place_tests {
         );
         assert!(t[at..].starts_with("boulder"));
         let (t, at) =
-            insert_node(T, Place::Stack, "scatter in=pool count=3 {\n    rock\n}").unwrap();
+            insert_node(T, Place::Stack, "scatter at=pool count=3 {\n    rock\n}").unwrap();
         assert!(
-            t.contains("        scatter in=pool count=3 {\n            rock\n        }\n    }"),
+            t.contains("        scatter at=pool count=3 {\n            rock\n        }\n    }"),
             "{t}"
         );
         assert!(t[at..].starts_with("scatter"));
@@ -835,21 +835,21 @@ mod place_tests {
 
     #[test]
     fn renames_a_line_or_region_and_what_names_it() {
-        let t = "tile size=\"1x1\" {\n    line shore wobble=5 { through \"0,0.38\" east }\n    line trail { through south north }\n    region pool { boundedBy shore trail; fill \"0.5,0.25\" }\n    region bank { boundedBy \"shore\"; fill \"0.5,0.75\" }\n    stack {\n        dirt in=bank // the bank\n        wall along=shore\n        rock in=\"bank\" at=\"0.5,0.5\"\n    }\n}\n";
+        let t = "tile size=\"1x1\" {\n    line shore wobble=5 { through \"0,0.38\" east }\n    line trail { through south north }\n    region pool { boundedBy shore trail; fill \"0.5,0.25\" }\n    region bank { boundedBy \"shore\"; fill \"0.5,0.75\" }\n    stack {\n        dirt at=bank // the bank\n        wall at=shore\n        rock at=\"bank\"\n    }\n}\n";
         let r = rename_mark(t, Mark::Line, "shore", "beach").unwrap();
         assert_eq!(
             r,
             t.replace("line shore", "line beach")
                 .replace("By shore", "By beach")
                 .replace("By \"shore\"", "By \"beach\"")
-                .replace("along=shore", "along=beach")
+                .replace("at=shore", "at=beach")
         );
         let r = rename_mark(t, Mark::Region, "bank", "meadow").unwrap();
         assert_eq!(
             r,
             t.replace("region bank", "region meadow")
-                .replace("in=bank", "in=meadow")
-                .replace("in=\"bank\"", "in=\"meadow\"")
+                .replace("at=bank", "at=meadow")
+                .replace("at=\"bank\"", "at=\"meadow\"")
         );
         assert!(matches!(
             rename_mark(t, Mark::Line, "shore", "trail"),

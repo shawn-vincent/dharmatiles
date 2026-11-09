@@ -193,7 +193,7 @@ pub struct Line {
     pub name: Spanned<String>,
     /// The points it passes through.
     pub through: Vec<Spanned<Point>>,
-    /// A width makes it a strip that an element `along=` it covers.
+    /// A width makes it a strip that an element `at=` it covers.
     pub width: Option<Spanned<Num>>,
     /// How far it wanders off its points, mm.
     pub wobble: Option<Spanned<Num>>,
@@ -320,15 +320,15 @@ pub enum Callee {
 /// The place words written on an entry.
 #[derive(Debug, Clone, Default)]
 pub struct Place {
-    /// `in=`: a region; `None` is the caller's area (the whole tile).
+    /// `at=` a region; `None` is the caller's area (the whole tile).
     pub region: Option<Spanned<String>>,
-    /// `along=`: an edge, an edge path or a line.
+    /// `at=` a line: an edge, an edge path or a line.
     pub along: Option<Spanned<Along>>,
     /// `side=` of a drawn line; `None` is centre.
     pub side: Option<Spanned<Side>>,
     /// `at=`: a point, possibly a range drawn once; `None` is anywhere.
     pub at: Option<Spanned<Point>>,
-    /// `against=`: a kind of thing.
+    /// `at=foot(…)`: a kind of thing.
     pub against: Option<Spanned<String>>,
     /// `seed=`: pins this thing's element while the tile seed changes the rest.
     pub seed: Option<Spanned<i64>>,
@@ -520,7 +520,7 @@ pub enum Value {
     Word(&'static Word),
     /// `#true` / `#false`.
     Bool(bool),
-    /// A kind tag (`against=cliff` inside a `bank`).
+    /// A kind tag (`foot(cliff)`).
     Tag(String),
     /// The enclosing definition's parameter, filled in by the caller.
     Param(String),

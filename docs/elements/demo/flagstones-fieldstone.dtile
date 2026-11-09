@@ -5,6 +5,6 @@ tile size="1x1" seed=4 {
         base
         dirt
         flagstones style=fieldstone
-        wall along="north" style=fieldstone coping=on-edge seed=6
+        wall at="north" style=fieldstone coping=on-edge seed=6
     }
 }

@@ -100,7 +100,7 @@ impl Control {
 
 // ---- shared words -------------------------------------------------------
 
-/// The kinds a scatter or bank may gather against (`against=`).
+/// The kinds a scatter or bank may gather against (`at=foot(…)`).
 pub static TAGS: &[&str] = &["cliff", "wall", "rock", "tree"];
 
 // ---- dirt, grass --------------------------------------------------------
@@ -662,13 +662,13 @@ static SCATTER: &[Control] = &[
     c(
         "spread",
         Axis::Mm,
-        "with at=: a cluster within this distance of it",
+        "a cluster within this distance of a point",
     )
     .planned(),
     c(
         "reach",
         Axis::Mm,
-        "with against=: how far out from the foot",
+        "with at=foot(…): how far out from the foot",
     ),
     c(
         "clumps",
@@ -879,12 +879,7 @@ pub static ELEMENTS: &[Element] = &[
         name: "scatter",
         about: "more than one thing: how many and where; its children say what",
         role: Role::Scatter,
-        place: &[
-            PlaceWord::In,
-            PlaceWord::Along,
-            PlaceWord::Against,
-            PlaceWord::At,
-        ],
+        place: &[PlaceWord::In, PlaceWord::Along, PlaceWord::Against],
         honours: &[PlaceWord::Against],
         controls: SCATTER,
         ..Element::BASE
@@ -897,7 +892,7 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("meadow", "`meadow` is now `grass`"),
     (
         "scree",
-        "scree is things scattered against the cliff: `scatter against=cliff perSquare=55 { stone }`",
+        "scree is things scattered at a cliff's foot: `scatter at=\"foot(cliff)\" perSquare=55 { stone }`",
     ),
     ("blocks", "scree `blocks` are now `boulder`s in a scatter"),
     ("family", "`family` is now `style`"),
@@ -909,8 +904,8 @@ pub static RENAMED: &[(&str, &str)] = &[
         "level",
         "a floor's `level` is now its `top=`: `flagstones top=floorHeight`",
     ),
-    ("self", "`self=` is now `in=`"),
-    ("near", "`near=` is now `against=`"),
+    ("self", "`self=` is now `at=`"),
+    ("near", "`near=` is now `at=\"foot(…)\"`"),
     ("heights", "`heights` is now `let`: `let foot 4`, in mm"),
     ("levels", "`levels` is now `let`: `let foot 4`, in mm"),
     ("cols", "a tile's size is `size=\"2x1\"`, columns first"),
@@ -946,6 +941,18 @@ pub static RENAMED: &[(&str, &str)] = &[
         "write the weighting on the size: `size=\"low(1..6, 11)\"` for mostly=small, `high(1..6)` for large, the plain range for even; `dharmatiles migrate` rewrites old tiles",
     ),
     ("lines", "a region is `boundedBy` its lines"),
+    (
+        "in",
+        "one word names a place: write `at=` and the region; `dharmatiles migrate` rewrites old tiles",
+    ),
+    (
+        "along",
+        "one word names a place: write `at=` and the line or edge; `dharmatiles migrate` rewrites old tiles",
+    ),
+    (
+        "against",
+        "write `at=\"foot(cliff)\"`, the band at that kind's foot; `dharmatiles migrate` rewrites old tiles",
+    ),
 ];
 
 /// The control names written with hyphens before names became camelCase,

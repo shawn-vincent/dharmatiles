@@ -3,6 +3,6 @@ tile size="1x1" seed=1 {
     stack {
         base
         dirt
-        wall along="north" style=regular-brick
+        wall at="north" style=regular-brick
     }
 }

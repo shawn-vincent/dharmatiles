@@ -101,14 +101,14 @@ async function setClause(clause, name, value) {
 function renderMarkLens(kind, m) {
   const t = tile(), sh = m?.sheet;
   if (!t || !sh || doc.get().file !== t.path) { lens.hide(); return; }
-  const nameRow = { name: 'name', unit: 'word', required: true, viaSet: true, about: `what the tile calls this ${kind}; renaming it renames every ${kind === 'line' ? '`boundedBy` and `along=`' : '`in=`'} that names it` };
+  const nameRow = { name: 'name', unit: 'word', required: true, viaSet: true, about: `what the tile calls this ${kind}; renaming it renames every ${kind === 'line' ? '`boundedBy` and `at=`' : '`at=`'} that names it` };
   const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0] }];
   let controls, set;
   if (kind === 'line') {
     controls = [
       nameRow,
       { name: 'wobble', unit: 'mm', default: '0', about: 'how far the line may wander off its points' },
-      { name: 'width', unit: 'mm', about: 'makes the line a strip; an element along= it covers the strip' },
+      { name: 'width', unit: 'mm', about: 'makes the line a strip; an element at= it covers the strip' },
       { name: 'through', unit: 'raw', required: true, about: 'the points it runs through: "x,y" in squares, corners, or edge middles (south, east, north, west); drag a number or click to type' },
     ];
     written.push(...sh.controls.map(asWritten));

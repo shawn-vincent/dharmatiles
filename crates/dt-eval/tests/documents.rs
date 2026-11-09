@@ -291,9 +291,9 @@ fn a_line_and_two_regions_make_a_step() {
 #[test]
 fn an_unknown_region_is_refused() {
     let e = errors(
-        "tile {\n  line across { through west east }\n  region a { boundedBy across; fill \"0.5,0.25\" }\n  stack {\n    dirt in=b\n  }\n}\n",
+        "tile {\n  line across { through west east }\n  region a { boundedBy across; fill \"0.5,0.25\" }\n  stack {\n    dirt at=b\n  }\n}\n",
     );
-    assert_eq!(e[0].code, "dt::unknown-name");
+    assert_eq!(e[0].code, "dt::place");
     assert_eq!(e[0].location().unwrap().1, 5);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `a`?"));
 }
@@ -379,18 +379,7 @@ fn the_floor_and_wall_tiles_build_with_grass() {
 }
 
 #[test]
-fn a_wall_off_its_area_is_refused() {
-    let text = "tile size=\"1x1\" {\n  line across { through west east }\n  region south { boundedBy across; fill \"0.5,0.25\" }\n  stack {\n    dirt\n    wall in=south along=north style=cut-stone\n  }\n}\n";
-    let src = mem(&[("t.dtile", text)]);
-    let Err(e) = build(&src, "t.dtile", &Options::default()) else {
-        panic!("built a wall off its area");
-    };
-    assert!(e[0].message.contains("wall"), "{e:?}");
-    assert_eq!(e[0].location().unwrap().1, 6, "{e:?}");
-}
-
-#[test]
-fn a_wall_in_a_definition_needs_along_from_the_call() {
+fn a_wall_in_a_definition_needs_its_place_from_the_call() {
     let def = "define ruin-corner {\n    stack {\n        wall style=cut-stone\n    }\n}\n";
     let without = format!(
         "{def}tile size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner\n    }}\n}}\n"
@@ -398,11 +387,11 @@ fn a_wall_in_a_definition_needs_along_from_the_call() {
     let e = errors(&without);
     assert!(
         e.iter()
-            .any(|d| d.code == "dt::missing-control" && rendered(d).contains("along=")),
+            .any(|d| d.code == "dt::missing-control" && rendered(d).contains("at=")),
         "{e:?}"
     );
     let with = format!(
-        "{def}tile size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner along=\"north\"\n    }}\n}}\n"
+        "{def}tile size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner at=\"north\"\n    }}\n}}\n"
     );
     let src = mem(&[("t.dtile", &with)]);
     assert!(check(&src, "t.dtile", &Options::default()).is_ok());

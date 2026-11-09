@@ -891,7 +891,7 @@ pub struct Scatter {
     count: Option<Draw>,
     per_square: Draw,
     gap: f64,
-    /// `against=`: how far from the foot stones lie, mean mm.
+    /// `at=foot(…)`: how far from the foot stones lie, mean mm.
     reach: f64,
     things: Vec<Thing>,
 }
@@ -962,7 +962,7 @@ impl Element for Scatter {
             Some(kind) => Some(ctx.foot(kind).ok_or_else(|| {
                 LookError::general(
                     format!("nothing in this tile to gather against: no `{kind}`"),
-                    format!("add a `{kind}` to the stack, or remove `against=`"),
+                    format!("add a `{kind}` to the stack, or remove `at=foot(…)`"),
                 )
             })?),
             None => None,

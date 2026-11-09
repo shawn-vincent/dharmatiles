@@ -48,7 +48,7 @@ fn a_huge_tile_is_refused_before_any_grid_is_made() {
 #[test]
 fn a_fill_point_on_its_line_is_an_empty_region() {
     let e = errors(
-        "tile {\n  line split { through west east }\n  region s { boundedBy split; fill \"0.5,0.5\" }\n  stack { dirt in=s }\n}\n",
+        "tile {\n  line split { through west east }\n  region s { boundedBy split; fill \"0.5,0.5\" }\n  stack { dirt at=s }\n}\n",
     );
     assert_eq!(e[0].code, "dt::empty-region");
     assert_eq!(e[0].location().unwrap().1, 3);
@@ -59,7 +59,7 @@ fn a_fill_point_on_its_line_is_an_empty_region() {
 fn a_fill_point_beside_its_line_is_not_empty() {
     let src = mem(&[(
         "t.dtile",
-        "tile {\n  line split { through west east }\n  region s { boundedBy split; fill \"0.5,0.2\" }\n  stack { dirt in=s }\n}\n",
+        "tile {\n  line split { through west east }\n  region s { boundedBy split; fill \"0.5,0.2\" }\n  stack { dirt at=s }\n}\n",
     )]);
     assert!(check(&src, "t.dtile", &Options::default()).is_ok());
 }

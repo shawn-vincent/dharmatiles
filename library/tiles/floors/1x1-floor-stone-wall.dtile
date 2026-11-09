@@ -3,6 +3,6 @@ tile size="1x1" seed=72 {
         base
         dirt
         flagstones texture=chipped seed=22
-        wall along="north" style=cut-stone seed=23
+        wall at="north" style=cut-stone seed=23
     }
 }

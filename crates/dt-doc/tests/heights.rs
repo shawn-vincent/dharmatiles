@@ -83,7 +83,7 @@ fn a_stream_with_its_banks_drawn_decodes() {
     let dirt = &t.stack[0];
     assert_eq!(dirt.pins.len(), 2);
     assert_eq!(dirt.slope.as_ref().unwrap().value, 30.0);
-    // `at=` of an area-filler also reads as today's `in=`
+    // `at=` of an area-filler is its region
     let water = t.stack.last().unwrap();
     assert!(water.top.is_some());
     assert_eq!(water.place.region.as_ref().unwrap().value, "banks");
@@ -184,10 +184,14 @@ fn types_are_checked_where_they_are_written() {
     assert_fails(&tile("stack { dirt top=x }"), "dt::type", "squares");
     // a body, grass or scatter takes a region
     assert_fails(
-        &tile("stack { dirt at=northEdge }"),
+        &tile("stack { flagstones at=northEdge }"),
         "dt::type",
-        "`dirt` fills a region, and `northEdge` is a line",
+        "`flagstones` fills a region, and `northEdge` is a line",
     );
+    // a line is a place a dirt follows, and a scatter spreads along
+    snippet(&tile(
+        "stack { dirt at=northEdge\n scatter perSquare=2 at=northEdge { rock } }",
+    ));
     assert_fails(&tile("stack { dirt at=center }"), "dt::type", "is a point");
     assert_fails(
         &tile("stack { dirt\n grass at=\"(0.5, 0.5)\" }"),
@@ -199,7 +203,17 @@ fn types_are_checked_where_they_are_written() {
             "region r { within 2 of=center }\nstack { dirt\n scatter count=2 at=center { rock } }",
         ),
         "dt::type",
-        "`scatter` fills a region",
+        "`scatter` fills a region or follows a line, and `center` is a point",
+    );
+    assert_fails(
+        &tile("stack { dirt\n wall at=center }"),
+        "dt::type",
+        "`wall` is built along a line or fills a region, and `center` is a point",
+    );
+    assert_fails(
+        &tile("stack { dirt\n dirt at=\"foot(cliff)\" }"),
+        "dt::type",
+        "is the foot of a thing",
     );
     // a length is a length
     assert_fails(
@@ -300,4 +314,40 @@ fn a_cliffs_top_is_its_band() {
     let t = doc.tile().unwrap();
     assert!(t.stack[0].top.is_some());
     assert!(t.stack[1].top.is_none());
+}
+
+#[test]
+fn at_is_the_one_word_for_a_place() {
+    // a region, a line and the foot of a kind of thing, by element
+    let doc = snippet(&tile(
+        "line trail { through west east }\nregion pool { boundedBy trail; fill \"(0.5, 0.2)\" }\nstack { base\n dirt at=pool\n wall at=trail\n rock at=pool\n scatter at=\"foot(cliff)\" reach=3 perSquare=5 { stone } }",
+    ));
+    let t = &doc.tile().unwrap().stack;
+    assert_eq!(t[0].place.region.as_ref().unwrap().value, "pool");
+    assert!(matches!(
+        t[1].place.along.as_ref().unwrap().value,
+        dt_doc::place::Along::Line(_)
+    ));
+    assert_eq!(t[2].place.region.as_ref().unwrap().value, "pool");
+    assert_eq!(t[3].place.against.as_ref().unwrap().value, "cliff");
+    // a scatter given a point asks for a region round it
+    assert_fails(
+        &tile("stack { scatter count=2 at=center { rock } }"),
+        "dt::type",
+        "within 5 of=center",
+    );
+    // the old words are gone, and name the new one
+    for old in ["in=center", "along=north", "against=cliff"] {
+        assert_fails(
+            &tile(&format!("stack {{ dirt {old} }}")),
+            "dt::unknown-control",
+            "`at=",
+        );
+    }
+    // one place each
+    assert_fails(
+        &tile("region r { within 3 of=center }\nstack { dirt at=r at=r }"),
+        "dt::duplicate",
+        "set twice",
+    );
 }

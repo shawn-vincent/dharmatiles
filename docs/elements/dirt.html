@@ -60,13 +60,13 @@
     }
 }</code></pre>
 <p>With <code>clods=none stones=none</code> the dirt is plain: its hills alone, with no soil roughness, clods, grit, pebbles or stones. A pond's bed, or ground a tree or a wall stands on, can be written so.</p>
-<p>Under other elements, write <code>dirt</code> first and let the rest stand on it. Restrict it to a <a href="region.html">region</a> with <code>in=</code>:</p>
+<p>Under other elements, write <code>dirt</code> first and let the rest stand on it. Restrict it to a <a href="region.html">region</a> with <code>at=</code>:</p>
 <pre><code>tile size="1x1" seed=42 {
     line margin wobble=5 { through "0.48,1" "0.52,0" }
     region meadow { boundedBy margin; fill "0.25,0.5" }
     stack {
         dirt
-        grass in=meadow
+        grass at=meadow
     }
 }</code></pre>
 <p>Against a cliff, the bank is drawn: the dirt is pinned high under the cliff and given a wide band across the apron beside it, and a <a href="scatter.html"><code>scatter</code></a> written inside it lands on it (from <code>2x1-cliff</code>). A second dirt laid on the cliff's stones is a film that follows their tops:</p>
@@ -82,7 +82,7 @@ dirt top="bottom + [0.6 .. 1.2]" at=crag     // on the cliff's top, over rock un
 <!-- gen:reference dirt -->
 <div class="facts">
   <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
-  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code></div></div>
+  <div><div class="k">Place</div><div class="v"><code>at=</code> region, line</div></div>
   <div><div class="k">Holds</div><div class="v">a <a href="scatter.html"><code>scatter</code></a> inside it lands on it</div></div>
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>

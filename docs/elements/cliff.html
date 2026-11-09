@@ -15,7 +15,7 @@
   <div class="eyebrow"><i class="fam-mark fam-thing" title="stone: a thing, a run or a scatter"></i>Element · body</div>
   <h1>cliff</h1>
   <p class="lede">A storey of stacked, broken rock: big blocks resting on each other under gravity, cleaved into columns, cracked across their joints and grained. It is a body of the stack: its <code>at=</code> region is where the stones stand and its <code>top=</code> band is how high their tops are, so a run, a corner, a mound or a spire is a region and a band, not a form.</p>
-  <p class="small">Scree is not part of the cliff: it is <a href="stone.html"><code>stone</code></a>s and <a href="boulder.html"><code>boulder</code></a>s in a <a href="scatter.html"><code>scatter</code></a> <code>against=cliff</code>; the earth at its foot is the dirt's own pins, and dirt on its top is a second <a href="dirt.html"><code>dirt</code></a> laid on it.</p>
+  <p class="small">Scree is not part of the cliff: it is <a href="stone.html"><code>stone</code></a>s and <a href="boulder.html"><code>boulder</code></a>s in a <a href="scatter.html"><code>scatter</code></a> <code>at="foot(cliff)"</code>; the earth at its foot is the dirt's own pins, and dirt on its top is a second <a href="dirt.html"><code>dirt</code></a> laid on it.</p>
   <figure class="shot hero-one"><img src="img/el-cliff.jpg" alt="A two-square escarpment: a storey-high cliff of stacked blocks along the north edge, its face stepping in and out, with scree and dirt at its foot" width="699" height="743"><figcaption><code>lib:tiles/cliffs/2x1-cliff-escarpment.dtile</code>: a band whose top ramps from 10 to 40 mm, a film of dirt on the stone tops (here and there: it lies only where a top is flat and clear of every lip).</figcaption></figure>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v">35 mm tall by default; runs on any length of edge</div></div>
@@ -82,8 +82,8 @@
             shattered patches=3 width="5..10"
         }
         dirt top="bottom + [0.6 .. 1.2]" at=crag    // the film on its top
-        scatter against=cliff perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-        scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
+        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
     }
 }</code></pre>
 <p>A wide band makes a jagged crest: <code>cliff top="dirtEdgeHeight + [28 .. 42]" at=crag</code> has stone tops anywhere from 28 to 42 mm. A <code>pin</code> holds the band to a height at a place. A mound or a spire is a few lumps, each region a different shape and each pinned to a wide band (8 to 15 mm) that overlaps the next one's, so the stones land at their own heights and the steps read as rough crags; concentric circles with narrow bands make a wedding cake. A cliff steps to a pin; write <code>slope DEG</code> in its block to let the band ease between pins, which a stone only follows as far as it can lean.</p>
@@ -94,7 +94,7 @@
 <!-- gen:reference cliff -->
 <div class="facts">
   <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
-  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code></div></div>
+  <div><div class="k">Place</div><div class="v"><code>at=</code> region, line</div></div>
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>
 <h3 id="controls">Controls</h3>

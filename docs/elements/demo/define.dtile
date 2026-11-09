@@ -10,8 +10,8 @@ tile size="1x1" seed=6 {
     stack {
         base
         dirt
-        lawn in=west                                 // its defaults
-        lawn in=middle cover="35%" clearings=6       // two params set
-        long-grass in=east                           // a definition calling lawn
+        lawn at=west                                 // its defaults
+        lawn at=middle cover="35%" clearings=6       // two params set
+        long-grass at=east                           // a definition calling lawn
     }
 }

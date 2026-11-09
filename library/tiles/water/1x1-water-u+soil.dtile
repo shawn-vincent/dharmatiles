@@ -12,7 +12,7 @@ tile size="1x1" seed=54 {
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
             pin top=waterBedHeight at=cove   // the bed, written last so it wins
         }
-        scatter in=cove count=2 { rock size="5..9" }
+        scatter at=cove count=2 { rock size="5..9" }
         water
     }
 }

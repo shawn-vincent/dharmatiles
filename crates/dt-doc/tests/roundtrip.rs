@@ -178,7 +178,7 @@ fn insertion_into_the_second_of_two_same_named_entries() {
     let new = set_control(text, &path, "bumpSize", 30).unwrap();
     let lines = changed_lines(text, &new);
     assert_eq!(lines.len(), 1);
-    assert!(lines[0].2.contains("dirt along=trail bumpSize=30"));
+    assert!(lines[0].2.contains("dirt at=trail bumpSize=30"));
     redecode(name, &new);
 }
 

@@ -21,7 +21,7 @@ tile size="1x1" seed=4 {
             stoneSize massive
         }
 
-        scatter against=cliff perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-        scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
+        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
     }
 }

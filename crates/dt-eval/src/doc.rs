@@ -82,7 +82,7 @@ pub struct Setting {
 pub struct Entry {
     /// The element named.
     pub what: Spanned<String>,
-    /// `in=`: the region it acts in (default the whole tile).
+    /// `at=` a region: where it acts in (default the whole tile).
     pub area: Option<Spanned<String>>,
     /// `seed=`: pins its element.
     pub seed: Option<u64>,
@@ -90,13 +90,13 @@ pub struct Entry {
     pub id: Option<String>,
     /// The controls the element takes: written, or their defaults.
     pub controls: Vec<Setting>,
-    /// `along=` a path of tile edges, as the path in squares walked with
+    /// `at=` a path of tile edges, as the path in squares walked with
     /// the tile inside on the left (see [`edge_path`]).
     pub along: Option<Vec<[f64; 2]>>,
     /// `at=`: where it stands, the x and the y in squares, each a number
     /// or a range with its odds, drawn once from the entry's seed.
     pub at: Option<[Draw; 2]>,
-    /// `against=`: the kind of thing it gathers at the foot of.
+    /// `at=foot(…)`: the kind of thing it gathers at the foot of.
     pub against: Option<String>,
     /// A scatter's children: each thing, its controls and its weight.
     pub children: Vec<Child>,
@@ -758,7 +758,7 @@ impl Reader<'_> {
                         pending.push(not_yet(
                             src,
                             a.span,
-                            &format!("`at=` a line or region on `{name}` is"),
+                            &format!("`at=` a line on `{name}` is"),
                         ));
                     }
                     things.push(thing(e));
@@ -928,7 +928,7 @@ impl Reader<'_> {
                             self.errors.push(d);
                         }
                     }
-                    // along= a path of edges and at= a point, for the elements
+                    // at= a path of edges and at= a point, for the elements
                     // that place by them; the rest is not built yet
                     let mut path = None;
                     let mut point = None;
@@ -939,17 +939,17 @@ impl Reader<'_> {
                     };
                     let mut unplaced = vec![("side=", e.place.side.as_ref().map(|s| s.span))];
                     if !element.honours(PlaceWord::Against) {
-                        unplaced.push(("against=", e.place.against.as_ref().map(|s| s.span)));
+                        unplaced.push(("at=foot(…)", e.place.against.as_ref().map(|s| s.span)));
                     }
                     match &along {
                         Some(a) if element.honours(PlaceWord::Along) => match &a.value {
                             Along::Edges(edges) => path = Some(edge_path(edges, self.dims)),
-                            Along::Line(_) => unplaced.push(("along= a drawn line", Some(a.span))),
+                            Along::Line(_) => unplaced.push(("at= a drawn line", Some(a.span))),
                         },
                         // inherited from a definition call: for the elements
                         // that place by it only, the others ignore it
                         Some(a) if e.place.along.is_some() => {
-                            unplaced.push(("along=", Some(a.span)));
+                            unplaced.push(("at= a line", Some(a.span)));
                         }
                         _ => {}
                     }
@@ -1021,11 +1021,11 @@ impl Reader<'_> {
                             continue;
                         };
                         for (word, span) in [
-                            ("along=", c.place.along.as_ref().map(|s| s.span)),
+                            ("at= a line", c.place.along.as_ref().map(|s| s.span)),
                             ("side=", c.place.side.as_ref().map(|s| s.span)),
                             ("at=", c.place.at.as_ref().map(|s| s.span)),
-                            ("against=", c.place.against.as_ref().map(|s| s.span)),
-                            ("in=", c.place.region.as_ref().map(|s| s.span)),
+                            ("at=foot(…)", c.place.against.as_ref().map(|s| s.span)),
+                            ("at= a region", c.place.region.as_ref().map(|s| s.span)),
                         ] {
                             if let Some(span) = span {
                                 ok = false;

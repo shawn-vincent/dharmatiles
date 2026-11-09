@@ -15,7 +15,7 @@ tile size="1x1" seed=57 {
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
             pin top=waterBedHeight at=channel   // the bed, written last so it wins
         }
-        rock in=channel size="6..10"
+        rock at=channel size="6..10"
         water
     }
 }

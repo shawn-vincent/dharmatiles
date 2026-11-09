@@ -120,7 +120,7 @@ export class Tools {
     else if (name === 'scatter') kind = 'scatter';
     else if (!el) kind = 'place'; // a definition: a thing
     else if (el.role === 'run') kind = 'run';
-    else if (el.place.includes('at')) kind = 'place';
+    else if (el.takes.includes('point')) kind = 'place';
     else kind = 'paint';
     this.ui.input.value = '';
     this.ui.input.blur();
@@ -275,16 +275,16 @@ export class Tools {
       const child = t.extra && !t.extra.includes('=') ? t.extra.split(/\s+/)[0] : 'rock';
       const more = t.extra && t.extra.includes('=') ? ` ${t.extra}` : '';
       this.stop();
-      await this.api.insert('stack', `scatter${r ? ` in=${r}` : ''} count=3${more} {\n    ${child}\n}`, { lens: 'count' });
+      await this.api.insert('stack', `scatter${r ? ` at=${r}` : ''} count=3${more} {\n    ${child}\n}`, { lens: 'count' });
     } else if (t.kind === 'paint') {
       const r = this.overlay.regionAt(p.q);
       this.stop();
-      await this.api.insert('stack', node(r ? `in=${r}` : ''));
+      await this.api.insert('stack', node(r ? `at=${r}` : ''));
     } else if (t.kind === 'run') {
       const l = this.overlay.lineAt(x, y, 14);
       const along = l || edgeOf(p.q, size);
       this.stop();
-      await this.api.insert('stack', node(`along=${along}`));
+      await this.api.insert('stack', node(`at=${along}`));
     } else if (t.kind === 'line') {
       t.points.push(snap(p.q, size));
       this.paint();
@@ -358,10 +358,10 @@ export class Tools {
         if (this.press?.moved) s.box = [this.press.q, h.q];
       } else if (t.kind === 'paint') {
         s.selRegion = this.overlay.regionAt(h.q);
-        s.label = { q: h.q, text: s.selRegion ? `in=${s.selRegion}` : 'the whole tile' };
+        s.label = { q: h.q, text: s.selRegion ? `at=${s.selRegion}` : 'the whole tile' };
       } else if (t.kind === 'run') {
         s.selLine = this.overlay.lineAt(h.x, h.y, 14);
-        s.label = { q: h.q, text: `along=${s.selLine || edgeOf(h.q, size)}` };
+        s.label = { q: h.q, text: `at=${s.selLine || edgeOf(h.q, size)}` };
       } else if (t.kind === 'line') {
         const now = snap(h.q, size);
         s.path = [...t.points.map((p) => p.q), now.q];

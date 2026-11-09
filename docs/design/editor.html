@@ -104,11 +104,11 @@
   <text class="m" x="14" y="108">  region pool { … }</text>
   <text class="m" x="14" y="126">  region bank { … }</text>
   <text class="m" x="14" y="144">  stack {</text>
-  <text class="m" x="14" y="162">    dirt in=bank</text>
-  <text class="m" x="14" y="180">    grass in=bank</text>
-  <text class="m" x="14" y="198">    ground in=pool …</text>
+  <text class="m" x="14" y="162">    dirt at=bank</text>
+  <text class="m" x="14" y="180">    grass at=bank</text>
+  <text class="m" x="14" y="198">    ground at=pool …</text>
   <rect class="selfill" x="8" y="205" width="256" height="18" rx="3"/>
-  <text class="m" x="14" y="218">    scatter in=pool count=2 {</text>
+  <text class="m" x="14" y="218">    scatter at=pool count=2 {</text>
   <text class="m" x="14" y="236">      rock size="6..10"</text>
   <text class="m" x="14" y="254">    }</text>
   <text class="m" x="14" y="272">    water</text>
@@ -181,7 +181,7 @@
 <tr><td>Range (<code>6..10</code>)</td><td>Two ends to drag, and the middle to slide both.</td></tr>
 <tr><td>Word (<code>wear=worn</code>)</td><td>Two short choices stay visible as buttons; larger sets use a dropdown so controls remain one row high. A number that also has words (<code>wall height full</code>) is typed like a number, and the helper offers its words.</td></tr>
 <tr><td>Point (<code>at=</code>)</td><td>A handle on the plate (see <a href="#place">placing</a>), and the numbers here.</td></tr>
-<tr><td>Region or line (<code>in=</code>, <code>along=</code>)</td><td>The document's names; hover one to light it on the plate.</td></tr>
+<tr><td>Region or line (<code>at=</code>)</td><td>The document's names; hover one to light it on the plate.</td></tr>
 <tr><td>Seed</td><td>A die: click for the next seed, drag to run through seeds.</td></tr>
 </tbody></table></div>
 <p>Setting a control back to its default removes it from the source. The property sheet never shows a value the document does not hold, apart from the faint defaults under <em>+ more</em>. Each control's name links to its line on the element's page.</p>
@@ -222,8 +222,8 @@
 </figure>
 <ul>
   <li><strong>Place a thing.</strong> Type an element in the bar (<code>rock</code>, <code>tree</code>, <code>boulder</code>, or a definition such as <code>oak</code>). Its footprint follows the pointer across the tile's surface; a click writes <code>rock at="x,y"</code> into the stack, in squares from the south-west corner as the language has it, and the draft build shows it at once. Click again to place another; <kbd>Esc</kbd> stops. Dragging a box instead of clicking writes a range (<code>at="0.4..0.8,0.2..0.5"</code>): the thing goes somewhere in it, by seed.</li>
-  <li><strong>Place many.</strong> Type <code>scatter</code> and drag over a region; it writes <code>scatter in=pool count=3 { rock }</code> and opens the property sheet on its count.</li>
-  <li><strong>Paint a surface.</strong> Type <code>dirt</code>, <code>flagstones</code>, <code>planks</code> or <code>water</code> and click a region: it writes the entry with <code>in=</code> that region.</li>
+  <li><strong>Place many.</strong> Type <code>scatter</code> and drag over a region; it writes <code>scatter at=pool count=3 { rock }</code> and opens the property sheet on its count.</li>
+  <li><strong>Paint a surface.</strong> Type <code>dirt</code>, <code>flagstones</code>, <code>planks</code> or <code>water</code> and click a region: it writes the entry with <code>at=</code> that region.</li>
   <li><strong>Draw a line.</strong> Type <code>line</code>, then click points on the plate; <kbd>Enter</kbd> or a double-click ends it. A point dropped on an edge or a corner snaps and is written as its word (<code>west</code>, <code>south-east</code>). The line's <code>wobble</code> shows as a faint band either side.</li>
   <li><strong>Make a region.</strong> Type <code>region</code> and click inside an area the lines enclose: it writes the region with a fill point there, and a name to type over. Click another area to add a second fill point to the same region.</li>
   <li><strong>Move things.</strong> A selected line shows its points as handles; a region its fill points; a placed thing its <code>at=</code>. Dragging a handle rewrites that point. The overlay moves at once, before any build.</li>
@@ -233,7 +233,7 @@
 <h2 id="text">The text</h2>
 <p>The text pane is a code editor (CodeMirror 6, vendored with the page like three.js, with a KDL v2 grammar). It is a full editor for people who prefer to type, and everything in it is fed by the program.</p>
 <ul>
-  <li><strong>Completion everywhere</strong>, from the element schema: the elements a stack can hold at this point; an element's controls with their unit, default and one-line help; a word control's words with their descriptions; the document's own line and region names after <code>in=</code>, <code>along=</code> and <code>boundedBy</code>; edge and corner words; <code>lib:</code> parts; level names in expressions. Completing an element inserts the controls it must have, with the cursor on the first.</li>
+  <li><strong>Completion everywhere</strong>, from the element schema: the elements a stack can hold at this point; an element's controls with their unit, default and one-line help; a word control's words with their descriptions; the document's own line and region names after <code>at=</code> and <code>boundedBy</code>; edge and corner words; <code>lib:</code> parts; level names in expressions. Completing an element inserts the controls it must have, with the cursor on the first.</li>
   <li><strong>Pictures in completion.</strong> Each element in the list shows its picture from its element page, so you choose by what it makes.</li>
   <li><strong>Errors as you type.</strong> The program's checker (read and plan, no build) runs on every pause in typing, and its errors appear at their span with the same text and help as <code>dharmatiles check</code>. The view keeps the last good build until the text checks again.</li>
   <li><strong>Hover</strong> a control for its line from the element page and a link to the page.</li>
@@ -327,10 +327,10 @@
     <rect x="70" y="103" width="30" height="4" rx="2" style="fill:var(--line-2)"/>
     <text class="s" x="14" y="126">document</text>
     <text class="m" x="14" y="148" style="font-size:9.5px">stack {</text>
-    <text class="m" x="14" y="164" style="font-size:9.5px">  dirt in=bank</text>
-    <text class="m" x="14" y="180" style="font-size:9.5px">  grass in=bank</text>
+    <text class="m" x="14" y="164" style="font-size:9.5px">  dirt at=bank</text>
+    <text class="m" x="14" y="180" style="font-size:9.5px">  grass at=bank</text>
     <rect class="selfill" x="10" y="186" width="150" height="16" rx="3"/>
-    <text class="m" x="14" y="198" style="font-size:9.5px">  scatter in=pool count=2</text>
+    <text class="m" x="14" y="198" style="font-size:9.5px">  scatter at=pool count=2</text>
     <text class="m" x="14" y="214" style="font-size:9.5px">    rock size="6..10"</text>
     <text class="m" x="14" y="230" style="font-size:9.5px">  water</text>
     <rect class="pane" x="10" y="312" width="150" height="28" rx="14"/><text class="s" x="22" y="330">Type or ask…</text>

@@ -87,8 +87,13 @@ export const elementNamed = (n) => server.get().elements.find((e) => e.name === 
 /** Is there text with changes not yet saved? */
 export const dirty = () => { const d = doc.get(); return d.text != null && d.base != null && d.text !== d.base; };
 
-/** A word of a stack entry's own controls (`in=bank` -> bank), or undefined. */
+/** A word of a stack entry's own controls (`at=bank` -> bank), or undefined. */
 export const controlText = (it, name) => [...(it.place || []), ...(it.controls || [])].find((c) => c.name === name)?.text.replace(new RegExp(`^${name}=`), '').replace(/"/g, '');
+/** The region an entry is put in (`at=bank` -> bank): its `at=` when that names one of the map's regions. */
+export const regionOf = (it) => {
+  const at = controlText(it, 'at');
+  return at && doc.get().map?.regions.some((r) => r.name === at) ? at : undefined;
+};
 /** The file stem (`2x1-cliff`, `1x1-water+grass-tree`): the menu's name for a tile, whatever the document calls it. */
 export const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.(dtile|stl)$/i, '') + (/\.stl$/i.test(t.path) ? '.stl' : '');
 

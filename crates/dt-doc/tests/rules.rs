@@ -97,14 +97,14 @@ fn every_control_has_an_axis_that_says_how_it_scales() {
 
 #[test]
 fn line_and_child_forms_decode_the_same() {
-    let a = first("tile { stack { wall along=north thickness=7 } }");
-    let b = first("tile { stack { wall along=north { thickness 7 } } }");
+    let a = first("tile { stack { wall at=north thickness=7 } }");
+    let b = first("tile { stack { wall at=north { thickness 7 } } }");
     assert_eq!(a.value("thickness"), b.value("thickness"));
     assert_eq!(a.control("thickness").unwrap().form, Form::Property);
     assert_eq!(b.control("thickness").unwrap().form, Form::Child);
     // Words, and place words, too.
-    let a = first("tile { stack { wall along=north style=cut-stone } }");
-    let b = first("tile { stack { wall { along north; style cut-stone } } }");
+    let a = first("tile { stack { wall at=north style=cut-stone } }");
+    let b = first("tile { stack { wall { at north; style cut-stone } } }");
     assert_eq!(a.value("style"), b.value("style"));
     assert_eq!(a.place.along.unwrap().value, b.place.along.unwrap().value);
 }
@@ -112,7 +112,7 @@ fn line_and_child_forms_decode_the_same() {
 #[test]
 fn a_control_is_written_once() {
     assert_fails(
-        "tile { stack { wall along=north thickness=7 { thickness 8 } } }",
+        "tile { stack { wall at=north thickness=7 { thickness 8 } } }",
         "dt::duplicate",
         "`thickness` is set twice",
     );
@@ -283,10 +283,10 @@ fn old_words_say_what_replaced_them() {
         ("tile { stack { hills } }", "`hills` is now `dirt`"),
         ("tile { stack { meadow } }", "`meadow` is now `grass`"),
         (
-            "tile { stack { wall along=north family=brick } }",
+            "tile { stack { wall at=north family=brick } }",
             "`family` is now `style`",
         ),
-        ("tile { stack { dirt self=yard } }", "`self=` is now `in=`"),
+        ("tile { stack { dirt self=yard } }", "`self=` is now `at=`"),
         (
             "tile { stack { dirt { bank near=cliff } } }",
             "a bank is drawn",
@@ -297,9 +297,9 @@ fn old_words_say_what_replaced_them() {
         ),
         (
             "tile { stack { scatter near=cliff { stone } } }",
-            "`near=` is now `against=`",
+            "`near=` is now `at=\"foot(…)\"`",
         ),
-        ("tile { stack { scree } }", "scatter against=cliff"),
+        ("tile { stack { scree } }", "scatter at=\"foot(cliff)\""),
         ("tile cols=2 { }", "size=\\\"2x1\\\""),
         ("heights { edge 3.4 }", "`heights` is now `let`"),
     ] {
@@ -333,7 +333,7 @@ fn words_keep_their_numbers_and_numbers_are_accepted() {
         "did you mean `round`?",
     );
     // Wall height: a word or mm.
-    let e = first("tile { stack { wall along=south { height 20 } } }");
+    let e = first("tile { stack { wall at=south { height 20 } } }");
     assert!(e.value("height").unwrap().num().is_some());
 }
 
@@ -397,14 +397,14 @@ fn an_old_hyphenated_control_name_gives_the_camel_case_one() {
 #[test]
 fn regions_only_on_divided_tiles() {
     assert_fails(
-        "tile { region all { fill \"0.5,0.5\" }; stack { dirt in=all } }",
+        "tile { region all { fill \"0.5,0.5\" }; stack { dirt at=all } }",
         "dt::region",
         "the whole tile is already the default area",
     );
     assert_fails(
-        "tile { stack { dirt in=verge } }",
-        "dt::unknown-name",
-        "leave `in=` out",
+        "tile { stack { dirt at=verge } }",
+        "dt::place",
+        "no place is called `verge`",
     );
     assert_fails(
         "tile { line l { through west east }; region r { boundedBy l } }",
@@ -446,39 +446,39 @@ fn a_tile_is_at_most_64_squares_a_side() {
 
 #[test]
 fn edges_and_edge_paths() {
-    let e = first("tile { stack { wall along=\"south east north\" } }");
+    let e = first("tile { stack { wall at=\"south east north\" } }");
     assert_eq!(
         e.place.along.unwrap().value,
         Along::Edges(vec![Edge::South, Edge::East, Edge::North])
     );
     assert_fails(
-        "tile { stack { wall along=\"north south\" } }",
+        "tile { stack { wall at=\"north south\" } }",
         "dt::place",
         "don't meet at a corner",
     );
     assert_fails(
-        "tile { stack { wall along=nort } }",
-        "dt::unknown-name",
+        "tile { stack { wall at=nort } }",
+        "dt::place",
         "did you mean `north`?",
     );
     assert_fails(
         "tile { stack { wall } }",
         "dt::missing-control",
-        "`wall` needs `along=`",
+        "`wall` needs `at=`",
     );
 }
 
 #[test]
 fn side_is_for_drawn_lines() {
-    let e = first("tile { line l { through west east }; stack { wall along=l side=left } }");
+    let e = first("tile { line l { through west east }; stack { wall at=l side=left } }");
     assert_eq!(e.place.side.unwrap().value, Side::Left);
     assert_fails(
-        "tile { stack { wall along=north side=left } }",
+        "tile { stack { wall at=north side=left } }",
         "dt::place",
         "always stands inside the tile",
     );
     assert_fails(
-        "tile { line l { through west east }; stack { wall along=l side=middle } }",
+        "tile { line l { through west east }; stack { wall at=l side=middle } }",
         "dt::choice",
         "left, right or centre",
     );
@@ -539,9 +539,9 @@ fn a_thing_is_one() {
         "a scatter's job",
     );
     assert_fails(
-        "tile { stack { tree along=north } }",
-        "dt::place",
-        "scatter along=",
+        "tile { stack { tree at=\"north west\" } }",
+        "dt::type",
+        "scatter at=<line>",
     );
 }
 
@@ -586,12 +586,8 @@ fn scatter_rules() {
             "both say how many",
         ),
         (
-            "tile { stack { scatter count=3 spread=5 { rock } } }",
-            "clusters round an `at=`",
-        ),
-        (
             "tile { stack { scatter count=3 reach=5 { rock } } }",
-            "`against=`",
+            "`at=foot(…)`",
         ),
         ("tile { stack { scatter count=3 } }", "children say what"),
         (
@@ -626,7 +622,7 @@ fn scatter_rules() {
 #[test]
 fn kinds_let_solids_be_planned_first() {
     let doc = snippet(
-        "use \"parts/grass\" lawn\ntile { stack { lawn; scatter count=3 { rock }; dirt; wall along=north } }",
+        "use \"parts/grass\" lawn\ntile { stack { lawn; scatter count=3 { rock }; dirt; wall at=north } }",
     );
     let kinds: Vec<_> = doc.tile().unwrap().stack.iter().map(|e| e.kind).collect();
     assert_eq!(
@@ -702,7 +698,7 @@ fn definitions_are_typed_by_what_their_parameters_fill() {
 #[test]
 fn every_mistake_is_reported() {
     let (e, shown) =
-        fails("tile { stack { hills; tree hieght=40; wall along=north style=feildstone } }");
+        fails("tile { stack { hills; tree hieght=40; wall at=north style=feildstone } }");
     assert_eq!(e.len(), 3, "{shown}");
     assert!(e.iter().all(|e| e.help.is_some()), "{shown}");
 }
@@ -722,7 +718,7 @@ fn value_is_kept_with_its_span() {
 #[test]
 fn the_r6_snippets_decode() {
     let e = first(
-        "tile { stack { wall along=south style=cut-stone {\n    height full\n    thickness 7\n} } }",
+        "tile { stack { wall at=south style=cut-stone {\n    height full\n    thickness 7\n} } }",
     );
     assert_eq!(e.value("style").unwrap().word().unwrap().word, "cut-stone");
     let e = first(

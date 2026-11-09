@@ -8,7 +8,7 @@ import { byteToIndex } from '../text.js';
 import { $, pickView, toast, viewer } from './app.js';
 import { texts, canLeave } from './document.js';
 import {
-  controlText, dirty, doc, entrySel, isEntry, isMark, mapNode, markSel, same, server, stackItems, stem,
+  controlText, dirty, regionOf, doc, entrySel, isEntry, isMark, mapNode, markSel, same, server, stackItems, stem,
   tile, tileSel, view,
 } from './stores.js';
 
@@ -118,7 +118,7 @@ function clickHit(hit) {
   if (!hit) return setSel(null);
   const s = view.get().sel;
   const many = piecesOf(hit.entry) > 1;
-  const inOf = (e) => (stackItems()[e] ? controlText(stackItems()[e], 'in') : null);
+  const inOf = (e) => (stackItems()[e] ? regionOf(stackItems()[e]) : null);
   if (s?.kind === 'region' && inOf(hit.entry) === s.id) return setSel(tileSel(), { from: 'view' }); // the region -> the tile
   if (!isEntry(s) || s.id !== hit.entry) return setSel(entrySel(hit.entry, many ? hit.piece : null), { from: 'view' });
   if (s.piece != null) return setSel(entrySel(hit.entry), { from: 'view' }); // the piece -> its entry

@@ -77,13 +77,13 @@
   </figure>
 </div>
 <h2 id="use">Using it in a tile</h2>
-<p>A wall must have <code>along=</code>: a tile edge, an edge path (two edges make a corner), or a drawn <a href="line.html">line</a>:</p>
+<p>A wall must have <code>at=</code> a line: a tile edge, an edge path (two edges make a corner), or a drawn <a href="line.html">line</a>:</p>
 <pre><code>use "parts/grass" lawn
 
 tile size="1x1" seed=62 {
     stack {
         dirt
-        wall along="north west" style=cut-stone seed=12 {
+        wall at="north west" style=cut-stone seed=12 {
             height full                 // up to the wall-top level (33.1 mm)
             thickness 7
         }
@@ -91,7 +91,7 @@ tile size="1x1" seed=62 {
     }
 }</code></pre>
 <p>The styles: <code>style=cut-stone</code> (the default), <code>fieldstone</code> (drystone, no mortar), <code>brick</code> and <code>regular-brick</code>. Each sets its own stone sizes and finish; <code>stones</code>, <code>joints</code> and <code>edges</code> adjust them:</p>
-<pre><code>wall along=north style=fieldstone {
+<pre><code>wall at=north style=fieldstone {
     stones height="2.2..5.2" length="5..16" texture=worn
     coping on-edge                      // what tops a drystone wall
 }</code></pre>
@@ -101,8 +101,8 @@ tile size="1x1" seed=62 {
 <!-- gen:reference wall -->
 <div class="facts">
   <div><div class="k">Kind</div><div class="v">a run: built along a tile edge or a drawn line</div></div>
-  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code> <code>side=</code></div></div>
-  <div><div class="k">Must have</div><div class="v"><code>along=</code></div></div>
+  <div><div class="k">Place</div><div class="v"><code>at=</code> region, line; <code>side=</code></div></div>
+  <div><div class="k">Must have</div><div class="v"><code>at=</code></div></div>
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>
 <h3 id="controls">Controls</h3>
@@ -186,7 +186,7 @@ tile size="1x1" seed=62 {
 
 <p class="small muted">What the program does, in order:</p>
 <ol class="small">
-  <li><strong>Spine</strong>: the line the wall follows (<code>along=</code>): its outer face, with the wall's body to its left; on a tile edge, inside the tile.</li>
+  <li><strong>Spine</strong>: the line the wall follows (<code>at=</code>): its outer face, with the wall's body to its left; on a tile edge, inside the tile.</li>
   <li><strong>Layout</strong>: courses (rows) × bays (stones along a row), with quoins alternating at corners and ends, make the cells; <code>top battlements</code> and <code>ruin</code> edit the cells.</li>
   <li><strong>Stones</strong>: every cell becomes one unit: a dressed block (cut stone, brick, regular brick) or a fieldstone; its finish (<code>texture</code>) is chipped, worn, hewn or dressed.</li>
   <li><strong>Core and joints</strong>: mortared styles stand on a recessed core and the joints are reveals onto it; drystone has no core, and rough rubble fills behind the face.</li>

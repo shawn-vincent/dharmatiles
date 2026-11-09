@@ -7,7 +7,7 @@ import { byteToIndex } from '../text.js';
 import { failed } from '../problems.js';
 import { $, host, offerMine, viewer } from './app.js';
 import { askDraft, edited, openFile, replaceBytes, texts } from './document.js';
-import { controlText, doc, isEntry, mapNode, server, stackItems, tile, view } from './stores.js';
+import { doc, isEntry, mapNode, regionOf, server, stackItems, tile, view } from './stores.js';
 
 export let tools = null; // the bar's tools (below)
 
@@ -28,7 +28,7 @@ function surfaceHeights(p) {
 function tints() {
   const out = {};
   for (const it of stackItems()) {
-    const r = controlText(it, 'in');
+    const r = regionOf(it);
     if (r && COLOUR[it.element]) out[r] = cssVar(COLOUR[it.element]);
   }
   return out;

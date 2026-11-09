@@ -14,12 +14,12 @@ tile size="1x2" seed=7 {
 
     stack {
         dirt                                    // the whole tile, at the ground height
-        dirt along=trail                        // the path, a second dirt along it
+        dirt at=trail                           // the path, a second dirt along it
 
-        scatter in=verge at="0.2,1.4" spread=6 count=5 {   // a cluster
+        scatter at=verge count=5 {
             rock size="4..10" shape=rounded buried="30%"   // shape: or angular, flat
         }
 
-        lawn in=verge cover="85%"
+        lawn at=verge cover="85%"
     }
 }

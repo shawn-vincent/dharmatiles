@@ -13,7 +13,7 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>line</h1>
-  <p class="lede">A line through points. Lines divide a tile into <a href="region.html">regions</a>, and can wander off its points (<code>wobble</code>). Later, runs and surfaces will be built <code>along=</code> one, and a width will make it a strip.</p>
+  <p class="lede">A line through points. Lines divide a tile into <a href="region.html">regions</a>, and can wander off its points (<code>wobble</code>). Later, runs and surfaces will be built <code>at=</code> one, and a width will make it a strip.</p>
   <figure class="shot pair">
     <div><img src="img/el-line-straight.jpg" alt="From above: grass above a line through three points, bare dirt below; the boundary runs straight through the marked points." width="640" height="639"><p><code>wobble=0</code></p></div>
     <div><img src="img/el-line.jpg" alt="The same line with wobble 5: the boundary wanders a few millimetres off the straight path between the points." width="640" height="637"><p><code>wobble=5</code></p></div>
@@ -31,13 +31,13 @@
 line trail width=9 wobble=3 { through south "0.65,1" north }
 line ring closed=#true wobble=2 { through "(0.3, 0.3)" "(0.7, 0.3)" "(0.5, 0.7)" }
 line stream { through westCenter eastCenter }       // the built-in points, by name</code></pre>
-<p class="callout">Not built yet: <code>width=</code> and <code>along=</code> are read and checked, but <code>dharmatiles build</code> refuses a tile that uses them (<code>check</code> says which lines). For now a line divides regions.</p>
+<p class="callout">Not built yet: <code>width=</code> and <code>at=</code> a line are read and checked, but <code>dharmatiles build</code> refuses a tile that uses them (<code>check</code> says which lines). For now a line divides regions.</p>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>line NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>boundedBy</code> and <code>along=</code>. <strong>Required.</strong></td></tr>
-<tr><td><code>width=</code></td><td>mm</td><td>—</td><td>Makes the line a strip of this width; an element <code>along=</code> it covers the strip.</td></tr>
+<tr><td><code>line NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>boundedBy</code> and <code>at=</code>. <strong>Required.</strong></td></tr>
+<tr><td><code>width=</code></td><td>mm</td><td>—</td><td>Makes the line a strip of this width; an element <code>at=</code> it covers the strip.</td></tr>
 <tr><td><code>wobble=</code></td><td>mm</td><td>0</td><td>Lets the line wander up to this far off its points, keyed by the tile seed and the line's name.</td></tr>
 <tr><td><code>closed=</code></td><td>#true or #false</td><td>#false</td><td>A loop: the last point joins the first (at least three points). The inside of a closed line is a region with <code>fill</code>.</td></tr>
 <tr><td><code>through</code></td><td>points</td><td>—</td><td>The points, in order: <code>"(x, y)"</code> or <code>"x,y"</code> in squares, a point's name (<a href="point.html">built in or declared</a>), an edge word (its middle) or a corner word. <strong>Required.</strong></td></tr>

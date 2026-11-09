@@ -184,15 +184,20 @@ fn role_text(role: &str) -> &'static str {
 fn reference(element: &Value, tiles: &[(String, String)]) -> String {
     let name = element["name"].as_str().unwrap_or_default();
     let mut s = String::new();
-    let place: Vec<String> = element["place"]
+    let takes: Vec<&str> = element["takes"]
         .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(Value::as_str)
-                .map(|w| format!("<code>{w}=</code>"))
-                .collect()
-        })
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
+    let mut place: Vec<String> = Vec::new();
+    if !takes.is_empty() {
+        place.push(format!("<code>at=</code> {}", takes.join(", ")));
+    }
+    if element["place"]
+        .as_array()
+        .is_some_and(|a| a.iter().any(|w| w.as_str() == Some("side")))
+    {
+        place.push("<code>side=</code>".to_owned());
+    }
     let _ = writeln!(s, "<div class=\"facts\">");
     let _ = writeln!(
         s,
@@ -201,11 +206,11 @@ fn reference(element: &Value, tiles: &[(String, String)]) -> String {
     );
     let _ = writeln!(
         s,
-        "  <div><div class=\"k\">Place words</div><div class=\"v\">{}</div></div>",
+        "  <div><div class=\"k\">Place</div><div class=\"v\">{}</div></div>",
         if place.is_empty() {
             "none".to_owned()
         } else {
-            place.join(" ")
+            place.join("; ")
         }
     );
     let needs: Vec<String> = element["needs"]

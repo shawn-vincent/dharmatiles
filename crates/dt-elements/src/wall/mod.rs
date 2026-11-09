@@ -2,7 +2,7 @@
 //! share. Openings are not built: there is no vocabulary for
 //! them yet.
 //!
-//! A wall is a spine (`along=`, the outer face, the body to its left)
+//! A wall is a spine (`at=` a line, the outer face, the body to its left)
 //! split into segments; courses × bays × quoin alternation make cells
 //! ([`layout`]); battlements and ruin edit the cells; every cell becomes
 //! one unit: a [`block`] (cut stone, brick, regular brick, floor slab) or
@@ -318,8 +318,8 @@ impl Element for Wall {
         let Some(along) = ctx.along else {
             return Err(LookError {
                 control: None,
-                message: "a wall needs along= the tile edges it stands on".into(),
-                help: Some("write along=\"north\" or along=\"north west\"".into()),
+                message: "a wall needs at= the tile edges it stands on".into(),
+                help: Some("write at=\"north\" or at=\"north west\"".into()),
                 code: None,
             });
         };

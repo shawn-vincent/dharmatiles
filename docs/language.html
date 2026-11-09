@@ -90,7 +90,7 @@ atom   := number "%"? | name | "(" sum ")" | "[" sum ".." sum "]" | weighting   
 list      := "[" item ( "," item )+ "]"                                   item := value ( ":" weight )?
 range     := sum ".." sum | "[" sum ".." sum "]"</code></pre>
 <p>Nine functions in all. A comma inside brackets makes a list; <code>..</code> makes a range.</p>
-<pre><code>scatter against=cliff perSquare=55 reach=4 { stone size="low(1..6, 11)" }
+<pre><code>scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
 scatter perSquare=3 { rock size="bell(6..10)" }
 scatter perSquare=3 { stone size="[3, 4:3, 5.5]" }
 let small "low(1..6, 11)"</code></pre>
@@ -228,22 +228,22 @@ let tallWallHeight     72.3</code></pre>
 <thead><tr><th>Thing</th><th>Written as</th><th>Means</th></tr></thead>
 <tbody>
 <tr><td>Tile size</td><td><code>size="2x1"</code></td><td>Columns first. Default <code>"1x1"</code>.</td></tr>
-<tr><td>Edge</td><td><code>north</code>, <code>south</code>, <code>east</code>, <code>west</code></td><td>As a point: the middle of that edge.</td></tr>
-<tr><td>Edge path</td><td><code>along="north west"</code></td><td>Several edges in order, quoted. Two edges meeting make a corner.</td></tr>
+<tr><td>Edge</td><td><code>north</code>, <code>south</code>, <code>east</code>, <code>west</code></td><td>For a thing, a point: the middle of that edge. For a wall, surface or scatter, a line: that edge.</td></tr>
+<tr><td>Edge path</td><td><code>at="north west"</code></td><td>Several edges in order, quoted. Two edges meeting make a corner.</td></tr>
 <tr><td>Corner</td><td><code>north-west</code>, <code>south-east</code>, …</td><td>A point at that corner.</td></tr>
 <tr><td>Point</td><td><code>"0.65,1"</code></td><td>One quoted pair. Either coordinate may be a range, weighted or not: <code>"0.6..1.4,0.6..1.4"</code> or <code>"bell(0.6..1.4), 0.5"</code>, drawn once from the tile seed.</td></tr>
 </tbody></table></div>
 <p>A wall or cliff on a tile edge always stands inside the tile, its outer face flush with the edge. That is the DungeonBlocks slab standard, and it means an author never has to work out which side of a line a wall is on.</p>
 
 <h3 id="lines">Lines</h3>
-<p>A drawn line runs through points. With a <code>width</code> it is a strip, and an element <code>along=</code> it covers the strip. <code>wobble</code> lets it wander up to that many mm off its points.</p>
+<p>A drawn line runs through points. With a <code>width</code> it is a strip, and an element <code>at=</code> it covers the strip. <code>wobble</code> lets it wander up to that many mm off its points.</p>
 <pre><code>line trail width=9 wobble=3 { through south "0.65,1" north }</code></pre>
 <p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. <code>side=</code> along a tile edge is an error, because on an edge a wall always stands inside.</p>
 
 <h3 id="regions">Regions</h3>
 <p>The whole tile is the default area, so an undivided tile needs no region. A region exists only when lines divide the tile. It is the paint-bucket model from the design conversation: name the lines that bound it, then drop one or more fill points.</p>
 <pre><code>region verge { boundedBy trail; fill "0.15,1"; fill "0.85,1" }</code></pre>
-<p>Several fill points on different sides of a line join areas without union, intersection or difference. Elements act inside a region with <code>in=verge</code>.</p>
+<p>Several fill points on different sides of a line join areas without union, intersection or difference. Elements act inside a region with <code>at=verge</code>.</p>
 
 <h3 id="named-places">Places by name</h3>
 <p>A place is a point, a line or a region, all flat: they say where, never how high. Every tile has them built in, named in camelCase:</p>
@@ -258,21 +258,21 @@ let tallWallHeight     72.3</code></pre>
 <pre><code>region banks { within 4.5 of=stream }                     // a disc round a point, a strip beside a line, a ring round a region
 region verge { except path }                              // a region that only excepts is the whole tile less those
 region knoll { boundedBy foot; fill center }             // the paint bucket, as before</code></pre>
-<p>One place property, <code>at=</code>, names where a line goes. A body, <code>grass</code> or <code>scatter</code> fills a region: given a point or a line it is refused (<code>dt::type</code>). A pin or a thing takes any place. With no <code>at=</code> a line covers the whole tile. See <a href="elements/point.html"><code>point</code></a>, <a href="elements/line.html"><code>line</code></a> and <a href="elements/region.html"><code>region</code></a>.</p>
+<p>One place word, <code>at=</code>, says where an entry goes, and it takes any place: a point, a line or a region. Each element takes the kinds that mean something to it and refuses the others with <code>dt::type</code> and a help line: a body, <code>grass</code> or <code>reeds</code> fills a region (a body or <code>grass</code> may also follow a line); a wall follows a line; a thing stands at a point or fills a region; a <code>scatter</code> fills a region or spreads along a line, and given a point it is refused (write a region round it, <code>within 5 of=knoll</code>). With no <code>at=</code> an entry covers the whole tile. <code>within</code>, <code>except</code> and <code>boundedBy</code> build places; they never use one. See <a href="elements/point.html"><code>point</code></a>, <a href="elements/line.html"><code>line</code></a> and <a href="elements/region.html"><code>region</code></a>.</p>
 
 <h2 id="placement">5. Placement and scatter</h2>
 <h3 id="place-words">Place words</h3>
-<p>Five place words, one meaning each, shared by every element. Each element page lists the ones it takes.</p>
+<p>One word, <code>at=</code>, names the place, and <code>side=</code> adjusts a line. Each element page lists the kinds of place it takes.</p>
 <div class="tbl"><table>
 <thead><tr><th>Word</th><th>Takes</th><th>Means</th></tr></thead>
 <tbody>
-<tr><td><code>in=</code></td><td>a region name</td><td>Acts only inside that region. Default: the whole tile.</td></tr>
-<tr><td><code>along=</code></td><td>a line, an edge or an edge path</td><td>Built along it. On a tile edge, always inside.</td></tr>
-<tr><td><code>at=</code></td><td>a point, ranges allowed, or a corner or edge word</td><td>Centred there, or drawn once within the range. No <code>at=</code>: anywhere in the area.</td></tr>
-<tr><td><code>against=</code></td><td><code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code></td><td>Gathers at the foot of that kind of thing.</td></tr>
+<tr><td><code>at=</code> a region</td><td>a region name</td><td>Acts only inside that region. Default: the whole tile.</td></tr>
+<tr><td><code>at=</code> a line</td><td>a line, an edge or an edge path</td><td>Built or spread along it. On a tile edge, always inside.</td></tr>
+<tr><td><code>at=</code> a point</td><td>a point, ranges allowed, or a corner or edge word</td><td>Centred there, or drawn once within the range. No <code>at=</code>: anywhere in the area.</td></tr>
+<tr><td><code>at="foot(cliff)"</code></td><td><code>foot(</code> <code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code> <code>)</code>, quoted</td><td>The band at the foot of that kind of thing, where a scatter gathers. <code>reach=</code> says how far out.</td></tr>
 <tr><td><code>side=</code></td><td><code>left</code>, <code>right</code> or <code>centre</code></td><td>Along a drawn line, which side the element stands, as you walk the line. Not on a tile edge.</td></tr>
 </tbody></table></div>
-<p>A wall must have <code>along=</code>; a cliff needs it for the edge forms (<code>run</code>, <code>corner</code>, <code>escarpment</code>) but not the free-standing ones. Surfaces take <code>in=</code> and usually <code>along=</code>; things take <code>in=</code> and <code>at=</code>.</p>
+<p>A wall must have <code>at=</code> a line; a cliff needs it for the edge forms (<code>run</code>, <code>corner</code>, <code>escarpment</code>) but not the free-standing ones. Surfaces take a region and usually a line; things take a point or a region. An entry has one place: a second <code>at=</code> is <code>dt::duplicate</code>, and the old <code>in=</code>, <code>along=</code> and <code>against=</code> are <code>dt::unknown-control</code> naming <code>at=</code> (<code>dharmatiles migrate</code> rewrites old tiles).</p>
 
 <h3 id="one-thing">One thing</h3>
 <p>A thing is one of itself. How many is never its own control: <code>tree count=3</code> is an error whose help says to use a scatter. With no <code>at=</code> a thing goes anywhere in its area. Either way its footprint is kept inside the tile and clear of other solids, nudged inward rather than clipped (D12).</p>
@@ -284,13 +284,12 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 <tbody>
 <tr><td><code>count</code></td><td>number, or a weighted range</td><td>How many, in total.</td></tr>
 <tr><td><code>perSquare</code></td><td>number, or a weighted range</td><td>How many per square of the area, or per square of length along a line.</td></tr>
-<tr><td><code>at</code> + <code>spread</code></td><td>point; mm</td><td>A cluster round that point, within this distance.</td></tr>
-<tr><td><code>reach</code></td><td>mm</td><td>With <code>against=</code>: how far out from the foot.</td></tr>
+<tr><td><code>reach</code></td><td>mm</td><td>With <code>at="foot(…)"</code>: how far out from the foot.</td></tr>
 <tr><td><code>clumps</code></td><td>per square</td><td>Gathers them into clumps. Default: spread evenly.</td></tr>
 <tr><td><code>gap</code></td><td>mm</td><td>Least space between neighbours.</td></tr>
 <tr><td>child <code>weight=</code></td><td>number</td><td>Share of the mix when there are several children. Default: equal.</td></tr>
 </tbody></table></div>
-<p>A scatter must have exactly one of <code>count</code> and <code>perSquare</code>; <code>spread</code> needs <code>at=</code>, and <code>reach</code> needs <code>against=</code>. A scatter inside a surface (<code>dirt { scatter … }</code>) lands on that surface.</p>
+<p>A scatter must have exactly one of <code>count</code> and <code>perSquare</code>; <code>reach</code> needs <code>at="foot(…)"</code>. A scatter inside a surface (<code>dirt { scatter … }</code>) lands on that surface.</p>
 
 <h3 id="stack-order">Stack order</h3>
 <p>Order is free for solids. Every solid (rocks, trees, walls, cliffs, boulders, scattered or not) is planned before anything grows, and grass and dirt banks grow round every solid wherever they are listed. Order of land bodies is stack order, each one the higher of what is below and its own top: a dirt along a path, listed after the whole-tile dirt, takes the higher of the two there. Each element is a surface, a thing, a run or a scatter, and that decides how it is planned.</p>
@@ -312,7 +311,7 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 <p>Parts files hold definitions that tiles bring in by name. A <code>use</code> line names the file and the definitions it brings in, so a reader knows where every name came from:</p>
 <pre><code>use "parts/grass" lawn long-grass</code></pre>
 <p>A bare path such as <code>"parts/grass"</code> is the bundled library, and <code>"lib:parts/grass"</code> says so explicitly. <code>"./mine"</code> or <code>"../shared/x"</code> is a file in the author's project. Anything else is an error.</p>
-<p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like an element; its params are set as properties, and place words (<code>in=</code>, <code>at=</code>) pass through to the elements inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<code>dt::loop</code>).</p>
+<p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<code>dt::loop</code>).</p>
 <pre><code>// library/parts/grass.dtile
 define lawn {
     param length "3.5..6.5"   // blade length along the ground, mm
@@ -352,7 +351,7 @@ define oak {
 
   × `1..6` must be quoted
     ╭─[library/tiles/cliffs/2x1-cliff.dtile:27:66]
- 27 │         scatter against=cliff perSquare=55 reach=4 { stone size=1..6 }
+ 27 │         scatter at="foot(cliff)" perSquare=55 reach=4 { stone size=1..6 }
     ·                                                                  ──┬─
     ·                                                                    ╰── not a KDL number
   help: ranges, percents, points and sizes are written as strings: "1..6"</code></pre>
@@ -373,7 +372,7 @@ define oak {
    ·         ──┬──
    ·           ╰── unknown
   help: `hills` is now `dirt`</code></pre>
-<p>Other mistakes caught the same way: a misspelt control (<code>clumsp</code>, did you mean <code>clumps</code>?), a unit written in (<code>"4.5mm"</code>), an expert control in a tile, a missing <code>along=</code>, <code>side=</code> on a tile edge, and old KDL v1 syntax.</p>
+<p>Other mistakes caught the same way: a misspelt control (<code>clumsp</code>, did you mean <code>clumps</code>?), a unit written in (<code>"4.5mm"</code>), an expert control in a tile, a wall without <code>at=</code>, <code>side=</code> on a tile edge, and old KDL v1 syntax.</p>
 
 
 <h3 id="refusals">Refusals of the heights language</h3>
@@ -437,7 +436,7 @@ tile size="1x1" seed=64 {
 
         // Along the north edge, then the west edge.  On a tile edge a
         // wall always stands inside, its outer face flush with the edge.
-        wall along="north west" style=fieldstone seed=14 {
+        wall at="north west" style=fieldstone seed=14 {
             height full                     // up to wallHeight (33.1 mm)
             thickness 7
             coping loose                    // or: on-edge
@@ -452,7 +451,7 @@ tile size="1x1" seed=64 {
     }
 }</code></pre>
 <ul>
-  <li>Two edges in <code>along=</code> make a corner.</li>
+  <li>Two edges in <code>at=</code> make a corner.</li>
   <li>The wall's <code>seed=14</code> pins its stones while the tile seed varies everything else.</li>
   <li>On OpenLOCK, the 7 mm thickness and the stone sizes all shrink with the square.</li>
 </ul>
@@ -485,18 +484,18 @@ tile size="2x1" seed=1 {
         dirt top="bottom + [0.6 .. 1.2]" at=crag   // dirt on the cliff's top
 
         // scree: fallen stones gathered at the cliff's foot
-        scatter against=cliff perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-        scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
+        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
     }
 }</code></pre>
 <ul>
   <li><code>let foot 4</code> adds a height for this tile.</li>
-  <li>The dirt is listed before the cliff and still banks <code>against=cliff</code>. Its pebbles are scattered on the dirt.</li>
+  <li>The dirt is listed before the cliff and still banks <code>at="foot(cliff)"</code>. Its pebbles are scattered on the dirt.</li>
   <li>Scree is stones and boulders scattered against the cliff; they take their fragment shapes from the cliff's rock.</li>
 </ul>
 
-<h3 id="ex-path">A divided tile: grass, a path and a rock cluster</h3>
-<p>A path of bare dirt winding up a 1×2 tile through grass, with a cluster of rocks beside it: lines, regions, <code>in=</code> and <code>at=</code> together. (It is a test document in the repository, <code>crates/dt-doc/tests/fixtures/1x2-grass-path-rocks.dtile</code>.)</p>
+<h3 id="ex-path">A divided tile: grass, a path and rocks</h3>
+<p>A path of bare dirt winding up a 1×2 tile through grass, with rocks beside it: lines, regions and <code>at=</code> together. (It is a test document in the repository, <code>crates/dt-doc/tests/fixtures/1x2-grass-path-rocks.dtile</code>.)</p>
 <pre><code>use "parts/grass" lawn
 
 tile size="1x2" seed=7 {
@@ -510,13 +509,13 @@ tile size="1x2" seed=7 {
 
     stack {
         dirt                                    // the whole tile, at the ground height
-        dirt along=trail                        // the path, a second dirt along it
+        dirt at=trail                        // the path, a second dirt along it
 
-        scatter in=verge at="0.2,1.4" spread=6 count=5 {   // a cluster
+        scatter at=verge count=5 {
             rock size="4..10" shape=rounded buried="30%"   // shape: or angular, flat
         }
 
-        lawn in=verge cover="85%"
+        lawn at=verge cover="85%"
     }
 }</code></pre>
 <ul>
@@ -526,7 +525,7 @@ tile size="1x2" seed=7 {
 
 <h3 id="ex-snippets">Two short ones</h3>
 <pre><code>// A straight wall on the south edge
-wall along=south style=cut-stone {
+wall at=south style=cut-stone {
     height full
     thickness 7
 }
@@ -545,7 +544,7 @@ cliff top="dirtEdgeHeight + 55" at=crag {
   <li>Ranges and percents are quoted: <code>size="6..10"</code>, <code>cover="35%"</code>.</li>
   <li>A plain range is flat, on every element. A weighting is written round it, <code>size="low(6..10, 3)"</code>; every range in a value is its own draw; a weighted range goes on a draw, not on a band; a <code>let</code> name holds a distribution.</li>
   <li>Points are quoted pairs in squares (<code>"(0.5, 1)"</code>), a point's name, or a corner or edge word.</li>
-  <li>The whole tile is the default area. A region is flat: its fill points and its <code>within</code> discs, less what it <code>except</code>s. A body, grass or scatter fills a region; a pin or a thing takes any place.</li>
+  <li>The whole tile is the default area. A region is flat: its fill points and its <code>within</code> discs, less what it <code>except</code>s. One word, <code>at=</code>, names any place (a point, a line or a region), and each element refuses the kinds it cannot use with <code>dt::type</code>: a body or grass fills a region or follows a line, a scatter fills a region or spreads along a line (never a point), a thing stands at a point or fills a region. <code>foot(cliff)</code> is the band at that kind's foot.</li>
   <li>A stack that uses the heights language is written bottom up: <code>base</code> first, the land in order, <code>water</code> last. Heights are mm above zero; a pin is exact where it is and the later pin wins; the library's defaults are read before the tile.</li>
   <li>Every name is declared once, in camelCase, and so is every control: <code>perSquare=55</code>, not <code>per-square=55</code>. A hyphenated control name is an <code>unknown-control</code> error that gives the new one, and <code>dharmatiles migrate</code> rewrites old tiles. <code>let</code> adds a name, <code>override</code> replaces a library one, and neither works on the other's names.</li>
   <li>Stack order is free for solids: every solid is planned first and everything grows round it. Land bodies are laid in stack order, each the higher of what is below it and its own top.</li>

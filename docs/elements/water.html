@@ -76,8 +76,8 @@
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // a bank drawn between the bed and the land
             pin top=waterBedHeight at=pool                                // later, so it wins in the pool
         }
-        grass in=bank
-        scatter in=pool count=2 { rock size="6..10" }
+        grass at=bank
+        scatter at=pool count=2 { rock size="6..10" }
         water
     }
 }</code></pre>
@@ -87,7 +87,7 @@
 <!-- gen:reference water -->
 <div class="facts">
   <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
-  <div><div class="k">Place words</div><div class="v"><code>in=</code></div></div>
+  <div><div class="k">Place</div><div class="v"><code>at=</code> region</div></div>
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>
 <h3 id="controls">Controls</h3>

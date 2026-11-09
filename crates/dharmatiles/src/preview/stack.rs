@@ -123,8 +123,8 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
     v["span"] = json!([start, len]);
     v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
     v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name()));
-    // where it is put (at=, in=, along=), as written, for the map's handles
-    const PLACE: [&str; 4] = ["at", "in", "along", "against"];
+    // where it is put (at=), as written, for the map's handles
+    const PLACE: [&str; 1] = ["at"];
     v["place"] = json!(
         dt_doc::edit::props_at(text, e.what.span.offset())
             .unwrap_or_default()

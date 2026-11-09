@@ -5,7 +5,7 @@
 use std::fmt::Write as _;
 
 use dt_doc::elements::ELEMENTS;
-use dt_doc::schema::{self, Axis, Control, Element, Role, Word};
+use dt_doc::schema::{self, Axis, Control, Element, PlaceWord, Role, Word};
 use dt_eval::Diag;
 use serde_json::{Map, Value, json};
 
@@ -110,7 +110,8 @@ fn element_json(l: &'static Element) -> Value {
     let takes = built(l);
     let mut v = summary_json(l);
     v["ok"] = json!(true);
-    v["place"] = json!(l.place.iter().map(|p| p.as_str()).collect::<Vec<_>>());
+    v["place"] = json!(l.place_words());
+    v["takes"] = json!(l.place_kinds());
     v["needs"] = json!(l.needs.iter().map(|p| p.as_str()).collect::<Vec<_>>());
     v["holds_scatter"] = json!(l.holds_scatter);
     v["controls"] = json!(
@@ -267,11 +268,19 @@ fn show(l: &'static Element) {
     say!("{}: {}", l.name, l.about);
     let mut facts = vec![role(l.role).to_owned()];
     if !l.place.is_empty() {
-        let place: Vec<String> = l.place.iter().map(|p| format!("{}=", p.as_str())).collect();
-        facts.push(format!("place {}", place.join(" ")));
+        let takes = l.place_kinds();
+        let mut place = Vec::new();
+        if !takes.is_empty() {
+            place.push(format!("at= {}", takes.join(", ")));
+        }
+        if l.place.contains(&PlaceWord::Side) {
+            place.push("side=".to_owned());
+        }
+        facts.push(format!("place {}", place.join(", ")));
     }
     if !l.needs.is_empty() {
-        let needs: Vec<String> = l.needs.iter().map(|p| format!("{}=", p.as_str())).collect();
+        let mut needs: Vec<String> = l.needs.iter().map(|p| format!("{}=", p.as_str())).collect();
+        needs.dedup();
         facts.push(format!("needs {}", needs.join(" ")));
     }
     if l.holds_scatter {

@@ -13,8 +13,8 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>region</h1>
-  <p class="lede">An area of a divided tile. Name the lines that bound it, then drop one or more fill points, like a paint bucket: the region is everything a fill point reaches without crossing a line. Elements act inside a region with <code>in=</code>.</p>
-  <figure class="shot"><img src="img/el-region.jpg" alt="A tile divided by two lines into three regions: a stone floor at the back, a grassy bank in the middle, a pool in front." width="864" height="667"><figcaption>Two lines make three regions, each its own surface: <code>floor in=yard</code>, <code>grass in=bank</code> on the dirt, and water over the pool the dirt is pinned down in. From <code>docs/elements/demo/region.dtile</code>.</figcaption></figure>
+  <p class="lede">An area of a divided tile. Name the lines that bound it, then drop one or more fill points, like a paint bucket: the region is everything a fill point reaches without crossing a line. Elements act inside a region with <code>at=</code>.</p>
+  <figure class="shot"><img src="img/el-region.jpg" alt="A tile divided by two lines into three regions: a stone floor at the back, a grassy bank in the middle, a pool in front." width="864" height="667"><figcaption>Two lines make three regions, each its own surface: <code>floor at=yard</code>, <code>grass at=bank</code> on the dirt, and water over the pool the dirt is pinned down in. From <code>docs/elements/demo/region.dtile</code>.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>
@@ -31,21 +31,21 @@ region dry { except pool }                  // everything but the pool
 stack {
     base
     dirt { pin top=waterBedHeight at=pool }   // a region is a place a pin holds
-    grass in=bank                             // and where a coat grows
+    grass at=bank                             // and where a coat grows
     water                                     // fills its area up to its top
 }</code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>region NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>in=</code> and <code>at=</code>. <strong>Required.</strong></td></tr>
+<tr><td><code>region NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>at=</code>. <strong>Required.</strong></td></tr>
 <tr><td><code>boundedBy</code></td><td>line names</td><td>—</td><td>The lines that bound it.</td></tr>
 <tr><td><code>fill</code></td><td>a point</td><td>—</td><td>A point inside it, <code>"(x, y)"</code> or a point's name. Several fill points on different sides of a line join those areas into one region.</td></tr>
 <tr><td><code>within MM of=PLACE</code></td><td>a length, a place</td><td>—</td><td>Everything within that distance of a point, a line or a region: a disc round a point, a strip beside a line, a ring round a region (the region itself included). The length scales with the system. A range in it, <code>within "[10 .. 20]" of=northEdge</code>, draws the depth along the place: masses 6 to 15 mm long, each as deep as the range draws it (the same for the region and place whatever the seed), the middle of the range at both ends so runs butt.</td></tr>
 <tr><td><code>except</code></td><td>region names</td><td>—</td><td>Takes those regions out. A region that only excepts starts from the whole tile.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>The whole tile is the default area, so an undivided tile needs no region. The words add together: the fills, then each <code>within</code>, then <code>except</code> takes away. A region is flat, a footprint and nothing else; how high a body is over it is the body's <code>top</code> and <code>pin</code>. Bodies, grass and <code>scatter</code> take a region with <code>at=</code> (or <code>in=</code>); a point or a line is refused (<code>dt::type</code>). A region whose fill points all lie on its lines is an error.</p>
+<p>The whole tile is the default area, so an undivided tile needs no region. The words add together: the fills, then each <code>within</code>, then <code>except</code> takes away. A region is flat, a footprint and nothing else; how high a body is over it is the body's <code>top</code> and <code>pin</code>. Bodies, grass and <code>scatter</code> take a region with <code>at=</code>; a point or a line is refused (<code>dt::type</code>). A region whose fill points all lie on its lines is an error.</p>
 </article>
 </div>
 </body>

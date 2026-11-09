@@ -265,15 +265,15 @@ impl CellMm {
 
 /// Where and as what an element is built.
 pub struct Ctx<'a> {
-    /// Its area (the whole tile unless `in=` names a region).
+    /// Its area (the whole tile unless `at=` names a region).
     pub area: &'a Mask,
     /// Its stack path, the owner of what it makes.
     pub path: &'a str,
     /// Its seed, keyed by its path.
     pub seed: Seed,
-    /// `along=`: the path it follows, in squares from the south-west
+    /// `at=` a line: the path it follows, in squares from the south-west
     /// corner, walked with the tile inside on the left (a run's outer
-    /// face). `None` without `along=`.
+    /// face). `None` without a line.
     pub along: Option<&'a [[f64; 2]]>,
     /// `at=`: where it stands, in squares, the x and the y each a number
     /// (a range of no width) or a range with its odds, drawn from the
@@ -283,7 +283,7 @@ pub struct Ctx<'a> {
     /// to the gate's rule (a tree's [`dt_kit::stand`], its leaf cull) use
     /// its numbers.
     pub printer: dt_kit::Printer,
-    /// `against=`: the kind of thing this element gathers against (a scatter),
+    /// `at=foot(…)`: the kind of thing this element gathers against (a scatter),
     /// if written.
     pub against: Option<&'a str>,
     /// The planned feet of every solid that has one (a cliff's), from the

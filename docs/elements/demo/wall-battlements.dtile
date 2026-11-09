@@ -4,6 +4,6 @@ tile size="1x1" seed=2 {
     stack {
         base
         dirt
-        wall along="north" style=regular-brick top=battlements seed=8
+        wall at="north" style=regular-brick top=battlements seed=8
     }
 }

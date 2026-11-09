@@ -19,7 +19,7 @@ const TILE: &str = r#"tile size="1x1" seed=97 {
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand
             pin top=waterBedHeight at=pool
         }
-        scatter in=pool count=2 { rock size="6..10" }
+        scatter at=pool count=2 { rock size="6..10" }
         water
     }
 }"#;

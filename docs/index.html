@@ -65,8 +65,8 @@ tile size="1x1" seed=97 {
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
             pin top=waterBedHeight at=pool                                // later, so it wins in the pool
         }
-        grass in=bank
-        scatter in=pool count=2 { rock size="6..10" }
+        grass at=bank
+        scatter at=pool count=2 { rock size="6..10" }
         water
     }
 }</code></pre>
@@ -139,7 +139,7 @@ cargo build --release                 # a few minutes, once
 <div class="tbl"><table>
 <thead><tr><th>Works</th><th>Not built yet</th></tr></thead>
 <tbody>
-<tr><td>Every element on the <a href="elements/index.html">elements</a> pages builds: dirt, grass, reeds, flowers, water, rocks and scatter, trees, walls, flagstone and plank floors, and cliffs.</td><td>A line's <code>width=</code>, and building <code>along=</code> a drawn line (walls, paths, surfaces). <code>check</code> names the lines; <code>build</code> refuses them.</td></tr>
+<tr><td>Every element on the <a href="elements/index.html">elements</a> pages builds: dirt, grass, reeds, flowers, water, rocks and scatter, trees, walls, flagstone and plank floors, and cliffs.</td><td>A line's <code>width=</code>, and building <code>at=</code> a drawn line (walls, paths, surfaces). <code>check</code> names the lines; <code>build</code> refuses them.</td></tr>
 <tr><td>DungeonBlocks and OpenLOCK bases from one document; STL, a 3MF painted by material (a Bambu Studio project with a template), and PNG views.</td><td>Doors, windows and hatches in walls.</td></tr>
 <tr><td>The <a href="preview.html">preview</a>, <code>watch</code>, and the whole library (<code>build --all</code>, once for each base).</td><td>Prebuilt downloads, and builds for Linux and Windows.</td></tr>
 </tbody></table></div>

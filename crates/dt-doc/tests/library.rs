@@ -6,7 +6,7 @@ mod common;
 
 use common::*;
 use dt_doc::model::{Callee, Definition, Entry, Form, Source, TileHeader, Value};
-use dt_doc::place::{Along, Edge, Point};
+use dt_doc::place::{Along, Edge};
 use dt_doc::schema::{Axis, Kind};
 
 fn none(_: &str) -> Option<f64> {
@@ -410,12 +410,7 @@ fn path_rocks_is_a_divided_tile() {
 
     let cluster = &t.stack[2];
     assert_eq!(cluster.place.region.as_ref().unwrap().value, "verge");
-    assert!(matches!(
-        cluster.place.at.as_ref().unwrap().value,
-        Point::Pair { .. }
-    ));
     assert_eq!(num(cluster.value("count")), 5.0);
-    assert_eq!(num(cluster.value("spread")), 6.0);
     let rock = &cluster.children[0];
     assert_eq!(word(rock.value("shape")), "rounded");
     assert!(close(range(rock.value("buried")), (0.3, 0.3)));

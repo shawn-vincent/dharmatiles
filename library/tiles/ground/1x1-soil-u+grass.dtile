@@ -6,6 +6,6 @@ tile size="1x1" seed=102 {
     stack {
         base
         dirt
-        grass in=meadow
+        grass at=meadow
     }
 }

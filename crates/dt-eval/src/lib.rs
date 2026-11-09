@@ -542,7 +542,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     })
 }
 
-/// An entry's area: `None` for the whole tile, or its `in=` region.
+/// An entry's area: `None` for the whole tile, or its `at=` region.
 fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usize> {
     let name = e.area.as_ref()?;
     let found = tile.regions.iter().position(|r| r.name == name.value);
@@ -558,7 +558,7 @@ fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usiz
             .maybe_help(
                 did_you_mean(&name.value, tile.regions.iter().map(|r| r.name.as_str()))
                     .map(|w| format!("did you mean `{w}`?"))
-                    .or_else(|| Some("without in=, an element covers the whole tile".into())),
+                    .or_else(|| Some("without at=, an element covers the whole tile".into())),
             ),
         );
     }

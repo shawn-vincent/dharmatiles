@@ -75,7 +75,7 @@ tile size="2x2" seed=4 {
 <!-- gen:reference grass -->
 <div class="facts">
   <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
-  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code></div></div>
+  <div><div class="k">Place</div><div class="v"><code>at=</code> region, line</div></div>
   <div><div class="k">Holds</div><div class="v">a <a href="scatter.html"><code>scatter</code></a> inside it lands on it</div></div>
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>
@@ -142,7 +142,7 @@ tile size="2x2" seed=4 {
   <li>Blades curve coherently: a flow carries their direction. Blades at the rim never point away from the edge.</li>
   <li>Bare patches are natural in size, not scaled to fit; grass presses against rocks rather than leaving a ring round each one.</li>
   <li>Grass is as thick between rocks as on open ground: scattered stones take only the ground they stand on.</li>
-  <li><code>at=</code> names the region it grows in (the same as <code>in=</code>); a point or a line is refused (<code>dt::type</code>). With neither it grows on all the open dirt.</li>
+  <li><code>at=</code> names the region it grows in; a point is refused (<code>dt::type</code>). With neither it grows on all the open dirt.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

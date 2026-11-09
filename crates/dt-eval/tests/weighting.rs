@@ -181,7 +181,7 @@ fn a_band_refuses_a_weighting_but_takes_flat() {
     refused(
         &tile(
             "    line l { through \"0,0.5\" \"1,0.5\" }\n    region r { within \"low([2 .. 6])\" of=l }",
-            "        dirt in=r",
+            "        dirt at=r",
         ),
         "dt::weighting",
         "write the range alone",
@@ -541,7 +541,7 @@ fn a_walls_courses_and_bays_take_a_weighting() {
     takes_a_weighting(
         |v| {
             format!(
-                "        dirt\n        wall along=\"north\" style=fieldstone {{\n            stones height=\"2.2..5.2\" length=\"{v}\"\n        }}"
+                "        dirt\n        wall at=\"north\" style=fieldstone {{\n            stones height=\"2.2..5.2\" length=\"{v}\"\n        }}"
             )
         },
         "5..16",
@@ -551,7 +551,7 @@ fn a_walls_courses_and_bays_take_a_weighting() {
     takes_a_weighting(
         |v| {
             format!(
-                "        dirt\n        wall along=\"north\" style=fieldstone {{\n            stones height=\"{v}\" length=\"5..16\"\n        }}"
+                "        dirt\n        wall at=\"north\" style=fieldstone {{\n            stones height=\"{v}\" length=\"5..16\"\n        }}"
             )
         },
         "2.2..5.2",

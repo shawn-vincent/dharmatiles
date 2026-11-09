@@ -67,9 +67,9 @@ test('completion offers controls but not ones already written', () => {
 });
 
 test('completion knows regions and line edges', () => {
-  let c = caret('tile { region bank { fill "0.5,0.5" }; stack { grass in=ba| } }');
+  let c = caret('tile { region bank { fill "0.5,0.5" }; stack { grass at=ba| } }');
   assert.deepEqual(suggest(c.caret, c.text, elements).items.map((x) => x.label), ['bank']);
-  c = caret('tile { stack { rock along=no| } }');
+  c = caret('tile { stack { wall at=no| } }');
   assert.deepEqual(suggest(c.caret, c.text, elements).items.map((x) => x.label), ['north']);
 });
 

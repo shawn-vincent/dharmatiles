@@ -17,8 +17,8 @@
   <figure class="shot">
   <ol class="stack-steps">
     <li><img src="img/el-stack-1.jpg" alt="" loading="lazy" width="520" height="374"><code>dirt { pin … at=shoreBand; pin … at=pool }</code></li>
-    <li><img src="img/el-stack-2.jpg" alt="" loading="lazy" width="520" height="377"><code>grass in=bank</code></li>
-    <li><img src="img/el-stack-3.jpg" alt="" loading="lazy" width="520" height="386"><code>scatter in=pool count=2 { rock size="6..10" }</code></li>
+    <li><img src="img/el-stack-2.jpg" alt="" loading="lazy" width="520" height="377"><code>grass at=bank</code></li>
+    <li><img src="img/el-stack-3.jpg" alt="" loading="lazy" width="520" height="386"><code>scatter at=pool count=2 { rock size="6..10" }</code></li>
     <li><img src="img/el-stack-4.jpg" alt="" loading="lazy" width="520" height="390"><code>water</code></li>
   </ol>
   <figcaption>The home page's pond, built one stack line at a time. The dirt covers the whole tile, pinned down to the water's bed in the pool; each later line stands on what is there, and the water, written last, fills the pool. The tile's <code>base</code> line is left out of the pictures. From <code>docs/elements/demo/stack.dtile</code>.</figcaption>
@@ -34,7 +34,7 @@
 <pre><code>stack {
     dirt level=edge { scatter perSquare=40 { pebble } }
     cliff top="dirtEdgeHeight + 35" at=crag
-    scatter against=cliff perSquare=55 reach=4 { stone }
+    scatter at="foot(cliff)" perSquare=55 reach=4 { stone }
     grass                    // grows round the cliff and the stones, wherever it is listed
 }</code></pre>
 <h2 id="reference">Reference</h2>
@@ -45,7 +45,7 @@
 <tr><td><code>seed=</code></td><td>a whole number</td><td>—</td><td>Pins this entry's randomness while the tile seed changes everything else.</td></tr>
 <tr><td><code>id=</code></td><td>a name</td><td>—</td><td>Names the entry among same-named siblings, for edits and diagnostics.</td></tr>
 <tr><td><code>weight=</code></td><td>a number</td><td>1</td><td>Only on a child of a <a href="scatter.html"><code>scatter</code></a>: its share of the mix.</td></tr>
-<tr><td>place words</td><td></td><td></td><td><code>in=</code>, <code>along=</code>, <code>at=</code>, <code>against=</code>, <code>side=</code>: each element page lists the ones it takes. <code>at=</code> also takes a place by name or <code>"(x, y)"</code>: a body, grass or scatter takes a region, a thing or a pin any place.</td></tr>
+<tr><td>place words</td><td></td><td></td><td><code>at=</code> and <code>side=</code>. <code>at=</code> takes a place by name or <code>"(x, y)"</code>, an edge or edge path, or <code>foot(cliff)</code>; each element page lists the kinds of place it takes (a point, a line, a region, a foot) and refuses the rest with <code>dt::type</code>.</td></tr>
 <tr><td><code>top=</code></td><td>a height or a range</td><td>—</td><td>On a body (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>): the band it fills. On a thing: its height limit. Heights are mm above zero; see <a href="let.html">let</a>.</td></tr>
 <tr><td>a name</td><td>a name</td><td>—</td><td>After a body's element, <code>dirt hillDirt</code>: its name in messages.</td></tr>
 </tbody></table></div>

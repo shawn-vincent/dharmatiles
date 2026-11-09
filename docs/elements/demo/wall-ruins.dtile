@@ -6,7 +6,7 @@ tile size="1x1" seed=5 {
     stack {
         base
         dirt
-        wall along="north" style=cut-stone ruin="70%" seed=3
+        wall at="north" style=cut-stone ruin="70%" seed=3
         lawn
     }
 }

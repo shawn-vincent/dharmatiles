@@ -1057,7 +1057,7 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     let dir = std::env::temp_dir().join(format!("dt-marks-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"1x1\" seed=3 {\n    line shore wobble=5 { through \"0,0.38\" \"1,0.42\" }\n    region pool { boundedBy shore; fill \"0.5,0.25\" }\n    region bank { boundedBy shore; fill \"0.5,0.75\" }\n    stack {\n        dirt in=bank\n        water\n    }\n}\n";
+    let text = "tile size=\"1x1\" seed=3 {\n    line shore wobble=5 { through \"0,0.38\" \"1,0.42\" }\n    region pool { boundedBy shore; fill \"0.5,0.25\" }\n    region bank { boundedBy shore; fill \"0.5,0.75\" }\n    stack {\n        dirt at=bank\n        water\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1083,7 +1083,7 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     );
     let t = v["text"].as_str().unwrap();
     assert!(
-        t.contains("region meadow") && t.contains("dirt in=meadow"),
+        t.contains("region meadow") && t.contains("dirt at=meadow"),
         "{t}"
     );
     let v = call(

@@ -124,15 +124,96 @@ struct Edit {
 /// # Errors
 /// If the text is not KDL, or a stack is written on one line.
 pub fn heights(text: &str) -> Result<Option<String>, EditError> {
-    let names = control_names(text)?;
-    let text = names.as_deref().unwrap_or(text);
-    let sizes = mostly(text)?;
-    let text = sizes.as_deref().unwrap_or(text);
-    let floors = floors(text)?;
-    let now = floors.as_deref().unwrap_or(text);
-    let cliffs = cliffs(now)?;
-    let now = cliffs.as_deref().unwrap_or(now);
-    Ok(heights_only(now)?.or(cliffs).or(floors).or(sizes).or(names))
+    let mut now = text.to_owned();
+    let mut changed = false;
+    let mut step = |f: fn(&str) -> Result<Option<String>, EditError>| -> Result<(), EditError> {
+        if let Some(next) = f(&now)? {
+            now = next;
+            changed = true;
+        }
+        Ok(())
+    };
+    step(control_names)?;
+    step(mostly)?;
+    step(floors)?;
+    step(cliffs)?;
+    step(heights_only)?;
+    step(places)?;
+    Ok(changed.then_some(now))
+}
+
+/// One word names a place: `in=bank` and `along=trail` are `at=bank` and
+/// `at=trail`, and `against=cliff` is `at="foot(cliff)"`.  An entry that
+/// writes two places (`wall in=south along=north`, or an old word beside an
+/// `at=`) is left as written: it has no one-word form, and the decoder says
+/// what to do.  Every other byte is as written.  `Ok(None)` when nothing
+/// changes.
+///
+/// # Errors
+/// If the text is not KDL.
+pub fn places(text: &str) -> Result<Option<String>, EditError> {
+    fn walk(nodes: &[KdlNode], edits: &mut Vec<Edit>) {
+        for n in nodes {
+            let skipped = matches!(
+                n.name().value(),
+                "line" | "region" | "point" | "let" | "override" | "use" | "param" | "pin"
+            );
+            if !skipped {
+                let old: Vec<_> = n
+                    .entries()
+                    .iter()
+                    .filter(|e| {
+                        e.name()
+                            .is_some_and(|k| matches!(k.value(), "in" | "along" | "against"))
+                    })
+                    .collect();
+                let places = n
+                    .entries()
+                    .iter()
+                    .filter(|e| {
+                        e.name()
+                            .is_some_and(|k| matches!(k.value(), "in" | "along" | "against" | "at"))
+                    })
+                    .count();
+                if old.len() == 1 && places == 1 {
+                    let e = old[0];
+                    if let Some(k) = e.name() {
+                        let (start, end) = (k.span().offset(), k.span().offset() + k.span().len());
+                        if k.value() == "against" {
+                            if let Some(kind) = e.value().as_string() {
+                                edits.push(Edit {
+                                    start,
+                                    end: e.span().offset() + e.span().len(),
+                                    with: format!("at=\"foot({kind})\""),
+                                });
+                            }
+                        } else {
+                            edits.push(Edit {
+                                start,
+                                end,
+                                with: "at".to_owned(),
+                            });
+                        }
+                    }
+                }
+            }
+            if let Some(kids) = n.children() {
+                walk(kids.nodes(), edits);
+            }
+        }
+    }
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut edits = Vec::new();
+    walk(doc.nodes(), &mut edits);
+    if edits.is_empty() {
+        return Ok(None);
+    }
+    edits.sort_by_key(|e| std::cmp::Reverse(e.start));
+    let mut out = text.to_owned();
+    for e in edits {
+        out.replace_range(e.start..e.end, &e.with);
+    }
+    Ok(Some(out))
 }
 
 /// The rock family: the things `mostly=` skewed.
@@ -1182,6 +1263,25 @@ mod tests {
         assert_eq!(
             heights(old).unwrap().unwrap().matches("bounded-by").count(),
             0
+        );
+    }
+
+    #[test]
+    fn in_along_and_against_become_at_and_nothing_else_moves() {
+        let old = "tile size=\"1x1\" { // keep\n    line shore { through west east }\n    region bank { boundedBy shore; fill \"0.5,0.8\" }\n    stack {\n        base\n        dirt in=bank   // a note\n        wall along=\"north west\" style=cut-stone\n        scatter against=cliff reach=4 perSquare=5 { stone }\n        wall in=bank along=north\n        scatter in=bank at=\"0.2,0.3\" count=2 { rock }\n    }\n}\n";
+        let new = places(old).unwrap().unwrap();
+        assert_eq!(
+            new,
+            old.replace("dirt in=bank", "dirt at=bank")
+                .replace("wall along=\"north west\"", "wall at=\"north west\"")
+                .replace("against=cliff", "at=\"foot(cliff)\"")
+        );
+        assert!(places(&new).unwrap().is_none());
+        assert!(
+            heights(old)
+                .unwrap()
+                .unwrap()
+                .contains("at=\"foot(cliff)\"")
         );
     }
 

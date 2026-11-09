@@ -216,7 +216,7 @@ pub(super) fn place(
         if a.bits[node(x, y)] {
             (x, y)
         } else {
-            // outside its area (`in=`): nudged to the nearest area node
+            // outside its area (`at=` a region): nudged to the nearest area node
             // that keeps the crown on the tile, as the automatic path
             // keeps to its area
             let near = |k: usize| {

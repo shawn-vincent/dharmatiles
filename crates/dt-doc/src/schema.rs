@@ -340,44 +340,54 @@ pub fn check(
     }
 }
 
-/// The place words: one meaning each, shared by every
-/// element.  Which an element takes is in [`Element::place`].
+/// What kinds of place an element takes, and the one other place word,
+/// `side=`.  A place is written `at=`, whatever its kind: the kinds are
+/// what [`Element::place`] lists, and the word the user writes for any of
+/// them is `at`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaceWord {
-    /// `in=` a region; default the whole tile.
+    /// `at=` a region; default the whole tile.
     In,
-    /// `along=` a line, an edge or an edge path.
+    /// `at=` a line, an edge or an edge path.
     Along,
     /// `side=left|right|centre` of a drawn line.
     Side,
     /// `at=` a point; ranges allowed.
     At,
-    /// `against=` a kind of thing: gathers at its foot.
+    /// `at=foot(cliff)`: the band at a kind of thing's foot.
     Against,
 }
 
 impl PlaceWord {
-    /// The word as written.
+    /// The word as written: every kind of place is written `at`.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
-            PlaceWord::In => "in",
-            PlaceWord::Along => "along",
             PlaceWord::Side => "side",
-            PlaceWord::At => "at",
-            PlaceWord::Against => "against",
+            _ => "at",
         }
     }
 
-    /// Parse a place word.
+    /// What this kind of place is called: the kinds `at=` takes are a
+    /// region, a line, a point and the foot of a thing.
+    #[must_use]
+    pub fn kind(self) -> &'static str {
+        match self {
+            PlaceWord::In => "region",
+            PlaceWord::Along => "line",
+            PlaceWord::At => "point",
+            PlaceWord::Against => "foot(…)",
+            PlaceWord::Side => "side",
+        }
+    }
+
+    /// Parse a place word as written: `at` and `side` only; `in`, `along`
+    /// and `against` are gone.
     #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
-            "in" => PlaceWord::In,
-            "along" => PlaceWord::Along,
             "side" => PlaceWord::Side,
             "at" => PlaceWord::At,
-            "against" => PlaceWord::Against,
             _ => return None,
         })
     }
@@ -444,7 +454,7 @@ pub struct Element {
     pub needs: &'static [PlaceWord],
     /// True when a `scatter` may sit inside it (`dirt { scatter … }`).
     pub holds_scatter: bool,
-    /// The place words its build honours so far, `in=` aside (every
+    /// The kinds of place its build honours so far, a region aside (every
     /// element acts in its region); the rest of [`Element::place`] is
     /// planned.
     pub honours: &'static [PlaceWord],
@@ -495,7 +505,35 @@ impl Element {
         }
     }
 
-    /// Whether its build honours the place word `w` (`in=` always).
+    /// The place words it is written with, each once (`at`, `side`).
+    #[must_use]
+    pub fn place_words(&self) -> Vec<&'static str> {
+        let mut out: Vec<&'static str> = Vec::new();
+        for w in self.place {
+            if !out.contains(&w.as_str()) {
+                out.push(w.as_str());
+            }
+        }
+        out
+    }
+
+    /// The kinds of place `at=` takes here: `region`, `line`, `point`,
+    /// `foot(…)`.
+    #[must_use]
+    pub fn place_kinds(&self) -> Vec<&'static str> {
+        [
+            PlaceWord::In,
+            PlaceWord::Along,
+            PlaceWord::At,
+            PlaceWord::Against,
+        ]
+        .into_iter()
+        .filter(|w| self.place.contains(w))
+        .map(PlaceWord::kind)
+        .collect()
+    }
+
+    /// Whether its build honours the place word `w` (a region always).
     #[must_use]
     pub fn honours(&self, w: PlaceWord) -> bool {
         w == PlaceWord::In || self.honours.contains(&w)

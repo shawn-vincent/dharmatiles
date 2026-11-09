@@ -78,10 +78,10 @@ tile size="1x1" seed=97 {
     region pool { boundedBy shore; fill "0.5,0.25" }
     region bank { boundedBy shore; fill "0.5,0.75" }
     stack {
-        dirt in=bank
-        grass in=bank
-        ground in=pool level="water - 2.2"
-        scatter in=pool count=2 { rock size="6..10" }
+        dirt at=bank
+        grass at=bank
+        ground at=pool level="water - 2.2"
+        scatter at=pool count=2 { rock size="6..10" }
         water
     }
 }

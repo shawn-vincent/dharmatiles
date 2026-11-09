@@ -6,7 +6,7 @@ tile size="1x1" seed=5 {
     stack {
         base
         dirt
-        wall along="north east south west" style=fieldstone seed=3 {
+        wall at="north east south west" style=fieldstone seed=3 {
             height full
             thickness 6
         }
