@@ -128,16 +128,24 @@ impl Cliff {
             }
             _ => {}
         }
-        // the `rock` word, then the numbers behind it (`rock.<kind>`) over it
-        if let Some(name) = s.word("rock")?
-            && let Some(i) = KIND_NAMES.iter().position(|n| *n == name)
-        {
-            w = [0.0; 5];
-            w[i] = 1.0;
-        }
-        for (i, kind) in KIND_NAMES.iter().enumerate() {
-            if let Some(v) = s.number(&format!("rock.{kind}"))? {
-                w[i] = v.max(0.0);
+        // the `rock` word and the numbers behind it (`rock.<kind>`): a
+        // later write wins, so the word (written after its numbers) stands
+        // alone
+        for k in s.family("rock") {
+            match &k.value {
+                Value::Word(name) => {
+                    if let Some(i) = KIND_NAMES.iter().position(|n| n == name) {
+                        w = [0.0; 5];
+                        w[i] = 1.0;
+                    }
+                }
+                Value::Number(v) => {
+                    let kind = k.name.strip_prefix("rock.").unwrap_or_default();
+                    if let Some(i) = KIND_NAMES.iter().position(|n| *n == kind) {
+                        w[i] = v.max(0.0);
+                    }
+                }
+                Value::Range(..) => {}
             }
         }
         c.ledge_height = s.number("ledges/height")?.or(c.ledge_height);

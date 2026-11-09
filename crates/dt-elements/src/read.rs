@@ -56,6 +56,17 @@ impl<'a> Settings<'a> {
         self.0.iter().rev().find(|c| c.name == name)
     }
 
+    /// The controls named `family` or `family.…`, in document order, for a
+    /// word and the numbers it stands for, where the later write wins.
+    pub(crate) fn family<'b>(&'b self, family: &'b str) -> impl Iterator<Item = &'a Control> + 'b {
+        self.0.iter().filter(move |c| {
+            c.name == family
+                || c.name
+                    .strip_prefix(family)
+                    .is_some_and(|rest| rest.starts_with('.'))
+        })
+    }
+
     /// The first of `names` that is set: the strongest spelling first.
     pub(crate) fn first(&self, names: &[&str]) -> Option<&'a Control> {
         names.iter().find_map(|n| self.control(n))

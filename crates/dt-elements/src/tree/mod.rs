@@ -193,14 +193,14 @@ impl Tree {
         p.balance = branch("balance", p.balance)?;
         p.exponent = branch("exponent", p.exponent)?;
         p.min_radius = branch("min-radius", p.min_radius)?;
-        if let Some(w) = s.word("leaves")? {
-            (p.leaves, p.clumps_on) = leaves_word(w);
-        }
-        if let Some(v) = s.number("leaves.leaves")? {
-            p.leaves = v > 0.5;
-        }
-        if let Some(v) = s.number("leaves.clumps")? {
-            p.clumps_on = v > 0.5;
+        // the `leaves` word and the numbers behind it, a later write winning
+        for c in s.family("leaves") {
+            match (c.name.as_str(), &c.value) {
+                ("leaves", Value::Word(w)) => (p.leaves, p.clumps_on) = leaves_word(w),
+                ("leaves.leaves", Value::Number(v)) => p.leaves = *v > 0.5,
+                ("leaves.clumps", Value::Number(v)) => p.clumps_on = *v > 0.5,
+                _ => {}
+            }
         }
         Ok(Self { p })
     }
