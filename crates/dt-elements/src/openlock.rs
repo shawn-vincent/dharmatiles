@@ -19,7 +19,8 @@
 //! 14 mm-wide part of it reaching 0.3 mm higher, so its roof is bridged one
 //! layer above the slot's. Interior square boundaries stay solid: one
 //! merged N×M tile, not N×M separate ones. The lotus logo is inset 0.4 mm
-//! into the bottom. The base never depends on the content, so unlike the
+//! into the bottom, as large as fits at the middle without touching a pocket
+//! (at most 22 mm), and left out where that is under 6 mm (a 1×1 or a 2×1). The base never depends on the content, so unlike the
 //! DungeonBlocks peg it has one height.
 
 use dt_kit::Kind;
@@ -101,6 +102,57 @@ struct Cutter {
     z1: f64,
 }
 
+/// A side of the tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Side {
+    South,
+    North,
+    West,
+    East,
+}
+
+impl Side {
+    const ALL: [Self; 4] = [Self::South, Self::North, Self::West, Self::East];
+
+    /// The squares along this side.
+    fn squares(self, frame: &Frame) -> u32 {
+        match self {
+            Self::South | Self::North => frame.cols,
+            Self::West | Self::East => frame.rows,
+        }
+    }
+
+    /// Plan position of `u` mm along the side from its start and `v` mm in
+    /// from its face; at the face itself (`v == 0`) it overshoots by [`EPS`].
+    fn at(self, [w, h]: [f64; 2], u: f64, v: f64) -> [f64; 2] {
+        let v_out = if v == 0.0 { EPS } else { 0.0 };
+        match self {
+            Self::South => [u, v - v_out],
+            Self::North => [u, h - v + v_out],
+            Self::West => [v - v_out, u],
+            Self::East => [w - v + v_out, u],
+        }
+    }
+}
+
+/// One clip socket: the T slot in a side, the pocket behind it and the
+/// pocket's raised part.
+struct Socket {
+    /// Which side it is in (the tests ask for sockets by side, not by the
+    /// order they are made in).
+    #[cfg_attr(not(test), allow(dead_code))]
+    side: Side,
+    slot: Cutter,
+    pocket: Cutter,
+    roof: Cutter,
+}
+
+impl Socket {
+    fn cutters(&self) -> [&Cutter; 3] {
+        [&self.slot, &self.pocket, &self.roof]
+    }
+}
+
 /// Where the sockets sit along a side `n` squares long of `s` mm squares,
 /// from its start: on the `n - 1` interior grid lines (the squares' joins),
 /// or at the middle when the side is one square. A tile of any size then
@@ -114,55 +166,82 @@ fn socket_centres(n: u32, s: f64) -> Vec<f64> {
     }
 }
 
+/// The least a lotus is drawn at, mm: smaller, its petals are thinner than
+/// the printer's line and it is left out.
+const LOGO_MIN_MM: f64 = 6.0;
+/// The largest lotus, mm.
+const LOGO_MAX_MM: f64 = 22.0;
+
 impl OpenLock {
-    /// Every cutter for a `w` × `h` mm tile of `cols` × `rows` squares of
-    /// `s` mm: on each perimeter square the T slot, the pocket behind it and
-    /// the pocket's raised part.
-    fn sockets(&self, cols: u32, rows: u32, s: f64, w: f64, h: f64) -> Vec<Cutter> {
-        let mut out = Vec::new();
+    /// Every socket of a tile: on each side the T slot, the pocket behind it
+    /// and the pocket's raised part.
+    fn sockets(&self, frame: &Frame) -> Vec<Socket> {
+        let size = frame.size_mm();
         let top = self.socket_floor_mm + self.socket_mm;
-        // (u along the edge, v in from the face) → plan, for each edge
-        #[allow(clippy::type_complexity)]
-        let edges: [(u32, &dyn Fn(f64, f64, f64) -> [f64; 2]); 4] = [
-            (cols, &|c, u, v| {
-                [c + u, v - if v == 0.0 { EPS } else { 0.0 }]
-            }),
-            (cols, &|c, u, v| {
-                [c + u, h - v + if v == 0.0 { EPS } else { 0.0 }]
-            }),
-            (rows, &|c, u, v| {
-                [v - if v == 0.0 { EPS } else { 0.0 }, c + u]
-            }),
-            (rows, &|c, u, v| {
-                [w - v + if v == 0.0 { EPS } else { 0.0 }, c + u]
-            }),
-        ];
         let (v0, v1) = (
             self.pocket_start_mm,
             self.pocket_start_mm + self.pocket_depth_mm,
         );
-        for (n, map) in edges {
-            for c in socket_centres(n, s) {
-                out.push(Cutter {
-                    outline: T_POLY.iter().map(|p| map(c, p[0], p[1])).collect(),
-                    z0: self.socket_floor_mm,
-                    z1: top,
-                });
-                for (width, z1) in [
-                    (self.pocket_width_mm, top),
-                    (self.pocket_roof_width_mm, top + self.pocket_roof_rise_mm),
-                ] {
+        let mut out = Vec::new();
+        for side in Side::ALL {
+            for c in socket_centres(side.squares(frame), frame.square_mm) {
+                let at = |u: f64, v: f64| side.at(size, c + u, v);
+                let pocket = |width: f64, z1: f64| {
                     let u = width / 2.0;
-                    out.push(Cutter {
-                        outline: vec![map(c, -u, v0), map(c, u, v0), map(c, u, v1), map(c, -u, v1)],
+                    Cutter {
+                        outline: vec![at(-u, v0), at(u, v0), at(u, v1), at(-u, v1)],
                         z0: -EPS,
                         z1,
-                    });
-                }
+                    }
+                };
+                out.push(Socket {
+                    side,
+                    slot: Cutter {
+                        outline: T_POLY.iter().map(|p| at(p[0], p[1])).collect(),
+                        z0: self.socket_floor_mm,
+                        z1: top,
+                    },
+                    pocket: pocket(self.pocket_width_mm, top),
+                    roof: pocket(self.pocket_roof_width_mm, top + self.pocket_roof_rise_mm),
+                });
             }
         }
         out
     }
+
+    /// The side of the lotus on the underside, mm: the largest square about
+    /// the tile's middle that no pocket reaches (the pockets are open through
+    /// the bottom, where the logo is inset), at most [`LOGO_MAX_MM`]; `None`
+    /// when that is under [`LOGO_MIN_MM`] (a 1×1 or a 2×1: the pockets leave
+    /// only a few millimetres at the middle).
+    fn logo_side(&self, frame: &Frame) -> Option<f64> {
+        let [w, h] = frame.size_mm();
+        let (cx, cy) = (w / 2.0, h / 2.0);
+        // half the side that clears each pocket, which a square about the
+        // middle reaches along x and y at once
+        let mut half = LOGO_MAX_MM / 2.0;
+        for s in self.sockets(frame) {
+            let (lo, hi) = bounds(&s.pocket.outline);
+            let dx = (lo[0] - cx).max(cx - hi[0]).max(0.0);
+            let dy = (lo[1] - cy).max(cy - hi[1]).max(0.0);
+            // the square overlaps the pocket unless it stops short on one axis
+            half = half.min(dx.max(dy));
+        }
+        let side = (2.0 * half).min(w.min(h) * 0.75);
+        (side >= LOGO_MIN_MM).then_some(side)
+    }
+}
+
+/// The low and high corners of a plan outline.
+fn bounds(outline: &[[f64; 2]]) -> ([f64; 2], [f64; 2]) {
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for p in outline {
+        for k in 0..2 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    (lo, hi)
 }
 
 impl OpenLock {
@@ -186,14 +265,8 @@ impl OpenLock {
         keep([w - wall_mm, 0.0, bottom], [w, h, 0.0], wall);
         keep([0.0, 0.0, bottom], [w, wall_mm, 0.0], wall);
         keep([0.0, h - wall_mm, bottom], [w, h, 0.0], wall);
-        for c in self.sockets(frame.cols, frame.rows, frame.square_mm, w, h) {
-            let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
-            for p in &c.outline {
-                for k in 0..2 {
-                    lo[k] = lo[k].min(p[k]);
-                    hi[k] = hi[k].max(p[k]);
-                }
-            }
+        for c in self.sockets(frame).iter().flat_map(Socket::cutters) {
+            let (lo, hi) = bounds(&c.outline);
             // a pocket is open to the bottom: its keep-out reaches the table
             let z0 = if c.z0 < 0.0 {
                 bottom
@@ -223,10 +296,8 @@ impl Element for OpenLock {
         let f = *scene.frame();
         let [w, h] = f.size_mm();
         let bottom = -self.depth_mm;
-        let cutters = self.sockets(f.cols, f.rows, f.square_mm, w, h);
-        let logo = Outline::svg_path(LOGO, LOGO_TOL).map_err(LookError::build)?;
-        let side = 22.0_f64.min(w.min(h) * 0.75);
-        let logo = logo.placed(LOGO_VIEWBOX, w / 2.0, h / 2.0, side);
+        let sockets = self.sockets(&f);
+        let cutters: Vec<&Cutter> = sockets.iter().flat_map(Socket::cutters).collect();
         let n = u32::try_from(cutters.len() + 2).unwrap_or(u32::MAX);
         let slots = scene
             .slots(n, Material::Connector)
@@ -238,23 +309,27 @@ impl Element for OpenLock {
         for (k, c) in cutters.into_iter().enumerate() {
             let k = u32::try_from(k + 1).unwrap_or(u32::MAX);
             let o = Outline {
-                contours: vec![c.outline],
+                contours: vec![c.outline.clone()],
             };
             cuts.push(
                 extrude(slots.get(k), &o, 0.0, bottom + c.z0, bottom + c.z1)
                     .map_err(LookError::build)?,
             );
         }
-        cuts.push(
-            extrude(
-                slots.get(n - 1),
-                &logo,
-                0.0,
-                bottom - EPS,
-                bottom + self.logo_depth_mm,
-            )
-            .map_err(LookError::build)?,
-        );
+        if let Some(side) = self.logo_side(&f) {
+            let logo = Outline::svg_path(LOGO, LOGO_TOL).map_err(LookError::build)?;
+            let logo = logo.placed(LOGO_VIEWBOX, w / 2.0, h / 2.0, side);
+            cuts.push(
+                extrude(
+                    slots.get(n - 1),
+                    &logo,
+                    0.0,
+                    bottom - EPS,
+                    bottom + self.logo_depth_mm,
+                )
+                .map_err(LookError::build)?,
+            );
+        }
         let slab = carve(&body, &cuts).map_err(LookError::build)?;
         scene.add(
             Tag {
@@ -272,31 +347,43 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
 
+    fn on(sockets: &[Socket], side: Side) -> Vec<&Socket> {
+        sockets.iter().filter(|s| s.side == side).collect()
+    }
+
+    fn span(outline: &[[f64; 2]], axis: usize) -> f64 {
+        let (lo, hi) = bounds(outline);
+        hi[axis] - lo[axis]
+    }
+
     #[test]
     fn a_1x1_has_four_sockets_each_with_a_pocket_and_its_raised_part() {
         let ol = OpenLock::default();
-        let c = ol.sockets(1, 1, 25.4, 25.4, 25.4);
-        assert_eq!(c.len(), 12);
+        let f = Frame::openlock(1, 1);
+        let c = ol.sockets(&f);
+        assert_eq!(c.len(), 4);
         // each socket's T opens its edge: some point lies just outside the tile
-        for t in c.iter().step_by(3) {
+        for t in &c {
             assert!(
-                t.outline
+                t.slot
+                    .outline
                     .iter()
-                    .any(|q| q[0] < 0.0 || q[1] < 0.0 || q[0] > 25.4 || q[1] > 25.4)
+                    .any(|q| q[0] < 0.0 || q[1] < 0.0 || q[0] > 25.4 || q[1] > 25.4),
+                "{:?}",
+                t.side
             );
         }
         // the pockets sit 6.0 to 10.7 mm in, 18 and 14 mm wide, the pocket
         // through the bottom and its raised part 0.3 mm over the socket top
-        let south = &c[0..3];
-        assert_eq!((south[0].z0, south[0].z1), (1.4, 5.6));
-        for (p, wide, top) in [(&south[1], 18.0, 5.6), (&south[2], 14.0, 5.9)] {
-            let ys: Vec<f64> = p.outline.iter().map(|q| q[1]).collect();
-            let xs: Vec<f64> = p.outline.iter().map(|q| q[0]).collect();
-            assert!((ys.iter().cloned().fold(f64::MIN, f64::max) - 10.7).abs() < 1e-9);
-            assert!((ys.iter().cloned().fold(f64::MAX, f64::min) - 6.0).abs() < 1e-9);
-            let span = xs.iter().cloned().fold(f64::MIN, f64::max)
-                - xs.iter().cloned().fold(f64::MAX, f64::min);
-            assert!((span - wide).abs() < 1e-9);
+        let south = on(&c, Side::South);
+        assert_eq!(south.len(), 1);
+        let south = south[0];
+        assert_eq!((south.slot.z0, south.slot.z1), (1.4, 5.6));
+        for (p, wide, top) in [(&south.pocket, 18.0, 5.6), (&south.roof, 14.0, 5.9)] {
+            let (lo, hi) = bounds(&p.outline);
+            assert!((hi[1] - 10.7).abs() < 1e-9);
+            assert!((lo[1] - 6.0).abs() < 1e-9);
+            assert!((span(&p.outline, 0) - wide).abs() < 1e-9);
             assert!(p.z0 < 0.0 && (p.z1 - top).abs() < 1e-9);
         }
     }
@@ -328,10 +415,11 @@ mod tests {
 
     #[test]
     fn the_base_volume_is_the_slab_less_its_cuts() {
-        // measured on the built base (T slots, pockets, raised parts and
-        // the logo cut from the rounded slab): 2747.328 mm³ (1×1)
+        // snapshots of the built base (T slots, pockets, raised parts and
+        // the logo cut from the rounded slab), not derived from the sizes:
+        // 1x1 has no logo (the pockets leave it no room), 2x2 has one
         let v = base_volume(1, 1);
-        assert!((v - 2747.328).abs() / 2747.328 < 0.002, "1x1: {v}");
+        assert!((v - 2756.218).abs() / 2756.218 < 0.002, "1x1: {v:.3}");
         let v = base_volume(2, 2);
         assert!((v - 17404.475).abs() / 17404.475 < 0.002, "2x2: {v}");
     }
@@ -359,11 +447,98 @@ mod tests {
     }
 
     #[test]
+    fn a_pocket_leaves_the_tiles_other_faces_at_least_the_printers_wall() {
+        // the pockets of two sides meet at a 1x1's corners (the south and
+        // west pockets overlap, x and y 6.0 to 10.7 mm); what stays between
+        // each pocket and the faces it does not open on is the base's wall
+        let wall = 2.0 * 0.45;
+        let ol = OpenLock::default();
+        for (cols, rows) in [(1, 1), (2, 1), (2, 2), (4, 2)] {
+            let f = Frame::openlock(cols, rows);
+            let [w, h] = f.size_mm();
+            for s in ol.sockets(&f) {
+                let (lo, hi) = bounds(&s.pocket.outline);
+                let to = |face: Side| match face {
+                    Side::South => lo[1],
+                    Side::North => h - hi[1],
+                    Side::West => lo[0],
+                    Side::East => w - hi[0],
+                };
+                for face in Side::ALL.into_iter().filter(|&d| d != s.side) {
+                    // the opposite face is the other side's pocket, not wall
+                    let across = matches!(
+                        (s.side, face),
+                        (Side::South, Side::North)
+                            | (Side::North, Side::South)
+                            | (Side::West, Side::East)
+                            | (Side::East, Side::West)
+                    );
+                    if !across {
+                        assert!(
+                            to(face) >= wall,
+                            "{cols}x{rows}: the {:?} pocket is {} mm from the {face:?} face",
+                            s.side,
+                            to(face)
+                        );
+                    }
+                }
+            }
+        }
+        // on a 1x1 it is 3.7 mm: the pockets are 18 mm wide on 25.4 mm
+        let f = Frame::openlock(1, 1);
+        let south = &ol.sockets(&f)[0];
+        let (lo, _) = bounds(&south.pocket.outline);
+        assert!((lo[0] - 3.7).abs() < 1e-9, "{lo:?}");
+    }
+
+    #[test]
+    fn the_logo_touches_no_pocket_on_any_tile() {
+        let ol = OpenLock::default();
+        for (cols, rows, side) in [
+            (1, 1, None),
+            (2, 1, None),
+            (2, 2, Some(22.0)),
+            (4, 2, Some(22.0)),
+            (3, 3, Some(22.0)),
+        ] {
+            let f = Frame::openlock(cols, rows);
+            let got = ol.logo_side(&f);
+            assert_eq!(got.is_some(), side.is_some(), "{cols}x{rows}: {got:?}");
+            let Some(got) = got else { continue };
+            assert!((got - side.unwrap()).abs() < 1e-9, "{cols}x{rows}: {got}");
+            let [w, h] = f.size_mm();
+            let (lo, hi) = (
+                [w / 2.0 - got / 2.0, h / 2.0 - got / 2.0],
+                [w / 2.0 + got / 2.0, h / 2.0 + got / 2.0],
+            );
+            for s in ol.sockets(&f) {
+                let (plo, phi) = bounds(&s.pocket.outline);
+                let overlap = (0..2).all(|k| lo[k] < phi[k] && plo[k] < hi[k]);
+                assert!(
+                    !overlap,
+                    "{cols}x{rows}: the logo reaches the {:?} pocket",
+                    s.side
+                );
+            }
+        }
+        // and where it fits, the logo is in the build: it changes the volume
+        // by about its inset's worth
+        let with = base_volume(2, 2);
+        assert!(with < 17420.0 && with > 17380.0, "{with}");
+    }
+
+    #[test]
     fn interior_square_boundaries_stay_solid() {
         // a 2×1 tile: one socket each on north and south (on the join), one
         // each on east and west (the middle of the one-square side)
-        let c = OpenLock::default().sockets(2, 1, 25.4, 50.8, 25.4);
-        assert_eq!(c.len(), 4 * 3);
+        let c = OpenLock::default().sockets(&Frame::openlock(2, 1));
+        assert_eq!(c.len(), 4);
+        for side in [Side::South, Side::North] {
+            let at = on(&c, side);
+            assert_eq!(at.len(), 1);
+            let (lo, hi) = bounds(&at[0].slot.outline);
+            assert!((lo[0] + hi[0]) / 2.0 - 25.4 < 1e-9);
+        }
     }
 
     #[test]
@@ -386,9 +561,10 @@ mod tests {
             (1, 3, 6),
             (3, 3, 8),
         ] {
-            let s = 25.4;
-            let c = ol.sockets(cols, rows, s, f64::from(cols) * s, f64::from(rows) * s);
-            assert_eq!(c.len(), n * 3, "{cols}x{rows}");
+            let c = ol.sockets(&Frame::openlock(cols, rows));
+            assert_eq!(c.len(), n, "{cols}x{rows}");
+            assert_eq!(on(&c, Side::South).len(), (cols as usize - 1).max(1));
+            assert_eq!(on(&c, Side::East).len(), (rows as usize - 1).max(1));
         }
     }
 }
