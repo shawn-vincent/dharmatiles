@@ -62,13 +62,15 @@ struct Arris {
     pts: Vec<V>,
 }
 
-/// The chips (hulls) that break the arrises as a mason's are broken.
+/// The chips (hulls) that break the arrises as a mason's are broken. A chip
+/// whose hull comes out degenerate is left out and added to `left_out`.
 #[allow(clippy::too_many_lines)]
 pub fn chip_edges(
     rng: &mut Rng,
     rock: &Piece,
     dep_mm: (f64, f64),
     keep: &dyn Fn(V, V, V) -> bool,
+    left_out: &mut usize,
 ) -> Vec<TriMesh> {
     let (p, t) = welded(&rock.mesh());
     if t.is_empty() {
@@ -191,9 +193,13 @@ pub fn chip_edges(
                         }
                     }
                 }
-                if let Ok(h) = form::hull(&pts) {
-                    chips.push(h);
-                    done.push((c, 0.5 * ln));
+                match form::hull(&pts) {
+                    Ok(h) => {
+                        chips.push(h);
+                        done.push((c, 0.5 * ln));
+                    }
+                    // a degenerate chip: left out, and counted
+                    Err(_) => *left_out += 1,
                 }
             }
             s += if lip {

@@ -5,9 +5,13 @@
 //! | code | meaning |
 //! |---|---|
 //! | 0 | success |
-//! | 1 | error: a bad document or a failed build (nothing written for it) |
+//! | 1 | error: a bad document, or a failure that is not a bug (a file that cannot be read or written) |
 //! | 2 | usage error (clap's) |
 //! | 3 | built, but the audit gate failed: the STL is still written, so you can look at it (overhangs red with `--png`) |
+//!
+//! | 101 | a bug: a panic (Rust's own code for one), including one caught while building the library |
+//!
+//! When a run has several outcomes (`build --all`), the worst wins: 101, then 1, then 3, then 0.
 //!
 //! Results go to stdout (`--json` prints one JSON report); progress and
 //! errors go to stderr, errors with miette: the line, a caret under the
@@ -61,9 +65,39 @@ use library::{disk_library, options, out_dir};
 const OK: u8 = 0;
 const ERROR: u8 = 1;
 const AUDIT_FAILED: u8 = 3;
+/// A bug: a panic.  Rust's own exit code for one.
+const BUG: u8 = 101;
+
+/// Say plainly that a panic is a bug in the program, with its message and
+/// place, then Rust's own report.  The panic itself still ends the run with
+/// 101, or is caught and counted as a bug where the run goes on.
+fn install_panic_hook() {
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let at = info
+            .location()
+            .map_or_else(String::new, |l| format!(" at {}:{}", l.file(), l.line()));
+        let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            (*s).to_owned()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "(no message)".to_owned()
+        };
+        tell!("this is a bug in dharmatiles, not in your tile: {msg}{at}");
+        default(info);
+    }));
+}
 
 fn main() -> ExitCode {
+    install_panic_hook();
     let cli = Cli::parse();
+    // Test hook for the exit-code tests: DT_TEST_PANIC=main panics here, a
+    // bug reaching main; any other value panics when that text is in the
+    // path of a tile being built (a bug caught in a library sweep).
+    if std::env::var("DT_TEST_PANIC").as_deref() == Ok("main") {
+        panic!("DT_TEST_PANIC=main");
+    }
     disk_library();
     // no command: browse your tiles and the library in the browser
     let command = cli.command.unwrap_or(Command::Preview {

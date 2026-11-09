@@ -9,7 +9,7 @@ use std::path::Path;
 /// # Errors
 /// When a template is named or found but cannot be read.
 pub(crate) fn template(path: Option<&Path>) -> Result<Option<String>, String> {
-    let found = crate::preview::roots::personal_home().join("bambu.3mf");
+    let found = crate::preview::roots::personal_home()?.join("bambu.3mf");
     let path = match path {
         Some(p) => p.to_path_buf(),
         None if found.is_file() => found,
@@ -22,7 +22,9 @@ pub(crate) fn template(path: Option<&Path>) -> Result<Option<String>, String> {
         }
     };
     let bytes = std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    dt_kit::project_settings(&bytes)
-        .map(Some)
-        .map_err(|e| format!("{}: {e}", path.display()))
+    let settings =
+        dt_kit::project_settings(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    // refuse now, naming the template, rather than place the tile on a guessed bed
+    dt_kit::bed_centre(&settings).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(Some(settings))
 }

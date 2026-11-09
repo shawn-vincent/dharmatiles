@@ -1018,6 +1018,7 @@ pub struct Scene {
     terrain: Terrain,
     built: Parts,
     notes: Vec<(String, f64)>,
+    left_out: Vec<(String, usize)>,
     stages: Vec<Stage>,
     progress: crate::Progress,
 }
@@ -1033,6 +1034,7 @@ impl Scene {
             terrain: Terrain::new(frame),
             built: Parts::new(frame),
             notes: Vec::new(),
+            left_out: Vec::new(),
             stages: Vec::new(),
             progress: crate::Progress::none(),
         }
@@ -1257,6 +1259,25 @@ impl Scene {
     /// Record an element's number for the build record (counts and the like).
     pub fn note(&mut self, name: &str, value: f64) {
         self.notes.push((name.to_owned(), value));
+    }
+
+    /// Count `n` pieces an element left out because it could not make them
+    /// (a hull or a band that came out degenerate). Counted by element;
+    /// nothing is recorded for zero.
+    pub fn left_out(&mut self, element: &str, n: usize) {
+        if n == 0 {
+            return;
+        }
+        match self.left_out.iter_mut().find(|(e, _)| e == element) {
+            Some((_, c)) => *c += n,
+            None => self.left_out.push((element.to_owned(), n)),
+        }
+    }
+
+    /// What elements left out, by element, in the order first counted.
+    #[must_use]
+    pub fn left_outs(&self) -> &[(String, usize)] {
+        &self.left_out
     }
 
     /// The numbers elements noted, in order.

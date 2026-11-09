@@ -360,7 +360,8 @@ fn the_command_line_names_files_folders_and_library_groups() {
         d.clone(),
         "lib:tiles/water".to_owned(),
         FLAT.to_owned(),
-    ]);
+    ])
+    .unwrap();
     assert_eq!(files, vec!["a.dtile".to_owned(), FLAT.to_owned()]);
     let kinds: Vec<_> = roots.iter().map(|r| r.kind.clone()).collect();
     assert_eq!(
@@ -372,9 +373,9 @@ fn the_command_line_names_files_folders_and_library_groups() {
         ]
     );
     // no paths: the personal home, then the library
-    let (roots, files) = roots_for(&[]);
+    let (roots, files) = roots_for(&[]).unwrap();
     assert!(files.is_empty());
-    assert_eq!(roots[0].kind, RootKind::Dir(personal_home()));
+    assert_eq!(roots[0].kind, RootKind::Dir(personal_home().unwrap()));
     assert_eq!(roots[1].kind, RootKind::Library("tiles/".to_owned()));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -1031,19 +1032,22 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
 
 #[test]
 fn a_library_tile_exports_to_my_tiles_never_into_the_library() {
-    let mine = super::roots::personal_home().join("out");
-    assert_eq!(edit::export_dir("lib:tiles/ground/1x1-grass.dtile"), mine);
+    let mine = super::roots::personal_home().unwrap().join("out");
+    assert_eq!(
+        edit::export_dir("lib:tiles/ground/1x1-grass.dtile").unwrap(),
+        mine
+    );
     // the same tile named by its file inside the library folder
     if let Some(lib) = dt_eval::source::library_dir() {
         let file = lib.join("tiles/ground/1x1-grass.dtile");
-        assert_eq!(edit::export_dir(&file.to_string_lossy()), mine);
+        assert_eq!(edit::export_dir(&file.to_string_lossy()).unwrap(), mine);
     }
     // a file of yours: its project's out/
     let dir = std::env::temp_dir().join(format!("dt-where-{}", std::process::id()));
     std::fs::create_dir_all(dir.join("a")).unwrap();
     std::fs::write(dir.join("dharmatiles.dtile"), "name \"t\"\n").unwrap();
     assert_eq!(
-        edit::export_dir(&dir.join("a/t.dtile").to_string_lossy()),
+        edit::export_dir(&dir.join("a/t.dtile").to_string_lossy()).unwrap(),
         dir.join("out")
     );
 }

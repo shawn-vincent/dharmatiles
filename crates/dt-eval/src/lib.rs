@@ -267,6 +267,9 @@ pub struct Built {
     pub edge_mm: Option<f64>,
     /// Numbers the elements noted (counts), in build order.
     pub notes: Vec<(String, f64)>,
+    /// Pieces elements left out because they could not make them (a degenerate
+    /// hull or band), by element; empty when nothing was.
+    pub left_out: Vec<(String, usize)>,
     /// The ground surface as built, for painted previews.
     pub surface: Option<(dt_kit::Grid, dt_kit::Mask)>,
     /// The nodes a stamped solid (floor, wall, tree) covers, for painted
@@ -1060,6 +1063,16 @@ impl<'a> Plan<'a> {
             footprint,
             edge_mm: self.solved.edge_mm,
             notes: scene.notes().to_vec(),
+            left_out: {
+                let mut all = scene.left_outs().to_vec();
+                for b in self.solved.bodies.iter().filter(|b| b.left_out > 0) {
+                    match all.iter_mut().find(|(e, _)| *e == b.element) {
+                        Some((_, n)) => *n += b.left_out,
+                        None => all.push((b.element.clone(), b.left_out)),
+                    }
+                }
+                all
+            },
             surface: scene.surface(),
             covered: scene
                 .support()

@@ -165,6 +165,9 @@ const fn ramp_name(m: Material, brick: bool) -> &'static str {
 /// everything else from the mesh's own relief. `overhang` faces are red
 /// and `band` faces orange, over every other paint. `brick` paints
 /// masonry from the brick ramp.
+///
+/// # Panics
+/// When `materials` is shorter than the mesh's faces (a bug in the caller).
 #[must_use]
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn paint_mesh(
@@ -231,7 +234,11 @@ pub fn paint_mesh(
     }
     let mut out = Vec::with_capacity(nf);
     for k in 0..nf {
-        let m = materials.get(k).copied().unwrap_or(Material::Earth);
+        // every caller builds `materials` face for face from the same mesh
+        let m = materials
+            .get(k)
+            .copied()
+            .expect("paint_mesh: one material per face");
         if overhang.get(k).copied().unwrap_or(false) {
             out.push(RED);
             continue;

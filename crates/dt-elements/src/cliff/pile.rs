@@ -16,6 +16,7 @@ use crate::{LookError, Span};
 struct Column {
     stones: Vec<(usize, dt_kit::Piece)>,
     cracks: usize,
+    left_out: usize,
 }
 
 type ColResult = Result<Column, dt_kit::KitError>;
@@ -76,6 +77,8 @@ pub(super) struct Dressed {
     pub repeated: usize,
     /// Cracks cut in the stones' tops.
     pub tops: usize,
+    /// Pieces left out because their hull came out degenerate.
+    pub left_out: usize,
     /// The core behind the stones, a field in the pile's grid.
     pub core_field: Field,
 }
@@ -169,12 +172,17 @@ pub(super) fn dress(
     }
     let mut frng = Rng::new(site.seed.key("cliff-faces"));
     faces::plan_faces(&mut frng, &mut cols, placed);
-    // support cones of resting stones, for the cleaving guard
+    // support cones of resting stones, for the cleaving guard; a cone whose
+    // hull comes out degenerate is left out, and counted
+    let mut cones_left_out = 0;
     let cones: Vec<Option<dt_kit::TriMesh>> = placed
         .iter()
         .map(|r| {
             if r.z0 > 0.0 {
-                finish::support_cone(r)
+                finish::support_cone(r).unwrap_or_else(|_| {
+                    cones_left_out += 1;
+                    None
+                })
             } else {
                 None
             }
@@ -233,16 +241,19 @@ pub(super) fn dress(
             Ok(Column {
                 stones: out,
                 cracks: cs.tops,
+                left_out: cs.left_out,
             })
         })
         .collect();
     progress.fraction("stones finished", 0.85);
     let mut pieces: Vec<(usize, dt_kit::Piece)> = Vec::new();
     let mut tops = 0;
+    let mut left_out = cones_left_out;
     for r in results {
         let col = r.map_err(LookError::build)?;
         pieces.extend(col.stones);
         tops += col.cracks;
+        left_out += col.left_out;
     }
     pieces.sort_by_key(|p| p.0);
     // a stone the band holds down at its site adds no height there, so the
@@ -285,6 +296,7 @@ pub(super) fn dress(
         pieces,
         repeated,
         tops,
+        left_out,
         core_field,
     })
 }

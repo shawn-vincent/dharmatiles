@@ -414,21 +414,38 @@ impl Shared {
         }
     }
 
-    /// The paint now: the palette document if there is a good one, else
-    /// the default.
-    fn palette(&self) -> dt_kit::Palette {
+    /// The paint now: the palette document, or the default when none was
+    /// named.  A palette that cannot be read is an error, in words naming it.
+    fn palette_checked(&self) -> Result<dt_kit::Palette, String> {
         let Some(f) = &self.palette else {
-            return dt_kit::Palette::default();
+            return Ok(dt_kit::Palette::default());
         };
-        match std::fs::read_to_string(f)
-            .map_err(|e| e.to_string())
-            .and_then(|t| dt_kit::Palette::parse(&t))
-        {
-            Ok(p) => p,
-            Err(e) => {
-                tell!("palette {}: {e}; using the default paint", f.display());
-                dt_kit::Palette::default()
-            }
+        std::fs::read_to_string(f)
+            .map_err(|e| format!("cannot read the palette {}: {e}", f.display()))
+            .and_then(|t| {
+                dt_kit::Palette::parse(&t).map_err(|e| format!("palette {}: {e}", f.display()))
+            })
+    }
+
+    /// The paint now, for a view: the palette document, else the default
+    /// paint, saying so on stderr; the build that shows a tile tells the page
+    /// too ([`Shared::palette_problem`]).
+    fn palette(&self) -> dt_kit::Palette {
+        self.palette_checked().unwrap_or_else(|e| {
+            tell_once(&format!("{e}; using the default paint"));
+            dt_kit::Palette::default()
+        })
+    }
+
+    /// What is wrong with the palette, as the page's unexpected problem
+    /// (empty when nothing is): the tile is shown in the default paint.
+    fn palette_problem(&self) -> Vec<Value> {
+        match self.palette_checked() {
+            Ok(_) => Vec::new(),
+            Err(e) => errors_json(&[Diag::plain(
+                "dt::palette",
+                format!("{e}; the tile is shown in the default paint"),
+            )]),
         }
     }
 
@@ -738,11 +755,24 @@ pub fn run(
         .local_addr()
         .map_or_else(|_| "127.0.0.1".to_owned(), |a| a.to_string());
     // files named are built at once; folder and library tiles when chosen
-    let (roots, files) = roots_for(paths);
+    let (roots, files) = match roots_for(paths) {
+        Ok(r) => r,
+        Err(e) => {
+            tell!("error: {e}");
+            return crate::ERROR;
+        }
+    };
+    let home = match roots::personal_home() {
+        Ok(h) => h,
+        Err(e) => {
+            tell!("error: {e}");
+            return crate::ERROR;
+        }
+    };
     let cache = crate::library::project().out;
     let shared = Arc::new(
         Shared::with_roots(roots, &files, opts)
-            .with_home(roots::personal_home())
+            .with_home(home)
             .with_cache(Timings::file_in(&cache))
             .with_palette_opt(palette),
     );

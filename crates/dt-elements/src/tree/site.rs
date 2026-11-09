@@ -73,6 +73,7 @@ const ISLE_MM3: f64 = 0.01;
 pub(super) fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, usize), LookError> {
     let bodies = leaves::split_bodies(&solid.mesh());
     let main = bodies.iter().map(dt_kit::signed_volume).fold(0.0, f64::max);
+    let mut left_out = 0;
     let plugs: Vec<TriMesh> = bodies
         .into_iter()
         .filter(|b| {
@@ -88,9 +89,11 @@ pub(super) fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, us
                 .iter()
                 .map(|p| graph::add(c, graph::scale(graph::sub(*p, c), 1.1)))
                 .collect();
-            form::hull(&pts).ok()
+            // a degenerate pocket: no plug, and counted
+            form::hull(&pts).map_err(|_| left_out += 1).ok()
         })
         .collect();
+    scene.left_out("tree", left_out);
     if plugs.is_empty() {
         return Ok((solid, 0));
     }

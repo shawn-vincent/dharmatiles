@@ -307,8 +307,11 @@ fn settings(template: &str, slots: &[String]) -> Result<String, String> {
     serde_json::to_string_pretty(&Value::Object(d)).map_err(|e| e.to_string())
 }
 
-/// The middle of the template's bed, mm (256 × 256 when it does not say).
-fn bed_centre(template: &str) -> [f64; 2] {
+/// The middle of the template's bed, mm.
+///
+/// # Errors
+/// When the template has no printable area to find the bed from.
+pub fn bed_centre(template: &str) -> Result<[f64; 2], String> {
     // `settings` has already parsed this same text (and refused it when it is
     // not JSON), so the parse cannot fail here; a Null just finds no bed.
     let v: Value = serde_json::from_str(template).unwrap_or(Value::Null);
@@ -325,7 +328,7 @@ fn bed_centre(template: &str) -> [f64; 2] {
         })
         .unwrap_or_default();
     if pts.is_empty() {
-        return [128.0, 128.0];
+        return Err("the Bambu template has no printable_area (a list of \"XxY\" corners), so the middle of its bed is unknown; save the template from Bambu Studio with a printer selected".to_owned());
     }
     let (lo, hi) = pts
         .iter()
@@ -335,7 +338,7 @@ fn bed_centre(template: &str) -> [f64; 2] {
                 [hi[0].max(p[0]), hi[1].max(p[1])],
             )
         });
-    [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0]
+    Ok([(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0])
 }
 
 /// **bambu_project**: the 3MF bytes of `mesh` as a Bambu Studio project,
@@ -344,7 +347,7 @@ fn bed_centre(template: &str) -> [f64; 2] {
 /// other settings (see [`project_settings`]).
 ///
 /// # Errors
-/// When the template's settings cannot be read.
+/// When the template's settings cannot be read, or it has no printable area.
 pub fn bambu_project(
     mesh: &TriMesh,
     materials: &[Material],
@@ -380,7 +383,7 @@ pub fn bambu_project(
             )
         });
     let mid = [0, 1, 2].map(|i| (lo[i] + hi[i]) / 2.0);
-    let bed = bed_centre(template);
+    let bed = bed_centre(template)?;
     let name = std::path::Path::new(&record.document)
         .file_stem()
         .map_or_else(|| "tile".to_owned(), |s| s.to_string_lossy().into_owned());

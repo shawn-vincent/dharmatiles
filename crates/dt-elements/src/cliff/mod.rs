@@ -317,6 +317,7 @@ impl Element for Cliff {
         scene.note("cliff_stones", n_stones as f64);
         scene.note("cliff_repeated_stones", dressed.repeated as f64);
         scene.note("cliff_top_cracks", dressed.tops as f64);
+        scene.left_out("cliff", dressed.left_out);
         Ok(())
     }
 }

@@ -7,7 +7,7 @@ use dt_eval::{Built, Diag, Files, Options, Source};
 use dt_kit::{VIEWS, render, stl};
 use serde_json::{Value, json};
 
-use crate::{AUDIT_FAILED, ERROR, OK, progress};
+use crate::{AUDIT_FAILED, BUG, ERROR, OK, progress};
 
 /// What else a build writes beside the STL.
 #[derive(Clone, Copy)]
@@ -44,6 +44,11 @@ pub(crate) fn build(
         // A panic in one tile is a bug, but it must not end the sweep: it is
         // reported against the tile by name, and the next tile builds.
         let (c, r) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if let Ok(t) = std::env::var("DT_TEST_PANIC")
+                && p.contains(&t)
+            {
+                panic!("DT_TEST_PANIC in {p}");
+            }
             build_one(&Files, p, opts, out, extras, json)
         }))
         .unwrap_or_else(|panic| {
@@ -51,7 +56,7 @@ pub(crate) fn build(
             progress::clear();
             tell!("error: {p}: the build panicked (a bug in dharmatiles, not in the tile): {msg}");
             (
-                ERROR,
+                BUG,
                 json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain("dt::panic", format!("the build panicked: {msg}"))])}),
             )
         });
@@ -75,13 +80,16 @@ pub(crate) fn build(
     code
 }
 
-/// The worse of two exit codes: an error beats a failed audit beats success.
+/// The worse of two exit codes: a bug (101) beats an error (1) beats a failed
+/// audit (3) beats success (0).
 pub(crate) fn worse(a: u8, b: u8) -> u8 {
-    if a == ERROR || b == ERROR {
-        ERROR
-    } else {
-        a.max(b)
-    }
+    let rank = |c: u8| match c {
+        BUG => 3,
+        ERROR => 2,
+        AUDIT_FAILED => 1,
+        _ => 0,
+    };
+    if rank(b) > rank(a) { b } else { a }
 }
 
 /// Build one tile and write its files; report it on stderr unless `json`.
@@ -185,6 +193,9 @@ pub(crate) fn build_one(
             built_s,
             total_s
         );
+        if !b.left_out.is_empty() {
+            tell!("  left out: {}", left_out_text(&b.left_out));
+        }
         if b.reused > 0 {
             tell!("  {} steps kept from the last build", b.reused);
         }
@@ -259,9 +270,18 @@ pub(crate) fn write(
     Ok(files)
 }
 
+/// `cliff 2, tree 1`: what elements left out, for the summary.
+fn left_out_text(left_out: &[(String, usize)]) -> String {
+    left_out
+        .iter()
+        .map(|(e, n)| format!("{e} {n}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
     let a = &b.audit;
-    json!({
+    let mut v = json!({
         "path": b.record.document,
         "ok": failures.is_empty(),
         "record": {
@@ -296,7 +316,17 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
         "stage_secs": b.stage_secs.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>(),
         "edge_mm": b.edge_mm,
         "stats": stats(&b.notes),
-    })
+    });
+    // only when an element left something out: the record is unchanged otherwise
+    if !b.left_out.is_empty() {
+        v["left_out"] = b
+            .left_out
+            .iter()
+            .map(|(e, n)| (e.clone(), json!(n)))
+            .collect::<serde_json::Map<_, _>>()
+            .into();
+    }
+    v
 }
 
 /// Is `code` a refusal of the document (a mistake the reader can fix) rather
@@ -342,4 +372,20 @@ pub(crate) fn stats(notes: &[(String, f64)]) -> serde_json::Map<String, Value> {
             (key, json!(v))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_worst_outcome_wins() {
+        assert_eq!(worse(OK, AUDIT_FAILED), AUDIT_FAILED);
+        assert_eq!(worse(AUDIT_FAILED, ERROR), ERROR);
+        assert_eq!(worse(ERROR, AUDIT_FAILED), ERROR);
+        assert_eq!(worse(ERROR, BUG), BUG);
+        assert_eq!(worse(BUG, AUDIT_FAILED), BUG);
+        assert_eq!(worse(BUG, OK), BUG);
+        assert_eq!(worse(OK, OK), OK);
+    }
 }

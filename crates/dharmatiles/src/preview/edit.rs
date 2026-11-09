@@ -279,7 +279,10 @@ fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
             RootKind::Dir(d) => Some(d.clone()),
             _ => None,
         })
-        .unwrap_or_else(personal_home);
+        .map_or_else(
+            || personal_home().map_err(|e| ("500 Internal Server Error", json!({ "error": e }))),
+            Ok,
+        )?;
     std::fs::create_dir_all(&home).map_err(|e| {
         (
             "500 Internal Server Error",
@@ -633,7 +636,10 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
     } else {
         None
     };
-    let out = export_dir(tile);
+    let out = match export_dir(tile) {
+        Ok(o) => o,
+        Err(e) => return ("500 Internal Server Error", json!({ "error": e })),
+    };
     if v["where"].as_bool() == Some(true) {
         // shown with ~ for the home folder
         let home = std::env::var_os("HOME").map(PathBuf::from);
@@ -649,7 +655,10 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
             json!({ "out": out.display().to_string(), "shown": shown }),
         );
     }
-    let palette = shared.palette();
+    let palette = match shared.palette_checked() {
+        Ok(p) => p,
+        Err(e) => return ("500 Internal Server Error", json!({ "error": e })),
+    };
     let extras = crate::build::Extras {
         progress: false,
         tile_no: None,
@@ -702,14 +711,30 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
 /// or a file inside the library folder) goes to `out/` in My tiles; any
 /// other file to its project's `out/` (beside the nearest
 /// `dharmatiles.dtile` above it), else `out/` beside it.
-pub(super) fn export_dir(tile: &str) -> PathBuf {
-    let in_library = tile.starts_with("lib:")
-        || dt_eval::source::library_dir()
-            .and_then(|l| l.canonicalize().ok())
-            .zip(Path::new(tile).canonicalize().ok())
-            .is_some_and(|(l, t)| t.starts_with(l));
+///
+/// # Errors
+/// When the library folder or the tile's folder cannot be resolved to compare
+/// them, or there is no personal home: a guess could write into the library.
+pub(super) fn export_dir(tile: &str) -> Result<PathBuf, String> {
+    let in_library = if tile.starts_with("lib:") {
+        true
+    } else if let Some(lib) = dt_eval::source::library_dir() {
+        let l = lib
+            .canonicalize()
+            .map_err(|e| format!("cannot resolve the library folder {}: {e}", lib.display()))?;
+        let folder = Path::new(tile)
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let f = folder
+            .canonicalize()
+            .map_err(|e| format!("cannot resolve the folder of {tile}: {e}"))?;
+        f.starts_with(l)
+    } else {
+        false
+    };
     if in_library {
-        return personal_home().join("out");
+        return Ok(personal_home()?.join("out"));
     }
     let dir = Path::new(tile).parent().unwrap_or_else(|| Path::new("."));
     let project = dt_eval::discover(dir);
@@ -718,7 +743,7 @@ pub(super) fn export_dir(tile: &str) -> PathBuf {
             "note: {why}; the project file is ignored, so exports go to out/"
         ));
     }
-    project.out
+    Ok(project.out)
 }
 
 /// Show a written file in the Finder (macOS `open -R`; elsewhere the

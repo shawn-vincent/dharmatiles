@@ -852,7 +852,13 @@ struct Film {
 /// The film `ctx`'s dirt is, if it is laid over pieces: the dirt's band is
 /// `bottom` plus a thickness, and `bottom` here is the pieces' tops, not the
 /// envelope the solver held them to. `None` for any other dirt.
-fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band, skin_mm: f64) -> Option<Film> {
+fn film_on(
+    scene: &Scene,
+    ctx: &Ctx<'_>,
+    band: &Band,
+    skin_mm: f64,
+    left_out: &mut usize,
+) -> Option<Film> {
     let rest = scene.rest()?;
     let frame = scene.frame();
     let below = ctx.below?;
@@ -904,7 +910,8 @@ fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band, skin_mm: f64) -> Option<Fi
             area.bits[k] = false;
         }
     }
-    let band = Band::new(flo, fhi).ok()?;
+    // a degenerate film band: no film is laid, and it is counted
+    let band = Band::new(flo, fhi).map_err(|_| *left_out += 1).ok()?;
     Some(Film { area, band, floor })
 }
 
@@ -928,7 +935,9 @@ impl Element for Dirt {
         // the pieces' own tops, on the rock under the film's slope and clear
         // of the lips and faces, as thick as its band is over what was under
         let skin_mm = 3.0 * ctx.printer.layer_mm;
-        let film = film_on(scene, ctx, band, skin_mm);
+        let mut film_left_out = 0;
+        let film = film_on(scene, ctx, band, skin_mm, &mut film_left_out);
+        scene.left_out("dirt", film_left_out);
         if film
             .as_ref()
             .is_some_and(|f| !f.area.bits.iter().any(|&b| b))

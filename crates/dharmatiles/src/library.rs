@@ -82,7 +82,7 @@ pub(crate) fn options(system: &str, printer: &str, seed: Option<u64>) -> Result<
         system,
         printer,
         seed,
-        Some(&crate::preview::roots::personal_home()),
+        Some(&crate::preview::roots::personal_home()?),
     )
 }
 
@@ -172,7 +172,7 @@ pub(crate) fn preview_options(
     system: Option<&str>,
     printer: Option<&str>,
 ) -> Result<Options, String> {
-    let home = crate::preview::roots::personal_home();
+    let home = crate::preview::roots::personal_home()?;
     let (rs, rp) = remembered_target(&home).unwrap_or_else(|e| {
         // the remembered target is a convenience: say it is not used, and
         // build for the default (never silently)

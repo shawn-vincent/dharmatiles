@@ -75,6 +75,9 @@ pub struct SolvedBody {
     pub land_mm: f64,
     /// Its pins, defaults first.
     pub pins: Vec<PinReport>,
+    /// How many times laying this body into the surface under later bodies
+    /// was left out (its band came out degenerate): 0 or 1.
+    pub left_out: usize,
     nx: usize,
     ny: usize,
     per: f64,
@@ -754,6 +757,7 @@ fn solve_on(
             .reduce(f64::min)
             .unwrap_or(0.0)
             .max(1.0);
+        let mut left_out = 0;
         // lay the body on the surface
         if land {
             for k in 0..nx * ny {
@@ -763,8 +767,11 @@ fn solve_on(
                     under_hi.z[k] = under_hi.z[k].max(s.hi);
                 }
             }
-            if let Ok(b) = Band::new(under_lo.clone(), under_hi.clone()) {
-                under = b;
+            match Band::new(under_lo.clone(), under_hi.clone()) {
+                Ok(b) => under = b,
+                // degenerate: the surface under later bodies keeps what it
+                // had, and the body counts it
+                Err(_) => left_out = 1,
             }
         }
         bodies.push(SolvedBody {
@@ -777,6 +784,7 @@ fn solve_on(
             below,
             land_mm,
             pins: reports,
+            left_out,
             nx,
             ny,
             per: g.per,

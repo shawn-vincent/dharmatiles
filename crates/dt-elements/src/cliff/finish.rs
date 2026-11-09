@@ -415,10 +415,10 @@ pub fn offset_poly(poly: &[P2], d: f64) -> Vec<P2> {
 
 /// The wedge under a resting rock: its footprint at its underside,
 /// narrowing at the seat slope to a ridge: no flat bottom.
-pub fn support_cone(r: &Placed) -> Option<dt_kit::TriMesh> {
+pub fn support_cone(r: &Placed) -> Result<Option<dt_kit::TriMesh>, dt_kit::KitError> {
     let poly = r.poly();
     if poly.len() < 3 {
-        return None;
+        return Ok(None);
     }
     let slope = SEAT_SLOPE_DEG.to_radians().tan();
     let b = bounds(&poly);
@@ -435,5 +435,5 @@ pub fn support_cone(r: &Placed) -> Option<dt_kit::TriMesh> {
     let inner = offset_poly(&poly, -lo);
     let mut pts: Vec<[f64; 3]> = poly.iter().map(|p| [p[0], p[1], r.z0]).collect();
     pts.extend(inner.iter().map(|p| [p[0], p[1], r.z0 - slope * lo]));
-    dt_kit::form::hull(&pts).ok()
+    dt_kit::form::hull(&pts).map(Some)
 }

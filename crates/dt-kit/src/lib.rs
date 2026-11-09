@@ -68,7 +68,7 @@ pub use audit::{
     Audit, Dropped, Export, Hang, HangBand, Printer, audit, audit_banded, audit_rounded, draft,
     fit, hang,
 };
-pub use bambu::{bambu_project, project_settings};
+pub use bambu::{bambu_project, bed_centre, project_settings};
 pub use band::{
     Band, Banded, Ease, Lint, Pin, Refusal, Shadowed, Solved, Steep, drop_mm, lints, solve,
     solve_traced,

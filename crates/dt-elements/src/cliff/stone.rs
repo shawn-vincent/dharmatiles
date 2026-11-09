@@ -72,6 +72,7 @@ fn chamfer_corners(
     poly: &[P2],
     d: f64,
     loaded: &dyn Fn(P2) -> bool,
+    left_out: &mut usize,
 ) -> Result<Piece, KitError> {
     let n = poly.len();
     let Some((lo, hi)) = rock.bounds() else {
@@ -103,11 +104,15 @@ fn chamfer_corners(
                 pts.push([q[0], q[1], z]);
             }
         }
-        if let Ok(h) = form::hull(&pts) {
-            let cut = rock.minus(&[h])?;
-            if !cut.is_empty() {
-                rock = cut;
+        match form::hull(&pts) {
+            Ok(h) => {
+                let cut = rock.minus(&[h])?;
+                if !cut.is_empty() {
+                    rock = cut;
+                }
             }
+            // a degenerate cutter: the corner stays, and is counted
+            Err(_) => *left_out += 1,
         }
     }
     Ok(rock)
@@ -690,6 +695,8 @@ fn largest(p: &Piece) -> Result<Piece, KitError> {
 pub struct ColState {
     pub refused: HashSet<usize>,
     pub tops: usize,
+    /// Pieces left out because their hull came out degenerate.
+    pub left_out: usize,
 }
 
 /// Build stone `ri` of column `c`. `support` is what a cut must not undercut.
@@ -764,7 +771,7 @@ pub fn rock_piece(
         }
     }
     let loaded_at = |q: P2| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]);
-    let rock = chamfer_corners(rock, &poly, c.corner_mm, &loaded_at)?;
+    let rock = chamfer_corners(rock, &poly, c.corner_mm, &loaded_at, &mut st.left_out)?;
     let Some((lo3, hi3)) = rock.bounds() else {
         return Ok(None);
     };
@@ -927,7 +934,7 @@ pub fn rock_piece(
                 .iter()
                 .any(|q| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]))
     };
-    let chips = chip_edges(crng, &rock, CHIP_MM, &keep);
+    let chips = chip_edges(crng, &rock, CHIP_MM, &keep, &mut st.left_out);
     // each finishing step may fail on a degenerate cut (the kernel refuses a
     // mesh that is not a closed manifold): that step is then skipped, and
     // the stone keeps what it had

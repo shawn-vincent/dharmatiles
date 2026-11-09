@@ -395,3 +395,63 @@ fn build_all_with_no_library_to_sweep_is_an_error_not_a_success() {
         assert!(err.contains("build --all"), "{err}");
     }
 }
+
+#[test]
+fn a_panic_reaching_main_exits_101_naming_a_bug() {
+    let o = Command::new(EXE)
+        .args(["elements"])
+        .env("DT_TEST_PANIC", "main")
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(101));
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("this is a bug in dharmatiles"), "{err}");
+    assert!(err.contains("DT_TEST_PANIC=main"), "{err}");
+}
+
+#[test]
+fn a_panic_in_one_tile_of_a_sweep_exits_101_and_the_rest_build() {
+    let d = scratch("sweep-panic");
+    let o = Command::new(EXE)
+        .args([
+            "build",
+            "lib:tiles/test/1x1-flat.dtile",
+            "lib:tiles/test/1x1-planks.dtile",
+            "--out",
+        ])
+        .arg(&d)
+        .env("DT_TEST_PANIC", "1x1-planks")
+        .output()
+        .unwrap();
+    assert_eq!(
+        o.status.code(),
+        Some(101),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("1x1-planks"), "{err}");
+    assert!(err.contains("built lib:tiles/test/1x1-flat"), "{err}");
+}
+
+#[test]
+fn the_worst_outcome_of_a_sweep_wins() {
+    // a refused document (1) with a panicked tile (101): 101
+    let d = scratch("sweep-worst");
+    let bad = d.join("bad.dtile");
+    std::fs::write(&bad, "tile { stack { gruond } }\n").unwrap();
+    let run = |panic: Option<&str>| {
+        let mut c = Command::new(EXE);
+        c.args(["build"])
+            .arg(&bad)
+            .arg("lib:tiles/test/1x1-flat.dtile")
+            .arg("--out")
+            .arg(&d);
+        if let Some(p) = panic {
+            c.env("DT_TEST_PANIC", p);
+        }
+        c.output().unwrap().status.code()
+    };
+    assert_eq!(run(None), Some(1));
+    assert_eq!(run(Some("1x1-flat")), Some(101));
+}

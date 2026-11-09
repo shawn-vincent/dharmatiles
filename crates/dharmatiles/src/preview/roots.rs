@@ -145,27 +145,36 @@ pub(super) fn tile_files(dir: &std::path::Path, depth: usize, out: &mut Vec<Stri
 
 /// The personal home: `$DT_HOME`, else `~/dharmatiles`.  It need not exist
 /// yet; the preview lists its tiles once it does.
-#[must_use]
-pub fn personal_home() -> std::path::PathBuf {
+///
+/// # Errors
+/// When neither `$DT_HOME` nor the home folder (`$HOME`, `%USERPROFILE%`) is
+/// set: there is nowhere to put your tiles, and a relative folder would put
+/// them wherever the program happens to run.
+pub fn personal_home() -> Result<std::path::PathBuf, String> {
     if let Some(d) = std::env::var_os("DT_HOME").filter(|d| !d.is_empty()) {
-        return d.into();
+        return Ok(d.into());
     }
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
-        .unwrap_or_default();
-    std::path::PathBuf::from(home).join("dharmatiles")
+        .filter(|h| !h.is_empty())
+        .ok_or_else(|| {
+            "cannot find your home folder: neither DT_HOME nor HOME is set; set DT_HOME to the folder for your tiles".to_owned()
+        })?;
+    Ok(std::path::PathBuf::from(home).join("dharmatiles"))
 }
 
 /// What the command line asks for: the roots, and the files named.
 /// A folder is a root of its own; `lib:tiles/water` (no `.dtile`) is the
 /// library's water group; anything else is a file.  No paths: the personal
 /// home and the library.
-#[must_use]
-pub fn roots_for(paths: &[String]) -> (Vec<Root>, Vec<String>) {
+///
+/// # Errors
+/// When no paths are named and there is no personal home ([`personal_home`]).
+pub fn roots_for(paths: &[String]) -> Result<(Vec<Root>, Vec<String>), String> {
     let lib = Root::new("Library", RootKind::Library("tiles/".to_owned()));
     if paths.is_empty() {
-        let home = Root::new("My tiles", RootKind::Dir(personal_home()));
-        return (vec![home, lib], Vec::new());
+        let home = Root::new("My tiles", RootKind::Dir(personal_home()?));
+        return Ok((vec![home, lib], Vec::new()));
     }
     let mut roots = Vec::new();
     let mut files = Vec::new();
@@ -195,5 +204,5 @@ pub fn roots_for(paths: &[String]) -> (Vec<Root>, Vec<String>) {
     if !files.is_empty() {
         roots.insert(0, Root::new("Files", RootKind::Files));
     }
-    (roots, files)
+    Ok((roots, files))
 }
