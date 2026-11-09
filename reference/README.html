@@ -1,0 +1,72 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Reference sources</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;color:#222}
+table{border-collapse:collapse;margin:.5rem 0 1rem}td,th{border:1px solid #ccc;padding:.25rem .5rem;text-align:left;vertical-align:top}
+code{background:#f3f3f3;padding:0 .2em}
+</style>
+<h1>Reference sources</h1>
+<p>Outside work we measure our geometry against. Only this page is in git: the downloaded projects
+sit beside it (<code>reference/openlock/…</code>) and are git-ignored, because their licences
+(CC BY-NC 4.0 and GPL-2.0-or-later) are not ours. Read them for dimensions and behaviour; do not
+copy or port their code into the program. Re-download with the commands below.</p>
+
+<h2>OpenLOCK connector</h2>
+<table>
+<tr><th>Source</th><th>What it is</th><th>Licence</th></tr>
+<tr><td><a href="https://github.com/caitlynb/OpenSCAD-OpenLock">caitlynb/OpenSCAD-OpenLock</a><br>
+<code>git clone --depth 1 https://github.com/caitlynb/OpenSCAD-OpenLock.git reference/openlock/OpenSCAD-OpenLock</code></td>
+<td>OpenSCAD tiles built from geometry: <code>clipcut()</code> (the socket), <code>clipsupport()</code>
+(a printable support inside it), <code>basepiece()</code>, parts A–V, Imperial 25.4 / Metric 25 mm.
+Prebuilt STLs of every part in <code>STLs/</code> (the <code>-None-var0</code> files are untextured).
+OpenLOCK 8.0-era.</td>
+<td>CC BY-NC 4.0 (stated in its README; no licence file)</td></tr>
+<tr><td><a href="https://github.com/PieterVdc/Openlock-Template-maker">PieterVdc/Openlock-Template-maker</a><br>
+<code>git clone --depth 1 https://github.com/PieterVdc/Openlock-Template-maker.git reference/openlock/Openlock-Template-maker</code></td>
+<td>Blender add-on; <code>floor_maker.py</code> <code>OpenLock_Clip_Bool_Floor_model()</code> gives the
+socket as explicit vertices, with five-layer supports; placement on 12.7 mm steps.</td>
+<td>GPL-2.0-or-later</td></tr>
+<tr><td><a href="https://www.printablescenery.com/product/open-lock/">Printable Scenery OpenLOCK templates</a></td>
+<td>The authority: official tessellation templates (STL, template 8.6, clip 5.4). Port positions and
+footprints are fixed for compatibility. Not downloaded: the store needs an account.</td>
+<td>CC BY-NC; a free commercial licence on request</td></tr>
+</table>
+
+<h3>The socket, as the two references build it</h3>
+<p>Coordinates: <em>along</em> the edge from the socket centre, <em>in</em> from the tile face, <em>z</em> up
+from the base bottom (the base is 8 mm).</p>
+<table>
+<tr><th></th><th>OpenSCAD-OpenLock</th><th>Template maker</th><th>dharmatiles (9cf7f17)</th></tr>
+<tr><td>T profile</td><td>14 wide to 2 in; 12 at 2; tapers to 10 at 5; 10 wide to 7</td>
+<td>same to 5; 10 wide to <b>6</b></td><td>same as OpenSCAD (to 7)</td></tr>
+<tr><td>Height</td><td>z 1.4 – 5.6</td><td>z 1.4 – 5.6</td><td>z 1.4 – 5.6</td></tr>
+<tr><td>Behind the T</td><td>one pocket centred on the socket, 18 along × 4.7 in (in 6.0 – 10.7),
+<b>open through the bottom</b> up to z 5.6, its middle 14 mm to z 5.8 (one layer over the socket top)</td>
+<td>none</td>
+<td>two slots at ±8.35 along, 4.7 along × 9 in, <b>from the face</b>, z 1.4 – 5.6, closed below</td></tr>
+<tr><td>Supports</td><td>a 6 × 6 box wall with a 4 × 4 hole, in the socket, one layer short of floor and roof</td>
+<td>two thin fins, five steps up</td><td>none</td></tr>
+<tr><td>Underside</td><td>1 × 1 mm V-grooves under the square lines; 0.5 mm-deep pads under each half square on large parts</td>
+<td>—</td><td>lotus logo, 0.4 mm</td></tr>
+</table>
+<p><b>Finding (8 Nov 2026):</b> our two "retention slots" are OpenSCAD's pocket read on the wrong axes:
+its <code>cube([4.7,18,…])</code> sits at <code>x = −8.35</code> after the profile is rotated, which is
+8.35 mm <em>into</em> the tile, 18 mm <em>along</em> the edge. Ours puts 4.7 mm slots 8.35 mm either side
+of the mouth, opening the face, so at socket height a 25.4 mm square's face is open over about 21 mm
+instead of 14. Slicing <code>STLs/OSOL-E-Imperial-8.0-None-var0.stl</code> confirms the reference's
+shape. The T profile itself matches. The two references disagree on the T's depth (7 vs 6) and on the
+pocket; the official template settles both.</p>
+
+<h3>Other OpenSCAD-OpenLock parts (unit u = 25.4 mm)</h3>
+<table>
+<tr><th>Part</th><th>Footprint</th><th>Clips</th></tr>
+<tr><td>A, B, C, D</td><td>wall strips ½u × 2, 2, 2½, 3u</td><td>one side; 1, 2, 2, 3</td></tr>
+<tr><td>S, SA, SB</td><td>1u × 2, 3, 4u</td><td>every perimeter square</td></tr>
+<tr><td>E, R, U</td><td>2×2, 4×2, 4×4u</td><td>every perimeter square</td></tr>
+<tr><td>F</td><td>quarter disc, radius 2u (on 2×2)</td><td>the two straight edges; one on the arc</td></tr>
+<tr><td>G</td><td>quarter ring, radii 2u – 2½u</td><td>three on the inner arc at 22.5°, 45°, 67.5°, facing the centre</td></tr>
+<tr><td>V</td><td>quarter disc, radius 4u (on 4×4)</td><td>three per straight edge; three on the arc at 22.5°, 45°, 67.5°</td></tr>
+</table>
+<p>The round parts put sockets on an arc, normal to it, at fixed angles, so curved tiles still clip to
+square ones along their straight edges.</p>

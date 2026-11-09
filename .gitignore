@@ -16,3 +16,5 @@ __pycache__/
 /3mf/
 /.pytest_cache/
 docs/*.3mf
+reference/*
+!reference/README.html
