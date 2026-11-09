@@ -13,7 +13,7 @@ tile size="2x2" seed=1 {
             pin top=waterBedHeight at=lake   // the bed, written last so it wins
             stones none
         }
-        scatter in=land per-square="1.5..2" gap=1.5 {
+        scatter in=land perSquare="1.5..2" gap=1.5 {
             rock
         }
         grass in=land bare="15%"

@@ -302,11 +302,11 @@ fn old_words_say_what_replaced_them() {
 
 #[test]
 fn words_keep_their_numbers_and_numbers_are_accepted() {
-    let e = first("tile { stack { cliff { stone-size massive } } }");
-    let w = e.value("stone-size").unwrap().word().unwrap();
-    assert_eq!((w.word, w.sets), ("massive", &[("stone-size", 1.35)][..]));
-    let e = first("tile { stack { cliff { stone-size \"135%\" } } }");
-    let n = e.value("stone-size").unwrap().num().unwrap();
+    let e = first("tile { stack { cliff { stoneSize massive } } }");
+    let w = e.value("stoneSize").unwrap().word().unwrap();
+    assert_eq!((w.word, w.sets), ("massive", &[("stoneSize", 1.35)][..]));
+    let e = first("tile { stack { cliff { stoneSize \"135%\" } } }");
+    let n = e.value("stoneSize").unwrap().num().unwrap();
     assert!((n.bounds(&none).unwrap().0 - 1.35).abs() < 1e-12);
     // Weights instead of a word.
     let e = first("tile { stack { cliff { rock columns=50 blocks=50 } } }");
@@ -342,6 +342,34 @@ fn branch_knobs_are_for_parts_files_only() {
         "tile { stack { tree { debug attractors=#true } } }",
         "dt::unknown-control",
         "--show attractors",
+    );
+}
+
+#[test]
+fn an_old_hyphenated_control_name_gives_the_camel_case_one() {
+    for (old, new) in dt_doc::elements::OLD_CONTROL_NAMES {
+        assert!(!new.contains('-') && new.chars().any(char::is_uppercase));
+        assert_eq!(old.replace('-', "").to_lowercase(), new.to_lowercase());
+    }
+    assert_fails(
+        "tile { stack { scatter per-square=3 { rock } } }",
+        "dt::unknown-control",
+        "write `perSquare`",
+    );
+    assert_fails(
+        "tile { stack { cliff { stone-size massive } } }",
+        "dt::unknown-control",
+        "write `stoneSize`",
+    );
+    assert_fails(
+        "tile { stack { tree { crown clump-size=6 } } }",
+        "dt::unknown-control",
+        "write `clumpSize`",
+    );
+    assert_fails(
+        "tile { stack { dirt bump-size=14 } }",
+        "dt::unknown-control",
+        "write `bumpSize`",
     );
 }
 
@@ -487,7 +515,7 @@ fn a_thing_is_one() {
         "scatter count=… { tree }",
     );
     assert_fails(
-        "tile { stack { rock per-square=3 } }",
+        "tile { stack { rock perSquare=3 } }",
         "dt::unknown-control",
         "a scatter's job",
     );
@@ -501,7 +529,7 @@ fn a_thing_is_one() {
 #[test]
 fn scatter_owns_placement_and_mixes_by_weight() {
     let e = first(
-        "tile { stack { scatter per-square=6 mostly=small { boulder size=\"2..8\" weight=2; pebble } } }",
+        "tile { stack { scatter perSquare=6 mostly=small { boulder size=\"2..8\" weight=2; pebble } } }",
     );
     assert_eq!(e.children.len(), 2);
     assert_eq!(e.children[0].place.weight.as_ref().unwrap().value, 2.0);
@@ -536,7 +564,7 @@ fn scatter_rules() {
             "for more than one",
         ),
         (
-            "tile { stack { scatter count=3 per-square=2 { rock } } }",
+            "tile { stack { scatter count=3 perSquare=2 { rock } } }",
             "both say how many",
         ),
         (

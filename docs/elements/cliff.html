@@ -74,16 +74,16 @@
         dirt top=dirtEdgeHeight {
             pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
             pin top=dirtEdgeHeight at=edges             // the rim stays at the standard edge height
-            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
         }
         cliff top="dirtEdgeHeight + 35" at=crag {   // or leave top out: the library's 35 mm
             rock mixed                  // or: columns, blocks, slabs
-            stone-size massive          // or: rubble, broken
+            stoneSize massive          // or: rubble, broken
             shattered patches=3 width="5..10"
         }
         dirt top="bottom + [0.6 .. 1.2]" at=crag    // the film on its top
-        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
-        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
+        scatter against=cliff perSquare=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
     }
 }</code></pre>
 <p>A wide band makes a jagged crest: <code>cliff top="dirtEdgeHeight + [28 .. 42]" at=crag</code> has stone tops anywhere from 28 to 42 mm. A <code>pin</code> holds the band to a height at a place. A mound or a spire is a few lumps, each region a different shape and each pinned to a wide band (8 to 15 mm) that overlaps the next one's, so the stones land at their own heights and the steps read as rough crags; concentric circles with narrow bands make a wedding cake. A cliff steps to a pin; write <code>slope DEG</code> in its block to let the band ease between pins, which a stone only follows as far as it can lean.</p>
@@ -107,7 +107,7 @@
 <tr id="c-rock-slabs"><td><code>rock slabs</code></td><td>number</td><td>—</td><td>weight of thin tilted slabs</td></tr>
 <tr id="c-rock-odd"><td><code>rock odd</code></td><td>number</td><td>—</td><td>weight of irregular lumps</td></tr>
 <tr id="c-rock-monoliths"><td><code>rock monoliths</code></td><td>number</td><td>—</td><td>weight of ground-to-top stones</td></tr>
-<tr id="c-stone-size"><td><code>stone-size</code></td><td>percent</td><td><code>rubble</code></td><td>small broken stones, or big masses<dl class="words"><dt><code>rubble</code></dt><dd>small broken stones</dd><dt><code>broken</code></dt><dd>between the two (provisional)</dd><dt><code>massive</code></dt><dd>big masses: 1.35x rubble size</dd></dl></td></tr>
+<tr id="c-stoneSize"><td><code>stoneSize</code></td><td>percent</td><td><code>rubble</code></td><td>small broken stones, or big masses<dl class="words"><dt><code>rubble</code></dt><dd>small broken stones</dd><dt><code>broken</code></dt><dd>between the two (provisional)</dd><dt><code>massive</code></dt><dd>big masses: 1.35x rubble size</dd></dl></td></tr>
 <tr id="c-ledges"><td><code>ledges</code></td><td>count, 0 to 2</td><td><code>1</code></td><td>steps down the free faces: shelves a miniature can stand on</td></tr>
 <tr id="c-ledges-height"><td><code>ledges height</code></td><td>percent</td><td>—</td><td>how far up the shelf is, as a share of the cliff</td></tr>
 <tr id="c-shattered"><td><code>shattered</code></td><td>group</td><td>—</td><td>broken patches with more cracks and scree</td></tr>

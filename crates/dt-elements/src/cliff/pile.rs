@@ -28,7 +28,7 @@ const ROCKS_PER_SQUARE: usize = 400;
 #[derive(Clone, Debug)]
 pub(super) struct Look {
     pub weights: Option<[f64; 5]>,
-    /// stone-size multiplier relative to the form's own (massive = 1).
+    /// stoneSize multiplier relative to the form's own (massive = 1).
     pub size: f64,
     pub patches: Option<f64>,
     pub patch_width: Option<Span>,

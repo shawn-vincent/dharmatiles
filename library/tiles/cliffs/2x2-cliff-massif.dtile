@@ -12,18 +12,18 @@ tile size="2x2" seed=1 {
         dirt top=dirtEdgeHeight {
             pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
             pin top=dirtEdgeHeight at=edges
-            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
         }
 
         cliff top="dirtEdgeHeight + [8 .. 22]" at=crag {
             pin top="dirtEdgeHeight + [18 .. 35]" at=lump2
             rock mixed
-            stone-size massive
+            stoneSize massive
             shattered patches=3 width="5..10"
         }
         dirt top="bottom + [0.6 .. 1.2]" at=lump2
 
-        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
-        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
+        scatter against=cliff perSquare=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
     }
 }

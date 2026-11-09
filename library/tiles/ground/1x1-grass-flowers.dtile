@@ -8,7 +8,7 @@ tile size="1x1" seed=7 {
     stack {
         base
         dirt
-        flowers per-square=4 petals=5 radius=2.5 centre=1.5 stem=1 dome=1 petal=0.5
+        flowers perSquare=4 petals=5 radius=2.5 centre=1.5 stem=1 dome=1 petal=0.5
         lawn
     }
 }

@@ -65,7 +65,7 @@ fn an_unknown_control_names_the_ones_there_are() {
     assert_eq!(e[0].code, "dt::unknown-control");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert!(
-        e[0].help.as_deref().unwrap().contains("bump-size"),
+        e[0].help.as_deref().unwrap().contains("bumpSize"),
         "{:?}",
         e[0].help
     );

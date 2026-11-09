@@ -180,7 +180,7 @@ fn trees_part_keeps_expert_branching() {
         ("target", 0.25),
         ("balance", 0.8),
         ("exponent", 3.0),
-        ("min-radius", 0.9),
+        ("minRadius", 0.9),
     ] {
         assert!((num(tree.sub("branch", k)) - v).abs() < 1e-12, "{k}");
     }
@@ -220,7 +220,7 @@ fn grass_tree_keeps_every_control() {
     // The words keep the numbers they stand for.
     let shape = tree.sub("crown", "shape").unwrap().word().unwrap();
     assert_eq!(shape.word, "round");
-    assert_eq!(shape.sets[1], ("top-curve", 1.4));
+    assert_eq!(shape.sets[1], ("topCurve", 1.4));
     let branching = tree.sub("crown", "branching").unwrap().word().unwrap();
     assert_eq!(branching.word, "normal");
     assert_eq!(branching.sets[0], ("split", 30.0));
@@ -300,7 +300,7 @@ fn cliff_run_keeps_every_control() {
     // GRIT_PER_SQUARE 45, GRIT_D_MM (1, 2.2), GRIT_BURY (0.2, 0.5): on the dirt.
     let grit = &dirt.children[0];
     assert!(grit.is_scatter());
-    assert_eq!(num(grit.value("per-square")), 45.0);
+    assert_eq!(num(grit.value("perSquare")), 45.0);
     let pebble = &grit.children[0];
     assert_eq!(pebble.what.value, "pebble");
     assert!(close(range(pebble.value("size")), (1.0, 2.2)));
@@ -327,8 +327,8 @@ fn cliff_run_keeps_every_control() {
         ]
     );
     assert_eq!(
-        cliff.value("stone-size").unwrap().word().unwrap().sets,
-        &[("stone-size", 1.35)]
+        cliff.value("stoneSize").unwrap().word().unwrap().sets,
+        &[("stoneSize", 1.35)]
     );
     assert_eq!(num(cliff.sub("shattered", "patches")), 3.0);
     assert!(close(range(cliff.sub("shattered", "width")), (5.0, 10.0)));
@@ -336,7 +336,7 @@ fn cliff_run_keeps_every_control() {
     // SCREE_PER_SQUARE 55, SCREE_D_MM (1, 6) ** 2, SCREE_REACH_MM 4
     let stones = &t.stack[3];
     assert_eq!(stones.place.against.as_ref().unwrap().value, "cliff");
-    assert_eq!(num(stones.value("per-square")), 55.0);
+    assert_eq!(num(stones.value("perSquare")), 55.0);
     assert_eq!(num(stones.value("reach")), 4.0);
     let stone = &stones.children[0];
     assert!(close(range(stone.value("size")), (1.0, 6.0)));
@@ -349,7 +349,7 @@ fn cliff_run_keeps_every_control() {
     // SCREE_BLOCKS 2.5, SCREE_BLOCK_MM (4.5, 8)
     let boulders = &t.stack[4];
     assert_eq!(boulders.path, ["tile", "stack", "scatter#2"]);
-    assert_eq!(num(boulders.value("per-square")), 2.5);
+    assert_eq!(num(boulders.value("perSquare")), 2.5);
     assert!(close(range(boulders.children[0].value("size")), (4.5, 8.0)));
 }
 

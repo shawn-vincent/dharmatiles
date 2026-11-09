@@ -106,7 +106,7 @@ fn elements_dirt_lists_its_controls() {
     assert!(text.starts_with("dirt: "), "{text}");
     let size = text
         .lines()
-        .find(|l| l.trim_start().starts_with("bump-size "))
+        .find(|l| l.trim_start().starts_with("bumpSize "))
         .unwrap();
     assert!(size.contains("mm, 5 to 70"), "{size}");
     // the old forms are gone
@@ -147,7 +147,7 @@ fn elements_dirt_json_has_units_limits_defaults_and_subs() {
     assert!(v["built"].is_boolean());
     let controls = v["controls"].as_array().unwrap();
     let find = |n: &str| controls.iter().find(|c| c["name"] == n).unwrap();
-    let size = find("bump-size");
+    let size = find("bumpSize");
     assert_eq!(size["unit"], "mm");
     assert_eq!(size["limits"], serde_json::json!([5.0, 70.0]));
     assert!(

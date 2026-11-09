@@ -23,7 +23,7 @@ pub(super) enum Parent {
 }
 
 /// Controls asked of a thing that are a scatter's job.
-const SCATTER_ONLY: [&str; 6] = ["count", "per-square", "spread", "reach", "clumps", "gap"];
+const SCATTER_ONLY: [&str; 6] = ["count", "perSquare", "spread", "reach", "clumps", "gap"];
 
 /// What a name on an entry resolved to.
 enum Target {
@@ -789,6 +789,10 @@ impl Decoder<'_> {
             };
             let Some(sub) = k.and_then(|k| k.subs.iter().find(|s| s.name == sk.value)) else {
                 let help = match k {
+                    _ if crate::elements::camel_of(&sk.value).is_some() => format!(
+                        "control names are camelCase: write `{}`",
+                        crate::elements::camel_of(&sk.value).unwrap_or_default()
+                    ),
                     _ if renamed(&sk.value).is_some() => {
                         renamed(&sk.value).unwrap_or_default().to_owned()
                     }
@@ -890,6 +894,8 @@ impl Decoder<'_> {
             ))
         } else if name == "debug" {
             Some("debug switches are not tile controls; `dharmatiles build --show attractors` shows them".to_owned())
+        } else if let Some(new) = crate::elements::camel_of(name) {
+            Some(format!("control names are camelCase: write `{new}`"))
         } else if let Some(h) = renamed(name) {
             Some(h.to_owned())
         } else if let Some(g) = controls
@@ -1028,20 +1034,20 @@ impl Decoder<'_> {
     fn check_scatter(&mut self, entry: &Entry) {
         let span = entry.what.span;
         let count = entry.control("count");
-        let per = entry.control("per-square");
+        let per = entry.control("perSquare");
         match (count, per) {
             (None, None) => {
                 self.err("dt::scatter", span, "a scatter says how many", "no count")
-                    .help = Some("write `count=5` in total, or `per-square=6`".to_owned());
+                    .help = Some("write `count=5` in total, or `perSquare=6`".to_owned());
             }
             (Some(_), Some(p)) => {
                 self.err(
                     "dt::scatter",
                     p.name.span,
-                    "`count` and `per-square` both say how many",
+                    "`count` and `perSquare` both say how many",
                     "a second count",
                 )
-                .help = Some("keep one: `count` is a total, `per-square` a density".to_owned());
+                .help = Some("keep one: `count` is a total, `perSquare` a density".to_owned());
             }
             (Some(c), None) => {
                 if let Some(Spanned {

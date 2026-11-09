@@ -45,7 +45,7 @@ fn mound(film: bool) -> String {
             pin top="dirtEdgeHeight + [19 .. 28]" at=lump3
             pin top="dirtEdgeHeight + [29 .. 34]" at=lump4
             rock mixed
-            stone-size broken
+            stoneSize broken
         }}
 {}    }}
 }}
@@ -139,7 +139,7 @@ fn table_seeded(film: bool, seed: u32) -> String {
         }}
         cliff top="dirtEdgeHeight + 14" at=crag {{
             rock blocks
-            stone-size massive
+            stoneSize massive
         }}
 {}    }}
 }}
@@ -447,8 +447,8 @@ fn every_old_cliff_form_migrates_to_a_tile_that_checks_clean() {
 #[test]
 fn the_ledges_and_the_shattered_controls_still_parse() {
     let text = mound(false).replace(
-        "stone-size broken",
-        "stone-size broken\n            ledges 2\n            shattered patches=2 width=\"5..10\"",
+        "stoneSize broken",
+        "stoneSize broken\n            ledges 2\n            shattered patches=2 width=\"5..10\"",
     );
     check(&mem(&text), "t.dtile", &Options::default()).unwrap();
 }

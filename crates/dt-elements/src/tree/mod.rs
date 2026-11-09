@@ -159,8 +159,8 @@ const EXPONENT: Knob = Knob {
     word: "crown/branching.exponent",
 };
 const MIN_RADIUS: Knob = Knob {
-    expert: "branch/min-radius",
-    word: "crown/branching.min-radius",
+    expert: "branch/minRadius",
+    word: "crown/branching.minRadius",
 };
 
 /// All six, for the schema test.
@@ -196,7 +196,7 @@ impl Tree {
         p.trunk = s.span_or("trunk/height", p.trunk)?;
         p.trunk_width = s.span("trunk/width")?.or(p.trunk_width);
         p.width = s.span_or("crown/width", p.width)?;
-        p.clump_size = s.span_or("crown/clump-size", p.clump_size)?;
+        p.clump_size = s.span_or("crown/clumpSize", p.clump_size)?;
         p.leaf_length = s.span_or("leaf/length", p.leaf_length)?;
         p.leaf_width = s.span_or("leaf/width", p.leaf_width)?;
         if let Some(v) = s.number("crown/clumps")? {
@@ -206,11 +206,10 @@ impl Tree {
             }
         }
         let sh = &mut p.shape;
-        sh.top_pointiness = s.number_or("crown/shape.top-pointiness", sh.top_pointiness)?;
-        sh.top_curve = s.number_or("crown/shape.top-curve", sh.top_curve)?;
-        sh.bottom_pointiness =
-            s.number_or("crown/shape.bottom-pointiness", sh.bottom_pointiness)?;
-        sh.bottom_curve = s.number_or("crown/shape.bottom-curve", sh.bottom_curve)?;
+        sh.top_pointiness = s.number_or("crown/shape.topPointiness", sh.top_pointiness)?;
+        sh.top_curve = s.number_or("crown/shape.topCurve", sh.top_curve)?;
+        sh.bottom_pointiness = s.number_or("crown/shape.bottomPointiness", sh.bottom_pointiness)?;
+        sh.bottom_curve = s.number_or("crown/shape.bottomCurve", sh.bottom_curve)?;
         // the branching word's numbers, and the expert `branch/…` knobs
         // over them (a parts file's)
         let knob = |k: &Knob, now: f64| -> Result<f64, LookError> {

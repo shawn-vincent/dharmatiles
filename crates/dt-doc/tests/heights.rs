@@ -295,7 +295,7 @@ fn a_thing_stands_at_a_literal_point_or_a_name_and_a_body_has_a_name() {
 #[test]
 fn a_cliffs_top_is_its_band() {
     let doc = snippet(&tile(
-        "stack { cliff top=\"dirtEdgeHeight + 35\"\n cliff stone-size=massive }",
+        "stack { cliff top=\"dirtEdgeHeight + 35\"\n cliff stoneSize=massive }",
     ));
     let t = doc.tile().unwrap();
     assert!(t.stack[0].top.is_some());

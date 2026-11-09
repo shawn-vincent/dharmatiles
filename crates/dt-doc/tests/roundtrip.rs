@@ -141,20 +141,20 @@ fn insertion_goes_on_the_line_as_a_property() {
     assert!(tree.place.at.is_some());
 
     // On a line with only a name and a comment.
-    let new = insert_property(text, &["tile", "stack", "dirt"], "bump-size", 20).unwrap();
+    let new = insert_property(text, &["tile", "stack", "dirt"], "bumpSize", 20).unwrap();
     assert!(
         changed_lines(text, &new)[0]
             .2
-            .starts_with("        dirt clods=none stones=none bump-size=20")
+            .starts_with("        dirt clods=none stones=none bumpSize=20")
     );
     redecode(name, &new);
 
     // Into a group line.
-    let new = insert_property(text, &["tile", "stack", "tree", "crown"], "clump-size", 6).unwrap();
+    let new = insert_property(text, &["tile", "stack", "tree", "crown"], "clumpSize", 6).unwrap();
     assert!(
         changed_lines(text, &new)[0]
             .2
-            .ends_with("branching=normal clump-size=6")
+            .ends_with("branching=normal clumpSize=6")
     );
     redecode(name, &new);
 
@@ -175,10 +175,10 @@ fn insertion_into_the_second_of_two_same_named_entries() {
     let doc = redecode(name, text);
     let second = &doc.tile().unwrap().stack[1];
     let path: Vec<&str> = second.path.iter().map(String::as_str).collect();
-    let new = set_control(text, &path, "bump-size", 30).unwrap();
+    let new = set_control(text, &path, "bumpSize", 30).unwrap();
     let lines = changed_lines(text, &new);
     assert_eq!(lines.len(), 1);
-    assert!(lines[0].2.contains("dirt along=trail bump-size=30"));
+    assert!(lines[0].2.contains("dirt along=trail bumpSize=30"));
     redecode(name, &new);
 }
 
@@ -220,13 +220,13 @@ fn removal_in_either_form() {
 fn edits_compose() {
     let (name, text) = CLIFF_RUN;
     let a = set_control(text, &["tile", "stack", "cliff"], "ledges", 2).unwrap();
-    let b = set_control(&a, &["tile", "stack", "scatter#2"], "per-square", 3).unwrap();
+    let b = set_control(&a, &["tile", "stack", "scatter#2"], "perSquare", 3).unwrap();
     let c = set_control(&b, &["tile", "stack", "scatter", "stone"], "mostly", "even").unwrap();
     let lines = changed_lines(text, &c);
     assert_eq!(lines.len(), 3);
     assert!(lines[0].2.contains("ledges=2"), "{}", lines[0].2);
     assert!(lines[1].2.contains("{ stone size=\"1..6\" mostly=even }"));
-    assert!(lines[2].2.contains("per-square=3 { boulder"));
+    assert!(lines[2].2.contains("perSquare=3 { boulder"));
     // The multi-line `about` string survives.
     assert!(c.contains("        Rock band against the north edge. Both ends finish in the\n"));
     redecode(name, &c);

@@ -24,10 +24,10 @@
 <article class="doc">
 <h2 id="use">Writing it</h2>
 <pre><code>scatter in=pool count=2 { rock size="6..10" }                 // two rocks in the pool
-scatter against=cliff per-square=55 reach=4 { stone }         // scree at the cliff's foot
-scatter per-square=3 { stone weight=3; boulder }              // a mix, three stones to a boulder
-dirt { scatter per-square=40 { pebble } }                     // inside a surface: lands on it</code></pre>
-<p>A scatter needs exactly one of <code>count</code> and <code>per-square</code>. <code>reach</code> needs <code>against=</code>; <code>spread</code> needs <code>at=</code>. With several children, each child's <code>weight=</code> is its share of the mix (default: equal). Every scattered thing keeps inside the tile and clear of other solids: it is nudged inward, never clipped.</p>
+scatter against=cliff perSquare=55 reach=4 { stone }         // scree at the cliff's foot
+scatter perSquare=3 { stone weight=3; boulder }              // a mix, three stones to a boulder
+dirt { scatter perSquare=40 { pebble } }                     // inside a surface: lands on it</code></pre>
+<p>A scatter needs exactly one of <code>count</code> and <code>perSquare</code>. <code>reach</code> needs <code>against=</code>; <code>spread</code> needs <code>at=</code>. With several children, each child's <code>weight=</code> is its share of the mix (default: equal). Every scattered thing keeps inside the tile and clear of other solids: it is nudged inward, never clipped.</p>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference scatter -->
 <div class="facts">
@@ -40,7 +40,7 @@ dirt { scatter per-square=40 { pebble } }                     // inside a surfac
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr id="c-count"><td><code>count</code></td><td>count, 0 to 10000, or a range</td><td>—</td><td>how many, in total</td></tr>
-<tr id="c-per-square"><td><code>per-square</code></td><td>per square, a number or a range</td><td>—</td><td>how many per square of the area, or of length along a line</td></tr>
+<tr id="c-perSquare"><td><code>perSquare</code></td><td>per square, a number or a range</td><td>—</td><td>how many per square of the area, or of length along a line</td></tr>
 <tr id="c-spread"><td><code>spread</code></td><td>mm</td><td>—</td><td>with at=: a cluster within this distance of it <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
 <tr id="c-reach"><td><code>reach</code></td><td>mm</td><td>—</td><td>with against=: how far out from the foot</td></tr>
 <tr id="c-clumps"><td><code>clumps</code></td><td>per square</td><td>—</td><td>gathers them into clumps; default spread evenly <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>

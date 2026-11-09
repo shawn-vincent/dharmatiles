@@ -40,7 +40,7 @@ pub const SLOPE_DEG: f64 = 24.0;
 /// The most a hill spans, mm at the reference square: a band wider than
 /// this (a bank drawn between two places) is mostly the smooth surface.
 const HILL_MM: f64 = 4.0;
-/// The default `bump-size`: a broad scale, mm.
+/// The default `bumpSize`: a broad scale, mm.
 const SIZE_MM: f64 = 14.0;
 /// The hills' second noise: its size as a share of the first, and its weight.
 const MID_RATIO: f64 = 5.0 / 14.0;
@@ -164,7 +164,7 @@ impl Dirt {
         d
     }
 
-    /// From controls: `bump-size`, `clods` (a word whose number the
+    /// From controls: `bumpSize`, `clods` (a word whose number the
     /// evaluator passes as `clods.density`) and `stones`.
     ///
     /// # Errors
@@ -174,7 +174,7 @@ impl Dirt {
         let mut size_mm = SIZE_MM;
         let s = Settings::new(controls);
         clod_density = s.number_or("clods.density", clod_density)?;
-        size_mm = s.number_or("bump-size", size_mm)?;
+        size_mm = s.number_or("bumpSize", size_mm)?;
         let mut stones = STONES_2X2;
         // the numbers behind the `stones` word
         #[allow(clippy::cast_possible_truncation)]

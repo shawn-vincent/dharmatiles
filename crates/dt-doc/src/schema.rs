@@ -308,7 +308,7 @@ pub fn check(
             return refuse(
                 format!("`{owner} {name}` is a count of whole things"),
                 "not whole",
-                Some("per-square densities may be fractions; counts can't".to_owned()),
+                Some("perSquare densities may be fractions; counts can't".to_owned()),
             );
         }
         if let Some(l) = limits
@@ -560,8 +560,8 @@ mod tests {
 
     #[test]
     fn suggestions() {
-        let names = ["per-square", "clumps", "height", "branching"];
-        assert_eq!(did_you_mean("per-sqare", names), Some("per-square"));
+        let names = ["perSquare", "clumps", "height", "branching"];
+        assert_eq!(did_you_mean("per-sqare", names), Some("perSquare"));
         assert_eq!(did_you_mean("hieght", names), Some("height"));
         assert_eq!(did_you_mean("wobble", names), None);
     }

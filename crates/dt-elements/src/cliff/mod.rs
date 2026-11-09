@@ -105,11 +105,11 @@ impl Cliff {
         };
         let mut w = [f64::NAN; 5];
         let s = Settings::new(controls);
-        // a word stands for its number (`stone-size.stone-size`: rubble 1,
+        // a word stands for its number (`stoneSize.stoneSize`: rubble 1,
         // broken 1.15, massive 1.35); a share under 1 sits between rubble
         // and massive
-        let share = match s.pick("stone-size")? {
-            Some(Pick::Word(_)) => Some(s.number("stone-size.stone-size")?.unwrap_or(1.0)),
+        let share = match s.pick("stoneSize")? {
+            Some(Pick::Word(_)) => Some(s.number("stoneSize.stoneSize")?.unwrap_or(1.0)),
             Some(Pick::Number(v)) => Some(v),
             None => None,
         };

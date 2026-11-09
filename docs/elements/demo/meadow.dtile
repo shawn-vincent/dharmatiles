@@ -6,7 +6,7 @@ tile size="2x2" seed=1 {
     stack {
         base
         dirt                                         // the ground, and the bare earth between the grass
-        scatter per-square=2 {                       // about 8 rocks on a 2×2
+        scatter perSquare=2 {                       // about 8 rocks on a 2×2
             rock size="2..10" shape=angular buried="30%"
         }
         lawn cover="80%"                             // grass over 80% of the ground; it grows round the rocks

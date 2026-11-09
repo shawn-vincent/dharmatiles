@@ -85,8 +85,8 @@ fn a_cliff_is_not_carved_again_for_its_boulders() {
     };
     let reused = edit(
         "lib:tiles/cliffs/1x1-cliff.dtile",
-        "per-square=2.5",
-        "per-square=3.5",
+        "perSquare=2.5",
+        "perSquare=3.5",
         &opts,
     );
     assert!(reused >= 3, "only {reused} steps reused");

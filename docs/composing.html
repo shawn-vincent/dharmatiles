@@ -56,7 +56,7 @@
 tile size="2x2" seed=1 {
     stack {
         dirt                                         // the ground, and the bare earth between the grass
-        scatter per-square=2 {                       // about 8 rocks on a 2×2
+        scatter perSquare=2 {                       // about 8 rocks on a 2×2
             rock size="2..10" shape=angular buried="30%"
         }
         lawn cover="80%"                             // grass over 80% of the ground; it grows round the rocks
@@ -76,7 +76,7 @@ tile size="2x2" seed=1 {
 <tr><td><code>at=</code></td><td>a point or range, in squares</td><td>anywhere</td><td>Where one thing stands. Footprints are kept inside the tile and clear of other solids.</td></tr>
 <tr><td><code>against=</code></td><td><code>cliff</code>, <code>wall</code>, <code>rock</code>, <code>tree</code></td><td>—</td><td>Scatters gather at the foot of that kind of solid.</td></tr>
 <tr><td>grass <code>cover</code></td><td>percent</td><td>100%</td><td>Share of the ground grassed over. A meadow uses about 80%.</td></tr>
-<tr><td>scatter <code>count</code> / <code>per-square</code></td><td>number</td><td>—</td><td>How many solids. The meadow uses 6–9 rocks on a 2×2.</td></tr>
+<tr><td>scatter <code>count</code> / <code>perSquare</code></td><td>number</td><td>—</td><td>How many solids. The meadow uses 6–9 rocks on a 2×2.</td></tr>
 <tr><td>rock <code>buried</code></td><td>percent</td><td>—</td><td>How much of each rock is under the ground.</td></tr>
 <tr><td><code>region</code></td><td><code>bounded-by</code> lines, <code>fill</code> points</td><td>—</td><td>Divides the tile, like a paint bucket: name the lines, drop fill points.</td></tr>
 </tbody></table></div>

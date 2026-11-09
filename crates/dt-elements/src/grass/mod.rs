@@ -130,7 +130,7 @@ impl Grass {
         g.clearings = s.number_or("clearings", g.clearings)?;
         g.cover = s.number_or("cover", g.cover)?;
         g.bare = s.number_or("bare", g.bare)?;
-        if let (Some(a), Some(b)) = (s.number("flow.meander-min")?, s.number("flow.meander-max")?) {
+        if let (Some(a), Some(b)) = (s.number("flow.meanderMin")?, s.number("flow.meanderMax")?) {
             g.meander = Span::new(a, b.max(a));
         }
         Ok(g)

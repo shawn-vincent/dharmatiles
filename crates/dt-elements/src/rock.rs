@@ -906,7 +906,7 @@ impl Scatter {
             things: Vec::new(),
         };
         s.count = set.span("count")?;
-        s.per_square = set.span_or("per-square", PER_SQUARE)?;
+        s.per_square = set.span_or("perSquare", PER_SQUARE)?;
         s.reach = set.number_or("reach", s.reach)?;
         s.gap = set.number_or("gap", s.gap)?;
         for ch in children {
@@ -922,7 +922,7 @@ impl Scatter {
         if s.things.is_empty() {
             return Err(LookError::general(
                 "a scatter needs a child to say what it scatters",
-                "write `scatter per-square=2 { rock }`",
+                "write `scatter perSquare=2 { rock }`",
             ));
         }
         Ok(s)

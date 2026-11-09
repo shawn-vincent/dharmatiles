@@ -6,17 +6,17 @@ dt::choice
  27 │             rock mixd
     ·                  ──┬─
     ·                    ╰── not one of its words
- 28 │             stone-size "135"
+ 28 │             stoneSize "135"
     ╰────
   help: did you mean `mixed`?
 dt::percent
 
-  × `cliff stone-size` is a share, written as a percent
-    ╭─[library/tiles/test/2x1-cliff-full.dtile:28:24]
+  × `cliff stoneSize` is a share, written as a percent
+    ╭─[library/tiles/test/2x1-cliff-full.dtile:28:23]
  27 │             rock mixd
- 28 │             stone-size "135"
-    ·                        ──┬──
-    ·                          ╰── no %
+ 28 │             stoneSize "135"
+    ·                       ──┬──
+    ·                         ╰── no %
  29 │             shattered patches=3 width="5..10"
     ╰────
-  help: write `stone-size="135%"`
+  help: write `stoneSize="135%"`

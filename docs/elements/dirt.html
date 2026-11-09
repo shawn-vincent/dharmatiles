@@ -50,11 +50,11 @@
 <p>The dirt texture is also the exposed ground in every other lab: grass stands on it, water's shore and banks use it, and rocks sit in it.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>The plainest tile is dirt on its own: the library's top, hills spanning 1 mm over the ground height. <code>top</code> sets how high it may be, <code>bump-size</code> how wide its hills are, and <code>clods</code> how cloddy the soil is:</p>
+<p>The plainest tile is dirt on its own: the library's top, hills spanning 1 mm over the ground height. <code>top</code> sets how high it may be, <code>bumpSize</code> how wide its hills are, and <code>clods</code> how cloddy the soil is:</p>
 <pre><code>tile size="1x1" seed=13 {
     stack {
         base
-        dirt top="[groundHeight .. groundHeight + 2.5]" bump-size=14 {   // hills up to 2.5 mm, about 14 mm across
+        dirt top="[groundHeight .. groundHeight + 2.5]" bumpSize=14 {   // hills up to 2.5 mm, about 14 mm across
             clods some                  // or: none, few, many
         }
     }
@@ -73,7 +73,7 @@
 <pre><code>dirt top=dirtEdgeHeight {
     pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
     pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
-    scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+    scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
 }
 dirt top="bottom + [0.6 .. 1.2]" at=crag     // on the cliff's top, over rock under 35°</code></pre>
 <p><code>stones none</code> leaves out the few larger stones dirt beds in by default, for a tile that places its own rocks.</p>
@@ -90,7 +90,7 @@ dirt top="bottom + [0.6 .. 1.2]" at=crag     // on the cliff's top, over rock un
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-bump-size"><td><code>bump-size</code></td><td>mm, 5 to 70</td><td>—</td><td>how wide the hills are in its band: broad and rolling, or choppy</td></tr>
+<tr id="c-bumpSize"><td><code>bumpSize</code></td><td>mm, 5 to 70</td><td>—</td><td>how wide the hills are in its band: broad and rolling, or choppy</td></tr>
 <tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>none</code></dt><dd>no clods (with <code>stones=none</code>: plain, untextured dirt)</dd><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>clods here and there</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
 <tr id="c-stones"><td><code>stones</code></td><td>word</td><td><code>some</code></td><td>a few stones bedded in the dirt<dl class="words"><dt><code>none</code></dt><dd>bare dirt, no stones</dd><dt><code>some</code></dt><dd>a few bedded stones</dd><dt><code>many</code></dt><dd>a stony patch (provisional)</dd></dl></td></tr>
 </tbody></table></div>
@@ -161,7 +161,7 @@ dirt top="bottom + [0.6 .. 1.2]" at=crag     // on the cliff's top, over rock un
 <ul>
   <li><strong>Tile.</strong> Any size in 35 mm squares.</li>
   <li><strong>Edge height.</strong> The library pins the first dirt to <code>dirtEdgeHeight</code>, 3.4 mm above the base, at every tile edge (<code>library/parts/edges.dtile</code>); a pin the tile writes later wins where they overlap.</li>
-  <li><strong>Hills in a band.</strong> The default top is <code>[groundHeight .. groundHeight + 1]</code>: broad hills (<code>bump-size</code>) spanning that band, easing down to the edge pin at the dirt's slope, 24° unless it says otherwise. Where the band is wide (a bank drawn between a bed and the land) the dirt takes the smoothest surface the band allows.</li>
+  <li><strong>Hills in a band.</strong> The default top is <code>[groundHeight .. groundHeight + 1]</code>: broad hills (<code>bumpSize</code>) spanning that band, easing down to the edge pin at the dirt's slope, 24° unless it says otherwise. Where the band is wide (a bank drawn between a bed and the land) the dirt takes the smoothest surface the band allows.</li>
   <li><strong>Pebbles and stones.</strong> Per square: 45–75 small pebbles (0.5–1.5 mm) and 8–13 medium (2.2–4.5 mm). On a 2×2 tile: 4–7 larger stones (4.5–7.5 mm) in 4–7 loose clusters.</li>
   <li><strong>Flat ground.</strong> A single height for <code>top</code> is flat, exactly: <code>dirt top=groundHeight</code>.</li>
 </ul>

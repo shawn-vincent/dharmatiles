@@ -44,10 +44,10 @@ CI is off. Run the tests locally on this Mac only; do not wait on or re-enable G
 | Level | Name | Size | Key symbols |
 |---|---|---|---|
 | Full printed output | **tile** | cols × rows × square_mm | `tile` node, `Frame`, `out/` |
-| One 35 mm DungeonBlocks unit | **square** | 35 × 35 mm (or 25.4 for OL) | `cols`, `rows`, `per-square` |
+| One 35 mm DungeonBlocks unit | **square** | 35 × 35 mm (or 25.4 for OL) | `cols`, `rows`, `perSquare` |
 | One heightmap subdivision | **cell** | square_mm / cells_per_square | `Frame::step_mm`, `Field` |
 
-**Never call a 35 mm unit a "tile".** Densities are `per-square`.
+**Never call a 35 mm unit a "tile".** Densities are `perSquare`.
 
 ## Architecture
 

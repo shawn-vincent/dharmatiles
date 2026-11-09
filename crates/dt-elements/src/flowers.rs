@@ -59,7 +59,7 @@ impl Flowers {
             petal: 0.5,
         };
         let s = Settings::new(controls);
-        f.per_square = s.number_or("per-square", f.per_square)?;
+        f.per_square = s.number_or("perSquare", f.per_square)?;
         if let Some(n) = s.number("petals")? {
             f.petals = n.round() as usize;
         }

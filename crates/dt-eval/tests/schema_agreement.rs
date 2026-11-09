@@ -50,7 +50,7 @@ fn words_that_stand_for_a_number_carry_it() {
         assert!(w.sets.iter().any(|(n, _)| *n == "height"), "{}", w.word);
     }
     let cliff = dt_doc::schema::element("cliff").unwrap();
-    for w in cliff.control("stone-size").unwrap().words {
-        assert!(w.sets.iter().any(|(n, _)| *n == "stone-size"), "{}", w.word);
+    for w in cliff.control("stoneSize").unwrap().words {
+        assert!(w.sets.iter().any(|(n, _)| *n == "stoneSize"), "{}", w.word);
     }
 }

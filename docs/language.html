@@ -98,7 +98,7 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <tr><td>Size</td><td>mm at the DungeonBlocks reference: <code>thickness 7</code></td><td>Scales like a photocopy</td></tr>
 <tr><td>Level</td><td>a named level, mm above the tile base, or an expression: <code>level=foot</code>, <code>level="ground - 1"</code></td><td>Scales like a photocopy</td></tr>
 <tr><td>Position</td><td>squares from the south-west corner: <code>at="0.65,1"</code></td><td>Follows the square</td></tr>
-<tr><td>Density</td><td>per square: <code>per-square=45</code></td><td>Follows the square</td></tr>
+<tr><td>Density</td><td>per square: <code>perSquare=45</code></td><td>Follows the square</td></tr>
 <tr><td>Angle</td><td>degrees: <code>branch split=34</code></td><td>Unchanged</td></tr>
 <tr><td>Share</td><td>percent, quoted: <code>cover="85%"</code></td><td>Unchanged</td></tr>
 <tr><td>Count, word, switch</td><td><code>count=5</code>, <code>rock mixed</code>, <code>#true</code></td><td>Unchanged</td></tr>
@@ -242,7 +242,7 @@ region knoll { bounded-by foot; fill center }             // the paint bucket, a
 <thead><tr><th>Control</th><th>Takes</th><th>What you get</th></tr></thead>
 <tbody>
 <tr><td><code>count</code></td><td>number</td><td>How many, in total.</td></tr>
-<tr><td><code>per-square</code></td><td>number</td><td>How many per square of the area, or per square of length along a line.</td></tr>
+<tr><td><code>perSquare</code></td><td>number</td><td>How many per square of the area, or per square of length along a line.</td></tr>
 <tr><td><code>at</code> + <code>spread</code></td><td>point; mm</td><td>A cluster round that point, within this distance.</td></tr>
 <tr><td><code>reach</code></td><td>mm</td><td>With <code>against=</code>: how far out from the foot.</td></tr>
 <tr><td><code>clumps</code></td><td>per square</td><td>Gathers them into clumps. Default: spread evenly.</td></tr>
@@ -250,7 +250,7 @@ region knoll { bounded-by foot; fill center }             // the paint bucket, a
 <tr><td><code>mostly</code></td><td><code>small</code> / <code>even</code> / <code>large</code></td><td>Skews every child's size range.</td></tr>
 <tr><td>child <code>weight=</code></td><td>number</td><td>Share of the mix when there are several children. Default: equal.</td></tr>
 </tbody></table></div>
-<p>A scatter must have exactly one of <code>count</code> and <code>per-square</code>; <code>spread</code> needs <code>at=</code>, and <code>reach</code> needs <code>against=</code>. A scatter inside a surface (<code>dirt { scatter … }</code>) lands on that surface.</p>
+<p>A scatter must have exactly one of <code>count</code> and <code>perSquare</code>; <code>spread</code> needs <code>at=</code>, and <code>reach</code> needs <code>against=</code>. A scatter inside a surface (<code>dirt { scatter … }</code>) lands on that surface.</p>
 
 <h3 id="mostly">mostly=</h3>
 <p><code>mostly=</code> skews a range draw as <code>lo + (hi − lo) × u<sup>k</sup></code>: <code>small</code> is k = 2 , <code>even</code> is k = 1, <code>large</code> is k = ½.</p>
@@ -303,7 +303,7 @@ define oak {
         tree height=height {
             trunk height=18
             crown width=44 clumps=60 shape=wide
-            branch split=34 eagerness=0.6 target=0.25 balance=0.8 exponent=3 min-radius=0.9
+            branch split=34 eagerness=0.6 target=0.25 balance=0.8 exponent=3 minRadius=0.9
         }
     }
 }</code></pre>
@@ -315,7 +315,7 @@ define oak {
 
   × `1..6` must be quoted
     ╭─[library/tiles/cliffs/2x1-cliff.dtile:27:66]
- 27 │         scatter against=cliff per-square=55 reach=4 { stone size=1..6 mostly=small }
+ 27 │         scatter against=cliff perSquare=55 reach=4 { stone size=1..6 mostly=small }
     ·                                                                  ──┬─
     ·                                                                    ╰── not a KDL number
   help: ranges, percents, points and sizes are written as strings: "1..6"</code></pre>
@@ -436,19 +436,19 @@ tile size="2x1" seed=1 {
         dirt top=dirtEdgeHeight {
             pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron   // the bank, drawn
             pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
-            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
         }
 
         cliff top="dirtEdgeHeight + 35" at=crag {
             rock mixed                  // or: columns, blocks, slabs
-            stone-size massive          // or: rubble, broken
+            stoneSize massive          // or: rubble, broken
             shattered patches=3 width="5..10"
         }
         dirt top="bottom + [0.6 .. 1.2]" at=crag   // dirt on the cliff's top
 
         // scree: fallen stones gathered at the cliff's foot
-        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
-        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
+        scatter against=cliff perSquare=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
     }
 }</code></pre>
 <ul>
@@ -508,7 +508,7 @@ cliff top="dirtEdgeHeight + 55" at=crag {
   <li>Points are quoted pairs in squares (<code>"(0.5, 1)"</code>), a point's name, or a corner or edge word.</li>
   <li>The whole tile is the default area. A region is flat: its fill points and its <code>within</code> discs, less what it <code>except</code>s. A body, grass or scatter fills a region; a pin or a thing takes any place.</li>
   <li>A stack that uses the heights language is written bottom up: <code>base</code> first, the land in order, <code>water</code> last. Heights are mm above zero; a pin is exact where it is and the later pin wins; the library's defaults are read before the tile.</li>
-  <li>Every name is declared once, in camelCase. <code>let</code> adds a name, <code>override</code> replaces a library one, and neither works on the other's names.</li>
+  <li>Every name is declared once, in camelCase, and so is every control: <code>perSquare=55</code>, not <code>per-square=55</code>. A hyphenated control name is an <code>unknown-control</code> error that gives the new one, and <code>dharmatiles migrate</code> rewrites old tiles. <code>let</code> adds a name, <code>override</code> replaces a library one, and neither works on the other's names.</li>
   <li>Stack order is free for solids: every solid is planned first and everything grows round it. Land bodies are laid in stack order, each the higher of what is below it and its own top.</li>
   <li>Character controls are words that stand for documented numbers; a number is always accepted too.</li>
   <li>A wall or cliff on a tile edge stands inside the tile.</li>

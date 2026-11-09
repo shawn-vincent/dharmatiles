@@ -113,7 +113,7 @@ pub static TAGS: &[&str] = &["cliff", "wall", "rock", "tree"];
 // ---- dirt, grass --------------------------------------------------------
 
 const BUMP_SIZE: Control = c(
-    "bump-size",
+    "bumpSize",
     Axis::Mm,
     "how wide the hills are in its band: broad and rolling, or choppy",
 )
@@ -159,17 +159,17 @@ static FLOW: &[Word] = &[
     w(
         "combed",
         "blades lean together, tidily (provisional)",
-        &[("meander-min", 0.0), ("meander-max", 10.0)],
+        &[("meanderMin", 0.0), ("meanderMax", 10.0)],
     ),
     w(
         "wavy",
         "blades meander together, in phase",
-        &[("meander-min", 10.0), ("meander-max", 30.0)],
+        &[("meanderMin", 10.0), ("meanderMax", 30.0)],
     ),
     w(
         "wild",
         "blades every which way (provisional)",
-        &[("meander-min", 25.0), ("meander-max", 60.0)],
+        &[("meanderMin", 25.0), ("meanderMax", 60.0)],
     ),
 ];
 
@@ -219,40 +219,40 @@ static CROWN_SHAPE: &[Word] = &[
         "round",
         "a round crown",
         &[
-            ("top-pointiness", 0.0),
-            ("top-curve", 1.4),
-            ("bottom-pointiness", 0.35),
-            ("bottom-curve", 0.8),
+            ("topPointiness", 0.0),
+            ("topCurve", 1.4),
+            ("bottomPointiness", 0.35),
+            ("bottomCurve", 0.8),
         ],
     ),
     w(
         "cone",
         "pointed at the top, like a fir (provisional)",
         &[
-            ("top-pointiness", 1.0),
-            ("top-curve", 0.8),
-            ("bottom-pointiness", 0.1),
-            ("bottom-curve", 1.0),
+            ("topPointiness", 1.0),
+            ("topCurve", 0.8),
+            ("bottomPointiness", 0.1),
+            ("bottomCurve", 1.0),
         ],
     ),
     w(
         "wide",
         "a broad, flat-bottomed spread (provisional)",
         &[
-            ("top-pointiness", 0.0),
-            ("top-curve", 2.0),
-            ("bottom-pointiness", 0.6),
-            ("bottom-curve", 0.6),
+            ("topPointiness", 0.0),
+            ("topCurve", 2.0),
+            ("bottomPointiness", 0.6),
+            ("bottomCurve", 0.6),
         ],
     ),
     w(
         "tall",
         "a narrow column (provisional)",
         &[
-            ("top-pointiness", 0.3),
-            ("top-curve", 1.0),
-            ("bottom-pointiness", 0.3),
-            ("bottom-curve", 1.0),
+            ("topPointiness", 0.3),
+            ("topCurve", 1.0),
+            ("bottomPointiness", 0.3),
+            ("bottomCurve", 1.0),
         ],
     ),
 ];
@@ -268,7 +268,7 @@ static BRANCHING: &[Word] = &[
             ("target", 0.25),
             ("balance", 0.8),
             ("exponent", 3.0),
-            ("min-radius", 1.0),
+            ("minRadius", 1.0),
         ],
     ),
     w(
@@ -280,7 +280,7 @@ static BRANCHING: &[Word] = &[
             ("target", 0.33),
             ("balance", 1.0),
             ("exponent", 3.0),
-            ("min-radius", 1.0),
+            ("minRadius", 1.0),
         ],
     ),
     w(
@@ -292,7 +292,7 @@ static BRANCHING: &[Word] = &[
             ("target", 0.4),
             ("balance", 1.0),
             ("exponent", 2.6),
-            ("min-radius", 0.9),
+            ("minRadius", 0.9),
         ],
     ),
 ];
@@ -338,7 +338,7 @@ static TREE: &[Control] = &[
             )
             .limits(8.0, 200.0)
             .default("32"),
-            c("clump-size", Axis::Mm, "size of each clump")
+            c("clumpSize", Axis::Mm, "size of each clump")
                 .limits(1.0, 20.0)
                 .ranges()
                 .default("5.5"),
@@ -396,7 +396,7 @@ static TREE: &[Control] = &[
             )
             .limits(0.0, 1.0),
             c("exponent", Axis::Number, "pipe-model exponent").limits(1.0, 8.0),
-            c("min-radius", Axis::Mm, "branch radius at a tip").limits(0.2, 5.0),
+            c("minRadius", Axis::Mm, "branch radius at a tip").limits(0.2, 5.0),
         ],
         "the generator's six branching knobs (expert: parts files only)",
     )
@@ -598,16 +598,16 @@ static ROCK_MIX: &[Word] = &[
 ];
 
 static STONE_SIZE: &[Word] = &[
-    w("rubble", "small broken stones", &[("stone-size", 1.0)]),
+    w("rubble", "small broken stones", &[("stoneSize", 1.0)]),
     w(
         "broken",
         "between the two (provisional)",
-        &[("stone-size", 1.15)],
+        &[("stoneSize", 1.15)],
     ),
     w(
         "massive",
         "big masses: 1.35x rubble size",
-        &[("stone-size", 1.35)],
+        &[("stoneSize", 1.35)],
     ),
 ];
 
@@ -627,7 +627,7 @@ static CLIFF: &[Control] = &[
         c("monoliths", Axis::Number, "weight of ground-to-top stones"),
     ]),
     c(
-        "stone-size",
+        "stoneSize",
         Axis::Share,
         "small broken stones, or big masses",
     )
@@ -662,7 +662,7 @@ static SCATTER: &[Control] = &[
         .limits(0.0, 10_000.0)
         .ranges(),
     c(
-        "per-square",
+        "perSquare",
         Axis::PerSquare,
         "how many per square of the area, or of length along a line",
     )
@@ -803,7 +803,7 @@ pub static ELEMENTS: &[Element] = &[
         role: Role::Surface,
         place: SURFACE_PLACE,
         controls: &[
-            c("per-square", Axis::PerSquare, "how many flowers a square")
+            c("perSquare", Axis::PerSquare, "how many flowers a square")
                 .limits(0.0, 40.0)
                 .default("4"),
             c("petals", Axis::Count, "petals round the centre")
@@ -908,7 +908,7 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("meadow", "`meadow` is now `grass`"),
     (
         "scree",
-        "scree is things scattered against the cliff: `scatter against=cliff per-square=55 { stone }`",
+        "scree is things scattered against the cliff: `scatter against=cliff perSquare=55 { stone }`",
     ),
     ("blocks", "scree `blocks` are now `boulder`s in a scatter"),
     ("family", "`family` is now `style`"),
@@ -929,7 +929,7 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("tips", "a tree's branch ends are `crown clumps=…`"),
     ("canopy", "a tree's crown is `crown width=…`, in mm"),
     ("foliage", "foliage is `leaves on`, `clumps-only` or `bare`"),
-    ("mass", "stone size is `stone-size rubble|broken|massive`"),
+    ("mass", "stone size is `stoneSize rubble|broken|massive`"),
     (
         "form",
         "a cliff's form is its region: `cliff top=\"dirtEdgeHeight + 35\" at=crag`; run `dharmatiles migrate`",
@@ -954,6 +954,26 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("organic", "a line's wobble is `line name width=… wobble=…`"),
     ("lines", "a region is `bounded-by` its lines"),
 ];
+
+/// The control names written with hyphens before names became camelCase,
+/// each with its new spelling. `dharmatiles migrate` rewrites them and an
+/// old one is an `unknown-control` error that names the new one.
+pub static OLD_CONTROL_NAMES: &[(&str, &str)] = &[
+    ("per-square", "perSquare"),
+    ("bump-size", "bumpSize"),
+    ("clump-size", "clumpSize"),
+    ("min-radius", "minRadius"),
+    ("stone-size", "stoneSize"),
+];
+
+/// The camelCase name of an old hyphenated control name.
+#[must_use]
+pub fn camel_of(old: &str) -> Option<&'static str> {
+    OLD_CONTROL_NAMES
+        .iter()
+        .find(|(o, _)| *o == old)
+        .map(|(_, n)| *n)
+}
 
 /// The hint for an old word.
 #[must_use]

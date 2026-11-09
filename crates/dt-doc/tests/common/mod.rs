@@ -190,7 +190,7 @@ pub const CASES: [Case; 10] = [
         slug: "several",
         title: "Several mistakes at once",
         tile: CLIFF_RUN,
-        from: "rock mixed\n            stone-size massive",
-        to: "rock mixd\n            stone-size \"135\"",
+        from: "rock mixed\n            stoneSize massive",
+        to: "rock mixd\n            stoneSize \"135\"",
     },
 ];

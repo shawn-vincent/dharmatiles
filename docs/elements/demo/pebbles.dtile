@@ -3,6 +3,6 @@ tile size="1x1" seed=5 {
     stack {
         base
         dirt
-        scatter per-square=60 { pebble }
+        scatter perSquare=60 { pebble }
     }
 }

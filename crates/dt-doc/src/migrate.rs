@@ -124,11 +124,61 @@ struct Edit {
 /// # Errors
 /// If the text is not KDL, or a stack is written on one line.
 pub fn heights(text: &str) -> Result<Option<String>, EditError> {
+    let names = control_names(text)?;
+    let text = names.as_deref().unwrap_or(text);
     let floors = floors(text)?;
     let now = floors.as_deref().unwrap_or(text);
     let cliffs = cliffs(now)?;
     let now = cliffs.as_deref().unwrap_or(now);
-    Ok(heights_only(now)?.or(cliffs).or(floors))
+    Ok(heights_only(now)?.or(cliffs).or(floors).or(names))
+}
+
+/// Rewrite the hyphenated control names of the old spelling
+/// (`per-square=55`) as camelCase (`perSquare=55`), on the line or as a
+/// control's own line, leaving every other byte as written.
+/// `Ok(None)` when there is none.
+///
+/// # Errors
+/// If the text is not KDL.
+pub fn control_names(text: &str) -> Result<Option<String>, EditError> {
+    fn walk(nodes: &[KdlNode], edits: &mut Vec<Edit>) {
+        for n in nodes {
+            let name = n.name();
+            if let Some(new) = crate::elements::camel_of(name.value()) {
+                edits.push(Edit {
+                    start: name.span().offset(),
+                    end: name.span().offset() + name.span().len(),
+                    with: new.to_owned(),
+                });
+            }
+            for e in n.entries() {
+                if let Some(k) = e.name()
+                    && let Some(new) = crate::elements::camel_of(k.value())
+                {
+                    edits.push(Edit {
+                        start: k.span().offset(),
+                        end: k.span().offset() + k.span().len(),
+                        with: new.to_owned(),
+                    });
+                }
+            }
+            if let Some(kids) = n.children() {
+                walk(kids.nodes(), edits);
+            }
+        }
+    }
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut edits = Vec::new();
+    walk(doc.nodes(), &mut edits);
+    if edits.is_empty() {
+        return Ok(None);
+    }
+    edits.sort_by_key(|e| std::cmp::Reverse(e.start));
+    let mut out = text.to_owned();
+    for e in edits {
+        out.replace_range(e.start..e.end, &e.with);
+    }
+    Ok(Some(out))
 }
 
 /// A free-standing form's two masses, as discs round a point at the 70 mm
@@ -865,11 +915,11 @@ mod tests {
 
     #[test]
     fn levels_and_bumps_become_a_top() {
-        let old = "tile size=\"2x2\" seed=1 {\n    stack {\n        dirt level=\"edge + 0.3\" bumps=\"2.2..3.2\" bump-size=14 {\n            clods some\n        }\n    }\n}\n";
+        let old = "tile size=\"2x2\" seed=1 {\n    stack {\n        dirt level=\"edge + 0.3\" bumps=\"2.2..3.2\" bumpSize=14 {\n            clods some\n        }\n    }\n}\n";
         let new = heights(old).unwrap().unwrap();
         assert!(
             new.contains(
-                "dirt bump-size=14 top=\"[dirtEdgeHeight + 0.3 .. dirtEdgeHeight + 0.3 + 3.2]\" {"
+                "dirt bumpSize=14 top=\"[dirtEdgeHeight + 0.3 .. dirtEdgeHeight + 0.3 + 3.2]\" {"
             ),
             "{new}"
         );
@@ -937,5 +987,28 @@ mod tests {
         assert_eq!(new.matches("pin top=").count(), 1, "{new}");
         assert!(!new.contains("form="), "{new}");
         assert!(heights(&new).unwrap().is_none());
+    }
+
+    #[test]
+    fn old_control_names_become_camel_case_and_nothing_else_moves() {
+        let old = "tile size=\"1x1\" { // keep\n    stack {\n        scatter per-square=55 reach=4 { stone }   // a note\n        cliff {\n            stone-size massive\n        }\n        tree { crown clump-size=6; branch min-radius=0.9 }\n        dirt bump-size=\"14\"\n    }\n}\n";
+        let new = control_names(old).unwrap().unwrap();
+        assert_eq!(
+            new,
+            old.replace("per-square", "perSquare")
+                .replace("stone-size", "stoneSize")
+                .replace("clump-size", "clumpSize")
+                .replace("min-radius", "minRadius")
+                .replace("bump-size", "bumpSize")
+        );
+        assert!(control_names(&new).unwrap().is_none());
+        // the migration entry point carries them too
+        assert_eq!(heights(old).unwrap().unwrap().matches("-").count(), 0);
+    }
+
+    #[test]
+    fn a_hyphen_in_a_value_or_a_definition_name_is_left_alone() {
+        let text = "tile size=\"1x1\" {\n    stack {\n        wall style=cut-stone\n        long-grass in=east\n    }\n}\n";
+        assert!(control_names(text).unwrap().is_none());
     }
 }

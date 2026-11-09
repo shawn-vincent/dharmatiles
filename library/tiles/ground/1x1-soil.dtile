@@ -4,7 +4,7 @@ tile size="1x1" seed=13 {
     about "Bare earth: clods, grit and half-sunk pebbles over gentle rises."
     stack {
         base
-        dirt bump-size=14 top="[groundHeight .. groundHeight + 2.5]" {
+        dirt bumpSize=14 top="[groundHeight .. groundHeight + 2.5]" {
    // rises up to 2.5 mm, about 14 mm across
             clods some                  // or: few, many
         }
