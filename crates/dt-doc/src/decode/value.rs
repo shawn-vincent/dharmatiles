@@ -404,7 +404,10 @@ pub fn check_text(k: &'static Control, owner: &str, typed: &str) -> Option<Refus
     let axis = k.value?;
     let t = typed.trim();
     let (unit, body) = match t.strip_prefix('(').and_then(|r| r.split_once(')')) {
-        Some((u, rest)) => (Some(Unit::parse(u)?).filter(|_| axis == Axis::Mm), rest),
+        Some((u, rest)) => {
+            let unit = Unit::parse(u)?;
+            ((axis == Axis::Mm).then_some(unit), rest)
+        }
         None => (None, t),
     };
     let x = expr::parse(body.trim()).ok()?;
