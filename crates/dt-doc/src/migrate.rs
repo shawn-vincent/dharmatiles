@@ -142,11 +142,11 @@ const MOUND: Rings = &[
     (27.0, 0.17),
     (20.5, 0.385),
     (14.5, 0.59),
-    (9.0, 0.8),
-    (6.0, 1.0),
+    (10.0, 0.8),
+    (8.0, 1.0),
 ];
-const SPIRE: Rings = &[(26.0, 0.11), (18.5, 0.325), (12.0, 0.59), (7.25, 1.0)];
-const NEEDLE: Rings = &[(21.0, 0.14), (14.0, 0.42), (8.0, 1.0)];
+const SPIRE: Rings = &[(26.0, 0.11), (18.5, 0.325), (13.0, 0.59), (9.5, 1.0)];
+const NEEDLE: Rings = &[(24.0, 0.14), (16.0, 0.42), (10.0, 1.0)];
 
 /// How a form's cliff is written now: its regions, its top and its pins.
 struct Recipe {
@@ -256,8 +256,8 @@ fn recipe(
             let step = 0.3_f64.min(cols.min(rows) * 0.3);
             let needles = [
                 (cx, cy, 1.0),
-                (cx - step, cy + step * 0.35, 0.65),
-                (cx + step * 0.7, cy - step * 0.3, 0.55),
+                (cx - step, cy + step * 0.35, 0.8),
+                (cx + step * 0.7, cy - step * 0.3, 0.75),
             ];
             let foot: Vec<String> = needles
                 .iter()
@@ -274,9 +274,11 @@ fn recipe(
                 .push(format!("region {name} {{ {} }}", foot.join("; ")));
             out.top = format!("\"dirtEdgeHeight + [3 .. {}]\"", round1(h * 0.18));
             let mut film = name.clone();
-            for (i, &(x, y, z)) in needles.iter().enumerate() {
-                let c = format!("\"({}, {})\"", round1_sq(x), round1_sq(y));
-                for (k, &(r, hf)) in NEEDLE.iter().enumerate() {
+            // the rings of every needle outer first, so no needle's foot
+            // is drawn over another's summit
+            for (k, &(r, hf)) in NEEDLE.iter().enumerate() {
+                for (i, &(x, y, z)) in needles.iter().enumerate() {
+                    let c = format!("\"({}, {})\"", round1_sq(x), round1_sq(y));
                     let region = format!("{name}n{}r{}", i + 1, k + 1);
                     out.regions.push(format!(
                         "region {region} {{ within {} of={c} }}",

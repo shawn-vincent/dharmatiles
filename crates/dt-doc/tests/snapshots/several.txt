@@ -1,22 +1,22 @@
 dt::choice
 
   × `cliff rock` can't be `mixd`
-    ╭─[library/tiles/test/2x1-cliff-full.dtile:26:18]
- 25 │         cliff top="dirtEdgeHeight + 35" at=crag {
- 26 │             rock mixd
+    ╭─[library/tiles/test/2x1-cliff-full.dtile:27:18]
+ 26 │         cliff top="dirtEdgeHeight + 35" at=crag {
+ 27 │             rock mixd
     ·                  ──┬─
     ·                    ╰── not one of its words
- 27 │             stone-size "135"
+ 28 │             stone-size "135"
     ╰────
   help: did you mean `mixed`?
 dt::percent
 
   × `cliff stone-size` is a share, written as a percent
-    ╭─[library/tiles/test/2x1-cliff-full.dtile:27:24]
- 26 │             rock mixd
- 27 │             stone-size "135"
+    ╭─[library/tiles/test/2x1-cliff-full.dtile:28:24]
+ 27 │             rock mixd
+ 28 │             stone-size "135"
     ·                        ──┬──
     ·                          ╰── no %
- 28 │             shattered patches=3 width="5..10"
+ 29 │             shattered patches=3 width="5..10"
     ╰────
   help: write `stone-size="135%"`

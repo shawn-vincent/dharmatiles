@@ -473,6 +473,8 @@ impl Cliff {
                 }
             }
         }
+        // where a stone stands all the way down (a film lies only on one)
+        let mut stone_deep = vec![false; nx * ny];
         // the core's edge keeps clear of the stones' faces: a core wall that
         // grazed a face would leave a hair of it loose between the two.
         // Every node near the core is tried against the finished stones at
@@ -517,6 +519,7 @@ impl Cliff {
                 tried[k] = true;
                 deep[k] = hit[a..b].iter().all(|&h| h);
             }
+            stone_deep.clone_from(&deep);
             let (to_deep, _) = dt_kit::distance(&frame, &deep);
             let shallow: Vec<bool> = (0..nx * ny).map(|k| tried[k] && !deep[k]).collect();
             let (to_shallow, _) = dt_kit::distance(&frame, &shallow);
@@ -578,6 +581,7 @@ impl Cliff {
                         && s.z[c] - low.z[c] < 0.05
                         && ctx.area.bits[k]
                         && mask.bits[k]
+                        && stone_deep[k]
                         && off_core.z[k] >= FILM_INSET_MM;
                 }
             }

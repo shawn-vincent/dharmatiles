@@ -1,5 +1,6 @@
-// Every control the cliff vocabulary names (bank, scree, shattered patches,
-// ledges): the language tests' fixture.
+// Every control the cliff vocabulary names (rock, stone-size, shattered
+// patches), its pins on the dirt and its film of dirt: the language tests'
+// fixture.
 // A 2×1 cliff run: a band of stacked rock against the north edge, with dirt
 // on its top and scree at its foot.
 

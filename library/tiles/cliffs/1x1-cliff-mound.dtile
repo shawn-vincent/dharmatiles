@@ -6,8 +6,8 @@ tile size="1x1" seed=1 {
     region crag { within 13.5 of=center }
     region crag2 { within 10.5 of=center }
     region crag3 { within 7.5 of=center }
-    region crag4 { within 4.5 of=center }
-    region crag5 { within 3 of=center }
+    region crag4 { within 5 of=center }
+    region crag5 { within 4 of=center }
     region apron { within 6.5 of=crag }
 
     stack {

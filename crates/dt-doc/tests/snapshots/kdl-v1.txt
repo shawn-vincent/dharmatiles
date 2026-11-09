@@ -1,11 +1,11 @@
 dt::syntax
 
   × bare `true` is KDL v1; dharmatiles documents are KDL v2
-    ╭─[library/tiles/test/2x1-cliff-full.dtile:28:31]
- 27 │             stone-size massive
- 28 │             shattered patches=true width="5..10"
+    ╭─[library/tiles/test/2x1-cliff-full.dtile:29:31]
+ 28 │             stone-size massive
+ 29 │             shattered patches=true width="5..10"
     ·                               ──┬─
     ·                                 ╰── KDL v1 keyword
- 29 │         }
+ 30 │         }
     ╰────
   help: write #true

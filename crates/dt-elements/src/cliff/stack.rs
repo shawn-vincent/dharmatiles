@@ -448,6 +448,13 @@ pub fn stack(
         step: 1.0,
         z: t.z.iter().map(|&z| z > FOOT).collect(),
     };
+    // a cell the band jumps across holds no stone (and takes none of the
+    // stacking's turns)
+    for q in 0..nx * ny {
+        if form.lo.z[q] > form.hi.z[q] + 1e-9 {
+            want.z[q] = false;
+        }
+    }
     let mut rocks: Vec<Placed> = Vec::new();
     let mut probs: Vec<f64> = (0..5)
         .map(|k| form.kind_p.map_or(KINDS[k].1, |p| p[k]))
@@ -577,7 +584,7 @@ pub fn stack(
                     .map(|q| retry.z[q])
                     .max()
                     .unwrap_or(0);
-                if is_top && rmax < CRUMB_RETRY {
+                if (is_top || form.ztop.is_none()) && rmax < CRUMB_RETRY {
                     for q in 0..nx * ny {
                         if cells.z[q] {
                             retry.z[q] += 1;

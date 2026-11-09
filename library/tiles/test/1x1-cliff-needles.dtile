@@ -5,16 +5,16 @@ tile size="1x1" seed=1 {
         Two or three tall stacks on a shared footing.
         """
 
-    region crag { within 13.5 of="(0.5, 0.5)"; within 9 of="(0.2, 0.61)"; within 7.5 of="(0.71, 0.41)" }
-    region cragn1r1 { within 10.5 of="(0.5, 0.5)" }
-    region cragn1r2 { within 7 of="(0.5, 0.5)" }
-    region cragn1r3 { within 4 of="(0.5, 0.5)" }
-    region cragn2r1 { within 7 of="(0.2, 0.61)" }
-    region cragn2r2 { within 4.5 of="(0.2, 0.61)" }
-    region cragn2r3 { within 2.5 of="(0.2, 0.61)" }
-    region cragn3r1 { within 6 of="(0.71, 0.41)" }
-    region cragn3r2 { within 4 of="(0.71, 0.41)" }
-    region cragn3r3 { within 2 of="(0.71, 0.41)" }
+    region crag { within 15.5 of="(0.5, 0.5)"; within 12.5 of="(0.2, 0.61)"; within 11.5 of="(0.71, 0.41)" }
+    region cragn1r1 { within 12 of="(0.5, 0.5)" }
+    region cragn2r1 { within 9.5 of="(0.2, 0.61)" }
+    region cragn3r1 { within 9 of="(0.71, 0.41)" }
+    region cragn1r2 { within 8 of="(0.5, 0.5)" }
+    region cragn2r2 { within 6.5 of="(0.2, 0.61)" }
+    region cragn3r2 { within 6 of="(0.71, 0.41)" }
+    region cragn1r3 { within 5 of="(0.5, 0.5)" }
+    region cragn2r3 { within 4 of="(0.2, 0.61)" }
+    region cragn3r3 { within 4 of="(0.71, 0.41)" }
     region apron { within 6.5 of=crag }
 
     stack {
@@ -27,14 +27,14 @@ tile size="1x1" seed=1 {
 
         cliff top="dirtEdgeHeight + [3 .. 10]" at=crag {
             pin top="dirtEdgeHeight + [4.5 .. 7.5]" at=cragn1r1
+            pin top="dirtEdgeHeight + [3 .. 6]" at=cragn2r1
+            pin top="dirtEdgeHeight + [3 .. 6]" at=cragn3r1
             pin top="dirtEdgeHeight + [20 .. 23]" at=cragn1r2
+            pin top="dirtEdgeHeight + [15.5 .. 18.5]" at=cragn2r2
+            pin top="dirtEdgeHeight + [14.5 .. 17.5]" at=cragn3r2
             pin top="dirtEdgeHeight + [52 .. 55]" at=cragn1r3
-            pin top="dirtEdgeHeight + [2 .. 5]" at=cragn2r1
-            pin top="dirtEdgeHeight + [12 .. 15]" at=cragn2r2
-            pin top="dirtEdgeHeight + [33 .. 36]" at=cragn2r3
-            pin top="dirtEdgeHeight + [1 .. 4]" at=cragn3r1
-            pin top="dirtEdgeHeight + [9.5 .. 12.5]" at=cragn3r2
-            pin top="dirtEdgeHeight + [27.5 .. 30.5]" at=cragn3r3
+            pin top="dirtEdgeHeight + [41 .. 44]" at=cragn2r3
+            pin top="dirtEdgeHeight + [38.5 .. 41.5]" at=cragn3r3
             rock mixed
             stone-size massive
         }

@@ -853,7 +853,7 @@ fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band) -> Option<Film> {
     let below = ctx.below?;
     // it is a film when its region holds pieces' tops
     let on_rest: Vec<usize> = (0..ctx.area.bits.len())
-        .filter(|&k| ctx.area.bits[k] && rest.flat.bits[k])
+        .filter(|&k| ctx.area.bits[k] && rest.tops[k].is_finite())
         .collect();
     let (lo, hi) = (band.lo(), band.hi());
     // and its band lies over what was under it: a layer, not a new ground
@@ -903,6 +903,13 @@ impl Element for Dirt {
         // the pieces' own tops, on the rock under the film's slope and clear
         // of the lips and faces, as thick as its band is over what was under
         let film = film_on(scene, ctx, band);
+        if film
+            .as_ref()
+            .is_some_and(|f| !f.area.bits.iter().any(|&b| b))
+        {
+            // no top for a film to lie on
+            return Ok(());
+        }
         let (area, band) = film
             .as_ref()
             .map_or((ctx.area, band), |f| (&f.area, &f.band));

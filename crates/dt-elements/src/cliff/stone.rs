@@ -21,7 +21,7 @@ use super::util::{Field, Grid, P2, bounds, cell_grid, norm2, point_in, ring_dist
 use dt_kit::smooth01;
 
 /// A stone the cuts leave with less than this is not made, mm³.
-const SCRAP_MM3: f64 = 5.0;
+const SCRAP_MM3: f64 = 12.0;
 const JOINT_MM: (f64, f64) = (0.8, 1.2);
 const JOINT_MIN_MM: f64 = 4.0;
 const SHOULDER_P: f64 = 0.6;
