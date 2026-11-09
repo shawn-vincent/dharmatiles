@@ -78,6 +78,7 @@ impl Flowers {
                     f.outer, f.centre
                 ),
                 help: Some("make `radius` larger than `centre`".into()),
+                code: None,
             });
         }
         Ok(f)

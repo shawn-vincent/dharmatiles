@@ -1,0 +1,10 @@
+// A heaved floor: sixteen slabs in a band three millimetres wide, each at
+// its own height and tilt; the slabs on the edge stay at floorEdgeHeight.
+tile size="1x1" seed=11 {
+    about "Heaved flagstones in a band floorHeight ± 1.5 mm."
+    stack {
+        base
+        dirt
+        flagstones slabs=4 top="[floorHeight - 1.5 .. floorHeight + 1.5]"
+    }
+}

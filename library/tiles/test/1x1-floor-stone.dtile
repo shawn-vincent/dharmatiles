@@ -3,6 +3,6 @@ tile size="1x1" seed=1 {
     stack {
         base
         dirt
-        floor texture=dressed
+        flagstones texture=dressed
     }
 }

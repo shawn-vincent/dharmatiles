@@ -26,6 +26,7 @@ const TILES: &[&str] = &[
     "lib:tiles/water/1x1-water+grass.dtile",
     "lib:tiles/walls/1x1-wall-brick-corner.dtile",
     "lib:tiles/floors/1x1-floor-stone-wall.dtile",
+    "lib:tiles/floors/1x1-floor-planks.dtile",
     "lib:tiles/cliffs/1x1-cliff.dtile",
     "lib:tiles/test/1x1-tree.dtile",
 ];

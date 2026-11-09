@@ -59,7 +59,7 @@ pub fn default_secs(element: &str, squares: f64) -> f64 {
         "tree" => 6.5,
         "grass" => 0.35 * squares,
         "wall" => 0.7,
-        "floor" => 0.4,
+        "flagstones" | "planks" => 0.4,
         "cliff" => 0.2,
         "water" => 0.1 * squares,
         "dirt" => 0.06 * squares,

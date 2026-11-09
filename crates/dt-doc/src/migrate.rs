@@ -17,6 +17,11 @@
 //!   stones=none`: no texture at all);
 //! - the stack gains `base` as its first line.
 //!
+//! - `floor` is `flagstones` (the slabs; planks are new): its `level=L`
+//!   (or `level L` as a child) goes, and a level other than the library's
+//!   `floorHeight` becomes `top=L` with `pin top=L at=edges`, so the floor
+//!   still meets the tile's edge at its own height.
+//!
 //! Level names become the library's heights: `edge` is `dirtEdgeHeight`,
 //! `ground` is `groundHeight`, `water` is `waterSurfaceHeight`.
 
@@ -34,6 +39,7 @@ fn heights_word(w: &str) -> String {
         "ground" => "groundHeight".to_owned(),
         "water" => "waterSurfaceHeight".to_owned(),
         "foot" => "footHeight".to_owned(),
+        "floor" => "floorHeight".to_owned(),
         other => other.to_owned(),
     }
 }
@@ -117,8 +123,113 @@ struct Edit {
 ///
 /// # Errors
 /// If the text is not KDL, or a stack is written on one line.
-#[allow(clippy::too_many_lines)]
 pub fn heights(text: &str) -> Result<Option<String>, EditError> {
+    let floors = floors(text)?;
+    let now = floors.as_deref().unwrap_or(text);
+    Ok(heights_only(now)?.or(floors))
+}
+
+/// `floor` as `flagstones`; `Ok(None)` when the tile has no `floor`.
+fn floors(text: &str) -> Result<Option<String>, EditError> {
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let stack = doc
+        .nodes()
+        .iter()
+        .find(|n| n.name().value() == "tile")
+        .and_then(|n| n.children())
+        .and_then(|b| b.nodes().iter().find(|n| n.name().value() == "stack"))
+        .and_then(|n| n.children());
+    let Some(kids) = stack else {
+        return Ok(None);
+    };
+    let mut edits: Vec<Edit> = Vec::new();
+    for n in kids.nodes().iter().filter(|n| n.name().value() == "floor") {
+        let (off, len) = (n.span().offset(), n.span().len());
+        edits.push(Edit {
+            start: off,
+            end: off + 5,
+            with: "flagstones".to_owned(),
+        });
+        // the level, as a property or a child
+        let mut level: Option<String> = None;
+        if let Some(e) = n.entry("level") {
+            level = num_text(e.value()).map(|l| height(&l));
+            let s = e.span().offset();
+            let start = if text[..s].ends_with(' ') { s - 1 } else { s };
+            edits.push(Edit {
+                start,
+                end: s + e.span().len(),
+                with: String::new(),
+            });
+        }
+        let mut brace = None;
+        if let Some(body) = n.children() {
+            brace = text[off..off + len].find('{').map(|b| off + b);
+            for c in body.nodes().iter().filter(|c| c.name().value() == "level") {
+                level = c
+                    .entries()
+                    .first()
+                    .and_then(|e| num_text(e.value()))
+                    .map(|l| height(&l));
+                let (co, cl) = (c.span().offset(), c.span().len());
+                edits.push(Edit {
+                    start: line_start(text, co),
+                    end: line_end(text, co + cl),
+                    with: String::new(),
+                });
+            }
+        }
+        let Some(level) = level.filter(|l| l != "floorHeight" && l != "7.4") else {
+            continue;
+        };
+        let top = if level.contains(' ') {
+            format!("\"{level}\"")
+        } else {
+            level
+        };
+        let ind = indent(text, off);
+        let pin = format!("pin top={top} at=edges");
+        // `top=` goes on the head, the pin into the block
+        let head_end = brace.unwrap_or_else(|| {
+            let node = text[off..off + len].trim_end();
+            off + node.len()
+        });
+        let head_end = if brace.is_some() {
+            text[..head_end].trim_end().len()
+        } else {
+            head_end
+        };
+        let own = if brace.is_some() {
+            format!(" top={top}")
+        } else {
+            format!(" top={top} {{ {pin} }}")
+        };
+        edits.push(Edit {
+            start: head_end,
+            end: head_end,
+            with: own,
+        });
+        if let Some(b) = brace {
+            edits.push(Edit {
+                start: b + 1,
+                end: b + 1,
+                with: format!("\n{ind}    {pin}"),
+            });
+        }
+    }
+    if edits.is_empty() {
+        return Ok(None);
+    }
+    edits.sort_by_key(|e| std::cmp::Reverse((e.start, e.end)));
+    let mut out = text.to_owned();
+    for e in edits {
+        out.replace_range(e.start..e.end, &e.with);
+    }
+    Ok(Some(out))
+}
+
+#[allow(clippy::too_many_lines)]
+fn heights_only(text: &str) -> Result<Option<String>, EditError> {
     let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
     let Some(tile) = doc.nodes().iter().find(|n| n.name().value() == "tile") else {
         return Ok(None);
@@ -359,6 +470,23 @@ mod tests {
             "{new}"
         );
         assert!(new.contains("clods some"), "{new}");
+    }
+
+    #[test]
+    fn a_floor_is_flagstones_and_its_level_a_top() {
+        let old = "tile size=\"1x1\" seed=1 {\n    stack {\n        base\n        dirt\n        floor texture=dressed seed=21 {\n            slabs 1\n            level 7.4   // the official floor\n        }\n        floor level=4 style=fieldstone\n    }\n}\n";
+        let new = heights(old).unwrap().unwrap();
+        assert!(
+            new.contains("flagstones texture=dressed seed=21 {"),
+            "{new}"
+        );
+        assert!(!new.contains("level"), "{new}");
+        assert!(new.contains("slabs 1"), "{new}");
+        assert!(
+            new.contains("flagstones style=fieldstone top=4 { pin top=4 at=edges }"),
+            "{new}"
+        );
+        assert!(heights(&new).unwrap().is_none());
     }
 
     #[test]

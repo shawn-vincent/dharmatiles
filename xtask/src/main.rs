@@ -18,11 +18,12 @@ commands:
            path, or a short name for a test tile (flat, dirt, dirt-stones,
            rocks, water, grass, tree, wall-cut-stone, wall-brick,
            wall-regular-brick, wall-fieldstone, floor-stone,
-           floor-fieldstone, cliff, cliff-<form>)
+           floor-fieldstone, flagstones-heaved, planks, cliff,
+           cliff-<form>)
   pictures [group …]
            rebuild the docs' element pictures from docs/elements/demo/
            into docs/elements/img/ (groups: line, region, use, define,
-           stack, walls, meadow; all when none is named)
+           stack, walls, floors, meadow; all when none is named)
   docs [--check]
            fill each docs/elements/ page's generated reference block from
            the element schema; --check changes nothing and fails if stale
@@ -117,8 +118,12 @@ fn tile_for(name: &str) -> String {
     match name {
         "flat" => test("1x1-flat"),
         "dirt" | "dirt-stones" | "rocks" | "water" | "grass" => test(&format!("2x2-{name}")),
-        "tree" | "cliff" => test(&format!("1x1-{name}")),
-        n if n.starts_with("wall-") || n.starts_with("floor-") || n.starts_with("cliff-") => {
+        "tree" | "cliff" | "planks" => test(&format!("1x1-{name}")),
+        n if n.starts_with("wall-")
+            || n.starts_with("floor-")
+            || n.starts_with("flagstones-")
+            || n.starts_with("cliff-") =>
+        {
             test(&format!("1x1-{n}"))
         }
         other => other.to_owned(),

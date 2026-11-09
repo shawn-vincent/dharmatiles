@@ -62,7 +62,7 @@ fn the_library_heights_are_constants() {
 fn the_edge_defaults_are_read_with_their_pins() {
     let doc = decode_ok(EDGES);
     let names: Vec<&str> = doc.defaults.iter().map(|e| e.what.value.as_str()).collect();
-    assert_eq!(names, ["dirt", "floor", "water"]);
+    assert_eq!(names, ["dirt", "flagstones", "planks", "water"]);
     let dirt = &doc.defaults[0];
     assert!(dirt.top.is_some());
     assert_eq!(dirt.pins.len(), 1);

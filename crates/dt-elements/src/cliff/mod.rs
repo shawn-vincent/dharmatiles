@@ -90,6 +90,7 @@ impl Cliff {
                 control: Some(k.name.clone()),
                 message: m,
                 help: None,
+                code: None,
             };
             match (k.name.as_str(), &k.value) {
                 ("height", Value::Number(v)) => c.height = Some(*v),
@@ -188,6 +189,7 @@ impl Cliff {
                     control: None,
                     message: "this cliff form needs along= the tile edge it stands against".into(),
                     help: Some("write along=\"north\"".into()),
+                    code: None,
                 });
             };
             if along.len() < 2 {
@@ -195,6 +197,7 @@ impl Cliff {
                     control: Some("along".into()),
                     message: "a cliff needs an edge to stand against".into(),
                     help: Some("write along=\"north\" (one edge)".into()),
+                    code: None,
                 });
             }
             let a = [along[0][0] * sq, along[0][1] * sq];

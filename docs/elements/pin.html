@@ -38,7 +38,7 @@
 <tr><td><code>at=</code></td><td>any place</td><td>A name or a literal point; a point, a line or a region. <strong>Required.</strong></td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>Pins go inside a body's block (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>floor</code>). Where pins overlap, the later one wins. The library's defaults are read before the tile, so a pin the tile writes always wins over a default. A pin says where and how high, nothing else: how the body meets it is the body's (dirt eases toward it no steeper than its slope, water settles over 9 mm, cliffs and floors step).</p>
+<p>Pins go inside a body's block (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>). Where pins overlap, the later one wins. The library's defaults are read before the tile, so a pin the tile writes always wins over a default. A pin says where and how high, nothing else: how the body meets it is the body's (dirt eases toward it no steeper than its slope, water settles over 9 mm, cliffs and floors step).</p>
 <p><code>check</code> solves the bands and notes what it finds: a pin that wins nowhere because later pins cover all of its place (<code>dt::shadowed</code>), dirt forced steeper than its slope (<code>dt::steep</code>, with both heights and the distance), a pin whose place is empty (<code>dt::empty</code>, refused), and a stretch where the tile's own pins move the rim off the library's edge height (<code>dt::edge</code>). <code>check --explain</code> gives each pin's share of its place where it wins. Building a tile with tops and pins is not done yet: <code>build</code> refuses it and says which lines.</p>
 </article>
 </div>

@@ -4,7 +4,7 @@ tile size="1x1" seed=4 {
     stack {
         base
         dirt
-        floor style=fieldstone
+        flagstones style=fieldstone
         wall along="north" style=fieldstone coping=on-edge seed=6
     }
 }

@@ -516,9 +516,9 @@ static WALL: &[Control] = &[
     ]),
 ];
 
-// ---- floor --------------------------------------------------------------
+// ---- floors -------------------------------------------------------------
 
-static FLOOR: &[Control] = &[
+static FLAGSTONES: &[Control] = &[
     c("style", Axis::Word, "cut slabs, or drystone flagstones")
         .words(&[
             w("cut-stone", "dressed slabs on the square grid", &[]),
@@ -535,13 +535,29 @@ static FLOOR: &[Control] = &[
     c("slabs", Axis::Count, "slabs across one square")
         .limits(1.0, 6.0)
         .default("1"),
-    c(
-        "level",
-        Axis::Level,
-        "the pavement top: 7.4 is the official interior floor",
-    )
-    .limits(1.0, 30.0)
-    .default("7.4"),
+];
+
+static PLANKS: &[Control] = &[
+    c("style", Axis::Word, "how the boards are cut")
+        .words(&[
+            w("random", "boards of mixed lengths, joints staggered", &[]),
+            w(
+                "even",
+                "boards half a square long, each course set half a board on",
+                &[],
+            ),
+        ])
+        .default("random"),
+    c("texture", Axis::Word, "the wood's finish")
+        .words(&[
+            w("smooth", "planed boards, faint grain, few checks", &[]),
+            w("worn", "rounded edges, open grain, some checks", &[]),
+            w("rough", "sawn boards, coarse grain, many checks", &[]),
+        ])
+        .default("worn"),
+    c("boards", Axis::Count, "boards across one square")
+        .limits(2.0, 16.0)
+        .default("8"),
 ];
 
 // ---- cliff --------------------------------------------------------------
@@ -958,15 +974,26 @@ pub static ELEMENTS: &[Element] = &[
         controls: WALL,
     },
     Element {
-        name: "floor",
-        about: "a stone pavement that replaces the ground: a wall laid on its side",
+        name: "flagstones",
+        about: "a floor of stone slabs, a wall laid on its side; each slab's height and tilt is drawn inside its band",
         role: Role::Surface,
         place: &[PlaceWord::In],
         needs: &[],
         holds_scatter: false,
         honours: &[],
         scattered: false,
-        controls: FLOOR,
+        controls: FLAGSTONES,
+    },
+    Element {
+        name: "planks",
+        about: "a floor of wooden boards; each board's height and tilt is drawn inside its band",
+        role: Role::Surface,
+        place: &[PlaceWord::In],
+        needs: &[],
+        holds_scatter: false,
+        honours: &[],
+        scattered: false,
+        controls: PLANKS,
     },
     Element {
         name: "cliff",
@@ -1007,6 +1034,14 @@ pub static RENAMED: &[(&str, &str)] = &[
     ),
     ("blocks", "scree `blocks` are now `boulder`s in a scatter"),
     ("family", "`family` is now `style`"),
+    (
+        "floor",
+        "`floor` is now `flagstones` (stone slabs) or `planks` (boards); its `level` is the body's `top`",
+    ),
+    (
+        "level",
+        "a floor's `level` is now its `top=`: `flagstones top=floorHeight`",
+    ),
     ("self", "`self=` is now `in=`"),
     ("near", "`near=` is now `against=`"),
     ("heights", "`heights` is now `let`: `let foot 4`, in mm"),
@@ -1141,12 +1176,12 @@ mod tests {
             .unwrap();
         let r = ruin.check("wall", 1.5, 1.5, false).unwrap_err();
         assert_eq!(r.message, "`wall ruin` is 0% to 100%, not 150%");
-        let level = crate::schema::element("floor")
+        let boards = crate::schema::element("planks")
             .unwrap()
-            .control("level")
+            .control("boards")
             .unwrap();
-        assert!(level.check("floor", 0.0, 0.0, false).is_err());
-        assert!(level.check("floor", 1.5, 1.5, false).is_ok());
+        assert!(boards.check("planks", 1.0, 1.0, false).is_err());
+        assert!(boards.check("planks", 8.0, 8.0, false).is_ok());
         let cliff = crate::schema::element("cliff")
             .unwrap()
             .control("height")

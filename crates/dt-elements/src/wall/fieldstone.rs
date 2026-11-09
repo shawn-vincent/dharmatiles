@@ -401,13 +401,16 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
         0.0
     };
     let base = if run.laid { 0.0 } else { run.base };
+    // a laid stone on the tile's boundary runs past the plane, so the cut
+    // there is through its flat top and square
+    let pad = if run.laid { m.edge_pad } else { 0.0 };
     let zeff = |z: f64, t: f64| -> f64 {
         if c.is_bottom && z <= c.z0 + 1e-9 {
-            return if run.laid { z } else { base };
+            return if run.laid { z - pad } else { base };
         }
         if c.is_top && z >= c.z1 - 1e-9 {
             if run.laid {
-                return z;
+                return z + pad;
             }
             return z - top_drop;
         }
@@ -415,7 +418,7 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
     };
     let side = |t_cut: f64, end: End, off: f64, inward: f64| -> Vec<[f64; 2]> {
         if end == End::Face {
-            let em = if run.laid { 0.0 } else { END_MARGIN * s };
+            let em = if run.laid { -pad } else { END_MARGIN * s };
             let tq = t_cut + inward * em;
             return vec![[tq, zeff(c.z0, tq)], [tq, zeff(c.z1, tq)]];
         }
@@ -949,6 +952,12 @@ pub(crate) fn joint_pins(stones: &[Stone], s: f64) -> Result<Vec<(usize, TriMesh
 }
 
 impl Stone {
+    /// The stone's box in plan (its outline's reach along the run, and its
+    /// cell across), world mm for a run laid along the south edge.
+    pub fn plan_box(&self) -> ([f64; 2], [f64; 2]) {
+        (self.t, self.z)
+    }
+
     /// The pebble in wall-local (t, q, z): latitude rings from the front
     /// pole (q = y0) to the back (q = y1), each the outline scaled about
     /// its drifting pole, the equator the outline; then the relief.

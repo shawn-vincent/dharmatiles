@@ -177,7 +177,7 @@ pub struct PinDecl {
     pub from: Provenance,
 }
 
-/// A body of the stack (dirt, water, cliff or floor) as written.
+/// A body of the stack (dirt, water, cliff, flagstones or planks) as written.
 #[derive(Clone, Debug)]
 pub struct BodyDecl {
     /// Its place in the tile's stack ([`Tile::stack`]).
@@ -697,7 +697,11 @@ impl Reader<'_> {
         let mut things = Vec::new();
         for e in &def.stack {
             let el = match &e.callee {
-                Callee::Element(el) if matches!(el.name, "dirt" | "water") => el,
+                Callee::Element(el)
+                    if matches!(el.name, "dirt" | "water" | "flagstones" | "planks") =>
+                {
+                    el
+                }
                 _ => {
                     // a thing, a coat or a part: its top and an `at=` that
                     // is a line or a region are not built yet
@@ -725,7 +729,7 @@ impl Reader<'_> {
                 .iter()
                 .position(|s| s.span == e.span && Arc::ptr_eq(&s.src, src))
             else {
-                pending.push(not_yet(src, e.what.span, "a dirt or water here is"));
+                pending.push(not_yet(src, e.what.span, "a dirt, water or floor here is"));
                 continue;
             };
             bodies.push(BodyDecl {

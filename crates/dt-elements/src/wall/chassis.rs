@@ -5,7 +5,8 @@
 
 use dt_kit::Kind;
 use dt_kit::form::{clip, solid};
-use dt_kit::{Mask, Material, Rng, Scene, Seed, Solid, Tag, TriMesh, union};
+use dt_kit::pieces::{Pieces, Plane};
+use dt_kit::{Field, Mask, Material, Rng, Scene, Seed, Solid, Tag, TriMesh, union};
 use rayon::prelude::*;
 
 use super::block::{Block, Finish, MAX_PROUD_MM};
@@ -33,6 +34,62 @@ const CRENEL_DEPTH_MM: f64 = 11.0;
 /// The most a head joint's end is chipped back at its top, mm (a
 /// printability floor: two such ends and the joint stay bridgeable).
 const HEAD_PULL_MM: f64 = 0.25;
+
+/// What a laid run (a floor) is made to fit: its band, the height field it
+/// draws each piece's height and tilt from, and what it is made of.
+pub(crate) struct Laid<'a> {
+    /// The band every piece is fitted to, and checked against.
+    pub fit: Pieces<'a>,
+    /// The heaved surface in the band: each piece takes its height and
+    /// tilt from it where it stands.
+    pub heave: &'a Field,
+    /// The steepest a piece may tilt, as a slope.
+    pub tilt_max: f64,
+    /// What the pieces are made of.
+    pub material: Material,
+    /// The lattice step, mm.
+    pub step: f64,
+}
+
+/// A piece as laid: its top plane and its box in plan.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Placed {
+    pub plane: Plane,
+    pub lo: [f64; 2],
+    pub hi: [f64; 2],
+}
+
+impl Laid<'_> {
+    /// What a piece in the box `lo..hi` wants: the height field's height
+    /// at its middle and its tilt across it, the tilt held to the
+    /// steepest.
+    fn want(&self, lo: [f64; 2], hi: [f64; 2]) -> Plane {
+        let at = [0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1])];
+        let h = |x: f64, y: f64| self.heave.sample(x, y);
+        let gx = (h(hi[0], at[1]) - h(lo[0], at[1])) / (hi[0] - lo[0]).max(1e-6);
+        let gy = (h(at[0], hi[1]) - h(at[0], lo[1])) / (hi[1] - lo[1]).max(1e-6);
+        let size = gx.hypot(gy);
+        let k = if size > self.tilt_max {
+            self.tilt_max / size
+        } else {
+            1.0
+        };
+        Plane {
+            at,
+            z: h(at[0], at[1]),
+            g: [gx * k, gy * k],
+        }
+    }
+
+    /// The box `lo..hi` fitted: its top plane, inside the band at every
+    /// node it stands on.
+    fn plane_for(&self, lo: [f64; 2], hi: [f64; 2], what: &str) -> Result<Plane, LookError> {
+        let nodes = self.fit.nodes(lo, hi, self.step);
+        self.fit
+            .plane(&nodes, self.want(lo, hi))
+            .map_err(|r| LookError::band(&r, what))
+    }
+}
 
 /// The build's frame: segments, seat and how wall-local (t, q, z) maps to
 /// the world.
@@ -102,8 +159,9 @@ pub(crate) fn percentile(mut v: Vec<f64>, pct: f64) -> f64 {
 
 /// A unit to build in parallel.
 pub(crate) enum Unit {
-    Block(Block),
-    Stone(Box<fieldstone::Stone>),
+    /// A block, and for a laid one the top plane it was fitted to.
+    Block(Block, Option<Plane>),
+    Stone(Box<fieldstone::Stone>, Option<([f64; 2], [f64; 2])>),
     Mesh(TriMesh),
 }
 
@@ -153,7 +211,7 @@ pub(crate) fn build(
     spine: &[[f64; 2]],
     kind: Kind,
 ) -> Result<(), LookError> {
-    let (wall, counts, fp, top) = run(m, scene, ctx, spine, kind, &|_| true)?;
+    let (wall, counts, fp, top, _) = run(m, scene, ctx, spine, kind, &|_| true, None)?;
     finish_build(scene, ctx, kind, wall, counts, &fp, top);
     Ok(())
 }
@@ -187,7 +245,7 @@ pub(crate) fn finish_build(
 }
 
 /// A built run: the solid, its counts, its footprint and its top.
-pub(crate) type Built = (Solid, Counts, Mask, f64);
+pub(crate) type Built = (Solid, Counts, Mask, f64, Vec<Placed>);
 
 /// Build a masonry run (not yet added). `keep(cell)` drops cells (a
 /// floor outside its area).
@@ -199,7 +257,9 @@ pub(crate) fn run(
     spine: &[[f64; 2]],
     kind: Kind,
     keep: &(dyn Fn(&Cell) -> bool + Sync),
+    laid: Option<&Laid<'_>>,
 ) -> Result<Built, LookError> {
+    debug_assert_eq!(m.laid, laid.is_some());
     let frame = *scene.frame();
     let s = frame.scale();
     let tile = frame.size_mm();
@@ -361,7 +421,10 @@ pub(crate) fn run(
         yaw_deg: if m.laid { 0.0 } else { m.yaw_deg },
         tilt_deg: m.tilt_deg,
         scale: s,
+        grain: m.grain,
+        checks: m.checks,
     };
+    let mut placed: Vec<Placed> = Vec::new();
     if let Some(f) = &field {
         let mut stones: Vec<fieldstone::Stone> = cells
             .iter()
@@ -374,12 +437,34 @@ pub(crate) fn run(
             }
         }
         counts.units = stones.len();
-        units.extend(stones.into_iter().map(|st| Unit::Stone(Box::new(st))));
+        units.extend(stones.into_iter().map(|st| {
+            // a laid stone is fitted to its band when it is made (its box
+            // held inside the tile: what lies past the plane is cut away)
+            let req = laid.map(|_| {
+                let (t, z) = st.plan_box();
+                (
+                    [t[0].max(0.0), z[0].max(0.0)],
+                    [t[1].min(tile[0]), z[1].min(tile[1])],
+                )
+            });
+            Unit::Stone(Box::new(st), req)
+        }));
     } else {
-        let (blocks, extra, missing) = blocks(m, &run, &cells, &finish, seed)?;
+        let (blocks, extra, missing, put) = blocks(m, &run, &cells, &finish, seed, laid)?;
+        placed = put;
         counts.units = blocks.len();
         counts.missing = missing;
-        units.extend(blocks.into_iter().map(Unit::Block));
+        let planes: Vec<Option<Plane>> = if placed.is_empty() {
+            vec![None; blocks.len()]
+        } else {
+            placed.iter().map(|p| Some(p.plane)).collect()
+        };
+        units.extend(
+            blocks
+                .into_iter()
+                .zip(planes)
+                .map(|(b, p)| Unit::Block(b, p)),
+        );
         units.extend(extra.into_iter().map(Unit::Mesh));
     }
     // hearting: always for drystone, on ruin for mortared walls
@@ -394,10 +479,12 @@ pub(crate) fn run(
         counts.chips += feet.len();
         units.extend(feet.into_iter().map(Unit::Mesh));
     }
-    let solid = solidify(scene, &units, &run, m.laid, ctx.edge_mm)?;
+    let material = laid.map_or(Material::Masonry, |l| l.material);
+    let (solid, laid_stones) = solidify(scene, &units, &run, laid, material)?;
+    placed.extend(laid_stones);
     // crumbs the union leaves (a sliver where a tiny closer meets the
     // core's rounding) would be dropped by the gate as lost parts
-    let (solid, _) = crate::tree::drop_crumbs(scene, solid, Material::Masonry, true)?;
+    let (solid, _) = crate::tree::drop_crumbs(scene, solid, material, true)?;
     // drystone's pebbles leave cracks between their rounded tops that an
     // upper stone's underside can roof by a hair: cut what cannot stand
     // on what is below it (a bevel at the reach angle), as a construction
@@ -414,7 +501,7 @@ pub(crate) fn run(
         solid
     };
     let top = if m.laid { thickness } else { seat + height };
-    Ok((solid, counts, fp, top))
+    Ok((solid, counts, fp, top, placed))
 }
 
 /// Every unit a leaf solid (slots reserved in sequence, built in
@@ -423,25 +510,54 @@ pub(crate) fn solidify(
     scene: &mut Scene,
     units: &[Unit],
     run: &Run,
-    laid: bool,
-    edge: Option<f64>,
-) -> Result<Solid, LookError> {
+    laid: Option<&Laid<'_>>,
+    material: Material,
+) -> Result<(Solid, Vec<Placed>), LookError> {
     let n = u32::try_from(units.len()).map_err(LookError::build)?;
-    let slots = scene
-        .slots(n + 1, Material::Masonry)
-        .map_err(LookError::build)?;
-    type Piece = Result<(Solid, [f64; 3], [f64; 3]), LookError>;
+    let slots = scene.slots(n + 1, material).map_err(LookError::build)?;
+    type Piece = Result<(Solid, [f64; 3], [f64; 3], Option<Placed>), LookError>;
     let ticks = scene.progress().counter("stones", units.len(), 0.0, 0.9);
     let built: Vec<Piece> = units
         .par_iter()
         .enumerate()
         .map(|(i, u)| {
             ticks.tick();
+            let mut put = None;
             let mesh = match u {
-                Unit::Block(b) => b.mesh(&run.segs[b.seg]).map_err(LookError::build)?,
-                Unit::Stone(st) => run.place(st.seg, st.mesh().map_err(LookError::build)?),
+                Unit::Block(b, plane) => {
+                    let mut mesh = b.mesh(&run.segs[b.seg]).map_err(LookError::build)?;
+                    if let Some(plane) = plane {
+                        // the relief's high points may stand over the fitted
+                        // plane: the block is seated down to it (its tilt
+                        // kept), so the grain's highest reaches the band's
+                        // top and no further
+                        let over = mesh
+                            .positions
+                            .iter()
+                            .map(|p| p[2] - plane.height([p[0], p[1]]))
+                            .fold(0.0_f64, f64::max);
+                        if over > 0.0 {
+                            for p in &mut mesh.positions {
+                                p[2] -= over;
+                            }
+                        }
+                    }
+                    mesh
+                }
+                Unit::Stone(st, req) => {
+                    let mut mesh = run.place(st.seg, st.mesh().map_err(LookError::build)?);
+                    if let (Some(l), Some((lo, hi))) = (laid, req) {
+                        put = Some(fit_stone(l, &mut mesh, *lo, *hi)?);
+                    }
+                    mesh
+                }
                 Unit::Mesh(mm) => mm.clone(),
             };
+            if let (Some(l), true) = (laid, !matches!(u, Unit::Mesh(_))) {
+                l.fit
+                    .admits(&mesh)
+                    .map_err(|r| LookError::band(&r, "a piece of the floor"))?;
+            }
             let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
             for p in &mesh.positions {
                 for k in 0..3 {
@@ -454,13 +570,16 @@ pub(crate) fn solidify(
                 solid(slots.get(i), &mesh).map_err(LookError::build)?,
                 lo,
                 hi,
+                put,
             ))
         })
         .collect();
     let mut solids = Vec::with_capacity(built.len());
     let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
+    let mut put = Vec::new();
     for b in built {
-        let (sd, l, h) = b?;
+        let (sd, l, h, p) = b?;
+        put.extend(p);
         for k in 0..3 {
             lo[k] = lo[k].min(l[k]);
             hi[k] = hi[k].max(h[k]);
@@ -476,25 +595,58 @@ pub(crate) fn solidify(
     // and the earth's side shared a plane from 0 to the edge level and
     // the union handed its faces to either material. (Standing walls
     // stand inside the tile and never reach its side.)
-    let z_lo = if laid {
-        // the earth's grain may dip a little under the edge level: the slabs
-        // reach down to its lowest, so none lies over a hollow
-        edge.map_or(0.0, |e| {
-            scene
-                .land()
-                .map_or(e, |l| l.z.iter().copied().fold(e, f64::min) - 0.05)
+    let z_lo = if laid.is_some() {
+        // the slabs stand on the land under them: they reach down to its
+        // lowest, so none lies over a hollow (zero, the base, where there
+        // is no land)
+        scene.land().map_or(0.0, |l| {
+            l.z.iter().copied().fold(f64::INFINITY, f64::min) - 0.05
         })
     } else {
         lo[2] - 10.0
     };
-    clip(
+    let cut = clip(
         &all,
         slots.get(n),
         [0.0, 0.0, z_lo],
         [run.tile[0], run.tile[1], hi[2] + 10.0],
     )
-    .map_err(LookError::build)
+    .map_err(LookError::build)?;
+    Ok((cut, put))
 }
+
+/// Fit a laid stone's finished mesh to its band: its highest point is taken
+/// to a plane drawn from the height field, inside the band over the box
+/// it stands in, and the stone is stretched up or down from its foot (the
+/// foot stays where it is, so nothing is left hanging over the land).
+fn fit_stone(
+    l: &Laid<'_>,
+    mesh: &mut TriMesh,
+    lo: [f64; 2],
+    hi: [f64; 2],
+) -> Result<Placed, LookError> {
+    let plane = l.plane_for(lo, hi, "a flagstone")?;
+    let foot = mesh
+        .positions
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::INFINITY, f64::min);
+    let apex = mesh
+        .positions
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::NEG_INFINITY, f64::max);
+    let span = (apex - foot).max(1e-9);
+    for p in &mut mesh.positions {
+        let top = plane.height([p[0], p[1]]);
+        p[2] = foot + (p[2] - foot) * (top - foot) / span;
+    }
+    Ok(Placed { plane, lo, hi })
+}
+
+/// The blocks of a run, the extra meshes (mortar, pointing), how many cells
+/// are missing, and where each block was laid.
+type BlocksMade = (Vec<Block>, Vec<TriMesh>, usize, Vec<Placed>);
 
 /// Blocks for every cell (mortared families and slabs), held printable,
 /// plus the mortar under a missing brick and the pointing of joints wider
@@ -506,7 +658,8 @@ pub(crate) fn blocks(
     cells: &[Cell],
     finish: &Finish,
     seed: Seed,
-) -> Result<(Vec<Block>, Vec<TriMesh>, usize), LookError> {
+    laid: Option<&Laid<'_>>,
+) -> Result<BlocksMade, LookError> {
     let s = finish.scale;
     // the joint scales with everything else
     let jw = m.joint * s;
@@ -542,6 +695,7 @@ pub(crate) fn blocks(
         }
     }
     let mut out: Vec<(usize, Block)> = Vec::new();
+    let mut placed: Vec<Placed> = Vec::new();
     for (i, c) in cells.iter().enumerate() {
         if missing[i] {
             continue;
@@ -578,8 +732,50 @@ pub(crate) fn blocks(
             if spall {
                 f.chip += (0.30 * (x1 - x0).min(y[1] - y[0]) * 0.25).min(0.30 * s);
             }
+            // a laid piece takes its top from the band: a plane fitted to
+            // it over the nodes it stands on, held under the steepest tilt
+            let (xs, ys, zt) = if let Some(l) = laid {
+                let plane = l.plane_for([x0, y[0]], [x1, y[1]], "a slab")?;
+                // on the tile's boundary the piece runs past the plane, so
+                // the cut there is square and its top is whole
+                let pad = m.edge_pad;
+                let xs = [
+                    if c.t0 < 1e-6 && pad > 0.0 {
+                        x0 - pad
+                    } else {
+                        x0
+                    },
+                    if c.t1 > run.tile[0] - 1e-6 && pad > 0.0 {
+                        x1 + pad
+                    } else {
+                        x1
+                    },
+                ];
+                let ys = [
+                    if y[0] < 1e-6 && pad > 0.0 {
+                        y[0] - pad
+                    } else {
+                        y[0]
+                    },
+                    if y[1] > run.tile[1] - 1e-6 && pad > 0.0 {
+                        y[1] + pad
+                    } else {
+                        y[1]
+                    },
+                ];
+                let mid = [0.5 * (xs[0] + xs[1]), 0.5 * (ys[0] + ys[1])];
+                let zt = plane.height(mid);
+                placed.push(Placed {
+                    plane,
+                    lo: [x0, y[0]],
+                    hi: [x1, y[1]],
+                });
+                (xs, ys, zt)
+            } else {
+                ([x0, x1], y, t - q0)
+            };
             (
-                ([x0, x1], y, [-1.0, t - q0]),
+                (xs, ys, [-1.0, zt]),
                 [!face0, !face1, !c.is_bottom, !c.is_top],
                 true,
             )
@@ -596,6 +792,17 @@ pub(crate) fn blocks(
         let mut b = block::draw(&mut rng, c.seg, bx, &f, exposed_top, exposed_top, mask, bs);
         if run.laid {
             b.exposed = [false; 4];
+            if let Some(p) = placed.last() {
+                // the tilt and height are the fitted plane's, and nothing
+                // settles under it
+                b.tilt = p.plane.g;
+                b.drop = 0.0;
+                if f.checks > 0.0 && rng.random() < f.checks {
+                    let end = if rng.random() < 0.5 { 0.0 } else { 1.0 };
+                    let across = rng.uniform(0.2 * (b.y[1] - b.y[0]), 0.8 * (b.y[1] - b.y[0]));
+                    b.check = Some([end, across, 0.3 * s]);
+                }
+            }
         } else {
             b.exposed = [face0, face1, true, true];
             // a head joint opens no wider at its top than the unit above
@@ -701,7 +908,7 @@ pub(crate) fn blocks(
         }
     }
     let n_missing = missing.iter().filter(|&&x| x).count();
-    Ok((blocks, extra, n_missing))
+    Ok((blocks, extra, n_missing, placed))
 }
 
 /// `_hearting_parts`: a sealed sheet of small rough chips through the

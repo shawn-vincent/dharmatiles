@@ -15,7 +15,7 @@
   <div class="eyebrow"><i class="fam-mark fam-thing" title="stone: a thing, a run or a scatter"></i>Element · run</div>
   <h1>wall</h1>
   <p class="lede">A masonry wall standing on a tile edge: cut stone, fieldstone, brick or regular brick, laid in courses with real joints, its top at the official wall-top level (33.1 mm). On a tile edge it always stands inside the tile, its outer face flush with the edge, so walls on neighbouring tiles line up.</p>
-  <p class="small">Stone floors are their own element, <a href="floor.html"><code>floor</code></a>; walls stand on them. Doors, windows and hatches are not built yet.</p>
+  <p class="small">Floors are their own elements, <a href="flagstones.html"><code>flagstones</code></a> and <a href="planks.html"><code>planks</code></a>; walls stand on them. Doors, windows and hatches are not built yet.</p>
   <figure class="shot hero-one"><img src="img/el-wall.jpg" alt="A one-square tile with a cut-stone wall turning a corner along the north and west edges, grass in front"><figcaption><code>lib:tiles/walls/1x1-wall-stone-corner.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
     <div><div class="k">Styles</div><div class="v">cut stone, fieldstone, brick, regular brick</div></div>
@@ -55,8 +55,8 @@
 <tr><td>Fieldstone</td><td>Drystone: flat, rounded natural stones packed tight with no mortar, small rough chips filling the gaps. Topped with perched stones or a row of stones on edge.</td><td><code>wall style=fieldstone</code></td></tr>
 <tr><td>Brick</td><td>Small worn bricks with a few missing and spalled.</td><td><code>wall style=brick</code></td></tr>
 <tr><td>Regular brick</td><td>Uniform bricks in dead-level running bond, half a brick offset per course.</td><td><code>wall style=regular-brick</code></td></tr>
-<tr><td>Stone floor</td><td>Dressed slabs gridding the ground, one per square by default, some cracked, spalled or missing.</td><td><code>floor</code></td></tr>
-<tr><td>Drystone floor</td><td>Flagstones: a fieldstone wall laid on its side.</td><td><code>floor style=fieldstone</code></td></tr>
+<tr><td>Stone floor</td><td>Dressed slabs gridding the ground, one per square by default, some cracked, spalled or missing.</td><td><code>flagstones</code></td></tr>
+<tr><td>Drystone floor</td><td>Flagstones: a fieldstone wall laid on its side.</td><td><code>flagstones style=fieldstone</code></td></tr>
 </tbody></table></div>
 <div class="grid2">
   <figure class="shot">
@@ -69,7 +69,7 @@
   </figure>
   <figure class="shot">
     <img src="img/el-wall-fieldstone.jpg" alt="Drystone flagstone floor with a fieldstone wall standing on it" loading="lazy">
-    <figcaption>A fieldstone wall with <code>coping=on-edge</code> on a <code>floor style=fieldstone</code>: <a href="demo/floor-fieldstone.dtile"><code>demo/floor-fieldstone.dtile</code></a>.</figcaption>
+    <figcaption>A fieldstone wall with <code>coping=on-edge</code> on a <code>flagstones style=fieldstone</code>: <a href="demo/flagstones-fieldstone.dtile"><code>demo/flagstones-fieldstone.dtile</code></a>.</figcaption>
   </figure>
   <figure class="shot">
     <img src="img/el-wall-ruins.jpg" alt="A low ruined cut-stone wall with rubble showing along its broken top" loading="lazy">
@@ -141,9 +141,9 @@ tile size="1x1" seed=62 {
 
 <h3 id="floor-spec">Floors</h3>
 <ul>
-  <li><strong>The <a href="floor.html"><code>floor</code></a> element</strong> is a stone pavement: dressed slabs from the tile bottom to 7.4 mm (the official interior floor), one per square by default (<code>slabs</code> subdivides). About 4% of slabs are missing (dirt shows in the pits), 10% spalled and 20% cracked.</li>
-  <li><strong>The floor is the ground.</strong> There is no soil on top of the pavement. A wall written after it stands on the slabs, its top still at the wall-top level.</li>
-  <li><strong>Drystone floor:</strong> <code>floor style=fieldstone</code> lays a fieldstone wall's stones and chinking flat, as flags.</li>
+  <li><strong>The <a href="flagstones.html"><code>flagstones</code></a> element</strong> is a stone pavement: dressed slabs standing on the land to 7.4 mm (the official interior floor), one per square by default (<code>slabs</code> subdivides). About 4% of slabs are missing (dirt shows in the pits), 10% spalled and 20% cracked.</li>
+  <li><strong>The slabs are the top.</strong> A wall written after a floor stands on the slabs, its top still at the wall-top level.</li>
+  <li><strong>Drystone floor:</strong> <code>flagstones style=fieldstone</code> lays a fieldstone wall's stones and chinking flat, as flags.</li>
 </ul>
 
 <h3 id="sizes">Sizes and levels</h3>
@@ -202,7 +202,7 @@ tile size="1x1" seed=62 {
   <li><strong>Core and hearting.</strong> Mortared walls have a hidden core set back from every face, which shows as the mortar. Drystone walls have no core; about a thousand small rough chips fill the inside (<code>_hearting_parts</code>, line 1246).</li>
   <li><strong>Assembly.</strong> Stones, core and surrounds are unioned into one solid. <code>separate_pinches</code> nudges apart points where two stones only just touch, so the STL stays watertight (<code>src/dharmatiles/stone/solidify.py:42</code>), and the wall is clipped to the tile (line 1564). Slots are one boolean cut out of the finished wall (<code>_cut_slots</code>, line 848). The footprint is stamped into the ground so grass steers around it.</li>
 </ol>
-<p>A floor is the same chassis with <code>laid_flat=True</code>: the wall's height axis becomes the second plan axis, courses become rows of slabs, and the thickness becomes the pavement depth (<code>walls/floor.py</code>, line 42).</p>
+<p>A floor is the same chassis laid flat: the wall's height axis becomes the second plan axis, courses become rows of slabs or boards, and each piece takes its top from the floor's band (<code>crates/dt-elements/src/floor.rs</code>).</p>
 <details>
   <summary>Texture presets</summary>
   <div class="tbl"><table>

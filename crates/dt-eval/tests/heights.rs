@@ -141,8 +141,8 @@ fn a_layer_that_can_never_be_thick_enough_is_refused() {
 
 #[test]
 fn a_cliff_has_no_band_yet() {
-    // cliffs and floors are pieces bodies: their tops come with step 8, so
-    // check solves only the dirt and the water
+    // the cliff is a pieces body whose top comes with step 8b, so check
+    // solves only the dirt and the water (floors have theirs)
     let c = solved(&tile("stack { base\n dirt\n cliff along=north }"));
     assert_eq!(c.solved.as_ref().unwrap().bodies.len(), 1);
 }

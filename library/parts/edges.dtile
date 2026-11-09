@@ -3,10 +3,11 @@
 // are read before the tile's own lines, so a tile's top replaces the default
 // top and its pins win over the default pin wherever they overlap.  The land
 // defaults apply to the first land layer only; the water default to every
-// water.  (`floor` becomes `flagstones` and `planks` when floors are split by
-// material.)
+// water.  A floor, flagstones or planks, is a pieces body: its band is the
+// floor height and the edge pin holds it flush with the tile's edge.
 defaults {
     dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
-    floor top=floorHeight                          { pin top=floorEdgeHeight at=edges }
+    flagstones top=floorHeight                     { pin top=floorEdgeHeight at=edges }
+    planks top=floorHeight                         { pin top=floorEdgeHeight at=edges }
     water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" { pin top=waterEdgeHeight at=edges }
 }

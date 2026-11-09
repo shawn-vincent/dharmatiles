@@ -1,31 +1,90 @@
-//! `floor`: a stone pavement, a wall laid on its side (Shawn: "the floor should just be a wall laying on its side … with
-//! different sized bricks"). The masonry chassis builds it: courses are
-//! pavement rows and bays slabs, both pinned to the square grid (`slabs`
-//! per square), the wall's thickness is the pavement's depth from the
-//! datum to `level` (7.4 mm, the official interior floor), the mortar core
-//! one sheet a joint's depth under the top. The floor replaces the
-//! ground: slabs run full depth and are cut flat at the datum. Some slabs
-//! are missing (dark pits onto the mortar), some spalled (broken
-//! corners); slabs run flush at the tile edges.
+//! `flagstones` and `planks`: the floors, two pieces bodies.
 //!
-//! The area is slab-granular: a slab is laid where its centre is in the
-//! entry's area. `style=fieldstone` lays crack-network flagstones.
+//! A floor is a wall laid on its side (Shawn: "the floor should just be a
+//! wall laying on its side"): the masonry chassis lays the slabs, or the
+//! boards, as separate solids (each its own slot), and their union is the
+//! body. The body has a band like dirt has (`top=`, solved with its pins,
+//! each held to its place, nothing eased: slabs step). What is different
+//! from a field body is that it is made of pieces, so each piece is made to
+//! fit the band as it is made:
+//!
+//! 1. the body's heights are a heaved surface inside the band (the same
+//!    calculator dirt's hills use, [`dt_kit::span::hills`]): one height is
+//!    a flat floor, a wide band a heaved one;
+//! 2. each slab or board takes a plane from that surface where it stands
+//!    (its height at its middle, its tilt across it) held under the
+//!    steepest tilt, then reduced by [`dt_kit::pieces::Pieces::plane`] until
+//!    it is inside the band over every node the piece stands on; nothing
+//!    is ever trimmed afterwards;
+//! 3. a piece whose finished mesh stands over the band is refused
+//!    (`dt::band`, a bug).
+//!
+//! The slabs stand on the land under them (they reach down to its lowest
+//! point, or to zero, the base, with no land), so none is left over a
+//! hollow; where the land is higher than a slab the land shows, the surface
+//! being the higher of what is below and the body's own top. A floor
+//! meets the tile edge flush and square: its pieces on the boundary run
+//! past the plane and are cut there, so their tops are whole at the
+//! plane. Weathered flagstones (`texture=worn`) keep a worn round of their
+//! own at the edge instead.
+//!
+//! Slabs are laid where their middle is inside the entry's area.
+//! `style=fieldstone` lays crack-network flagstones.
 
-use dt_kit::Kind;
-use dt_kit::Scene;
+use dt_kit::span::hills;
+use dt_kit::{Field, Kind, Mask, Noise, Scale, Scene, noise};
 
 use crate::read;
-use crate::wall::{self, Family, Height, Mason};
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write};
+use crate::wall::{self, Family, Height, Laid, Mason};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
-/// The `floor` element.
+/// The steepest a slab or board tilts, degrees.
+const TILT_MAX_DEG: f64 = 4.0;
+/// The heave's blur, mm at the 35 mm square: about a slab across.
+const HEAVE_SIGMA_MM: f64 = 7.0;
+/// How steeply the heave may rise from a pinned place, degrees.
+const HEAVE_SLOPE_DEG: f64 = 35.0;
+/// Past this a band has room (a thinner one is a pin).
+const ROOM_MM: f64 = 0.02;
+/// The nominal pavement depth the stones are drawn for, mm at the
+/// reference (their feet go on to the land).
+const DEPTH_MM: f64 = 7.4;
+/// How far a slab on the tile's boundary runs past the plane, true mm:
+/// past its arris rounding, so the cut is through its flat top.
+const BLOCK_PAD_MM: f64 = 1.5;
+/// The same for a drystone flag, whose pebble shape falls away from its
+/// outline over its rounding.
+const FIELDSTONE_PAD_MM: f64 = 6.0;
+
+/// `flagstones`: stone slabs.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Floor {
+pub struct Flagstones {
     mason: Mason,
     slabs: u32,
 }
 
-impl Floor {
+/// `planks`: wooden boards.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Planks {
+    mason: Mason,
+    boards: u32,
+    even: bool,
+}
+
+fn whole(c: &Control, name: &str) -> Result<u32, LookError> {
+    let v = read::number(c)?;
+    if v.fract() != 0.0 || v < 1.0 {
+        return Err(LookError::control(
+            name,
+            format!("{name} must be a whole number, not {}", c.value),
+            format!("write how many across a square, such as {name}=2"),
+        ));
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Ok(v as u32)
+}
+
+impl Flagstones {
     /// From its controls.
     ///
     /// # Errors
@@ -38,9 +97,7 @@ impl Floor {
             None => false,
         };
         let mut m = if fieldstone {
-            // the fieldstone wall's own stone sizes (Shawn, walls E57:
-            // big flagstones looked weird; the floor should read like the
-            // wall's stones, laid flat)
+            // the fieldstone wall's own stone sizes, laid flat
             Mason::new(Family::Fieldstone)
         } else {
             let mut m = Mason::new(Family::Slab);
@@ -55,7 +112,12 @@ impl Floor {
             m
         };
         m.laid = true;
-        m.thickness = 7.4;
+        m.thickness = DEPTH_MM;
+        m.edge_pad = if fieldstone {
+            FIELDSTONE_PAD_MM
+        } else {
+            BLOCK_PAD_MM
+        };
         let mut slabs = 1;
         for c in controls {
             match c.name.as_str() {
@@ -68,27 +130,13 @@ impl Floor {
                             m.texture(t);
                         }
                     }
-                }
-                "slabs" => {
-                    let v = read::number(c)?;
-                    if v.fract() != 0.0 {
-                        return Err(LookError::control(
-                            "slabs",
-                            format!("slabs must be a whole number, not {}", c.value),
-                            "write how many slabs across a square, such as slabs=2".into(),
-                        ));
-                    }
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    {
-                        slabs = v as u32;
+                    if w == "worn" {
+                        // weathered: the worn edge takes a round of its own
+                        // at the plane
+                        m.edge_pad = 0.0;
                     }
                 }
-                "level" => {
-                    m.thickness = match &c.value {
-                        Value::Word(w) if w == "floor" => 7.4,
-                        _ => read::number(c)?,
-                    }
-                }
+                "slabs" => slabs = whole(c, "slabs")?,
                 _ => {}
             }
         }
@@ -96,54 +144,219 @@ impl Floor {
     }
 }
 
-impl Element for Floor {
-    fn plan(&self) -> Plan {
-        Plan {
-            writes: Write::Solid(Kind::Floor),
-            reads: vec![Read::Solids(Kind::Terrain)],
-            cell_mm: None,
+/// The plank textures: chip, rounding, relief, grain depth, share with a
+/// check.
+fn plank_texture(word: &str) -> Option<((f64, f64, f64), f64, f64)> {
+    match word {
+        "smooth" => Some(((0.10, 0.14, 0.0), 0.03, 0.15)),
+        "worn" => Some(((0.25, 0.40, 0.0), 0.05, 0.30)),
+        "rough" => Some(((0.35, 0.25, 0.04), 0.09, 0.50)),
+        _ => None,
+    }
+}
+
+impl Planks {
+    /// From its controls.
+    ///
+    /// # Errors
+    /// [`LookError`] for a control it does not take or a value out of
+    /// range.
+    pub fn new(controls: &[Control]) -> Result<Self, LookError> {
+        let mut m = Mason::new(Family::Slab);
+        m.laid = true;
+        m.thickness = DEPTH_MM;
+        m.joint = 0.3;
+        m.reveal = 1.0;
+        m.face_recess = 0.0;
+        m.missing = 0.0;
+        m.spall = 0.0;
+        m.edge_pad = BLOCK_PAD_MM;
+        let (tex, grain, checks) = plank_texture("worn").unwrap_or_default();
+        m.texture(tex);
+        m.grain = grain;
+        m.checks = checks;
+        let mut boards = 8;
+        let mut even = false;
+        for c in controls {
+            match c.name.as_str() {
+                "style" => even = read::word(c)? == "even",
+                "texture" => {
+                    if let Some((tex, grain, checks)) = plank_texture(read::word(c)?) {
+                        m.texture(tex);
+                        m.grain = grain;
+                        m.checks = checks;
+                    }
+                }
+                "boards" => boards = whole(c, "boards")?,
+                _ => {}
+            }
         }
+        Ok(Self {
+            mason: m,
+            boards,
+            even,
+        })
+    }
+}
+
+fn plan() -> Plan {
+    Plan {
+        writes: Write::Solid(Kind::Floor),
+        // it stands on the land if the tile has any; zero, the base, if not
+        reads: vec![Read::IfAny(Kind::Terrain)],
+        cell_mm: None,
+    }
+}
+
+/// The heaved surface in a floor's band: the band itself where it is a
+/// single height, else the smoothest surface in it with noise spread over
+/// the room there is.
+fn heave(scene: &Scene, ctx: &Ctx<'_>, band: &dt_kit::Band) -> (Field, bool) {
+    let f = scene.frame();
+    let (lo, hi) = (band.lo(), band.hi());
+    if (0..lo.z.len()).all(|k| hi.z[k] - lo.z[k] < ROOM_MM) {
+        return (lo.clone(), true);
+    }
+    let n = noise(
+        f,
+        ctx.seed.key("heave"),
+        Noise::Smooth {
+            sigma_mm: HEAVE_SIGMA_MM,
+        },
+        Scale::Layout,
+    );
+    let h = hills(&n, band, f64::MAX, HEAVE_SLOPE_DEG, f.scale());
+    if !h.converged {
+        return (h.shape.field().clone(), false);
+    }
+    (h.shape.field().clone(), true)
+}
+
+/// Lay a floor of `m`'s pieces in `material`: heave, fit, build, stamp.
+fn lay(
+    m: &Mason,
+    scene: &mut Scene,
+    ctx: &Ctx<'_>,
+    material: dt_kit::Material,
+    what: &str,
+) -> Result<(), LookError> {
+    let f = *scene.frame();
+    let Some(band) = ctx.band else {
+        return Err(LookError::general(
+            format!("the {what} has no solved band"),
+            "the tile was not solved: run check to see why",
+        ));
+    };
+    let [w, h] = f.size_mm();
+    let (surface, settled) = heave(scene, ctx, band);
+    if !settled {
+        scene.note("relax_unconverged", 1.0);
+    }
+    let laid = Laid {
+        fit: dt_kit::pieces::Pieces::new(band, &f),
+        heave: &surface,
+        tilt_max: libm::tan(TILT_MAX_DEG.to_radians()),
+        material,
+        step: f.step_mm(),
+    };
+    let mut m = m.clone();
+    m.height = Height::Rel(h);
+    // the spine along the south edge walking east: the strip covers the
+    // tile northward
+    let spine = [[0.0, 0.0], [w, 0.0]];
+    let area = ctx.area;
+    let (nx, ny) = f.nodes();
+    let step = f.step_mm();
+    let keep = |c: &wall::layout::Cell| {
+        // laid flat: t runs east, the rows (cell z) north
+        let (x, y) = (0.5 * (c.t0 + c.t1), 0.5 * (c.z0 + c.z1));
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let (i, j) = (
+            (libm::round(x / step) as usize).min(nx - 1),
+            (libm::round(y / step) as usize).min(ny - 1),
+        );
+        area.bits[j * nx + i]
+    };
+    let (solid, counts, _, _, placed) =
+        wall::run(&m, scene, ctx, &spine, Kind::Floor, &keep, Some(&laid))?;
+    if counts.units == 0 {
+        return Err(LookError::general(
+            format!("the {what}'s area holds no whole piece: no piece centre falls inside it"),
+            "make its area bigger",
+        ));
+    }
+    // what stands on the floor sees each piece's top where it stands; the
+    // gaps between (joints, a missing slab) the heaved surface
+    let mut tops = vec![f64::NEG_INFINITY; nx * ny];
+    for (k, t) in tops.iter_mut().enumerate() {
+        if area.bits[k] {
+            *t = surface.z[k];
+        }
+    }
+    for p in &placed {
+        for j in 0..ny {
+            #[allow(clippy::cast_precision_loss)]
+            let y = j as f64 * step;
+            if y < p.lo[1] || y > p.hi[1] {
+                continue;
+            }
+            for i in 0..nx {
+                #[allow(clippy::cast_precision_loss)]
+                let x = i as f64 * step;
+                if x >= p.lo[0] && x <= p.hi[0] {
+                    let k = j * nx + i;
+                    if area.bits[k] {
+                        tops[k] = tops[k].max(p.plane.height([x, y]));
+                    }
+                }
+            }
+        }
+    }
+    // the pieces' own stamp replaces the flat one
+    let none = Mask::new(nx, ny, false);
+    wall::finish_build(scene, ctx, Kind::Floor, solid, counts, &none, 0.0);
+    scene.stamp_heights(&tops);
+    Ok(())
+}
+
+impl Element for Flagstones {
+    fn plan(&self) -> Plan {
+        plan()
     }
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
-        let f = *scene.frame();
-        let s = f.scale();
-        let [w, h] = f.size_mm();
+        let s = scene.frame().scale();
         let mut m = self.mason.clone();
-        // the level scales with everything else (a photocopy, every
-        // level included): Run scales the thickness
         if m.family == Family::Slab {
-            let pitch = f.square_mm / f64::from(self.slabs) / s;
+            let pitch = scene.frame().square_mm / f64::from(self.slabs) / s;
             m.course = (pitch, pitch);
             m.bay = (pitch, pitch);
         }
-        m.height = Height::Rel(h);
-        // the spine along the south edge walking east: the strip covers
-        // the tile northward
-        let spine = [[0.0, 0.0], [w, 0.0]];
-        let area = ctx.area;
-        let (nx, ny) = f.nodes();
-        let step = f.step_mm();
-        let keep = |c: &wall::layout::Cell| {
-            // laid flat: t runs east, the rows (cell z) north
-            let (x, y) = (0.5 * (c.t0 + c.t1), 0.5 * (c.z0 + c.z1));
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let (i, j) = (
-                (libm::round(x / step) as usize).min(nx - 1),
-                (libm::round(y / step) as usize).min(ny - 1),
-            );
-            area.bits[j * nx + i]
-        };
-        let (solid, counts, mut fp, top) = wall::run(&m, scene, ctx, &spine, Kind::Floor, &keep)?;
-        if counts.units == 0 {
-            return Err(LookError::build(
-                "the floor's area holds no whole slab: no slab centre falls inside it",
-            ));
+        lay(&m, scene, ctx, dt_kit::Material::Masonry, "flagstones")
+    }
+}
+
+impl Element for Planks {
+    fn plan(&self) -> Plan {
+        plan()
+    }
+
+    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
+        let f = scene.frame();
+        let s = f.scale();
+        let mut m = self.mason.clone();
+        // boards run east to west: a board's width is one course
+        let width = f.square_mm / f64::from(self.boards) / s;
+        m.course = (width, width);
+        if self.even {
+            // every board half a square long, each course set half a board
+            // on from the last
+            m.bay = (17.5, 17.5);
+            m.bond = wall::Bond::Running;
+        } else {
+            m.bay = (9.0, 26.0);
+            m.min_bond = 4.0;
         }
-        for (b, a) in fp.bits.iter_mut().zip(&area.bits) {
-            *b = *b && *a;
-        }
-        wall::finish_build(scene, ctx, Kind::Floor, solid, counts, &fp, top);
-        Ok(())
+        lay(&m, scene, ctx, dt_kit::Material::Wood, "planks")
     }
 }

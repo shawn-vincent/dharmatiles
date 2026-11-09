@@ -131,28 +131,11 @@ fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
 }
 
 #[test]
-fn a_value_out_of_range_once_its_names_resolve_is_refused_when_read() {
-    // a level names other levels: only the reader knows what it comes to
-    let e = errors("tile { stack { floor level=\"groundHeight - 50\" } }\n");
-    assert!(
-        e[0].message.starts_with("`floor level` is 1 to 30, not -4"),
-        "{}",
-        e[0].message
-    );
+fn a_value_out_of_range_is_refused_when_read() {
     // a parameter is checked at the call, against the control it feeds
     let e = errors(
         "define tall {\n    param height 50\n    stack { tree height=height }\n}\n\
          tile { stack { dirt; tall height=150 } }\n",
     );
     assert_eq!(e[0].message, "`tall height` is 20 mm to 120 mm, not 150 mm");
-}
-
-#[test]
-fn level_messages_show_numbers_as_written() {
-    // was "not Number(inf)"
-    for (level, shown) in [("#inf", "not ∞"), ("#nan", "not NaN"), ("-50", "not -50")] {
-        let e = errors(&format!("tile {{ stack {{ floor level={level} }} }}\n"));
-        assert!(e[0].message.ends_with(shown), "{}", e[0].message);
-        assert!(!e[0].message.contains("Number("), "{}", e[0].message);
-    }
 }

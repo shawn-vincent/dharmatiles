@@ -38,6 +38,8 @@ const TILES: &[&str] = &[
     "lib:tiles/test/1x1-wall-cut-stone-corner.dtile",
     "lib:tiles/test/1x1-wall-fieldstone.dtile",
     "lib:tiles/test/1x1-floor-stone.dtile",
+    "lib:tiles/test/1x1-flagstones-heaved.dtile",
+    "lib:tiles/test/1x1-planks.dtile",
     "lib:tiles/test/1x1-wall-rim.dtile",
     "lib:tiles/test/2x2-hill.dtile",
 ];
@@ -452,6 +454,8 @@ fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
         "lib:tiles/test/1x1-wall-fieldstone.dtile",
         "lib:tiles/test/1x1-wall-rim.dtile",
         "lib:tiles/test/1x1-floor-stone.dtile",
+        "lib:tiles/test/1x1-flagstones-heaved.dtile",
+        "lib:tiles/test/1x1-planks.dtile",
     ] {
         let b = built(path);
         let a = &b.audit;

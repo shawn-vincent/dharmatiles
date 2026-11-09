@@ -124,7 +124,7 @@ tile size="2x2" seed=1 {
 <h2 id="how">How it is made</h2>
 <p>The program orders the stack by what each element reads and writes, so the order a tile lists them in does not decide what grows round what.</p>
 <ol>
-  <li><strong>Surfaces.</strong> Dirt is the ground; floors are laid on it. A later land body is the higher of what is below it and its own top.</li>
+  <li><strong>Surfaces.</strong> Dirt is the ground; floors (flagstones, planks) are laid on it. A later land body is the higher of what is below it and its own top.</li>
   <li><strong>Solids.</strong> Rocks, trees, walls and cliffs claim their footprints and are bedded into the ground, kept inside the tile and clear of each other.</li>
   <li><strong>Growth.</strong> Grass and reeds read the footprints: no blade roots inside one, blades stop just inside a rock's face, and the flow parts round each solid.</li>
   <li><strong>Join and check.</strong> Everything is joined with the base into one body, and the printability gate checks it.</li>

@@ -2,7 +2,7 @@
 //! bands on a lattice, with the refusals and lints of the band solver.
 //! Fields only, no meshes: tens of milliseconds.
 //!
-//! Each body of the stack (dirt, water, cliff, floor) takes its top, or its
+//! Each body of the stack (dirt, water, cliff, flagstones, planks) takes its top, or its
 //! element's default top; its pins are the library defaults' first (the
 //! land defaults for the first land layer only, the water default for every
 //! water), then the tile's own, so the tile's win where they overlap.  The
@@ -398,12 +398,16 @@ fn solve_on(
 
     for b in &h.bodies {
         let land = writes.get(b.entry) != Some(&Write::Fill);
+        // a floor is a pieces body: it takes its own defaults wherever it is
+        // laid (its edge pin is its edge contract), and never uses up the
+        // first land layer's, which are the dirt's
+        let floor = matches!(b.element.as_str(), "flagstones" | "planks");
         let default: Option<&DefaultBody> = h
             .defaults
             .iter()
             .find(|d| d.element == b.element)
-            .filter(|_| !land || first_land);
-        if land {
+            .filter(|_| !land || floor || first_land);
+        if land && !floor {
             first_land = false;
         }
         let region = match &b.region {
@@ -498,7 +502,10 @@ fn solve_on(
         if !ok {
             continue;
         }
-        let ease = if land {
+        let ease = if land && matches!(b.element.as_str(), "flagstones" | "planks") {
+            // a floor's slabs step: a pin holds its place, nothing eases
+            Ease::Step
+        } else if land {
             Ease::Slope(b.slope.unwrap_or(dt_elements::dirt::SLOPE_DEG))
         } else {
             Ease::Settle(dt_elements::water::SETTLE_MM * g.scale)
@@ -622,7 +629,7 @@ fn solve_on(
             .iter()
             .position(|p| p.from.default && p.at == PlaceRef::Name("edges".into()))
         {
-            if land && edge_mm.is_none() {
+            if land && !floor && edge_mm.is_none() {
                 // where the library's edge pin holds the rim, as solved
                 edge_mm = (0..nx * ny)
                     .filter(|&k| {

@@ -844,7 +844,6 @@ impl<'a> Plan<'a> {
             against: entry.and_then(|e| e.against.as_deref()),
             foots: &self.foots,
             band: self.solved.by_entry[i].map(|b| &self.solved.bodies[b].band),
-            edge_mm: self.solved.edge_mm,
             calm_mm: self.solved.calm_mm,
             under: self.under.get(i).and_then(Option::as_ref),
             draft: self.opts.draft,
@@ -905,8 +904,14 @@ impl<'a> Plan<'a> {
                     let msg = format!("{}: {}", self.jobs[i].path, e.message);
                     match tile.stack.get(i) {
                         Some(en) => vec![
-                            Diag::at(&en.src, en.span, "dt::build", msg, "while building this")
-                                .maybe_help(e.help),
+                            Diag::at(
+                                &en.src,
+                                en.span,
+                                e.code.unwrap_or("dt::build"),
+                                msg,
+                                "while building this",
+                            )
+                            .maybe_help(e.help),
                         ],
                         None => build_error(msg),
                     }
@@ -964,7 +969,7 @@ impl<'a> Plan<'a> {
         let masonry: Vec<bool> = tile
             .stack
             .iter()
-            .filter(|e| matches!(e.what.value.as_str(), "wall" | "floor"))
+            .filter(|e| matches!(e.what.value.as_str(), "wall" | "flagstones"))
             .map(|e| {
                 e.controls.iter().any(|c| {
                     c.name == "style"

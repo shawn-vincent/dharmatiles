@@ -6,6 +6,6 @@ tile size="1x1" seed=1 {
     stack {
         base
         dirt
-        floor style=fieldstone
+        flagstones style=fieldstone
     }
 }

@@ -32,8 +32,8 @@ use crate::read;
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write};
 #[cfg(test)]
 use chassis::percentile;
-pub(crate) use chassis::{Run, build, cell_seed, finish_build, run};
-use layout::Bond;
+pub(crate) use chassis::{Laid, Run, build, cell_seed, finish_build, run};
+pub(crate) use layout::Bond;
 
 /// The official wall top above the datum, mm at the reference.
 const WALL_TOP_MM: f64 = 33.1;
@@ -108,6 +108,13 @@ pub(crate) struct Mason {
     pub spall: f64,
     pub crack: f64,
     pub embed: f64,
+    /// A laid piece on the tile's boundary runs this far past the plane
+    /// (true mm), so the cut at the plane is square and its top meets the
+    /// plane at the piece's own height; 0: its rounded edge stays.
+    pub edge_pad: f64,
+    /// Wood grain depth, mm, and the share of boards with a check.
+    pub grain: f64,
+    pub checks: f64,
 }
 
 impl Mason {
@@ -137,6 +144,9 @@ impl Mason {
             spall: 0.0,
             crack: 0.0,
             embed: 2.5,
+            edge_pad: 0.0,
+            grain: 0.0,
+            checks: 0.0,
         };
         match family {
             Family::CutStone | Family::Slab => base,
@@ -313,6 +323,7 @@ impl Element for Wall {
                 control: None,
                 message: "a wall needs along= the tile edges it stands on".into(),
                 help: Some("write along=\"north\" or along=\"north west\"".into()),
+                code: None,
             });
         };
         let sq = scene.frame().square_mm;

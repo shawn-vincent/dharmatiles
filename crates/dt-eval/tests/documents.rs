@@ -47,10 +47,15 @@ fn a_misspelt_look_points_at_its_line_with_a_hint() {
 
 #[test]
 fn an_unknown_height_lists_the_heights() {
-    let e = errors("tile {\n  stack {\n    floor level=grundHeight\n  }\n}\n");
-    assert_eq!(e[0].location().unwrap().1, 3);
+    let wobble = |v: &str| {
+        format!(
+            "tile {{\n  line s wobble={v} {{ through \"0,0.5\" \"1,0.5\" }}\n  stack {{\n    dirt\n  }}\n}}\n"
+        )
+    };
+    let e = errors(&wobble("grundHeight"));
+    assert_eq!(e[0].location().unwrap().1, 2);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `groundHeight`?"));
-    let e = errors("tile {\n  stack {\n    floor level=lava\n  }\n}\n");
+    let e = errors(&wobble("lava"));
     assert!(e[0].help.as_deref().unwrap().contains("wallHeight"));
 }
 
@@ -193,7 +198,7 @@ fn definition_parameters_take_arguments_and_defaults() {
 
 #[test]
 fn kdl_syntax_errors_carry_their_place() {
-    let e = errors("tile {\n  stack {\n    floor level=5mm\n  }\n}\n");
+    let e = errors("tile {\n  stack {\n    dirt top=5mm\n  }\n}\n");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert!(e[0].help.is_some());
 }

@@ -60,6 +60,13 @@ pub(crate) struct Block {
     /// The relief's noise scale, mm.
     pub noise_mm: f64,
     pub seed: Seed,
+    /// Wood grain: grooves along x cut into the top, this deep at most, mm
+    /// (0: none).
+    pub grain: f64,
+    /// A check (a crack in the end grain) run in from an end: which end
+    /// (0 the x0 end, 1 the x1 end), where across the block (local y) and
+    /// how deep it is, mm.
+    pub check: Option<[f64; 3]>,
 }
 
 impl Block {
@@ -133,7 +140,11 @@ impl Block {
             ));
         }
         let planes = self.planes();
-        let pitch = (lx.max(ly).max(lz) / 56.0).clamp(0.18, 0.32);
+        let mut pitch = (lx.max(ly).max(lz) / 56.0).clamp(0.18, 0.32);
+        if self.grain > 0.0 {
+            // the grooves are about a millimetre apart: sample them
+            pitch = pitch.min(0.22);
+        }
         let tau = (0.7 * self.rounding)
             .min(0.22 * lx.min(ly).min(lz))
             .max(0.6 * pitch);
@@ -173,12 +184,52 @@ impl Block {
                 lo * hi
             });
         }
+        if self.grain > 0.0 || self.check.is_some() {
+            self.cut_wood(&mut m, lx, ly, lz);
+        }
         let (x0, y0, z0) = (self.x[0], self.y[0], self.z[0]);
         for p in &mut m.positions {
             let w = seg.at(x0 + p[0], y0 + p[1]);
             *p = [w[0], w[1], z0 + p[2]];
         }
         Ok(m)
+    }
+}
+
+impl Block {
+    /// The wood's grain and its check, cut into the top only (nothing is
+    /// ever raised: the top plane is the block's highest): grooves along x
+    /// that wander slowly, and a V-shaped crack running in from one end.
+    fn cut_wood(&self, m: &mut TriMesh, lx: f64, ly: f64, lz: f64) {
+        let zt = lz - self.drop;
+        let (xc, yc) = (lx / 2.0, ly / 2.0);
+        let top_at = |x: f64, y: f64| zt + self.tilt[0] * (x - xc) + self.tilt[1] * (y - yc);
+        let ph = (self.seed.key("grain").value() % 1000) as f64 * 0.37;
+        let tau = core::f64::consts::TAU;
+        for p in &mut m.positions {
+            let top = top_at(p[0], p[1]);
+            if p[2] < top - 0.3 {
+                continue;
+            }
+            let mut cut = 0.0;
+            if self.grain > 0.0 {
+                let wob = 0.9 * libm::sin(tau * p[0] / 23.0 + ph)
+                    + 0.5 * libm::sin(tau * p[0] / 9.0 + 1.7 * ph);
+                let u = 0.5 + 0.5 * libm::sin(tau * p[1] / 1.15 + wob + ph);
+                cut += self.grain * u * u * u;
+            }
+            if let Some([end, cy, depth]) = self.check {
+                let along = if end < 0.5 { p[0] } else { lx - p[0] };
+                let reach = (0.25 * lx).min(3.5);
+                let across = libm::fabs(p[1] - cy - 0.15 * libm::sin(tau * along / 3.0));
+                let half = 0.32 * (1.0 - along / reach).max(0.0);
+                if along < reach && across < half {
+                    cut += depth * (1.0 - across / half) * (1.0 - along / reach);
+                }
+            }
+            let near = ((p[2] - (top - 0.3)) / 0.3).clamp(0.0, 1.0);
+            p[2] -= cut * near;
+        }
     }
 }
 
@@ -195,6 +246,10 @@ pub(crate) struct Finish {
     pub yaw_deg: f64,
     pub tilt_deg: f64,
     pub scale: f64,
+    /// Wood grain depth, mm (0: none), and the share of boards that carry
+    /// a check at one end.
+    pub grain: f64,
+    pub checks: f64,
 }
 
 /// `_block_mesh`'s draws for one block: the ring pulls (per ring, per
@@ -259,6 +314,8 @@ pub(crate) fn draw(
         cover_top: !exposed_top,
         noise_mm: 7.0 * s,
         seed,
+        grain: f.grain,
+        check: None,
     }
 }
 
@@ -359,6 +416,8 @@ mod tests {
             yaw_deg: 1.2,
             tilt_deg: 0.7,
             scale: 1.0,
+            grain: 0.0,
+            checks: 0.0,
         }
     }
 

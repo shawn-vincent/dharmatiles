@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>planks</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow"><i class="fam-mark fam-surface" title="earth: a surface"></i>Element · floor body</div>
+  <h1>planks</h1>
+  <p class="lede">A floor of wooden boards running across the tile, mixed lengths with their joints staggered, grain along each board and checks in the end grain. Each board&rsquo;s height and tilt is drawn inside the floor&rsquo;s band, as flagstones&rsquo; are.</p>
+  <figure class="shot"><img src="img/el-planks.jpg" alt="A one-square tile of wooden boards"><figcaption><code>lib:tiles/floors/1x1-floor-planks.dtile</code>.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>tile size="1x1" seed=73 {
+    stack {
+        base
+        dirt
+        planks style=random texture=worn boards=8 seed=24
+    }
+}</code></pre>
+<p>Boards run east to west, <code>boards</code> across a square. <code>style=even</code> cuts every board half a square long, each course set half a board on.</p>
+<figure class="shot"><img src="img/el-planks-close.jpg" alt="A close view of planks: grain lines and a check in the end grain"><figcaption>Close view: grain along the boards, a check at an end.</figcaption></figure>
+<h2 id="reference">Reference</h2>
+<!-- gen:reference planks -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code></div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
+<h3 id="controls">Controls</h3>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr id="c-style"><td><code>style</code></td><td>word</td><td><code>random</code></td><td>how the boards are cut<dl class="words"><dt><code>random</code></dt><dd>boards of mixed lengths, joints staggered</dd><dt><code>even</code></dt><dd>boards half a square long, each course set half a board on</dd></dl></td></tr>
+<tr id="c-texture"><td><code>texture</code></td><td>word</td><td><code>worn</code></td><td>the wood's finish<dl class="words"><dt><code>smooth</code></dt><dd>planed boards, faint grain, few checks</dd><dt><code>worn</code></dt><dd>rounded edges, open grain, some checks</dd><dt><code>rough</code></dt><dd>sawn boards, coarse grain, many checks</dd></dl></td></tr>
+<tr id="c-boards"><td><code>boards</code></td><td>count, 2 to 16</td><td><code>8</code></td><td>boards across one square</td></tr>
+</tbody></table></div>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/floors/1x1-floor-planks.dtile"><code>1x1-floor-planks.dtile</code></a> <span class="muted small">lib:tiles/floors/1x1-floor-planks.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles elements planks</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
+<h3 id="rules">Rules</h3>
+<p>What this element always does. A change to one of these is a change to the element.</p>
+<ul class="rules">
+  <li>A floor is a <em>pieces body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>in=</code> names the region it fills. It starts with the top <code>floorHeight</code> and a pin at <code>edges</code> at <code>floorEdgeHeight</code>, flush with the edge. A floor's pins step: nothing eases between a pin and the band beside it. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
+  <li>Each piece is made to fit the band as it is made: its height and tilt are drawn from a heaved surface inside the band, then held inside the band over every node it stands on, and the finished piece is checked against the band. Nothing is trimmed afterwards. A single height is a flat floor, a wide band a heaved one.</li>
+  <li>A piece that misses its band is a bug the build refuses (<code>dt::band</code>). Where a pin's edge falls inside one piece the band jumps across it and the build is refused: put the pin's edge on the edge of a piece.</li>
+  <li>The grain is the piece's own and never rises above the band's top: the highest of it reaches the band, and the rest lies under it.</li>
+  <li>Its pieces stand on what is below: they reach down to the lowest land under the floor, or to zero, the base, where there is none. The floor's surface is the higher of what is below and its own top, inside its region.</li>
+  <li>A floor meets the tile edge flush at <code>floorEdgeHeight</code>, 7.4 mm, and square: the pieces on the edge run past the plane and are cut there, so there is no edge-round and two floor tiles meet with no step.</li>
+  <li>The grain is made along each board&rsquo;s length and laid out on the board, so a tilted board&rsquo;s grain is not distorted; checks run in from an end. Both are cut into the top and never rise above it.</li>
+</ul>
+
+<h2 id="notes">Notes</h2>
+<p>Planks are wood: they paint in the wood colour of the 3MF. A <a href="wall.html"><code>wall</code></a> stands on them as on flagstones. Dirt laid on a floor does not follow it as a film yet.</p>
+</article>
+</div>
+</body>
+</html>

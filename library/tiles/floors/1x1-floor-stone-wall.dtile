@@ -2,7 +2,7 @@ tile size="1x1" seed=72 {
     stack {
         base
         dirt
-        floor texture=chipped seed=22
+        flagstones texture=chipped seed=22
         wall along="north" style=cut-stone seed=23
     }
 }

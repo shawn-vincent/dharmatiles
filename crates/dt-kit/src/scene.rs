@@ -561,6 +561,21 @@ impl Terrain {
         }
     }
 
+    /// **stamp_heights**: a pieces body's tops, one per node (world mm,
+    /// `-∞` where it has none): the support rises to each, never falls.
+    pub fn stamp_heights(&mut self, tops: &[f64]) {
+        let (nx, ny) = self.frame.nodes();
+        let step = self.frame.step_mm();
+        let s = self
+            .support
+            .get_or_insert_with(|| Grid::filled(nx, ny, step, f32::NEG_INFINITY));
+        for (k, &t) in tops.iter().enumerate().filter(|(_, t)| t.is_finite()) {
+            #[allow(clippy::cast_possible_truncation)]
+            let z = t as f32;
+            s.z[k] = s.z[k].max(z);
+        }
+    }
+
     /// The highest stamped top at each node (world mm, `-∞` where nothing
     /// is stamped), or `None` before any stamp.
     #[must_use]
@@ -982,6 +997,12 @@ impl Scene {
     /// it through [`Scene::support`].
     pub fn stamp(&mut self, footprint: &Mask, top_mm: f64) {
         self.terrain.stamp(footprint, top_mm)
+    }
+
+    /// **stamp_heights**: a pieces body's tops, one per node (`-∞` where it
+    /// has none); see [`Terrain::stamp_heights`].
+    pub fn stamp_heights(&mut self, tops: &[f64]) {
+        self.terrain.stamp_heights(tops);
     }
 
     /// The highest stamped top at each node (world mm, `-∞` where nothing

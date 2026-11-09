@@ -46,7 +46,7 @@ pub(crate) enum Mode {
 /// What a stack entry is, for where it may stand and what it may carry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Class {
-    /// Dirt, water, cliff, floor: a band and its pins.
+    /// Dirt, water, cliff, flagstones, planks: a band and its pins.
     Body,
     /// Grass, scatter, ground, a coat: fills a region.
     Area,
@@ -566,7 +566,7 @@ impl Decoder<'_> {
     pub(crate) fn class_of(&self, entry: &Entry) -> Class {
         match &entry.callee {
             Callee::Element(l) => match l.name {
-                "dirt" | "water" | "cliff" | "floor" => Class::Body,
+                "dirt" | "water" | "cliff" | "flagstones" | "planks" => Class::Body,
                 "ground" | "grass" | "scatter" => Class::Area,
                 _ => match l.role {
                     Role::Thing | Role::Run => Class::Thing,
@@ -785,7 +785,7 @@ impl Decoder<'_> {
                         "not a body",
                     )
                     .help = Some(
-                        "pins hold a body's top (dirt, water, cliff, floor) to a height at a place"
+                        "pins hold a body's top (dirt, water, cliff, flagstones, planks) to a height at a place"
                             .to_owned(),
                     );
                     return true;

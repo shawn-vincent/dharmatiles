@@ -52,6 +52,7 @@ mod land;
 mod outline;
 mod paint;
 mod piece;
+pub mod pieces;
 pub mod progress;
 pub mod rays;
 mod render;

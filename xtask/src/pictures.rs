@@ -10,7 +10,7 @@
 //! - `el-meadow.jpg`: the composing page's meadow
 //!
 //! `cargo xtask pictures line stack` rebuilds only those groups (line,
-//! region, use, define, stack, walls, meadow).
+//! region, use, define, stack, walls, floors, meadow).
 //!
 //! Labels are not drawn into the pictures: the pages set them in the
 //! site's type.
@@ -23,6 +23,35 @@ const BRASS: [u8; 3] = [168, 114, 15];
 const WHITE: [u8; 3] = [255, 255, 255];
 const QUALITY: u8 = 86;
 
+/// The floor pages' pictures: (document, view, picture).
+const FLOORS: [(&str, &str, &str); 5] = [
+    (
+        "lib:tiles/floors/1x1-floor-stone.dtile",
+        "painted",
+        "el-flagstones.jpg",
+    ),
+    (
+        "demo:flagstones-heaved",
+        "painted",
+        "el-flagstones-heaved.jpg",
+    ),
+    (
+        "lib:tiles/floors/1x1-floor-stone.dtile",
+        "low",
+        "el-flagstones-edge.jpg",
+    ),
+    (
+        "lib:tiles/floors/1x1-floor-planks.dtile",
+        "painted",
+        "el-planks.jpg",
+    ),
+    (
+        "lib:tiles/floors/1x1-floor-planks.dtile",
+        "close",
+        "el-planks-close.jpg",
+    ),
+];
+
 /// The wall page's families: (document, picture).
 const WALLS: [(&str, &str); 4] = [
     (
@@ -30,7 +59,7 @@ const WALLS: [(&str, &str); 4] = [
         "el-wall-cut-stone.jpg",
     ),
     ("demo:wall-battlements", "el-wall-battlements.jpg"),
-    ("demo:floor-fieldstone", "el-wall-fieldstone.jpg"),
+    ("demo:flagstones-fieldstone", "el-wall-fieldstone.jpg"),
     ("demo:wall-ruins", "el-wall-ruins.jpg"),
 ];
 
@@ -114,6 +143,13 @@ pub fn run(root: &Path, only: &[String]) -> Result<(), String> {
                 out,
                 700,
             )?;
+        }
+    }
+
+    if want("floors") {
+        for (doc, which, out) in FLOORS {
+            let name = doc.trim_start_matches("demo:");
+            save(view(name, None, which)?, out, 700)?;
         }
     }
 

@@ -40,18 +40,18 @@ fn sizes_are_mm_and_h_is_opt_in() {
 #[test]
 fn heights_are_named_or_mm_or_expressions() {
     for text in [
-        "tile { stack { floor level=groundHeight } }",
-        "tile { stack { floor level=wallHeight } }",
-        "tile { stack { floor level=4 } }",
-        "tile { stack { floor level=\"groundHeight - 1\" } }",
-        "tile { let foot 4; stack { floor level=foot } }",
-        "tile { let path \"groundHeight - 1\"; stack { floor level=path } }",
-        "tile { override groundHeight 6; stack { floor level=groundHeight } }",
+        "tile { line s wobble=groundHeight { through \"0,0.5\" \"1,0.5\" }; stack { dirt } }",
+        "tile { line s wobble=wallHeight { through \"0,0.5\" \"1,0.5\" }; stack { dirt } }",
+        "tile { line s wobble=4 { through \"0,0.5\" \"1,0.5\" }; stack { dirt } }",
+        "tile { line s wobble=\"groundHeight - 1\" { through \"0,0.5\" \"1,0.5\" }; stack { dirt } }",
+        "tile { let foot 4; line s wobble=foot { through \"0,0.5\" \"1,0.5\" }; stack { dirt } }",
+        "tile { let path \"groundHeight - 1\"; line s wobble=path { through \"0,0.5\" \"1,0.5\" }; stack { dirt } }",
+        "tile { override groundHeight 6; line s wobble=groundHeight { through \"0,0.5\" \"1,0.5\" }; stack { dirt } }",
     ] {
         snippet(text);
     }
     assert_fails(
-        "tile { stack { floor level=grundHeight } }",
+        "tile { line s wobble=grundHeight { through \"0,0.5\" \"1,0.5\" }; stack { dirt } }",
         "dt::unknown-name",
         "did you mean `groundHeight`?",
     );

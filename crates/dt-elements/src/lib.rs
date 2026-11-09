@@ -5,7 +5,7 @@
 //! scheduler in dt-eval can order the stack and refuse reads nothing can
 //! satisfy; then it builds into the scene ([`Element::build`]).
 //!
-//! Layers of the terrain: [`dirt`], [`water`]. Solids: [`floor`], [`rock`]
+//! Layers of the terrain: [`dirt`], [`water`]. Pieces bodies: [`floor`] (`flagstones`, `planks`). Solids: [`rock`]
 //! and its kin, [`grass`], [`reeds`], [`flowers`], [`cliff`], [`wall`],
 //! [`tree`]. Bases: [`connector`] (DungeonBlocks) and [`openlock`].
 
@@ -72,14 +72,32 @@ pub struct LookError {
     pub message: String,
     /// What to do about it.
     pub help: Option<String>,
+    /// The diagnostic code, when it is not a plain build failure
+    /// (`dt::band`).
+    pub code: Option<&'static str>,
 }
 
 impl LookError {
+    /// A pieces body's piece outside its band (`dt::band`: a bug in the
+    /// body, refused).
+    fn band(r: &dt_kit::Refusal, what: &str) -> Self {
+        Self {
+            control: None,
+            message: format!("{what}: {r}"),
+            help: Some(
+                "this is a bug in the element: a piece is made to fit its band and never trimmed; where the band jumps across a piece (a pin's edge inside a slab) move the pin to a slab's edge"
+                    .into(),
+            ),
+            code: Some(r.code()),
+        }
+    }
+
     fn control(name: &str, message: String, help: String) -> Self {
         Self {
             control: Some(name.to_owned()),
             message,
             help: Some(help),
+            code: None,
         }
     }
 
@@ -89,6 +107,7 @@ impl LookError {
             control: None,
             message: message.into(),
             help: Some(help.into()),
+            code: None,
         }
     }
 
@@ -97,6 +116,7 @@ impl LookError {
             control: None,
             message: e.to_string(),
             help: None,
+            code: None,
         }
     }
 }
@@ -193,10 +213,6 @@ pub struct Ctx<'a> {
     /// every node (negative infinity where none does), so its grain keeps
     /// off the bed. `None` for anything else.
     pub under: Option<&'a dt_kit::Field>,
-    /// Where the first land body meets a tile edge, mm: its solved band
-    /// where the library's edge pin holds the rim.  `None` when none does.
-    /// What a laid floor is cut at.
-    pub edge_mm: Option<f64>,
     /// The calm water level, mm (the library's `waterSurfaceHeight`, scaled)
     /// when the tile has a water; what waves are drawn about and reeds
     /// stand in.  `None` without one.
@@ -290,7 +306,10 @@ static ELEMENTS: &[(&str, Builder)] = &[
     ("boulder", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
     ("pebble", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
     ("wall", |_, c, _| Ok(Box::new(wall::Wall::new(c)?))),
-    ("floor", |_, c, _| Ok(Box::new(floor::Floor::new(c)?))),
+    ("flagstones", |_, c, _| {
+        Ok(Box::new(floor::Flagstones::new(c)?))
+    }),
+    ("planks", |_, c, _| Ok(Box::new(floor::Planks::new(c)?))),
     ("tree", |_, c, _| Ok(Box::new(tree::Tree::new(c)?))),
     ("grass", |_, c, _| Ok(Box::new(grass::Grass::new(c)?))),
     ("reeds", |_, c, _| Ok(Box::new(reeds::Reeds::new(c)?))),
@@ -314,6 +333,7 @@ pub fn element_with(
             control: None,
             message: format!("unknown element `{name}`"),
             help: None,
+            code: None,
         }),
     }
 }
