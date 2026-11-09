@@ -184,7 +184,7 @@ test('a foreign mesh fails clearly', () => {
 
 test('a disconnected edit reports a recoverable result instead of rejecting', async () => {
   const original = globalThis.fetch;
-  globalThis.fetch = async () => { throw new Error('offline'); };
+  globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
   try {
     assert.deepEqual(await browserHost().edit({}), {
       status: 0,
@@ -290,9 +290,9 @@ test('the sheet asks the program to check a typed value', async () => {
   const sent = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
-    if (url === '/api/session') return { ok: true, json: async () => ({ token: 't' }) };
+    if (url === '/api/session') return new Response('{"token":"t"}');
     sent.push([url, JSON.parse(init.body)]);
-    return { ok: true, status: 200, json: async () => ({ message: 'takes 20 to 120' }) };
+    return new Response('{"message":"takes 20 to 120"}');
   };
   try {
     const r = await browserHost().checkValue('tree', 'height', '150');
@@ -395,4 +395,56 @@ test('a burst of typing asks the program once, with the last text', () => {
   ask.cancel();
   assert.equal(pending.size, 0);
   assert.deepEqual(asked, ['40.']);
+});
+
+test('only a lost connection is status 0; any other failure of a call is thrown', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => { throw new RangeError('a bug'); };
+  try {
+    await assert.rejects(browserHost().edit({}), /a bug/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('a reply that is not JSON has its words as the error', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => (String(url).endsWith('session')
+    ? new Response('{"token":"t"}')
+    : new Response('not this page', { status: 403 }));
+  try {
+    const r = await browserHost().edit({});
+    assert.deepEqual(r, { status: 403, body: { error: 'not this page' } });
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('unexpected failures are kept with what was being done, once each, and shown to listeners', async () => {
+  const { showError, failed, problems, dismiss, onProblems, installGlobalHandlers } = await import('../js/problems.js');
+  const log = console.error; console.error = () => {};
+  try {
+    let told = 0;
+    onProblems(() => { told += 1; });
+    showError('Could not save a', new Error('disk full', { cause: new Error('no space') }));
+    showError('Could not save a', new Error('disk full'));
+    assert.equal(problems().length, 1);
+    assert.equal(problems()[0].count, 2);
+    assert.match(problems()[0].details, /caused by:[\s\S]*no space/);
+    assert.equal(failed('x', { status: 0, body: { error: 'disconnected' } }), false, 'a lost connection is the chip\'s');
+    assert.equal(failed('x', { status: 422, body: { error: 'a mistake' } }), false, 'a refusal with its reason is shown where asked');
+    assert.equal(failed('Could not y', { status: 500, body: { error: 'boom' } }), true);
+    assert.equal(problems().at(-1).message, 'boom');
+    assert.ok(told >= 3);
+    const handlers = {};
+    installGlobalHandlers({ addEventListener: (k, f) => { handlers[k] = f; } });
+    handlers.unhandledrejection({ reason: new Error('lost promise') });
+    handlers.error({ message: 'ResizeObserver loop completed with undelivered notifications.' });
+    handlers.error({ message: 'x', error: new Error('script broke') });
+    assert.deepEqual(problems().slice(-2).map((p) => p.message), ['lost promise', 'script broke']);
+    dismiss();
+    assert.equal(problems().length, 0);
+  } finally {
+    console.error = log;
+  }
 });

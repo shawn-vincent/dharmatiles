@@ -3,10 +3,12 @@
 // tile's builds) and the view store (which tile).
 
 import { NO_ENTRY, parsePayload } from '../payload.js';
+import { isOffline } from '../host.js';
+import { showError } from '../problems.js';
 import { host, pickView, viewer } from './app.js';
 import { beginFollow, endFollow, followBuild } from './build.js';
 import { canLeave } from './document.js';
-import { inRoot, isEntry, server, stackItems, tile, tileById, view } from './stores.js';
+import { inRoot, isEntry, server, stackItems, stem, tile, tileById, view } from './stores.js';
 
 // ---- choosing a tile ---------------------------------------------------
 
@@ -110,7 +112,7 @@ async function loadMesh(t) {
     const sel = view.get().sel;
     if (isEntry(sel) && sel.id >= stackItems().length) view.set({ sel: null });
   } catch (e) {
-    console.error(e);
+    if (!isOffline(e)) showError(`Could not show ${stem(t)}`, e); // offline: the chip says so, and the mesh is fetched again
   }
 }
 

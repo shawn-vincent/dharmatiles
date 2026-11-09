@@ -5,7 +5,7 @@
 //
 //   connect({onSnapshot, onTile, onProgress, onState})  start listening; onState('live' | 'offline')
 //   fetchMesh(id) -> ArrayBuffer            the tile's binary mesh
-//   fetchSketch(id, sketch) -> ArrayBuffer  one stage's sketch while it builds
+//   fetchSketch(id, sketch) -> ArrayBuffer  one stage's sketch while it builds (null once the build has moved on)
 //   build(id)                               build a tile not built yet
 //   text(id, file?) -> {file, text, writable}
 //   elements() -> [element]                 the element schema
@@ -28,14 +28,31 @@
 // run of the program) and the last revision seen: the program answers with
 // what changed since, or a fresh snapshot.
 
+// fetch rejects with a TypeError when it cannot reach the program (down, or
+// the connection dropped): that is a lost connection, shown by the chip, and
+// the page repeats what it needs on reconnect.  Any other failure is not.
+export const isOffline = (e) => e instanceof TypeError;
+const offline = isOffline;
+
+// What an error reply says: the program's `{error}`, or its plain words.
+const reasonOf = async (r) => {
+  const raw = await r.text();
+  try { return JSON.parse(raw).error || raw; } catch { return raw || `the program answered ${r.status}`; }
+};
+
 export function browserHost() {
   let token = null;
   const session = async () => {
-    if (!token) token = (await (await fetch('/api/session', { cache: 'no-store' })).json()).token;
+    if (!token) {
+      const r = await fetch('/api/session', { cache: 'no-store' });
+      if (!r.ok) throw new Error(`session: ${await reasonOf(r)}`);
+      token = (await r.json()).token;
+    }
     return token;
   };
   // One editor call: JSON in, {status, body} out (or, for a draft, the
-  // bytes), with the session token.
+  // bytes), with the session token.  A reply that is not JSON has its words
+  // as the body's error.  Only a lost connection is status 0.
   const call = async (path, body, bytes = false) => {
     try {
       const r = await fetch(path, {
@@ -44,11 +61,14 @@ export function browserHost() {
         body: JSON.stringify(body),
       });
       if (bytes && r.ok) return { status: r.status, buffer: await r.arrayBuffer() };
-      let v = null;
-      try { v = await r.json(); } catch { /* not JSON */ }
-      return { status: r.status, body: v };
-    } catch {
-      return { status: 0, body: { error: 'the editor is disconnected' } };
+      const raw = await r.text();
+      try { return { status: r.status, body: JSON.parse(raw) }; } catch (e) {
+        if (r.ok) throw new Error(`${path}: the program answered ${r.status} with something that is not JSON`, { cause: e });
+        return { status: r.status, body: { error: raw || `the program answered ${r.status}` } };
+      }
+    } catch (e) {
+      if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
+      throw e;
     }
   };
   const tile = (id, what) => `/api/tiles/${encodeURIComponent(id)}/${what}`;
@@ -76,25 +96,34 @@ export function browserHost() {
     },
     async fetchMesh(id) {
       const r = await fetch(tile(id, 'mesh'), { cache: 'no-store' });
-      if (!r.ok) throw new Error(`mesh: ${r.status}`);
+      if (!r.ok) throw new Error(`mesh: ${await reasonOf(r)}`);
       return r.arrayBuffer();
     },
     async fetchSketch(id, sketch) {
       const r = await fetch(tile(id, `sketch?id=${sketch}`), { cache: 'no-store' });
-      if (!r.ok) throw new Error(`sketch: ${r.status}`);
+      if (r.status === 404) return null; // the build moved on: its sketches are gone
+      if (!r.ok) throw new Error(`sketch: ${await reasonOf(r)}`);
       return r.arrayBuffer();
     },
     async build(id) {
-      await fetch(tile(id, 'build'), { method: 'POST' }).catch(() => {}); // offline: asked again on reconnect
+      let r;
+      try { r = await fetch(tile(id, 'build'), { method: 'POST' }); } catch (e) {
+        if (offline(e)) return; // offline: asked again on reconnect
+        throw e;
+      }
+      if (r.status >= 500) throw new Error(`build: ${await reasonOf(r)}`);
     },
     async text(id, file) {
       const q = file ? `?file=${encodeURIComponent(file)}` : '';
       const r = await fetch(tile(id, `text${q}`), { cache: 'no-store' });
-      return r.ok ? r.json() : null;
+      if (r.status === 404) return null; // no such tile or file (any more)
+      if (!r.ok) throw new Error(`text: ${await reasonOf(r)}`);
+      return r.json();
     },
     async elements() {
       const r = await fetch('/api/elements', { cache: 'force-cache' });
-      return r.ok ? r.json() : [];
+      if (!r.ok) throw new Error(`elements: ${await reasonOf(r)}`);
+      return r.json();
     },
     check: (id, body) => call(tile(id, 'check'), body),
     checkValue: (element, control, typed) => call('/api/check-value', { element, control, typed }),

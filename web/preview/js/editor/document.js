@@ -7,8 +7,10 @@ import { suggest } from '../complete.js';
 import { describeChange } from '../history.js';
 import { parsePayload } from '../payload.js';
 import { TextPane, byteToIndex } from '../text.js';
+import { isOffline } from '../host.js';
+import { failed, showError } from '../problems.js';
 import { $, FAMILY, host, offerMine } from './app.js';
-import { dirty, doc, server, tile, view } from './stores.js';
+import { dirty, doc, server, stem, tile, view } from './stores.js';
 
 // ---- the document: the text, one history, checking and saving -----------------
 // The text pane edits the file shown (the tile's document, or a file it
@@ -138,8 +140,8 @@ export async function askDraft() {
   drafting = true; again = false;
   try {
     const r = await host.draft(t.id, { text: d.text, file: d.file === t.path ? undefined : d.file });
-    if (r.buffer && t.id === view.get().tileId) view.set({ draft: { tileId: t.id, payload: parsePayload(r.buffer) } });
-  } catch (e) { console.error(e); }
+    if (!failed(`Could not draft ${stem(t)}`, r) && r.buffer && t.id === view.get().tileId) view.set({ draft: { tileId: t.id, payload: parsePayload(r.buffer) } });
+  } catch (e) { showError(`Could not draft ${stem(t)}`, e); }
   drafting = false;
   if (again) askDraft();
 }
@@ -164,6 +166,7 @@ async function check() {
   const text = d.text, seq = ++run.checkSeq;
   const r = await host.check(t.id, { text, file: d.file === t.path ? undefined : d.file });
   if (r.status === 0) return false; // the server is away: not checked yet, and checked again when it is back
+  if (failed(`Could not check ${stem(t)}`, r)) return false;
   if (seq !== run.checkSeq || text !== doc.get().text || !r.body || t.id !== view.get().tileId) return false;
   const patch = { note: null, checked: text, ok: !!r.body.ok, errors: r.body.errors || [] };
   if (r.body.ok && r.body.stack) patch.stack = r.body.stack; // the last good stack stays while there are mistakes
@@ -191,7 +194,10 @@ async function save(now = false) {
     const r = await host.save(t.id, { text, base: d.base, file: file === t.path ? undefined : file });
     if (r.status === 200) doc.set({ note: null, base: text, conflict: null });
     else if (r.status === 409) doc.set({ note: null, conflict: r.body?.text ?? '' });
-    else doc.set({ note: r.body?.error || `could not save (${r.status})` });
+    else {
+      doc.set({ note: r.body?.error || `could not save (${r.status})` });
+      failed(`Could not save ${stem(t)}`, r);
+    }
   } finally {
     run.saving = false;
     doc.set({ saving: false });
@@ -273,7 +279,11 @@ export async function loadText(file) {
       if (fresh) carried = null;
       if (v.file === t.path && !doc.get().map) check(); // its map, for the overlay
       return true;
-    } catch (e) { console.error(e); loadKey = null; return false; }
+    } catch (e) {
+      loadKey = null;
+      if (!isOffline(e)) showError(`Could not open ${want}`, e);
+      return false;
+    }
   })();
   return loading;
 }
@@ -312,9 +322,9 @@ function renderTextBar() {
   const e = d.checked === d.text && !d.ok ? d.errors.find((x) => !x.file || x.file === f) || d.errors[0] : null;
   hint.classList.toggle('bad', !!e);
   // the hint shows until the first edit; a mistake always shows, on one line (all of it on hover)
-  if (dirty()) { try { localStorage.setItem('dt-hint-seen', '1'); } catch { /* ignore */ } }
+  if (dirty()) { try { localStorage.setItem('dt-hint-seen', '1'); } catch { /* private mode: the default stands */ } }
   let seen = false;
-  try { seen = localStorage.getItem('dt-hint-seen') === '1'; } catch { /* ignore */ }
+  try { seen = localStorage.getItem('dt-hint-seen') === '1'; } catch { /* private mode: the default stands */ }
   hint.textContent = e ? `${e.line ? `Line ${e.line}: ` : ''}${e.message}.${e.help ? ` ${e.help[0].toUpperCase()}${e.help.slice(1)}` : ''}`
     : d.writable ? 'Type to change the tile; it saves as you go. ⌃Space: what can go here; ? for keys.' : 'Click a line to select it in the view.';
   hint.title = hint.textContent;

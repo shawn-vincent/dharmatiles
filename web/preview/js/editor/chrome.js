@@ -50,7 +50,7 @@ const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 function setPaint(on) {
   $('t-paint').checked = on;
   viewer.setPaint(on);
-  try { localStorage.setItem('dt-preview-paint', on ? '1' : '0'); } catch { /* ignore */ }
+  try { localStorage.setItem('dt-preview-paint', on ? '1' : '0'); } catch { /* private mode: the default stands */ }
 }
 
 // popovers: one open at a time (`view.popover`); Esc or a click outside closes it
@@ -97,7 +97,7 @@ function renderPage() {
 const dark = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
   let stored = null;
-  try { stored = localStorage.getItem('dt-theme'); } catch { /* ignore */ }
+  try { stored = localStorage.getItem('dt-theme'); } catch { /* private mode: the default stands */ }
   const hash = (location.hash.match(/theme=(light|dark)/) || [])[1]; // #theme=light previews a theme without saving it
   if (hash) stored = hash;
   if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
@@ -113,7 +113,7 @@ function applyTheme() {
 function toggleTheme() {
   const isDark = document.documentElement.dataset.theme
     ? document.documentElement.dataset.theme === 'dark' : dark.matches;
-  try { localStorage.setItem('dt-theme', isDark ? 'light' : 'dark'); } catch { /* ignore */ }
+  try { localStorage.setItem('dt-theme', isDark ? 'light' : 'dark'); } catch { /* private mode: the default stands */ }
   applyTheme();
 }
 
@@ -171,12 +171,12 @@ export function init() {
   });
   toggle('t-overhang', (on) => viewer.setOverhang(on));
   $('t-paint').onchange = (e) => setPaint(e.target.checked);
-  try { if (localStorage.getItem('dt-preview-paint') === '0') setPaint(false); } catch { /* ignore */ }
+  try { if (localStorage.getItem('dt-preview-paint') === '0') setPaint(false); } catch { /* private mode: the default stands */ }
   if (/paint=off/.test(location.hash)) { $('t-paint').checked = false; viewer.setPaint(false); } // #paint=off previews grey without saving
   toggle('t-wire', (on) => viewer.setWireframe(on));
   toggle('t-grid', (on) => viewer.setGrid(on));
-  toggle('t-fade', (on) => { viewer.setFade(on); try { localStorage.setItem('dt-fade', on ? '1' : '0'); } catch { /* ignore */ } });
-  try { if (localStorage.getItem('dt-fade') === '0') { $('t-fade').checked = false; viewer.setFade(false); } } catch { /* ignore */ }
+  toggle('t-fade', (on) => { viewer.setFade(on); try { localStorage.setItem('dt-fade', on ? '1' : '0'); } catch { /* private mode: the default stands */ } });
+  try { if (localStorage.getItem('dt-fade') === '0') { $('t-fade').checked = false; viewer.setFade(false); } } catch { /* private mode: the default stands */ }
   for (const [btn, pop] of popovers) $(btn).onclick = (e) => { e.stopPropagation(); openPopover(pop); };
   $('choose').onclick = () => {
     const lib = server.get().roots.findIndex((r) => r.kind === 'library');
@@ -194,7 +194,7 @@ export function init() {
   dark.addEventListener('change', applyTheme);
   applyTheme();
   $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
-  try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* ignore */ }
+  try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* private mode: the default stands */ }
   $('hide-text').onclick = $('show-text').onclick = () => layout.toggle('text');
   $('hide-props').onclick = $('show-props').onclick = () => layout.toggle('props');
   for (const b of $('layout-seg').children) b.onclick = () => layout.preset(b.dataset.preset);

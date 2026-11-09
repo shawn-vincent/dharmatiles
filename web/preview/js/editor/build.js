@@ -4,8 +4,10 @@
 // sketches) and the view store (the mesh shown).
 
 import { parsePayload } from '../payload.js';
+import { isOffline } from '../host.js';
+import { showError } from '../problems.js';
 import { host, viewer } from './app.js';
-import { server, tile, view } from './stores.js';
+import { server, stem, tile, view } from './stores.js';
 
 // ---- the build as it goes ----------------------------------------------
 // While the tile builds, the mesh shown is the last build's: it fades. Each
@@ -46,7 +48,11 @@ async function syncSketches(t) {
   for (const k of list) {
     if (!sketchCache.has(key(k))) {
       // a failed fetch is not kept: the next sync asks again
-      sketchCache.set(key(k), host.fetchSketch(t.id, k.id).then(parsePayload).catch(() => { sketchCache.delete(key(k)); return null; }));
+      sketchCache.set(key(k), host.fetchSketch(t.id, k.id).then((buf) => (buf ? parsePayload(buf) : null)).catch((e) => {
+        sketchCache.delete(key(k));
+        if (!isOffline(e)) showError(`Could not load a sketch of ${stem(t)}`, e); // offline: asked again on the next sync
+        return null;
+      }));
     }
   }
   const got = await Promise.all(list.map(async (k) => ({ id: k.id, rough: k.rough, payload: await sketchCache.get(key(k)) })));

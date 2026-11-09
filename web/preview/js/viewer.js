@@ -47,7 +47,7 @@ void main() {
 const NARROW_FOV = 3; // the near-orthographic end of the projection tween
 const easeInOutCubic = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 const reduceMotion = () => {
-  try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+  try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; /* no media queries: motion is not reduced */ }
 };
 const rad = (d) => (d * Math.PI) / 180;
 const dirv = (elev, azim) => new THREE.Vector3(
@@ -692,7 +692,7 @@ export class Viewer {
   /** The theme's grid ink: dark by day, pale against Moonpool's twilight. */
   setGridColor(css) {
     this.gridInk ??= new THREE.Color(0.17, 0.2, 0.25);
-    try { this.gridInk.setStyle(css); } catch { /* keep the previous colour */ }
+    this.gridInk.setStyle(css); // a bad theme token is a bug: let it throw to the page's error panel
     if (this.grid) this.grid.material.uniforms.uInk.value.copy(this.gridInk);
     this.draw();
   }
@@ -946,7 +946,7 @@ export class Viewer {
 
   /** The theme's accent (`--accent`), used to tint selected geometry. */
   setAccent(css) {
-    try { this.uniforms.uAccent.value.setStyle(css); } catch { /* keep the default */ }
+    this.uniforms.uAccent.value.setStyle(css); // a bad theme token is a bug: let it throw to the page's error panel
     this.draw();
   }
 

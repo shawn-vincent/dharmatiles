@@ -1,6 +1,7 @@
 // The tile menu: listing and filtering the tiles, a new tile, renaming one,
 // and making a library tile your own.
 
+import { failed, showError } from '../problems.js';
 import { $, host } from './app.js';
 import { canLeave, carryHistory } from './document.js';
 import { select } from './open.js';
@@ -130,6 +131,7 @@ export function startRename() {
       done = false; input.disabled = false; input.classList.add('bad');
       input.title = r.body?.error || 'The tile could not be renamed.';
       doc.set({ note: input.title }); input.focus();
+      failed(`Could not rename ${stem(t)}`, r);
       return;
     }
     input.remove(); $('tilebtn').hidden = false;
@@ -181,12 +183,16 @@ export function init() {
     let r;
     try {
       r = await host.newTile($('new-name').value, $('new-size').value);
-    } catch {
-      r = { status: 0, body: { error: 'the editor is disconnected' } };
+    } catch (e) {
+      ok.disabled = false;
+      $('new-note').textContent = 'The tile could not be made.';
+      showError('Could not make the tile', e);
+      return;
     }
     ok.disabled = false;
     if (r.status !== 200 || r.body?.id == null) {
       $('new-note').textContent = r.body?.error || 'The tile could not be made.';
+      failed('Could not make the tile', r);
       return;
     }
     $('new-dialog').close();
@@ -204,7 +210,11 @@ export function init() {
     const r = await host.mine(t.id);
     $('mine-ok').disabled = false;
     view.set({ mineOpen: false });
-    if (r.status !== 200 || r.body?.id == null) { doc.set({ note: r.body?.error || 'could not make a copy' }); return; }
+    if (r.status !== 200 || r.body?.id == null) {
+      doc.set({ note: r.body?.error || 'could not make a copy' });
+      failed(`Could not make ${stem(t)} yours`, r);
+      return;
+    }
     // the copy joins the list with the next event
     if (await whenListed(r.body.id)) select(r.body.id);
   };

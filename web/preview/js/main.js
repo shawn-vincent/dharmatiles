@@ -14,6 +14,7 @@
 // whole tile.  Clicking a thing selects it; clicking it again climbs: piece,
 // entry, the region it is in, tile.
 
+import { installGlobalHandlers } from './problems.js';
 import { init as initChrome } from './editor/chrome.js';
 import { init as initBuild } from './editor/build.js';
 import { init as initTiles } from './editor/tiles.js';
@@ -28,6 +29,8 @@ import { init as initLive } from './editor/live.js';
 import { init as initScrollShadows } from './scroll-shadows.js';
 import { viewer } from './editor/app.js';
 import { doc, server, view } from './editor/stores.js';
+
+installGlobalHandlers(); // a script error or an unhandled rejection lands in the error panel
 
 window.dtPreview = { server, view, doc, viewer, get tools() { return tools; } }; // for tests and the console
 

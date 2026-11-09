@@ -3,6 +3,7 @@
 // user's home, so the next run starts on it) and builds again for it; this
 // part shows it and asks.
 
+import { failed } from '../problems.js';
 import { $, host, toast } from './app.js';
 import { server } from './stores.js';
 
@@ -36,7 +37,10 @@ function render() {
 
 async function choose(body) {
   const r = await host.setTarget(body);
-  if (r.status !== 200) toast(r.body?.error || 'could not change the build target');
+  if (r.status !== 200) {
+    toast(r.body?.error || 'could not change the build target');
+    failed('Could not change the build target', r);
+  }
   // the new target comes back on the event stream, as a snapshot
 }
 

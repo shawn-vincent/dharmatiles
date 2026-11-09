@@ -4,6 +4,7 @@ import { valueOf } from '../lens.js';
 import { Overlay } from '../overlay.js';
 import { Tools } from '../place.js';
 import { byteToIndex } from '../text.js';
+import { failed } from '../problems.js';
 import { $, host, offerMine, viewer } from './app.js';
 import { askDraft, edited, openFile, replaceBytes, texts } from './document.js';
 import { controlText, doc, isEntry, mapNode, server, stackItems, tile, view } from './stores.js';
@@ -85,7 +86,7 @@ async function insertNode(place, node, { select: sel } = {}) {
     if (doc.get().file !== t.path) return;
   }
   const r = await host.edit({ op: 'insert', text: doc.get().text, place, node });
-  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be written' }); return; }
+  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be written' }); failed('Could not add to the tile', r); return; }
   if (sel) view.set({ sel, textFile: null }); else doc.set({ selectAt: r.body.at });
   edited(r.body.text, 'view', `Added ${node.trim().split(/\s+/)[0]}`, byteToIndex(r.body.text, r.body.at));
   askDraft();

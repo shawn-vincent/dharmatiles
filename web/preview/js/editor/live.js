@@ -2,6 +2,7 @@
 // store and nowhere else.  Everything on the page that depends on the
 // server's word subscribes to that store; this part knows no other.
 
+import { showError } from '../problems.js';
 import { host } from './app.js';
 import { server } from './stores.js';
 
@@ -10,7 +11,7 @@ const progressOf = (tiles) => Object.fromEntries(tiles.filter((t) => t.progress)
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  host.elements().then((elements) => server.set({ elements })).catch(() => {});
+  host.elements().then((elements) => server.set({ elements })).catch((e) => showError('Could not load the elements', e));
   host.connect({
     onState: (s) => {
       const live = s === 'live';

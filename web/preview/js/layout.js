@@ -179,7 +179,7 @@ export class Layout {
       this.side.hidden = !g.areas.includes('side');
       for (const [name, s] of Object.entries(this.sashes)) s.hidden = !(name === 'sash-split' ? g.editor.areas : g.areas).includes(name);
     }
-    if (save) { try { localStorage.setItem('dt-layout', JSON.stringify(this.o)); } catch { /* ignore */ } }
+    if (save) { try { localStorage.setItem('dt-layout', JSON.stringify(this.o)); } catch { /* private mode: the default stands */ } }
     this.onChange(this.o);
   }
 

@@ -1,5 +1,6 @@
 // Export: the same build as `dharmatiles build`, written to out/.
 
+import { dismiss, failed, onProblems, problems, showError } from '../problems.js';
 import { $, host, viewer } from './app.js';
 import { openFile } from './document.js';
 import { dirty, doc, progressOf, renameable, rootOf, server, stem, tile, view } from './stores.js';
@@ -49,10 +50,51 @@ function renderExport() {
   $('export-reveal').hidden = !exporting.files;
 }
 
+/**
+ * The error panel: the tile's own (file:line:col; the old mesh stays behind
+ * them, a click shows the line), then the failures the program or the page
+ * hit that are not a mistake in the tile (the standard: errors.html), each
+ * with what was being done, the words, its details to copy, and a way to
+ * dismiss it.
+ */
+function drawErrors(t) {
+  const errs = $('errors'), own = t?.errors || [], bugs = problems();
+  errs.hidden = !own.length && !bugs.length;
+  errs.replaceChildren();
+  const line = (cls, text) => { const x = document.createElement('div'); if (cls) x.className = cls; x.textContent = text; return x; };
+  for (const e of own) {
+    const d = document.createElement('div'); d.className = e.unexpected ? 'e bug' : 'e';
+    d.append(line('where', e.file ? `${e.file}:${e.line}:${e.column}  ${e.code}` : e.code));
+    d.append(line('', e.unexpected ? `A bug, not a mistake in your tile: ${e.message}` : e.message));
+    if (e.help) d.append(line('help', e.help));
+    if (e.file && e.line) d.onclick = () => openFile(e.file === t.path ? null : e.file, e.line);
+    errs.append(d);
+  }
+  for (const p of bugs) {
+    const d = document.createElement('div'); d.className = 'e bug';
+    d.append(line('where', p.count > 1 ? `${p.what} (${p.count} times)` : p.what));
+    d.append(line('', p.message));
+    const more = document.createElement('details');
+    const sum = document.createElement('summary'); sum.textContent = 'Details';
+    const pre = document.createElement('pre'); pre.textContent = p.details;
+    more.append(sum, pre);
+    const acts = document.createElement('div'); acts.className = 'acts';
+    const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'btn'; copy.textContent = 'Copy details';
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(p.details); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select the details and copy them yourself'; }
+    };
+    const close = document.createElement('button'); close.type = 'button'; close.className = 'btn'; close.textContent = 'Dismiss';
+    close.onclick = () => dismiss(p);
+    acts.append(copy, close);
+    d.append(more, acts);
+    errs.append(d);
+  }
+}
+
 function renderTitle() {
   const t = tile(), { live, ever, overhangDeg, steepestDeg } = server.get();
   $('empty').hidden = !!t;
-  const status = $('status'), errs = $('errors'), dl = $('record'), gate = $('gate');
+  const status = $('status'), dl = $('record'), gate = $('gate');
   dl.replaceChildren();
   $('failures').replaceChildren();
   clearInterval(timer);
@@ -63,7 +105,8 @@ function renderTitle() {
   const away = !live;
   const awayLabel = ever ? 'reconnecting…' : 'connecting…';
   if (!t) {
-    status.hidden = true; errs.hidden = true; $('export').hidden = true;
+    status.hidden = true; $('export').hidden = true;
+    drawErrors(null);
     gate.hidden = !away;
     if (away) { gate.className = 'busy'; $('gatetext').textContent = awayLabel; }
     $('tilename').textContent = ''; $('tilewhere').textContent = 'Tiles'; $('tileplan').textContent = '';
@@ -105,19 +148,7 @@ function renderTitle() {
     $('progress').style.width = '0';
     buildStart.delete(t.id);
   }
-  // errors: file:line:col, the old mesh stays behind them; a click shows the line
-  errs.hidden = !t.errors.length;
-  errs.replaceChildren();
-  for (const e of t.errors) {
-    const d = document.createElement('div'); d.className = 'e';
-    const w = document.createElement('div'); w.className = 'where';
-    w.textContent = e.file ? `${e.file}:${e.line}:${e.column}  ${e.code}` : e.code;
-    const m = document.createElement('div'); m.textContent = e.message;
-    d.append(w, m);
-    if (e.help) { const h = document.createElement('div'); h.className = 'help'; h.textContent = e.help; d.append(h); }
-    if (e.file && e.line) d.onclick = () => openFile(e.file === t.path ? null : e.file, e.line);
-    errs.append(d);
-  }
+  drawErrors(t);
   const r = t.record;
   gate.hidden = false;
   renderExport();
@@ -182,10 +213,11 @@ export function init() {
     if (p && t.status === 'building') showProgress(p);
   });
   renderTitle();
-  try { $('export-3mf').checked = localStorage.getItem('dt-export-3mf') === '1'; } catch { /* ignore */ }
+  onProblems(() => drawErrors(tile()));
+  try { $('export-3mf').checked = localStorage.getItem('dt-export-3mf') === '1'; } catch { /* private mode: the default stands */ }
   // a new target makes what was written the target before no longer the answer
   server.subscribe(['system', 'printer'], () => { exporting.files = null; renderExport(); });
-  $('export-3mf').onchange = (e) => { try { localStorage.setItem('dt-export-3mf', e.target.checked ? '1' : '0'); } catch { /* ignore */ } exporting.files = null; renderExport(); };
+  $('export-3mf').onchange = (e) => { try { localStorage.setItem('dt-export-3mf', e.target.checked ? '1' : '0'); } catch { /* private mode: the default stands */ } exporting.files = null; renderExport(); };
   $('export').addEventListener('click', async () => {
     exporting.files = null; exporting.error = null; exporting.out = null; renderExport();
     const t = tile();
@@ -193,7 +225,8 @@ export function init() {
     try {
       const r = await host.exportTile(t.id, { where: true });
       if (r.status === 200 && t.id === tile()?.id) { exporting.out = r.body; renderExport(); }
-    } catch { /* said when exporting */ }
+      else failed(`Could not find where ${stem(t)} would be written`, r);
+    } catch (e) { showError(`Could not find where ${stem(t)} would be written`, e); }
   });
   $('export-go').onclick = async () => {
     const t = tile();
@@ -201,13 +234,23 @@ export function init() {
     exporting.busy = true; exporting.error = null; exporting.files = null; renderExport();
     try {
       const r = await host.exportTile(t.id, { threemf: $('export-3mf').checked });
-      if (r.status !== 200) exporting.error = r.body?.error || `could not export (${r.status})`;
+      if (r.status !== 200) {
+        exporting.error = r.body?.error || `could not export (${r.status})`;
+        if (r.status !== 0) failed(`Could not export ${stem(t)}`, r);
+      }
       else if (!r.body.ok) exporting.error = r.body.errors?.[0]?.message || (r.body.failures?.length ? `Fails the gate: ${r.body.failures[0]}` : 'the build failed');
       else exporting.files = r.body.files || [];
       if (r.status === 200 && r.body.files && !r.body.ok) exporting.files = r.body.files;
-    } catch { exporting.error = 'cannot export while the editor is disconnected'; }
+    } catch (e) {
+      exporting.error = 'the export failed';
+      showError(`Could not export ${stem(t)}`, e);
+    }
     exporting.busy = false;
     renderExport();
   };
-  $('export-reveal').onclick = () => { const f = exporting.files?.find((x) => /\.(stl|3mf)$/.test(x)); if (f) host.reveal(f); };
+  $('export-reveal').onclick = async () => {
+    const f = exporting.files?.find((x) => /\.(stl|3mf)$/.test(x));
+    if (!f) return;
+    try { failed('Could not show the file', await host.reveal(f)); } catch (e) { showError('Could not show the file', e); }
+  };
 }

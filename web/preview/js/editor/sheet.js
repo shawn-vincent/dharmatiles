@@ -3,6 +3,7 @@
 
 import { Lens, kdlString } from '../lens.js';
 import { byteToIndex } from '../text.js';
+import { failed } from '../problems.js';
 import { $, host, offerMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, undo } from './document.js';
 import { doc, elementNamed, isEntry, isMark, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
@@ -14,7 +15,7 @@ import { startRename } from './tiles.js';
 async function setControl(at, name, value) {
   if (!doc.get().writable) return offerMine();
   const r = await host.edit({ text: doc.get().text, at, name, value });
-  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); return; }
+  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed(`Could not change ${name}`, r); return; }
   edited(r.body.text, 'lens', `Changed ${name}`);
 }
 
@@ -23,7 +24,11 @@ export const lens = new Lens($('lens'), {
   replace: replaceBytes,
   set: setControl,
   makeMine: () => offerMine(),
-  checkValue: async (element, control, typed) => (await host.checkValue(element, control, typed)).body?.message ?? null,
+  checkValue: async (element, control, typed) => {
+    const r = await host.checkValue(element, control, typed);
+    if (failed(`Could not check what was typed for ${control}`, r)) return null;
+    return r.body?.message ?? null; // offline: nothing to say yet; the edit is checked again when it is sent
+  },
 });
 /** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty
@@ -40,7 +45,7 @@ const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.
 async function tileEdit(body, label) {
   if (!doc.get().writable) return offerMine();
   const r = await host.edit({ text: doc.get().text, ...body });
-  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); return; }
+  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed(`Could not make the change: ${label}`, r); return; }
   edited(r.body.text, 'lens', label);
   return true;
 }
@@ -154,7 +159,7 @@ function muteAt(byte, label = 'Entry') {
 async function removeAt(byte, label = 'Entry') {
   if (!doc.get().writable) return offerMine();
   const r = await host.edit({ op: 'remove', text: doc.get().text, at: byte });
-  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be taken out' }); return; }
+  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be taken out' }); failed(`Could not delete ${label}`, r); return; }
   view.set({ sel: null });
   edited(r.body.text, 'view', `Deleted ${label}`);
   askDraft();
