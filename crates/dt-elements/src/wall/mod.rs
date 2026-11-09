@@ -28,8 +28,8 @@ pub(crate) mod rubble;
 
 use dt_kit::{Kind, Scene};
 
-use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Span, Value, Write};
+use crate::read::{Pick, Settings};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Span, Write};
 #[cfg(test)]
 use chassis::percentile;
 pub(crate) use chassis::{Laid, Run, build, cell_seed, finish_build, run};
@@ -37,8 +37,6 @@ pub(crate) use layout::Bond;
 
 /// The official wall top above the datum, mm at the reference.
 const WALL_TOP_MM: f64 = 33.1;
-/// `low`: half the wall top (provisional).
-const LOW_TOP_MM: f64 = 16.55;
 /// Mortar core edge fillet, mm.
 const CORE_ROUND_MM: f64 = 0.6;
 /// The thinnest mortar core a wall keeps between its joints' depths, mm
@@ -230,11 +228,14 @@ impl Wall {
             _ => Family::CutStone,
         };
         let mut m = Mason::new(family);
-        // `full` and `low` are wall tops; a number is a share of the band
-        m.height = match s.value("height") {
-            Some(Value::Word(w)) if w == "full" => Height::Top(WALL_TOP_MM),
-            Some(Value::Word(w)) if w == "low" => Height::Top(LOW_TOP_MM),
-            _ => s.number("height")?.map_or(m.height, Height::Rel),
+        // a word is a wall top, in mm (`full`, `low`); a number is a share
+        // of the band
+        m.height = match s.pick("height")? {
+            Some(Pick::Number(v)) => Height::Rel(v),
+            Some(Pick::Word(_)) => s
+                .number("height.height")?
+                .map_or(Height::Top(WALL_TOP_MM), Height::Top),
+            None => m.height,
         };
         m.across = s.number_or("thickness", m.across)?;
         m.course = s.span_or("stones/height", m.course)?;
@@ -331,6 +332,7 @@ impl Element for Wall {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+    use crate::Value;
 
     fn c(name: &str, v: Value) -> Control {
         Control {

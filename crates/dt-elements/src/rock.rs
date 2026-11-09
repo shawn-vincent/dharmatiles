@@ -34,7 +34,7 @@ use dt_kit::{
     grain, hull, scatter, solid,
 };
 
-use crate::read::{Settings, range_of};
+use crate::read::Settings;
 use crate::{Control, Ctx, Element, LookError, Plan, Span, Write};
 
 // body
@@ -534,10 +534,9 @@ impl Thing {
         };
         let s = Settings::new(controls);
         t.size = s.span_or("size", t.size)?;
-        if let Some(v) = s.value("buried") {
+        if let Some(r) = s.span("buried")? {
             let share = |x: f64| if x > 1.0 { x / 100.0 } else { x };
-            t.buried =
-                range_of(v).map_or(Span::point(0.0), |r| Span::new(share(r.lo), share(r.hi)));
+            t.buried = Span::new(share(r.lo), share(r.hi));
         }
         t.exponent = s.number_or("mostly.exponent", t.exponent)?;
         if let Some(w) = s.word("shape")? {
@@ -906,11 +905,8 @@ impl Scatter {
             reach: SCREE_REACH_MM,
             things: Vec::new(),
         };
-        s.count = set.value("count").and_then(range_of);
-        s.per_square = set
-            .value("per-square")
-            .and_then(range_of)
-            .unwrap_or(PER_SQUARE);
+        s.count = set.span("count")?;
+        s.per_square = set.span_or("per-square", PER_SQUARE)?;
         s.reach = set.number_or("reach", s.reach)?;
         s.gap = set.number_or("gap", s.gap)?;
         for ch in children {

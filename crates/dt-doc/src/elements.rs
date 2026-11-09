@@ -298,17 +298,9 @@ static BRANCHING: &[Word] = &[
 ];
 
 static LEAVES: &[Word] = &[
-    w(
-        "on",
-        "separate leaves over the clumps",
-        &[("leaves", 1.0), ("clumps", 1.0)],
-    ),
-    w(
-        "clumps-only",
-        "just foliage clumps",
-        &[("leaves", 0.0), ("clumps", 1.0)],
-    ),
-    w("bare", "a winter tree", &[("leaves", 0.0), ("clumps", 0.0)]),
+    w("on", "separate leaves over the clumps", &[]),
+    w("clumps-only", "just foliage clumps", &[]),
+    w("bare", "a winter tree", &[]),
 ];
 
 static TREE: &[Control] = &[
@@ -423,7 +415,7 @@ static WALL_HEIGHT: &[Word] = &[
     Word {
         word: "full",
         about: "up to the wall-top level",
-        sets: &[],
+        sets: &[("height", crate::schema::H_MM)],
         level: Some("wall-top"),
     },
     w(

@@ -69,6 +69,12 @@ impl Span {
         rng.uniform(self.lo, self.hi)
     }
 
+    /// True for one number (a range of no width): a number never draws.
+    #[must_use]
+    pub fn is_point(self) -> bool {
+        self.hi <= self.lo
+    }
+
     /// As a pair, for the kernels that take `(lo, hi)`.
     #[must_use]
     pub const fn pair(self) -> (f64, f64) {

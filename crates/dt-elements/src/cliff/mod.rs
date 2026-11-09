@@ -54,8 +54,8 @@ mod util;
 use dt_kit::Kind;
 use dt_kit::{Band, Field, Material, OnFrame, Scene, Tag};
 
-use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
+use crate::read::{Pick, Settings};
+use crate::{Control, Ctx, Element, LookError, Plan, Write};
 use pile::{Look, Planned, Site};
 
 /// The cliff element.
@@ -105,41 +105,38 @@ impl Cliff {
         };
         let mut w = [f64::NAN; 5];
         let s = Settings::new(controls);
-        match s.value("stone-size") {
-            Some(Value::Word(s)) => {
-                c.look.size = match s.as_str() {
-                    "rubble" => 1.0 / 1.35,
-                    "broken" => 1.15 / 1.35,
-                    _ => 1.0,
-                };
-            }
-            Some(Value::Number(v)) => {
-                c.look.size = if *v >= 1.0 {
-                    *v / 1.35
-                } else {
-                    (1.0 + 0.35 * v.clamp(0.0, 1.0)) / 1.35
-                }
-            }
-            _ => {}
+        // a word stands for its number (`stone-size.stone-size`: rubble 1,
+        // broken 1.15, massive 1.35); a share under 1 sits between rubble
+        // and massive
+        let share = match s.pick("stone-size")? {
+            Some(Pick::Word(_)) => Some(s.number("stone-size.stone-size")?.unwrap_or(1.0)),
+            Some(Pick::Number(v)) => Some(v),
+            None => None,
+        };
+        if let Some(v) = share {
+            c.look.size = if v >= 1.0 {
+                v / 1.35
+            } else {
+                (1.0 + 0.35 * v.clamp(0.0, 1.0)) / 1.35
+            };
         }
         // the `rock` word and the numbers behind it (`rock.<kind>`): a
         // later write wins, so the word (written after its numbers) stands
         // alone
-        for k in s.family("rock") {
-            match &k.value {
-                Value::Word(name) => {
-                    if let Some(i) = KIND_NAMES.iter().position(|n| n == name) {
+        for (name, what) in s.family("rock")? {
+            match what {
+                Pick::Word(word) => {
+                    if let Some(i) = KIND_NAMES.iter().position(|n| *n == word) {
                         w = [0.0; 5];
                         w[i] = 1.0;
                     }
                 }
-                Value::Number(v) => {
-                    let kind = k.name.strip_prefix("rock.").unwrap_or_default();
+                Pick::Number(v) => {
+                    let kind = name.strip_prefix("rock.").unwrap_or_default();
                     if let Some(i) = KIND_NAMES.iter().position(|n| *n == kind) {
                         w[i] = v.max(0.0);
                     }
                 }
-                Value::Range(..) => {}
             }
         }
         c.look.ledge_height = s.number("ledges/height")?.or(c.look.ledge_height);

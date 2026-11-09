@@ -35,7 +35,7 @@ use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Degrees, Element, LookError, Plan, Read, Value, Write};
+use crate::{Control, Ctx, Degrees, Element, LookError, Plan, Read, Span, Write};
 use site::{crumbs, fill_pockets, ground_drop, place};
 pub(crate) use site::{drop_crumbs, ground_box};
 
@@ -74,13 +74,13 @@ const STAMP_MIN_MM: f64 = 1.6;
 /// build).
 #[derive(Clone, Debug, PartialEq)]
 struct Params {
-    height: Value,
-    trunk: Value,
-    trunk_width: Option<Value>,
-    width: Value,
+    height: Span,
+    trunk: Span,
+    trunk_width: Option<Span>,
+    width: Span,
     shape: crown::Shape,
     clumps: usize,
-    clump_size: Value,
+    clump_size: Span,
     split: Degrees,
     eagerness: f64,
     target: f64,
@@ -89,8 +89,8 @@ struct Params {
     min_radius: f64,
     leaves: bool,
     clumps_on: bool,
-    leaf_length: Value,
-    leaf_width: Value,
+    leaf_length: Span,
+    leaf_width: Span,
 }
 
 /// Where in the tree's stage the leaves' build lies (progress fractions).
@@ -100,13 +100,13 @@ const LEAVES_TO: f64 = 0.61;
 impl Default for Params {
     fn default() -> Self {
         Self {
-            height: Value::Number(40.0),
-            trunk: Value::Number(30.0),
+            height: Span::point(40.0),
+            trunk: Span::point(30.0),
             trunk_width: None,
-            width: Value::Number(30.0),
+            width: Span::point(30.0),
             shape: crown::ROUND,
             clumps: 32,
-            clump_size: Value::Number(5.5),
+            clump_size: Span::point(5.5),
             split: Degrees(30.0),
             eagerness: 0.8,
             target: 0.33,
@@ -116,8 +116,8 @@ impl Default for Params {
             // `leaves on` (dt-doc's default)
             leaves: true,
             clumps_on: true,
-            leaf_length: Value::Number(4.5),
-            leaf_width: Value::Number(3.0),
+            leaf_length: Span::point(4.5),
+            leaf_width: Span::point(3.0),
         }
     }
 }
@@ -127,6 +127,51 @@ impl Default for Params {
 pub struct Tree {
     p: Params,
 }
+
+/// One of the branch knobs: the expert control (a parts file's) over the
+/// number the `branching` word stands for.  Both names are the schema's;
+/// a test checks they are.
+pub struct Knob {
+    /// `branch/<knob>`.
+    pub expert: &'static str,
+    /// `crown/branching.<knob>`.
+    pub word: &'static str,
+}
+
+const SPLIT: Knob = Knob {
+    expert: "branch/split",
+    word: "crown/branching.split",
+};
+const EAGERNESS: Knob = Knob {
+    expert: "branch/eagerness",
+    word: "crown/branching.eagerness",
+};
+const TARGET: Knob = Knob {
+    expert: "branch/target",
+    word: "crown/branching.target",
+};
+const BALANCE: Knob = Knob {
+    expert: "branch/balance",
+    word: "crown/branching.balance",
+};
+const EXPONENT: Knob = Knob {
+    expert: "branch/exponent",
+    word: "crown/branching.exponent",
+};
+const MIN_RADIUS: Knob = Knob {
+    expert: "branch/min-radius",
+    word: "crown/branching.min-radius",
+};
+
+/// All six, for the schema test.
+pub const KNOBS: [&Knob; 6] = [
+    &SPLIT,
+    &EAGERNESS,
+    &TARGET,
+    &BALANCE,
+    &EXPONENT,
+    &MIN_RADIUS,
+];
 
 /// `leaves`: whether there are leaves, and clumps.
 fn leaves_word(w: &str) -> (bool, bool) {
@@ -147,25 +192,13 @@ impl Tree {
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut p = Params::default();
         let s = Settings::new(controls);
-        if let Some(v) = s.length("height")? {
-            p.height = v;
-        }
-        if let Some(v) = s.length("trunk/height")? {
-            p.trunk = v;
-        }
-        p.trunk_width = s.length("trunk/width")?.or(p.trunk_width);
-        if let Some(v) = s.length("crown/width")? {
-            p.width = v;
-        }
-        if let Some(v) = s.length("crown/clump-size")? {
-            p.clump_size = v;
-        }
-        if let Some(v) = s.length("leaf/length")? {
-            p.leaf_length = v;
-        }
-        if let Some(v) = s.length("leaf/width")? {
-            p.leaf_width = v;
-        }
+        p.height = s.span_or("height", p.height)?;
+        p.trunk = s.span_or("trunk/height", p.trunk)?;
+        p.trunk_width = s.span("trunk/width")?.or(p.trunk_width);
+        p.width = s.span_or("crown/width", p.width)?;
+        p.clump_size = s.span_or("crown/clump-size", p.clump_size)?;
+        p.leaf_length = s.span_or("leaf/length", p.leaf_length)?;
+        p.leaf_width = s.span_or("leaf/width", p.leaf_width)?;
         if let Some(v) = s.number("crown/clumps")? {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             {
@@ -180,38 +213,28 @@ impl Tree {
         sh.bottom_curve = s.number_or("crown/shape.bottom-curve", sh.bottom_curve)?;
         // the branching word's numbers, and the expert `branch/…` knobs
         // over them (a parts file's)
-        let knob = |p: &str| [format!("branch/{p}"), format!("crown/branching.{p}")];
-        let branch = |name: &str, now: f64| -> Result<f64, LookError> {
-            let [expert, word] = knob(name);
-            Ok(s.number_of(&[&expert, &word])?.unwrap_or(now))
+        let knob = |k: &Knob, now: f64| -> Result<f64, LookError> {
+            Ok(s.number(k.expert)?.or(s.number(k.word)?).unwrap_or(now))
         };
-        if let Some(d) = s.degrees_of(&["branch/split", "crown/branching.split"])? {
-            p.split = d;
-        }
-        p.eagerness = branch("eagerness", p.eagerness)?;
-        p.target = branch("target", p.target)?;
-        p.balance = branch("balance", p.balance)?;
-        p.exponent = branch("exponent", p.exponent)?;
-        p.min_radius = branch("min-radius", p.min_radius)?;
-        // the `leaves` word and the numbers behind it, a later write winning
-        for c in s.family("leaves") {
-            match (c.name.as_str(), &c.value) {
-                ("leaves", Value::Word(w)) => (p.leaves, p.clumps_on) = leaves_word(w),
-                ("leaves.leaves", Value::Number(v)) => p.leaves = *v > 0.5,
-                ("leaves.clumps", Value::Number(v)) => p.clumps_on = *v > 0.5,
-                _ => {}
-            }
+        p.split = s
+            .degrees(SPLIT.expert)?
+            .or(s.degrees(SPLIT.word)?)
+            .unwrap_or(p.split);
+        p.eagerness = knob(&EAGERNESS, p.eagerness)?;
+        p.target = knob(&TARGET, p.target)?;
+        p.balance = knob(&BALANCE, p.balance)?;
+        p.exponent = knob(&EXPONENT, p.exponent)?;
+        p.min_radius = knob(&MIN_RADIUS, p.min_radius)?;
+        if let Some(w) = s.word("leaves")? {
+            (p.leaves, p.clumps_on) = leaves_word(w);
         }
         Ok(Self { p })
     }
 }
 
-fn draw(v: &Value, rng: &mut Rng) -> f64 {
-    match *v {
-        Value::Number(x) => x,
-        Value::Range(a, b) => rng.uniform(a, b),
-        Value::Word(_) => f64::NAN,
-    }
+/// A span's value: a range is drawn, a number never draws.
+fn draw(v: Span, rng: &mut Rng) -> f64 {
+    if v.is_point() { v.lo } else { v.draw(rng) }
 }
 
 /// A leaf's size, world mm (already scaled), for the leaf placer.
@@ -273,15 +296,15 @@ impl Tree {
         let stand_rule = dt_kit::Stand::for_printer(printer);
         let s = scene.frame().scale();
         let mut rng = Rng::new(seed.key("sizes"));
-        let height = draw(&p.height, &mut rng) * s;
-        let trunk = draw(&p.trunk, &mut rng) * s;
-        let radius = 0.5 * draw(&p.width, &mut rng) * s;
-        let clump_r = draw(&p.clump_size, &mut rng) * s;
+        let height = draw(p.height, &mut rng) * s;
+        let trunk = draw(p.trunk, &mut rng) * s;
+        let radius = 0.5 * draw(p.width, &mut rng) * s;
+        let clump_r = draw(p.clump_size, &mut rng) * s;
         let leaf = LeafSize {
-            length_mm: draw(&p.leaf_length, &mut rng) * s,
-            width_mm: draw(&p.leaf_width, &mut rng) * s,
+            length_mm: draw(p.leaf_length, &mut rng) * s,
+            width_mm: draw(p.leaf_width, &mut rng) * s,
         };
-        let trunk_width = p.trunk_width.as_ref().map(|v| draw(v, &mut rng) * s);
+        let trunk_width = p.trunk_width.map(|v| draw(v, &mut rng) * s);
         if trunk >= height - 1e-6 {
             return Err(LookError::control(
                 "trunk/height",
@@ -557,13 +580,13 @@ impl Element for Tree {
         let s = scene.frame().scale();
         // the crown radius as `grow` draws it (the same stream)
         let mut rng = Rng::new(ctx.seed.key("sizes"));
-        let _ = draw(&self.p.height, &mut rng);
-        let _ = draw(&self.p.trunk, &mut rng);
-        let mut margin = 0.5 * draw(&self.p.width, &mut rng) * s;
-        let _ = draw(&self.p.clump_size, &mut rng);
-        let _ = draw(&self.p.leaf_length, &mut rng);
-        let _ = draw(&self.p.leaf_width, &mut rng);
-        if let Some(v) = &self.p.trunk_width {
+        let _ = draw(self.p.height, &mut rng);
+        let _ = draw(self.p.trunk, &mut rng);
+        let mut margin = 0.5 * draw(self.p.width, &mut rng) * s;
+        let _ = draw(self.p.clump_size, &mut rng);
+        let _ = draw(self.p.leaf_length, &mut rng);
+        let _ = draw(self.p.leaf_width, &mut rng);
+        if let Some(v) = self.p.trunk_width {
             // a set trunk width: its flared foot must stand on the tile
             // too (it would hang past the edge), and must fit on it
             let foot = 0.5 * draw(v, &mut rng) * s * (1.0 + FLARE);
