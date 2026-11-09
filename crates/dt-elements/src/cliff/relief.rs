@@ -11,7 +11,7 @@ use dt_kit::vec3::dot;
 use dt_kit::{KitError, Piece, TriMesh, hung, tri_normal};
 
 use super::faces::{Face, RELIEF_GRID_MM};
-use super::util::{Cells, Field, cell_grid, edt_in};
+use super::util::{Cells, Field, Z_UP, cell_grid, edt_in};
 use dt_kit::smooth01;
 
 const CRACK_GRID_MM: f64 = 0.1;
@@ -21,7 +21,6 @@ const FACET_END_MM: f64 = 1.5;
 const RELIEF_OFF_MM: f64 = 4.0;
 const CUT_BLUR_MM: (f64, f64) = (0.08, 0.3);
 const CUT_SHORT_MM: f64 = 0.1;
-const Z_UP: [f64; 3] = [0.0, 0.0, 1.0];
 
 /// Bilinear sample at index coordinates; outside the grid: `cval` when
 /// `constant`, else clamped to the edge.

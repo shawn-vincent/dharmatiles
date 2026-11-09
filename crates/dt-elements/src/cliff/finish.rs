@@ -7,7 +7,7 @@ use dt_kit::{Piece, Rng, Slot, Support};
 use super::faces::{Column, Cut, OpenFace};
 use super::form::{Form, GRID_MM, Zones};
 use super::stack::Placed;
-use super::util::{Field, P2, area, bounds, centroid, hull2, norm2};
+use super::util::{Field, P2, Z_UP, area, bounds, centroid, hull2, norm2};
 
 pub const COLUMN_SHARE: f64 = 0.6;
 const STONE_STEP_MM: (f64, f64) = (0.2, 1.0);
@@ -23,7 +23,6 @@ const CLEAVE_MIN_KEEP: f64 = 0.6;
 const CLEAVE_MIN_MM3: f64 = 0.02;
 const CLEAVE_SUPPORT_MM3: f64 = 1.0;
 pub const SEAT_SLOPE_DEG: f64 = 90.0 - 55.0 + 3.0;
-const Z_UP: [f64; 3] = [0.0, 0.0, 1.0];
 
 pub fn top_z_poly(r: &Placed, poly: &[P2]) -> f64 {
     poly.iter()
@@ -321,7 +320,7 @@ pub fn plan_column(
     c.reach = hull.mesh().positions;
     let step = c.step;
     c.step = 0.0;
-    if form.round {
+    if form.free_standing {
         c.back.iter_mut().for_each(|b| b.1 = 0.0);
     }
     if c.carries {
@@ -342,7 +341,7 @@ pub fn plan_column(
         if rim {
             continue;
         }
-        let sb = if form.round {
+        let sb = if form.free_standing {
             0.0
         } else {
             step.min(COLUMN_STEP_MAX * (ptp(m, &c.reach) - 4.0))

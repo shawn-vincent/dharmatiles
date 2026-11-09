@@ -1,26 +1,26 @@
 // A single tall pillar of rock.
 
-tile size="1x1" seed=1 {
+tile size="1x1" seed=2 {
     about "A single tall pillar of rock."
 
-    region crag { within 13 of=center }
-    region crag2 { within 9.5 of=center }
-    region crag3 { within 6.5 of=center }
-    region crag4 { within 5 of=center }
+    region crag { within 12 of=center; within 8 of="(0.45, 0.55)" }
+    region lump2 { within 8 of="(0.5, 0.5)"; within 5.5 of="(0.55, 0.45)" }
+    region lump3 { within 5.5 of="(0.5, 0.5)"; within 3.5 of="(0.45, 0.55)" }
+    region lump4 { within 4.5 of="(0.5, 0.5)" }
     region apron { within 6.5 of=crag }
 
     stack {
         base
         dirt top=dirtEdgeHeight {
             pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
-            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
+            pin top=dirtEdgeHeight at=edges
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
 
-        cliff top="dirtEdgeHeight + [3.5 .. 6.5]" at=crag {
-            pin top="dirtEdgeHeight + [16 .. 19]" at=crag2
-            pin top="dirtEdgeHeight + [31 .. 34]" at=crag3
-            pin top="dirtEdgeHeight + [55 .. 58]" at=crag4
+        cliff top="dirtEdgeHeight + [3.5 .. 12]" at=crag {
+            pin top="dirtEdgeHeight + [9 .. 26]" at=lump2
+            pin top="dirtEdgeHeight + [22 .. 44]" at=lump3
+            pin top="dirtEdgeHeight + [40 .. 58]" at=lump4
             rock columns
             stone-size massive
         }

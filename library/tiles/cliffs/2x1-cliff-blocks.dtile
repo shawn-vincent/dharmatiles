@@ -10,7 +10,7 @@ tile size="2x1" seed=2 {
         base
         dirt top=dirtEdgeHeight {
             pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
-            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
+            pin top=dirtEdgeHeight at=edges
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
 

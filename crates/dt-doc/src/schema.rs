@@ -455,6 +455,10 @@ pub struct Element {
     pub honours: &'static [PlaceWord],
     /// True when a `scatter` may scatter it (built so far).
     pub scattered: bool,
+    /// True for a body of separate pieces made to fit its band (stones,
+    /// slabs, boards): it steps between its pins, and takes its own defaults
+    /// wherever it is laid.
+    pub pieces: bool,
     /// Its controls.
     pub controls: &'static [Control],
 }

@@ -10,7 +10,6 @@ use super::util::{Cells, Field, cell_grid, edt_in};
 
 pub const GRID_MM: f64 = 0.25;
 pub const FOOT: f64 = 0.0;
-pub const SQUARE_MM: f64 = 35.0;
 
 pub const MIN_H_MM: f64 = 3.5;
 /// Past this a band has room (a thinner one is a pin).
@@ -49,9 +48,11 @@ pub struct Form {
     pub hi: Field,
     /// The one height of a flat band: the plane every stone top touches.
     pub ztop: Option<f64>,
-    pub round: bool,
+    /// No tile side stands against the pile: it is free-standing (round it,
+    /// not along a face).
+    pub free_standing: bool,
     pub mass: f64,
-    pub along_y: Option<Cells>,
+    pub along_y: Cells,
     pub kind_p: Option<[f64; 5]>,
     /// (axis, high side) of the tile-boundary planes the cliff stands against.
     pub rims: Vec<(usize, bool)>,
@@ -169,9 +170,9 @@ pub fn make_form(rng: &mut Rng, ask: &Ask<'_>) -> Form {
             ay.z[j * nx + i] = gx.abs() > gy.abs();
         }
     }
-    let round = rims.is_empty();
+    let free_standing = rims.is_empty();
     if ask.ledges > 0 {
-        shelves(rng, ask, &want, &mut t, &ay, round);
+        shelves(rng, ask, &want, &mut t, &ay, free_standing);
     }
     Form {
         w,
@@ -180,9 +181,9 @@ pub fn make_form(rng: &mut Rng, ask: &Ask<'_>) -> Form {
         lo,
         hi,
         ztop,
-        round,
-        mass: if round { MASS_FREE } else { MASS_EDGE } * ask.mass_gain,
-        along_y: Some(ay),
+        free_standing,
+        mass: if free_standing { MASS_FREE } else { MASS_EDGE } * ask.mass_gain,
+        along_y: ay,
         kind_p: ask.kinds,
         rims,
     }
@@ -192,7 +193,14 @@ pub fn make_form(rng: &mut Rng, ask: &Ask<'_>) -> Form {
 /// strip of most of them stands lower than the rest, in one to three steps,
 /// so a face steps back in tiers a miniature can stand on. Masses are
 /// counted along the face (or round it, for a free-standing pile).
-fn shelves(rng: &mut Rng, ask: &Ask<'_>, want: &Cells, t: &mut Field, ay: &Cells, round: bool) {
+fn shelves(
+    rng: &mut Rng,
+    ask: &Ask<'_>,
+    want: &Cells,
+    t: &mut Field,
+    ay: &Cells,
+    free_standing: bool,
+) {
     let s = ask.s;
     let (nx, ny) = (want.nx, want.ny);
     let dist = edt_in(want);
@@ -220,7 +228,7 @@ fn shelves(rng: &mut Rng, ask: &Ask<'_>, want: &Cells, t: &mut Field, ay: &Cells
             super::util::cx(q % nx, GRID_MM),
             super::util::cx(q / nx, GRID_MM),
         );
-        if round {
+        if free_standing {
             libm::atan2(y - cy, x - cx).rem_euclid(std::f64::consts::TAU) * radius
         } else if ay.z[q] {
             y
@@ -228,7 +236,7 @@ fn shelves(rng: &mut Rng, ask: &Ask<'_>, want: &Cells, t: &mut Field, ay: &Cells
             x
         }
     };
-    let length = if round {
+    let length = if free_standing {
         std::f64::consts::TAU * radius
     } else {
         (nx.max(ny) as f64) * GRID_MM
@@ -327,7 +335,7 @@ impl Zones {
         width: Option<(f64, f64)>,
     ) -> Self {
         let k = patches.map_or(
-            ((w / (SQUARE_MM * s) * ZONES_PER_SQUARE).round() as usize).max(1),
+            ((w / (dt_kit::REFERENCE_SQUARE_MM * s) * ZONES_PER_SQUARE).round() as usize).max(1),
             |p| p.max(0.0) as usize,
         );
         let sig = width.map_or(ZONE_SIGMA_MM, |(a, b)| (0.5 * a, 0.5 * b));

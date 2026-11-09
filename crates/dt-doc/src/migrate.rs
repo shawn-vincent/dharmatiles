@@ -131,22 +131,36 @@ pub fn heights(text: &str) -> Result<Option<String>, EditError> {
     Ok(heights_only(now)?.or(cliffs).or(floors))
 }
 
-/// The rings of a free-standing pile, each a disc round a point: its radius
-/// and the share of the height it stands at (the middle of the form's own
-/// range), at the 70 mm reference the form's masses were drawn for.
-type Rings = &'static [(f64, f64)];
+/// A free-standing form's two masses, as discs round a point at the 70 mm
+/// reference the old forms were drawn for: the radius of the foot and of the
+/// summit, the foot's band and the summit's, each as shares of the height.
+/// The migrator only carries a form over, one region and one pin; the
+/// library's own tiles are where such a mass is designed.
+struct Mass {
+    foot_r: f64,
+    foot: (f64, f64),
+    summit_r: f64,
+    summit: (f64, f64),
+}
 
-const PLATEAU: Rings = &[(26.0, 1.0)];
-const MASSIF: Rings = &[(26.5, 0.5), (15.0, 1.0)];
-const MOUND: Rings = &[
-    (27.0, 0.17),
-    (20.5, 0.385),
-    (14.5, 0.59),
-    (10.0, 0.8),
-    (8.0, 1.0),
-];
-const SPIRE: Rings = &[(26.0, 0.11), (18.5, 0.325), (13.0, 0.59), (9.5, 1.0)];
-const NEEDLE: Rings = &[(24.0, 0.14), (16.0, 0.42), (10.0, 1.0)];
+/// The shortest rise a foot's band starts at, mm.
+const FOOT_LO_MM: f64 = 3.0;
+
+fn mass(form: &str) -> Option<Mass> {
+    let m = |foot_r, foot, summit_r, summit| Mass {
+        foot_r,
+        foot,
+        summit_r,
+        summit,
+    };
+    Some(match form {
+        "plateau" => return None,
+        "massif" => m(26.5, (0.41, 0.5), 15.0, (0.91, 1.0)),
+        "mound" => m(27.0, (0.0, 0.3), 10.0, (0.7, 1.0)),
+        "spire" => m(26.0, (0.0, 0.12), 9.5, (0.7, 1.0)),
+        _ => return None,
+    })
+}
 
 /// How a form's cliff is written now: its regions, its top and its pins.
 struct Recipe {
@@ -167,44 +181,6 @@ fn round1(v: f64) -> String {
         format!("{}", r.round())
     } else {
         format!("{r}")
-    }
-}
-
-/// `rings` as nested discs round `centre` (a place), `scale` the form's
-/// size against its reference, `height` the cliff's: the outer ring is the
-/// cliff's own band, the inner ones pins, each a step of three millimetres.
-fn rings(
-    name: &str,
-    centre: &str,
-    rings: Rings,
-    scale: f64,
-    height: f64,
-    out: &mut Recipe,
-    first: bool,
-) {
-    for (k, &(r, h)) in rings.iter().enumerate() {
-        let region = if k == 0 && first {
-            name.to_owned()
-        } else {
-            format!("{name}{}", k + 1)
-        };
-        out.regions.push(format!(
-            "region {region} {{ within {} of={centre} }}",
-            round1(r * scale)
-        ));
-        let hi = height * h;
-        let band = format!(
-            "dirtEdgeHeight + [{} .. {}]",
-            round1((hi - 3.0).max(1.0)),
-            round1(hi)
-        );
-        if k == 0 && first {
-            out.top = format!("\"{band}\"");
-            out.crag = region.clone();
-        } else {
-            out.pins.push(format!("pin top=\"{band}\" at={region}"));
-        }
-        out.film = region;
     }
 }
 
@@ -241,14 +217,39 @@ fn recipe(
     let scale = (cols.min(rows) * 35.0) / 70.0;
     let edge = |w: &str| format!("{w}Edge");
     match form {
-        "plateau" | "massif" | "mound" | "spire" => {
-            let rs = match form {
-                "plateau" => PLATEAU,
-                "massif" => MASSIF,
-                "mound" => MOUND,
-                _ => SPIRE,
-            };
-            rings(&name, "center", rs, scale, h, &mut out, true);
+        "plateau" => {
+            out.regions.push(format!(
+                "region {name} {{ within {} of=center }}",
+                round1(26.0 * scale)
+            ));
+        }
+        "massif" | "mound" | "spire" => {
+            let m = mass(form).unwrap_or(Mass {
+                foot_r: 26.0,
+                foot: (0.0, 0.3),
+                summit_r: 10.0,
+                summit: (0.7, 1.0),
+            });
+            let summit = format!("{name}2");
+            out.regions.push(format!(
+                "region {name} {{ within {} of=center }}",
+                round1(m.foot_r * scale)
+            ));
+            out.regions.push(format!(
+                "region {summit} {{ within {} of=center }}",
+                round1(m.summit_r * scale)
+            ));
+            out.top = format!(
+                "\"dirtEdgeHeight + [{} .. {}]\"",
+                round1((h * m.foot.0).max(FOOT_LO_MM)),
+                round1(h * m.foot.1)
+            );
+            out.pins.push(format!(
+                "pin top=\"dirtEdgeHeight + [{} .. {}]\" at={summit}",
+                round1(h * m.summit.0),
+                round1(h * m.summit.1)
+            ));
+            out.film = summit;
         }
         "needles" => {
             // three needles on a shared footing, as the form drew them
@@ -264,7 +265,7 @@ fn recipe(
                 .map(|&(x, y, z)| {
                     format!(
                         "within {} of=\"({}, {})\"",
-                        round1(NEEDLE[0].0 * 1.3 * scale * z),
+                        round1(24.0 * 1.3 * 0.5 * scale * z),
                         round1_sq(x),
                         round1_sq(y)
                     )
@@ -273,29 +274,25 @@ fn recipe(
             out.regions
                 .push(format!("region {name} {{ {} }}", foot.join("; ")));
             out.top = format!("\"dirtEdgeHeight + [3 .. {}]\"", round1(h * 0.18));
-            let mut film = name.clone();
-            // the rings of every needle outer first, so no needle's foot
-            // is drawn over another's summit
-            for (k, &(r, hf)) in NEEDLE.iter().enumerate() {
-                for (i, &(x, y, z)) in needles.iter().enumerate() {
-                    let c = format!("\"({}, {})\"", round1_sq(x), round1_sq(y));
-                    let region = format!("{name}n{}r{}", i + 1, k + 1);
-                    out.regions.push(format!(
-                        "region {region} {{ within {} of={c} }}",
-                        round1(r * scale * z)
-                    ));
-                    let hi = h * z * hf;
-                    out.pins.push(format!(
-                        "pin top=\"dirtEdgeHeight + [{} .. {}]\" at={region}",
-                        round1((hi - 3.0).max(1.0)),
-                        round1(hi)
-                    ));
-                    if i == 0 && k == NEEDLE.len() - 1 {
-                        film = region;
-                    }
+            // one pin to each needle's summit
+            for (i, &(x, y, z)) in needles.iter().enumerate() {
+                let region = format!("{name}n{}", i + 1);
+                out.regions.push(format!(
+                    "region {region} {{ within {} of=\"({}, {})\" }}",
+                    round1(10.0 * scale * z),
+                    round1_sq(x),
+                    round1_sq(y)
+                ));
+                let hi = h * z;
+                out.pins.push(format!(
+                    "pin top=\"dirtEdgeHeight + [{} .. {}]\" at={region}",
+                    round1(hi * 0.7),
+                    round1(hi)
+                ));
+                if i == 0 {
+                    out.film = region;
                 }
             }
-            out.film = film;
         }
         _ => {
             // a band against edges: how deep, where, how high
@@ -499,7 +496,7 @@ fn cliffs(text: &str) -> Result<Option<String>, EditError> {
         }) else {
             continue;
         };
-        let (h0, h1) = range_of(prop(bank, "height"), (1.5, 3.5));
+        let (_h0, h1) = range_of(prop(bank, "height"), (1.5, 3.5));
         let (r0, r1) = range_of(prop(bank, "reach"), (3.0, 6.5));
         let _ = r0;
         let crag = apron.as_ref().map_or("crag", |a| a.0.as_str()).to_owned();
@@ -514,9 +511,7 @@ fn cliffs(text: &str) -> Result<Option<String>, EditError> {
             start: s,
             end: e,
             with: format!(
-                "{nind}    pin top=\"[dirtEdgeHeight .. dirtEdgeHeight + {}]\" at=apron\n{nind}    pin top=\"dirtEdgeHeight + [{} .. {}]\" at={crag}\n",
-                round1(h1),
-                round1(h0),
+                "{nind}    pin top=\"[dirtEdgeHeight .. dirtEdgeHeight + {}]\" at=apron\n{nind}    pin top=dirtEdgeHeight at=edges\n",
                 round1(h1)
             ),
         });
@@ -928,20 +923,22 @@ mod tests {
             new.contains("dirt top=\"bottom + [0.6 .. 1.2]\" at=crag"),
             "{new}"
         );
-        assert!(new.contains("pin top=\"dirtEdgeHeight + [1.5 .. 3.5]\" at=crag"));
+        assert!(new.contains("pin top=dirtEdgeHeight at=edges"), "{new}");
         assert!(!new.contains("bank"), "{new}");
         assert!(heights(&new).unwrap().is_none());
     }
 
     #[test]
-    fn a_free_standing_form_is_nested_discs() {
+    fn a_free_standing_form_is_one_region_and_one_pin() {
         let old = "tile size=\"1x1\" seed=1 {\n    stack {\n        base\n        dirt\n        cliff form=mound height=34 {\n            rock mixed\n        }\n    }\n}\n";
         let new = heights(old).unwrap().unwrap();
         assert!(
             new.contains("region crag { within 13.5 of=center }"),
             "{new}"
         );
-        assert!(new.contains("pin top="), "{new}");
+        assert!(new.contains("region crag2 { within 5 of=center }"), "{new}");
+        assert_eq!(new.matches("pin top=").count(), 1, "{new}");
         assert!(!new.contains("form="), "{new}");
+        assert!(heights(&new).unwrap().is_none());
     }
 }

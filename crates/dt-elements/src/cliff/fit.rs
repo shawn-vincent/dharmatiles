@@ -7,7 +7,7 @@
 //! course lower down) is left as it is.
 
 use dt_kit::pieces::{Pieces, Plane};
-use dt_kit::{Band, Frame, Mask, Refusal};
+use dt_kit::{Band, Frame, Mask};
 
 use super::form::GRID_MM;
 use super::util::Cells;
@@ -15,7 +15,6 @@ use super::util::Cells;
 /// The band's fitter on the tile's lattice.
 pub struct Fit<'a> {
     pieces: Pieces<'a>,
-    band: &'a Band,
     mask: &'a Mask,
     nx: usize,
     ny: usize,
@@ -29,7 +28,6 @@ impl<'a> Fit<'a> {
         let (nx, ny) = frame.nodes();
         Self {
             pieces: Pieces::new(band, frame),
-            band,
             mask,
             nx,
             ny,
@@ -72,65 +70,48 @@ impl<'a> Fit<'a> {
         out
     }
 
-    /// Whether a stone's top plane is under the band's high over `cells`
-    /// as it is: what a crumb merged into the stone must keep.
-    pub fn under(&self, cells: &Cells, (c, a, b): (f64, f64, f64)) -> bool {
-        self.nodes(cells).iter().all(|&k| {
-            let p = self.pos(k);
-            c + a * p[0] + b * p[1] + self.foot <= self.band.at(k).hi + 1e-9
-        })
+    /// Whether a stone's top plane `z = c + a x + b y` (above the foot) is
+    /// under the band's high over `cells` as it is: what a crumb merged into
+    /// the stone must keep.
+    pub fn under(&self, cells: &Cells, top: (f64, f64, f64)) -> bool {
+        let nodes = self.nodes(cells);
+        self.pieces.under(&nodes, self.plane(&nodes, top))
     }
 
-    /// A stone's top plane `z = c + a x + b y` (above the foot), fitted.
-    ///
-    /// # Errors
-    /// None now: a stone the band jumps across is cut flat at its lowest high.
-    pub fn top(
-        &self,
-        cells: &Cells,
-        (c, a, b): (f64, f64, f64),
-    ) -> Result<(f64, f64, f64), Refusal> {
-        let nodes = self.nodes(cells);
-        if nodes.is_empty() {
-            return Ok((c, a, b));
-        }
-        let z = |p: [f64; 2]| c + a * p[0] + b * p[1] + self.foot;
-        let reaches = nodes
-            .iter()
-            .any(|&k| z(self.pos(k)) >= self.band.at(k).lo - 1e-9);
-        if !reaches {
-            return Ok((c, a, b));
-        }
-        let n = nodes.len() as f64;
+    /// The plane `z = c + a x + b y` (above the foot) as a world plane at
+    /// the middle of `nodes`.
+    fn plane(&self, nodes: &[usize], (c, a, b): (f64, f64, f64)) -> Plane {
+        let n = nodes.len().max(1) as f64;
         let at = nodes.iter().fold([0.0, 0.0], |s, &k| {
             let p = self.pos(k);
             [s[0] + p[0] / n, s[1] + p[1] / n]
         });
-        let got = match self.pieces.plane(
-            &nodes,
-            Plane {
-                at,
-                z: z(at),
-                g: [a, b],
-            },
-        ) {
-            Ok(p) => p,
-            // the band jumps across the stone: it is cut flat at the lowest
-            // of its highs (stood over the lower side, short of the higher)
-            Err(_) => Plane {
-                at,
-                z: nodes
-                    .iter()
-                    .map(|&k| self.band.at(k).hi)
-                    .fold(f64::INFINITY, f64::min),
-                g: [0.0, 0.0],
-            },
-        };
-        Ok((
-            got.z - self.foot - got.g[0] * at[0] - got.g[1] * at[1],
+        Plane {
+            at,
+            z: c + a * at[0] + b * at[1] + self.foot,
+            g: [a, b],
+        }
+    }
+
+    /// A stone's top plane `z = c + a x + b y` (above the foot), fitted
+    /// to the band: [`Pieces::plane_or_flat`] (a stone the band jumps across
+    /// is cut flat at its lowest high), and left as it is where it stops
+    /// short of the band (a course lower down).
+    pub fn top(&self, cells: &Cells, top: (f64, f64, f64)) -> (f64, f64, f64) {
+        let nodes = self.nodes(cells);
+        if nodes.is_empty() {
+            return top;
+        }
+        let want = self.plane(&nodes, top);
+        if !self.pieces.reaches(&nodes, want) {
+            return top;
+        }
+        let got = self.pieces.plane_or_flat(&nodes, want);
+        (
+            got.z - self.foot - got.g[0] * got.at[0] - got.g[1] * got.at[1],
             got.g[0],
             got.g[1],
-        ))
+        )
     }
 }
 

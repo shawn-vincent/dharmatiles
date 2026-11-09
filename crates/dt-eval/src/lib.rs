@@ -1047,11 +1047,14 @@ impl<'a> Plan<'a> {
             edge_mm: self.solved.edge_mm,
             notes: scene.notes().to_vec(),
             surface: scene.surface(),
-            covered: scene.support().map(|g| dt_kit::Mask {
-                nx: g.nx,
-                ny: g.ny,
-                bits: g.z.iter().map(|z| z.is_finite()).collect(),
-            }),
+            covered: scene
+                .support()
+                .zip(scene.bedded())
+                .map(|(g, bits)| dt_kit::Mask {
+                    nx: g.nx,
+                    ny: g.ny,
+                    bits,
+                }),
             stage_secs,
             reused,
             brick,

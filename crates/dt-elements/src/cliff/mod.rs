@@ -39,6 +39,7 @@
 mod chips;
 mod core;
 mod faces;
+mod film;
 mod finish;
 mod fit;
 mod form;
@@ -57,16 +58,8 @@ use stone::{ColState, Env};
 
 type ColResult = Result<(Vec<(usize, dt_kit::Piece)>, usize), dt_kit::KitError>;
 
-/// The steepest top a dirt film lies on, degrees.
-const FILM_SLOPE_DEG: f64 = 35.0;
-/// How far inside the stones the core's edge stands, and how often down it
-/// is tried, mm.
-const CORE_CLEAR_MM: f64 = 1.0;
-/// How far the core's edge is drawn back from a face beside it, mm.
-const CORE_DRAW_BACK_MM: f64 = 0.8;
-const CORE_LEVELS_MM: f64 = 1.0;
-/// How far a film stands back from a lip or a face, mm.
-const FILM_INSET_MM: f64 = 1.5;
+/// The most stones a pile may be made of, per square of its area.
+const ROCKS_PER_SQUARE: usize = 400;
 
 /// The cliff element.
 #[derive(Clone, Debug)]
@@ -175,7 +168,7 @@ impl Cliff {
             },
         );
         let zone = form::Zones::new(&mut rng, fm.w, s, self.patches, self.patch_width);
-        let max_rocks = 400 * ((fm.w * fm.h / (sq * sq)).ceil() as usize).max(1);
+        let max_rocks = ROCKS_PER_SQUARE * ((fm.w * fm.h / (sq * sq)).ceil() as usize).max(1);
         let fit = fit::Fit::new(band, frame, ctx.area, foot);
         let mut st = stack::stack(&mut rng, &fm, &zone, s, max_rocks, &fit)
             .map_err(|e| LookError::band(&e, "the cliff's stones"))?;
@@ -200,13 +193,11 @@ struct Planned {
 
 /// The node of `frame`'s lattice nearest the cell `(ci, cj)` of the pile's
 /// grid, counted by cell centre.
-fn node_cell(frame: &dt_kit::Frame, x: f64, y: f64, nx: usize, ny: usize) -> Option<usize> {
+pub(super) fn node_cell(x: f64, y: f64, nx: usize, ny: usize) -> Option<usize> {
     let ci = (x / form::GRID_MM).floor();
     let cj = (y / form::GRID_MM).floor();
-    (ci >= 0.0 && cj >= 0.0 && (ci as usize) < nx && (cj as usize) < ny).then(|| {
-        let _ = frame;
-        cj as usize * nx + ci as usize
-    })
+    (ci >= 0.0 && cj >= 0.0 && (ci as usize) < nx && (cj as usize) < ny)
+        .then(|| cj as usize * nx + ci as usize)
 }
 
 impl Element for Cliff {
@@ -222,7 +213,7 @@ impl Element for Cliff {
     }
 
     fn foot(&self, frame: &dt_kit::Frame, ctx: &Ctx<'_>) -> Result<Option<crate::Foot>, LookError> {
-        let Planned { fm, zone, st, .. } = self.pile_plan(frame, ctx)?;
+        let Planned { zone, st, .. } = self.pile_plan(frame, ctx)?;
         let (nx, ny) = frame.nodes();
         let step = frame.step_mm();
         let mut rock = vec![false; nx * ny];
@@ -231,17 +222,16 @@ impl Element for Cliff {
             for i in 0..nx {
                 let (x, y) = (i as f64 * step, j as f64 * step);
                 let q = j * nx + i;
-                if let Some(c) = node_cell(frame, x, y, st.s.nx, st.s.ny) {
-                    rock[q] = st.s.z[c] > form::FOOT + 0.5;
+                if let Some(c) = node_cell(x, y, st.s.nx, st.s.ny) {
+                    rock[q] = st.s.z[c] > form::FOOT + core::ROCK_MIN_MM;
                 }
                 wts[q] = 0.5 + (zone.at(x) - form::ZONE_FLOOR) / (1.0 - form::ZONE_FLOOR);
             }
         }
-        let _ = fm;
         let (d, _) = dt_kit::distance(frame, &rock);
         let dist: Vec<f64> =
             d.z.iter()
-                .map(|&v| if v.is_finite() { v } else { 1e9 })
+                .map(|&v| if v.is_finite() { v } else { f64::MAX })
                 .collect();
         let mut cells = Vec::new();
         for j in 1..ny - 1 {
@@ -300,7 +290,7 @@ impl Element for Cliff {
                     continue;
                 }
                 let rp = r.poly();
-                if poly_overlap(&rp, cpoly) > 1.0 {
+                if shared_area_mm2(&rp, cpoly) > 1.0 {
                     c.carries = true;
                     c.back.iter_mut().for_each(|b| b.1 = 0.0);
                     break;
@@ -317,7 +307,7 @@ impl Element for Cliff {
             .map_err(|e| LookError::build(format!("core mesh: {e}")))?;
         let m = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, foot];
         if progress.sketching() {
-            let rough = rough_pile(&core_mesh, &placed, &m);
+            let rough = rough_pile(&core_mesh, &placed, foot);
             progress.sketch(&rough, &vec![Material::Rock; rough.triangles.len()], true);
         }
         let mut frng = Rng::new(ctx.seed.key("cliff-faces"));
@@ -396,6 +386,23 @@ impl Element for Cliff {
             tops += t;
         }
         pieces.sort_by_key(|p| p.0);
+        // a stone the band holds down at its site adds no height there, so the
+        // stack can draw the same one again and again: the same cut stone,
+        // solids that coincide (the same size and place to 0.05 mm), which a union of the pile never
+        // finishes. Only the first of each is kept; the rest were the same rock.
+        let mut seen = std::collections::HashSet::new();
+        pieces.retain(|(_, p)| {
+            let m = p.mesh();
+            let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
+            for v in &m.positions {
+                for k in 0..3 {
+                    lo[k] = lo[k].min(v[k]);
+                    hi[k] = hi[k].max(v[k]);
+                }
+            }
+            let key = |x: f64| (x * 20.0).round() as i64;
+            seen.insert((m.triangles.len(), lo.map(key), hi.map(key)))
+        });
         // a stone that stands over the band is a bug in the body
         let fit = dt_kit::pieces::Pieces::new(band, &frame);
         for (_, p) in &pieces {
@@ -432,8 +439,8 @@ impl Element for Cliff {
 
 impl Cliff {
     /// The core as a rock layer of the terrain (set in from the faces, down
-    /// from the tops, clear of the tile's sides), and what the pile's tops
-    /// give a film laid on them.
+    /// from the tops, clear of the tile's sides), and what the finished
+    /// stones' tops give a film laid on them.
     fn lay_core(
         scene: &mut Scene,
         ctx: &Ctx<'_>,
@@ -445,147 +452,16 @@ impl Cliff {
     ) -> Result<(), LookError> {
         let frame = *scene.frame();
         let (nx, ny) = frame.nodes();
-        let step = frame.step_mm();
-        let (cnx, cny) = (s.nx, s.ny);
-        let [w, h] = frame.size_mm();
-        let rims = [
-            core::rim_mm(fm, 0, false),
-            core::rim_mm(fm, 0, true),
-            core::rim_mm(fm, 1, false),
-            core::rim_mm(fm, 1, true),
-        ];
-        // the core: the pile set in from its faces, down from its tops, clear
-        // of the tile's sides
-        let mut mask = dt_kit::Mask::new(nx, ny, false);
-        let mut z = vec![0.0; nx * ny];
-        for j in 0..ny {
-            for i in 0..nx {
-                let (x, y) = (i as f64 * step, j as f64 * step);
-                let k = j * nx + i;
-                let Some(c) = node_cell(&frame, x, y, cnx, cny) else {
-                    continue;
-                };
-                let inside = x > rims[0] && x < w - rims[1] && y > rims[2] && y < h - rims[3];
-                let ct = core_field.z[c] - core::CORE_DROP_MM;
-                if inside && ct > form::FOOT + 0.3 {
-                    mask.bits[k] = true;
-                    z[k] = ct + foot;
-                }
+        let tops = film::stone_tops(&frame, stones, foot);
+        let (mut mask, mut z) = core::core_mask(&frame, fm, core_field, s, foot);
+        // the core stands under the stones as they are, not as planned
+        for k in 0..nx * ny {
+            if mask.bits[k] && tops[k].is_finite() {
+                z[k] = z[k].min(tops[k] - core::CORE_DROP_MM);
             }
         }
-        // where a stone stands all the way down (a film lies only on one)
-        let mut stone_deep = vec![false; nx * ny];
-        // the core's edge keeps clear of the stones' faces: a core wall that
-        // grazed a face would leave a hair of it loose between the two.
-        // Every node near the core is tried against the finished stones at
-        // several heights (deep: inside them all the way down); a node of the
-        // core's edge with a deep and a not-deep node within the clearance of
-        // it has a face beside it, and the edge is drawn back from it.
-        {
-            let (to_core, near_core) = dt_kit::distance(&frame, &mask.bits);
-            let mut pts: Vec<[f64; 3]> = Vec::new();
-            let mut spans: Vec<(usize, usize, usize)> = Vec::new();
-            for k in 0..nx * ny {
-                if to_core.z[k] > 2.0 * CORE_CLEAR_MM {
-                    continue;
-                }
-                let Some(src) = near_core[k] else { continue };
-                let (x, y) = ((k % nx) as f64 * step, (k / nx) as f64 * step);
-                let from = pts.len();
-                let mut zz = z[src] - foot - 0.3;
-                while zz > form::FOOT + 0.5 {
-                    pts.push([x, y, zz]);
-                    zz -= CORE_LEVELS_MM;
-                }
-                pts.push([x, y, form::FOOT + 0.5]);
-                spans.push((k, from, pts.len()));
-            }
-            let mut hit = vec![false; pts.len()];
-            for m in stones {
-                let rest: Vec<usize> = (0..pts.len()).filter(|&i| !hit[i]).collect();
-                if rest.is_empty() {
-                    break;
-                }
-                let sub: Vec<[f64; 3]> = rest.iter().map(|&i| pts[i]).collect();
-                for (j, h) in m.contains(&sub).into_iter().enumerate() {
-                    if h {
-                        hit[rest[j]] = true;
-                    }
-                }
-            }
-            let mut deep = vec![false; nx * ny];
-            let mut tried = vec![false; nx * ny];
-            for &(k, a, b) in &spans {
-                tried[k] = true;
-                deep[k] = hit[a..b].iter().all(|&h| h);
-            }
-            stone_deep.clone_from(&deep);
-            let (to_deep, _) = dt_kit::distance(&frame, &deep);
-            let shallow: Vec<bool> = (0..nx * ny).map(|k| tried[k] && !deep[k]).collect();
-            let (to_shallow, _) = dt_kit::distance(&frame, &shallow);
-            let mut bad = vec![false; nx * ny];
-            for j in 1..ny - 1 {
-                for i in 1..nx - 1 {
-                    let k = j * nx + i;
-                    let edge = mask.bits[k]
-                        && !(mask.bits[k - 1]
-                            && mask.bits[k + 1]
-                            && mask.bits[k - nx]
-                            && mask.bits[k + nx]);
-                    if edge {
-                        let other = if deep[k] {
-                            to_shallow.z[k]
-                        } else {
-                            to_deep.z[k]
-                        };
-                        bad[k] = other < CORE_CLEAR_MM;
-                    }
-                }
-            }
-            if bad.iter().any(|&b| b) {
-                let (d, _) = dt_kit::distance(&frame, &bad);
-                for k in 0..nx * ny {
-                    mask.bits[k] &= d.z[k] >= CORE_DRAW_BACK_MM;
-                }
-            }
-        }
-        // the film's ground: the pile's tops, where the top is under the
-        // steepest slope and clear of every lip and face of the stones and
-        // of the core (laid on a face it would run down it)
-        let smooth = s.blur(0.5 / form::GRID_MM);
-        let low = s.erode(FILM_INSET_MM / form::GRID_MM);
-        let tan = libm::tan(FILM_SLOPE_DEG.to_radians());
-        let (off_core, _) = dt_kit::distance(
-            &frame,
-            &mask.bits.iter().map(|&b| !b).collect::<Vec<bool>>(),
-        );
-        let mut top = vec![f64::NEG_INFINITY; nx * ny];
-        let mut flat = dt_kit::Mask::new(nx, ny, false);
-        for j in 0..ny {
-            for i in 0..nx {
-                let (x, y) = (i as f64 * step, j as f64 * step);
-                let k = j * nx + i;
-                let Some(c) = node_cell(&frame, x, y, cnx, cny) else {
-                    continue;
-                };
-                let (ci, cj) = (c % cnx, c / cnx);
-                if s.z[c] > form::FOOT + 0.5 {
-                    top[k] = s.z[c] + foot;
-                    let (i0, i1) = (ci.saturating_sub(1), (ci + 1).min(cnx - 1));
-                    let (j0, j1) = (cj.saturating_sub(1), (cj + 1).min(cny - 1));
-                    let gx = (smooth.at(i1, cj) - smooth.at(i0, cj))
-                        / ((i1 - i0).max(1) as f64 * form::GRID_MM);
-                    let gy = (smooth.at(ci, j1) - smooth.at(ci, j0))
-                        / ((j1 - j0).max(1) as f64 * form::GRID_MM);
-                    flat.bits[k] = libm::hypot(gx, gy) < tan
-                        && s.z[c] - low.z[c] < 0.05
-                        && ctx.area.bits[k]
-                        && mask.bits[k]
-                        && stone_deep[k]
-                        && off_core.z[k] >= FILM_INSET_MM;
-                }
-            }
-        }
+        core::draw_back_from_faces(&frame, &mut mask, &z, foot, stones);
+        let flat = film::film_ground(&frame, &tops, ctx.area, &mask);
         if mask.bits.iter().any(|&b| b) {
             let field = Lattice::new(&frame, 0.0).with_z(z);
             let band = Band::point(&field);
@@ -604,9 +480,9 @@ impl Cliff {
                 })
                 .map_err(LookError::build)?;
         }
-        scene.stamp_heights(&top);
+        scene.stamp_heights_bare(&tops);
         scene.set_rest(dt_kit::Rest {
-            tops: top,
+            tops,
             flat,
             core: mask,
         });
@@ -615,9 +491,9 @@ impl Cliff {
 }
 
 /// The pile as boxes: the core and each rock's footprint stood from its
-/// underside to its top, placed on the tile by `m`.  A stand-in for the
+/// underside to its top, raised to stand on `foot`.  A stand-in for the
 /// view while the stones are cut, never printed.
-fn rough_pile(core: &dt_kit::TriMesh, placed: &[stack::Placed], m: &[f64; 12]) -> dt_kit::TriMesh {
+fn rough_pile(core: &dt_kit::TriMesh, placed: &[stack::Placed], foot: f64) -> dt_kit::TriMesh {
     let mut out = core.clone();
     out.extra.clear();
     out.num_extra = 0;
@@ -641,23 +517,16 @@ fn rough_pile(core: &dt_kit::TriMesh, placed: &[stack::Placed], m: &[f64; 12]) -
         out.triangles
             .extend(b.triangles.iter().map(|t| t.map(|v| v + off)));
     }
-    // m is column-major: x' = m0 x + m3 y + m6 z + m9
     for p in &mut out.positions {
-        let [x, y, z] = *p;
-        *p = [
-            m[0] * x + m[3] * y + m[6] * z + m[9],
-            m[1] * x + m[4] * y + m[7] * z + m[10],
-            m[2] * x + m[5] * y + m[8] * z + m[11],
-        ];
+        p[2] += foot;
     }
     out
 }
 
-/// Approximate overlap area of two convex-ish polygons by the bounds of
-/// their intersection test on the cells (cheap): the area of the
-/// intersection of their bounding boxes if their outlines overlap.
-fn poly_overlap(a: &[util::P2], b: &[util::P2]) -> f64 {
-    // sample the smaller polygon's bounds on a 0.5 mm grid
+/// The area two outlines share, mm², estimated: the points of a 0.5 mm grid
+/// over the overlap of their bounds that are inside both, each counted as
+/// 0.25 mm².
+fn shared_area_mm2(a: &[util::P2], b: &[util::P2]) -> f64 {
     let (ba, bb) = (util::bounds(a), util::bounds(b));
     let (x0, y0, x1, y1) = (
         ba[0].max(bb[0]),

@@ -178,6 +178,39 @@ impl<'a> Pieces<'a> {
         })
     }
 
+    /// **plane_or_flat**: [`Pieces::plane`], and where the band jumps across
+    /// the piece (no plane fits), a flat top at the lowest of the band's
+    /// highs over `nodes`: the piece stands over its lower side and stops
+    /// short of the higher. A pieces body that cannot be set to a band's
+    /// step (a cliff's stone) takes this; a floor refuses instead.
+    #[must_use]
+    pub fn plane_or_flat(&self, nodes: &[usize], want: Plane) -> Plane {
+        self.plane(nodes, want).unwrap_or_else(|_| Plane {
+            at: want.at,
+            z: nodes
+                .iter()
+                .map(|&k| self.band.at(k).hi)
+                .fold(f64::INFINITY, f64::min),
+            g: [0.0, 0.0],
+        })
+    }
+
+    /// Whether `plane` is under the band's high at every one of `nodes`.
+    #[must_use]
+    pub fn under(&self, nodes: &[usize], plane: Plane) -> bool {
+        nodes
+            .iter()
+            .all(|&k| plane.height(self.pos(k)) <= self.band.at(k).hi + 1e-9)
+    }
+
+    /// Whether `plane` reaches the band's low at any of `nodes`.
+    #[must_use]
+    pub fn reaches(&self, nodes: &[usize], plane: Plane) -> bool {
+        nodes
+            .iter()
+            .any(|&k| plane.height(self.pos(k)) >= self.band.at(k).lo - 1e-9)
+    }
+
     /// The band's high at a point, bilinear between nodes.
     fn high_at(&self, p: [f64; 2]) -> f64 {
         let hi: &Field = self.band.hi();

@@ -628,11 +628,11 @@ static CLIFF: &[Control] = &[
     .words(ROCK_MIX)
     .default("mixed")
     .subs(&[
-        c("columns", Axis::Number, "weight of tall upright stones").planned(),
-        c("blocks", Axis::Number, "weight of chunky blocks").planned(),
-        c("slabs", Axis::Number, "weight of thin tilted slabs").planned(),
-        c("odd", Axis::Number, "weight of irregular lumps").planned(),
-        c("monoliths", Axis::Number, "weight of ground-to-top stones").planned(),
+        c("columns", Axis::Number, "weight of tall upright stones"),
+        c("blocks", Axis::Number, "weight of chunky blocks"),
+        c("slabs", Axis::Number, "weight of thin tilted slabs"),
+        c("odd", Axis::Number, "weight of irregular lumps"),
+        c("monoliths", Axis::Number, "weight of ground-to-top stones"),
     ]),
     c(
         "stone-size",
@@ -720,6 +720,7 @@ const fn thing(
         holds_scatter: false,
         honours: &[PlaceWord::At],
         scattered,
+        pieces: false,
         controls,
     }
 }
@@ -735,6 +736,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: true,
         honours: &[],
         scattered: false,
+        pieces: false,
         controls: &[
             BUMP_SIZE,
             c("clods", Axis::Word, "lumps of earth on the surface")
@@ -758,6 +760,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: true,
         honours: &[],
         scattered: false,
+        pieces: false,
         controls: &[
             c("length", Axis::Mm, "blade length along the ground")
                 .over(0.0, f64::INFINITY)
@@ -798,6 +801,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[],
         scattered: false,
+        pieces: false,
         controls: &[
             c("clumps", Axis::Count, "how many clumps along the shore")
                 .limits(0.0, 30.0)
@@ -822,6 +826,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[],
         scattered: false,
+        pieces: false,
         controls: &[
             c("per-square", Axis::PerSquare, "how many flowers a square")
                 .limits(0.0, 40.0)
@@ -855,6 +860,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[],
         scattered: false,
+        pieces: false,
         controls: &[],
     },
     thing("rock", "one rock", &ROCK, true),
@@ -880,6 +886,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[PlaceWord::Along],
         scattered: false,
+        pieces: false,
         controls: WALL,
     },
     Element {
@@ -891,6 +898,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[],
         scattered: false,
+        pieces: true,
         controls: FLAGSTONES,
     },
     Element {
@@ -902,6 +910,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[],
         scattered: false,
+        pieces: true,
         controls: PLANKS,
     },
     Element {
@@ -913,6 +922,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[],
         scattered: false,
+        pieces: true,
         controls: CLIFF,
     },
     Element {
@@ -929,6 +939,7 @@ pub static ELEMENTS: &[Element] = &[
         holds_scatter: false,
         honours: &[PlaceWord::Against],
         scattered: false,
+        pieces: false,
         controls: SCATTER,
     },
 ];

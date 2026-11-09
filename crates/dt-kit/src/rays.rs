@@ -123,6 +123,12 @@ impl RayMesh {
         (self.lo, self.hi)
     }
 
+    /// The unit normal of triangle `t`.
+    #[must_use]
+    pub fn normal(&self, t: u32) -> [f64; 3] {
+        self.face_normals[t as usize]
+    }
+
     /// The first hit of each ray (`dirs` need not be unit), in input order.
     #[must_use]
     pub fn first_hits(&self, origins: &[[f64; 3]], dirs: &[[f64; 3]]) -> Vec<Option<RayHit>> {

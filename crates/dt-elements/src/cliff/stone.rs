@@ -10,14 +10,16 @@ use dt_kit::vec3::{cross, dot, norm, sub, unit};
 use dt_kit::{KitError, Piece, Rng, Slot, Support, TriMesh, form, hung, welded};
 
 use super::chips::{CHIP_MM, adjacency, chip_edges, corner_chips, face_normals};
-use super::faces::{Column, Face};
+use super::faces::{CRACK_DEPTH_MM, CRACK_SLOT_MM, Column, Face};
 use super::finish::{
     COLUMN_STEP_MAX, Cutter, SEAT_SLOPE_DEG, occupied, offset_poly, open_faces, prism,
 };
 use super::form::{FOOT, Form, GRID_MM};
 use super::relief::relief;
 use super::stack::{Placed, SINK_MM};
-use super::util::{Field, Grid, P2, bounds, cell_grid, norm2, point_in, ring_dist, trace_outline};
+use super::util::{
+    Field, Grid, P2, Z_UP, bounds, cell_grid, norm2, point_in, ring_dist, trace_outline,
+};
 use dt_kit::smooth01;
 
 /// A stone the cuts leave with less than this is not made, mm³.
@@ -35,13 +37,10 @@ const SEAT_KEEP_MM: (f64, f64) = (4.5, 1.0);
 const FACE_GRAIN_MM: f64 = 0.25;
 const FACE_GRAIN_LEN_MM: f64 = 1.0;
 const FIT_GAP_MM: f64 = 0.02;
-const CRACK_DEPTH_MM: (f64, f64) = (0.5, 0.65);
-const CRACK_SLOT_MM: (f64, f64) = (0.4, 0.5);
 const TEX_EDGE_MM: f64 = 0.25;
 const SHARP_EDGE_DEG: f64 = 18.0;
 const EDGE_KEEP_MM: f64 = 0.5;
 const TEX_BASE_FADE_MM: f64 = 0.8;
-const Z_UP: [f64; 3] = [0.0, 0.0, 1.0];
 
 type V = [f64; 3];
 
@@ -153,6 +152,10 @@ fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Pie
         return Ok(rock);
     };
     let (lo, hi) = (lo3[2], hi3[2]);
+    // a rock thinner than the seat's bevel has no underside to seat
+    if hi - lo < 0.1 + 1e-9 {
+        return Ok(rock);
+    }
     let bed = seat_bed(r);
     let mut bv: Vec<f64> = bed.z.iter().copied().filter(|v| !v.is_nan()).collect();
     bv.sort_by(f64::total_cmp);

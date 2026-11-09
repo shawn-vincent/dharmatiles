@@ -129,9 +129,6 @@ const PEB_TRIES: u32 = 60;
 /// The printable-texture rule's window and layer, mm.
 const TEXTURE_WINDOW_MM: f64 = 1.5;
 const TEXTURE_LAYER_MM: f64 = 0.2;
-/// The reference square: per-square counts are per this many mm².
-const SQUARE_MM: f64 = 35.0;
-
 /// The earth on a ground shape.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dirt {
@@ -756,7 +753,7 @@ fn place_pebbles(
     w_rim: &Field,
 ) -> (Vec<bool>, Counts) {
     let [w, h] = frame.size_mm();
-    let area_sq = w * h / (SQUARE_MM * SQUARE_MM);
+    let area_sq = w * h / (dt_kit::REFERENCE_SQUARE_MM * dt_kit::REFERENCE_SQUARE_MM);
     let c = cluster_field(frame, seed, ground);
     let mut rng = Rng::new(seed.key("pebbles"));
     #[allow(

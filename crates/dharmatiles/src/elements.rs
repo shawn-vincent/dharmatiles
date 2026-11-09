@@ -295,13 +295,10 @@ mod tests {
 
     #[test]
     fn a_planned_control_is_not_taken() {
-        let cliff = schema::element("cliff").expect("cliff");
-        let rock = cliff.control("rock").expect("rock");
-        assert!(taken(Some(cliff), "rock", rock));
-        assert!(!taken(
-            Some(cliff),
-            "rock/columns",
-            rock.sub("columns").expect("columns")
-        ));
+        let scatter = schema::element("scatter").expect("scatter");
+        let count = scatter.control("count").expect("count");
+        let spread = scatter.control("spread").expect("spread");
+        assert!(taken(Some(scatter), "count", count));
+        assert!(!taken(Some(scatter), "spread", spread));
     }
 }

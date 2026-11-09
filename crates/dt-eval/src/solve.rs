@@ -407,13 +407,13 @@ fn solve_on(
         // a floor or a cliff is a pieces body: it takes its own defaults
         // wherever it is laid (a floor's edge pin is its edge contract), and
         // never uses up the first land layer's, which are the dirt's
-        let floor = matches!(b.element.as_str(), "flagstones" | "planks" | "cliff");
+        let pieces = dt_doc::schema::element(&b.element).is_some_and(|e| e.pieces);
         let default: Option<&DefaultBody> = h
             .defaults
             .iter()
             .find(|d| d.element == b.element)
-            .filter(|_| !land || floor || first_land);
-        if land && !floor {
+            .filter(|_| !land || pieces || first_land);
+        if land && !pieces {
             first_land = false;
         }
         let region = match &b.region {
@@ -508,7 +508,11 @@ fn solve_on(
         if !ok {
             continue;
         }
-        let ease = if land && floor {
+        let ease = if let (true, true, Some(slope)) = (land, pieces, b.slope) {
+            // a pieces body steps between its pins, unless it is told how
+            // steeply its pieces stand
+            Ease::Slope(slope)
+        } else if land && pieces {
             // a floor's slabs and a cliff's stones step: a pin holds its
             // place, nothing eases
             Ease::Step
@@ -616,6 +620,9 @@ fn solve_on(
                     );
                 }
                 Lint::Steep(_) => {}
+                // a default pin the tile covers with its own is the way a tile
+                // overrides it: nothing to say
+                Lint::Shadowed(sh) if decls[sh.pin].from.default => {}
                 Lint::Shadowed(sh) => {
                     let p = decls[sh.pin];
                     let by: Vec<String> =
@@ -642,7 +649,7 @@ fn solve_on(
             .iter()
             .position(|p| p.from.default && p.at == PlaceRef::Name("edges".into()))
         {
-            if land && !floor && edge_mm.is_none() {
+            if land && !pieces && edge_mm.is_none() {
                 // where the library's edge pin holds the rim, as solved
                 edge_mm = (0..nx * ny)
                     .filter(|&k| {
@@ -660,6 +667,12 @@ fn solve_on(
                     (i == 0 || j == 0 || i == nx - 1 || j == ny - 1)
                         && region.bits[k]
                         && solved.owner[k].is_some_and(|o| o != edge)
+                        // a pin of the tile's own that holds the library's
+                        // edge height keeps the tile standard
+                        && {
+                            let (b, e) = (solved.band.at(k), pins[edge].band.at(k));
+                            (b.lo - e.lo).abs() > 1e-6 || (b.hi - e.hi).abs() > 1e-6
+                        }
                 })
                 .collect();
             if let Some(&first) = off.first() {

@@ -346,3 +346,6 @@ pub fn ring_dist(poly: &[P2], p: P2) -> f64 {
         .map(|k| seg_dist(p, poly[k], poly[(k + 1) % n]))
         .fold(f64::INFINITY, f64::min)
 }
+
+/// Straight up.
+pub const Z_UP: [f64; 3] = [0.0, 0.0, 1.0];

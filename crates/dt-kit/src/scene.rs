@@ -524,6 +524,9 @@ pub struct Terrain {
     wet: Mask,
     stone: Mask,
     support: Option<Grid>,
+    /// Nodes whose stamped support is not painted as bedding (a cliff's
+    /// stones stand on earth that looks like earth).
+    unbedded: Vec<bool>,
     rest: Option<Rest>,
 }
 
@@ -552,6 +555,7 @@ impl Terrain {
             wet: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
             support: None,
+            unbedded: Vec::new(),
             rest: None,
         }
     }
@@ -591,6 +595,38 @@ impl Terrain {
             let z = t as f32;
             s.z[k] = s.z[k].max(z);
         }
+    }
+
+    /// **stamp_heights_bare**: like [`Terrain::stamp_heights`], but the
+    /// earth under it keeps its own paint, the sides and ground in the
+    /// earth's grain, not the flat bedding colour of a floor's.
+    pub fn stamp_heights_bare(&mut self, tops: &[f64]) {
+        if self.unbedded.is_empty() {
+            self.unbedded = vec![false; tops.len()];
+        }
+        for (k, t) in tops.iter().enumerate() {
+            if t.is_finite()
+                && self
+                    .support
+                    .as_ref()
+                    .is_none_or(|s| s.z[k] == f32::NEG_INFINITY)
+            {
+                self.unbedded[k] = true;
+            }
+        }
+        self.stamp_heights(tops);
+    }
+
+    /// Where the support is painted as bedding: stamped, and not bare.
+    #[must_use]
+    pub fn bedded(&self) -> Option<Vec<bool>> {
+        let s = self.support.as_ref()?;
+        Some(
+            s.z.iter()
+                .enumerate()
+                .map(|(k, z)| z.is_finite() && !self.unbedded.get(k).copied().unwrap_or(false))
+                .collect(),
+        )
     }
 
     /// The highest stamped top at each node (world mm, `-∞` where nothing
@@ -1020,6 +1056,18 @@ impl Scene {
     /// has none); see [`Terrain::stamp_heights`].
     pub fn stamp_heights(&mut self, tops: &[f64]) {
         self.terrain.stamp_heights(tops);
+    }
+
+    /// **stamp_heights_bare**: as [`Scene::stamp_heights`], with the earth
+    /// under it painted as earth, not as bedding.
+    pub fn stamp_heights_bare(&mut self, tops: &[f64]) {
+        self.terrain.stamp_heights_bare(tops);
+    }
+
+    /// Where the support is painted as bedding.
+    #[must_use]
+    pub fn bedded(&self) -> Option<Vec<bool>> {
+        self.terrain.bedded()
     }
 
     /// The highest stamped top at each node (world mm, `-∞` where nothing

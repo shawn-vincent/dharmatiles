@@ -124,6 +124,63 @@ pub fn paint(materials: &[Material], overhang: &[bool]) -> Vec<[f32; 3]> {
 /// flat earth brown.
 const BED: [f32; 3] = [128.0, 97.0, 64.0];
 
+/// How far from the blur a node may stand before the blur is taken over
+/// the nodes at its own height only, mm: dirt lying on stone, high over
+/// the ground round it, has relief against its own surface, not against
+/// the ground.
+const GATE_MM: f64 = 6.0;
+/// The nodes such a blur is taken over: within this of the node's own
+/// height, mm.
+const GATE_SAME_MM: f64 = 0.8;
+
+/// `blurred` (a Gaussian of `sigma` nodes over `z`) where a node stands near
+/// it; where it does not, the Gaussian over the nodes within [`GATE_MM`]
+/// of the node's own height.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
+fn gated(z: &[f64], nx: usize, ny: usize, sigma: f64, blurred: Vec<f64>) -> Vec<f64> {
+    let reach = (3.0 * sigma).ceil() as i64;
+    let mut out = blurred;
+    for k in 0..z.len() {
+        let (i, j) = ((k % nx) as i64, (k / nx) as i64);
+        // only where the ground round it falls away: a sample of the ring
+        let away = (0..12).any(|a| {
+            let t = f64::from(a) * std::f64::consts::TAU / 12.0;
+            let (ii, jj) = (
+                (i as f64 + reach as f64 * t.cos()).round() as i64,
+                (j as f64 + reach as f64 * t.sin()).round() as i64,
+            );
+            ii >= 0
+                && jj >= 0
+                && ii < nx as i64
+                && jj < ny as i64
+                && (z[jj as usize * nx + ii as usize] - z[k]).abs() > GATE_MM
+        });
+        if !away {
+            continue;
+        }
+        let (mut sum, mut wsum) = (0.0, 0.0);
+        for jj in (j - reach).max(0)..=(j + reach).min(ny as i64 - 1) {
+            for ii in (i - reach).max(0)..=(i + reach).min(nx as i64 - 1) {
+                let q = (jj as usize) * nx + ii as usize;
+                if (z[q] - z[k]).abs() > GATE_SAME_MM {
+                    continue;
+                }
+                let d2 = ((ii - i) * (ii - i) + (jj - j) * (jj - j)) as f64;
+                let w = (-d2 / (2.0 * sigma * sigma)).exp();
+                sum += w * z[q];
+                wsum += w;
+            }
+        }
+        out[k] = sum / wsum;
+    }
+    out
+}
+
 /// The ground surface as built, for a painted preview: heights, local
 /// relief at two scales, and which nodes are stone.
 #[derive(Clone, Debug)]
@@ -152,6 +209,10 @@ impl SurfacePaint {
         let w2 = dt_geom::blur(&z, g.nx, g.ny, 2.0 / g.step);
         let w6 = dt_geom::blur(&z, g.nx, g.ny, 6.0 / g.step);
         let low = z.iter().copied().fold(f64::INFINITY, f64::min);
+        let (b1, b2) = (
+            gated(&z, g.nx, g.ny, 0.8 / g.step, b1),
+            gated(&z, g.nx, g.ny, 4.0 / g.step, b2),
+        );
         Self {
             nx: g.nx,
             ny: g.ny,

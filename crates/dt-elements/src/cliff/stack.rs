@@ -468,7 +468,7 @@ pub fn stack(
     let mut retry = cell_grid(nx, ny, 0i32);
     let h_cliff = t.z.iter().copied().fold(f64::NEG_INFINITY, f64::max) - FOOT;
     let mut last_w = 0.0f64;
-    let (edt, phi) = if form.round {
+    let (edt, phi) = if form.free_standing {
         let e = edt_in(&want);
         let e = Grid {
             nx,
@@ -536,7 +536,7 @@ pub fn stack(
             };
         }
         last_w = w;
-        if form.along_y.as_ref().is_some_and(|m| m.at(si, sj)) {
+        if form.along_y.at(si, sj) {
             std::mem::swap(&mut w, &mut d);
         }
         let yaw = phi.as_ref().map_or(0.0, |p| {
@@ -609,7 +609,7 @@ pub fn stack(
                 continue;
             }
         }
-        if !form.round {
+        if !form.free_standing {
             let cmax = (0..nx * ny)
                 .filter(|&q| cells.z[q])
                 .map(|q| s.z[q])
@@ -682,7 +682,7 @@ pub fn stack(
         // stagger: no top level with its neighbours' (that is how courses appear)
         let dil2 = cells.grow4(2);
         let ring: Vec<usize> = (0..nx * ny)
-            .filter(|&q| dil2.z[q] && !cells.z[q] && s.z[q] > FOOT + 0.5)
+            .filter(|&q| dil2.z[q] && !cells.z[q] && s.z[q] > FOOT + super::core::ROCK_MIN_MM)
             .collect();
         let dilc = cells.grow4((COURSE_MM / GRID_MM) as usize);
         let near: Vec<bool> = (0..nx * ny).map(|q| dilc.z[q] && !cells.z[q]).collect();
@@ -738,7 +738,7 @@ pub fn stack(
             let dv = rng.signed((STAGGER_MM, 2.5 * STAGGER_MM));
             h = finish(rng, h + dv);
         }
-        let (c_top, a, b) = fit.top(&cells, (c + h - a * xm - b * ym, a, b))?;
+        let (c_top, a, b) = fit.top(&cells, (c + h - a * xm - b * ym, a, b));
         let mut bed = cell_grid(nx, ny, f64::NAN);
         let mut svmin = f64::INFINITY;
         for j in 0..ny {

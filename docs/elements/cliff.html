@@ -16,7 +16,7 @@
   <h1>cliff</h1>
   <p class="lede">A storey of stacked, broken rock: big blocks resting on each other under gravity, cleaved into columns, cracked across their joints and grained. It is a body of the stack: its <code>at=</code> region is where the stones stand and its <code>top=</code> band is how high their tops are, so a run, a corner, a mound or a spire is a region and a band, not a form.</p>
   <p class="small">Scree is not part of the cliff: it is <a href="stone.html"><code>stone</code></a>s and <a href="boulder.html"><code>boulder</code></a>s in a <a href="scatter.html"><code>scatter</code></a> <code>against=cliff</code>; the earth at its foot is the dirt's own pins, and dirt on its top is a second <a href="dirt.html"><code>dirt</code></a> laid on it.</p>
-  <figure class="shot hero-one"><img src="img/el-cliff.jpg" alt="A two-square escarpment: a storey-high cliff of stacked blocks along the north edge, its face stepping in and out, with scree and dirt at its foot" width="699" height="743"><figcaption><code>lib:tiles/cliffs/2x1-cliff-escarpment.dtile</code>: a band whose top ramps from 10 to 40 mm, a film of dirt on the stone tops.</figcaption></figure>
+  <figure class="shot hero-one"><img src="img/el-cliff.jpg" alt="A two-square escarpment: a storey-high cliff of stacked blocks along the north edge, its face stepping in and out, with scree and dirt at its foot" width="699" height="743"><figcaption><code>lib:tiles/cliffs/2x1-cliff-escarpment.dtile</code>: a band whose top ramps from 10 to 40 mm, a film of dirt on the stone tops (here and there: it lies only where a top is flat and clear of every lip).</figcaption></figure>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v">35 mm tall by default; runs on any length of edge</div></div>
     <div><div class="k">Shapes</div><div class="v">a region and a band: runs, corners, canyons, heaps, spires</div></div>
@@ -59,12 +59,12 @@
 <tr><td>canyon</td><td>the west and east edges, <code>"[8 .. 14]"</code></td></tr>
 <tr><td>escarpment</td><td>a run whose band ramps: <code>dirtEdgeHeight + 10 + 30 * sin(90 * x / 2) + [-4 .. 0]</code></td></tr>
 <tr><td>plateau</td><td>a disc <code>within 26 of=center</code>, one height</td></tr>
-<tr><td>massif, mound, spire</td><td>nested discs, the outer one the cliff's own band and each inner one a <code>pin</code> a step higher</td></tr>
-<tr><td>needles</td><td>nested discs round several points on a low shared footing</td></tr>
+<tr><td>massif, mound, spire</td><td>regions drawn as lumps, not circles: the outer one the cliff's own band, each inner one a <code>pin</code> with a wide band over it (<code>migrate</code> writes two discs and one pin; the library tiles are drawn by hand)</td></tr>
+<tr><td>needles</td><td>the pillars' feet as one region, a <code>pin</code> to each summit</td></tr>
 </tbody></table></div>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A cliff fills a region, its face toward the open ground. This is the library's run: the dirt is pinned high under the cliff and given a wide band across the apron beside it (the bank, drawn), the cliff is a plane of stone tops 35 mm over the edge height, and a film of dirt lies on its top:</p>
+<p>A cliff fills a region, its face toward the open ground. This is the library's run: the dirt is given a wide band across the apron beside it (the bank, drawn) and held at the standard edge height where the cliff meets the tile's edge, the cliff is a plane of stone tops 35 mm over the edge height, and a film of dirt lies on its top:</p>
 <pre><code>tile size="2x1" seed=1 {
     region crag  { within "[10 .. 20]" of=northEdge }   // its depth wanders along the edge
     region apron { within 6.5 of=crag }
@@ -73,7 +73,7 @@
         base
         dirt top=dirtEdgeHeight {
             pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
-            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
+            pin top=dirtEdgeHeight at=edges             // the rim stays at the standard edge height
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
         cliff top="dirtEdgeHeight + 35" at=crag {   // or leave top out: the library's 35 mm
@@ -86,8 +86,8 @@
         scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
     }
 }</code></pre>
-<p>A wide band makes a jagged crest: <code>cliff top="dirtEdgeHeight + [28 .. 42]" at=crag</code> has stone tops anywhere from 28 to 42 mm. A <code>pin</code> holds the band to a height at a place: nested discs, each pinned a step higher, make a mound or a spire. Cliffs do not ease: the stones step to a pin.</p>
-<p>Write the pin's band wide enough for a stone: a stone's top is one plane, so a band that jumps across a stone (a pin's edge inside it) is not stacked across; the stacker keeps each stone to where the band holds its height.</p>
+<p>A wide band makes a jagged crest: <code>cliff top="dirtEdgeHeight + [28 .. 42]" at=crag</code> has stone tops anywhere from 28 to 42 mm. A <code>pin</code> holds the band to a height at a place. A mound or a spire is a few lumps, each region a different shape and each pinned to a wide band (8 to 15 mm) that overlaps the next one's, so the stones land at their own heights and the steps read as rough crags; concentric circles with narrow bands make a wedding cake. A cliff steps to a pin; write <code>slope DEG</code> in its block to let the band ease between pins, which a stone only follows as far as it can lean.</p>
+<p>Let neighbouring pins' bands overlap, so a stone that stands over two of them has room under the lower one's high. Write the pin's band wide enough for a stone: a stone's top is one plane, so a band that jumps across a stone (a pin's edge inside it) is not stacked across; the stacker keeps each stone to where the band holds its height.</p>
 <p>Both ends of a run finish in the standard end section, so runs butt end to end. The stone face on the tile edge is textured to the plane and never passes it.</p>
 
 <h2 id="spec">Reference</h2>
@@ -102,11 +102,11 @@
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr id="c-rock"><td><code>rock</code></td><td>word</td><td><code>mixed</code></td><td>what the cliff is stacked from, or weights<dl class="words"><dt><code>mixed</code></dt><dd>the run shares</dd><dt><code>columns</code></dt><dd>basalt columns (provisional)</dd><dt><code>blocks</code></dt><dd>blocky granite (provisional)</dd><dt><code>slabs</code></dt><dd>layered sandstone (provisional)</dd></dl></td></tr>
-<tr id="c-rock-columns"><td><code>rock columns</code></td><td>number</td><td>—</td><td>weight of tall upright stones <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
-<tr id="c-rock-blocks"><td><code>rock blocks</code></td><td>number</td><td>—</td><td>weight of chunky blocks <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
-<tr id="c-rock-slabs"><td><code>rock slabs</code></td><td>number</td><td>—</td><td>weight of thin tilted slabs <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
-<tr id="c-rock-odd"><td><code>rock odd</code></td><td>number</td><td>—</td><td>weight of irregular lumps <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
-<tr id="c-rock-monoliths"><td><code>rock monoliths</code></td><td>number</td><td>—</td><td>weight of ground-to-top stones <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-rock-columns"><td><code>rock columns</code></td><td>number</td><td>—</td><td>weight of tall upright stones</td></tr>
+<tr id="c-rock-blocks"><td><code>rock blocks</code></td><td>number</td><td>—</td><td>weight of chunky blocks</td></tr>
+<tr id="c-rock-slabs"><td><code>rock slabs</code></td><td>number</td><td>—</td><td>weight of thin tilted slabs</td></tr>
+<tr id="c-rock-odd"><td><code>rock odd</code></td><td>number</td><td>—</td><td>weight of irregular lumps</td></tr>
+<tr id="c-rock-monoliths"><td><code>rock monoliths</code></td><td>number</td><td>—</td><td>weight of ground-to-top stones</td></tr>
 <tr id="c-stone-size"><td><code>stone-size</code></td><td>percent</td><td><code>rubble</code></td><td>small broken stones, or big masses<dl class="words"><dt><code>rubble</code></dt><dd>small broken stones</dd><dt><code>broken</code></dt><dd>between the two (provisional)</dd><dt><code>massive</code></dt><dd>big masses: 1.35x rubble size</dd></dl></td></tr>
 <tr id="c-ledges"><td><code>ledges</code></td><td>count, 0 to 2</td><td><code>1</code></td><td>steps down the free faces: shelves a miniature can stand on</td></tr>
 <tr id="c-ledges-height"><td><code>ledges height</code></td><td>percent</td><td>—</td><td>how far up the shelf is, as a share of the cliff</td></tr>
@@ -160,8 +160,9 @@
   <li>Seams between stacked stones read as grooves. Cracks are thin, run their full width and depth to an edge, joint or other crack, and carry on round a convex corner onto the next face.</li>
   <li>The fine grain is strong enough to read and to drybrush at print scale.</li>
   <li>Run ends are a standard section, so runs meet end to end; a few millimetres of mismatch reads as one more joint.</li>
-  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high its stones' tops may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. The library's default top is <code>dirtEdgeHeight + 35</code>. Cliffs do not ease; their stones step. A stone over the band's high is a bug in the body (<code>dt::band</code>), refused. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
-  <li>Its core is the pile set in from its faces, laid as a rock layer of the terrain before the lift and kept clear of the stones' faces, so a gap between stones is a recess and nothing of the core stands loose. Dirt laid on the cliff (<code>dirt top="bottom + [0.6 .. 1.2]"</code>) is a film on the stones' own tops: at least the printer's skin, only on rock under 35°, clear of every lip and face.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high its stones' tops may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. The library's default top is <code>dirtEdgeHeight + 35</code>. A cliff steps between its pins unless it is given a <code>slope</code>. A stone over the band's high is a bug in the body (<code>dt::band</code>), refused. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
+  <li>Its core is the pile set in from its faces, laid as a rock layer of the terrain before the lift and kept clear of the stones' faces, so a gap between stones is a recess and nothing of the core stands loose. Dirt laid on the cliff (<code>dirt top="bottom + [0.6 .. 1.2]"</code>) is a film read from the finished stones, not from the plan: rays are dropped on them and the film lies where one hits a top under 35°, 1.5 mm or more from any lip, face or slit. So it never runs down a face or into the gap between two stones, lies only on a stone that stands, and carries the dirt's grain like any other dirt.</li>
+  <li>Where the cliff meets a tile's edge, write <code>pin top=dirtEdgeHeight at=edges</code> after the dirt's other pins: the dirt keeps the standard edge height there, so the side of the tile under the stones carries the dirt's grain like the rest of the rim and the tile still butts a standard one.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>
@@ -184,7 +185,7 @@
 </div>
 <p class="small muted">The animation is a simplified stand-in for the idea, drawn in your browser; it is not the program's output. What the program does, in order:</p>
 <ol class="small">
-  <li><strong>Form</strong>: the region is the footprint and the body's heaved shape in its band is the target height field (a plane for one height); the outer strip of most masses is a shelf stepped down from it.</li>
+  <li><strong>Form</strong>: the region is the footprint and the body's heaved shape in its band is the target height field (a plane for one height); the outer strip of most masses is a shelf stepped down from it (<code>ledges</code>).</li>
   <li><strong>Stack</strong>: stones are placed lowest pocket first, each resting on the highest supports under it; neighbouring tops never line up, which is what makes courses read. A stone that reaches the band is fitted to it (the nearest plane inside the band over every node it stands on) as it is stacked.</li>
   <li><strong>Columns</strong>: stones that share a footprint stand in one column, cleaved by whole planes planned once on the column's hull.</li>
   <li><strong>Cracks</strong>: each open face of the pile gets one crack network, planned once so a crack runs on across the joints between stones.</li>
