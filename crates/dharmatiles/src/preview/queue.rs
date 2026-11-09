@@ -22,8 +22,8 @@ pub(super) enum Outcome {
     Mistake,
     /// A newer draft of the tile (or the tile leaving) made this one moot.
     Superseded,
-    /// The build panicked: a bug in an element.
-    Failed,
+    /// The build panicked: a bug in an element, with the panic's words.
+    Failed(String),
 }
 
 /// A draft the page asked for, waiting or running.
@@ -88,6 +88,7 @@ impl Shared {
         q.drafts.retain(|d| {
             let same = d.tile == id;
             if same {
+                // Allowed (you cancelled): the requester may have gone already
                 let _ = d.reply.send(Outcome::Superseded);
             }
             !same
@@ -169,6 +170,7 @@ impl Shared {
         q.drafts.retain(|d| {
             let same = d.tile == id;
             if same {
+                // Allowed (you cancelled): the requester may have gone already
                 let _ = d.reply.send(Outcome::Superseded);
             }
             !same

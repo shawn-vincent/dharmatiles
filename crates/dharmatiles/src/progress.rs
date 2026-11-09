@@ -26,6 +26,7 @@ pub(crate) fn tracker_for(
     extra: Vec<StageInfo>,
     on_change: Box<dyn Fn(&Status) + Send + Sync>,
 ) -> Option<(Arc<Tracker>, Progress)> {
+    // no progress bar when the plan fails: the build that follows reports why
     let checked = dt_eval::check(sources, path, opts).ok()?;
     let mut stages = plan_stages(&checked, path, opts, timings);
     if stages.is_empty() {
@@ -86,6 +87,8 @@ pub(crate) fn tty_sink(prefix: String, name: String) -> Box<dyn Fn(&Status) + Se
         - 1;
     Box::new(move |s| {
         let mut e = std::io::stderr().lock();
+        // Allowed silence: the status line is drawn on stderr, the only place
+        // to report a failure to draw it.
         let _ = write!(e, "\r\x1b[2K{}", line(&prefix, &name, s, width));
         let _ = e.flush();
     })

@@ -14,30 +14,62 @@ pub(crate) fn disk_library() {
     if std::env::var_os("DT_LIBRARY").is_some() {
         return;
     }
-    let root = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).root;
+    let root = project().root;
     let lib = root.join("library");
     if lib.join("printers/default.dtile").is_file() {
         dt_eval::source::use_library_dir(lib);
     }
 }
 
+/// The folder the program was run in; when it cannot be found, say so and
+/// use `.` (never silently).
+pub(crate) fn current_dir() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|e| {
+        tell!("note: cannot find the current folder ({e}); using `.`");
+        PathBuf::from(".")
+    })
+}
+
+/// The project around the current folder, saying so when its project file
+/// could not be used.
+pub(crate) fn project() -> dt_eval::Project {
+    let p = dt_eval::discover(&current_dir());
+    if let Some(why) = &p.problem {
+        crate::preview::tell_once(&format!(
+            "note: {why}; the project file is ignored, so builds go to out/"
+        ));
+    }
+    p
+}
+
 /// Every library tile, test tiles included (the preview's list).
-pub(crate) fn all_library_tiles() -> Vec<String> {
-    let mut v: Vec<String> = dt_eval::Library::paths()
+///
+/// # Errors
+/// The library cannot be found or listed.
+pub(crate) fn all_library_tiles() -> Result<Vec<String>, String> {
+    let mut v: Vec<String> = dt_eval::Library::paths()?
         .into_iter()
         .filter(|p| p.contains("tiles/"))
         .collect();
     v.sort();
-    v
+    Ok(v)
 }
 
-pub(crate) fn library_tiles() -> Vec<String> {
-    let mut v: Vec<String> = dt_eval::Library::paths()
+/// The shipped tiles (`build --all`, the MCP's `list_tiles`), test tiles left out.
+///
+/// # Errors
+/// The library cannot be found or listed, or holds no tiles: a sweep of
+/// nothing is not a success.
+pub(crate) fn library_tiles() -> Result<Vec<String>, String> {
+    let mut v: Vec<String> = dt_eval::Library::paths()?
         .into_iter()
         .filter(|p| p.contains("tiles/") && !p.contains("tiles/test/"))
         .collect();
     v.sort();
-    v
+    if v.is_empty() {
+        return Err("the library holds no tiles to build".to_owned());
+    }
+    Ok(v)
 }
 
 /// The options for a build target: the base system and the printer
@@ -84,31 +116,51 @@ pub(crate) fn options_in(
 
 /// `--out`, or `out/` beside `dharmatiles.dtile`, else here.
 pub(crate) fn out_dir(out: Option<PathBuf>) -> PathBuf {
-    out.unwrap_or_else(|| {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        dt_eval::discover(&cwd).out
-    })
+    out.unwrap_or_else(|| project().out)
 }
 
 /// The file in the user's home that remembers the build target.
 const TARGET_FILE: &str = "target.json";
 
-/// The target the title bar's chip last chose: `(system, printer)`.
-pub(crate) fn remembered_target(home: &std::path::Path) -> (Option<String>, Option<String>) {
-    let v: serde_json::Value = std::fs::read_to_string(home.join(TARGET_FILE))
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default();
+/// The target the title bar's chip last chose: `(system, printer)`; both
+/// `None` before any choice (no file yet).
+///
+/// # Errors
+/// The file is there but cannot be read or is not the JSON this program wrote.
+pub(crate) fn remembered_target(
+    home: &std::path::Path,
+) -> Result<(Option<String>, Option<String>), String> {
+    let file = home.join(TARGET_FILE);
+    let text = match std::fs::read_to_string(&file) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((None, None)),
+        Err(e) => return Err(format!("cannot read {}: {e}", file.display())),
+    };
+    let v: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| format!("{} is not valid JSON: {e}", file.display()))?;
     let get = |k: &str| v[k].as_str().map(str::to_owned);
-    (get("system"), get("printer"))
+    Ok((get("system"), get("printer")))
 }
 
-/// Remember the target in the user's home (made if need be); a failure to
-/// write is not worth telling.
-pub(crate) fn remember_target(home: &std::path::Path, system: &str, printer: &str) {
+/// Remember the target in the user's home (made if need be).
+///
+/// # Errors
+/// The folder cannot be made or the file written.
+pub(crate) fn remember_target(
+    home: &std::path::Path,
+    system: &str,
+    printer: &str,
+) -> Result<(), String> {
     let text = serde_json::json!({"system": system, "printer": printer}).to_string() + "\n";
-    let _ =
-        std::fs::create_dir_all(home).and_then(|()| std::fs::write(home.join(TARGET_FILE), text));
+    let file = home.join(TARGET_FILE);
+    std::fs::create_dir_all(home)
+        .and_then(|()| std::fs::write(&file, text))
+        .map_err(|e| {
+            format!(
+                "cannot remember the build target in {}: {e}",
+                file.display()
+            )
+        })
 }
 
 /// The target for the preview: the flags given, else the one remembered
@@ -121,7 +173,12 @@ pub(crate) fn preview_options(
     printer: Option<&str>,
 ) -> Result<Options, String> {
     let home = crate::preview::roots::personal_home();
-    let (rs, rp) = remembered_target(&home);
+    let (rs, rp) = remembered_target(&home).unwrap_or_else(|e| {
+        // the remembered target is a convenience: say it is not used, and
+        // build for the default (never silently)
+        tell!("note: {e}; using the default build target");
+        (None, None)
+    });
     let sys = system
         .map(str::to_owned)
         .or(rs)
@@ -131,8 +188,11 @@ pub(crate) fn preview_options(
         .or(rp)
         .unwrap_or_else(|| "default".to_owned());
     match options_in(&sys, &pr, None, Some(&home)) {
-        // a remembered printer that has gone: the default, not a failure
-        Err(_) if printer.is_none() && system.is_none() => {
+        // a remembered printer that has gone: the default, not a failure, and said
+        Err(e) if printer.is_none() && system.is_none() => {
+            tell!(
+                "note: the remembered build target {sys}/{pr} is not available ({e}); using db/default"
+            );
             options_in("db", "default", None, Some(&home))
         }
         r => r,

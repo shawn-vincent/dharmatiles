@@ -87,6 +87,7 @@ fn each_element_family_builds_for_openlock() {
 /// Every library tile whose elements are all built.
 fn buildable() -> Vec<String> {
     Library::paths()
+        .expect("the library is listed")
         .into_iter()
         .filter(|p| p.contains("tiles/"))
         .filter(|p| {

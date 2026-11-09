@@ -99,7 +99,13 @@ fn build_views(
     system: Option<&str>,
     dir: &Path,
 ) -> Result<(), String> {
-    let _ = std::fs::remove_dir_all(dir);
+    // a stale folder would be mistaken for this build's pictures: clear it,
+    // or stop (a folder that is not there is already clear)
+    match std::fs::remove_dir_all(dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("cannot clear {}: {e}", dir.display())),
+    }
     let mut cmd = Command::new(exe);
     cmd.args(["build", tile, "--png"]);
     if let Some(s) = seed {

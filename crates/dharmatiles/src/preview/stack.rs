@@ -41,7 +41,7 @@ fn item(label: String, element: &str) -> Value {
 }
 
 /// The tile's stack as `{label, element, href}` items, in written order,
-/// ending with the base the system adds.
+/// ending with the base when the stack has a `base` line.
 #[must_use]
 pub fn items(tile: &Tile, system: &str) -> Vec<Value> {
     let mut out = Vec::with_capacity(tile.stack.len() + 1);
@@ -51,11 +51,24 @@ pub fn items(tile: &Tile, system: &str) -> Vec<Value> {
             tile.stack[..i].iter().rev().find(|p| inside(e, p)),
         ));
     }
-    out.push(base(system));
+    if let Some(span) = tile.base_span {
+        let mut v = base(system);
+        v["what"] = json!("base");
+        v["file"] = json!(tile.src.name());
+        let text = tile.src.inner();
+        let line = |o: usize| {
+            text.get(..o.min(text.len()))
+                .map_or(1, |t| t.matches('\n').count() + 1)
+        };
+        let (start, len) = (span.offset(), span.len());
+        v["span"] = json!([start, len]);
+        v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
+        out.push(v);
+    }
     out
 }
 
-/// The base the evaluator adds to every tile.
+/// The base line's connector for the build target: its label and page.
 #[must_use]
 pub fn base(system: &str) -> Value {
     let (label, page) = if system == "ol" {

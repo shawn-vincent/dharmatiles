@@ -162,6 +162,9 @@ impl Timings {
     #[must_use]
     pub fn load(path: &Path) -> Self {
         let mut map = BTreeMap::new();
+        // Allowed silence: these timings only size the progress bar's
+        // estimate, never what is built; a file not there, or unreadable,
+        // means estimates from the elements' defaults.
         if let Ok(text) = std::fs::read_to_string(path) {
             for l in text.lines() {
                 if let Some((k, v)) = l.rsplit_once('\t')
@@ -201,6 +204,7 @@ impl Timings {
     pub fn save(&self) {
         let Some(path) = &self.path else { return };
         if let Some(dir) = path.parent() {
+            // best effort, like the rest of this: the write below fails the same way
             let _ = std::fs::create_dir_all(dir);
         }
         let text: String = self
@@ -210,6 +214,7 @@ impl Timings {
             .collect();
         let tmp = path.with_extension(format!("tmp{}", std::process::id()));
         if std::fs::write(&tmp, text).is_ok() && std::fs::rename(&tmp, path).is_err() {
+            // best-effort cleanup of the temporary file
             let _ = std::fs::remove_file(&tmp);
         }
     }

@@ -352,3 +352,46 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
         assert!(!o.stderr.is_empty(), "{args:?}");
     }
 }
+
+#[test]
+fn a_sweep_reports_every_failing_tile_by_name_and_exits_1() {
+    let d = scratch("sweep");
+    let o = Command::new(EXE)
+        .args([
+            "build",
+            "no/such/first.dtile",
+            "lib:tiles/test/1x1-flat.dtile",
+            "no/such/last.dtile",
+            "--out",
+        ])
+        .arg(&d)
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert_eq!(o.status.code(), Some(1), "{err}");
+    assert!(
+        d.join("db/test/1x1-flat-db.stl").is_file(),
+        "the good tile still builds: {err}"
+    );
+    assert!(err.contains("2 of 3 tiles failed"), "{err}");
+    assert!(
+        err.contains("no/such/first.dtile") && err.contains("no/such/last.dtile"),
+        "{err}"
+    );
+}
+
+#[test]
+fn build_all_with_no_library_to_sweep_is_an_error_not_a_success() {
+    let d = scratch("empty-library");
+    for lib in [d.clone(), d.join("not-there")] {
+        let o = Command::new(EXE)
+            .args(["build", "--all", "--out"])
+            .arg(d.join("out"))
+            .env("DT_LIBRARY", &lib)
+            .output()
+            .unwrap();
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert_eq!(o.status.code(), Some(1), "{err}");
+        assert!(err.contains("build --all"), "{err}");
+    }
+}

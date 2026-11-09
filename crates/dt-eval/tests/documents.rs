@@ -93,6 +93,7 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
     assert!(c.pending().is_empty(), "{path}: {:?}", c.pending());
     // (a palette is not a tile document)
     for path in Library::paths()
+        .expect("the library is listed")
         .into_iter()
         .filter(|p| !p.contains("palettes/"))
     {
@@ -414,6 +415,7 @@ fn a_wall_in_a_definition_needs_along_from_the_call() {
 fn library_tile_file_names_follow_the_standard() {
     let mut bad = Vec::new();
     for path in dt_eval::Library::paths()
+        .expect("the library is listed")
         .into_iter()
         .filter(|p| p.contains("tiles/"))
     {

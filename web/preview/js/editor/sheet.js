@@ -125,8 +125,10 @@ function renderLens() {
   const elements = server.get().elements;
   if (!s || s.kind === 'tile') { renderTileLens(); return; }
   const { file, writable } = doc.get();
-  if (!it || it.element === 'connector' || !it.span || it.file !== file || !elements.length) { lens.hide(); return; }
-  const groups = [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
+  if (!it || !it.span || it.file !== file || !elements.length) { lens.hide(); return; }
+  // the base line: no settings of its own; the build target (the system chip) picks the connector
+  const base = it.element === 'connector';
+  const groups = base ? [] : [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
   for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
   const actions = [];
   if (it.file === file && writable) {
@@ -135,7 +137,8 @@ function renderLens() {
       { label: 'Delete', title: `Delete ${it.label} from the document`, run: () => removeAt(it.span[0], it.label) },
     );
   }
-  lens.show({ title: it.label, kind: it.what || it.element, href: it.href, groups, actions });
+  const note = base ? 'The connector under zero. It has no settings: the build target (the system chip at the top) chooses DungeonBlocks or OpenLOCK. Delete the line for a tile with no base.' : undefined;
+  lens.show({ title: it.label, kind: it.what || it.element, href: it.href, note, groups, actions });
 }
 
 /** Comment a stack entry out (`/-`), with a way back. */

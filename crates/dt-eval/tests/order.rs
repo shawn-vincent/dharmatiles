@@ -12,6 +12,7 @@ use dt_eval::{Library, Options, check};
 fn every_library_tile_builds_in_the_order_it_did() {
     let mut text = String::new();
     for path in Library::paths()
+        .expect("the library is listed")
         .into_iter()
         .filter(|p| p.contains("tiles/"))
     {

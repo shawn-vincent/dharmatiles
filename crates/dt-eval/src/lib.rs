@@ -43,6 +43,9 @@ pub struct Project {
     /// Build output: `out/` beside the project file unless it says
     /// `out "…"`.
     pub out: PathBuf,
+    /// Why the project file could not be used, when it was found but not
+    /// read (output then goes to `out/`): callers say so.
+    pub problem: Option<String>,
 }
 
 /// **Project discovery**: walk up from `start` to the first folder with a
@@ -53,18 +56,29 @@ pub fn discover(start: &Path) -> Project {
         .ancestors()
         .find(|d| d.join("dharmatiles.dtile").is_file());
     let root = found.unwrap_or(start).to_path_buf();
-    let out = found
-        .and_then(|d| std::fs::read_to_string(d.join("dharmatiles.dtile")).ok())
-        .and_then(|t| kdl::KdlDocument::parse(&t).ok())
-        .and_then(|k| {
-            k.get("out")
-                .and_then(|n| n.entries().first())
-                .and_then(|e| e.value().as_string().map(PathBuf::from))
+    let mut problem = None;
+    let out = found.and_then(|d| {
+        let file = d.join("dharmatiles.dtile");
+        let read = std::fs::read_to_string(&file)
+            .map_err(|e| format!("cannot read {}: {e}", file.display()))
+            .and_then(|t| {
+                kdl::KdlDocument::parse(&t)
+                    .map_err(|e| format!("{} is not valid KDL: {e}", file.display()))
+            })
+            .map(|k| {
+                k.get("out")
+                    .and_then(|n| n.entries().first())
+                    .and_then(|e| e.value().as_string().map(PathBuf::from))
+            });
+        read.unwrap_or_else(|e| {
+            problem = Some(e);
+            None
         })
-        .unwrap_or_else(|| PathBuf::from("out"));
+    });
     Project {
-        out: root.join(out),
+        out: root.join(out.unwrap_or_else(|| PathBuf::from("out"))),
         root,
+        problem,
     }
 }
 

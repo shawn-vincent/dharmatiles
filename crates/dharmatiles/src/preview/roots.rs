@@ -54,12 +54,14 @@ impl Root {
             }
             RootKind::Library(prefix) => {
                 let want = format!("lib:{prefix}");
-                Some(
-                    crate::all_library_tiles()
-                        .into_iter()
-                        .filter(|p| p.starts_with(&want))
-                        .collect(),
-                )
+                match crate::all_library_tiles() {
+                    Ok(all) => Some(all.into_iter().filter(|p| p.starts_with(&want)).collect()),
+                    Err(e) => {
+                        // the list as it was stays: no tile is dropped for a failed scan
+                        super::tell_once(&format!("error: preview: cannot list the library: {e}"));
+                        None
+                    }
+                }
             }
         }
     }
@@ -97,10 +99,29 @@ pub(super) fn is_tile_document(f: &std::path::Path) -> bool {
 /// Every tile document (`.dtile` with a `tile` node) and `.stl` under
 /// `dir`, skipping hidden folders and build output.
 pub(super) fn tile_files(dir: &std::path::Path, depth: usize, out: &mut Vec<String>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        // a folder not made yet (the personal home) simply has no tiles
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        Err(e) => {
+            super::tell_once(&format!(
+                "error: preview: cannot list {}: {e}; its tiles are missing from the list",
+                dir.display()
+            ));
+            return;
+        }
     };
-    for e in entries.flatten() {
+    for e in entries {
+        let e = match e {
+            Ok(e) => e,
+            Err(e) => {
+                super::tell_once(&format!(
+                    "error: preview: cannot list an entry of {}: {e}",
+                    dir.display()
+                ));
+                continue;
+            }
+        };
         let name = e.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') {
             continue;

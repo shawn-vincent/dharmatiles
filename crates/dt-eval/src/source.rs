@@ -79,33 +79,36 @@ pub struct Library;
 
 impl Library {
     /// Every library path, as `lib:…`.
-    #[must_use]
-    pub fn paths() -> Vec<String> {
-        if let Some(dir) = library_dir() {
-            let mut v = Vec::new();
-            kdl_files(dir, dir, &mut v);
-            v.sort();
-            return v;
-        }
-        Vec::new()
+    ///
+    /// # Errors
+    /// There is no library folder on disk, or a folder in it cannot be read:
+    /// a sweep must not quietly skip tiles it could not list.
+    pub fn paths() -> Result<Vec<String>, String> {
+        let dir = library_dir().ok_or_else(|| {
+            "no library folder found: set DT_LIBRARY, or run inside the dharmatiles checkout"
+                .to_owned()
+        })?;
+        let mut v = Vec::new();
+        kdl_files(dir, dir, &mut v)?;
+        v.sort();
+        Ok(v)
     }
 }
 
 /// Every `.dtile` under `dir`, as `lib:` paths relative to `root`.
-fn kdl_files(root: &Path, dir: &Path, out: &mut Vec<String>) {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for e in rd.flatten() {
-        let p = e.path();
+fn kdl_files(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<(), String> {
+    let list = |e: std::io::Error| format!("cannot read {}: {e}", dir.display());
+    for e in std::fs::read_dir(dir).map_err(list)? {
+        let p = e.map_err(list)?.path();
         if p.is_dir() {
-            kdl_files(root, &p, out);
+            kdl_files(root, &p, out)?;
         } else if p.extension().is_some_and(|x| x == "dtile")
             && let Ok(rel) = p.strip_prefix(root)
         {
             out.push(format!("{LIB}{}", rel.to_string_lossy().replace('\\', "/")));
         }
     }
+    Ok(())
 }
 
 impl Source for Library {

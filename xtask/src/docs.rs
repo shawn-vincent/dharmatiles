@@ -61,7 +61,12 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
     let mut stale = Vec::new();
     let mut pages: Vec<PathBuf> = std::fs::read_dir(&dir)
         .map_err(|e| format!("{}: {e}", dir.display()))?
-        .filter_map(|e| e.ok().map(|e| e.path()))
+        .map(|e| {
+            e.map(|e| e.path())
+                .map_err(|e| format!("{}: {e}", dir.display()))
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
         .filter(|p| p.extension().is_some_and(|x| x == "html"))
         .collect();
     pages.sort();

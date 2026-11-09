@@ -52,6 +52,17 @@ impl dt_kit::Reporter for LatestBuild {
     }
 }
 
+/// The failure a caught panic becomes for the page: not a mistake in the
+/// document but a bug, with the panic's own words.  Logged here too (the
+/// panic hook has already written the message and where it happened).
+fn panicked(what: &str, panic: &(dyn std::any::Any + Send)) -> Diag {
+    let msg = panic_message(panic);
+    tell!("error: the build of {what} panicked: {msg}");
+    Diag::plain("dt::panic", format!("the build panicked: {msg}")).help(
+        "this is a bug in dharmatiles, not in your tile: the terminal has the location; the tile builds again when it changes",
+    )
+}
+
 /// Build tile `id`: plan pass, then geometry, pushing each result.
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, opts: &Options) {
     let Some(path) = lock(&shared.tiles)
@@ -132,6 +143,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     let reporter = dt_eval::Progress::new(latest.clone());
     let cache = shared.build_cache(&path, false);
     let built = match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        #[cfg(test)]
+        assert!(
+            !path.contains("dt-test-panic-in-build"),
+            "a test panic in the build"
+        );
         dt_eval::build_cached(&rec, &path, opts, &reporter, Some(&cache))
     })) {
         Ok(built) => built,
@@ -143,10 +159,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             });
             return;
         }
-        Err(_) => Err(vec![Diag::plain(
-            "dt::panic",
-            "the build panicked (a bug in an element); see the terminal".to_owned(),
-        )]),
+        Err(panic) => Err(vec![panicked(&path, panic.as_ref())]),
     };
     if latest.changed() {
         tell!("discarded superseded build of {path}");
@@ -167,6 +180,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             let encode_progress = tracker.as_ref().map_or_else(dt_eval::Progress::none, |t| {
                 dt_eval::Progress::new(t.clone())
             });
+            #[cfg(test)]
+            assert!(
+                !path.contains("dt-test-panic-in-encode"),
+                "a test panic in the encoding"
+            );
             encode_progress.begin(ENCODE, "preparing the view");
             let t_encode = Instant::now();
             let mesh = Arc::new(payload::from_built(
@@ -318,15 +336,18 @@ fn draft(shared: &Arc<Shared>, d: &queue::Draft, opts: &Options) {
     }));
     let outcome = match made {
         Err(panic) if panic.is::<Superseded>() => Outcome::Superseded,
-        Err(_) => {
-            tell!("the draft of {} panicked (a bug in an element)", d.path);
-            Outcome::Failed
+        Err(panic) => {
+            let msg = panic_message(panic.as_ref());
+            tell!("error: the draft of {} panicked: {msg}", d.path);
+            Outcome::Failed(format!("the draft panicked: {msg}"))
         }
         // a mistake in the text: the check shows it, the last mesh stays
         Ok(Err(_)) => Outcome::Mistake,
         Ok(Ok(_)) if d.cancel.load(Ordering::Relaxed) => Outcome::Superseded,
         Ok(Ok(mesh)) => Outcome::Mesh(Arc::new(mesh)),
     };
+    // Allowed: the requester gave up waiting (its request timed out or its
+    // connection closed); there is nobody left to tell.
     let _ = d.reply.send(outcome);
 }
 
@@ -352,7 +373,29 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
         let opts = shared.options();
         match &job {
             queue::Job::Draft(d) => draft(shared, d, &opts),
-            queue::Job::Full(id, cancel) => rebuild(shared, id, Arc::clone(cancel), &opts),
+            queue::Job::Full(id, cancel) => {
+                // `rebuild` catches a panic in the build itself; this catches
+                // one anywhere else in it (encoding, bookkeeping), so the lane
+                // goes on and the page is told
+                let ran = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    rebuild(shared, id, Arc::clone(cancel), &opts);
+                }));
+                if let Err(panic) = ran
+                    && !panic.is::<Superseded>()
+                {
+                    let what = lock(&shared.tiles)
+                        .iter()
+                        .find(|t| t.id == *id)
+                        .map_or_else(|| id.clone(), |t| t.path.clone());
+                    let d = panicked(&what, panic.as_ref());
+                    shared.update(id, |t| {
+                        t.status = State::Failed;
+                        t.progress = None;
+                        t.sketches.clear();
+                        t.errors = errors_json(&[d]);
+                    });
+                }
+            }
         }
         shared.finish(&job);
     }

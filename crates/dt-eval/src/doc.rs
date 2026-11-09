@@ -266,6 +266,9 @@ pub struct Tile {
     /// The stack has a `base` line: the connector of the build target goes
     /// under zero. Without one the tile has no base and prints flat from zero.
     pub has_base: bool,
+    /// Where the `base` line is written, when there is one (the preview
+    /// selects it like any entry).
+    pub base_span: Option<SourceSpan>,
     /// The entries that call built elements, definitions inlined.
     pub stack: Vec<Entry>,
     /// What the document asks for that is not built yet: one error each,
@@ -546,6 +549,7 @@ impl Reader<'_> {
             regions: Vec::new(),
             heights: Heights::default(),
             has_base: def.base.is_some(),
+            base_span: def.base.as_ref().map(|b| b.span),
             stack: Vec::new(),
             pending: Vec::new(),
             src: Arc::clone(src),

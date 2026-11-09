@@ -309,6 +309,8 @@ fn settings(template: &str, slots: &[String]) -> Result<String, String> {
 
 /// The middle of the template's bed, mm (256 × 256 when it does not say).
 fn bed_centre(template: &str) -> [f64; 2] {
+    // `settings` has already parsed this same text (and refused it when it is
+    // not JSON), so the parse cannot fail here; a Null just finds no bed.
     let v: Value = serde_json::from_str(template).unwrap_or(Value::Null);
     let pts: Vec<[f64; 2]> = v
         .get("printable_area")

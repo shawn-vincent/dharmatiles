@@ -76,7 +76,7 @@ pub use roots::{Root, RootKind, roots_for};
 use roots::{lib_group, personal_home};
 pub use worker::work;
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::net::TcpListener;
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -278,8 +278,30 @@ pub struct Shared {
 /// the tiles worked on last keep theirs.
 const BUILD_CACHES: usize = 4;
 
+/// Lock `m`, also when a thread panicked holding it.  Allowed: every panic
+/// in a build or a route is caught, logged and shown to the page (see
+/// `worker` and `server`), and the state behind these locks is only ever
+/// replaced whole, so a poisoned lock holds nothing half-written.
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Log `msg` to stderr the first time it is said, for a failure the periodic
+/// rescan would otherwise repeat every few seconds.
+pub(crate) fn tell_once(msg: &str) {
+    static SAID: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+    if lock(&SAID).insert(msg.to_owned()) {
+        tell!("{msg}");
+    }
+}
+
+/// The words of a caught panic (its message), for the log and the page.
+pub(crate) fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "a panic with no message".to_owned())
 }
 
 impl Shared {
@@ -368,7 +390,7 @@ impl Shared {
             return Ok(());
         }
         if let Some(h) = &self.home {
-            crate::library::remember_target(h, system, printer);
+            crate::library::remember_target(h, system, printer)?;
         }
         *lock(&self.target) = next;
         let mut tiles = lock(&self.tiles);
@@ -498,8 +520,7 @@ impl Shared {
             let mut tiles = lock(&self.tiles);
             let before = tiles.len();
             for (r, paths) in found {
-                let have: std::collections::BTreeSet<&str> =
-                    paths.iter().map(String::as_str).collect();
+                let have: BTreeSet<&str> = paths.iter().map(String::as_str).collect();
                 tiles.retain(|t| {
                     let keep = t.root != r || have.contains(t.path.as_str());
                     if !keep {
@@ -557,6 +578,8 @@ impl Shared {
     /// the snapshot.  Locked so no change falls between the first message
     /// and the rest.
     fn subscribe(&self, from: &route::Resume) -> std::sync::mpsc::Receiver<String> {
+        // The sends below ignore their result: `rx` is held here until this
+        // returns, so a send to `tx` cannot fail.
         let (tx, rx) = std::sync::mpsc::channel();
         let tiles = lock(&self.tiles);
         let mut ev = lock(&self.events);
@@ -577,6 +600,7 @@ impl Shared {
             }
             if !list {
                 let rev = ev.rev;
+                // (the receiver is held here until this returns: a send cannot fail)
                 let _ = tx
                     .send(json!({"type": "resumed", "rev": rev, "epoch": self.epoch}).to_string());
                 for id in ids {
@@ -600,23 +624,30 @@ impl Shared {
     /// A file of tile `id` for the text pane: the tile's own document, or
     /// (`file`) one its last build read, and whether it may be written
     /// (library files never are).  Nothing else on disk is served.
-    fn text(&self, id: &str, file: Option<&str>) -> Option<Value> {
+    ///
+    /// # Errors
+    /// The file is one the tile has, but it could not be read.
+    fn text(&self, id: &str, file: Option<&str>) -> Result<Option<Value>, String> {
         let path = {
             let tiles = lock(&self.tiles);
-            let t = tiles.iter().find(|t| t.id == id)?;
+            let Some(t) = tiles.iter().find(|t| t.id == id) else {
+                return Ok(None);
+            };
             match file {
                 None => t.path.clone(),
                 Some(f) if f == t.path || t.files.contains_key(f) => f.to_owned(),
-                Some(_) => return None,
+                Some(_) => return Ok(None),
             }
         };
         if !path.ends_with(".dtile") {
-            return None;
+            return Ok(None);
         }
-        let text = dt_eval::Source::read(&dt_eval::Files, &path).ok()?;
+        let text = dt_eval::Source::read(&dt_eval::Files, &path)?;
         let writable = !path.starts_with(dt_eval::LIB)
             && std::fs::metadata(&path).is_ok_and(|m| !m.permissions().readonly());
-        Some(serde_json::json!({ "file": path, "text": text, "writable": writable }))
+        Ok(Some(
+            serde_json::json!({ "file": path, "text": text, "writable": writable }),
+        ))
     }
 
     fn mesh(&self, id: &str) -> Option<Arc<Vec<u8>>> {
@@ -708,7 +739,7 @@ pub fn run(
         .map_or_else(|_| "127.0.0.1".to_owned(), |a| a.to_string());
     // files named are built at once; folder and library tiles when chosen
     let (roots, files) = roots_for(paths);
-    let cache = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).out;
+    let cache = crate::library::project().out;
     let shared = Arc::new(
         Shared::with_roots(roots, &files, opts)
             .with_home(roots::personal_home())

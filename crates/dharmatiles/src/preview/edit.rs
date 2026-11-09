@@ -166,9 +166,14 @@ fn draft(shared: &Shared, id: &str, tile: &str, file: &str, v: &Value) -> Reply 
             json!({ "superseded": true, "error": "a newer draft took its place" }),
         )
             .into(),
-        Ok(Outcome::Failed) | Err(_) => (
+        Ok(Outcome::Failed(why)) => (
             "500 Internal Server Error",
-            json!({ "error": "the draft could not be built" }),
+            json!({ "error": format!("the draft could not be built: {why}") }),
+        )
+            .into(),
+        Err(e) => (
+            "500 Internal Server Error",
+            json!({ "error": format!("the draft was not answered ({e}): the build worker may have died") }),
         )
             .into(),
     }
@@ -226,6 +231,7 @@ fn write_new(dir: &Path, stem: &str, text: &str) -> Result<PathBuf, (&'static st
                     .write_all(text.as_bytes())
                     .map(|()| dest.clone())
                     .map_err(|e| {
+                        // best-effort cleanup of the half-made file; the write error is what is reported
                         let _ = std::fs::remove_file(&dest);
                         (
                             "500 Internal Server Error",
@@ -316,6 +322,7 @@ fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
     match std::fs::hard_link(&from, &to) {
         Ok(()) => {
             if let Err(e) = std::fs::remove_file(&from) {
+                // best-effort cleanup of the new link; the failure to remove the old name is what is reported
                 let _ = std::fs::remove_file(&to);
                 return (
                     "500 Internal Server Error",
@@ -486,7 +493,15 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
             let stack = c.tile.as_ref().map(|t| stack::items(t, &opts.system));
-            let own = src.read(tile).unwrap_or_default();
+            let own = match src.read(tile) {
+                Ok(t) => t,
+                Err(e) => {
+                    return (
+                        "500 Internal Server Error",
+                        json!({ "error": format!("cannot read {tile}: {e}") }),
+                    );
+                }
+            };
             (
                 "200 OK",
                 json!({ "ok": true, "errors": [], "stack": stack, "map": map::json(&c, &own) }),
@@ -515,7 +530,15 @@ fn save(file: &str, v: &Value) -> (&'static str, Value) {
             json!({ "error": "this file is not yours to write: make it yours first" }),
         );
     }
-    let now = std::fs::read_to_string(file).unwrap_or_default();
+    let now = match std::fs::read_to_string(file) {
+        Ok(t) => t,
+        Err(e) => {
+            return (
+                "500 Internal Server Error",
+                json!({ "error": format!("cannot read {file} to compare it: {e}") }),
+            );
+        }
+    };
     if now != base {
         return (
             "409 Conflict",
@@ -530,6 +553,7 @@ fn save(file: &str, v: &Value) -> (&'static str, Value) {
     match std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, file)) {
         Ok(()) => ("200 OK", json!({ "ok": true })),
         Err(e) => {
+            // best-effort cleanup of the temporary file; the write error is what is reported
             let _ = std::fs::remove_file(&tmp);
             (
                 "500 Internal Server Error",
@@ -688,7 +712,13 @@ pub(super) fn export_dir(tile: &str) -> PathBuf {
         return personal_home().join("out");
     }
     let dir = Path::new(tile).parent().unwrap_or_else(|| Path::new("."));
-    dt_eval::discover(dir).out
+    let project = dt_eval::discover(dir);
+    if let Some(why) = &project.problem {
+        super::tell_once(&format!(
+            "note: {why}; the project file is ignored, so exports go to out/"
+        ));
+    }
+    project.out
 }
 
 /// Show a written file in the Finder (macOS `open -R`; elsewhere the

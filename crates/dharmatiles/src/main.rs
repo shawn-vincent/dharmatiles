@@ -113,7 +113,17 @@ fn main() -> ExitCode {
                     return ExitCode::from(ERROR);
                 }
             };
-            let paths = if all { library_tiles() } else { paths };
+            let paths = if all {
+                match library_tiles() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tell!("error: build --all: {e}");
+                        return ExitCode::from(ERROR);
+                    }
+                }
+            } else {
+                paths
+            };
             let out = out_dir(out);
             let opts = match options(&system, &printer, seed) {
                 Ok(o) => o,

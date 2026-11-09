@@ -1185,7 +1185,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     assert!(lock(&shared.tiles).iter().all(|t| t.stale && t.changed()));
     assert_eq!(shared.options().target(), "db-mine");
     // and the choice is in the home, for the next run
-    let (sys, printer) = crate::library::remembered_target(&dir);
+    let (sys, printer) = crate::library::remembered_target(&dir).unwrap();
     assert_eq!(
         (sys.as_deref(), printer.as_deref()),
         (Some("db"), Some("mine"))
@@ -1198,4 +1198,111 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     std::fs::remove_file(dir.join("printers/mine.dtile")).unwrap();
     let o = crate::library::options_in("db", "default", None, Some(&dir)).unwrap();
     assert_eq!(o.target(), "db");
+}
+
+/// An internal failure is an error status with its message; a mistake in
+/// the document is data with its code.  Neither ends the server.
+#[test]
+fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
+    use route::Reply;
+    let dir = std::env::temp_dir().join(format!("dt-errors-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    // a file the program owns but cannot read as text: not a mistake in a document
+    std::fs::write(&file, [0xff, 0xfe, 0xfd]).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let shared = Shared::new(std::slice::from_ref(&path));
+    let id = tile_id(&path);
+    let t = shared.token.clone();
+    let json = |r: Reply| match r {
+        Reply::Json(s, v) => (s, v),
+        _ => panic!("not JSON"),
+    };
+    let call = |m: &str, p: &str, body: &[u8]| {
+        json(server::answer(
+            &shared,
+            &http::Request::build(m, p, Some(&t), body),
+        ))
+    };
+    // a document error: 200, ok false, a code and a place
+    let text = "tile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n";
+    let body = serde_json::json!({ "text": text }).to_string();
+    let (s, v) = call("POST", &format!("/api/tiles/{id}/check"), body.as_bytes());
+    assert_eq!((s, v["ok"].clone()), ("200 OK", Value::Bool(false)));
+    let e = &v["errors"][0];
+    assert!(e["code"].as_str().unwrap().starts_with("dt::"), "{e}");
+    assert_eq!(e["unexpected"], false, "a mistake in the document");
+    // an internal failure: the file cannot be read; 500 and the reason
+    let body = serde_json::json!({ "text": "x", "base": "y" }).to_string();
+    let (s, v) = call("POST", &format!("/api/tiles/{id}/save"), body.as_bytes());
+    assert_eq!(s, "500 Internal Server Error");
+    assert!(v["error"].as_str().unwrap().contains("cannot read"), "{v}");
+    let (s, v) = call("GET", &format!("/api/tiles/{id}/text"), b"");
+    assert_eq!(s, "500 Internal Server Error");
+    assert!(v["error"].as_str().unwrap().contains("cannot read"), "{v}");
+    // a panic in a route: 500 naming it, and the next call is answered
+    let (s, v) = call("GET", "/api/test-panic", b"");
+    assert_eq!(s, "500 Internal Server Error");
+    assert!(
+        v["error"]
+            .as_str()
+            .unwrap()
+            .contains("a test panic in a route"),
+        "{v}"
+    );
+    assert_eq!(call("GET", "/api/tiles", b"").0, "200 OK");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A panic in a build (or in encoding it) is reported to the page as a
+/// failed build with its message, and the worker goes on: the other tile
+/// builds, and the failed one builds again when its file changes.
+#[test]
+fn a_panic_in_a_build_is_reported_and_the_server_keeps_serving() {
+    let dir = std::env::temp_dir().join(format!("dt-panics-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let text = dt_eval::Library.read(FLAT).unwrap();
+    let in_build = dir.join("dt-test-panic-in-build.dtile");
+    let in_encode = dir.join("dt-test-panic-in-encode.dtile");
+    std::fs::write(&in_build, &text).unwrap();
+    std::fs::write(&in_encode, &text).unwrap();
+    let names: Vec<String> = [&in_build, &in_encode]
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .chain([FLAT.to_owned()])
+        .collect();
+    let r = start(&names.iter().map(String::as_str).collect::<Vec<_>>(), true);
+    let tile = |name: &str| -> Value {
+        tiles(&r)["tiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["path"].as_str().unwrap().contains(name))
+            .unwrap()
+            .clone()
+    };
+    let t0 = Instant::now();
+    while ["panic-in-build", "panic-in-encode", "1x1-flat"]
+        .iter()
+        .any(|n| !matches!(tile(n)["status"].as_str(), Some("failed" | "ready")))
+    {
+        assert!(t0.elapsed() < Duration::from_secs(120), "timed out");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    for (name, words) in [
+        ("panic-in-build", "a test panic in the build"),
+        ("panic-in-encode", "a test panic in the encoding"),
+    ] {
+        let t = tile(name);
+        assert_eq!(t["status"], "failed", "{name}");
+        let e = &t["errors"][0];
+        assert_eq!(e["code"], "dt::panic");
+        assert_eq!(e["unexpected"], true);
+        assert!(e["message"].as_str().unwrap().contains(words), "{e}");
+    }
+    // the worker went on, and the server still serves
+    assert_eq!(tile("1x1-flat")["status"], "ready");
+    assert!(get(&r, "/api/tiles").0.starts_with("HTTP/1.1 200"));
+    drop(r);
+    let _ = std::fs::remove_dir_all(&dir);
 }

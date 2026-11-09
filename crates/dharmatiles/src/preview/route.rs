@@ -65,6 +65,8 @@ fn dev_asset(path: &str) -> Option<(&'static str, Vec<u8>)> {
     if !(rel == "index.html" || rel == "style.css" || rel.starts_with("js/")) {
         return None;
     }
+    // Developer aid only (`DT_WEB` is never set for a user): a file not
+    // there is served from the copy in the program, which is what a user sees.
     std::fs::read(std::path::Path::new(&dir).join(rel))
         .ok()
         .map(|b| (ctype, b))
@@ -96,6 +98,8 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             epoch: req.param("epoch").map(str::to_owned),
             since: req.param("since").and_then(|s| s.parse().ok()),
         }),
+        #[cfg(test)]
+        ("GET", "/api/test-panic", _) => panic!("a test panic in a route"),
         ("GET", "/api/session", _) => Reply::Json(OK, json!({ "token": shared.token })),
         ("GET", "/api/elements", _) => Reply::Json(OK, crate::elements::all_json()),
         ("GET", "/api/tiles", _) => Reply::Json(OK, shared.snapshot()),
@@ -106,11 +110,14 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
                 .and_then(|k| shared.sketch_mesh(id, k)),
             "no such sketch",
         ),
-        ("GET", _, Some((id, "text"))) => shared
-            .text(id, req.param("file"))
-            .map_or(Reply::Text("404 Not Found", "no such file"), |v| {
-                Reply::Json(OK, v)
-            }),
+        ("GET", _, Some((id, "text"))) => match shared.text(id, req.param("file")) {
+            Ok(Some(v)) => Reply::Json(OK, v),
+            Ok(None) => Reply::Text("404 Not Found", "no such file"),
+            Err(e) => Reply::Json(
+                "500 Internal Server Error",
+                json!({ "error": format!("cannot read the file: {e}") }),
+            ),
+        },
         ("POST", _, Some((id, "build"))) => {
             let known = shared.want(id);
             let status = if known {

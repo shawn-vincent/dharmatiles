@@ -54,44 +54,85 @@ pub fn serve_http(addr: &str) -> u8 {
 
 fn http_one(mut conn: std::net::TcpStream) {
     use std::io::Read;
-    let Ok(clone) = conn.try_clone() else { return };
-    let mut reader = std::io::BufReader::new(clone);
-    let mut first = String::new();
-    if reader.read_line(&mut first).unwrap_or(0) == 0 {
-        return;
-    }
-    let mut len = 0usize;
-    loop {
-        let mut h = String::new();
-        if reader.read_line(&mut h).unwrap_or(0) == 0 || h.trim().is_empty() {
-            break;
-        }
-        if let Some((k, v)) = h.split_once(':')
-            && k.eq_ignore_ascii_case("content-length")
-        {
-            len = v.trim().parse().unwrap_or(0);
-        }
-    }
     let reply = |conn: &mut std::net::TcpStream, status: &str, body: &str| {
-        let _ = write!(
+        let sent = write!(
             conn,
             "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
+        if let Err(e) = sent {
+            eprintln!("error: dharmatiles mcp: cannot reply ({status}): {e}");
+        }
     };
+    let bad = |conn: &mut std::net::TcpStream, why: String| {
+        eprintln!("error: dharmatiles mcp: {why}");
+        reply(
+            conn,
+            "400 Bad Request",
+            &error(&Value::Null, -32600, &why).to_string(),
+        );
+    };
+    let clone = match conn.try_clone() {
+        Ok(c) => c,
+        Err(e) => return eprintln!("error: dharmatiles mcp: cannot read a connection: {e}"),
+    };
+    let mut reader = std::io::BufReader::new(clone);
+    let mut first = String::new();
+    match reader.read_line(&mut first) {
+        // the client connected and left without a word: nothing to answer
+        Ok(0) => return,
+        Ok(_) => {}
+        Err(e) => return bad(&mut conn, format!("cannot read the request: {e}")),
+    }
+    let mut len = 0usize;
+    loop {
+        let mut h = String::new();
+        match reader.read_line(&mut h) {
+            Ok(0) => break,
+            Ok(_) if h.trim().is_empty() => break,
+            Ok(_) => {}
+            Err(e) => return bad(&mut conn, format!("cannot read the request headers: {e}")),
+        }
+        if let Some((k, v)) = h.split_once(':')
+            && k.eq_ignore_ascii_case("content-length")
+        {
+            match v.trim().parse() {
+                Ok(n) => len = n,
+                Err(e) => return bad(&mut conn, format!("bad Content-Length `{}`: {e}", v.trim())),
+            }
+        }
+    }
     if !first.starts_with("POST /mcp") {
         reply(&mut conn, "404 Not Found", "{}");
         return;
     }
     let mut body = vec![0u8; len];
-    if reader.read_exact(&mut body).is_err() {
-        return;
+    if let Err(e) = reader.read_exact(&mut body) {
+        return bad(
+            &mut conn,
+            format!("the body is shorter than its Content-Length: {e}"),
+        );
     }
     match serde_json::from_slice::<Value>(&body) {
-        Ok(msg) => match handle(&msg) {
-            Some(r) => reply(&mut conn, "200 OK", &r.to_string()),
-            None => reply(&mut conn, "202 Accepted", ""),
-        },
+        Ok(msg) => {
+            let id = msg.get("id").cloned().unwrap_or(Value::Null);
+            match std::panic::catch_unwind(|| handle(&msg)) {
+                Ok(Some(r)) => reply(&mut conn, "200 OK", &r.to_string()),
+                Ok(None) => reply(&mut conn, "202 Accepted", ""),
+                Err(panic) => {
+                    let why = format!(
+                        "the call panicked: {}",
+                        crate::preview::panic_message(panic.as_ref())
+                    );
+                    eprintln!("error: dharmatiles mcp: {why}");
+                    reply(
+                        &mut conn,
+                        "500 Internal Server Error",
+                        &error(&id, -32603, &why).to_string(),
+                    );
+                }
+            }
+        }
         Err(e) => reply(
             &mut conn,
             "400 Bad Request",
@@ -190,7 +231,10 @@ fn call(name: &str, a: &Value) -> Value {
         ("check_document", Some(p), _) => run_self(&[s("check"), s(p), s("--json")]),
         ("list_elements", _, _) => run_self(&[s("elements"), s("--json")]),
         ("describe_element", _, Some(n)) => run_self(&[s("elements"), s(n), s("--json")]),
-        ("list_tiles", _, _) => text(&json!({"tiles": crate::library_tiles()}).to_string(), false),
+        ("list_tiles", _, _) => match crate::library_tiles() {
+            Ok(tiles) => text(&json!({"tiles": tiles}).to_string(), false),
+            Err(e) => text(&format!("cannot list the library: {e}"), true),
+        },
         ("build_tile", Some(p), _) => {
             let mut args = vec![s("build"), s(p), s("--json")];
             args.extend(opts);
@@ -239,13 +283,35 @@ fn preview(path: &str, opts: &[String], view: &str) -> Value {
         "close" => "-close.png",
         _ => "-painted.png",
     };
-    let found = walk(&dir)
-        .into_iter()
-        .find(|p| p.to_string_lossy().ends_with(want));
-    let Some(png) = found.and_then(|p| std::fs::read(p).ok()) else {
-        let _ = std::fs::remove_dir_all(&dir);
-        return report;
+    let found = match walk(&dir) {
+        Ok(files) => files
+            .into_iter()
+            .find(|p| p.to_string_lossy().ends_with(want)),
+        // nothing was written: the build failed, and `report` says why
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return report,
+        Err(e) => {
+            return text(
+                &format!("built, but the preview images could not be listed: {e}"),
+                true,
+            );
+        }
     };
+    let png = match found.map(std::fs::read) {
+        Some(Ok(png)) => png,
+        Some(Err(e)) => {
+            return text(
+                &format!("built, but the preview image could not be read: {e}"),
+                true,
+            );
+        }
+        // no image: the build failed, and `report` says why
+        None => {
+            // best-effort cleanup of the scratch folder
+            let _ = std::fs::remove_dir_all(&dir);
+            return report;
+        }
+    };
+    // best-effort cleanup of the scratch folder
     let _ = std::fs::remove_dir_all(&dir);
     json!({"content": [
         {"type": "image", "data": base64(&png), "mimeType": "image/png"},
@@ -253,19 +319,17 @@ fn preview(path: &str, opts: &[String], view: &str) -> Value {
     ], "isError": false})
 }
 
-fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+fn walk(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
     let mut out = Vec::new();
-    if let Ok(rd) = std::fs::read_dir(dir) {
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                out.extend(walk(&p));
-            } else {
-                out.push(p);
-            }
+    for e in std::fs::read_dir(dir)? {
+        let p = e?.path();
+        if p.is_dir() {
+            out.extend(walk(&p)?);
+        } else {
+            out.push(p);
         }
     }
-    out
+    Ok(out)
 }
 
 /// Standard base64.

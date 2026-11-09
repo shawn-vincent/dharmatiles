@@ -61,8 +61,13 @@ impl Default for Palette {
             flat: Vec::new(),
             ramps: std::collections::BTreeMap::new(),
         };
-        // the bundled palette is checked by a test
-        let _ = p.read(DEFAULT);
+        // The bundled palette is compiled in and checked by a test
+        // (`the_bundled_palette_reads`), so this cannot fail in a program that
+        // passed its tests; if it ever did, stopping is right: no colours
+        // can be guessed.
+        #[allow(clippy::expect_used)]
+        p.read(DEFAULT)
+            .expect("the bundled palette (library/palettes/default.dtile) reads");
         p
     }
 }
@@ -393,6 +398,17 @@ pub(crate) fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_bundled_palette_reads() {
+        // `Palette::default` expects this to hold
+        let mut p = Palette {
+            flat: Vec::new(),
+            ramps: std::collections::BTreeMap::new(),
+        };
+        p.read(DEFAULT).unwrap();
+        assert!(!p.flat.is_empty());
+    }
 
     #[test]
     fn a_palette_names_materials_and_refuses_what_is_not_one() {

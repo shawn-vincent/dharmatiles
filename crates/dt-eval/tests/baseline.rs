@@ -71,6 +71,7 @@ fn secs(r: &str) -> f64 {
 #[ignore = "builds the whole library, about five minutes"]
 fn the_library_builds_as_the_baseline_says() {
     let tiles: Vec<String> = Library::paths()
+        .expect("the library is listed")
         .into_iter()
         .filter(|p| p.contains("tiles/") && !p.contains("tiles/test/"))
         .collect();

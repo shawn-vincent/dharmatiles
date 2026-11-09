@@ -35,14 +35,39 @@ pub(crate) fn build(
 ) -> u8 {
     let mut code = OK;
     let mut reports = Vec::new();
+    let mut failed: Vec<&str> = Vec::new();
     for (n, p) in paths.iter().enumerate() {
         let extras = Extras {
             tile_no: (paths.len() > 1).then_some((n + 1, paths.len())),
             ..extras
         };
-        let (c, r) = build_one(&Files, p, opts, out, extras, json);
+        // A panic in one tile is a bug, but it must not end the sweep: it is
+        // reported against the tile by name, and the next tile builds.
+        let (c, r) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            build_one(&Files, p, opts, out, extras, json)
+        }))
+        .unwrap_or_else(|panic| {
+            let msg = crate::preview::panic_message(panic.as_ref());
+            progress::clear();
+            tell!("error: {p}: the build panicked (a bug in dharmatiles, not in the tile): {msg}");
+            (
+                ERROR,
+                json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain("dt::panic", format!("the build panicked: {msg}"))])}),
+            )
+        });
+        if c != OK {
+            failed.push(p);
+        }
         code = worse(code, c);
         reports.push(r);
+    }
+    if !json && paths.len() > 1 && !failed.is_empty() {
+        tell!(
+            "{} of {} tiles failed: {}",
+            failed.len(),
+            paths.len(),
+            failed.join(", ")
+        );
     }
     if json {
         say!("{}", json!({"ok": code == OK, "tiles": reports}));
@@ -274,6 +299,13 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
     })
 }
 
+/// Is `code` a refusal of the document (a mistake the reader can fix) rather
+/// than a failure of the program (a panic, an unreadable or unwritable file,
+/// a kernel that failed)?  The page shows the second kind as a bug.
+fn is_document_error(code: &str) -> bool {
+    !matches!(code, "dt::panic" | "dt::source" | "dt::write" | "dt::build")
+}
+
 pub(crate) fn errors_json(errs: &[Diag]) -> Vec<Value> {
     errs.iter()
         .map(|d| {
@@ -281,7 +313,7 @@ pub(crate) fn errors_json(errs: &[Diag]) -> Vec<Value> {
                 (Value::Null, Value::Null, Value::Null),
                 |(f, l, c)| (json!(f), json!(l), json!(c)),
             );
-            json!({"code": d.code, "message": d.message, "file": file, "line": line, "column": column, "help": d.help})
+            json!({"code": d.code, "message": d.message, "file": file, "line": line, "column": column, "help": d.help, "unexpected": !is_document_error(d.code)})
         })
         .collect()
 }
