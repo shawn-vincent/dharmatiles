@@ -64,7 +64,6 @@ fn role(r: Role) -> &'static str {
 fn unit(a: Axis) -> &'static str {
     match a {
         Axis::Mm => "mm",
-        Axis::Level => "level",
         Axis::Deg => "degrees",
         Axis::Share => "percent",
         Axis::Count => "count",

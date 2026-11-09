@@ -110,7 +110,7 @@ impl Decoder<'_> {
             return None;
         }
         if axis.is_numeric() {
-            let n = self.num(e, axis, Some(k), owner, name, ctx)?;
+            let n = self.num(e, axis, false, Some(k), owner, name, ctx)?;
             return Some(Spanned {
                 value: Value::Num(n.value),
                 span: n.span,
@@ -148,27 +148,36 @@ impl Decoder<'_> {
     }
 
     /// A number on `axis`: a KDL number, or a quoted expression, range or
-    /// percent.  `k` supplies words for hints and limits.
+    /// percent.  `k` supplies words for hints and limits.  `lets` lets the
+    /// number name the tile's `let` heights (a line's `wobble`); no element
+    /// control does.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn num(
         &mut self,
         e: &KdlEntry,
         axis: Axis,
+        lets: bool,
         k: Option<&'static Control>,
         owner: &str,
         name: &str,
         ctx: &Ctx,
     ) -> Option<Spanned<Num>> {
         let span = value_span(e);
+        let kind = if lets {
+            "a length: mm, a `let` name, or an expression like \"groundHeight - 1\""
+        } else {
+            axis.describe()
+        };
         let unit = match e.ty() {
             None => None,
             Some(t) => match Unit::parse(t.value()) {
-                Some(u) if matches!(axis, Axis::Mm | Axis::Level) => Some(u),
+                Some(u) if axis == Axis::Mm => Some(u),
                 Some(u) => {
                     self.err(
                         "dt::unit",
                         span,
                         format!("`({})` doesn't fit `{owner} {name}`", u.as_str()),
-                        format!("{name} is {}", axis.describe()),
+                        format!("{name} is {kind}"),
                     )
                     .help = Some(format!(
                         "(mm) and (h) are for sizes and levels; write `{name}` without it"
@@ -205,7 +214,7 @@ impl Decoder<'_> {
                 self.err(
                     "dt::value",
                     span,
-                    format!("`{owner} {name}` is {}", axis.describe()),
+                    format!("`{owner} {name}` is {kind}"),
                     "a switch",
                 );
                 return None;
@@ -224,9 +233,7 @@ impl Decoder<'_> {
                             format!("can't read `{owner} {name}`: {}", err.message),
                             "here",
                         )
-                        .help = Some(
-                            k.map_or_else(|| format!("`{name}` is {}", axis.describe()), describe),
-                        );
+                        .help = Some(k.map_or_else(|| format!("`{name}` is {kind}"), describe));
                         return None;
                     }
                 }
@@ -255,7 +262,7 @@ impl Decoder<'_> {
             self.err(
                 "dt::percent",
                 span,
-                format!("`{owner} {name}` is {}, not a percent", axis.describe()),
+                format!("`{owner} {name}` is {kind}, not a percent"),
                 "a percent",
             )
             .help = Some(k.map_or_else(|| format!("write `{name}` as a plain number"), describe));
@@ -264,7 +271,7 @@ impl Decoder<'_> {
         // Names: parameters, and the tile's `let`s where a height is expected.
         for n in x.names() {
             let ok = ctx.params.iter().any(|p| p == n)
-                || (axis == Axis::Level
+                || (lets
                     && ctx
                         .consts
                         .iter()
@@ -273,13 +280,13 @@ impl Decoder<'_> {
                 continue;
             }
             let mut cands: Vec<&str> = ctx.params.iter().map(String::as_str).collect();
-            if axis == Axis::Level {
+            if lets {
                 cands.extend(ctx.consts.iter().map(|(l, _)| l.as_str()));
             }
             if let Some(k) = k {
                 cands.extend(k.words.iter().map(|w| w.word));
             }
-            let what = if axis == Axis::Level {
+            let what = if lets {
                 "height or parameter"
             } else if k.is_some_and(|k| !k.words.is_empty()) {
                 "word or parameter"
@@ -289,9 +296,9 @@ impl Decoder<'_> {
             let near = did_you_mean(n, cands.iter().copied());
             let mut help = hint_or(
                 near,
-                k.map_or_else(|| format!("`{name}` is {}", axis.describe()), describe),
+                k.map_or_else(|| format!("`{name}` is {kind}"), describe),
             );
-            if axis == Axis::Level && near.is_none() && !ctx.consts.is_empty() {
+            if lets && near.is_none() && !ctx.consts.is_empty() {
                 let list: Vec<&str> = ctx.consts.iter().map(|(l, _)| l.as_str()).collect();
                 help = format!(
                     "{help}; heights: {}; a tile adds its own with `let name mm`",

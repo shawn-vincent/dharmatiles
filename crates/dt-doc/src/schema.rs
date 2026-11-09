@@ -28,9 +28,6 @@ pub enum Axis {
     /// A size in mm at the DungeonBlocks reference.  `(mm)` checks it and
     /// `(h)` writes it in wall tops.  Scales with the system.
     Mm,
-    /// Where a surface sits: a named level, mm above the tile base, or an
-    /// expression of levels (`"ground - 1"`).  Scales with the system.
-    Level,
     /// An angle in degrees.  Never scales.
     Deg,
     /// A share, written as a percent (`"85%"`).  Never scales.
@@ -56,13 +53,7 @@ impl Axis {
     pub fn is_numeric(self) -> bool {
         matches!(
             self,
-            Axis::Mm
-                | Axis::Level
-                | Axis::Deg
-                | Axis::Share
-                | Axis::Count
-                | Axis::PerSquare
-                | Axis::Number
+            Axis::Mm | Axis::Deg | Axis::Share | Axis::Count | Axis::PerSquare | Axis::Number
         )
     }
 
@@ -71,7 +62,6 @@ impl Axis {
     pub fn describe(self) -> &'static str {
         match self {
             Axis::Mm => "a size in mm",
-            Axis::Level => "a height: mm, a `let` name, or an expression like \"groundHeight - 1\"",
             Axis::Deg => "an angle in degrees",
             Axis::Share => "a share, written as a percent such as \"30%\"",
             Axis::Count => "a count",

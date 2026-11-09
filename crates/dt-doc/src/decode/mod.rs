@@ -854,12 +854,7 @@ impl<'k> Decoder<'k> {
                 return;
             }
             // a wobble is a length that may name a `let`
-            let axis = if key == "wobble" {
-                Axis::Level
-            } else {
-                Axis::Mm
-            };
-            *slot = this.num(e, axis, None, "line", key, ctx);
+            *slot = this.num(e, Axis::Mm, key == "wobble", None, "line", key, ctx);
         };
         let mut closed: Option<bool> = None;
         let mut set_closed = |this: &mut Self, kspan: SourceSpan, e: &KdlEntry| {
