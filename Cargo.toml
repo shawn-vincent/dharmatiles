@@ -64,3 +64,9 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.dt-elements]
 opt-level = 3
+
+# EXPERIMENT (segv-experiment branch): Manifold's level set reads vertPos[-1]
+# when its hash table fills before any vert has moved; the carried patch
+# guards it.
+[patch.crates-io]
+manifold-csg-sys = { path = "third_party/manifold-csg-sys" }

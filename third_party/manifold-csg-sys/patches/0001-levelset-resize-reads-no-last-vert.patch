@@ -1,0 +1,26 @@
+diff --git a/src/sdf.cpp b/src/sdf.cpp
+index 7ef0ca81..ec76b051 100644
+--- a/src/sdf.cpp
++++ b/src/sdf.cpp
+@@ -548,10 +548,17 @@ void Manifold::Impl::CreateLevelSet(std::function<double(vec3)> sdf, Box bounds,
+         MakeEmpty(Error::Cancelled);
+         return;
+       }
+-      const vec3 lastVert = vertPos[index[0] - 1];
+-      const uint64_t lastIndex =
+-          EncodeIndex(ivec4(ivec3((lastVert - origin) / spacing), 1), gridPow);
+-      const double ratio = static_cast<double>(maxIndex) / lastIndex;
++      // The table can fill with grid verts that crossed the surface but moved
++      // no vert (index[0] == 0): there is then no last vert to read (vertPos[-1]
++      // is out of bounds), and a last vert at index 0 would make the ratio
++      // infinite. Either way the ratio means nothing: double the table.
++      double ratio = 1001;
++      if (index[0] > 0) {
++        const vec3 lastVert = vertPos[index[0] - 1];
++        const uint64_t lastIndex = EncodeIndex(
++            ivec4(ivec3((lastVert - origin) / spacing), 1), gridPow);
++        if (lastIndex > 0) ratio = static_cast<double>(maxIndex) / lastIndex;
++      }
+ 
+       if (ratio > 1000)  // do not trust the ratio if it is too large
+         tableSize *= 2;
