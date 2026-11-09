@@ -227,7 +227,9 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #lens .body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 16px; }
 #lens .empty { margin: auto; max-width: 22ch; padding: 28px 18px; color: var(--muted); text-align: center; line-height: 1.55; }
 #lens .empty b { display: block; margin-bottom: 5px; color: var(--ink); font: 700 20px/1.1 var(--f-display); }
-#lens .grp { font-size: 12px; color: var(--muted); margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line); }
+#lens .grp { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line); }
+#lens .grp .x { padding: 0 2px; font-size: 16px; }
+#lens .add { margin-top: 10px; }
 #lens .row { display: grid; grid-template-columns: 78px minmax(0, 1fr) 14px; align-items: start; min-height: 30px; gap: 6px; }
 #lens .row .nm { padding-top: 4px; font-size: 13px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #lens .row.faint .nm, #lens .row.faint .val { opacity: .55; }

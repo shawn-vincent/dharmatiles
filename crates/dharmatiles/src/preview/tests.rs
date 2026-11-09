@@ -1401,3 +1401,71 @@ fn a_panic_in_a_build_is_reported_and_the_server_keeps_serving() {
     drop(r);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_map_marks_every_point_a_line_or_region_refers_to() {
+    let dir = std::env::temp_dir().join(format!("dt-markers-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    let text = "tile size=\"2x2\" seed=3 {\n    point knoll \"(0.5, 0.5)\"\n    line shore { through west \"0,0.38\" knoll \"(1.5, 1.25)\" east }\n    line ring closed=#true { through \"0.2,0.2\" \"0.8,0.2\" \"0.5,0.8\" }\n    region bay { boundedBy shore; fill \"0.5,0.2\"; fill center; within 4 of=\"(1.2, 0.3)\"; within 6 of=knoll; within 5 of=shore }\n    stack {\n        dirt\n    }\n}\n";
+    std::fs::write(&file, text).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let v = post(
+        &r,
+        &format!("/api/tiles/{}/check", id0(&r)),
+        Some(&token),
+        None,
+        &serde_json::json!({ "text": text }).to_string(),
+    )
+    .1;
+    let map = &v["map"];
+    let span = |m: &Value| {
+        let s = m["span"].as_array().unwrap();
+        let a = usize::try_from(s[0].as_u64().unwrap()).unwrap();
+        a..a + usize::try_from(s[1].as_u64().unwrap()).unwrap()
+    };
+    // a line: every through point, named or literal, as written
+    let shore = map["lines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["name"] == "shore")
+        .unwrap();
+    let m = shore["markers"].as_array().unwrap();
+    let labels: Vec<_> = m.iter().map(|m| m["label"].as_str().unwrap()).collect();
+    assert_eq!(labels, ["west", "0,0.38", "knoll", "(1.5, 1.25)", "east"]);
+    let kinds: Vec<_> = m.iter().map(|m| m["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["name", "literal", "name", "literal", "name"]);
+    assert_eq!(m[0]["at"], serde_json::json!([0.0, 1.0]));
+    assert_eq!(m[2]["at"], serde_json::json!([0.5, 0.5]));
+    assert_eq!(m[3]["at"], serde_json::json!([1.5, 1.25]));
+    assert_eq!(&text[span(&m[3])], "\"(1.5, 1.25)\"");
+    // a closed line has them all still (its drawn points repeat the first)
+    let ring = map["lines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["name"] == "ring")
+        .unwrap();
+    assert_eq!(ring["markers"].as_array().unwrap().len(), 3);
+    assert_eq!(ring["markers"][1]["at"], serde_json::json!([0.8, 0.2]));
+    // a region: each fill, then each within centre that is a point (not the line)
+    let bay = map["regions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["name"] == "bay")
+        .unwrap();
+    let m = bay["markers"].as_array().unwrap();
+    let labels: Vec<_> = m.iter().map(|m| m["label"].as_str().unwrap()).collect();
+    assert_eq!(
+        labels,
+        ["0.5,0.2", "center", "(1.2, 0.3)", "knoll"],
+        "{m:?}"
+    );
+    assert_eq!(m[1]["at"], serde_json::json!([1.0, 1.0]));
+    assert_eq!(m[2]["at"], serde_json::json!([1.2, 0.3]));
+}

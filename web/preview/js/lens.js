@@ -116,7 +116,17 @@ export class Lens {
     if (model.note) body.append(el('div', 'note', model.note));
     let hidden = 0;
     for (const g of model.groups) {
-      if (g.heading) body.append(el('div', 'grp', g.heading));
+      if (g.heading) {
+        const h = el('div', 'grp');
+        h.append(el('span', '', g.heading));
+        if (g.remove && this.api.writable()) {
+          const x = el('button', 'x', '×');
+          x.type = 'button'; x.title = g.remove.title; x.setAttribute('aria-label', g.remove.title);
+          x.onclick = g.remove.run;
+          h.append(x);
+        }
+        body.append(h);
+      }
       const written = new Map(g.written.map((s) => [s.name, s]));
       const controls = g.schema ? g.schema.controls : g.written.map((s) => ({ name: s.name }));
       for (const c of controls) {
@@ -127,6 +137,7 @@ export class Lens {
       // written controls the schema does not know (a definition's arguments)
       if (g.schema) for (const s of g.written) if (!g.schema.controls.some((c) => c.name === s.name)) body.append(this.row(g, { name: s.name }, s));
     }
+    if (model.add && this.api.writable()) body.append(this.addMenu(model.add));
     if (hidden || this.more) {
       const b = el('button', 'linkish more', this.more ? 'fewer controls' : `${hidden} more control${hidden === 1 ? '' : 's'}`);
       b.onclick = () => { this.more = !this.more; this.show(this.model); };
@@ -141,6 +152,26 @@ export class Lens {
       }
       r.append(actions);
     }
+  }
+
+  /** A menu that adds something: `add` is {label, items: [{label, title, disabled, run}]}; choosing an item runs it, then the menu is ready again. */
+  addMenu(add) {
+    const select = el('select', 'word-select add');
+    select.setAttribute('aria-label', add.label);
+    const first = el('option', '', `${add.label}…`);
+    first.value = ''; first.disabled = true; first.selected = true;
+    select.append(first);
+    add.items.forEach((it, i) => {
+      const o = el('option', '', it.label);
+      o.value = String(i); o.title = it.title || ''; o.disabled = !!it.disabled;
+      select.append(o);
+    });
+    select.onchange = () => {
+      const it = add.items[Number(select.value)];
+      select.value = '';
+      if (it && !it.disabled) it.run();
+    };
+    return select;
   }
 
   /** Write control `name` of group `g`: through the group's own writer when it has one. */

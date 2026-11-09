@@ -7,7 +7,7 @@ import { failed } from '../problems.js';
 import { $, host, offerMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, undo } from './document.js';
 import { doc, elementNamed, isEntry, isMark, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
-import { clauseGroups, combineNote, regionKind } from './region-sheet.js';
+import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 
 // ---- the lens ---------------------------------------------------------------
@@ -137,15 +137,33 @@ function renderMarkLens(kind, m) {
       }
       return null;
     };
+    // each clause is a group with a × that takes it out of the source
     const clauses = clauseGroups(m, sh, doc.get().map, asWritten).map((g) => ({
       at: g.clause.at, heading: g.heading, schema: { controls: g.controls }, written: g.written,
       set: (name, value) => setClause(g.clause, name, value),
+      remove: { title: `Take out this ${g.clause.kind} clause`, run: () => tileEdit({ op: 'remove', at: g.clause.at }, `Took out a ${g.clause.kind} clause of ${m.name}`) },
     }));
+    // the bucket (boundedBy and its fill points) is a clause too: one group, taken out together
+    const bucket = controls.filter((c) => c.name !== 'name');
+    const main = [{ at: sh.at, schema: { controls: controls.filter((c) => c.name === 'name') }, written: written.filter((w) => w.name === 'name'), set }];
+    if (bucket.length) {
+      main.push({
+        heading: 'boundedBy', at: sh.at, schema: { controls: bucket }, written: written.filter((w) => w.name !== 'name'), set,
+        remove: { title: 'Take out the boundedBy and its fill points', run: () => tileEdit({ op: 'remove-children', at: sh.at, names: ['boundedBy', 'fill'] }, `Took out the boundedBy of ${m.name}`) },
+      });
+    }
+    const add = {
+      label: 'add clause',
+      items: clauseMenu(m, sh, doc.get().map).map((c) => ({
+        ...c, label: c.disabled ? `${c.label} (${c.why})` : c.label,
+        run: () => tileEdit({ op: 'insert', place: 'in', at: sh.at, node: c.node }, `Added a ${c.kind} clause to ${m.name}`),
+      })),
+    };
     const note = combineNote(sh);
     const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
     lens.show({
       title: m.name, kind, href: 'https://shawn-vincent.github.io/dharmatiles/language.html#regions', note,
-      groups: [{ at: sh.at, schema: { controls }, written, set }, ...clauses], actions,
+      groups: [...main, ...clauses], add, actions,
     });
     return;
   }

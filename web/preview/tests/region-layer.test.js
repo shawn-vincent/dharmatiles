@@ -31,7 +31,7 @@ test('an empty region has no triangles', () => {
 });
 
 import { discTriangles, outlineTriangles, refAnchor, refItems, regionAnchor, ribbonTriangles } from '../js/overlay.js';
-import { clauseGroups, clauseTitle, combineNote, describeDistance, placeChoices, regionKind } from '../js/editor/region-sheet.js';
+import { clauseGroups, clauseMenu, clauseTitle, combineNote, describeDistance, placeChoices, regionKind } from '../js/editor/region-sheet.js';
 
 test('a line is a flat strip and a curtain, in mm, centred on level zero', () => {
   const t = ribbonTriangles([[0, 0], [1, 0]], 35, 1);
@@ -75,7 +75,8 @@ test('what a region is made from is drawn: lines as ribbons, a region faint insi
   const map2 = { cols: 2, rows: 2, cells: 2, regions: [{ name: 'crag', nx: 5, ny: 5, bits: '0'.repeat(10) + '00100' + '0'.repeat(10) }] };
   const apron = { refs: [{ kind: 'region', name: 'crag' }, { kind: 'edge', name: 'westEdge', pts: [[0, 0], [0, 2]] }, { kind: 'point', name: 'knoll', at: [1, 1] }, { kind: 'unknown', name: 'x' }] };
   const items = refItems(map2, apron, 35, '#abc');
-  assert.deepEqual(items.map((i) => i.role), ['fill', 'line', 'line', 'line']);
+  // the point is a marker with its label, not a disc here
+  assert.deepEqual(items.map((i) => i.role), ['fill', 'line', 'line']);
   assert.ok(items.every((i) => i.color === '#abc'));
   assert.ok(items[0].dz < items[1].dz, 'the fill lies under its outline');
 });
@@ -115,4 +116,26 @@ test('a region of places shows each clause and how they combine', () => {
 
 test('place choices are ordered edges, lines, regions, points', () => {
   assert.deepEqual(placeChoices(places, 'x', '"(0.3, 0.7)"').map((w) => w.word), ['"(0.3, 0.7)"', 'northEdge', 'shore', 'crag', 'apron', 'center']);
+});
+
+test('a flat band has no curtain', () => {
+  assert.equal(ribbonTriangles([[0, 0], [1, 0]], 35, 1, false, false).length, 18);
+});
+
+test('the add-clause menu offers within, except and boundedBy, and says why one cannot be written', () => {
+  const map2 = { lines: [{ name: 'shore' }], regions: [{ name: 'pool' }, { name: 'crag' }] };
+  const bucket = { bounded_by: { span: [1, 2] }, fill: { span: [3, 4] }, clauses: [] };
+  const menu = clauseMenu({ name: 'pool' }, bucket, map2);
+  assert.deepEqual(menu.map((c) => c.kind), ['within', 'except', 'boundedBy']);
+  assert.equal(menu[0].node, 'within 6 of=center');
+  assert.equal(menu[1].node, 'except crag'); // another region, never itself
+  assert.equal(menu[2].disabled, true); // its boundedBy is written already
+  const places = { clauses: [{ kind: 'within' }] };
+  const m2 = clauseMenu({ name: 'pool' }, places, map2);
+  assert.equal(m2[2].node, 'boundedBy shore; fill center'); // a bucket needs its fill point
+  assert.equal(clauseMenu({ name: 'pool' }, { fill: { span: [1, 1] } }, map2)[2].node, 'boundedBy shore');
+  const alone = clauseMenu({ name: 'pool' }, places, { lines: [], regions: [{ name: 'pool' }] });
+  assert.equal(alone[1].disabled, true);
+  assert.equal(alone[2].disabled, true);
+  assert.match(alone[1].why, /no other region/);
 });

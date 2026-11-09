@@ -5,7 +5,10 @@
 //!   everything else byte for byte; `value: null` takes it out.  With
 //!   `op: insert` `{place: stack|tile, node}` it writes a new node (at the
 //!   end of the stack, or before it) and says at which byte; with
-//!   `op: remove` it takes out the node at `at`.  Nothing is written to
+//!   `op: remove` it takes out the node at `at`; with `place: in` and `at`
+//!   it writes `node` as the last child of the node at `at` (a clause of a
+//!   region), and `op: remove-children` `{at, names}` takes out that node's
+//!   children called one of `names` (a region's `boundedBy` and `fill`).  Nothing is written to
 //!   disk: the page saves the result.
 //! - `/api/check-value` `{element, control, typed}`: what the reader would
 //!   refuse in `typed` for that control (`{message, label, help}`, or
@@ -434,6 +437,13 @@ fn edit(v: &Value) -> (&'static str, Value) {
             let Some(node) = v["node"].as_str() else {
                 return bad("give the node to insert");
             };
+            // as the last child of the node at `at`: a clause of a region
+            if v["place"].as_str() == Some("in") {
+                let Some(at) = at else {
+                    return bad("give the byte of the node to write into");
+                };
+                return done(dt_doc::edit::insert_child_at(text, at, node));
+            }
             let place = if v["place"].as_str() == Some("tile") {
                 dt_doc::edit::Place::Tile
             } else {
@@ -447,6 +457,20 @@ fn edit(v: &Value) -> (&'static str, Value) {
                 return bad("give the node's byte");
             };
             return done(dt_doc::edit::remove_node_at(text, at).map(|t| (t, at)));
+        }
+        // a node's children of those names out: {op: remove-children, at, names}
+        Some("remove-children") => {
+            let Some(at) = at else {
+                return bad("give the node's byte");
+            };
+            let names: Vec<&str> = v["names"]
+                .as_array()
+                .map(|a| a.iter().filter_map(Value::as_str).collect())
+                .unwrap_or_default();
+            if names.is_empty() {
+                return bad("give the names of the children to take out");
+            }
+            return done(dt_doc::edit::remove_children_at(text, at, &names).map(|t| (t, at)));
         }
         // a line or region renamed, with what names it: {op: rename, mark, old, new}
         Some("rename") => {

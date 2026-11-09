@@ -202,6 +202,93 @@ fn place_ref(t: &dt_eval::Tile, name: &str) -> Value {
     json!({ "name": name, "kind": "unknown" })
 }
 
+/// Where a written point lies, in squares, and whether it is a `literal`
+/// pair or a `name` (a corner or edge word, a declared or built-in point).
+/// A coordinate drawn from a range or written as an expression is placed
+/// where its range middles; a name nothing declares has no place.  The
+/// reading is the program's own ([`dt_doc::place::parse_point`]), not the page's.
+fn locate(t: &dt_eval::Tile, text: &str) -> (&'static str, Option<[f64; 2]>) {
+    use dt_doc::place::{BUILTIN_POINTS, Point, builtin_point, parse_point};
+    let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
+    if let Ok(p) = parse_point(text) {
+        let kind = if matches!(p, Point::Pair { .. }) {
+            "literal"
+        } else {
+            "name"
+        };
+        let at = p
+            .bounds(cols, rows)
+            .ok()
+            .map(|((x0, x1), (y0, y1))| [f64::midpoint(x0, x1), f64::midpoint(y0, y1)]);
+        return (kind, at);
+    }
+    let name = text.trim();
+    let at = t.heights.points.get(name).copied().or_else(|| {
+        BUILTIN_POINTS
+            .contains(&name)
+            .then(|| builtin_point(name, cols, rows))
+            .flatten()
+            .map(|(x, y)| [x, y])
+    });
+    ("name", at)
+}
+
+/// A control point a line or region refers to: its label (the source as
+/// written: the coordinates, or the point's name), where it is, and the
+/// written value's byte span.  `ranged` is true when it lies somewhere in a
+/// range, so `at` is only the middle of where it may land.
+fn marker(t: &dt_eval::Tile, text: &str, span: Option<[usize; 2]>) -> Value {
+    let (kind, at) = locate(t, text);
+    let ranged = dt_doc::place::parse_point(text).is_ok_and(|p| p.is_range());
+    json!({ "label": text.trim(), "kind": kind, "at": at, "span": span, "ranged": ranged })
+}
+
+/// The `of` points of a region's `within` clauses: the ones written as a
+/// literal pair or as the name of a point (a line or region is drawn as
+/// itself, not as a point).
+fn within_markers(t: &dt_eval::Tile, node: &kdl::KdlNode, text: &str) -> Vec<Value> {
+    use dt_doc::place::{BUILTIN_POINTS, Point, parse_point};
+    node.children()
+        .map(kdl::KdlDocument::nodes)
+        .unwrap_or_default()
+        .iter()
+        .filter(|c| c.name().value() == "within")
+        .filter_map(|c| {
+            let e = c
+                .entries()
+                .iter()
+                .find(|e| e.name().is_some_and(|n| n.value() == "of"))?;
+            let (w, span) = entry_value(text, e);
+            let w = unquoted(&w);
+            let name = w.trim();
+            let is_point = t.heights.points.contains_key(name)
+                || BUILTIN_POINTS.contains(&name)
+                || matches!(parse_point(&w), Ok(Point::Pair { .. }));
+            is_point.then(|| marker(t, &w, Some(span)))
+        })
+        .collect()
+}
+
+/// Every control point a region refers to: each `fill` point, then each
+/// `within … of=` centre that is a point.
+fn markers_of(
+    t: &dt_eval::Tile,
+    tile: Option<&kdl::KdlNode>,
+    r: &dt_eval::Region,
+    fills: Option<&[Written]>,
+    text: &str,
+) -> Vec<Value> {
+    let mut out: Vec<Value> = fills
+        .unwrap_or_default()
+        .iter()
+        .map(|(x, sp)| marker(t, x, Some(*sp)))
+        .collect();
+    if let Some(node) = tile.and_then(|n| mark_node(n, "region", &r.name)) {
+        out.extend(within_markers(t, node, text));
+    }
+    out
+}
+
 /// The places a region is made from, each once: the lines that bound it,
 /// the places its `within`s are round, the regions it excepts.
 fn region_refs(t: &dt_eval::Tile, r: &dt_eval::Region) -> Vec<Value> {
@@ -282,6 +369,7 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
                 "pts": pts,
                 "wobble": t.wobbles.get(name).map(|(_, w)| w),
                 "span": w.as_ref().map(|w| w.0),
+                "markers": w.as_ref().map(|(_, w)| w.iter().map(|(x, sp)| marker(t, x, Some(*sp))).collect::<Vec<_>>()).unwrap_or_default(),
                 "points": w.map(|(_, w)| points(&w, control)).unwrap_or_default(),
                 "sheet": node.and_then(|n| mark_node(n, "line", name)).map(|l| json!({
                     "at": l.name().span().offset(),
@@ -303,6 +391,7 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
                 "bounded_by": r.bounded_by.iter().map(|b| b.value.clone()).collect::<Vec<_>>(),
                 "nx": m.nx, "ny": m.ny, "bits": bits,
                 "span": w.as_ref().map(|w| w.0),
+                "markers": markers_of(t, node, r, w.as_ref().map(|(_, w)| w.as_slice()), text),
                 "fills": w.map(|(_, w)| points(&w, Some(&r.fills))).unwrap_or_default(),
                 "sheet": node.and_then(|n| mark_node(n, "region", &r.name)).map(|g| json!({
                     "at": g.name().span().offset(),

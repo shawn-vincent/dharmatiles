@@ -652,6 +652,53 @@ pub fn remove_node_at(text: &str, offset: usize) -> Result<String, EditError> {
     Ok(format!("{}{}", &text[..s], &text[e..]))
 }
 
+/// Write a new node (one or more lines of KDL, unindented) as the last child
+/// of the node whose name starts at byte `offset` (see [`path_at`]): a clause
+/// in a region.  Everything else stays byte for byte.  Returns the new text
+/// and the byte the new node's name starts at.
+///
+/// # Errors
+/// If the text doesn't parse, no node holds the offset, or `node` is not KDL.
+pub fn insert_child_at(
+    text: &str,
+    offset: usize,
+    node: &str,
+) -> Result<(String, usize), EditError> {
+    let node = node.trim();
+    KdlDocument::parse(node).map_err(|e| EditError::Parse(e.to_string()))?;
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let parent =
+        node_at(&doc, offset).ok_or_else(|| EditError::NoNode(format!("byte {offset}")))?;
+    Ok(add_child(text, parent, None, node))
+}
+
+/// Take out every child named one of `names` of the node whose name starts
+/// at byte `offset` (see [`path_at`]), each with its line when it had the
+/// line to itself.  A region's `boundedBy` and its `fill` points go together.
+///
+/// # Errors
+/// If the text doesn't parse or no node holds the offset.
+pub fn remove_children_at(text: &str, offset: usize, names: &[&str]) -> Result<String, EditError> {
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let parent =
+        node_at(&doc, offset).ok_or_else(|| EditError::NoNode(format!("byte {offset}")))?;
+    let mut at: Vec<usize> = parent
+        .children()
+        .map(|c| c.nodes())
+        .unwrap_or_default()
+        .iter()
+        .filter(|n| names.contains(&n.name().value()))
+        .map(|n| n.name().span().offset())
+        .collect();
+    // last first, so the earlier offsets stay where they are
+    at.sort_unstable_by(|a, b| b.cmp(a));
+    let mut out = text.to_owned();
+    for a in at {
+        out = remove_node_at(&out, a)?;
+    }
+    Ok(out)
+}
+
 /// What a tile draws and names: a `line` or a `region`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mark {
@@ -867,5 +914,42 @@ mod place_tests {
             rename_mark(t, Mark::Region, "nope", "x"),
             Err(EditError::NoNode(_))
         ));
+    }
+}
+
+#[cfg(test)]
+mod clause_tests {
+    use super::*;
+
+    const REGION: &str = "tile size=\"1x1\" {\n    region pool {\n        boundedBy shore\n        fill \"0.5,0.2\"\n        within 6 of=center\n    }\n}\n";
+
+    #[test]
+    fn a_clause_is_written_last_in_its_region() {
+        let at = REGION.find("pool").unwrap();
+        let (t, node) = insert_child_at(REGION, at, "except crag").unwrap();
+        assert!(
+            t.contains("        within 6 of=center\n        except crag\n    }"),
+            "{t}"
+        );
+        assert!(t[node..].starts_with("except crag"));
+    }
+
+    #[test]
+    fn a_clause_goes_into_a_region_on_one_line() {
+        let src = "tile size=\"1x1\" {\n    region a { within 4 of=center }\n}\n";
+        let at = src.find("region a").unwrap() + 7;
+        let (t, _) = insert_child_at(src, at, "except b").unwrap();
+        assert!(KdlDocument::parse(&t).is_ok(), "{t}");
+        assert!(t.contains("except b"));
+    }
+
+    #[test]
+    fn the_bucket_comes_out_together() {
+        let at = REGION.find("pool").unwrap();
+        let t = remove_children_at(REGION, at, &["boundedBy", "fill"]).unwrap();
+        assert_eq!(
+            t,
+            "tile size=\"1x1\" {\n    region pool {\n        within 6 of=center\n    }\n}\n"
+        );
     }
 }

@@ -76,3 +76,25 @@ export function clauseGroups(m, sh, map, as) {
   }
   return groups;
 }
+
+/**
+ * The clauses a region's "add clause" menu offers, each {kind, label, title, disabled, node}: `node` is the source it writes.
+ * A `within` is a small disc round the tile's centre, an `except` names another region, a `boundedBy` names a line (with a
+ * `fill` point beside it when the region has none, since the pair make the paint bucket).  One that cannot be written says why.
+ */
+export function clauseMenu(m, sh, map) {
+  const other = (map?.regions || []).find((r) => r.name !== m.name);
+  const line = (map?.lines || [])[0];
+  const written = !!sh?.bounded_by?.span;
+  return [
+    { kind: 'within', label: 'within', title: 'Add everything within a distance of a place (a disc round a point, a strip beside a line, a ring round a region)', node: 'within 6 of=center' },
+    other
+      ? { kind: 'except', label: 'except', title: 'Take another region out of this one', node: `except ${other.name}` }
+      : { kind: 'except', label: 'except', title: 'There is no other region to take out', why: 'no other region', disabled: true },
+    written
+      ? { kind: 'boundedBy', label: 'boundedBy', title: 'Already written: choose its lines above', why: 'already written', disabled: true }
+      : !line
+        ? { kind: 'boundedBy', label: 'boundedBy', title: 'Draw a line first', why: 'no line yet', disabled: true }
+        : { kind: 'boundedBy', label: 'boundedBy', title: 'Bound the region by a line, filled from a point', node: sh?.fill?.span ? `boundedBy ${line.name}` : `boundedBy ${line.name}; fill center` },
+  ];
+}

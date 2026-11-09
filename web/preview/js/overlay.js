@@ -32,9 +32,10 @@ export function regionTriangles(r, m, sq = m.sq ?? 35) {
 /**
  * A polyline (points in squares) as a ribbon in the 3D scene: a flat strip 2*`half` mm wide at z 0
  * and a curtain from -`half` to `half` along it, so it reads from above and from the side.
- * Returns a Float32Array of triangles (9 numbers each); `closed` joins the last point to the first.
+ * Returns a Float32Array of triangles (9 numbers each); `closed` joins the last point to the first;
+ * `curtain` false leaves out the upright strip (a flat band).
  */
-export function ribbonTriangles(pts, sq, half = 0.7, closed = false) {
+export function ribbonTriangles(pts, sq, half = 0.7, closed = false, curtain = true) {
   const out = [];
   const n = pts.length;
   for (let k = 0; k < (closed ? n : n - 1); k++) {
@@ -46,7 +47,7 @@ export function ribbonTriangles(pts, sq, half = 0.7, closed = false) {
     ax -= ux * half; ay -= uy * half; bx += ux * half; by += uy * half; // butt joints meet
     const nx = -uy * half, ny = ux * half;
     out.push(ax - nx, ay - ny, 0, bx - nx, by - ny, 0, bx + nx, by + ny, 0, ax - nx, ay - ny, 0, bx + nx, by + ny, 0, ax + nx, ay + ny, 0);
-    out.push(ax, ay, -half, bx, by, -half, bx, by, half, ax, ay, -half, bx, by, half, ax, ay, half);
+    if (curtain) out.push(ax, ay, -half, bx, by, -half, bx, by, half, ax, ay, -half, bx, by, half, ax, ay, half);
   }
   return new Float32Array(out);
 }
@@ -123,17 +124,23 @@ export function regionAnchor(r, m) {
   return [Math.min(m.cols, Math.max(0, best[0] * step)), Math.min(m.rows, Math.max(0, best[1] * step))];
 }
 
+/** Half the width of a drawn line, mm: thin on a small tile, a little wider on a big one, so about the same on the screen. */
+export function lineHalf(map, sq) {
+  return Math.min(1, Math.max(0.3, 0.012 * Math.max(map.cols, map.rows) * sq));
+}
+
 /**
- * The scene items for the places a region is made from (its `refs`): lines and edges as ribbons, points as discs, a region
- * as a faint fill inside an outline.  Each {positions, color, role: 'line'|'fill', dz}.
+ * The scene items for the places a region is made from (its `refs`): lines and edges as ribbons, a region
+ * as a faint fill inside an outline (its points are markers, drawn with their labels).  Each {positions, color, role: 'line'|'fill', dz}.
  */
 export function refItems(map, region, sq, color) {
   const items = [];
   // thin on a small tile, a little wider on a big one: about the same on the screen
-  const half = Math.min(1, Math.max(0.3, 0.012 * Math.max(map.cols, map.rows) * sq));
+  const half = lineHalf(map, sq);
   for (const ref of region.refs || []) {
-    if (ref.at) items.push({ positions: discTriangles(ref.at, sq, 2.4 * half), color, role: 'line', dz: 0.08 });
-    else if (ref.kind === 'region') {
+    // a point is a marker with its label (Overlay.draw), not a disc
+    if (ref.kind === 'point') continue;
+    if (ref.kind === 'region') {
       const r = map.regions.find((x) => x.name === ref.name);
       if (!r) continue;
       items.push({ positions: regionTriangles(r, map, sq), color, role: 'fill', dz: 0.04 });
@@ -235,12 +242,19 @@ export class Overlay {
         want.push({ r, sel });
       }
     }
-    const focus = want.some((w) => w.sel);
+    const line = m && scene.show !== false ? m.lines.find((l) => l.name === scene.selLine && l.pts.length > 1) : null;
+    const focus = want.some((w) => w.sel) || !!line;
     const items = (focus ? want.filter((w) => w.sel) : want).map(({ r, sel }) => ({
       positions: regionTriangles(r, m, this.sq),
       color: sel ? css('--accent') : scene.tints?.[r.name] || css('--plate-ink'),
       alpha: 0.16,
     }));
+    // the selected line is a ribbon at zero, as a region is: its wobble's band under it, then the line
+    if (line) {
+      const half = lineHalf(m, this.sq);
+      if (line.wobble) items.push({ positions: ribbonTriangles(line.pts, this.sq, line.wobble * (this.sq / 35), false, false), color: css('--accent'), role: 'fill', dz: 0.02, alpha: 0.18 });
+      items.push({ positions: ribbonTriangles(line.pts, this.sq, 1.5 * half), color: css('--accent'), alpha: 1, dz: 0.04 });
+    }
     // what the selected region is made from, drawn beside it
     if (focus) for (const w of want) if (w.sel) items.push(...refItems(m, w.r, this.sq, css('--ref')).map((i) => ({ ...i, alpha: i.role === 'fill' ? 0.22 : 1 })));
     const key = JSON.stringify([items.map((i) => [i.color, i.role, i.dz, i.positions.length, i.positions.reduce((a, x, n) => a + x * ((n % 97) + 1), 0)]), focus, z, m && [m.cols, m.rows, m.cells]]);
@@ -291,57 +305,22 @@ export class Overlay {
       c.beginPath(); edge.forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y))); c.closePath();
       c.clip();
       c.globalAlpha = 1;
-      // lines: the wobble's band, then the line
+      // lines drawn faint while a tool is held; the selected one is a ribbon in the scene (drawRegions)
       for (const l of m.lines) {
-        const sel = scene.selLine === l.name;
-        if (!sel && !all) continue;
+        if (!all || scene.selLine === l.name) continue;
         const pts = l.pts.map((q) => this.at(q));
         if (pts.length < 2) continue;
-        const path = () => { c.beginPath(); pts.forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y))); };
-        if (l.wobble && sel) {
-          const mid = l.pts[Math.floor(l.pts.length / 2)];
-          const a = this.at(mid), b = this.at([mid[0] + (2 * l.wobble) / this.sq, mid[1]]);
-          c.lineWidth = Math.max(2, Math.hypot(b.x - a.x, b.y - a.y));
-          c.strokeStyle = accent;
-          c.globalAlpha = 0.18;
-          c.lineJoin = 'round'; c.lineCap = 'butt';
-          path(); c.stroke();
-        }
-        c.globalAlpha = sel ? 1 : 0.7;
-        c.lineWidth = sel ? 2.5 : 1.5;
-        c.strokeStyle = sel ? accent : ink;
-        c.setLineDash(sel ? [] : [6, 4]);
-        path(); c.stroke();
+        c.globalAlpha = 0.7;
+        c.lineWidth = 1.5;
+        c.strokeStyle = ink;
+        c.setLineDash([6, 4]);
+        c.beginPath(); pts.forEach((p, n) => (n ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+        c.stroke();
         c.setLineDash([]);
       }
       c.restore();
       c.globalAlpha = 1;
-      // the selected region's name, at its fill points (or in the middle of what it covers), and the names of what it is made from
-      c.font = '600 12px "IBM Plex Sans", sans-serif';
-      c.textAlign = 'center'; c.textBaseline = 'bottom';
-      const taken = [];
-      const place = (q, text, tone) => {
-        const p = this.atZero(q);
-        let y = p.y - 8;
-        while (taken.some((t) => Math.abs(t.x - p.x) < 70 && Math.abs(t.y - y) < 20)) y -= 20;
-        taken.push({ x: p.x, y });
-        this.tag(p.x, y, text, tone);
-        return p;
-      };
-      for (const r of m.regions) {
-        if (scene.selRegion !== r.name) continue;
-        const heres = r.fills.filter((f) => f.at).map((f) => f.at);
-        for (const q of heres) {
-          const p = place(q, r.name, true);
-          c.fillStyle = accent;
-          c.beginPath(); c.arc(p.x, p.y, 3, 0, 7); c.fill();
-        }
-        if (!heres.length) { const q = regionAnchor(r, m); if (q) place(q, r.name, true); }
-        for (const ref of r.refs || []) {
-          const q = refAnchor(ref, m);
-          if (q) place(q, ref.name, 'ref');
-        }
-      }
+      this.drawLabels(scene);
     }
     // the tool's own drawing
     if (scene.box) {
@@ -383,16 +362,69 @@ export class Overlay {
     }
   }
 
-  /** A small label: `on` true in the accent, 'ref' in the colour of the places a region is made from, else on a pale ground. */
+  /**
+   * The names and control points of the selected line or region.  Every control point it refers to is a dot with its label beside it
+   * (the source as written: coordinates, or the point's name), then the names: the line's or region's own, and what a region is made from.
+   * Labels keep clear of each other and of the dots.
+   */
+  drawLabels(scene) {
+    const m = this.map, c = this.ctx;
+    const sel = m.regions.find((r) => r.name === scene.selRegion) || null;
+    const line = m.lines.find((l) => l.name === scene.selLine) || null;
+    const markers = ((sel || line)?.markers || []).filter((k) => k.at);
+    const taken = []; // rects {x0, y0, x1, y1} already used on the canvas
+    const free = (r) => !taken.some((t) => r.x0 < t.x1 && r.x1 > t.x0 && r.y0 < t.y1 && r.y1 > t.y0);
+    const width = (text) => c.measureText(text).width + 10;
+    // the dots first, so labels keep off them
+    const dots = markers.map((k) => ({ k, p: this.atZero(k.at) }));
+    for (const { p } of dots) taken.push({ x0: p.x - 7, y0: p.y - 7, x1: p.x + 7, y1: p.y + 7 });
+    c.font = '500 12px "JetBrains Mono", monospace';
+    c.textBaseline = 'bottom';
+    for (const { k, p } of dots) {
+      const w = width(k.label);
+      // beside the dot: right, then left, then stepping up and down
+      const spots = [];
+      for (const dy of [0, -20, 20, -40, 40]) {
+        spots.push({ x: p.x + 9, dy }, { x: p.x - 9 - w, dy });
+      }
+      const at = spots.find((o) => free({ x0: o.x, y0: p.y - 9 + o.dy, x1: o.x + w, y1: p.y + 9 + o.dy })) || spots[0];
+      taken.push({ x0: at.x, y0: p.y - 9 + at.dy, x1: at.x + w, y1: p.y + 9 + at.dy });
+      this.tag(at.x, p.y + 8 + at.dy, k.label, 'point', 'left');
+    }
+    for (const { k, p } of dots) {
+      // a point drawn from a range lies somewhere in it: a ring, not a dot
+      c.beginPath(); c.arc(p.x, p.y, 5, 0, 7);
+      c.lineWidth = 2.5; c.strokeStyle = css('--on-point'); c.stroke();
+      c.lineWidth = 1.5; c.strokeStyle = css('--point'); c.stroke();
+      if (!k.ranged) { c.fillStyle = css('--point'); c.fill(); }
+    }
+    // the names, centred above their places
+    c.font = '600 12px "IBM Plex Sans", sans-serif';
+    const name = (q, text, tone) => {
+      if (!q) return;
+      const p = this.atZero(q), w = width(text);
+      let y = p.y - 8;
+      while (!free({ x0: p.x - w / 2, y0: y - 17, x1: p.x + w / 2, y1: y + 1 }) && y > p.y - 120) y -= 20;
+      taken.push({ x0: p.x - w / 2, y0: y - 17, x1: p.x + w / 2, y1: y + 1 });
+      this.tag(p.x, y, text, tone);
+    };
+    if (line) name(refAnchor({ kind: 'line', pts: line.pts }, m), line.name, true);
+    if (sel) {
+      name(regionAnchor(sel, m), sel.name, true);
+      for (const ref of sel.refs || []) if (ref.kind !== 'point') name(refAnchor(ref, m), ref.name, 'ref');
+    }
+  }
+
+  /** A small label: `on` true in the accent, 'point' in the colour of control points, 'ref' in the colour of the places a region is made from, else on a pale ground. */
   tag(x, y, text, on, align = 'center') {
     const c = this.ctx;
     const w = c.measureText(text).width + 10;
     const left = align === 'center' ? x - w / 2 : x;
     c.globalAlpha = 0.92;
-    c.fillStyle = on === 'ref' ? css('--ref') : on ? css('--accent') : 'rgb(255 255 255)';
+    c.fillStyle = on === 'point' ? css('--point') : on === 'ref' ? css('--ref') : on ? css('--accent') : 'rgb(255 255 255)';
     c.fillRect(left, y - 17, w, 18);
     c.globalAlpha = 1;
-    c.fillStyle = on === 'ref' ? css('--on-ref') : on ? css('--on-accent') : '#1A1714';
+    c.fillStyle = on === 'point' ? css('--on-point') : on === 'ref' ? css('--on-ref') : on ? css('--on-accent') : '#1A1714';
     c.textAlign = 'left';
     c.fillText(text, left + 5, y - 3);
     c.textAlign = align;
