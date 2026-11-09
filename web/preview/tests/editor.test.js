@@ -10,7 +10,7 @@ import { indentSelection, newlineAt, indentFor, braceEnd } from '../js/text.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { rememberView, shortcutViews } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
-import { asNumber, asRange, formOf, valueItems, written } from '../js/value.js';
+import { asNumber, asRange, debounce, formOf, valueItems, written } from '../js/value.js';
 
 const elements = [
   {
@@ -370,4 +370,29 @@ test('a dropped stream is opened again with its epoch and last revision', () => 
     globalThis.EventSource = original;
     globalThis.setTimeout = realTimeout;
   }
+});
+
+test('a burst of typing asks the program once, with the last text', () => {
+  const pending = new Map();
+  let next = 1;
+  const timers = {
+    set: (fn) => { pending.set(next, fn); return next++; },
+    clear: (id) => pending.delete(id),
+  };
+  const asked = [];
+  const ask = debounce((typed) => asked.push(typed), 200, timers);
+  ask('4');
+  ask('40');
+  ask('40.');
+  assert.deepEqual(asked, []);
+  assert.equal(pending.size, 1);
+  const [[due, run]] = [...pending];
+  pending.delete(due); // a timer is gone once it has fired
+  run();
+  assert.deepEqual(asked, ['40.']);
+  ask('5');
+  assert.equal(pending.size, 1);
+  ask.cancel();
+  assert.equal(pending.size, 0);
+  assert.deepEqual(asked, ['40.']);
 });

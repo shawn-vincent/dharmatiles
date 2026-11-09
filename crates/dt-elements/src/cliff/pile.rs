@@ -11,7 +11,14 @@ use super::stone::{ColState, Env};
 use super::{faces, finish, fit, form, stack, stone, util};
 use crate::{LookError, Span};
 
-type ColResult = Result<(Vec<(usize, dt_kit::Piece)>, usize), dt_kit::KitError>;
+/// What one column of stones came to: each stone's index and piece, and
+/// how many cracks it cut in their tops.
+struct Column {
+    stones: Vec<(usize, dt_kit::Piece)>,
+    cracks: usize,
+}
+
+type ColResult = Result<Column, dt_kit::KitError>;
 
 /// The most stones a pile may be made of, per square of its area.
 const ROCKS_PER_SQUARE: usize = 400;
@@ -223,16 +230,19 @@ pub(super) fn dress(
                 }
                 ticks.tick();
             }
-            Ok((out, cs.tops))
+            Ok(Column {
+                stones: out,
+                cracks: cs.tops,
+            })
         })
         .collect();
     progress.fraction("stones finished", 0.85);
     let mut pieces: Vec<(usize, dt_kit::Piece)> = Vec::new();
     let mut tops = 0;
     for r in results {
-        let (v, t) = r.map_err(LookError::build)?;
-        pieces.extend(v);
-        tops += t;
+        let col = r.map_err(LookError::build)?;
+        pieces.extend(col.stones);
+        tops += col.cracks;
     }
     pieces.sort_by_key(|p| p.0);
     // a stone the band holds down at its site adds no height there, so the

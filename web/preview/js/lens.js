@@ -13,7 +13,10 @@
 //   api.checkValue(element, control, typed) -> Promise<string|null>
 //                                       the program's check of a typed value
 
-import { asNumber, asRange, formOf, isNumeric, kdlString, unquote, valueItems, written } from './value.js';
+import { asNumber, asRange, debounce, formOf, isNumeric, kdlString, unquote, valueItems, written } from './value.js';
+
+// how long typing pauses before the program is asked about the value
+const CHECK_PAUSE_MS = 200;
 
 export { kdlString, unquote };
 
@@ -358,6 +361,14 @@ export class Lens {
     }
     pop.append(list);
     let s = { items: [] }, i = 0, asked = 0;
+    const askLater = debounce((typed) => {
+      const ask = ++asked;
+      this.api.checkValue?.(element, c.name, typed).then((why) => {
+        if (ask !== asked) return;
+        check.textContent = why || '';
+        check.hidden = !why;
+      });
+    }, CHECK_PAUSE_MS);
     const take = () => {
       const it = s.items[i];
       if (!it) return false;
@@ -383,13 +394,9 @@ export class Lens {
       s = valueItems(input.value, input.selectionStart ?? input.value.length, c);
       i = 0;
       draw();
-      // the program's answer, for what is typed now (a later one wins)
-      const typed = input.value, ask = ++asked;
-      this.api.checkValue?.(element, c.name, typed).then((why) => {
-        if (ask !== asked) return;
-        check.textContent = why || '';
-        check.hidden = !why;
-      });
+      // the program's answer, for what is typed now (a later one wins),
+      // asked once the typing pauses
+      askLater(input.value);
       const form = formOf(input.value);
       one?.classList.toggle('on', form === 'number');
       range?.classList.toggle('on', form === 'range');
@@ -422,7 +429,7 @@ export class Lens {
         if (e.key === 'Tab' || (e.key === 'Enter' && s.to > s.from)) return take();
         return false;
       },
-      close: () => { window.removeEventListener('scroll', place, true); pop.remove(); },
+      close: () => { askLater.cancel(); window.removeEventListener('scroll', place, true); pop.remove(); },
     };
   }
 

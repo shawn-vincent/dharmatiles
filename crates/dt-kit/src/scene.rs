@@ -19,6 +19,17 @@ pub struct Frame {
     pub cells_per_square: u32,
 }
 
+/// A frame is a key as it stands (its square's size by its bits), for what
+/// is kept under the frame it was made for.
+impl std::hash::Hash for Frame {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.cols.hash(state);
+        self.rows.hash(state);
+        self.square_mm.to_bits().hash(state);
+        self.cells_per_square.hash(state);
+    }
+}
+
 /// The DungeonBlocks reference square: every size an author writes is mm
 /// at this square, and scales with the system.
 pub const REFERENCE_SQUARE_MM: f64 = 35.0;

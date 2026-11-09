@@ -73,3 +73,19 @@ export function valueItems(typed, caret, c) {
   items = items.filter((i) => i.label.startsWith(word) && i.label !== word);
   return { from, to: caret, items };
 }
+
+/**
+ * `fn` run once, `ms` after the last call (with that call's arguments);
+ * `.cancel()` drops a run that is waiting.  The value helper asks the
+ * program about what is typed through this, so a burst of keys is one
+ * request.
+ */
+export function debounce(fn, ms, timers = { set: setTimeout, clear: clearTimeout }) {
+  let id = null;
+  const call = (...args) => {
+    if (id !== null) timers.clear(id);
+    id = timers.set(() => { id = null; fn(...args); }, ms);
+  };
+  call.cancel = () => { if (id !== null) timers.clear(id); id = null; };
+  return call;
+}

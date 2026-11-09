@@ -185,7 +185,7 @@ impl Cliff {
     fn plan_key(frame: &dt_kit::Frame, ctx: &Ctx<'_>) -> u64 {
         use std::hash::{Hash, Hasher};
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        format!("{frame:?}").hash(&mut h);
+        frame.hash(&mut h);
         ctx.seed.value().hash(&mut h);
         ctx.land_mm.to_bits().hash(&mut h);
         ctx.area.content_hash().hash(&mut h);
@@ -371,5 +371,75 @@ impl Cliff {
             core: mask,
         });
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use dt_kit::{Band, Field, Frame, Scene, Seed};
+    use std::sync::Arc;
+
+    /// A flat band 20 mm up over the whole tile.
+    fn flat(frame: &Frame) -> Band {
+        let (nx, ny) = frame.nodes();
+        let f = |z| Field::filled(nx, ny, frame.step_mm(), z);
+        Band::new(f(20.0), f(20.0)).unwrap()
+    }
+
+    /// One plan from `cliff` for the frame, seed and band given.
+    fn plan(cliff: &Cliff, frame: Frame, seed: u64, band: &Band) -> Arc<Planned> {
+        let scene = Scene::new(frame, Seed::new(seed));
+        let area = scene.whole();
+        let ctx = Ctx {
+            area: &area,
+            path: "tile/t/cliff",
+            seed: Seed::new(seed),
+            along: None,
+            at: None,
+            printer: dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2),
+            against: None,
+            foots: &[],
+            band: Some(band),
+            below: None,
+            land_mm: 0.0,
+            under: None,
+            calm_mm: None,
+            draft: false,
+        };
+        cliff.pile_plan(&frame, &ctx).unwrap()
+    }
+
+    #[test]
+    fn the_pile_is_planned_once_for_what_decided_it() {
+        let cliff = Cliff::new(&[]).unwrap();
+        let frame = Frame::dungeonblocks(1, 1);
+        let band = flat(&frame);
+        let first = plan(&cliff, frame, 7, &band);
+        // the same inputs: the kept plan itself, and it is what a fresh
+        // plan comes to
+        let again = plan(&cliff, frame, 7, &band);
+        assert!(Arc::ptr_eq(&first, &again));
+        let fresh = plan(&Cliff::new(&[]).unwrap(), frame, 7, &band);
+        assert_eq!(first.slots_needed(), fresh.slots_needed());
+        assert_eq!(first.foot.to_bits(), fresh.foot.to_bits());
+        // each thing that decides the plan is in its key
+        let other = plan(&cliff, frame, 8, &band);
+        assert!(!Arc::ptr_eq(&first, &other), "the seed");
+        let wider = Frame::dungeonblocks(2, 1);
+        let moved = plan(&cliff, wider, 8, &flat(&wider));
+        assert!(!Arc::ptr_eq(&other, &moved), "the frame");
+        let mut ol = wider;
+        ol.cells_per_square = 64;
+        let coarse = plan(&cliff, ol, 8, &flat(&ol));
+        assert!(!Arc::ptr_eq(&moved, &coarse), "the resolution");
+        let high = {
+            let (nx, ny) = frame.nodes();
+            let f = |z| Field::filled(nx, ny, frame.step_mm(), z);
+            Band::new(f(25.0), f(25.0)).unwrap()
+        };
+        let taller = plan(&cliff, frame, 8, &high);
+        assert!(!Arc::ptr_eq(&other, &taller), "the band");
     }
 }

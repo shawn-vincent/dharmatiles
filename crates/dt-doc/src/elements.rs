@@ -1099,6 +1099,18 @@ mod tests {
         assert!(check_text(tree, "tree", "tall").is_none());
         // (h) is in wall tops, checked in mm: 1.2 * 33.1 = 39.7
         assert!(check_text(tree, "tree", "(h)1.2").is_none());
+        // a syntax error and an annotation that is no unit are refused;
+        // nothing typed yet is not
+        assert!(
+            check_text(tree, "tree", "4 +")
+                .unwrap()
+                .message
+                .contains("`4 +`")
+        );
+        assert!(check_text(tree, "tree", "(mm").is_some());
+        let r = check_text(tree, "tree", "(cm)5").unwrap();
+        assert_eq!(r.message, "`(cm)` is not an annotation");
+        assert!(check_text(tree, "tree", "  ").is_none());
         let ruin = ctl("wall", "ruin");
         assert!(check_text(ruin, "wall", "40%").is_none());
         assert_eq!(

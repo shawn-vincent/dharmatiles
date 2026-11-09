@@ -191,10 +191,7 @@ impl Decoder<'_> {
                         format!("`({})` is not an annotation", t.value()),
                         "not (mm) or (h)",
                     )
-                    .help = Some(
-                        "units are not written; (mm)4.5 checks a size, and (h)1.2 is in wall tops of 33.1 mm"
-                            .to_owned(),
-                    );
+                    .help = Some(UNIT_HELP.to_owned());
                     return None;
                 }
             },
@@ -398,19 +395,41 @@ fn range_flaw(
 /// written one: what is wrong with it, or `None` (also for anything the
 /// reader resolves later, such as an expression with names, and for what is
 /// not a number or a range, such as a word).  `typed` is the text of the
-/// value, an optional `(mm)` or `(h)` annotation first.
+/// value, an optional `(mm)` or `(h)` annotation first.  A syntax error and
+/// an annotation that is not a unit are refused, not passed.
 #[must_use]
 pub fn check_text(k: &'static Control, owner: &str, typed: &str) -> Option<Refusal> {
     let axis = k.value?;
     let t = typed.trim();
+    if t.is_empty() {
+        return None;
+    }
     let (unit, body) = match t.strip_prefix('(').and_then(|r| r.split_once(')')) {
         Some((u, rest)) => {
-            let unit = Unit::parse(u)?;
+            let Some(unit) = Unit::parse(u) else {
+                return Some(Refusal {
+                    message: format!("`({u})` is not an annotation"),
+                    label: "not (mm) or (h)",
+                    help: Some(UNIT_HELP.to_owned()),
+                });
+            };
             ((axis == Axis::Mm).then_some(unit), rest)
         }
         None => (None, t),
     };
-    let x = expr::parse(body.trim()).ok()?;
+    let x = match expr::parse(body.trim()) {
+        Ok(x) => x,
+        // a word or a switch is the reader's to place; a number or an
+        // expression that does not parse is refused here
+        Err(_) if !axis.is_numeric() => return None,
+        Err(e) => {
+            return Some(Refusal {
+                message: format!("`{t}` does not read as a number: {}", e.message),
+                label: "not a number",
+                help: Some(describe(k)),
+            });
+        }
+    };
     if let Some((_, r)) = percent_flaw(&x, axis, Some(k), (owner, k.name), axis.describe()) {
         return Some(r);
     }
@@ -419,6 +438,10 @@ pub fn check_text(k: &'static Control, owner: &str, typed: &str) -> Option<Refus
     }
     range_flaw(&x, unit, axis, Some(k), (owner, k.name))
 }
+
+/// What the reader says of an annotation that is not a unit.
+const UNIT_HELP: &str =
+    "units are not written; (mm)4.5 checks a size, and (h)1.2 is in wall tops of 33.1 mm";
 
 fn hint_or(m: Option<&str>, otherwise: String) -> String {
     m.map_or(otherwise, |m| format!("did you mean `{m}`?"))

@@ -56,11 +56,33 @@ pub fn patch(patches_dir: &Path, manifold_src: &Path) {
                 patch.file_name().unwrap_or_default().to_string_lossy()
             );
         } else {
-            // Log why --check failed so we can diagnose CI issues.
-            println!(
-                "cargo:warning=Patch skipped (already applied?): {} ({})",
-                patch.file_name().unwrap_or_default().to_string_lossy(),
+            // dharmatiles: a patch that does not apply is fine only when it
+            // is already in the tree (upstream took it, or an earlier run
+            // applied it): its reverse then applies. Anything else is a
+            // drifted patch, and the build stops rather than carry on
+            // without the fix (the level-set fault returns as a SIGSEGV).
+            let applied = Command::new("git")
+                .args([
+                    "apply",
+                    "--check",
+                    "--reverse",
+                    "--ignore-whitespace",
+                    "--whitespace=nowarn",
+                ])
+                .arg(patch)
+                .current_dir(manifold_src)
+                .output()
+                .expect("failed to check patch");
+            assert!(
+                applied.status.success(),
+                "patch {} neither applies to the Manifold source nor is already in it \
+                 (Manifold moved?): {}",
+                patch.display(),
                 String::from_utf8_lossy(&check.stderr).trim()
+            );
+            println!(
+                "cargo:warning=Patch already in the source: {}",
+                patch.file_name().unwrap_or_default().to_string_lossy()
             );
         }
     }
