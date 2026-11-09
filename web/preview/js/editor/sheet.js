@@ -7,6 +7,7 @@ import { failed } from '../problems.js';
 import { $, host, offerMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, undo } from './document.js';
 import { doc, elementNamed, isEntry, isMark, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
+import { clauseGroups, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 
 // ---- the lens ---------------------------------------------------------------
@@ -80,6 +81,22 @@ async function renameMark(kind, old, name) {
     view.set({ sel: markSel(kind, next) });
   }
 }
+/** Change one clause of a region (a `within`'s distance or place, an `except`'s regions), through the server's edit route like the other controls. */
+async function setClause(clause, name, value) {
+  if (!doc.get().writable) return offerMine();
+  if (name === 'except') {
+    const run = clause.regions;
+    if (!value.length) { doc.set({ note: 'an except names at least one region; take the clause out instead' }); return null; }
+    if (!run?.span) return null;
+    return replaceBytes(run.span[0], run.span[1], value.join(' '), true);
+  }
+  if (name === 'of') return setControl(clause.at, 'of', value);
+  if (name === 'distance') {
+    const r = await host.edit({ op: 'arg', text: doc.get().text, at: clause.at, index: 0, value });
+    if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed('Could not change the distance', r); return; }
+    edited(r.body.text, 'lens', 'Changed distance');
+  }
+}
 /** The sheet of a drawn line or a region: its name, its controls, its points. */
 function renderMarkLens(kind, m) {
   const t = tile(), sh = m?.sheet;
@@ -99,13 +116,17 @@ function renderMarkLens(kind, m) {
     if (th) written.push(th);
     set = (name, value) => (name === 'name' ? renameMark('line', m.name, value) : setControl(sh.at, name, value));
   } else {
+    // a region is made as its source says: lines and fill points, places it reaches round and regions it excepts, or both
+    const rk = regionKind(sh);
     const lines = (doc.get().map?.lines || []).map((l) => ({ word: l.name, about: `bounded by the line ${l.name}` }));
-    controls = [
-      nameRow,
-      { name: 'bounded-by', unit: 'several', words: lines, required: true, about: 'the lines that divide the tile into this region and the rest' },
-      { name: 'fill', unit: 'raw', required: true, about: 'a point inside the region, "x,y" in squares: the region is the area around it that the lines enclose' },
-    ];
-    for (const [n, run] of [['bounded-by', sh.bounded_by], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
+    controls = [nameRow];
+    if (rk !== 'places') {
+      controls.push(
+        { name: 'bounded-by', unit: 'several', words: lines, required: true, about: 'the lines that divide the tile into this region and the rest' },
+        { name: 'fill', unit: 'raw', required: true, about: 'a point inside the region, "x,y" in squares: the region is the area around it that the lines enclose' },
+      );
+      for (const [n, run] of [['bounded-by', sh.bounded_by], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
+    }
     set = (name, value) => {
       if (name === 'name') return renameMark('region', m.name, value);
       if (name === 'bounded-by') {
@@ -116,6 +137,17 @@ function renderMarkLens(kind, m) {
       }
       return null;
     };
+    const clauses = clauseGroups(m, sh, doc.get().map, asWritten).map((g) => ({
+      at: g.clause.at, heading: g.heading, schema: { controls: g.controls }, written: g.written,
+      set: (name, value) => setClause(g.clause, name, value),
+    }));
+    const note = combineNote(sh);
+    const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
+    lens.show({
+      title: m.name, kind, href: 'https://shawn-vincent.github.io/dharmatiles/language.html#regions', note,
+      groups: [{ at: sh.at, schema: { controls }, written, set }, ...clauses], actions,
+    });
+    return;
   }
   const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
   lens.show({

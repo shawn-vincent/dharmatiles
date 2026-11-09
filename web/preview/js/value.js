@@ -80,7 +80,7 @@ export function valueItems(typed, caret, c) {
  * program about what is typed through this, so a burst of keys is one
  * request.
  */
-export function debounce(fn, ms, timers = { set: setTimeout, clear: clearTimeout }) {
+export function debounce(fn, ms, timers = { set: (f, t) => setTimeout(f, t), clear: (id) => clearTimeout(id) }) {
   let id = null;
   const call = (...args) => {
     if (id !== null) timers.clear(id);

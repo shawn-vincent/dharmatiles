@@ -1097,6 +1097,97 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
 }
 
 #[test]
+fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
+    let dir = std::env::temp_dir().join(format!("dt-clauses-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    let text = "tile size=\"2x2\" seed=3 {\n    point knoll \"(0.5, 0.5)\"\n    line shore { through \"0,0.4\" \"2,0.5\" }\n    region crag { within \"[8 .. 14]\" of=westEdge; within 6 of=knoll }\n    region apron { within 6.5 of=crag; except crag }\n    region pool { bounded-by shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
+    std::fs::write(&file, text).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let call = |p: &str, body: Value| post(&r, p, Some(&token), None, &body.to_string()).1;
+    let v = call(
+        &format!("/api/tiles/{}/check", id0(&r)),
+        serde_json::json!({ "text": text }),
+    );
+    let region = |name: &str| {
+        v["map"]["regions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["name"] == name)
+            .unwrap()
+            .clone()
+    };
+    let crag = region("crag");
+    let clauses = crag["sheet"]["clauses"].as_array().unwrap();
+    assert_eq!(clauses.len(), 2, "{crag}");
+    assert_eq!(clauses[0]["kind"], "within");
+    assert_eq!(clauses[0]["distance"]["text"], "\"[8 .. 14]\"");
+    assert_eq!(clauses[0]["range"], serde_json::json!([8.0, 14.0]));
+    assert_eq!(clauses[0]["of"]["text"], "westEdge");
+    let sp = |c: &Value, k: &str| {
+        let s = c[k]["span"].as_array().unwrap();
+        let a = usize::try_from(s[0].as_u64().unwrap()).unwrap();
+        a..a + usize::try_from(s[1].as_u64().unwrap()).unwrap()
+    };
+    assert_eq!(&text[sp(&clauses[0], "distance")], "\"[8 .. 14]\"");
+    assert_eq!(&text[sp(&clauses[1], "of")], "knoll");
+    // the places it refers to, with their geometry
+    let refs = crag["refs"].as_array().unwrap();
+    assert_eq!(refs[0]["name"], "westEdge");
+    assert_eq!(refs[0]["kind"], "edge");
+    assert_eq!(refs[0]["pts"], serde_json::json!([[0.0, 0.0], [0.0, 2.0]]));
+    assert_eq!(refs[1]["kind"], "point");
+    assert_eq!(refs[1]["at"], serde_json::json!([0.5, 0.5]));
+    // a region refers to another region (once, though it names it twice), and excepts are clauses
+    let apron = region("apron");
+    let refs = apron["refs"].as_array().unwrap();
+    assert_eq!(refs.len(), 1, "{apron}");
+    assert_eq!(refs[0]["kind"], "region");
+    let ex = &apron["sheet"]["clauses"][1];
+    assert_eq!(ex["kind"], "except");
+    assert_eq!(ex["regions"]["text"], "crag");
+    // a bucket region refers to the lines that bound it, and has no clauses
+    let pool = region("pool");
+    assert_eq!(pool["refs"][0]["kind"], "line");
+    assert_eq!(pool["sheet"]["clauses"].as_array().unwrap().len(), 0);
+    // the places a choice can name
+    let places = v["map"]["places"].as_array().unwrap();
+    for (n, k) in [
+        ("northEdge", "edge"),
+        ("shore", "line"),
+        ("crag", "region"),
+        ("knoll", "point"),
+        ("center", "point"),
+        ("tile", "tile"),
+    ] {
+        assert!(
+            places.iter().any(|p| p["name"] == n && p["kind"] == k),
+            "{n}: {places:?}"
+        );
+    }
+    // the distance is edited through the server, the way the other controls are
+    let v = call(
+        "/api/edit",
+        serde_json::json!({ "op": "arg", "text": text, "at": clauses[1]["at"], "index": 0, "value": 9 }),
+    );
+    let t = v["text"].as_str().unwrap();
+    assert!(
+        t.contains("within \"[8 .. 14]\" of=westEdge; within 9 of=knoll"),
+        "{t}"
+    );
+    let v = call(
+        "/api/edit",
+        serde_json::json!({ "op": "set", "text": text, "at": clauses[0]["at"], "name": "of", "value": "eastEdge" }),
+    );
+    let t = v["text"].as_str().unwrap();
+    assert!(t.contains("of=eastEdge; within 6 of=knoll"), "{t}");
+}
+
+#[test]
 fn a_build_sends_sketches_as_it_goes_and_drops_them_when_done() {
     let r = start(&[FLAT], false);
     let mut c = TcpStream::connect(r.addr).unwrap();

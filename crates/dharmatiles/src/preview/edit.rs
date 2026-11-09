@@ -460,6 +460,19 @@ fn edit(v: &Value) -> (&'static str, Value) {
             };
             return done(dt_doc::edit::rename_mark(text, mark, old, new.trim()).map(|t| (t, 0)));
         }
+        // a node's positional argument replaced: {op: arg, at, index, value}
+        Some("arg") => {
+            let (Some(at), Some(index)) = (at, v["index"].as_u64()) else {
+                return bad("give the node's byte and the argument's index");
+            };
+            let Some(k) = kdl_value(&v["value"]) else {
+                return bad("a value is a number, a string or a switch");
+            };
+            let Ok(index) = usize::try_from(index) else {
+                return bad("give the argument's index");
+            };
+            return done(dt_doc::edit::set_arg_at(text, at, index, k).map(|t| (t, at)));
+        }
         Some("set") | None => {}
         Some(op) => return bad(format!("no edit called `{op}`")),
     }

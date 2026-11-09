@@ -28,6 +28,124 @@ export function regionTriangles(r, m, sq = m.sq ?? 35) {
   return new Float32Array(out);
 }
 
+
+/**
+ * A polyline (points in squares) as a ribbon in the 3D scene: a flat strip 2*`half` mm wide at z 0
+ * and a curtain from -`half` to `half` along it, so it reads from above and from the side.
+ * Returns a Float32Array of triangles (9 numbers each); `closed` joins the last point to the first.
+ */
+export function ribbonTriangles(pts, sq, half = 0.7, closed = false) {
+  const out = [];
+  const n = pts.length;
+  for (let k = 0; k < (closed ? n : n - 1); k++) {
+    const a = pts[k], b = pts[(k + 1) % n];
+    let ax = a[0] * sq, ay = a[1] * sq, bx = b[0] * sq, by = b[1] * sq;
+    const len = Math.hypot(bx - ax, by - ay);
+    if (!len) continue;
+    const ux = (bx - ax) / len, uy = (by - ay) / len;
+    ax -= ux * half; ay -= uy * half; bx += ux * half; by += uy * half; // butt joints meet
+    const nx = -uy * half, ny = ux * half;
+    out.push(ax - nx, ay - ny, 0, bx - nx, by - ny, 0, bx + nx, by + ny, 0, ax - nx, ay - ny, 0, bx + nx, by + ny, 0, ax + nx, ay + ny, 0);
+    out.push(ax, ay, -half, bx, by, -half, bx, by, half, ax, ay, -half, bx, by, half, ax, ay, half);
+  }
+  return new Float32Array(out);
+}
+
+/** The outline of a region's lattice cells as ribbons (mm; not along the tile's own border). */
+export function outlineTriangles(r, m, sq = m.sq ?? 35, half = 0.5) {
+  const step = 1 / m.cells, segs = [];
+  const set = (i, j) => i >= 0 && j >= 0 && i < r.nx && j < r.ny && r.bits[j * r.nx + i] === '1';
+  const clampX = (v) => Math.min(m.cols, Math.max(0, v)), clampY = (v) => Math.min(m.rows, Math.max(0, v));
+  for (let j = 0; j < r.ny; j++) for (let i = 0; i < r.nx; i++) {
+    if (!set(i, j)) continue;
+    const x0 = clampX((i - 0.5) * step), x1 = clampX((i + 0.5) * step), y0 = clampY((j - 0.5) * step), y1 = clampY((j + 0.5) * step);
+    if (x1 <= x0 || y1 <= y0) continue;
+    if (i > 0 && !set(i - 1, j)) segs.push([[x0, y0], [x0, y1]]);
+    if (i < r.nx - 1 && !set(i + 1, j)) segs.push([[x1, y0], [x1, y1]]);
+    if (j > 0 && !set(i, j - 1)) segs.push([[x0, y0], [x1, y0]]);
+    if (j < r.ny - 1 && !set(i, j + 1)) segs.push([[x0, y1], [x1, y1]]);
+  }
+  const parts = segs.map((g) => ribbonTriangles(g, sq, half));
+  const all = new Float32Array(parts.reduce((a, p) => a + p.length, 0));
+  let at = 0;
+  for (const p of parts) { all.set(p, at); at += p.length; }
+  return all;
+}
+
+/** A point (squares) as a flat disc of radius `rad` mm, with a ring round it as a ribbon's worth of height. */
+export function discTriangles(q, sq, rad = 1.6, sides = 20) {
+  const out = [];
+  const cx = q[0] * sq, cy = q[1] * sq;
+  for (let k = 0; k < sides; k++) {
+    const a = (k / sides) * Math.PI * 2, b = ((k + 1) / sides) * Math.PI * 2;
+    out.push(cx, cy, 0, cx + rad * Math.cos(a), cy + rad * Math.sin(a), 0, cx + rad * Math.cos(b), cy + rad * Math.sin(b), 0);
+  }
+  return new Float32Array(out);
+}
+
+/** Where to hang a label on a place (squares): the middle of a line, the point itself, the set cell nearest a region's centre. */
+export function refAnchor(ref, map) {
+  if (ref.at) return ref.at;
+  if (ref.kind === 'region') {
+    const r = map.regions.find((x) => x.name === ref.name);
+    return r ? regionAnchor(r, map) : null;
+  }
+  const pts = ref.pts || [];
+  if (pts.length < 2) return pts[0] || null;
+  // a loop (all four edges, the tile) is labelled on its first side
+  const closed = pts.length > 2 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1];
+  const use = closed ? pts.slice(0, 2) : pts;
+  const seg = use.slice(1).map((p, k) => Math.hypot(p[0] - use[k][0], p[1] - use[k][1]));
+  let left = seg.reduce((a, b) => a + b, 0) / 2;
+  for (let k = 0; k < seg.length; k++) {
+    if (left <= seg[k] || k === seg.length - 1) {
+      const t = seg[k] ? Math.min(1, left / seg[k]) : 0;
+      return [use[k][0] + (use[k + 1][0] - use[k][0]) * t, use[k][1] + (use[k + 1][1] - use[k][1]) * t];
+    }
+    left -= seg[k];
+  }
+  return use[0];
+}
+
+/** The set cell of a region nearest its centre of mass, in squares (null for an empty region). */
+export function regionAnchor(r, m) {
+  const step = 1 / m.cells;
+  let sx = 0, sy = 0, n = 0;
+  for (let j = 0; j < r.ny; j++) for (let i = 0; i < r.nx; i++) if (r.bits[j * r.nx + i] === '1') { sx += i; sy += j; n++; }
+  if (!n) return null;
+  const cx = sx / n, cy = sy / n;
+  let best = null, d = Infinity;
+  for (let j = 0; j < r.ny; j++) for (let i = 0; i < r.nx; i++) {
+    if (r.bits[j * r.nx + i] !== '1') continue;
+    const e = (i - cx) ** 2 + (j - cy) ** 2;
+    if (e < d) { d = e; best = [i, j]; }
+  }
+  return [Math.min(m.cols, Math.max(0, best[0] * step)), Math.min(m.rows, Math.max(0, best[1] * step))];
+}
+
+/**
+ * The scene items for the places a region is made from (its `refs`): lines and edges as ribbons, points as discs, a region
+ * as a faint fill inside an outline.  Each {positions, color, role: 'line'|'fill', dz}.
+ */
+export function refItems(map, region, sq, color) {
+  const items = [];
+  // thin on a small tile, a little wider on a big one: about the same on the screen
+  const half = Math.min(1, Math.max(0.3, 0.012 * Math.max(map.cols, map.rows) * sq));
+  for (const ref of region.refs || []) {
+    if (ref.at) items.push({ positions: discTriangles(ref.at, sq, 2.4 * half), color, role: 'line', dz: 0.08 });
+    else if (ref.kind === 'region') {
+      const r = map.regions.find((x) => x.name === ref.name);
+      if (!r) continue;
+      items.push({ positions: regionTriangles(r, map, sq), color, role: 'fill', dz: 0.04 });
+      items.push({ positions: outlineTriangles(r, map, sq, 0.7 * half), color, role: 'line', dz: 0.08 });
+    } else if (ref.pts) {
+      const loop = ref.kind === 'tile' || ref.name === 'edges';
+      items.push({ positions: ribbonTriangles(ref.pts, sq, half), color, role: 'line', dz: 0.08, loop });
+    }
+  }
+  return items.filter((i) => i.positions.length);
+}
+
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 
 export class Overlay {
@@ -123,7 +241,9 @@ export class Overlay {
       color: sel ? css('--accent') : scene.tints?.[r.name] || css('--plate-ink'),
       alpha: 0.16,
     }));
-    const key = JSON.stringify([items.map((i) => [i.color, i.positions.length, i.positions.reduce((a, x, n) => a + x * ((n % 97) + 1), 0)]), focus, z, m && [m.cols, m.rows, m.cells]]);
+    // what the selected region is made from, drawn beside it
+    if (focus) for (const w of want) if (w.sel) items.push(...refItems(m, w.r, this.sq, css('--ref')).map((i) => ({ ...i, alpha: i.role === 'fill' ? 0.22 : 1 })));
+    const key = JSON.stringify([items.map((i) => [i.color, i.role, i.dz, i.positions.length, i.positions.reduce((a, x, n) => a + x * ((n % 97) + 1), 0)]), focus, z, m && [m.cols, m.rows, m.cells]]);
     if (key === this.regionKey) return;
     this.regionKey = key;
     v.setRegionLayer(items.length ? { focus, z, items } : null);
@@ -196,17 +316,30 @@ export class Overlay {
       }
       c.restore();
       c.globalAlpha = 1;
-      // the selected region's name, at its fill points
+      // the selected region's name, at its fill points (or in the middle of what it covers), and the names of what it is made from
       c.font = '600 12px "IBM Plex Sans", sans-serif';
       c.textAlign = 'center'; c.textBaseline = 'bottom';
+      const taken = [];
+      const place = (q, text, tone) => {
+        const p = this.atZero(q);
+        let y = p.y - 8;
+        while (taken.some((t) => Math.abs(t.x - p.x) < 70 && Math.abs(t.y - y) < 20)) y -= 20;
+        taken.push({ x: p.x, y });
+        this.tag(p.x, y, text, tone);
+        return p;
+      };
       for (const r of m.regions) {
         if (scene.selRegion !== r.name) continue;
-        for (const f of r.fills) {
-          if (!f.at) continue;
-          const p = this.atZero(f.at);
-          this.tag(p.x, p.y - 8, r.name, true);
+        const heres = r.fills.filter((f) => f.at).map((f) => f.at);
+        for (const q of heres) {
+          const p = place(q, r.name, true);
           c.fillStyle = accent;
           c.beginPath(); c.arc(p.x, p.y, 3, 0, 7); c.fill();
+        }
+        if (!heres.length) { const q = regionAnchor(r, m); if (q) place(q, r.name, true); }
+        for (const ref of r.refs || []) {
+          const q = refAnchor(ref, m);
+          if (q) place(q, ref.name, 'ref');
         }
       }
     }
@@ -250,16 +383,16 @@ export class Overlay {
     }
   }
 
-  /** A small label on a pale ground. */
+  /** A small label: `on` true in the accent, 'ref' in the colour of the places a region is made from, else on a pale ground. */
   tag(x, y, text, on, align = 'center') {
     const c = this.ctx;
     const w = c.measureText(text).width + 10;
     const left = align === 'center' ? x - w / 2 : x;
     c.globalAlpha = 0.92;
-    c.fillStyle = on ? css('--accent') : 'rgb(255 255 255)';
+    c.fillStyle = on === 'ref' ? css('--ref') : on ? css('--accent') : 'rgb(255 255 255)';
     c.fillRect(left, y - 17, w, 18);
     c.globalAlpha = 1;
-    c.fillStyle = on ? css('--on-accent') : '#1A1714';
+    c.fillStyle = on === 'ref' ? css('--on-ref') : on ? css('--on-accent') : '#1A1714';
     c.textAlign = 'left';
     c.fillText(text, left + 5, y - 3);
     c.textAlign = align;

@@ -322,6 +322,22 @@ pub fn set_control_at(
     set_control(text, &steps, name, value)
 }
 
+/// Replace the positional argument `index` of the node at byte `offset`
+/// (see [`path_at`]): a `within`'s distance, say.
+///
+/// # Errors
+/// As [`path_at`] and [`set_value`].
+pub fn set_arg_at(
+    text: &str,
+    offset: usize,
+    index: usize,
+    value: impl Into<KdlValue>,
+) -> Result<String, EditError> {
+    let path = path_at(text, offset)?;
+    let steps: Vec<&str> = path.iter().map(String::as_str).collect();
+    set_value(text, &steps, Key::Arg(index), value)
+}
+
 /// [`remove_control`] on the node at byte `offset` (see [`path_at`]).
 ///
 /// # Errors

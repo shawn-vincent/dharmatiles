@@ -28,10 +28,10 @@ use dt_kit::{Audit, BuildRecord, Export, Frame, Mask, Material, Printer, Scene, 
 
 pub use cache::Cache;
 pub use diag::Diag;
+pub use doc::{Region, Tile, Within};
 pub use dt_kit::Progress;
 pub use source::{Files, LIB, Library, Memory, Source};
 
-use crate::doc::Tile;
 use crate::plan::{Refusal, Step};
 
 /// A project: the folder holding `dharmatiles.dtile` (or the start folder

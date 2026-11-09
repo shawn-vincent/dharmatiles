@@ -973,6 +973,9 @@ export class Viewer {
         const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: it.color, side: THREE.DoubleSide, transparent: true }));
         m.frustumCulled = false;
         m.userData.alpha = it.alpha;
+        m.userData.ref = !!it.role; // a place the selected region is made from, not the region
+        m.userData.line = it.role === 'line';
+        m.position.z = it.dz ?? 0;
         group.add(m);
       }
       group.position.z = layer.z;
@@ -992,8 +995,10 @@ export class Viewer {
       const mat = m.material;
       mat.depthTest = seen;
       mat.depthWrite = seen;
-      mat.opacity = L.focus ? (seen ? 1 : 0.55) : m.userData.alpha;
-      mat.transparent = !(L.focus && seen);
+      // the region itself is opaque; what it is made from is quieter: a line solid, a region's fill faint
+      const solid = !m.userData.ref || m.userData.line;
+      mat.opacity = L.focus ? (solid ? (seen ? 1 : 0.7) : m.userData.alpha) : m.userData.alpha;
+      mat.transparent = !(L.focus && seen && solid);
       m.renderOrder = seen ? 0 : 9;
       mat.needsUpdate = true;
     }
