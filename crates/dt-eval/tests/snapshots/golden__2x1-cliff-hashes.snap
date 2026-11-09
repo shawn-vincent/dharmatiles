@@ -1,5 +1,6 @@
 ---
 source: crates/dt-eval/tests/golden.rs
+assertion_line: 147
 expression: hashes(b)
 ---
 20f36b45eab31048  plan
@@ -34,8 +35,8 @@ bf7f24f2f9140596  cliff:tile/cliff/0
 97d440d249f645da  cliff:tile/cliff/0
 cd1bd43f2dd88913  cliff:tile/cliff/0
 d106dec5f81fb1dc  cliff:tile/cliff/0
-09e36df90bded421  surface
-ade4e33a7ba544e1  terrain:tile/terrain
+048d1b8fe5831ed9  surface
+4957fb46b7b2126b  terrain:tile/terrain
 5bf363dc1080c8f0  rock:tile/scatter/0
 d4ce1939874ae257  rock:tile/scatter/0
 83ccddc589f9145f  rock:tile/scatter/0
@@ -166,5 +167,5 @@ da59da844d4be927  rock:tile/scatter/1
 411c61d87a97e0ee  rock:tile/scatter/1
 7847ba62e800d2d6  rock:tile/scatter/1
 df3311b61d160185  connector:tile/connector
-24494358feca8cf2  union
-459cad49955154d5  export
+46a8423532f1bf26  union
+7eb2dedda163c162  export

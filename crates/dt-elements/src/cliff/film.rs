@@ -27,7 +27,7 @@ const SMOOTH_NODES: usize = 2;
 /// without it the inset would follow that alternation as a comb.
 const CLOSE_NODES: f64 = 1.5;
 /// How far the outline of a film patch is rounded, nodes (the blur's sigma).
-const EDGE_SMOOTH_NODES: f64 = 2.0;
+const EDGE_SMOOTH_NODES: f64 = 4.0;
 
 /// The top of the pile at every node (mm, as the stones stand, `-∞` where
 /// no stone is hit): a ray down from above onto each stone.
