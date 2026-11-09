@@ -185,6 +185,9 @@ impl Eval<'_> {
             },
             Expr::Neg(a) => -self.iv(a, v, depth)?,
             Expr::Range { lo, hi } => self.iv(lo, v, depth)?.hull(self.iv(hi, v, depth)?),
+            // the plain range is a band; odds have nothing to act on there
+            Expr::Weighted { range, .. } if e.weighted().is_none() => self.iv(range, v, depth)?,
+            Expr::Weighted { .. } => return Err(format!("{WEIGHTED_BAND}: `{e}`")),
             Expr::Bin { op, lhs, rhs } => {
                 let (a, b) = (self.iv(lhs, v, depth)?, self.iv(rhs, v, depth)?);
                 match op {
@@ -210,6 +213,24 @@ impl Eval<'_> {
     }
 }
 
+/// What a band says of a weighted range it reaches through a name (`dt::weighting`).
+const WEIGHTED_BAND: &str = "a weighted range does not go on a band";
+
+/// The diagnostic code and help for a band's failure.
+fn band_flaw(msg: &str) -> (&'static str, Option<String>) {
+    if msg.starts_with(WEIGHTED_BAND) {
+        (
+            "dt::weighting",
+            Some(
+                "write the range alone in the `let`, or make the weighted one a plain range"
+                    .to_owned(),
+            ),
+        )
+    } else {
+        ("dt::value", None)
+    }
+}
+
 fn collect(e: &Expr, out: &mut Vec<String>) {
     match e {
         Expr::Name(n) => out.push(n.clone()),
@@ -219,6 +240,7 @@ fn collect(e: &Expr, out: &mut Vec<String>) {
             collect(lo, out);
             collect(hi, out);
         }
+        Expr::Weighted { range, .. } => collect(range, out),
         Expr::Bin { lhs, rhs, .. } => {
             collect(lhs, out);
             collect(rhs, out);
@@ -451,13 +473,16 @@ fn solve_on(
         let own = match g.band(top, &under, None) {
             Ok(x) => x,
             Err(msg) => {
-                errors.push(Diag::at(
+                let (code, help) = band_flaw(&msg);
+                let mut d = Diag::at(
                     top_src,
                     *top_span,
-                    "dt::value",
+                    code,
                     format!("can't work out this top: {msg}"),
                     "here",
-                ));
+                );
+                d.help = help;
+                errors.push(d);
                 continue;
             }
         };
@@ -489,13 +514,16 @@ fn solve_on(
             let band = match g.band(&p.top, &under, Some(&place)) {
                 Ok(x) => x,
                 Err(msg) => {
-                    errors.push(Diag::at(
+                    let (code, help) = band_flaw(&msg);
+                    let mut d = Diag::at(
                         &p.from.src,
                         p.top_span,
-                        "dt::value",
+                        code,
                         format!("can't work out this pin's top: {msg}"),
                         "here",
-                    ));
+                    );
+                    d.help = help;
+                    errors.push(d);
                     ok = false;
                     continue;
                 }

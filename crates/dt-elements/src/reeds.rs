@@ -23,7 +23,7 @@ use dt_kit::Kind;
 use dt_kit::{Material, Rng, Scene, Tag, TriMesh, form};
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Span, Write};
+use crate::{Control, Ctx, Dist, Element, LookError, Plan, Weighting, Write};
 
 const REED_SEP_MM: f64 = 12.0;
 /// Land height relative to the calm water level where reeds root.
@@ -43,8 +43,10 @@ const SECTION: usize = 24;
 #[derive(Clone, Debug)]
 pub struct Reeds {
     clumps: (i64, i64),
+    clumps_odds: Weighting,
     stems: (i64, i64),
-    height: Span,
+    stems_odds: Weighting,
+    height: Dist,
 }
 
 impl Reeds {
@@ -55,13 +57,15 @@ impl Reeds {
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut r = Self {
             clumps: (3, 5),
+            clumps_odds: Weighting::Flat,
             stems: (5, 9),
-            height: Span::new(8.0, 13.0),
+            stems_odds: Weighting::Flat,
+            height: Dist::flat(8.0, 13.0),
         };
         let s = Settings::new(controls);
-        r.clumps = s.counts_or("clumps", r.clumps)?;
-        r.stems = s.counts_or("stems", r.stems)?;
-        r.height = s.span_or("height", r.height)?;
+        (r.clumps, r.clumps_odds) = s.counts_dist_or("clumps", r.clumps)?;
+        (r.stems, r.stems_odds) = s.counts_dist_or("stems", r.stems)?;
+        r.height = s.dist_or("height", r.height)?;
         Ok(r)
     }
 }
@@ -172,7 +176,7 @@ impl Element for Reeds {
             let j = rng.int(0, i as i64) as usize;
             cand.swap(i, j);
         }
-        let n = rng.int(self.clumps.0, self.clumps.1);
+        let n = Dist::int(self.clumps.0, self.clumps.1, self.clumps_odds, &mut rng);
         let mut centres: Vec<[f64; 2]> = Vec::new();
         for c in cand {
             if centres
@@ -188,7 +192,7 @@ impl Element for Reeds {
         let e = 0.3;
         let mut stems: Vec<Stem> = Vec::new();
         for c in &centres {
-            let k = rng.int(self.stems.0, self.stems.1);
+            let k = Dist::int(self.stems.0, self.stems.1, self.stems_odds, &mut rng);
             let dx = -(ground(c[0] + e, c[1]) - ground(c[0] - e, c[1])) / (2.0 * e);
             let dy = -(ground(c[0], c[1] + e) - ground(c[0], c[1] - e)) / (2.0 * e);
             let nw = libm::hypot(dx, dy) + 1e-9;

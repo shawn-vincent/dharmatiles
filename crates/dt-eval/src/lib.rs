@@ -14,6 +14,7 @@ mod cache;
 pub mod diag;
 pub mod doc;
 mod hash;
+mod lower;
 pub mod places;
 pub mod plan;
 pub mod progress;
@@ -449,9 +450,10 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                     .control
                     .as_ref()
                     .and_then(|c| e.controls.iter().find(|s| &s.name == c));
+                let code = le.code.unwrap_or("dt::element");
                 let d = match at {
-                    Some(s) => Diag::at(&s.src, s.span, "dt::element", le.message, "here"),
-                    None => Diag::at(&e.src, e.what.span, "dt::element", le.message, "here"),
+                    Some(s) => Diag::at(&s.src, s.span, code, le.message, "here"),
+                    None => Diag::at(&e.src, e.what.span, code, le.message, "here"),
                 };
                 errors.push(d.maybe_help(le.help));
                 continue;
@@ -524,7 +526,9 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     // the Solve phase: bands and pins, no meshes, on the lattice the build
     // makes its bodies on: `check` and `build` share this one solve
     let writes: Vec<dt_elements::Write> = plans.iter().map(|p| p.writes).collect();
-    let solved = Some(solve::solve(&tile, &frame, opts, &writes)?);
+    let mut solved = solve::solve(&tile, &frame, opts, &writes)?;
+    solved.notes.extend(tile.notes.iter().cloned());
+    let solved = Some(solved);
     Ok(Checked {
         file: read.file,
         tile: Some(tile),

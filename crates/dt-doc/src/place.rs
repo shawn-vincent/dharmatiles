@@ -289,6 +289,8 @@ pub type PlaceError = ExprError;
 fn perr(message: impl Into<String>, start: usize, end: usize) -> PlaceError {
     ExprError {
         message: message.into(),
+        code: None,
+        help: None,
         start,
         end,
     }
@@ -334,6 +336,13 @@ pub fn parse_point(s: &str) -> Result<Point, PlaceError> {
     }
     let coord = |part: &str, offset: usize| -> Result<Expr, PlaceError> {
         let x = expr::parse(part).map_err(|e| perr(e.message, e.start + offset, e.end + offset))?;
+        if let Some(w) = x.weighted() {
+            return Err(perr(
+                format!("`{w}`: a point's range does not take a weighting yet"),
+                offset,
+                offset + part.len(),
+            ));
+        }
         if let Some(n) = x.names().first() {
             let at = part.find(n).unwrap_or(0) + offset;
             return Err(perr(

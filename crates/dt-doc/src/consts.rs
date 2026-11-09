@@ -129,6 +129,42 @@ impl ConstTable {
         &self.overridden
     }
 
+    /// True when `expr` holds a range, or names a constant that does: a
+    /// distribution, drawn where it is used.
+    #[must_use]
+    pub fn draws(&self, expr: &Expr) -> bool {
+        self.draws_at(expr, 0)
+    }
+
+    fn draws_at(&self, expr: &Expr, depth: usize) -> bool {
+        depth <= 64
+            && (expr.range_count() > 0
+                || expr.names().iter().any(|n| {
+                    self.get(n)
+                        .is_some_and(|e| self.draws_at(&e.expr, depth + 1))
+                }))
+    }
+
+    /// The first weighted range, other than the plain range, that `expr`
+    /// holds or reaches through a constant, as written: what a band refuses.
+    #[must_use]
+    pub fn weighted_in(&self, expr: &Expr) -> Option<String> {
+        self.weighted_at(expr, 0)
+    }
+
+    fn weighted_at(&self, expr: &Expr, depth: usize) -> Option<String> {
+        if depth > 64 {
+            return None;
+        }
+        if let Some(w) = expr.weighted() {
+            return Some(w.to_string());
+        }
+        expr.names().iter().find_map(|n| {
+            self.get(n)
+                .and_then(|e| self.weighted_at(&e.expr, depth + 1))
+        })
+    }
+
     /// `expr` as one number, a range drawn at `u` (0 low, 1 high); names
     /// are constants, or `vars` (`x`, `y`, `bottom`).
     ///

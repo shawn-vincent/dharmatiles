@@ -63,6 +63,7 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
         Expr::Name(n) => name(n).map_or_else(|| err(format!("unknown name `{n}`"), None), Ok),
         Expr::Neg(a) => dim_of(a, name),
         Expr::Range { lo, hi } => unify(dim_of(lo, name)?, dim_of(hi, name)?, "a range"),
+        Expr::Weighted { range, .. } => dim_of(range, name),
         Expr::Bin { op, lhs, rhs } => {
             let (a, b) = (dim_of(lhs, name)?, dim_of(rhs, name)?);
             match op {

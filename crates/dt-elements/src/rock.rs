@@ -35,7 +35,7 @@ use dt_kit::{
 };
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Span, Write};
+use crate::{Control, Ctx, Dist, Element, LookError, Plan, Span, Weighting, Write};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -499,8 +499,8 @@ pub fn make_item(
 pub struct Thing {
     /// `rock`, `stone`, `boulder` or `pebble`.
     pub kind: String,
-    /// Its size range.
-    pub size: Span,
+    /// Its size range, and the odds along it.
+    pub size: Dist,
     /// `lo + (hi − lo)·u^exponent`.
     pub exponent: f64,
     /// Dome, slab, block, wedge weights.
@@ -526,14 +526,14 @@ impl Thing {
     pub fn new(kind: &str, controls: &[Control], weight: f64) -> Result<Self, LookError> {
         let mut t = Self {
             kind: kind.to_owned(),
-            size: Span::new(6.0, 15.0),
+            size: Dist::flat(6.0, 15.0),
             exponent: WIDTH_EXP,
             mix: FAMILIES,
             weight,
             buried: Span::point(0.0),
         };
         let s = Settings::new(controls);
-        t.size = s.span_or("size", t.size)?;
+        t.size = s.dist_or("size", t.size)?;
         if let Some(r) = s.span("buried")? {
             let share = |x: f64| if x > 1.0 { x / 100.0 } else { x };
             t.buried = Span::new(share(r.lo), share(r.hi));
@@ -551,8 +551,14 @@ impl Thing {
     }
 
     fn draw(&self, rng: &mut Rng) -> f64 {
-        let (lo, hi) = self.size.pair();
-        lo + (hi - lo) * libm::pow(rng.random(), self.exponent)
+        // a weighting written on the size is the odds; a plain range keeps
+        // the family's skew until it is removed
+        if matches!(self.size.weighting, Weighting::Flat) {
+            let (lo, hi) = (self.size.lo, self.size.hi);
+            lo + (hi - lo) * libm::pow(rng.random(), self.exponent)
+        } else {
+            self.size.draw(rng)
+        }
     }
 }
 
@@ -873,8 +879,8 @@ fn place_at_foot(
 
 /// `scatter { rock … }`: many rock things, by count or per square.
 pub struct Scatter {
-    count: Option<Span>,
-    per_square: Span,
+    count: Option<Dist>,
+    per_square: Dist,
     gap: f64,
     /// `against=`: how far from the foot stones lie, mean mm.
     reach: f64,
@@ -882,7 +888,7 @@ pub struct Scatter {
 }
 
 /// Placements: 9 to 12 per 2×2, so 2.25 to 3 a square.
-const PER_SQUARE: Span = Span::new(2.25, 3.0);
+const PER_SQUARE: Dist = Dist::flat(2.25, 3.0);
 const GAP_MM: f64 = 1.5;
 // scree: fallen stones at a cliff's foot
 const SCREE_REACH_MM: f64 = 4.0;
@@ -905,8 +911,8 @@ impl Scatter {
             reach: SCREE_REACH_MM,
             things: Vec::new(),
         };
-        s.count = set.span("count")?;
-        s.per_square = set.span_or("perSquare", PER_SQUARE)?;
+        s.count = set.dist("count")?;
+        s.per_square = set.dist_or("perSquare", PER_SQUARE)?;
         s.reach = set.number_or("reach", s.reach)?;
         s.gap = set.number_or("gap", s.gap)?;
         for ch in children {
@@ -961,14 +967,11 @@ impl Element for Scatter {
             },
             |f| f.squares,
         );
+        // one draw either way; the width is never below an epsilon
+        let wide = |r: Dist| Dist::new(r.lo, r.hi.max(r.lo + f64::EPSILON), r.weighting);
         let n = match self.count {
-            Some(r) => rng.uniform(r.lo, r.hi.max(r.lo + f64::EPSILON)),
-            None => {
-                rng.uniform(
-                    self.per_square.lo,
-                    self.per_square.hi.max(self.per_square.lo + f64::EPSILON),
-                ) * squares
-            }
+            Some(r) => wide(r).draw(&mut rng),
+            None => wide(self.per_square).draw(&mut rng) * squares,
         };
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let n = libm::round(n).clamp(0.0, 10_000.0) as usize;

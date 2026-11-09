@@ -25,6 +25,7 @@ pub mod wall;
 pub mod water;
 
 pub use dt_kit::Kind;
+pub use dt_kit::{Dist, Weighting};
 use dt_kit::{Mask, Scene, Seed};
 
 /// A control's value, as the document gave it (levels already resolved
@@ -37,6 +38,10 @@ pub enum Value {
     Word(String),
     /// A range `lo..hi`, drawn by the element (once per tile, or per thing).
     Range(f64, f64),
+    /// A weighted range, `low(1..6, 4)`: the range and the odds along it.
+    /// Only controls that draw take one ([`read::Settings::dist`]); the rest
+    /// refuse it (`dt::weighting`).
+    Dist(Dist),
 }
 
 /// A number or a range `lo..hi` as an element reads it: one number is the
@@ -116,6 +121,14 @@ impl std::fmt::Display for Value {
             }
             Self::Number(n) => write!(f, "{n}"),
             Self::Range(a, b) => write!(f, "\"{a}..{b}\""),
+            Self::Dist(d) => {
+                let (name, args) = d.weighting.call();
+                write!(f, "\"{name}({}..{}", d.lo, d.hi)?;
+                for a in args {
+                    write!(f, ", {a}")?;
+                }
+                f.write_str(")\"")
+            }
             Self::Word(w) => write!(f, "`{w}`"),
         }
     }
@@ -156,6 +169,17 @@ impl LookError {
                     .into(),
             ),
             code: Some(r.code()),
+        }
+    }
+
+    /// A control given a weighting where it does not take one yet
+    /// (`dt::weighting`).
+    fn weighting(name: &str, message: String, help: String) -> Self {
+        Self {
+            control: Some(name.to_owned()),
+            message,
+            help: Some(help),
+            code: Some("dt::weighting"),
         }
     }
 

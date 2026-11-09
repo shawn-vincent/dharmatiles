@@ -29,7 +29,7 @@ pub(crate) mod rubble;
 use dt_kit::{Kind, Scene};
 
 use crate::read::{Pick, Settings};
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Span, Write};
+use crate::{Control, Ctx, Dist, Element, LookError, Plan, Read, Span, Write};
 #[cfg(test)]
 use chassis::percentile;
 pub(crate) use chassis::{Laid, Run, build, cell_seed, finish_build, run};
@@ -96,7 +96,7 @@ pub(crate) struct Mason {
     pub reveal: f64,
     pub min_bond: f64,
     pub chip: f64,
-    pub rounding: Span,
+    pub rounding: Dist,
     /// Relief mm (`None`: fieldstone's auto amplitude).
     pub relief: Option<f64>,
     pub face_recess: f64,
@@ -136,7 +136,7 @@ impl Mason {
             reveal: 1.3,
             min_bond: 3.0,
             chip: 0.55,
-            rounding: Span::new(0.22, 0.22),
+            rounding: Dist::flat(0.22, 0.22),
             relief: Some(0.07),
             face_recess: 0.60,
             yaw_deg: 1.2,
@@ -163,7 +163,7 @@ impl Mason {
                 reveal: 1.0,
                 min_bond: 2.0,
                 chip: 0.25,
-                rounding: Span::new(0.35, 0.35),
+                rounding: Dist::flat(0.35, 0.35),
                 relief: Some(0.08),
                 missing: 0.04,
                 spall: 0.10,
@@ -178,7 +178,7 @@ impl Mason {
                     reveal: 1.0,
                     bond: Bond::Running,
                     chip,
-                    rounding: Span::new(r, r),
+                    rounding: Dist::flat(r, r),
                     relief: Some(rel),
                     face_recess: 0.12,
                     yaw_deg: 0.25,
@@ -192,7 +192,7 @@ impl Mason {
                 joint: 0.0,
                 reveal: 2.8,
                 min_bond: 1.8,
-                rounding: Span::new(1.3, 2.6),
+                rounding: Dist::flat(1.3, 2.6),
                 relief: None,
                 ..base
             },
@@ -202,7 +202,7 @@ impl Mason {
     /// Set a texture preset's chip, rounding and relief.
     pub fn texture(&mut self, (chip, r, rel): (f64, f64, f64)) {
         self.chip = chip;
-        self.rounding = Span::point(r);
+        self.rounding = Dist::flat(r, r);
         self.relief = Some(rel);
     }
 }
@@ -253,7 +253,7 @@ impl Wall {
         let depth = s.number("joints/depth")?;
         let depth_set = depth.is_some();
         m.reveal = depth.unwrap_or(m.reveal);
-        m.rounding = s.span_or("edges/rounding", m.rounding)?;
+        m.rounding = s.dist_or("edges/rounding", m.rounding)?;
         if let Some(w) = s.word("coping")? {
             m.coping_on_edge = w == "on-edge";
         }

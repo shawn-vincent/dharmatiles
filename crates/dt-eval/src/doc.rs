@@ -36,6 +36,7 @@ use dt_kit::Seed;
 use miette::{NamedSource, SourceSpan};
 
 use crate::diag::{Diag, Src};
+use crate::lower::{Lets, Lowered, element_value};
 use crate::source::{LIB, Source, resolve};
 
 /// The edge contract every tile applies at its root.
@@ -274,6 +275,9 @@ pub struct Tile {
     /// What the document asks for that is not built yet: one error each,
     /// at its text.  `check` accepts these; `build` refuses them.
     pub pending: Vec<Diag>,
+    /// Notes from reading: nothing wrong, but look (a weighting on a range
+    /// of no width).
+    pub notes: Vec<Diag>,
     /// The tile's own text.
     pub src: Src,
     /// Where its `tile` keyword is written.
@@ -342,6 +346,7 @@ pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
         loading: Vec::new(),
         errors: Vec::new(),
         entries: 0,
+        notes: Vec::new(),
         top: None,
         dims: (1.0, 1.0),
         points: BTreeMap::new(),
@@ -400,8 +405,9 @@ struct Bound {
 struct Scope {
     file: Arc<File>,
     params: BTreeMap<String, Bound>,
-    /// The tile's scalar `let`s in mm (library heights included).
-    lets: Vec<(String, f64)>,
+    /// The tile's `let`s (library heights included): numbers in mm, and the
+    /// ranges they hold.
+    lets: Arc<Lets>,
     area: Option<Spanned<String>>,
     /// Place words a definition call passes to the elements inside it.
     at: Option<Spanned<Point>>,
@@ -418,6 +424,8 @@ struct Reader<'s> {
     errors: Vec<Diag>,
     /// Stack entries met so far while inlining, definitions included.
     entries: usize,
+    /// Notes (nothing wrong, but look): a weighting on a range of no width.
+    notes: Vec<Diag>,
     /// The tile's own entry being inlined (where a blow-up is reported).
     top: Option<(Src, SourceSpan)>,
     /// The tile's squares across and up, for edge paths and points.
@@ -526,7 +534,7 @@ impl Reader<'_> {
             .cloned()
             .collect();
         let consts = ConstTable::build(&library_consts, &def.consts);
-        let lets = lets_mm(&consts);
+        let lets = Arc::new(Lets::from_consts(&consts));
         let seed = match header.seed {
             None => 1,
             Some(s) => u64::try_from(s).unwrap_or_else(|_| {
@@ -552,6 +560,7 @@ impl Reader<'_> {
             base_span: def.base.as_ref().map(|b| b.span),
             stack: Vec::new(),
             pending: Vec::new(),
+            notes: Vec::new(),
             src: Arc::clone(src),
             span: def.name.span,
         };
@@ -570,7 +579,7 @@ impl Reader<'_> {
             if let Some(w) = l.width.as_ref() {
                 t.pending.push(not_yet(src, w.span, "a line's width is"));
             }
-            let wobble = match l.wobble.as_ref().map(|w| (w, w.value.mm(&lets))) {
+            let wobble = match l.wobble.as_ref().map(|w| (w, wobble_mm(&w.value, &lets))) {
                 None => 0.0,
                 Some((_, Ok(v))) if v.is_finite() && (0.0..=35.0).contains(&v) => v,
                 Some((w, got)) => {
@@ -617,6 +626,19 @@ impl Reader<'_> {
             }
             let mut within = Vec::new();
             for w in &r.within {
+                // a distance is a band: the odds of a weighting have nothing to act on
+                if let Some(text) = consts.weighted_in(&w.mm.value) {
+                    let mut d = Diag::at(
+                        src,
+                        w.mm.span,
+                        "dt::weighting",
+                        format!("a weighted range does not go on a band: `{text}` in a distance"),
+                        "within is a band, not a draw",
+                    );
+                    d.help = Some("write the range alone".to_owned());
+                    self.errors.push(d);
+                    continue;
+                }
                 let range = if w.mm.value.is_range() {
                     match (
                         consts.scalar(&w.mm.value, 0.0, &|_| None),
@@ -678,6 +700,7 @@ impl Reader<'_> {
         self.expand(&def.stack, &scope, &mut stack, &mut pending);
         t.stack = stack;
         t.pending.extend(pending);
+        t.notes = std::mem::take(&mut self.notes);
         t.heights = self.heights(file, def, consts, &t.stack, &mut t.pending);
         Some(t)
     }
@@ -1171,10 +1194,27 @@ impl Reader<'_> {
             {
                 let b = bind(v, src, scope);
                 let value = match value(&b, &scope.lets) {
-                    Ok(v) => v,
-                    Err(why) => {
+                    Ok(Lowered { value, note }) => {
+                        if let Some(note) = note {
+                            self.notes.push(Diag::at(
+                                &b.src,
+                                b.value.span,
+                                "dt::weighting",
+                                note,
+                                "here",
+                            ));
+                        }
+                        value
+                    }
+                    Err((why, hard)) => {
                         ok = false;
-                        pending.push(*why);
+                        // a mistake is shown where it was made; a name with
+                        // no value yet waits for its caller
+                        if hard {
+                            self.errors.push(*why);
+                        } else {
+                            pending.push(*why);
+                        }
                         continue;
                     }
                 };
@@ -1204,7 +1244,7 @@ impl Reader<'_> {
             if element.takes(c.name)
                 && e.control(c.name).is_none()
                 && let Some(raw) = c.default_value()
-                && let Ok(value) = element_value(&raw, &scope.lets)
+                && let Ok(Lowered { value, .. }) = element_value(&raw, &scope.lets)
             {
                 push_setting(&mut out, c.name, &raw, value, e.what.span, src);
             }
@@ -1234,6 +1274,7 @@ fn checked(
     let (lo, hi, range) = match *v {
         dt_elements::Value::Number(x) => (x, x, false),
         dt_elements::Value::Range(lo, hi) => (lo, hi, true),
+        dt_elements::Value::Dist(d) => (d.lo, d.hi, true),
         dt_elements::Value::Word(_) => return Ok(()),
     };
     c.check(owner, lo, hi, range).map_err(|r| {
@@ -1272,27 +1313,13 @@ fn push_setting(
 }
 
 /// A written value for a built element: a range stays a range (the element
-/// draws from it).
-fn value(b: &Bound, lets: &[(String, f64)]) -> Result<dt_elements::Value, Box<Diag>> {
-    element_value(&b.value.value, lets)
-        .map_err(|msg| Box::new(Diag::at(&b.src, b.value.span, "dt::value", msg, "here")))
-}
-
-/// A value as a built element takes it: one number in mm, or a word.
-fn element_value(v: &Value, lets: &[(String, f64)]) -> Result<dt_elements::Value, String> {
-    match v {
-        Value::Num(n) if n.expr.is_range() => {
-            let env = |name: &str| lets.iter().rev().find(|(k, _)| k == name).map(|(_, v)| *v);
-            n.bounds(&env).map(|(a, b)| dt_elements::Value::Range(a, b))
-        }
-        Value::Num(n) => n.mm(lets).map(dt_elements::Value::Number),
-        Value::Word(w) => Ok(dt_elements::Value::Word(w.word.to_owned())),
-        Value::Bool(v) => Ok(dt_elements::Value::Word(
-            if *v { "#true" } else { "#false" }.to_owned(),
-        )),
-        Value::Tag(t) | Value::Text(t) => Ok(dt_elements::Value::Word(t.clone())),
-        Value::Param(p) => Err(format!("the parameter `{p}` has no value here")),
-    }
+/// draws from it), a weighted range keeps its odds.
+fn value(b: &Bound, lets: &Lets) -> Result<Lowered, (Box<Diag>, bool)> {
+    element_value(&b.value.value, lets).map_err(|why| {
+        let mut d = Diag::at(&b.src, b.value.span, why.code, why.message, "here");
+        d.help = why.help;
+        (Box::new(d), why.hard)
+    })
 }
 
 /// `v` with a parameter replaced by what the caller bound to it.
@@ -1310,8 +1337,10 @@ fn bind(v: &Spanned<Value>, src: &Src, scope: &Scope) -> Bound {
 
 /// A control's schema default, resolved; `None` without one (or for a
 /// range, which no built element takes yet).
-fn default_value(c: &'static Control, lets: &[(String, f64)]) -> Option<dt_elements::Value> {
-    element_value(&c.default_value()?, lets).ok()
+fn default_value(c: &'static Control, lets: &Lets) -> Option<dt_elements::Value> {
+    element_value(&c.default_value()?, lets)
+        .ok()
+        .map(|l| l.value)
 }
 
 fn thing(e: &model::Entry) -> ThingDecl {
@@ -1368,15 +1397,15 @@ pub fn edge_path(edges: &[Edge], (cols, rows): (f64, f64)) -> Vec<[f64; 2]> {
     out
 }
 
-/// The tile's constants that are one number (no `x` or `y`), in mm: what an
-/// element control or a line's wobble may name.
-fn lets_mm(consts: &ConstTable) -> Vec<(String, f64)> {
-    consts
-        .entries()
-        .iter()
-        .filter_map(|e| {
-            let mm = consts.scalar(&e.expr, 0.5, &|_| None).ok()?;
-            Some((e.name.clone(), mm))
-        })
-        .collect()
+/// A line's wobble: one number of mm, its names the tile's `let`s.
+fn wobble_mm(n: &model::Num, lets: &Lets) -> Result<f64, String> {
+    if let Some(x) = n
+        .expr
+        .names()
+        .into_iter()
+        .find(|x| lets.draws.iter().any(|(k, _)| k == x))
+    {
+        return Err(format!("`{x}` is a range; one number is needed here"));
+    }
+    n.mm(&lets.nums)
 }

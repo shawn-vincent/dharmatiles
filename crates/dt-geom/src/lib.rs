@@ -11,6 +11,7 @@
 //!   panels); [`hash`]: a spatial hash; [`convex`]: polytopes cut by half-spaces (rock facets and chips);
 //!   [`vec3`]: the 3-vector helpers.
 //! - [`iv::Iv`]: intervals and their arithmetic, for ranges in heights.
+//! - [`weighting`]: a range's odds ([`Weighting`], [`Dist`]): one draw, any width.
 //! - [`seed::Seed`], the deterministic path-keyed seed derivation, and the
 //!   seeded stream [`Rng`].
 //! - [`Solid`] (booleans, hull, refine, transform, slice), Manifold's
@@ -35,6 +36,7 @@ pub mod solid;
 pub mod source;
 pub mod stack;
 pub mod vec3;
+pub mod weighting;
 
 pub use convex::Convex;
 pub use filter::{Structuring, blur, blur_recursive, dilate, erode, quantile};
@@ -52,3 +54,4 @@ pub use stack::{
 };
 
 pub use solid::Solid;
+pub use weighting::{Dist, WEIGHTINGS, Weighting, WeightingError, weighting_names};

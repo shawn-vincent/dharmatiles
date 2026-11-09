@@ -153,16 +153,17 @@ impl Decoder<'_> {
                 Ok(x) => x,
                 Err(err) => {
                     let at = self.inner_at(e, s);
+                    let help = err.help.clone().unwrap_or_else(|| {
+                        "a height is mm above zero: a number, a name such as groundHeight, a range [4 .. 6], and + - * /"
+                            .to_owned()
+                    });
                     self.err(
-                        "dt::value",
+                        err.code.unwrap_or("dt::value"),
                         sub_span(span, at + err.start, at + err.end),
                         format!("can't read {what}: {}", err.message),
                         "here",
                     )
-                    .help = Some(
-                        "a height is mm above zero: a number, a name such as groundHeight, a range [4 .. 6], and + - * /"
-                            .to_owned(),
-                    );
+                    .help = Some(help);
                     return None;
                 }
             },
@@ -176,6 +177,18 @@ impl Decoder<'_> {
                 return None;
             }
         };
+        // A top, a pin and a distance are bands the solver fits, not draws:
+        // the odds of a weighting have nothing to act on.
+        if mode != Mode::Const && expr.weighted().is_some() {
+            self.err(
+                "dt::weighting",
+                span,
+                "a weighted range does not go on a band",
+                format!("{what} is a band the solver fits, not a draw"),
+            )
+            .help = Some(format!("write the range alone: {}", expr.unweighted_text()));
+            return None;
+        }
         for n in expr.names() {
             let special = matches!(n, "x" | "y" | "bottom");
             if special && mode == Mode::Length {

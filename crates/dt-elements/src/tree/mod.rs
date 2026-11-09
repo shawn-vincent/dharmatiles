@@ -35,7 +35,7 @@ use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Degrees, Element, LookError, Plan, Read, Span, Write};
+use crate::{Control, Ctx, Degrees, Dist, Element, LookError, Plan, Read, Span, Write};
 use site::{crumbs, fill_pockets, ground_drop, place};
 pub(crate) use site::{drop_crumbs, ground_box};
 
@@ -76,8 +76,8 @@ const STAMP_MIN_MM: f64 = 1.6;
 struct Params {
     height: Span,
     trunk: Span,
-    trunk_width: Option<Span>,
-    width: Span,
+    trunk_width: Option<Dist>,
+    width: Dist,
     shape: crown::Shape,
     clumps: usize,
     clump_size: Span,
@@ -90,7 +90,7 @@ struct Params {
     leaves: bool,
     clumps_on: bool,
     leaf_length: Span,
-    leaf_width: Span,
+    leaf_width: Dist,
 }
 
 /// Where in the tree's stage the leaves' build lies (progress fractions).
@@ -103,7 +103,7 @@ impl Default for Params {
             height: Span::point(40.0),
             trunk: Span::point(30.0),
             trunk_width: None,
-            width: Span::point(30.0),
+            width: Dist::flat(30.0, 30.0),
             shape: crown::ROUND,
             clumps: 32,
             clump_size: Span::point(5.5),
@@ -117,7 +117,7 @@ impl Default for Params {
             leaves: true,
             clumps_on: true,
             leaf_length: Span::point(4.5),
-            leaf_width: Span::point(3.0),
+            leaf_width: Dist::flat(3.0, 3.0),
         }
     }
 }
@@ -194,11 +194,11 @@ impl Tree {
         let s = Settings::new(controls);
         p.height = s.span_or("height", p.height)?;
         p.trunk = s.span_or("trunk/height", p.trunk)?;
-        p.trunk_width = s.span("trunk/width")?.or(p.trunk_width);
-        p.width = s.span_or("crown/width", p.width)?;
+        p.trunk_width = s.dist("trunk/width")?.or(p.trunk_width);
+        p.width = s.dist_or("crown/width", p.width)?;
         p.clump_size = s.span_or("crown/clumpSize", p.clump_size)?;
         p.leaf_length = s.span_or("leaf/length", p.leaf_length)?;
-        p.leaf_width = s.span_or("leaf/width", p.leaf_width)?;
+        p.leaf_width = s.dist_or("leaf/width", p.leaf_width)?;
         if let Some(v) = s.number("crown/clumps")? {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             {
@@ -233,6 +233,12 @@ impl Tree {
 
 /// A span's value: a range is drawn, a number never draws.
 fn draw(v: Span, rng: &mut Rng) -> f64 {
+    if v.is_point() { v.lo } else { v.draw(rng) }
+}
+
+/// A weighted range's value: a range is drawn (one draw, with its odds), a
+/// number never draws.
+fn draw_dist(v: Dist, rng: &mut Rng) -> f64 {
     if v.is_point() { v.lo } else { v.draw(rng) }
 }
 
@@ -297,13 +303,13 @@ impl Tree {
         let mut rng = Rng::new(seed.key("sizes"));
         let height = draw(p.height, &mut rng) * s;
         let trunk = draw(p.trunk, &mut rng) * s;
-        let radius = 0.5 * draw(p.width, &mut rng) * s;
+        let radius = 0.5 * draw_dist(p.width, &mut rng) * s;
         let clump_r = draw(p.clump_size, &mut rng) * s;
         let leaf = LeafSize {
             length_mm: draw(p.leaf_length, &mut rng) * s,
-            width_mm: draw(p.leaf_width, &mut rng) * s,
+            width_mm: draw_dist(p.leaf_width, &mut rng) * s,
         };
-        let trunk_width = p.trunk_width.map(|v| draw(v, &mut rng) * s);
+        let trunk_width = p.trunk_width.map(|v| draw_dist(v, &mut rng) * s);
         if trunk >= height - 1e-6 {
             return Err(LookError::control(
                 "trunk/height",
@@ -581,14 +587,14 @@ impl Element for Tree {
         let mut rng = Rng::new(ctx.seed.key("sizes"));
         let _ = draw(self.p.height, &mut rng);
         let _ = draw(self.p.trunk, &mut rng);
-        let mut margin = 0.5 * draw(self.p.width, &mut rng) * s;
+        let mut margin = 0.5 * draw_dist(self.p.width, &mut rng) * s;
         let _ = draw(self.p.clump_size, &mut rng);
         let _ = draw(self.p.leaf_length, &mut rng);
-        let _ = draw(self.p.leaf_width, &mut rng);
+        let _ = draw_dist(self.p.leaf_width, &mut rng);
         if let Some(v) = self.p.trunk_width {
             // a set trunk width: its flared foot must stand on the tile
             // too (it would hang past the edge), and must fit on it
-            let foot = 0.5 * draw(v, &mut rng) * s * (1.0 + FLARE);
+            let foot = 0.5 * draw_dist(v, &mut rng) * s * (1.0 + FLARE);
             let [w, h] = scene.frame().size_mm();
             if 2.0 * foot > w.min(h) {
                 return Err(LookError::control(

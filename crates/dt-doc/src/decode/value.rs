@@ -110,7 +110,18 @@ impl Decoder<'_> {
             return None;
         }
         if axis.is_numeric() {
-            let n = self.num(e, axis, false, Some(k), owner, name, ctx)?;
+            // a control may name the tile's own `let`s (a range one holds is
+            // drawn where it is used), though not a library height
+            let n = self.num(
+                e,
+                axis,
+                false,
+                axis != Axis::Share,
+                Some(k),
+                owner,
+                name,
+                ctx,
+            )?;
             return Some(Spanned {
                 value: Value::Num(n.value),
                 span: n.span,
@@ -157,6 +168,7 @@ impl Decoder<'_> {
         e: &KdlEntry,
         axis: Axis,
         lets: bool,
+        tile_lets: bool,
         k: Option<&'static Control>,
         owner: &str,
         name: &str,
@@ -224,13 +236,16 @@ impl Decoder<'_> {
                 match expr::parse(s) {
                     Ok(x) => (x, sub_span(span, at, at + s.len())),
                     Err(err) => {
+                        let help = err.help.clone().unwrap_or_else(|| {
+                            k.map_or_else(|| format!("`{name}` is {kind}"), describe)
+                        });
                         self.err(
-                            "dt::expr",
+                            err.code.unwrap_or("dt::expr"),
                             sub_span(span, at + err.start, at + err.end),
                             format!("can't read `{owner} {name}`: {}", err.message),
                             "here",
                         )
-                        .help = Some(k.map_or_else(|| format!("`{name}` is {kind}"), describe));
+                        .help = Some(help);
                         return None;
                     }
                 }
@@ -241,8 +256,22 @@ impl Decoder<'_> {
             return None;
         }
         // Names: parameters, and the tile's `let`s where a height is expected.
+        // the tile's own `let`s: the constants that are not the library's
+        let own: Vec<&str> = if tile_lets {
+            ctx.consts
+                .iter()
+                .filter(|(l, d)| {
+                    *d != crate::dim::Dim::Squares
+                        && !self.known.consts().iter().any(|c| c.name.value == *l)
+                })
+                .map(|(l, _)| l.as_str())
+                .collect()
+        } else {
+            Vec::new()
+        };
         for n in x.names() {
             let ok = ctx.params.iter().any(|p| p == n)
+                || own.contains(&n)
                 || (lets
                     && ctx
                         .consts
@@ -255,11 +284,14 @@ impl Decoder<'_> {
             if lets {
                 cands.extend(ctx.consts.iter().map(|(l, _)| l.as_str()));
             }
+            cands.extend(own.iter().copied());
             if let Some(k) = k {
                 cands.extend(k.words.iter().map(|w| w.word));
             }
             let what = if lets {
                 "height or parameter"
+            } else if !own.is_empty() {
+                "parameter or `let`"
             } else if k.is_some_and(|k| !k.words.is_empty()) {
                 "word or parameter"
             } else {
