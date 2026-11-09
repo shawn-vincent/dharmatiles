@@ -20,8 +20,8 @@
 //! the tile and grained ([`stone`]), the grain held under the band's high.
 //! A **core** behind the stones makes a gap between them a recess, never a
 //! hole: the pile set in from its faces, laid as a rock layer of the terrain
-//! with the land, before the lift ([`core`]). The dirt film on the tops lies
-//! on it and follows the stones' tops.
+//! with the land, before the lift ([`core`]). A dirt laid after the cliff lies
+//! on the stones' tops (the terrain's support) like on any surface.
 //!
 //! The engine (planning the pile, dressing its stones) is [`pile`]; this
 //! module is the body that lays what it makes.
@@ -40,7 +40,6 @@
 mod chips;
 mod core;
 mod faces;
-mod film;
 mod finish;
 mod fit;
 mod form;
@@ -49,6 +48,7 @@ mod pile;
 mod relief;
 mod stack;
 mod stone;
+mod tops;
 mod util;
 
 use dt_kit::Kind;
@@ -213,7 +213,7 @@ impl Element for Cliff {
     fn plan(&self) -> Plan {
         Plan {
             // the cliff lays its rock core with the land, before the lift,
-            // and its stones with it, so a film of dirt after it in the
+            // and its stones with it, so a dirt after it in the
             // stack lies on its tops
             writes: Write::Surface,
             reads: vec![],
@@ -318,7 +318,7 @@ impl Element for Cliff {
 impl Cliff {
     /// The core as a rock layer of the terrain (set in from the faces, down
     /// from the tops, clear of the tile's sides), and what the finished
-    /// stones' tops give a film laid on them.
+    /// stones' tops give what is laid on them (the terrain's support).
     fn lay_core(
         scene: &mut Scene,
         ctx: &Ctx<'_>,
@@ -330,7 +330,7 @@ impl Cliff {
     ) -> Result<(), LookError> {
         let frame = *scene.frame();
         let (nx, ny) = frame.nodes();
-        let tops = film::stone_tops(&frame, stones, foot);
+        let tops = tops::stone_tops(&frame, stones, foot);
         let (mut mask, mut z) = core::core_mask(&frame, fm, core_field, s, foot);
         // the core stands under the stones as they are, not as planned
         for k in 0..nx * ny {
@@ -339,7 +339,6 @@ impl Cliff {
             }
         }
         core::draw_back_from_faces(&frame, &mut mask, &z, foot, stones);
-        let flat = film::film_ground(&frame, &tops, ctx.area, &mask, frame.scale());
         if mask.bits.iter().any(|&b| b) {
             let field = Field::new(&frame, 0.0).with_z(z);
             let band = Band::point(&field);
@@ -359,11 +358,7 @@ impl Cliff {
                 .map_err(LookError::build)?;
         }
         scene.stamp_heights(&tops, dt_kit::Under::Earth);
-        scene.set_rest(dt_kit::Rest {
-            tops,
-            flat,
-            core: mask,
-        });
+        scene.set_rest(dt_kit::Rest { core: mask });
         Ok(())
     }
 }

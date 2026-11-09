@@ -63,12 +63,29 @@ const SIDE_RELIEF_MM: f64 = 0.6;
 const DRY_MARGIN_MM: f64 = 0.2;
 /// Below any surface: a lobe or pebble that is not there.
 const NONE: f64 = -1e9;
-/// How much deeper than its band a film's face stands, mm at the reference
-/// square: the depth of its grain's pits (clods stand 0.75 mm), so the
-/// skin is the pits' floor and the band's low is the skin over the stone.
-const FILM_GRAIN_MM: f64 = 0.6;
-/// How far in from its outline a film reaches its full lift, mm (scaled).
-const FILM_FADE_MM: f64 = 2.5;
+/// The steepest surface dirt stays on, degrees: the default `maxSlope`.
+/// Dirt slides off anything steeper and leaves it bare (an angle: it never
+/// scales).
+pub const MAX_SLOPE_DEG: f64 = 35.0;
+/// Dirt does not lie within this of a lip or a slit in the surface under
+/// it, mm at the reference square (scaled with the system).
+const LIP_INSET_MM: f64 = 1.5;
+/// A step between neighbouring nodes this deep in the surface under dirt is
+/// a lip, mm at the reference square (scaled).
+const LIP_MM: f64 = 1.0;
+/// How far the smoothing reaches that measures the slope of the surface
+/// under dirt, nodes: the slope of the surface, not of its grain.
+const SLOPE_SMOOTH_NODES: f64 = 2.0;
+/// A gap this narrow between two places dirt may not lie, nodes, is closed:
+/// a slit finer than the lattice hits and misses from node to node, and
+/// without it the inset would follow that alternation as a comb.
+const SLIT_CLOSE_NODES: f64 = 1.5;
+/// How far the outline of the places dirt may not lie is rounded, nodes (the
+/// blur's sigma): a lattice staircase or a comb becomes a clean edge.
+const EDGE_SMOOTH_NODES: f64 = 4.0;
+/// Where dirt lies thinner than this over what is under it, mm at the
+/// reference square (scaled), no stone is bedded in it: it would stand clear.
+const BED_DEPTH_MM: f64 = 2.0;
 
 // 1 soil roughness
 const SOIL_MID_MM: f64 = 1.6;
@@ -144,6 +161,8 @@ pub struct Dirt {
     pub clod_density: f64,
     /// Bedded stones per 2×2 tile, drawn from this range (`stones`).
     pub stones: (i64, i64),
+    /// The steepest surface it stays on, degrees (`maxSlope`).
+    pub max_slope_deg: f64,
 }
 
 impl Dirt {
@@ -154,18 +173,8 @@ impl Dirt {
         self.clod_density <= 0.0 && self.stones.1 <= 0
     }
 
-    /// This dirt as it is laid: on pieces (a film a millimetre thick) it
-    /// holds no bedded stone, which would stand clear of it.
-    fn on(&self, film: bool) -> Self {
-        let mut d = self.clone();
-        if film {
-            d.stones = (0, 0);
-        }
-        d
-    }
-
     /// From controls: `bumpSize`, `clods` (a word whose number the
-    /// evaluator passes as `clods.density`) and `stones`.
+    /// evaluator passes as `clods.density`), `stones` and `maxSlope`.
     ///
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
@@ -175,6 +184,7 @@ impl Dirt {
         let s = Settings::new(controls);
         clod_density = s.number_or("clods.density", clod_density)?;
         size_mm = s.number_or("bumpSize", size_mm)?;
+        let max_slope_deg = s.number_or("maxSlope", MAX_SLOPE_DEG)?;
         let mut stones = STONES_2X2;
         // the numbers behind the `stones` word
         #[allow(clippy::cast_possible_truncation)]
@@ -191,6 +201,7 @@ impl Dirt {
             size_mm,
             clod_density,
             stones,
+            max_slope_deg,
         })
     }
 }
@@ -257,6 +268,9 @@ pub struct Ground<'a> {
     pub under: Option<&'a Field>,
     /// The printer's skin, mm.
     pub skin_mm: f64,
+    /// Where it is a thin layer over what is under it: no stone is bedded
+    /// there. `None` for dirt that is not laid over anything.
+    pub thin: Option<&'a dt_kit::Mask>,
 }
 
 /// What the dirt made on its band: the hills, the grain's relief and where the surface is set in to hold it, the pebble
@@ -322,6 +336,7 @@ pub fn surface(
         band,
         under,
         skin_mm,
+        thin,
     } = *on;
     let frame = *scene.frame();
     let dt_kit::span::Hills { shape, converged } = hills(dirt, &frame, seed.key("hills"), band);
@@ -358,7 +373,7 @@ pub fn surface(
         nx: area.nx,
         ny: area.ny,
         bits: (0..area.bits.len())
-            .map(|k| area.bits[k] && keep.z[k] > 0.5)
+            .map(|k| area.bits[k] && keep.z[k] > 0.5 && !thin.is_some_and(|t| t.bits[k]))
             .collect(),
     };
     // the grain runs on to the rim and over the edge-round: no fade
@@ -838,81 +853,122 @@ fn place_pebbles(
     (mask, counts)
 }
 
-/// A dirt laid on a pieces body: where it lies and the band it fills.
-struct Film {
+/// A dirt laid over what is under it: where it stays and the band it fills.
+struct Held {
     area: dt_kit::Mask,
     band: Band,
-    /// The lowest the grain may take the film: the skin over the stone's
-    /// top, so a pit never thins the film to nothing over the stone
-    /// (the grain's own cap counts from the core under the stones, half a
-    /// millimetre lower).
-    floor: Field,
+    /// Where it is a thin layer over what is under it.
+    thin: dt_kit::Mask,
 }
 
-/// The film `ctx`'s dirt is, if it is laid over pieces: the dirt's band is
-/// `bottom` plus a thickness, and `bottom` here is the pieces' tops, not the
-/// envelope the solver held them to. `None` for any other dirt.
-fn film_on(
+/// Where `ctx`'s dirt lies on the surface under it, the same for every dirt.
+///
+/// The surface under it is what the scene has laid there (land, a cliff's
+/// stones, a floor's slabs: [`Scene::laid_surface`]), uneven as it is. The
+/// dirt's band is measured from it: `bottom + [0.6 .. 1.2]` is 0.6 to 1.2 mm
+/// over the surface, wherever that stands. The dirt stays only where that
+/// surface is flatter than `maxSlope` and does not drop away within the lip
+/// inset: it slides off a steep face and does not bridge a slit or hang over
+/// an edge. `None` when nothing is laid under it (nothing is under it but
+/// its own band); a band that cannot be laid over the surface is counted as
+/// left out.
+fn hold(
     scene: &Scene,
     ctx: &Ctx<'_>,
     band: &Band,
-    skin_mm: f64,
+    max_slope_deg: f64,
     left_out: &mut usize,
-) -> Option<Film> {
-    let rest = scene.rest()?;
-    let frame = scene.frame();
+) -> Option<Held> {
+    let under = scene.laid_surface()?;
     let below = ctx.below?;
-    // it is a film when its region holds pieces' tops
-    let on_rest: Vec<usize> = (0..ctx.area.bits.len())
-        .filter(|&k| ctx.area.bits[k] && rest.tops[k].is_finite())
-        .collect();
-    let (lo, hi) = (band.lo(), band.hi());
-    // and its band lies over what was under it: a layer, not a new ground
-    if on_rest.is_empty()
-        || on_rest
-            .iter()
-            .any(|&k| lo.z[k] < below.lo().z[k] || hi.z[k] < below.hi().z[k])
-    {
+    let frame = scene.frame();
+    let (nx, ny) = frame.nodes();
+    let n = nx * ny;
+    let scale = frame.scale();
+    if !(0..n).any(|k| ctx.area.bits[k] && under.z[k].is_finite()) {
         return None;
     }
-    let mut flo = lo.clone();
-    let mut fhi = hi.clone();
-    let mut area = ctx.area.clone();
-    let mut floor = lo.map(|_| f64::NEG_INFINITY);
-    // the film's face stands the grain's depth over its band, so its pits
-    // reach down to the skin and no further (the floor under them is not a
-    // flat the whole face is cut to); the lift and the band's width fade in
-    // from the outline, so the edge meets the stone at the skin, a low step
-    let (reach, _) = dt_kit::distance(
-        frame,
-        &ctx.area
-            .bits
-            .iter()
-            .zip(&rest.flat.bits)
-            .map(|(&a, &f)| !(a && f))
-            .collect::<Vec<_>>(),
-    );
-    let (depth, fade) = (FILM_GRAIN_MM * frame.scale(), FILM_FADE_MM * frame.scale());
-    for k in 0..area.bits.len() {
-        if !ctx.area.bits[k] {
+    let (lo, hi) = (band.lo(), band.hi());
+    let (mut flo, mut fhi) = (lo.clone(), hi.clone());
+    // the surface it lies on: what is laid, and where nothing is, what its
+    // band was measured from
+    let mut surface = below.lo().clone();
+    let mut thin = dt_kit::Mask::new(nx, ny, false);
+    for k in 0..n {
+        let u = under.z[k];
+        if !u.is_finite() {
             continue;
         }
-        if rest.flat.bits[k] {
-            let top = rest.tops[k];
-            let t = smooth01(reach.z[k] / fade);
-            flo.z[k] = top + (lo.z[k] - below.lo().z[k]) + depth * t;
-            // the band narrows to the skin at the outline: the edge is a step
-            // of the skin and no more, and the face climbs from it
-            let high = top + (hi.z[k] - below.hi().z[k]) + depth * t;
-            fhi.z[k] = flo.z[k] + (high - flo.z[k]) * t;
-            floor.z[k] = top + skin_mm;
-        } else {
-            area.bits[k] = false;
+        surface.z[k] = u;
+        if ctx.area.bits[k] {
+            flo.z[k] = u + (lo.z[k] - below.lo().z[k]);
+            fhi.z[k] = u + (hi.z[k] - below.hi().z[k]);
+            thin.bits[k] = fhi.z[k] - u < BED_DEPTH_MM * scale;
         }
     }
-    // a degenerate film band: no film is laid, and it is counted
+    let area = held_area(frame, ctx.area, &surface, max_slope_deg);
     let band = Band::new(flo, fhi).map_err(|_| *left_out += 1).ok()?;
-    Some(Film { area, band, floor })
+    Some(Held { area, band, thin })
+}
+
+/// `area` less where the surface is steeper than `max_slope_deg`, steps
+/// down to a neighbour deeper than a lip, or is within the lip inset of
+/// either: the same rule everywhere.
+fn held_area(
+    frame: &dt_kit::Frame,
+    area: &dt_kit::Mask,
+    surface: &Field,
+    max_slope_deg: f64,
+) -> dt_kit::Mask {
+    let (nx, ny) = frame.nodes();
+    let (step, scale) = (frame.step_mm(), frame.scale());
+    let (gx, gy) = surface.blur(SLOPE_SMOOTH_NODES * step).gradient();
+    let (lip_mm, inset_mm) = (LIP_MM * scale, LIP_INSET_MM * scale);
+    let tan = libm::tan(max_slope_deg.to_radians());
+    let z = &surface.z;
+    let mut bad = vec![false; nx * ny];
+    for j in 0..ny {
+        for i in 0..nx {
+            let k = j * nx + i;
+            let drops = |(di, dj): (isize, isize)| {
+                let (ni, nj) = (i.wrapping_add_signed(di), j.wrapping_add_signed(dj));
+                ni < nx && nj < ny && (z[nj * nx + ni] - z[k]).abs() > lip_mm
+            };
+            bad[k] = [(-1, 0), (1, 0), (0, -1), (0, 1)].into_iter().any(drops)
+                || libm::hypot(gx.z[k], gy.z[k]) > tan;
+        }
+    }
+    if !bad.iter().any(|&b| b) {
+        return area.clone();
+    }
+    let bad = close(frame, &bad, SLIT_CLOSE_NODES * step);
+    let (to_bad, _) = dt_kit::distance(frame, &bad);
+    let zone = Field::new(frame, 0.0)
+        .with_z(
+            to_bad
+                .z
+                .iter()
+                .map(|&d| f64::from(u8::from(d < inset_mm)))
+                .collect(),
+        )
+        .blur(EDGE_SMOOTH_NODES * step);
+    dt_kit::Mask {
+        nx,
+        ny,
+        bits: (0..nx * ny)
+            .map(|k| area.bits[k] && zone.z[k] < 0.5)
+            .collect(),
+    }
+}
+
+/// `mask` closed by `r_mm`: grown by it, then shrunk by it, so a gap narrower
+/// than twice that between two set places is filled and the rest is as it was.
+fn close(frame: &dt_kit::Frame, mask: &[bool], r_mm: f64) -> Vec<bool> {
+    let (d, _) = dt_kit::distance(frame, mask);
+    let grown: Vec<bool> = d.z.iter().map(|&v| v <= r_mm).collect();
+    let rest: Vec<bool> = grown.iter().map(|&b| !b).collect();
+    let (d, _) = dt_kit::distance(frame, &rest);
+    d.z.iter().map(|&v| v > r_mm).collect()
 }
 
 impl Element for Dirt {
@@ -931,28 +987,29 @@ impl Element for Dirt {
                 "write the tile in the heights language: `dirt` takes the library's top, or `dirt top=…`",
             ));
         };
-        // dirt laid on a pieces body (a cliff's stones) is a film: it lies on
-        // the pieces' own tops, on the rock under the film's slope and clear
-        // of the lips and faces, as thick as its band is over what was under
+        // dirt lies on the surface under it, where that is flat enough
         let skin_mm = 3.0 * ctx.printer.layer_mm;
-        let mut film_left_out = 0;
-        let film = film_on(scene, ctx, band, skin_mm, &mut film_left_out);
-        scene.left_out("dirt", film_left_out);
-        if film
-            .as_ref()
-            .is_some_and(|f| !f.area.bits.iter().any(|&b| b))
+        let mut left_out = 0;
+        let held = hold(scene, ctx, band, self.max_slope_deg, &mut left_out);
+        scene.left_out("dirt", left_out);
+        if left_out > 0
+            || held
+                .as_ref()
+                .is_some_and(|h| !h.area.bits.iter().any(|&b| b))
         {
-            // no top for a film to lie on
+            // a band that cannot be laid over the surface, or no surface
+            // flat enough for dirt to stay on
             return Ok(());
         }
-        let (area, band) = film
-            .as_ref()
-            .map_or((ctx.area, band), |f| (&f.area, &f.band));
+        let (area, band, thin) = held.as_ref().map_or((ctx.area, band, None), |h| {
+            (&h.area, &h.band, Some(&h.thin))
+        });
         let on = Ground {
             area,
             band,
             under: ctx.under,
             skin_mm,
+            thin,
         };
         let Made {
             shape,
@@ -961,14 +1018,7 @@ impl Element for Dirt {
             floor,
             stone,
             counts,
-        } = surface(&self.on(film.is_some()), scene, ctx.seed, ctx.path, &on)?;
-        // a film's grain stays a skin over the stone as well as over the
-        // water that will lie on it
-        let floor = match (floor, film.as_ref()) {
-            (Some(f), Some(m)) => Some(f.zip(&m.floor, f64::max)),
-            (None, Some(m)) => Some(m.floor.clone()),
-            (f, None) => f,
-        };
+        } = surface(self, scene, ctx.seed, ctx.path, &on)?;
         let grain = dt_kit::Relief {
             relief: &relief,
             weight: &weight,
@@ -1017,4 +1067,84 @@ pub fn texture_ok(z: &Field, rim: &Field) -> f64 {
     #[allow(clippy::cast_precision_loss)]
     let share = ok as f64 / all.max(1) as f64;
     share
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    use super::*;
+    use dt_kit::Frame;
+
+    /// A surface over a 1x1 tile, `z(x, y)` mm, and the whole tile as the area.
+    fn on(z: impl Fn(f64, f64) -> f64) -> (Frame, dt_kit::Mask, Field) {
+        let frame = Frame::dungeonblocks(1, 1);
+        let (nx, ny) = frame.nodes();
+        let step = frame.step_mm();
+        let surface = Field::new(&frame, 0.0).with_z(
+            (0..nx * ny)
+                .map(|k| z((k % nx) as f64 * step, (k / nx) as f64 * step))
+                .collect(),
+        );
+        (frame, dt_kit::Mask::new(nx, ny, true), surface)
+    }
+
+    fn count(m: &dt_kit::Mask) -> usize {
+        m.bits.iter().filter(|&&b| b).count()
+    }
+
+    #[test]
+    fn dirt_stays_on_a_surface_flatter_than_its_max_slope() {
+        let ramp = |deg: f64| move |x: f64, _: f64| x * libm::tan(deg.to_radians());
+        let (frame, area, flat) = on(ramp(25.0));
+        assert_eq!(count(&held_area(&frame, &area, &flat, 35.0)), count(&area));
+        // the same ground, steeper than dirt may lie: bare
+        let (frame, area, steep) = on(ramp(45.0));
+        assert_eq!(count(&held_area(&frame, &area, &steep, 35.0)), 0);
+    }
+
+    #[test]
+    fn max_slope_changes_how_much_of_a_surface_holds_dirt() {
+        // 25 degrees on the west half, 50 on the east
+        let two = |x: f64, _: f64| {
+            let (a, b) = (libm::tan(25f64.to_radians()), libm::tan(50f64.to_radians()));
+            let mid = 17.5;
+            if x < mid {
+                x * a
+            } else {
+                mid * a + (x - mid) * b
+            }
+        };
+        let (frame, area, surface) = on(two);
+        let at = |deg: f64| count(&held_area(&frame, &area, &surface, deg));
+        let (low, mid, high) = (at(20.0), at(35.0), at(60.0));
+        assert_eq!(low, 0, "nothing is flatter than 20 degrees");
+        assert!(mid > 0 && mid < count(&area), "the west half holds: {mid}");
+        assert_eq!(high, count(&area), "all of it is under 60 degrees");
+    }
+
+    #[test]
+    fn dirt_stands_back_from_a_lip_and_is_the_same_on_every_surface() {
+        // flat, with a 3 mm step down at x = 17.5 mm
+        let (frame, area, surface) = on(|x, _| if x < 17.5 { 10.0 } else { 7.0 });
+        let held = held_area(&frame, &area, &surface, 35.0);
+        let (nx, ny) = frame.nodes();
+        let step = frame.step_mm();
+        let j = ny / 2;
+        let row = |i: usize| held.bits[j * nx + i];
+        // far from the lip on both sides it lies; at the lip and within the
+        // inset of it, it does not
+        assert!(row((10.0 / step) as usize) && row((25.0 / step) as usize));
+        assert!(!row((17.5 / step) as usize));
+        assert!(!row(((17.5 - 1.0) / step) as usize));
+        assert!(!row(((17.5 + 1.0) / step) as usize));
+        // and a smooth surface is left whole
+        let (frame, area, flat) = on(|_, _| 10.0);
+        assert_eq!(count(&held_area(&frame, &area, &flat, 35.0)), count(&area));
+        let _ = ny;
+    }
 }

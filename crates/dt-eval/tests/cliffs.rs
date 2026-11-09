@@ -1,6 +1,7 @@
-//! The cliff as a pieces body: every stone top inside its band, a film of
-//! dirt only on stones that stand, the tile's outer sides carrying grain,
-//! and every old cliff form migrating to a tile that checks clean.
+//! The cliff as a pieces body: every stone top inside its band, dirt on its
+//! tops lying like dirt (on the stone, off the steep faces, as far as
+//! `maxSlope` lets it), the tile's outer sides carrying grain, and every old
+//! cliff form migrating to a tile that checks clean.
 
 #![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
 
@@ -15,19 +16,15 @@ fn mem(text: &str) -> Memory {
 const EDGE_MM: f64 = 3.4;
 /// The tallest pebble bedded in that ground, mm (`pebble size` tops at 4.5).
 const PEBBLE_MAX_MM: f64 = 4.5;
-/// The film's band over the stone's top, mm (the tile writes `bottom + [0.6 .. 1.2]`).
-const FILM_MIN_MM: f64 = 0.6;
-const FILM_MAX_MM: f64 = 1.2;
-/// How far the film's face stands over its band, mm: the depth of its grain.
-const FILM_GRAIN_MM: f64 = 0.6;
-/// How far the rock under a film triangle may differ from the highest rock
-/// in the 3 x 3 cells round it: the cells are 0.25 mm and a top's slope under
-/// a film is under 35 degrees, so about 0.75 * 0.7; and the float32 round.
-const CELL_SLOPE_MM: f64 = 0.6;
+/// The dirt's band over the stone's top, mm (the tile writes `bottom + [0.6 .. 1.2]`).
+const DIRT_MIN_MM: f64 = 0.6;
+const DIRT_MAX_MM: f64 = 1.2;
+/// How far the dirt's grain may stand over its band, mm (clods stand 0.75).
+const GRAIN_MM: f64 = 0.8;
 /// A vertex this near the tile's plane is on it, mm.
 const FLAT_MM: f64 = 0.1;
 
-/// A free-standing pile on the library's dirt, with the film or without it.
+/// A free-standing pile on the library's dirt, with dirt on it or without.
 fn mound(film: bool) -> String {
     format!(
         r#"tile size="1x1" seed=1 {{
@@ -106,29 +103,9 @@ fn every_stone_top_stands_in_its_band_and_the_pile_reaches_it() {
     }
 }
 
-/// The highest rock under each 0.25 mm cell, from the no-film build.
-fn rock_tops(b: &Built) -> std::collections::HashMap<(i32, i32), f64> {
-    let cell = |v: f64| (v / 0.25).round() as i32;
-    let mut tops = std::collections::HashMap::new();
-    for (t, m) in b.export.mesh.triangles.iter().zip(&b.materials) {
-        if *m != Material::Rock {
-            continue;
-        }
-        for &i in t {
-            let p = b.export.mesh.positions[i as usize];
-            let e = tops.entry((cell(p[0]), cell(p[1]))).or_insert(f64::MIN);
-            *e = e.max(p[2]);
-        }
-    }
-    tops
-}
-
-/// A flat-topped block of stone with a film on its top, or bare.
-fn table(film: bool) -> String {
-    table_seeded(film, 2)
-}
-
-fn table_seeded(film: bool, seed: u32) -> String {
+/// A flat-topped block of stone with dirt on its top, or bare, the dirt
+/// written with `extra` after its region.
+fn table(film: bool, seed: u32, extra: &str) -> String {
     format!(
         r#"tile size="1x1" seed={seed} {{
     region crag {{ within 13 of=center }}
@@ -145,73 +122,11 @@ fn table_seeded(film: bool, seed: u32) -> String {
 }}
 "#,
         if film {
-            "        dirt top=\"bottom + [0.6 .. 1.2]\" at=crag\n"
+            format!("        dirt top=\"bottom + [0.6 .. 1.2]\" at=crag {extra}\n")
         } else {
-            ""
+            String::new()
         }
     )
-}
-
-#[test]
-fn a_film_lies_only_on_stones_that_stand_and_is_a_layer_of_its_band() {
-    let (bare, filmed) = (built(&table(false)), built(&table(true)));
-    let rock = rock_tops(&bare);
-    let cell = |v: f64| (v / 0.25).round() as i32;
-    let (mut film, mut over, mut bare) = (0_usize, 0_usize, 0_usize);
-    let mut gaps: Vec<f64> = Vec::new();
-    for (t, m) in filmed.export.mesh.triangles.iter().zip(&filmed.materials) {
-        if *m != Material::Earth {
-            continue;
-        }
-        let ps = t.map(|i| filmed.export.mesh.positions[i as usize]);
-        let c = [0, 1, 2].map(|k| (ps[0][k] + ps[1][k] + ps[2][k]) / 3.0);
-        // the ground round the pile is under its edge height and a pebble:
-        // higher earth is film
-        if c[2] < EDGE_MM + PEBBLE_MAX_MM {
-            continue;
-        }
-        film += 1;
-        // a stone stands under it: the film is the band's thickness over
-        // its top, grain pits cut into it, so it lies between a cell's slope
-        // under the stone's top and the band's high over it
-        let near = (-1..=1)
-            .flat_map(|di| (-1..=1).map(move |dj| (di, dj)))
-            .filter_map(|(di, dj)| rock.get(&(cell(c[0]) + di, cell(c[1]) + dj)))
-            .copied()
-            .fold(f64::MIN, f64::max);
-        if near <= f64::MIN {
-            bare += 1;
-            continue;
-        }
-        gaps.push(c[2] - near);
-        if c[2] - near >= -CELL_SLOPE_MM && c[2] - near <= FILM_MAX_MM + CELL_SLOPE_MM {
-            over += 1;
-        }
-    }
-    gaps.sort_by(f64::total_cmp);
-    assert!(film > 100, "the film is laid: {film}");
-    // never over the band's high (grain is held under it) ...
-    let highest = gaps.last().copied().unwrap();
-    assert!(
-        highest <= FILM_MAX_MM + FILM_GRAIN_MM + 0.05,
-        "a film triangle {highest} mm over the stone's top, band high {FILM_MAX_MM} and grain {FILM_GRAIN_MM}"
-    );
-    // ... and the film as a whole is a layer of that band: its middle lies
-    // between nothing and the band's high (grain pits take it below the
-    // band's low, by design; a half of it is over half the least thickness)
-    let median = gaps[gaps.len() / 2];
-    assert!(
-        median > 0.5 * FILM_MIN_MM - CELL_SLOPE_MM && median < FILM_MAX_MM + FILM_GRAIN_MM,
-        "median film {median} mm over the stone"
-    );
-    // none lies where no stone stands, and all but the film's own edge (a
-    // wall a lip's width from the stone's top) lie within its thickness of one
-    assert_eq!(bare, 0, "film triangles over no stone at all");
-    assert!(
-        over * 100 >= film * 98,
-        "film triangles not over a standing stone: {} of {film}",
-        film - over
-    );
 }
 
 /// The up-facing triangles of `b` of `material`, as three vertices each.
@@ -286,37 +201,92 @@ fn film_thickness(bare: &Built, filmed: &Built) -> Vec<f64> {
     thick
 }
 
+/// The mound with its foot stones standing clear of the ground's pebbles.
+fn tall(film: bool) -> String {
+    mound(film).replace("[3 .. 9]", "[8 .. 12]")
+}
+
+/// The up-facing earth vertices higher than the ground round the pile.
+fn dirt_vertices(b: &Built) -> Vec<[f64; 3]> {
+    up_triangles(b, Material::Earth)
+        .into_iter()
+        .flatten()
+        .filter(|p| p[2] >= EDGE_MM + PEBBLE_MAX_MM)
+        .collect()
+}
+
 #[test]
-fn a_film_keeps_its_skin_over_the_stone_whatever_its_grain() {
-    // the grain's pits take the film's face down, never to less than the
-    // band's low over the stone (the printer's skin) and never over its high
+fn dirt_follows_a_stones_top_as_a_layer_of_its_band() {
+    // the dirt is its band over the stone under it; the grain's pits may take
+    // it under the band's low, never under the stone's top by more than a
+    // pit's depth, and its grain never stands more than a clod over the high
     for seed in [2, 5, 9] {
         let name = format!("table seed {seed}");
-        let (bare, filmed) = (
-            built(&table_seeded(false, seed)),
-            built(&table_seeded(true, seed)),
+        let (bare, dirt) = (
+            built(&table(false, seed, "")),
+            built(&table(true, seed, "")),
         );
-        let t = film_thickness(&bare, &filmed);
+        let t = film_thickness(&bare, &dirt);
         assert!(
             t.len() > 500,
-            "{name}: the film is laid: {} triangles",
+            "{name}: the dirt is laid: {} triangles",
             t.len()
         );
         assert!(
-            t[0] >= FILM_MIN_MM - 0.02,
-            "{name}: the film is {} mm over the stone at its thinnest, band low {FILM_MIN_MM}",
+            t[0] >= DIRT_MIN_MM - GRAIN_MM,
+            "{name}: the dirt is {} mm over the stone at its thinnest",
             t[0]
         );
         assert!(
-            t[t.len() - 1] <= FILM_MAX_MM + FILM_GRAIN_MM + 0.05,
-            "{name}: the film is {} mm over the stone at its thickest, band high {FILM_MAX_MM} and grain {FILM_GRAIN_MM}",
+            t[t.len() - 1] <= DIRT_MAX_MM + GRAIN_MM,
+            "{name}: the dirt is {} mm over the stone at its thickest",
             t[t.len() - 1]
         );
-        // and grain is still there: the film is not a flat sheet at its low
-        // (the middle eight tenths of it spread over a quarter millimetre)
-        let (p10, p90) = (t[t.len() / 10], t[t.len() * 9 / 10]);
-        assert!(p90 - p10 > 0.25, "{name}: the film has grain: {p10}..{p90}");
+        // it lies on the stone, not a different height from it: the middle
+        // of it is within its band
+        let median = t[t.len() / 2];
+        assert!(
+            median > 0.5 * DIRT_MIN_MM && median < DIRT_MAX_MM + 0.5 * GRAIN_MM,
+            "{name}: median dirt {median} mm over the stone"
+        );
     }
+}
+
+#[test]
+fn dirt_is_absent_where_the_surface_under_it_is_steeper_than_max_slope() {
+    // a pile of broken stones: their grain and tilts are steeper than 35
+    // degrees at the scale dirt reads the slope, so there is no dirt on it
+    // at the default and it stays bare; the same dirt lies on the flat tops
+    // of the table (`dirt_follows_a_stones_top`), and the unit tests in
+    // `dirt.rs` hold the angle itself
+    let tile = |extra: &str| tall(true).replace("at=crag\n", &format!("at=crag {extra}\n"));
+    assert_eq!(
+        dirt_vertices(&built(&tile(""))).len(),
+        0,
+        "dirt on broken stone at 35 degrees"
+    );
+    assert!(
+        dirt_vertices(&built(&tile("maxSlope=60"))).len() > 100,
+        "a steeper limit lets it on"
+    );
+}
+
+#[test]
+fn max_slope_changes_how_much_stone_holds_dirt() {
+    let tile = |extra: &str| tall(true).replace("at=crag\n", &format!("at=crag {extra}\n"));
+    let cover = |extra: &str| {
+        let b = built(&tile(extra));
+        dirt_vertices(&b).len()
+    };
+    let (low, default, high) = (
+        cover("maxSlope=45"),
+        cover("maxSlope=60"),
+        cover("maxSlope=85"),
+    );
+    assert!(
+        low < default && default < high,
+        "dirt over steeper stone: {low} < {default} < {high}"
+    );
 }
 
 /// The share of the side's vertices (above the base, under `z_max`) within

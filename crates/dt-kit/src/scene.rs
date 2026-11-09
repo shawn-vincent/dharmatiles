@@ -576,15 +576,9 @@ pub enum Under {
     Earth,
 }
 
-/// What a pieces body's tops give a layer laid on it (a dirt film on
-/// stone): the tops, and where a film may lie.
+/// What a pieces body leaves for the elements laid after it.
 #[derive(Clone, Debug)]
 pub struct Rest {
-    /// The top of the pieces at every node (world mm, `-∞` where none).
-    pub tops: Vec<f64>,
-    /// Where it is rock under the steepest slope a film lies on, clear of
-    /// the lips and faces.
-    pub flat: Mask,
     /// Where the pieces' core stands: nothing is set down on it.
     pub core: Mask,
 }
@@ -606,7 +600,7 @@ impl Terrain {
         }
     }
 
-    /// **rest**: what a pieces body's tops give the layers laid after it.
+    /// **rest**: what a pieces body leaves for what is laid after it.
     pub fn set_rest(&mut self, rest: Rest) {
         self.rest = Some(rest);
     }
@@ -669,6 +663,30 @@ impl Terrain {
     #[must_use]
     pub fn surface_field(&self) -> Option<&Grid> {
         (!self.layers.is_empty()).then_some(&self.shown)
+    }
+
+    /// The surface under whatever is laid next (world mm): at each node the
+    /// higher of the land laid there and the top stamped there (a cliff's
+    /// stones, a floor's slabs), `-∞` where nothing is laid; `None` when
+    /// nothing is laid at all.
+    #[must_use]
+    pub fn laid_surface(&self) -> Option<crate::Field> {
+        if !self.any_land && self.support.is_none() {
+            return None;
+        }
+        let n = self.land.z.len();
+        let mut z = vec![f64::NEG_INFINITY; n];
+        for l in self.layers.iter().filter(|l| !l.fluid) {
+            for k in (0..n).filter(|&k| l.mask.bits[k]) {
+                z[k] = z[k].max(f64::from(self.land.z[k]));
+            }
+        }
+        if let Some(s) = &self.support {
+            for (v, &t) in z.iter_mut().zip(&s.z) {
+                *v = v.max(f64::from(t));
+            }
+        }
+        Some(<crate::Field as crate::OnFrame>::new(&self.frame, 0.0).with_z(z))
     }
 
     /// The land alone (world mm): every land layer laid, the higher of
@@ -1112,13 +1130,18 @@ impl Scene {
         self.terrain.surface_field()
     }
 
-    /// **rest**: a pieces body gives the layers laid after it its tops.
+    /// **rest**: a pieces body leaves its core for what is laid after it.
     pub fn set_rest(&mut self, rest: Rest) {
         self.terrain.set_rest(rest);
     }
 
-    /// What the pieces bodies laid so far give a layer laid on them, if any
-    /// does.
+    /// The surface under whatever is laid next: see [`Terrain::laid_surface`].
+    #[must_use]
+    pub fn laid_surface(&self) -> Option<crate::Field> {
+        self.terrain.laid_surface()
+    }
+
+    /// What the pieces bodies laid so far leave, if any did.
     #[must_use]
     pub fn rest(&self) -> Option<&Rest> {
         self.terrain.rest.as_ref()

@@ -749,6 +749,13 @@ pub static ELEMENTS: &[Element] = &[
             )
             .words(STONES)
             .default("some"),
+            c(
+                "maxSlope",
+                Axis::Deg,
+                "the steepest surface under it that dirt stays on; on anything steeper it slides off and leaves it bare",
+            )
+            .limits(5.0, 85.0)
+            .default("35"),
         ],
         ..Element::BASE
     },

@@ -7,7 +7,7 @@
 //! The core is the cliff's rock layer in the terrain, laid with the land
 //! before the lift: a height field with a vertical face, never carved or
 //! grained, so it costs a layer of the lift and not a mesh of millions of
-//! triangles. It is also what the dirt film on the tops lies on.
+//! triangles. It is also what a dirt laid on the tops lies on.
 
 use dt_kit::{Frame, KitError, Mask, hung, rays::RayMesh};
 
