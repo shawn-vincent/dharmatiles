@@ -28,6 +28,7 @@
   <li><a href="#preview">In the preview</a></li>
   <li><a href="#silence">The few allowed silences</a></li>
   <li><a href="#output">Output never changes silently</a></li>
+  <li><a href="#hosted">If part of it is ever hosted</a></li>
   <li><a href="#tests">Tests</a></li>
 </ol></nav>
 <article class="doc">
@@ -96,6 +97,19 @@
 
 <h2 id="output">Output never changes silently</h2>
 <p>No fallback may quietly change what is built. If a value cannot be read, the tile is refused; it is never built with a default instead. If a repair changes the mesh (voids filled, pinches moved), the build says so and the build record counts it. The printability gate is never loosened and geometry is never culled to pass it. What prints is what the document says, or the program says why not.</p>
+
+<h2 id="hosted">If part of it is ever hosted</h2>
+<p>dharmatiles runs on your own machine, so the full details of an error are always yours to see. Tiles are always generated on your own machine: by the installed program, or in the browser through WebAssembly, which counts as local here. A server never generates tiles. If a hosted part is ever added (a shared library, accounts, sharing tiles), it follows a development, staging and production split:</p>
+<div class="tbl"><table>
+<thead><tr><th></th><th>Development</th><th>Staging and production</th></tr></thead>
+<tbody>
+<tr><td>Server to page</td><td>Error code, message, chain of causes</td><td>Error code and a plain message only; no internal details or traces</td></tr>
+<tr><td>Server log</td><td>Everything</td><td>Everything, with the request it came from</td></tr>
+<tr><td>Page</td><td>Details expandable and copyable</td><td>A plain message and what to do next</td></tr>
+<tr><td>Target</td><td colspan="2">Zero unexpected errors in production; every one that appears is investigated</td></tr>
+</tbody>
+</table></div>
+<p>Everything else on this page applies unchanged.</p>
 
 <h2 id="tests">Tests</h2>
 <ul class="rules">
