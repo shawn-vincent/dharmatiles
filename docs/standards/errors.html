@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Errors</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Standard · the program, the preview, every element</div>
+  <h1>Errors</h1>
+  <p class="lede">Nothing is swallowed and nothing is hidden. When something goes wrong you see it, in words, with what to do next. A tile that fails loudly gets fixed; a tile that quietly comes out different gets printed, and costs a spool and an evening.</p>
+  <div class="facts">
+    <div><div class="k">Target</div><div class="v">zero panics, zero silent fallbacks</div></div>
+    <div><div class="k">Your mistakes</div><div class="v">shown where you made them</div></div>
+    <div><div class="k">Our mistakes</div><div class="v">shown loudly, never guessed past</div></div>
+  </div>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#kinds">Two kinds of error</a></li>
+  <li><a href="#tell">Telling them apart</a></li>
+  <li><a href="#where">Where errors are handled</a></li>
+  <li><a href="#rust">In the Rust code</a></li>
+  <li><a href="#preview">In the preview</a></li>
+  <li><a href="#silence">The few allowed silences</a></li>
+  <li><a href="#output">Output never changes silently</a></li>
+  <li><a href="#tests">Tests</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="kinds">Two kinds of error</h2>
+<div class="tbl"><table>
+<thead><tr><th></th><th>Expected: your document or your input</th><th>Unexpected: the program</th></tr></thead>
+<tbody>
+<tr><td>What it is</td><td>Something you wrote or did that the program checks for and refuses</td><td>Something broke: a bug, a panic, a file the program could not read or write, a kernel that failed</td></tr>
+<tr><td>Examples</td><td>An unknown control (<code>dt::unknown-control</code>), a value out of range, a read nothing in the stack writes, a tile that fails the printability gate, an old form that needs <code>dharmatiles migrate</code></td><td>A panic in an element, a Manifold failure, an I/O error writing an STL, a malformed reply from the preview's server, a build worker that died</td></tr>
+<tr><td>Who fixes it</td><td>You, by editing the tile</td><td>A developer</td></tr>
+<tr><td>How it is shown</td><td>A diagnostic with its code, the place in the file, and a help line saying what to write instead; in the preview, beside the line and in the error panel</td><td>Prominently and plainly: what failed, the error's own words, and the details (the chain of causes, the panic message and location) available to copy</td></tr>
+<tr><td>Exit code</td><td>1 (the tile is refused)</td><td>1, after the message; never a 0</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="tell">Telling them apart</h2>
+<p>An error is <b>expected</b> only when all four hold:</p>
+<ol>
+  <li>The program checks for it explicitly, and it has a name: a <code>dt::</code> diagnostic code, or a gate verdict.</li>
+  <li>You can fix it yourself by changing the document or what you typed.</li>
+  <li>Nothing is broken: the program did exactly what it should.</li>
+  <li>The message says what to do: a help line, a suggestion, or the numbers that failed.</li>
+</ol>
+<p>If any one fails, it is <b>unexpected</b>. When in doubt, treat it as unexpected: a loud report of something minor costs a minute, a silent one can cost a print.</p>
+<p>One operation can fail both ways. Building a tile can be refused by its document (expected) or crash in a kernel (unexpected). Keep them apart by type, never by catching everything: document errors are diagnostics with codes, everything else is an error that carries its cause. Never show a kernel failure as if it were a mistake in the tile.</p>
+
+<h2 id="where">Where errors are handled</h2>
+<p>Below the boundaries an error travels up, unchanged except for added context. It is handled only at a boundary, where someone can be told:</p>
+<div class="tbl"><table>
+<thead><tr><th>Boundary</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td>The command line (<code>main</code>)</td><td>Prints diagnostics with <code>miette</code> (code, span, help) and other errors with their chain of causes, to stderr; exits 1</td></tr>
+<tr><td>The preview's HTTP routes</td><td>Answer a document error as data the page shows inline; answer anything else with an error status and a body naming what failed and why; log it to the server's stderr</td></tr>
+<tr><td>The preview's build worker</td><td>Catches a panic per build, reports it to the page as a failed build with its message, logs it, and keeps serving; the next edit builds again</td></tr>
+<tr><td>Library sweeps (<code>build --all</code>)</td><td>Report every failing tile by name with its reason and carry on to the next; the run exits 1 if any failed</td></tr>
+<tr><td>The page's event handlers</td><td>Show an unexpected failure in the error panel or the connection chip; never only in the console</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="rust">In the Rust code</h2>
+<ul class="rules">
+  <li>Return <code>Result</code> and use <code>?</code>. Add context where it helps (which tile, which element, which file) rather than replacing the error.</li>
+  <li>Document errors are <code>miette</code> diagnostics with a <code>dt::</code> code, the span, and a help line. A new refusal gets a new code, not a reused vague one.</li>
+  <li>No <code>let _ =</code>, <code>.ok()</code>, <code>unwrap_or_default()</code> or <code>unwrap_or(…)</code> on a result that can fail for real. Writing into a <code>String</code> cannot fail, so <code>let _ = write!(s, …)</code> there is fine.</li>
+  <li><code>unwrap</code> and <code>expect</code> only for what cannot happen; an <code>expect</code> message says why it cannot. Anything a document or a file can cause is a <code>Result</code>.</li>
+  <li>A panic is a bug. It is never part of the plan, and a caught panic is still reported.</li>
+</ul>
+
+<h2 id="preview">In the preview</h2>
+<ul class="rules">
+  <li>Document errors appear beside their line and in the error panel, with the program's message and help. The page never re-checks a document itself; it asks the program (<code>/api/check-value</code>, the build) and draws the answer.</li>
+  <li>An unexpected failure (a server error, an unreadable reply, a failed fetch other than the connection dropping) goes to the error panel with what was being done ("Could not save 1x1-cliff-corner") and the error's words. Logging it to the console as well is fine; logging it only there is not.</li>
+  <li>A lost connection is shown by the connection chip, and the page tries again. That is expected, so it is not an error panel entry.</li>
+  <li>Unhandled promise rejections and script errors are caught globally and shown the same way.</li>
+</ul>
+
+<h2 id="silence">The few allowed silences</h2>
+<p>An error may go unshown only when it changes nothing you make or see, and the code says why in a comment where it is ignored:</p>
+<ul class="rules">
+  <li><b>Per-viewer conveniences in the browser:</b> <code>localStorage</code> can be unavailable (private windows); a remembered theme, layout or toggle then falls back to its default.</li>
+  <li><b>Best-effort cleanup:</b> removing a temporary file or an empty cache folder after the real work has succeeded.</li>
+  <li><b>You cancelled:</b> closing a picker or a menu is not an error.</li>
+  <li><b>Offline:</b> a request made while the connection is down, which the page repeats on reconnect, with the chip showing the state.</li>
+</ul>
+
+<h2 id="output">Output never changes silently</h2>
+<p>No fallback may quietly change what is built. If a value cannot be read, the tile is refused; it is never built with a default instead. If a repair changes the mesh (voids filled, pinches moved), the build says so and the build record counts it. The printability gate is never loosened and geometry is never culled to pass it. What prints is what the document says, or the program says why not.</p>
+
+<h2 id="tests">Tests</h2>
+<ul class="rules">
+  <li>Every <code>dt::</code> refusal has a test that a document triggers it, with its code.</li>
+  <li>The preview's server has tests that a document error comes back as data and an internal failure as an error status with its message.</li>
+  <li>A panic anywhere in a test run is a failure, never retried away. An intermittent crash is a bug to find (the Manifold level-set fix is the model: reproduce, find the cause, prove the fix).</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>
