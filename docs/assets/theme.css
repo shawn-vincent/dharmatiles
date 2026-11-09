@@ -4,7 +4,8 @@
    The idea: a tile is always shown the same way, on the pale light-box
    plate the renderer uses (#D9E0EB), ruled in its squares.  Around it the
    chrome is Moonpool at night and Lichen & Linen by day; a botanical or
-   sea-glass accent marks what you can press. Red and orange mean overhang and nothing else; the four
+   sea-glass accent marks what you can press. --over and --band paint overhang on a model; --err is the
+   interface's danger colour (errors, destructive buttons), and may look alike; the four
    material colours mean element families and nothing else.
 
    Type: Big Shoulders Display for names and headings (the box-art voice),
