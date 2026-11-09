@@ -6,6 +6,7 @@ mod entry;
 mod heights;
 mod syntax;
 mod value;
+pub use value::check_text;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

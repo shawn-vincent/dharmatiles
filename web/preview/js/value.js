@@ -1,11 +1,10 @@
 // A control's value as the sheet edits it: what may be typed, what it is
-// written as, what can go at the caret, and a first check.  No page here;
-// the lens draws it (lens.js).  The server's check (dt_doc's
-// Control::check) is the one that counts; this one only answers while
-// typing, for plain numbers and ranges, with the same limits.
+// written as, and what can go at the caret.  No page here;
+// the lens draws it (lens.js).  Nothing here checks a value: the program's
+// check (dt_doc's `check_text`, by `/api/check-value`) is the only one.
 
 /** The units whose values are numbers or expressions. */
-const NUMERIC = new Set(['mm', 'level', 'degrees', 'percent', 'count', 'per square', 'number']);
+const NUMERIC = new Set(['mm', 'degrees', 'percent', 'count', 'per square', 'number']);
 export const isNumeric = (c) => NUMERIC.has(c.unit);
 
 /** `text` as a KDL v2 string. */
@@ -59,10 +58,9 @@ export function asNumber(typed) {
 
 /**
  * What can go at `caret` in `typed`: {from, to, items: [{label, insert, about, kind}]}.
- * The control's words while nothing but a word is typed, and for a level the
- * named levels (each {name, value, about}) at any name in an expression.
+ * The control's words while nothing but a word is typed.
  */
-export function valueItems(typed, caret, c, levels = []) {
+export function valueItems(typed, caret, c) {
   const before = typed.slice(0, caret);
   const word = (before.match(/[A-Za-z_][\w-]*$/) || [''])[0];
   // a name starts afresh: not straight after a number (`(h)5`, `1e`)
@@ -72,35 +70,6 @@ export function valueItems(typed, caret, c, levels = []) {
   // nothing typed but a word (or not even that): the control's words
   const t = typed.trim();
   if (!t || WORD.test(t)) items.push(...(c.words || []).map((w) => ({ label: w.word, insert: w.word, about: w.about, kind: 'word' })));
-  if (c.unit === 'level') items.push(...levels.map((l) => ({ label: l.name, insert: l.name, about: `${l.value} mm · ${l.about}`, kind: 'level' })));
   items = items.filter((i) => i.label.startsWith(word) && i.label !== word);
   return { from, to: caret, items };
-}
-
-const fmt = (v) => String(Number(v.toFixed(4)));
-
-/**
- * A first check of a typed number or range against the control: what is
- * wrong, in a few words, or null (also for an expression, which only the
- * reader can resolve).
- */
-export function checkValue(typed, c) {
-  const t = typed.trim();
-  const form = formOf(t);
-  // (h)1.2 is in wall tops: the reader turns it into mm
-  if ((form !== 'number' && form !== 'range') || t.startsWith('(')) return null;
-  const percent = c.unit === 'percent';
-  const parts = t.split('..').map((p) => p.trim());
-  if (parts.some((p) => p.endsWith('%') !== percent)) return percent ? 'a share is written as a percent: 30%' : 'a percent is only for a share';
-  const [lo, top = lo] = parts.map((p) => Number(p.replace(/%$/, '')) / (percent ? 100 : 1));
-  if (parts.length === 2 && !c.ranges) return 'takes one number, not a range';
-  if (lo > top) return 'a range is written low end first';
-  if (['mm', 'count', 'per square'].includes(c.unit) && lo < 0) return "can't be negative";
-  if (c.unit === 'count' && (!Number.isInteger(lo) || !Number.isInteger(top))) return 'a count is whole';
-  const [min, max] = c.limits || [];
-  if (min != null) {
-    const ok = (v) => (c.above ? v > min : v >= min) && (max == null || v <= max);
-    if (!ok(lo) || !ok(top)) return `takes ${c.takes || `${fmt(min)} to ${fmt(max)}`}`;
-  }
-  return null;
 }

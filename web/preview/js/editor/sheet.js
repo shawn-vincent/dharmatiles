@@ -23,16 +23,8 @@ export const lens = new Lens($('lens'), {
   replace: replaceBytes,
   set: setControl,
   makeMine: () => offerMine(),
-  levels: () => levelsHere(),
+  checkValue: async (element, control, typed) => (await host.checkValue(element, control, typed)).body?.message ?? null,
 });
-/** The heights a value may name here: the library's, as this tile sets them, and its own `let`s. */
-function levelsHere() {
-  const own = doc.get().map?.tile;
-  const about = { library: 'a library height', override: 'a library height this tile overrides', tile: 'this tile’s own height' };
-  return (own?.heights || [])
-    .filter((h) => h.value != null)
-    .map((h) => ({ name: h.name, value: String(Math.round(h.value * 1000) / 1000), about: about[h.from] || 'a height' }));
-}
 /** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty
 const TILE_SCHEMA = {

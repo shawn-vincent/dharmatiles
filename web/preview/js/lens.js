@@ -10,8 +10,10 @@
 //   api.set(at, name, value)            write a control on the node at byte
 //                                       `at` (value null: take it out)
 //   api.makeMine()                      offer a copy of a library tile
+//   api.checkValue(element, control, typed) -> Promise<string|null>
+//                                       the program's check of a typed value
 
-import { asNumber, asRange, checkValue, formOf, isNumeric, kdlString, unquote, valueItems, written } from './value.js';
+import { asNumber, asRange, formOf, isNumeric, kdlString, unquote, valueItems, written } from './value.js';
 
 export { kdlString, unquote };
 
@@ -328,16 +330,16 @@ export class Lens {
     };
     input.onblur = () => finish(true);
     if (c.picker === 'size') close = this.sizeGrid(input, () => finish(true));
-    else if (num) { pop = this.valuePop(input, c); close = pop.close; }
+    else if (num) { pop = this.valuePop(input, c, g.schema?.name); close = pop.close; }
   }
 
   /**
-   * The helper under a typed value: what the control takes, a first check
-   * of what is typed, a number or a range, and what can go at the caret
-   * (its words; for a level, the named levels).  Arrows pick, Enter or
-   * Tab takes.  Returns {key(event) -> taken, close}.
+   * The helper under a typed value: what the control takes, the program's
+   * check of what is typed (asked of the server; nothing is checked here),
+   * and what can go at the caret (its words).  Arrows pick, Enter or Tab
+   * takes.  Returns {key(event) -> taken, close}.
    */
-  valuePop(input, c) {
+  valuePop(input, c, element) {
     const pop = el('div', 'value-pop');
     const takes = el('div', 'vp-takes', [[c.unit, c.takes].filter(Boolean).join(', '), c.default && `default ${c.default}`].filter(Boolean).join(' · '));
     const check = el('div', 'vp-check');
@@ -355,7 +357,7 @@ export class Lens {
       pop.append(forms);
     }
     pop.append(list);
-    let s = { items: [] }, i = 0;
+    let s = { items: [] }, i = 0, asked = 0;
     const take = () => {
       const it = s.items[i];
       if (!it) return false;
@@ -378,12 +380,16 @@ export class Lens {
       list.hidden = !s.items.length;
     };
     const update = () => {
-      s = valueItems(input.value, input.selectionStart ?? input.value.length, c, this.api.levels?.() || []);
+      s = valueItems(input.value, input.selectionStart ?? input.value.length, c);
       i = 0;
       draw();
-      const why = checkValue(input.value, c);
-      check.textContent = why || '';
-      check.hidden = !why;
+      // the program's answer, for what is typed now (a later one wins)
+      const typed = input.value, ask = ++asked;
+      this.api.checkValue?.(element, c.name, typed).then((why) => {
+        if (ask !== asked) return;
+        check.textContent = why || '';
+        check.hidden = !why;
+      });
       const form = formOf(input.value);
       one?.classList.toggle('on', form === 'number');
       range?.classList.toggle('on', form === 'range');

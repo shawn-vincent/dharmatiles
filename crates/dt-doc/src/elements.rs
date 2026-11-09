@@ -1088,6 +1088,45 @@ mod tests {
     }
 
     #[test]
+    fn typed_text_is_checked_as_a_written_value_is() {
+        use crate::decode::check_text;
+        let ctl = |e: &str, c: &str| crate::schema::element(e).unwrap().control(c).unwrap();
+        let tree = ctl("tree", "height");
+        assert!(check_text(tree, "tree", "40").is_none());
+        assert!(check_text(tree, "tree", "30..50").is_none());
+        assert_eq!(
+            check_text(tree, "tree", "150").unwrap().message,
+            "`tree height` is 20 mm to 120 mm, not 150 mm"
+        );
+        assert_eq!(
+            check_text(tree, "tree", "50..30").unwrap().message,
+            "a range is written low end first"
+        );
+        // the reader resolves names; a word is not a number
+        assert!(check_text(tree, "tree", "wall-top * 4").is_none());
+        assert!(check_text(tree, "tree", "tall").is_none());
+        // (h) is in wall tops, checked in mm: 1.2 * 33.1 = 39.7
+        assert!(check_text(tree, "tree", "(h)1.2").is_none());
+        let ruin = ctl("wall", "ruin");
+        assert!(check_text(ruin, "wall", "40%").is_none());
+        assert_eq!(
+            check_text(ruin, "wall", "150%").unwrap().message,
+            "`wall ruin` is 0% to 100%, not 150%"
+        );
+        assert_eq!(
+            check_text(ruin, "wall", "0.4").unwrap().message,
+            "`wall ruin` is a share, written as a percent"
+        );
+        let boards = ctl("planks", "boards");
+        assert!(
+            check_text(boards, "planks", "4..8")
+                .unwrap()
+                .message
+                .contains("one number")
+        );
+    }
+
+    #[test]
     fn branching_words_cover_every_expert_knob() {
         let tree = crate::schema::element("tree").unwrap();
         let branch = tree.control("branch").unwrap();

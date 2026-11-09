@@ -601,6 +601,16 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
     let edited = v["text"].as_str().unwrap().to_owned();
     assert_eq!(edited, text.replace("dirt\n", "dirt wear=worn\n"));
+    // check-value: the reader's own check of a typed value, nothing else
+    let cv = |control: &str, typed: &str| {
+        let b = serde_json::json!({ "element": "tree", "control": control, "typed": typed });
+        post(&r, "/api/check-value", Some(&token), None, &b.to_string())
+    };
+    let (h, v) = cv("height", "150");
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
+    assert_eq!(v["message"], "`tree height` is 20 mm to 120 mm, not 150 mm");
+    assert!(cv("height", "40").1["message"].is_null());
+    assert!(cv("no-such-control", "150").1["message"].is_null());
     // save: only over the text it was edited from
     let s = serde_json::json!({ "text": edited, "base": "something else" }).to_string();
     let (h, v) = post(

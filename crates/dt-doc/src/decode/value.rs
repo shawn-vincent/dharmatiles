@@ -6,7 +6,7 @@ use super::{Ctx, Decoder, sub_span, value_span};
 use crate::elements::TAGS;
 use crate::expr::{self, Expr, Unit};
 use crate::model::{Num, Spanned, Value};
-use crate::schema::{Axis, Control, Word, did_you_mean};
+use crate::schema::{Axis, Control, Refusal, Word, did_you_mean};
 
 fn as_f64(v: &KdlValue) -> Option<f64> {
     match v {
@@ -239,33 +239,8 @@ impl Decoder<'_> {
                 }
             }
         };
-        // Percent: required for a share, refused elsewhere.
-        if axis == Axis::Share && !x.all_percent() && x.names().is_empty() {
-            let help = match x.bounds(&|_| None) {
-                // 0.3 is a fraction (30%); 135 already means 135%.
-                Ok((lo, hi)) if (lo - hi).abs() < 1e-12 => {
-                    let pct = if lo.abs() <= 1.0 { lo * 100.0 } else { lo };
-                    format!("write `{name}=\"{}%\"`", fmt_num(pct))
-                }
-                _ => "write each end with %: \"20%..50%\"".to_owned(),
-            };
-            self.err(
-                "dt::percent",
-                span,
-                format!("`{owner} {name}` is a share, written as a percent"),
-                "no %",
-            )
-            .help = Some(help);
-            return None;
-        }
-        if axis != Axis::Share && x.has_percent() {
-            self.err(
-                "dt::percent",
-                span,
-                format!("`{owner} {name}` is {kind}, not a percent"),
-                "a percent",
-            )
-            .help = Some(k.map_or_else(|| format!("write `{name}` as a plain number"), describe));
+        if let Some((code, r)) = percent_flaw(&x, axis, k, (owner, name), kind) {
+            self.err(code, span, r.message, r.label).help = r.help;
             return None;
         }
         // Names: parameters, and the tile's `let`s where a height is expected.
@@ -318,26 +293,11 @@ impl Decoder<'_> {
             .help = Some(help);
             return None;
         }
-        // Counts are whole; sensible limits catch slips.
         if x.names().is_empty()
-            && let Ok((lo, hi)) = x.bounds(&|_| None)
+            && let Some(r) = range_flaw(&x, unit, axis, k, (owner, name))
         {
-            let mult = if unit == Some(Unit::H) {
-                crate::schema::H_MM
-            } else {
-                1.0
-            };
-            let (lo, hi) = (lo * mult, hi * mult);
-            let checked = match k {
-                Some(k) => k.check(owner, lo, hi, x.is_range()),
-                None => {
-                    crate::schema::check(axis, None, true, (owner, name), (lo, hi, x.is_range()))
-                }
-            };
-            if let Err(r) = checked {
-                self.err("dt::range", span, r.message, r.label).help = r.help;
-                return None;
-            }
+            self.err("dt::range", span, r.message, r.label).help = r.help;
+            return None;
         }
         Some(Spanned {
             value: Num { expr: x, unit },
@@ -367,6 +327,94 @@ impl Decoder<'_> {
         };
         Some(Spanned { value, span })
     }
+}
+
+/// A number written as a percent where a share is, and not elsewhere: what
+/// is wrong with `x` for this control, with its diagnostic code.
+fn percent_flaw(
+    x: &Expr,
+    axis: Axis,
+    k: Option<&'static Control>,
+    (owner, name): (&str, &str),
+    kind: &str,
+) -> Option<(&'static str, Refusal)> {
+    // Percent: required for a share, refused elsewhere.
+    if axis == Axis::Share && !x.all_percent() && x.names().is_empty() {
+        let help = match x.bounds(&|_| None) {
+            // 0.3 is a fraction (30%); 135 already means 135%.
+            Ok((lo, hi)) if (lo - hi).abs() < 1e-12 => {
+                let pct = if lo.abs() <= 1.0 { lo * 100.0 } else { lo };
+                format!("write `{name}=\"{}%\"`", fmt_num(pct))
+            }
+            _ => "write each end with %: \"20%..50%\"".to_owned(),
+        };
+        return Some((
+            "dt::percent",
+            Refusal {
+                message: format!("`{owner} {name}` is a share, written as a percent"),
+                label: "no %",
+                help: Some(help),
+            },
+        ));
+    }
+    if axis != Axis::Share && x.has_percent() {
+        return Some((
+            "dt::percent",
+            Refusal {
+                message: format!("`{owner} {name}` is {kind}, not a percent"),
+                label: "a percent",
+                help: Some(k.map_or_else(|| format!("write `{name}` as a plain number"), describe)),
+            },
+        ));
+    }
+    None
+}
+
+/// What is wrong with a number with no names in it, against the control's
+/// limits (`(h)` is in wall tops, checked in mm).
+fn range_flaw(
+    x: &Expr,
+    unit: Option<Unit>,
+    axis: Axis,
+    k: Option<&'static Control>,
+    (owner, name): (&str, &str),
+) -> Option<Refusal> {
+    // Counts are whole; sensible limits catch slips.
+    let (lo, hi) = x.bounds(&|_| None).ok()?;
+    let mult = if unit == Some(Unit::H) {
+        crate::schema::H_MM
+    } else {
+        1.0
+    };
+    let (lo, hi) = (lo * mult, hi * mult);
+    match k {
+        Some(k) => k.check(owner, lo, hi, x.is_range()),
+        None => crate::schema::check(axis, None, true, (owner, name), (lo, hi, x.is_range())),
+    }
+    .err()
+}
+
+/// What a person typed for a control, checked as the reader checks a
+/// written one: what is wrong with it, or `None` (also for anything the
+/// reader resolves later, such as an expression with names, and for what is
+/// not a number or a range, such as a word).  `typed` is the text of the
+/// value, an optional `(mm)` or `(h)` annotation first.
+#[must_use]
+pub fn check_text(k: &'static Control, owner: &str, typed: &str) -> Option<Refusal> {
+    let axis = k.value?;
+    let t = typed.trim();
+    let (unit, body) = match t.strip_prefix('(').and_then(|r| r.split_once(')')) {
+        Some((u, rest)) => (Some(Unit::parse(u)?).filter(|_| axis == Axis::Mm), rest),
+        None => (None, t),
+    };
+    let x = expr::parse(body.trim()).ok()?;
+    if let Some((_, r)) = percent_flaw(&x, axis, Some(k), (owner, k.name), axis.describe()) {
+        return Some(r);
+    }
+    if !x.names().is_empty() || !axis.is_numeric() {
+        return None;
+    }
+    range_flaw(&x, unit, axis, Some(k), (owner, k.name))
 }
 
 fn hint_or(m: Option<&str>, otherwise: String) -> String {

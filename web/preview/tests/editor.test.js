@@ -10,7 +10,7 @@ import { indentSelection, newlineAt, indentFor, braceEnd } from '../js/text.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { rememberView, shortcutViews } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
-import { asNumber, asRange, checkValue, formOf, valueItems, written } from '../js/value.js';
+import { asNumber, asRange, formOf, valueItems, written } from '../js/value.js';
 
 const elements = [
   {
@@ -277,18 +277,6 @@ test('a value switches between one number and a range', () => {
   assert.equal(asRange('ground'), 'ground');
 });
 
-const LEVELS = [{ name: 'edge', value: '3.4', about: 'the tile edge' }, { name: 'ground', value: '3.4', about: 'grass' }, { name: 'water', value: '2.6', about: 'water' }];
-
-test('a level offers the named levels at any name in an expression', () => {
-  const level = { unit: 'level' };
-  assert.deepEqual(valueItems('', 0, level, LEVELS).items.map((i) => i.label), ['edge', 'ground', 'water']);
-  const s = valueItems('ground - w', 10, level, LEVELS);
-  assert.deepEqual([s.from, s.to, s.items.map((i) => i.label)], [9, 10, ['water']]);
-  assert.equal(s.items[0].about, '2.6 mm · water');
-  // a number being typed is not a name
-  assert.deepEqual(valueItems('(h)1', 4, level, LEVELS).items, []);
-});
-
 test("a control's words are offered while only a word is typed", () => {
   const height = { unit: 'mm', words: [{ word: 'full', about: 'up to the wall top' }, { word: 'low', about: 'half' }] };
   assert.deepEqual(valueItems('', 0, height).items.map((i) => i.label), ['full', 'low']);
@@ -298,23 +286,21 @@ test("a control's words are offered while only a word is typed", () => {
   assert.deepEqual(valueItems('12 l', 4, height).items, []);
 });
 
-test('a typed number or range is checked against what the control takes', () => {
-  const tree = { unit: 'mm', limits: [20, 120], ranges: true, takes: '20 to 120, or a range' };
-  assert.equal(checkValue('40', tree), null);
-  assert.equal(checkValue('30..50', tree), null);
-  assert.equal(checkValue('150', tree), 'takes 20 to 120, or a range');
-  assert.equal(checkValue('50..30', tree), 'a range is written low end first');
-  assert.equal(checkValue('wall-top * 4', tree), null); // the reader resolves names
-  const cliff = { unit: 'mm', limits: [6, 120], ranges: false };
-  assert.equal(checkValue('30..40', cliff), 'takes one number, not a range');
-  const level = { unit: 'level', limits: [0, null], above: true, takes: 'over 0' };
-  assert.equal(checkValue('0', level), 'takes over 0');
-  assert.equal(checkValue('900', level), null);
-  const ruin = { unit: 'percent', limits: [0, 1], takes: '0% to 100%' };
-  assert.equal(checkValue('40%', ruin), null);
-  assert.equal(checkValue('150%', ruin), 'takes 0% to 100%');
-  assert.equal(checkValue('0.4', ruin), 'a share is written as a percent: 30%');
-  assert.equal(checkValue('2.5', { unit: 'count' }), 'a count is whole');
+test('the sheet asks the program to check a typed value', async () => {
+  const sent = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    if (url === '/api/session') return { ok: true, json: async () => ({ token: 't' }) };
+    sent.push([url, JSON.parse(init.body)]);
+    return { ok: true, status: 200, json: async () => ({ message: 'takes 20 to 120' }) };
+  };
+  try {
+    const r = await browserHost().checkValue('tree', 'height', '150');
+    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'height', typed: '150' }]]);
+    assert.equal(r.body.message, 'takes 20 to 120');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 // ---- the editor's stores ----------------------------------------------------

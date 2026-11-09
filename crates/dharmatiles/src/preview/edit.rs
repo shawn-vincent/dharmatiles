@@ -7,6 +7,10 @@
 //!   end of the stack, or before it) and says at which byte; with
 //!   `op: remove` it takes out the node at `at`.  Nothing is written to
 //!   disk: the page saves the result.
+//! - `/api/check-value` `{element, control, typed}`: what the reader would
+//!   refuse in `typed` for that control (`{message, label, help}`, or
+//!   `{message: null}`), by the same check as a written value, so the sheet
+//!   draws the program's answer and checks nothing itself.
 //! - `/api/tiles/ID/check` `{text, file?}`: read and plan the tile with
 //!   `text` in place of its document (or of `file`, one it uses): the
 //!   errors, the stack and the map (see `map`), under a second, for the
@@ -79,6 +83,9 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     };
     if path == "/api/edit" {
         return edit(&v).into();
+    }
+    if path == "/api/check-value" {
+        return check_value(&v).into();
     }
     if path == "/api/new" {
         return new_tile(shared, &v).into();
@@ -376,6 +383,27 @@ fn kdl_value(v: &Value) -> Option<kdl::KdlValue> {
         Value::String(s) => kdl::KdlValue::String(s.clone()),
         _ => return None,
     })
+}
+
+/// `/api/check-value`: the reader's check of one typed value.
+fn check_value(v: &Value) -> (&'static str, Value) {
+    let (Some(element), Some(control), Some(typed)) = (
+        v["element"].as_str(),
+        v["control"].as_str(),
+        v["typed"].as_str(),
+    ) else {
+        return bad("give the element, the control and what was typed");
+    };
+    // a control the schema does not know (the tile's own, a line's) has
+    // nothing to check against here
+    let flaw = dt_doc::schema::element(element)
+        .and_then(|e| e.control(control))
+        .and_then(|c| dt_doc::decode::check_text(c, element, typed));
+    let body = match flaw {
+        Some(r) => json!({ "message": r.message, "label": r.label, "help": r.help }),
+        None => json!({ "message": null }),
+    };
+    ("200 OK", body)
 }
 
 fn edit(v: &Value) -> (&'static str, Value) {
