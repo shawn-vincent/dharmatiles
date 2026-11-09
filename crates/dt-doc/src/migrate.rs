@@ -146,20 +146,40 @@ struct Mass {
 /// The shortest rise a foot's band starts at, mm.
 const FOOT_LO_MM: f64 = 3.0;
 
-fn mass(form: &str) -> Option<Mass> {
-    let m = |foot_r, foot, summit_r, summit| Mass {
-        foot_r,
-        foot,
-        summit_r,
-        summit,
-    };
-    Some(match form {
-        "plateau" => return None,
-        "massif" => m(26.5, (0.41, 0.5), 15.0, (0.91, 1.0)),
-        "mound" => m(27.0, (0.0, 0.3), 10.0, (0.7, 1.0)),
-        "spire" => m(26.0, (0.0, 0.12), 9.5, (0.7, 1.0)),
-        _ => return None,
-    })
+impl Mass {
+    const fn new(foot_r: f64, foot: (f64, f64), summit_r: f64, summit: (f64, f64)) -> Self {
+        Self {
+            foot_r,
+            foot,
+            summit_r,
+            summit,
+        }
+    }
+
+    /// The regions and pin of a free-standing form: a foot, and a summit
+    /// inside it that carries the film.
+    fn write(&self, out: &mut Recipe, name: &str, scale: f64, h: f64) {
+        let summit = format!("{name}2");
+        out.regions.push(format!(
+            "region {name} {{ within {} of=center }}",
+            round1(self.foot_r * scale)
+        ));
+        out.regions.push(format!(
+            "region {summit} {{ within {} of=center }}",
+            round1(self.summit_r * scale)
+        ));
+        out.top = format!(
+            "\"dirtEdgeHeight + [{} .. {}]\"",
+            round1((h * self.foot.0).max(FOOT_LO_MM)),
+            round1(h * self.foot.1)
+        );
+        out.pins.push(format!(
+            "pin top=\"dirtEdgeHeight + [{} .. {}]\" at={summit}",
+            round1(h * self.summit.0),
+            round1(h * self.summit.1)
+        ));
+        out.film = summit;
+    }
 }
 
 /// How a form's cliff is written now: its regions, its top and its pins.
@@ -223,34 +243,11 @@ fn recipe(
                 round1(26.0 * scale)
             ));
         }
-        "massif" | "mound" | "spire" => {
-            let m = mass(form).unwrap_or(Mass {
-                foot_r: 26.0,
-                foot: (0.0, 0.3),
-                summit_r: 10.0,
-                summit: (0.7, 1.0),
-            });
-            let summit = format!("{name}2");
-            out.regions.push(format!(
-                "region {name} {{ within {} of=center }}",
-                round1(m.foot_r * scale)
-            ));
-            out.regions.push(format!(
-                "region {summit} {{ within {} of=center }}",
-                round1(m.summit_r * scale)
-            ));
-            out.top = format!(
-                "\"dirtEdgeHeight + [{} .. {}]\"",
-                round1((h * m.foot.0).max(FOOT_LO_MM)),
-                round1(h * m.foot.1)
-            );
-            out.pins.push(format!(
-                "pin top=\"dirtEdgeHeight + [{} .. {}]\" at={summit}",
-                round1(h * m.summit.0),
-                round1(h * m.summit.1)
-            ));
-            out.film = summit;
+        "massif" => {
+            Mass::new(26.5, (0.41, 0.5), 15.0, (0.91, 1.0)).write(&mut out, &name, scale, h)
         }
+        "mound" => Mass::new(27.0, (0.0, 0.3), 10.0, (0.7, 1.0)).write(&mut out, &name, scale, h),
+        "spire" => Mass::new(26.0, (0.0, 0.12), 9.5, (0.7, 1.0)).write(&mut out, &name, scale, h),
         "needles" => {
             // three needles on a shared footing, as the form drew them
             let (cx, cy) = (cols / 2.0, rows / 2.0);
