@@ -50,7 +50,7 @@ pub(crate) enum Class {
     Body,
     /// Grass, scatter, ground, a coat: fills a region.
     Area,
-    /// A rock, tree, wall, reeds, flowers: stands somewhere.
+    /// A rock, tree, flower, wall, reeds: stands somewhere.
     Thing,
 }
 

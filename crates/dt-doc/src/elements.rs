@@ -204,6 +204,30 @@ static STONE: [Control; 4] = rock_controls("1..6");
 static BOULDER: [Control; 4] = rock_controls("4.5..8");
 static PEBBLE: [Control; 4] = rock_controls("1..2.2");
 
+// ---- flower -------------------------------------------------------------
+
+static FLOWER: [Control; 6] = [
+    c("size", Axis::Mm, "width across the petals' tips")
+        .limits(1.0, 20.0)
+        .weighted()
+        .default("5"),
+    c("petals", Axis::Count, "petals round the centre")
+        .limits(0.0, 12.0)
+        .default("5"),
+    c("centre", Axis::Mm, "radius of the centre dome")
+        .limits(0.3, 8.0)
+        .default("1.5"),
+    c("stem", Axis::Mm, "height of the column under each dome")
+        .limits(0.3, 6.0)
+        .default("1"),
+    c("dome", Axis::Mm, "height of the centre dome")
+        .limits(0.2, 4.0)
+        .default("1"),
+    c("petal", Axis::Mm, "height of each petal dome")
+        .limits(0.2, 4.0)
+        .default("0.5"),
+];
+
 // ---- tree ---------------------------------------------------------------
 
 static CROWN_SHAPE: &[Word] = &[
@@ -297,7 +321,7 @@ static LEAVES: &[Word] = &[
 ];
 
 static TREE: &[Control] = &[
-    c("height", Axis::Mm, "ground to the top of the crown")
+    c("size", Axis::Mm, "height: ground to the top of the crown")
         .limits(20.0, 120.0)
         .weighted()
         .default("40"),
@@ -788,36 +812,6 @@ pub static ELEMENTS: &[Element] = &[
         ..Element::BASE
     },
     Element {
-        name: "flowers",
-        about: "wildflowers: a thin dome on a column, ringed by petal domes on cones",
-        role: Role::Surface,
-        place: SURFACE_PLACE,
-        controls: &[
-            c("perSquare", Axis::PerSquare, "how many flowers a square")
-                .limits(0.0, 40.0)
-                .default("4"),
-            c("petals", Axis::Count, "petals round the centre")
-                .limits(0.0, 12.0)
-                .default("5"),
-            c("radius", Axis::Mm, "from the centre to a petal's tip")
-                .limits(0.5, 10.0)
-                .default("2.5"),
-            c("centre", Axis::Mm, "radius of the centre dome")
-                .limits(0.3, 8.0)
-                .default("1.5"),
-            c("stem", Axis::Mm, "height of the column under each dome")
-                .limits(0.3, 6.0)
-                .default("1"),
-            c("dome", Axis::Mm, "height of the centre dome")
-                .limits(0.2, 4.0)
-                .default("1"),
-            c("petal", Axis::Mm, "height of each petal dome")
-                .limits(0.2, 4.0)
-                .default("0.5"),
-        ],
-        ..Element::BASE
-    },
-    Element {
         name: "water",
         about: "still water with swells round its shores and rocks: fills its area up to its level",
         role: Role::Surface,
@@ -835,6 +829,12 @@ pub static ELEMENTS: &[Element] = &[
         "pebble",
         "a rock with pebble sizes, about 1–2.2 mm",
         &PEBBLE, true),
+    thing(
+        "flower",
+        "a wildflower: a thin dome on a column, ringed by petal domes on cones",
+        &FLOWER,
+        true,
+    ),
     thing(
         "tree",
         "a space-colonisation tree with foliage clumps and leaves",
@@ -942,6 +942,10 @@ pub static RENAMED: &[(&str, &str)] = &[
         "write the weighting on the size: `size=\"low(1..6, 11)\"` for mostly=small, `high(1..6)` for large, the plain range for even; `dharmatiles migrate` rewrites old tiles",
     ),
     ("lines", "a region is `boundedBy` its lines"),
+    (
+        "flowers",
+        "a flower is a thing: one is `flower at=…`, many are `scatter perSquare=4 { flower }`; `dharmatiles migrate` rewrites old tiles",
+    ),
     (
         "in",
         "one word names a place: write `at=` and the region; `dharmatiles migrate` rewrites old tiles",
@@ -1078,9 +1082,9 @@ mod tests {
     #[test]
     fn a_number_outside_its_control_is_refused_once_in_the_schema() {
         let tree = crate::schema::element("tree").unwrap();
-        let height = tree.control("height").unwrap();
+        let height = tree.control("size").unwrap();
         let r = height.check("tree", 150.0, 150.0, false).unwrap_err();
-        assert_eq!(r.message, "`tree height` is 20 mm to 120 mm, not 150 mm");
+        assert_eq!(r.message, "`tree size` is 20 mm to 120 mm, not 150 mm");
         let ruin = crate::schema::element("wall")
             .unwrap()
             .control("ruin")
@@ -1105,12 +1109,12 @@ mod tests {
     fn typed_text_is_checked_as_a_written_value_is() {
         use crate::decode::check_text;
         let ctl = |e: &str, c: &str| crate::schema::element(e).unwrap().control(c).unwrap();
-        let tree = ctl("tree", "height");
+        let tree = ctl("tree", "size");
         assert!(check_text(tree, "tree", "40").is_none());
         assert!(check_text(tree, "tree", "30..50").is_none());
         assert_eq!(
             check_text(tree, "tree", "150").unwrap().message,
-            "`tree height` is 20 mm to 120 mm, not 150 mm"
+            "`tree size` is 20 mm to 120 mm, not 150 mm"
         );
         assert_eq!(
             check_text(tree, "tree", "50..30").unwrap().message,

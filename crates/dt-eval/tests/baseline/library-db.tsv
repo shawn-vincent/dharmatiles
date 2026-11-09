@@ -15,7 +15,7 @@ lib:tiles/cliffs/2x2-cliff-plateau.dtile	bb8824a3edc3db38	1406138	143	3278	0	0	0
 lib:tiles/floors/1x1-floor-planks.dtile	95d03543e44c2592	339362	0	46	0	0	0	0.000	0.000	0	pass	1.0
 lib:tiles/floors/1x1-floor-stone-wall.dtile	f109a0bb0da1566c	222048	0	4	0	0	0	0.000	0.000	0	pass	1.0
 lib:tiles/floors/1x1-floor-stone.dtile	1fbab4a75b8b8d78	77002	0	0	0	0	0	0.000	0.000	0	pass	0.6
-lib:tiles/ground/1x1-grass-flowers.dtile	0ddd1732768bba03	321996	36	236	0	0	0	0.000	0.000	0	pass	1.5
+lib:tiles/ground/1x1-grass-flowers.dtile	f407d638a731a6b5	327394	30	208	0	0	0	0.000	0.000	0	pass	1.5
 lib:tiles/ground/1x1-grass-tree.dtile	5a52aae303d58136	630362	25	340	0	0	0	117.129	195.302	0	fail	4.6
 lib:tiles/ground/1x1-grass.dtile	5e79644ef92487bf	335714	26	366	0	0	0	0.000	0.000	0	pass	1.6
 lib:tiles/ground/1x1-soil+grass-angle.dtile	45f984859ffa3b93	323934	34	208	0	0	0	0.000	0.000	0	pass	1.3

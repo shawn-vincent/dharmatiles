@@ -169,8 +169,8 @@ pub const CASES: [Case; 10] = [
         slug: "thing-count",
         title: "Asking a thing for many",
         tile: GRASS_TREE,
-        from: "tree height=40",
-        to: "tree height=40 count=3",
+        from: "tree size=40",
+        to: "tree size=40 count=3",
     },
     Case {
         slug: "expert-in-tile",

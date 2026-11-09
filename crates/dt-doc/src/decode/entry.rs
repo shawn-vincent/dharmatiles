@@ -757,6 +757,10 @@ impl Decoder<'_> {
             Some(format!(
                 "a {owner} is one {owner}; how many and how spread is a scatter's job: `scatter {name}=… {{ {owner} }}`"
             ))
+        } else if owner == "tree" && name == "height" {
+            Some("a thing's measure is its `size`: write `tree size=…`; `dharmatiles migrate` rewrites old tiles".to_owned())
+        } else if owner == "flower" && name == "radius" {
+            Some("a flower's measure is its `size`, the width across the petals (twice the old radius): write `flower size=…`; `dharmatiles migrate` rewrites old tiles".to_owned())
         } else if name == "debug" {
             Some("debug switches are not tile controls; `dharmatiles build --show attractors` shows them".to_owned())
         } else if let Some(new) = crate::elements::camel_of(name) {

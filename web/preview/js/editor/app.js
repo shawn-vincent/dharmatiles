@@ -31,6 +31,6 @@ export const offerMine = () => view.set({ mineOpen: true });
 export const FAMILY = {
   dirt: 'surface', flagstones: 'surface', planks: 'surface', cliff: 'surface', water: 'water',
   rock: 'thing', stone: 'thing', boulder: 'thing', pebble: 'thing', scatter: 'thing', wall: 'thing',
-  grass: 'plant', reeds: 'plant', flowers: 'plant', tree: 'plant',
+  grass: 'plant', reeds: 'plant', flower: 'plant', tree: 'plant',
   dungeonblocks: 'base', openlock: 'base', connector: 'base', stl: 'base',
 };

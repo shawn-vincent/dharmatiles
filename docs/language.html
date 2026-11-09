@@ -63,7 +63,7 @@ tile size="1x1" {
 <div class="tbl"><table>
 <thead><tr><th>Rule</th><th>Example</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td>A node is a name, then values and properties, then an optional block.</td><td><code>tree height=40 { … }</code></td><td>Properties are <code>key=value</code>; a block is <code>{ … }</code>.</td></tr>
+<tr><td>A node is a name, then values and properties, then an optional block.</td><td><code>tree size=40 { … }</code></td><td>Properties are <code>key=value</code>; a block is <code>{ … }</code>.</td></tr>
 <tr><td>A control may go on the line or as a child line.</td><td><code>cliff height=35</code> or <code>cliff { height 35 }</code></td><td>Both decode the same. Edits keep whichever form is written; new controls go on the line.</td></tr>
 <tr><td>Ranges, percents and points are quoted.</td><td><code>size="1..6"</code>, <code>cover="85%"</code>, <code>at="0.65,1"</code></td><td>KDL numbers can't contain <code>..</code>, <code>%</code> or <code>,</code>. A forgotten quote gets an error that says what to write.</td></tr>
 <tr><td>Switches are <code>#true</code> and <code>#false</code>.</td><td>—</td><td>Bare <code>true</code> is KDL v1 and an error. Few controls are switches: most take a word (<code>clods some</code>, <code>leaves bare</code>).</td></tr>
@@ -275,7 +275,7 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 <p>A wall must have <code>at=</code> a line; a cliff needs it for the edge forms (<code>run</code>, <code>corner</code>, <code>escarpment</code>) but not the free-standing ones. Surfaces take a region and usually a line; things take a point or a region. An entry has one place: a second <code>at=</code> is <code>dt::duplicate</code>, and the old <code>in=</code>, <code>along=</code> and <code>against=</code> are <code>dt::unknown-control</code> naming <code>at=</code> (<code>dharmatiles migrate</code> rewrites old tiles).</p>
 
 <h3 id="one-thing">One thing</h3>
-<p>A thing is one of itself. How many is never its own control: <code>tree count=3</code> is an error whose help says to use a scatter. With no <code>at=</code> a thing goes anywhere in its area. Either way its footprint is kept inside the tile and clear of other solids, nudged inward rather than clipped (D12).</p>
+<p>Things share one vocabulary. A rock (and <code>stone</code>, <code>boulder</code>, <code>pebble</code>), a <code>tree</code> and a <code>flower</code> are placed the same way, with <code>at=</code> a point or a region they stand in, and sized the same way, by <code>size=</code>, which takes a number, a range or any weighting (<code>size="low(1..6, 11)"</code>); a tree's <code>size</code> is its height and a flower's the width across its petals. Many of them are a <code>scatter</code> whose children are things: <code>scatter at=meadow perSquare=4 { flower size="4..6" }</code>. A scatter holds rocks or flowers, not both; trees in a scatter are not built yet. A thing is one of itself. How many is never its own control: <code>tree count=3</code> is an error whose help says to use a scatter. With no <code>at=</code> a thing goes anywhere in its area. Either way its footprint is kept inside the tile and clear of other solids, nudged inward rather than clipped (D12).</p>
 
 <h3 id="scatter">scatter</h3>
 <p>More than one of a thing is a <code>scatter</code>. It says how many and where; its children say what.</p>
@@ -299,8 +299,8 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 <div class="tbl"><table>
 <thead><tr><th>Kind</th><th>Elements</th></tr></thead>
 <tbody>
-<tr><td>Surfaces</td><td><a href="elements/dirt.html"><code>dirt</code></a> · <a href="elements/grass.html"><code>grass</code></a> · <a href="elements/reeds.html"><code>reeds</code></a> · <a href="elements/flowers.html"><code>flowers</code></a> · <a href="elements/water.html"><code>water</code></a> · <a href="elements/flagstones.html"><code>flagstones</code></a> · <a href="elements/planks.html"><code>planks</code></a></td></tr>
-<tr><td>Things</td><td><a href="elements/rock.html"><code>rock</code></a> · <a href="elements/stone.html"><code>stone</code></a> · <a href="elements/boulder.html"><code>boulder</code></a> · <a href="elements/pebble.html"><code>pebble</code></a> · <a href="elements/tree.html"><code>tree</code></a></td></tr>
+<tr><td>Surfaces</td><td><a href="elements/dirt.html"><code>dirt</code></a> · <a href="elements/grass.html"><code>grass</code></a> · <a href="elements/reeds.html"><code>reeds</code></a> · <a href="elements/water.html"><code>water</code></a> · <a href="elements/flagstones.html"><code>flagstones</code></a> · <a href="elements/planks.html"><code>planks</code></a></td></tr>
+<tr><td>Things</td><td><a href="elements/rock.html"><code>rock</code></a> · <a href="elements/stone.html"><code>stone</code></a> · <a href="elements/boulder.html"><code>boulder</code></a> · <a href="elements/pebble.html"><code>pebble</code></a> · <a href="elements/flower.html"><code>flower</code></a> · <a href="elements/tree.html"><code>tree</code></a></td></tr>
 <tr><td>Runs</td><td><a href="elements/wall.html"><code>wall</code></a> · <a href="elements/cliff.html"><code>cliff</code></a></td></tr>
 <tr><td>Placement</td><td><a href="elements/scatter.html"><code>scatter</code></a></td></tr>
 <tr><td>Bases (added by the build)</td><td><a href="elements/dungeonblocks.html"><code>dungeonblocks</code></a> · <a href="elements/openlock.html"><code>openlock</code></a></td></tr>
@@ -336,7 +336,7 @@ define oak {
     param height 50           // ground to the top of the crown, mm
 
     stack {
-        tree height=height {
+        tree size=height {
             trunk height=18
             crown width=44 clumps=60 shape=wide
             branch split=34 eagerness=0.6 target=0.25 balance=0.8 exponent=3 minRadius=0.9
@@ -358,8 +358,8 @@ define oak {
 <pre><code>dt::unknown-control
 
   × `tree` has no control `count`
-    ╭─[library/tiles/ground/2x2-grass-tree.dtile:11:24]
- 11 │         tree height=40 count=3 {               // anywhere on the tile; or at="1,1"
+    ╭─[library/tiles/ground/2x2-grass-tree.dtile:11:22]
+ 11 │         tree size=40 count=3 {               // anywhere on the tile; or at="1,1"
     ·                        ──┬──
     ·                          ╰── unknown control
   help: a tree is one tree; how many and how spread is a scatter's job: `scatter
@@ -411,7 +411,7 @@ tile size="2x2" seed=84 {
         dirt clods=none stones=none
         long-grass                      // grows round the trunk, wherever it is listed
 
-        tree height=40 {               // anywhere on the tile; or at="1,1"
+        tree size=40 {               // anywhere on the tile; or at="1,1"
             trunk height=30             // bare trunk below the crown
             crown width=30 clumps=32 shape=round branching=normal
             leaf length=4.5 width=3

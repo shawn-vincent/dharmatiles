@@ -192,7 +192,7 @@ impl Tree {
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut p = Params::default();
         let s = Settings::new(controls);
-        p.height = s.dist_or("height", p.height)?;
+        p.height = s.dist_or("size", p.height)?;
         p.trunk = s.dist_or("trunk/height", p.trunk)?;
         p.trunk_width = s.dist("trunk/width")?.or(p.trunk_width);
         p.width = s.dist_or("crown/width", p.width)?;

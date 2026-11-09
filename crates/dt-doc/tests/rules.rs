@@ -28,11 +28,11 @@ fn assert_fails(text: &str, code: &str, want: &str) {
 
 #[test]
 fn sizes_are_mm_and_h_is_opt_in() {
-    let e = first("tile { stack { tree height=40 } }");
-    let n = e.value("height").unwrap().num().unwrap();
+    let e = first("tile { stack { tree size=40 } }");
+    let n = e.value("size").unwrap().num().unwrap();
     assert_eq!((n.unit, n.bounds(&none).unwrap()), (None, (40.0, 40.0)));
-    let e = first("tile { stack { tree height=(h)1.2 } }");
-    let n = e.value("height").unwrap().num().unwrap();
+    let e = first("tile { stack { tree size=(h)1.2 } }");
+    let n = e.value("size").unwrap().num().unwrap();
     assert_eq!(n.unit, Some(Unit::H));
     assert!((n.bounds(&none).unwrap().0 - 1.2 * schema::H_MM).abs() < 1e-9);
 }
@@ -57,7 +57,7 @@ fn heights_are_named_or_mm_or_expressions() {
     );
     // A height name is not a size.
     assert_fails(
-        "tile { stack { tree height=groundHeight } }",
+        "tile { stack { tree size=groundHeight } }",
         "dt::unknown-name",
         "no parameter is called `groundHeight`",
     );
@@ -77,7 +77,7 @@ fn the_old_levels_block_points_at_let() {
 #[test]
 fn every_control_has_an_axis_that_says_how_it_scales() {
     let tree = schema::element("tree").unwrap();
-    assert_eq!(tree.control("height").unwrap().value, Some(Axis::Mm));
+    assert_eq!(tree.control("size").unwrap().value, Some(Axis::Mm));
     let leaf = tree.control("leaf").unwrap();
     assert_eq!(leaf.sub("length").unwrap().value, Some(Axis::Mm));
     let crown = tree.control("crown").unwrap();
@@ -173,7 +173,7 @@ fn mm_annotation_is_an_optional_check() {
         "(mm) and (h) are for sizes and levels",
     );
     assert_fails(
-        "tile { stack { tree height=(cm)4 } }",
+        "tile { stack { tree size=(cm)4 } }",
         "dt::unit",
         "units are not written",
     );
@@ -555,12 +555,12 @@ fn scatter_owns_placement_and_mixes_by_weight() {
     assert_eq!(e.kind, Kind::Solid);
     // A defined thing can be scattered, and placed alone.
     let doc = snippet(
-        "use \"parts/trees\" oak\ntile size=\"2x2\" { stack { scatter count=2 { oak }; oak at=\"1,1\" height=60 } }",
+        "use \"parts/trees\" oak\ntile size=\"2x2\" { stack { scatter count=2 { oak }; oak at=\"1,1\" size=60 } }",
     );
     let s = &doc.tile().unwrap().stack;
     assert_eq!(s[0].kind, Kind::Solid);
     assert_eq!(
-        s[1].value("height")
+        s[1].value("size")
             .unwrap()
             .num()
             .unwrap()
@@ -680,7 +680,7 @@ fn definitions_are_typed_by_what_their_parameters_fill() {
     );
     // A required parameter.
     assert_fails(
-        "define d { param h; stack { tree height=h } }\ntile { stack { d } }",
+        "define d { param h; stack { tree size=h } }\ntile { stack { d } }",
         "dt::missing-control",
         "`d` needs `h`",
     );
@@ -705,12 +705,12 @@ fn every_mistake_is_reported() {
 
 #[test]
 fn value_is_kept_with_its_span() {
-    let text = "tile { stack { tree height=40 } }";
+    let text = "tile { stack { tree size=40 } }";
     let doc = snippet(text);
     let e = &doc.tile().unwrap().stack[0];
-    let s = e.control("height").unwrap().value.as_ref().unwrap().span;
+    let s = e.control("size").unwrap().value.as_ref().unwrap().span;
     assert_eq!(&text[s.offset()..s.offset() + s.len()], "40");
-    assert!(matches!(e.value("height"), Some(Value::Num(_))));
+    assert!(matches!(e.value("size"), Some(Value::Num(_))));
 }
 
 // ---- two whole tiles ------------------------------------------------------
@@ -782,5 +782,27 @@ fn a_tile_is_named_by_its_file() {
         "tile \"My Pond\" { stack { dirt } }",
         "dt::tile-name",
         "rename the file",
+    );
+}
+
+#[test]
+fn an_old_flowers_and_tree_height_name_the_new_forms() {
+    assert_fails(
+        "tile { stack { flowers perSquare=4 } }",
+        "dt::unknown-element",
+        "scatter perSquare=4 { flower }",
+    );
+    assert_fails(
+        "tile { stack { tree height=40 } }",
+        "dt::unknown-control",
+        "write `tree size=",
+    );
+    // a flower is a thing: placed alone, or scattered
+    snippet("tile { stack { dirt; flower at=\"0.5,0.5\" size=\"4..6\" } }");
+    snippet("tile { stack { dirt; scatter perSquare=4 { flower size=5 petals=6 } } }");
+    assert_fails(
+        "tile { stack { dirt; flower radius=2 } }",
+        "dt::unknown-control",
+        "twice the old radius",
     );
 }

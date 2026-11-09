@@ -615,7 +615,7 @@ mod tests {
         let tree = element("tree").unwrap();
         let shape = tree.control("crown").unwrap().sub("shape").unwrap();
         assert!(matches!(shape.default_value(), Some(Value::Word(w)) if w.word == "round"));
-        let height = tree.control("height").unwrap();
+        let height = tree.control("size").unwrap();
         assert!(matches!(height.default_value(), Some(Value::Num(_))));
         let boards = element("planks").unwrap().control("boards").unwrap();
         assert!(matches!(boards.default_value(), Some(Value::Num(_))));

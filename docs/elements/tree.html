@@ -56,7 +56,7 @@ tile size="2x2" seed=84 {
         base
         dirt clods=none stones=none
         long-grass
-        tree height=40 {                // or: tree at="1,1" height=40
+        tree size=40 {                  // or: tree at="1,1" size=40
             trunk height=30             // bare trunk below the crown
             crown width=30 clumps=32 shape=round branching=normal
             leaf length=4.5 width=3
@@ -84,7 +84,7 @@ tile size="2x2" seed=3 {
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-height"><td><code>height</code></td><td>mm, 20 to 120, or a range, or a weighted range</td><td><code>40</code></td><td>ground to the top of the crown</td></tr>
+<tr id="c-size"><td><code>size</code></td><td>mm, 20 to 120, or a range, or a weighted range</td><td><code>40</code></td><td>height: ground to the top of the crown</td></tr>
 <tr id="c-trunk"><td><code>trunk</code></td><td>group</td><td>—</td><td>the bare trunk</td></tr>
 <tr id="c-trunk-height"><td><code>trunk height</code></td><td>mm, 0 to 200, or a range, or a weighted range</td><td><code>30</code></td><td>bare trunk below the crown</td></tr>
 <tr id="c-trunk-width"><td><code>trunk width</code></td><td>mm, 0.5 to 40, or a range, or a weighted range</td><td>—</td><td>trunk thickness at the ground</td></tr>

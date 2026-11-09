@@ -134,7 +134,7 @@ fn insertion_goes_on_the_line_as_a_property() {
     assert_eq!(lines.len(), 1);
     assert_eq!(
         lines[0].2,
-        "        tree height=40 at=\"1,1\" {               // anywhere on the tile; or at=\"1,1\""
+        "        tree size=40 at=\"1,1\" {               // anywhere on the tile; or at=\"1,1\""
     );
     let doc = redecode(name, &new);
     let tree = &doc.tile().unwrap().stack[2];
@@ -160,8 +160,8 @@ fn insertion_goes_on_the_line_as_a_property() {
 
     // A control already written, in either form, is set, not inserted.
     assert_eq!(
-        insert_property(text, &path, "height", 50),
-        Err(EditError::Exists("height".into()))
+        insert_property(text, &path, "size", 50),
+        Err(EditError::Exists("size".into()))
     );
     assert_eq!(
         insert_property(text, &path, "leaf", 1),

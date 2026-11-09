@@ -608,10 +608,10 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
         let b = serde_json::json!({ "element": "tree", "control": control, "typed": typed });
         post(&r, "/api/check-value", Some(&token), None, &b.to_string())
     };
-    let (h, v) = cv("height", "150");
+    let (h, v) = cv("size", "150");
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
-    assert_eq!(v["message"], "`tree height` is 20 mm to 120 mm, not 150 mm");
-    assert!(cv("height", "40").1["message"].is_null());
+    assert_eq!(v["message"], "`tree size` is 20 mm to 120 mm, not 150 mm");
+    assert!(cv("size", "40").1["message"].is_null());
     assert!(cv("no-such-control", "150").1["message"].is_null());
     // save: only over the text it was edited from
     let s = serde_json::json!({ "text": edited, "base": "something else" }).to_string();

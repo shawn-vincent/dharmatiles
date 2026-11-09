@@ -15,7 +15,7 @@ export let tools = null; // the bar's tools (below)
 
 const overlay = new Overlay($('over'), viewer);
 const SURFACES = new Set(['dirt', 'flagstones', 'planks', 'cliff', 'water']);
-const COLOUR = { water: '--water', dirt: '--earth', flagstones: '--stone', cliff: '--stone', planks: '--earth', grass: '--moss', reeds: '--moss', flowers: '--bloom' };
+const COLOUR = { water: '--water', dirt: '--earth', flagstones: '--stone', cliff: '--stone', planks: '--earth', grass: '--moss', reeds: '--moss', flower: '--bloom' };
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 /** The ground's heights, from the surfaces the build made. */

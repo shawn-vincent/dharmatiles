@@ -13,7 +13,7 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-thing" title="stone: a thing, a run or a scatter"></i>Element · placement</div>
   <h1>scatter</h1>
-  <p class="lede">More than one of a thing. A scatter says how many and where; its children say what. Rocks, stones, boulders, pebbles, trees and definitions whose stack is one thing can all be scattered.</p>
+  <p class="lede">More than one of a thing. A scatter says how many and where; its children say what. Rocks, stones, boulders, pebbles, flowers, trees and definitions whose stack is one thing can all be scattered.</p>
   <figure class="shot"><img src="img/el-scatter.jpg" alt="lib:tiles/cliffs/2x1-cliff.dtile: stones and boulders scattered against the cliff, pebbles scattered in the dirt."><figcaption><code>lib:tiles/cliffs/2x1-cliff.dtile</code>: stones and boulders scattered against the cliff, pebbles scattered in the dirt.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
@@ -27,7 +27,7 @@
 scatter at="foot(cliff)" perSquare=55 reach=4 { stone }         // scree at the cliff's foot
 scatter perSquare=3 { stone weight=3; boulder }              // a mix, three stones to a boulder
 dirt { scatter perSquare=40 { pebble } }                     // inside a surface: lands on it</code></pre>
-<p>A scatter needs exactly one of <code>count</code> and <code>perSquare</code>. <code>reach</code> needs <code>at=foot(…)</code>. With several children, each child's <code>weight=</code> is its share of the mix (default: equal). Every scattered thing keeps inside the tile and clear of other solids: it is nudged inward, never clipped.</p>
+<p>A scatter needs exactly one of <code>count</code> and <code>perSquare</code>. <code>reach</code> needs <code>at=foot(…)</code>. A scatter holds rocks or flowers, not a mix of the two. With several children, each child's <code>weight=</code> is its share of the mix (default: equal). Every scattered thing keeps inside the tile and clear of other solids: it is nudged inward, never clipped.</p>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference scatter -->
 <div class="facts">
@@ -61,6 +61,7 @@ dirt { scatter perSquare=40 { pebble } }                     // inside a surface
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-corner.dtile"><code>2x2-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-corner.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-massif.dtile"><code>2x2-cliff-massif.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-massif.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-plateau.dtile"><code>2x2-cliff-plateau.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-plateau.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-flowers.dtile"><code>1x1-grass-flowers.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-flowers.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-tree.dtile"><code>1x1-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-tree.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-angle.dtile"><code>1x1-water+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-angle.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-corner.dtile"><code>1x1-water+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-corner.dtile</span></li>

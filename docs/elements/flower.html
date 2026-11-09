@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>flowers</title>
+<title>flower</title>
 <link rel="stylesheet" href="../assets/site.css">
 <script src="../assets/site.js"></script>
 </head>
@@ -11,10 +11,10 @@
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow"><i class="fam-mark fam-plant" title="moss: a plant"></i>Element · surface</div>
-  <h1>flowers</h1>
-  <p class="lede">Wildflowers: each one a thin dome on a column, ringed by petal domes on cones. Flowers stand before the grass is grown, so the grass grows round them, never through them.</p>
-  <figure class="shot"><img src="img/el-flowers.jpg" alt="lib:tiles/ground/1x1-grass-flowers.dtile: four flowers in a lawn."><figcaption><code>lib:tiles/ground/1x1-grass-flowers.dtile</code>: four flowers in a lawn.</figcaption></figure>
+  <div class="eyebrow"><i class="fam-mark fam-plant" title="moss: a plant"></i>Element · thing</div>
+  <h1>flower</h1>
+  <p class="lede">One wildflower: a thin dome on a column, ringed by petal domes on cones. A flower is placed and sized like every other thing, a rock or a tree: one stands <code>at=</code> a point or somewhere in a region, and many are a <a href="scatter.html"><code>scatter</code></a>. Flowers stand before the grass is grown, so the grass grows round them, never through them.</p>
+  <figure class="shot"><img src="img/el-flower.jpg" alt="lib:tiles/ground/1x1-grass-flowers.dtile: four flowers in a lawn."><figcaption><code>lib:tiles/ground/1x1-grass-flowers.dtile</code>: four flowers in a lawn.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>
@@ -28,24 +28,25 @@
 tile size="1x1" seed=7 {
     stack {
         dirt
-        flowers perSquare=4 petals=5 radius=2.5
+        scatter perSquare=4 { flower size="4..6" petals=5 }   // many, each its own size
+        flower at="0.5,0.5" size=5                            // or one, where you say
         lawn
     }
 }</code></pre>
+<p>A scatter holds flowers or rocks, not a mix of the two. Flowers keep to dry ground, inside the scatter's region and clear of rocks, trees and walls; a flower given a point must stand clear of the tile edge by its reach.</p>
 <h2 id="reference">Reference</h2>
-<!-- gen:reference flowers -->
+<!-- gen:reference flower -->
 <div class="facts">
-  <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
-  <div><div class="k">Place</div><div class="v"><code>at=</code> region, line</div></div>
+  <div><div class="k">Kind</div><div class="v">a thing: one solid, standing on the surface</div></div>
+  <div><div class="k">Place</div><div class="v"><code>at=</code> region, point</div></div>
   <div><div class="k">Built</div><div class="v">yes</div></div>
 </div>
 <h3 id="controls">Controls</h3>
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-perSquare"><td><code>perSquare</code></td><td>per square, 0 to 40</td><td><code>4</code></td><td>how many flowers a square</td></tr>
+<tr id="c-size"><td><code>size</code></td><td>mm, 1 to 20, or a range, or a weighted range</td><td><code>5</code></td><td>width across the petals' tips</td></tr>
 <tr id="c-petals"><td><code>petals</code></td><td>count, 0 to 12</td><td><code>5</code></td><td>petals round the centre</td></tr>
-<tr id="c-radius"><td><code>radius</code></td><td>mm, 0.5 to 10</td><td><code>2.5</code></td><td>from the centre to a petal's tip</td></tr>
 <tr id="c-centre"><td><code>centre</code></td><td>mm, 0.3 to 8</td><td><code>1.5</code></td><td>radius of the centre dome</td></tr>
 <tr id="c-stem"><td><code>stem</code></td><td>mm, 0.3 to 6</td><td><code>1</code></td><td>height of the column under each dome</td></tr>
 <tr id="c-dome"><td><code>dome</code></td><td>mm, 0.2 to 4</td><td><code>1</code></td><td>height of the centre dome</td></tr>
@@ -55,7 +56,7 @@ tile size="1x1" seed=7 {
 <ul class="tiles">
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-flowers.dtile"><code>1x1-grass-flowers.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-flowers.dtile</span></li>
 </ul>
-<p class="muted small">Generated from <code>dharmatiles elements flowers</code> by <code>cargo xtask docs</code>.</p>
+<p class="muted small">Generated from <code>dharmatiles elements flower</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->
 <h2 id="notes">Notes</h2>
 <p>Flowers paint in the <code>flower</code> colour of the <a href="palette.html">palette</a>. Every size is mm at the 35 mm square and scales with the system.</p>

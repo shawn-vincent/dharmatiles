@@ -134,8 +134,8 @@ fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
 fn a_value_out_of_range_is_refused_when_read() {
     // a parameter is checked at the call, against the control it feeds
     let e = errors(
-        "define tall {\n    param height 50\n    stack { tree height=height }\n}\n\
-         tile { stack { dirt; tall height=150 } }\n",
+        "define tall {\n    param size 50\n    stack { tree size=size }\n}\n\
+         tile { stack { dirt; tall size=150 } }\n",
     );
-    assert_eq!(e[0].message, "`tall height` is 20 mm to 120 mm, not 150 mm");
+    assert_eq!(e[0].message, "`tall size` is 20 mm to 120 mm, not 150 mm");
 }

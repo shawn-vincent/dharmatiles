@@ -139,6 +139,8 @@ pub fn heights(text: &str) -> Result<Option<String>, EditError> {
     step(cliffs)?;
     step(heights_only)?;
     step(places)?;
+    step(tree_size)?;
+    step(flowers)?;
     Ok(changed.then_some(now))
 }
 
@@ -361,6 +363,141 @@ pub fn mostly(text: &str) -> Result<Option<String>, EditError> {
         return Ok(None);
     }
     edits.sort_by_key(|e| std::cmp::Reverse((e.start, e.end)));
+    let mut out = text.to_owned();
+    for e in edits {
+        out.replace_range(e.start..e.end, &e.with);
+    }
+    Ok(Some(out))
+}
+
+/// A tree's `height` is its `size`, the one word a thing's measure goes by:
+/// `tree height=40` is `tree size=40` (the drawn range and its weighting
+/// are the same, so the build is too), on the line or as a control's own
+/// line.  The `trunk` group's own `height` stays.  Every other byte is as
+/// written.  `Ok(None)` when no tree writes a `height`.
+///
+/// # Errors
+/// If the text is not KDL.
+pub fn tree_size(text: &str) -> Result<Option<String>, EditError> {
+    fn walk(nodes: &[KdlNode], edits: &mut Vec<Edit>) {
+        for n in nodes {
+            if n.name().value() == "tree" {
+                let keys = n
+                    .entries()
+                    .iter()
+                    .filter_map(|e| e.name())
+                    .chain(
+                        n.children()
+                            .into_iter()
+                            .flat_map(|k| k.nodes().iter().map(KdlNode::name)),
+                    )
+                    .filter(|k| k.value() == "height");
+                for k in keys {
+                    edits.push(Edit {
+                        start: k.span().offset(),
+                        end: k.span().offset() + k.span().len(),
+                        with: "size".to_owned(),
+                    });
+                }
+            }
+            if let Some(kids) = n.children() {
+                walk(kids.nodes(), edits);
+            }
+        }
+    }
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut edits = Vec::new();
+    walk(doc.nodes(), &mut edits);
+    if edits.is_empty() {
+        return Ok(None);
+    }
+    edits.sort_by_key(|e| std::cmp::Reverse(e.start));
+    let mut out = text.to_owned();
+    for e in edits {
+        out.replace_range(e.start..e.end, &e.with);
+    }
+    Ok(Some(out))
+}
+
+/// The `flowers` covering is a scatter of a `flower` thing:
+/// `flowers at=bank perSquare=4 petals=5 radius=2.5` is
+/// `scatter at=bank perSquare=4 { flower size=5 petals=5 }`.  The scatter
+/// keeps the place, the density and the seed (`perSquare=4` is written even
+/// when the old line left it to the default, which was 4); the flower takes
+/// the rest, its `radius` as the width across the petals, `size` (twice
+/// the radius).  A `flowers` written with a block, or a control that is not
+/// a number, is left as written: the decoder names the new form.
+/// `Ok(None)` when no `flowers` is written.
+///
+/// # Errors
+/// If the text is not KDL.
+pub fn flowers(text: &str) -> Result<Option<String>, EditError> {
+    fn walk(text: &str, nodes: &[KdlNode], edits: &mut Vec<Edit>) {
+        for n in nodes {
+            if n.name().value() == "flowers" && n.children().is_none() {
+                let (off, len) = (n.span().offset(), n.span().len());
+                let node_text = text[off..off + len].trim_end();
+                let mut scatter: Vec<String> = Vec::new();
+                let mut flower: Vec<String> = Vec::new();
+                let mut per_square = false;
+                let mut size: Option<String> = None;
+                let mut ok = true;
+                for e in n.entries() {
+                    let raw = text[e.span().offset()..e.span().offset() + e.span().len()].trim();
+                    match e.name().map(|k| k.value()) {
+                        None => ok = false,
+                        Some("at" | "seed") => scatter.push(raw.to_owned()),
+                        Some("perSquare") => {
+                            per_square = true;
+                            scatter.push(raw.to_owned());
+                        }
+                        Some("radius") => match e
+                            .value()
+                            .as_float()
+                            .or_else(|| e.value().as_integer().map(|i| i as f64))
+                        {
+                            Some(r) => {
+                                size = Some(num_text(&KdlValue::Float(r * 2.0)).unwrap_or_default())
+                            }
+                            None => ok = false,
+                        },
+                        Some("petals" | "centre" | "stem" | "dome" | "petal") => {
+                            flower.push(raw.to_owned());
+                        }
+                        Some(_) => ok = false,
+                    }
+                }
+                if ok {
+                    if !per_square {
+                        scatter.push("perSquare=4".to_owned());
+                    }
+                    if let Some(sz) = size {
+                        flower.insert(0, format!("size={sz}"));
+                    }
+                    let body = if flower.is_empty() {
+                        "flower".to_owned()
+                    } else {
+                        format!("flower {}", flower.join(" "))
+                    };
+                    edits.push(Edit {
+                        start: off,
+                        end: off + node_text.len(),
+                        with: format!("scatter {} {{ {body} }}", scatter.join(" ")),
+                    });
+                }
+            }
+            if let Some(kids) = n.children() {
+                walk(text, kids.nodes(), edits);
+            }
+        }
+    }
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut edits = Vec::new();
+    walk(text, doc.nodes(), &mut edits);
+    if edits.is_empty() {
+        return Ok(None);
+    }
+    edits.sort_by_key(|e| std::cmp::Reverse(e.start));
     let mut out = text.to_owned();
     for e in edits {
         out.replace_range(e.start..e.end, &e.with);
@@ -1289,5 +1426,47 @@ mod tests {
     fn a_hyphen_in_a_value_or_a_definition_name_is_left_alone() {
         let text = "tile size=\"1x1\" {\n    stack {\n        wall style=cut-stone\n        long-grass in=east\n    }\n}\n";
         assert!(control_names(text).unwrap().is_none());
+    }
+}
+
+#[cfg(test)]
+mod thing_tests {
+    use super::*;
+
+    #[test]
+    fn a_trees_height_is_its_size_and_the_trunks_stays() {
+        let old =
+            "tile { stack { tree at=\"1,1\" height=\"low(36..40, 8)\" { trunk height=18 } } }";
+        assert_eq!(
+            tree_size(old).unwrap().unwrap(),
+            "tile { stack { tree at=\"1,1\" size=\"low(36..40, 8)\" { trunk height=18 } } }"
+        );
+        let line = "tile { stack { tree { height 40 } } }";
+        assert_eq!(
+            tree_size(line).unwrap().unwrap(),
+            "tile { stack { tree { size 40 } } }"
+        );
+        assert_eq!(
+            tree_size("tile { stack { grass height=2 } }").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn flowers_become_a_scatter_of_a_flower() {
+        let old = "tile { stack { flowers at=bank perSquare=6 petals=7 radius=3 stem=1.5 } }";
+        assert_eq!(
+            flowers(old).unwrap().unwrap(),
+            "tile { stack { scatter at=bank perSquare=6 { flower size=6 petals=7 stem=1.5 } } }"
+        );
+        // the old default density is kept
+        assert_eq!(
+            flowers("tile { stack { flowers } }").unwrap().unwrap(),
+            "tile { stack { scatter perSquare=4 { flower } } }"
+        );
+        assert_eq!(
+            flowers("tile { stack { scatter { rock } } }").unwrap(),
+            None
+        );
     }
 }

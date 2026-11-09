@@ -295,8 +295,8 @@ test('the sheet asks the program to check a typed value', async () => {
     return new Response('{"message":"takes 20 to 120"}');
   };
   try {
-    const r = await browserHost().checkValue('tree', 'height', '150');
-    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'height', typed: '150' }]]);
+    const r = await browserHost().checkValue('tree', 'size', '150');
+    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'size', typed: '150' }]]);
     assert.equal(r.body.message, 'takes 20 to 120');
   } finally {
     globalThis.fetch = realFetch;

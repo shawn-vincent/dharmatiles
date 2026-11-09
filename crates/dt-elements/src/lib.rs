@@ -6,7 +6,7 @@
 //! satisfy; then it builds into the scene ([`Element::build`]).
 //!
 //! Layers of the terrain: [`dirt`], [`water`]. Pieces bodies: [`floor`] (`flagstones`, `planks`). Solids: [`rock`]
-//! and its kin, [`grass`], [`reeds`], [`flowers`], [`cliff`], [`wall`],
+//! and its kin, [`grass`], [`reeds`], [`flowers`] (the `flower` thing), [`cliff`], [`wall`],
 //! [`tree`]. Bases: [`connector`] (DungeonBlocks) and [`openlock`].
 
 pub mod base;
@@ -385,7 +385,12 @@ static ELEMENTS: &[(&str, Builder)] = &[
     ("dirt", |_, c, _| Ok(Box::new(dirt::Dirt::new(c)?))),
     ("water", |_, c, _| Ok(Box::new(water::Water::new(c)?))),
     ("scatter", |_, c, ch| {
-        Ok(Box::new(rock::Scatter::new(c, ch)?))
+        // flowers or rocks: a scatter holds one kind of thing
+        if !ch.is_empty() && ch.iter().all(|k| k.name == "flower") {
+            Ok(Box::new(flowers::Scatter::new(c, ch)?))
+        } else {
+            Ok(Box::new(rock::Scatter::new(c, ch)?))
+        }
     }),
     ("rock", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
     ("stone", |n, c, _| Ok(Box::new(rock::Single::new(n, c)?))),
@@ -400,7 +405,7 @@ static ELEMENTS: &[(&str, Builder)] = &[
     ("grass", |_, c, _| Ok(Box::new(grass::Grass::new(c)?))),
     ("reeds", |_, c, _| Ok(Box::new(reeds::Reeds::new(c)?))),
     ("cliff", |_, c, _| Ok(Box::new(cliff::Cliff::new(c)?))),
-    ("flowers", |_, c, _| Ok(Box::new(flowers::Flowers::new(c)?))),
+    ("flower", |_, c, _| Ok(Box::new(flowers::Flower::new(c)?))),
 ];
 
 /// The element `name` with its controls and children (a scatter's things).
