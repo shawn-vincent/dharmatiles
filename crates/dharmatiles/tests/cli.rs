@@ -96,6 +96,44 @@ fn elements_lists_every_element() {
 }
 
 #[test]
+fn elements_json_lists_every_function_with_its_numbers() {
+    let o = Command::new(EXE)
+        .args(["elements", "rock", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0));
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    let names: Vec<&str> = v["weightings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|w| w["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "flat", "low", "high", "bell", "peak", "ends", "steps", "list", "mix"
+        ]
+    );
+    let bell = &v["weightings"][3];
+    assert_eq!(bell["call"], "bell(range, spread = 0.2, at = 0.5)");
+    assert_eq!(bell["args"][0]["name"], "spread");
+    assert_eq!(bell["args"][0]["default"], 0.2);
+    assert_eq!(bell["args"][0]["least"], 0.05);
+    assert_eq!(bell["args"][0]["most"], 1.0);
+    // no upper limit is null; over 0 says so
+    let low = &v["weightings"][1];
+    assert_eq!(low["args"][0]["most"], serde_json::Value::Null);
+    assert_eq!(low["args"][0]["above"], true);
+    // the numbers a function takes any number of
+    let steps = &v["weightings"][6];
+    assert_eq!(steps["rest"]["atLeast"], 2);
+    assert_eq!(steps["rest"]["atMost"], 32);
+    assert_eq!(v["weightings"][7]["rest"]["atMost"], 64);
+    assert_eq!(v["weightings"][8]["rest"]["atMost"], 16);
+}
+
+#[test]
 fn elements_rock_lists_the_weightings() {
     let o = Command::new(EXE)
         .args(["elements", "rock"])
@@ -114,6 +152,10 @@ fn elements_rock_lists_the_weightings() {
         "high(range",
         "bell(range",
         "peak(range",
+        "ends(range",
+        "steps(range",
+        "[value:weight",
+        "mix(part",
     ] {
         assert!(text.contains(f), "{f}: {text}");
     }

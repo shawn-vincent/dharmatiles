@@ -1271,11 +1271,11 @@ fn checked(
     v: &dt_elements::Value,
     b: &Bound,
 ) -> Result<(), Box<Diag>> {
-    let (lo, hi, range) = match *v {
-        dt_elements::Value::Number(x) => (x, x, false),
-        dt_elements::Value::Range(lo, hi) => (lo, hi, true),
+    let (lo, hi, range) = match v {
+        dt_elements::Value::Number(x) => (*x, *x, false),
+        dt_elements::Value::Range(lo, hi) => (*lo, *hi, true),
         dt_elements::Value::Dist(d) => (d.lo, d.hi, true),
-        dt_elements::Value::Draw(ref d) => {
+        dt_elements::Value::Draw(d) => {
             let (lo, hi) = d.bounds();
             (lo, hi, true)
         }

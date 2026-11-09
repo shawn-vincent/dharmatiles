@@ -149,7 +149,7 @@ fn an_unknown_function_lists_the_functions() {
     refused(
         &tile("", "        dirt\n        rock size=\"bel(1..6)\""),
         "dt::value",
-        "flat, low, high, bell or peak",
+        "flat, low, high, bell, peak, ends, steps or mix, or a list like [1:4, 2:5]",
     );
 }
 
@@ -269,15 +269,227 @@ fn two_ranges_in_one_control_roll_apart() {
 fn the_function_lists_agree() {
     // dt-doc parses the names and the arity, dt-geom holds the odds
     let doc: Vec<&str> = dt_doc::expr::WEIGHTINGS.iter().map(|w| w.0).collect();
-    let geom: Vec<&str> = dt_geom::WEIGHTINGS.iter().map(|w| w.0).collect();
+    let geom: Vec<&str> = dt_geom::WEIGHTINGS
+        .iter()
+        .map(|w| w.name)
+        .filter(|n| *n != "list")
+        .collect();
     assert_eq!(doc, geom);
     for (name, most) in dt_doc::expr::WEIGHTINGS {
-        let args = vec![0.5; most];
-        assert!(dt_geom::Weighting::from_call(name, &args).is_ok(), "{name}");
-        let args = vec![0.5; most + 1];
-        assert!(
-            dt_geom::Weighting::from_call(name, &args).is_err(),
-            "{name}"
-        );
+        match name {
+            // any number of weights, up to the cap, and parts with weights
+            "steps" => {
+                assert!(dt_geom::Weighting::from_call(name, &[1.0; 3]).is_ok());
+                assert!(dt_geom::Weighting::from_call(name, &[1.0; 33]).is_err());
+            }
+            "mix" => {}
+            _ => {
+                let args = vec![0.5; most];
+                assert!(dt_geom::Weighting::from_call(name, &args).is_ok(), "{name}");
+                let args = vec![0.5; most + 1];
+                assert!(
+                    dt_geom::Weighting::from_call(name, &args).is_err(),
+                    "{name}"
+                );
+            }
+        }
+    }
+}
+
+const WHOLE_SET: [&str; 4] = [
+    "ends(6..10, 2, 0.25)",
+    "steps(6..10, 1, 4, 2)",
+    "[6, 8:3, 10]",
+    "mix(bell(6..10), 3, flat(6..10), 1)",
+];
+
+#[test]
+fn the_whole_set_builds_each_its_own_draw() {
+    let plain = hash(&tile("", "        dirt\n        rock size=\"6..10\""));
+    let mut seen = vec![plain.clone()];
+    for size in WHOLE_SET {
+        let h = hash(&tile(
+            "",
+            &format!("        dirt\n        rock size=\"{size}\""),
+        ));
+        // the ground is the same: only the rock moved, and it moved differently each time
+        assert_eq!(h[0], plain[0], "{size}");
+        assert!(!seen.contains(&h), "{size}");
+        seen.push(h);
+    }
+    // a let holds a list or a mix like any distribution
+    let named = hash(&tile(
+        "    let pick \"[6, 8:3, 10]\"",
+        "        dirt\n        rock size=\"pick\"",
+    ));
+    assert_eq!(named, seen[3]);
+    // and they scale and shift with the range, and add as dice
+    for size in [
+        "2 * [3, 4:3, 5]",
+        "[3, 4:3, 5] * 2",
+        "mix(bell(6..10), 3, flat(6..10), 1) + 0",
+    ] {
+        hash(&tile(
+            "",
+            &format!("        dirt\n        rock size=\"{size}\""),
+        ));
+    }
+    // a list on a count picks among the numbers written
+    let count = |v: &str| {
+        hash(&tile(
+            "",
+            &format!("        dirt\n        scatter count=\"{v}\" {{ stone size=\"2..4\" }}"),
+        ))
+    };
+    assert_ne!(count("[1, 3:2, 5]"), count("1..5"));
+    count("ends(1..5, 1, 0)");
+    count("steps(1..5, 1, 0, 3)");
+}
+
+#[test]
+fn a_list_listing_a_value_twice_is_dt_weighting() {
+    let d = refused(
+        &tile("", "        dirt\n        rock size=\"[6:4, 8:5, 8:1]\""),
+        "dt::weighting",
+        "give each value once, with its total weight: [6:4, 8:6]",
+    );
+    assert_eq!(d.message, "8 is listed twice in [6:4, 8:5, 8:1]");
+}
+
+#[test]
+fn the_new_functions_check_their_limits() {
+    let rock = |size: &str| tile("", &format!("        dirt\n        rock size=\"{size}\""));
+    let many = |n: usize| vec!["1"; n].join(", ");
+    for (size, message, help) in [
+        (
+            "ends(6..10, 9)",
+            "ends' power must be from 0 to 8, not 9",
+            "0 is flat",
+        ),
+        (
+            "ends(6..10, 1, 2)",
+            "ends' centre must be from 0 to 1, not 2",
+            "low end",
+        ),
+        (
+            "steps(6..10, 3)",
+            "`steps` needs two weights at least",
+            "one weight per bin",
+        ),
+        (
+            "steps(6..10, 0, 0)",
+            "`steps` needs a weight above 0",
+            "above 0",
+        ),
+        (
+            "steps(6..10, 1, -1)",
+            "a weight in `steps` must be 0 or more, not -1",
+            "weight is",
+        ),
+        ("[6:0, 8:0]", "a list needs a weight above 0", "above 0"),
+        (
+            "[6:-1, 8]",
+            "a weight in a list must be 0 or more, not -1",
+            "weight is",
+        ),
+        (
+            "mix(bell(6..10), 0, flat(6..10), 0)",
+            "`mix` needs a weight above 0",
+            "above 0",
+        ),
+        (
+            "mix(bell(6..10, 5), 1, flat(6..10), 1)",
+            "bell's spread must be from 0.05 to 1, not 5",
+            "share of the width",
+        ),
+    ] {
+        let d = refused(&rock(size), "dt::range", help);
+        assert_eq!(d.message, message, "{size}");
+    }
+    // the caps: 32 bins, 64 values, 16 parts
+    assert!(
+        check(
+            &mem(&rock(&format!("steps(6..10, {})", many(32)))),
+            "t.dtile",
+            &Options::default()
+        )
+        .is_ok()
+    );
+    refused(
+        &rock(&format!("steps(6..10, {})", many(33))),
+        "dt::range",
+        "fewer, wider bins",
+    );
+    assert!(
+        check(
+            &mem(&rock(&format!(
+                "[{}]",
+                (1..=64)
+                    .map(|i| i.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))),
+            "t.dtile",
+            &Options::default()
+        )
+        .is_ok()
+    );
+    refused(
+        &rock(&format!(
+            "[{}]",
+            (1..=65)
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        "dt::range",
+        "steps(",
+    );
+    let parts = |n: usize| vec!["flat(6..10), 1"; n].join(", ");
+    assert!(
+        check(
+            &mem(&rock(&format!("mix({})", parts(16)))),
+            "t.dtile",
+            &Options::default()
+        )
+        .is_ok()
+    );
+    refused(
+        &rock(&format!("mix({})", parts(17))),
+        "dt::range",
+        "fewer parts",
+    );
+    // mix: the parts share one range, none nests, a part is a call
+    for (size, what) in [
+        (
+            "mix(bell(6..10), 1, flat(6..9), 1)",
+            "write 6..10 in every part",
+        ),
+        (
+            "mix(bell(6..10), 1, mix(low(6..10), 1, flat(6..10), 1), 1)",
+            "weightings do not nest",
+        ),
+        (
+            "mix(6..10, 1, flat(6..10), 1)",
+            "each part, then its weight",
+        ),
+        ("mix(bell(6..10), flat(6..10))", "write mix(bell(1..6), 3"),
+        ("low([6, 8])", "the first thing in the call is a range"),
+    ] {
+        refused(&rock(size), "dt::weighting", what);
+    }
+}
+
+#[test]
+fn a_band_refuses_a_list_a_steps_an_ends_and_a_mix() {
+    let top = |v: &str| tile("", &format!("        dirt top=\"{v}\""));
+    for v in [
+        "[2, 4]",
+        "[2:3, 4]",
+        "ends([2 .. 4])",
+        "steps([2 .. 4], 1, 2)",
+        "mix(low([2 .. 4]), 1, flat([2 .. 4]), 1)",
+    ] {
+        refused(&top(v), "dt::weighting", "write the range alone");
     }
 }

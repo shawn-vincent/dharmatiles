@@ -187,7 +187,9 @@ impl Eval<'_> {
             Expr::Range { lo, hi } => self.iv(lo, v, depth)?.hull(self.iv(hi, v, depth)?),
             // the plain range is a band; odds have nothing to act on there
             Expr::Weighted { range, .. } if e.weighted().is_none() => self.iv(range, v, depth)?,
-            Expr::Weighted { .. } => return Err(format!("{WEIGHTED_BAND}: `{e}`")),
+            Expr::Weighted { .. } | Expr::List { .. } => {
+                return Err(format!("{WEIGHTED_BAND}: `{e}`"));
+            }
             Expr::Bin { op, lhs, rhs } => {
                 let (a, b) = (self.iv(lhs, v, depth)?, self.iv(rhs, v, depth)?);
                 match op {
@@ -241,6 +243,7 @@ fn collect(e: &Expr, out: &mut Vec<String>) {
             collect(hi, out);
         }
         Expr::Weighted { range, .. } => collect(range, out),
+        Expr::List { items } => items.iter().for_each(|(v, _)| collect(v, out)),
         Expr::Bin { lhs, rhs, .. } => {
             collect(lhs, out);
             collect(rhs, out);

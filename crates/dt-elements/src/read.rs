@@ -35,7 +35,7 @@ fn span(c: &Control) -> Result<Span, LookError> {
             format!("`{}` does not take a weighting yet", c.name),
             format!(
                 "write the range {}; weightings are accepted on size, count, perSquare, clumps, stems, height on reeds, tree widths and the wall's edges rounding",
-                match c.value {
+                match &c.value {
                     Value::Dist(d) => format!("{}..{}", d.lo, d.hi),
                     _ => String::new(),
                 }
@@ -65,11 +65,11 @@ fn span(c: &Control) -> Result<Span, LookError> {
 
 /// One number, a range, a weighted range or a sum of ranges.
 fn dist(c: &Control) -> Result<Draw, LookError> {
-    match c.value {
-        Value::Number(v) if v.is_finite() => Ok(Draw::flat(v, v)),
-        Value::Range(a, b) if a.is_finite() && b.is_finite() => Ok(Draw::flat(a, b)),
-        Value::Dist(d) if d.lo.is_finite() && d.hi.is_finite() => Ok(Draw::Range(d)),
-        Value::Draw(ref d) if d.lo().is_finite() && d.hi().is_finite() => Ok(d.clone()),
+    match &c.value {
+        Value::Number(v) if v.is_finite() => Ok(Draw::flat(*v, *v)),
+        Value::Range(a, b) if a.is_finite() && b.is_finite() => Ok(Draw::flat(*a, *b)),
+        Value::Dist(d) if d.lo.is_finite() && d.hi.is_finite() => Ok(Draw::Range(d.clone())),
+        Value::Draw(d) if d.lo().is_finite() && d.hi().is_finite() => Ok(d.clone()),
         _ => Err(refuse(c, "a number, a range or a weighted range")),
     }
 }
@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn a_weighted_range_goes_where_the_control_draws() {
         let d = Dist::new(1.0, 6.0, Weighting::Low(11.0));
-        let a = [c("size", Value::Dist(d)), c("n", Value::Range(2.0, 4.0))];
+        let a = [c("size", Value::Dist(d.clone())), c("n", Value::Range(2.0, 4.0))];
         let s = Settings::new(&a);
         assert_eq!(s.dist("size"), Ok(Some(Draw::Range(d))));
         assert_eq!(s.dist("n"), Ok(Some(Draw::flat(2.0, 4.0))));

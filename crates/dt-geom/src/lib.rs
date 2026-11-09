@@ -54,4 +54,7 @@ pub use stack::{
 };
 
 pub use solid::Solid;
-pub use weighting::{Dist, Draw, Op, WEIGHTINGS, Weighting, WeightingError, weighting_names};
+pub use weighting::{
+    Dist, Draw, ENDS_POWER, MAX_BINS, MAX_LIST, MAX_MIX, Op, WEIGHTINGS, Weighting, WeightingArg,
+    WeightingError, WeightingFn, WeightingRest, weighting_names,
+};

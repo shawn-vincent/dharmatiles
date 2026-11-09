@@ -64,6 +64,17 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
         Expr::Neg(a) => dim_of(a, name),
         Expr::Range { lo, hi } => unify(dim_of(lo, name)?, dim_of(hi, name)?, "a range"),
         Expr::Weighted { range, .. } => dim_of(range, name),
+        Expr::List { items } => {
+            let mut dim = None;
+            for (v, _) in items {
+                let d = dim_of(v, name)?;
+                dim = Some(match dim {
+                    Some(prev) => unify(prev, d, "a list")?,
+                    None => d,
+                });
+            }
+            Ok(dim.unwrap_or(Dim::Scalar))
+        }
         Expr::Bin { op, lhs, rhs } => {
             let (a, b) = (dim_of(lhs, name)?, dim_of(rhs, name)?);
             match op {

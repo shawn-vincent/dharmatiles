@@ -129,12 +129,32 @@ fn weightings_json(l: &Element) -> Value {
     if !takes_weighting(l.controls) {
         return json!([]);
     }
-    Value::Array(
-        dt_kit::WEIGHTINGS
-            .iter()
-            .map(|(name, args, about)| json!({"name": name, "args": args, "about": about}))
-            .collect(),
-    )
+    Value::Array(dt_kit::WEIGHTINGS.iter().map(weighting_json).collect())
+}
+
+/// One weighting function: how it is written, each number after the range
+/// with its default and limits (`most` null for no limit; `above` refuses
+/// `least` itself), and the numbers it takes any number of.
+fn weighting_json(f: &dt_kit::WeightingFn) -> Value {
+    let finite = |x: f64| x.is_finite().then_some(x);
+    json!({
+        "name": f.name,
+        "call": f.call,
+        "about": f.about,
+        "args": f.args.iter().map(|a| json!({
+            "name": a.name,
+            "default": a.default,
+            "least": a.least,
+            "above": a.above,
+            "most": finite(a.most),
+        })).collect::<Vec<_>>(),
+        "rest": f.rest.map(|r| json!({
+            "name": r.name,
+            "least": r.least,
+            "atLeast": r.at_least,
+            "atMost": r.at_most,
+        })),
+    })
 }
 
 fn takes_weighting(controls: &[Control]) -> bool {
@@ -315,16 +335,37 @@ fn show(l: &'static Element) {
         );
         let wn = dt_kit::WEIGHTINGS
             .iter()
-            .map(|(n, a, _)| n.len() + a.len() + 6)
+            .map(|f| f.call.chars().count())
             .max()
             .unwrap_or(0);
-        for (name, args, about) in dt_kit::WEIGHTINGS {
-            let call = if args.is_empty() {
-                format!("{name}(range)")
-            } else {
-                format!("{name}(range, {args})")
-            };
-            say!("  {call:wn$}  {about}");
+        for f in dt_kit::WEIGHTINGS {
+            say!("  {:wn$}  {}", f.call, f.about);
+            for a in f.args {
+                let least = if a.above {
+                    format!("over {}", a.least)
+                } else {
+                    format!("from {}", a.least)
+                };
+                let most = if a.most.is_finite() {
+                    format!(" to {}", a.most)
+                } else {
+                    String::new()
+                };
+                let default = a
+                    .default
+                    .map_or_else(String::new, |d| format!(", default {d}"));
+                say!("  {:wn$}    {}: {least}{most}{default}", "", a.name);
+            }
+            if let Some(r) = f.rest {
+                say!(
+                    "  {:wn$}    {}s: {} to {}, each from {}",
+                    "",
+                    r.name,
+                    r.at_least,
+                    r.at_most,
+                    r.least
+                );
+            }
         }
     }
 }

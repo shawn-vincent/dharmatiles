@@ -75,7 +75,7 @@ pub use band::{
 };
 pub use dt_geom::Convex;
 pub use dt_geom::{
-    Dist, Draw, Grid, Iv, Mask, Op, Rng, Seed, TriMesh, WEIGHTINGS, Weighting, vec3,
+    Dist, Draw, Grid, Iv, Mask, Op, Rng, Seed, TriMesh, WEIGHTINGS, Weighting, WeightingFn, vec3,
 };
 pub use dt_geom::{Structuring, distance_nearest};
 pub use field::{

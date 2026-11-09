@@ -125,14 +125,7 @@ impl std::fmt::Display for Value {
             }
             Self::Number(n) => write!(f, "{n}"),
             Self::Range(a, b) => write!(f, "\"{a}..{b}\""),
-            Self::Dist(d) => {
-                let (name, args) = d.weighting.call();
-                write!(f, "\"{name}({}..{}", d.lo, d.hi)?;
-                for a in args {
-                    write!(f, ", {a}")?;
-                }
-                f.write_str(")\"")
-            }
+            Self::Dist(d) => write!(f, "\"{}\"", d.written()),
             Self::Draw(d) => {
                 let (lo, hi) = d.bounds();
                 write!(f, "\"{lo}..{hi}\" (sum of {} ranges)", d.ranges())

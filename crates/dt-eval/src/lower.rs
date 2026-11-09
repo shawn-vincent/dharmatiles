@@ -161,7 +161,9 @@ fn number(n: &Num, lets: &Lets) -> Result<Lowered, Refused> {
     let named_draw = n.expr.names().iter().any(|x| lets.draw(x).is_some());
     let weighted = {
         let mut any = false;
-        visit(&n.expr, &mut |e| any |= matches!(e, Expr::Weighted { .. }));
+        visit(&n.expr, &mut |e| {
+            any |= matches!(e, Expr::Weighted { .. } | Expr::List { .. });
+        });
         any
     };
     // The plain cases are as they were: one range is its two ends, one number
@@ -214,6 +216,7 @@ fn visit<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
             visit(rhs, f);
         }
         Expr::Weighted { range, .. } => visit(range, f),
+        Expr::List { items } => items.iter().for_each(|(v, _)| visit(v, f)),
         Expr::Call { args, .. } => args.iter().for_each(|a| visit(a, f)),
     }
 }
@@ -281,15 +284,38 @@ fn lower(e: &Expr, lets: &Lets, depth: usize) -> Result<Part, Refused> {
             let (lo, hi) = ends(e, lets)?;
             Part::Dist(Dist::flat(lo, hi))
         }
-        Expr::Weighted { name, args, range } => {
+        Expr::Weighted {
+            name,
+            args,
+            range,
+            parts,
+        } => {
             let (lo, hi) = ends(range, lets)?;
-            let w = Weighting::from_call(name, args).map_err(|w| Refused {
-                code: "dt::range",
-                message: w.message,
-                help: Some(w.help),
-                hard: true,
-            })?;
+            let w = if name == "mix" {
+                let mut made = Vec::with_capacity(parts.len());
+                for ((n, a), weight) in parts.iter().zip(args) {
+                    made.push((*weight, Weighting::from_call(n, a).map_err(refused)?));
+                }
+                Weighting::mix(made)
+            } else {
+                Weighting::from_call(name, args)
+            }
+            .map_err(refused)?;
             Part::Dist(Dist::new(lo, hi, w))
+        }
+        Expr::List { items } => {
+            let env = |name: &str| lets.num(name);
+            let mut values = Vec::with_capacity(items.len());
+            for (v, w) in items {
+                if lets.draws_in(v) {
+                    return Err(Refused::mistake(format!(
+                        "`{v}` is a range inside a list: the values of a list are numbers"
+                    ))
+                    .with_help("write numbers: [1:4, 2:5, 3:1]"));
+                }
+                values.push((v.sample(&env, 0.0)?, *w));
+            }
+            Part::Dist(Dist::list(&values).map_err(refused)?)
         }
         Expr::Call { name, .. } => {
             return Err(Refused::mistake(format!(
@@ -298,6 +324,16 @@ fn lower(e: &Expr, lets: &Lets, depth: usize) -> Result<Part, Refused> {
         }
         Expr::Num { .. } => Part::Num(e.sample(&env, 0.0)?),
     })
+}
+
+/// A weighting that cannot be made, as the diagnostic it is.
+fn refused(w: dt_geom::WeightingError) -> Refused {
+    Refused {
+        code: w.code,
+        message: w.message,
+        help: Some(w.help),
+        hard: true,
+    }
 }
 
 /// A range's two ends, evaluated as a plain range's always were (the

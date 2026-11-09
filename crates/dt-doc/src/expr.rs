@@ -107,12 +107,22 @@ pub enum Expr {
     /// range).  The odds are `dt_geom::Weighting`'s; they are checked where
     /// the value is drawn.
     Weighted {
-        /// The function: `flat`, `low`, `high`, `bell` or `peak`.
+        /// The function: one of [`WEIGHTINGS`].
         name: String,
         /// The numbers after the range.
         args: Vec<f64>,
         /// The plain range it weights.
         range: Box<Expr>,
+        /// For `mix`, its parts: each a function and its numbers over the
+        /// same range, with `args` the weights; empty for every other call.
+        parts: Vec<(String, Vec<f64>)>,
+    },
+    /// A list of values with weights, `[1:4, 2:5, 3]`: one of them is drawn
+    /// (a missing weight is 1).  A comma inside brackets makes a list; `..`
+    /// makes a range.
+    List {
+        /// Each value and its weight, in the order written.
+        items: Vec<(Expr, Option<f64>)>,
     },
     /// A function call, `cos(720 * x)`: `sin`, `cos` (degrees), `abs`,
     /// `min`, `max`, `clamp` and `smooth`.  Only in [`parse_v2`] values.
@@ -183,6 +193,7 @@ enum Tok {
     LBracket,
     RBracket,
     Comma,
+    Colon,
 }
 
 fn lex(src: &str, v2: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
@@ -280,6 +291,10 @@ fn lex(src: &str, v2: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
             b',' => {
                 i += 1;
                 Tok::Comma
+            }
+            b':' => {
+                i += 1;
+                Tok::Colon
             }
             _ => {
                 let ch = src[i..].chars().next().unwrap_or('?');
@@ -462,7 +477,7 @@ impl Parser<'_> {
 fn unknown_function(name: &str, (start, end): (usize, usize), v2: bool) -> ExprError {
     let names: Vec<&str> = WEIGHTINGS.iter().map(|(w, _)| *w).collect();
     let weightings = match names.split_last() {
-        Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+        Some((last, rest)) => format!("{} or {last}, or a list like [1:4, 2:5]", rest.join(", ")),
         None => String::new(),
     };
     let help = if v2 {
@@ -484,32 +499,91 @@ fn unknown_function(name: &str, (start, end): (usize, usize), v2: bool) -> ExprE
 }
 
 impl Parser<'_> {
-    /// `[ low .. high ]`, at the `[`.
+    /// `[ low .. high ]` or `[ value:weight, value, … ]`, at the `[`.
     fn bracket_range(&mut self) -> Result<Expr, ExprError> {
         self.pos += 1;
         // the ends are sums; a bare `..` inside brackets is the brackets' own
         let tight = std::mem::replace(&mut self.tight, false);
-        let ends = self.bracket_ends();
+        let e = self.bracket_inside();
         self.tight = tight;
-        let (lo, hi) = ends?;
-        Ok(Expr::Range {
-            lo: Box::new(lo),
-            hi: Box::new(hi),
-        })
+        e
     }
 
-    fn bracket_ends(&mut self) -> Result<(Expr, Expr), ExprError> {
-        let lo = self.sum()?;
-        if self.peek() != Some(&Tok::DotDot) {
-            return self.err("a range has two ends: [low .. high]");
+    fn bracket_inside(&mut self) -> Result<Expr, ExprError> {
+        let first = self.sum()?;
+        if self.peek() == Some(&Tok::DotDot) {
+            self.pos += 1;
+            let hi = self.sum()?;
+            if self.peek() != Some(&Tok::RBracket) {
+                return self.err(if self.peek() == Some(&Tok::Comma) {
+                    "a range has two ends and a list has none: write [low .. high] or [1, 2, 3]"
+                } else {
+                    "missing `]`"
+                });
+            }
+            self.pos += 1;
+            return Ok(Expr::Range {
+                lo: Box::new(first),
+                hi: Box::new(hi),
+            });
+        }
+        let mut items = Vec::new();
+        let mut value = first;
+        loop {
+            let weight = if self.peek() == Some(&Tok::Colon) {
+                self.pos += 1;
+                Some(self.plain_number("a list")?.0)
+            } else {
+                None
+            };
+            items.push((value, weight));
+            match self.peek() {
+                Some(Tok::Comma) => {
+                    self.pos += 1;
+                    value = self.sum()?;
+                    if self.peek() == Some(&Tok::DotDot) {
+                        return self.err("a list holds values, not ranges: [1, 2, 3] or [1 .. 3]");
+                    }
+                }
+                Some(Tok::RBracket) => break,
+                Some(Tok::DotDot) => {
+                    return self.err("a list holds values, not ranges: [1, 2, 3] or [1 .. 3]");
+                }
+                _ => return self.err("expected `,` or `]`"),
+            }
+        }
+        if items.len() < 2 {
+            return self.err("a range has two ends and a list two values: [low .. high], [1, 2]");
         }
         self.pos += 1;
-        let hi = self.sum()?;
-        if self.peek() != Some(&Tok::RBracket) {
-            return self.err("missing `]`");
+        Ok(Expr::List { items })
+    }
+
+    /// A plain number written as a weight or an argument: no range, no name.
+    fn plain_number(&mut self, what: &str) -> Result<(f64, (usize, usize)), ExprError> {
+        let from = self.here().0;
+        let mut x = self.sum()?;
+        if self.peek() == Some(&Tok::DotDot) {
+            self.pos += 1;
+            let hi = self.sum()?;
+            x = Expr::Range {
+                lo: Box::new(x),
+                hi: Box::new(hi),
+            };
         }
-        self.pos += 1;
-        Ok((lo, hi))
+        let span = (from, self.prev_end());
+        if x.is_range() || !x.names().is_empty() {
+            return Err(ExprError::coded(
+                "dt::weighting",
+                format!("the numbers after the range in `{what}` are plain numbers"),
+                format!("write a number such as {what}(1..6, 2), not a range or a name"),
+                span,
+            ));
+        }
+        let v = x
+            .sample(&|_| None, 0.0)
+            .map_err(|m| ExprError::coded("dt::weighting", m, String::new(), span))?;
+        Ok((v, span))
     }
 
     /// A weighting call, `low(1..6, 4)`: the name is read, the `(` is next.
@@ -537,6 +611,9 @@ impl Parser<'_> {
             )
         };
         self.pos += 1; // the `(`
+        if name == "mix" {
+            return self.mix_call();
+        }
         let first = self.here();
         // low(bell(..)): a weighting inside a weighting
         if let (Some(Tok::Name(inner)), Some((Tok::LParen, ..))) =
@@ -545,50 +622,16 @@ impl Parser<'_> {
         {
             return Err(wrap(first));
         }
-        let range = if self.peek() == Some(&Tok::LBracket) {
-            self.bracket_range()?
-        } else {
-            let lo = self.sum()?;
-            if self.peek() != Some(&Tok::DotDot) {
-                return Err(wrap((first.0, self.prev_end())));
-            }
-            self.pos += 1;
-            let hi = self.sum()?;
-            Expr::Range {
-                lo: Box::new(lo),
-                hi: Box::new(hi),
-            }
-        };
+        let range = self.call_range(&wrap, first)?;
         let mut args = Vec::new();
         while self.peek() == Some(&Tok::Comma) {
             self.pos += 1;
-            let from = self.here().0;
-            let mut x = self.sum()?;
-            if self.peek() == Some(&Tok::DotDot) {
-                self.pos += 1;
-                let hi = self.sum()?;
-                x = Expr::Range {
-                    lo: Box::new(x),
-                    hi: Box::new(hi),
-                };
-            }
-            let span = (from, self.prev_end());
-            if x.is_range() || !x.names().is_empty() {
-                return Err(ExprError::coded(
-                    "dt::weighting",
-                    format!("the numbers after the range in `{name}` are plain numbers"),
-                    format!("write a number such as {name}(1..6, 2), not a range or a name"),
-                    span,
-                ));
-            }
-            let v = x
-                .sample(&|_| None, 0.0)
-                .map_err(|m| ExprError::coded("dt::weighting", m, String::new(), span))?;
+            let (v, span) = self.plain_number(&name)?;
             if args.len() == want {
                 return Err(ExprError::coded(
                     "dt::weighting",
                     format!("`{name}` takes the range and {want} number(s) at most"),
-                    format!("remove `{x}`"),
+                    "remove the last number".to_owned(),
                     span,
                 ));
             }
@@ -602,7 +645,147 @@ impl Parser<'_> {
             name,
             args,
             range: Box::new(range),
+            parts: Vec::new(),
         })
+    }
+
+    /// The range a call wraps: `1..6` or `[1 .. 6]`, nothing else.
+    fn call_range(
+        &mut self,
+        wrap: &dyn Fn((usize, usize)) -> ExprError,
+        first: (usize, usize),
+    ) -> Result<Expr, ExprError> {
+        if self.peek() == Some(&Tok::LBracket) {
+            let e = self.bracket_range()?;
+            if matches!(e, Expr::List { .. }) {
+                return Err(wrap((first.0, self.prev_end())));
+            }
+            return Ok(e);
+        }
+        let lo = self.sum()?;
+        if self.peek() != Some(&Tok::DotDot) {
+            return Err(wrap((first.0, self.prev_end())));
+        }
+        self.pos += 1;
+        let hi = self.sum()?;
+        Ok(Expr::Range {
+            lo: Box::new(lo),
+            hi: Box::new(hi),
+        })
+    }
+
+    /// `mix(part, weight, part, weight, …)`, after the `(`: each part is a
+    /// weighting call, all over the same range.
+    fn mix_call(&mut self) -> Result<Expr, ExprError> {
+        let mut weights = Vec::new();
+        let mut parts: Vec<(String, Vec<f64>)> = Vec::new();
+        let mut range: Option<Expr> = None;
+        loop {
+            let at = self.here();
+            let named = match (self.peek().cloned(), self.toks.get(self.pos + 1)) {
+                (Some(Tok::Name(n)), Some((Tok::LParen, ..)))
+                    if WEIGHTINGS.iter().any(|(w, _)| *w == n) =>
+                {
+                    Some(n)
+                }
+                _ => None,
+            };
+            let Some(n) = named else {
+                return Err(ExprError::coded(
+                    "dt::weighting",
+                    "a part of a mix is a weighting over the range".to_owned(),
+                    "write mix(bell(1..6), 3, flat(1..6), 1): each part, then its weight"
+                        .to_owned(),
+                    (at.0, self.skip_part()),
+                ));
+            };
+            if n == "mix" {
+                return Err(ExprError::coded(
+                    "dt::weighting",
+                    "a mix does not hold another mix".to_owned(),
+                    "weightings do not nest: write the parts side by side in one mix(…)".to_owned(),
+                    (at.0, self.skip_part()),
+                ));
+            }
+            self.pos += 1;
+            let part = self.weighted(n)?;
+            let end = self.prev_end();
+            let Expr::Weighted {
+                name,
+                args,
+                range: r,
+                ..
+            } = part
+            else {
+                return self.err("a part of a mix is a weighting");
+            };
+            match &range {
+                Some(first_range) if *first_range != *r => {
+                    return Err(ExprError::coded(
+                        "dt::weighting",
+                        "the parts of a mix share one range".to_owned(),
+                        format!(
+                            "write {first_range} in every part, so the parts blend over the same values"
+                        ),
+                        (at.0, end),
+                    ));
+                }
+                Some(_) => {}
+                None => range = Some(*r),
+            }
+            parts.push((name, args));
+            if self.peek() != Some(&Tok::Comma) {
+                return Err(ExprError::coded(
+                    "dt::weighting",
+                    "each part of a mix has a weight after it".to_owned(),
+                    "write mix(bell(1..6), 3, flat(1..6), 1)".to_owned(),
+                    (at.0, end),
+                ));
+            }
+            self.pos += 1;
+            if matches!(
+                (self.peek(), self.toks.get(self.pos + 1)),
+                (Some(Tok::Name(_)), Some((Tok::LParen, ..)))
+            ) {
+                return Err(ExprError::coded(
+                    "dt::weighting",
+                    "each part of a mix has a weight after it".to_owned(),
+                    "write mix(bell(1..6), 3, flat(1..6), 1)".to_owned(),
+                    (at.0, self.skip_part()),
+                ));
+            }
+            weights.push(self.plain_number("mix")?.0);
+            match self.peek() {
+                Some(Tok::Comma) => self.pos += 1,
+                Some(Tok::RParen) => break,
+                _ => return self.err("expected `,` or `)`"),
+            }
+        }
+        self.pos += 1; // the `)`
+        Ok(Expr::Weighted {
+            name: "mix".to_owned(),
+            args: weights,
+            range: Box::new(range.unwrap_or_else(|| Expr::num(0.0))),
+            parts,
+        })
+    }
+
+    /// The end of what stands where a part should: to the next comma or the
+    /// close, for an error that points at it.
+    fn skip_part(&self) -> usize {
+        let mut depth = 0usize;
+        let mut end = self.here().1;
+        for (t, _, e) in &self.toks[self.pos.min(self.toks.len())..] {
+            match t {
+                Tok::LParen | Tok::LBracket => depth += 1,
+                Tok::RParen | Tok::RBracket if depth == 0 => break,
+                Tok::RParen | Tok::RBracket => depth -= 1,
+                Tok::Comma if depth == 0 => break,
+                _ => {}
+            }
+            end = *e;
+        }
+        end
     }
 
     /// `name(` arguments `)`: the name is already read.
@@ -700,15 +883,19 @@ pub const FUNCTIONS: [(&str, usize); 7] = [
     ("smooth", 1),
 ];
 
-/// The weighting functions and how many numbers follow the range.  The odds
-/// themselves are `dt_geom::Weighting`'s (dt-doc holds no geometry); a test in
-/// dt-eval keeps the two lists the same.
-pub const WEIGHTINGS: [(&str, usize); 5] = [
+/// The weighting functions written as calls, and how many numbers follow the
+/// range (`steps` takes any number up to its cap, `mix` writes parts and
+/// weights instead).  The odds themselves are `dt_geom::Weighting`'s (dt-doc
+/// holds no geometry); a test in dt-eval keeps the two lists the same.
+pub const WEIGHTINGS: [(&str, usize); 8] = [
     ("flat", 0),
     ("low", 1),
     ("high", 1),
     ("bell", 2),
     ("peak", 2),
+    ("ends", 2),
+    ("steps", usize::MAX),
+    ("mix", 0),
 ];
 
 /// The sine of an angle in degrees, from `+ - * /` only (a Taylor series
@@ -820,7 +1007,7 @@ impl Expr {
     #[must_use]
     pub fn is_range(&self) -> bool {
         let mut any = false;
-        self.visit(&mut |e| any |= matches!(e, Expr::Range { .. }));
+        self.visit(&mut |e| any |= matches!(e, Expr::Range { .. } | Expr::List { .. }));
         any
     }
 
@@ -834,6 +1021,7 @@ impl Expr {
                 rhs.visit(f);
             }
             Expr::Weighted { range, .. } => range.visit(f),
+            Expr::List { items } => items.iter().for_each(|(v, _)| v.visit(f)),
             Expr::Call { args, .. } => args.iter().for_each(|a| a.visit(f)),
         }
     }
@@ -908,8 +1096,26 @@ impl Expr {
                 });
                 a + (b - a) * t
             }
-            Expr::Weighted { name, args, range } => {
-                range.draw_at(env, at, next, Some((name, args)))?
+            Expr::Weighted {
+                name, args, range, ..
+            } => range.draw_at(env, at, next, Some((name, args)))?,
+            Expr::List { items } => {
+                // a list is its values' least to greatest, drawn at one position
+                let vals = items
+                    .iter()
+                    .map(|(v, _)| v.draw_at(env, at, next, None))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let a = vals.iter().copied().fold(f64::INFINITY, f64::min);
+                let b = vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                let ordinal = *next;
+                *next += 1;
+                let t = at(&Draw {
+                    ordinal,
+                    lo: a,
+                    hi: b,
+                    weighting: Some(("list", &[])),
+                });
+                a + (b - a) * t
             }
             Expr::Call { name, args } => {
                 let vals = args
@@ -930,6 +1136,26 @@ impl Expr {
                 format!("[{} .. {}]", lo.unweighted_text(), hi.unweighted_text())
             }
             Expr::Weighted { range, .. } => range.unweighted_text(),
+            Expr::List { items } => {
+                // the interval a list of plain numbers spans
+                let nums: Vec<f64> = items
+                    .iter()
+                    .filter_map(|(v, _)| match v {
+                        Expr::Num {
+                            value,
+                            percent: false,
+                        } => Some(*value),
+                        _ => None,
+                    })
+                    .collect();
+                if nums.len() == items.len() {
+                    let lo = nums.iter().copied().fold(f64::INFINITY, f64::min);
+                    let hi = nums.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    format!("[{lo} .. {hi}]")
+                } else {
+                    "[low .. high]".to_owned()
+                }
+            }
             Expr::Neg(e) => format!("-{}", e.unweighted_text()),
             Expr::Bin { op, lhs, rhs } => {
                 let c = match op {
@@ -952,7 +1178,9 @@ impl Expr {
     #[must_use]
     pub fn range_count(&self) -> usize {
         let mut n = 0;
-        self.visit(&mut |e| n += usize::from(matches!(e, Expr::Range { .. })));
+        self.visit(&mut |e| {
+            n += usize::from(matches!(e, Expr::Range { .. } | Expr::List { .. }));
+        });
         n
     }
 
@@ -962,11 +1190,16 @@ impl Expr {
     pub fn weighted(&self) -> Option<&Expr> {
         let mut found = None;
         self.visit(&mut |e| {
-            if let Expr::Weighted { name, args, .. } = e
-                && found.is_none()
-                && !(name == "flat"
-                    || (matches!(name.as_str(), "low" | "high") && args.first() == Some(&1.0)))
-            {
+            let odds = match e {
+                Expr::Weighted { name, args, .. } => {
+                    !(name == "flat"
+                        || (matches!(name.as_str(), "low" | "high") && args.first() == Some(&1.0)))
+                }
+                // a list draws one of its values: a draw, never a band
+                Expr::List { .. } => true,
+                _ => false,
+            };
+            if odds && found.is_none() {
                 found = Some(e);
             }
         });
@@ -1016,12 +1249,46 @@ impl fmt::Display for Expr {
                 write!(f, "({} {c} {})", Operand(lhs), Operand(rhs))
             }
             Expr::Range { lo, hi } => write!(f, "{lo}..{hi}"),
-            Expr::Weighted { name, args, range } => {
+            Expr::Weighted {
+                name,
+                args,
+                range,
+                parts,
+            } if name == "mix" => {
+                f.write_str("mix(")?;
+                for (i, ((n, a), w)) in parts.iter().zip(args).enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{n}({range}")?;
+                    for x in a {
+                        write!(f, ", {x}")?;
+                    }
+                    write!(f, "), {w}")?;
+                }
+                f.write_str(")")
+            }
+            Expr::Weighted {
+                name, args, range, ..
+            } => {
                 write!(f, "{name}({range}")?;
                 for a in args {
                     write!(f, ", {a}")?;
                 }
                 f.write_str(")")
+            }
+            Expr::List { items } => {
+                f.write_str("[")?;
+                for (i, (v, w)) in items.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{v}")?;
+                    if let Some(w) = w {
+                        write!(f, ":{w}")?;
+                    }
+                }
+                f.write_str("]")
             }
             Expr::Call { name, args } => {
                 write!(f, "{name}(")?;
@@ -1175,7 +1442,10 @@ mod tests {
 
     fn weighted(src: &str, v2: bool) -> (String, Vec<f64>, Expr) {
         let e = if v2 { parse_v2(src) } else { parse(src) }.unwrap();
-        let Expr::Weighted { name, args, range } = e else {
+        let Expr::Weighted {
+            name, args, range, ..
+        } = e
+        else {
             panic!("{src}: not a weighting: {e:?}")
         };
         (name, args, *range)
@@ -1243,9 +1513,10 @@ mod tests {
             .unwrap_err();
             assert_eq!(err.code, Some("dt::value"));
             assert!(err.message.contains("unknown function `bel`"));
-            assert!(err.help.unwrap().contains("flat, low, high, bell or peak"));
+            assert!(err.help.unwrap().contains(
+                "flat, low, high, bell, peak, ends, steps or mix, or a list like [1:4, 2:5]"
+            ));
         }
-        // a list is not here yet in a control value
         assert!(
             parse("1, 2")
                 .unwrap_err()
@@ -1315,8 +1586,108 @@ mod tests {
                 .message
                 .contains("missing `]`")
         );
-        assert!(parse("[1, 2]").is_err());
         assert!(parse("1..2..3 + 1..2").is_err());
+    }
+
+    #[test]
+    fn the_rest_of_the_set_and_lists_parse_in_both_dialects() {
+        for v2 in [false, true] {
+            let p = |src: &str| if v2 { parse_v2(src) } else { parse(src) };
+            for (src, name, args) in [
+                ("ends(1..6, 2, 0.25)", "ends", vec![2.0, 0.25]),
+                ("ends([1 .. 6])", "ends", vec![]),
+                ("steps(1..6, 1, 4, 2)", "steps", vec![1.0, 4.0, 2.0]),
+                ("steps([1 .. 6], 0, 3)", "steps", vec![0.0, 3.0]),
+            ] {
+                let Expr::Weighted {
+                    name: n, args: a, ..
+                } = p(src).unwrap()
+                else {
+                    panic!("{src}")
+                };
+                assert_eq!((n.as_str(), &a), (name, &args), "{src}");
+            }
+            // a list: values with weights, a missing weight left out
+            let Expr::List { items } = p("[1:4, 2:5, 3]").unwrap() else {
+                panic!("a list")
+            };
+            let ws: Vec<Option<f64>> = items.iter().map(|i| i.1).collect();
+            assert_eq!(ws, [Some(4.0), Some(5.0), None]);
+            let e = p("[2, 5:3, 8.5]").unwrap();
+            assert_eq!(e.range_count(), 1);
+            assert!(e.is_range());
+            assert_eq!(e.bounds(&none).unwrap(), (2.0, 8.5));
+            assert_eq!(p(&e.to_string()).unwrap(), e);
+            // `[1 .. 6]` is a range, a comma makes a list
+            assert!(matches!(p("[1 .. 6]").unwrap(), Expr::Range { .. }));
+            assert!(p("[1]").is_err() && p("[1:2]").is_err());
+            // a list sits in arithmetic
+            assert_eq!(p("2 * [1, 3] + [1 .. 2]").unwrap().range_count(), 2);
+            // a mix: parts over the same range, each with its weight
+            let e = p("mix(bell(1..6), 3, flat(1..6), 1)").unwrap();
+            let Expr::Weighted {
+                name,
+                args,
+                parts,
+                range,
+            } = &e
+            else {
+                panic!("a mix")
+            };
+            assert_eq!(name, "mix");
+            assert_eq!(args, &[3.0, 1.0]);
+            assert_eq!(parts[0], ("bell".to_owned(), vec![]));
+            assert_eq!(parts[1], ("flat".to_owned(), vec![]));
+            assert!(matches!(**range, Expr::Range { .. }));
+            assert_eq!(p(&e.to_string()).unwrap(), e);
+            assert!(
+                p("mix(ends([1 .. 6], 2), 1, steps(1..6, 1, 2), 2, low(1..6, 3), 0.5)").is_ok()
+            );
+            // bands refuse each of them
+            for src in [
+                "ends(1..6)",
+                "steps(1..6, 1, 2)",
+                "[1, 2]",
+                "mix(low(1..6), 1, flat(1..6), 1)",
+            ] {
+                assert!(p(src).unwrap().weighted().is_some(), "{src}");
+            }
+        }
+    }
+
+    #[test]
+    fn list_and_mix_mistakes_have_their_code() {
+        for (src, what) in [
+            (
+                "mix(1..6, 1, flat(1..6), 1)",
+                "part of a mix is a weighting",
+            ),
+            ("mix(bell(1..6), 1, flat(2..6), 1)", "share one range"),
+            (
+                "mix(bell(1..6), 1, mix(low(1..6), 1, flat(1..6), 1), 1)",
+                "another mix",
+            ),
+            ("mix(bell(1..6), flat(1..6))", "has a weight after it"),
+            ("mix(bell(1..6), 1, flat(1..6), x)", "plain numbers"),
+            ("low([1, 2])", "wraps a plain range"),
+            ("low(1..6, 2, 3)", "at most"),
+        ] {
+            let err = parse(src).unwrap_err();
+            assert_eq!(err.code, Some("dt::weighting"), "{src}: {err:?}");
+            assert!(err.message.contains(what), "{src}: {err:?}");
+            assert!(err.help.is_some(), "{src}");
+        }
+        for src in [
+            "[1, 2",
+            "[1, 2..3]",
+            "[1..2, 3]",
+            "[1:x, 2]",
+            "[1 .. 2, 3]",
+            "[1,]",
+            "[1 2]",
+        ] {
+            assert!(parse(src).is_err(), "{src}");
+        }
     }
 
     #[test]
