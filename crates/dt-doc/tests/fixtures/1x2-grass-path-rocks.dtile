@@ -10,7 +10,7 @@ tile size="1x2" seed=7 {
     line trail width=9 wobble=3 { through south "0.65,1" north }
 
     // Everything beside the path: one fill point on each side of it.
-    region verge { bounded-by trail; fill "0.15,1"; fill "0.85,1" }
+    region verge { boundedBy trail; fill "0.15,1"; fill "0.85,1" }
 
     stack {
         dirt                                    // the whole tile, at the ground height

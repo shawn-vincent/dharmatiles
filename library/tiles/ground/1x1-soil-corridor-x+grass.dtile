@@ -4,8 +4,8 @@ tile size="1x1" seed=105 {
     line northwest-margin wobble=2.2 { through "0,0.67" "0.33,1" }
     line northeast-margin wobble=2.2 { through "0.67,1" "1,0.67" }
     line southeast-margin wobble=2.2 { through "1,0.33" "0.67,0" }
-    region path { bounded-by southwest-margin northwest-margin northeast-margin southeast-margin; fill "0.5,0.5" }
-    region meadow { bounded-by southwest-margin northwest-margin northeast-margin southeast-margin; fill "0.08,0.08"; fill "0.08,0.92"; fill "0.92,0.92"; fill "0.92,0.08" }
+    region path { boundedBy southwest-margin northwest-margin northeast-margin southeast-margin; fill "0.5,0.5" }
+    region meadow { boundedBy southwest-margin northwest-margin northeast-margin southeast-margin; fill "0.08,0.08"; fill "0.08,0.92"; fill "0.92,0.92"; fill "0.92,0.08" }
     stack {
         base
         dirt

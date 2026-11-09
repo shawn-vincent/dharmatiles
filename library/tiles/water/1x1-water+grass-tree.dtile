@@ -5,8 +5,8 @@ use "parts/grass" long-grass
 tile size="1x1" seed=53 {
     about "A meadow bank with a tree and rocks above a pool."
     line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { bounded-by shore; fill "0.5,0.25" }
-    region bank { bounded-by shore; fill "0.5,0.75" }
+    region pool { boundedBy shore; fill "0.5,0.25" }
+    region bank { boundedBy shore; fill "0.5,0.75" }
     region shoreBand { within 7 of=shore }
     stack {
         base

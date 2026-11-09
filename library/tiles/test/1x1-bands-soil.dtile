@@ -10,7 +10,7 @@ tile size="1x1" seed=42 {
 
     point knoll "(0.7, 0.5)"
     line margin wobble=5 { through "(0.48, 1)" "(0.52, 0)" }
-    region meadow { bounded-by margin; fill "(0.25, 0.5)" }
+    region meadow { boundedBy margin; fill "(0.25, 0.5)" }
 
     stack {
         base

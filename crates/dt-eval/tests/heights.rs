@@ -133,7 +133,7 @@ fn a_pin_that_covers_a_library_default_pin_says_nothing() {
 fn a_pin_with_no_ground_is_refused() {
     // a region the tile's lines never enclose
     let e = refused(&tile(
-        "line wall { through \"(0, 0.5)\" \"(1, 0.5)\" }\n region nowhere { bounded-by wall; fill \"(0.5, 0.5)\" }\n stack { base\n dirt { pin top=7 at=nowhere } }",
+        "line wall { through \"(0, 0.5)\" \"(1, 0.5)\" }\n region nowhere { boundedBy wall; fill \"(0.5, 0.5)\" }\n stack { base\n dirt { pin top=7 at=nowhere } }",
     ));
     assert_eq!(e[0].code, "dt::empty");
     assert!(e[0].message.contains("covers nothing"), "{}", e[0].message);

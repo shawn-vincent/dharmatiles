@@ -655,14 +655,14 @@ pub fn remove_node_at(text: &str, offset: usize) -> Result<String, EditError> {
 /// What a tile draws and names: a `line` or a `region`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mark {
-    /// `line <name> { through … }`, named by `bounded-by` and `along=`.
+    /// `line <name> { through … }`, named by `boundedBy` and `along=`.
     Line,
     /// `region <name> { … }`, named by `in=`.
     Region,
 }
 
 /// Rename the tile's line or region `old` to `new`, and every place the
-/// tile names it: a line in `bounded-by` and `along=`, a region in `in=`.
+/// tile names it: a line in `boundedBy` and `along=`, a region in `in=`.
 /// Only those names change, each written as it was (quoted or bare);
 /// everything else stays byte for byte.
 ///
@@ -738,7 +738,7 @@ pub fn rename_mark(text: &str, mark: Mark, old: &str, new: &str) -> Result<Strin
                 continue;
             }
             let refers = match (mark, e.name().map(|k| k.value())) {
-                (Mark::Line, None) => n.name().value() == "bounded-by",
+                (Mark::Line, None) => n.name().value() == "boundedBy",
                 (Mark::Line, Some("along")) | (Mark::Region, Some("in")) => true,
                 _ => false,
             };
@@ -835,13 +835,13 @@ mod place_tests {
 
     #[test]
     fn renames_a_line_or_region_and_what_names_it() {
-        let t = "tile size=\"1x1\" {\n    line shore wobble=5 { through \"0,0.38\" east }\n    line trail { through south north }\n    region pool { bounded-by shore trail; fill \"0.5,0.25\" }\n    region bank { bounded-by \"shore\"; fill \"0.5,0.75\" }\n    stack {\n        dirt in=bank // the bank\n        wall along=shore\n        rock in=\"bank\" at=\"0.5,0.5\"\n    }\n}\n";
+        let t = "tile size=\"1x1\" {\n    line shore wobble=5 { through \"0,0.38\" east }\n    line trail { through south north }\n    region pool { boundedBy shore trail; fill \"0.5,0.25\" }\n    region bank { boundedBy \"shore\"; fill \"0.5,0.75\" }\n    stack {\n        dirt in=bank // the bank\n        wall along=shore\n        rock in=\"bank\" at=\"0.5,0.5\"\n    }\n}\n";
         let r = rename_mark(t, Mark::Line, "shore", "beach").unwrap();
         assert_eq!(
             r,
             t.replace("line shore", "line beach")
-                .replace("by shore", "by beach")
-                .replace("by \"shore\"", "by \"beach\"")
+                .replace("By shore", "By beach")
+                .replace("By \"shore\"", "By \"beach\"")
                 .replace("along=shore", "along=beach")
         );
         let r = rename_mark(t, Mark::Region, "bank", "meadow").unwrap();

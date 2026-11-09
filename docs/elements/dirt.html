@@ -63,7 +63,7 @@
 <p>Under other elements, write <code>dirt</code> first and let the rest stand on it. Restrict it to a <a href="region.html">region</a> with <code>in=</code>:</p>
 <pre><code>tile size="1x1" seed=42 {
     line margin wobble=5 { through "0.48,1" "0.52,0" }
-    region meadow { bounded-by margin; fill "0.25,0.5" }
+    region meadow { boundedBy margin; fill "0.25,0.5" }
     stack {
         dirt
         grass in=meadow

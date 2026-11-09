@@ -3,9 +3,9 @@
 tile size="1x1" seed=8 {
     line upper wobble=3 { through "0,0.5" "1,0.56" }
     line lower wobble=4 { through "0,0.2" "1,0.26" }
-    region yard { bounded-by upper; fill "0.5,0.85" }
-    region bank { bounded-by upper lower; fill "0.5,0.38" }
-    region pool { bounded-by lower; fill "0.5,0.1" }
+    region yard { boundedBy upper; fill "0.5,0.85" }
+    region bank { boundedBy upper lower; fill "0.5,0.38" }
+    region pool { boundedBy lower; fill "0.5,0.1" }
     region shoreBand { within 7 of=lower }
     stack {
         base

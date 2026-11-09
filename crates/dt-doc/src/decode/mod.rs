@@ -314,8 +314,9 @@ impl<'k> Decoder<'k> {
                 "use" | "define" | "tile" | "let" | "override" | "defaults" => {}
                 "printer" => doc.printer = self.printer(n),
                 other => {
-                    let help = crate::elements::renamed(other)
-                        .map(str::to_owned)
+                    let help = crate::elements::camel_of(other)
+                        .map(|new| format!("control names are camelCase: write `{new}`"))
+                        .or_else(|| crate::elements::renamed(other).map(str::to_owned))
                         .or_else(|| {
                             hint(did_you_mean(
                                 other,
@@ -827,8 +828,9 @@ impl<'k> Decoder<'k> {
                 "width" => &mut line.width,
                 "wobble" => &mut line.wobble,
                 other => {
-                    let help = crate::elements::renamed(other)
-                        .map(str::to_owned)
+                    let help = crate::elements::camel_of(other)
+                        .map(|new| format!("control names are camelCase: write `{new}`"))
+                        .or_else(|| crate::elements::renamed(other).map(str::to_owned))
                         .or_else(|| {
                             hint(did_you_mean(
                                 other,
@@ -1012,7 +1014,7 @@ impl<'k> Decoder<'k> {
                             .help = Some("write `except path`".to_owned());
                     }
                 }
-                "bounded-by" => {
+                "boundedBy" => {
                     for e in c.entries() {
                         let span = value_span(e);
                         match arg_str(e) {
@@ -1040,7 +1042,7 @@ impl<'k> Decoder<'k> {
                                 self.err(
                                     "dt::region",
                                     span,
-                                    "`bounded-by` names lines",
+                                    "`boundedBy` names lines",
                                     "not a name",
                                 );
                             }
@@ -1059,12 +1061,13 @@ impl<'k> Decoder<'k> {
                     }
                 }
                 other => {
-                    let help = crate::elements::renamed(other)
-                        .map(str::to_owned)
+                    let help = crate::elements::camel_of(other)
+                        .map(|new| format!("control names are camelCase: write `{new}`"))
+                        .or_else(|| crate::elements::renamed(other).map(str::to_owned))
                         .or_else(|| {
                             hint(did_you_mean(
                                 other,
-                                ["bounded-by", "fill", "within", "except"],
+                                ["boundedBy", "fill", "within", "except"],
                             ))
                         });
                     self.err(
@@ -1081,19 +1084,19 @@ impl<'k> Decoder<'k> {
         // that only excepts starts from the whole tile
         let shaped = !region.within.is_empty() || !region.except.is_empty();
         let has = |w: &str| n.iter_children().any(|c| c.name().value() == w);
-        if region.bounded_by.is_empty() && !has("bounded-by") && !shaped {
+        if region.bounded_by.is_empty() && !has("boundedBy") && !shaped {
             self.err(
                 "dt::region",
                 region.name.span,
                 "a region divides the tile, so it needs lines",
-                "no `bounded-by`",
+                "no `boundedBy`",
             )
             .help = Some(
-                "the whole tile is already the default area: drop the region and its `in=`, or write `bounded-by trail`"
+                "the whole tile is already the default area: drop the region and its `in=`, or write `boundedBy trail`"
                     .to_owned(),
             );
         }
-        if region.fills.is_empty() && !has("fill") && (!shaped || has("bounded-by")) {
+        if region.fills.is_empty() && !has("fill") && (!shaped || has("boundedBy")) {
             self.err(
                 "dt::region",
                 region.name.span,

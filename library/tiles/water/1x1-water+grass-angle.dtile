@@ -3,8 +3,8 @@
 tile size="1x1" seed=61 {
     about "A shallow pool tucked into the south-west corner of a meadow bank."
     line shore wobble=2.5 { through "0,0.4" "0.4,0" }
-    region pool { bounded-by shore; fill "0.1,0.1" }
-    region bank { bounded-by shore; fill "0.75,0.75" }
+    region pool { boundedBy shore; fill "0.1,0.1" }
+    region bank { boundedBy shore; fill "0.75,0.75" }
     region shoreBand { within 7 of=shore }
     stack {
         base

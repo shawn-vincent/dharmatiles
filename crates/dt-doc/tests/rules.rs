@@ -385,6 +385,11 @@ fn an_old_hyphenated_control_name_gives_the_camel_case_one() {
         "dt::unknown-control",
         "write `bumpSize`",
     );
+    assert_fails(
+        "tile {\n line shore { through west east }\n region pool { bounded-by shore; fill \"0.5,0.2\" }\n stack { dirt }\n}",
+        "dt::unknown-node",
+        "write `boundedBy`",
+    );
 }
 
 // ---- the whole tile is the default area -------------------------
@@ -402,7 +407,7 @@ fn regions_only_on_divided_tiles() {
         "leave `in=` out",
     );
     assert_fails(
-        "tile { line l { through west east }; region r { bounded-by l } }",
+        "tile { line l { through west east }; region r { boundedBy l } }",
         "dt::region",
         "fill point",
     );

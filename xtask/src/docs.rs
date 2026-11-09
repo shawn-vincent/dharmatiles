@@ -352,7 +352,7 @@ mod tests {
     fn a_node_is_found_at_a_line_start_or_after_a_brace() {
         assert!(super::writes("stack {\n  dirt level=edge\n}", "dirt"));
         assert!(super::writes(
-            "region a { bounded-by x; fill \"0,0\" }",
+            "region a { boundedBy x; fill \"0,0\" }",
             "fill"
         ));
         assert!(!super::writes("// dirt\nground in=dirt", "dirt"));

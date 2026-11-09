@@ -950,7 +950,7 @@ pub static RENAMED: &[(&str, &str)] = &[
         "mostly",
         "write the weighting on the size: `size=\"low(1..6, 11)\"` for mostly=small, `high(1..6)` for large, the plain range for even; `dharmatiles migrate` rewrites old tiles",
     ),
-    ("lines", "a region is `bounded-by` its lines"),
+    ("lines", "a region is `boundedBy` its lines"),
 ];
 
 /// The control names written with hyphens before names became camelCase,
@@ -962,6 +962,7 @@ pub static OLD_CONTROL_NAMES: &[(&str, &str)] = &[
     ("clump-size", "clumpSize"),
     ("min-radius", "minRadius"),
     ("stone-size", "stoneSize"),
+    ("bounded-by", "boundedBy"),
 ];
 
 /// The camelCase name of an old hyphenated control name.

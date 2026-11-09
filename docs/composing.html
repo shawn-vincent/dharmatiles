@@ -78,7 +78,7 @@ tile size="2x2" seed=1 {
 <tr><td>grass <code>cover</code></td><td>percent</td><td>100%</td><td>Share of the ground grassed over. A meadow uses about 80%.</td></tr>
 <tr><td>scatter <code>count</code> / <code>perSquare</code></td><td>number</td><td>—</td><td>How many solids. The meadow uses 6–9 rocks on a 2×2.</td></tr>
 <tr><td>rock <code>buried</code></td><td>percent</td><td>—</td><td>How much of each rock is under the ground.</td></tr>
-<tr><td><code>region</code></td><td><code>bounded-by</code> lines, <code>fill</code> points</td><td>—</td><td>Divides the tile, like a paint bucket: name the lines, drop fill points.</td></tr>
+<tr><td><code>region</code></td><td><code>boundedBy</code> lines, <code>fill</code> points</td><td>—</td><td>Divides the tile, like a paint bucket: name the lines, drop fill points.</td></tr>
 </tbody></table></div>
 <p>How rocks and grass meet is fixed and has no control: rock tops stand at least max(1.5 mm, 0.45 × rock height) above the grass; grass is half height at a rock's face, back to full height 1.2 mm out; about 35% of rocks get an apron; bare earth is filled to 20% with natural-size patches. The full language is on the <a href="language.html#placement">language page</a>.</p>
 

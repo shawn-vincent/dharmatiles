@@ -100,7 +100,7 @@ fn closed_lines_and_regions_that_only_except() {
     let doc = snippet(&tile(
         r#"
     line ring closed=#true wobble=2 { through "(0.3, 0.3)" "(0.7, 0.3)" "(0.5, 0.7)" }
-    region inside { bounded-by ring; fill center }
+    region inside { boundedBy ring; fill center }
     region outside { except inside }
     region verge { except inside; within 3 of=northEdge }
     stack { base; dirt }"#,

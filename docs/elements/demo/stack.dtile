@@ -3,8 +3,8 @@
 // `base` line is left out, so each picture is the terrain the stack so far makes).
 tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { bounded-by shore; fill "0.5,0.25" }
-    region bank { bounded-by shore; fill "0.5,0.75" }
+    region pool { boundedBy shore; fill "0.5,0.25" }
+    region bank { boundedBy shore; fill "0.5,0.75" }
     region shoreBand { within 7 of=shore }
     stack {
         dirt { pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand; pin top=waterBedHeight at=pool }

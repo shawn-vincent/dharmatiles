@@ -6,8 +6,8 @@ tile size="1x1" seed=66 {
     line shore-nw { through "0,0.57" "0.43,1" }
     line shore-ne { through "0.57,1" "1,0.57" }
     line shore-se { through "1,0.43" "0.57,0" }
-    region channel { bounded-by shore-sw shore-nw shore-ne shore-se; fill "0.5,0.5" }
-    region bank { bounded-by shore-sw shore-nw shore-ne shore-se; fill "0.08,0.08"; fill "0.08,0.92"; fill "0.92,0.92"; fill "0.92,0.08" }
+    region channel { boundedBy shore-sw shore-nw shore-ne shore-se; fill "0.5,0.5" }
+    region bank { boundedBy shore-sw shore-nw shore-ne shore-se; fill "0.08,0.08"; fill "0.08,0.92"; fill "0.92,0.92"; fill "0.92,0.08" }
     region shoreBand { within 7 of=shore-sw; within 7 of=shore-nw; within 7 of=shore-ne; within 7 of=shore-se }
     stack {
         base

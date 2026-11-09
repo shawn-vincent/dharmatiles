@@ -1,5 +1,5 @@
 // What a region's property sheet shows, from what its source says
-// (docs/language.html, "Regions"): a region is its bounded-by and fill (the paint
+// (docs/language.html, "Regions"): a region is its boundedBy and fill (the paint
 // bucket), plus each `within` clause, less what it `except`s.  Pure: the sheet
 // (sheet.js) adds the writers.
 
@@ -31,7 +31,7 @@ export function combineNote(sh) {
   const within = clauses.some((c) => c.kind === 'within'), except = clauses.some((c) => c.kind === 'except');
   const kind = regionKind(sh);
   if (kind === 'bucket') return 'The area the lines enclose around the fill points.';
-  const base = kind === 'mixed' ? 'The painted area (bounded-by and fill), with every within clause added' : within ? 'Every within clause added together: all that lies within its distance of its place' : 'The whole tile';
+  const base = kind === 'mixed' ? 'The painted area (boundedBy and fill), with every within clause added' : within ? 'Every within clause added together: all that lies within its distance of its place' : 'The whole tile';
   if (kind === 'places' && !within) return `${base}, less the regions it excepts.`;
   return except ? `${base}, then the except regions taken away.` : `${base}.`;
 }

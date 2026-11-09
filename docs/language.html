@@ -69,7 +69,7 @@ tile size="1x1" {
 <tr><td>Switches are <code>#true</code> and <code>#false</code>.</td><td>—</td><td>Bare <code>true</code> is KDL v1 and an error. Few controls are switches: most take a word (<code>clods some</code>, <code>leaves bare</code>).</td></tr>
 <tr><td><code>//</code> comments a line; <code>/-</code> switches off the next node.</td><td><code>/- tree</code></td><td></td></tr>
 <tr><td><code>"""</code> opens a multi-line string.</td><td><code>about """ … """</code></td><td></td></tr>
-<tr><td>Several nodes on one line are separated by <code>;</code>.</td><td><code>region verge { bounded-by trail; fill "0.15,1" }</code></td><td></td></tr>
+<tr><td>Several nodes on one line are separated by <code>;</code>.</td><td><code>region verge { boundedBy trail; fill "0.15,1" }</code></td><td></td></tr>
 </tbody></table></div>
 
 <h3 id="expressions">Values inside quotes</h3>
@@ -226,7 +226,7 @@ let tallWallHeight     72.3</code></pre>
 
 <h3 id="regions">Regions</h3>
 <p>The whole tile is the default area, so an undivided tile needs no region. A region exists only when lines divide the tile. It is the paint-bucket model from the design conversation: name the lines that bound it, then drop one or more fill points.</p>
-<pre><code>region verge { bounded-by trail; fill "0.15,1"; fill "0.85,1" }</code></pre>
+<pre><code>region verge { boundedBy trail; fill "0.15,1"; fill "0.85,1" }</code></pre>
 <p>Several fill points on different sides of a line join areas without union, intersection or difference. Elements act inside a region with <code>in=verge</code>.</p>
 
 <h3 id="named-places">Places by name</h3>
@@ -241,7 +241,7 @@ let tallWallHeight     72.3</code></pre>
 <p>A place is written as a name or as a literal point <code>"(x, y)"</code> in squares from the south-west corner; today's <code>"x,y"</code> still reads. A region is its fill points and its discs less what it excepts:</p>
 <pre><code>region banks { within 4.5 of=stream }                     // a disc round a point, a strip beside a line, a ring round a region
 region verge { except path }                              // a region that only excepts is the whole tile less those
-region knoll { bounded-by foot; fill center }             // the paint bucket, as before</code></pre>
+region knoll { boundedBy foot; fill center }             // the paint bucket, as before</code></pre>
 <p>One place property, <code>at=</code>, names where a line goes. A body, <code>grass</code> or <code>scatter</code> fills a region: given a point or a line it is refused (<code>dt::type</code>). A pin or a thing takes any place. With no <code>at=</code> a line covers the whole tile. See <a href="elements/point.html"><code>point</code></a>, <a href="elements/line.html"><code>line</code></a> and <a href="elements/region.html"><code>region</code></a>.</p>
 
 <h2 id="placement">5. Placement and scatter</h2>
@@ -490,7 +490,7 @@ tile size="1x2" seed=7 {
     line trail width=9 wobble=3 { through south "0.65,1" north }
 
     // Everything beside the path: one fill point on each side of it.
-    region verge { bounded-by trail; fill "0.15,1"; fill "0.85,1" }
+    region verge { boundedBy trail; fill "0.15,1"; fill "0.85,1" }
 
     stack {
         dirt                                    // the whole tile, at the ground height

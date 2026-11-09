@@ -1174,6 +1174,18 @@ mod tests {
     }
 
     #[test]
+    fn an_old_bounded_by_becomes_bounded_by_and_nothing_else_moves() {
+        let old = "tile size=\"1x1\" { // keep\n    line shore { through west east }\n    region pool { bounded-by shore; fill \"0.5,0.2\" }   // a note\n    region bank {\n        bounded-by shore\n        fill \"0.5,0.8\"\n    }\n    stack { dirt in=bank }\n}\n";
+        let new = control_names(old).unwrap().unwrap();
+        assert_eq!(new, old.replace("bounded-by", "boundedBy"));
+        assert!(control_names(&new).unwrap().is_none());
+        assert_eq!(
+            heights(old).unwrap().unwrap().matches("bounded-by").count(),
+            0
+        );
+    }
+
+    #[test]
     fn a_hyphen_in_a_value_or_a_definition_name_is_left_alone() {
         let text = "tile size=\"1x1\" {\n    stack {\n        wall style=cut-stone\n        long-grass in=east\n    }\n}\n";
         assert!(control_names(text).unwrap().is_none());

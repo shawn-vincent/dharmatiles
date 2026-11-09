@@ -3,8 +3,8 @@
 tile size="1x1" seed=51 {
     about "Water over most of the square, a dirt spit in the south-west corner."
     line shore wobble=2.5 { through "0,0.6" "0.6,0" }
-    region pool { bounded-by shore; fill "0.75,0.75" }
-    region bank { bounded-by shore; fill "0.15,0.15" }
+    region pool { boundedBy shore; fill "0.75,0.75" }
+    region bank { boundedBy shore; fill "0.15,0.15" }
     region shoreBand { within 7 of=shore }
     stack {
         base

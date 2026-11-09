@@ -101,7 +101,7 @@ async function setClause(clause, name, value) {
 function renderMarkLens(kind, m) {
   const t = tile(), sh = m?.sheet;
   if (!t || !sh || doc.get().file !== t.path) { lens.hide(); return; }
-  const nameRow = { name: 'name', unit: 'word', required: true, viaSet: true, about: `what the tile calls this ${kind}; renaming it renames every ${kind === 'line' ? '`bounded-by` and `along=`' : '`in=`'} that names it` };
+  const nameRow = { name: 'name', unit: 'word', required: true, viaSet: true, about: `what the tile calls this ${kind}; renaming it renames every ${kind === 'line' ? '`boundedBy` and `along=`' : '`in=`'} that names it` };
   const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0] }];
   let controls, set;
   if (kind === 'line') {
@@ -122,14 +122,14 @@ function renderMarkLens(kind, m) {
     controls = [nameRow];
     if (rk !== 'places') {
       controls.push(
-        { name: 'bounded-by', unit: 'several', words: lines, required: true, about: 'the lines that divide the tile into this region and the rest' },
+        { name: 'boundedBy', unit: 'several', words: lines, required: true, about: 'the lines that divide the tile into this region and the rest' },
         { name: 'fill', unit: 'raw', required: true, about: 'a point inside the region, "x,y" in squares: the region is the area around it that the lines enclose' },
       );
-      for (const [n, run] of [['bounded-by', sh.bounded_by], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
+      for (const [n, run] of [['boundedBy', sh.bounded_by], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
     }
     set = (name, value) => {
       if (name === 'name') return renameMark('region', m.name, value);
-      if (name === 'bounded-by') {
+      if (name === 'boundedBy') {
         const run = sh.bounded_by;
         if (!value.length) { doc.set({ note: 'a region needs at least one line' }); return null; }
         if (!run?.span) return null;

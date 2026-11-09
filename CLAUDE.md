@@ -75,8 +75,8 @@ Every leaf solid takes a slot reserved in sequence, so its source id (and so the
 ```kdl
 tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { bounded-by shore; fill "0.5,0.25" }
-    region bank { bounded-by shore; fill "0.5,0.75" }
+    region pool { boundedBy shore; fill "0.5,0.25" }
+    region bank { boundedBy shore; fill "0.5,0.75" }
     stack {
         dirt in=bank
         grass in=bank

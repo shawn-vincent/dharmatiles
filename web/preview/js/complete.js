@@ -11,7 +11,7 @@
 const WORDS = [
   ['stack', 'the entries, in build order'], ['region', 'an area bounded by lines'], ['line', 'a line through points'],
   ['define', 'a definition of your own'], ['use', 'definitions from another file'], ['param', 'a definition\'s parameter'],
-  ['about', 'a sentence about the tile'], ['through', 'the points a line passes'], ['bounded-by', 'the lines round a region'], ['fill', 'a point inside a region'],
+  ['about', 'a sentence about the tile'], ['through', 'the points a line passes'], ['boundedBy', 'the lines round a region'], ['fill', 'a point inside a region'],
 ];
 const PLACE = [
   ['in', 'the region it acts in'], ['at', 'where it stands, in squares'], ['along', 'a line or edge it follows'],

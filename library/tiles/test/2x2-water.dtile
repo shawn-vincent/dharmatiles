@@ -4,11 +4,11 @@ tile size="2x2" seed=1 {
         through "0.486,0" "0.486,2"
     }
     region bank {
-        bounded-by shore
+        boundedBy shore
         fill "0.2,1"
     }
     region pool {
-        bounded-by shore
+        boundedBy shore
         fill "1.5,1"
     }
     region shoreBand { within 7 of=shore }

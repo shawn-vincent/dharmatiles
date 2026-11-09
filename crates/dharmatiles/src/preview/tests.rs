@@ -874,7 +874,7 @@ fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
     let dir = std::env::temp_dir().join(format!("dt-place-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"1x1\" {\n    line shore { through west \"1,0.5\" }\n    region pool { bounded-by shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
+    let text = "tile size=\"1x1\" {\n    line shore { through west \"1,0.5\" }\n    region pool { boundedBy shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1057,7 +1057,7 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     let dir = std::env::temp_dir().join(format!("dt-marks-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"1x1\" seed=3 {\n    line shore wobble=5 { through \"0,0.38\" \"1,0.42\" }\n    region pool { bounded-by shore; fill \"0.5,0.25\" }\n    region bank { bounded-by shore; fill \"0.5,0.75\" }\n    stack {\n        dirt in=bank\n        water\n    }\n}\n";
+    let text = "tile size=\"1x1\" seed=3 {\n    line shore wobble=5 { through \"0,0.38\" \"1,0.42\" }\n    region pool { boundedBy shore; fill \"0.5,0.25\" }\n    region bank { boundedBy shore; fill \"0.5,0.75\" }\n    stack {\n        dirt in=bank\n        water\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1101,7 +1101,7 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     let dir = std::env::temp_dir().join(format!("dt-clauses-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"2x2\" seed=3 {\n    point knoll \"(0.5, 0.5)\"\n    line shore { through \"0,0.4\" \"2,0.5\" }\n    region crag { within \"[8 .. 14]\" of=westEdge; within 6 of=knoll }\n    region apron { within 6.5 of=crag; except crag }\n    region pool { bounded-by shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
+    let text = "tile size=\"2x2\" seed=3 {\n    point knoll \"(0.5, 0.5)\"\n    line shore { through \"0,0.4\" \"2,0.5\" }\n    region crag { within \"[8 .. 14]\" of=westEdge; within 6 of=knoll }\n    region apron { within 6.5 of=crag; except crag }\n    region pool { boundedBy shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);

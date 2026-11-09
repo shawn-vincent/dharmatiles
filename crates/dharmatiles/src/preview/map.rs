@@ -306,7 +306,7 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
                 "fills": w.map(|(_, w)| points(&w, Some(&r.fills))).unwrap_or_default(),
                 "sheet": node.and_then(|n| mark_node(n, "region", &r.name)).map(|g| json!({
                     "at": g.name().span().offset(),
-                    "bounded_by": args_of(text, g, "bounded-by"),
+                    "bounded_by": args_of(text, g, "boundedBy"),
                     "fill": args_of(text, g, "fill"),
                     "clauses": clauses(text, g, &r.within),
                 })),

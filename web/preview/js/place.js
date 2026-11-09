@@ -294,7 +294,7 @@ export class Tools {
       const name = fresh('area-1', (this.api.map()?.regions || []).map((r) => r.name));
       this.stop();
       const fill = `"${num(p.q[0])},${num(p.q[1])}"`;
-      await this.api.insert('tile', `region ${name} { bounded-by ${lines.join(' ')}; fill ${fill} }`, { select: { kind: 'region', id: name } });
+      await this.api.insert('tile', `region ${name} { boundedBy ${lines.join(' ')}; fill ${fill} }`, { select: { kind: 'region', id: name } });
     }
   }
 

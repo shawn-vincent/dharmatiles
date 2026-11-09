@@ -4,8 +4,8 @@ tile size="1x1" seed=58 {
     about "A channel from the west edge opening into broad water to the east."
     line shore-south wobble=1.5 { through "0,0.43" "0.6,0" }
     line shore-north wobble=1.5 { through "0,0.57" "0.6,1" }
-    region channel { bounded-by shore-north shore-south; fill "0.75,0.5" }
-    region bank { bounded-by shore-north shore-south; fill "0.08,0.08"; fill "0.08,0.92" }
+    region channel { boundedBy shore-north shore-south; fill "0.75,0.5" }
+    region bank { boundedBy shore-north shore-south; fill "0.08,0.08"; fill "0.08,0.92" }
     region shoreBand { within 7 of=shore-south; within 7 of=shore-north }
     stack {
         base

@@ -237,8 +237,8 @@ fn a_line_and_two_regions_make_a_step() {
         "t.dtile",
         r#"tile size="1x1" seed=3 {
     line across { through west east }
-    region low { bounded-by across; fill "0.5,0.25" }
-    region high { bounded-by across; fill "0.5,0.75" }
+    region low { boundedBy across; fill "0.5,0.25" }
+    region high { boundedBy across; fill "0.5,0.75" }
     stack {
         dirt top=8 {
             pin top=5 at=low
@@ -291,7 +291,7 @@ fn a_line_and_two_regions_make_a_step() {
 #[test]
 fn an_unknown_region_is_refused() {
     let e = errors(
-        "tile {\n  line across { through west east }\n  region a { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    dirt in=b\n  }\n}\n",
+        "tile {\n  line across { through west east }\n  region a { boundedBy across; fill \"0.5,0.25\" }\n  stack {\n    dirt in=b\n  }\n}\n",
     );
     assert_eq!(e[0].code, "dt::unknown-name");
     assert_eq!(e[0].location().unwrap().1, 5);
@@ -337,8 +337,8 @@ fn water_alone_builds_a_tile() {
 fn a_seed_wobbles_the_lines_again() {
     let text = r#"tile size="1x1" seed=3 {
     line across wobble=4 { through west east }
-    region low { bounded-by across; fill "0.5,0.1" }
-    region high { bounded-by across; fill "0.5,0.9" }
+    region low { boundedBy across; fill "0.5,0.1" }
+    region high { boundedBy across; fill "0.5,0.9" }
     stack {
         dirt top=8 {
             pin top=5 at=low
@@ -380,7 +380,7 @@ fn the_floor_and_wall_tiles_build_with_grass() {
 
 #[test]
 fn a_wall_off_its_area_is_refused() {
-    let text = "tile size=\"1x1\" {\n  line across { through west east }\n  region south { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    dirt\n    wall in=south along=north style=cut-stone\n  }\n}\n";
+    let text = "tile size=\"1x1\" {\n  line across { through west east }\n  region south { boundedBy across; fill \"0.5,0.25\" }\n  stack {\n    dirt\n    wall in=south along=north style=cut-stone\n  }\n}\n";
     let src = mem(&[("t.dtile", text)]);
     let Err(e) = build(&src, "t.dtile", &Options::default()) else {
         panic!("built a wall off its area");
