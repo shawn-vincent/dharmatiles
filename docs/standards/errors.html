@@ -41,7 +41,7 @@
 <tr><td>Examples</td><td>An unknown control (<code>dt::unknown-control</code>), a value out of range, a read nothing in the stack writes, a tile that fails the printability gate, an old form that needs <code>dharmatiles migrate</code></td><td>A panic in an element, a Manifold failure, an I/O error writing an STL, a malformed reply from the preview's server, a build worker that died</td></tr>
 <tr><td>Who fixes it</td><td>You, by editing the tile</td><td>A developer</td></tr>
 <tr><td>How it is shown</td><td>A diagnostic with its code, the place in the file, and a help line saying what to write instead; in the preview, beside the line and in the error panel</td><td>Prominently and plainly: what failed, the error's own words, and the details (the chain of causes, the panic message and location) available to copy</td></tr>
-<tr><td>Exit code</td><td>1 (the tile is refused)</td><td>1, after the message; never a 0</td></tr>
+<tr><td>Exit code</td><td>1 when the document is refused; 3 when the tile builds but fails the printability gate</td><td>1, after the message, panics included; never a 0. When a run has both, the error wins: 1</td></tr>
 </tbody>
 </table></div>
 
@@ -75,7 +75,7 @@
   <li>Document errors are <code>miette</code> diagnostics with a <code>dt::</code> code, the span, and a help line. A new refusal gets a new code, not a reused vague one.</li>
   <li>No <code>let _ =</code>, <code>.ok()</code>, <code>unwrap_or_default()</code> or <code>unwrap_or(…)</code> on a result that can fail for real. Writing into a <code>String</code> cannot fail, so <code>let _ = write!(s, …)</code> there is fine.</li>
   <li><code>unwrap</code> and <code>expect</code> only for what cannot happen; an <code>expect</code> message says why it cannot. Anything a document or a file can cause is a <code>Result</code>.</li>
-  <li>A panic is a bug. It is never part of the plan, and a caught panic is still reported.</li>
+  <li>A panic is a bug. It is never part of the plan, and a caught panic is still reported. The command line catches any panic that reaches <code>main</code> and exits 1 with its message.</li>
 </ul>
 
 <h2 id="preview">In the preview</h2>
@@ -91,12 +91,13 @@
 <ul class="rules">
   <li><b>Per-viewer conveniences in the browser:</b> <code>localStorage</code> can be unavailable (private windows); a remembered theme, layout or toggle then falls back to its default.</li>
   <li><b>Best-effort cleanup:</b> removing a temporary file or an empty cache folder after the real work has succeeded.</li>
+  <li><b>Estimates:</b> the cache of past build times that sizes the progress bar. Losing it changes only the estimate.</li>
   <li><b>You cancelled:</b> closing a picker or a menu is not an error.</li>
   <li><b>Offline:</b> a request made while the connection is down, which the page repeats on reconnect, with the chip showing the state.</li>
 </ul>
 
 <h2 id="output">Output never changes silently</h2>
-<p>No fallback may quietly change what is built. If a value cannot be read, the tile is refused; it is never built with a default instead. If a repair changes the mesh (voids filled, pinches moved), the build says so and the build record counts it. The printability gate is never loosened and geometry is never culled to pass it. What prints is what the document says, or the program says why not.</p>
+<p>No fallback may quietly change what is built. If a value cannot be read, the tile is refused; it is never built with a default instead. If a repair changes the mesh (voids filled, pinches moved), the build says so and the build record counts it. If an element leaves out a piece it could not make (a hull or a band that came out degenerate), it counts what it left out in the build record, by element. The printability gate is never loosened and geometry is never culled to pass it. What prints is what the document says, or the program says why not.</p>
 
 <h2 id="hosted">If part of it is ever hosted</h2>
 <p>dharmatiles runs on your own machine, so the full details of an error are always yours to see. Tiles are always generated on your own machine: by the installed program, or in the browser through WebAssembly, which counts as local here. A server never generates tiles. If a hosted part is ever added (a shared library, accounts, sharing tiles), it follows a development, staging and production split:</p>
