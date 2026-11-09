@@ -35,7 +35,7 @@ use dt_kit::{
 };
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Dist, Element, LookError, Plan, Span, Write};
+use crate::{Control, Ctx, Draw, Element, LookError, Plan, Span, Write};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -498,7 +498,7 @@ pub struct Thing {
     /// `rock`, `stone`, `boulder` or `pebble`.
     pub kind: String,
     /// Its size range, and the odds along it.
-    pub size: Dist,
+    pub size: Draw,
     /// Dome, slab, block, wedge weights.
     pub mix: [f64; 4],
     /// Its share of a scatter's mix.
@@ -522,7 +522,7 @@ impl Thing {
     pub fn new(kind: &str, controls: &[Control], weight: f64) -> Result<Self, LookError> {
         let mut t = Self {
             kind: kind.to_owned(),
-            size: Dist::flat(6.0, 15.0),
+            size: Draw::flat(6.0, 15.0),
             mix: FAMILIES,
             weight,
             buried: Span::point(0.0),
@@ -867,8 +867,8 @@ fn place_at_foot(
 
 /// `scatter { rock … }`: many rock things, by count or per square.
 pub struct Scatter {
-    count: Option<Dist>,
-    per_square: Dist,
+    count: Option<Draw>,
+    per_square: Draw,
     gap: f64,
     /// `against=`: how far from the foot stones lie, mean mm.
     reach: f64,
@@ -876,7 +876,7 @@ pub struct Scatter {
 }
 
 /// Placements: 9 to 12 per 2×2, so 2.25 to 3 a square.
-const PER_SQUARE: Dist = Dist::flat(2.25, 3.0);
+const PER_SQUARE: Draw = Draw::flat(2.25, 3.0);
 const GAP_MM: f64 = 1.5;
 // scree: fallen stones at a cliff's foot
 const SCREE_REACH_MM: f64 = 4.0;
@@ -955,11 +955,10 @@ impl Element for Scatter {
             },
             |f| f.squares,
         );
-        // one draw either way; the width is never below an epsilon
-        let wide = |r: Dist| Dist::new(r.lo, r.hi.max(r.lo + f64::EPSILON), r.weighting);
-        let n = match self.count {
-            Some(r) => wide(r).draw(&mut rng),
-            None => wide(self.per_square).draw(&mut rng) * squares,
+        // one draw either way
+        let n = match &self.count {
+            Some(r) => r.draw(&mut rng),
+            None => self.per_square.draw(&mut rng) * squares,
         };
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let n = libm::round(n).clamp(0.0, 10_000.0) as usize;

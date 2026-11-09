@@ -6,7 +6,7 @@
 //! An element asks for its controls by name and gets typed values or its
 //! default; it never loops over the controls matching names or `Value`s.
 
-use crate::{Control, Degrees, Dist, LookError, Span, Value, Weighting};
+use crate::{Control, Degrees, Draw, LookError, Span, Value};
 
 fn refuse(c: &Control, what: &str) -> LookError {
     LookError::control(
@@ -41,16 +41,35 @@ fn span(c: &Control) -> Result<Span, LookError> {
                 }
             ),
         )),
+        // a sum of plain ranges is read as its ends, as it always was
+        Value::Draw(ref d) if d.is_flat() => {
+            let (a, b) = d.bounds();
+            if a.is_finite() && b.is_finite() {
+                Ok(Span::new(a, b))
+            } else {
+                Err(refuse(c, "a number or a range"))
+            }
+        }
+        Value::Draw(ref d) => Err(LookError::weighting(
+            &c.name,
+            format!("`{}` does not take a weighting yet", c.name),
+            format!(
+                "write the range {}..{}; weightings are accepted on size, count, perSquare, clumps, stems, height on reeds, tree widths and the wall's edges rounding",
+                d.lo(),
+                d.hi()
+            ),
+        )),
         _ => Err(refuse(c, "a number or a range")),
     }
 }
 
-/// One number, a range or a weighted range.
-fn dist(c: &Control) -> Result<Dist, LookError> {
+/// One number, a range, a weighted range or a sum of ranges.
+fn dist(c: &Control) -> Result<Draw, LookError> {
     match c.value {
-        Value::Number(v) if v.is_finite() => Ok(Dist::flat(v, v)),
-        Value::Range(a, b) if a.is_finite() && b.is_finite() => Ok(Dist::flat(a, b)),
-        Value::Dist(d) if d.lo.is_finite() && d.hi.is_finite() => Ok(d),
+        Value::Number(v) if v.is_finite() => Ok(Draw::flat(v, v)),
+        Value::Range(a, b) if a.is_finite() && b.is_finite() => Ok(Draw::flat(a, b)),
+        Value::Dist(d) if d.lo.is_finite() && d.hi.is_finite() => Ok(Draw::Range(d)),
+        Value::Draw(ref d) if d.lo().is_finite() && d.hi().is_finite() => Ok(d.clone()),
         _ => Err(refuse(c, "a number, a range or a weighted range")),
     }
 }
@@ -112,33 +131,18 @@ impl<'a> Settings<'a> {
     }
 
     /// A number, a range or a weighted range: the control draws with its odds.
-    pub(crate) fn dist(&self, name: &str) -> Result<Option<Dist>, LookError> {
+    pub(crate) fn dist(&self, name: &str) -> Result<Option<Draw>, LookError> {
         self.control(name).map(dist).transpose()
     }
 
     /// A [`Settings::dist`], or `default`.
-    pub(crate) fn dist_or(&self, name: &str, default: Dist) -> Result<Dist, LookError> {
+    pub(crate) fn dist_or(&self, name: &str, default: Draw) -> Result<Draw, LookError> {
         Ok(self.dist(name)?.unwrap_or(default))
     }
 
     /// A span, or `default`.
     pub(crate) fn span_or(&self, name: &str, default: Span) -> Result<Span, LookError> {
         Ok(self.span(name)?.unwrap_or(default))
-    }
-
-    /// A count or a range of them, as `(low, high)` rounded, with the odds
-    /// along it.  Integer controls keep their rounding rule: a flat range
-    /// is `rng.int(lo, hi)`, a weighted one `Dist::int`.
-    pub(crate) fn counts_dist_or(
-        &self,
-        name: &str,
-        default: (i64, i64),
-    ) -> Result<((i64, i64), Weighting), LookError> {
-        #[allow(clippy::cast_possible_truncation, reason = "the schema bounds counts")]
-        let r = |v: f64| libm::round(v) as i64;
-        Ok(self.dist(name)?.map_or((default, Weighting::Flat), |d| {
-            ((r(d.lo), r(d.hi)), d.weighting)
-        }))
     }
 
     /// A word or a number.
@@ -176,6 +180,7 @@ impl<'a> Settings<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Dist, Weighting};
 
     fn c(name: &str, value: Value) -> Control {
         Control {
@@ -202,8 +207,8 @@ mod tests {
         let d = Dist::new(1.0, 6.0, Weighting::Low(11.0));
         let a = [c("size", Value::Dist(d)), c("n", Value::Range(2.0, 4.0))];
         let s = Settings::new(&a);
-        assert_eq!(s.dist("size"), Ok(Some(d)));
-        assert_eq!(s.dist("n"), Ok(Some(Dist::flat(2.0, 4.0))));
+        assert_eq!(s.dist("size"), Ok(Some(Draw::Range(d))));
+        assert_eq!(s.dist("n"), Ok(Some(Draw::flat(2.0, 4.0))));
         let e = s.span("size").unwrap_err();
         assert_eq!(e.code, Some("dt::weighting"));
         assert!(e.message.contains("`size` does not take a weighting yet"));
@@ -218,19 +223,27 @@ mod tests {
     #[test]
     fn counts_round_and_the_last_write_wins() {
         let a = [c("n", Value::Range(1.4, 2.6))];
-        assert_eq!(
-            Settings::new(&a).counts_dist_or("n", (0, 0)),
-            Ok(((1, 3), Weighting::Flat))
-        );
-        let w = [c(
-            "n",
-            Value::Dist(Dist::new(1.4, 9.6, Weighting::Low(3.0))),
-        )];
-        assert_eq!(
-            Settings::new(&w).counts_dist_or("n", (0, 0)),
-            Ok(((1, 10), Weighting::Low(3.0)))
-        );
+        let n = Settings::new(&a).dist("n").unwrap().unwrap();
+        let mut rng = dt_kit::Rng::new(dt_kit::Seed::new(1));
+        for _ in 0..50 {
+            assert!((1..=3).contains(&n.int_by(1.0, &mut rng)));
+        }
         let b = [c("n", Value::Number(1.0)), c("n", Value::Number(2.0))];
         assert_eq!(Settings::new(&b).number_or("n", 0.0), Ok(2.0));
+    }
+
+    #[test]
+    fn a_sum_of_plain_ranges_is_a_span_by_its_ends() {
+        use dt_kit::{Draw as D, Op};
+        let sum = D::Bin(
+            Op::Add,
+            Box::new(D::flat(1.0, 2.0)),
+            Box::new(D::flat(3.0, 4.0)),
+        );
+        let a = [c("size", Value::Draw(sum))];
+        assert_eq!(
+            Settings::new(&a).span("size"),
+            Ok(Some(Span::new(4.0, 6.0)))
+        );
     }
 }

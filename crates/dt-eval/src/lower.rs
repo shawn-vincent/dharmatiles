@@ -12,7 +12,7 @@ use dt_doc::consts::ConstTable;
 use dt_doc::expr::Expr;
 use dt_doc::model::{Num, Value};
 use dt_doc::schema;
-use dt_geom::{Dist, Weighting};
+use dt_geom::{Dist, Draw, Op, Weighting};
 
 /// The tile's `let`s as an element control sees them.
 #[derive(Clone, Debug, Default)]
@@ -137,11 +137,23 @@ pub(crate) fn element_value(v: &Value, lets: &Lets) -> Result<Lowered, Refused> 
     })
 }
 
-/// What a lowered expression is: a number, or one range with its odds.
-#[derive(Clone, Copy, Debug)]
+/// What a lowered expression is: a number, one range with its odds (which
+/// shifts and scales without losing them), or several rolled and summed.
+#[derive(Clone, Debug)]
 enum Part {
     Num(f64),
     Dist(Dist),
+    Draw(Draw),
+}
+
+impl Part {
+    fn into_draw(self) -> Draw {
+        match self {
+            Self::Num(x) => Draw::Num(x),
+            Self::Dist(d) => Draw::Range(d),
+            Self::Draw(d) => d,
+        }
+    }
 }
 
 fn number(n: &Num, lets: &Lets) -> Result<Lowered, Refused> {
@@ -153,8 +165,8 @@ fn number(n: &Num, lets: &Lets) -> Result<Lowered, Refused> {
         any
     };
     // The plain cases are as they were: one range is its two ends, one number
-    // is itself.
-    if !named_draw && !weighted {
+    // is itself.  Two ranges or more are rolled each on its own.
+    if !named_draw && !weighted && n.expr.range_count() <= 1 {
         return Ok(Lowered::plain(if n.expr.is_range() {
             let (a, b) = n.bounds(&env)?;
             dt_elements::Value::Range(a, b)
@@ -169,6 +181,13 @@ fn number(n: &Num, lets: &Lets) -> Result<Lowered, Refused> {
     };
     match lower(&n.expr, lets, 0)? {
         Part::Num(v) => Ok(Lowered::plain(dt_elements::Value::Number(v * k))),
+        Part::Draw(d) => Ok(Lowered::plain(dt_elements::Value::Draw(
+            if n.unit != Some(dt_doc::expr::Unit::H) {
+                d
+            } else {
+                Draw::Bin(Op::Mul, Box::new(d), Box::new(Draw::Num(k)))
+            },
+        ))),
         Part::Dist(d) => {
             let d = Dist::new(d.lo * k, d.hi * k, d.weighting);
             let note = (d.is_point() && !matches!(d.weighting, Weighting::Flat))
@@ -235,19 +254,26 @@ fn lower(e: &Expr, lets: &Lets, depth: usize) -> Result<Part, Refused> {
                     scale(Part::Dist(d), x)
                 }
                 (Div, Part::Dist(d), Part::Num(x)) => ordered(d.lo / x, d.hi / x, d.weighting),
-                (Div, Part::Num(_), Part::Dist(_)) => {
+                (Div, _, Part::Dist(_) | Part::Draw(_)) => {
                     return Err(Refused::mistake(format!(
                         "`{e}` divides by a range: the odds of its result are not a weighting"
                     ))
-                    .with_help("divide a range by a number, not a number by a range"));
+                    .with_help("divide a range by a number, not by a range"));
                 }
-                _ => {
-                    return Err(Refused::mistake(format!(
-                        "`{e}` combines two ranges in one control"
+                // anything else holds two ranges or more: each rolls on its
+                // own, then the arithmetic runs on the numbers
+                (op, a, b) => {
+                    let op = match op {
+                        Add => Op::Add,
+                        Sub => Op::Sub,
+                        Mul => Op::Mul,
+                        Div => Op::Div,
+                    };
+                    Part::Draw(Draw::Bin(
+                        op,
+                        Box::new(a.into_draw()),
+                        Box::new(b.into_draw()),
                     ))
-                    .with_help(
-                        "a control draws one range: write the range once, or draw the other in its own control",
-                    ));
                 }
             }
         }
@@ -306,6 +332,7 @@ fn scale(p: Part, k: f64) -> Part {
     match p {
         Part::Num(x) => Part::Num(x * k),
         Part::Dist(d) => ordered(d.lo * k, d.hi * k, d.weighting),
+        Part::Draw(d) => Part::Draw(Draw::Bin(Op::Mul, Box::new(d), Box::new(Draw::Num(k)))),
     }
 }
 
@@ -330,7 +357,7 @@ mod tests {
     fn dist(src: &str, l: &Lets) -> Dist {
         match lower(&parse_v2(src).unwrap(), l, 0).unwrap() {
             Part::Dist(d) => d,
-            Part::Num(x) => panic!("{src} is the number {x}"),
+            other => panic!("{src} is not one range: {other:?}"),
         }
     }
 
@@ -358,13 +385,29 @@ mod tests {
         assert_eq!(dist("pair", &l), Dist::flat(1.0, 2.0));
     }
 
+    fn draw(src: &str, l: &Lets) -> Draw {
+        match lower(&parse_v2(src).unwrap(), l, 0).unwrap() {
+            Part::Draw(d) => d,
+            other => panic!("{src} is not a sum: {other:?}"),
+        }
+    }
+
     #[test]
-    fn two_ranges_in_one_control_are_refused() {
+    fn two_ranges_in_one_control_are_two_rolls() {
         let l = lets(&[("s", "[1 .. 2]")]);
-        let e = lower(&parse_v2("s - s").unwrap(), &l, 0).unwrap_err();
-        assert_eq!(e.code, "dt::value");
-        assert!(e.message.contains("two ranges"), "{e:?}");
+        // a name used twice is two leaves, each its own ordinal
+        let d = draw("s - s", &l);
+        assert_eq!(d.ranges(), 2);
+        assert_eq!(d.bounds(), (-1.0, 1.0));
+        let d = draw("[1 .. 2] + [3 .. 4]", &l);
+        assert_eq!(d.bounds(), (4.0, 6.0));
+        // a number shifts it, a negative factor mirrors it
+        assert_eq!(draw("2 * ([1 .. 2] + [3 .. 4])", &l).bounds(), (8.0, 12.0));
+        assert_eq!(draw("-([1 .. 2] + [3 .. 4])", &l).bounds(), (-6.0, -4.0));
+        assert_eq!(draw("[1 .. 2] - [3 .. 4]", &l).bounds(), (-3.0, -1.0));
         let e = lower(&parse_v2("3 / s").unwrap(), &l, 0).unwrap_err();
+        assert!(e.message.contains("divides by a range"), "{e:?}");
+        let e = lower(&parse_v2("s / s").unwrap(), &l, 0).unwrap_err();
         assert!(e.message.contains("divides by a range"), "{e:?}");
     }
 

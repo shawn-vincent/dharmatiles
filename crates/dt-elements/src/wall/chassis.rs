@@ -419,7 +419,7 @@ pub(crate) fn run(
     }
     let finish = Finish {
         chip: m.chip * s,
-        rounding: m.rounding.lo * s,
+        rounding: m.rounding.lo() * s,
         relief: m.relief.unwrap_or(0.0) * s,
         settle: 0.2 * s,
         yaw_deg: if m.laid { 0.0 } else { m.yaw_deg },

@@ -755,7 +755,7 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
     };
     // the chamfer at least as big as any rounding the stone below may
     // have, so the corner under it never roofs a rounded notch
-    let ch = (m.rounding.hi * s)
+    let ch = (m.rounding.hi() * s)
         .min(ROUND_SIZE_CAP * span[0].min(span[1]))
         .max(rr);
     let rounded = round_corners(&poly, rr, m.joint * s / 2.0, below, ch);

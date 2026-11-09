@@ -23,7 +23,7 @@ use dt_kit::Kind;
 use dt_kit::{Material, Rng, Scene, Tag, TriMesh, form};
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Dist, Element, LookError, Plan, Weighting, Write};
+use crate::{Control, Ctx, Draw, Element, LookError, Plan, Write};
 
 const REED_SEP_MM: f64 = 12.0;
 /// Land height relative to the calm water level where reeds root.
@@ -42,11 +42,9 @@ const SECTION: usize = 24;
 /// The reeds element.
 #[derive(Clone, Debug)]
 pub struct Reeds {
-    clumps: (i64, i64),
-    clumps_odds: Weighting,
-    stems: (i64, i64),
-    stems_odds: Weighting,
-    height: Dist,
+    clumps: Draw,
+    stems: Draw,
+    height: Draw,
 }
 
 impl Reeds {
@@ -56,15 +54,13 @@ impl Reeds {
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut r = Self {
-            clumps: (3, 5),
-            clumps_odds: Weighting::Flat,
-            stems: (5, 9),
-            stems_odds: Weighting::Flat,
-            height: Dist::flat(8.0, 13.0),
+            clumps: Draw::flat(3.0, 5.0),
+            stems: Draw::flat(5.0, 9.0),
+            height: Draw::flat(8.0, 13.0),
         };
         let s = Settings::new(controls);
-        (r.clumps, r.clumps_odds) = s.counts_dist_or("clumps", r.clumps)?;
-        (r.stems, r.stems_odds) = s.counts_dist_or("stems", r.stems)?;
+        r.clumps = s.dist_or("clumps", r.clumps)?;
+        r.stems = s.dist_or("stems", r.stems)?;
         r.height = s.dist_or("height", r.height)?;
         Ok(r)
     }
@@ -176,7 +172,7 @@ impl Element for Reeds {
             let j = rng.int(0, i as i64) as usize;
             cand.swap(i, j);
         }
-        let n = Dist::int(self.clumps.0, self.clumps.1, self.clumps_odds, &mut rng);
+        let n = self.clumps.int_by(1.0, &mut rng);
         let mut centres: Vec<[f64; 2]> = Vec::new();
         for c in cand {
             if centres
@@ -192,7 +188,7 @@ impl Element for Reeds {
         let e = 0.3;
         let mut stems: Vec<Stem> = Vec::new();
         for c in &centres {
-            let k = Dist::int(self.stems.0, self.stems.1, self.stems_odds, &mut rng);
+            let k = self.stems.int_by(1.0, &mut rng);
             let dx = -(ground(c[0] + e, c[1]) - ground(c[0] - e, c[1])) / (2.0 * e);
             let dy = -(ground(c[0], c[1] + e) - ground(c[0], c[1] - e)) / (2.0 * e);
             let nw = libm::hypot(dx, dy) + 1e-9;

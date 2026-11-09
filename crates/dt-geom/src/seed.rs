@@ -59,6 +59,13 @@ impl Rng {
         Self(seed.0)
     }
 
+    /// An independent stream keyed by `k`, taken from the state now without
+    /// moving this one.
+    #[must_use]
+    pub const fn fork(&self, k: u64) -> Self {
+        Self(splitmix64(self.0 ^ k.wrapping_mul(0xD6E8_FEB8_6659_FD93)))
+    }
+
     /// The next 64 random bits.
     pub const fn next_u64(&mut self) -> u64 {
         let r = splitmix64(self.0);

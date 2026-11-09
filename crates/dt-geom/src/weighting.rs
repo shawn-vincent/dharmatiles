@@ -448,6 +448,185 @@ impl Dist {
     }
 }
 
+/// An arithmetic operator between draws.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Op {
+    /// `a + b`
+    Add,
+    /// `a - b`
+    Sub,
+    /// `a * b`
+    Mul,
+    /// `a / b`
+    Div,
+}
+
+/// What a control holds when it draws: an expression over numbers and
+/// ranges.  Every range is its own roll, like a die; the arithmetic then
+/// runs on the plain numbers.  One range is [`Dist`] and draws exactly as
+/// it does.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Draw {
+    /// A number: it never draws.
+    Num(f64),
+    /// One range with its odds.
+    Range(Dist),
+    /// `-a`
+    Neg(Box<Draw>),
+    /// `a op b`
+    Bin(Op, Box<Draw>, Box<Draw>),
+}
+
+impl From<Dist> for Draw {
+    fn from(d: Dist) -> Self {
+        Self::Range(d)
+    }
+}
+
+impl Draw {
+    /// The plain range `lo..hi`.
+    #[must_use]
+    pub const fn flat(lo: f64, hi: f64) -> Self {
+        Self::Range(Dist::flat(lo, hi))
+    }
+
+    /// The ends the value can come to, by interval arithmetic.
+    #[must_use]
+    pub fn bounds(&self) -> (f64, f64) {
+        match self {
+            Self::Num(x) => (*x, *x),
+            Self::Range(d) => (d.lo, d.hi),
+            Self::Neg(a) => {
+                let (lo, hi) = a.bounds();
+                (-hi, -lo)
+            }
+            Self::Bin(op, a, b) => {
+                let ((al, ah), (bl, bh)) = (a.bounds(), b.bounds());
+                let at = |f: fn(f64, f64) -> f64| {
+                    let c = [f(al, bl), f(al, bh), f(ah, bl), f(ah, bh)];
+                    (
+                        c.iter().copied().fold(f64::INFINITY, f64::min),
+                        c.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+                    )
+                };
+                match op {
+                    Op::Add => (al + bl, ah + bh),
+                    Op::Sub => (al - bh, ah - bl),
+                    Op::Mul => at(|x, y| x * y),
+                    Op::Div => at(|x, y| x / y),
+                }
+            }
+        }
+    }
+
+    /// The low end.
+    #[must_use]
+    pub fn lo(&self) -> f64 {
+        self.bounds().0
+    }
+
+    /// The high end.
+    #[must_use]
+    pub fn hi(&self) -> f64 {
+        self.bounds().1
+    }
+
+    /// True for a value of no width: it never draws.
+    #[must_use]
+    pub fn is_point(&self) -> bool {
+        let (lo, hi) = self.bounds();
+        hi <= lo
+    }
+
+    /// How many ranges it rolls.
+    #[must_use]
+    pub fn ranges(&self) -> usize {
+        match self {
+            Self::Num(_) => 0,
+            Self::Range(_) => 1,
+            Self::Neg(a) => a.ranges(),
+            Self::Bin(_, a, b) => a.ranges() + b.ranges(),
+        }
+    }
+
+    /// True when no range carries a weighting.
+    #[must_use]
+    pub fn is_flat(&self) -> bool {
+        match self {
+            Self::Num(_) => true,
+            Self::Range(d) => d.weighting.is_flat(),
+            Self::Neg(a) => a.is_flat(),
+            Self::Bin(_, a, b) => a.is_flat() && b.is_flat(),
+        }
+    }
+
+    /// The one range, when the value is only that.
+    #[must_use]
+    pub fn single(&self) -> Option<Dist> {
+        match self {
+            Self::Range(d) => Some(*d),
+            _ => None,
+        }
+    }
+
+    fn roll(&self, rng: &mut Rng, base: &Rng, ordinal: &mut u64) -> f64 {
+        match self {
+            Self::Num(x) => *x,
+            Self::Range(d) => {
+                let k = *ordinal;
+                *ordinal += 1;
+                // the first range reads the stream, as a lone range always
+                // did; each later one is keyed by its place in the value
+                if k == 0 {
+                    d.draw(rng)
+                } else {
+                    d.draw(&mut base.fork(k))
+                }
+            }
+            Self::Neg(a) => -a.roll(rng, base, ordinal),
+            Self::Bin(op, a, b) => {
+                let x = a.roll(rng, base, ordinal);
+                let y = b.roll(rng, base, ordinal);
+                match op {
+                    Op::Add => x + y,
+                    Op::Sub => x - y,
+                    Op::Mul => x * y,
+                    Op::Div => x / y,
+                }
+            }
+        }
+    }
+
+    /// One draw: each range rolls on its own, then the arithmetic.  The
+    /// stream moves by one draw however many ranges there are, so editing
+    /// this value never moves what is drawn after it.
+    pub fn draw(&self, rng: &mut Rng) -> f64 {
+        let base = rng.clone();
+        self.roll(rng, &base, &mut 0)
+    }
+
+    /// A whole number, both ends included, for a control that counts: the
+    /// ends round, a lone range keeps [`Dist::int`], a sum rounds what it
+    /// drew.  `k` scales the value first (a density times the squares).
+    pub fn int_by(&self, k: f64, rng: &mut Rng) -> i64 {
+        #[allow(clippy::cast_possible_truncation)]
+        let r = |v: f64| libm::round(v) as i64;
+        let (lo, hi) = self.bounds();
+        let (l, h) = (r(lo * k), r(hi * k));
+        match self {
+            Self::Range(d) => Dist::int(l, h, d.weighting, rng),
+            _ if h <= l => {
+                // a number never draws; a sum that cannot differ still rolls
+                if self.ranges() > 0 {
+                    self.draw(rng);
+                }
+                l
+            }
+            _ => r(self.draw(rng) * k).clamp(l, h),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -672,5 +851,68 @@ mod tests {
         let mut a = Rng::new(crate::Seed::new(5).key("int"));
         let mut b = a.clone();
         assert_eq!(Dist::int(1, 6, Weighting::Flat, &mut a), b.int(1, 6));
+    }
+
+    fn sum(a: Dist, b: Dist) -> Draw {
+        Draw::Bin(Op::Add, Box::new(a.into()), Box::new(b.into()))
+    }
+
+    #[test]
+    fn a_sum_lands_in_the_summed_interval_and_leans_to_the_middle() {
+        let d = sum(Dist::flat(1.0, 2.0), Dist::flat(3.0, 4.0));
+        assert_eq!(d.bounds(), (4.0, 6.0));
+        let mut mid = 0;
+        for i in 0..4000 {
+            let v = d.draw(&mut Rng::new(crate::Seed::new(i)));
+            assert!((4.0..=6.0).contains(&v), "{v}");
+            mid += usize::from((4.5..5.5).contains(&v));
+        }
+        // a triangle: three quarters of two dice land in the middle half
+        assert!((2800..3200).contains(&mid), "{mid}");
+    }
+
+    #[test]
+    fn two_rolls_are_independent_and_the_stream_moves_once() {
+        let s = Dist::flat(1.0, 2.0);
+        let diff = Draw::Bin(Op::Sub, Box::new(s.into()), Box::new(s.into()));
+        assert_eq!(diff.bounds(), (-1.0, 1.0));
+        let (mut same, mut neg) = (0, 0);
+        for i in 0..2000 {
+            let v = diff.draw(&mut Rng::new(crate::Seed::new(i)));
+            same += usize::from(v == 0.0);
+            neg += usize::from(v < 0.0);
+        }
+        assert_eq!(same, 0);
+        assert!((800..1200).contains(&neg), "{neg}");
+        // the rng ends where one range leaves it
+        let (mut a, mut b) = (Rng::new(crate::Seed::new(9)), Rng::new(crate::Seed::new(9)));
+        diff.draw(&mut a);
+        Draw::Range(s).draw(&mut b);
+        assert_eq!(a.next_u64(), b.next_u64());
+    }
+
+    #[test]
+    fn one_range_draws_as_the_dist_does() {
+        for w in ALL {
+            let d = Dist::new(2.0, 9.0, w);
+            let (mut a, mut b) = (Rng::new(crate::Seed::new(5)), Rng::new(crate::Seed::new(5)));
+            for _ in 0..50 {
+                assert_eq!(
+                    Draw::Range(d).draw(&mut a).to_bits(),
+                    d.draw(&mut b).to_bits()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn interval_arithmetic_handles_mirrors_and_products() {
+        let r = || Box::new(Draw::flat(-2.0, 3.0));
+        assert_eq!(Draw::Neg(r()).bounds(), (-3.0, 2.0));
+        assert_eq!(Draw::Bin(Op::Mul, r(), r()).bounds(), (-6.0, 9.0));
+        assert_eq!(
+            Draw::Bin(Op::Mul, r(), Box::new(Draw::Num(-2.0))).bounds(),
+            (-6.0, 4.0)
+        );
     }
 }

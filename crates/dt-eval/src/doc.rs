@@ -1275,6 +1275,10 @@ fn checked(
         dt_elements::Value::Number(x) => (x, x, false),
         dt_elements::Value::Range(lo, hi) => (lo, hi, true),
         dt_elements::Value::Dist(d) => (d.lo, d.hi, true),
+        dt_elements::Value::Draw(ref d) => {
+            let (lo, hi) = d.bounds();
+            (lo, hi, true)
+        }
         dt_elements::Value::Word(_) => return Ok(()),
     };
     c.check(owner, lo, hi, range).map_err(|r| {

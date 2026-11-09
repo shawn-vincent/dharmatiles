@@ -231,15 +231,29 @@ fn a_weighted_range_of_no_width_is_a_note() {
 }
 
 #[test]
-fn two_ranges_in_one_control_are_refused_not_averaged() {
-    refused(
-        &tile(
-            "    let s \"[6 .. 8]\"\n    let t \"[1 .. 2]\"",
-            "        dirt\n        rock size=\"s + t\"",
-        ),
-        "dt::value",
-        "draws one range",
+fn two_ranges_in_one_control_roll_apart() {
+    let one = hash(&tile("", "        dirt\n        rock size=\"6..10\""));
+    // one range moved by a number is the same draw to the last bit
+    let text = tile(
+        "    let s \"[6 .. 10]\"",
+        "        dirt\n        rock size=\"s + 0\"",
     );
+    assert_eq!(hash(&text), one);
+    // two ranges build (they were refused once), and are not one range
+    let text = tile(
+        "    let s \"[3 .. 5]\"",
+        "        dirt\n        rock size=\"s + s\"",
+    );
+    let two = hash(&text);
+    assert_ne!(two, one);
+    // editing one value moves nothing drawn after it: the ground is the same
+    assert_eq!(two[0], one[0]);
+    // a plain sum written out builds too
+    let text = tile(
+        "",
+        "        dirt\n        rock size=\"flat(3..5) + flat(3..5)\"",
+    );
+    assert_eq!(hash(&text), two);
 }
 
 #[test]

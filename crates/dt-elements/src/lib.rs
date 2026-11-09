@@ -25,7 +25,7 @@ pub mod wall;
 pub mod water;
 
 pub use dt_kit::Kind;
-pub use dt_kit::{Dist, Weighting};
+pub use dt_kit::{Dist, Draw, Op, Weighting};
 use dt_kit::{Mask, Scene, Seed};
 
 /// A control's value, as the document gave it (levels already resolved
@@ -42,6 +42,10 @@ pub enum Value {
     /// Only controls that draw take one ([`read::Settings::dist`]); the rest
     /// refuse it (`dt::weighting`).
     Dist(Dist),
+    /// Several ranges in one expression (`[1..2] + [3..4]`): each rolls on
+    /// its own, then the arithmetic.  Controls that draw take it like a
+    /// weighted range; a control that reads a range takes its ends.
+    Draw(Draw),
 }
 
 /// A number or a range `lo..hi` as an element reads it: one number is the
@@ -128,6 +132,10 @@ impl std::fmt::Display for Value {
                     write!(f, ", {a}")?;
                 }
                 f.write_str(")\"")
+            }
+            Self::Draw(d) => {
+                let (lo, hi) = d.bounds();
+                write!(f, "\"{lo}..{hi}\" (sum of {} ranges)", d.ranges())
             }
             Self::Word(w) => write!(f, "`{w}`"),
         }
