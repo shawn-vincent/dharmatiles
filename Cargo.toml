@@ -64,3 +64,13 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.dt-elements]
 opt-level = 3
+
+# Manifold's level set reads one element before a buffer (`vertPos[-1]`) when
+# its hash table fills before any vertex has moved, then sizes the table from
+# that garbage: the table can come out empty and the next insert faults (a
+# rare, intermittent SIGSEGV in the wall and floor builds). The vendored
+# `manifold-csg-sys` is the published 3.5.105 with one carried patch for it
+# (third_party/manifold-csg-sys/patches); drop the vendored copy once Manifold
+# has the fix.
+[patch.crates-io]
+manifold-csg-sys = { path = "third_party/manifold-csg-sys" }
