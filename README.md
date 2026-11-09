@@ -75,4 +75,6 @@ extras/     a paint organizer and STL helpers (Python, not part of the program)
 
 ## Licence
 
-The code is MIT OR Apache-2.0. The licence for the tile library and its renders is not decided yet.
+Everything here, the code and the tile library, is under the [Anti-Capitalist Software License v1.4](LICENSE) (https://anticapitalist.software/): free for individuals, non-profits, educational institutions and worker-owned co-operatives. Manifold, built in through `third_party/manifold-csg-sys`, keeps its own Apache-2.0 and MIT licences there.
+
+OpenLOCK is by Printable Scenery, under CC BY-NC 4.0.
