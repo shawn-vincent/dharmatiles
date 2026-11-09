@@ -39,6 +39,67 @@ pub enum Value {
     Range(f64, f64),
 }
 
+/// A number or a range `lo..hi` as an element reads it: one number is the
+/// range with both ends equal.  Whether a draw happens at all is the
+/// element's (a range is drawn per thing, a number never draws).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Span {
+    /// The low end.
+    pub lo: f64,
+    /// The high end.
+    pub hi: f64,
+}
+
+impl Span {
+    /// `lo..hi`.
+    #[must_use]
+    pub const fn new(lo: f64, hi: f64) -> Self {
+        Self { lo, hi }
+    }
+
+    /// One number, as a range of no width.
+    #[must_use]
+    pub const fn point(v: f64) -> Self {
+        Self { lo: v, hi: v }
+    }
+
+    /// A uniform draw over the range (one draw from `rng`, whatever the
+    /// width).
+    pub fn draw(self, rng: &mut dt_kit::Rng) -> f64 {
+        rng.uniform(self.lo, self.hi)
+    }
+
+    /// As a pair, for the kernels that take `(lo, hi)`.
+    #[must_use]
+    pub const fn pair(self) -> (f64, f64) {
+        (self.lo, self.hi)
+    }
+
+    /// Half way.
+    #[must_use]
+    pub fn mid(self) -> f64 {
+        0.5 * (self.lo + self.hi)
+    }
+
+    /// Both ends scaled (a size in mm follows the system).
+    #[must_use]
+    pub fn scaled(self, k: f64) -> Self {
+        Self::new(self.lo * k, self.hi * k)
+    }
+}
+
+/// An angle in degrees, as written; never scales.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub struct Degrees(pub f64);
+
+impl Degrees {
+    /// In radians.
+    #[must_use]
+    pub fn radians(self) -> f64 {
+        self.0.to_radians()
+    }
+}
+
 /// As an author would write it, for messages: `-50`, `∞`, `NaN`, `` `wet` ``.
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

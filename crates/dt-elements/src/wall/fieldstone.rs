@@ -742,7 +742,7 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
     if span[0] < 0.5 * s || span[1] < 0.5 * s {
         return None;
     }
-    let rr = (r.uniform(m.rounding.0, m.rounding.1) * s).min(ROUND_SIZE_CAP * span[0].min(span[1]));
+    let rr = (m.rounding.draw(&mut r) * s).min(ROUND_SIZE_CAP * span[0].min(span[1]));
     let mut poly = raw;
     if signed_area(&poly) < 0.0 {
         poly.reverse();
@@ -755,7 +755,7 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
     };
     // the chamfer at least as big as any rounding the stone below may
     // have, so the corner under it never roofs a rounded notch
-    let ch = (m.rounding.1 * s)
+    let ch = (m.rounding.hi * s)
         .min(ROUND_SIZE_CAP * span[0].min(span[1]))
         .max(rr);
     let rounded = round_corners(&poly, rr, m.joint * s / 2.0, below, ch);

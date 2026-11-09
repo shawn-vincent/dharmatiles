@@ -52,7 +52,7 @@ use dt_kit::{Band, Field as Lattice, Material, OnFrame, Rng, Scene, Support, Tag
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Span, Value, Write};
 use stone::{ColState, Env};
 
 type ColResult = Result<(Vec<(usize, dt_kit::Piece)>, usize), dt_kit::KitError>;
@@ -67,7 +67,7 @@ pub struct Cliff {
     /// stone-size multiplier relative to the form's own (massive = 1).
     size: f64,
     patches: Option<f64>,
-    patch_width: Option<(f64, f64)>,
+    patch_width: Option<Span>,
     ledges: u32,
     ledge_height: Option<f64>,
     /// The pile planned for this build, kept from the plan pass (a scatter
@@ -226,7 +226,13 @@ impl Cliff {
                 s,
             },
         );
-        let zone = form::Zones::new(&mut rng, fm.w, s, self.patches, self.patch_width);
+        let zone = form::Zones::new(
+            &mut rng,
+            fm.w,
+            s,
+            self.patches,
+            self.patch_width.map(Span::pair),
+        );
         let max_rocks = ROCKS_PER_SQUARE * ((fm.w * fm.h / (sq * sq)).ceil() as usize).max(1);
         let fit = fit::Fit::new(band, frame, ctx.area, foot);
         let mut st = stack::stack(&mut rng, &fm, &zone, s, max_rocks, &fit)

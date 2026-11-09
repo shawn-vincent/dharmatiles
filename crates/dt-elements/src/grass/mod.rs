@@ -73,7 +73,7 @@ use dt_kit::{Field, Material, Rng, Scene, Standing, Tag, TriMesh, distance, form
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Span, Write};
 use flow::Swaths;
 use fronds::Surface;
 use lat::Lat;
@@ -102,12 +102,12 @@ const SIDE_INNER_MM: f64 = 0.8;
 /// The grass element.
 #[derive(Clone, Debug)]
 pub struct Grass {
-    length: (f64, f64),
-    height: (f64, f64),
+    length: Span,
+    height: Span,
     clearings: f64,
     cover: f64,
     bare: f64,
-    meander: (f64, f64),
+    meander: Span,
 }
 
 impl Grass {
@@ -117,12 +117,12 @@ impl Grass {
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut g = Self {
-            length: (3.5, 6.5),
-            height: (1.5, 2.0),
+            length: Span::new(3.5, 6.5),
+            height: Span::new(1.5, 2.0),
             clearings: 1.5,
             cover: 1.0,
             bare: 0.0,
-            meander: (10.0, 30.0),
+            meander: Span::new(10.0, 30.0),
         };
         let s = Settings::new(controls);
         g.length = s.span_or("length", g.length)?;
@@ -131,7 +131,7 @@ impl Grass {
         g.cover = s.number_or("cover", g.cover)?;
         g.bare = s.number_or("bare", g.bare)?;
         if let (Some(a), Some(b)) = (s.number("flow.meander-min")?, s.number("flow.meander-max")?) {
-            g.meander = (a, b.max(a));
+            g.meander = Span::new(a, b.max(a));
         }
         Ok(g)
     }
@@ -181,7 +181,7 @@ impl Element for Grass {
             &mut draws("flow"),
             &ground,
             s,
-            self.meander,
+            self.meander.pair(),
         );
         let sw = Swaths::new(seed.key("swath"), &mut draws("swath"), w, h, &flow0, s);
 
@@ -239,7 +239,7 @@ impl Element for Grass {
             let aprons = apron_shapes(&mut draws("aprons"), &flow0, &things);
             lenses = fill_bare_earth(&lenses, &aprons, &blocker, &outside, &frame, self.bare);
         }
-        let wrap = obstacle_circles(&things, &blocker, &frame, &flow0, self.length.0 * s);
+        let wrap = obstacle_circles(&things, &blocker, &frame, &flow0, self.length.lo * s);
         let flow = flow::finish_flow(
             seed.key("rim"),
             &mut draws("rim"),
@@ -316,8 +316,8 @@ impl Element for Grass {
         };
 
         // 4 fronds
-        let len = (self.length.0 * s, self.length.1 * s);
-        let hgt = (self.height.0 * s, self.height.1 * s);
+        let len = self.length.scaled(s).pair();
+        let hgt = self.height.scaled(s).pair();
         let (frs, strands) = fronds::plan(
             &mut draws("fronds"),
             &surf,

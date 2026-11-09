@@ -35,7 +35,7 @@ use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write};
+use crate::{Control, Ctx, Degrees, Element, LookError, Plan, Read, Value, Write};
 use site::{crumbs, fill_pockets, ground_drop, place};
 pub(crate) use site::{drop_crumbs, ground_box};
 
@@ -81,7 +81,7 @@ struct Params {
     shape: crown::Shape,
     clumps: usize,
     clump_size: Value,
-    split_deg: f64,
+    split: Degrees,
     eagerness: f64,
     target: f64,
     balance: f64,
@@ -107,7 +107,7 @@ impl Default for Params {
             shape: crown::ROUND,
             clumps: 32,
             clump_size: Value::Number(5.5),
-            split_deg: 30.0,
+            split: Degrees(30.0),
             eagerness: 0.8,
             target: 0.33,
             balance: 1.0,
@@ -185,7 +185,9 @@ impl Tree {
             let [expert, word] = knob(name);
             Ok(s.number_of(&[&expert, &word])?.unwrap_or(now))
         };
-        p.split_deg = branch("split", p.split_deg)?;
+        if let Some(d) = s.degrees_of(&["branch/split", "crown/branching.split"])? {
+            p.split = d;
+        }
         p.eagerness = branch("eagerness", p.eagerness)?;
         p.target = branch("target", p.target)?;
         p.balance = branch("balance", p.balance)?;
@@ -319,7 +321,7 @@ impl Tree {
             (k >= 2).then_some(labels.as_slice()),
             &Colonise {
                 step_mm: step,
-                split_cos: p.eagerness * libm::cos(p.split_deg.to_radians()),
+                split_cos: p.eagerness * libm::cos(p.split.radians()),
                 aim_sin: libm::sin(TARGET_FDM_DEG.to_radians()),
                 floor_deg: STRICT_FDM_DEG,
                 climb_deg: CLIMB_DEG,

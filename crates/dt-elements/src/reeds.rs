@@ -23,7 +23,7 @@ use dt_kit::Kind;
 use dt_kit::{Material, Rng, Scene, Tag, TriMesh, form};
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Span, Write};
 
 const REED_SEP_MM: f64 = 12.0;
 /// Land height relative to the calm water level where reeds root.
@@ -44,7 +44,7 @@ const SECTION: usize = 24;
 pub struct Reeds {
     clumps: (i64, i64),
     stems: (i64, i64),
-    height: (f64, f64),
+    height: Span,
 }
 
 impl Reeds {
@@ -56,7 +56,7 @@ impl Reeds {
         let mut r = Self {
             clumps: (3, 5),
             stems: (5, 9),
-            height: (8.0, 13.0),
+            height: Span::new(8.0, 13.0),
         };
         let s = Settings::new(controls);
         r.clumps = s.counts_or("clumps", r.clumps)?;
@@ -201,7 +201,7 @@ impl Element for Reeds {
                     c[0] + SPREAD_MM * libm::cos(fan_a) * rr,
                     c[1] + SPREAD_MM * libm::sin(fan_a) * rr,
                 ];
-                let height = rng.uniform(self.height.0, self.height.1) * s;
+                let height = self.height.draw(&mut rng) * s;
                 let hw = rng.uniform(HALF_W_MM.0, HALF_W_MM.1) * s;
                 let ht = hw * rng.uniform(THICK.0, THICK.1);
                 let ts = rng.uniform(TIP_SCALE.0, TIP_SCALE.1);

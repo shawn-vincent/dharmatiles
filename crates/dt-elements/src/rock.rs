@@ -35,7 +35,7 @@ use dt_kit::{
 };
 
 use crate::read::{Settings, range_of};
-use crate::{Control, Ctx, Element, LookError, Plan, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Span, Write};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -500,7 +500,7 @@ pub struct Thing {
     /// `rock`, `stone`, `boulder` or `pebble`.
     pub kind: String,
     /// Its size range.
-    pub size: (f64, f64),
+    pub size: Span,
     /// `lo + (hi − lo)·u^exponent`.
     pub exponent: f64,
     /// Dome, slab, block, wedge weights.
@@ -508,7 +508,7 @@ pub struct Thing {
     /// Its share of a scatter's mix.
     pub weight: f64,
     /// How much of its width sinks under the ground, a share range.
-    pub buried: (f64, f64),
+    pub buried: Span,
 }
 
 /// The things a rock element builds, with their default size (dt-doc's
@@ -526,17 +526,18 @@ impl Thing {
     pub fn new(kind: &str, controls: &[Control], weight: f64) -> Result<Self, LookError> {
         let mut t = Self {
             kind: kind.to_owned(),
-            size: (6.0, 15.0),
+            size: Span::new(6.0, 15.0),
             exponent: WIDTH_EXP,
             mix: FAMILIES,
             weight,
-            buried: (0.0, 0.0),
+            buried: Span::point(0.0),
         };
         let s = Settings::new(controls);
         t.size = s.span_or("size", t.size)?;
         if let Some(v) = s.value("buried") {
             let share = |x: f64| if x > 1.0 { x / 100.0 } else { x };
-            t.buried = range_of(v).map_or((0.0, 0.0), |(a, b)| (share(a), share(b)));
+            t.buried =
+                range_of(v).map_or(Span::point(0.0), |r| Span::new(share(r.lo), share(r.hi)));
         }
         t.exponent = s.number_or("mostly.exponent", t.exponent)?;
         if let Some(w) = s.word("shape")? {
@@ -551,7 +552,7 @@ impl Thing {
     }
 
     fn draw(&self, rng: &mut Rng) -> f64 {
-        let (lo, hi) = self.size;
+        let (lo, hi) = self.size.pair();
         lo + (hi - lo) * libm::pow(rng.random(), self.exponent)
     }
 }
@@ -873,8 +874,8 @@ fn place_at_foot(
 
 /// `scatter { rock … }`: many rock things, by count or per square.
 pub struct Scatter {
-    count: Option<(f64, f64)>,
-    per_square: (f64, f64),
+    count: Option<Span>,
+    per_square: Span,
     gap: f64,
     /// `against=`: how far from the foot stones lie, mean mm.
     reach: f64,
@@ -882,7 +883,7 @@ pub struct Scatter {
 }
 
 /// Placements: 9 to 12 per 2×2, so 2.25 to 3 a square.
-const PER_SQUARE: (f64, f64) = (2.25, 3.0);
+const PER_SQUARE: Span = Span::new(2.25, 3.0);
 const GAP_MM: f64 = 1.5;
 // scree: fallen stones at a cliff's foot
 const SCREE_REACH_MM: f64 = 4.0;
@@ -965,11 +966,11 @@ impl Element for Scatter {
             |f| f.squares,
         );
         let n = match self.count {
-            Some((a, b)) => rng.uniform(a, b.max(a + f64::EPSILON)),
+            Some(r) => rng.uniform(r.lo, r.hi.max(r.lo + f64::EPSILON)),
             None => {
                 rng.uniform(
-                    self.per_square.0,
-                    self.per_square.1.max(self.per_square.0 + f64::EPSILON),
+                    self.per_square.lo,
+                    self.per_square.hi.max(self.per_square.lo + f64::EPSILON),
                 ) * squares
             }
         };
@@ -993,9 +994,9 @@ impl Element for Scatter {
             let d = thing.draw(&mut r);
             let mut item = match foot {
                 Some(_) => make_item(&mut r, d, SCREE_MIX, false, true)?,
-                None => make_item(&mut r, d, thing.mix, true, thing.buried.1 > 0.0)?,
+                None => make_item(&mut r, d, thing.mix, true, thing.buried.hi > 0.0)?,
             };
-            item.bury = thing.buried;
+            item.bury = thing.buried.pair();
             items.push(item);
             kinds.push(thing.kind.as_str());
         }

@@ -6,7 +6,7 @@
 //! An element asks for its controls by name and gets typed values or its
 //! default; it never loops over the controls matching names or `Value`s.
 
-use crate::{Control, LookError, Value};
+use crate::{Control, Degrees, LookError, Span, Value};
 
 fn refuse(c: &Control, what: &str) -> LookError {
     LookError::control(
@@ -25,10 +25,10 @@ fn number(c: &Control) -> Result<f64, LookError> {
 }
 
 /// One number or a range, as `(low, high)`.
-fn span(c: &Control) -> Result<(f64, f64), LookError> {
+fn span(c: &Control) -> Result<Span, LookError> {
     match c.value {
-        Value::Number(v) if v.is_finite() => Ok((v, v)),
-        Value::Range(a, b) if a.is_finite() && b.is_finite() => Ok((a, b)),
+        Value::Number(v) if v.is_finite() => Ok(Span::point(v)),
+        Value::Range(a, b) if a.is_finite() && b.is_finite() => Ok(Span::new(a, b)),
         _ => Err(refuse(c, "a number or a range")),
     }
 }
@@ -83,12 +83,12 @@ impl<'a> Settings<'a> {
     }
 
     /// A number or a range, as `(low, high)`.
-    pub(crate) fn span(&self, name: &str) -> Result<Option<(f64, f64)>, LookError> {
+    pub(crate) fn span(&self, name: &str) -> Result<Option<Span>, LookError> {
         self.control(name).map(span).transpose()
     }
 
     /// A span, or `default`.
-    pub(crate) fn span_or(&self, name: &str, default: (f64, f64)) -> Result<(f64, f64), LookError> {
+    pub(crate) fn span_or(&self, name: &str, default: Span) -> Result<Span, LookError> {
         Ok(self.span(name)?.unwrap_or(default))
     }
 
@@ -100,7 +100,7 @@ impl<'a> Settings<'a> {
     ) -> Result<(i64, i64), LookError> {
         #[allow(clippy::cast_possible_truncation, reason = "the schema bounds counts")]
         let r = |v: f64| libm::round(v) as i64;
-        Ok(self.span(name)?.map_or(default, |(a, b)| (r(a), r(b))))
+        Ok(self.span(name)?.map_or(default, |s| (r(s.lo), r(s.hi))))
     }
 
     /// A number or a range kept as written (a range is drawn per thing when
@@ -111,6 +111,11 @@ impl<'a> Settings<'a> {
             .transpose()
     }
 
+    /// An angle in degrees.
+    pub(crate) fn degrees_of(&self, names: &[&str]) -> Result<Option<Degrees>, LookError> {
+        Ok(self.number_of(names)?.map(Degrees))
+    }
+
     /// A word.
     pub(crate) fn word(&self, name: &str) -> Result<Option<&'a str>, LookError> {
         self.control(name).map(word).transpose()
@@ -118,10 +123,10 @@ impl<'a> Settings<'a> {
 }
 
 /// One number or range of a [`Value`], when it is not a word.
-pub(crate) fn range_of(v: &Value) -> Option<(f64, f64)> {
+pub(crate) fn range_of(v: &Value) -> Option<Span> {
     match v {
-        Value::Number(a) => Some((*a, *a)),
-        Value::Range(a, b) => Some((*a, *b)),
+        Value::Number(a) => Some(Span::point(*a)),
+        Value::Range(a, b) => Some(Span::new(*a, *b)),
         Value::Word(_) => None,
     }
 }
@@ -141,8 +146,8 @@ mod tests {
     fn spans_take_a_number_or_a_range() {
         let a = [c("h", Value::Number(3.0)), c("r", Value::Range(2.0, 4.0))];
         let s = Settings::new(&a);
-        assert_eq!(s.span("h"), Ok(Some((3.0, 3.0))));
-        assert_eq!(s.span("r"), Ok(Some((2.0, 4.0))));
+        assert_eq!(s.span("h"), Ok(Some(Span::point(3.0))));
+        assert_eq!(s.span("r"), Ok(Some(Span::new(2.0, 4.0))));
         assert_eq!(s.span("none"), Ok(None));
         assert!(s.number("r").is_err());
         let w = [c("h", Value::Word("tall".into()))];

@@ -39,7 +39,7 @@ use dt_kit::{Field, Kind, Mask, Noise, Scale, Scene, noise};
 
 use crate::read::Settings;
 use crate::wall::{self, Family, Height, Laid, Mason};
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Span, Write};
 
 /// The steepest a slab or board tilts, degrees.
 const TILT_MAX_DEG: f64 = 4.0;
@@ -323,8 +323,8 @@ impl Element for Flagstones {
         let mut m = self.mason.clone();
         if m.family == Family::Slab {
             let pitch = scene.frame().square_mm / f64::from(self.slabs) / s;
-            m.course = (pitch, pitch);
-            m.bay = (pitch, pitch);
+            m.course = Span::point(pitch);
+            m.bay = Span::point(pitch);
         }
         lay(&m, scene, ctx, dt_kit::Material::Masonry, "flagstones")
     }
@@ -341,14 +341,14 @@ impl Element for Planks {
         let mut m = self.mason.clone();
         // boards run east to west: a board's width is one course
         let width = f.square_mm / f64::from(self.boards) / s;
-        m.course = (width, width);
+        m.course = Span::point(width);
         if self.even {
             // every board half a square long, each course set half a board
             // on from the last
-            m.bay = (17.5, 17.5);
+            m.bay = Span::point(17.5);
             m.bond = wall::Bond::Running;
         } else {
-            m.bay = (9.0, 26.0);
+            m.bay = Span::new(9.0, 26.0);
             m.min_bond = 4.0;
         }
         lay(&m, scene, ctx, dt_kit::Material::Wood, "planks")
