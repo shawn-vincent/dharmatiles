@@ -123,8 +123,12 @@ fn rock_tops(b: &Built) -> std::collections::HashMap<(i32, i32), f64> {
 
 /// A flat-topped block of stone with a film on its top, or bare.
 fn table(film: bool) -> String {
+    table_seeded(film, 2)
+}
+
+fn table_seeded(film: bool, seed: u32) -> String {
     format!(
-        r#"tile size="1x1" seed=2 {{
+        r#"tile size="1x1" seed={seed} {{
     region crag {{ within 13 of=center }}
     stack {{
         base
@@ -206,6 +210,110 @@ fn a_film_lies_only_on_stones_that_stand_and_is_a_layer_of_its_band() {
         "film triangles not over a standing stone: {} of {film}",
         film - over
     );
+}
+
+/// The up-facing triangles of `b` of `material`, as three vertices each.
+fn up_triangles(b: &Built, material: Material) -> Vec<[[f64; 3]; 3]> {
+    let mut out = Vec::new();
+    for (t, m) in b.export.mesh.triangles.iter().zip(&b.materials) {
+        if *m != material {
+            continue;
+        }
+        let ps = t.map(|i| b.export.mesh.positions[i as usize].map(f64::from));
+        let (u, v) = (
+            [0, 1, 2].map(|k| ps[1][k] - ps[0][k]),
+            [0, 1, 2].map(|k| ps[2][k] - ps[0][k]),
+        );
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        if n[2] > 0.9 * (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() {
+            out.push(ps);
+        }
+    }
+    out
+}
+
+/// The film's thickness over the stone under it, exactly: at every vertex of a
+/// flat-facing earth triangle higher than the ground round the pile, its
+/// height less the height of the bare build's stone straight under it (found
+/// by the triangle the point falls in), sorted.
+fn film_thickness(bare: &Built, filmed: &Built) -> Vec<f64> {
+    let mut grid: std::collections::HashMap<(i32, i32), Vec<[[f64; 3]; 3]>> = Default::default();
+    for ps in up_triangles(bare, Material::Rock) {
+        let span = |k: usize| {
+            let (lo, hi) = ps
+                .iter()
+                .fold((f64::MAX, f64::MIN), |(l, h), p| (l.min(p[k]), h.max(p[k])));
+            (lo.floor() as i32)..=(hi.floor() as i32)
+        };
+        for i in span(0) {
+            for j in span(1) {
+                grid.entry((i, j)).or_default().push(ps);
+            }
+        }
+    }
+    let stone_at = |x: f64, y: f64| -> Option<f64> {
+        let mut best: Option<f64> = None;
+        for ps in grid.get(&(x.floor() as i32, y.floor() as i32))? {
+            let d = (ps[1][1] - ps[2][1]) * (ps[0][0] - ps[2][0])
+                + (ps[2][0] - ps[1][0]) * (ps[0][1] - ps[2][1]);
+            let a = ((ps[1][1] - ps[2][1]) * (x - ps[2][0])
+                + (ps[2][0] - ps[1][0]) * (y - ps[2][1]))
+                / d;
+            let b = ((ps[2][1] - ps[0][1]) * (x - ps[2][0])
+                + (ps[0][0] - ps[2][0]) * (y - ps[2][1]))
+                / d;
+            let c = 1.0 - a - b;
+            if a >= -1e-9 && b >= -1e-9 && c >= -1e-9 {
+                let z = a * ps[0][2] + b * ps[1][2] + c * ps[2][2];
+                best = Some(best.map_or(z, |v| v.max(z)));
+            }
+        }
+        best
+    };
+    let mut thick: Vec<f64> = up_triangles(filmed, Material::Earth)
+        .iter()
+        .flatten()
+        .filter(|p| p[2] >= EDGE_MM + PEBBLE_MAX_MM)
+        .filter_map(|p| stone_at(p[0], p[1]).map(|z| p[2] - z))
+        .collect();
+    thick.sort_by(f64::total_cmp);
+    thick
+}
+
+#[test]
+fn a_film_keeps_its_skin_over_the_stone_whatever_its_grain() {
+    // the grain's pits take the film's face down, never to less than the
+    // band's low over the stone (the printer's skin) and never over its high
+    for seed in [2, 5, 9] {
+        let name = format!("table seed {seed}");
+        let (bare, filmed) = (
+            built(&table_seeded(false, seed)),
+            built(&table_seeded(true, seed)),
+        );
+        let t = film_thickness(&bare, &filmed);
+        assert!(
+            t.len() > 500,
+            "{name}: the film is laid: {} triangles",
+            t.len()
+        );
+        assert!(
+            t[0] >= FILM_MIN_MM - 0.02,
+            "{name}: the film is {} mm over the stone at its thinnest, band low {FILM_MIN_MM}",
+            t[0]
+        );
+        assert!(
+            t[t.len() - 1] <= FILM_MAX_MM + 0.05,
+            "{name}: the film is {} mm over the stone at its thickest, band high {FILM_MAX_MM}",
+            t[t.len() - 1]
+        );
+        // and grain is still there: the film is not a flat sheet at its low
+        let (p10, p90) = (t[t.len() / 10], t[t.len() * 9 / 10]);
+        assert!(p90 - p10 > 0.1, "{name}: the film has grain: {p10}..{p90}");
+    }
 }
 
 /// The share of the side's vertices (above the base, under `z_max`) within

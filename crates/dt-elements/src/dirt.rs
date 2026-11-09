@@ -836,12 +836,17 @@ fn place_pebbles(
 struct Film {
     area: dt_kit::Mask,
     band: Band,
+    /// The lowest the grain may take the film: the skin over the stone's
+    /// top, so a pit never thins the film to nothing over the stone
+    /// (the grain's own cap counts from the core under the stones, half a
+    /// millimetre lower).
+    floor: Field,
 }
 
 /// The film `ctx`'s dirt is, if it is laid over pieces: the dirt's band is
 /// `bottom` plus a thickness, and `bottom` here is the pieces' tops, not the
 /// envelope the solver held them to. `None` for any other dirt.
-fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band) -> Option<Film> {
+fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band, skin_mm: f64) -> Option<Film> {
     let rest = scene.rest()?;
     let below = ctx.below?;
     // it is a film when its region holds pieces' tops
@@ -860,6 +865,7 @@ fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band) -> Option<Film> {
     let mut flo = lo.clone();
     let mut fhi = hi.clone();
     let mut area = ctx.area.clone();
+    let mut floor = lo.map(|_| f64::NEG_INFINITY);
     for k in 0..area.bits.len() {
         if !ctx.area.bits[k] {
             continue;
@@ -868,12 +874,13 @@ fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band) -> Option<Film> {
             let top = rest.tops[k];
             flo.z[k] = top + (lo.z[k] - below.lo().z[k]);
             fhi.z[k] = top + (hi.z[k] - below.hi().z[k]);
+            floor.z[k] = top + skin_mm;
         } else {
             area.bits[k] = false;
         }
     }
     let band = Band::new(flo, fhi).ok()?;
-    Some(Film { area, band })
+    Some(Film { area, band, floor })
 }
 
 impl Element for Dirt {
@@ -895,7 +902,8 @@ impl Element for Dirt {
         // dirt laid on a pieces body (a cliff's stones) is a film: it lies on
         // the pieces' own tops, on the rock under the film's slope and clear
         // of the lips and faces, as thick as its band is over what was under
-        let film = film_on(scene, ctx, band);
+        let skin_mm = 3.0 * ctx.printer.layer_mm;
+        let film = film_on(scene, ctx, band, skin_mm);
         if film
             .as_ref()
             .is_some_and(|f| !f.area.bits.iter().any(|&b| b))
@@ -910,7 +918,7 @@ impl Element for Dirt {
             area,
             band,
             under: ctx.under,
-            skin_mm: 3.0 * ctx.printer.layer_mm,
+            skin_mm,
         };
         let Made {
             shape,
@@ -920,6 +928,13 @@ impl Element for Dirt {
             stone,
             counts,
         } = surface(&self.on(film.is_some()), scene, ctx.seed, ctx.path, &on)?;
+        // a film's grain stays a skin over the stone as well as over the
+        // water that will lie on it
+        let floor = match (floor, film.as_ref()) {
+            (Some(f), Some(m)) => Some(f.zip(&m.floor, f64::max)),
+            (None, Some(m)) => Some(m.floor.clone()),
+            (f, None) => f,
+        };
         let grain = dt_kit::Relief {
             relief: &relief,
             weight: &weight,
