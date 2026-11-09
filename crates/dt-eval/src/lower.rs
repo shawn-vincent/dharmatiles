@@ -221,6 +221,18 @@ fn visit<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
     }
 }
 
+/// One coordinate of an `at=` point, in squares: a number, or a range with
+/// its odds, drawn once from the entry's seed.  A number is a range of no
+/// width, as a control's number is, so it takes its draw as before.
+pub(crate) fn coordinate(e: &Expr) -> Result<Draw, Refused> {
+    let lets = Lets::default();
+    if !lets.draws_in(e) {
+        let v = e.sample(&|_| None, 0.0)?;
+        return Ok(Draw::flat(v, v));
+    }
+    Ok(lower(e, &lets, 0)?.into_draw())
+}
+
 const DEPTH: usize = 32;
 
 fn lower(e: &Expr, lets: &Lets, depth: usize) -> Result<Part, Refused> {

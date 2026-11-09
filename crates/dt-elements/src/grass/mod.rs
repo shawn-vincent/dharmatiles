@@ -73,7 +73,7 @@ use dt_kit::{Field, Material, Rng, Scene, Standing, Tag, TriMesh, distance, form
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Span, Write};
+use crate::{Control, Ctx, Draw, Element, LookError, Plan, Read, Span, Write};
 use flow::Swaths;
 use fronds::Surface;
 use lat::Lat;
@@ -102,8 +102,8 @@ const SIDE_INNER_MM: f64 = 0.8;
 /// The grass element.
 #[derive(Clone, Debug)]
 pub struct Grass {
-    length: Span,
-    height: Span,
+    length: Draw,
+    height: Draw,
     clearings: f64,
     cover: f64,
     bare: f64,
@@ -117,16 +117,16 @@ impl Grass {
     /// [`LookError`] for an unknown control or a value out of range.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut g = Self {
-            length: Span::new(3.5, 6.5),
-            height: Span::new(1.5, 2.0),
+            length: Draw::flat(3.5, 6.5),
+            height: Draw::flat(1.5, 2.0),
             clearings: 1.5,
             cover: 1.0,
             bare: 0.0,
             meander: Span::new(10.0, 30.0),
         };
         let s = Settings::new(controls);
-        g.length = s.span_or("length", g.length)?;
-        g.height = s.span_or("height", g.height)?;
+        g.length = s.dist_or("length", g.length)?;
+        g.height = s.dist_or("height", g.height)?;
         g.clearings = s.number_or("clearings", g.clearings)?;
         g.cover = s.number_or("cover", g.cover)?;
         g.bare = s.number_or("bare", g.bare)?;
@@ -239,7 +239,7 @@ impl Element for Grass {
             let aprons = apron_shapes(&mut draws("aprons"), &flow0, &things);
             lenses = fill_bare_earth(&lenses, &aprons, &blocker, &outside, &frame, self.bare);
         }
-        let wrap = obstacle_circles(&things, &blocker, &frame, &flow0, self.length.lo * s);
+        let wrap = obstacle_circles(&things, &blocker, &frame, &flow0, self.length.lo() * s);
         let flow = flow::finish_flow(
             seed.key("rim"),
             &mut draws("rim"),
@@ -316,16 +316,16 @@ impl Element for Grass {
         };
 
         // 4 fronds
-        let len = self.length.scaled(s).pair();
-        let hgt = self.height.scaled(s).pair();
+        let len = self.length.scaled(s);
+        let hgt = self.height.scaled(s);
         let (frs, strands) = fronds::plan(
             &mut draws("fronds"),
             &surf,
             &sw,
             &flow,
             (w, h),
-            len,
-            hgt,
+            &len,
+            &hgt,
             self.cover,
         );
 

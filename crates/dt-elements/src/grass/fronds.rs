@@ -5,7 +5,7 @@
 //! with the system's square; the strand spacing is the blade density and
 //! does not either.
 
-use dt_kit::{Field, Rng};
+use dt_kit::{Draw, Field, Rng};
 use rayon::prelude::*;
 
 use super::flow::{Flow, Swaths, poisson_sites};
@@ -94,7 +94,7 @@ fn make_strand_roots(
     rng: &mut Rng,
     flow: &Flow,
     (w, h): (f64, f64),
-    len: (f64, f64),
+    len: &Draw,
 ) -> (Vec<[f64; 2]>, Vec<f64>, usize) {
     let m = STRAND_MARGIN_MM;
     let seeds = poisson_sites(rng, (-m, -m, w + m, h + m), STRAND_SPACING_MM);
@@ -119,7 +119,7 @@ fn make_strand_roots(
     for i in 0..n {
         let mut u = 0.0;
         while u < slen[i] {
-            let l = rng.uniform(len.0, len.1);
+            let l = len.draw(rng);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let k = ((u / TRACE_STEP_MM) as usize).min(fp[i].len() - 2);
             let (p, q) = (fp[i][k], fp[i][k + 1]);
@@ -177,8 +177,8 @@ pub fn plan(
     sw: &Swaths,
     flow: &Flow,
     (w, h): (f64, f64),
-    len: (f64, f64),
-    hgt: (f64, f64),
+    len: &Draw,
+    hgt: &Draw,
     cover: f64,
 ) -> (Vec<Frond>, usize) {
     let (roots, l0, n_strands) = make_strand_roots(rng, flow, (w, h), len);
@@ -237,7 +237,7 @@ pub fn plan(
             (d + wander).to_radians()
         })
         .collect();
-    let lmax = len.1 * 1.1 + 0.5;
+    let lmax = len.hi() * 1.1 + 0.5;
     let paths = trace_batch(&roots, lmax, flow, Some(&delta), 1.0);
     let step = TRACE_STEP_MM;
     let mut out = Vec::new();
@@ -282,7 +282,7 @@ pub fn plan(
             let (_, s, _) = sw.coords(roots[f][0], roots[f][1]);
             blade_len = l0[f] * (0.8 + 0.3 * s);
             wmax = rng.uniform(FROND_HALF_W_MM.0, FROND_HALF_W_MM.1);
-            hf = rng.uniform(hgt.0, hgt.1);
+            hf = hgt.draw(rng);
         }
         let is_bank = bank[f] && !sprig;
         if is_bank {

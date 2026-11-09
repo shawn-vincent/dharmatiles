@@ -200,12 +200,13 @@ pub(super) fn place(
             })
             .ok_or_else(|| LookError::build("the tree's area is empty"))
     };
-    let (x, y) = if let Some([[x0, x1], [y0, y1]]) = ctx.at {
-        let u = rng.random();
-        let v = rng.random();
+    let (x, y) = if let Some([dx, dy]) = ctx.at {
+        // a number is a range of no width and still takes its draw, so the
+        // stream after it is where it always was
+        let (u, v) = (dx.draw(&mut rng), dy.draw(&mut rng));
         // nudged in so the crown stays on the tile, never clipped
-        let x = ((x0 + u * (x1 - x0)) * sq).clamp(m, w - m);
-        let y = ((y0 + v * (y1 - y0)) * sq).clamp(m, h - m);
+        let x = (u * sq).clamp(m, w - m);
+        let y = (v * sq).clamp(m, h - m);
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let node = |x: f64, y: f64| {
             let i = libm::round(x / step).clamp(0.0, (a.nx - 1) as f64) as usize;

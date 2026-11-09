@@ -332,8 +332,8 @@ pub(crate) fn run(
     let courses = Courses {
         across,
         height,
-        course: m.course.scaled(s).pair(),
-        bay: m.bay.scaled(s).pair(),
+        course: m.course.scaled(s),
+        bay: m.bay.scaled(s),
         min_bond: m.min_bond * s,
         bond: m.bond,
     };
@@ -383,7 +383,7 @@ pub(crate) fn run(
     // but never by half or more of the shortest unit there (a closer can
     // be MIN_BAY_FRAC of the shortest stone, a course as low as the
     // drawn heights make it), or that unit would miss the core and float
-    let end_in = rv.min(0.5 * layout::MIN_BAY_FRAC * m.bay.lo * s);
+    let end_in = rv.min(0.5 * layout::MIN_BAY_FRAC * m.bay.lo() * s);
     let low_course = cells
         .iter()
         .map(|c| c.z1 - c.z0)

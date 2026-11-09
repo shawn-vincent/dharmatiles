@@ -29,7 +29,7 @@ pub(crate) mod rubble;
 use dt_kit::{Kind, Scene};
 
 use crate::read::{Pick, Settings};
-use crate::{Control, Ctx, Draw, Element, LookError, Plan, Read, Span, Write};
+use crate::{Control, Ctx, Draw, Element, LookError, Plan, Read, Write};
 #[cfg(test)]
 use chassis::percentile;
 pub(crate) use chassis::{Laid, Run, build, cell_seed, finish_build, run};
@@ -90,8 +90,8 @@ pub(crate) struct Mason {
     /// the same number means two things by `laid`.
     pub across: f64,
     pub height: Height,
-    pub course: Span,
-    pub bay: Span,
+    pub course: Draw,
+    pub bay: Draw,
     pub joint: f64,
     pub reveal: f64,
     pub min_bond: f64,
@@ -130,8 +130,8 @@ impl Mason {
             laid: false,
             across: 7.0,
             height: Height::Top(WALL_TOP_MM),
-            course: Span::new(5.5, 8.5),
-            bay: Span::new(11.0, 20.0),
+            course: Draw::flat(5.5, 8.5),
+            bay: Draw::flat(11.0, 20.0),
             joint: 0.11,
             reveal: 1.3,
             min_bond: 3.0,
@@ -157,8 +157,8 @@ impl Mason {
         match family {
             Family::CutStone | Family::Slab => base,
             Family::Brick => Self {
-                course: Span::new(2.5, 3.0),
-                bay: Span::new(5.0, 6.6),
+                course: Draw::flat(2.5, 3.0),
+                bay: Draw::flat(5.0, 6.6),
                 joint: 0.125,
                 reveal: 1.0,
                 min_bond: 2.0,
@@ -172,8 +172,8 @@ impl Mason {
             Family::RegularBrick => {
                 let (chip, r, rel) = texture("dressed").unwrap_or_default();
                 Self {
-                    course: Span::new(3.2, 3.2),
-                    bay: Span::new(8.5, 8.5),
+                    course: Draw::flat(3.2, 3.2),
+                    bay: Draw::flat(8.5, 8.5),
                     joint: 0.45,
                     reveal: 1.0,
                     bond: Bond::Running,
@@ -187,8 +187,8 @@ impl Mason {
                 }
             }
             Family::Fieldstone => Self {
-                course: Span::new(2.2, 5.2),
-                bay: Span::new(5.0, 16.0),
+                course: Draw::flat(2.2, 5.2),
+                bay: Draw::flat(5.0, 16.0),
                 joint: 0.0,
                 reveal: 2.8,
                 min_bond: 1.8,
@@ -238,8 +238,8 @@ impl Wall {
             None => m.height,
         };
         m.across = s.number_or("thickness", m.across)?;
-        m.course = s.span_or("stones/height", m.course)?;
-        m.bay = s.span_or("stones/length", m.bay)?;
+        m.course = s.dist_or("stones/height", m.course)?;
+        m.bay = s.dist_or("stones/length", m.bay)?;
         if let Some(t) = s.word("stones/texture")?.and_then(texture) {
             if family == Family::Fieldstone {
                 // fieldstone keeps its pebble roundings; the
@@ -298,7 +298,8 @@ impl Wall {
         }
         if m.bond == Bond::Running && family != Family::RegularBrick {
             // a running bond on any family: uniform courses of the mean
-            m.course = Span::point(m.course.mid());
+            let mid = 0.5 * (m.course.lo() + m.course.hi());
+            m.course = Draw::flat(mid, mid);
         }
         Ok(Self { mason: m })
     }
@@ -345,7 +346,7 @@ mod tests {
     fn controls_set_the_family_and_its_defaults() {
         let w = Wall::new(&[c("style", Value::Word("brick".into()))]).unwrap();
         assert_eq!(w.mason.family, Family::Brick);
-        assert!((w.mason.course.lo - 2.5).abs() < 1e-12);
+        assert!((w.mason.course.lo() - 2.5).abs() < 1e-12);
         let w = Wall::new(&[
             c("style", Value::Word("cut-stone".into())),
             c("stones/texture", Value::Word("hewn".into())),

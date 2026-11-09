@@ -85,11 +85,6 @@ impl Control {
         self.planned = true;
         self
     }
-    /// Takes a range as well as one number.
-    const fn ranges(mut self) -> Self {
-        self.ranges = true;
-        self
-    }
     /// Takes a weighted range as well (`low(1..6, 4)`): it draws, and its
     /// element reads the odds.
     const fn weighted(mut self) -> Self {
@@ -198,7 +193,7 @@ const fn rock_controls(size: &'static str) -> [Control; 4] {
             Axis::Share,
             "how much of each rock is under the ground",
         )
-        .ranges(),
+        .weighted(),
     ]
 }
 
@@ -303,14 +298,14 @@ static LEAVES: &[Word] = &[
 static TREE: &[Control] = &[
     c("height", Axis::Mm, "ground to the top of the crown")
         .limits(20.0, 120.0)
-        .ranges()
+        .weighted()
         .default("40"),
     group(
         "trunk",
         &[
             c("height", Axis::Mm, "bare trunk below the crown")
                 .limits(0.0, 200.0)
-                .ranges()
+                .weighted()
                 .default("30"),
             c("width", Axis::Mm, "trunk thickness at the ground")
                 .limits(0.5, 40.0)
@@ -337,7 +332,7 @@ static TREE: &[Control] = &[
             .default("32"),
             c("clumpSize", Axis::Mm, "size of each clump")
                 .limits(1.0, 20.0)
-                .ranges()
+                .weighted()
                 .default("5.5"),
             c(
                 "branching",
@@ -361,7 +356,7 @@ static TREE: &[Control] = &[
         &[
             c("length", Axis::Mm, "leaf length")
                 .limits(0.5, 20.0)
-                .ranges()
+                .weighted()
                 .default("4.5"),
             c("width", Axis::Mm, "leaf width")
                 .limits(0.5, 20.0)
@@ -463,10 +458,10 @@ static WALL: &[Control] = &[
         &[
             c("height", Axis::Mm, "course height")
                 .limits(1.0, 40.0)
-                .ranges(),
+                .weighted(),
             c("length", Axis::Mm, "stone length along the wall")
                 .limits(2.0, 80.0)
-                .ranges(),
+                .weighted(),
             c("texture", Axis::Word, "surface finish of each stone").words(TEXTURE),
         ],
         "stone size",
@@ -646,7 +641,7 @@ static CLIFF: &[Control] = &[
         "shattered",
         &[
             c("patches", Axis::Count, "broken patches along the run"),
-            c("width", Axis::Mm, "how wide each patch is").ranges(),
+            c("width", Axis::Mm, "how wide each patch is").weighted(),
         ],
         "broken patches with more cracks and scree",
     ),
@@ -741,11 +736,11 @@ pub static ELEMENTS: &[Element] = &[
         controls: &[
             c("length", Axis::Mm, "blade length along the ground")
                 .over(0.0, f64::INFINITY)
-                .ranges()
+                .weighted()
                 .default("3.5..6.5"),
             c("height", Axis::Mm, "how tall a blade stands over the ground")
                 .over(0.0, f64::INFINITY)
-                .ranges()
+                .weighted()
                 .default("1.5..2"),
             c(
                 "clearings",

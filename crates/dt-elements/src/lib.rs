@@ -173,17 +173,6 @@ impl LookError {
         }
     }
 
-    /// A control given a weighting where it does not take one yet
-    /// (`dt::weighting`).
-    fn weighting(name: &str, message: String, help: String) -> Self {
-        Self {
-            control: Some(name.to_owned()),
-            message,
-            help: Some(help),
-            code: Some("dt::weighting"),
-        }
-    }
-
     fn control(name: &str, message: String, help: String) -> Self {
         Self {
             control: Some(name.to_owned()),
@@ -286,10 +275,10 @@ pub struct Ctx<'a> {
     /// corner, walked with the tile inside on the left (a run's outer
     /// face). `None` without `along=`.
     pub along: Option<&'a [[f64; 2]]>,
-    /// `at=`: where it stands, in squares, as `[x_lo, x_hi]` and
-    /// `[y_lo, y_hi]` (equal ends for a fixed point; a range is drawn
-    /// from the entry's seed). `None` without `at=`.
-    pub at: Option<[[f64; 2]; 2]>,
+    /// `at=`: where it stands, in squares, the x and the y each a number
+    /// (a range of no width) or a range with its odds, drawn from the
+    /// entry's seed. `None` without `at=`.
+    pub at: Option<&'a [Draw; 2]>,
     /// The printer the build is checked against: elements that cut or cull
     /// to the gate's rule (a tree's [`dt_kit::stand`], its leaf cull) use
     /// its numbers.

@@ -860,7 +860,7 @@ impl<'a> Plan<'a> {
             path: &job.path,
             seed: job.seed,
             along: entry.and_then(|e| e.along.as_deref()),
-            at: entry.and_then(|e| e.at),
+            at: entry.and_then(|e| e.at.as_ref()),
             printer: *self.opts.printer,
             against: entry.and_then(|e| e.against.as_deref()),
             foots: &self.foots,

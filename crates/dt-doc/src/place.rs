@@ -296,6 +296,39 @@ fn perr(message: impl Into<String>, start: usize, end: usize) -> PlaceError {
     }
 }
 
+/// True when the `(` that starts `t` closes at its very end.
+fn encloses(t: &str) -> bool {
+    let mut depth = 0usize;
+    for (i, c) in t.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return i + 1 == t.len();
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// The commas of `s` outside every parenthesis and bracket.
+fn top_commas(s: &str) -> Vec<usize> {
+    let mut depth = 0usize;
+    let mut out = Vec::new();
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => out.push(i),
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Parse a point: `"x,y"`, a corner word or an edge word.
 ///
 /// # Errors
@@ -304,7 +337,7 @@ pub fn parse_point(s: &str) -> Result<Point, PlaceError> {
     // "(x, y)": the pair may be written in parentheses
     let open = s.len() - s.trim_start().len();
     let t = s.trim();
-    if t.starts_with('(') && t.ends_with(')') && t.contains(',') {
+    if t.starts_with('(') && encloses(t) && t.contains(',') {
         let inner = &t[1..t.len() - 1];
         return parse_point(inner)
             .map_err(|e| perr(e.message, e.start + open + 1, e.end + open + 1));
@@ -316,7 +349,10 @@ pub fn parse_point(s: &str) -> Result<Point, PlaceError> {
     if let Some(e) = Edge::parse(t) {
         return Ok(Point::Edge(e));
     }
-    let Some(comma) = s.find(',') else {
+    // the pair's comma is the one outside every call and bracket: a weighted
+    // coordinate such as `low(0..1, 3)` has commas of its own
+    let commas = top_commas(s);
+    let Some(&comma) = commas.first() else {
         if t.contains(' ') && t.split_whitespace().count() == 2 {
             return Err(perr(
                 "a point's two numbers are separated by a comma: \"x,y\"",
@@ -330,19 +366,11 @@ pub fn parse_point(s: &str) -> Result<Point, PlaceError> {
             s.len(),
         ));
     };
-    if s[comma + 1..].contains(',') {
-        let at = comma + 1 + s[comma + 1..].find(',').unwrap_or(0);
+    if let Some(&at) = commas.get(1) {
         return Err(perr("a point has two coordinates", at, at + 1));
     }
     let coord = |part: &str, offset: usize| -> Result<Expr, PlaceError> {
         let x = expr::parse(part).map_err(|e| perr(e.message, e.start + offset, e.end + offset))?;
-        if let Some(w) = x.weighted() {
-            return Err(perr(
-                format!("`{w}`: a point's range does not take a weighting yet"),
-                offset,
-                offset + part.len(),
-            ));
-        }
         if let Some(n) = x.names().first() {
             let at = part.find(n).unwrap_or(0) + offset;
             return Err(perr(
@@ -429,6 +457,29 @@ mod tests {
         );
         let p = parse_point("south").unwrap();
         assert_eq!(p.bounds(1.0, 2.0).unwrap(), ((0.5, 0.5), (0.0, 0.0)));
+    }
+
+    #[test]
+    fn a_coordinate_may_hold_commas_of_its_own() {
+        for src in [
+            "low(0.3..0.7, 3), 0.5",
+            "0.5,[0.4, 0.6:2]",
+            "mix(bell(0.3..0.7), 1, flat(0.3..0.7), 1),steps(0.2..0.8, 1, 2)",
+        ] {
+            let Point::Pair { x, y } = parse_point(src).unwrap() else {
+                panic!("{src}")
+            };
+            assert!(x.is_range() || y.is_range(), "{src}");
+        }
+        // a third top-level comma is still a third coordinate
+        let e = parse_point("low(0.3..0.7, 3), 0.5, 1").unwrap_err();
+        assert!(e.message.contains("two coordinates"), "{e:?}");
+        // the parenthesised pair is the pair, not a call's parenthesis
+        assert!(parse_point("(1, 2)").is_ok());
+        assert!(matches!(
+            parse_point("(0.1), (0.2)").unwrap(),
+            Point::Pair { .. }
+        ));
     }
 
     #[test]

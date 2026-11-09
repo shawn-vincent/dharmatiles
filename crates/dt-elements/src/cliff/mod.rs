@@ -144,7 +144,7 @@ impl Cliff {
             c.look.ledges = v.clamp(0.0, 2.0).round() as u32;
         }
         c.look.patches = s.number("shattered/patches")?.or(c.look.patches);
-        c.look.patch_width = s.span("shattered/width")?.or(c.look.patch_width);
+        c.look.patch_width = s.dist("shattered/width")?.or(c.look.patch_width);
         if w.iter().any(|x| !x.is_nan()) {
             let w: [f64; 5] = w.map(|x| if x.is_nan() { 0.0 } else { x });
             if w.iter().sum::<f64>() > 0.0 {

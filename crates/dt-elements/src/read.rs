@@ -2,11 +2,11 @@
 //! whether it takes a range, its words) is the schema's, checked when the
 //! document is read (`dt_doc::schema::Control::check`); [`Settings`] is the
 //! one place that takes a value apart, by what the element wants it as (a
-//! number, a span, counts, a word), and refuses a value of the wrong shape.
+//! number, a draw, a word), and refuses a value of the wrong shape.
 //! An element asks for its controls by name and gets typed values or its
 //! default; it never loops over the controls matching names or `Value`s.
 
-use crate::{Control, Degrees, Draw, LookError, Span, Value};
+use crate::{Control, Degrees, Draw, LookError, Value};
 
 fn refuse(c: &Control, what: &str) -> LookError {
     LookError::control(
@@ -21,45 +21,6 @@ fn number(c: &Control) -> Result<f64, LookError> {
     match c.value {
         Value::Number(v) if v.is_finite() => Ok(v),
         _ => Err(refuse(c, "a number")),
-    }
-}
-
-/// One number or a range, as `(low, high)`.  A weighted range is refused:
-/// the control does not draw with odds yet (`dt::weighting`).
-fn span(c: &Control) -> Result<Span, LookError> {
-    match c.value {
-        Value::Number(v) if v.is_finite() => Ok(Span::point(v)),
-        Value::Range(a, b) if a.is_finite() && b.is_finite() => Ok(Span::new(a, b)),
-        Value::Dist(_) => Err(LookError::weighting(
-            &c.name,
-            format!("`{}` does not take a weighting yet", c.name),
-            format!(
-                "write the range {}; weightings are accepted on size, count, perSquare, clumps, stems, height on reeds, tree widths and the wall's edges rounding",
-                match &c.value {
-                    Value::Dist(d) => format!("{}..{}", d.lo, d.hi),
-                    _ => String::new(),
-                }
-            ),
-        )),
-        // a sum of plain ranges is read as its ends, as it always was
-        Value::Draw(ref d) if d.is_flat() => {
-            let (a, b) = d.bounds();
-            if a.is_finite() && b.is_finite() {
-                Ok(Span::new(a, b))
-            } else {
-                Err(refuse(c, "a number or a range"))
-            }
-        }
-        Value::Draw(ref d) => Err(LookError::weighting(
-            &c.name,
-            format!("`{}` does not take a weighting yet", c.name),
-            format!(
-                "write the range {}..{}; weightings are accepted on size, count, perSquare, clumps, stems, height on reeds, tree widths and the wall's edges rounding",
-                d.lo(),
-                d.hi()
-            ),
-        )),
-        _ => Err(refuse(c, "a number or a range")),
     }
 }
 
@@ -125,11 +86,6 @@ impl<'a> Settings<'a> {
         Ok(self.number(name)?.unwrap_or(default))
     }
 
-    /// A number or a range, as `(low, high)`.
-    pub(crate) fn span(&self, name: &str) -> Result<Option<Span>, LookError> {
-        self.control(name).map(span).transpose()
-    }
-
     /// A number, a range or a weighted range: the control draws with its odds.
     pub(crate) fn dist(&self, name: &str) -> Result<Option<Draw>, LookError> {
         self.control(name).map(dist).transpose()
@@ -138,11 +94,6 @@ impl<'a> Settings<'a> {
     /// A [`Settings::dist`], or `default`.
     pub(crate) fn dist_or(&self, name: &str, default: Draw) -> Result<Draw, LookError> {
         Ok(self.dist(name)?.unwrap_or(default))
-    }
-
-    /// A span, or `default`.
-    pub(crate) fn span_or(&self, name: &str, default: Span) -> Result<Span, LookError> {
-        Ok(self.span(name)?.unwrap_or(default))
     }
 
     /// A word or a number.
@@ -190,34 +141,22 @@ mod tests {
     }
 
     #[test]
-    fn spans_take_a_number_or_a_range() {
-        let a = [c("h", Value::Number(3.0)), c("r", Value::Range(2.0, 4.0))];
+    fn a_draw_takes_a_number_a_range_or_odds() {
+        let d = Dist::new(1.0, 6.0, Weighting::Low(11.0));
+        let a = [
+            c("h", Value::Number(3.0)),
+            c("r", Value::Range(2.0, 4.0)),
+            c("size", Value::Dist(d.clone())),
+        ];
         let s = Settings::new(&a);
-        assert_eq!(s.span("h"), Ok(Some(Span::point(3.0))));
-        assert_eq!(s.span("r"), Ok(Some(Span::new(2.0, 4.0))));
-        assert_eq!(s.span("none"), Ok(None));
+        assert_eq!(s.dist("h"), Ok(Some(Draw::flat(3.0, 3.0))));
+        assert_eq!(s.dist("r"), Ok(Some(Draw::flat(2.0, 4.0))));
+        assert_eq!(s.dist("size"), Ok(Some(Draw::Range(d))));
+        assert_eq!(s.dist("none"), Ok(None));
         assert!(s.number("r").is_err());
         let w = [c("h", Value::Word("tall".into()))];
-        let e = Settings::new(&w).span("h").unwrap_err();
+        let e = Settings::new(&w).dist("h").unwrap_err();
         assert_eq!(e.control.as_deref(), Some("h"));
-    }
-
-    #[test]
-    fn a_weighted_range_goes_where_the_control_draws() {
-        let d = Dist::new(1.0, 6.0, Weighting::Low(11.0));
-        let a = [c("size", Value::Dist(d.clone())), c("n", Value::Range(2.0, 4.0))];
-        let s = Settings::new(&a);
-        assert_eq!(s.dist("size"), Ok(Some(Draw::Range(d))));
-        assert_eq!(s.dist("n"), Ok(Some(Draw::flat(2.0, 4.0))));
-        let e = s.span("size").unwrap_err();
-        assert_eq!(e.code, Some("dt::weighting"));
-        assert!(e.message.contains("`size` does not take a weighting yet"));
-        assert!(e.help.unwrap().contains("write the range 1..6"));
-        assert!(
-            Settings::new(&[c("w", Value::Word("x".into()))])
-                .dist("w")
-                .is_err()
-        );
     }
 
     #[test]
@@ -230,20 +169,5 @@ mod tests {
         }
         let b = [c("n", Value::Number(1.0)), c("n", Value::Number(2.0))];
         assert_eq!(Settings::new(&b).number_or("n", 0.0), Ok(2.0));
-    }
-
-    #[test]
-    fn a_sum_of_plain_ranges_is_a_span_by_its_ends() {
-        use dt_kit::{Draw as D, Op};
-        let sum = D::Bin(
-            Op::Add,
-            Box::new(D::flat(1.0, 2.0)),
-            Box::new(D::flat(3.0, 4.0)),
-        );
-        let a = [c("size", Value::Draw(sum))];
-        assert_eq!(
-            Settings::new(&a).span("size"),
-            Ok(Some(Span::new(4.0, 6.0)))
-        );
     }
 }

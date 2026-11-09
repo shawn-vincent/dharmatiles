@@ -2,7 +2,7 @@
 //! bays × quoins as cells, then battlements and ruin as edits of the cell
 //! list.
 
-use dt_kit::Rng;
+use dt_kit::{Draw, Rng};
 
 /// A segment fails the layout's rules.
 pub(crate) type LayoutError = String;
@@ -113,9 +113,10 @@ fn count(total: f64, lo: f64, hi: f64) -> usize {
 }
 
 /// `_course_heights`: varied heights summing exactly to `h`.
-pub(crate) fn course_heights(h: f64, lo: f64, hi: f64, rng: &mut Rng) -> Vec<f64> {
+pub(crate) fn course_heights(h: f64, course: &Draw, rng: &mut Rng) -> Vec<f64> {
+    let (lo, hi) = course.bounds();
     let n = count(h, lo, hi);
-    let v: Vec<f64> = (0..n).map(|_| rng.uniform(lo, hi)).collect();
+    let v: Vec<f64> = (0..n).map(|_| course.draw(rng)).collect();
     let sum: f64 = v.iter().sum();
     v.into_iter().map(|x| x * h / sum).collect()
 }
@@ -129,17 +130,11 @@ fn running_heights(h: f64, lo: f64, hi: f64) -> Vec<f64> {
 
 /// `_bay_cuts`: interior cuts in `[t0, t1]`, each kept `min_bond` from
 /// the cuts of the course below.
-fn bay_cuts(
-    t0: f64,
-    t1: f64,
-    (lo, hi): (f64, f64),
-    prev: &[f64],
-    min_bond: f64,
-    rng: &mut Rng,
-) -> Vec<f64> {
+fn bay_cuts(t0: f64, t1: f64, bay: &Draw, prev: &[f64], min_bond: f64, rng: &mut Rng) -> Vec<f64> {
+    let (lo, hi) = bay.bounds();
     let len = t1 - t0;
     let n = count(len, lo, hi);
-    let w: Vec<f64> = (0..n).map(|_| rng.uniform(lo, hi)).collect();
+    let w: Vec<f64> = (0..n).map(|_| bay.draw(rng)).collect();
     let sum: f64 = w.iter().sum();
     let mut cuts = Vec::with_capacity(n);
     let mut acc = 0.0;
@@ -187,12 +182,14 @@ fn running_cuts(t0: f64, t1: f64, brick: f64, offset: f64) -> Vec<f64> {
 }
 
 /// The layout's inputs.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Courses {
     pub across: f64,
     pub height: f64,
-    pub course: (f64, f64),
-    pub bay: (f64, f64),
+    /// Course heights, drawn per course (with their odds).
+    pub course: Draw,
+    /// Bay lengths, drawn per bay (with their odds).
+    pub bay: Draw,
     pub min_bond: f64,
     pub bond: Bond,
 }
@@ -203,11 +200,11 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
     let t = c.across;
     let running = c.bond == Bond::Running;
     let heights = if running {
-        running_heights(c.height, c.course.0, c.course.1)
+        running_heights(c.height, c.course.lo(), c.course.hi())
     } else {
-        course_heights(c.height, c.course.0, c.course.1, rng)
+        course_heights(c.height, &c.course, rng)
     };
-    let brick = 0.5 * (c.bay.0 + c.bay.1);
+    let brick = 0.5 * (c.bay.lo() + c.bay.hi());
     let mut z_edges = vec![0.0];
     for h in &heights {
         z_edges.push(z_edges.last().copied().unwrap_or(0.0) + h);
@@ -228,14 +225,14 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
             } else {
                 seg.len - t
             };
-            if t1 - t0 < MIN_BAY_FRAC * c.bay.0 {
+            if t1 - t0 < MIN_BAY_FRAC * c.bay.lo() {
                 continue;
             }
             #[allow(clippy::cast_precision_loss)]
             let mut cuts = if running {
                 running_cuts(t0, t1, brick, (ci % 2) as f64 * 0.5 * brick)
             } else {
-                bay_cuts(t0, t1, c.bay, &prev[k], c.min_bond, rng)
+                bay_cuts(t0, t1, &c.bay, &prev[k], c.min_bond, rng)
             };
             if k > 0 && owns_start {
                 cuts.retain(|&x| x >= t + 2.0);
@@ -473,8 +470,8 @@ mod tests {
         let c = Courses {
             across: 7.0,
             height: 28.0,
-            course: (5.5, 8.5),
-            bay: (11.0, 20.0),
+            course: Draw::flat(5.5, 8.5),
+            bay: Draw::flat(11.0, 20.0),
             min_bond: 3.0,
             bond: Bond::Irregular,
         };
@@ -514,8 +511,8 @@ mod tests {
         let c = Courses {
             across: 7.0,
             height: 28.8,
-            course: (3.2, 3.2),
-            bay: (8.5, 8.5),
+            course: Draw::flat(3.2, 3.2),
+            bay: Draw::flat(8.5, 8.5),
             min_bond: 0.0,
             bond: Bond::Running,
         };

@@ -35,7 +35,7 @@ use dt_kit::{
 };
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Draw, Element, LookError, Plan, Span, Write};
+use crate::{Control, Ctx, Dist, Draw, Element, LookError, Op, Plan, Write};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -447,7 +447,7 @@ pub struct Item {
     /// Its radius for spacing.
     pub r: f64,
     /// How much of its width sinks under the ground, a share range.
-    pub bury: (f64, f64),
+    pub bury: Draw,
 }
 
 /// One stone, or (a quarter of the time when `clusters`) a cluster of 2
@@ -468,7 +468,7 @@ pub fn make_item(
         return Ok(Item {
             stones: vec![([0.0, 0.0], main)],
             r: d / 2.0,
-            bury: (0.0, 0.0),
+            bury: Draw::flat(0.0, 0.0),
         });
     }
     let k = rng.int(CLUSTER_STONES.0, CLUSTER_STONES.1);
@@ -487,7 +487,7 @@ pub fn make_item(
     Ok(Item {
         stones,
         r,
-        bury: (0.0, 0.0),
+        bury: Draw::flat(0.0, 0.0),
     })
 }
 
@@ -504,7 +504,7 @@ pub struct Thing {
     /// Its share of a scatter's mix.
     pub weight: f64,
     /// How much of its width sinks under the ground, a share range.
-    pub buried: Span,
+    pub buried: Draw,
 }
 
 /// The things a rock element builds, with their default size (dt-doc's
@@ -512,6 +512,20 @@ pub struct Thing {
 #[must_use]
 pub fn is_thing(name: &str) -> bool {
     matches!(name, "rock" | "stone" | "boulder" | "pebble")
+}
+
+/// A share written as a percent (`40`) or a fraction (`0.4`), as a
+/// fraction: each end of a range is read on its own, a sum as a whole.
+fn share(d: Draw) -> Draw {
+    let one = |x: f64| if x > 1.0 { x / 100.0 } else { x };
+    match d {
+        Draw::Range(r) => Draw::Range(Dist::new(one(r.lo), one(r.hi), r.weighting)),
+        Draw::Num(x) => Draw::Num(one(x)),
+        other if other.hi() > 1.0 => {
+            Draw::Bin(Op::Div, Box::new(other), Box::new(Draw::Num(100.0)))
+        }
+        other => other,
+    }
 }
 
 impl Thing {
@@ -525,13 +539,12 @@ impl Thing {
             size: Draw::flat(6.0, 15.0),
             mix: FAMILIES,
             weight,
-            buried: Span::point(0.0),
+            buried: Draw::flat(0.0, 0.0),
         };
         let s = Settings::new(controls);
         t.size = s.dist_or("size", t.size)?;
-        if let Some(r) = s.span("buried")? {
-            let share = |x: f64| if x > 1.0 { x / 100.0 } else { x };
-            t.buried = Span::new(share(r.lo), share(r.hi));
+        if let Some(r) = s.dist("buried")? {
+            t.buried = share(r);
         }
         if let Some(w) = s.word("shape")? {
             t.mix = match w {
@@ -601,9 +614,9 @@ fn add_items(
                 r: st.radius() + slack,
             };
             let mut z0 = land.as_ref().map_or(0.0, |l| l.seat(disc, SEAT_RULE).z);
-            if item.bury.1 > 0.0 {
+            if item.bury.hi() > 0.0 {
                 let mut br = Rng::new(seed.key("bury").index(u64::from(k)));
-                z0 -= br.uniform(item.bury.0, item.bury.1) * st.width;
+                z0 -= item.bury.draw(&mut br) * st.width;
             }
             let mesh = grain(&st.convex, &g, seed.index(u64::from(k)).value())
                 .map_err(LookError::build)?;
@@ -711,10 +724,18 @@ impl Element for Single {
         let yaw = rng.uniform(0.0, 360.0);
         let s = scene.frame().scale();
         let sq = scene.frame().square_mm;
-        let at = match ctx.at.map(|[[x0, x1], [y0, y1]]| {
-            // a range is drawn from the entry's seed
-            let x = if x1 > x0 { rng.uniform(x0, x1) } else { x0 };
-            let y = if y1 > y0 { rng.uniform(y0, y1) } else { y0 };
+        let at = match ctx.at.map(|[dx, dy]| {
+            // a range is drawn from the entry's seed, with its odds; a number never draws
+            let x = if dx.is_point() {
+                dx.lo()
+            } else {
+                dx.draw(&mut rng)
+            };
+            let y = if dy.is_point() {
+                dy.lo()
+            } else {
+                dy.draw(&mut rng)
+            };
             [x * sq, y * sq]
         }) {
             Some(a) => {
@@ -980,9 +1001,9 @@ impl Element for Scatter {
             let d = thing.draw(&mut r);
             let mut item = match foot {
                 Some(_) => make_item(&mut r, d, SCREE_MIX, false, true)?,
-                None => make_item(&mut r, d, thing.mix, true, thing.buried.hi > 0.0)?,
+                None => make_item(&mut r, d, thing.mix, true, thing.buried.hi() > 0.0)?,
             };
-            item.bury = thing.buried.pair();
+            item.bury = thing.buried.clone();
             items.push(item);
             kinds.push(thing.kind.as_str());
         }

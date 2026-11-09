@@ -35,7 +35,7 @@ use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Degrees, Draw, Element, LookError, Plan, Read, Span, Write};
+use crate::{Control, Ctx, Degrees, Draw, Element, LookError, Plan, Read, Write};
 use site::{crumbs, fill_pockets, ground_drop, place};
 pub(crate) use site::{drop_crumbs, ground_box};
 
@@ -74,13 +74,13 @@ const STAMP_MIN_MM: f64 = 1.6;
 /// build).
 #[derive(Clone, Debug, PartialEq)]
 struct Params {
-    height: Span,
-    trunk: Span,
+    height: Draw,
+    trunk: Draw,
     trunk_width: Option<Draw>,
     width: Draw,
     shape: crown::Shape,
     clumps: usize,
-    clump_size: Span,
+    clump_size: Draw,
     split: Degrees,
     eagerness: f64,
     target: f64,
@@ -89,7 +89,7 @@ struct Params {
     min_radius: f64,
     leaves: bool,
     clumps_on: bool,
-    leaf_length: Span,
+    leaf_length: Draw,
     leaf_width: Draw,
 }
 
@@ -100,13 +100,13 @@ const LEAVES_TO: f64 = 0.61;
 impl Default for Params {
     fn default() -> Self {
         Self {
-            height: Span::point(40.0),
-            trunk: Span::point(30.0),
+            height: Draw::flat(40.0, 40.0),
+            trunk: Draw::flat(30.0, 30.0),
             trunk_width: None,
             width: Draw::flat(30.0, 30.0),
             shape: crown::ROUND,
             clumps: 32,
-            clump_size: Span::point(5.5),
+            clump_size: Draw::flat(5.5, 5.5),
             split: Degrees(30.0),
             eagerness: 0.8,
             target: 0.33,
@@ -116,7 +116,7 @@ impl Default for Params {
             // `leaves on` (dt-doc's default)
             leaves: true,
             clumps_on: true,
-            leaf_length: Span::point(4.5),
+            leaf_length: Draw::flat(4.5, 4.5),
             leaf_width: Draw::flat(3.0, 3.0),
         }
     }
@@ -192,12 +192,12 @@ impl Tree {
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut p = Params::default();
         let s = Settings::new(controls);
-        p.height = s.span_or("height", p.height)?;
-        p.trunk = s.span_or("trunk/height", p.trunk)?;
+        p.height = s.dist_or("height", p.height)?;
+        p.trunk = s.dist_or("trunk/height", p.trunk)?;
         p.trunk_width = s.dist("trunk/width")?.or(p.trunk_width);
         p.width = s.dist_or("crown/width", p.width)?;
-        p.clump_size = s.span_or("crown/clumpSize", p.clump_size)?;
-        p.leaf_length = s.span_or("leaf/length", p.leaf_length)?;
+        p.clump_size = s.dist_or("crown/clumpSize", p.clump_size)?;
+        p.leaf_length = s.dist_or("leaf/length", p.leaf_length)?;
         p.leaf_width = s.dist_or("leaf/width", p.leaf_width)?;
         if let Some(v) = s.number("crown/clumps")? {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -229,11 +229,6 @@ impl Tree {
         }
         Ok(Self { p })
     }
-}
-
-/// A span's value: a range is drawn, a number never draws.
-fn draw(v: Span, rng: &mut Rng) -> f64 {
-    if v.is_point() { v.lo } else { v.draw(rng) }
 }
 
 /// A weighted range's value: a range is drawn (one draw, with its odds), a
@@ -301,12 +296,12 @@ impl Tree {
         let stand_rule = dt_kit::Stand::for_printer(printer);
         let s = scene.frame().scale();
         let mut rng = Rng::new(seed.key("sizes"));
-        let height = draw(p.height, &mut rng) * s;
-        let trunk = draw(p.trunk, &mut rng) * s;
+        let height = draw_dist(&p.height, &mut rng) * s;
+        let trunk = draw_dist(&p.trunk, &mut rng) * s;
         let radius = 0.5 * draw_dist(&p.width, &mut rng) * s;
-        let clump_r = draw(p.clump_size, &mut rng) * s;
+        let clump_r = draw_dist(&p.clump_size, &mut rng) * s;
         let leaf = LeafSize {
-            length_mm: draw(p.leaf_length, &mut rng) * s,
+            length_mm: draw_dist(&p.leaf_length, &mut rng) * s,
             width_mm: draw_dist(&p.leaf_width, &mut rng) * s,
         };
         let trunk_width = p.trunk_width.as_ref().map(|v| draw_dist(v, &mut rng) * s);
@@ -585,11 +580,11 @@ impl Element for Tree {
         let s = scene.frame().scale();
         // the crown radius as `grow` draws it (the same stream)
         let mut rng = Rng::new(ctx.seed.key("sizes"));
-        let _ = draw(self.p.height, &mut rng);
-        let _ = draw(self.p.trunk, &mut rng);
+        let _ = draw_dist(&self.p.height, &mut rng);
+        let _ = draw_dist(&self.p.trunk, &mut rng);
         let mut margin = 0.5 * draw_dist(&self.p.width, &mut rng) * s;
-        let _ = draw(self.p.clump_size, &mut rng);
-        let _ = draw(self.p.leaf_length, &mut rng);
+        let _ = draw_dist(&self.p.clump_size, &mut rng);
+        let _ = draw_dist(&self.p.leaf_length, &mut rng);
         let _ = draw_dist(&self.p.leaf_width, &mut rng);
         if let Some(v) = &self.p.trunk_width {
             // a set trunk width: its flared foot must stand on the tile

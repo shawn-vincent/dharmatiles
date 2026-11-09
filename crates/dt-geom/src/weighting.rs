@@ -1071,6 +1071,23 @@ impl Draw {
         Self::Range(Dist::flat(lo, hi))
     }
 
+    /// Every length scaled by `k` (a size in mm follows the system): a
+    /// range keeps its odds and has both ends scaled, so one range draws
+    /// exactly what a range of the scaled ends does.  A product or a quotient
+    /// scales its left side.
+    #[must_use]
+    pub fn scaled(&self, k: f64) -> Self {
+        match self {
+            Self::Num(x) => Self::Num(x * k),
+            Self::Range(d) => Self::Range(Dist::new(d.lo * k, d.hi * k, d.weighting.clone())),
+            Self::Neg(a) => Self::Neg(Box::new(a.scaled(k))),
+            Self::Bin(op @ (Op::Add | Op::Sub), a, b) => {
+                Self::Bin(*op, Box::new(a.scaled(k)), Box::new(b.scaled(k)))
+            }
+            Self::Bin(op, a, b) => Self::Bin(*op, Box::new(a.scaled(k)), b.clone()),
+        }
+    }
+
     /// The ends the value can come to, by interval arithmetic.
     #[must_use]
     pub fn bounds(&self) -> (f64, f64) {
@@ -1524,6 +1541,29 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn scaling_a_range_scales_its_ends_and_keeps_its_odds() {
+        let d = Draw::Range(Dist::new(2.0, 6.0, Weighting::Low(3.0)));
+        let k = 25.4 / 35.0;
+        let (mut a, mut b) = (Rng::new(crate::Seed::new(8)), Rng::new(crate::Seed::new(8)));
+        for _ in 0..50 {
+            let scaled = Dist::new(2.0 * k, 6.0 * k, Weighting::Low(3.0));
+            assert_eq!(
+                d.scaled(k).draw(&mut a).to_bits(),
+                scaled.draw(&mut b).to_bits()
+            );
+        }
+        let sum = sum(Dist::flat(1.0, 2.0), Dist::flat(3.0, 4.0));
+        assert_eq!(sum.scaled(2.0).bounds(), (8.0, 12.0));
+        let prod = Draw::Bin(
+            Op::Mul,
+            Box::new(Draw::flat(1.0, 2.0)),
+            Box::new(Draw::Num(3.0)),
+        );
+        assert_eq!(prod.scaled(2.0).bounds(), (6.0, 12.0));
+        assert_eq!(Draw::Num(4.0).scaled(0.5), Draw::Num(2.0));
     }
 
     #[test]

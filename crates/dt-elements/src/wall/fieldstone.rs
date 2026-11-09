@@ -136,7 +136,7 @@ pub(crate) fn cells(m: &Mason, run: &Run, courses: &Courses, rng: &mut Rng) -> (
     } else {
         h
     };
-    let mut c = *courses;
+    let mut c = courses.clone();
     c.height = hc;
     let cells = layout::layout(&run.segs, &c, rng);
     let cells = merge_throughstones(cells, s, rng);

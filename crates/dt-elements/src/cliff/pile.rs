@@ -9,7 +9,7 @@ use rayon::prelude::*;
 
 use super::stone::{ColState, Env};
 use super::{faces, finish, fit, form, stack, stone, util};
-use crate::{LookError, Span};
+use crate::{Draw, LookError};
 
 /// What one column of stones came to: each stone's index and piece, and
 /// how many cracks it cut in their tops.
@@ -31,7 +31,7 @@ pub(super) struct Look {
     /// stoneSize multiplier relative to the form's own (massive = 1).
     pub size: f64,
     pub patches: Option<f64>,
-    pub patch_width: Option<Span>,
+    pub patch_width: Option<Draw>,
     pub ledges: u32,
     pub ledge_height: Option<f64>,
 }
@@ -107,13 +107,7 @@ pub(super) fn plan(look: &Look, site: &Site<'_>) -> Result<Planned, LookError> {
             s,
         },
     );
-    let zone = form::Zones::new(
-        &mut rng,
-        fm.w,
-        s,
-        look.patches,
-        look.patch_width.map(Span::pair),
-    );
+    let zone = form::Zones::new(&mut rng, fm.w, s, look.patches, look.patch_width.as_ref());
     let max_rocks = ROCKS_PER_SQUARE * ((fm.w * fm.h / (sq * sq)).ceil() as usize).max(1);
     let fit = fit::Fit::new(band, frame, site.area, foot);
     let mut st = stack::stack(&mut rng, &fm, &zone, s, max_rocks, &fit)

@@ -4,7 +4,7 @@
 //! Heights are above the foot (0). Lengths that size masses scale with `s`
 //! (the system's scale, 1 on DungeonBlocks); details never do.
 
-use dt_kit::{Band, Field, Frame, Mask, Rng};
+use dt_kit::{Band, Dist, Draw, Field, Frame, Mask, Rng};
 
 use super::util::{Cells, cell_grid, edt_in};
 
@@ -327,23 +327,27 @@ pub const ZONE_FLOOR: f64 = 0.25;
 const ZONES_PER_SQUARE: f64 = 1.5;
 const ZONE_SIGMA_MM: (f64, f64) = (5.0, 10.0);
 
+/// Half a patch's width, widened by a hair when it has none, so it still
+/// has a spread.
+fn sigma(width: &Draw) -> Draw {
+    match width.scaled(0.5) {
+        Draw::Range(d) => Draw::Range(Dist::new(d.lo, d.hi.max(d.lo + 1e-6), d.weighting)),
+        other if other.is_point() => Draw::flat(other.lo(), other.lo() + 1e-6),
+        other => other,
+    }
+}
+
 impl Zones {
-    pub fn new(
-        rng: &mut Rng,
-        w: f64,
-        s: f64,
-        patches: Option<f64>,
-        width: Option<(f64, f64)>,
-    ) -> Self {
+    pub fn new(rng: &mut Rng, w: f64, s: f64, patches: Option<f64>, width: Option<&Draw>) -> Self {
         let k = patches.map_or(
             ((w / (dt_kit::REFERENCE_SQUARE_MM * s) * ZONES_PER_SQUARE).round() as usize).max(1),
             |p| p.max(0.0) as usize,
         );
-        let sig = width.map_or(ZONE_SIGMA_MM, |(a, b)| (0.5 * a, 0.5 * b));
+        // a patch's sigma is half its width, drawn with the width's odds and
+        // never of no width
+        let sig = width.map_or(Draw::flat(ZONE_SIGMA_MM.0, ZONE_SIGMA_MM.1), sigma);
         let cx: Vec<f64> = (0..k).map(|_| rng.uniform(0.0, w)).collect();
-        let sg: Vec<f64> = (0..k)
-            .map(|_| rng.uniform(sig.0, sig.1.max(sig.0 + 1e-6)))
-            .collect();
+        let sg: Vec<f64> = (0..k).map(|_| sig.draw(rng)).collect();
         Self { cx, sg }
     }
     pub fn at(&self, x: f64) -> f64 {

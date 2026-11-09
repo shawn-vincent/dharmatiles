@@ -207,16 +207,6 @@ fn a_band_refuses_a_weighting_but_takes_flat() {
 }
 
 #[test]
-fn a_control_that_does_not_draw_with_odds_says_so() {
-    let d = refused(
-        &tile("", "        dirt\n        grass length=\"low(3..6)\""),
-        "dt::weighting",
-        "write the range 3..6",
-    );
-    assert!(d.message.contains("`length` does not take a weighting yet"));
-}
-
-#[test]
 fn a_weighted_range_of_no_width_is_a_note() {
     let c = check(
         &mem(&tile("", "        dirt\n        rock size=\"low(5..5)\"")),
@@ -492,4 +482,122 @@ fn a_band_refuses_a_list_a_steps_an_ends_and_a_mix() {
     ] {
         refused(&top(v), "dt::weighting", "write the range alone");
     }
+}
+
+/// A flat spelling of a range builds as the plain range does, the same range
+/// with odds builds differently, and nothing is refused: the control draws.
+fn takes_a_weighting(stack: impl Fn(&str) -> String, plain: &str, flat: &str, weighted: &str) {
+    let base = hash(&tile("", &stack(plain)));
+    assert_eq!(hash(&tile("", &stack(flat))), base, "{flat}");
+    assert_ne!(hash(&tile("", &stack(weighted))), base, "{weighted}");
+}
+
+#[test]
+fn how_deep_a_rock_is_buried_takes_a_weighting() {
+    takes_a_weighting(
+        |v| {
+            format!(
+                "        dirt\n        scatter perSquare=20 {{ pebble size=\"1..2.2\" buried=\"{v}\" }}"
+            )
+        },
+        "20%..50%",
+        "low(20%..50%, 1)",
+        "low(20%..50%, 8)",
+    );
+}
+
+#[test]
+fn a_points_range_takes_a_weighting() {
+    takes_a_weighting(
+        |v| format!("        dirt\n        rock size=6 at=\"{v}\""),
+        "0.3..0.7,0.5",
+        "low(0.3..0.7, 1),0.5",
+        "low(0.3..0.7, 9),0.5",
+    );
+    // the commas inside a call or a list are not the pair's
+    for at in [
+        "mix(bell(0.3..0.7), 1, flat(0.3..0.7), 1), 0.5",
+        "[0.3, 0.6:3], high(0.4..0.6, 3)",
+        "steps(0.3..0.7, 1, 3), ends(0.4..0.6)",
+        "0.5, [0.4, 0.5:2, 0.6]",
+    ] {
+        hash(&tile(
+            "",
+            &format!("        dirt\n        rock size=6 at=\"{at}\""),
+        ));
+    }
+    refused(
+        &tile(
+            "",
+            "        dirt\n        rock size=6 at=\"low(0.3..0.7, -1),0.5\"",
+        ),
+        "dt::range",
+        "1 is flat",
+    );
+}
+
+#[test]
+fn a_walls_courses_and_bays_take_a_weighting() {
+    takes_a_weighting(
+        |v| {
+            format!(
+                "        dirt\n        wall along=\"north\" style=fieldstone {{\n            stones height=\"2.2..5.2\" length=\"{v}\"\n        }}"
+            )
+        },
+        "5..16",
+        "low(5..16, 1)",
+        "low(5..16, 8)",
+    );
+    takes_a_weighting(
+        |v| {
+            format!(
+                "        dirt\n        wall along=\"north\" style=fieldstone {{\n            stones height=\"{v}\" length=\"5..16\"\n        }}"
+            )
+        },
+        "2.2..5.2",
+        "high(2.2..5.2, 1)",
+        "high(2.2..5.2, 8)",
+    );
+}
+
+#[test]
+fn a_blades_length_and_height_take_a_weighting() {
+    takes_a_weighting(
+        |v| format!("        dirt\n        grass length=\"{v}\""),
+        "3.5..6.5",
+        "low(3.5..6.5, 1)",
+        "low(3.5..6.5, 8)",
+    );
+    takes_a_weighting(
+        |v| format!("        dirt\n        grass height=\"{v}\""),
+        "1.5..2",
+        "high(1.5..2, 1)",
+        "high(1.5..2, 8)",
+    );
+}
+
+#[test]
+fn a_trees_heights_and_a_cliffs_patches_take_a_weighting() {
+    let tree = |v: &str| format!("        dirt\n        tree {v}");
+    takes_a_weighting(
+        |v| tree(&format!("height=\"{v}\"")),
+        "36..40",
+        "low(36..40, 1)",
+        "low(36..40, 8)",
+    );
+    // the rest read and build too
+    hash(&tile(
+        "",
+        &tree(
+            "height=38 { trunk height=\"low(26..32)\"; crown width=24 clumpSize=\"[4, 5:3, 6]\"; leaf length=\"bell(4..5)\" width=3 }",
+        ),
+    ));
+    let cliff = |v: &str| {
+        format!(
+            "tile size=\"2x1\" seed=1 {{\n    region crag {{ within \"[10 .. 20]\" of=northEdge }}\n    stack {{\n        base\n        dirt top=4\n        cliff top=\"dirtEdgeHeight + 35\" at=crag {{\n            rock mixed\n            shattered patches=3 width=\"{v}\"\n        }}\n    }}\n}}\n"
+        )
+    };
+    let base = hash(&cliff("5..10"));
+    assert_eq!(hash(&cliff("low(5..10, 1)")), base);
+    assert_ne!(hash(&cliff("low(5..10, 8)")), base);
 }

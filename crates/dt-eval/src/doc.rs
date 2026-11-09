@@ -32,7 +32,7 @@ use dt_doc::expr::Expr;
 use dt_doc::model::{self, Callee, Definition, Document, PlaceRef, Spanned, Use, Value};
 use dt_doc::place::{Along, Edge, Point};
 use dt_doc::schema::{Control, Element, PlaceWord, Role};
-use dt_kit::Seed;
+use dt_kit::{Draw, Seed};
 use miette::{NamedSource, SourceSpan};
 
 use crate::diag::{Diag, Src};
@@ -93,9 +93,9 @@ pub struct Entry {
     /// `along=` a path of tile edges, as the path in squares walked with
     /// the tile inside on the left (see [`edge_path`]).
     pub along: Option<Vec<[f64; 2]>>,
-    /// `at=`: where it may stand, `[x_lo, x_hi]` and `[y_lo, y_hi]` in
-    /// squares.
-    pub at: Option<[[f64; 2]; 2]>,
+    /// `at=`: where it stands, the x and the y in squares, each a number
+    /// or a range with its odds, drawn once from the entry's seed.
+    pub at: Option<[Draw; 2]>,
     /// `against=`: the kind of thing it gathers at the foot of.
     pub against: Option<String>,
     /// A scatter's children: each thing, its controls and its weight.
@@ -955,19 +955,30 @@ impl Reader<'_> {
                     }
                     match &at {
                         Some(p) if element.honours(PlaceWord::At) => {
-                            let bounds = match &p.value {
+                            let fixed = |((x0, x1), (y0, y1)): dt_doc::place::Bounds| {
+                                [Draw::flat(x0, x1), Draw::flat(y0, y1)]
+                            };
+                            let drawn = match &p.value {
                                 Point::Named(n) => self
                                     .points
                                     .get(n)
-                                    .map(|q| ((q[0], q[0]), (q[1], q[1])))
-                                    .ok_or_else(|| format!("no point is called `{n}`")),
-                                v => v.bounds(self.dims.0, self.dims.1),
+                                    .map(|q| fixed(((q[0], q[0]), (q[1], q[1]))))
+                                    .ok_or_else(|| {
+                                        ("dt::at", format!("no point is called `{n}`"), None)
+                                    }),
+                                Point::Pair { x, y } => crate::lower::coordinate(x)
+                                    .and_then(|x| Ok([x, crate::lower::coordinate(y)?]))
+                                    .map_err(|r| (r.code, r.message, r.help)),
+                                v => v
+                                    .bounds(self.dims.0, self.dims.1)
+                                    .map(fixed)
+                                    .map_err(|msg| ("dt::at", msg, None)),
                             };
-                            match bounds {
-                                Ok(((x0, x1), (y0, y1))) => point = Some([[x0, x1], [y0, y1]]),
-                                Err(msg) => self
-                                    .errors
-                                    .push(Diag::at(src, p.span, "dt::at", msg, "here")),
+                            match drawn {
+                                Ok(d) => point = Some(d),
+                                Err((code, msg, help)) => self.errors.push(
+                                    Diag::at(src, p.span, code, msg, "here").maybe_help(help),
+                                ),
                             }
                         }
                         Some(p) if e.place.at.is_some() => unplaced.push(("at=", Some(p.span))),
