@@ -163,6 +163,13 @@ impl Solid {
         bounds: Bounds,
         edge_length: f64,
     ) -> Self {
+        // EXPERIMENT (segv-experiment branch): DT_LS_LOCK=1 serialises every
+        // sequential level set behind one mutex
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = std::env::var_os("DT_LS_LOCK").map(|_| {
+            LOCK.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
         Self(Manifold::from_sdf_seq(
             |x, y, z| sdf([x, y, z]),
             (bounds.min, bounds.max),
