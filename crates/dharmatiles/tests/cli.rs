@@ -96,6 +96,37 @@ fn elements_lists_every_element() {
 }
 
 #[test]
+fn elements_rock_lists_the_weightings() {
+    let o = Command::new(EXE)
+        .args(["elements", "rock"])
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0));
+    let text = String::from_utf8(o.stdout).unwrap();
+    let size = text
+        .lines()
+        .find(|l| l.trim_start().starts_with("size "))
+        .unwrap();
+    assert!(size.contains("or a weighted range"), "{size}");
+    for f in [
+        "flat(range",
+        "low(range",
+        "high(range",
+        "bell(range",
+        "peak(range",
+    ] {
+        assert!(text.contains(f), "{f}: {text}");
+    }
+    assert!(!text.contains("skews"), "{text}");
+    // an element with no weighted control lists none
+    let o = Command::new(EXE)
+        .args(["elements", "water"])
+        .output()
+        .unwrap();
+    assert!(!String::from_utf8(o.stdout).unwrap().contains("low(range"));
+}
+
+#[test]
 fn elements_dirt_lists_its_controls() {
     let o = Command::new(EXE)
         .args(["elements", "dirt"])

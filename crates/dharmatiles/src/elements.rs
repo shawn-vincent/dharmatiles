@@ -119,7 +119,28 @@ fn element_json(l: &'static Element) -> Value {
             .map(|c| control_json(takes, c.name, c))
             .collect::<Vec<_>>()
     );
+    v["weightings"] = weightings_json(l);
     v
+}
+
+/// The weighting functions, for an element with a control that takes one;
+/// empty for the rest.
+fn weightings_json(l: &Element) -> Value {
+    if !takes_weighting(l.controls) {
+        return json!([]);
+    }
+    Value::Array(
+        dt_kit::WEIGHTINGS
+            .iter()
+            .map(|(name, args, about)| json!({"name": name, "args": args, "about": about}))
+            .collect(),
+    )
+}
+
+fn takes_weighting(controls: &[Control]) -> bool {
+    controls
+        .iter()
+        .any(|c| c.weighted || takes_weighting(c.subs))
 }
 
 fn control_json(takes: Option<&'static Element>, path: &str, c: &Control) -> Value {
@@ -131,6 +152,7 @@ fn control_json(takes: Option<&'static Element>, path: &str, c: &Control) -> Val
         "limits": c.limits.map(|l| [Some(l.min), l.max.is_finite().then_some(l.max)]),
         "above": c.limits.is_some_and(|l| l.above),
         "ranges": c.ranges,
+        "weighted": c.weighted,
         "takes": c.takes(),
         "default": (!c.default.is_empty()).then_some(c.default),
         "required": c.required,
@@ -284,6 +306,25 @@ fn show(l: &'static Element) {
                 let _ = write!(line, " · the `{level}` level");
             }
             say!("{line}");
+        }
+    }
+    if takes_weighting(l.controls) {
+        say!("");
+        say!(
+            "A control that takes \"a weighted range\" takes odds, written round the range: size=\"low(1..6, 4)\""
+        );
+        let wn = dt_kit::WEIGHTINGS
+            .iter()
+            .map(|(n, a, _)| n.len() + a.len() + 6)
+            .max()
+            .unwrap_or(0);
+        for (name, args, about) in dt_kit::WEIGHTINGS {
+            let call = if args.is_empty() {
+                format!("{name}(range)")
+            } else {
+                format!("{name}(range, {args})")
+            };
+            say!("  {call:wn$}  {about}");
         }
     }
 }

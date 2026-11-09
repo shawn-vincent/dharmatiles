@@ -78,8 +78,33 @@ tile size="1x1" {
 sum    := prod ( ("+" | "-") prod )*
 prod   := unary ( ("*" | "/") unary )*
 unary  := "-" unary | atom
-atom   := number "%"? | name | "(" sum ")"</code></pre>
-<p>A name is a parameter of the enclosing definition or, where a height is expected, a <code>let</code> name: <code>level="groundHeight - 1"</code>, <code>level="wallHeight / 2"</code>. There are no calls, loops or assignments. <code>%</code> is the only suffix.</p>
+atom   := number "%"? | name | "(" sum ")" | weighting      see Weighted ranges</code></pre>
+<p>A name is a parameter of the enclosing definition or, where a height is expected, a <code>let</code> name: <code>level="groundHeight - 1"</code>, <code>level="wallHeight / 2"</code>. The only calls in a quoted control value are the weightings below; there are no loops or assignments. <code>%</code> is the only suffix.</p>
+
+<h3 id="weighted">Weighted ranges</h3>
+<p>A range that is drawn once per thing can say which parts of it are likelier. The range goes inside a function:</p>
+<pre><code>weighting := ("flat" | "low" | "high" | "bell" | "peak") "(" range ( "," number )* ")"
+range     := sum ".." sum | "[" sum ".." sum "]"</code></pre>
+<pre><code>scatter against=cliff perSquare=55 reach=4 { stone size="low(1..6, 11)" }
+scatter perSquare=3 { rock size="bell(6..10)" }
+let small "low(1..6, 11)"</code></pre>
+<div class="weights" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0">
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>flat</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,43.6 8.3,43.6 10.6,43.6 12.9,43.6 15.2,43.6 17.5,43.6 19.8,43.6 22.1,43.6 24.4,43.6 26.7,43.6 29.0,43.6 31.3,43.6 33.6,43.6 35.9,43.6 38.2,43.6 40.5,43.6 42.8,43.6 45.1,43.6 47.4,43.6 49.7,43.6 52.0,43.6 54.3,43.6 56.6,43.6 58.9,43.6 61.2,43.6 63.5,43.6 65.8,43.6 68.1,43.6 70.4,43.6 72.7,43.6 75.0,43.6 77.3,43.6 79.6,43.6 81.9,43.6 84.2,43.6 86.5,43.6 88.8,43.6 91.1,43.6 93.4,43.6 95.7,43.6 98.0,43.6 100.3,43.6 102.6,43.6 104.9,43.6 107.2,43.6 109.5,43.6 111.8,43.6 114.1,43.6 116.4,43.6 118.7,43.6 121.0,43.6 123.3,43.6 125.6,43.6 127.9,43.6 130.2,43.6 132.5,43.6 134.8,43.6 137.1,43.6 139.4,43.6 141.7,43.6 144.0,43.6" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>1..6</code> or <code>flat(1..6)</code></div><div class="muted small">Every value equally likely.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>low</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,28.1 8.3,28.9 10.6,29.7 12.9,30.4 15.2,31.1 17.5,31.8 19.8,32.5 22.1,33.2 24.4,33.9 26.7,34.5 29.0,35.1 31.3,35.7 33.6,36.3 35.9,36.9 38.2,37.5 40.5,38.1 42.8,38.6 45.1,39.1 47.4,39.7 49.7,40.2 52.0,40.7 54.3,41.2 56.6,41.6 58.9,42.1 61.2,42.6 63.5,43.0 65.8,43.4 68.1,43.9 70.4,44.3 72.7,44.7 75.0,45.1 77.3,45.5 79.6,45.8 81.9,46.2 84.2,46.6 86.5,46.9 88.8,47.3 91.1,47.6 93.4,47.9 95.7,48.3 98.0,48.6 100.3,48.9 102.6,49.2 104.9,49.5 107.2,49.8 109.5,50.0 111.8,50.3 114.1,50.6 116.4,50.8 118.7,51.1 121.0,51.3 123.3,51.6 125.6,51.8 127.9,52.1 130.2,52.3 132.5,52.5 134.8,52.7 137.1,52.9 139.4,53.1 141.7,53.3 144.0,53.5" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>low(1..6, 4)</code></div><div class="muted small">Mostly low. The ratio is how many times likelier the low end is than the high end: 1 is flat, 4 the default, a fraction leans high.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>high</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,53.5 8.3,53.3 10.6,53.1 12.9,52.9 15.2,52.7 17.5,52.5 19.8,52.3 22.1,52.1 24.4,51.8 26.7,51.6 29.0,51.3 31.3,51.1 33.6,50.8 35.9,50.6 38.2,50.3 40.5,50.0 42.8,49.8 45.1,49.5 47.4,49.2 49.7,48.9 52.0,48.6 54.3,48.3 56.6,47.9 58.9,47.6 61.2,47.3 63.5,46.9 65.8,46.6 68.1,46.2 70.4,45.8 72.7,45.5 75.0,45.1 77.3,44.7 79.6,44.3 81.9,43.9 84.2,43.4 86.5,43.0 88.8,42.6 91.1,42.1 93.4,41.6 95.7,41.2 98.0,40.7 100.3,40.2 102.6,39.7 104.9,39.1 107.2,38.6 109.5,38.1 111.8,37.5 114.1,36.9 116.4,36.3 118.7,35.7 121.0,35.1 123.3,34.5 125.6,33.9 127.9,33.2 130.2,32.5 132.5,31.8 134.8,31.1 137.1,30.4 139.4,29.7 141.7,28.9 144.0,28.1" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>high(1..6, 4)</code></div><div class="muted small">Mostly high: the mirror of <code>low</code>.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>bell</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,60.3 8.3,60.0 10.6,59.5 12.9,59.0 15.2,58.4 17.5,57.7 19.8,56.9 22.1,56.0 24.4,55.0 26.7,53.9 29.0,52.6 31.3,51.3 33.6,49.8 35.9,48.2 38.2,46.5 40.5,44.8 42.8,42.9 45.1,41.1 47.4,39.2 49.7,37.3 52.0,35.4 54.3,33.6 56.6,31.9 58.9,30.2 61.2,28.8 63.5,27.5 65.8,26.4 68.1,25.5 70.4,24.9 72.7,24.5 75.0,24.4 77.3,24.5 79.6,24.9 81.9,25.5 84.2,26.4 86.5,27.5 88.8,28.8 91.1,30.2 93.4,31.9 95.7,33.6 98.0,35.4 100.3,37.3 102.6,39.2 104.9,41.1 107.2,42.9 109.5,44.8 111.8,46.5 114.1,48.2 116.4,49.8 118.7,51.3 121.0,52.6 123.3,53.9 125.6,55.0 127.9,56.0 130.2,56.9 132.5,57.7 134.8,58.4 137.1,59.0 139.4,59.5 141.7,60.0 144.0,60.3" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>bell(1..6, 0.2, 0.5)</code></div><div class="muted small">Mostly in the middle. Spread is a share of the width (0.05 to 1); the centre is optional. Cut at the range.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>peak</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,62.0 8.3,60.8 10.6,59.5 12.9,58.3 15.2,57.0 17.5,55.8 19.8,54.5 22.1,53.3 24.4,52.0 26.7,50.8 29.0,49.6 31.3,48.3 33.6,47.1 35.9,45.8 38.2,44.6 40.5,43.3 42.8,42.1 45.1,40.8 47.4,39.6 49.7,38.4 52.0,37.1 54.3,35.9 56.6,34.6 58.9,33.4 61.2,32.1 63.5,30.9 65.8,29.6 68.1,28.4 70.4,27.2 72.7,25.9 75.0,24.7 77.3,25.9 79.6,27.2 81.9,28.4 84.2,29.6 86.5,30.9 88.8,32.1 91.1,33.4 93.4,34.6 95.7,35.9 98.0,37.1 100.3,38.4 102.6,39.6 104.9,40.8 107.2,42.1 109.5,43.3 111.8,44.6 114.1,45.8 116.4,47.1 118.7,48.3 121.0,49.6 123.3,50.8 125.6,52.0 127.9,53.3 130.2,54.5 132.5,55.8 134.8,57.0 137.1,58.3 139.4,59.5 141.7,60.8 144.0,62.0" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>peak(1..6, 0.5, 0.5)</code></div><div class="muted small">A favourite value falling off in a straight line over the spread. Cut at the range, so a wide spread leaves the ends above zero; a centre at 0 or 1 makes a ramp.</div></figure>
+</div>
+<p class="muted small">Each curve is the density over the range: higher means likelier, the dotted line is the plain range.</p>
+<p>Written alone, a range is flat on every element. <code>a..b</code> and <code>[a .. b]</code> both read inside a call, in a quoted control value and in a height. The numbers after the range are plain numbers; a strength outside its limits is <code>dt::range</code>, with the limits in the help.</p>
+<ul>
+  <li><strong>Every range is its own draw.</strong> Write a range twice and it rolls twice: <code>[1 .. 2] + [3 .. 4]</code> is two dice. Each range draws from its value's own key and its position in the value, so editing one value never moves another's draws.</li>
+  <li><strong>A weighted range goes on a draw, not on a band.</strong> A <code>top=</code>, a pin's top and a <code>within</code> distance are bands the solver fits, not draws: <code>low(…)</code> there is a <code>dt::weighting</code> error whose help gives the range to write. <code>flat(…)</code> is the plain range and is accepted anywhere a range is.</li>
+  <li><strong>A <code>let</code> name holds a distribution.</strong> <code>let small "low(1..6, 11)"</code> stands for that range with its odds, and a control that names <code>small</code> draws from it, each use its own roll. A tile's own <code>let</code> may be named by a size, count or density control; the library's heights may not. A control draws one range: two in one control are refused.</li>
+  <li>A weighting wraps a plain range: <code>low(bell(1..6))</code> and <code>low(3)</code> are <code>dt::weighting</code> errors. An unknown function is <code>dt::value</code>. A weighting on a range of no width has no effect, and <code>check</code> says so in a note.</li>
+  <li>Only controls whose "takes" column says <em>weighted range</em> accept one; any other says <code>does not take a weighting yet</code>. <code>dharmatiles elements rock</code> lists the functions.</li>
+</ul>
+
 
 <h3 id="entry">What every stack entry takes</h3>
 <ul>
@@ -241,19 +266,15 @@ region knoll { bounded-by foot; fill center }             // the paint bucket, a
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>Takes</th><th>What you get</th></tr></thead>
 <tbody>
-<tr><td><code>count</code></td><td>number</td><td>How many, in total.</td></tr>
-<tr><td><code>perSquare</code></td><td>number</td><td>How many per square of the area, or per square of length along a line.</td></tr>
+<tr><td><code>count</code></td><td>number, or a weighted range</td><td>How many, in total.</td></tr>
+<tr><td><code>perSquare</code></td><td>number, or a weighted range</td><td>How many per square of the area, or per square of length along a line.</td></tr>
 <tr><td><code>at</code> + <code>spread</code></td><td>point; mm</td><td>A cluster round that point, within this distance.</td></tr>
 <tr><td><code>reach</code></td><td>mm</td><td>With <code>against=</code>: how far out from the foot.</td></tr>
 <tr><td><code>clumps</code></td><td>per square</td><td>Gathers them into clumps. Default: spread evenly.</td></tr>
 <tr><td><code>gap</code></td><td>mm</td><td>Least space between neighbours.</td></tr>
-<tr><td><code>mostly</code></td><td><code>small</code> / <code>even</code> / <code>large</code></td><td>Skews every child's size range.</td></tr>
 <tr><td>child <code>weight=</code></td><td>number</td><td>Share of the mix when there are several children. Default: equal.</td></tr>
 </tbody></table></div>
 <p>A scatter must have exactly one of <code>count</code> and <code>perSquare</code>; <code>spread</code> needs <code>at=</code>, and <code>reach</code> needs <code>against=</code>. A scatter inside a surface (<code>dirt { scatter … }</code>) lands on that surface.</p>
-
-<h3 id="mostly">mostly=</h3>
-<p><code>mostly=</code> skews a range draw as <code>lo + (hi − lo) × u<sup>k</sup></code>: <code>small</code> is k = 2 , <code>even</code> is k = 1, <code>large</code> is k = ½.</p>
 
 <h3 id="stack-order">Stack order</h3>
 <p>Order is free for solids. Every solid (rocks, trees, walls, cliffs, boulders, scattered or not) is planned before anything grows, and grass and dirt banks grow round every solid wherever they are listed. Order of land bodies is stack order, each one the higher of what is below and its own top: a dirt along a path, listed after the whole-tile dirt, takes the higher of the two there. Each element is a surface, a thing, a run or a scatter, and that decides how it is planned.</p>
@@ -315,7 +336,7 @@ define oak {
 
   × `1..6` must be quoted
     ╭─[library/tiles/cliffs/2x1-cliff.dtile:27:66]
- 27 │         scatter against=cliff perSquare=55 reach=4 { stone size=1..6 mostly=small }
+ 27 │         scatter against=cliff perSquare=55 reach=4 { stone size=1..6 }
     ·                                                                  ──┬─
     ·                                                                    ╰── not a KDL number
   help: ranges, percents, points and sizes are written as strings: "1..6"</code></pre>
@@ -350,6 +371,7 @@ define oak {
 <tr><td><code>dt::pin</code></td><td>static</td><td>A pin without <code>top=</code> or <code>at=</code>, or a pin on something that is not a body.<br><code>a pin needs at=</code></td></tr>
 <tr><td><code>dt::base-order</code></td><td>static</td><td><code>base</code> anywhere but first, or a second one.<br><code>the base is the first line of the stack</code></td></tr>
 <tr><td><code>dt::fluid-order</code></td><td>static</td><td>Anything written after a fluid.<br><code>`rock` is written after the water</code> — help: move it above the water</td></tr>
+<tr><td><code>dt::weighting</code></td><td>static</td><td>A weighted range on a band (<code>top</code>, a pin, <code>within</code>), a weighting that does not wrap a plain range, or a control that takes none yet.<br><code>a weighted range does not go on a band</code> — help: write the range alone</td></tr>
 <tr><td><code>dt::empty</code></td><td>solve</td><td>A pin whose place covers nothing.<br><code>this pin's place `nowhere` covers nothing</code></td></tr>
 <tr><td><code>dt::thin</code></td><td>solve</td><td>A layer that can never be as thick as the printer's skin (three layers).<br><code>the dirt is at most 0.30 mm thick at (17.50, 17.50) mm, under the 0.60 mm the printer's skin needs</code></td></tr>
 <tr><td><code>dt::missing-control</code></td><td>solve</td><td>A body with no top and no default, such as a cliff.</td></tr>
@@ -447,7 +469,7 @@ tile size="2x1" seed=1 {
         dirt top="bottom + [0.6 .. 1.2]" at=crag   // dirt on the cliff's top
 
         // scree: fallen stones gathered at the cliff's foot
-        scatter against=cliff perSquare=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff perSquare=55 reach=4 { stone size="low(1..6, 11)" }
         scatter against=cliff perSquare=2.5 { boulder size="4.5..8" }
     }
 }</code></pre>
@@ -505,6 +527,7 @@ cliff top="dirtEdgeHeight + 55" at=crag {
   <li>Sizes are millimetres at the 35 mm DungeonBlocks square; heights are millimetres or <code>let</code> names. Units are not written: <code>4.5</code>, never <code>"4.5mm"</code> (<code>(mm)4.5</code> is an optional check).</li>
   <li>Every size a tile writes scales with the system, like a photocopy; hidden printability floors keep it printable. Print-scale detail (grain, blades, leaves) keeps its printed size.</li>
   <li>Ranges and percents are quoted: <code>size="6..10"</code>, <code>cover="35%"</code>.</li>
+  <li>A plain range is flat, on every element. A weighting is written round it, <code>size="low(6..10, 3)"</code>; every range in a value is its own draw; a weighted range goes on a draw, not on a band; a <code>let</code> name holds a distribution.</li>
   <li>Points are quoted pairs in squares (<code>"(0.5, 1)"</code>), a point's name, or a corner or edge word.</li>
   <li>The whole tile is the default area. A region is flat: its fill points and its <code>within</code> discs, less what it <code>except</code>s. A body, grass or scatter fills a region; a pin or a thing takes any place.</li>
   <li>A stack that uses the heights language is written bottom up: <code>base</code> first, the land in order, <code>water</code> last. Heights are mm above zero; a pin is exact where it is and the later pin wins; the library's defaults are read before the tile.</li>
