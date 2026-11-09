@@ -25,6 +25,7 @@ import { init as initMap, tools } from './editor/map.js';
 import { init as initExport } from './editor/export.js';
 import { init as initTarget } from './editor/target.js';
 import { init as initLive } from './editor/live.js';
+import { init as initScrollShadows } from './scroll-shadows.js';
 import { viewer } from './editor/app.js';
 import { doc, server, view } from './editor/stores.js';
 
@@ -34,6 +35,7 @@ window.dtPreview = { server, view, doc, viewer, get tools() { return tools; } };
 // build's camera, the tile menu, the view's tile, the text, the selection, the
 // sheet, the map, export, then the event stream, which starts everything moving
 initChrome();
+initScrollShadows();
 initBuild();
 initTiles();
 initOpen();
