@@ -11,6 +11,9 @@ publish.workspace = true
 [features]
 default = ["manifold-parallel"]
 manifold-parallel = ["dt-kit/manifold-parallel", "dt-elements/manifold-parallel"]
+# The crash switch the CLI tests drive (DT_TEST_PANIC). Only the dharmatiles
+# crate's dev-dependencies turn it on, so no shipped program has it.
+test-panic = []
 [dependencies]
 dt-doc.workspace = true
 dt-geom.workspace = true

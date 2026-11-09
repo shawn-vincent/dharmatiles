@@ -92,12 +92,8 @@ fn install_panic_hook() {
 fn main() -> ExitCode {
     install_panic_hook();
     let cli = Cli::parse();
-    // Test hook for the exit-code tests: DT_TEST_PANIC=main panics here, a
-    // bug reaching main; any other value panics when that text is in the
-    // path of a tile being built (a bug caught in a library sweep).
-    if std::env::var("DT_TEST_PANIC").as_deref() == Ok("main") {
-        panic!("DT_TEST_PANIC=main");
-    }
+    // the crash switch of the exit-code tests; nothing in a shipped build
+    dt_eval::crash_switch::panic_in_main();
     disk_library();
     // no command: browse your tiles and the library in the browser
     let command = cli.command.unwrap_or(Command::Preview {

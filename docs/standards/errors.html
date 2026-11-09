@@ -91,6 +91,7 @@
   <li>No <code>let _ =</code>, <code>.ok()</code>, <code>unwrap_or_default()</code> or <code>unwrap_or(…)</code> on a result that can fail for real. Writing into a <code>String</code> cannot fail, so <code>let _ = write!(s, …)</code> there is fine.</li>
   <li><code>unwrap</code> and <code>expect</code> only for what cannot happen; an <code>expect</code> message says why it cannot. Anything a document or a file can cause is a <code>Result</code>.</li>
   <li>A panic is a bug. It is never part of the plan, and a caught panic is still reported, saying it is a bug in dharmatiles, with its message and where it happened.</li>
+  <li>No shipped program carries a crash switch. The exit-code tests make the program panic through <code>DT_TEST_PANIC</code>, which <code>dt_eval::crash_switch</code> reads only when its <code>test-panic</code> feature is on, and only the dharmatiles crate's dev-dependencies turn that on: a normal build reads no such variable.</li>
 </ul>
 
 <h2 id="preview">In the preview</h2>

@@ -11,6 +11,7 @@
 //! needs an element not built yet set aside (see its module docs).
 
 mod cache;
+pub mod crash_switch;
 pub mod diag;
 pub mod doc;
 mod hash;
