@@ -433,18 +433,24 @@ impl Dist {
         self.hi <= self.lo
     }
 
-    /// A whole number from `lo` to `hi`, both included.  A flat range keeps
-    /// [`Rng::int`]'s modulus; a weighted one cuts [0, 1] into `hi - lo + 1`
-    /// equal bins, `lo + floor((hi - lo + 1) t)` clamped to `hi`.
+    /// A whole number from `lo` to `hi`, both included, every whole number
+    /// equally likely under a flat range: [0, 1] is cut into `hi - lo + 1`
+    /// equal bins.  One rule for flat and weighted: see [`Dist::bin`].
     #[must_use]
     pub fn int(lo: i64, hi: i64, weighting: Weighting, rng: &mut Rng) -> i64 {
-        if matches!(weighting, Weighting::Flat) || hi <= lo {
-            return rng.int(lo, hi);
+        if hi <= lo {
+            return lo;
         }
-        let t = weighting.unit(rng.random());
+        Self::bin(lo, hi, weighting.unit(rng.random()))
+    }
+
+    /// The whole number position `t` (0 to 1) falls in when `lo..=hi` is
+    /// cut into equal bins: `lo + floor((hi - lo + 1) t)`, clamped to `hi`.
+    #[must_use]
+    pub fn bin(lo: i64, hi: i64, t: f64) -> i64 {
         #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
         let k = libm::floor((hi - lo + 1) as f64 * t) as i64;
-        (lo + k).min(hi)
+        (lo + k).clamp(lo, hi)
     }
 }
 
@@ -606,8 +612,8 @@ impl Draw {
     }
 
     /// A whole number, both ends included, for a control that counts: the
-    /// ends round, a lone range keeps [`Dist::int`], a sum rounds what it
-    /// drew.  `k` scales the value first (a density times the squares).
+    /// ends round, a lone range is [`Dist::int`], a sum falls in the equal bin
+    /// its drawn place along its ends does.  `k` scales the value first (a density times the squares).
     pub fn int_by(&self, k: f64, rng: &mut Rng) -> i64 {
         #[allow(clippy::cast_possible_truncation)]
         let r = |v: f64| libm::round(v) as i64;
@@ -622,7 +628,10 @@ impl Draw {
                 }
                 l
             }
-            _ => r(self.draw(rng) * k).clamp(l, h),
+            _ => {
+                let (a, b) = (lo * k, hi * k);
+                Dist::bin(l, h, (self.draw(rng) * k - a) / (b - a))
+            }
         }
     }
 }
@@ -914,5 +923,31 @@ mod tests {
             Draw::Bin(Op::Mul, r(), Box::new(Draw::Num(-2.0))).bounds(),
             (-6.0, 4.0)
         );
+    }
+
+    #[test]
+    fn every_whole_number_is_as_likely_under_a_flat_range() {
+        let mut seen = [0usize; 5];
+        let mut rng = Rng::new(crate::Seed::new(3));
+        for _ in 0..10_000 {
+            seen[usize::try_from(Dist::int(1, 5, Weighting::Flat, &mut rng) - 1).unwrap()] += 1;
+        }
+        // the ends are no rarer than the middle (they were half as likely
+        // when a count was `round(uniform(lo, hi))`)
+        for n in seen {
+            assert!((1800..2200).contains(&n), "{seen:?}");
+        }
+        // a sum falls in the same bins from its place along its ends
+        let d = Draw::flat(1.0, 5.0);
+        let mut seen = [0usize; 5];
+        for _ in 0..10_000 {
+            seen[usize::try_from(d.int_by(1.0, &mut rng) - 1).unwrap()] += 1;
+        }
+        for n in seen {
+            assert!((1800..2200).contains(&n), "{seen:?}");
+        }
+        assert_eq!(Dist::bin(1, 5, 1.0), 5);
+        assert_eq!(Dist::bin(1, 5, 0.0), 1);
+        assert_eq!(Dist::int(3, 3, Weighting::Flat, &mut rng), 3);
     }
 }

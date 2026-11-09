@@ -77,7 +77,7 @@ dirt { scatter perSquare=40 { pebble } }                     // inside a surface
 <h2 id="notes">Notes</h2>
 <dl class="defs">
   <dt>against=</dt><dd>Gathers at the foot of that kind of thing: <code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code>. Scattered against a cliff, rocks take the cliff's rock: that is scree.</dd>
-  <dt>count, perSquare</dt><dd>Take a weighted range: <code>perSquare="low(2..8, 3)"</code>. See <a href="../language.html#weighted">weighted ranges</a>.</dd>
+  <dt>count, perSquare</dt><dd>Take a weighted range: <code>perSquare="low(2..8, 3)"</code>. Each whole number of a range is as likely as any other. See <a href="../language.html#weighted">weighted ranges</a>.</dd>
   <dt>inside a surface</dt><dd>A scatter written inside <code>dirt</code> or <code>grass</code> is placed on that surface, in its area.</dd>
 </dl>
 <p>A single thing never takes a count: <code>tree count=3</code> is an error whose help says to use a scatter. See <a href="../language.html#placement">placement</a> in the language guide.</p>

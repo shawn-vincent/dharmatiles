@@ -955,13 +955,13 @@ impl Element for Scatter {
             },
             |f| f.squares,
         );
-        // one draw either way
+        // a whole number: the ends round and every one is as likely as any
         let n = match &self.count {
-            Some(r) => r.draw(&mut rng),
-            None => self.per_square.draw(&mut rng) * squares,
+            Some(r) => r.int_by(1.0, &mut rng),
+            None => self.per_square.int_by(squares, &mut rng),
         };
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let n = libm::round(n).clamp(0.0, 10_000.0) as usize;
+        let n = n.clamp(0, 10_000) as usize;
         let total: f64 = self.things.iter().map(|t| t.weight).sum();
         let mut items = Vec::with_capacity(n);
         let mut kinds: Vec<&str> = Vec::with_capacity(n);
