@@ -77,7 +77,7 @@
 <div class="grid2">
   <div class="card"><h3>See it change as you change it</h3><p>A change shows in the view while your hand is still on it: the line moves as you drag its point, the rocks grow as you drag their size. Where the full build is too slow for that, the view answers at once with what it can, a draft, and the full build follows (<a href="#speed">how fast it answers</a>).</p></div>
   <div class="card"><h3>Show the state</h3><p>Nothing a tile depends on is hidden. Lines, regions and fill points are drawn on the plate; the selected entry's source and controls stay visible; the gate's verdict and the overhang paint are always on. From <cite>Learnable Programming</cite>: the reader should never have to simulate the program in their head.</p></div>
-  <div class="card"><h3>Point at the thing</h3><p>The view and the text are two faces of one tile, linked both ways. Point at a stone and you see the words that made it; point at the words and you see the stones. You change a tile by touching it, and the touch is written down as text you can read.</p></div>
+  <div class="card"><h3>Point at the thing</h3><p>The view and the source are two faces of one tile, linked both ways. Point at a stone and you see the words that made it; point at the words and you see the stones. You change a tile by touching it, and the touch is written down as text you can read.</p></div>
   <div class="card"><h3>Make by reacting</h3><p>You rarely start from nothing: you start from a library tile, or from a choice the editor shows you. Completion shows what each element and each word makes, with its picture. Seeds and sweeps lay out several versions to choose between.</p></div>
   <div class="card"><h3>Up and down the ladder</h3><p>From one build, step up to the same tile at eight seeds, or across the whole range of one control, and step back down by clicking the one you want (<cite>Up and Down the Ladder of Abstraction</cite>).</p></div>
   <div class="card"><h3>Ask for little</h3><p>From <cite>Magic Ink</cite>: good information software needs as little interaction as possible. The editor shows what matters without being asked, keeps no hidden modes, and gives each gesture one meaning everywhere.</p></div>
@@ -139,7 +139,7 @@
   <rect class="raised" x="792" y="462" width="77" height="26" rx="4"/><text class="t" x="812" y="480">Delete</text>
   <text class="s" x="290" y="76">the view: select · drag · place</text>
 </svg>
-<figcaption>Desktop. A rock is selected: its scatter is lit in the text and its property sheet fills the right sidebar, with Help at the top and Hide and Delete at the bottom.</figcaption>
+<figcaption>Desktop. A rock is selected: its scatter is lit in the source and its property sheet fills the right sidebar, with Help at the top and Hide and Delete at the bottom.</figcaption>
 </figure>
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>What it is</th><th>What it does</th></tr></thead>
@@ -157,15 +157,15 @@
   <li><strong>Your own tiles</strong> (in <code>$DT_HOME</code>, else <code>~/dharmatiles</code>, or a file you named) are changed in place. Each finished gesture (a drag released, a click placed, a pause in typing) writes the file.</li>
   <li><strong>A new tile</strong> starts blank (<em>New tile</em> in the title's list: a 1×1 tile with plain ground, size and name to change), or as a copy of any library tile.</li>
   <li><strong>Library tiles</strong> open read-only. The first change offers one choice, <em>Make it mine</em>, which copies the document (and the parts it uses stay <code>lib:</code> references) into My tiles under the same name and carries on with the change there. The library is never written by the editor.</li>
-  <li><strong>Other editors.</strong> The file is still watched. A save from another editor while the page has no unsaved typing simply loads. If the page has unsaved typing, a line over the text says the file changed on disk and offers to load it or keep yours.</li>
-  <li><strong>Undo</strong> is one history for every kind of change, in the view, in the text or by the assistant: <kbd>⌘Z</kbd> and <kbd>⇧⌘Z</kbd>, or Undo and Redo in the title. Each title control has a scrollable history of named actions for jumping several versions at once. Each step is a text change, so undo is exact.</li>
+  <li><strong>Other editors.</strong> The file is still watched. A save from another editor while the page has no unsaved typing simply loads. If the page has unsaved typing, a line over the source says the file changed on disk and offers to load it or keep yours.</li>
+  <li><strong>Undo</strong> is one history for every kind of change, in the view, in the source or by the assistant: <kbd>⌘Z</kbd> and <kbd>⇧⌘Z</kbd>, or Undo and Redo in the title. Each title control has a scrollable history of named actions for jumping several versions at once. Each step is a text change, so undo is exact.</li>
 </ul>
 
 <h2 id="select">Selecting</h2>
 <p>Every solid in a build already carries the stack path that made it (its tag's <code>owner</code>, such as <code>tile/water+grass/scatter#1/2</code>), and every triangle of the final mesh keeps which solid it came from. That is enough to go from any point on the tile to the words that made it.</p>
 <ul>
   <li><strong>Hover</strong> lifts the thing under the pointer with a thin accent outline and names it in the bar's hint ("rock 2 of scatter in pool").</li>
-  <li><strong>Click</strong> selects it. Its node in the text is marked and scrolled into view if needed; its property sheet fills the right sidebar.</li>
+  <li><strong>Click</strong> selects it. Its node in the source is marked and scrolled into view if needed; its property sheet fills the right sidebar.</li>
   <li><strong>Click again on the same spot</strong> climbs: a rock, then its scatter, then the region it stands in, then the tile. <kbd>Esc</kbd> or a click on empty plate clears the selection.</li>
   <li><strong>In the text</strong>, putting the cursor in a node selects it in the view; hovering a node outlines its geometry without selecting it.</li>
   <li><strong>On the plate</strong>, lines, fill points and regions are drawn as a thin overlay, and are selected like any solid.</li>
@@ -184,7 +184,7 @@
 <tr><td>Region or line (<code>in=</code>, <code>along=</code>)</td><td>The document's names; hover one to light it on the plate.</td></tr>
 <tr><td>Seed</td><td>A die: click for the next seed, drag to run through seeds.</td></tr>
 </tbody></table></div>
-<p>Setting a control back to its default removes it from the text. The property sheet never shows a value the document does not hold, apart from the faint defaults under <em>+ more</em>. Each control's name links to its line on the element's page.</p>
+<p>Setting a control back to its default removes it from the source. The property sheet never shows a value the document does not hold, apart from the faint defaults under <em>+ more</em>. Each control's name links to its line on the element's page.</p>
 <p>The same scrubbing works in the text: hold <kbd>⌥</kbd> and drag any number in the document.</p>
 
 <h2 id="place">Placing and drawing</h2>
@@ -265,7 +265,7 @@
 <h2 id="speed">How fast it answers</h2>
 <p>A full build takes from about a second for a plain tile to minutes for trees. The editor never waits for it with nothing to show. It answers in three steps, each replacing the one before:</p>
 <div class="tiers">
-  <div class="tier"><div class="when">At once</div><p><strong>The overlay.</strong> Lines, fill points, regions and placed footprints are drawn by the page from the plan, and move with the hand. Checking the text (read and plan) takes milliseconds.</p></div>
+  <div class="tier"><div class="when">At once</div><p><strong>The overlay.</strong> Lines, fill points, regions and placed footprints are drawn by the page from the plan, and move with the hand. Checking the source (read and plan) takes milliseconds.</p></div>
   <div class="tier"><div class="when">Under a second</div><p><strong>A draft build</strong> at fewer cells per square, with fine detail (grass blades, leaves, pebbles) shown as light stand-in volumes, and only the stack entries the change touches rebuilt. Marked <em>draft</em>.</p></div>
   <div class="tier"><div class="when">When ready</div><p><strong>The full build</strong>, which the gate judges. It starts when the hand lets go, and the view swaps to it without moving the camera, as the preview does today.</p></div>
 </div>
@@ -277,7 +277,7 @@
   <li><strong>Asking.</strong> Anything typed in the bar that is not an element or a command is a request; the bar shows <em>Ask</em> before you send it. <kbd>⌥Enter</kbd> sends anything as a request.</li>
   <li><strong>What it sees.</strong> The document, the selection (so <em>these rocks</em> means the selected ones), the plan, the gate's verdict, and on request pictures of the current build from any view, painted with overhang as the view paints it.</li>
   <li><strong>What it can do.</strong> The tools the program's MCP server already offers (check a document, list and describe elements, build, render, audit) and the document edits: set or remove a control, add or remove a node. It can change only the open document. It can read the library and the element pages.</li>
-  <li><strong>What you see.</strong> Its answer in a small card over the bar, with the edits it suggests as a difference: lines to add and lines to remove, marked in the text and shown as a draft in the view. Nothing is written until you accept; <em>Accept</em> applies them all as one undo step named after the request, <em>Reject</em> drops them, and you can keep talking to change the suggestion first.</li>
+  <li><strong>What you see.</strong> Its answer in a small card over the bar, with the edits it suggests as a difference: lines to add and lines to remove, marked in the source and shown as a draft in the view. Nothing is written until you accept; <em>Accept</em> applies them all as one undo step named after the request, <em>Reject</em> drops them, and you can keep talking to change the suggestion first.</li>
   <li><strong>Fixing what the gate refuses.</strong> The assistant builds its suggestion before showing it, is given the gate's verdict, and may revise it a small number of times; the card says whether the suggestion passes.</li>
   <li><strong>The key</strong> is entered once in settings (the title's menu), and kept by the program in your config folder (on macOS, in the Keychain once the app is native). The program, not the page, talks to the provider, so the key never sits in the browser, and nothing is sent anywhere else. The assistant shows how much each request used.</li>
   <li><strong>The model.</strong> Claude by default, with the provider and model chosen in settings.</li>
@@ -387,8 +387,8 @@
 <h2 id="stages">Stages</h2>
 <p>Each stage is usable on its own, and ends when it is used to make a real tile.</p>
 <ol>
-  <li><strong>Built — Select.</strong> Owner paths in the mesh; hover, click and climb; the text and property panes linked to the view.</li>
-  <li><strong>Built — Edit.</strong> The text pane editable with completion and errors; the property sheet; writing the file; one undo; <em>Make it mine</em>; the write protection.</li>
+  <li><strong>Built — Select.</strong> Owner paths in the mesh; hover, click and climb; the source and property panes linked to the view.</li>
+  <li><strong>Built — Edit.</strong> The source pane editable with completion and errors; the property sheet; writing the file; one undo; <em>Make it mine</em>; the write protection.</li>
   <li><strong>Built — Draft.</strong> Draft builds answer while the property sheet is dragged. Per-entry rebuilding remains.</li>
   <li><strong>Built — Place and draw.</strong> The bar; placing, scattering, painting; lines and regions on the plate; handles; the map overlay; mute and delete.</li>
   <li><strong>The gate and the ladder.</strong> The verdict that jumps to the worst patch; seeds, sweeps and compare.</li>

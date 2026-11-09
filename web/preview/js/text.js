@@ -1,4 +1,4 @@
-// The text pane: the document as written, highlighted, and editable.
+// The source pane: the document as written, highlighted, and editable.
 //
 // CodeMirror 6 (vendor/codemirror.js, bundled once from the entry beside
 // it): soft wrap with continuation lines indented under their parent,

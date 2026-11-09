@@ -123,20 +123,20 @@ function setProjection(ortho, animated = true) {
   $('b-proj').firstChild.textContent = ortho ? 'Orthographic ' : 'Perspective ';
   try { localStorage.setItem('dt-preview-ortho', ortho ? '1' : '0'); } catch { /* private mode */ }
 }
-// the panes: Edit (text over properties), Inspect (side by side), Look (the view alone)
+// the panes: Edit (source over properties), Inspect (side by side), Look (the view alone)
 const layout = new Layout($('app'), (st) => {
-  $('reopen').hidden = !st.hideText && !st.hideProps;
-  $('show-text').hidden = !st.hideText;
+  $('reopen').hidden = !st.hideSource && !st.hideProps;
+  $('show-source').hidden = !st.hideSource;
   $('show-props').hidden = !st.hideProps;
-  const preset = st.hideText && st.hideProps ? 'look' : st.hideText || st.hideProps ? null : st.mode;
+  const preset = st.hideSource && st.hideProps ? 'look' : st.hideSource || st.hideProps ? null : st.mode;
   for (const b of $('layout-seg').children) b.classList.toggle('on', b.dataset.preset === preset);
   $('t-right').checked = st.side === 'right';
 });
 const showKeys = () => { closePopovers(); $('keys').showModal(); };
-/** ⌘1/⌘2/⌘3: put the keyboard in the text, the view or the properties (showing the pane first). */
+/** ⌘1/⌘2/⌘3: put the keyboard in the source, the view or the properties (showing the pane first). */
 function focusPane(n) {
   const st = layout.state;
-  if (n === 1) { if (st.hideText) layout.toggle('text'); $('code').querySelector('.cm-content')?.focus(); }
+  if (n === 1) { if (st.hideSource) layout.toggle('source'); $('code').querySelector('.cm-content')?.focus(); }
   if (n === 2) $('canvas').focus();
   if (n === 3) {
     if (st.hideProps) layout.toggle('props');
@@ -195,7 +195,7 @@ export function init() {
   applyTheme();
   $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
   try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* private mode: the default stands */ }
-  $('hide-text').onclick = $('show-text').onclick = () => layout.toggle('text');
+  $('hide-source').onclick = $('show-source').onclick = () => layout.toggle('source');
   $('hide-props').onclick = $('show-props').onclick = () => layout.toggle('props');
   for (const b of $('layout-seg').children) b.onclick = () => layout.preset(b.dataset.preset);
   $('t-right').onchange = (e) => layout.set({ side: e.target.checked ? 'right' : 'left' });
@@ -225,7 +225,7 @@ export function init() {
     if (e.key === 't') toggleTheme();
     if (e.key === 'p') setProjection(!viewer.isOrtho);
     if (e.key === 'a' || e.key === '/') { e.preventDefault(); $('place-in').focus(); }
-    if (e.key === '[') layout.toggle('text');
+    if (e.key === '[') layout.toggle('source');
     if (e.key === ']') layout.toggle('props');
     if (e.key === '\\') layout.toggle('both');
     if (e.key === '?') { e.preventDefault(); showKeys(); }

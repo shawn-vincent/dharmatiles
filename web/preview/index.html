@@ -57,8 +57,8 @@
           <button id="tilebtn" type="button" title="The tile's own properties"><span id="tilename"></span></button>
         </div>
         <div id="editor">
-          <section id="text" aria-label="The document">
-            <div id="textbar"><span id="textpath"></span><span id="textstate"></span><button class="pane-x" id="hide-text" type="button" title="Hide the text ([)" aria-label="Hide the text">×</button></div>
+          <section id="source" aria-label="The source">
+            <div id="sourcebar"><span id="sourcepath"></span><span id="sourcestate"></span><button class="pane-x" id="hide-source" type="button" title="Hide the source ([)" aria-label="Hide the source">×</button></div>
             <div id="code" role="list"></div>
             <div id="codehint">Click a line to select it in the view.</div>
           </section>
@@ -75,7 +75,7 @@
     <canvas id="canvas" tabindex="0" aria-label="3D tile view"></canvas>
     <canvas id="over" aria-hidden="true"></canvas>
     <div id="viewbar">
-      <div id="reopen" hidden><button class="btn" id="show-text" type="button" title="Show the text ([)">Text</button><button class="btn" id="show-props" type="button" title="Show the properties (])">Properties</button></div>
+      <div id="reopen" hidden><button class="btn" id="show-source" type="button" title="Show the source ([)">Source</button><button class="btn" id="show-props" type="button" title="Show the properties (])">Properties</button></div>
       <div class="seg" id="views" role="group" aria-label="Views"></div>
       <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display">⋯</button>
       <div id="display" class="menu" hidden>
@@ -87,8 +87,8 @@
         <button id="b-proj" class="btn" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
         <div id="allviews"></div>
         <div class="seg" id="layout-seg" role="group" aria-label="Layout">
-          <button type="button" data-preset="edit" title="Text over properties in one sidebar">Edit</button>
-          <button type="button" data-preset="inspect" title="Text, view and properties side by side">Inspect</button>
+          <button type="button" data-preset="edit" title="Source over properties in one sidebar">Edit</button>
+          <button type="button" data-preset="inspect" title="Source, view and properties side by side">Inspect</button>
           <button type="button" data-preset="look" title="Only the view (\)">Look</button>
         </div>
         <label class="switch"><input type="checkbox" id="t-right"> Panes on the right</label>
@@ -152,7 +152,7 @@
     <h2 id="new-title">New tile</h2>
     <label class="field">Name<input id="new-name" name="name" type="text" value="Untitled tile" maxlength="80" required autocomplete="off"></label>
     <label class="field">Size<select id="new-size" name="size"><option>1x1</option><option>2x1</option><option>1x2</option><option>2x2</option></select></label>
-    <p class="dialog-note" id="new-note">Starts as printable flat ground. Everything about it is ordinary text you can change.</p>
+    <p class="dialog-note" id="new-note">Starts as printable flat ground. Everything about it is in its source, which you can change.</p>
     <div class="row-btns"><button class="btn" id="new-cancel" type="button">Cancel</button><button class="btn on" id="new-ok" type="submit">Create tile</button></div>
   </form>
 </dialog>
@@ -163,13 +163,13 @@
     <h2 id="keys-title">Keys</h2>
     <div class="cols">
       <dl>
-        <dt><kbd>⌘1</kbd></dt><dd>The text</dd>
+        <dt><kbd>⌘1</kbd></dt><dd>The source</dd>
         <dt><kbd>⌘2</kbd></dt><dd>The view</dd>
         <dt><kbd>⌘3</kbd></dt><dd>The properties</dd>
-        <dt><kbd>[</kbd></dt><dd>Hide or show the text</dd>
+        <dt><kbd>[</kbd></dt><dd>Hide or show the source</dd>
         <dt><kbd>]</kbd></dt><dd>Hide or show the properties</dd>
         <dt><kbd>\</kbd></dt><dd>Only the view</dd>
-        <dt><kbd>⌘F</kbd></dt><dd>Find in the text</dd>
+        <dt><kbd>⌘F</kbd></dt><dd>Find in source</dd>
         <dt><kbd>⌘Z</kbd> <kbd>⌘⇧Z</kbd></dt><dd>Undo, redo</dd>
         <dt><kbd>F2</kbd></dt><dd>Rename the tile</dd>
       </dl>
@@ -187,7 +187,7 @@
         <dt><kbd>⌃Space</kbd></dt><dd>What can go here</dd>
       </dl>
     </div>
-    <p class="dialog-note">Single keys work when the text is not being typed into.</p>
+    <p class="dialog-note">Single keys work when you are not typing.</p>
     <div class="row-btns"><button class="btn on" value="close" autofocus>Close</button></div>
   </form>
 </dialog>

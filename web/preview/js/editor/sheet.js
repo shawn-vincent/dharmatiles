@@ -117,7 +117,7 @@ function renderMarkLens(kind, m) {
       return null;
     };
   }
-  const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the text`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
+  const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
   lens.show({
     title: m.name, kind, href: `https://shawn-vincent.github.io/dharmatiles/language.html#${kind === 'line' ? 'lines' : 'regions'}`,
     groups: [{ at: sh.at, schema: { controls }, written, set }], actions,

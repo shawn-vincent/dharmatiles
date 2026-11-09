@@ -99,7 +99,7 @@ function renderList() {
 function openNewTile() {
   view.set({ popover: null });
   const dlg = $('new-dialog');
-  $('new-note').textContent = 'Starts as printable flat ground. Everything about it is ordinary text you can change.';
+  $('new-note').textContent = 'Starts as printable flat ground. Everything about it is in its source, which you can change.';
   dlg.showModal();
   $('new-name').focus();
   $('new-name').select();

@@ -33,7 +33,7 @@ button { font: inherit; color: inherit; }
 #back { flex: none; display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid transparent; border-radius: var(--r); padding: 4px 7px; color: var(--muted); cursor: pointer; font-size: 13px; }
 #back:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
 #back span:first-child { font-size: 17px; line-height: 1; }
-#editor { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(120px, 60fr) 6px minmax(120px, 40fr); grid-template-areas: "text" "sash-split" "properties"; }
+#editor { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(120px, 60fr) 6px minmax(120px, 40fr); grid-template-areas: "source" "sash-split" "properties"; }
 
 /* ---- sashes: every pane edge can be dragged ---- */
 .sash { position: relative; z-index: 4; cursor: col-resize; touch-action: none; background: var(--line); background-clip: content-box; padding: 0 2.5px; }
@@ -46,7 +46,7 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 body.resizing-rows, body.resizing-rows * { cursor: row-resize !important; user-select: none; }
 body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 @media (min-width: 901px) {
-  #app.hide-text #text, #app.hide-props #properties-pane { display: none; }
+  #app.hide-source #source, #app.hide-props #properties-pane { display: none; }
 }
 .pane-x { flex: none; width: 22px; height: 22px; display: inline-grid; place-items: center; border: 0; border-radius: var(--r); background: none; color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; }
 .pane-x:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
@@ -156,13 +156,13 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .dot.building { background: var(--accent); border-color: var(--accent); animation: pulse 1s ease-in-out infinite; }
 .dot.ready.over { box-shadow: 0 0 0 2px var(--raised), 0 0 0 3.5px var(--band); }
 
-/* ---- the text ---- */
-#text { grid-area: text; background: var(--panel); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-#textbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
-#textpath { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
-#textstate { white-space: nowrap; }
-#textstate .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; }
-#textstate .back:hover { text-decoration: underline; }
+/* ---- the source ---- */
+#source { grid-area: source; background: var(--panel); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+#sourcebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+#sourcepath { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+#sourcestate { white-space: nowrap; }
+#sourcestate .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; }
+#sourcestate .back:hover { text-decoration: underline; }
 #code { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* the editor: CodeMirror (js/text.js), in the theme's colours */
 #code .cm-editor { flex: 1; min-height: 0; height: 100%; font: 12.5px/1.75 var(--f-code); color: var(--ink); background: transparent; }
@@ -250,7 +250,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #lens .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px 0 0; font-size: 15px; line-height: 1; }
 #lens .x:hover { color: var(--ink); }
 #lens .note { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
-#lens .linkish, #textstate .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
+#lens .linkish, #sourcestate .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
 #lens .linkish:hover { text-decoration: underline; }
 #lens .more { font-size: 12px; margin-top: 6px; }
 /* a tile's size, picked from a grid under the field (lens.js sizeGrid) */
@@ -333,7 +333,7 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
   #app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px 62vh auto auto; grid-template-areas: "title" "view" "properties" "side"; }
   #side { height: 75vh; border-top: 1px solid var(--line); }
   .sash, .pane-x, #reopen { display: none !important; }
-  #text, #properties-pane { border: 0; border-top: 1px solid var(--line); }
+  #source, #properties-pane { border: 0; border-top: 1px solid var(--line); }
   #properties-pane { height: min(520px, 70vh); }
   #code { max-height: 60vh; }
   #title .wordmark .txt { display: none; }

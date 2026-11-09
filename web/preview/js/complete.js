@@ -1,4 +1,4 @@
-// Completion for the text pane, from the element schema and the document's
+// Completion for the source pane, from the element schema and the document's
 // own names (docs/design/editor.html, "The text").  Three places:
 //
 //   at the start of a node   element names, the document's definitions, the

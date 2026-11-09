@@ -268,7 +268,7 @@ export async function loadText(file) {
       doc.set({
         tileId: t.id, file: v.file, text: v.text, base: v.text, writable: v.writable,
         conflict: null, note: null,
-        checked: v.text, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this text's
+        checked: v.text, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's
         ...(fresh ? { map: null } : {}),
       });
       if (fresh && carried && carried.history[carried.at]?.text === v.text) {
@@ -298,9 +298,9 @@ export async function openFile(file, line) {
 function renderTextBar() {
   const t = tile(), d = doc.get(), f = d.file, live = server.get().live;
   // the tile's own file is named in the crumb above; another file (a part) by its path
-  $('textpath').textContent = !f || f === t?.path ? '' : `‎${f}`;
-  $('textpath').title = f || '';
-  const st = $('textstate');
+  $('sourcepath').textContent = !f || f === t?.path ? '' : `‎${f}`;
+  $('sourcepath').title = f || '';
+  const st = $('sourcestate');
   st.replaceChildren();
   const button = (label, fn, cls = 'back') => {
     const b = document.createElement('button');
