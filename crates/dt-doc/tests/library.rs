@@ -283,7 +283,7 @@ fn cliff_run_keeps_every_control() {
     assert_eq!(t.consts[0].name.value, "footHeight");
 
     let order: Vec<_> = t.stack.iter().map(|e| e.what.value.as_str()).collect();
-    assert_eq!(order, ["dirt", "cliff", "scatter", "scatter"]);
+    assert_eq!(order, ["dirt", "cliff", "dirt", "scatter", "scatter"]);
 
     // APRON_H_MM (1.5, 3.5), APRON_R_MM (3.0, 6.5)
     let dirt = entry(&t.stack, "dirt");
@@ -291,12 +291,12 @@ fn cliff_run_keeps_every_control() {
         dirt.top.as_ref().map(|t| &t.value),
         Some(&dt_doc::expr::Expr::Name("footHeight".into()))
     );
+    // the bank is drawn: two pins on the dirt
+    assert_eq!(dirt.pins.len(), 2);
     assert_eq!(
-        dirt.sub("bank", "against"),
-        Some(&Value::Tag("cliff".into()))
+        dirt.pins[1].at.value,
+        dt_doc::model::PlaceRef::Name("crag".to_owned())
     );
-    assert!(close(range(dirt.sub("bank", "height")), (1.5, 3.5)));
-    assert!(close(range(dirt.sub("bank", "reach")), (3.0, 6.5)));
     // GRIT_PER_SQUARE 45, GRIT_D_MM (1, 2.2), GRIT_BURY (0.2, 0.5): on the dirt.
     let grit = &dirt.children[0];
     assert!(grit.is_scatter());
@@ -308,13 +308,13 @@ fn cliff_run_keeps_every_control() {
     assert_eq!(dirt.kind, Kind::Mixed, "dirt holding pebbles");
     assert_eq!(pebble.path, ["tile", "stack", "dirt", "scatter", "pebble"]);
 
-    // FORMS['run']: height 35, mass 1.35, cap; KINDS shares.
+    // a run: a band 35 mm over the edge height, in the crag
     let cliff = entry(&t.stack, "cliff");
+    assert!(cliff.top.is_some());
     assert_eq!(
-        cliff.place.along.as_ref().unwrap().value,
-        Along::Edges(vec![Edge::North])
+        cliff.place.region.as_ref().map(|r| r.value.as_str()),
+        Some("crag")
     );
-    assert_eq!(num(cliff.value("height")), 35.0);
     let mixed = cliff.value("rock").unwrap().word().unwrap();
     assert_eq!(
         mixed.sets,
@@ -330,12 +330,11 @@ fn cliff_run_keeps_every_control() {
         cliff.value("stone-size").unwrap().word().unwrap().sets,
         &[("stone-size", 1.35)]
     );
-    assert_eq!(word(cliff.value("top")), "dirt");
     assert_eq!(num(cliff.sub("shattered", "patches")), 3.0);
     assert!(close(range(cliff.sub("shattered", "width")), (5.0, 10.0)));
 
     // SCREE_PER_SQUARE 55, SCREE_D_MM (1, 6) ** 2, SCREE_REACH_MM 4
-    let stones = &t.stack[2];
+    let stones = &t.stack[3];
     assert_eq!(stones.place.against.as_ref().unwrap().value, "cliff");
     assert_eq!(num(stones.value("per-square")), 55.0);
     assert_eq!(num(stones.value("reach")), 4.0);
@@ -348,7 +347,7 @@ fn cliff_run_keeps_every_control() {
     assert_eq!(stones.kind, Kind::Solid);
     assert_eq!(stones.path, ["tile", "stack", "scatter"]);
     // SCREE_BLOCKS 2.5, SCREE_BLOCK_MM (4.5, 8)
-    let boulders = &t.stack[3];
+    let boulders = &t.stack[4];
     assert_eq!(boulders.path, ["tile", "stack", "scatter#2"]);
     assert_eq!(num(boulders.value("per-square")), 2.5);
     assert!(close(range(boulders.children[0].value("size")), (4.5, 8.0)));
@@ -429,18 +428,12 @@ fn spans_point_at_the_text() {
     let at = |s: miette::SourceSpan| &text[s.offset()..s.offset() + s.len()];
     assert_eq!(at(cliff.what.span), "cliff");
     assert_eq!(
-        at(cliff
-            .control("height")
-            .unwrap()
-            .value
-            .as_ref()
-            .unwrap()
-            .span),
-        "35"
+        at(cliff.top.as_ref().unwrap().span),
+        "\"dirtEdgeHeight + 35\""
     );
     assert_eq!(
         at(cliff.control("rock").unwrap().value.as_ref().unwrap().span),
         "mixed"
     );
-    assert_eq!(at(cliff.place.along.as_ref().unwrap().span), "north");
+    assert_eq!(at(cliff.place.region.as_ref().unwrap().span), "crag");
 }

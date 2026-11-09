@@ -111,6 +111,62 @@ impl<'a> Places<'a> {
         }
     }
 
+    /// The depth a ranged `within` draws along `of`: masses of 6 to 15 mm
+    /// (at the reference square) side by side, each as deep as the range
+    /// draws it, the same for a given region and place whatever the seed;
+    /// the end of each is the standard end section, the range's middle.
+    fn drawn_depth(
+        &self,
+        region: &str,
+        of: &PlaceRef,
+        place: &Mask,
+        range: (f64, f64),
+        scale: f64,
+    ) -> Drawn {
+        let (nx, _) = self.dims();
+        let step = self.frame.step_mm();
+        let (mut i0, mut i1, mut j0, mut j1) = (usize::MAX, 0, usize::MAX, 0);
+        for (k, &b) in place.bits.iter().enumerate() {
+            if b {
+                let (i, j) = (k % nx, k / nx);
+                i0 = i0.min(i);
+                i1 = i1.max(i);
+                j0 = j0.min(j);
+                j1 = j1.max(j);
+            }
+        }
+        let along_x = i1.saturating_sub(i0) >= j1.saturating_sub(j0);
+        let (lo, hi) = if along_x { (i0, i1) } else { (j0, j1) };
+        let len = hi.saturating_sub(lo) as f64 * step;
+        let key = dt_kit::Seed::new(0x00d7_a11e)
+            .key(region)
+            .key(&format!("{of:?}"));
+        let mut rng = dt_kit::Rng::new(key);
+        let mut edges = vec![0.0];
+        while edges.last().copied().unwrap_or(0.0) < len {
+            let l = edges.last().copied().unwrap_or(0.0);
+            edges.push(l + rng.uniform(6.0 * scale, 15.0 * scale));
+        }
+        let n = edges.len();
+        edges[n - 1] = len;
+        if n > 2 && edges[n - 1] - edges[n - 2] < 3.0 * scale {
+            edges.remove(n - 2);
+        }
+        let depths: Vec<f64> = (0..edges.len() - 1)
+            .map(|_| rng.uniform(range.0, range.1))
+            .collect();
+        Drawn {
+            nx,
+            along_x,
+            lo,
+            step,
+            len,
+            end: (4.0 * scale, 0.5 * (range.0 + range.1)),
+            edges,
+            depths,
+        }
+    }
+
     fn region_named(&self, r: &Region, depth: usize) -> Result<Mask, String> {
         if let Some(m) = self.regions.borrow().get(&r.name) {
             return Ok(m.clone());
@@ -151,10 +207,22 @@ impl<'a> Places<'a> {
         let scale = self.frame.square_mm / dt_kit::REFERENCE_SQUARE_MM;
         for w in &r.within {
             let of = self.mask_at(&w.of, depth + 1)?;
-            let (dist, _) = distance_nearest(&of.bits, nx, ny);
-            let reach = w.mm * scale / self.frame.step_mm();
-            for (o, d) in out.bits.iter_mut().zip(&dist) {
-                *o |= *d <= reach + 1e-9;
+            let (dist, near) = distance_nearest(&of.bits, nx, ny);
+            let step = self.frame.step_mm();
+            if let Some((a, b)) = w.range {
+                // the depth wanders between a and b along the place
+                let reach = self.drawn_depth(&r.name, &w.of, &of, (a * scale, b * scale), scale);
+                for k in 0..out.bits.len() {
+                    if let Some(src) = near[k] {
+                        let t = reach.along(src);
+                        out.bits[k] |= dist[k] * step <= t + 1e-9;
+                    }
+                }
+            } else {
+                let reach = w.mm * scale / step;
+                for (o, d) in out.bits.iter_mut().zip(&dist) {
+                    *o |= *d <= reach + 1e-9;
+                }
             }
         }
         for e in &r.except {
@@ -164,5 +232,35 @@ impl<'a> Places<'a> {
             }
         }
         Ok(out)
+    }
+}
+
+/// A depth drawn along a place ([`Places::drawn_depth`]).
+struct Drawn {
+    nx: usize,
+    along_x: bool,
+    lo: usize,
+    step: f64,
+    len: f64,
+    /// The end section's length and depth, mm.
+    end: (f64, f64),
+    edges: Vec<f64>,
+    depths: Vec<f64>,
+}
+
+impl Drawn {
+    /// The depth, mm, at the place's node `src`.
+    fn along(&self, src: usize) -> f64 {
+        let at = if self.along_x {
+            src % self.nx
+        } else {
+            src / self.nx
+        };
+        let t = at.saturating_sub(self.lo) as f64 * self.step;
+        if t < self.end.0 || t > self.len - self.end.0 {
+            return self.end.1;
+        }
+        let k = self.edges.partition_point(|&e| e <= t).saturating_sub(1);
+        self.depths[k.min(self.depths.len() - 1)]
     }
 }

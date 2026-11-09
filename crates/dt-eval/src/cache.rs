@@ -115,7 +115,7 @@ pub(crate) fn base_key(
         .iter()
         .fold(mix(crate::hash::OFFSET, text.as_bytes()), |h, f| {
             let h = mix(h, format!("{}|{:?}|{}", f.kind, f.squares, f.nx).as_bytes());
-            let h = mix_f64s(mix_f64s(mix_f64s(h, &f.dist), &f.zone), &f.end);
+            let h = mix_f64s(h, &f.dist);
             f.cells
                 .iter()
                 .fold(h, |h, (p, d, w)| mix_f64s(h, &[p[0], p[1], d[0], d[1], *w]))

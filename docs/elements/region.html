@@ -41,7 +41,7 @@ stack {
 <tr><td><code>region NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>in=</code> and <code>at=</code>. <strong>Required.</strong></td></tr>
 <tr><td><code>bounded-by</code></td><td>line names</td><td>—</td><td>The lines that bound it.</td></tr>
 <tr><td><code>fill</code></td><td>a point</td><td>—</td><td>A point inside it, <code>"(x, y)"</code> or a point's name. Several fill points on different sides of a line join those areas into one region.</td></tr>
-<tr><td><code>within MM of=PLACE</code></td><td>a length, a place</td><td>—</td><td>Everything within that distance of a point, a line or a region: a disc round a point, a strip beside a line, a ring round a region (the region itself included). The length scales with the system. A range in it (drawn along an edge) is read but not built yet.</td></tr>
+<tr><td><code>within MM of=PLACE</code></td><td>a length, a place</td><td>—</td><td>Everything within that distance of a point, a line or a region: a disc round a point, a strip beside a line, a ring round a region (the region itself included). The length scales with the system. A range in it, <code>within "[10 .. 20]" of=northEdge</code>, draws the depth along the place: masses 6 to 15 mm long, each as deep as the range draws it (the same for the region and place whatever the seed), the middle of the range at both ends so runs butt.</td></tr>
 <tr><td><code>except</code></td><td>region names</td><td>—</td><td>Takes those regions out. A region that only excepts starts from the whole tile.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>

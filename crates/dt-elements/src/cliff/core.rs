@@ -3,8 +3,13 @@
 //! CORE_RIM in. Cleaving never cuts into it; it shows only where
 //! neighbours' rounded corners leave a gap, as the gap's floor, never a
 //! hole through the pile.
+//!
+//! The core is the cliff's rock layer in the terrain, laid with the land
+//! before the lift: a height field with a vertical face, never carved or
+//! grained, so it costs a layer of the lift and not a mesh of millions of
+//! triangles. It is also what the dirt film on the tops lies on.
 
-use dt_kit::{Convex, KitError, Piece, Slot, hung};
+use dt_kit::{KitError, hung};
 
 use super::faces::Column;
 use super::form::{FOOT, Form, GRID_MM};
@@ -15,13 +20,10 @@ const CORE_SET_MM: f64 = 2.0;
 const CORE_RIM_MM: f64 = 2.8;
 const CORE_END_RIM_MM: f64 = 0.5;
 const CORE_DEEP_MM: f64 = 12.0;
-const CORE_DROP_MM: f64 = 0.5;
+pub const CORE_DROP_MM: f64 = 0.5;
 
-pub fn core_mesh(
-    s: &Field,
-    cols: &[Column],
-    placed: &[Placed],
-) -> Result<dt_kit::TriMesh, KitError> {
+/// The core's height field: the pile set in from its open faces.
+pub fn core_field(s: &Field, cols: &[Column], placed: &[Placed]) -> Field {
     let (nx, ny) = (s.nx, s.ny);
     let r0 = CORE_SET_MM / GRID_MM;
     let mut c = s.erode(r0);
@@ -44,6 +46,23 @@ pub fn core_mesh(
             }
         }
     }
+    c
+}
+
+/// How far in from a tile boundary the core stands: the faces on the
+/// cliff's rims carry the stone's relief and stand back from the plane;
+/// where the pile ends the core comes nearer.
+pub fn rim_mm(f: &Form, ax: usize, hi: bool) -> f64 {
+    if f.rims.is_empty() || f.rims.contains(&(ax, hi)) {
+        CORE_RIM_MM
+    } else {
+        CORE_END_RIM_MM
+    }
+}
+
+/// A mesh of the core field, for the cleaving guard.
+pub fn core_mesh(c: &Field) -> Result<dt_kit::TriMesh, KitError> {
+    let (nx, ny) = (c.nx, c.ny);
     let zb = FOOT - 1.5;
     let depth: Vec<f64> =
         c.z.iter()
@@ -62,28 +81,4 @@ pub fn core_mesh(
         *p = [p[0] + 0.5 * GRID_MM, p[1] + 0.5 * GRID_MM, p[2] + zb];
     }
     Ok(m)
-}
-
-/// The core solid, clipped to the tile less its rim.
-pub fn core_piece(slot: Slot, mesh: &dt_kit::TriMesh, f: &Form) -> Result<Piece, KitError> {
-    let zb = FOOT - 1.5;
-    let rim: Vec<f64> = [false, true]
-        .iter()
-        .flat_map(|&hi| {
-            [0usize, 1].map(move |ax| {
-                if f.rims.is_empty() || f.rims.contains(&(ax, hi)) {
-                    CORE_RIM_MM
-                } else {
-                    CORE_END_RIM_MM
-                }
-            })
-        })
-        .collect();
-    let core = Piece::new(slot, mesh)?;
-    let bx = Convex::cuboid(
-        [rim[0], rim[1], zb - 1.0],
-        [f.w - rim[2], f.h - rim[3], zb - 1.0 + 200.0],
-    )
-    .to_tri_mesh();
-    core.within(&bx)
 }

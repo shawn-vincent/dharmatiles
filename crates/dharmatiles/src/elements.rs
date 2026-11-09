@@ -303,14 +303,5 @@ mod tests {
             "rock/columns",
             rock.sub("columns").expect("columns")
         ));
-        assert!(!taken(
-            Some(cliff),
-            "scree",
-            cliff.control("scree").expect("scree")
-        ));
-        let dirt = schema::element("dirt").expect("dirt");
-        let bank = dirt.control("bank").expect("bank");
-        assert!(taken(Some(dirt), "bank", bank));
-        assert!(!taken(None, "bank", bank));
     }
 }

@@ -33,7 +33,7 @@
 <h2 id="use">Writing it</h2>
 <pre><code>stack {
     dirt level=edge { scatter per-square=40 { pebble } }
-    cliff along=north height=35
+    cliff top="dirtEdgeHeight + 35" at=crag
     scatter against=cliff per-square=55 reach=4 { stone }
     grass                    // grows round the cliff and the stones, wherever it is listed
 }</code></pre>

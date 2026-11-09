@@ -5,14 +5,26 @@ tile size="1x1" seed=1 {
         A free-standing stepped mound.
         """
 
+    region crag { within 13.5 of=center }
+    region crag2 { within 10.5 of=center }
+    region crag3 { within 7.5 of=center }
+    region crag4 { within 4.5 of=center }
+    region crag5 { within 3 of=center }
+    region apron { within 6.5 of=crag }
+
     stack {
         base
         dirt top=dirtEdgeHeight {
-            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
+            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
 
-        cliff form=mound height=34 {
+        cliff top="dirtEdgeHeight + [3 .. 6]" at=crag {
+            pin top="dirtEdgeHeight + [10 .. 13]" at=crag2
+            pin top="dirtEdgeHeight + [17 .. 20]" at=crag3
+            pin top="dirtEdgeHeight + [24 .. 27]" at=crag4
+            pin top="dirtEdgeHeight + [31 .. 34]" at=crag5
             rock mixed
             stone-size massive
         }

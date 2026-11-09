@@ -69,11 +69,13 @@
         grass in=meadow
     }
 }</code></pre>
-<p>Against a cliff or wall, dirt can heap up in a <code>bank</code>, and a <a href="scatter.html"><code>scatter</code></a> written inside it lands on it (from <code>2x1-cliff</code>):</p>
+<p>Against a cliff, the bank is drawn: the dirt is pinned high under the cliff and given a wide band across the apron beside it, and a <a href="scatter.html"><code>scatter</code></a> written inside it lands on it (from <code>2x1-cliff</code>). A second dirt laid on the cliff's stones is a film that follows their tops:</p>
 <pre><code>dirt top=dirtEdgeHeight {
-    bank against=cliff height="1.5..3.5" reach="3..6.5"
+    pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
+    pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
     scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
-}</code></pre>
+}
+dirt top="bottom + [0.6 .. 1.2]" at=crag     // on the cliff's top, over rock under 35°</code></pre>
 <p><code>stones none</code> leaves out the few larger stones dirt beds in by default, for a tile that places its own rocks.</p>
 
 <h2 id="spec">Reference</h2>
@@ -91,10 +93,6 @@
 <tr id="c-bump-size"><td><code>bump-size</code></td><td>mm, 5 to 70</td><td>—</td><td>how wide the hills are in its band: broad and rolling, or choppy</td></tr>
 <tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>none</code></dt><dd>no clods (with <code>stones=none</code>: plain, untextured dirt)</dd><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>clods here and there</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
 <tr id="c-stones"><td><code>stones</code></td><td>word</td><td><code>some</code></td><td>a few stones bedded in the dirt<dl class="words"><dt><code>none</code></dt><dd>bare dirt, no stones</dd><dt><code>some</code></dt><dd>a few bedded stones</dd><dt><code>many</code></dt><dd>a stony patch (provisional)</dd></dl></td></tr>
-<tr id="c-bank"><td><code>bank</code></td><td>group</td><td>—</td><td>earth heaped against a cliff or wall</td></tr>
-<tr id="c-bank-against"><td><code>bank against</code></td><td>tag</td><td>—</td><td>what the bank leans on <strong>Required.</strong></td></tr>
-<tr id="c-bank-height"><td><code>bank height</code></td><td>mm, a number or a range</td><td>—</td><td>height at the face</td></tr>
-<tr id="c-bank-reach"><td><code>bank reach</code></td><td>mm, a number or a range</td><td>—</td><td>how far out it runs</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
@@ -181,6 +179,7 @@
 <p>What this element always does. A change to one of these is a change to the element.</p>
 <ul class="rules">
   <li>Plain earth with clods, grit and half-sunk pebbles: no footprints, no cracks.</li>
+  <li>Laid on a cliff's stones (<code>top="bottom + [0.6 .. 1.2]"</code>), a dirt is a film on their tops: at least the printer's skin, only on rock under 35°, clear of every lip and face, with no bedded stones.</li>
   <li>Pebbles stay off ground steeper than about 22 to 34 degrees (a bank), and off the rim; with <code>clods=none stones=none</code> there is no texture at all.</li>
   <li>Strong contrast between cloddy and smooth patches, and texture everywhere that shows at 0.2 mm layers.</li>
   <li>Pebbles big enough to read at tabletop distance.</li>

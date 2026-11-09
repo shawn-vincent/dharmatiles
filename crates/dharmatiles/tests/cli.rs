@@ -155,13 +155,6 @@ fn elements_dirt_json_has_units_limits_defaults_and_subs() {
             .iter()
             .all(|c| c["name"] != "level" && c["name"] != "bumps")
     );
-    let bank: Vec<_> = find("bank")["subs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|s| s["name"].as_str().unwrap())
-        .collect();
-    assert_eq!(bank, ["against", "height", "reach"]);
     let clods = find("clods");
     assert_eq!(clods["unit"], "word");
     assert_eq!(clods["default"], "some");
@@ -172,7 +165,21 @@ fn elements_dirt_json_has_units_limits_defaults_and_subs() {
         .find(|w| w["word"] == "some")
         .unwrap();
     assert!(some["sets"]["density"].is_number());
-    assert!(find("bank")["unit"].is_null());
+    // a group's subs: the cliff's shattered patches
+    let o = Command::new(EXE)
+        .args(["elements", "cliff", "--json"])
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    let cliff = v["controls"].as_array().unwrap();
+    let shattered: Vec<_> = cliff.iter().find(|c| c["name"] == "shattered").unwrap()["subs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(shattered, ["patches", "width"]);
+    assert!(cliff.iter().find(|c| c["name"] == "shattered").unwrap()["unit"].is_null());
     for c in controls {
         assert!(c["taken"].is_boolean(), "{c}");
     }

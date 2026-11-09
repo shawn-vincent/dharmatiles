@@ -62,7 +62,7 @@ fn the_library_heights_are_constants() {
 fn the_edge_defaults_are_read_with_their_pins() {
     let doc = decode_ok(EDGES);
     let names: Vec<&str> = doc.defaults.iter().map(|e| e.what.value.as_str()).collect();
-    assert_eq!(names, ["dirt", "flagstones", "planks", "water"]);
+    assert_eq!(names, ["dirt", "cliff", "flagstones", "planks", "water"]);
     let dirt = &doc.defaults[0];
     assert!(dirt.top.is_some());
     assert_eq!(dirt.pins.len(), 1);
@@ -293,11 +293,11 @@ fn a_thing_stands_at_a_literal_point_or_a_name_and_a_body_has_a_name() {
 }
 
 #[test]
-fn a_cliffs_own_top_words_stay_its_own() {
+fn a_cliffs_top_is_its_band() {
     let doc = snippet(&tile(
-        "stack { cliff along=north top=dirt\n cliff along=south top=\"dirtEdgeHeight + 35\" }",
+        "stack { cliff top=\"dirtEdgeHeight + 35\"\n cliff stone-size=massive }",
     ));
     let t = doc.tile().unwrap();
-    assert!(t.stack[0].top.is_none() && t.stack[0].control("top").is_some());
-    assert!(t.stack[1].top.is_some());
+    assert!(t.stack[0].top.is_some());
+    assert!(t.stack[1].top.is_none());
 }

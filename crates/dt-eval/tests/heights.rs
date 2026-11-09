@@ -195,14 +195,13 @@ fn a_tile_that_only_names_its_base_builds_as_today() {
 }
 
 #[test]
-fn a_cliffs_top_is_checked_but_not_built_yet() {
-    let text = tile("stack { base\n dirt\n cliff along=north top=\"dirtEdgeHeight + 35\" }");
+fn a_cliffs_top_builds() {
+    let text = tile(
+        "region r { within 12 of=northEdge }\n stack { base\n dirt\n cliff top=\"dirtEdgeHeight + 35\" at=r }",
+    );
     let c = solved(&text);
-    assert_eq!(c.pending().len(), 1);
-    let Err(e) = build(&mem(&text), "t.dtile", &Options::default()) else {
-        panic!("built a top that is not built yet");
-    };
-    assert_eq!(e[0].code, "dt::not-yet");
+    assert!(c.pending().is_empty(), "{:?}", c.pending());
+    assert!(c.solved.is_some());
 }
 
 #[test]

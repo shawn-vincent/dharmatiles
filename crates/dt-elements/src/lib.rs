@@ -209,6 +209,12 @@ pub struct Ctx<'a> {
     /// lattice (a dirt's or a water's top, pins applied); `None` for
     /// everything else.
     pub band: Option<&'a dt_kit::Band>,
+    /// The surface laid before this body (what `bottom` meant when it was
+    /// solved), on the build's lattice; `None` for everything else.
+    pub below: Option<&'a dt_kit::Band>,
+    /// The lowest the land under this body reaches where it lies (world mm,
+    /// the surface laid before it): a cliff's stones are counted from it.
+    pub land_mm: f64,
     /// For a dirt: about the height the water laid over it stands at, at
     /// every node (negative infinity where none does), so its grain keeps
     /// off the bed. `None` for anything else.
@@ -232,8 +238,8 @@ impl Ctx<'_> {
     }
 }
 
-/// Where a planned solid meets the ground: what a bank heaps against and
-/// a scatter gathers at (plan, then build).
+/// Where a planned solid meets the ground: what a scatter gathers at (plan,
+/// then build).
 #[derive(Clone, Debug)]
 pub struct Foot {
     /// What it is.
@@ -241,11 +247,6 @@ pub struct Foot {
     /// Per ground node, row-major: distance from the solid in mm (huge
     /// where it is nowhere near).
     pub dist: Vec<f64>,
-    /// Per ground node: how shattered the cliff is there, 0 (quiet) to 1.
-    pub zone: Vec<f64>,
-    /// Per ground node: 0 at a tile end of the run, rising to 1 clear of it
-    /// (every seed's bank is the same at the ends).
-    pub end: Vec<f64>,
     /// Ground cells touching the solid: position, outward direction, weight.
     pub cells: Vec<([f64; 2], [f64; 2], f64)>,
     /// Squares' worth of foot length.

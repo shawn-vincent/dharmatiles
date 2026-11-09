@@ -181,7 +181,8 @@ mod tests {
             [
                 "dirt",
                 "pebbles in dirt",
-                "cliff",
+                "cliff in crag",
+                "dirt in crag",
                 "stones at the cliff",
                 "boulders at the cliff",
                 "DungeonBlocks base",

@@ -6,6 +6,7 @@
 
 use dt_kit::Rng;
 
+use super::fit::Fit;
 use super::form::{FOOT, Form, GRID_MM, MIN_H_MM, ZONE_FLOOR, Zones};
 use super::util::{Cells, Draw, Field, Grid, P2, cell_grid, edt_in, lerp, min_side, trace_outline};
 
@@ -365,6 +366,7 @@ fn merge_crumb(
     s: &mut Field,
     ztop: Option<f64>,
     min_h: f64,
+    fit: &Fit<'_>,
 ) -> bool {
     let ring = {
         let d = cells.grow4(2);
@@ -388,7 +390,8 @@ fn merge_crumb(
     for (k, r) in rocks.iter().enumerate().rev() {
         let touches = idx.iter().any(|_| false)
             || (0..cells.ny).any(|j| (0..cells.nx).any(|i| ring.at(i, j) && r.cells.at(i, j)));
-        if !touches {
+        // the stone's plane must already be under the band over the crumb
+        if !touches || !fit.under(cells, r.top) {
             continue;
         }
         let zs: Vec<f64> = idx
@@ -428,7 +431,14 @@ pub struct Stacked {
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: usize) -> Stacked {
+pub fn stack(
+    rng: &mut Rng,
+    form: &Form,
+    zone: &Zones,
+    s_scale: f64,
+    max_rocks: usize,
+    fit: &Fit<'_>,
+) -> Result<Stacked, dt_kit::Refusal> {
     let (nx, ny) = (form.t.nx, form.t.ny);
     let t = &form.t;
     let mut s = cell_grid(nx, ny, FOOT - 1.0);
@@ -492,6 +502,11 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             }
         }
         let Some((si, sj)) = site else { break };
+        // a cell the band jumps across holds no stone
+        if form.lo.at(si, sj) > form.hi.at(si, sj) + 1e-9 {
+            s.set(si, sj, t.at(si, sj));
+            continue;
+        }
         let sp = [super::util::cx(si, GRID_MM), super::util::cx(sj, GRID_MM)];
         let mut kind = rng.pick(&probs);
         let is_top = form.ztop.is_some_and(|zt| t.at(si, sj) >= zt - 1e-6);
@@ -524,10 +539,20 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
         let (mut area, mut side) = (0.0, 0.0);
         for attempt in 0..4 {
             let mut room = cell_grid(nx, ny, false);
+            // a stone stays where the band holds its height at the site: none
+            // grows over a place the band jumps across
+            // (a flat plane at the site's height is then inside the band
+            // over the whole stone)
+            let at = t.at(si, sj).clamp(
+                form.lo.at(si, sj),
+                form.hi.at(si, sj).max(form.lo.at(si, sj)),
+            );
             for q in 0..nx * ny {
                 room.z[q] = want.z[q]
                     && s.z[q] <= s.at(si, sj) + bridge + 3.0 * f64::from(attempt)
-                    && t.z[q] - s.z[q] > 0.3;
+                    && t.z[q] - s.z[q] > 0.3
+                    && form.hi.z[q] >= at - 1e-9
+                    && form.lo.z[q] <= at + 1e-9;
             }
             cells = if let Some(e) = &edt {
                 grow_turned(&room, (sp[0], sp[1]), (si, sj), w, d, yaw, e.at(si, sj))
@@ -545,7 +570,7 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             continue;
         }
         if (area < MIN_AREA_MM2 || side < MIN_SIDE_MM) && !rocks.is_empty() {
-            let mut ok = merge_crumb(&mut rocks, &cells, &mut s, form.ztop, 0.5 * MIN_H_MM);
+            let mut ok = merge_crumb(&mut rocks, &cells, &mut s, form.ztop, 0.5 * MIN_H_MM, fit);
             if !ok {
                 let rmax = (0..nx * ny)
                     .filter(|&q| cells.z[q])
@@ -563,7 +588,7 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
                 }
             }
             if !ok {
-                ok = merge_crumb(&mut rocks, &cells, &mut s, form.ztop, 0.3);
+                ok = merge_crumb(&mut rocks, &cells, &mut s, form.ztop, 0.3, fit);
             }
             if !ok && (area < THIN_AREA_MM2 || side < MIN_SIDE_MM * 0.6) {
                 for q in 0..nx * ny {
@@ -706,7 +731,7 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             let dv = rng.signed((STAGGER_MM, 2.5 * STAGGER_MM));
             h = finish(rng, h + dv);
         }
-        let c_top = c + h - a * xm - b * ym;
+        let (c_top, a, b) = fit.top(&cells, (c + h - a * xm - b * ym, a, b))?;
         let mut bed = cell_grid(nx, ny, f64::NAN);
         let mut svmin = f64::INFINITY;
         for j in 0..ny {
@@ -734,7 +759,7 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             bed,
         });
     }
-    Stacked { rocks, s }
+    Ok(Stacked { rocks, s })
 }
 
 /// The stack claims support over every cell it gave a stone, but a

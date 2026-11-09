@@ -32,24 +32,6 @@ use dt_kit::{
 use crate::read;
 use crate::{Control, Ctx, Element, LookError, Plan, Value, Write};
 
-// the bank heaped against a cliff
-const APRON_H_MM: (f64, f64) = (1.5, 3.5);
-const APRON_R_MM: (f64, f64) = (3.0, 6.5);
-/// (height, reach) at the tile ends, the same for every seed (S4).
-const APRON_END: (f64, f64) = (2.5, 4.5);
-const APRON_EXP: f64 = 1.6;
-
-/// `bank against=… height=… reach=…`.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Bank {
-    /// The kind it leans on.
-    pub against: String,
-    /// Height at the face, mm at the reference square.
-    pub height: (f64, f64),
-    /// How far out it runs, mm at the reference square.
-    pub reach: (f64, f64),
-}
-
 /// The height-field resolution, true mm.
 const CELL_MM: f64 = 0.15;
 /// How steeply dirt lies when nothing holds it, degrees: the easing the
@@ -159,8 +141,6 @@ pub struct Dirt {
     pub clod_density: f64,
     /// Bedded stones per 2×2 tile, drawn from this range (`stones`).
     pub stones: (i64, i64),
-    /// Earth heaped against something (`bank`).
-    pub bank: Option<Bank>,
 }
 
 impl Dirt {
@@ -171,8 +151,18 @@ impl Dirt {
         self.clod_density <= 0.0 && self.stones.1 <= 0
     }
 
+    /// This dirt as it is laid: on pieces (a film a millimetre thick) it
+    /// holds no bedded stone, which would stand clear of it.
+    fn on(&self, film: bool) -> Self {
+        let mut d = self.clone();
+        if film {
+            d.stones = (0, 0);
+        }
+        d
+    }
+
     /// From controls: `bump-size`, `clods` (a word whose number the
-    /// evaluator passes as `clods.density`), `stones` and `bank`.
+    /// evaluator passes as `clods.density`) and `stones`.
     ///
     /// # Errors
     /// [`LookError`] for an unknown control or a value out of range.
@@ -198,28 +188,7 @@ impl Dirt {
             }
         }
         stones.1 = stones.1.max(stones.0);
-        let range = |name: &str, d: (f64, f64)| {
-            controls
-                .iter()
-                .find(|c| c.name == name)
-                .map_or(d, |c| match c.value {
-                    Value::Number(v) => (v, v),
-                    Value::Range(a, b) => (a, b),
-                    Value::Word(_) => d,
-                })
-        };
-        let bank = controls
-            .iter()
-            .find_map(|c| match (c.name.as_str(), &c.value) {
-                ("bank/against", Value::Word(w)) => Some(Bank {
-                    against: w.clone(),
-                    height: range("bank/height", APRON_H_MM),
-                    reach: range("bank/reach", APRON_R_MM),
-                }),
-                _ => None,
-            });
         Ok(Self {
-            bank,
             size_mm,
             clod_density,
             stones,
@@ -277,14 +246,12 @@ pub fn hills(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, band: &Band) -> dt_
     dt_kit::span::hills(&n, band, HILL_MM * s, SLOPE_DEG, s)
 }
 
-/// What a dirt is made on: its area, the planned feet of what it heaps
-/// against, its solved band, and where water lies over it.
+/// What a dirt is made on: its area, its solved band, and where water lies
+/// over it.
 #[derive(Clone, Copy)]
 pub struct Ground<'a> {
     /// The nodes the dirt covers.
     pub area: &'a dt_kit::Mask,
-    /// The planned feet of every solid that has one.
-    pub foots: &'a [crate::Foot],
     /// The solved band.
     pub band: &'a Band,
     /// About the height the water laid after it stands at, if any is.
@@ -293,15 +260,12 @@ pub struct Ground<'a> {
     pub skin_mm: f64,
 }
 
-/// What the dirt made on its band: the hills, the earth heaped beyond them,
-/// the grain's relief and where the surface is set in to hold it, the pebble
+/// What the dirt made on its band: the hills, the grain's relief and where the surface is set in to hold it, the pebble
 /// mask and the counts.
 pub struct Made {
     /// The hills, inside the band.
     pub shape: Banded,
-    /// Earth heaped on the hills beyond the band (a bank against a cliff).
-    pub raise: Field,
-    /// The grain's relief over the hills and the heap, mm.
+    /// The grain's relief over the hills, mm.
     pub relief: Field,
     /// Where the surface is set in, 0 to 1: not at the rim, which is held
     /// exactly, and not under water.
@@ -322,7 +286,6 @@ fn earth<'a>(
     owner: &'a str,
     area: &'a dt_kit::Mask,
     shape: &'a Banded,
-    raise: &'a Field,
     grain: &'a dt_kit::Relief<'a>,
     skin_mm: f64,
 ) -> dt_kit::LayerSpec<'a> {
@@ -332,7 +295,6 @@ fn earth<'a>(
         fluid: false,
         mask: area,
         shape,
-        raise: Some(raise),
         grain: Some(grain),
         skin_mm,
         round_mm: 0.0,
@@ -358,7 +320,6 @@ pub fn surface(
 ) -> Result<Made, LookError> {
     let Ground {
         area,
-        foots,
         band,
         under,
         skin_mm,
@@ -374,7 +335,6 @@ pub fn surface(
         let none = Field::new(&frame, 0.0);
         return Ok(Made {
             shape,
-            raise: none.clone(),
             relief: none.clone(),
             weight: none.clone(),
             floor: None,
@@ -383,7 +343,7 @@ pub fn surface(
         });
     }
     let rim = rim(&frame);
-    let mut base = shape.field().clone();
+    let base = shape.field().clone();
     // grain stays off what water covers: where the water's low end stands
     // over the hills, the texture fades out (a pool's bed is smooth)
     let keep = under.map_or_else(
@@ -402,27 +362,6 @@ pub fn surface(
             .map(|k| area.bits[k] && keep.z[k] > 0.5)
             .collect(),
     };
-    if let Some(b) = &dirt.bank {
-        let s = frame.scale();
-        for f in foots.iter().filter(|f| f.kind.name() == b.against) {
-            for k in 0..base.z.len() {
-                let (d, u, e) = (f.dist[k], f.zone[k], f.end[k]);
-                let rr = APRON_END.1 * s
-                    + e * (b.reach.0 * s + (b.reach.1 - b.reach.0) * s * u - APRON_END.1 * s);
-                if d >= rr {
-                    continue;
-                }
-                let hh = APRON_END.0 * s
-                    + e * (b.height.0 * s + (b.height.1 - b.height.0) * s * u - APRON_END.0 * s);
-                base.z[k] += hh * libm::pow((1.0 - d / rr).clamp(0.0, 1.0), APRON_EXP);
-            }
-        }
-    }
-    let raise = base.with_z(
-        (0..base.z.len())
-            .map(|k| base.z[k] - shape.field().z[k])
-            .collect(),
-    );
     // the grain runs on to the rim and over the edge-round: no fade
     let w_rim = rim.map(|_| 1.0);
     let w_tex = w_rim.zip(&keep, |w, k| w * k);
@@ -470,7 +409,7 @@ pub fn surface(
             weight: &weight,
             floor: floor.as_ref(),
         };
-        let off = scene.grain_offset(&earth(owner, area, &shape, &raise, &grain, skin_mm));
+        let off = scene.grain_offset(&earth(owner, area, &shape, &grain, skin_mm));
         for b in bedded {
             let lower = off.sample(b.at[0], b.at[1]);
             b.add(scene, owner, lower);
@@ -478,7 +417,6 @@ pub fn surface(
     }
     Ok(Made {
         shape,
-        raise,
         relief,
         weight,
         floor,
@@ -901,6 +839,50 @@ fn place_pebbles(
     (mask, counts)
 }
 
+/// A dirt laid on a pieces body: where it lies and the band it fills.
+struct Film {
+    area: dt_kit::Mask,
+    band: Band,
+}
+
+/// The film `ctx`'s dirt is, if it is laid over pieces: the dirt's band is
+/// `bottom` plus a thickness, and `bottom` here is the pieces' tops, not the
+/// envelope the solver held them to. `None` for any other dirt.
+fn film_on(scene: &Scene, ctx: &Ctx<'_>, band: &Band) -> Option<Film> {
+    let rest = scene.rest()?;
+    let below = ctx.below?;
+    // it is a film when its region holds pieces' tops
+    let on_rest: Vec<usize> = (0..ctx.area.bits.len())
+        .filter(|&k| ctx.area.bits[k] && rest.flat.bits[k])
+        .collect();
+    let (lo, hi) = (band.lo(), band.hi());
+    // and its band lies over what was under it: a layer, not a new ground
+    if on_rest.is_empty()
+        || on_rest
+            .iter()
+            .any(|&k| lo.z[k] < below.lo().z[k] || hi.z[k] < below.hi().z[k])
+    {
+        return None;
+    }
+    let mut flo = lo.clone();
+    let mut fhi = hi.clone();
+    let mut area = ctx.area.clone();
+    for k in 0..area.bits.len() {
+        if !ctx.area.bits[k] {
+            continue;
+        }
+        if rest.flat.bits[k] {
+            let top = rest.tops[k];
+            flo.z[k] = top + (lo.z[k] - below.lo().z[k]);
+            fhi.z[k] = top + (hi.z[k] - below.hi().z[k]);
+        } else {
+            area.bits[k] = false;
+        }
+    }
+    let band = Band::new(flo, fhi).ok()?;
+    Some(Film { area, band })
+}
+
 impl Element for Dirt {
     fn plan(&self) -> Plan {
         Plan {
@@ -917,22 +899,27 @@ impl Element for Dirt {
                 "write the tile in the heights language: `dirt` takes the library's top, or `dirt top=…`",
             ));
         };
+        // dirt laid on a pieces body (a cliff's stones) is a film: it lies on
+        // the pieces' own tops, on the rock under the film's slope and clear
+        // of the lips and faces, as thick as its band is over what was under
+        let film = film_on(scene, ctx, band);
+        let (area, band) = film
+            .as_ref()
+            .map_or((ctx.area, band), |f| (&f.area, &f.band));
         let on = Ground {
-            area: ctx.area,
-            foots: ctx.foots,
+            area,
             band,
             under: ctx.under,
             skin_mm: 3.0 * ctx.printer.layer_mm,
         };
         let Made {
             shape,
-            raise,
             relief,
             weight,
             floor,
             stone,
             counts,
-        } = surface(self, scene, ctx.seed, ctx.path, &on)?;
+        } = surface(&self.on(film.is_some()), scene, ctx.seed, ctx.path, &on)?;
         let grain = dt_kit::Relief {
             relief: &relief,
             weight: &weight,
@@ -945,17 +932,10 @@ impl Element for Dirt {
                     depth_mm: (SIDE_RELIEF_MM * scene.frame().scale()).max(ctx.printer.line_mm),
                     seed: ctx.seed.key("side"),
                 }),
-                ..earth(
-                    ctx.path,
-                    ctx.area,
-                    &shape,
-                    &raise,
-                    &grain,
-                    3.0 * ctx.printer.layer_mm,
-                )
+                ..earth(ctx.path, area, &shape, &grain, 3.0 * ctx.printer.layer_mm)
             })
             .map_err(LookError::build)?;
-        scene.mark_stone(ctx.area, &stone);
+        scene.mark_stone(area, &stone);
         #[allow(clippy::cast_precision_loss)]
         for (k, v) in [
             ("clods", counts.clods),

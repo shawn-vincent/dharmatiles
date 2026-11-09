@@ -257,6 +257,8 @@ mod tests {
             against: None,
             foots: &[],
             band: None,
+            below: None,
+            land_mm: 0.0,
             under: None,
             calm_mm: None,
             draft: false,

@@ -844,6 +844,8 @@ impl<'a> Plan<'a> {
             against: entry.and_then(|e| e.against.as_deref()),
             foots: &self.foots,
             band: self.solved.by_entry[i].map(|b| &self.solved.bodies[b].band),
+            below: self.solved.by_entry[i].map(|b| &self.solved.bodies[b].below),
+            land_mm: self.solved.by_entry[i].map_or(0.0, |b| self.solved.bodies[b].land_mm),
             calm_mm: self.solved.calm_mm,
             under: self.under.get(i).and_then(Option::as_ref),
             draft: self.opts.draft,

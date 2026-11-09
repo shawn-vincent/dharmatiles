@@ -1,20 +1,24 @@
 // Rock round the north-west corner: two faces on show.
 
-tile size="1x1" seed=2 {
+tile size="1x1" seed=5 {
     about "Rock round the north-west corner: two faces on show."
+
+    region crag { within "[10 .. 20]" of=northEdge; within "[10 .. 20]" of=westEdge }
+    region apron { within 6.5 of=crag }
 
     stack {
         base
         dirt top=dirtEdgeHeight {
-            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
+            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
 
-        cliff form=corner along="north west" height=35 {
+        cliff top="dirtEdgeHeight + 35" at=crag {
             rock mixed
             stone-size massive
-            top dirt
         }
+        dirt top="bottom + [0.6 .. 1.2]" at=crag
 
         scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
         scatter against=cliff per-square=2.5 { boulder size="4.5..8" }

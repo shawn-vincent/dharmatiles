@@ -97,24 +97,24 @@ fn every_control_has_an_axis_that_says_how_it_scales() {
 
 #[test]
 fn line_and_child_forms_decode_the_same() {
-    let a = first("tile { stack { cliff along=north height=35 } }");
-    let b = first("tile { stack { cliff along=north { height 35 } } }");
-    assert_eq!(a.value("height"), b.value("height"));
-    assert_eq!(a.control("height").unwrap().form, Form::Property);
-    assert_eq!(b.control("height").unwrap().form, Form::Child);
+    let a = first("tile { stack { wall along=north thickness=7 } }");
+    let b = first("tile { stack { wall along=north { thickness 7 } } }");
+    assert_eq!(a.value("thickness"), b.value("thickness"));
+    assert_eq!(a.control("thickness").unwrap().form, Form::Property);
+    assert_eq!(b.control("thickness").unwrap().form, Form::Child);
     // Words, and place words, too.
-    let a = first("tile { stack { cliff along=north rock=blocks } }");
-    let b = first("tile { stack { cliff { along north; rock blocks } } }");
-    assert_eq!(a.value("rock"), b.value("rock"));
+    let a = first("tile { stack { wall along=north style=cut-stone } }");
+    let b = first("tile { stack { wall { along north; style cut-stone } } }");
+    assert_eq!(a.value("style"), b.value("style"));
     assert_eq!(a.place.along.unwrap().value, b.place.along.unwrap().value);
 }
 
 #[test]
 fn a_control_is_written_once() {
     assert_fails(
-        "tile { stack { cliff along=north height=35 { height 40 } } }",
+        "tile { stack { wall along=north thickness=7 { thickness 8 } } }",
         "dt::duplicate",
-        "`height` is set twice",
+        "`thickness` is set twice",
     );
 }
 
@@ -131,7 +131,7 @@ fn groups_are_child_lines() {
         "has no value of its own",
     );
     // A control with a value and sub-controls: ledges 1 height="40%".
-    let e = first("tile { stack { cliff along=north { ledges 1 height=\"40%\" } } }");
+    let e = first("tile { stack { cliff { ledges 1 height=\"40%\" } } }");
     let l = e.control("ledges").unwrap();
     assert_eq!(
         l.value
@@ -156,7 +156,6 @@ fn groups_are_child_lines() {
         (0.4, 0.4)
     );
     // a group: on the line, or as a child
-    first("tile { stack { dirt { bank against=cliff height=2 } } }");
     first("tile { stack { tree { crown width=30 } } }");
 }
 
@@ -276,6 +275,14 @@ fn old_words_say_what_replaced_them() {
         ("tile { stack { dirt self=yard } }", "`self=` is now `in=`"),
         (
             "tile { stack { dirt { bank near=cliff } } }",
+            "a bank is drawn",
+        ),
+        (
+            "tile { stack { cliff form=mound } }",
+            "a cliff's form is its region",
+        ),
+        (
+            "tile { stack { scatter near=cliff { stone } } }",
             "`near=` is now `against=`",
         ),
         ("tile { stack { scree } }", "scatter against=cliff"),
@@ -295,14 +302,14 @@ fn old_words_say_what_replaced_them() {
 
 #[test]
 fn words_keep_their_numbers_and_numbers_are_accepted() {
-    let e = first("tile { stack { cliff along=north { stone-size massive } } }");
+    let e = first("tile { stack { cliff { stone-size massive } } }");
     let w = e.value("stone-size").unwrap().word().unwrap();
     assert_eq!((w.word, w.sets), ("massive", &[("stone-size", 1.35)][..]));
-    let e = first("tile { stack { cliff along=north { stone-size \"135%\" } } }");
+    let e = first("tile { stack { cliff { stone-size \"135%\" } } }");
     let n = e.value("stone-size").unwrap().num().unwrap();
     assert!((n.bounds(&none).unwrap().0 - 1.35).abs() < 1e-12);
     // Weights instead of a word.
-    let e = first("tile { stack { cliff along=north { rock columns=50 blocks=50 } } }");
+    let e = first("tile { stack { cliff { rock columns=50 blocks=50 } } }");
     assert!(e.value("rock").is_none());
     assert_eq!(e.control("rock").unwrap().subs.len(), 2);
     // A misspelt word suggests the right one.
@@ -673,16 +680,7 @@ fn the_r6_snippets_decode() {
     );
     assert_eq!(e.value("style").unwrap().word().unwrap().word, "cut-stone");
     let e = first(
-        "tile { stack { cliff along=north height=55 {\n    depth \"12..24\"                  // how far the rock reaches into the tile\n    rock blocks\n    ledges 1 height=\"40%\"           // a shelf 40% of the way up: 22 mm\n} } }",
-    );
-    assert_eq!(
-        e.value("depth")
-            .unwrap()
-            .num()
-            .unwrap()
-            .bounds(&none)
-            .unwrap(),
-        (12.0, 24.0)
+        "tile { stack { cliff {\n    rock blocks\n    ledges 1 height=\"40%\"           // a shelf 40% of the way up\n} } }",
     );
     assert_eq!(e.value("rock").unwrap().word().unwrap().word, "blocks");
 }

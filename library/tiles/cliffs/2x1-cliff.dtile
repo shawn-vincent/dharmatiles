@@ -1,5 +1,5 @@
 // A 2×1 cliff run: a band of stacked rock against the north edge, with dirt
-// lodged on its top, a dirt bank against its face, and scree at its foot.
+// lodged on its top, the bank at its foot drawn as pins, and scree at its foot.
 
 tile size="2x1" seed=1 {
     about """
@@ -7,19 +7,23 @@ tile size="2x1" seed=1 {
         standard end section, so runs butt end to end.
         """
 
+    region crag { within "[10 .. 20]" of=northEdge }
+    region apron { within 6.5 of=crag }
+
     stack {
         base
         dirt top=dirtEdgeHeight {
-            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
+            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
 
-        cliff along=north height=35 {   // 35 mm above its foot
-            rock mixed                  // or: columns, blocks, slabs
-            stone-size massive          // or: rubble, broken
-            top dirt                    // or: bare
+        cliff top="dirtEdgeHeight + 35" at=crag {
+            rock mixed
+            stone-size massive
             shattered patches=3 width="5..10"
         }
+        dirt top="bottom + [0.6 .. 1.2]" at=crag
 
         // scree: fallen stones gathered at the cliff's foot
         scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }

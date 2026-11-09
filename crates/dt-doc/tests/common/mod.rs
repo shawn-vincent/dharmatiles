@@ -141,8 +141,8 @@ pub const CASES: [Case; 10] = [
         slug: "kdl-v1",
         title: "KDL v1 syntax",
         tile: CLIFF_RUN,
-        from: "top dirt",
-        to: "top true",
+        from: "shattered patches=3",
+        to: "shattered patches=true",
     },
     Case {
         slug: "missing-along",
@@ -190,7 +190,7 @@ pub const CASES: [Case; 10] = [
         slug: "several",
         title: "Several mistakes at once",
         tile: CLIFF_RUN,
-        from: "rock mixed                  // or: columns, blocks, slabs\n            stone-size massive",
-        to: "rock mixd                   // or: columns, blocks, slabs\n            stone-size \"135\"",
+        from: "rock mixed\n            stone-size massive",
+        to: "rock mixd\n            stone-size \"135\"",
     },
 ];

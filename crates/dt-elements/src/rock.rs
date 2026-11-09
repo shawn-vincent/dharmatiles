@@ -768,10 +768,22 @@ impl Element for Single {
     }
 }
 
+/// The entry's area less the core of a cliff's stones: nothing is set down
+/// on it (it lies behind the stones, and what stood on it would be loose).
+fn open_area(scene: &Scene, ctx: &Ctx<'_>) -> dt_kit::Mask {
+    let mut area = ctx.area.clone();
+    if let Some(rest) = scene.rest() {
+        for (a, c) in area.bits.iter_mut().zip(&rest.core.bits) {
+            *a &= !*c;
+        }
+    }
+    area
+}
+
 /// Dart-throw radii (world mm) into the entry's area, largest first.
 fn place(scene: &Scene, ctx: &Ctx<'_>, rng: &mut Rng, radii: &[f64], gap: f64) -> Vec<Placed> {
     let frame = *scene.frame();
-    let area = ctx.area;
+    let area = &open_area(scene, ctx);
     let step = frame.step_mm();
     let inside = |x: f64, y: f64| {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -808,7 +820,7 @@ fn place_at_foot(
     let s = frame.scale();
     let step = frame.step_mm();
     let size = frame.size_mm();
-    let area = ctx.area;
+    let area = &open_area(scene, ctx);
     let total: f64 = foot.cells.iter().map(|c| c.2).sum();
     if foot.cells.is_empty() || total <= 0.0 {
         return Vec::new();

@@ -138,9 +138,11 @@ pub struct Region {
 /// A distance round a place.
 #[derive(Clone, Debug)]
 pub struct Within {
-    /// Mm at the reference square (a range is taken at its middle: its
-    /// footprint is drawn by the build, not available yet).
+    /// Mm at the reference square (a range is taken at its middle).
     pub mm: f64,
+    /// A range `[a .. b]`, mm at the reference square: the footprint's depth
+    /// wanders between them along the place.
+    pub range: Option<(f64, f64)>,
     /// The place it is round.
     pub of: PlaceRef,
     /// Where it is written.
@@ -611,14 +613,23 @@ impl Reader<'_> {
             }
             let mut within = Vec::new();
             for w in &r.within {
-                let range = w.mm.value.is_range();
-                if range {
-                    t.pending
-                        .push(not_yet(src, w.mm.span, "a footprint range in `within` is"));
-                }
+                let range = if w.mm.value.is_range() {
+                    match (
+                        consts.scalar(&w.mm.value, 0.0, &|_| None),
+                        consts.scalar(&w.mm.value, 1.0, &|_| None),
+                    ) {
+                        (Ok(a), Ok(b)) if a.is_finite() && b.is_finite() && a >= 0.0 => {
+                            Some((a.min(b), a.max(b)))
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
                 match consts.scalar(&w.mm.value, 0.5, &|_| None) {
                     Ok(mm) if mm >= 0.0 && mm.is_finite() => within.push(Within {
                         mm,
+                        range,
                         of: w.of.value.clone(),
                         span: w.of.span,
                     }),
@@ -698,7 +709,10 @@ impl Reader<'_> {
         for e in &def.stack {
             let el = match &e.callee {
                 Callee::Element(el)
-                    if matches!(el.name, "dirt" | "water" | "flagstones" | "planks") =>
+                    if matches!(
+                        el.name,
+                        "dirt" | "water" | "flagstones" | "planks" | "cliff"
+                    ) =>
                 {
                     el
                 }
@@ -729,7 +743,11 @@ impl Reader<'_> {
                 .iter()
                 .position(|s| s.span == e.span && Arc::ptr_eq(&s.src, src))
             else {
-                pending.push(not_yet(src, e.what.span, "a dirt, water or floor here is"));
+                pending.push(not_yet(
+                    src,
+                    e.what.span,
+                    "a dirt, water, floor or cliff here is",
+                ));
                 continue;
             };
             bodies.push(BodyDecl {

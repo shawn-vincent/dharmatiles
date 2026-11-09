@@ -3,17 +3,38 @@
 tile size="2x1" seed=1 {
     about "A cluster of thin pillars."
 
+    region crag { within 13.5 of="(1, 0.5)"; within 9 of="(0.7, 0.61)"; within 7.5 of="(1.21, 0.41)" }
+    region cragn1r1 { within 10.5 of="(1, 0.5)" }
+    region cragn1r2 { within 7 of="(1, 0.5)" }
+    region cragn1r3 { within 4 of="(1, 0.5)" }
+    region cragn2r1 { within 7 of="(0.7, 0.61)" }
+    region cragn2r2 { within 4.5 of="(0.7, 0.61)" }
+    region cragn2r3 { within 2.5 of="(0.7, 0.61)" }
+    region cragn3r1 { within 6 of="(1.21, 0.41)" }
+    region cragn3r2 { within 4 of="(1.21, 0.41)" }
+    region cragn3r3 { within 2 of="(1.21, 0.41)" }
+    region apron { within 6.5 of=crag }
+
     stack {
         base
         dirt top=dirtEdgeHeight {
-            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
+            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
 
-        cliff form=needles height=55 {
+        cliff top="dirtEdgeHeight + [3 .. 10]" at=crag {
+            pin top="dirtEdgeHeight + [4.5 .. 7.5]" at=cragn1r1
+            pin top="dirtEdgeHeight + [20 .. 23]" at=cragn1r2
+            pin top="dirtEdgeHeight + [52 .. 55]" at=cragn1r3
+            pin top="dirtEdgeHeight + [2 .. 5]" at=cragn2r1
+            pin top="dirtEdgeHeight + [12 .. 15]" at=cragn2r2
+            pin top="dirtEdgeHeight + [33 .. 36]" at=cragn2r3
+            pin top="dirtEdgeHeight + [1 .. 4]" at=cragn3r1
+            pin top="dirtEdgeHeight + [9.5 .. 12.5]" at=cragn3r2
+            pin top="dirtEdgeHeight + [27.5 .. 30.5]" at=cragn3r3
             rock columns
             stone-size massive
-            top bare
         }
 
         scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }

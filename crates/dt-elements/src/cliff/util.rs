@@ -8,7 +8,6 @@ pub trait Draw {
     fn pick(&mut self, p: &[f64]) -> usize;
     fn perm(&mut self, n: usize) -> Vec<usize>;
     fn signed(&mut self, lo_hi: (f64, f64)) -> f64;
-    fn count(&mut self, lo_hi: (i64, i64)) -> i64;
 }
 
 impl Draw for Rng {
@@ -34,9 +33,6 @@ impl Draw for Rng {
     fn signed(&mut self, lo_hi: (f64, f64)) -> f64 {
         let s = if self.random() < 0.5 { -1.0 } else { 1.0 };
         s * self.uniform(lo_hi.0, lo_hi.1)
-    }
-    fn count(&mut self, lo_hi: (i64, i64)) -> i64 {
-        self.int(lo_hi.0, lo_hi.1)
     }
 }
 

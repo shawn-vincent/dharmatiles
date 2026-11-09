@@ -20,6 +20,8 @@ use super::stack::{Placed, SINK_MM};
 use super::util::{Field, Grid, P2, bounds, cell_grid, norm2, point_in, ring_dist, trace_outline};
 use dt_kit::smooth01;
 
+/// A stone the cuts leave with less than this is not made, mm³.
+const SCRAP_MM3: f64 = 5.0;
 const JOINT_MM: (f64, f64) = (0.8, 1.2);
 const JOINT_MIN_MM: f64 = 4.0;
 const SHOULDER_P: f64 = 0.6;
@@ -50,6 +52,10 @@ pub struct Env<'a> {
     pub seed: u64,
     /// A draft: carve on coarser grids and leave the grain off.
     pub draft: bool,
+    /// The band's high (world mm): no grain stands over it.
+    pub high: &'a dt_kit::Field,
+    /// The foot the stones' heights are counted from, world mm.
+    pub foot: f64,
 }
 
 /// How much coarser a draft's carving grids are than a print's.
@@ -488,7 +494,12 @@ fn fit_tile(rock: Piece, form: &Form, setback: &[((usize, bool), f64)]) -> Piece
 
 /// The face grain: value-noise fBm FACE_GRAIN_MM deep, one field over the
 /// whole tile so it runs on across the joints.
-pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
+pub fn grain(
+    rock: &Piece,
+    seed: u64,
+    z0: f64,
+    cap: Option<(&dt_kit::Field, f64)>,
+) -> Result<Piece, KitError> {
     let base = rock.mesh();
     if base.positions.is_empty() {
         return Ok(rock.clone());
@@ -618,9 +629,59 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
             q[1] + amp * n[i][1],
             q[2] + amp * n[i][2],
         ];
+        // grain stays inside the surface: never over the band's high
+        if let Some((high, foot)) = cap {
+            let top = high.sample(out[i][0], out[i][1]) - foot;
+            out[i][2] = out[i][2].min(top);
+        }
     }
     let g = rock.rebuilt(out, t)?;
     Ok(if g.is_empty() { rock.clone() } else { g })
+}
+
+/// Only the stone's largest connected part: a part a cut left on its own
+/// (above a crack, say) touches nothing and would stand loose.
+///
+/// # Errors
+/// [`KitError::Mesh`] if the surface cannot be rebuilt.
+fn largest(p: &Piece) -> Result<Piece, KitError> {
+    let (pos, tri) = dt_kit::welded(&p.mesh());
+    if tri.is_empty() {
+        return Ok(p.clone());
+    }
+    let mut par: Vec<usize> = (0..pos.len()).collect();
+    fn find(par: &mut [usize], mut i: usize) -> usize {
+        while par[i] != i {
+            par[i] = par[par[i]];
+            i = par[i];
+        }
+        i
+    }
+    for t in &tri {
+        for k in 1..3 {
+            let (a, b) = (find(&mut par, t[0] as usize), find(&mut par, t[k] as usize));
+            par[a] = b;
+        }
+    }
+    let mut vol: std::collections::BTreeMap<usize, f64> = std::collections::BTreeMap::new();
+    for t in &tri {
+        let r = find(&mut par, t[0] as usize);
+        let [a, b, c] = t.map(|i| pos[i as usize]);
+        *vol.entry(r).or_default() += dot(a, cross(b, c)) / 6.0;
+    }
+    if vol.len() < 2 {
+        return Ok(p.clone());
+    }
+    let best = vol
+        .iter()
+        .max_by(|x, y| x.1.abs().total_cmp(&y.1.abs()))
+        .map_or(0, |x| *x.0);
+    let keep: Vec<[u32; 3]> = tri
+        .iter()
+        .copied()
+        .filter(|t| find(&mut par, t[0] as usize) == best)
+        .collect();
+    p.rebuilt(pos, keep)
 }
 
 /// Per-column mutable state while its stones are built (top down).
@@ -878,10 +939,10 @@ pub fn rock_piece(
         }
     };
     let rock = relief(rock.clone(), &c.faces, None, None, env.coarse())
-        .and_then(|p| p.parts_over(1e9))
+        .and_then(|p| largest(&p))
         .unwrap_or(rock);
     let rock = match top_cracks(rng, &rock, r, &c.faces, env) {
-        Ok((p, k)) => match p.parts_over(1e9) {
+        Ok((p, k)) => match largest(&p) {
             Ok(p) => {
                 st.tops += k;
                 p
@@ -891,10 +952,17 @@ pub fn rock_piece(
         Err(_) => rock,
     };
     let rock = fit_tile(rock, form, &setback);
+    // a cut at the tile can leave a sliver on its own: only the stone stays
+    let rock = largest(&rock).unwrap_or(rock);
+    // the cuts can leave a scrap: that is no stone, and would stand loose
+    if rock.volume() < SCRAP_MM3 {
+        return Ok(None);
+    }
     if env.draft {
         return Ok(Some(rock));
     }
-    let grained = grain(&rock, env.seed, zbase).and_then(|p| p.parts_over(1e9));
+    let grained =
+        grain(&rock, env.seed, zbase, Some((env.high, env.foot))).and_then(|p| largest(&p));
     Ok(Some(grained.unwrap_or(rock)))
 }
 

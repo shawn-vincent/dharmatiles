@@ -88,7 +88,7 @@ pub use progress::{Counter, Event, Progress, Reporter};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
     ABSENT_UNDER_MM, CORNER_ROUND_MM, Frame, Kind, LIFT_TOL_MM, LayerSpec, Material, Part, Parts,
-    REFERENCE_SQUARE_MM, Relief, Scene, SideSpec, Slot, Slots, Solid, Stage, Standing, Tag,
+    REFERENCE_SQUARE_MM, Relief, Rest, Scene, SideSpec, Slot, Slots, Solid, Stage, Standing, Tag,
     Terrain,
 };
 pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};

@@ -451,9 +451,6 @@ pub struct LayerSpec<'a> {
     pub mask: &'a Mask,
     /// The body's surface, inside its band by type.
     pub shape: &'a crate::Banded,
-    /// Earth heaped on the shape beyond its band (a bank against a cliff),
-    /// added as it is.
-    pub raise: Option<&'a crate::Field>,
     /// The material's grain, set into the surface by the kit (a
     /// displacement of the one surface, not separate solids).
     pub grain: Option<&'a Relief<'a>>,
@@ -527,6 +524,20 @@ pub struct Terrain {
     wet: Mask,
     stone: Mask,
     support: Option<Grid>,
+    rest: Option<Rest>,
+}
+
+/// What a pieces body's tops give a layer laid on it (a dirt film on
+/// stone): the tops, and where a film may lie.
+#[derive(Clone, Debug)]
+pub struct Rest {
+    /// The top of the pieces at every node (world mm, `-∞` where none).
+    pub tops: Vec<f64>,
+    /// Where it is rock under the steepest slope a film lies on, clear of
+    /// the lips and faces.
+    pub flat: Mask,
+    /// Where the pieces' core stands: nothing is set down on it.
+    pub core: Mask,
 }
 
 impl Terrain {
@@ -541,7 +552,13 @@ impl Terrain {
             wet: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
             support: None,
+            rest: None,
         }
+    }
+
+    /// **rest**: what a pieces body's tops give the layers laid after it.
+    pub fn set_rest(&mut self, rest: Rest) {
+        self.rest = Some(rest);
     }
 
     /// **stamp**: a solid's footprint and top (world mm): the support
@@ -648,7 +665,7 @@ impl Terrain {
         }
         let height = stands.dilate(GRAIN_REACH_MM).blur(GRAIN_SMOOTH_MM);
         for k in (0..n).filter(|&k| spec.mask.bits[k]) {
-            let s = shape.z[k] + spec.raise.map_or(0.0, |r| r.z[k]);
+            let s = shape.z[k];
             let below = if spec.fluid {
                 0.0
             } else {
@@ -674,7 +691,7 @@ impl Terrain {
         #[allow(clippy::cast_possible_truncation)]
         let mut top: Vec<f32> = (0..n)
             .map(|k| {
-                let s = shape.z[k] + spec.raise.map_or(0.0, |r| r.z[k]);
+                let s = shape.z[k];
                 spec.grain.filter(|_| spec.mask.bits[k]).map_or(s, |g| {
                     // never above the surface, never more than the cap under it
                     (s - off[k] + g.relief.z[k]).clamp(s - cap[k], s)
@@ -1017,6 +1034,18 @@ impl Scene {
     #[must_use]
     pub fn surface_field(&self) -> Option<&Grid> {
         self.terrain.surface_field()
+    }
+
+    /// **rest**: a pieces body gives the layers laid after it its tops.
+    pub fn set_rest(&mut self, rest: Rest) {
+        self.terrain.set_rest(rest);
+    }
+
+    /// What the pieces bodies laid so far give a layer laid on them, if any
+    /// does.
+    #[must_use]
+    pub fn rest(&self) -> Option<&Rest> {
+        self.terrain.rest.as_ref()
     }
 
     /// **lay**: add a layer to the terrain, in stack order: land bodies
@@ -1362,7 +1391,6 @@ mod tests {
                 fluid: false,
                 mask: &mask,
                 shape: &shape,
-                raise: None,
                 grain: None,
                 skin_mm: skin,
                 round_mm: round,
@@ -1445,7 +1473,6 @@ mod tests {
                     fluid: false,
                     mask: &mask,
                     shape: &parts.shape,
-                    raise: None,
                     grain: Some(&grain),
                     skin_mm: 0.6,
                     round_mm: round,
@@ -1532,7 +1559,6 @@ mod tests {
             fluid: false,
             mask: &mask,
             shape: &parts.shape,
-            raise: None,
             grain: Some(&grain),
             skin_mm: 0.6,
             round_mm: 0.0,

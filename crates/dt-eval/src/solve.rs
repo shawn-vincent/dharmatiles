@@ -67,6 +67,12 @@ pub struct SolvedBody {
     pub band: Band,
     /// Nodes in its region.
     pub region_nodes: usize,
+    /// The surface laid before it (the higher of every land body so far),
+    /// world mm on the lattice: what `bottom` meant when it was solved.
+    pub below: Band,
+    /// The lowest the surface before it is anywhere, at least 1 mm: what a
+    /// pieces body's stones are counted from.
+    pub land_mm: f64,
     /// Its pins, defaults first.
     pub pins: Vec<PinReport>,
     nx: usize,
@@ -398,10 +404,10 @@ fn solve_on(
 
     for b in &h.bodies {
         let land = writes.get(b.entry) != Some(&Write::Fill);
-        // a floor is a pieces body: it takes its own defaults wherever it is
-        // laid (its edge pin is its edge contract), and never uses up the
-        // first land layer's, which are the dirt's
-        let floor = matches!(b.element.as_str(), "flagstones" | "planks");
+        // a floor or a cliff is a pieces body: it takes its own defaults
+        // wherever it is laid (a floor's edge pin is its edge contract), and
+        // never uses up the first land layer's, which are the dirt's
+        let floor = matches!(b.element.as_str(), "flagstones" | "planks" | "cliff");
         let default: Option<&DefaultBody> = h
             .defaults
             .iter()
@@ -502,8 +508,9 @@ fn solve_on(
         if !ok {
             continue;
         }
-        let ease = if land && matches!(b.element.as_str(), "flagstones" | "planks") {
-            // a floor's slabs step: a pin holds its place, nothing eases
+        let ease = if land && floor {
+            // a floor's slabs and a cliff's stones step: a pin holds its
+            // place, nothing eases
             Ease::Step
         } else if land {
             Ease::Slope(b.slope.unwrap_or(dt_elements::dirt::SLOPE_DEG))
@@ -558,14 +565,20 @@ fn solve_on(
                 .help("raise the top's high end, or lower what it rests on"),
             );
         }
-        // lints
+        // lints (a body that follows what is under it, a film on stone, is
+        // as steep as that is)
+        let follows = {
+            let mut names = Vec::new();
+            collect(top, &mut names);
+            names.iter().any(|n| n == "bottom")
+        };
         let slope = match ease {
             Ease::Slope(d) => Some(d),
             _ => None,
         };
         for lint in lints(&solved, &pins, slope.unwrap_or(89.9)) {
             match lint {
-                Lint::Steep(s) if slope.is_some() => {
+                Lint::Steep(s) if slope.is_some() && !follows => {
                     let lead = s.pins.iter().flatten().next().map(|&i| decls[i]);
                     let (src, span) = lead.map_or((&tile.src, b.span), |p| (&p.from.src, p.span));
                     let mut named: Vec<String> = s
@@ -724,6 +737,15 @@ fn solve_on(
                 wins,
             });
         }
+        // what is under it, before it is laid
+        let below = under.clone();
+        // a pieces body's stones are counted from here and stand a mm lower:
+        // the lowest the surface is anywhere, never under 1 mm (the base)
+        let land_mm = (0..nx * ny)
+            .map(|k| below.at(k).lo)
+            .reduce(f64::min)
+            .unwrap_or(0.0)
+            .max(1.0);
         // lay the body on the surface
         if land {
             for k in 0..nx * ny {
@@ -744,6 +766,8 @@ fn solve_on(
             label: b.label.clone(),
             band: solved.band,
             region_nodes: region.bits.iter().filter(|&&x| x).count(),
+            below,
+            land_mm,
             pins: reports,
             nx,
             ny,

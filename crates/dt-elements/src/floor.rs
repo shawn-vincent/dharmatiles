@@ -220,15 +220,14 @@ fn plan() -> Plan {
 /// The heaved surface in a floor's band: the band itself where it is a
 /// single height, else the smoothest surface in it with noise spread over
 /// the room there is.
-fn heave(scene: &Scene, ctx: &Ctx<'_>, band: &dt_kit::Band) -> (Field, bool) {
-    let f = scene.frame();
+pub(crate) fn heave(f: &dt_kit::Frame, seed: dt_kit::Seed, band: &dt_kit::Band) -> (Field, bool) {
     let (lo, hi) = (band.lo(), band.hi());
     if (0..lo.z.len()).all(|k| hi.z[k] - lo.z[k] < ROOM_MM) {
         return (lo.clone(), true);
     }
     let n = noise(
         f,
-        ctx.seed.key("heave"),
+        seed.key("heave"),
         Noise::Smooth {
             sigma_mm: HEAVE_SIGMA_MM,
         },
@@ -257,7 +256,7 @@ fn lay(
         ));
     };
     let [w, h] = f.size_mm();
-    let (surface, settled) = heave(scene, ctx, band);
+    let (surface, settled) = heave(scene.frame(), ctx.seed, band);
     if !settled {
         scene.note("relax_unconverged", 1.0);
     }

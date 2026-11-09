@@ -56,10 +56,6 @@ impl Control {
         self.subs = subs;
         self
     }
-    const fn required(mut self) -> Self {
-        self.required = true;
-        self
-    }
     const fn expert(mut self) -> Self {
         self.expert = true;
         self
@@ -623,47 +619,7 @@ static STONE_SIZE: &[Word] = &[
     ),
 ];
 
-static CLIFF_FORM: &[Word] = &[
-    w(
-        "run",
-        "a band against one edge (the default for one edge)",
-        &[],
-    ),
-    w(
-        "corner",
-        "a band round two edges (the default for two)",
-        &[],
-    ),
-    w("canyon", "bands against the west and east edges", &[]),
-    w(
-        "escarpment",
-        "a band whose height ramps along the edge (10 to 40 mm)",
-        &[],
-    ),
-    w("plateau", "a free-standing flat-topped mass", &[]),
-    w("massif", "a free-standing mass with a tall core", &[]),
-    w("mound", "a free-standing stepped mound", &[]),
-    w("spire", "a free-standing tall tapering stack", &[]),
-    w(
-        "needles",
-        "two or three tall stacks on a shared footing",
-        &[],
-    ),
-];
-
 static CLIFF: &[Control] = &[
-    c(
-        "form",
-        Axis::Word,
-        "the shape of the mass: a band on an edge, or free-standing",
-    )
-    .words(CLIFF_FORM),
-    c("height", Axis::Mm, "height above the foot")
-        .limits(6.0, 120.0)
-        .default("35"),
-    c("depth", Axis::Mm, "how far the rock reaches into the tile")
-        .limits(4.0, 60.0)
-        .ranges(),
     c(
         "rock",
         Axis::Word,
@@ -685,13 +641,18 @@ static CLIFF: &[Control] = &[
     )
     .words(STONE_SIZE)
     .default("rubble"),
-    c("ledges", Axis::Count, "shelves a miniature can stand on")
-        .limits(0.0, 2.0)
-        .subs(&[c(
-            "height",
-            Axis::Share,
-            "how far up, as a share of the cliff",
-        )]),
+    c(
+        "ledges",
+        Axis::Count,
+        "steps down the free faces: shelves a miniature can stand on",
+    )
+    .limits(0.0, 2.0)
+    .default("1")
+    .subs(&[c(
+        "height",
+        Axis::Share,
+        "how far up the shelf is, as a share of the cliff",
+    )]),
     group(
         "shattered",
         &[
@@ -700,49 +661,6 @@ static CLIFF: &[Control] = &[
         ],
         "broken patches with more cracks and scree",
     ),
-    c(
-        "bank-height",
-        Axis::Mm,
-        "dirt heaped against the face: how high (a range)",
-    )
-    .ranges()
-    .planned()
-    .default("1.5..3.5"),
-    c(
-        "bank-reach",
-        Axis::Mm,
-        "dirt heaped against the face: how far out (a range)",
-    )
-    .ranges()
-    .planned()
-    .default("3..6.5"),
-    c(
-        "scree",
-        Axis::PerSquare,
-        "fallen stones along each square of the foot",
-    )
-    .planned()
-    .default("55"),
-    c(
-        "boulders",
-        Axis::PerSquare,
-        "big fallen blocks along each square of the foot",
-    )
-    .planned()
-    .default("2.5"),
-    c(
-        "grit",
-        Axis::PerSquare,
-        "small stones half-buried in the bank, per square of the foot",
-    )
-    .planned()
-    .default("45"),
-    c("top", Axis::Word, "earth lodged on the flat top")
-        .words(&[
-            w("bare", "bare rock", &[]),
-            w("dirt", "dirt lodged in the top's joints", &[]),
-        ])
-        .default("bare"),
 ];
 
 // ---- scatter ------------------------------------------------------------
@@ -829,15 +747,6 @@ pub static ELEMENTS: &[Element] = &[
             )
             .words(STONES)
             .default("some"),
-            group(
-                "bank",
-                &[
-                    c("against", Axis::Tag, "what the bank leans on").required(),
-                    c("height", Axis::Mm, "height at the face").ranges(),
-                    c("reach", Axis::Mm, "how far out it runs").ranges(),
-                ],
-                "earth heaped against a cliff or wall",
-            ),
         ],
     },
     Element {
@@ -997,12 +906,12 @@ pub static ELEMENTS: &[Element] = &[
     },
     Element {
         name: "cliff",
-        about: "a cliff of stacked rock; one edge is a run, two a corner; `form=` names the free-standing masses",
-        role: Role::Run,
-        place: RUN_PLACE,
+        about: "a cliff of stacked rock: stones stacked so their tops span the band, in its region",
+        role: Role::Surface,
+        place: SURFACE_PLACE,
         needs: &[],
         holds_scatter: false,
-        honours: &[PlaceWord::Along],
+        honours: &[],
         scattered: false,
         controls: CLIFF,
     },
@@ -1052,7 +961,18 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("canopy", "a tree's crown is `crown width=…`, in mm"),
     ("foliage", "foliage is `leaves on`, `clumps-only` or `bare`"),
     ("mass", "stone size is `stone-size rubble|broken|massive`"),
-    ("dirt-on-tops", "write `top dirt`"),
+    (
+        "form",
+        "a cliff's form is its region: `cliff top=\"dirtEdgeHeight + 35\" at=crag`; run `dharmatiles migrate`",
+    ),
+    (
+        "bank",
+        "a bank is drawn: a wide-band `pin top=\"[dirtEdgeHeight .. dirtEdgeHeight + 3.5]\" at=apron` on the dirt; run `dharmatiles migrate`",
+    ),
+    (
+        "dirt-on-tops",
+        "dirt on a cliff's top is a dirt layer: `dirt top=\"bottom + [0.6 .. 1.2]\" at=crag`",
+    ),
     (
         "stones",
         "a cliff's mix is `rock mixed`, or `rock columns=… blocks=…`",
@@ -1182,12 +1102,12 @@ mod tests {
             .unwrap();
         assert!(boards.check("planks", 1.0, 1.0, false).is_err());
         assert!(boards.check("planks", 8.0, 8.0, false).is_ok());
-        let cliff = crate::schema::element("cliff")
+        let rows = crate::schema::element("planks")
             .unwrap()
-            .control("height")
+            .control("boards")
             .unwrap();
-        let r = cliff.check("cliff", 30.0, 40.0, true).unwrap_err();
-        assert_eq!(r.message, "`cliff height` takes one number, not a range");
+        let r = rows.check("planks", 4.0, 8.0, true).unwrap_err();
+        assert_eq!(r.message, "`planks boards` takes one number, not a range");
     }
 
     #[test]

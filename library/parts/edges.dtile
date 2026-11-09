@@ -4,9 +4,12 @@
 // top and its pins win over the default pin wherever they overlap.  The land
 // defaults apply to the first land layer only; the water default to every
 // water.  A floor, flagstones or planks, is a pieces body: its band is the
-// floor height and the edge pin holds it flush with the tile's edge.
+// floor height and the edge pin holds it flush with the tile's edge.  A cliff
+// is one too: its band is the standard 35 mm over the edge height, a plane its
+// stones' tops touch.
 defaults {
     dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
+    cliff top="dirtEdgeHeight + 35"
     flagstones top=floorHeight                     { pin top=floorEdgeHeight at=edges }
     planks top=floorHeight                         { pin top=floorEdgeHeight at=edges }
     water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" { pin top=waterEdgeHeight at=edges }
