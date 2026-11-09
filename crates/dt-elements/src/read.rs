@@ -101,9 +101,10 @@ impl<'a> Settings<'a> {
         self.control(name).map(pick).transpose()
     }
 
-    /// The word and the numbers behind it (`rock`, `rock.columns`, …) in
-    /// document order, as `(name, what)`: a later write wins, so the caller
-    /// folds them in order.
+    /// The word, the numbers it stands for (`rock.columns`, …) and the
+    /// numbers written after it (`rock/columns`) in order, as
+    /// `(name, what)`: a later write wins, so the caller folds them in
+    /// order.
     pub(crate) fn family(&self, family: &str) -> Result<Vec<(&'a str, Pick<'a>)>, LookError> {
         self.0
             .iter()
@@ -111,7 +112,7 @@ impl<'a> Settings<'a> {
                 c.name == family
                     || c.name
                         .strip_prefix(family)
-                        .is_some_and(|rest| rest.starts_with('.'))
+                        .is_some_and(|rest| rest.starts_with(['.', '/']))
             })
             .map(|c| pick(c).map(|p| (c.name.as_str(), p)))
             .collect()

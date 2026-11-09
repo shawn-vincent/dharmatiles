@@ -120,23 +120,16 @@ impl Cliff {
                 (1.0 + 0.35 * v.clamp(0.0, 1.0)) / 1.35
             };
         }
-        // the `rock` word and the numbers behind it (`rock.<kind>`): a
-        // later write wins, so the word (written after its numbers) stands
-        // alone
+        // the `rock` word stands for its schema weights (`rock.<kind>`, put
+        // before the word); a number written after it (`rock/<kind>`)
+        // adjusts one weight.  The words themselves carry nothing more.
         for (name, what) in s.family("rock")? {
-            match what {
-                Pick::Word(word) => {
-                    if let Some(i) = KIND_NAMES.iter().position(|n| *n == word) {
-                        w = [0.0; 5];
-                        w[i] = 1.0;
-                    }
-                }
-                Pick::Number(v) => {
-                    let kind = name.strip_prefix("rock.").unwrap_or_default();
-                    if let Some(i) = KIND_NAMES.iter().position(|n| *n == kind) {
-                        w[i] = v.max(0.0);
-                    }
-                }
+            let Pick::Number(v) = what else { continue };
+            let kind = name
+                .strip_prefix("rock")
+                .and_then(|r| r.strip_prefix(['.', '/']));
+            if let Some(i) = KIND_NAMES.iter().position(|n| Some(*n) == kind) {
+                w[i] = v.max(0.0);
             }
         }
         c.look.ledge_height = s.number("ledges/height")?.or(c.look.ledge_height);
@@ -381,6 +374,32 @@ mod tests {
     use super::*;
     use dt_kit::{Band, Field, Frame, Scene, Seed};
     use std::sync::Arc;
+
+    #[test]
+    fn the_rock_word_sets_its_weights_and_a_number_after_it_adjusts_one() {
+        let n = |name: &str, v: f64| Control {
+            name: name.into(),
+            value: crate::Value::Number(v),
+        };
+        let word = |w: &str| Control {
+            name: "rock".into(),
+            value: crate::Value::Word(w.into()),
+        };
+        // the evaluator puts a word's numbers (`rock.<kind>`) before the word
+        let columns = [
+            n("rock.columns", 70.0),
+            n("rock.blocks", 15.0),
+            n("rock.slabs", 5.0),
+            n("rock.odd", 4.0),
+            n("rock.monoliths", 6.0),
+            word("columns"),
+        ];
+        let w = |c: &[Control]| Cliff::new(c).unwrap().look.weights;
+        assert_eq!(w(&columns), Some([70.0, 15.0, 5.0, 4.0, 6.0]));
+        let mut adjusted = columns.to_vec();
+        adjusted.push(n("rock/slabs", 30.0));
+        assert_eq!(w(&adjusted), Some([70.0, 15.0, 30.0, 4.0, 6.0]));
+    }
 
     /// A flat band 20 mm up over the whole tile.
     fn flat(frame: &Frame) -> Band {

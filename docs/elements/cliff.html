@@ -156,6 +156,7 @@
   <li>Faces on the tile edge are textured right up to it, never cut flat. A stone is never clipped at the tile edge: it is shrunk back until it touches.</li>
   <li>Edge stones touch the boundary plane; inner stones may sit back from it.</li>
   <li>Stones fill the cliff's region; its tile-edge faces and ends are bound, its front is free. A single-height band is a plane every stone top touches, and its edge is straight. A stone is made to fit the band as it is stacked, never trimmed after, so there is no hollow behind or under it; one that reaches the band stands inside it over every node it stands on, and the grain is held under the band's high.</li>
+  <li>The <code>rock</code> word stands for the five kind weights in the schema (<code>mixed</code> is 38, 38, 12, 6 and 6 for columns, blocks, slabs, odd and monoliths; <code>columns</code> leans on columns at 70, and so on), and the weights are relative. A number written with the word (<code>rock columns columns=40</code>, or <code>rock mixed slabs=30</code>) replaces that one weight and leaves the rest: the word is read first, then the numbers, whichever order they are typed in. Numbers with no word adjust <code>mixed</code>.</li>
   <li>No flat ceilings: a resting stone has a sloped bottom that sinks into the stone below.</li>
   <li>Seams between stacked stones read as grooves. Cracks are thin, run their full width and depth to an edge, joint or other crack, and carry on round a convex corner onto the next face.</li>
   <li>The fine grain is strong enough to read and to drybrush at print scale.</li>

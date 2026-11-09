@@ -1156,6 +1156,17 @@ impl Reader<'_> {
         for s in &e.controls {
             // the control's own value, then its sub-controls as `control/sub`
             let mut items: Vec<Item<'_>> = Vec::new();
+            // numbers written with no word adjust the default word's numbers
+            // (`rock columns=50` leans the mixed cliff), so that word comes first
+            if s.value.is_none()
+                && !s.subs.is_empty()
+                && let Some(c) = s.control
+                && !c.words.is_empty()
+                && let Some(raw) = c.default_value()
+                && let Ok(Lowered { value, .. }) = element_value(&raw, &scope.lets)
+            {
+                push_setting(&mut out, &s.name.value, &raw, value, s.span, src);
+            }
             if let Some(v) = &s.value {
                 items.push(Item {
                     name: s.name.value.clone(),

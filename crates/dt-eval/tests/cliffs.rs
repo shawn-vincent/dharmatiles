@@ -138,7 +138,7 @@ fn table_seeded(film: bool, seed: u32) -> String {
             pin top=dirtEdgeHeight at=edges
         }}
         cliff top="dirtEdgeHeight + 14" at=crag {{
-            rock blocks
+            rock blocks columns=0 slabs=0 odd=0 monoliths=0
             stoneSize massive
         }}
 {}    }}
