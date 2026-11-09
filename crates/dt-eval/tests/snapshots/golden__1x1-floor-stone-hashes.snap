@@ -6,7 +6,7 @@ expression: hashes(b)
 f19517dc1d98df85  rock:tile/dirt/0
 63b5ae3b5daf3a00  surface
 57a35d7a2328200b  terrain:tile/terrain
-9495a1b1da6573e2  floor:tile/flagstones/0
+fa01654b3932cb33  floor:tile/flagstones/0
 f7653a612bb4f2ea  connector:tile/connector
-8c4bfdea05b6ce62  union
-ccff479ba674355b  export
+1171a936231e9551  union
+f53419d4b3e5a42e  export

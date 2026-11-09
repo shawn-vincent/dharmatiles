@@ -49,6 +49,9 @@ pub(crate) struct Laid<'a> {
     pub material: Material,
     /// The lattice step, mm.
     pub step: f64,
+    /// How far from the tile's boundary a stone's flank is drawn to it,
+    /// true mm (0: none).
+    pub pull: f64,
 }
 
 /// A piece as laid: its top plane and its box in plan.
@@ -546,6 +549,9 @@ pub(crate) fn solidify(
                 }
                 Unit::Stone(st, req) => {
                     let mut mesh = run.place(st.seg, st.mesh().map_err(LookError::build)?);
+                    if let Some(l) = laid.filter(|l| l.pull > 0.0) {
+                        pull_flanks(&mut mesh, run.tile, l.pull);
+                    }
                     if let (Some(l), Some((lo, hi))) = (laid, req) {
                         put = Some(fit_stone(l, &mut mesh, *lo, *hi)?);
                     }
@@ -613,6 +619,41 @@ pub(crate) fn solidify(
     )
     .map_err(LookError::build)?;
     Ok((cut, put))
+}
+
+/// Draw a laid stone's upper flank to the tile's plane where it stands near
+/// it: a vertex within `reach` of a side moves toward that side, the more the
+/// higher it is on the stone and the nearer the plane, so the pillow's
+/// top edge meets the plane at about the stone's top and its face keeps
+/// the stone's own relief (scaled down) a little behind the plane. Nothing
+/// moves past the plane, and a vertex only moves toward it, so the flank
+/// never leans out.
+fn pull_flanks(mesh: &mut TriMesh, tile: [f64; 2], reach: f64) {
+    let foot = mesh
+        .positions
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::INFINITY, f64::min);
+    let apex = mesh
+        .positions
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::NEG_INFINITY, f64::max);
+    let span = (apex - foot).max(1e-9);
+    let smooth = |t: f64| {
+        let t = t.clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    };
+    for p in &mut mesh.positions {
+        let up = smooth(1.3 * (p[2] - foot) / span);
+        for axis in 0..2 {
+            let (lo, hi) = (p[axis], tile[axis] - p[axis]);
+            let (d, from_hi) = if lo <= hi { (lo, false) } else { (hi, true) };
+            let w = 1.0 - smooth(d / reach).powi(2);
+            let moved = d * (1.0 - w * up);
+            p[axis] = if from_hi { tile[axis] - moved } else { moved };
+        }
+    }
 }
 
 /// Fit a laid stone's finished mesh to its band: its highest point is taken

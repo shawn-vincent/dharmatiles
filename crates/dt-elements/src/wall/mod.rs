@@ -112,6 +112,9 @@ pub(crate) struct Mason {
     /// (true mm), so the cut at the plane is square and its top meets the
     /// plane at the piece's own height; 0: its rounded edge stays.
     pub edge_pad: f64,
+    /// A laid stone's flanks within this far of the tile's boundary are
+    /// drawn to the plane (true mm, 0: they keep their pillow shape).
+    pub edge_pull: f64,
     /// Wood grain depth, mm, and the share of boards with a check.
     pub grain: f64,
     pub checks: f64,
@@ -145,6 +148,7 @@ impl Mason {
             crack: 0.0,
             embed: 2.5,
             edge_pad: 0.0,
+            edge_pull: 0.0,
             grain: 0.0,
             checks: 0.0,
         };

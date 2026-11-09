@@ -206,6 +206,32 @@ impl Block {
         let top_at = |x: f64, y: f64| zt + self.tilt[0] * (x - xc) + self.tilt[1] * (y - yc);
         let ph = (self.seed.key("grain").value() % 1000) as f64 * 0.37;
         let tau = core::f64::consts::TAU;
+        // the sides carry the grain too (end grain and edge grain): each
+        // face is set back by a pattern of its own, never forward of where
+        // it stands
+        let side = 2.5 * self.grain;
+        let pat = |u: f64, v: f64| {
+            let a = 0.5 + 0.5 * libm::sin(tau * u / 2.3 + ph);
+            let b =
+                0.5 + 0.5 * libm::sin(tau * v / 1.7 + 2.0 * ph + 0.9 * libm::sin(tau * u / 6.0));
+            let c = 0.5 + 0.5 * libm::sin(tau * (u + 1.3 * v) / 3.1 + 3.0 * ph);
+            (0.6 * a * b + 0.4 * c * c).clamp(0.0, 1.0)
+        };
+        if side > 0.0 {
+            for p in &mut m.positions {
+                let q = *p;
+                if q[0] < 0.3 {
+                    p[0] += side * pat(q[1], q[2]);
+                } else if q[0] > lx - 0.3 {
+                    p[0] -= side * pat(q[1], q[2]);
+                }
+                if q[1] < 0.3 {
+                    p[1] += side * pat(q[0], q[2]);
+                } else if q[1] > ly - 0.3 {
+                    p[1] -= side * pat(q[0], q[2]);
+                }
+            }
+        }
         for p in &mut m.positions {
             let top = top_at(p[0], p[1]);
             if p[2] < top - 0.3 {

@@ -23,10 +23,13 @@
 //! point, or to zero, the base, with no land), so none is left over a
 //! hollow; where the land is higher than a slab the land shows, the surface
 //! being the higher of what is below and the body's own top. A floor
-//! meets the tile edge flush and square: its pieces on the boundary run
-//! past the plane and are cut there, so their tops are whole at the
-//! plane. Weathered flagstones (`texture=worn`) keep a worn round of their
-//! own at the edge instead.
+//! meets the tile edge flush at its own height, with its faces at the plane
+//! keeping the material's grain and never passing it: a slab or board on the
+//! boundary stands a hair past the plane and is cut there (its top edge is
+//! square, its relief lies at or just behind the plane), a drystone flag's
+//! upper flank is drawn to the plane, and a board's end grain carries the
+//! wood's pattern set back from it. Weathered flagstones (`texture=worn`)
+//! keep a worn round of their own at the edge instead.
 //!
 //! Slabs are laid where their middle is inside the entry's area.
 //! `style=fieldstone` lays crack-network flagstones.
@@ -49,12 +52,17 @@ const ROOM_MM: f64 = 0.02;
 /// The nominal pavement depth the stones are drawn for, mm at the
 /// reference (their feet go on to the land).
 const DEPTH_MM: f64 = 7.4;
-/// How far a slab on the tile's boundary runs past the plane, true mm:
-/// past its arris rounding, so the cut is through its flat top.
-const BLOCK_PAD_MM: f64 = 1.5;
-/// The same for a drystone flag, whose pebble shape falls away from its
-/// outline over its rounding.
-const FIELDSTONE_PAD_MM: f64 = 6.0;
+/// How far a slab on the tile's boundary stands outside the plane before
+/// it is cut there, true mm: past its arris rounding, so the top edge is
+/// square, and no further than the relief's depth, so its face keeps the
+/// stone's chipped texture where the relief cuts it back.
+const BLOCK_PAD_MM: f64 = 0.05;
+/// How far from the plane a drystone flag's flank is drawn to it, true mm:
+/// its pillow shape is kept everywhere else.
+/// The same for a board, whose faces carry the grain set back by up to
+/// this much more.
+const PLANK_PAD_MM: f64 = 0.1;
+const FIELDSTONE_PULL_MM: f64 = 3.0;
 
 /// `flagstones`: stone slabs.
 #[derive(Clone, Debug, PartialEq)]
@@ -113,11 +121,11 @@ impl Flagstones {
         };
         m.laid = true;
         m.thickness = DEPTH_MM;
-        m.edge_pad = if fieldstone {
-            FIELDSTONE_PAD_MM
+        if fieldstone {
+            m.edge_pull = FIELDSTONE_PULL_MM;
         } else {
-            BLOCK_PAD_MM
-        };
+            m.edge_pad = BLOCK_PAD_MM;
+        }
         let mut slabs = 1;
         for c in controls {
             match c.name.as_str() {
@@ -134,6 +142,7 @@ impl Flagstones {
                         // weathered: the worn edge takes a round of its own
                         // at the plane
                         m.edge_pad = 0.0;
+                        m.edge_pull = 0.0;
                     }
                 }
                 "slabs" => slabs = whole(c, "slabs")?,
@@ -170,7 +179,7 @@ impl Planks {
         m.face_recess = 0.0;
         m.missing = 0.0;
         m.spall = 0.0;
-        m.edge_pad = BLOCK_PAD_MM;
+        m.edge_pad = PLANK_PAD_MM;
         let (tex, grain, checks) = plank_texture("worn").unwrap_or_default();
         m.texture(tex);
         m.grain = grain;
@@ -258,6 +267,7 @@ fn lay(
         tilt_max: libm::tan(TILT_MAX_DEG.to_radians()),
         material,
         step: f.step_mm(),
+        pull: m.edge_pull,
     };
     let mut m = m.clone();
     m.height = Height::Rel(h);

@@ -40,10 +40,12 @@ fn tops(b: &Built, edges: bool) -> f64 {
 
 #[test]
 fn a_single_height_is_a_flat_floor_flush_at_the_edge() {
-    for stack in [
-        "base\n dirt\n flagstones",
-        "base\n dirt\n flagstones style=fieldstone",
-        "base\n dirt\n planks",
+    // (the stack, how far under floorEdgeHeight its edge may top out: the
+    // grain's depth, and a drystone flag's rounded shoulder)
+    for (stack, under) in [
+        ("base\n dirt\n flagstones", 0.4),
+        ("base\n dirt\n flagstones style=fieldstone", 1.0),
+        ("base\n dirt\n planks", 0.4),
     ] {
         let b = built(stack);
         assert!(b.audit.watertight, "{stack}");
@@ -55,8 +57,8 @@ fn a_single_height_is_a_flat_floor_flush_at_the_edge() {
             "{stack}: {}",
             tops(&b, false)
         );
-        // and the edge reaches it (square: its top is whole at the plane)
-        assert!(tops(&b, true) >= 7.4 - 0.15, "{stack}: {}", tops(&b, true));
+        // and the edge reaches it, to within the grain's depth: the faces at the plane keep their relief
+        assert!(tops(&b, true) >= 7.4 - under, "{stack}: {}", tops(&b, true));
     }
 }
 
@@ -103,5 +105,38 @@ fn the_library_floors_pass_the_gate() {
             b.audit.failures(&Options::default().printer).is_empty(),
             "{path}"
         );
+    }
+}
+
+#[test]
+fn the_faces_at_the_plane_keep_the_materials_grain_and_never_pass_it() {
+    for stack in [
+        "base\n dirt\n flagstones",
+        "base\n dirt\n flagstones style=fieldstone",
+        "base\n dirt\n planks",
+    ] {
+        let b = built(stack);
+        let [w, h] = b.footprint;
+        let (mut near, mut on) = (0_u32, 0_u32);
+        for p in &b.export.mesh.positions {
+            // nothing past the plane
+            assert!(p[0] >= -1e-4 && p[1] >= -1e-4, "{stack}");
+            assert!(p[0] <= w + 1e-4 && p[1] <= h + 1e-4, "{stack}");
+            if p[2] < 4.5 {
+                continue;
+            }
+            let d = p[0].min(w - p[0]).min(p[1]).min(h - p[1]);
+            if d < 1.0 {
+                near += 1;
+                if d < 0.1 {
+                    on += 1;
+                }
+            }
+        }
+        // at least 15% of a face is within 0.1 mm of the plane, so neighbours
+        // touch; and the rest is set back, carrying the grain
+        let share = f64::from(on) / f64::from(near.max(1_u32));
+        assert!(share >= 0.15, "{stack}: {share}");
+        assert!(share <= 0.97, "{stack}: a flat sawn face, {share}");
     }
 }
