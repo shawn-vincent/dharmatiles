@@ -66,9 +66,9 @@ fn passes(path: &str, system: &str) {
         let d = 3.4;
         assert!((e / d - RATIO).abs() < 1e-9, "{path}: edge {e} against {d}");
     }
-    // the base is 8 mm under the whole tile; a tile with no base line has
+    // the base is 7 mm under the whole tile; a tile with no base line has
     // none and is flat on the bed
-    let want = if tile.has_base { -8.0 } else { 0.0 };
+    let want = if tile.has_base { -7.0 } else { 0.0 };
     let lo = b
         .export
         .mesh

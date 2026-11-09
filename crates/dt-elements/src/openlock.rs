@@ -1,27 +1,32 @@
 //! `connector` for OpenLOCK: the clip-socket base under z = 0.
 //!
-//! OpenLOCK credit: the clip socket's dimensions and placement are taken
-//! from the geometry of OpenSCAD-OpenLock by Caitlyn Byrne
-//! (<https://github.com/caitlynb/OpenSCAD-OpenLock>, CC BY-NC 4.0), measured
-//! on its output; no code is copied. The OpenLOCK tile system is by
-//! Printable Scenery.
+//! OpenLOCK credit: OpenLOCK is by Printable Scenery
+//! (<https://www.printablescenery.com/product/open-lock/>), whose
+//! tessellation templates and clip are licensed CC BY-NC 4.0 (a free
+//! commercial licence is available from Printable Scenery on request). The
+//! socket's dimensions here were measured from the official templates
+//! (template 8.6, clip 5.4) by slicing their STLs; no mesh or code is
+//! copied. `reference/README.html` has the measurements.
 //!
-//! The base is an 8 mm slab under the whole tile. Sockets sit on the grid
-//! lines between squares, as on OpenSCAD-OpenLock's parts: along a side
-//! n squares long, one at each of its n - 1 interior lines, or one at the
-//! middle when n is 1 (a 2×2 has one per side, a 4×2 three along its long
-//! sides and one at the middle of its short ones). Each socket is a clip
-//! socket in the tile's outer edge: a T-shaped slot (14 mm at
-//! the mouth, stepping to 12 and 10 mm, 7 mm deep), 4.2 mm tall from 1.4 mm
-//! above the bottom, and behind it a pocket for the clip's head, centred on
-//! the socket: 18 mm along the edge, 4.7 mm deep (6.0 to 10.7 mm in from the
-//! face), open through the bottom of the base up to the socket's top, with a
-//! 14 mm-wide part of it reaching 0.3 mm higher, so its roof is bridged one
-//! layer above the slot's. Interior square boundaries stay solid: one
-//! merged N×M tile, not N×M separate ones. The lotus logo is inset 0.4 mm
-//! into the bottom, as large as fits at the middle without touching a pocket
-//! (at most 22 mm), and left out where that is under 6 mm (a 1×1 or a 2×1). The base never depends on the content, so unlike the
-//! DungeonBlocks peg it has one height.
+//! The base is a 7 mm slab under the whole tile (the official floor
+//! templates are 7.0 mm). Sockets sit on the grid lines between squares,
+//! a subset of the official ones (the templates have a socket every
+//! 12.7 mm along a side): along a side n squares long, one at each of its
+//! n - 1 interior lines, or one at the middle when n is 1 (a 2×2 has one
+//! per side, a 4×2 three along its long sides and one at the middle of its
+//! short ones). Each socket is a clip socket in the tile's outer edge: a
+//! T-shaped slot (14 mm at the mouth, stepping to 12 and 10 mm, 6 mm deep),
+//! 4.2 mm tall from 1.4 mm above the bottom, and behind it a pocket for the
+//! clip's head, centred on the socket: 18 mm along the edge, 4.7 mm deep
+//! (6.0 to 10.7 mm in from the face), open through the bottom of the base up
+//! to 6.1 mm, half a millimetre over the slot's top, so its roof is bridged.
+//! Where a pocket nears a corner its ends are cut at 45° and leave a 3 mm
+//! strut between it and the next side's pocket, as the official 1×1 does.
+//! Interior square boundaries stay solid: one merged N×M tile, not N×M
+//! separate ones. The lotus logo is inset 0.4 mm into the bottom, as large
+//! as fits at the middle without touching a pocket (at most 22 mm), and left
+//! out where that is under 6 mm (a 1×1 or a 2×1). The base never depends on
+//! the content, so unlike the DungeonBlocks peg it has one height.
 
 use dt_kit::Kind;
 use dt_kit::{Frame, Material, Outline, Scene, Tag, carve, extrude};
@@ -46,10 +51,10 @@ pub struct OpenLock {
     pub pocket_depth_mm: f64,
     /// Pocket width along the edge.
     pub pocket_width_mm: f64,
-    /// Width along the edge of the pocket's raised part.
-    pub pocket_roof_width_mm: f64,
-    /// How far the raised part reaches above the socket's top.
-    pub pocket_roof_rise_mm: f64,
+    /// How far the pocket's roof stands above the socket's top.
+    pub pocket_rise_mm: f64,
+    /// Width of the diagonal strut left between two pockets at a corner.
+    pub strut_mm: f64,
     /// Logo inset depth.
     pub logo_depth_mm: f64,
 }
@@ -57,14 +62,14 @@ pub struct OpenLock {
 impl Default for OpenLock {
     fn default() -> Self {
         Self {
-            depth_mm: 8.0,
+            depth_mm: 7.0,
             socket_mm: 4.2,
             socket_floor_mm: 1.4,
             pocket_start_mm: 6.0,
             pocket_depth_mm: 4.7,
             pocket_width_mm: 18.0,
-            pocket_roof_width_mm: 14.0,
-            pocket_roof_rise_mm: 0.3,
+            pocket_rise_mm: 0.5,
+            strut_mm: 3.0,
             logo_depth_mm: 0.4,
         }
     }
@@ -72,14 +77,14 @@ impl Default for OpenLock {
 
 /// The T-shaped socket in `(along the edge from its centre, depth in from
 /// the face)`: 14 mm wide for the first 2 mm, 12 mm to 5 mm deep, then
-/// 10 mm to the back wall at 7 mm (`_T_POLY`).
+/// 10 mm to 6 mm, where the pocket begins.
 const T_POLY: [[f64; 2]; 10] = [
     [-7.0, 0.0],
     [-7.0, 2.0],
     [-6.0, 2.0],
     [-5.0, 5.0],
-    [-5.0, 7.0],
-    [5.0, 7.0],
+    [-5.0, 6.0],
+    [5.0, 6.0],
     [5.0, 5.0],
     [6.0, 2.0],
     [7.0, 2.0],
@@ -135,8 +140,7 @@ impl Side {
     }
 }
 
-/// One clip socket: the T slot in a side, the pocket behind it and the
-/// pocket's raised part.
+/// One clip socket: the T slot in a side and the pocket behind it.
 struct Socket {
     /// Which side it is in (the tests ask for sockets by side, not by the
     /// order they are made in).
@@ -144,13 +148,38 @@ struct Socket {
     side: Side,
     slot: Cutter,
     pocket: Cutter,
-    roof: Cutter,
 }
 
 impl Socket {
-    fn cutters(&self) -> [&Cutter; 3] {
-        [&self.slot, &self.pocket, &self.roof]
+    fn cutters(&self) -> [&Cutter; 2] {
+        [&self.slot, &self.pocket]
     }
+}
+
+/// `poly` (points `(along, depth)`) cut to the half-plane
+/// `ca * along + cd * depth + c0 >= 0` (Sutherland-Hodgman).
+fn clip(poly: &[[f64; 2]], [ca, cd, c0]: [f64; 3]) -> Vec<[f64; 2]> {
+    let f = |p: [f64; 2]| ca * p[0] + cd * p[1] + c0;
+    let mut out: Vec<[f64; 2]> = Vec::with_capacity(poly.len() + 2);
+    for (i, &p) in poly.iter().enumerate() {
+        let q = poly[(i + 1) % poly.len()];
+        let (fp, fq) = (f(p), f(q));
+        if fp >= 0.0 {
+            out.push(p);
+        }
+        if (fp >= 0.0) != (fq >= 0.0) {
+            let t = fp / (fp - fq);
+            out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
+        }
+    }
+    out.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9);
+    if out.len() > 1 && {
+        let (a, b) = (out[0], out[out.len() - 1]);
+        (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9
+    } {
+        out.pop();
+    }
+    out
 }
 
 /// Where the sockets sit along a side `n` squares long of `s` mm squares,
@@ -173,8 +202,7 @@ const LOGO_MIN_MM: f64 = 6.0;
 const LOGO_MAX_MM: f64 = 22.0;
 
 impl OpenLock {
-    /// Every socket of a tile: on each side the T slot, the pocket behind it
-    /// and the pocket's raised part.
+    /// Every socket of a tile: on each side the T slot and the pocket behind it.
     fn sockets(&self, frame: &Frame) -> Vec<Socket> {
         let size = frame.size_mm();
         let top = self.socket_floor_mm + self.socket_mm;
@@ -182,18 +210,18 @@ impl OpenLock {
             self.pocket_start_mm,
             self.pocket_start_mm + self.pocket_depth_mm,
         );
+        // the strut between two pockets at a corner runs at 45°: a pocket
+        // keeps its along-the-edge extent at depth `d` to within
+        // `strut / sqrt 2` + `d` of each end of the side
+        let k = self.strut_mm / std::f64::consts::SQRT_2;
         let mut out = Vec::new();
         for side in Side::ALL {
+            let len = f64::from(side.squares(frame)) * frame.square_mm;
             for c in socket_centres(side.squares(frame), frame.square_mm) {
                 let at = |u: f64, v: f64| side.at(size, c + u, v);
-                let pocket = |width: f64, z1: f64| {
-                    let u = width / 2.0;
-                    Cutter {
-                        outline: vec![at(-u, v0), at(u, v0), at(u, v1), at(-u, v1)],
-                        z0: -EPS,
-                        z1,
-                    }
-                };
+                let u = self.pocket_width_mm / 2.0;
+                let rect = [[c - u, v0], [c + u, v0], [c + u, v1], [c - u, v1]];
+                let cut = clip(&clip(&rect, [1.0, -1.0, -k]), [-1.0, -1.0, len - k]);
                 out.push(Socket {
                     side,
                     slot: Cutter {
@@ -201,8 +229,11 @@ impl OpenLock {
                         z0: self.socket_floor_mm,
                         z1: top,
                     },
-                    pocket: pocket(self.pocket_width_mm, top),
-                    roof: pocket(self.pocket_roof_width_mm, top + self.pocket_roof_rise_mm),
+                    pocket: Cutter {
+                        outline: cut.iter().map(|p| side.at(size, p[0], p[1])).collect(),
+                        z0: -EPS,
+                        z1: top + self.pocket_rise_mm,
+                    },
                 });
             }
         }
@@ -357,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn a_1x1_has_four_sockets_each_with_a_pocket_and_its_raised_part() {
+    fn a_1x1_has_four_sockets_each_with_a_pocket() {
         let ol = OpenLock::default();
         let f = Frame::openlock(1, 1);
         let c = ol.sockets(&f);
@@ -373,19 +404,30 @@ mod tests {
                 t.side
             );
         }
-        // the pockets sit 6.0 to 10.7 mm in, 18 and 14 mm wide, the pocket
-        // through the bottom and its raised part 0.3 mm over the socket top
+        // the pocket sits 6.0 to 10.7 mm in, through the bottom and up to
+        // 6.1 mm, half a millimetre over the socket top; on a 1x1 its ends
+        // are cut at 45° by the corner struts (9.0 mm wide at 6.0 in, a
+        // point at 10.6)
         let south = on(&c, Side::South);
         assert_eq!(south.len(), 1);
         let south = south[0];
         assert_eq!((south.slot.z0, south.slot.z1), (1.4, 5.6));
-        for (p, wide, top) in [(&south.pocket, 18.0, 5.6), (&south.roof, 14.0, 5.9)] {
-            let (lo, hi) = bounds(&p.outline);
-            assert!((hi[1] - 10.7).abs() < 1e-9);
-            assert!((lo[1] - 6.0).abs() < 1e-9);
-            assert!((span(&p.outline, 0) - wide).abs() < 1e-9);
-            assert!(p.z0 < 0.0 && (p.z1 - top).abs() < 1e-9);
-        }
+        let p = &south.pocket;
+        let (lo, hi) = bounds(&p.outline);
+        assert!((lo[1] - 6.0).abs() < 1e-9);
+        assert!(hi[1] < 10.7 && hi[1] > 10.5, "{hi:?}");
+        assert!((span(&p.outline, 0) - 9.17).abs() < 0.02, "{:?}", p.outline);
+        assert!(p.z0 < 0.0 && (p.z1 - 6.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_pocket_far_from_a_corner_is_18_by_4_7() {
+        let c = OpenLock::default().sockets(&Frame::openlock(2, 2));
+        let south = on(&c, Side::South)[0];
+        let (lo, hi) = bounds(&south.pocket.outline);
+        assert!((hi[1] - 10.7).abs() < 1e-9 && (lo[1] - 6.0).abs() < 1e-9);
+        assert!((span(&south.pocket.outline, 0) - 18.0).abs() < 1e-9);
+        assert_eq!(south.pocket.outline.len(), 4);
     }
 
     /// The base alone, as built into an empty scene.
@@ -415,13 +457,13 @@ mod tests {
 
     #[test]
     fn the_base_volume_is_the_slab_less_its_cuts() {
-        // snapshots of the built base (T slots, pockets, raised parts and
+        // snapshots of the built base (T slots, pockets and
         // the logo cut from the rounded slab), not derived from the sizes:
         // 1x1 has no logo (the pockets leave it no room), 2x2 has one
         let v = base_volume(1, 1);
-        assert!((v - 2756.218).abs() / 2756.218 < 0.002, "1x1: {v:.3}");
+        assert!((v - 2811.012).abs() / 2811.012 < 0.002, "1x1: {v:.3}");
         let v = base_volume(2, 2);
-        assert!((v - 17404.475).abs() / 17404.475 < 0.002, "2x2: {v}");
+        assert!((v - 14733.706).abs() / 14733.706 < 0.002, "2x2: {v}");
     }
 
     #[test]
@@ -432,25 +474,26 @@ mod tests {
             min: [x - half, y - half, z0],
             max: [x + half, y + half, 1.0],
         };
-        // the middle, through to the table (z = -8): clear of everything
-        // (pockets reach 10.7 mm in, plus the wall)
-        assert!(base::refuse_cut(&keep, &cut(12.7, 12.7, 1.0, -8.0)).is_none());
+        // the middle, through to the table (z = -7): clear of everything
+        // (pockets reach 10.6 mm in, plus the wall)
+        assert!(base::refuse_cut(&keep, &cut(12.7, 12.7, 1.0, -7.0)).is_none());
         // into a pocket, which is open to the bottom
-        assert!(base::refuse_cut(&keep, &cut(12.7, 8.0, 1.0, -8.0)).is_some());
+        assert!(base::refuse_cut(&keep, &cut(12.7, 8.0, 1.0, -7.0)).is_some());
         assert!(base::refuse_cut(&keep, &cut(12.7, 8.0, 1.0, -3.0)).is_some());
         // into a base wall, and into a socket's mouth
         assert!(base::refuse_cut(&keep, &cut(0.5, 12.7, 1.0, -3.0)).is_some());
         assert!(base::refuse_cut(&keep, &cut(12.7, 4.0, 1.0, -6.0)).is_some());
-        // a socket has its band of height: a wall's thickness above it a
-        // shallow cut over it is clear
-        assert!(base::refuse_cut(&keep, &cut(12.7, 4.0, 1.0, -1.0)).is_none());
+        // a socket has its band of height: a wall's thickness above its top
+        // (5.6 mm up, z = -1.4) a shallow cut over it is clear
+        assert!(base::refuse_cut(&keep, &cut(12.7, 4.0, 1.0, -0.4)).is_none());
+        assert!(base::refuse_cut(&keep, &cut(12.7, 4.0, 1.0, -1.0)).is_some());
     }
 
     #[test]
     fn a_pocket_leaves_the_tiles_other_faces_at_least_the_printers_wall() {
-        // the pockets of two sides meet at a 1x1's corners (the south and
-        // west pockets overlap, x and y 6.0 to 10.7 mm); what stays between
-        // each pocket and the faces it does not open on is the base's wall
+        // the corner struts keep two sides' pockets 3 mm apart at a 1x1's
+        // corners; what stays between each pocket and the faces it does not
+        // open on is the base's wall
         let wall = 2.0 * 0.45;
         let ol = OpenLock::default();
         for (cols, rows) in [(1, 1), (2, 1), (2, 2), (4, 2)] {
@@ -484,11 +527,14 @@ mod tests {
                 }
             }
         }
-        // on a 1x1 it is 3.7 mm: the pockets are 18 mm wide on 25.4 mm
+        // on a 1x1 it is 8.12 mm: the corner struts cut the pocket's ends
         let f = Frame::openlock(1, 1);
         let south = &ol.sockets(&f)[0];
         let (lo, _) = bounds(&south.pocket.outline);
-        assert!((lo[0] - 3.7).abs() < 1e-9, "{lo:?}");
+        assert!(
+            (lo[0] - (6.0 + 3.0 / std::f64::consts::SQRT_2)).abs() < 1e-9,
+            "{lo:?}"
+        );
     }
 
     #[test]
@@ -524,7 +570,7 @@ mod tests {
         // and where it fits, the logo is in the build: it changes the volume
         // by about its inset's worth
         let with = base_volume(2, 2);
-        assert!(with < 17420.0 && with > 17380.0, "{with}");
+        assert!(with < 14750.0 && with > 14715.0, "{with}");
     }
 
     #[test]

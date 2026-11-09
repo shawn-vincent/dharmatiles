@@ -27,36 +27,41 @@ OpenLOCK 8.0-era.</td>
 <td>Blender add-on; <code>floor_maker.py</code> <code>OpenLock_Clip_Bool_Floor_model()</code> gives the
 socket as explicit vertices, with five-layer supports; placement on 12.7 mm steps.</td>
 <td>GPL-2.0-or-later</td></tr>
-<tr><td><a href="https://www.printablescenery.com/product/open-lock/">Printable Scenery OpenLOCK templates</a></td>
-<td>The authority: official tessellation templates (STL, template 8.6, clip 5.4). Port positions and
-footprints are fixed for compatibility. Not downloaded: the store needs an account.</td>
-<td>CC BY-NC; a free commercial licence on request</td></tr>
+<tr><td><a href="https://www.printablescenery.com/product/open-lock/">Printable Scenery OpenLOCK templates</a><br>
+<code>reference/openlock/official/</code> (template 8.6: <code>Primary-Floors/</code>, <code>Secondary-Floors/</code>, wall and roof folders; <code>OpenLOCK_Clip_v5.4.stl</code>; <code>OpenLOCK 8.4 Ref.jpg</code>)</td>
+<td><b>The authority.</b> Official tessellation templates (STL) and clip. Our socket is measured from <code>Primary-Floors/I</code>, <code>S</code>, <code>E</code> and <code>R</code> (1×1, 2×1, 2×2, 4×2 of the 25.4 mm square) and the clip. Not in git.</td>
+<td>CC BY-NC 4.0; a free commercial licence from Printable Scenery on request</td></tr>
 </table>
 
-<h3>The socket, as the two references build it</h3>
-<p>Coordinates: <em>along</em> the edge from the socket centre, <em>in</em> from the tile face, <em>z</em> up
-from the base bottom (the base is 8 mm).</p>
+<h3>The socket: the official templates against the rest</h3>
+<p>Credit: OpenLOCK is by Printable Scenery; its templates and clip are CC BY-NC 4.0, and a free commercial licence is available from Printable Scenery on request. The socket's dimensions in dharmatiles were measured from the official templates (slices of the STLs at many heights); no mesh or code is copied.</p>
+<p>Coordinates: <em>along</em> the edge from the socket centre, <em>in</em> from the tile face, <em>z</em> up from the base bottom.</p>
+<table>
+<tr><th></th><th>Official 8.6</th><th>OpenSCAD-OpenLock</th><th>Template maker</th><th>dharmatiles before</th><th>dharmatiles now</th></tr>
+<tr><td>Base height</td><td><b>7.0</b> (every floor template)</td><td>8</td><td>8</td><td>8.0</td><td>7.0</td></tr>
+<tr><td>T profile</td><td>14 wide to 2 in; 12 at 2; 10 at 5 (straight taper); 10 to 6, where the pocket begins</td><td>same, 10 to 7</td><td>same, 10 to 6</td><td>same, 10 to 7</td><td>same, 10 to 6</td></tr>
+<tr><td>Socket height</td><td>z 1.4 to 5.6</td><td>1.4 to 5.6</td><td>1.4 to 5.6</td><td>1.4 to 5.6</td><td>1.4 to 5.6</td></tr>
+<tr><td>Pocket behind the T</td><td>6.0 to 10.7 in, <b>open through the bottom</b>, roof flat at <b>z 6.1</b> (a 0.2-per-0.4 ramp from z 5.6 at 5.0 in up to 6.1 at 6.0 in); a 0.9 mm roof above to 7.0</td><td>18 along, 6.0 to 10.7, open through the bottom to 5.6; middle 14 mm to 5.8</td><td>none</td><td>18 along, 6.0 to 10.7, to 5.6; middle 14 mm to 5.9</td><td>18 along, 6.0 to 10.7, to 6.1 (a step, no ramp: the ramp is a 63° overhang and the gate budget cannot take it)</td></tr>
+<tr><td>Along the edge</td><td>one band the length of the side, ends cut at 45° leaving a 3.0 mm strut to the next side's band (a 1×1's four pockets are triangles, 9.0 wide at 6.0 in, a point at 10.6)</td><td>18 along each socket</td><td>—</td><td>18 along (a 1×1's pockets run together)</td><td>18 along, ends cut by the same 3.0 mm struts</td></tr>
+<tr><td>Socket places</td><td>every 12.7 mm from the corner (1×1: 12.7; 2×1 long side: 12.7, 25.4, 38.1; 2×2: 12.7, 25.4, 38.1; 4×2 long side: seven), walls 2.7 wide between neighbours at 2 to 6 in</td><td>the interior grid lines (25.4 multiples)</td><td>12.7 steps</td><td>interior grid lines, the middle of a one-square side</td><td>same as before: a subset of the official places</td></tr>
+<tr><td>Face between sockets</td><td>open at socket height: a row of 1.4 × 2 posts every 5.08 mm holds the roof (printing supports)</td><td>solid</td><td>—</td><td>solid</td><td>solid</td></tr>
+<tr><td>Underside</td><td>flat</td><td>V-grooves, pads</td><td>—</td><td>lotus 0.4 mm</td><td>lotus 0.4 mm</td></tr>
+</table>
+<p><b>Settled (9 Nov 2026):</b> the T is 6 deep, as the template maker has it (OpenSCAD's 7 lies inside the pocket, so the cut is the same). The pocket is OpenSCAD's: open through the bottom, 6.0 to 10.7 in, not two slots at the face. Its roof is 6.1, half a millimetre over the socket (neither reference had that), and the base is 7.0. What dharmatiles does not copy: the open face between sockets and a socket at every 12.7 mm (our tiles keep a solid wall and the grid-line subset, which meets the official places), and the roof ramp.</p>
+<p><b>The clip</b> (<code>OpenLOCK_Clip_v5.4.stl</code>): one 3.5 mm slab, z 1.75 to 5.25, 19.5 along and 13.2 across, centred on the tile face. A stem 3.7 deep (1.85 each side) × 13.2 wide sits in the 14 mm mouth (0.4 clear each side, 0.15 in depth). Each half is 9.8 wide from 1.85 to 5.5 in, swells to 10.66 at 6.5 in (the snap bulge) and ends at 9.75 in with 45° corners. Against our socket: 0.35 mm clear above and below the slot, 0.85 under the pocket roof, 0.95 short of the pocket's back wall, and the bulge touches the T's last millimetre by at most 0.12 mm per side (0.01 mm² of the clip), which is the detent. The official 2×2 gives the same 0.01 mm².</p>
+<p>Checked by slicing our 1×1, 2×1 and 2×2 OpenLOCK builds the same way: at z 0.3 the 1×1's pockets match the official <code>I</code> template to 0.03 mm (area 561.19 against 561.18 mm²), and on the 2×2 the T half-widths at depths 2.1, 3, 4, 4.9, 5.5 and 5.9 mm (5.97, 5.67, 5.32, 5.02, 5.0, 5.0) and the void heights (1.4 to 5.6 in the T, 0 to 6.1 over the pocket) equal the official <code>E</code>.</p>
+
+<h3>The two earlier references</h3>
 <table>
 <tr><th></th><th>OpenSCAD-OpenLock</th><th>Template maker</th><th>dharmatiles (9cf7f17)</th></tr>
 <tr><td>T profile</td><td>14 wide to 2 in; 12 at 2; tapers to 10 at 5; 10 wide to 7</td>
 <td>same to 5; 10 wide to <b>6</b></td><td>same as OpenSCAD (to 7)</td></tr>
-<tr><td>Height</td><td>z 1.4 – 5.6</td><td>z 1.4 – 5.6</td><td>z 1.4 – 5.6</td></tr>
-<tr><td>Behind the T</td><td>one pocket centred on the socket, 18 along × 4.7 in (in 6.0 – 10.7),
-<b>open through the bottom</b> up to z 5.6, its middle 14 mm to z 5.8 (one layer over the socket top)</td>
+<tr><td>Behind the T</td><td>one pocket centred on the socket, 18 along × 4.7 in (in 6.0 – 10.7), open through the bottom up to z 5.6, its middle 14 mm to z 5.8</td>
 <td>none</td>
-<td>two slots at ±8.35 along, 4.7 along × 9 in, <b>from the face</b>, z 1.4 – 5.6, closed below</td></tr>
-<tr><td>Supports</td><td>a 6 × 6 box wall with a 4 × 4 hole, in the socket, one layer short of floor and roof</td>
-<td>two thin fins, five steps up</td><td>none</td></tr>
-<tr><td>Underside</td><td>1 × 1 mm V-grooves under the square lines; 0.5 mm-deep pads under each half square on large parts</td>
-<td>—</td><td>lotus logo, 0.4 mm</td></tr>
+<td>two slots at ±8.35 along, 4.7 along × 9 in, from the face, z 1.4 – 5.6, closed below</td></tr>
+<tr><td>Supports</td><td>a 6 × 6 box wall with a 4 × 4 hole, in the socket</td><td>two thin fins, five steps up</td><td>none</td></tr>
 </table>
-<p><b>Finding (8 Nov 2026):</b> our two "retention slots" are OpenSCAD's pocket read on the wrong axes:
-its <code>cube([4.7,18,…])</code> sits at <code>x = −8.35</code> after the profile is rotated, which is
-8.35 mm <em>into</em> the tile, 18 mm <em>along</em> the edge. Ours puts 4.7 mm slots 8.35 mm either side
-of the mouth, opening the face, so at socket height a 25.4 mm square's face is open over about 21 mm
-instead of 14. Slicing <code>STLs/OSOL-E-Imperial-8.0-None-var0.stl</code> confirms the reference's
-shape. The T profile itself matches. The two references disagree on the T's depth (7 vs 6) and on the
-pocket; the official template settles both.</p>
+<p>Our two "retention slots" were OpenSCAD's pocket read on the wrong axes (its <code>cube([4.7,18,…])</code> sits 8.35 mm <em>into</em> the tile, 18 mm <em>along</em> the edge); fixed on 8 Nov 2026, and the official template now confirms the pocket.</p>
 
 <h3>Other OpenSCAD-OpenLock parts (unit u = 25.4 mm)</h3>
 <table>

@@ -202,7 +202,7 @@ fn no_base_line_means_no_base() {
             "{system}: a connector part"
         );
         let some = build(&Library, "lib:tiles/test/1x1-flat.dtile", &opts).unwrap();
-        assert!(min_z(&some) < -7.0, "{system}: the base is under zero");
+        assert!(min_z(&some) < -6.9, "{system}: the base is under zero");
         assert!(some.audit.failures(&opts.printer).is_empty(), "{system}");
     }
 }
