@@ -12,10 +12,10 @@ use rayon::prelude::*;
 
 /// One tile for each element that reports sub-progress.
 const TILES: &[&str] = &[
-    "lib:tiles/test/2x2-grass.dtile",
-    "lib:tiles/test/1x1-wall-cut-stone.dtile",
-    "lib:tiles/test/2x2-rocks.dtile",
-    "lib:tiles/test/1x1-tree.dtile",
+    "lib:tests/plants/2x2-grass.dtile",
+    "lib:tests/walls/1x1-wall-cut-stone.dtile",
+    "lib:tests/rocks/2x2-rocks.dtile",
+    "lib:tests/plants/1x1-tree.dtile",
 ];
 
 fn tracked(path: &str, threads: usize) -> (Built, Vec<Status>) {
@@ -97,9 +97,9 @@ impl dt_kit::Reporter for Subs {
 #[test]
 fn elements_with_a_loop_report_their_counts() {
     [
-        ("lib:tiles/test/1x1-wall-cut-stone.dtile", "stones"),
-        ("lib:tiles/test/2x2-grass.dtile", "blades"),
-        ("lib:tiles/test/2x2-rocks.dtile", "stones"),
+        ("lib:tests/walls/1x1-wall-cut-stone.dtile", "stones"),
+        ("lib:tests/plants/2x2-grass.dtile", "blades"),
+        ("lib:tests/rocks/2x2-rocks.dtile", "stones"),
     ]
     .par_iter()
     .for_each(|&(path, what)| {
@@ -144,7 +144,7 @@ impl dt_kit::Reporter for Sketches {
 /// stage's parts, and the build is the same as one without.
 #[test]
 fn sketches_come_as_the_build_goes_and_change_nothing() {
-    let path = "lib:tiles/test/1x1-cliff-mound.dtile";
+    let path = "lib:tests/cliffs/1x1-cliff-mound.dtile";
     let opts = Options::default();
     let plain = fingerprint(&build(&Library, path, &opts).unwrap());
     let seen = Arc::new(Sketches(Mutex::new(Vec::new())));

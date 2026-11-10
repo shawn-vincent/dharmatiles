@@ -88,7 +88,7 @@ fn a_control_not_built_yet_is_checked_but_not_built() {
 #[test]
 fn library_tiles_check_and_say_which_look_is_missing_when_built() {
     // the full cliff run (bank, scree, pebbles on the dirt) is built now
-    let path = "lib:tiles/test/2x1-cliff-full.dtile";
+    let path = "lib:tests/cliffs/2x1-cliff-full.dtile";
     let c = check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     assert!(c.pending().is_empty(), "{path}: {:?}", c.pending());
     // (a palette is not a tile document)
@@ -105,7 +105,7 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
 fn heights_and_printer_come_from_the_library() {
     let c = check(
         &Library,
-        "lib:tiles/test/1x1-flat.dtile",
+        "lib:tests/ground/1x1-flat.dtile",
         &Options::default(),
     )
     .unwrap();
@@ -425,15 +425,11 @@ fn a_seed_wobbles_the_lines_again() {
 
 #[test]
 fn the_floor_and_wall_tiles_build_with_grass() {
+    // a straight wall and a corner, each with grass to its foot (the golden
+    // tests hold the stone floor with a wall on it)
     for path in [
-        "lib:tiles/floors/1x1-floor-stone.dtile",
-        "lib:tiles/floors/1x1-floor-stone-wall.dtile",
-        "lib:tiles/walls/1x1-wall-stone.dtile",
-        "lib:tiles/walls/1x1-wall-stone-corner.dtile",
-        "lib:tiles/walls/1x1-wall-brick.dtile",
-        "lib:tiles/walls/1x1-wall-brick-corner.dtile",
-        "lib:tiles/walls/1x1-wall-fieldstone.dtile",
-        "lib:tiles/walls/1x1-wall-fieldstone-corner.dtile",
+        "lib:tests/walls/1x1-wall-stone+grass.dtile",
+        "lib:tests/walls/1x1-wall-brick-corner+grass.dtile",
     ] {
         let b =
             build(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
@@ -469,7 +465,7 @@ fn library_tile_file_names_follow_the_standard() {
     for path in dt_eval::Library::paths()
         .expect("the library is listed")
         .into_iter()
-        .filter(|p| p.contains("tiles/"))
+        .filter(|p| p.starts_with("lib:tiles/") || p.starts_with("lib:tests/"))
     {
         let file = path.rsplit('/').next().unwrap_or(&path);
         let stem = file.strip_suffix(".dtile").unwrap_or("");

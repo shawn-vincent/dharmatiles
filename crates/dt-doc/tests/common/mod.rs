@@ -18,10 +18,10 @@ pub const EDGES: (&str, &str) = lib!("parts/edges.dtile");
 pub const GRASS: (&str, &str) = lib!("parts/grass.dtile");
 pub const TREES: (&str, &str) = lib!("parts/trees.dtile");
 pub const PRINTER: (&str, &str) = lib!("printers/default.dtile");
-pub const FLAT: (&str, &str) = lib!("tiles/test/1x1-flat.dtile");
+pub const FLAT: (&str, &str) = lib!("tests/ground/1x1-flat.dtile");
 pub const GRASS_TREE: (&str, &str) = lib!("tiles/ground/2x2-grass-tree.dtile");
 pub const WALL_CORNER: (&str, &str) = lib!("tiles/walls/1x1-wall-fieldstone-corner.dtile");
-pub const CLIFF_RUN: (&str, &str) = lib!("tiles/test/2x1-cliff-full.dtile");
+pub const CLIFF_RUN: (&str, &str) = lib!("tests/cliffs/2x1-cliff-full.dtile");
 /// A tile written from scratch: a divided tile, not a library tile.
 pub const PATH_ROCKS: (&str, &str) = (
     "tests/fixtures/1x2-grass-path-rocks.dtile",

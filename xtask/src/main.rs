@@ -127,22 +127,34 @@ fn build_views(
     }
 }
 
-/// The test tile behind a short name, or the argument itself.
+/// The test tile behind a short name (`flat`, `rocks`, `wall-rim`: a test
+/// tile's file name without its size, or with it), or the argument itself.
 fn tile_for(name: &str) -> String {
-    let test = |t: &str| format!("lib:tiles/test/{t}.dtile");
-    match name {
-        "flat" => test("1x1-flat"),
-        "dirt" | "rocks" | "water" | "grass" => test(&format!("2x2-{name}")),
-        "tree" | "cliff" | "planks" => test(&format!("1x1-{name}")),
-        n if n.starts_with("wall-")
-            || n.starts_with("floor-")
-            || n.starts_with("flagstones-")
-            || n.starts_with("cliff-") =>
-        {
-            test(&format!("1x1-{n}"))
+    let tests = root().join("library/tests");
+    let Ok(groups) = std::fs::read_dir(&tests) else {
+        return name.to_owned();
+    };
+    let mut found: Vec<String> = Vec::new();
+    for g in groups.flatten() {
+        let Ok(files) = std::fs::read_dir(g.path()) else {
+            continue;
+        };
+        for f in files.flatten() {
+            let file = f.file_name().to_string_lossy().into_owned();
+            let Some(stem) = file.strip_suffix(".dtile") else {
+                continue;
+            };
+            let bare = stem.split_once('-').map_or(stem, |(_, r)| r);
+            if stem == name || bare == name {
+                found.push(format!(
+                    "lib:tests/{}/{file}",
+                    g.file_name().to_string_lossy()
+                ));
+            }
         }
-        other => other.to_owned(),
     }
+    found.sort();
+    found.into_iter().next().unwrap_or_else(|| name.to_owned())
 }
 
 /// The four views each build writes, in contact-sheet column order.

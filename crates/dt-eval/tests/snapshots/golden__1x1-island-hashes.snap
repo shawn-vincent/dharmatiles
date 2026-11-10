@@ -1,0 +1,32 @@
+---
+source: crates/dt-eval/tests/golden.rs
+expression: hashes(b)
+---
+061c2046a1bc3dfb  plan
+ead732005393f774  surface
+77ea2079b8d9e259  terrain:tile/terrain
+57b7b0e75e22e965  grass:tile/grass/0
+11819153464abb5c  grass:tile/grass/0
+a79dd9f6dae85c22  grass:tile/grass/0
+34e04a22d3a09a6e  grass:tile/grass/0
+c61b2086c5433956  grass:tile/grass/0
+cfa76eaebed536ae  grass:tile/grass/0
+be9a71ce401b16cb  grass:tile/grass/0
+5ab72f60b90fc33f  grass:tile/grass/0
+8a48380fbcdd3b7c  grass:tile/grass/0
+993e12ccc52e94a5  grass:tile/grass/0
+2ecafd1353347586  grass:tile/grass/0
+db60c3628bc8b792  grass:tile/grass/0
+14369bc5dbaa513e  grass:tile/grass/0
+cae6e99619b63ac7  grass:tile/grass/0
+346ff5be22526d2e  grass:tile/grass/0
+f4d822b09678b495  grass:tile/grass/0
+4da27e683dba8503  grass:tile/grass/0
+9b2cdceafd9924f1  grass:tile/grass/0
+4f810b713dcdf86c  grass:tile/grass/0
+e5cb27016004bfb8  grass:tile/grass/0
+8ace865cfdd656e4  grass:tile/grass/0
+5cc05c9e325004a3  grass:tile/grass/0
+f7653a612bb4f2ea  connector:tile/connector
+e4260dcac0ae09f2  union
+44cd6e6b7c04b513  export

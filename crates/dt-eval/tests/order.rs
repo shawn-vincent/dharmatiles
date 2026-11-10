@@ -14,7 +14,7 @@ fn every_library_tile_builds_in_the_order_it_did() {
     for path in Library::paths()
         .expect("the library is listed")
         .into_iter()
-        .filter(|p| p.contains("tiles/"))
+        .filter(|p| p.starts_with("lib:tiles/") || p.starts_with("lib:tests/"))
     {
         match check(&Library, &path, &Options::default()) {
             Ok(c) => writeln!(text, "{path}: {:?}", c.steps).unwrap(),

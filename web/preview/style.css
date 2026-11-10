@@ -145,7 +145,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #tiles .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #tiles li.group { text-transform: capitalize; font: 700 15px/1 var(--f-display); letter-spacing: .02em; color: var(--muted); padding: 14px 8px 5px; cursor: default; }
 #tiles li.group:hover { background: none; }
-#tiles li.group.fold { cursor: pointer; } #tiles li.group.fold:hover { color: var(--ink); }
+
 #tiles li.note { cursor: default; color: var(--muted); font-size: 13px; line-height: 1.5; padding: 10px 8px; }
 #tiles li.note:hover { background: none; }
 

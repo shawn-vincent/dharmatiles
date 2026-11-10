@@ -1,4 +1,4 @@
-//! `cargo run --release -p dt-eval --example trace -- lib:tiles/test/1x1-tree.dtile`:
+//! `cargo run --release -p dt-eval --example trace -- lib:tests/plants/1x1-tree.dtile`:
 //! print each build stage and element sub-progress with its time, to calibrate
 //! the progress fractions inside an element.
 

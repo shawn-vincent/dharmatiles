@@ -42,14 +42,14 @@ pub(crate) fn project() -> dt_eval::Project {
     p
 }
 
-/// Every library tile, test tiles included (the preview's list).
+/// Every library tile and test tile (the preview's Library and Tests).
 ///
 /// # Errors
 /// The library cannot be found or listed.
 pub(crate) fn all_library_tiles() -> Result<Vec<String>, String> {
     let mut v: Vec<String> = dt_eval::Library::paths()?
         .into_iter()
-        .filter(|p| p.contains("tiles/"))
+        .filter(|p| p.starts_with("lib:tiles/") || p.starts_with("lib:tests/"))
         .collect();
     v.sort();
     Ok(v)
@@ -63,7 +63,7 @@ pub(crate) fn all_library_tiles() -> Result<Vec<String>, String> {
 pub(crate) fn library_tiles() -> Result<Vec<String>, String> {
     let mut v: Vec<String> = dt_eval::Library::paths()?
         .into_iter()
-        .filter(|p| p.contains("tiles/") && !p.contains("tiles/test/"))
+        .filter(|p| p.starts_with("lib:tiles/"))
         .collect();
     v.sort();
     if v.is_empty() {

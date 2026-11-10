@@ -263,7 +263,7 @@ pub struct Built {
     /// Where it came from.
     pub record: BuildRecord,
     /// Output path below the project's `out/`, such as
-    /// `db/test/1x1-flat-db.stl`.
+    /// `db/tests/ground/1x1-flat-db.stl`.
     pub out: PathBuf,
     /// Tile width and height in mm.
     pub footprint: [f64; 2],
@@ -1254,7 +1254,7 @@ fn entry_paths(tile: &Tile) -> Vec<String> {
     out
 }
 
-/// `lib:tiles/test/1x1-flat.dtile` → `db/test/1x1-flat-db.stl`; a relative
+/// `lib:tests/ground/1x1-flat.dtile` → `db/tests/ground/1x1-flat-db.stl`; a relative
 /// disk path keeps its folders below `tiles/` (all of them if it has
 /// none), resolved so the result always stays inside `<system>/`: a `..`
 /// that would leave it is dropped, and an absolute path keeps none.
@@ -1298,8 +1298,8 @@ mod tests {
         assert_eq!(o.target(), "db-fine");
         assert_eq!(o.printer.layer_mm, 0.12);
         assert_eq!(
-            out_path("lib:tiles/test/1x1-flat.dtile", &o.target()),
-            PathBuf::from("db-fine/test/1x1-flat-db-fine.stl")
+            out_path("lib:tests/ground/1x1-flat.dtile", &o.target()),
+            PathBuf::from("db-fine/tests/ground/1x1-flat-db-fine.stl")
         );
         let e = o.use_printer("nope", None).unwrap_err();
         assert!(e[0].message.contains("no printer profile"), "{e:?}");
@@ -1331,8 +1331,8 @@ mod tests {
     #[test]
     fn out_paths_mirror_the_library() {
         assert_eq!(
-            out_path("lib:tiles/test/1x1-flat.dtile", "db"),
-            PathBuf::from("db/test/1x1-flat-db.stl")
+            out_path("lib:tests/ground/1x1-flat.dtile", "db"),
+            PathBuf::from("db/tests/ground/1x1-flat-db.stl")
         );
         assert_eq!(out_path("my.dtile", "db"), PathBuf::from("db/my-db.stl"));
     }

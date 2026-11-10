@@ -14,9 +14,8 @@ function dotClass(t) {
   const over = t.record && (t.record.audit.overhang_mm2 > 0 || t.record.audit.band_mm2 > 0);
   return `dot ${t.status}${over && t.status === 'ready' ? ' over' : ''}`;
 }
-let testsOpen = false; // the library's "Test tiles" starts collapsed
 
-// the switcher: one button per root (the personal home, the library, each folder named)
+// the switcher: one button per root (the personal home, the library, the test tiles, each folder named)
 function renderRoots() {
   const nav = $('roots'), { roots } = server.get(), current = view.get().root;
   nav.replaceChildren();
@@ -56,14 +55,9 @@ function renderList() {
     li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
     return li;
   };
-  const header = (text, onclick, open) => {
+  const header = (text) => {
     const g = document.createElement('li'); g.className = 'group';
-    g.textContent = `${onclick ? (open ? '▾ ' : '▸ ') : ''}${text}`;
-    if (onclick) {
-      g.classList.add('fold'); g.tabIndex = 0; g.setAttribute('role', 'button'); g.setAttribute('aria-expanded', open);
-      g.onclick = onclick;
-      g.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onclick(); } };
-    }
+    g.textContent = text;
     ul.append(g);
   };
   const root = rootOf(current);
@@ -76,22 +70,13 @@ function renderList() {
     ul.append(li);
     return;
   }
-  const shown = all.filter(matches);
-  // test tiles fold away in the library only
-  const isTest = (t) => root.kind === 'library' && t.group === 'test';
-  const main = shown.filter((t) => !isTest(t))
+  const shown = all.filter(matches)
     .sort((x, y) => (x.group || '').localeCompare(y.group || '') || x.path.localeCompare(y.path));
-  const tests = shown.filter(isTest);
   let last = null;
-  for (const t of main) {
+  for (const t of shown) {
     const g = t.group;
     if (g && g !== last) { header(g); last = g; }
     ul.append(row(t));
-  }
-  if (tests.length) {
-    const open = testsOpen || !!q || tests.some((t) => t.id === tileId);
-    header(`Test tiles (${tests.length})`, () => { testsOpen = !open; renderList(); }, open);
-    if (open) for (const t of tests) ul.append(row(t));
   }
 }
 

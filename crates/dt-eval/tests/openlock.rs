@@ -20,15 +20,15 @@ const RATIO: f64 = 25.4 / 35.0;
 
 /// One tile for each element family.
 const TILES: &[&str] = &[
-    "lib:tiles/test/1x1-flat.dtile",
-    "lib:tiles/ground/1x1-soil+grass.dtile",
-    "lib:tiles/ground/1x1-grass-flowers.dtile",
-    "lib:tiles/water/1x1-water+grass.dtile",
-    "lib:tiles/walls/1x1-wall-brick-corner.dtile",
-    "lib:tiles/floors/1x1-floor-stone-wall.dtile",
-    "lib:tiles/floors/1x1-floor-planks.dtile",
-    "lib:tiles/cliffs/1x1-cliff.dtile",
-    "lib:tiles/test/1x1-tree.dtile",
+    "lib:tests/ground/1x1-flat.dtile",
+    "lib:tests/plants/1x1-soil+grass.dtile",
+    "lib:tests/plants/1x1-grass-flowers.dtile",
+    "lib:tests/water/1x1-water+grass.dtile",
+    "lib:tests/walls/1x1-wall-brick-corner+grass.dtile",
+    "lib:tests/floors/1x1-floor-stone-wall.dtile",
+    "lib:tests/floors/1x1-planks.dtile",
+    "lib:tests/cliffs/1x1-cliff-columns.dtile",
+    "lib:tests/plants/1x1-tree.dtile",
 ];
 
 fn on(system: &str) -> Options {
@@ -89,7 +89,7 @@ fn buildable() -> Vec<String> {
     Library::paths()
         .expect("the library is listed")
         .into_iter()
-        .filter(|p| p.contains("tiles/"))
+        .filter(|p| p.starts_with("lib:tiles/") || p.starts_with("lib:tests/"))
         .filter(|p| {
             check(&Library, p, &Options::default())
                 .is_ok_and(|c| c.tile.is_some() && c.pending().is_empty())

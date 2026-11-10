@@ -29,7 +29,12 @@ fn refused(text: &str) -> Vec<Diag> {
 }
 
 fn library(name: &str) -> Checked {
-    let path = format!("lib:tiles/test/{name}.dtile");
+    let group = if name.contains("pond") || name.contains("stream") {
+        "water"
+    } else {
+        "ground"
+    };
+    let path = format!("lib:tests/{group}/{name}.dtile");
     check(&Library, &path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:#?}"))
 }
 

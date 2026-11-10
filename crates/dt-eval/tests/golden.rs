@@ -22,31 +22,54 @@ use dt_kit::{VIEWS, render};
 use rayon::prelude::*;
 
 const TILES: &[&str] = &[
-    "lib:tiles/test/1x1-flat.dtile",
-    "lib:tiles/test/1x1-no-base.dtile",
-    "lib:tiles/ground/1x1-soil.dtile",
-    "lib:tiles/test/2x2-dirt.dtile",
-    "lib:tiles/test/2x2-rocks.dtile",
-    "lib:tiles/test/2x2-water.dtile",
-    "lib:tiles/test/2x2-grass.dtile",
-    "lib:tiles/test/2x2-meadow.dtile",
-    "lib:tiles/test/2x2-shore.dtile",
-    "lib:tiles/ground/1x1-grass-flowers.dtile",
-    "lib:tiles/cliffs/2x1-cliff.dtile",
-    "lib:tiles/test/1x1-tree.dtile",
-    "lib:tiles/test/1x1-wall-cut-stone-corner.dtile",
-    "lib:tiles/test/1x1-wall-fieldstone.dtile",
-    "lib:tiles/test/1x1-floor-stone.dtile",
-    "lib:tiles/test/1x1-flagstones-heaved.dtile",
-    "lib:tiles/test/1x1-planks.dtile",
-    "lib:tiles/test/1x1-wall-rim.dtile",
-    "lib:tiles/test/2x2-hill.dtile",
+    "lib:tests/ground/1x1-flat.dtile",
+    "lib:tests/ground/1x1-no-base.dtile",
+    "lib:tests/ground/1x1-soil.dtile",
+    "lib:tests/ground/2x2-dirt.dtile",
+    "lib:tests/rocks/2x2-rocks.dtile",
+    "lib:tests/water/2x2-water.dtile",
+    "lib:tests/plants/2x2-grass.dtile",
+    "lib:tests/plants/2x2-meadow.dtile",
+    "lib:tests/water/2x2-shore.dtile",
+    "lib:tests/plants/1x1-grass-flowers.dtile",
+    "lib:tests/cliffs/2x1-cliff.dtile",
+    "lib:tests/plants/1x1-tree.dtile",
+    "lib:tests/walls/1x1-wall-cut-stone-corner.dtile",
+    "lib:tests/walls/1x1-wall-fieldstone.dtile",
+    "lib:tests/floors/1x1-floor-stone.dtile",
+    "lib:tests/floors/1x1-flagstones-heaved.dtile",
+    "lib:tests/floors/1x1-planks.dtile",
+    "lib:tests/walls/1x1-wall-rim.dtile",
+    "lib:tests/ground/2x2-hill.dtile",
     // a stone floor with a wall standing on it: what laying floors before
     // the lift must leave as it is
-    "lib:tiles/floors/1x1-floor-stone-wall.dtile",
+    "lib:tests/floors/1x1-floor-stone-wall.dtile",
     // a cove of water cut into dirt: a hollow in the land under a fluid
-    "lib:tiles/water/1x1-water-u+soil.dtile",
+    "lib:tests/water/1x1-water-u+soil.dtile",
+    // odd shapes no library would ship: a closed line, sharp teeth on a
+    // long tile, a tile taller than wide, a region that is only a sliver
+    "lib:tests/shapes/1x1-island.dtile",
+    "lib:tests/shapes/3x1-zigzag.dtile",
+    "lib:tests/shapes/1x2-diagonal.dtile",
+    "lib:tests/shapes/1x1-corner-sliver.dtile",
 ];
+
+/// The shape tiles are the edge cases: each must pass the gate, watertight
+/// with nothing lost.
+#[test]
+fn the_shape_tiles_pass_the_gate() {
+    let printer = Options::default().printer;
+    for path in TILES.iter().filter(|p| p.contains("/shapes/")) {
+        let a = &built(path).audit;
+        assert!(
+            a.failures(&printer).is_empty(),
+            "{path}: {:?}",
+            a.failures(&printer)
+        );
+        assert!(a.watertight, "{path}");
+        assert!(a.dropped.is_empty(), "{path}: {:?}", a.dropped);
+    }
+}
 
 fn build_at(path: &str, threads: usize) -> Built {
     let pool = rayon::ThreadPoolBuilder::new()
@@ -149,7 +172,7 @@ fn golden_hashes() {
 
 #[test]
 fn the_flat_tile_meets_the_exit_criteria() {
-    let b = built("lib:tiles/test/1x1-flat.dtile");
+    let b = built("lib:tests/ground/1x1-flat.dtile");
     let a = &b.audit;
     assert!(a.watertight, "watertight after the float32 reload");
     assert_eq!(a.overhang_mm2, 0.0);
@@ -190,7 +213,7 @@ fn no_base_line_means_no_base() {
             system: system.to_owned(),
             ..Options::default()
         };
-        let none = build(&Library, "lib:tiles/test/1x1-no-base.dtile", &opts).unwrap();
+        let none = build(&Library, "lib:tests/ground/1x1-no-base.dtile", &opts).unwrap();
         assert!(none.audit.failures(&opts.printer).is_empty(), "{system}");
         assert!(none.audit.watertight && none.audit.holes == 0);
         assert!(min_z(&none).abs() < 1e-6, "{system}: flat from zero");
@@ -200,7 +223,7 @@ fn no_base_line_means_no_base() {
                 .all(|m| *m != dt_kit::Material::Connector),
             "{system}: a connector part"
         );
-        let some = build(&Library, "lib:tiles/test/1x1-flat.dtile", &opts).unwrap();
+        let some = build(&Library, "lib:tests/ground/1x1-flat.dtile", &opts).unwrap();
         assert!(min_z(&some) < -6.9, "{system}: the base is under zero");
         assert!(some.audit.failures(&opts.printer).is_empty(), "{system}");
     }
@@ -217,8 +240,8 @@ fn the_edge_height_is_the_most_the_rim_reaches() {
     const EDGE: f64 = 3.4;
     const ROUND: f64 = 0.2;
     for path in [
-        "lib:tiles/test/2x2-dirt.dtile",
-        "lib:tiles/ground/1x1-soil.dtile",
+        "lib:tests/ground/2x2-dirt.dtile",
+        "lib:tests/ground/1x1-soil.dtile",
     ] {
         let b = built(path);
         let (surface, _) = b.surface.as_ref().unwrap();
@@ -276,9 +299,9 @@ fn the_edge_height_is_the_most_the_rim_reaches() {
 #[test]
 fn the_dirt_sides_are_relief_behind_the_plane() {
     for path in [
-        "lib:tiles/ground/1x1-soil.dtile",
-        "lib:tiles/test/2x2-dirt.dtile",
-        "lib:tiles/test/2x2-hill.dtile",
+        "lib:tests/ground/1x1-soil.dtile",
+        "lib:tests/ground/2x2-dirt.dtile",
+        "lib:tests/ground/2x2-hill.dtile",
     ] {
         let b = built(path);
         let [w, h] = b.footprint;
@@ -376,9 +399,9 @@ fn the_dirt_sides_are_relief_behind_the_plane() {
 #[test]
 fn the_dirt_tiles_meet_the_exit_criteria() {
     for path in [
-        "lib:tiles/ground/1x1-soil.dtile",
-        "lib:tiles/test/2x2-dirt.dtile",
-        "lib:tiles/test/2x2-hill.dtile",
+        "lib:tests/ground/1x1-soil.dtile",
+        "lib:tests/ground/2x2-dirt.dtile",
+        "lib:tests/ground/2x2-hill.dtile",
     ] {
         let b = built(path);
         let a = &b.audit;
@@ -416,8 +439,8 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
 fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
     use dt_kit::Material;
     for path in [
-        "lib:tiles/test/2x2-rocks.dtile",
-        "lib:tiles/test/2x2-water.dtile",
+        "lib:tests/rocks/2x2-rocks.dtile",
+        "lib:tests/water/2x2-water.dtile",
     ] {
         let b = built(path);
         let a = &b.audit;
@@ -452,12 +475,12 @@ fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
 #[test]
 fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
     for path in [
-        "lib:tiles/test/1x1-wall-cut-stone-corner.dtile",
-        "lib:tiles/test/1x1-wall-fieldstone.dtile",
-        "lib:tiles/test/1x1-wall-rim.dtile",
-        "lib:tiles/test/1x1-floor-stone.dtile",
-        "lib:tiles/test/1x1-flagstones-heaved.dtile",
-        "lib:tiles/test/1x1-planks.dtile",
+        "lib:tests/walls/1x1-wall-cut-stone-corner.dtile",
+        "lib:tests/walls/1x1-wall-fieldstone.dtile",
+        "lib:tests/walls/1x1-wall-rim.dtile",
+        "lib:tests/floors/1x1-floor-stone.dtile",
+        "lib:tests/floors/1x1-flagstones-heaved.dtile",
+        "lib:tests/floors/1x1-planks.dtile",
     ] {
         let b = built(path);
         let a = &b.audit;
@@ -478,9 +501,9 @@ fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
 fn the_grass_tiles_meet_the_exit_criteria() {
     use dt_kit::Material;
     for path in [
-        "lib:tiles/test/2x2-grass.dtile",
-        "lib:tiles/test/2x2-meadow.dtile",
-        "lib:tiles/test/2x2-shore.dtile",
+        "lib:tests/plants/2x2-grass.dtile",
+        "lib:tests/plants/2x2-meadow.dtile",
+        "lib:tests/water/2x2-shore.dtile",
     ] {
         let b = built(path);
         let a = &b.audit;

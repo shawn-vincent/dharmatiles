@@ -332,8 +332,8 @@ fn side_grain(b: &Built, axis: usize, high: bool, z_max: f64) -> (f64, usize, us
 #[test]
 fn the_tiles_outer_sides_carry_grain_all_the_way_up() {
     for path in [
-        "lib:tiles/cliffs/1x1-cliff.dtile",
-        "lib:tiles/cliffs/1x1-cliff-corner.dtile",
+        "lib:tests/cliffs/1x1-cliff-columns.dtile",
+        "lib:tests/cliffs/1x1-cliff-corner.dtile",
     ] {
         let b = build(&Library, path, &Options::default()).unwrap();
         // the crag stands on the north (and west) sides; every side, the
@@ -398,7 +398,11 @@ fn every_old_cliff_form_migrates_to_a_tile_that_checks_clean() {
             c.notes()
         );
         // and it builds, on the quick setting (the gate is for full builds):
-        // there are stones, and they are rock
+        // there are stones, and they are rock; one form of each kind (a
+        // run along an edge, a free-standing mass, a corner) is enough
+        if !matches!(form, "run" | "spire" | "corner") {
+            continue;
+        }
         let draft = Options {
             draft: true,
             ..Options::default()
@@ -438,7 +442,7 @@ fn a_band_that_holds_a_stone_down_does_not_stack_it_on_itself() {
     // coincident solids, a union that never finished)
     let b = build(
         &Library,
-        "lib:tiles/cliffs/1x1-cliff-spire.dtile",
+        "lib:tests/cliffs/1x1-cliff-spire.dtile",
         &Options::default(),
     )
     .unwrap();

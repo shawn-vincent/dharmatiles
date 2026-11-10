@@ -73,7 +73,7 @@ fn the_library_builds_as_the_baseline_says() {
     let tiles: Vec<String> = Library::paths()
         .expect("the library is listed")
         .into_iter()
-        .filter(|p| p.contains("tiles/") && !p.contains("tiles/test/"))
+        .filter(|p| p.starts_with("lib:tiles/"))
         .collect();
     assert!(tiles.len() > 50, "{} library tiles", tiles.len());
     let rows: Vec<String> = tiles.iter().map(|p| row(p)).collect();

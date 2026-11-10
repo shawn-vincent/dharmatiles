@@ -41,7 +41,12 @@ fn a_write_error_in_json_has_every_error_key() {
     let blocked = d.join("out");
     std::fs::write(&blocked, "a file where the out folder should be").unwrap();
     let o = Command::new(EXE)
-        .args(["build", "lib:tiles/test/1x1-flat.dtile", "--json", "--out"])
+        .args([
+            "build",
+            "lib:tests/ground/1x1-flat.dtile",
+            "--json",
+            "--out",
+        ])
         .arg(&blocked)
         .output()
         .unwrap();
@@ -331,7 +336,7 @@ fn watch_of_a_library_tile_watches_its_file_on_disk() {
     use std::io::BufRead;
     let d = scratch("watch-lib");
     let mut child = Command::new(EXE)
-        .args(["watch", "lib:tiles/test/1x1-flat.dtile", "--out"])
+        .args(["watch", "lib:tests/ground/1x1-flat.dtile", "--out"])
         .arg(&d)
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -362,7 +367,7 @@ fn watch_of_a_library_tile_watches_its_file_on_disk() {
     let _ = child.kill();
     let _ = child.wait();
     assert!(watching, "never started watching:\n{}", seen.join("\n"));
-    assert!(d.join("db/test/1x1-flat-db.stl").exists());
+    assert!(d.join("db/tests/ground/1x1-flat-db.stl").exists());
 }
 
 #[test]
@@ -378,7 +383,12 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
     .unwrap();
     let build = |args: &[&str]| {
         Command::new(EXE)
-            .args(["build", "lib:tiles/test/1x1-flat.dtile", "--json", "--out"])
+            .args([
+                "build",
+                "lib:tests/ground/1x1-flat.dtile",
+                "--json",
+                "--out",
+            ])
             .arg(d.join("out"))
             .args(args)
             .env("DT_HOME", &home)
@@ -388,7 +398,7 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
     // the default printer: the paths are the system's alone
     let o = build(&[]);
     assert_eq!(o.status.code(), Some(0));
-    assert!(d.join("out/db/test/1x1-flat-db.stl").is_file());
+    assert!(d.join("out/db/tests/ground/1x1-flat-db.stl").is_file());
     // another printer, the library's and the user's own, and the other system
     for (args, folder, file, target) in [
         (
@@ -408,7 +418,11 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
         let o = build(&args);
         assert_eq!(o.status.code(), Some(0), "{args:?}");
         assert!(
-            d.join("out").join(folder).join("test").join(file).is_file(),
+            d.join("out")
+                .join(folder)
+                .join("tests/ground")
+                .join(file)
+                .is_file(),
             "{args:?}"
         );
         let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
@@ -433,7 +447,7 @@ fn a_sweep_reports_every_failing_tile_by_name_and_exits_1() {
         .args([
             "build",
             "no/such/first.dtile",
-            "lib:tiles/test/1x1-flat.dtile",
+            "lib:tests/ground/1x1-flat.dtile",
             "no/such/last.dtile",
             "--out",
         ])
@@ -443,7 +457,7 @@ fn a_sweep_reports_every_failing_tile_by_name_and_exits_1() {
     let err = String::from_utf8_lossy(&o.stderr);
     assert_eq!(o.status.code(), Some(1), "{err}");
     assert!(
-        d.join("db/test/1x1-flat-db.stl").is_file(),
+        d.join("db/tests/ground/1x1-flat-db.stl").is_file(),
         "the good tile still builds: {err}"
     );
     assert!(err.contains("2 of 3 tiles failed"), "{err}");
@@ -488,8 +502,8 @@ fn a_panic_in_one_tile_of_a_sweep_exits_101_and_the_rest_build() {
     let o = Command::new(EXE)
         .args([
             "build",
-            "lib:tiles/test/1x1-flat.dtile",
-            "lib:tiles/test/1x1-planks.dtile",
+            "lib:tests/ground/1x1-flat.dtile",
+            "lib:tests/floors/1x1-planks.dtile",
             "--out",
         ])
         .arg(&d)
@@ -504,7 +518,7 @@ fn a_panic_in_one_tile_of_a_sweep_exits_101_and_the_rest_build() {
     );
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("1x1-planks"), "{err}");
-    assert!(err.contains("built lib:tiles/test/1x1-flat"), "{err}");
+    assert!(err.contains("built lib:tests/ground/1x1-flat"), "{err}");
 }
 
 #[test]
@@ -517,7 +531,7 @@ fn the_worst_outcome_of_a_sweep_wins() {
         let mut c = Command::new(EXE);
         c.args(["build"])
             .arg(&bad)
-            .arg("lib:tiles/test/1x1-flat.dtile")
+            .arg("lib:tests/ground/1x1-flat.dtile")
             .arg("--out")
             .arg(&d);
         if let Some(p) = panic {

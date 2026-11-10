@@ -1,0 +1,34 @@
+// A copy of the library's tiles/cliffs/2x1-cliff, kept as a test tile so the
+// library's own can change without touching the tests.
+// A 2×1 cliff run: a band of stacked rock against the north edge, with dirt
+// lodged on its top, the bank at its foot drawn as pins, and scree at its foot.
+
+tile size="2x1" seed=1 {
+    about """
+        Rock band against the north edge. Both ends finish in the
+        standard end section, so runs butt end to end.
+        """
+
+    region crag { within "[10 .. 20]" of=northEdge }
+    region apron { within 6.5 of=crag }
+
+    stack {
+        base
+        dirt top=dirtEdgeHeight {
+            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
+            pin top=dirtEdgeHeight at=edges
+            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
+        }
+
+        cliff top="dirtEdgeHeight + 35" at=crag {
+            rock mixed
+            stoneSize massive
+            shattered patches=3 width="5..10"
+        }
+        dirt top="bottom + [0.6 .. 1.2]" at=crag
+
+        // scree: fallen stones gathered at the cliff's foot
+        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
+    }
+}

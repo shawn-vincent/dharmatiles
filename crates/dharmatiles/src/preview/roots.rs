@@ -12,8 +12,8 @@ pub enum RootKind {
     Files,
     /// A folder: every tile document under it.
     Dir(std::path::PathBuf),
-    /// The library's tiles under `lib:` + this prefix (`tiles/`, or
-    /// `tiles/water/` for one group).
+    /// The library's tiles under `lib:` + this prefix (`tiles/`, the test
+    /// tiles' `tests/`, or `tiles/water/` for one group).
     Library(String),
 }
 
@@ -80,9 +80,11 @@ impl Root {
     }
 }
 
-/// `lib:tiles/water/x.dtile` → `water`.
+/// `lib:tiles/water/x.dtile` → `water`; `lib:tests/shapes/x.dtile` → `shapes`.
 pub(super) fn lib_group(path: &str) -> Option<String> {
-    let rest = path.strip_prefix("lib:tiles/")?;
+    let rest = path
+        .strip_prefix("lib:tiles/")
+        .or_else(|| path.strip_prefix("lib:tests/"))?;
     let (g, _) = rest.split_once('/')?;
     Some(g.to_owned())
 }
@@ -166,7 +168,7 @@ pub fn personal_home() -> Result<std::path::PathBuf, String> {
 /// What the command line asks for: the roots, and the files named.
 /// A folder is a root of its own; `lib:tiles/water` (no `.dtile`) is the
 /// library's water group; anything else is a file.  No paths: the personal
-/// home and the library.
+/// home, the library and the test tiles.
 ///
 /// # Errors
 /// When no paths are named and there is no personal home ([`personal_home`]).
@@ -174,7 +176,8 @@ pub fn roots_for(paths: &[String]) -> Result<(Vec<Root>, Vec<String>), String> {
     let lib = Root::new("Library", RootKind::Library("tiles/".to_owned()));
     if paths.is_empty() {
         let home = Root::new("My tiles", RootKind::Dir(personal_home()?));
-        return Ok((vec![home, lib], Vec::new()));
+        let tests = Root::new("Tests", RootKind::Library("tests/".to_owned()));
+        return Ok((vec![home, lib, tests], Vec::new()));
     }
     let mut roots = Vec::new();
     let mut files = Vec::new();
@@ -185,14 +188,15 @@ pub fn roots_for(paths: &[String]) -> Result<(Vec<Root>, Vec<String>), String> {
             && !lower.ends_with(".stl")
         {
             let prefix = format!("{}/", rest.trim_end_matches('/'));
-            let label = format!(
-                "Library: {}",
-                prefix.trim_start_matches("tiles/").trim_end_matches('/')
-            );
-            let label = if prefix == "tiles/" {
-                "Library".to_owned()
+            let (name, group) = match prefix.strip_prefix("tests/") {
+                Some(g) => ("Tests", g),
+                None => ("Library", prefix.trim_start_matches("tiles/")),
+            };
+            let group = group.trim_end_matches('/');
+            let label = if group.is_empty() {
+                name.to_owned()
             } else {
-                label
+                format!("{name}: {group}")
             };
             roots.push(Root::new(&label, RootKind::Library(prefix)));
         } else if !p.starts_with("lib:") && std::path::Path::new(p).is_dir() {

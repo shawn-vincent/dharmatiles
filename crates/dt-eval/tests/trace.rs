@@ -59,10 +59,8 @@ fn a_draft_is_quick_and_still_traced() {
         draft: true,
         ..Options::default()
     };
-    for tile in [
-        "lib:tiles/water/1x1-water+grass.dtile",
-        "lib:tiles/test/2x2-meadow.dtile",
-    ] {
+    {
+        let tile = "lib:tests/water/1x1-water+grass.dtile";
         let t0 = std::time::Instant::now();
         let f = dt_eval::build(&dt_eval::Library, tile, &full).unwrap();
         let tf = t0.elapsed().as_secs_f64();

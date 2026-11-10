@@ -1,7 +1,7 @@
 dt::choice
 
   × `cliff rock` can't be `mixd`
-    ╭─[library/tiles/test/2x1-cliff-full.dtile:27:18]
+    ╭─[library/tests/cliffs/2x1-cliff-full.dtile:27:18]
  26 │         cliff top="dirtEdgeHeight + 35" at=crag {
  27 │             rock mixd
     ·                  ──┬─
@@ -12,7 +12,7 @@ dt::choice
 dt::percent
 
   × `cliff stoneSize` is a share, written as a percent
-    ╭─[library/tiles/test/2x1-cliff-full.dtile:28:23]
+    ╭─[library/tests/cliffs/2x1-cliff-full.dtile:28:23]
  27 │             rock mixd
  28 │             stoneSize "135"
     ·                       ──┬──

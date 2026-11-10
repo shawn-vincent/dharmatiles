@@ -74,7 +74,7 @@ fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Valu
     }
 }
 
-const FLAT: &str = "lib:tiles/test/1x1-flat.dtile";
+const FLAT: &str = "lib:tests/ground/1x1-flat.dtile";
 
 #[test]
 fn serves_the_viewer_and_its_vendored_three() {
@@ -372,11 +372,13 @@ fn the_command_line_names_files_folders_and_library_groups() {
             RootKind::Library("tiles/water/".to_owned())
         ]
     );
-    // no paths: the personal home, then the library
+    // no paths: the personal home, then the library, then the test tiles
     let (roots, files) = roots_for(&[]).unwrap();
     assert!(files.is_empty());
     assert_eq!(roots[0].kind, RootKind::Dir(personal_home().unwrap()));
     assert_eq!(roots[1].kind, RootKind::Library("tiles/".to_owned()));
+    assert_eq!(roots[2].kind, RootKind::Library("tests/".to_owned()));
+    assert_eq!(roots[2].label, "Tests");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -394,7 +396,7 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
     std::fs::write(dir.join("dharmatiles.dtile"), "out \"out\"\n").unwrap(); // the project file
     let roots = vec![
         Root::new("My tiles", RootKind::Dir(dir.clone())),
-        Root::new("Library", RootKind::Library("tiles/test/".to_owned())),
+        Root::new("Tests", RootKind::Library("tests/ground/".to_owned())),
     ];
     let shared = Shared::with_roots(roots, &[], &Options::default());
     let listed = |s: &Shared| -> Vec<(String, Value, Value)> {
@@ -1270,7 +1272,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     assert_eq!(id, Some(0));
     {
         let mut tiles = lock(&shared.tiles);
-        let mut t = Slot::new("lib:tiles/test/1x1-flat.dtile");
+        let mut t = Slot::new("lib:tests/ground/1x1-flat.dtile");
         t.status = State::Ready;
         tiles.push(t);
     }

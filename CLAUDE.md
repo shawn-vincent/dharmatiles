@@ -91,7 +91,7 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 
 ### Library
 
-`library/tiles/<group>/…kdl` are the shipped tiles, `library/tiles/test/` are the golden and language tests' tiles, `library/parts/` are shared definitions (`grass`, `trees`, `edges`, `levels`).
+`library/tiles/<group>/…dtile` are the shipped tiles (the Library tab, `build --all`); `library/tests/<group>/…dtile` are the test tiles (the Tests tab): the tiles the test suite builds, kept apart so library tiles can come and go without touching the tests, and free to be odd shapes and edge cases no library would ship; `library/parts/` are shared definitions (`grass`, `trees`, `edges`, `levels`).
 
 ## Standing rules
 

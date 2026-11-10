@@ -892,7 +892,7 @@ mod tests {
 
         let (status, _) = rename(
             &shared,
-            "lib:tiles/test/1x1-flat.dtile",
+            "lib:tests/ground/1x1-flat.dtile",
             &json!({ "name": "x" }),
         );
         assert_eq!(status, "400 Bad Request");

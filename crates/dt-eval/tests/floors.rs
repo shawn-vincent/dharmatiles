@@ -96,9 +96,9 @@ fn a_floor_with_no_land_stands_on_the_base() {
 #[test]
 fn the_library_floors_pass_the_gate() {
     for path in [
-        "lib:tiles/floors/1x1-floor-stone.dtile",
-        "lib:tiles/floors/1x1-floor-planks.dtile",
-        "lib:tiles/test/1x1-flagstones-heaved.dtile",
+        "lib:tests/floors/1x1-floor-stone.dtile",
+        "lib:tests/floors/1x1-planks.dtile",
+        "lib:tests/floors/1x1-flagstones-heaved.dtile",
     ] {
         let b = build(&Library, path, &Options::default()).unwrap();
         assert!(

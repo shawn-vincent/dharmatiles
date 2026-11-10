@@ -25,8 +25,14 @@ fn errors(text: &str) -> Vec<Diag> {
     }
 }
 
+/// Each stage's hash, from a draft: a draw moves a draft as it moves a full
+/// build, at a fraction of the time.
 fn hash(text: &str) -> Vec<(String, u64)> {
-    let b = build(&mem(text), "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:?}"));
+    let draft = Options {
+        draft: true,
+        ..Options::default()
+    };
+    let b = build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
     b.stages.iter().map(|s| (s.name.clone(), s.hash)).collect()
 }
 

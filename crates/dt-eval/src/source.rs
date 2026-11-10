@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn the_flat_tile_is_in_the_library() {
-        assert!(Library.read("lib:tiles/test/1x1-flat.dtile").is_ok());
+        assert!(Library.read("lib:tests/ground/1x1-flat.dtile").is_ok());
         assert!(Library.read("lib:nope.dtile").is_err());
     }
 }

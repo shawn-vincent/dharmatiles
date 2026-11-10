@@ -15,6 +15,15 @@ fn fingerprint(b: &Built) -> (Vec<(String, u64)>, u64) {
     )
 }
 
+/// Drafts: the cache keeps a draft's steps as it keeps a full build's, and
+/// a draft is a fraction of the time.
+fn draft() -> Options {
+    Options {
+        draft: true,
+        ..Options::default()
+    }
+}
+
 /// `tile` as written, then with `from` replaced by `to`: each built with
 /// the cache and from nothing.  Returns the steps the edit reused.
 fn edit(tile: &str, from: &str, to: &str, opts: &Options) -> usize {
@@ -48,10 +57,10 @@ fn edit(tile: &str, from: &str, to: &str, opts: &Options) -> usize {
 #[test]
 fn an_edit_late_in_the_plan_reuses_the_steps_before_it() {
     let reused = edit(
-        "lib:tiles/test/2x2-shore.dtile",
+        "lib:tests/water/2x2-shore.dtile",
         "count=3",
         "count=4",
-        &Options::default(),
+        &draft(),
     );
     assert!(reused >= 2, "only {reused} steps reused");
 }
@@ -62,17 +71,17 @@ fn an_edit_late_in_the_plan_reuses_the_steps_before_it() {
 #[test]
 fn an_edit_reuses_only_what_comes_before_it() {
     let reused = edit(
-        "lib:tiles/test/2x2-shore.dtile",
+        "lib:tests/water/2x2-shore.dtile",
         "bare=\"15%\"",
         "bare=\"25%\"",
-        &Options::default(),
+        &draft(),
     );
     assert!(reused >= 2, "only {reused} steps reused");
     let reused = edit(
-        "lib:tiles/test/2x2-shore.dtile",
+        "lib:tests/water/2x2-shore.dtile",
         "top=dirtEdgeHeight",
         "top=\"dirtEdgeHeight + 0.5\"",
-        &Options::default(),
+        &draft(),
     );
     assert_eq!(reused, 0);
 }
@@ -80,12 +89,9 @@ fn an_edit_reuses_only_what_comes_before_it() {
 /// A cliff draft: the boulders change, the cliff is not carved again.
 #[test]
 fn a_cliff_is_not_carved_again_for_its_boulders() {
-    let opts = Options {
-        draft: true,
-        ..Options::default()
-    };
+    let opts = draft();
     let reused = edit(
-        "lib:tiles/cliffs/1x1-cliff.dtile",
+        "lib:tests/cliffs/1x1-cliff-columns.dtile",
         "perSquare=2.5",
         "perSquare=3.5",
         &opts,
