@@ -24,6 +24,7 @@ pub(crate) mod block;
 mod chassis;
 pub(crate) mod fieldstone;
 pub(crate) mod layout;
+mod path;
 pub(crate) mod rubble;
 
 use dt_kit::{Kind, Scene};
@@ -120,6 +121,9 @@ pub(crate) struct Mason {
     /// Wood grain depth, mm, and the share of boards with a check.
     pub grain: f64,
     pub checks: f64,
+    /// A drawn line's wall (the spine is a line's, bends at any angle) and
+    /// whether it is a ring; `None` on a tile edge or an edge path.
+    pub drawn: Option<bool>,
 }
 
 impl Mason {
@@ -153,6 +157,7 @@ impl Mason {
             edge_pull: 0.0,
             grain: 0.0,
             checks: 0.0,
+            drawn: None,
         };
         match family {
             Family::CutStone | Family::Slab => base,
@@ -323,9 +328,25 @@ impl Element for Wall {
                 code: None,
             });
         };
-        let sq = scene.frame().square_mm;
-        let spine: Vec<[f64; 2]> = along.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
-        build(&self.mason, scene, ctx, &spine, Kind::Wall)
+        let frame = *scene.frame();
+        let sq = frame.square_mm;
+        let pts: Vec<[f64; 2]> = along.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
+        let Some(side) = ctx.line_side else {
+            return build(&self.mason, scene, ctx, &pts, Kind::Wall);
+        };
+        // a drawn line: its runs, on the side asked for
+        let s = frame.scale();
+        let spine = path::drawn(
+            &pts,
+            side,
+            self.mason.across * s,
+            s,
+            frame.size_mm(),
+            0.6 * self.mason.bay.lo() * s,
+        )?;
+        let mut m = self.mason.clone();
+        m.drawn = Some(spine.ring);
+        build(&m, scene, ctx, &spine.pts, Kind::Wall)
     }
 }
 

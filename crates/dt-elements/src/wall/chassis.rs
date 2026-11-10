@@ -10,7 +10,7 @@ use dt_kit::{Field, Mask, Material, Rng, Scene, Seed, Solid, Tag, TriMesh, union
 use rayon::prelude::*;
 
 use super::block::{Block, Finish, MAX_PROUD_MM};
-use super::layout::{Cell, Courses, End, Envelope, Seg};
+use super::layout::{Cell, Courses, End, Envelope, Seg, Vertex};
 use super::{CORE_ROUND_MM, Family, GAP_MM, Height, Mason, block, fieldstone, layout, rubble};
 use crate::{Ctx, LookError};
 
@@ -188,6 +188,8 @@ pub(crate) fn cell_seed(seed: Seed, what: &str, key: &[i64]) -> Seed {
 /// The footprint mask: nodes within each segment's strip `[0, len] ×
 /// [0, depth]`.
 pub(crate) fn footprint(scene: &Scene, segs: &[Seg], depth: f64) -> Mask {
+    // a bend's run goes on past the vertex
+    let reach = |v: Vertex| if let Vertex::Bend(e) = v { e } else { 0.0 };
     let f = scene.frame();
     let (nx, ny) = f.nodes();
     let step = f.step_mm();
@@ -200,7 +202,8 @@ pub(crate) fn footprint(scene: &Scene, segs: &[Seg], depth: f64) -> Mask {
                 let (dx, dy) = (p[0] - g.a[0], p[1] - g.a[1]);
                 let t = dx * g.d[0] + dy * g.d[1];
                 let q = dx * g.n[0] + dy * g.n[1];
-                t >= -1e-9 && t <= g.len + 1e-9 && q >= -1e-9 && q <= depth + 1e-9
+                let (lo, hi) = (reach(g.start), reach(g.end));
+                t >= -lo - 1e-9 && t <= g.len + hi + 1e-9 && q >= -1e-9 && q <= depth + 1e-9
             });
         }
     }
@@ -267,8 +270,12 @@ pub(crate) fn run(
     let frame = *scene.frame();
     let s = frame.scale();
     let tile = frame.size_mm();
-    let segs = layout::segments(spine).map_err(LookError::build)?;
     let across = m.across * s;
+    let segs = match m.drawn {
+        Some(ring) => layout::segments_drawn(spine, ring, across),
+        None => layout::segments(spine),
+    }
+    .map_err(LookError::build)?;
     let seed = ctx.seed;
 
     // ---- seat (standing) or the strip (laid)
@@ -392,6 +399,27 @@ pub(crate) fn run(
     let round = CORE_ROUND_MM * s;
     if m.family != Family::Fieldstone && !m.laid {
         for (k, g) in run.segs.iter().enumerate() {
+            // a bend's core runs on past the vertex like its stones
+            let (b0, b1) = (
+                if let Vertex::Bend(e) = g.start {
+                    e
+                } else {
+                    0.0
+                },
+                if let Vertex::Bend(e) = g.end { e } else { 0.0 },
+            );
+            let (end_in0, end_in1) = (
+                if matches!(g.start, Vertex::Bend(_)) {
+                    -b0
+                } else {
+                    end_in
+                },
+                if matches!(g.end, Vertex::Bend(_)) {
+                    b1
+                } else {
+                    -end_in
+                },
+            );
             let mut core = |t0: f64, t1: f64, z0: f64, z1: f64| -> Result<(), LookError> {
                 if t1 - t0 > 2.0 * round && z1 - z0 > 2.0 * round {
                     let mesh = rubble::rounded_box([t0, rv, z0], [t1, across - rv, z1], round)
@@ -401,9 +429,9 @@ pub(crate) fn run(
                 Ok(())
             };
             if let Some(e) = &env {
-                core(end_in, g.len - end_in, base, e[k].min(g.len) - top_in)?;
+                core(end_in0, g.len + end_in1, base, e[k].min(g.len) - top_in)?;
             } else if let Some(b) = &crenels {
-                core(end_in, g.len - end_in, base, b.floor_z - top_in)?;
+                core(end_in0, g.len + end_in1, base, b.floor_z - top_in)?;
                 for &(m0, m1) in &b.merlons[k] {
                     core(
                         (m0 + end_in).max(end_in),
@@ -413,7 +441,31 @@ pub(crate) fn run(
                     )?;
                 }
             } else {
-                core(end_in, g.len - end_in, base, height - top_in)?;
+                core(end_in0, g.len + end_in1, base, height - top_in)?;
+            }
+        }
+        // the core across a bend: both runs' core ends and what lies
+        // between them
+        if env.is_none() && crenels.is_none() {
+            let n = run.segs.len();
+            for (k, g) in run.segs.iter().enumerate() {
+                let Vertex::Bend(_) = g.end else { continue };
+                let h = &run.segs[(k + 1) % n];
+                let turn = g.d[0] * h.d[1] - g.d[1] * h.d[0];
+                if turn.abs() < 0.02 {
+                    continue;
+                }
+                let (z0, z1) = (base, height - top_in);
+                let mut pts = Vec::with_capacity(8);
+                for q in [rv, across - rv] {
+                    for (sg, t) in [(g, g.len), (h, 0.0)] {
+                        let p = sg.at(t, q);
+                        pts.push([p[0], p[1], run.seat + z0]);
+                        pts.push([p[0], p[1], run.seat + z1]);
+                    }
+                }
+                let hull = dt_kit::form::hull(&pts).map_err(LookError::build)?;
+                units.push(Unit::Mesh(hull));
             }
         }
     }
@@ -752,12 +804,12 @@ pub(crate) fn blocks(
         // which sits back by its face recess: run on into it, so the
         // corner joint never opens wider than the block above can bridge
         if !run.laid {
-            let n = run.segs.len();
+            let g = &run.segs[c.seg];
             let reach = fr + 0.1 * s;
-            if c.seg > 0 && !face0 && (c.t0 - t).abs() < 1e-6 {
+            if g.start == Vertex::Quoin && !face0 && (c.t0 - t).abs() < 1e-6 {
                 x0 -= reach;
             }
-            if c.seg + 1 < n && !face1 && (c.t1 - (run.segs[c.seg].len - t)).abs() < 1e-6 {
+            if g.end == Vertex::Quoin && !face1 && (c.t1 - (g.len - t)).abs() < 1e-6 {
                 x1 += reach;
             }
         }

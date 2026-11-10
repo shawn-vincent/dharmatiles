@@ -1,0 +1,18 @@
+// A 2×2 lawn with a cut-stone wall along a curving drawn line, from the
+// west edge to the east. The wall follows the line, wobble and all, and
+// stands to its left as you walk it (side=left): its outer face is the line.
+
+use "parts/grass" lawn
+
+tile size="2x2" seed=33 {
+    line lane wobble=6 { through "0,0.5" "0.45,0.55" "0.85,0.78" "1.1,1.1" "1.35,1.38" "1.7,1.5" "2,1.5" }
+    stack {
+        base
+        dirt
+        wall at=lane side=left style=cut-stone seed=7 {
+            height full
+            thickness 7
+        }
+        lawn                                // grows up to the wall's foot
+    }
+}

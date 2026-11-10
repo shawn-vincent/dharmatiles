@@ -37,6 +37,7 @@ lib:tiles/walls/1x1-wall-fieldstone-corner.dtile	83b809f7217077ce	466704	31	278	
 lib:tiles/walls/1x1-wall-fieldstone.dtile	ceba6f2f6fb03a13	390388	26	176	0	0	0	0.000	0.000	0	pass	1.8
 lib:tiles/walls/1x1-wall-stone-corner.dtile	3a5169df37e3b50a	526228	25	124	0	0	0	0.000	0.000	0	pass	2.1
 lib:tiles/walls/1x1-wall-stone.dtile	eafa6d16c5986119	396990	19	266	0	0	0	0.000	0.000	0	pass	1.7
+lib:tiles/walls/2x2-wall-curve.dtile	6e46f2698375ad1c	1851130	182	1028	0	0	0	0.000	0.000	0	pass	9.1
 lib:tiles/water/1x1-water+grass-angle.dtile	09a7682754fed770	284926	27	190	0	0	0	0.000	0.000	0	pass	1.4
 lib:tiles/water/1x1-water+grass-corner.dtile	0345d0d046e13017	42144	0	0	0	0	0	0.000	0.000	0	pass	0.3
 lib:tiles/water/1x1-water+grass-tree.dtile	e53124360c26cf61	584112	16	306	0	0	0	138.609	284.993	0	fail	4.6

@@ -24,6 +24,7 @@ pub mod source;
 
 use std::path::{Path, PathBuf};
 
+use dt_doc::place::Side;
 use dt_doc::schema::did_you_mean;
 use dt_elements::{Control, Ctx, Element};
 use dt_kit::{Audit, BuildRecord, Export, Frame, Mask, Material, Printer, Scene, Seed, Stage};
@@ -906,6 +907,13 @@ impl<'a> Plan<'a> {
                         .as_ref()
                         .and_then(|n| self.tile.lines.get(n))
                         .map(Vec::as_slice)
+                })
+            }),
+            line_side: entry.and_then(|e| {
+                e.line.as_ref().map(|_| match e.side {
+                    Some(Side::Left) => dt_elements::LineSide::Left,
+                    Some(Side::Right) => dt_elements::LineSide::Right,
+                    Some(Side::Centre) | None => dt_elements::LineSide::Centre,
                 })
             }),
             at: entry.and_then(|e| e.at.as_ref()),

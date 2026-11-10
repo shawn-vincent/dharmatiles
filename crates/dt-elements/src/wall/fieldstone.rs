@@ -19,7 +19,7 @@
 use dt_kit::form::{Relief, relief_radial, subdivide};
 use dt_kit::{KitError, Rng, Seed, TriMesh};
 
-use super::layout::{self, Cell, Courses, End, Seg};
+use super::layout::{self, Cell, Courses, End, Seg, Vertex};
 use super::{Mason, Run};
 
 // crack network (mm at the reference)
@@ -156,25 +156,32 @@ pub(crate) fn cells(m: &Mason, run: &Run, courses: &Courses, rng: &mut Rng) -> (
 }
 
 fn coping_cells(segs: &[Seg], t: f64, z0: f64, h: f64, s: f64, rng: &mut Rng) -> Vec<Cell> {
-    let n_joints = segs.len() - 1;
     let mut out = Vec::new();
     for (k, seg) in segs.iter().enumerate() {
-        let owns_start = k > 0 && (k - 1) % 2 != 0;
-        let owns_end = k < n_joints && k % 2 == 0;
-        let mut t0 = if k == 0 || owns_start { 0.0 } else { t };
-        let mut t1 = if k == n_joints || owns_end {
-            seg.len
-        } else {
-            seg.len - t
+        let quoin0 = seg.start == Vertex::Quoin;
+        let quoin1 = seg.end == Vertex::Quoin;
+        let owns_start = quoin0 && (k - 1) % 2 != 0;
+        let owns_end = quoin1 && k % 2 == 0;
+        let mut t0 = match seg.start {
+            Vertex::Free => 0.0,
+            Vertex::Quoin if owns_start => 0.0,
+            Vertex::Quoin => t,
+            Vertex::Bend(e) => -e,
+        };
+        let mut t1 = match seg.end {
+            Vertex::Free => seg.len,
+            Vertex::Quoin if owns_end => seg.len,
+            Vertex::Quoin => seg.len - t,
+            Vertex::Bend(e) => seg.len + e,
         };
         let mut slab0 = None;
         let mut slab1 = None;
-        if k > 0 && owns_start {
+        if quoin0 && owns_start {
             let e = t + rng.uniform(CORNER_SLAB.0, CORNER_SLAB.1) * s;
             slab0 = Some((0.0, e));
             t0 = e;
         }
-        if k < n_joints && owns_end {
+        if quoin1 && owns_end {
             let b = seg.len - t - rng.uniform(CORNER_SLAB.0, CORNER_SLAB.1) * s;
             slab1 = Some((b, seg.len));
             t1 = b;
@@ -196,8 +203,8 @@ fn coping_cells(segs: &[Seg], t: f64, z0: f64, h: f64, s: f64, rng: &mut Rng) ->
         }
         pieces.extend(slab1);
         for (b, (ta, tb)) in pieces.into_iter().enumerate() {
-            let first = ta <= 1e-6 && (k == 0 || owns_start);
-            let last = tb >= seg.len - 1e-6 && (k == n_joints || owns_end);
+            let first = ta <= 1e-6 && (seg.start == Vertex::Free || owns_start);
+            let last = tb >= seg.len - 1e-6 && (seg.end == Vertex::Free || owns_end);
             #[allow(clippy::cast_possible_wrap)]
             out.push(Cell {
                 seg: k,
@@ -451,10 +458,11 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
     let corner = (PROUD_DEEP.1 + 0.1) * s;
     let (mut ov0, mut ov1) = (ov0, ov1);
     if !run.laid && !c.coping {
-        if c.seg > 0 && c.end0 == End::Joint && libm::fabs(c.t0 - run.across) < 1e-6 {
+        if g.start == Vertex::Quoin && c.end0 == End::Joint && libm::fabs(c.t0 - run.across) < 1e-6
+        {
             ov0 += corner;
         }
-        if c.seg + 1 < run.segs.len()
+        if g.end == Vertex::Quoin
             && c.end1 == End::Joint
             && libm::fabs(c.t1 - (g.len - run.across)) < 1e-6
         {

@@ -7,10 +7,29 @@ use dt_kit::{Draw, Rng};
 /// A segment fails the layout's rules.
 pub(crate) type LayoutError = String;
 
+/// What a segment's start or end meets.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Vertex {
+    /// The free end of a wall: a textured face.
+    Free,
+    /// A right-angle corner whose two runs take turns passing through it,
+    /// course by course (an edge path's corner).
+    Quoin,
+    /// A bend of a drawn line, at any angle: the two runs overlap, each
+    /// running on past the vertex by this many mm so that the face on the
+    /// outside of the turn is whole (nothing past it on a left turn, where
+    /// the outside is the spine itself).
+    Bend(f64),
+}
+
 /// One straight run of the spine: from `a` along `d` for `len` mm, the
 /// body to the left (`n`, the inward normal).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Seg {
+    /// What its start meets.
+    pub start: Vertex,
+    /// What its end meets.
+    pub end: Vertex,
     /// The outer-face start, world mm.
     pub a: [f64; 2],
     /// Unit run direction.
@@ -34,28 +53,87 @@ impl Seg {
 /// `_segments`: the spine (world mm) as segments; corners must be right
 /// angles (gen-1).
 pub(crate) fn segments(spine: &[[f64; 2]]) -> Result<Vec<Seg>, LayoutError> {
+    let segs = segs_of(spine, false, 0.0, true)?;
+    for w in segs.windows(2) {
+        if (w[0].d[0] * w[1].d[0] + w[0].d[1] * w[1].d[1]).abs() > 1e-3 {
+            return Err("a wall turns only at right angles".into());
+        }
+    }
+    Ok(segs)
+}
+
+/// The most a drawn wall may turn at one vertex, degrees.
+pub(crate) const MAX_TURN_DEG: f64 = 150.0;
+
+/// A drawn line's spine (world mm) as segments: a left turn of exactly
+/// a right angle is a quoin corner like an edge path's, any other turn a
+/// bend (see [`Vertex::Bend`]); a ring has bends only.
+/// `across` is the wall's thickness, mm.
+pub(crate) fn segments_drawn(
+    spine: &[[f64; 2]],
+    ring: bool,
+    across: f64,
+) -> Result<Vec<Seg>, LayoutError> {
+    segs_of(spine, ring, across, false)
+}
+
+fn segs_of(
+    spine: &[[f64; 2]],
+    ring: bool,
+    across: f64,
+    edges: bool,
+) -> Result<Vec<Seg>, LayoutError> {
     if spine.len() < 2 {
         return Err("a wall needs a path of at least one edge".into());
     }
     let mut segs = Vec::new();
-    for w in spine.windows(2) {
-        let v = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
+    let mut pairs: Vec<([f64; 2], [f64; 2])> = spine.windows(2).map(|w| (w[0], w[1])).collect();
+    if ring && let (Some(&first), Some(&last)) = (spine.first(), spine.last()) {
+        pairs.push((last, first));
+    }
+    for (p, q) in pairs {
+        let v = [q[0] - p[0], q[1] - p[1]];
         let len = libm::hypot(v[0], v[1]);
         if len < 1e-6 {
             return Err("the wall's path has a zero-length edge".into());
         }
         let d = [v[0] / len, v[1] / len];
         segs.push(Seg {
-            a: w[0],
+            start: Vertex::Free,
+            end: Vertex::Free,
+            a: p,
             d,
             n: [-d[1], d[0]],
             len,
         });
     }
-    for w in segs.windows(2) {
-        if (w[0].d[0] * w[1].d[0] + w[0].d[1] * w[1].d[1]).abs() > 1e-3 {
-            return Err("a wall turns only at right angles".into());
-        }
+    let n = segs.len();
+    let joints = if ring { n } else { n - 1 };
+    for j in 0..joints {
+        let k = (j + 1) % n;
+        let (a, b) = (segs[j], segs[k]);
+        let dot = a.d[0] * b.d[0] + a.d[1] * b.d[1];
+        let cross = a.d[0] * b.d[1] - a.d[1] * b.d[0];
+        let right_angle = dot.abs() <= 1e-3;
+        let (end, start) = if !ring && right_angle && (edges || cross > 0.0) {
+            (Vertex::Quoin, Vertex::Quoin)
+        } else {
+            let turn = libm::atan2(cross.abs(), dot);
+            if turn.to_degrees() > MAX_TURN_DEG {
+                return Err(format!(
+                    "the wall turns back on itself ({:.0} degrees at one point); a wall turns at most {MAX_TURN_DEG:.0} degrees at a bend",
+                    turn.to_degrees()
+                ));
+            }
+            let e = if cross < 0.0 {
+                across * libm::tan(0.5 * turn)
+            } else {
+                0.0
+            };
+            (Vertex::Bend(e), Vertex::Bend(e))
+        };
+        segs[j].end = end;
+        segs[k].start = start;
     }
     Ok(segs)
 }
@@ -209,7 +287,6 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
     for h in &heights {
         z_edges.push(z_edges.last().copied().unwrap_or(0.0) + h);
     }
-    let n_joints = segs.len() - 1;
     let mut cells = Vec::new();
     let mut prev: Vec<Vec<f64>> = vec![Vec::new(); segs.len()];
     for (ci, w) in z_edges.windows(2).enumerate() {
@@ -217,13 +294,21 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
         let is_top = ci == heights.len() - 1;
         let is_bottom = ci == 0;
         for (k, seg) in segs.iter().enumerate() {
-            let owns_start = k > 0 && (ci + k - 1) % 2 != 0;
-            let owns_end = k < n_joints && (ci + k) % 2 == 0;
-            let t0 = if k == 0 || owns_start { 0.0 } else { t };
-            let t1 = if k == n_joints || owns_end {
-                seg.len
-            } else {
-                seg.len - t
+            let quoin0 = seg.start == Vertex::Quoin;
+            let quoin1 = seg.end == Vertex::Quoin;
+            let owns_start = quoin0 && (ci + k - 1) % 2 != 0;
+            let owns_end = quoin1 && (ci + k) % 2 == 0;
+            let t0 = match seg.start {
+                Vertex::Free => 0.0,
+                Vertex::Quoin if owns_start => 0.0,
+                Vertex::Quoin => t,
+                Vertex::Bend(e) => -e,
+            };
+            let t1 = match seg.end {
+                Vertex::Free => seg.len,
+                Vertex::Quoin if owns_end => seg.len,
+                Vertex::Quoin => seg.len - t,
+                Vertex::Bend(e) => seg.len + e,
             };
             if t1 - t0 < MIN_BAY_FRAC * c.bay.lo() {
                 continue;
@@ -234,10 +319,10 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
             } else {
                 bay_cuts(t0, t1, &c.bay, &prev[k], c.min_bond, rng)
             };
-            if k > 0 && owns_start {
+            if quoin0 && owns_start {
                 cuts.retain(|&x| x >= t + 2.0);
             }
-            if k < n_joints && owns_end {
+            if quoin1 && owns_end {
                 cuts.retain(|&x| x <= seg.len - t - 2.0);
             }
             prev[k].clone_from(&cuts);
@@ -251,12 +336,16 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
                     seg: k,
                     t0: ta,
                     t1: tb,
-                    end0: if ta > t0 || (k > 0 && !owns_start) {
+                    end0: if ta > t0
+                        || (quoin0 && !owns_start)
+                        || matches!(seg.start, Vertex::Bend(_))
+                    {
                         End::Joint
                     } else {
                         End::Face
                     },
-                    end1: if tb < t1 || (k < n_joints && !owns_end) {
+                    end1: if tb < t1 || (quoin1 && !owns_end) || matches!(seg.end, Vertex::Bend(_))
+                    {
                         End::Joint
                     } else {
                         End::Face
@@ -265,7 +354,8 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
                     z1,
                     is_top,
                     is_bottom,
-                    is_quoin: (ta == t0 && k > 0) || (tb == t1 && k < n_joints),
+                    is_quoin: (ta == t0 && seg.start != Vertex::Free)
+                        || (tb == t1 && seg.end != Vertex::Free),
                     key: vec![ci as i64, k as i64, b as i64],
                     side_bands: None,
                     coping: false,
@@ -502,6 +592,24 @@ mod tests {
                 .count();
             assert_eq!(through, 1, "course {ci}");
         }
+    }
+
+    #[test]
+    fn a_drawn_turn_is_a_quoin_bend_or_refused() {
+        // a left right angle is a quoin, a right one a bend that runs on
+        let left = segments_drawn(&[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0]], false, 7.0).unwrap();
+        assert_eq!(left[0].end, Vertex::Quoin);
+        let right = segments_drawn(&[[0.0, 0.0], [20.0, 0.0], [20.0, -20.0]], false, 7.0).unwrap();
+        let Vertex::Bend(e) = right[0].end else {
+            panic!("a bend")
+        };
+        assert!((e - 7.0).abs() < 1e-9);
+        // a ring has bends only
+        let ring = segments_drawn(&[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0]], true, 7.0).unwrap();
+        assert_eq!(ring.len(), 3);
+        assert!(ring.iter().all(|g| matches!(g.start, Vertex::Bend(_))));
+        // doubling back is refused
+        assert!(segments_drawn(&[[0.0, 0.0], [20.0, 0.0], [0.0, 1.0]], false, 7.0).is_err());
     }
 
     #[test]

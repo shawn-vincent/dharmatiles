@@ -144,7 +144,7 @@ pub(crate) fn step_keys(base: u64, tile: &Tile, steps: &[Step], jobs: &[Job]) ->
                             })
                             .collect();
                         // a drawn line is read at build time: its points count
-                        let line = e.line.as_ref().map(|n| (n, tile.lines.get(n)));
+                        let line = e.line.as_ref().map(|n| (n, e.side, tile.lines.get(n)));
                         format!(
                             "{:?}|{controls:?}|{children:?}|{:?}|{:?}|{:?}|{line:?}",
                             e.what.value, e.along, e.at, e.against

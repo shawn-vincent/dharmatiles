@@ -282,6 +282,10 @@ pub struct Ctx<'a> {
     /// corner, walked with the tile inside on the left (a run's outer
     /// face). `None` without a line.
     pub along: Option<&'a [[f64; 2]]>,
+    /// Which side of the drawn line `along` is a thing stands on (`side=`,
+    /// centre if not written); `Some` only when `along` is a drawn line,
+    /// `None` for tile edges.
+    pub line_side: Option<LineSide>,
     /// `at=`: where it stands, in squares, the x and the y each a number
     /// (a range of no width) or a range with its odds, drawn from the
     /// entry's seed. `None` without `at=`.
@@ -319,6 +323,17 @@ pub struct Ctx<'a> {
     /// whose cost is in fixed-millimetre detail (a cliff's carving) may
     /// make it coarser.  Never printed.
     pub draft: bool,
+}
+
+/// Which side of a drawn line a thing stands on, as you walk it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineSide {
+    /// To the left of the direction the line is drawn.
+    Left,
+    /// To the right of it.
+    Right,
+    /// Centred on the line.
+    Centre,
 }
 
 /// How far either side of a line a scatter spreads when it writes no

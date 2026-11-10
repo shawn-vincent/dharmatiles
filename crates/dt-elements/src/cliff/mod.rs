@@ -412,6 +412,7 @@ mod tests {
             path: "tile/t/cliff",
             seed: Seed::new(seed),
             along: None,
+            line_side: None,
             at: None,
             printer: dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2),
             against: None,

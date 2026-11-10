@@ -426,6 +426,8 @@ mod tests {
 
     fn seg() -> Seg {
         Seg {
+            start: crate::wall::layout::Vertex::Free,
+            end: crate::wall::layout::Vertex::Free,
             a: [0.0, 0.0],
             d: [1.0, 0.0],
             n: [0.0, 1.0],

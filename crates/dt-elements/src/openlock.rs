@@ -440,6 +440,7 @@ mod tests {
             path: "tile/t/connector",
             seed: dt_kit::Seed::new(1),
             along: None,
+            line_side: None,
             at: None,
             printer: dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2),
             against: None,

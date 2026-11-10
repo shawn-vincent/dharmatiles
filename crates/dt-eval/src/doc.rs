@@ -30,7 +30,7 @@ use dt_doc::Known;
 use dt_doc::consts::ConstTable;
 use dt_doc::expr::Expr;
 use dt_doc::model::{self, Callee, Definition, Document, PlaceRef, Spanned, Use, Value};
-use dt_doc::place::{Along, Edge, Point};
+use dt_doc::place::{Along, Edge, Point, Side};
 use dt_doc::schema::{Control, Element, PlaceWord, Role};
 use dt_kit::{Draw, Seed};
 use miette::{NamedSource, SourceSpan};
@@ -101,6 +101,8 @@ pub struct Entry {
     /// `at=` a drawn line (a scatter's): its name; the build reads the
     /// line's points from [`Tile::lines`], so a new seed's wobble reaches it.
     pub line: Option<String>,
+    /// `side=` of that line (a wall's): `None` is centre.
+    pub side: Option<Side>,
     /// A scatter's children: each thing, its controls and its weight.
     pub children: Vec<Child>,
     /// The text it came from.
@@ -923,6 +925,7 @@ impl Reader<'_> {
                     // that place by them; the rest is not built yet
                     let mut path = None;
                     let mut line = None;
+                    let mut side = None;
                     let mut point = None;
                     let against = if element.honours(PlaceWord::Against) {
                         e.place.against.as_ref().map(|a| a.value.clone())
@@ -938,6 +941,11 @@ impl Reader<'_> {
                             Along::Edges(edges) => path = Some(edge_path(edges, self.dims)),
                             Along::Line(name) if element.name == "scatter" => {
                                 line = Some(name.clone());
+                            }
+                            Along::Line(name) if element.name == "wall" => {
+                                line = Some(name.clone());
+                                side = e.place.side.as_ref().map(|s| s.value);
+                                unplaced.retain(|(w, _)| *w != "side=");
                             }
                             Along::Line(_) => unplaced.push(("at= a drawn line", Some(a.span))),
                         },
@@ -1056,6 +1064,7 @@ impl Reader<'_> {
                             at: point,
                             against,
                             line,
+                            side,
                             children,
                             src: Arc::clone(src),
                             span: e.span,
