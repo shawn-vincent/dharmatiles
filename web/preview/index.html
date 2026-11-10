@@ -151,7 +151,7 @@
     <div class="eyebrow">My tiles</div>
     <h2 id="new-title">New tile</h2>
     <label class="field">Name<input id="new-name" name="name" type="text" value="Untitled tile" maxlength="80" required autocomplete="off"></label>
-    <label class="field">Size<select id="new-size" name="size"><option>1x1</option><option>2x1</option><option>1x2</option><option>2x2</option></select></label>
+    <label class="field">Size<input id="new-size" name="size" type="text" value="1x1" autocomplete="off" spellcheck="false" inputmode="text" pattern="\s*\d+\s*x\s*\d+\s*" title="squares across, then up: 2x1" required></label>
     <p class="dialog-note" id="new-note">Starts as printable flat ground. Everything about it is in its source, which you can change.</p>
     <div class="row-btns"><button class="btn" id="new-cancel" type="button">Cancel</button><button class="btn on" id="new-ok" type="submit">Create tile</button></div>
   </form>

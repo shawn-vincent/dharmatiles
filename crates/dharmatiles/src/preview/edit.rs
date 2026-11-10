@@ -368,9 +368,14 @@ fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
 /// printable flat square gives the editor something real to select and change;
 /// every later gesture remains ordinary `.dtile` text.
 fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let size = v["size"].as_str().unwrap_or("1x1");
-    if !matches!(size, "1x1" | "2x1" | "1x2" | "2x2") {
-        return bad("size must be 1x1, 2x1, 1x2 or 2x2");
+    // squares across, then up, as the size picker offers: 1 to 8 each way
+    let size = v["size"].as_str().unwrap_or("1x1").trim();
+    let valid = size.split_once('x').is_some_and(|(c, r)| {
+        let ok = |n: &str| n.parse::<u32>().is_ok_and(|n| (1..=8).contains(&n)) && !n.starts_with('0');
+        ok(c) && ok(r)
+    });
+    if !valid {
+        return bad("size must be squares across and up, like 2x1 (1 to 8 each way)");
     }
     let stem = match tile_name(v) {
         Ok(s) => s,

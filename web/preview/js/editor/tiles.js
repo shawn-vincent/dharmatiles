@@ -4,6 +4,7 @@
 import { failed, showError } from '../problems.js';
 import { $, host } from './app.js';
 import { canLeave, carryHistory } from './document.js';
+import { attachSizeGrid } from '../size-grid.js';
 import { select } from './open.js';
 import { doc, inRoot, renameable, rootOf, server, stem, tile, view, whenListed } from './stores.js';
 
@@ -101,6 +102,7 @@ function openNewTile() {
   const dlg = $('new-dialog');
   $('new-note').textContent = 'Starts as printable flat ground. Everything about it is in its source, which you can change.';
   dlg.showModal();
+  $('new-size').value = '1x1';
   $('new-name').focus();
   $('new-name').select();
 }
@@ -173,6 +175,7 @@ export function init() {
   };
   $('new').onclick = openNewTile;
   $('empty-new').onclick = openNewTile;
+  attachSizeGrid($('new-size'), { parent: $('new-dialog') });
   $('new-cancel').onclick = () => $('new-dialog').close();
   $('new-form').onsubmit = async (e) => {
     e.preventDefault();
