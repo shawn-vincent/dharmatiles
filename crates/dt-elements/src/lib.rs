@@ -16,6 +16,7 @@ pub mod dirt;
 pub mod floor;
 pub mod flowers;
 pub mod grass;
+pub mod mixed;
 pub mod openlock;
 mod read;
 pub mod reeds;
@@ -209,6 +210,8 @@ pub enum Write {
     Surface,
     /// A solid of this kind.
     Solid(Kind),
+    /// Solids of each of these kinds (a scatter that mixes things).
+    Solids(&'static [Kind]),
     /// A solid of this kind laid with the land it stands on: after every
     /// surface and fill, before the lift (a floor), so the lift sees it
     /// and it reads no lifted ground.
@@ -430,8 +433,11 @@ static ELEMENTS: &[(&str, Builder)] = &[
     ("dirt", |_, c, _| Ok(Box::new(dirt::Dirt::new(c)?))),
     ("water", |_, c, _| Ok(Box::new(water::Water::new(c)?))),
     ("scatter", |_, c, ch| {
-        // flowers, trees or rocks: a scatter holds one kind of thing
-        if !ch.is_empty() && ch.iter().all(|k| k.name == "flower") {
+        // one kind of thing builds as its own scatter; two or more are mixed
+        let kinds = mixed::kinds(ch);
+        if kinds >= 2 {
+            Ok(Box::new(mixed::Scatter::new(c, ch)?))
+        } else if !ch.is_empty() && ch.iter().all(|k| k.name == "flower") {
             Ok(Box::new(flowers::Scatter::new(c, ch)?))
         } else if !ch.is_empty() && ch.iter().all(|k| k.name == "tree") {
             Ok(Box::new(tree::Scatter::new(c, ch)?))

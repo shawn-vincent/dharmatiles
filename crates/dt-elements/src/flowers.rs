@@ -98,8 +98,13 @@ impl Plant {
         Ok(f)
     }
 
+    /// Its share of a scatter's mix.
+    pub(crate) fn weight(&self) -> f64 {
+        self.weight
+    }
+
     /// One draw of the size, then the reach: the centre to a petal's tip.
-    fn reach(&self, rng: &mut Rng) -> f64 {
+    pub(crate) fn reach(&self, rng: &mut Rng) -> f64 {
         self.size.draw(rng) / 2.0
     }
 }
@@ -250,7 +255,7 @@ fn plan() -> Plan {
 /// Stand the `flowers` (each its plant and the reach it was drawn)
 /// at `placed`, on the ground, each turned a fresh angle; add them to the
 /// scene.
-fn stand(
+pub(crate) fn stand(
     scene: &mut Scene,
     ctx: &Ctx<'_>,
     rng: &mut Rng,
@@ -308,12 +313,15 @@ fn stand(
 /// Dart-throw the flowers' discs (each its reach, mm at the 35 mm square)
 /// into the entry's area: every disc dry, in the area and off what stands
 /// there. `gap` is mm at the 35 mm square.
-fn place(
+///
+/// `also` are discs (x, y, r) of other things already placed, kept clear of.
+pub(crate) fn place(
     scene: &Scene,
     area: &dt_kit::Mask,
     rng: &mut Rng,
     reaches: &[f64],
     gap: f64,
+    also: &[[f64; 3]],
 ) -> Result<Vec<Placed>, LookError> {
     let frame = *scene.frame();
     let s = frame.scale();
@@ -353,7 +361,7 @@ fn place(
             0.0
         }
     };
-    Ok(scatter(&frame, rng, &radii, &spread, &density, &[]))
+    Ok(scatter(&frame, rng, &radii, &spread, &density, also))
 }
 
 /// One flower: at `at=` a point, or somewhere in its region.
@@ -417,7 +425,7 @@ impl Element for Flower {
                 }]
             }
             None => {
-                let placed = place(scene, ctx.area, &mut rng, &[outer], GAP_MM)?;
+                let placed = place(scene, ctx.area, &mut rng, &[outer], GAP_MM, &[])?;
                 if placed.is_empty() {
                     return Err(LookError::build(format!(
                         "no room for a flower {:.1} mm wide here",
@@ -452,8 +460,8 @@ impl Scatter {
         for ch in children {
             if ch.name != "flower" {
                 return Err(LookError::general(
-                    format!("a scatter of `{}` with flowers is not built", ch.name),
-                    "a scatter holds rocks, or flowers; not both",
+                    format!("`{}` is not a flower", ch.name),
+                    "a scatter of flowers alone holds flowers; a mix goes through the mixed scatter",
                 ));
             }
             plants.push(Plant::new(&ch.controls, ch.weight)?);
@@ -515,7 +523,7 @@ impl Element for Scatter {
             flowers.push((plant, plant.reach(&mut r)));
         }
         let reaches: Vec<f64> = flowers.iter().map(|f| f.1).collect();
-        let placed = place(scene, &band, &mut rng, &reaches, self.gap)?;
+        let placed = place(scene, &band, &mut rng, &reaches, self.gap, &[])?;
         stand(scene, ctx, &mut rng, &flowers, &placed)
     }
 }

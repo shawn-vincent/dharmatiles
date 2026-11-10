@@ -622,7 +622,7 @@ impl Tree {
     ///
     /// # Errors
     /// [`LookError`] for a trunk wider than the tile.
-    fn footprint(&self, scene: &Scene, seed: Seed) -> Result<f64, LookError> {
+    pub(crate) fn footprint(&self, scene: &Scene, seed: Seed) -> Result<f64, LookError> {
         let s = scene.frame().scale();
         // the crown radius as `grow` draws it (the same stream)
         let mut rng = Rng::new(seed.key("sizes"));
@@ -712,8 +712,8 @@ impl Scatter {
         for ch in children {
             if ch.name != "tree" {
                 return Err(LookError::general(
-                    format!("a scatter of `{}` with trees is not built", ch.name),
-                    "a scatter holds one kind of thing: rocks, flowers or trees",
+                    format!("`{}` is not a tree", ch.name),
+                    "a scatter of trees alone holds trees; a mix goes through the mixed scatter",
                 ));
             }
             trees.push((Tree::new(&ch.controls)?, ch.weight));
@@ -786,38 +786,71 @@ impl Element for Scatter {
             radii.push(tree.footprint(scene, item)?);
             items.push((tree, item));
         }
-        // darts land where they land, and a tight row can fill up with a
-        // gap no crown fits: lay it out again (the next draws of the same
-        // stream) until every tree has room, up to LAYOUTS times
-        let mut placed = Vec::new();
-        for _ in 0..LAYOUTS {
-            let layout = scatter_sites(scene, &area, &mut rng, &radii, self.gap * s, 3.0 * s);
-            if layout.len() > placed.len() {
-                placed = layout;
-            }
-            if placed.len() == n {
-                break;
-            }
-        }
-        if placed.len() < n {
-            return Err(LookError::general(
-                format!(
-                    "room for {} of the {n} trees: crowns keep clear of one another and the tile's edge",
-                    placed.len()
-                ),
-                "ask for fewer, make `gap` or the crown `width` smaller, or give a line more `reach`",
-            ));
-        }
-        let mut leaves = 0.0;
-        for p in &placed {
-            let (tree, seed) = items[p.index];
-            let at = [p.at[0], p.at[1], ground_at(scene, p.at[0], p.at[1])];
-            let b = tree.grow(scene, seed, at, &ctx.printer)?;
-            leaves += b.grown.leaves as f64;
-            plant(scene, ctx.path, b);
-        }
-        scene.note("trees", placed.len() as f64);
-        scene.note("trees.leaves", leaves);
-        Ok(())
+        let placed = lay_out(scene, &area, &mut rng, &radii, self.gap * s)?;
+        grow_all(scene, ctx, &items, &placed)
     }
+}
+
+/// Dart-throw crowns of the given radii (world mm) into `area`, `gap`
+/// clear of one another (world mm), largest first.  Darts land where they
+/// land, and a tight row can fill up with a gap no crown fits: it is laid
+/// out again (the next draws of the same stream) until every tree has
+/// room, up to [`LAYOUTS`] times.
+///
+/// # Errors
+/// [`LookError`] naming how many fit, when not all do.
+pub(crate) fn lay_out(
+    scene: &Scene,
+    area: &dt_kit::Mask,
+    rng: &mut Rng,
+    radii: &[f64],
+    gap: f64,
+) -> Result<Vec<dt_kit::Placed>, LookError> {
+    let s = scene.frame().scale();
+    let n = radii.len();
+    let mut placed = Vec::new();
+    for _ in 0..LAYOUTS {
+        let layout = scatter_sites(scene, area, rng, radii, gap, 3.0 * s);
+        if layout.len() > placed.len() {
+            placed = layout;
+        }
+        if placed.len() == n {
+            break;
+        }
+    }
+    if placed.len() < n {
+        return Err(LookError::general(
+            format!(
+                "room for {} of the {n} trees: crowns keep clear of one another and the tile's edge",
+                placed.len()
+            ),
+            "ask for fewer, make `gap` or the crown `width` smaller, or give a line more `reach`",
+        ));
+    }
+    Ok(placed)
+}
+
+/// Grow each placed tree in turn (`items[p.index]`: its tree and its own
+/// seed) on the ground and add it to the scene; every tree's slots are
+/// reserved in sequence, so the source ids do not depend on the threads.
+///
+/// # Errors
+/// [`LookError`] when a tree fails to grow.
+pub(crate) fn grow_all(
+    scene: &mut Scene,
+    ctx: &Ctx<'_>,
+    items: &[(&Tree, Seed)],
+    placed: &[dt_kit::Placed],
+) -> Result<(), LookError> {
+    let mut leaves = 0.0;
+    for p in placed {
+        let (tree, seed) = items[p.index];
+        let at = [p.at[0], p.at[1], ground_at(scene, p.at[0], p.at[1])];
+        let b = tree.grow(scene, seed, at, &ctx.printer)?;
+        leaves += b.grown.leaves as f64;
+        plant(scene, ctx.path, b);
+    }
+    scene.note("trees", placed.len() as f64);
+    scene.note("trees.leaves", leaves);
+    Ok(())
 }

@@ -33,7 +33,7 @@ tile size="1x1" seed=7 {
         lawn
     }
 }</code></pre>
-<p>A scatter holds flowers or rocks, not a mix of the two. Flowers keep to dry ground, inside the scatter's region and clear of rocks, trees and walls; a flower given a point must stand clear of the tile edge by its reach.</p>
+<p>A scatter may mix flowers with rocks and trees (<code>weight=</code> picks each one); the flowers are placed last, clear of the others. Flowers keep to dry ground, inside the scatter's region and clear of rocks, trees and walls; a flower given a point must stand clear of the tile edge by its reach.</p>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference flower -->
 <div class="facts">
@@ -55,6 +55,7 @@ tile size="1x1" seed=7 {
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-flowers.dtile"><code>1x1-grass-flowers.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-flowers.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/2x2-glade.dtile"><code>2x2-glade.dtile</code></a> <span class="muted small">lib:tiles/ground/2x2-glade.dtile</span></li>
 </ul>
 <p class="muted small">Generated from <code>dharmatiles elements flower</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->

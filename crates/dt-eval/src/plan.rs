@@ -65,7 +65,11 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
     let lift = n; // the lift's node
     let is = |i: usize, w: Write| plans[i].writes == w;
     // a solid of `kind`, however it is laid
-    let is_solid = |i: usize, kind: Kind| is(i, Write::Solid(kind)) || is(i, Write::Laid(kind));
+    let is_solid = |i: usize, kind: Kind| {
+        is(i, Write::Solid(kind))
+            || is(i, Write::Laid(kind))
+            || matches!(plans[i].writes, Write::Solids(ks) if ks.contains(&kind))
+    };
     let laid: Vec<usize> = (0..n)
         .filter(|&i| matches!(plans[i].writes, Write::Laid(_)))
         .collect();

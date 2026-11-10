@@ -565,14 +565,14 @@ impl Thing {
     }
 
     /// One draw of the size: flat unless the size is weighted.
-    fn draw(&self, rng: &mut Rng) -> f64 {
+    pub(crate) fn draw(&self, rng: &mut Rng) -> f64 {
         self.size.draw(rng)
     }
 }
 
 /// What the build notes: per stone.
 #[derive(Clone, Debug, Default)]
-struct Tally {
+pub(crate) struct Tally {
     placements: usize,
     clusters: usize,
     facets: Vec<u32>,
@@ -585,7 +585,7 @@ struct Tally {
 
 /// Build placed items into the scene: grain, seat on `ground`, add as
 /// rock solids owned by `owner`.
-fn add_items(
+pub(crate) fn add_items(
     scene: &mut Scene,
     owner: &str,
     seed: Seed,
@@ -661,7 +661,7 @@ fn add_items(
     Ok(())
 }
 
-fn note(scene: &mut Scene, t: &Tally) {
+pub(crate) fn note(scene: &mut Scene, t: &Tally) {
     #[allow(clippy::cast_precision_loss)]
     let mean = |v: &[u32]| v.iter().map(|&x| f64::from(x)).sum::<f64>() / v.len().max(1) as f64;
     let min = |v: &[u32]| f64::from(v.iter().copied().min().unwrap_or(0));
@@ -772,6 +772,7 @@ impl Element for Single {
                     &[item.r * s],
                     1.5 * s,
                     crate::LINE_REACH_MM,
+                    &[],
                 );
                 let Some(p) = placed.first() else {
                     return Err(LookError::build(format!(
@@ -803,13 +804,17 @@ fn open_area(scene: &Scene, ctx: &Ctx<'_>, reach: f64) -> dt_kit::Mask {
 }
 
 /// Dart-throw radii (world mm) into the entry's area, largest first.
-fn place(
+///
+/// `also` are discs (x, y, r) of other things already placed, kept clear
+/// of like the rocks that stand.
+pub(crate) fn place(
     scene: &Scene,
     ctx: &Ctx<'_>,
     rng: &mut Rng,
     radii: &[f64],
     gap: f64,
     reach: f64,
+    also: &[[f64; 3]],
 ) -> Vec<Placed> {
     let frame = *scene.frame();
     let area = &open_area(scene, ctx, reach);
@@ -829,7 +834,9 @@ fn place(
         gap,
         factor: 1.0,
     };
-    scatter(&frame, rng, radii, &spread, &inside, &rocks_in(scene))
+    let mut avoid = rocks_in(scene);
+    avoid.extend_from_slice(also);
+    scatter(&frame, rng, radii, &spread, &inside, &avoid)
 }
 
 /// Scree: each item (largest first) lands near the foot of `foot`, in a
@@ -920,7 +927,7 @@ pub struct Scatter {
 }
 
 /// Placements: 9 to 12 per 2×2, so 2.25 to 3 a square.
-const PER_SQUARE: Draw = Draw::flat(2.25, 3.0);
+pub(crate) const PER_SQUARE: Draw = Draw::flat(2.25, 3.0);
 const GAP_MM: f64 = 1.5;
 // scree: fallen stones at a cliff's foot
 const SCREE_REACH_MM: f64 = 4.0;
@@ -950,11 +957,8 @@ impl Scatter {
         for ch in children {
             if !is_thing(&ch.name) {
                 return Err(LookError::general(
-                    format!(
-                        "a scatter of `{}` with other things is not built yet",
-                        ch.name
-                    ),
-                    "a scatter holds one kind of thing: rocks (rock, stone, boulder, pebble), flowers or trees; a mix is not built yet",
+                    format!("`{}` is not a rock thing", ch.name),
+                    "a scatter holds rocks (rock, stone, boulder, pebble), flowers and trees",
                 ));
             }
             s.things
@@ -1042,7 +1046,7 @@ impl Element for Scatter {
                 &kinds,
                 self.reach.unwrap_or(SCREE_REACH_MM),
             ),
-            None => place(scene, ctx, &mut rng, &radii, self.gap * s, line_reach),
+            None => place(scene, ctx, &mut rng, &radii, self.gap * s, line_reach, &[]),
         };
         let posed: Vec<(&Item, [f64; 2], f64)> = placed
             .iter()

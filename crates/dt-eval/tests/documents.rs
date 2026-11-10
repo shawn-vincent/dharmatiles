@@ -356,6 +356,34 @@ fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
 }
 
 #[test]
+fn a_mixed_scatter_builds_and_is_deterministic() {
+    // rocks and flowers, in a region and at a line
+    for body in [
+        "scatter count=10 { rock size=\"4..6\"; flower }",
+        "scatter at=road count=8 reach=3 { rock size=\"4..6\" weight=2; flower }",
+    ] {
+        let src = mem(&[("t.dtile", &on_a_line(body))]);
+        let a = build(&src, "t.dtile", &Options::default()).unwrap();
+        assert!(a.materials.contains(&dt_kit::Material::Rock), "{body}");
+        assert!(a.materials.contains(&dt_kit::Material::Flower), "{body}");
+        let b = build(&src, "t.dtile", &Options::default()).unwrap();
+        assert_eq!(a.materials, b.materials, "{body}");
+        assert_eq!(
+            format!("{:?}", a.stages),
+            format!("{:?}", b.stages),
+            "{body}"
+        );
+    }
+}
+
+#[test]
+fn a_mix_with_trees_checks() {
+    let ok = on_a_line("scatter at=road count=4 reach=3 { tree size=24; rock; flower }");
+    let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &Options::default()).unwrap();
+    assert!(c.pending().is_empty(), "{:?}", c.pending());
+}
+
+#[test]
 fn water_alone_builds_a_tile() {
     let src = mem(&[(
         "t.dtile",

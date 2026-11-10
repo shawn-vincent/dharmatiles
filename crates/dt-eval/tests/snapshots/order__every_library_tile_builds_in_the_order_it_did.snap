@@ -31,6 +31,8 @@ lib:tiles/ground/1x1-soil-corridor-turn+grass.dtile: [Entry(0), Lift, Entry(1), 
 lib:tiles/ground/1x1-soil-corridor-x+grass.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tiles/ground/1x1-soil-u+grass.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tiles/ground/1x1-soil.dtile: [Entry(0), Lift, Entry(1)]
+lib:tiles/ground/2x1-tree-row.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3)]
+lib:tiles/ground/2x2-glade.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3)]
 lib:tiles/ground/2x2-grass-tree.dtile: [Entry(0), Lift, Entry(2), Entry(1), Entry(3)]
 lib:tiles/test/1x1-bands-path.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3)]
 lib:tiles/test/1x1-bands-pond.dtile: [Entry(0), Entry(1), Entry(2), Lift, Entry(3)]
