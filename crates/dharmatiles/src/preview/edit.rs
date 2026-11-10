@@ -371,7 +371,8 @@ fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
     // squares across, then up, as the size picker offers: 1 to 8 each way
     let size = v["size"].as_str().unwrap_or("1x1").trim();
     let valid = size.split_once('x').is_some_and(|(c, r)| {
-        let ok = |n: &str| n.parse::<u32>().is_ok_and(|n| (1..=8).contains(&n)) && !n.starts_with('0');
+        let ok =
+            |n: &str| n.parse::<u32>().is_ok_and(|n| (1..=8).contains(&n)) && !n.starts_with('0');
         ok(c) && ok(r)
     });
     if !valid {
