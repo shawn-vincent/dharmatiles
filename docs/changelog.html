@@ -43,6 +43,7 @@
 <h2 id="unreleased">Unreleased</h2>
 <p>In the source, not yet in a numbered version.</p>
 <ul>
+  <li><strong>Grass sits on the soil:</strong> blades seat 0.25 mm into the dirt's texture (it was 1.5 mm), so clods no longer rise through the grass and an edge of single blades reads as grass. The mean grass top rises about 0.4 mm and stays in the grass band. 32 library tiles move.</li>
   <li><strong>Hover a place in the source:</strong> pointing at the source lines of a <code>line</code>, <code>region</code> or <code>point</code> declaration draws it in the view in the accent (a ribbon, a flat fill, a dot), as pointing at a stack entry lights that entry; the selection does not change, and moving off clears it. The map now carries the tile's points.</li>
   <li><strong>The size picker in New tile:</strong> the New tile dialog's Size field is the property sheet's size picker (type a size or point at the grid), one shared component, where it was a four-item dropdown; any size the grid offers can be made.</li>
   <li><strong>A place the tile names wins over an edge word:</strong> <code>at=west</code> where the tile declares a region <code>west</code> is that region, not the west edge (it was refused as an edge with no width since the line width landed). The define demo and its picture build again.</li>

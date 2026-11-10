@@ -84,9 +84,10 @@ const FIELD_RES_MM: f64 = 0.25;
 const LENSES_PER_SQ: (f64, f64) = (1.3, 1.8);
 /// Seating ground is the painted ground blurred this much.
 const SEAT_BLUR_MM: f64 = 0.8;
-/// Blades seat on the ground's low envelope: blades stand on the
-/// smooth hills under the dirt's texture, not on its crests.
-const SEAT_ERODE_MM: f64 = 1.5;
+/// Blades seat on the ground's low envelope taken this close: a quarter
+/// millimetre into the dirt's texture, so they lie on the soil rather than
+/// sunk under its clods.
+const SEAT_ERODE_MM: f64 = 0.25;
 const MUD_MAX_MM: f64 = 4.0;
 const MUD_SIGMA_MM: f64 = 9.0;
 /// Ground the flow and clearings read is blurred this much (the dirt's
