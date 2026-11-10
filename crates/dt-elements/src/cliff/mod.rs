@@ -48,7 +48,7 @@ mod pile;
 mod relief;
 mod stack;
 mod stone;
-mod tops;
+pub(crate) mod tops;
 mod util;
 
 use dt_kit::Kind;

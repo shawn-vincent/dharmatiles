@@ -103,6 +103,9 @@ pub struct Entry {
     pub line: Option<String>,
     /// A scatter's children: each thing, its controls and its weight.
     pub children: Vec<Child>,
+    /// A scatter written inside a surface: its own entry, built after the
+    /// lift, so no surface lies on it.
+    pub hoisted: bool,
     /// The text it came from.
     pub src: Src,
     /// The whole node.
@@ -1057,11 +1060,16 @@ impl Reader<'_> {
                             against,
                             line,
                             children,
+                            hoisted: false,
                             src: Arc::clone(src),
                             span: e.span,
                         });
                         if !hoisted.is_empty() {
+                            let from = out.len();
                             self.expand(&hoisted, &inner, out, pending);
+                            for h in &mut out[from..] {
+                                h.hoisted = true;
+                            }
                         }
                     }
                 }

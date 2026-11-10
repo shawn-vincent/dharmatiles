@@ -8,6 +8,12 @@
 //! - a solid laid with the land (a floor) waits for the surfaces and the
 //!   lift waits for it, so it stands on the land and the lift sees it;
 //! - a fill (water) reads the surfaces, and the solids it names;
+//! - a surface may read what the stack laid before it ([`Read::Laid`]): it
+//!   waits for the loose solids listed earlier that lay their top (rocks)
+//!   and stand on the land, so it lies on them; a solid that needs the
+//!   lifted ground (a tree) cannot come before the lift and is not waited
+//!   for. A surface listed before the rocks does not wait: the rocks bed
+//!   into it as always;
 //! - a read of a kind waits for every entry that writes one (the ground's
 //!   writer is the lift, when a surface paints); a read of every solid
 //!   (the connector's) waits for everything else.
@@ -60,7 +66,10 @@ pub enum Refusal {
 ///
 /// # Errors
 /// [`Refusal`] for a read that cannot be satisfied.
-pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
+///
+/// `hoisted[i]` marks an entry written inside a surface (a scatter in a
+/// dirt): it is built after the lift, and no surface lies on it.
+pub fn schedule(plans: &[Plan], hoisted: &[bool]) -> Result<Vec<Step>, Refusal> {
     let n = plans.len();
     let lift = n; // the lift's node
     let is = |i: usize, w: Write| plans[i].writes == w;
@@ -74,7 +83,10 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
         .filter(|&i| matches!(plans[i].writes, Write::Laid(_)))
         .collect();
     let surfaces: Vec<usize> = (0..n).filter(|&i| is(i, Write::Surface)).collect();
-    if let Some(&i) = surfaces.iter().find(|&&i| !plans[i].reads.is_empty()) {
+    if let Some(&i) = surfaces
+        .iter()
+        .find(|&&i| plans[i].reads.iter().any(|r| *r != Read::Laid))
+    {
         return Err(Refusal::SurfaceReadsSolid { entry: i });
     }
     let lifted = !surfaces.is_empty();
@@ -100,6 +112,23 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
                         return Err(Refusal::NoWriter { entry: i, kind });
                     }
                     waits[i].extend(w);
+                }
+                Read::Laid => {
+                    // the loose solids listed before it that lay their top
+                    // and need nothing the lift makes
+                    waits[i].extend((0..i).filter(|&j| {
+                        let hoisted = hoisted.get(j).copied().unwrap_or(false);
+                        let lays = match plans[j].writes {
+                            Write::Solid(k) => k.lays_top(),
+                            Write::Solids(ks) => ks.iter().any(|k| k.lays_top()),
+                            _ => false,
+                        };
+                        lays && !hoisted
+                            && !plans[j]
+                                .reads
+                                .iter()
+                                .any(|r| matches!(r, Read::AllSolids | Read::Solids(Kind::Terrain)))
+                    }));
                 }
                 Read::AllSolids => {
                     waits[i].extend((0..n).filter(|&j| {
@@ -165,12 +194,46 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
 mod tests {
     use super::*;
 
+    fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
+        super::schedule(plans, &[])
+    }
+
     fn p(writes: Write, reads: &[Read]) -> Plan {
         Plan {
             writes,
             reads: reads.to_vec(),
             cell_mm: None,
         }
+    }
+
+    #[test]
+    fn a_dirt_waits_for_the_rocks_listed_before_it_only() {
+        let rock = || p(Write::Solid(Kind::Rock), &[]);
+        let dirt = || p(Write::Surface, &[Read::Laid]);
+        // rocks before the dirt: the dirt lies on them
+        assert_eq!(
+            schedule(&[rock(), dirt()]),
+            Ok(vec![Step::Entry(0), Step::Entry(1), Step::Lift])
+        );
+        // rocks after it: as before, surfaces first
+        assert_eq!(
+            schedule(&[dirt(), rock()]),
+            Ok(vec![Step::Entry(0), Step::Lift, Step::Entry(1)])
+        );
+        // a scatter written inside a surface is built after the lift
+        assert_eq!(
+            super::schedule(&[rock(), dirt()], &[true, false]),
+            Ok(vec![Step::Entry(1), Step::Lift, Step::Entry(0)])
+        );
+        // a mix that stands on the lifted ground comes after the lift
+        let mix = p(
+            Write::Solids(&[Kind::Rock, Kind::Tree]),
+            &[Read::Solids(Kind::Terrain)],
+        );
+        assert_eq!(
+            schedule(&[mix, dirt()]),
+            Ok(vec![Step::Entry(1), Step::Lift, Step::Entry(0)])
+        );
     }
 
     #[test]

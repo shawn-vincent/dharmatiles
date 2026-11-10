@@ -76,6 +76,10 @@
     scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
 }
 dirt top="bottom + [0.6 .. 1.2]" at=crag     // 0.6 to 1.2 mm over whatever is under it, where that is under 35°</code></pre>
+<p>A dirt lies on loose rocks the same way, when it is listed after them: the rocks stand on the land first, and the dirt lies on their tops where they are flat enough (a dome is steeper than 35°, so a flat-topped slab holds dirt and a boulder does not). A dirt listed before the rocks is laid first, and the rocks bed into it as always.</p>
+<pre><code>dirt
+scatter count=2 { rock shape=flat size="14..17" }
+dirt top="bottom + [0.6 .. 1.2]" stones=none   // on the tops of the flat ones</code></pre>
 <p><code>stones none</code> leaves out the few larger stones dirt beds in by default, for a tile that places its own rocks.</p>
 
 <h2 id="spec">Reference</h2>
@@ -182,7 +186,7 @@ dirt top="bottom + [0.6 .. 1.2]" at=crag     // 0.6 to 1.2 mm over whatever is u
 <p>What this element always does. A change to one of these is a change to the element.</p>
 <ul class="rules">
   <li>Plain earth with clods, grit and half-sunk pebbles: no footprints, no cracks.</li>
-  <li>Dirt lies in its region on the surface under it, whatever that is (ground, a floor, a cliff's stones), and that surface is its uneven base: its band (<code>top="bottom + [0.6 .. 1.2]"</code>) is measured from the surface, wherever it stands, and its grain is the same on stone as on soil. It does not know what it lies on.</li>
+  <li>Dirt lies in its region on the surface under it, whatever that is (ground, a floor, a cliff's stones, the tops of loose rocks listed before it), and that surface is its uneven base: its band (<code>top="bottom + [0.6 .. 1.2]"</code>) is measured from the surface, wherever it stands, and its grain is the same on stone as on soil. It does not know what it lies on. A dirt lies on a rock only when it is listed after the rock; listed before, the rock beds into it. A scatter that also holds trees or flowers is built after the ground is lifted, so dirt does not lie on its rocks, and a tree's crown or a flower is never a surface for dirt.</li>
   <li>Dirt stays only where the surface under it is flatter than <code>maxSlope</code> (35° by default: an angle, which never scales). On anything steeper it slides off and leaves the surface bare, so a cliff's faces are clean. It is not laid where the surface drops away within 1.5 mm (at the 35 mm square, scaled with the system like every size) of a step deeper than 1 mm, so it never hangs over an edge or bridges a slit between two stones; the outline is rounded to a few cells so it has no comb. Where dirt is under 2 mm thick over what is under it, no stone is bedded in it.</li>
 
   <li>Pebbles stay off ground steeper than about 22 to 34 degrees (a bank), and off the rim; with <code>clods=none stones=none</code> there is no texture at all.</li>

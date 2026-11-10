@@ -232,6 +232,11 @@ pub enum Read {
     /// thing may stand on such as a wall on a floor); nothing to wait for
     /// if not.
     IfAny(Kind),
+    /// The tops laid before it in the stack: every solid listed earlier that
+    /// lays its top ([`Kind::lays_top`]) and stands on the land, so the
+    /// plan builds it first. A surface may read this and nothing else; it
+    /// lies on them like on any surface under it.
+    Laid,
 }
 
 /// An element's plan.

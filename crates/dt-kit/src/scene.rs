@@ -257,6 +257,13 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// Whether a solid of this kind lays its top into the surface laid after
+    /// it (a loose rock does; see [`Scene::lay_tops`]).
+    #[must_use]
+    pub const fn lays_top(self) -> bool {
+        matches!(self, Self::Rock)
+    }
+
     /// Every kind.
     pub const ALL: [Self; 11] = [
         Self::Terrain,
@@ -559,6 +566,11 @@ pub struct Terrain {
     wet: Mask,
     stone: Mask,
     support: Option<Grid>,
+    /// The tops of loose solids laid before the lift (a rock's): read by the
+    /// surface laid next ([`Terrain::laid_surface`]) and by nothing else.
+    tops: Option<Grid>,
+    /// Whether the lift has happened: nothing is laid after it.
+    lifted: bool,
     /// How the support at each node is painted, set by the first stamp
     /// there.
     under: Vec<Under>,
@@ -595,6 +607,8 @@ impl Terrain {
             wet: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
             support: None,
+            tops: None,
+            lifted: false,
             under: vec![Under::Bedding; nx * ny],
             rest: None,
         }
@@ -622,6 +636,26 @@ impl Terrain {
     pub fn stamp_heights(&mut self, tops: &[f64], under: Under) {
         for (k, &t) in tops.iter().enumerate().filter(|(_, t)| t.is_finite()) {
             self.raise(k, t, under);
+        }
+    }
+
+    /// **lay_tops**: the tops of a loose solid just laid (world mm, one per
+    /// node, `-∞` where it has none): the surface laid next rises to each,
+    /// never falls. Nothing else reads them (they are not the support
+    /// things stand on), and nothing is laid once the terrain is lifted.
+    pub fn lay_tops(&mut self, tops: &[f64]) {
+        if self.lifted {
+            return;
+        }
+        let (nx, ny) = self.frame.nodes();
+        let step = self.frame.step_mm();
+        let g = self
+            .tops
+            .get_or_insert_with(|| Grid::filled(nx, ny, step, f32::NEG_INFINITY));
+        for (z, &t) in g.z.iter_mut().zip(tops).filter(|(_, t)| t.is_finite()) {
+            #[allow(clippy::cast_possible_truncation)]
+            let t = t as f32;
+            *z = z.max(t);
         }
     }
 
@@ -671,7 +705,7 @@ impl Terrain {
     /// nothing is laid at all.
     #[must_use]
     pub fn laid_surface(&self) -> Option<crate::Field> {
-        if !self.any_land && self.support.is_none() {
+        if !self.any_land && self.support.is_none() && self.tops.is_none() {
             return None;
         }
         let n = self.land.z.len();
@@ -681,7 +715,7 @@ impl Terrain {
                 z[k] = z[k].max(f64::from(self.land.z[k]));
             }
         }
-        if let Some(s) = &self.support {
+        for s in [&self.support, &self.tops].into_iter().flatten() {
             for (v, &t) in z.iter_mut().zip(&s.z) {
                 *v = v.max(f64::from(t));
             }
@@ -1110,6 +1144,17 @@ impl Scene {
         self.terrain.stamp_heights(tops, under);
     }
 
+    /// **lay_tops**: see [`Terrain::lay_tops`].
+    pub fn lay_tops(&mut self, tops: &[f64]) {
+        self.terrain.lay_tops(tops);
+    }
+
+    /// Whether the terrain is lifted (nothing is laid after it).
+    #[must_use]
+    pub const fn lifted(&self) -> bool {
+        self.terrain.lifted
+    }
+
     /// Where the support is painted as bedding.
     #[must_use]
     pub fn bedded(&self) -> Option<Vec<bool>> {
@@ -1330,6 +1375,7 @@ impl Scene {
     /// # Errors
     /// [`KitError`] if the surface is not above 0 or the kernel refuses it.
     pub fn lift(&mut self, owner: &str, printer: &crate::Printer) -> Result<(), KitError> {
+        self.terrain.lifted = true;
         if self.terrain.layers.is_empty() {
             return Ok(());
         }

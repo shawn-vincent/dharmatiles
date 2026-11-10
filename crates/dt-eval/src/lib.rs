@@ -504,7 +504,8 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         return Err(errors);
     }
     let plans: Vec<_> = elements.iter().map(|l| l.plan()).collect();
-    let steps = plan::schedule(&plans).map_err(|r| {
+    let hoisted: Vec<bool> = tile.stack.iter().map(|e| e.hoisted).collect();
+    let steps = plan::schedule(&plans, &hoisted).map_err(|r| {
         let (msg, entry) = match &r {
             Refusal::NoWriter { entry, kind } => (
                 format!("this reads every {kind}, and nothing in the tile makes one"),

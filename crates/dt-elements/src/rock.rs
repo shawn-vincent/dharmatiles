@@ -649,6 +649,16 @@ pub(crate) fn add_items(
             tally.hovering += usize::from(gap > HOVER_TOL_MM);
         }
     }
+    // a rock laid before the lift lays its top: the surface laid after it (a
+    // dirt) lies on it like on any surface
+    if !scene.lifted() && !built.is_empty() {
+        let meshes: Vec<dt_kit::rays::RayMesh> = built
+            .iter()
+            .map(|sol| dt_kit::rays::RayMesh::new(&sol.mesh()))
+            .collect();
+        let tops = crate::cliff::tops::stone_tops(scene.frame(), &meshes, 0.0);
+        scene.lay_tops(&tops);
+    }
     for sol in built {
         scene.add(
             Tag {

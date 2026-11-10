@@ -67,7 +67,7 @@ rock at=pool                       // one rock, anywhere in the pool region</cod
         scatter perSquare="2.25..3" gap=1.5 { rock }
     }
 }</code></pre>
-<p>Scattered <code>at="foot(cliff)"</code>, stones and boulders gather at the cliff's foot as scree. Every rock is seated into the ground under it, and grass grows round it wherever the grass is listed.</p>
+<p>Scattered <code>at="foot(cliff)"</code>, stones and boulders gather at the cliff's foot as scree. Every rock is seated into the ground under it, and grass grows round it wherever the grass is listed. A rock lays its top into the surface laid after it: a <a href="dirt.html"><code>dirt</code></a> listed after the rock lies on its top where that is flatter than the dirt's <code>maxSlope</code>, and a dirt listed before it is laid first and the rock beds into it.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference rock -->
