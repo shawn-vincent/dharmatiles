@@ -814,3 +814,19 @@ fn an_old_flowers_and_tree_height_name_the_new_forms() {
         "twice the old radius",
     );
 }
+
+#[test]
+fn a_declared_place_wins_over_an_edge_word() {
+    // a region named `west` is that region, not the west edge
+    let e = first(
+        "tile { line a { through \"0.33,0\" \"0.33,1\" }; region west { boundedBy a; fill \"0.1,0.5\" }; stack { grass at=west } }",
+    );
+    assert_eq!(e.place.region.as_ref().unwrap().value, "west");
+    assert!(e.place.along.is_none());
+    // with no such place, the word is still the edge
+    let e = first("tile { stack { scatter at=west count=2 { rock } } }");
+    assert!(matches!(
+        e.place.along.as_ref().map(|a| &a.value),
+        Some(Along::Edges(v)) if v == &vec![Edge::West]
+    ));
+}

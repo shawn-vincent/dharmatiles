@@ -27,7 +27,7 @@
 define lawn {
     param length "3.5..6.5"   // blade length along the ground, mm
     param height "1.5..2"     // how tall a blade stands, mm
-    param clearings 1.5       // patches of bare earth per square
+    param clearings 0         // patches of bare earth per square
     param cover "100%"        // share of the ground grassed over
     stack {
         grass length=length height=height clearings=clearings cover=cover

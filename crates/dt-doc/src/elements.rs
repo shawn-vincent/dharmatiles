@@ -780,7 +780,7 @@ pub static ELEMENTS: &[Element] = &[
                 "patches of bare earth the grass parts round",
             )
             .limits(0.0, 20.0)
-            .default("1.5"),
+            .default("0"),
             c("cover", Axis::Share, "share of the ground grassed over")
                 .limits(0.0, 1.0)
                 .default("100%"),

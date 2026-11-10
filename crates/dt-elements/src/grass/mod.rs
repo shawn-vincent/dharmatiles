@@ -119,7 +119,7 @@ impl Grass {
         let mut g = Self {
             length: Draw::flat(3.5, 6.5),
             height: Draw::flat(1.5, 2.0),
-            clearings: 1.5,
+            clearings: 0.0,
             cover: 1.0,
             bare: 0.0,
             meander: Span::new(10.0, 30.0),

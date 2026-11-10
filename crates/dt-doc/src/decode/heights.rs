@@ -751,11 +751,14 @@ impl Decoder<'_> {
             return;
         }
 
-        // an edge, or a path of edges round the tile
+        // an edge, or a path of edges round the tile; a place the tile
+        // declares wins over an edge word of the same name (a region
+        // named `west` is that region, not the west edge)
         let edge_like = t
             .split_whitespace()
             .next()
-            .is_some_and(|w| w.chars().all(|c| c.is_ascii_alphabetic()));
+            .is_some_and(|w| w.chars().all(|c| c.is_ascii_alphabetic()))
+            && !ctx.places.iter().any(|(n, _)| n == t);
         match if edge_like {
             place::parse_edges(t)
         } else {

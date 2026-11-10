@@ -47,7 +47,7 @@
 <h2 id="look">What it looks like</h2>
 <p>At tabletop distance grass reads because of its middle-scale order, not its fine detail. Blades gather into ribbons that follow one smooth flow. The flow meanders in gentle S-curves about 15 mm long, and neighbouring ribbons wave together, the way wind lays long grass flat. A 2×2 tile has at least three main directions, never one sweep across the board.</p>
 <p>Each blade stands on the dirt by itself: a keel at the bottom, a single-line ridge on top, pointed at both ends, rising from its root and levelling off toward a tip that overhangs open air. Blades overlap downstream like shingles. Between ribbons the dirt shows as dark seams.</p>
-<p>A few bare clearings, about one and a half per square and about a tenth of the tile, sit in low ground. They are eye-shaped, stretched along the flow. The grass parts at their upstream end and closes again downstream, like water round a stone, and their banks are piles of separate blades. The ground under everything rolls gently: hills rise from flat plains at the tile edge and never dip below it.</p>
+<p>With <code>clearings</code> set (none by default; 1.5 per square is a natural meadow, about a tenth of the tile), bare clearings sit in low ground. They are eye-shaped, stretched along the flow. The grass parts at their upstream end and closes again downstream, like water round a stone, and their banks are piles of separate blades. The ground under everything rolls gently: hills rise from flat plains at the tile edge and never dip below it.</p>
 
 
 <h2 id="use">Using it in a tile</h2>
@@ -69,7 +69,7 @@ tile size="2x2" seed=4 {
     }
 }</code></pre>
 <p>Every control at once, at its default:</p>
-<pre><code>grass length="3.5..6.5" height="1.5..2" clearings=1.5 cover="100%" bare="0%" flow=wavy</code></pre>
+<pre><code>grass length="3.5..6.5" height="1.5..2" clearings=0 cover="100%" bare="0%" flow=wavy</code></pre>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference grass -->
@@ -85,7 +85,7 @@ tile size="2x2" seed=4 {
 <tbody>
 <tr id="c-length"><td><code>length</code></td><td>mm, over 0, or a range, or a weighted range</td><td><code>3.5..6.5</code></td><td>blade length along the ground</td></tr>
 <tr id="c-height"><td><code>height</code></td><td>mm, over 0, or a range, or a weighted range</td><td><code>1.5..2</code></td><td>how tall a blade stands over the ground</td></tr>
-<tr id="c-clearings"><td><code>clearings</code></td><td>per square, 0 to 20</td><td><code>1.5</code></td><td>patches of bare earth the grass parts round</td></tr>
+<tr id="c-clearings"><td><code>clearings</code></td><td>per square, 0 to 20</td><td><code>0</code></td><td>patches of bare earth the grass parts round</td></tr>
 <tr id="c-cover"><td><code>cover</code></td><td>percent, 0% to 100%</td><td><code>100%</code></td><td>share of the ground grassed over</td></tr>
 <tr id="c-bare"><td><code>bare</code></td><td>percent, 0% to 90%</td><td><code>0%</code></td><td>the least share left bare: clearings are added until the bare earth, rocks included, reaches it</td></tr>
 <tr id="c-flow"><td><code>flow</code></td><td>word</td><td><code>wavy</code></td><td>how tidily the blades lean together<dl class="words"><dt><code>combed</code></dt><dd>blades lean together, tidily (provisional)</dd><dt><code>wavy</code></dt><dd>blades meander together, in phase</dd><dt><code>wild</code></dt><dd>blades every which way (provisional)</dd></dl></td></tr>
@@ -121,7 +121,7 @@ tile size="2x2" seed=4 {
   <li><strong>Blades.</strong> 2.8–7.2 mm long (longer toward the downstream end of each swath), 2–4 lines (0.9–1.8 mm) wide, 1.5–2.0 mm tall. No grass stands more than 3.5 mm above the local ground.</li>
   <li><strong>Grass top.</strong> The mean grass top sits in the DungeonBlocks grass band: 4.4–5.9 mm above the terrain datum (15.3–16.8 mm above the bottom of the piece). Seed 1 measures 5.24 mm.</li>
   <li><strong>Ground.</strong> The tile edge is at 3.4 mm, the lowest ground on the tile. Hills rise from it to about 6.6 mm; at least 60% of the tile slopes 12° or less and nothing passes 34°.</li>
-  <li><strong>Clearings.</strong> 1.3–1.8 per square, at least 13 mm apart and 7 mm from the rim, covering about 10% of the tile, sunk 0.4 mm below the grass ground.</li>
+  <li><strong>Clearings.</strong> None unless <code>clearings</code> or <code>bare</code> asks for them; <code>clearings=1.5</code> draws 1.3–1.8 per square, at least 13 mm apart and 7 mm from the rim, covering about 10% of the tile, sunk 0.4 mm below the grass ground.</li>
 </ul>
 
 <h3 id="edges">Edges and joining tiles</h3>
