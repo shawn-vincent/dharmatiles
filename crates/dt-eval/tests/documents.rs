@@ -576,3 +576,36 @@ fn a_scatter_along_a_line_reaches_half_its_width_unless_told() {
     assert_eq!(hash(&t("")), hash(&t("reach=10")));
     assert_ne!(hash(&t("")), hash(&t("reach=3")));
 }
+
+#[test]
+fn a_scatter_holds_a_definition_of_one_thing() {
+    let text = |size: &str| {
+        format!(
+            "define boulder {{\n param size \"6..9\"\n stack {{ rock size=size }}\n}}\ndefine oak {{\n stack {{ boulder size=\"{size}\" }}\n}}\n{}",
+            tile_with(
+                "stack {\n base\n dirt\n scatter count=3 { boulder size=\"7..10\" weight=2; flower }\n }"
+            )
+        )
+    };
+    let build_of = |t: &str| build(&mem(&[("t.dtile", t)]), "t.dtile", &Options::default());
+    let c = check(
+        &mem(&[("t.dtile", text("5").as_str())]),
+        "t.dtile",
+        &Options::default(),
+    )
+    .unwrap();
+    assert!(c.pending().is_empty(), "{:?}", c.pending());
+    let a = build_of(&text("5")).unwrap();
+    assert!(a.materials.contains(&dt_kit::Material::Rock) || a.materials.len() > 1);
+    // the parameter reaches the rock: a different size is a different tile
+    let wide = text("5").replace("\"7..10\"", "\"12..14\"");
+    assert_ne!(a.stages, build_of(&wide).unwrap().stages);
+}
+
+#[test]
+fn a_scattered_thing_takes_no_place_word_of_its_own() {
+    let e = errors(&tile_with(
+        "stack {\n base\n dirt\n scatter count=3 { rock at=center }\n }",
+    ));
+    assert!(e.iter().any(|d| d.code == "dt::place"), "{e:?}");
+}

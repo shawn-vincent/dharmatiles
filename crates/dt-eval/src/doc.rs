@@ -401,6 +401,18 @@ pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<
     )
 }
 
+/// A place word an element does not take, where it is written.
+fn misplaced(src: &Src, span: SourceSpan, word: &str, on: &str) -> Diag {
+    Diag::at(
+        src,
+        span,
+        "dt::place",
+        format!("`{word}` does not place `{on}`"),
+        "not a place word for this",
+    )
+    .help("a scattered thing is placed by its scatter: put `at=` on the `scatter` line")
+}
+
 /// "`what` not available yet", at `span`: the language has it, the
 /// elements do not build it yet.
 fn not_yet(src: &Src, span: SourceSpan, what: &str) -> Diag {
@@ -1060,11 +1072,7 @@ impl Reader<'_> {
                     for (word, span) in unplaced {
                         if let Some(span) = span {
                             ok = false;
-                            pending.push(not_yet(
-                                src,
-                                span,
-                                &format!("`{word}` on `{}` is", element.name),
-                            ));
+                            self.errors.push(misplaced(src, span, word, element.name));
                         }
                     }
                     let mut children = Vec::new();
@@ -1078,43 +1086,28 @@ impl Reader<'_> {
                             hoisted.push(c.clone());
                             continue;
                         }
-                        let built = match &c.callee {
-                            Callee::Element(cl) if element.name == "scatter" && cl.scattered => {
-                                Some(*cl)
-                            }
-                            _ => None,
-                        };
-                        let Some(cl) = built else {
+                        if element.name != "scatter" {
                             ok = false;
-                            pending.push(not_yet(
-                                src,
-                                c.what.span,
-                                &format!("`{}` inside `{}` is", c.what.value, element.name),
-                            ));
-                            continue;
-                        };
-                        for (word, span) in [
-                            ("at= a line", c.place.along.as_ref().map(|s| s.span)),
-                            ("side=", c.place.side.as_ref().map(|s| s.span)),
-                            ("at=", c.place.at.as_ref().map(|s| s.span)),
-                            ("at=foot(…)", c.place.against.as_ref().map(|s| s.span)),
-                            ("at= a region", c.place.region.as_ref().map(|s| s.span)),
-                        ] {
-                            if let Some(span) = span {
-                                ok = false;
-                                pending.push(not_yet(
+                            self.errors.push(
+                                Diag::at(
                                     src,
-                                    span,
-                                    &format!("`{word}` on a scatter's `{}` is", cl.name),
-                                ));
-                            }
+                                    c.what.span,
+                                    "dt::nesting",
+                                    format!(
+                                        "`{}` can't go inside `{}`",
+                                        c.what.value, element.name
+                                    ),
+                                    "not a control here",
+                                )
+                                .help(format!(
+                                    "list `{}` in the stack beside `{}`",
+                                    c.what.value, element.name
+                                )),
+                            );
+                            continue;
                         }
-                        match self.controls(c, cl, scope, pending) {
-                            Some(controls) => children.push(Child {
-                                what: c.what.clone(),
-                                controls,
-                                weight: c.place.weight.as_ref().map_or(1.0, |w| w.value),
-                            }),
+                        match self.scatter_child(c, scope, pending) {
+                            Some(child) => children.push(child),
                             None => ok = false,
                         }
                     }
@@ -1180,22 +1173,7 @@ impl Reader<'_> {
                         ));
                         continue;
                     }
-                    let mut params = BTreeMap::new();
-                    for p in &def.params {
-                        let arg = e
-                            .control(&p.name.value)
-                            .and_then(|s| s.value.as_ref())
-                            .map(|v| bind(v, src, scope))
-                            .or_else(|| {
-                                p.default.as_ref().map(|v| Bound {
-                                    value: v.clone(),
-                                    src: Arc::clone(&file.src),
-                                })
-                            });
-                        if let Some(a) = arg {
-                            params.insert(p.name.value.clone(), a);
-                        }
-                    }
+                    let params = Self::params(e, &def, &file, scope);
                     let inner = Scope {
                         file: Arc::clone(&file),
                         params,
@@ -1211,6 +1189,134 @@ impl Reader<'_> {
                 }
             }
         }
+    }
+
+    /// What a call of `def` (defined in `file`) binds its parameters to: the
+    /// call's arguments, else the parameters' defaults.
+    fn params(
+        e: &model::Entry,
+        def: &Definition,
+        file: &Arc<File>,
+        scope: &Scope,
+    ) -> BTreeMap<String, Bound> {
+        let mut params = BTreeMap::new();
+        for p in &def.params {
+            let arg = e
+                .control(&p.name.value)
+                .and_then(|s| s.value.as_ref())
+                .map(|v| bind(v, &scope.file.src, scope))
+                .or_else(|| {
+                    p.default.as_ref().map(|v| Bound {
+                        value: v.clone(),
+                        src: Arc::clone(&file.src),
+                    })
+                });
+            if let Some(a) = arg {
+                params.insert(p.name.value.clone(), a);
+            }
+        }
+        params
+    }
+
+    /// One child of a scatter: a thing, or a definition whose stack is one
+    /// thing (`scatter count=2 { oak }`), with its controls.  `None` when
+    /// it cannot be given yet or is refused (both are reported).
+    fn scatter_child(
+        &mut self,
+        c: &model::Entry,
+        scope: &Scope,
+        pending: &mut Vec<Diag>,
+    ) -> Option<Child> {
+        let src = &scope.file.src;
+        let (cl, inner, thing) = match &c.callee {
+            Callee::Element(cl) if cl.scattered => (*cl, scope.clone(), c.clone()),
+            Callee::Element(cl) => {
+                self.errors.push(
+                    Diag::at(
+                        src,
+                        c.what.span,
+                        "dt::nesting",
+                        format!("`{}` can't be scattered", cl.name),
+                        "not a thing",
+                    )
+                    .help("a scatter holds rocks, flowers and trees"),
+                );
+                return None;
+            }
+            Callee::Definition(name) => {
+                let Some((file, def)) = self.definition(&scope.file, name) else {
+                    self.errors.push(Diag::at(
+                        src,
+                        c.what.span,
+                        "dt::unknown-name",
+                        format!("cannot find the definition `{name}`"),
+                        "not loaded",
+                    ));
+                    return None;
+                };
+                let one = match def.stack.as_slice() {
+                    [one] if scope.depth < 64 => one,
+                    _ => {
+                        self.errors.push(
+                            Diag::at(
+                                src,
+                                c.what.span,
+                                "dt::nesting",
+                                format!("`{name}` is not one thing, so a scatter cannot hold it"),
+                                "not one thing",
+                            )
+                            .help(
+                                "a scatter holds a definition whose stack is one rock, flower or tree",
+                            ),
+                        );
+                        return None;
+                    }
+                };
+                let inner = Scope {
+                    file: Arc::clone(&file),
+                    params: Self::params(c, &def, &file, scope),
+                    lets: scope.lets.clone(),
+                    area: None,
+                    at: None,
+                    along: None,
+                    seed: None,
+                    id: None,
+                    depth: scope.depth + 1,
+                };
+                let mut child = self.scatter_child(one, &inner, pending)?;
+                // the call's own name is where it is shown
+                child.what.span = c.what.span;
+                child.weight = c.place.weight.as_ref().map_or(1.0, |w| w.value);
+                return Some(child);
+            }
+        };
+        let mut ok = true;
+        for (word, span) in [
+            ("at= a line", c.place.along.as_ref().map(|s| s.span)),
+            ("side=", c.place.side.as_ref().map(|s| s.span)),
+            ("at=", c.place.at.as_ref().map(|s| s.span)),
+            ("at=foot(…)", c.place.against.as_ref().map(|s| s.span)),
+            ("at= a region", c.place.region.as_ref().map(|s| s.span)),
+        ] {
+            if let Some(span) = span {
+                ok = false;
+                self.errors.push(misplaced(
+                    &inner.file.src,
+                    span,
+                    word,
+                    &format!("a scatter's `{}`", cl.name),
+                ));
+            }
+        }
+        let controls = self.controls(&thing, cl, &inner, pending)?;
+        ok.then(|| Child {
+            what: Spanned {
+                value: cl.name.to_owned(),
+                span: c.what.span,
+            },
+            controls,
+            weight: c.place.weight.as_ref().map_or(1.0, |w| w.value),
+        })
     }
 
     /// The strip a surface follows when it is placed `at=` `along`: the
