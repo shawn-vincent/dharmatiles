@@ -1,11 +1,13 @@
 //! The map of a tile for the editor's overlay: its lines as drawn, its
-//! regions as the build fills them (on a coarse lattice), and where each
+//! regions as the build fills them (on the draft build's lattice), and where each
 //! line point and fill point is written, so the page can drag them.
 
 use serde_json::{Value, json};
 
-/// Lattice nodes per square for the regions' areas.
-const CELLS: u32 = 16;
+/// Lattice nodes per square for the regions' areas: the draft build's
+/// lattice, so a region's edge on the map steps under a millimetre (0.7 mm
+/// on DungeonBlocks, 0.5 on OpenLOCK) and meets its lines.
+const CELLS: u32 = dt_eval::DRAFT_CELLS;
 
 /// A written value: its text and its byte span.
 type Written = (String, [usize; 2]);
