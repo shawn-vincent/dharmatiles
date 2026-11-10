@@ -75,6 +75,9 @@ pub struct SolvedBody {
     pub land_mm: f64,
     /// Its pins, defaults first.
     pub pins: Vec<PinReport>,
+    /// The tile writes its band: a `top=` or a pin of its own (the debug
+    /// layer draws only these).
+    pub written: bool,
     /// How many times laying this body into the surface under later bodies
     /// was left out (its band came out degenerate): 0 or 1.
     pub left_out: usize,
@@ -814,6 +817,7 @@ fn solve_on(
             region_nodes: region.bits.iter().filter(|&&x| x).count(),
             below,
             land_mm,
+            written: b.top.is_some() || !b.pins.is_empty(),
             pins: reports,
             left_out,
             nx,

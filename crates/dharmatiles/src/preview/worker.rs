@@ -370,8 +370,12 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
         let Some(job) = shared.next_job(eager) else {
             continue;
         };
-        // the target the page chose now, for this job
-        let opts = shared.options();
+        // the target the page chose now, for this job; the editor's debug
+        // layer is always collected, so turning it on needs no build
+        let opts = Options {
+            debug: true,
+            ..shared.options()
+        };
         match &job {
             queue::Job::Draft(d) => draft(shared, d, &opts),
             queue::Job::Full(id, cancel) => {

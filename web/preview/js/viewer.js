@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from '/vendor/OrbitControls.js';
 import { ownerVertices, worstFlagged } from './payload.js';
+import { classInfo, segments, sheetGeometry, sheetTokens } from './debug-layer.js';
 
 THREE.ColorManagement.enabled = false; // colours are already display values
 
@@ -169,6 +170,14 @@ const PULSE = 0.35, PULSE_S = 1.4;
 // Seconds the rest takes to fade when something is selected, and to come
 // back when nothing is; and a hover's, quicker.
 const FADE_IN = 0.12, FADE_OUT = 0.1, HOVER_S = 0.14;
+// The debug layer's dots: a disc with a dark rim, a fixed size on screen.
+const DOT_VERT = `attribute vec3 color; varying vec3 vC; uniform float uSize;
+void main() { vC = color; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = uSize; }`;
+const DOT_FRAG = `varying vec3 vC;
+void main() { float r = length(gl_PointCoord - 0.5); if (r > 0.5) discard; gl_FragColor = vec4(r > 0.36 ? vC * 0.35 : vC, 1.0); }`;
+// band sheets: soft fill, a brighter contour
+const SHEET_ALPHA = { 'band-lo': 0.16, 'band-hi': 0.26 }, CONTOUR_ALPHA = 0.95;
+
 // The hover: with nothing selected the rest dims a little round what is
 // under the pointer; with a selection, what is under the pointer lifts
 // part way out of the fade.
@@ -252,6 +261,10 @@ export class Viewer {
     this.showPaint = true;
     this.showGrid = true;
     this.plan = null;
+    this.debug = null; // the payload's debug marks, drawn while showDebug
+    this.debugGroup = null;
+    this.showDebug = false;
+    this.debugColour = () => '#808080'; // the page gives the theme's tokens (setDebugColours)
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
   }
@@ -563,8 +576,64 @@ export class Viewer {
     this.maskMesh.frustumCulled = false;
     this.maskScene.add(this.maskMesh);
     this.payload = payload;
+    this.debug = payload.meta?.debug ?? null;
+    this.buildDebug();
     this.buildGrid();
     this.draw();
+  }
+
+  /** How the debug layer's colours are read: `fn(token)` gives a CSS colour (the theme's `--dbg-…`). */
+  setDebugColours(fn) { this.debugColour = fn; this.buildDebug(); this.draw(); }
+
+  /** Show or hide the debug layer (the payload's `debug`: grass starts and spines, band sheets). */
+  setDebugShown(on) { this.showDebug = on; this.buildDebug(); this.draw(); }
+
+  /** The debug layer's objects, made again from `this.debug` while it is shown. */
+  buildDebug() {
+    if (this.debugGroup) {
+      this.scene.remove(this.debugGroup);
+      this.debugGroup.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+      this.debugGroup = null;
+    }
+    const d = this.debug;
+    this.onDebugChange?.(this.showDebug ? d : null);
+    if (!this.showDebug || !d) return;
+    const group = new THREE.Group();
+    const colour = (token) => new THREE.Color().setStyle(this.debugColour(token)); // a bad token is a bug: let it throw
+    const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
+    // the sheets first, depth-tested so the terrain hides what is under it
+    const tokens = sheetTokens(d);
+    (d.sheets ?? []).forEach((s, k) => {
+      const { positions, contour } = sheetGeometry(s);
+      const c = colour(tokens[k]);
+      const fill = new THREE.BufferGeometry();
+      fill.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      over(new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: SHEET_ALPHA[s.class] ?? 0.2, side: THREE.DoubleSide, depthWrite: false })), 10);
+      const edge = new THREE.BufferGeometry();
+      edge.setAttribute('position', new THREE.BufferAttribute(contour, 3));
+      over(new THREE.LineSegments(edge, new THREE.LineBasicMaterial({ color: c.clone().lerp(new THREE.Color(1, 1, 1), 0.35), transparent: true, opacity: CONTOUR_ALPHA })), 11);
+    });
+    // then the marks, over everything: they lie on the ground under the blades
+    const marks = { depthTest: false, depthWrite: false, transparent: true };
+    for (const [cls, trails] of Object.entries(d.trails ?? {})) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(segments(trails), 3));
+      over(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: colour(classInfo(cls).token), opacity: cls === 'flow' ? 0.6 : 1, ...marks })), cls === 'flow' ? 20 : 21);
+    }
+    const pos = [], col = [];
+    for (const [cls, xyz] of Object.entries(d.dots ?? {})) {
+      const c = colour(classInfo(cls).token);
+      for (let k = 0; k < xyz.length; k += 3) { pos.push(xyz[k], xyz[k + 1], xyz[k + 2]); col.push(c.r, c.g, c.b); }
+    }
+    if (pos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3));
+      const size = 5 * Math.min(2, this.renderer.getPixelRatio());
+      over(new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: { uSize: { value: size } }, vertexShader: DOT_VERT, fragmentShader: DOT_FRAG, ...marks })), 22);
+    }
+    this.debugGroup = group;
+    this.scene.add(group);
   }
 
   /** The sketches of a build running: [{id, rough, payload}], replacing those shown. */

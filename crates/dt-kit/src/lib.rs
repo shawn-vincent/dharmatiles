@@ -45,6 +45,7 @@
 mod audit;
 mod bambu;
 mod band;
+pub mod debug;
 mod field;
 pub mod form;
 pub mod graph;

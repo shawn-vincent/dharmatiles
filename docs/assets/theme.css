@@ -39,6 +39,12 @@
 
   /* overhang: these two colours are the gate's, and only the gate's */
   --over: #E5483B; --band: #FF8C1A;
+  /* the editor's debug layer, drawn on the model: no red or orange (those
+     are overhang); the same in both themes, as the tile is */
+  --dbg-spine: #2F6FE0; --dbg-cut: #E2C21C; --dbg-edge: #E356C4; --dbg-flow: #3C4654;
+  --dbg-outside: #9AA1AB; --dbg-short-line: #8B46D8; --dbg-short-rim: #10A3A3; --dbg-short-other: #6E8F2A;
+  --dbg-crowded: #15171A; --dbg-under: #7A4B2A; --dbg-soil: #D2B48C; --dbg-cover: #FFFFFF;
+  --dbg-band-1: #38A6F5; --dbg-band-2: #9C6BFF; --dbg-band-3: #22C2A2; --dbg-band-4: #F05FB6;
 
   /* light: Lichen & Linen */
   --bg: #F3F2EC; --panel: #E6EAE1; --raised: #FCFCF8; --line: #C9D1C8; --line-2: #AEBBB0;

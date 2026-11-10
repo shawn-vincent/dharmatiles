@@ -1066,6 +1066,7 @@ pub struct Scene {
     left_out: Vec<(String, usize)>,
     stages: Vec<Stage>,
     progress: crate::Progress,
+    debug: Option<Box<crate::debug::Debug>>,
 }
 
 impl Scene {
@@ -1082,6 +1083,7 @@ impl Scene {
             left_out: Vec::new(),
             stages: Vec::new(),
             progress: crate::Progress::none(),
+            debug: None,
         }
     }
 
@@ -1315,6 +1317,25 @@ impl Scene {
     #[must_use]
     pub fn progress(&self) -> crate::Progress {
         self.progress.clone()
+    }
+
+    /// Collect the debug layer's marks from here on (the evaluator does when
+    /// its options ask).  Never read by geometry.
+    pub fn collect_debug(&mut self) {
+        self.debug.get_or_insert_with(Box::default);
+    }
+
+    /// The debug layer to add marks to, or `None` when it is off: an element
+    /// makes its marks only inside `if let Some(d) = scene.debug()`, and never
+    /// draws from a random stream for them.
+    pub fn debug(&mut self) -> Option<&mut crate::debug::Debug> {
+        self.debug.as_deref_mut()
+    }
+
+    /// The marks collected, if the layer is on.
+    #[must_use]
+    pub fn debug_marks(&self) -> Option<&crate::debug::Debug> {
+        self.debug.as_deref()
     }
 
     /// Record an element's number for the build record (counts and the like).

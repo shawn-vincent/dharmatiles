@@ -102,6 +102,9 @@ pub struct Options {
     /// without the union, and the gate's verdict left out (each face is
     /// flagged by its angle alone, see [`dt_kit::draft`]).  Never written.
     pub draft: bool,
+    /// Collect the editor's debug layer ([`dt_kit::debug`]): grass starts
+    /// and spines, band sheets.  Changes nothing that is built.
+    pub debug: bool,
 }
 
 /// A printer profile in use: the gate's numbers and the name they were read
@@ -246,6 +249,7 @@ impl Default for Options {
             },
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
             draft: false,
+            debug: false,
         }
     }
 }
@@ -295,6 +299,8 @@ pub struct Built {
     /// Which of its entry's solids each written triangle came from (the
     /// third rock of a scatter is 2), in build order.
     pub pieces: Vec<u16>,
+    /// The debug layer's marks, when [`Options::debug`] asked for them.
+    pub debug: Option<dt_kit::debug::Debug>,
 }
 
 /// No stack entry made this triangle.
@@ -929,11 +935,47 @@ impl<'a> Plan<'a> {
         }
     }
 
+    /// Entry `i`'s band, low and high, as debug sheets over its region,
+    /// when the layer is on, the entry writes its band (`top=` or a pin) and
+    /// the band has any depth there.
+    fn band_sheets(&self, scene: &mut Scene, i: usize) {
+        let Some(b) = self.solved.by_entry[i].filter(|&b| self.solved.bodies[b].written) else {
+            return;
+        };
+        let body = &self.solved.bodies[b];
+        let area = &self.masks[self.jobs[i].mask];
+        let path = &self.jobs[i].path;
+        let Some(d) = scene.debug() else {
+            return;
+        };
+        // on the region's lattice, the frame's
+        let on_area = |f: &dt_kit::Field| {
+            if f.nx == area.nx && f.ny == area.ny {
+                f.clone()
+            } else {
+                <dt_kit::Field as dt_kit::OnFrame>::from_fn(&self.c.frame, |x, y| f.sample(x, y))
+            }
+        };
+        let (lo, hi) = (on_area(body.band.lo()), on_area(body.band.hi()));
+        let deep = area
+            .bits
+            .iter()
+            .zip(lo.z.iter().zip(&hi.z))
+            .any(|(&a, (l, h))| a && h - l > 0.05);
+        if deep {
+            d.sheet(path, i, "band-lo", lo, area.clone());
+            d.sheet(path, i, "band-hi", hi, area.clone());
+        }
+    }
+
     /// Every step, from the last one `cache` kept.
     fn run(&self, progress: &Progress, cache: Option<&Cache>) -> Result<Ran, Vec<Diag>> {
         let (c, tile) = (self.c, self.tile);
         let mut scene = Scene::new(c.frame, Seed::new(c.seed));
         scene.set_progress(progress.clone());
+        if self.opts.debug {
+            scene.collect_debug();
+        }
         let mut stage_secs = Vec::new();
         let mut painted = false;
         // sketches start with the lifted ground, which carries what the
@@ -979,22 +1021,25 @@ impl<'a> Plan<'a> {
                 Step::Lift => scene
                     .lift("tile/terrain", &self.opts.printer)
                     .map_err(|e| build_error(e.to_string()))?,
-                Step::Entry(i) => c.elements[i].build(&mut scene, &self.ctx(i)).map_err(|e| {
-                    let msg = format!("{}: {}", self.jobs[i].path, e.message);
-                    match tile.stack.get(i) {
-                        Some(en) => vec![
-                            Diag::at(
-                                &en.src,
-                                en.span,
-                                e.code.unwrap_or("dt::build"),
-                                msg,
-                                "while building this",
-                            )
-                            .maybe_help(e.help),
-                        ],
-                        None => build_error(msg),
-                    }
-                })?,
+                Step::Entry(i) => {
+                    self.band_sheets(&mut scene, i);
+                    c.elements[i].build(&mut scene, &self.ctx(i)).map_err(|e| {
+                        let msg = format!("{}: {}", self.jobs[i].path, e.message);
+                        match tile.stack.get(i) {
+                            Some(en) => vec![
+                                Diag::at(
+                                    &en.src,
+                                    en.span,
+                                    e.code.unwrap_or("dt::build"),
+                                    msg,
+                                    "while building this",
+                                )
+                                .maybe_help(e.help),
+                            ],
+                            None => build_error(msg),
+                        }
+                    })?;
+                }
             }
             // a front end showing the build as it goes gets what this stage made
             lifted |= *step == Step::Lift;
@@ -1147,6 +1192,7 @@ impl<'a> Plan<'a> {
             brick,
             entries,
             pieces,
+            debug: scene.debug_marks().cloned(),
         })
     }
 }

@@ -326,6 +326,7 @@ impl Element for Grass {
         // 4 fronds
         let len = self.length.scaled(s);
         let hgt = self.height.scaled(s);
+        let mut starts = scene.debug().is_some().then(Vec::new);
         let (frs, strands) = fronds::plan(
             &mut draws("fronds"),
             &surf,
@@ -336,7 +337,15 @@ impl Element for Grass {
             &hgt,
             self.cover,
             &mut draws("edge-fronds"),
+            starts.as_mut(),
         );
+        if let (Some(starts), Some(d)) = (&starts, scene.debug()) {
+            let in_area = |x: f64, y: f64| {
+                let (i, j) = raw_node(&frame, x, y);
+                !surf.outside[j * nx + i]
+            };
+            debug_marks(d, ctx.path, starts, &frs, &flow, &in_area, &raw, (w, h));
+        }
 
         // 5 blades, in parallel, gathered in order
         let seat_at = |x: f64, y: f64| seat.sample(x, y);
@@ -411,6 +420,81 @@ impl Element for Grass {
             scene.note(k, v);
         }
         Ok(())
+    }
+}
+
+/// How high over the ground the debug layer's marks are drawn, mm.
+const MARK_LIFT_MM: f64 = 0.15;
+/// The flow arrows' spacing and length, mm.
+const ARROW_MM: (f64, f64) = (3.5, 2.2);
+
+/// The debug layer's marks: every blade start by its fate, each grown
+/// blade's spine (cut short, added along the edge), and the flow on a
+/// coarse grid over the area.  Reads only what the build made.
+#[allow(clippy::too_many_arguments)]
+fn debug_marks(
+    d: &mut dt_kit::debug::Debug,
+    owner: &str,
+    starts: &[fronds::Start],
+    frs: &[fronds::Frond],
+    flow: &flow::Flow,
+    area_at: &impl Fn(f64, f64) -> bool,
+    raw: &Field,
+    (w, h): (f64, f64),
+) {
+    let drape = |p: [f64; 2]| {
+        let (x, y) = (p[0].clamp(0.0, w), p[1].clamp(0.0, h));
+        [p[0], p[1], raw.sample(x, y) + MARK_LIFT_MM]
+    };
+    let grown = starts.iter().filter(|s| s.fate.grown());
+    for (st, f) in grown.zip(frs) {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let n = ((f.length / fronds::TRACE_STEP_MM) as usize).min(f.path.len() - 1);
+        // a point every half millimetre, and the tip
+        let mut pts: Vec<[f64; 3]> = f.path[..=n].iter().step_by(2).map(|&p| drape(p)).collect();
+        if n % 2 == 1 {
+            pts.push(drape(f.path[n]));
+        }
+        let class = match (st.edge, st.fate) {
+            (true, _) => "spine-edge",
+            (false, fronds::Fate::Cut) => "spine-cut",
+            _ => "spine",
+        };
+        d.trail(owner, class, pts);
+    }
+    for st in starts {
+        d.dot(owner, st.fate.class(), drape(st.at));
+    }
+    let (step, len) = ARROW_MM;
+    let mut y = step / 2.0;
+    while y < h {
+        let mut x = step / 2.0;
+        while x < w {
+            if area_at(x, y) {
+                let u = flow.at(x, y);
+                let (a, b) = (
+                    [x - u[0] * len / 2.0, y - u[1] * len / 2.0],
+                    [x + u[0] * len / 2.0, y + u[1] * len / 2.0],
+                );
+                let barb = |s: f64| {
+                    let (c, n) = (0.35 * len, [-u[1], u[0]]);
+                    [
+                        b[0] - u[0] * c + s * n[0] * c * 0.6,
+                        b[1] - u[1] * c + s * n[1] * c * 0.6,
+                    ]
+                };
+                let pts = vec![
+                    drape(a),
+                    drape(b),
+                    drape(barb(1.0)),
+                    drape(b),
+                    drape(barb(-1.0)),
+                ];
+                d.trail(owner, "flow", pts);
+            }
+            x += step;
+        }
+        y += step;
     }
 }
 

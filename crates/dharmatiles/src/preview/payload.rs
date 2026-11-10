@@ -139,6 +139,7 @@ pub fn from_built(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Ve
         "band_faces": b.audit.band.iter().filter(|&&o| o).count(),
         "overhang_deg": overhang_deg,
         "footprint": b.footprint,
+        "debug": debug_json(b),
     });
     encode_traced(
         &b.export.mesh,
@@ -148,6 +149,84 @@ pub fn from_built(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Ve
         &b.pieces,
         &meta,
     )
+}
+
+/// The most debug points sent; more are thinned evenly, class by class.
+pub const DEBUG_DOTS: usize = 40_000;
+/// The most debug polyline points sent; more polylines are thinned evenly.
+pub const DEBUG_TRAIL_POINTS: usize = 150_000;
+/// The most nodes a debug sheet is sent with across or up.
+pub const DEBUG_SHEET_NODES: usize = 72;
+
+/// A coordinate to a hundredth of a millimetre: the JSON stays short.
+fn mm(v: f64) -> f64 {
+    (v * 100.0).round() / 100.0
+}
+
+/// The debug layer's marks as the page draws them, thinned to
+/// [`DEBUG_DOTS`], [`DEBUG_TRAIL_POINTS`] and [`DEBUG_SHEET_NODES`]:
+/// `{"dots": {class: [x, y, z, …]}, "trails": {class: [[x, y, z, …], …]},
+/// "sheets": [{entry, owner, class, nx, ny, step, z: [h or null, …]}],
+/// "thinned": bool}`; `null` when the build collected none.
+#[must_use]
+pub fn debug_json(b: &Built) -> Value {
+    use std::collections::BTreeMap;
+    let Some(d) = &b.debug else {
+        return Value::Null;
+    };
+    let mut thinned = false;
+    // every k-th, so the kept ones spread over the whole tile
+    let every = |n: usize, budget: usize| n.div_ceil(budget.max(1)).max(1);
+    let k_dot = every(d.dots.len(), DEBUG_DOTS);
+    thinned |= k_dot > 1;
+    let mut dots: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    for p in &d.dots {
+        let n = seen.entry(p.class).or_default();
+        if n.is_multiple_of(k_dot) {
+            dots.entry(p.class).or_default().extend(p.at.map(mm));
+        }
+        *n += 1;
+    }
+    let total: usize = d.trails.iter().map(|t| t.points.len()).sum();
+    let k_trail = every(total, DEBUG_TRAIL_POINTS);
+    thinned |= k_trail > 1;
+    let mut trails: BTreeMap<&str, Vec<Vec<f64>>> = BTreeMap::new();
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    for t in &d.trails {
+        let n = seen.entry(t.class).or_default();
+        if n.is_multiple_of(k_trail) {
+            trails
+                .entry(t.class)
+                .or_default()
+                .push(t.points.iter().flat_map(|p| p.map(mm)).collect());
+        }
+        *n += 1;
+    }
+    let sheets: Vec<Value> = d
+        .sheets
+        .iter()
+        .map(|s| {
+            let k = every(s.z.nx.max(s.z.ny), DEBUG_SHEET_NODES);
+            let (nx, ny) = (s.z.nx.div_ceil(k), s.z.ny.div_ceil(k));
+            let z: Vec<Value> = (0..ny)
+                .flat_map(|j| (0..nx).map(move |i| (i * k, j * k)))
+                .map(|(i, j)| {
+                    let n = j * s.z.nx + i;
+                    if s.region.bits[n] {
+                        json!(mm(s.z.z[n]))
+                    } else {
+                        Value::Null
+                    }
+                })
+                .collect();
+            json!({
+                "entry": s.entry, "owner": s.owner, "class": s.class,
+                "nx": nx, "ny": ny, "step": s.z.step * k as f64, "z": z,
+            })
+        })
+        .collect();
+    json!({"dots": dots, "trails": trails, "sheets": sheets, "thinned": thinned})
 }
 
 /// The most triangles a draft or a sketch is sent with; more are thinned
@@ -236,6 +315,7 @@ pub fn from_draft(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Ve
         "overhang_deg": overhang_deg,
         "footprint": b.footprint,
         "thinned": kept.len() < b.export.mesh.triangles.len(),
+        "debug": debug_json(b),
     });
     encode_traced(
         &mesh,

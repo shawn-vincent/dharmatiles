@@ -108,8 +108,8 @@ pub(crate) fn base_key(
     foots: &[Foot],
 ) -> u64 {
     let text = format!(
-        "{frame:?}|{seed}|{}|{:?}|{}|{edges:?}|{fills}",
-        opts.system, opts.printer, opts.draft
+        "{frame:?}|{seed}|{}|{:?}|{}|{}|{edges:?}|{fills}",
+        opts.system, opts.printer, opts.draft, opts.debug
     );
     foots
         .iter()

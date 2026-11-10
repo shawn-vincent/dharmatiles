@@ -5,6 +5,7 @@
 import { Layout } from '../layout.js';
 import { rememberView, shortcutViews } from '../view-presets.js';
 import { VIEWS } from '../viewer.js';
+import { legendRows } from '../debug-layer.js';
 import { $, pickView, viewer } from './app.js';
 import { server, tile, view } from './stores.js';
 
@@ -51,6 +52,42 @@ function setPaint(on) {
   $('t-paint').checked = on;
   viewer.setPaint(on);
   try { localStorage.setItem('dt-preview-paint', on ? '1' : '0'); } catch { /* private mode: the default stands */ }
+}
+
+// the debug layer: off at every load; ⌃⌥D or the ⋯ menu
+function setDebug(on) {
+  $('t-debug').checked = on;
+  viewer.setDebugShown(on);
+}
+const cssToken = (t) => getComputedStyle(document.documentElement).getPropertyValue(t).trim();
+/** The debug layer's legend, beside the view while the layer is on. */
+function renderDebugLegend(d) {
+  const box = $('debug-legend');
+  box.hidden = !d;
+  if (!d) return;
+  const rows = legendRows(d).map((r) => {
+    const li = document.createElement('li');
+    const sw = document.createElement('i');
+    sw.className = `sw ${r.kind}`;
+    sw.style.background = cssToken(r.token);
+    const label = document.createElement('span');
+    label.textContent = r.label;
+    li.append(sw, label);
+    if (r.kind !== 'sheet') {
+      const n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = r.n;
+      li.append(n);
+    }
+    return li;
+  });
+  if (!rows.length) {
+    const li = document.createElement('li');
+    li.textContent = 'Nothing in this tile shows here yet: grass and banded surfaces do.';
+    rows.push(li);
+  }
+  $('debug-rows').replaceChildren(...rows);
+  $('debug-thinned').hidden = !d.thinned;
 }
 
 // popovers: one open at a time (`view.popover`); Esc or a click outside closes it
@@ -174,6 +211,9 @@ export function init() {
   try { if (localStorage.getItem('dt-preview-paint') === '0') setPaint(false); } catch { /* private mode: the default stands */ }
   if (/paint=off/.test(location.hash)) { $('t-paint').checked = false; viewer.setPaint(false); } // #paint=off previews grey without saving
   toggle('t-wire', (on) => viewer.setWireframe(on));
+  viewer.onDebugChange = renderDebugLegend;
+  viewer.setDebugColours(cssToken);
+  toggle('t-debug', setDebug);
   toggle('t-grid', (on) => viewer.setGrid(on));
   toggle('t-fade', (on) => { viewer.setFade(on); try { localStorage.setItem('dt-fade', on ? '1' : '0'); } catch { /* private mode: the default stands */ } });
   try { if (localStorage.getItem('dt-fade') === '0') { $('t-fade').checked = false; viewer.setFade(false); } } catch { /* private mode: the default stands */ }
@@ -203,6 +243,10 @@ export function init() {
   addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && ['1', '2', '3'].includes(e.key)) {
       e.preventDefault(); focusPane(Number(e.key)); return;
+    }
+    // ⌃⌥D, by the key's place (⌥ changes the character on a Mac)
+    if (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey && e.code === 'KeyD') {
+      e.preventDefault(); setDebug(!$('t-debug').checked); return;
     }
     if (e.defaultPrevented) return; // a tool (map.js) or the undo (document.js) took it
     if (e.key === 'Escape') {

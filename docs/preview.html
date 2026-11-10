@@ -50,6 +50,14 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
   <li><strong>Progress</strong> while a tile builds: the stage, an element's own count (grass blades, wall stones, tree leaves) and the time left, estimated from the last build of the same tile.</li>
 </ul>
 
+<h2 id="debug">The debug layer</h2>
+<p>When a tile does not come out as you expect, the debug layer shows how the build made it. It is off whenever the editor opens; <kbd>⌃⌥D</kbd> (<kbd>Ctrl</kbd>-<kbd>Alt</kbd>-<kbd>D</kbd>) or <em>Debug layer</em> in the <kbd>⋯</kbd> menu turns it on and off, and a legend at the top left names what is drawn, with counts. It reads in every view, Map included, and changes nothing that is built or printed.</p>
+<ul>
+  <li><strong>Grass:</strong> every blade start as a dot coloured by what became of it: grew; grew but cut short; outside the grass's area; too short at a line; too short at the tile edge; too short on bare soil, at a rock or where the flow folds; crowded by a blade already there; under a stone; on bare soil; left out by <code>cover</code>. Each grown blade's spine is drawn on the ground: blue when it grew to its full length, yellow when it was cut short (yellow, not orange: orange and red always mean overhang), pink for a blade started along the area's edge. Thin dark arrows show the flow the blades follow.</li>
+  <li><strong>Height bands:</strong> a surface whose tile writes its band (<code>top=</code> or a <code>pin</code>) shows the band's low and high as translucent sheets over its region, a hue for each, with a bright edge.</li>
+</ul>
+<p>A tile with a great many marks has them thinned evenly, and the legend says so. More elements will add what they do.</p>
+
 <h2 id="layout">Panes</h2>
 <p>The document and the property sheet share one sidebar by default, the source above the properties: the <strong>Edit</strong> layout. Every edge between panes is a sash: drag it to resize, double-click it to reset. Each pane's <kbd>×</kbd> hides it, and a button on the view brings it back.</p>
 <ul>
@@ -113,6 +121,7 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <tr><td><kbd>w</kbd></td><td>Wireframe</td></tr>
 <tr><td><kbd>g</kbd></td><td>The grid on the plate</td></tr>
 <tr><td><kbd>t</kbd></td><td>Light or dark</td></tr>
+<tr><td><kbd>⌃⌥D</kbd> (<kbd>Ctrl</kbd>-<kbd>Alt</kbd>-<kbd>D</kbd>)</td><td>The debug layer</td></tr>
 <tr><td><kbd>f</kbd></td><td>Fly to the selection</td></tr>
 <tr><td><kbd>A</kbd> or <kbd>/</kbd></td><td>The bar: place or draw</td></tr>
 <tr><td><kbd>[</kbd> <kbd>]</kbd> <kbd>\</kbd></td><td>Hide or show the source, the properties, both</td></tr>

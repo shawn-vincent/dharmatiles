@@ -169,10 +169,77 @@ pub struct Frond {
     pub height: f64,
 }
 
+/// What became of a blade start, for the debug layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fate {
+    /// Grown to its drawn length.
+    Grew,
+    /// Grown, shortened to stop at a line, the tile's rim, bare soil or an
+    /// obstacle.
+    Cut,
+    /// Under a rock, a trunk or a wall, with no open ground along the flow.
+    Under,
+    /// Too near a blade already grown.
+    Crowded,
+    /// On bare soil and not drawn as a sprig.
+    Soil,
+    /// Left out by `cover`.
+    Cover,
+    /// Outside the grass's area.
+    Outside,
+    /// Stopped at the area's edge (a line, a region, the waterline) before
+    /// the shortest blade.
+    ShortLine,
+    /// Stopped at the tile's rim before the shortest blade.
+    ShortRim,
+    /// Stopped by bare soil, an obstacle or a fold in the flow before the
+    /// shortest blade.
+    ShortOther,
+}
+
+impl Fate {
+    /// The debug layer's class.
+    #[must_use]
+    pub const fn class(self) -> &'static str {
+        match self {
+            Self::Grew => "grew",
+            Self::Cut => "cut",
+            Self::Under => "under",
+            Self::Crowded => "crowded",
+            Self::Soil => "soil",
+            Self::Cover => "cover",
+            Self::Outside => "outside",
+            Self::ShortLine => "short-line",
+            Self::ShortRim => "short-rim",
+            Self::ShortOther => "short-other",
+        }
+    }
+
+    /// A blade was grown.
+    #[must_use]
+    pub const fn grown(self) -> bool {
+        matches!(self, Self::Grew | Self::Cut)
+    }
+}
+
+/// A blade start and what became of it; `edge` for one added along the
+/// area's edge.
+#[derive(Clone, Copy, Debug)]
+pub struct Start {
+    /// Where, mm.
+    pub at: [f64; 2],
+    /// What became of it.
+    pub fate: Fate,
+    /// Added along the area's edge.
+    pub edge: bool,
+}
+
 /// The fronds of a tile `w × h`: roots along strands, then each drawn and
 /// shortened (never sliced) to fit; `None` for those not built (under a
 /// blocker, soil roots that did not become sprigs, shortened to nothing).
-/// Returns the fronds and the strand count.
+/// Returns the fronds and the strand count.  With `log`, every start in
+/// the tile is written to it with its fate, in order: the grown ones match
+/// the fronds one to one.
 #[allow(clippy::too_many_arguments)]
 pub fn plan(
     rng: &mut Rng,
@@ -184,6 +251,7 @@ pub fn plan(
     hgt: &Draw,
     cover: f64,
     edge_rng: &mut Rng,
+    mut log: Option<&mut Vec<Start>>,
 ) -> (Vec<Frond>, usize) {
     let (roots, l0, n_strands) = make_strand_roots(rng, flow, (w, h), len);
     let keep: Vec<usize> = (0..roots.len())
@@ -254,11 +322,21 @@ pub fn plan(
     let mut taken = Taken::default();
     let mut out = Vec::new();
     for f in 0..n {
-        if let Some(fr) = grower.grow(rng, roots[f], l0[f], &paths[f], bank[f], &mut taken) {
+        let grown = grower.grow(rng, roots[f], l0[f], &paths[f], bank[f], &mut taken);
+        if let Some(log) = log.as_deref_mut() {
+            log.push(Start {
+                at: roots[f],
+                fate: grown.as_ref().map_or_else(|f| *f, |(_, f)| *f),
+                edge: false,
+            });
+        }
+        if let Ok((fr, _)) = grown {
             out.push(fr);
         }
     }
-    edge_fill(edge_rng, &grower, flow, len, lmax, &mut taken, &mut out);
+    edge_fill(
+        edge_rng, &grower, flow, len, lmax, &mut taken, &mut out, log,
+    );
     (out, n_strands)
 }
 
@@ -311,7 +389,8 @@ impl Grower<'_> {
     }
 
     /// One frond from `root` along `path` (traced from it a step apart),
-    /// drawn and shortened to fit; `None` when it is not grown (under a
+    /// drawn and shortened to fit, with its fate ([`Fate::Grew`] or
+    /// [`Fate::Cut`]); the fate alone when it is not grown (under a
     /// blocker, crowded, a soil root that is not a sprig, left out by
     /// `cover`, shortened to nothing).
     fn grow(
@@ -322,20 +401,20 @@ impl Grower<'_> {
         path: &[[f64; 2]],
         bank: bool,
         taken: &mut Taken,
-    ) -> Option<Frond> {
+    ) -> Result<(Frond, Fate), Fate> {
         let surf = self.surf;
         let (w, h) = (self.w, self.h);
         let step = TRACE_STEP_MM;
         let k = self.idx(root);
         if surf.blk_depth.as_ref().is_some_and(|b| b.z[k] > 0.0) {
-            return None;
+            return Err(Fate::Under);
         }
         if taken.crowded(root) {
-            return None;
+            return Err(Fate::Crowded);
         }
         let sprig = surf.soil.z[k] > 0.5;
         if sprig && rng.random() > SPRIG_PROB {
-            return None;
+            return Err(Fate::Soil);
         }
         let (blade_len, wmax, mut hf);
         if sprig {
@@ -362,7 +441,7 @@ impl Grower<'_> {
         // others so the stream does not shift with it)
         let grown = rng.random() < self.cover;
         if !grown {
-            return None;
+            return Err(Fate::Cover);
         }
         // shorten (never slice) so the tip ends inside the tile, at most
         // `spill` into bare soil, and at most `tuck` into an obstacle
@@ -388,14 +467,25 @@ impl Grower<'_> {
             if folds || rim || deep || in_blk || surf.outside[kk] {
                 #[allow(clippy::cast_precision_loss)]
                 let at = t as f64 * step;
-                stop = Some(at);
+                let short = if surf.outside[kk] {
+                    if t == 0 {
+                        Fate::Outside
+                    } else {
+                        Fate::ShortLine
+                    }
+                } else if rim {
+                    Fate::ShortRim
+                } else {
+                    Fate::ShortOther
+                };
+                stop = Some((at, short));
                 break;
             }
         }
         let mut length = blade_len;
-        if let Some(l) = stop {
+        if let Some((l, short)) = stop {
             if l < FROND_MIN_LEN_MM {
-                return None;
+                return Err(short);
             }
             hf *= libm::pow((l / blade_len).clamp(0.3, 1.0), 0.8);
             length = l;
@@ -407,12 +497,20 @@ impl Grower<'_> {
             hf *= near.z[self.idx(tip)];
         }
         taken.add(root);
-        Some(Frond {
-            path: path.to_vec(),
-            length,
-            half_w: wmax,
-            height: hf,
-        })
+        let fate = if stop.is_some() {
+            Fate::Cut
+        } else {
+            Fate::Grew
+        };
+        Ok((
+            Frond {
+                path: path.to_vec(),
+                length,
+                half_w: wmax,
+                height: hf,
+            },
+            fate,
+        ))
     }
 }
 
@@ -463,6 +561,7 @@ fn cover_frond(cov: &mut [bool], soil: &Field, f: &Frond) {
 /// Its start is upstream along the flow so the blade's full part lies over
 /// the gap; where the edge is right behind the gap, the blade is grown the
 /// other way, against the edge, and shortened at it.
+#[allow(clippy::too_many_arguments)]
 fn edge_fill(
     rng: &mut Rng,
     g: &Grower,
@@ -471,6 +570,7 @@ fn edge_fill(
     lmax: f64,
     taken: &mut Taken,
     out: &mut Vec<Frond>,
+    mut log: Option<&mut Vec<Start>>,
 ) {
     let surf = g.surf;
     let Some(edge) = &surf.edge_dist else {
@@ -536,6 +636,13 @@ fn edge_fill(
                     .saturating_sub(1) as f64
                     * TRACE_STEP_MM;
                 if ahead < EDGE_BACK_MM {
+                    if let Some(log) = log.as_deref_mut() {
+                        log.push(Start {
+                            at: p,
+                            fate: Fate::ShortLine,
+                            edge: true,
+                        });
+                    }
                     continue;
                 }
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -543,7 +650,15 @@ fn edge_fill(
                 (fwd[t], -1.0)
             };
             let path = &trace_batch(&[root], lmax, flow, Some(&d), sign)[0];
-            if let Some(f) = g.grow(rng, root, l0, path, false, taken) {
+            let grown = g.grow(rng, root, l0, path, false, taken);
+            if let Some(log) = log.as_deref_mut() {
+                log.push(Start {
+                    at: root,
+                    fate: grown.as_ref().map_or_else(|f| *f, |(_, f)| *f),
+                    edge: true,
+                });
+            }
+            if let Ok((f, _)) = grown {
                 cover_frond(&mut cov, soil, &f);
                 out.push(f);
             }
