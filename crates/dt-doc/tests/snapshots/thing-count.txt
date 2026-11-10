@@ -1,11 +1,11 @@
 dt::unknown-control
 
   × `tree` has no control `count`
-    ╭─[library/tiles/ground/2x2-grass-tree.dtile:9:22]
+    ╭─[library/tiles/ground/2x2-grass-tree.dtile:9:32]
   8 │         dirt clods=none
-  9 │         tree size=40 count=3 {               // anywhere on the tile; or at="1,1"
-    ·                      ──┬──
-    ·                        ╰── unknown control
+  9 │         tree top="bottom + 40" count=3 {     // anywhere on the tile; or at="1,1"
+    ·                                ──┬──
+    ·                                  ╰── unknown control
  10 │             trunk height=30             // bare trunk below the crown
     ╰────
   help: a tree is one tree; how many and how spread is a scatter's job: `scatter

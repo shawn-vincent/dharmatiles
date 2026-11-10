@@ -347,7 +347,7 @@ fn a_scatter_at_a_line_builds_for_rocks_and_flowers() {
 
 #[test]
 fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
-    let ok = on_a_line("scatter at=road count=3 { tree size=24 }");
+    let ok = on_a_line("scatter at=road count=3 { tree top=\"bottom + 24\" }");
     let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &Options::default()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
     let e = errors(&on_a_line("tree at=road"));
@@ -378,7 +378,8 @@ fn a_mixed_scatter_builds_and_is_deterministic() {
 
 #[test]
 fn a_mix_with_trees_checks() {
-    let ok = on_a_line("scatter at=road count=4 reach=3 { tree size=24; rock; flower }");
+    let ok =
+        on_a_line("scatter at=road count=4 reach=3 { tree top=\"bottom + 24\"; rock; flower }");
     let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &Options::default()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
 }

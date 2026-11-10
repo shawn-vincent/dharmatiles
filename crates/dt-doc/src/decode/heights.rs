@@ -39,6 +39,9 @@ pub(crate) enum Mode {
     Const,
     /// A top: a height.
     Top,
+    /// A thing's top: a height drawn for each thing (a tree's), so a
+    /// weighted range has odds to act on.
+    Draw,
     /// A length (`within`): constants and numbers only.
     Length,
 }
@@ -176,7 +179,7 @@ impl Decoder<'_> {
         };
         // A top, a pin and a distance are bands the solver fits, not draws:
         // the odds of a weighting have nothing to act on.
-        if mode != Mode::Const && expr.weighted().is_some() {
+        if !matches!(mode, Mode::Const | Mode::Draw) && expr.weighted().is_some() {
             self.err(
                 "dt::weighting",
                 span,
@@ -574,6 +577,15 @@ impl Decoder<'_> {
 
     // ---- stack entries ----------------------------------------------
 
+    /// A tree, or a definition of one thing (which may be a tree): what a
+    /// scatter's `top=` may stand on.
+    fn is_tree_like(&self, entry: &Entry) -> bool {
+        match &entry.callee {
+            Callee::Element(l) => l.name == "tree",
+            Callee::Definition(_) => self.class_of(entry) == Class::Thing,
+        }
+    }
+
     pub(crate) fn class_of(&self, entry: &Entry) -> Class {
         match &entry.callee {
             Callee::Element(l) => match l.name {
@@ -634,7 +646,11 @@ impl Decoder<'_> {
     ) -> bool {
         let class = self.class_of(entry);
         match key.value.as_str() {
-            "top" if matches!(class, Class::Body | Class::Thing) && parent != Parent::Scatter => {
+            "top"
+                if class == Class::Body
+                    || (class == Class::Thing
+                        && (parent != Parent::Scatter || self.is_tree_like(entry))) =>
+            {
                 // an element's own `top` words (a cliff's `top=dirt`) stay theirs
                 if let (Some(l), Some(s)) = (entry.element(), e.value().as_string())
                     && l.control("top")
@@ -652,7 +668,12 @@ impl Decoder<'_> {
                     return true;
                 }
                 let what = format!("`{} top`", entry.what.value);
-                if let Some((x, _)) = self.height_expr(e, ctx, &what, Mode::Top) {
+                let mode = if class == Class::Thing {
+                    Mode::Draw
+                } else {
+                    Mode::Top
+                };
+                if let Some((x, _)) = self.height_expr(e, ctx, &what, mode) {
                     entry.top = Some(x);
                 }
                 true

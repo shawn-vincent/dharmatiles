@@ -63,7 +63,7 @@ tile size="1x1" {
 <div class="tbl"><table>
 <thead><tr><th>Rule</th><th>Example</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td>A node is a name, then values and properties, then an optional block.</td><td><code>tree size=40 { … }</code></td><td>Properties are <code>key=value</code>; a block is <code>{ … }</code>.</td></tr>
+<tr><td>A node is a name, then values and properties, then an optional block.</td><td><code>rock size=8 shape=flat { … }</code></td><td>Properties are <code>key=value</code>; a block is <code>{ … }</code>.</td></tr>
 <tr><td>A control may go on the line or as a child line.</td><td><code>cliff height=35</code> or <code>cliff { height 35 }</code></td><td>Both decode the same. Edits keep whichever form is written; new controls go on the line.</td></tr>
 <tr><td>Ranges, percents and points are quoted.</td><td><code>size="1..6"</code>, <code>cover="85%"</code>, <code>at="0.65,1"</code></td><td>KDL numbers can't contain <code>..</code>, <code>%</code> or <code>,</code>. A forgotten quote gets an error that says what to write.</td></tr>
 <tr><td>Switches are <code>#true</code> and <code>#false</code>.</td><td>—</td><td>Bare <code>true</code> is KDL v1 and an error. Few controls are switches: most take a word (<code>clods some</code>, <code>leaves bare</code>).</td></tr>
@@ -113,7 +113,7 @@ let small "low(1..6, 11)"</code></pre>
 <p>Written alone, a range is flat on every element. <code>a..b</code> and <code>[a .. b]</code> both read inside a call, in a quoted control value and in a height. The numbers after the range are plain numbers; a strength outside its limits is <code>dt::range</code>, with the limits in the help.</p>
 <ul>
   <li><strong>Every range is its own draw.</strong> Write a range twice and it rolls twice: <code>[1 .. 2] + [3 .. 4]</code> is two dice. Each range draws from its value's own key and its position in the value, so editing one value never moves another's draws.</li>
-  <li><strong>A weighted range goes on a draw, not on a band.</strong> A <code>top=</code>, a pin's top and a <code>within</code> distance are bands the solver fits, not draws: <code>low(…)</code> there is a <code>dt::weighting</code> error whose help gives the range to write. <code>flat(…)</code> is the plain range and is accepted anywhere a range is.</li>
+  <li><strong>A weighted range goes on a draw, not on a band.</strong> A body's <code>top=</code>, a pin's top and a <code>within</code> distance are bands the solver fits, not draws (a tree's <code>top=</code> is a draw, one per tree): <code>low(…)</code> there is a <code>dt::weighting</code> error whose help gives the range to write. <code>flat(…)</code> is the plain range and is accepted anywhere a range is.</li>
   <li><strong>A <code>let</code> name holds a distribution.</strong> <code>let small "low(1..6, 11)"</code> stands for that range with its odds, and a control that names <code>small</code> draws from it, each use its own roll. A tile's own <code>let</code> may be named by a size, count or density control; the library's heights may not.</li>
   <li><strong>A count has an equal chance for every whole number.</strong> A range on a count (<code>count</code>, <code>perSquare</code> as the number it makes, reeds' <code>clumps</code> and <code>stems</code>) is cut into one bin per whole number, ends rounded: <code>2..5</code> gives 2, 3, 4 and 5 a quarter each, the ends no rarer than the middle. A weighting moves the odds across the bins; a sum falls in the bin of its drawn place along its ends.</li>
   <li><strong>Sums are dice.</strong> <code>size="[1 .. 2] + [3 .. 4]"</code> (or <code>"1..2 + 3..4"</code>) adds two rolls and lands anywhere in 4..6, most often near 5. A name holds the range, not a roll, so <code>s - s</code> with <code>let s "[1 .. 2]"</code> is two rolls, anywhere in -1..1. Numbers and names shift and scale, and a negative factor mirrors. Dividing by a range is refused. On a count the sum is rounded, and a band (<code>top=</code>, a pin) reads a sum as the interval it spans.</li>
@@ -195,7 +195,7 @@ let tallWallHeight     72.3</code></pre>
     water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" { pin top=waterEdgeHeight at=edges }
 }</code></pre>
 <p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The dirt default applies to the first dirt only, so a second dirt laid over what is under it (<code>dirt top="bottom + [0.6 .. 1.2]"</code>) is not pulled to the rim; the water, flagstones and planks defaults apply to every water and every floor. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override waterBedHeight 0.4 → 0.8</code>), and each pin's share of its place.</p>
-<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and types, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease: their stones and slabs step), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it, and a floor draws each slab's or board's height and tilt inside it. A cliff draws its stones inside its band, as a floor draws its slabs. A thing's <code>top=</code> is checked but not built yet, and says so.</p>
+<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and types, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease: their stones and slabs step), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it, and a floor draws each slab's or board's height and tilt inside it. A cliff draws its stones inside its band, as a floor draws its slabs. A tree's <code>top=</code> is its height: <code>bottom</code> is the ground at its foot, so <code>top="bottom + 40"</code> is 40 mm tall wherever it stands and <code>top="groundHeight + 40"</code> reaches that height above zero. Each tree draws its own top, so unlike a band it takes a weighting. A rock's or a flower's <code>top=</code> is checked but not built yet (their <code>size=</code> is a width), and says so.</p>
 <p>A complete tile that builds:</p>
 <pre><code>tile size="1x1" seed=62 {
     point crossing "(0.65, 0.5)"
@@ -359,10 +359,10 @@ define oak {
 <pre><code>dt::unknown-control
 
   × `tree` has no control `count`
-    ╭─[library/tiles/ground/2x2-grass-tree.dtile:11:22]
- 11 │         tree size=40 count=3 {               // anywhere on the tile; or at="1,1"
-    ·                        ──┬──
-    ·                          ╰── unknown control
+    ╭─[library/tiles/ground/2x2-grass-tree.dtile:9:32]
+  9 │         tree top="bottom + 40" count=3 {     // anywhere on the tile; or at="1,1"
+    ·                                ──┬──
+    ·                                  ╰── unknown control
   help: a tree is one tree; how many and how spread is a scatter's job: `scatter
         count=… { tree }`</code></pre>
 <pre><code>dt::unknown-element
@@ -386,7 +386,7 @@ define oak {
 <tr><td><code>dt::unknown-name</code>, <code>dt::place</code></td><td>static</td><td>A height or a place that nothing declares, with the nearest name.<br><code>no place is called `southCentre`</code> — help: did you mean `southCenter`?</td></tr>
 <tr><td><code>dt::pin</code></td><td>static</td><td>A pin without <code>top=</code> or <code>at=</code>, or a pin on something that is not a body.<br><code>a pin needs at=</code></td></tr>
 <tr><td><code>dt::base-order</code></td><td>static</td><td><code>base</code> anywhere but first, or a second one.<br><code>the base is the first line of the stack</code></td></tr>
-<tr><td><code>dt::weighting</code></td><td>static</td><td>A weighted range on a band (<code>top</code>, a pin, <code>within</code>), a weighting that does not wrap a plain range, or a control that takes none yet.<br><code>a weighted range does not go on a band</code> — help: write the range alone</td></tr>
+<tr><td><code>dt::weighting</code></td><td>static</td><td>A weighted range on a band (a body's <code>top</code>, a pin, <code>within</code>), a weighting that does not wrap a plain range, or a control that takes none yet.<br><code>a weighted range does not go on a band</code> — help: write the range alone</td></tr>
 <tr><td><code>dt::empty</code></td><td>solve</td><td>A pin whose place covers nothing.<br><code>this pin's place `nowhere` covers nothing</code></td></tr>
 <tr><td><code>dt::thin</code></td><td>solve</td><td>A layer that can never be as thick as the printer's skin (three layers).<br><code>the dirt is at most 0.30 mm thick at (17.50, 17.50) mm, under the 0.60 mm the printer's skin needs</code></td></tr>
 <tr><td><code>dt::missing-control</code></td><td>solve</td><td>A body with no top and no default, such as a cliff.</td></tr>
@@ -409,7 +409,7 @@ tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none
-        tree size=40 {               // anywhere on the tile; or at="1,1"
+        tree top="bottom + 40" {     // anywhere on the tile; or at="1,1"
             trunk height=30             // bare trunk below the crown
             crown width=30 clumps=32 shape=round branching=normal
             leaf length=4.5 width=3

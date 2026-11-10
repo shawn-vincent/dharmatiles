@@ -12,7 +12,7 @@ fn mem(text: &str) -> Memory {
     Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect())
 }
 
-const TREE: &str = "tree at=\"0.5,0.5\" size=20 { trunk height=10; crown width=12 clumps=12 shape=round branching=normal; leaf length=4.5 width=3 }";
+const TREE: &str = "tree at=\"0.5,0.5\" top=\"bottom + 20\" { trunk height=10; crown width=12 clumps=12 shape=round branching=normal; leaf length=4.5 width=3 }";
 
 fn tile(stack: &str) -> String {
     format!("tile size=\"1x1\" seed=3 {{\n    stack {{\n        base\n{stack}\n    }}\n}}\n")

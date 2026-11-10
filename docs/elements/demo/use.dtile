@@ -7,7 +7,7 @@ tile size="1x1" seed=12 {
     stack {
         base
         dirt
-        oak size=40
+        oak top="bottom + 40"
         lawn
     }
 }

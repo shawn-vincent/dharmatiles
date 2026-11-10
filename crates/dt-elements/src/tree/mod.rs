@@ -74,7 +74,11 @@ const STAMP_MIN_MM: f64 = 1.6;
 /// build).
 #[derive(Clone, Debug, PartialEq)]
 struct Params {
+    /// Its height over its foot (`top="bottom + 40"`, and the default).
     height: Draw,
+    /// Its top above zero (`top="groundHeight + 40"`): the height is this
+    /// less the ground at its foot.
+    top: Option<Draw>,
     trunk: Draw,
     trunk_width: Option<Draw>,
     width: Draw,
@@ -93,6 +97,10 @@ struct Params {
     leaf_width: Draw,
 }
 
+/// The heights a tree may stand over its foot, mm at the 35 mm square.
+const MIN_HEIGHT_MM: f64 = 20.0;
+const MAX_HEIGHT_MM: f64 = 120.0;
+
 /// Where in the tree's stage the leaves' build lies (progress fractions).
 const LEAVES_FROM: f64 = 0.5;
 const LEAVES_TO: f64 = 0.61;
@@ -101,6 +109,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             height: Draw::flat(40.0, 40.0),
+            top: None,
             trunk: Draw::flat(30.0, 30.0),
             trunk_width: None,
             width: Draw::flat(30.0, 30.0),
@@ -192,7 +201,9 @@ impl Tree {
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
         let mut p = Params::default();
         let s = Settings::new(controls);
-        p.height = s.dist_or("size", p.height)?;
+        // the stack writes a tree's `top=` as one of these two
+        p.height = s.dist_or("height", p.height)?;
+        p.top = s.dist("top")?;
         p.trunk = s.dist_or("trunk/height", p.trunk)?;
         p.trunk_width = s.dist("trunk/width")?.or(p.trunk_width);
         p.width = s.dist_or("crown/width", p.width)?;
@@ -296,7 +307,25 @@ impl Tree {
         let stand_rule = dt_kit::Stand::for_printer(printer);
         let s = scene.frame().scale();
         let mut rng = Rng::new(seed.key("sizes"));
-        let height = draw_dist(&p.height, &mut rng) * s;
+        let height = match &p.top {
+            None => draw_dist(&p.height, &mut rng) * s,
+            Some(top) => {
+                let h = draw_dist(top, &mut rng) * s - at[2];
+                let (lo, hi) = (MIN_HEIGHT_MM * s, MAX_HEIGHT_MM * s);
+                if !(lo..=hi).contains(&h) {
+                    return Err(LookError::control(
+                        "top",
+                        format!(
+                            "this top is {:.1} mm over the ground at the tree's foot ({:.1} mm up); a tree is {MIN_HEIGHT_MM} to {MAX_HEIGHT_MM} mm tall",
+                            h / s,
+                            at[2] / s
+                        ),
+                        "write the height over its foot: `bottom + 40`".into(),
+                    ));
+                }
+                h
+            }
+        };
         let trunk = draw_dist(&p.trunk, &mut rng) * s;
         let radius = 0.5 * draw_dist(&p.width, &mut rng) * s;
         let clump_r = draw_dist(&p.clump_size, &mut rng) * s;
@@ -626,7 +655,7 @@ impl Tree {
         let s = scene.frame().scale();
         // the crown radius as `grow` draws it (the same stream)
         let mut rng = Rng::new(seed.key("sizes"));
-        let _ = draw_dist(&self.p.height, &mut rng);
+        let _ = draw_dist(self.p.top.as_ref().unwrap_or(&self.p.height), &mut rng);
         let _ = draw_dist(&self.p.trunk, &mut rng);
         let mut margin = 0.5 * draw_dist(&self.p.width, &mut rng) * s;
         let _ = draw_dist(&self.p.clump_size, &mut rng);

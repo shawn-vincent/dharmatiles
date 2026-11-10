@@ -5,7 +5,7 @@ tile size="2x2" seed=84 {
         dirt bumpSize=14 top="[groundHeight .. groundHeight + 2]" {
             clods some
         }
-        tree size=40 {
+        tree top="bottom + 40" {
             trunk height=30
             crown width=30 clumps=32 shape=round branching=normal
             // Leaves off until the leaf placer's blades pass the overhang

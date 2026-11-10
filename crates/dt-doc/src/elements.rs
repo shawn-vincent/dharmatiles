@@ -306,10 +306,6 @@ static LEAVES: &[Word] = &[
 ];
 
 static TREE: &[Control] = &[
-    c("size", Axis::Mm, "height: ground to the top of the crown")
-        .limits(20.0, 120.0)
-        .weighted()
-        .default("40"),
     group(
         "trunk",
         &[
@@ -1066,10 +1062,10 @@ mod tests {
 
     #[test]
     fn a_number_outside_its_control_is_refused_once_in_the_schema() {
-        let tree = crate::schema::element("tree").unwrap();
-        let height = tree.control("size").unwrap();
-        let r = height.check("tree", 150.0, 150.0, false).unwrap_err();
-        assert_eq!(r.message, "`tree size` is 20 mm to 120 mm, not 150 mm");
+        let rock = crate::schema::element("rock").unwrap();
+        let size = rock.control("size").unwrap();
+        let r = size.check("rock", 250.0, 250.0, false).unwrap_err();
+        assert!(r.message.starts_with("`rock size` is "), "{}", r.message);
         let ruin = crate::schema::element("wall")
             .unwrap()
             .control("ruin")
@@ -1094,12 +1090,17 @@ mod tests {
     fn typed_text_is_checked_as_a_written_value_is() {
         use crate::decode::check_text;
         let ctl = |e: &str, c: &str| crate::schema::element(e).unwrap().control(c).unwrap();
-        let tree = ctl("tree", "size");
+        let tree = crate::schema::element("tree")
+            .unwrap()
+            .control("trunk")
+            .unwrap()
+            .sub("height")
+            .unwrap();
         assert!(check_text(tree, "tree", "40").is_none());
         assert!(check_text(tree, "tree", "30..50").is_none());
         assert_eq!(
-            check_text(tree, "tree", "150").unwrap().message,
-            "`tree size` is 20 mm to 120 mm, not 150 mm"
+            check_text(tree, "tree", "250").unwrap().message,
+            "`tree height` is 0 mm to 200 mm, not 250 mm"
         );
         assert_eq!(
             check_text(tree, "tree", "50..30").unwrap().message,

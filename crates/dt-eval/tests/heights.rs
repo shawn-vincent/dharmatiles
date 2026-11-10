@@ -228,11 +228,16 @@ fn a_dirts_top_and_pins_build() {
 }
 
 #[test]
-fn a_things_top_is_checked_but_not_built_yet_and_a_line_is_refused() {
+fn a_trees_top_is_its_height_a_rocks_waits_and_a_line_is_refused() {
+    // a tree's top is its height: read, nothing pending
     let c = solved(&tile(
         "region canopy { within 15 of=center }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=canopy }",
     ));
-    // the region is built (a thing at a region stands in it); the top is not
+    assert!(c.pending().is_empty(), "{:?}", c.pending());
+    // a rock's top is not built yet
+    let c = solved(&tile(
+        "region canopy { within 15 of=center }\n stack { base\n dirt\n rock top=\"bottom + 8\" at=canopy }",
+    ));
     assert_eq!(c.pending().len(), 1, "{:?}", c.pending());
     // a line has no one place on it: refused, not pending
     let e = refused(&tile(
@@ -322,4 +327,47 @@ fn the_stream_banks_fall_from_the_land_to_the_bed() {
     let water = &c.solved.as_ref().unwrap().bodies[1];
     assert_eq!(water.element, "water");
     assert!(water.region_nodes > 0);
+}
+
+/// The height a built tile's one tree came to, mm.
+fn tree_height(text: &str) -> f64 {
+    let b = build(&mem(text), "t.dtile", &Options::default())
+        .unwrap_or_else(|e| panic!("{text}\n{e:#?}"));
+    b.notes
+        .iter()
+        .find(|(k, _)| k == "tree.height_mm")
+        .map(|(_, v)| *v)
+        .expect("a tree")
+}
+
+#[test]
+fn a_trees_top_over_its_foot_or_above_zero_is_its_height() {
+    // flat ground at groundHeight (4 mm): `bottom + 30` and `groundHeight + 30`
+    // stand the same tree
+    let tree = |top: &str| {
+        tile(&format!(
+            "stack {{ base\n dirt top=groundHeight clods=none\n tree at=\"0.5,0.5\" top=\"{top}\" {{ trunk height=12; crown width=14 clumps=12 }} }}"
+        ))
+    };
+    let over = tree_height(&tree("bottom + 30"));
+    let above = tree_height(&tree("groundHeight + 30"));
+    let taller = tree_height(&tree("bottom + 45"));
+    assert!((above - over).abs() < 0.3, "{above} vs {over}");
+    assert!(taller > over + 10.0, "{taller} vs {over}");
+    // a top that leaves the tree too short where it stands is refused there
+    let e = match build(
+        &mem(&tree("groundHeight + 10")),
+        "t.dtile",
+        &Options::default(),
+    ) {
+        Ok(_) => panic!("a 10 mm tree built"),
+        Err(e) => e,
+    };
+    assert!(
+        format!("{e:?}").contains("a tree is 20 to 120 mm tall"),
+        "{e:?}"
+    );
+    // `bottom` is added once
+    let e = refused(&tree("bottom * 2"));
+    assert!(e[0].message.contains("added once"), "{e:?}");
 }

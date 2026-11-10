@@ -140,6 +140,7 @@ pub fn heights(text: &str) -> Result<Option<String>, EditError> {
     step(heights_only)?;
     step(places)?;
     step(tree_size)?;
+    step(tree_top)?;
     step(flowers)?;
     step(dirt_stones)?;
     Ok(changed.then_some(now))
@@ -413,6 +414,119 @@ pub fn tree_size(text: &str) -> Result<Option<String>, EditError> {
         return Ok(None);
     }
     edits.sort_by_key(|e| std::cmp::Reverse(e.start));
+    let mut out = text.to_owned();
+    for e in edits {
+        out.replace_range(e.start..e.end, &e.with);
+    }
+    Ok(Some(out))
+}
+
+/// A tree's height is its `top`: `tree size=40` is
+/// `tree top="bottom + 40"`, `bottom` being the ground at its foot, so the
+/// tree draws the same height from the same roll and builds as before.  A
+/// bare range gains its brackets (`"30..36"` is `[30 .. 36]` after
+/// `bottom +`); a weighted range or a sum is kept as written.  On the line
+/// or as a control's own line.  A size that names a definition's
+/// parameter is left as written: the decoder says what to do.  Every other
+/// byte is as written.  `Ok(None)` when no tree writes a `size`.
+///
+/// # Errors
+/// If the text is not KDL.
+pub fn tree_top(text: &str) -> Result<Option<String>, EditError> {
+    /// The height `v` as a top over the tree's foot, or `None` for a
+    /// parameter's name.
+    fn top(v: &kdl::KdlValue) -> Option<String> {
+        let body = match v {
+            kdl::KdlValue::Integer(i) => i.to_string(),
+            kdl::KdlValue::Float(f) => f.to_string(),
+            kdl::KdlValue::String(s) => {
+                let s = s.trim();
+                if s.chars().all(|c| c.is_alphanumeric() || c == '_')
+                    && !s.starts_with(|c: char| c.is_ascii_digit())
+                {
+                    return None;
+                }
+                match s.split_once("..") {
+                    Some((lo, hi))
+                        if !s.contains(['[', '(', '+', '*', '/'])
+                            && !lo.trim().is_empty()
+                            && !hi.trim().is_empty() =>
+                    {
+                        format!("[{} .. {}]", lo.trim(), hi.trim())
+                    }
+                    _ => s.to_owned(),
+                }
+            }
+            _ => return None,
+        };
+        Some(format!("bottom + {body}"))
+    }
+    fn walk(text: &str, nodes: &[KdlNode], edits: &mut Vec<Edit>) {
+        for n in nodes {
+            if n.name().value() == "tree" {
+                for e in n.entries() {
+                    if e.name().is_some_and(|k| k.value() == "size")
+                        && let Some(t) = top(e.value())
+                    {
+                        edits.push(Edit {
+                            start: e.span().offset(),
+                            end: e.span().offset() + e.span().len(),
+                            with: format!("top=\"{t}\""),
+                        });
+                    }
+                }
+                for c in n.children().into_iter().flat_map(KdlDocument::nodes) {
+                    if c.name().value() == "size"
+                        && c.entries().len() == 1
+                        && c.entries()[0].name().is_none()
+                        && c.children().is_none()
+                        && let Some(t) = top(c.entries()[0].value())
+                    {
+                        // `size 40` on its own line: the top goes on the tree's line
+                        let a = c.span().offset();
+                        let line_start = text[..a].rfind('\n').map_or(0, |i| i + 1);
+                        let mut end = a + c.span().len();
+                        let rest = &text[end..];
+                        if text[line_start..a].trim().is_empty()
+                            && rest.trim_start_matches([' ', '\t', ';']).starts_with('\n')
+                        {
+                            end += rest.find('\n').map_or(rest.len(), |i| i + 1);
+                            edits.push(Edit {
+                                start: line_start,
+                                end,
+                                with: String::new(),
+                            });
+                        } else {
+                            let start = text[..a].trim_end().len();
+                            let rest = &text[end..];
+                            end += rest.len() - rest.trim_start_matches(';').len();
+                            edits.push(Edit {
+                                start,
+                                end,
+                                with: String::new(),
+                            });
+                        }
+                        let at = n.name().span().offset() + n.name().span().len();
+                        edits.push(Edit {
+                            start: at,
+                            end: at,
+                            with: format!(" top=\"{t}\""),
+                        });
+                    }
+                }
+            }
+            if let Some(kids) = n.children() {
+                walk(text, kids.nodes(), edits);
+            }
+        }
+    }
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut edits = Vec::new();
+    walk(text, doc.nodes(), &mut edits);
+    if edits.is_empty() {
+        return Ok(None);
+    }
+    edits.sort_by_key(|e| std::cmp::Reverse((e.start, e.end)));
     let mut out = text.to_owned();
     for e in edits {
         out.replace_range(e.start..e.end, &e.with);
@@ -1541,6 +1655,37 @@ mod thing_tests {
         assert_eq!(
             flowers("tile { stack { scatter { rock } } }").unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn a_tree_size_is_its_top_over_its_foot() {
+        let old = "tile {\n    stack {\n        tree size=35 { trunk height=18 }\n        scatter { tree size=\"26..32\" }\n        tree size=\"low(30..40, 4)\"\n        tree {\n            size 40\n            leaves bare\n        }\n    }\n}\n";
+        let new = tree_top(old).unwrap().unwrap();
+        assert!(
+            new.contains("tree top=\"bottom + 35\" { trunk height=18 }"),
+            "{new}"
+        );
+        assert!(new.contains("tree top=\"bottom + [26 .. 32]\""), "{new}");
+        assert!(
+            new.contains("tree top=\"bottom + low(30..40, 4)\""),
+            "{new}"
+        );
+        assert!(
+            new.contains("tree top=\"bottom + 40\" {\n            leaves bare\n"),
+            "{new}"
+        );
+        assert!(tree_top(&new).unwrap().is_none());
+        // a parameter's name is left to the decoder; a rock keeps its size
+        assert!(
+            tree_top("define oak { param size 50; stack { tree size=size } }")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            tree_top("tile { stack { rock size=8 } }")
+                .unwrap()
+                .is_none()
         );
     }
 

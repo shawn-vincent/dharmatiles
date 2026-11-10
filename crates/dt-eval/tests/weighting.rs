@@ -586,8 +586,8 @@ fn a_blades_length_and_height_take_a_weighting() {
 fn a_trees_heights_and_a_cliffs_patches_take_a_weighting() {
     let tree = |v: &str| format!("        dirt\n        tree {v}");
     takes_a_weighting(
-        |v| tree(&format!("size=\"{v}\"")),
-        "36..40",
+        |v| tree(&format!("top=\"bottom + {v}\"")),
+        "[36 .. 40]",
         "low(36..40, 1)",
         "low(36..40, 8)",
     );
@@ -595,7 +595,7 @@ fn a_trees_heights_and_a_cliffs_patches_take_a_weighting() {
     hash(&tile(
         "",
         &tree(
-            "size=38 { trunk height=\"low(26..32)\"; crown width=24 clumpSize=\"[4, 5:3, 6]\"; leaf length=\"bell(4..5)\" width=3 }",
+            "top=\"bottom + 38\" { trunk height=\"low(26..32)\"; crown width=24 clumpSize=\"[4, 5:3, 6]\"; leaf length=\"bell(4..5)\" width=3 }",
         ),
     ));
     let cliff = |v: &str| {

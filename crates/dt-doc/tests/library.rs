@@ -168,11 +168,11 @@ fn trees_part_keeps_expert_branching() {
     assert!(oak.thing, "an oak is one thing");
     assert_eq!(oak.summary, Kind::Solid);
     let tree = entry(&oak.stack, "tree");
-    assert_eq!(tree.value("size"), Some(&Value::Param("size".into())));
-    assert!(close(
-        range(oak.params[0].default.as_ref().map(|d| &d.value)),
-        (50.0, 50.0)
-    ));
+    assert_eq!(
+        tree.top.as_ref().unwrap().value.to_string(),
+        "(bottom + 50)"
+    );
+    assert!(oak.params.is_empty(), "a call's top= is the tree's");
     assert_eq!(word(tree.sub("crown", "shape")), "wide");
     for (k, v) in [
         ("split", 34.0),
@@ -211,8 +211,10 @@ fn grass_tree_keeps_every_control() {
 
     let tree = entry(&t.stack, "tree");
     assert!(tree.place.at.is_none(), "no at=: anywhere on the tile");
-    assert_eq!(num(tree.value("size")), 40.0);
-    assert_eq!(tree.control("size").unwrap().form, Form::Property);
+    assert_eq!(
+        tree.top.as_ref().unwrap().value.to_string(),
+        "(bottom + 40)"
+    );
     assert_eq!(num(tree.sub("trunk", "height")), 30.0);
     assert_eq!(num(tree.sub("crown", "width")), 30.0);
     // one clump per branch end

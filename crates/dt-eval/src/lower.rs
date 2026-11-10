@@ -137,6 +137,101 @@ pub(crate) fn element_value(v: &Value, lets: &Lets) -> Result<Lowered, Refused> 
     })
 }
 
+/// The heights a tree may stand, from its foot to the top of its crown,
+/// mm at the reference square.
+pub(crate) const TREE_HEIGHT_MM: (f64, f64) = (20.0, 120.0);
+
+/// A tree's `top=` as the tree takes it: `("height", …)` when it is written
+/// over the tree's foot (`bottom + 40`: the tree is 40 mm tall wherever it
+/// stands, drawn as a `size` was), or `("top", …)` for a height above zero
+/// (`groundHeight + 40`: the tree's height is that less the ground at its
+/// foot, found where it stands).
+pub(crate) fn tree_top(e: &Expr, lets: &Lets) -> Result<(&'static str, Lowered), Refused> {
+    let help = "a tree's top is `bottom + 40` (40 mm over the ground at its foot) or a height above zero such as `groundHeight + 40`";
+    let Some(rest) = over_bottom(e).map_err(|m| Refused::mistake(m).with_help(help))? else {
+        let num = Num {
+            expr: e.clone(),
+            unit: None,
+        };
+        return Ok(("top", number(&num, lets)?));
+    };
+    let num = Num {
+        expr: rest,
+        unit: None,
+    };
+    let low = number(&num, lets)?;
+    let (lo, hi) = match &low.value {
+        dt_elements::Value::Number(v) => (*v, *v),
+        dt_elements::Value::Range(a, b) => (*a, *b),
+        dt_elements::Value::Dist(d) => (d.lo, d.hi),
+        dt_elements::Value::Draw(d) => d.bounds(),
+        dt_elements::Value::Word(_) => (f64::NAN, f64::NAN),
+    };
+    let (min, max) = TREE_HEIGHT_MM;
+    if !(lo >= min && hi <= max) {
+        let fmt = |v: f64| format!("{}", (v * 10.0).round() / 10.0);
+        let made = if (hi - lo).abs() < 1e-9 {
+            format!("{} mm", fmt(lo))
+        } else {
+            format!("{} to {} mm", fmt(lo), fmt(hi))
+        };
+        return Err(Refused::mistake(format!(
+            "a tree is {min} mm to {max} mm tall over its foot, and this top makes it {made}"
+        ))
+        .with_help("write the height over the ground at its foot: `bottom + 40`"));
+    }
+    Ok(("height", low))
+}
+
+/// `e` less one `bottom` added to it (`bottom + 30 + [1 .. 2]` is
+/// `30 + [1 .. 2]`); `None` when it names no `bottom`.
+fn over_bottom(e: &Expr) -> Result<Option<Expr>, String> {
+    use dt_doc::expr::BinOp::{Add, Sub};
+    let has = |x: &Expr| x.names().contains(&"bottom");
+    if !has(e) {
+        return Ok(None);
+    }
+    let alone = || {
+        "`bottom` in a tree's top is added once: the ground at its foot plus the tree's height"
+            .to_owned()
+    };
+    Ok(Some(match e {
+        Expr::Name(n) if n == "bottom" => Expr::num(0.0),
+        Expr::Bin { op, lhs, rhs } if matches!(op, Add | Sub) => match (has(lhs), has(rhs)) {
+            (true, false) => {
+                let l = over_bottom(lhs)?.ok_or_else(alone)?;
+                if matches!(lhs.as_ref(), Expr::Name(n) if n == "bottom") {
+                    if *op == Add {
+                        rhs.as_ref().clone()
+                    } else {
+                        Expr::Neg(rhs.clone())
+                    }
+                } else {
+                    Expr::Bin {
+                        op: *op,
+                        lhs: Box::new(l),
+                        rhs: rhs.clone(),
+                    }
+                }
+            }
+            (false, true) if *op == Add => {
+                let r = over_bottom(rhs)?.ok_or_else(alone)?;
+                if matches!(rhs.as_ref(), Expr::Name(n) if n == "bottom") {
+                    lhs.as_ref().clone()
+                } else {
+                    Expr::Bin {
+                        op: *op,
+                        lhs: lhs.clone(),
+                        rhs: Box::new(r),
+                    }
+                }
+            }
+            _ => return Err(alone()),
+        },
+        _ => return Err(alone()),
+    }))
+}
+
 /// What a lowered expression is: a number, one range with its odds (which
 /// shifts and scales without losing them), or several rolled and summed.
 #[derive(Clone, Debug)]

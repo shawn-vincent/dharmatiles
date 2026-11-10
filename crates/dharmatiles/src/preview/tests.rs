@@ -607,12 +607,18 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     assert_eq!(edited, text.replace("dirt\n", "dirt wear=worn\n"));
     // check-value: the reader's own check of a typed value, nothing else
     let cv = |control: &str, typed: &str| {
-        let b = serde_json::json!({ "element": "tree", "control": control, "typed": typed });
+        let b = serde_json::json!({ "element": "rock", "control": control, "typed": typed });
         post(&r, "/api/check-value", Some(&token), None, &b.to_string())
     };
-    let (h, v) = cv("size", "150");
+    let (h, v) = cv("size", "250");
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
-    assert_eq!(v["message"], "`tree size` is 20 mm to 120 mm, not 150 mm");
+    assert!(
+        v["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("`rock size` is "),
+        "{v}"
+    );
     assert!(cv("size", "40").1["message"].is_null());
     assert!(cv("no-such-control", "150").1["message"].is_null());
     // a weighting's strength outside its limits is the program's dt::range

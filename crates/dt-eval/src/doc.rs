@@ -554,6 +554,9 @@ struct Scope {
     /// Place words a definition call passes to the elements inside it.
     at: Option<Spanned<Point>>,
     along: Option<Spanned<Along>>,
+    /// A definition call's `top=`, for the tree inside it, and where it
+    /// was written.  The outermost call's wins.
+    top: Option<(Spanned<Expr>, Src)>,
     seed: Option<u64>,
     id: Option<String>,
     depth: usize,
@@ -880,6 +883,7 @@ impl Reader<'_> {
             area: None,
             at: None,
             along: None,
+            top: None,
             seed: None,
             id: None,
             depth: 0,
@@ -933,9 +937,15 @@ impl Reader<'_> {
                     el
                 }
                 _ => {
-                    // a thing, a coat or a part: its top is not built yet
+                    // a thing, a coat or a part: its top is not built yet,
+                    // except a tree's (its height) and a definition call's
+                    // (for the tree inside it), which the stack reads
                     let name = e.what.value.as_str();
-                    if let Some(t) = &e.top {
+                    let read = match &e.callee {
+                        Callee::Element(el) => el.name == "tree",
+                        Callee::Definition(_) => true,
+                    };
+                    if let Some(t) = e.top.as_ref().filter(|_| !read) {
                         pending.push(not_yet(src, t.span, &format!("`top=` on `{name}` is")));
                     }
                     things.push(thing(e));
@@ -1298,6 +1308,7 @@ impl Reader<'_> {
                         continue;
                     }
                     let params = Self::params(e, &def, &file, scope);
+                    let top = self.call_top(e, &def, scope, pending);
                     let inner = Scope {
                         file: Arc::clone(&file),
                         params,
@@ -1305,6 +1316,7 @@ impl Reader<'_> {
                         area,
                         at,
                         along,
+                        top,
                         seed,
                         id,
                         depth: scope.depth + 1,
@@ -1313,6 +1325,36 @@ impl Reader<'_> {
                 }
             }
         }
+    }
+
+    /// The `top=` a call of `def` passes to the tree inside it: the
+    /// outermost call's, else this one's.  A `top=` on a call holding no
+    /// tree has nothing to stand on yet.
+    fn call_top(
+        &mut self,
+        e: &model::Entry,
+        def: &Definition,
+        scope: &Scope,
+        pending: &mut Vec<Diag>,
+    ) -> Option<(Spanned<Expr>, Src)> {
+        let src = &scope.file.src;
+        if let Some(t) = &e.top {
+            let holds_tree = def.stack.iter().any(|x| match &x.callee {
+                Callee::Element(el) => el.name == "tree",
+                Callee::Definition(_) => true,
+            });
+            if !holds_tree {
+                pending.push(not_yet(
+                    src,
+                    t.span,
+                    &format!("`top=` on `{}`, which holds no tree, is", e.what.value),
+                ));
+            }
+        }
+        scope
+            .top
+            .clone()
+            .or_else(|| e.top.clone().map(|t| (t, Arc::clone(src))))
     }
 
     /// What a call of `def` (defined in `file`) binds its parameters to: the
@@ -1396,6 +1438,7 @@ impl Reader<'_> {
                         return None;
                     }
                 };
+                let top = self.call_top(c, &def, scope, pending);
                 let inner = Scope {
                     file: Arc::clone(&file),
                     params: Self::params(c, &def, &file, scope),
@@ -1403,6 +1446,7 @@ impl Reader<'_> {
                     area: None,
                     at: None,
                     along: None,
+                    top,
                     seed: None,
                     id: None,
                     depth: scope.depth + 1,
@@ -1431,6 +1475,16 @@ impl Reader<'_> {
                     &format!("a scatter's `{}`", cl.name),
                 ));
             }
+        }
+        if cl.name != "tree"
+            && let Some(t) = &thing.top
+        {
+            ok = false;
+            pending.push(not_yet(
+                &inner.file.src,
+                t.span,
+                &format!("`top=` on `{}` is", cl.name),
+            ));
         }
         let controls = self.controls(&thing, cl, &inner, pending)?;
         ok.then(|| Child {
@@ -1494,6 +1548,38 @@ impl Reader<'_> {
         let src = &scope.file.src;
         let mut out = Vec::new();
         let mut ok = true;
+        // a tree's height is its `top`: the outermost call's, else its own
+        if element.name == "tree"
+            && let Some((t, at)) = scope
+                .top
+                .clone()
+                .or_else(|| e.top.clone().map(|t| (t, Arc::clone(src))))
+        {
+            match crate::lower::tree_top(&t.value, &scope.lets) {
+                Ok((name, Lowered { value, note })) => {
+                    if let Some(note) = note {
+                        self.notes
+                            .push(Diag::at(&at, t.span, "dt::weighting", note, "here"));
+                    }
+                    out.push(Setting {
+                        name: name.to_owned(),
+                        value,
+                        span: t.span,
+                        src: at,
+                    });
+                }
+                Err(why) => {
+                    let mut d = Diag::at(&at, t.span, why.code, why.message, "here");
+                    d.help = why.help;
+                    if why.hard {
+                        self.errors.push(d);
+                    } else {
+                        pending.push(d);
+                    }
+                    return None;
+                }
+            }
+        }
         for s in &e.controls {
             // the control's own value, then its sub-controls as `control/sub`
             let mut items: Vec<Item<'_>> = Vec::new();
