@@ -255,19 +255,18 @@ fn dirt_follows_a_stones_top_as_a_layer_of_its_band() {
 #[test]
 fn dirt_is_absent_where_the_surface_under_it_is_steeper_than_max_slope() {
     // a pile of broken stones: their grain and tilts are steeper than 35
-    // degrees at the scale dirt reads the slope, so there is no dirt on it
-    // at the default and it stays bare; the same dirt lies on the flat tops
-    // of the table (`dirt_follows_a_stones_top`), and the unit tests in
-    // `dirt.rs` hold the angle itself
+    // degrees at the scale dirt reads the slope, so dirt keeps to the flat
+    // patches (a ledge, the stones' feet) and the faces stay bare; with no
+    // limit to speak of (85 degrees) it lies on the faces too. The unit tests
+    // in `dirt.rs` hold the angle itself
     let tile = |extra: &str| tall(true).replace("at=crag\n", &format!("at=crag {extra}\n"));
-    assert_eq!(
+    let (default, steepest) = (
         dirt_vertices(&built(&tile(""))).len(),
-        0,
-        "dirt on broken stone at 35 degrees"
+        dirt_vertices(&built(&tile("maxSlope=85"))).len(),
     );
     assert!(
-        dirt_vertices(&built(&tile("maxSlope=60"))).len() > 100,
-        "a steeper limit lets it on"
+        default * 4 < steepest * 3,
+        "dirt on broken stone: {default} at 35 degrees, {steepest} at 85"
     );
 }
 

@@ -86,3 +86,51 @@ fn dirt_listed_before_the_rock_is_as_it_was() {
         "the rock beds into the dirt, nothing lies on it: earth {earth}"
     );
 }
+
+/// The mean height of the earth's vertices that lie within `[near, far]` mm
+/// (in plan) of a rock vertex, and how many there are.
+fn earth_beside_rock(b: &Built, near: f64, far: f64) -> (f64, usize) {
+    let pos = &b.export.mesh.positions;
+    let verts = |m: Material| -> Vec<[f64; 3]> {
+        let mut seen = std::collections::BTreeSet::new();
+        for (t, mat) in b.export.mesh.triangles.iter().zip(&b.materials) {
+            if *mat == m {
+                seen.extend(t.iter().copied());
+            }
+        }
+        seen.into_iter().map(|i| pos[i as usize]).collect()
+    };
+    let rock = verts(Material::Rock);
+    let zs: Vec<f64> = verts(Material::Earth)
+        .into_iter()
+        .filter(|e| {
+            let d = rock
+                .iter()
+                .map(|r| (e[0] - r[0]).hypot(e[1] - r[1]))
+                .fold(f64::MAX, f64::min);
+            d >= near && d <= far
+        })
+        .map(|e| e[2])
+        .collect();
+    (zs.iter().sum::<f64>() / zs.len().max(1) as f64, zs.len())
+}
+
+#[test]
+fn dirt_banks_up_to_the_foot_of_a_flat_rock() {
+    // the dirt listed after the rock lies 0.6 to 1.2 mm over the ground right
+    // up to the stone's foot: a node or two (a node is 0.27 mm) off it, the
+    // earth is higher than the same tile's bare ground there. A moat of
+    // 1.5 mm round the stone would leave it level with the ground.
+    let with = built(&tile("shape=flat size=20", true, ""));
+    let without = built(&tile("shape=flat size=20", false, ""));
+    let (z_with, n_with) = earth_beside_rock(&with, 0.2, 0.9);
+    assert!(n_with > 50, "earth stands beside the stone: {n_with}");
+    // the rock listed after the dirt is bedded in it, so compare with the
+    // same ring of the tile whose second dirt lies elsewhere
+    let (z_without, _) = earth_beside_rock(&without, 0.2, 0.9);
+    eprintln!("beside the foot: {z_with} with dirt, {z_without} without");
+    assert!(
+        z_with > z_without + 0.4,
+        "dirt reaches the foot: {z_with} mm with, {z_without} mm without"
+    );
+}

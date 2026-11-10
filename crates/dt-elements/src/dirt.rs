@@ -34,6 +34,11 @@ use crate::{Control, Ctx, Element, LookError, Plan, Write};
 
 /// The height-field resolution, true mm.
 const CELL_MM: f64 = 0.15;
+/// How many nodes from the tile's edge the slope's blur is whole.
+const SLOPE_EDGE_NODES: usize = 6;
+/// A node lower than the nearest lip or steep node by more than this is
+/// below it, at the foot of a rise, and keeps no standoff from it.
+const RISE_EPS_MM: f64 = 0.1;
 /// How steeply dirt lies when nothing holds it, degrees: the easing the
 /// solver gives it, and the reach of its hills from a pin.
 pub const SLOPE_DEG: f64 = 24.0;
@@ -911,9 +916,11 @@ fn hold(
     Some(Held { area, band, thin })
 }
 
-/// `area` less where the surface is steeper than `max_slope_deg`, steps
-/// down to a neighbour deeper than a lip, or is within the lip inset of
-/// either: the same rule everywhere.
+/// `area` less where the surface is steeper than `max_slope_deg`, is a lip
+/// (a node with a neighbour more than a step lower: dirt there would hang
+/// over an edge) or lies within the lip inset of a lip, on the lip's own side
+/// of it: the same rule everywhere. Only a drop counts. A rise (the foot of a
+/// stone, where the surface goes up) is no lip, so dirt banks right up to it.
 fn held_area(
     frame: &dt_kit::Frame,
     area: &dt_kit::Mask,
@@ -926,29 +933,57 @@ fn held_area(
     let (lip_mm, inset_mm) = (LIP_MM * scale, LIP_INSET_MM * scale);
     let tan = libm::tan(max_slope_deg.to_radians());
     let z = &surface.z;
+    let rise_mm = RISE_EPS_MM * scale;
+    // `bad`: a lip or a steep face, each with ground lower beside it; dirt
+    // stands back from these, on their own side
     let mut bad = vec![false; nx * ny];
+    let mut tops = vec![false; nx * ny];
     for j in 0..ny {
         for i in 0..nx {
             let k = j * nx + i;
-            let drops = |(di, dj): (isize, isize)| {
-                let (ni, nj) = (i.wrapping_add_signed(di), j.wrapping_add_signed(dj));
-                ni < nx && nj < ny && (z[nj * nx + ni] - z[k]).abs() > lip_mm
+            let differs = |mm: f64, up: bool| {
+                [(-1, 0), (1, 0), (0, -1), (0, 1)]
+                    .into_iter()
+                    .any(|(di, dj): (isize, isize)| {
+                        let (ni, nj) = (i.wrapping_add_signed(di), j.wrapping_add_signed(dj));
+                        ni < nx && nj < ny && {
+                            let d = z[k] - z[nj * nx + ni];
+                            if up { -d > mm } else { d > mm }
+                        }
+                    })
             };
-            bad[k] = [(-1, 0), (1, 0), (0, -1), (0, 1)].into_iter().any(drops)
-                || libm::hypot(gx.z[k], gy.z[k]) > tan;
+            let lip = differs(lip_mm, false);
+            // the blur is lopsided within its reach of the tile's edge: there the
+            // slope is the nearest whole-blur node's
+            let m = SLOPE_EDGE_NODES;
+            let c = (i.clamp(m, nx - 1 - m), j.clamp(m, ny - 1 - m));
+            let kc = c.1 * nx + c.0;
+            // a steep node counts only where the surface is not flat beside
+            // it: the blur carries steepness a little way past the foot of a
+            // rise, onto flat ground that is no part of the face
+            let steep = libm::hypot(gx.z[kc], gy.z[kc]) > tan
+                && (differs(rise_mm, false) || differs(rise_mm, true));
+            bad[k] = lip || steep;
+            // dirt stands back from what has ground lower beside it
+            tops[k] = bad[k] && (lip || differs(rise_mm, false));
         }
     }
     if !bad.iter().any(|&b| b) {
         return area.clone();
     }
-    let bad = close(frame, &bad, SLIT_CLOSE_NODES * step);
-    let (to_bad, _) = dt_kit::distance(frame, &bad);
+    let closed = close(frame, &bad, SLIT_CLOSE_NODES * step);
+    let bad: Vec<bool> = bad.iter().zip(&closed).map(|(&a, &b)| a || b).collect();
+    let (to_lip, near) = dt_kit::distance(frame, &tops);
     let zone = Field::new(frame, 0.0)
         .with_z(
-            to_bad
-                .z
-                .iter()
-                .map(|&d| f64::from(u8::from(d < inset_mm)))
+            (0..nx * ny)
+                .map(|k| {
+                    // within the inset of a lip, unless it is the lip's
+                    // foot: lower than it by more than a step
+                    let beside =
+                        to_lip.z[k] < inset_mm && near[k].is_some_and(|l| z[l] <= z[k] + rise_mm);
+                    f64::from(u8::from(bad[k] || beside))
+                })
                 .collect(),
         )
         .blur(EDGE_SMOOTH_NODES * step);
@@ -956,7 +991,7 @@ fn held_area(
         nx,
         ny,
         bits: (0..nx * ny)
-            .map(|k| area.bits[k] && zone.z[k] < 0.5)
+            .map(|k| area.bits[k] && zone.z[k] < 0.5 && !bad[k])
             .collect(),
     }
 }
@@ -1138,14 +1173,37 @@ mod tests {
         let j = ny / 2;
         let row = |i: usize| held.bits[j * nx + i];
         // far from the lip on both sides it lies; at the lip and within the
-        // inset of it, it does not
+        // inset of it on the high side, it does not
         assert!(row((10.0 / step) as usize) && row((25.0 / step) as usize));
-        assert!(!row((17.5 / step) as usize));
+        assert!(
+            !row((17.5 / step) as usize - 1),
+            "the lip itself is not held"
+        );
         assert!(!row(((17.5 - 1.0) / step) as usize));
-        assert!(!row(((17.5 + 1.0) / step) as usize));
+        // the low side is the foot of a rise: dirt banks up to it
+        assert!(row(((17.5 + 1.0) / step) as usize));
         // and a smooth surface is left whole
         let (frame, area, flat) = on(|_, _| 10.0);
         assert_eq!(count(&held_area(&frame, &area, &flat, 35.0)), count(&area));
         let _ = ny;
+    }
+
+    #[test]
+    fn dirt_banks_against_a_foot_and_stands_back_from_a_lip() {
+        // a block 3 mm high from x = 12 to 24 mm: its west foot at 12, its
+        // east foot at 24, its lips on top at the same x
+        let (frame, area, surface) = on(|x, _| if (12.0..24.0).contains(&x) { 3.0 } else { 0.0 });
+        let held = held_area(&frame, &area, &surface, 35.0);
+        let (nx, ny) = frame.nodes();
+        let step = frame.step_mm();
+        let j = ny / 2;
+        let row = |x: f64| held.bits[j * nx + (x / step).round() as usize];
+        // the node just off the foot is held; the block's rim is not, nor the
+        // top within the inset of it, but the middle of the top is
+        assert!(row(12.0 - 2.0 * step), "the foot is held");
+        assert!(row(24.0 + 2.0 * step), "the east foot is held");
+        assert!(!row(12.0 + step) && !row(24.0 - step), "the lip is not");
+        assert!(!row(12.0 + 1.0), "the top within the inset is not");
+        assert!(row(18.0), "the middle of the top is held");
     }
 }
