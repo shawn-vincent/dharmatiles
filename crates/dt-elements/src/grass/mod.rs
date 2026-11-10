@@ -306,6 +306,12 @@ impl Element for Grass {
         } else {
             (None, None)
         };
+        // the area's own edge (another region, the waterline): blade starts
+        // are added along it where none would cover the ground
+        let edge_dist = outside
+            .iter()
+            .any(|&o| o)
+            .then(|| distance(&frame, &outside).0);
         let surf = Surface {
             soil,
             soil_depth,
@@ -314,6 +320,7 @@ impl Element for Grass {
             near,
             outside,
             tuck_mm: TUCK_MM,
+            edge_dist,
         };
 
         // 4 fronds
@@ -328,6 +335,7 @@ impl Element for Grass {
             &len,
             &hgt,
             self.cover,
+            &mut draws("edge-fronds"),
         );
 
         // 5 blades, in parallel, gathered in order

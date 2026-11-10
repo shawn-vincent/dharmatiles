@@ -121,6 +121,7 @@ tile size="2x2" seed=4 {
   <li><strong>Blades.</strong> 2.8–7.2 mm long (longer toward the downstream end of each swath), 2–4 lines (0.9–1.8 mm) wide, 1.5–2.0 mm tall. No grass stands more than 3.5 mm above the local ground.</li>
   <li><strong>Grass top.</strong> The mean grass top sits in the DungeonBlocks grass band: 4.4–5.9 mm above the terrain datum (15.3–16.8 mm above the bottom of the piece). Seed 1 measures 5.24 mm.</li>
   <li><strong>Ground.</strong> The tile edge is at 3.4 mm, the lowest ground on the tile. Hills rise from it to about 6.6 mm; at least 60% of the tile slopes 12° or less and nothing passes 34°.</li>
+  <li><strong>Grass reaches its edge.</strong> Where grass grows in a region, it runs up to the region's edge (a line, another region, the waterline) whichever way the flow runs there: wherever ground within 4 mm of the edge would have no blade over it, a blade is started upstream of it so its full part lies over the ground, or grown back against the edge where the edge is right behind it. The tile's own edge keeps its rim rule.</li>
   <li><strong>Clearings.</strong> None unless <code>clearings</code> or <code>bare</code> asks for them; <code>clearings=1.5</code> draws 1.3–1.8 per square, at least 13 mm apart and 7 mm from the rim, covering about 10% of the tile, sunk 0.4 mm below the grass ground.</li>
 </ul>
 
@@ -169,6 +170,7 @@ tile size="2x2" seed=4 {
   <li><strong>Flow</strong>: a direction field over the tile, with an in-phase meander (neighbouring streamlines wave together, like combed hair).</li>
   <li><strong>Clearings and obstacles</strong>: patches of bare earth, and the footprints of rocks, trunks, walls and flowers (built first), part the flow; it wraps round them. Pebbles and stones narrower than the shortest blade do not: the blades run up to them and tuck against them.</li>
   <li><strong>Strands</strong>: streamlines traced along the flow, blades rooted along them; a root that falls under a solid moves along its streamline to where it leaves the solid and grows there, and blades stand lower beside one.</li>
+  <li><strong>Edge blades</strong>: after the strands, ground near the area's edge that no blade covers gets a blade of its own, grown and shortened by the same rule as every other.</li>
   <li><strong>Blades</strong>: each a loft through one outline per 0.2 mm layer, whole 0.45 mm lines wide, draped on the ground; where the ground slopes the layers follow it only so far that nothing overhangs past 55°.</li>
   <li><strong>Shingling</strong>: blades overlap like shingles; they are grouped into solids of mutually clear blades and unioned.</li>
 </ol>

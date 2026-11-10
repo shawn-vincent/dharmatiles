@@ -151,6 +151,9 @@ pub struct Surface {
     pub outside: Vec<bool>,
     /// How far into a blocker a spine may run before it stops, mm.
     pub tuck_mm: f64,
+    /// Distance to the area's edge (outside nodes: another region, water),
+    /// mm; `None` when the grass's area is the whole tile.
+    pub edge_dist: Option<Field>,
 }
 
 /// One frond's drawn dimensions after shortening.
@@ -180,6 +183,7 @@ pub fn plan(
     len: &Draw,
     hgt: &Draw,
     cover: f64,
+    edge_rng: &mut Rng,
 ) -> (Vec<Frond>, usize) {
     let (roots, l0, n_strands) = make_strand_roots(rng, flow, (w, h), len);
     let keep: Vec<usize> = (0..roots.len())
@@ -239,39 +243,99 @@ pub fn plan(
         .collect();
     let lmax = len.hi() * 1.1 + 0.5;
     let paths = trace_batch(&roots, lmax, flow, Some(&delta), 1.0);
-    let step = TRACE_STEP_MM;
+    let grower = Grower {
+        surf,
+        sw,
+        hgt,
+        cover,
+        w,
+        h,
+    };
+    let mut taken = Taken::default();
     let mut out = Vec::new();
-    let mut taken: std::collections::HashMap<(i64, i64), Vec<[f64; 2]>> =
-        std::collections::HashMap::new();
-    let bin = |p: [f64; 2]| {
+    for f in 0..n {
+        if let Some(fr) = grower.grow(rng, roots[f], l0[f], &paths[f], bank[f], &mut taken) {
+            out.push(fr);
+        }
+    }
+    edge_fill(edge_rng, &grower, flow, len, lmax, &mut taken, &mut out);
+    (out, n_strands)
+}
+
+/// Roots already grown, binned by `MIN_ROOT_GAP_MM`.
+#[derive(Default)]
+struct Taken(std::collections::HashMap<(i64, i64), Vec<[f64; 2]>>);
+
+impl Taken {
+    fn bin(p: [f64; 2]) -> (i64, i64) {
         #[allow(clippy::cast_possible_truncation)]
         let b = (
             libm::floor(p[0] / MIN_ROOT_GAP_MM) as i64,
             libm::floor(p[1] / MIN_ROOT_GAP_MM) as i64,
         );
         b
-    };
-    for f in 0..n {
-        let k = idx(roots[f]);
-        if surf.blk_depth.as_ref().is_some_and(|b| b.z[k] > 0.0) {
-            continue;
-        }
-        let b = bin(roots[f]);
-        let crowded = (-1..=1).any(|di| {
+    }
+
+    fn crowded(&self, p: [f64; 2]) -> bool {
+        let b = Self::bin(p);
+        (-1..=1).any(|di| {
             (-1..=1).any(|dj| {
-                taken.get(&(b.0 + di, b.1 + dj)).is_some_and(|v| {
-                    v.iter().any(|q| {
-                        libm::hypot(q[0] - roots[f][0], q[1] - roots[f][1]) < MIN_ROOT_GAP_MM
-                    })
+                self.0.get(&(b.0 + di, b.1 + dj)).is_some_and(|v| {
+                    v.iter()
+                        .any(|q| libm::hypot(q[0] - p[0], q[1] - p[1]) < MIN_ROOT_GAP_MM)
                 })
             })
-        });
-        if crowded {
-            continue;
+        })
+    }
+
+    fn add(&mut self, p: [f64; 2]) {
+        self.0.entry(Self::bin(p)).or_default().push(p);
+    }
+}
+
+/// What every root is grown against: one rule for the strands' roots and
+/// the starts added along an edge.
+struct Grower<'a> {
+    surf: &'a Surface,
+    sw: &'a Swaths,
+    hgt: &'a Draw,
+    cover: f64,
+    w: f64,
+    h: f64,
+}
+
+impl Grower<'_> {
+    fn idx(&self, p: [f64; 2]) -> usize {
+        let (i, j) = self.surf.soil.node(p[0], p[1]);
+        j * self.surf.soil.nx + i
+    }
+
+    /// One frond from `root` along `path` (traced from it a step apart),
+    /// drawn and shortened to fit; `None` when it is not grown (under a
+    /// blocker, crowded, a soil root that is not a sprig, left out by
+    /// `cover`, shortened to nothing).
+    fn grow(
+        &self,
+        rng: &mut Rng,
+        root: [f64; 2],
+        l0: f64,
+        path: &[[f64; 2]],
+        bank: bool,
+        taken: &mut Taken,
+    ) -> Option<Frond> {
+        let surf = self.surf;
+        let (w, h) = (self.w, self.h);
+        let step = TRACE_STEP_MM;
+        let k = self.idx(root);
+        if surf.blk_depth.as_ref().is_some_and(|b| b.z[k] > 0.0) {
+            return None;
+        }
+        if taken.crowded(root) {
+            return None;
         }
         let sprig = surf.soil.z[k] > 0.5;
         if sprig && rng.random() > SPRIG_PROB {
-            continue;
+            return None;
         }
         let (blade_len, wmax, mut hf);
         if sprig {
@@ -279,12 +343,12 @@ pub fn plan(
             wmax = SPRIG_HALF_W_MM;
             hf = SPRIG_H_MM;
         } else {
-            let (_, s, _) = sw.coords(roots[f][0], roots[f][1]);
-            blade_len = l0[f] * (0.8 + 0.3 * s);
+            let (_, s, _) = self.sw.coords(root[0], root[1]);
+            blade_len = l0 * (0.8 + 0.3 * s);
             wmax = rng.uniform(FROND_HALF_W_MM.0, FROND_HALF_W_MM.1);
-            hf = hgt.draw(rng);
+            hf = self.hgt.draw(rng);
         }
-        let is_bank = bank[f] && !sprig;
+        let is_bank = bank && !sprig;
         if is_bank {
             hf *= rng.uniform(BANK_H_SCALE.0, BANK_H_SCALE.1);
         }
@@ -296,13 +360,12 @@ pub fn plan(
         };
         // cover: a share of the roots grows nothing (drawn after the
         // others so the stream does not shift with it)
-        let grown = rng.random() < cover;
+        let grown = rng.random() < self.cover;
         if !grown {
-            continue;
+            return None;
         }
         // shorten (never slice) so the tip ends inside the tile, at most
         // `spill` into bare soil, and at most `tuck` into an obstacle
-        let path = &paths[f];
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let nl = (((blade_len / step).ceil() as usize) + 1).min(path.len());
         let mut stop = None;
@@ -316,21 +379,23 @@ pub fn plan(
                 u[0] * v[0] + u[1] * v[1] < 0.5 * step * step
             };
             let rim = p[0] < inset || p[0] > w - inset || p[1] < inset || p[1] > h - inset;
-            let kk = idx(*p);
+            let kk = self.idx(*p);
             let deep = !sprig && surf.soil_depth.z[kk] > spill;
             let in_blk = surf
                 .blk_depth
                 .as_ref()
                 .is_some_and(|b| b.z[kk] > surf.tuck_mm);
             if folds || rim || deep || in_blk || surf.outside[kk] {
-                stop = Some(t as f64 * step);
+                #[allow(clippy::cast_precision_loss)]
+                let at = t as f64 * step;
+                stop = Some(at);
                 break;
             }
         }
         let mut length = blade_len;
         if let Some(l) = stop {
             if l < FROND_MIN_LEN_MM {
-                continue;
+                return None;
             }
             hf *= libm::pow((l / blade_len).clamp(0.3, 1.0), 0.8);
             length = l;
@@ -339,15 +404,149 @@ pub fn plan(
         if let Some(near) = &surf.near {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let tip = path[((length / step) as usize).min(path.len() - 1)];
-            hf *= near.z[idx(tip)];
+            hf *= near.z[self.idx(tip)];
         }
-        taken.entry(b).or_default().push(roots[f]);
-        out.push(Frond {
-            path: path.clone(),
+        taken.add(root);
+        Some(Frond {
+            path: path.to_vec(),
             length,
             half_w: wmax,
             height: hf,
-        });
+        })
     }
-    (out, n_strands)
+}
+
+/// How near the area's edge (not the tile's own) bare ground is filled.
+const EDGE_REACH_MM: f64 = 4.0;
+/// Ground this near the tile's own edge is left to the rim rule.
+const EDGE_RIM_MM: f64 = 1.6;
+/// A start upstream of a gap needs this much room inside the area to lay
+/// a blade's full part over it; with less, the blade is grown the other
+/// way, against the edge.
+const EDGE_BACK_MM: f64 = 1.0;
+/// How far from its root a blade's middle lies, as a share of its length.
+const EDGE_MID: f64 = 0.45;
+
+/// A blade's half width from above `s` mm along a spine `len` long: the
+/// stroke gains half a line a side every 0.45 mm from each end.
+fn footprint_half(s: f64, len: f64, half_w: f64) -> f64 {
+    half_w
+        .min(0.3 + 0.5 * s)
+        .min(0.3 + 0.5 * (len - s))
+        .max(0.3)
+}
+
+/// Mark the lattice nodes under frond `f` in `cov`.
+fn cover_frond(cov: &mut [bool], soil: &Field, f: &Frond) {
+    let step = TRACE_STEP_MM;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let n = ((f.length / step) as usize).min(f.path.len() - 1);
+    for (t, p) in f.path.iter().take(n + 1).enumerate() {
+        #[allow(clippy::cast_precision_loss)]
+        let r = footprint_half(t as f64 * step, f.length, f.half_w);
+        let (i0, j0) = soil.node(p[0] - r, p[1] - r);
+        let (i1, j1) = soil.node(p[0] + r, p[1] + r);
+        for j in j0..=j1 {
+            for i in i0..=i1 {
+                if libm::hypot(soil.x(i) - p[0], soil.y(j) - p[1]) <= r {
+                    cov[j * soil.nx + i] = true;
+                }
+            }
+        }
+    }
+}
+
+/// Blade starts added along the area's edge (a line, a region's border,
+/// the waterline; not the tile's own edge): wherever ground the grass may
+/// grow on lies within `EDGE_REACH_MM` of the edge and no blade covers it,
+/// a blade is grown over it through the same rule as every other root.
+/// Its start is upstream along the flow so the blade's full part lies over
+/// the gap; where the edge is right behind the gap, the blade is grown the
+/// other way, against the edge, and shortened at it.
+fn edge_fill(
+    rng: &mut Rng,
+    g: &Grower,
+    flow: &Flow,
+    len: &Draw,
+    lmax: f64,
+    taken: &mut Taken,
+    out: &mut Vec<Frond>,
+) {
+    let surf = g.surf;
+    let Some(edge) = &surf.edge_dist else {
+        return;
+    };
+    let soil = &surf.soil;
+    let (nx, ny) = (soil.nx, soil.ny);
+    let mut cov = vec![false; nx * ny];
+    for f in out.iter() {
+        cover_frond(&mut cov, soil, f);
+    }
+    let open = |p: [f64; 2]| {
+        p[0] >= 0.0 && p[0] < g.w && p[1] >= 0.0 && p[1] < g.h && {
+            let k = g.idx(p);
+            !surf.outside[k]
+                && surf.soil.z[k] <= 0.5
+                && !surf.blk_depth.as_ref().is_some_and(|b| b.z[k] > 0.0)
+        }
+    };
+    for j in 0..ny {
+        for i in 0..nx {
+            let k = j * nx + i;
+            let p = [soil.x(i), soil.y(j)];
+            if cov[k]
+                || edge.z[k] > EDGE_REACH_MM
+                || p[0] < EDGE_RIM_MM
+                || p[0] > g.w - EDGE_RIM_MM
+                || p[1] < EDGE_RIM_MM
+                || p[1] > g.h - EDGE_RIM_MM
+                || !open(p)
+            {
+                continue;
+            }
+            // tried once, grown or not
+            cov[k] = true;
+            let l0 = len.draw(rng);
+            let wander = rng.uniform(-BANK_WANDER_DEG, BANK_WANDER_DEG)
+                + rng.uniform(-FROND_DELTA_DEG, FROND_DELTA_DEG);
+            let d = [wander.to_radians()];
+            let reach = EDGE_MID * l0;
+            // room upstream of the gap, inside the area
+            let back = &trace_batch(&[p], reach, flow, Some(&d), -1.0)[0];
+            #[allow(clippy::cast_precision_loss)]
+            let room = back
+                .iter()
+                .take_while(|q| open(**q))
+                .count()
+                .saturating_sub(1) as f64
+                * TRACE_STEP_MM;
+            let (root, sign) = if room >= EDGE_BACK_MM {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let t = ((room.min(reach) / TRACE_STEP_MM) as usize).min(back.len() - 1);
+                (back[t], 1.0)
+            } else {
+                // the edge is right behind the gap: start downstream and
+                // grow back toward the edge
+                let fwd = &trace_batch(&[p], reach, flow, Some(&d), 1.0)[0];
+                #[allow(clippy::cast_precision_loss)]
+                let ahead = fwd
+                    .iter()
+                    .take_while(|q| open(**q))
+                    .count()
+                    .saturating_sub(1) as f64
+                    * TRACE_STEP_MM;
+                if ahead < EDGE_BACK_MM {
+                    continue;
+                }
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let t = ((ahead.min(reach) / TRACE_STEP_MM) as usize).min(fwd.len() - 1);
+                (fwd[t], -1.0)
+            };
+            let path = &trace_batch(&[root], lmax, flow, Some(&d), sign)[0];
+            if let Some(f) = g.grow(rng, root, l0, path, false, taken) {
+                cover_frond(&mut cov, soil, &f);
+                out.push(f);
+            }
+        }
+    }
 }
