@@ -6,6 +6,6 @@ dt::unknown-element
  8 │         hills clods=none stones=none
    ·         ──┬──
    ·           ╰── unknown
- 9 │         long-grass                      // grows round the trunk, wherever it is listed
+ 9 │         tree size=40 {               // anywhere on the tile; or at="1,1"
    ╰────
   help: `hills` is now `dirt`

@@ -205,9 +205,9 @@ fn grass_tree_keeps_every_control() {
     // No region: the whole tile is the default area.
     assert!(t.regions.is_empty());
     let order: Vec<_> = t.stack.iter().map(|e| e.what.value.as_str()).collect();
-    assert_eq!(order, ["dirt", "long-grass", "tree"]);
+    assert_eq!(order, ["dirt", "tree", "long-grass"]);
     let kinds: Vec<_> = t.stack.iter().map(|e| e.kind).collect();
-    assert_eq!(kinds, [Kind::Surface, Kind::Surface, Kind::Solid]);
+    assert_eq!(kinds, [Kind::Surface, Kind::Solid, Kind::Surface]);
 
     let tree = entry(&t.stack, "tree");
     assert!(tree.place.at.is_none(), "no at=: anywhere on the tile");

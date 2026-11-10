@@ -15,8 +15,8 @@ tile size="1x1" seed=62 {
             pin top="[waterBedHeight .. groundHeight + 1]" at=banks       // anywhere from the bed to the land
             pin top="[waterBedHeight .. waterBedHeight + 0.3]" at=bed     // later, so it wins inside the bed
         }
+        water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" at=banks
         rock size="6..10" at=crossing
         grass
-        water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" at=banks
     }
 }

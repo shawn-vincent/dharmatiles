@@ -52,11 +52,11 @@
 <p>The same water works whatever is in the tile. In open water with nothing in it, faint sources at the corners give a calm, directionless chop. A rock in open water makes its own rings, and two rocks make two sets that merge between them. Square obstacles get squarish rings. When land surrounds the water on two, three or four sides, the shore waves stay close to the banks and the middle of the pond goes calm.</p>
 
 <h2 id="shore">The shore</h2>
-<p>The shore is where a meadow meets the water. The land runs down a real bank, never a cliff or a cut, and the shoreline wanders in bays, headlands and small coves. Along some stretches the grass grows right to the water and laps over its edge; along others a strip of bare earth up to 4 mm wide lies between. Grass near the water leans toward it or runs along the shore, never away. Three to five clumps of reeds stand in the shallows, each sending out its own small ripple rings. Rocks sit on the land, in the shallows and in the water; the ones in the water ring it with chop.</p>
+<p>The shore is where a meadow meets the water. The land runs down a real bank, never a cliff or a cut, and the shoreline wanders in bays, headlands and small coves. Along some stretches the grass grows right to the water and laps over its edge; along others a strip of bare earth up to 4 mm wide lies between. Grass near the water leans toward it or runs along the shore, never away. Three to five clumps of reeds stand in the shallows, each sending out its own small ripple rings. Rocks sit on the land, in the shallows and in the water; the ones listed above the water ring it with chop.</p>
 <p>Reeds are deliberately simple: 5–9 chunky blades per clump with a pointed-oval cross-section, 8–13 mm tall, rising from one base and curving gently outward to a fairly blunt point. They stand no more than about 40° from vertical.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A pool is a bed of <a href="dirt.html"><code>dirt</code></a> pinned below the water's top, then <code>water</code>, written last, which fills everything lower than its top:</p>
+<p>A pool is a bed of <a href="dirt.html"><code>dirt</code></a> pinned below the water's top, then <code>water</code>, which fills everything lower than its top over the ground listed above it:</p>
 <pre><code>tile size="1x1" seed=7 {
     stack {
         base
@@ -64,7 +64,7 @@
         water                                                          // fills to its top, about 2.6 mm
     }
 }</code></pre>
-<p>A shore is a line dividing the tile into a pool and a bank. Rocks in the pool send chop and leave a wake:</p>
+<p>A shore is a line dividing the tile into a pool and a bank. Water is built where it is listed, like every other layer, so what is listed after it stands in it or on the shore: the rocks stand in the pool, and the grass, listed after the water, keeps off the wet ground:</p>
 <pre><code>tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { boundedBy shore; fill "0.5,0.25" }
@@ -76,12 +76,13 @@
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // a bank drawn between the bed and the land
             pin top=waterBedHeight at=pool                                // later, so it wins in the pool
         }
-        grass at=bank
-        scatter at=pool count=2 { rock size="6..10" }
         water
+        scatter at=pool count=2 { rock size="6..10" }
+        grass at=bank
     }
 }</code></pre>
-<p>The waves come from what is around the water: the land sends swells, each rock sends chop. They are drawn inside the water's band, scaled to fit it, so a narrower <code>top</code> gives shorter ripples and a single height a still pond.</p>
+<p>List the water after the rocks and reeds instead and it sees them: each sends its own chop and wake, and the water goes round them. Listed before the water they stand in it without rings. A <code>dirt</code> or <code>ground</code> listed after the water lies over it: where its top is higher than the water the earth shows (a spit, an island), where it is lower the water stays. A <code>tree</code>, <code>grass</code> or <code>wall</code> listed above the ground it stands on is refused (<code>dt::order</code>), as for any element.</p>
+<p>The waves come from what is around the water: the land sends swells, each rock or reed listed above the water sends chop. They are drawn inside the water's band, scaled to fit it, so a narrower <code>top</code> gives shorter ripples and a single height a still pond.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference water -->
@@ -145,10 +146,10 @@
 <ul class="rules">
   <li>Water covers its whole area up to its top; the shoreline comes from the dirt beneath it.</li>
   <li>The water is a layer of the terrain over the ground, not a skin: the shore is cut exactly where the water's top meets the ground, and where the water meets a tile's side the side shows its whole depth in water colour.</li>
-  <li>Waves come from the obstacles: land sends strong ones, rocks weak ones, reeds small rings. Each kind of object sends its own range of wavelengths.</li>
+  <li>Waves come from the obstacles: land sends strong ones, rocks and reeds listed above the water weak ones and small rings. Each kind of object sends its own range of wavelengths.</li>
   <li>A source's waves grow less clear with distance; open corners are very faint sources.</li>
   <li>Ripples are smoother at the shore and round rocks, and stroke ends fade like ripples.</li>
-  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. Every water starts with the library's top, <code>[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]</code>, and a pin at <code>edges</code> at <code>waterEdgeHeight</code>, the tide. Water is a fluid: it is written last in the stack (<code>dt::fluid-order</code>). It eases over 9 mm round a pin. <code>check</code> reads and solves these; <code>build</code> does not build tops and pins yet. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. Every water starts with the library's top, <code>[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]</code>, and a pin at <code>edges</code> at <code>waterEdgeHeight</code>, the tide. Water is built where it is listed, over the ground listed above it: what is listed after it stands in it or on the shore and reads it (grass keeps off the wet ground), and a dirt or ground listed after it lies over it. It eases over 9 mm round a pin. <code>check</code> reads and solves these; <code>build</code> does not build tops and pins yet. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

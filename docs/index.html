@@ -65,9 +65,9 @@ tile size="1x1" seed=97 {
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
             pin top=waterBedHeight at=pool                                // later, so it wins in the pool
         }
-        grass at=bank
-        scatter at=pool count=2 { rock size="6..10" }
         water
+        scatter at=pool count=2 { rock size="6..10" }
+        grass at=bank
     }
 }</code></pre>
     <figure class="bench-out"><img src="elements/img/el-tile.jpg" alt="The document built: a one-square tile, water in the lower part with two rocks, a grassy bank above a wandering shore" width="856" height="635"><figcaption>That document, built. It's in the library as <code>lib:tiles/water/1x1-water+grass.dtile</code>.</figcaption></figure>

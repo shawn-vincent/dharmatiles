@@ -262,7 +262,7 @@ fn a_pin_needs_a_top_and_a_place() {
 }
 
 #[test]
-fn the_base_is_first_and_fluids_are_last() {
+fn the_base_is_first_and_water_is_listed_where_it_is_built() {
     assert_fails(
         &tile("stack { dirt\n base }"),
         "dt::base-order",
@@ -273,12 +273,9 @@ fn the_base_is_first_and_fluids_are_last() {
         "dt::base-order",
         "one base",
     );
-    assert_fails(
-        &tile("stack { base\n dirt\n water\n rock size=3 }"),
-        "dt::fluid-order",
-        "`rock` is written after the water",
-    );
-    // today's tiles, with no heights, keep their order
+    // water is built where it is listed: a rock or a dirt may follow it
+    snippet(&tile("stack { base\n dirt\n water\n rock size=3 }"));
+    snippet(&tile("stack { base\n dirt\n water\n dirt }"));
     snippet(&tile("stack { dirt\n water\n rock size=3 }"));
 }
 

@@ -70,7 +70,7 @@ tile size="2x2" seed=1 {
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
 <tbody>
-<tr><td>stack order</td><td>the order elements are listed</td><td>—</td><td>Free for solids: they are always planned first. Land bodies are laid in order, each the higher of what is below it and its own top; water goes last.</td></tr>
+<tr><td>stack order</td><td>the order elements are listed</td><td>—</td><td>Built in the order listed: each entry stands on the terrain laid so far. Land bodies are laid in order, each the higher of what is below it and its own top; water is built where it is listed, and what is listed after it stands in it or on its shore.</td></tr>
 <tr><td><code>at=</code></td><td>a region, a line, an edge or edge path, a point (a range allowed, in squares), or <code>foot(cliff)</code></td><td>whole tile</td><td>Where the element goes. A region is filled, a line is followed (a path, a wall), a point is where one thing stands, and <code>foot(cliff)</code> is the band at the foot of that kind of solid, where scatters gather. Footprints are kept inside the tile and clear of other solids.</td></tr>
 <tr><td>grass <code>cover</code></td><td>percent</td><td>100%</td><td>Share of the ground grassed over. A meadow uses about 80%.</td></tr>
 <tr><td>scatter <code>count</code> / <code>perSquare</code></td><td>number</td><td>—</td><td>How many solids. The meadow uses 6–9 rocks on a 2×2.</td></tr>

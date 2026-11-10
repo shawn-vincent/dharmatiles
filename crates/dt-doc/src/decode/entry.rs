@@ -86,8 +86,7 @@ impl Decoder<'_> {
             }
         }
         if ctx.in_tile {
-            let heights = base.is_some() || out.iter().any(Entry::uses_heights);
-            self.check_stack_order(base.as_ref(), &out, heights);
+            self.check_stack_order(base.as_ref());
             self.stack_base = base;
         }
         // `id=` names an entry among its same-named siblings (its seed

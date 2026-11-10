@@ -137,7 +137,7 @@ fn insertion_goes_on_the_line_as_a_property() {
         "        tree size=40 at=\"1,1\" {               // anywhere on the tile; or at=\"1,1\""
     );
     let doc = redecode(name, &new);
-    let tree = &doc.tile().unwrap().stack[2];
+    let tree = &doc.tile().unwrap().stack[1];
     assert!(tree.place.at.is_some());
 
     // On a line with only a name and a comment.

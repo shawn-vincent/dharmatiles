@@ -54,9 +54,6 @@ pub(crate) enum Class {
     Thing,
 }
 
-/// The fluids: written last.
-const FLUIDS: [&str; 1] = ["water"];
-
 /// Reserved: the names an expression already means.
 fn reserved(name: &str) -> bool {
     matches!(name, "x" | "y" | "bottom" | BUILTIN_REGION)
@@ -1088,8 +1085,9 @@ impl Decoder<'_> {
         })
     }
 
-    /// The order checks over a tile's stack: the base first, fluids last.
-    pub(crate) fn check_stack_order(&mut self, base: Option<&Base>, out: &[Entry], heights: bool) {
+    /// The order checks over a tile's stack: the base first. Every other layer
+    /// is built where it is listed (the plan refuses what that cannot satisfy).
+    pub(crate) fn check_stack_order(&mut self, base: Option<&Base>) {
         if let Some(b) = base
             && b.index != 0
         {
@@ -1100,30 +1098,6 @@ impl Decoder<'_> {
                 "not first",
             )
             .help = Some("the connector is laid first and everything rests on it: move `base` above the other lines".to_owned());
-        }
-        if !heights {
-            return;
-        }
-        let Some(fluid) = out
-            .iter()
-            .position(|e| FLUIDS.contains(&e.what.value.as_str()))
-        else {
-            return;
-        };
-        for e in &out[fluid + 1..] {
-            if !FLUIDS.contains(&e.what.value.as_str()) {
-                let f = &out[fluid].what.value;
-                self.err(
-                    "dt::fluid-order",
-                    e.what.span,
-                    format!("`{}` is written after the {f}", e.what.value),
-                    "after a fluid",
-                )
-                .help = Some(format!(
-                    "fluids are written last, filling round whatever stands: move `{}` above the `{f}`",
-                    e.what.value
-                ));
-            }
         }
     }
 }

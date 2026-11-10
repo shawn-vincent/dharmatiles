@@ -18,8 +18,8 @@
 //!
 //! The plan refuses what the listed order cannot satisfy, before anything
 //! is built, and never reorders to cure it: a read of the terrain or of a
-//! kind of solid that nothing listed above writes; a fill or a floor listed
-//! above a surface it would lie on; a surface that reads a solid.
+//! kind of solid that nothing listed above writes; a floor listed above a
+//! surface it would lie on; a surface that reads a solid.
 
 use dt_elements::{Kind, Plan, Read, Write};
 
@@ -54,7 +54,7 @@ pub enum Refusal {
         entry: usize,
         /// The first entry that writes it.
         later: usize,
-        /// What it reads: `None` for the ground a fill or a floor lies on.
+        /// What it reads: `None` for the ground a floor lies on.
         kind: Option<Kind>,
     },
 }
@@ -109,8 +109,9 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
     let ground: Vec<usize> = (0..n).filter(|&j| is(j, Write::Surface)).collect();
     #[allow(clippy::needless_range_loop)] // `i` also names the entry in `pos`
     for i in 0..n {
-        // a fill or a floor lies on the ground painted before it
-        if matches!(plans[i].writes, Write::Fill | Write::Laid(_))
+        // a floor lies on the ground painted before it; a fill (water) is
+        // built where it is listed and a surface listed after it lies over it
+        if matches!(plans[i].writes, Write::Laid(_))
             && let Some(&later) = ground.iter().find(|&&j| pos(j) > pos(i))
         {
             return Err(Refusal::Early {
@@ -350,6 +351,24 @@ mod tests {
         assert_eq!(
             schedule(&[p(Write::Fill, &[Read::IfAny(Kind::Rock)])]),
             Ok(vec![Step::Entry(0), Step::Lift])
+        );
+        // a surface listed after the water lies over it: the water is built
+        // where it is listed, the lift comes after the last layer
+        let dirt_after = [
+            p(Write::Surface, &[]),
+            p(Write::Fill, &[]),
+            p(Write::Surface, &[]),
+            on_ground(Write::Solid(Kind::Rock)),
+        ];
+        assert_eq!(
+            schedule(&dirt_after),
+            Ok(vec![
+                Step::Entry(0),
+                Step::Entry(1),
+                Step::Entry(2),
+                Step::Lift,
+                Step::Entry(3)
+            ])
         );
         // a tree listed above the water is built on the ground without it
         let tree_above = [
