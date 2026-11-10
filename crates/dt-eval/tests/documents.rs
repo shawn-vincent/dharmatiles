@@ -504,3 +504,75 @@ fn library_tile_file_names_follow_the_standard() {
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
+
+fn tile_with(body: &str) -> String {
+    format!("tile size=\"1x1\" seed=3 {{\n{body}\n}}\n")
+}
+
+#[test]
+fn a_lines_width_makes_a_strip_that_a_surface_follows() {
+    let text = tile_with(
+        "line trail width=12 { through southCenter northCenter }\n stack {\n base\n dirt\n grass at=trail\n }",
+    );
+    let src = mem(&[("t.dtile", text.as_str())]);
+    let c = check(&src, "t.dtile", &Options::default()).unwrap();
+    assert!(c.pending().is_empty(), "{:?}", c.pending());
+    let b = build(&src, "t.dtile", &Options::default()).unwrap();
+    assert!(b.materials.contains(&dt_kit::Material::Grass));
+    // a wider strip is another tile
+    let wide = text.replace("width=12", "width=24");
+    let hash = |t: &str| {
+        build(&mem(&[("t.dtile", t)]), "t.dtile", &Options::default())
+            .unwrap()
+            .stages
+    };
+    assert_ne!(hash(&text), hash(&wide));
+}
+
+#[test]
+fn a_surface_along_a_line_without_a_width_says_to_give_it_one() {
+    let e = errors(&tile_with(
+        "line trail { through southCenter northCenter }\n stack {\n base\n dirt\n grass at=trail\n }",
+    ));
+    assert_eq!(e[0].code, "dt::type");
+    assert!(e[0].message.contains("no width"), "{}", e[0].message);
+    assert!(e[0].help.as_deref().unwrap().contains("width="));
+}
+
+#[test]
+fn a_surface_along_a_tile_edge_points_to_a_region() {
+    let e = errors(&tile_with("stack {\n base\n dirt\n grass at=northEdge\n }"));
+    assert_eq!(e[0].code, "dt::type");
+    assert!(e[0].help.as_deref().unwrap().contains("within"));
+}
+
+#[test]
+fn a_width_is_a_length_above_zero() {
+    for w in ["0", "-3", "90"] {
+        let e = errors(&tile_with(&format!(
+            "line trail width={w} {{ through southCenter northCenter }}\n stack {{\n dirt\n }}"
+        )));
+        assert!(
+            ["dt::value", "dt::range"].contains(&e[0].code),
+            "{w}: {}",
+            e[0].code
+        );
+    }
+}
+
+#[test]
+fn a_scatter_along_a_line_reaches_half_its_width_unless_told() {
+    let t = |extra: &str| {
+        tile_with(&format!(
+            "line trail width=20 {{ through southCenter northCenter }}\n stack {{\n base\n dirt\n scatter at=trail count=6 {extra} {{ pebble }}\n }}"
+        ))
+    };
+    let hash = |t: &str| {
+        build(&mem(&[("t.dtile", t)]), "t.dtile", &Options::default())
+            .unwrap()
+            .stages
+    };
+    // reach=10 is half the width: the same tile
+    assert_eq!(hash(&t("")), hash(&t("reach=10")));
+    assert_ne!(hash(&t("")), hash(&t("reach=3")));
+}

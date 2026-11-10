@@ -383,6 +383,8 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
         .regions
         .iter()
         .zip(&masks)
+        // a line's width makes a strip no document names: the map has the line
+        .filter(|(r, _)| !r.strip)
         .map(|(r, m)| {
             let w = node.and_then(|n| written(n, "region", &r.name, "fill"));
             let bits: String = m.bits.iter().map(|&b| if b { '1' } else { '0' }).collect();

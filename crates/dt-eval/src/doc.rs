@@ -50,6 +50,15 @@ pub const HEIGHTS: &str = "lib:parts/heights.dtile";
 /// reference square.
 const LINE_WOBBLE_SIGMA_MM: f64 = 9.0;
 
+/// The widest strip a line makes, mm at the reference square (two squares).
+const MAX_LINE_WIDTH_MM: f64 = 70.0;
+
+/// The name of the strip a line's width makes.  It has a space, which no
+/// written name can, so a document never names it.
+fn strip_name(line: &str) -> String {
+    format!("{line} strip")
+}
+
 /// The printer profile builds are checked against by default.
 pub const PRINTER: &str = "lib:printers/default.dtile";
 
@@ -139,6 +148,10 @@ pub struct Region {
     pub except: Vec<String>,
     /// Where its name is written (in the tile's text).
     pub span: SourceSpan,
+    /// Made by a line's width, not written: the strip an element `at=` the
+    /// line covers.  Its name (`trail strip`) cannot be written, so no
+    /// document names it.
+    pub strip: bool,
 }
 
 /// A distance round a place.
@@ -261,6 +274,8 @@ pub struct Tile {
     pub seed: u64,
     /// Straight lines, by name, as points in squares.
     pub lines: BTreeMap<String, Vec<[f64; 2]>>,
+    /// The width, mm at the reference square, of each line that has one.
+    pub widths: BTreeMap<String, f64>,
     /// The wobbled lines as drawn (points in squares) and their wobble,
     /// mm, so [`Tile::reseed`] can wobble them again.
     pub wobbles: BTreeMap<String, (Vec<[f64; 2]>, f64)>,
@@ -355,6 +370,7 @@ pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
         top: None,
         dims: (1.0, 1.0),
         points: BTreeMap::new(),
+        widths: BTreeMap::new(),
     };
     let Some(file) = r.load(path, None) else {
         return Err(r.errors);
@@ -437,6 +453,8 @@ struct Reader<'s> {
     dims: (f64, f64),
     /// Every point of the tile by name (built in and declared), squares.
     points: BTreeMap<String, [f64; 2]>,
+    /// The width of each line that has one, mm at the reference square.
+    widths: BTreeMap<String, f64>,
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A
@@ -558,6 +576,7 @@ impl Reader<'_> {
             rows: header.rows,
             seed,
             lines: BTreeMap::new(),
+            widths: BTreeMap::new(),
             wobbles: BTreeMap::new(),
             regions: Vec::new(),
             heights: Heights::default(),
@@ -572,6 +591,7 @@ impl Reader<'_> {
         let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
         self.dims = (cols, rows);
         self.points = BTreeMap::new();
+        self.widths = BTreeMap::new();
         for n in dt_doc::place::BUILTIN_POINTS {
             if let Some((x, y)) = dt_doc::place::builtin_point(n, cols, rows) {
                 self.points.insert(n.to_owned(), [x, y]);
@@ -582,7 +602,34 @@ impl Reader<'_> {
         }
         for l in &def.lines {
             if let Some(w) = l.width.as_ref() {
-                t.pending.push(not_yet(src, w.span, "a line's width is"));
+                match wobble_mm(&w.value, &lets) {
+                    Ok(v) if v.is_finite() && v > 0.0 && v <= MAX_LINE_WIDTH_MM => {
+                        self.widths.insert(l.name.value.clone(), v);
+                        t.widths.insert(l.name.value.clone(), v);
+                        t.regions.push(Region {
+                            name: strip_name(&l.name.value),
+                            bounded_by: Vec::new(),
+                            fills: Vec::new(),
+                            within: vec![Within {
+                                mm: v / 2.0,
+                                range: None,
+                                of: PlaceRef::Name(l.name.value.clone()),
+                                span: w.span,
+                            }],
+                            except: Vec::new(),
+                            span: l.name.span,
+                            strip: true,
+                        });
+                    }
+                    got => {
+                        let why = got.err().map_or_else(
+                            || format!("a line's width is above 0 and up to {MAX_LINE_WIDTH_MM} mm"),
+                            |e| format!("a line's width is a length above 0, up to {MAX_LINE_WIDTH_MM} mm: {e}"),
+                        );
+                        self.errors
+                            .push(Diag::at(src, w.span, "dt::value", why, "here"));
+                    }
+                }
             }
             let wobble = match l.wobble.as_ref().map(|w| (w, wobble_mm(&w.value, &lets))) {
                 None => 0.0,
@@ -687,6 +734,7 @@ impl Reader<'_> {
                 within,
                 except: r.except.iter().map(|e| e.value.clone()).collect(),
                 span: r.name.span,
+                strip: false,
             });
         }
         let scope = Scope {
@@ -763,11 +811,8 @@ impl Reader<'_> {
                 .iter()
                 .position(|s| s.span == e.span && Arc::ptr_eq(&s.src, src))
             else {
-                pending.push(not_yet(
-                    src,
-                    e.what.span,
-                    "a dirt, water, floor or cliff here is",
-                ));
+                // not an entry of the stack: `expand` left it out after
+                // reporting why (an error, or something not built)
                 continue;
             };
             bodies.push(BodyDecl {
@@ -775,7 +820,15 @@ impl Reader<'_> {
                 element: el.name.to_owned(),
                 label: e.label.as_ref().map(|l| l.value.clone()),
                 top: e.top.as_ref().map(|t| (t.value.clone(), t.span)),
-                region: e.place.region.as_ref().map(|r| r.value.clone()),
+                region: e
+                    .place
+                    .region
+                    .as_ref()
+                    .map(|r| r.value.clone())
+                    .or_else(|| match e.place.along.as_ref().map(|a| &a.value) {
+                        Some(Along::Line(n)) if self.widths.contains_key(n) => Some(strip_name(n)),
+                        _ => None,
+                    }),
                 slope: e.slope.as_ref().map(|s| s.value),
                 pins: e.pins.iter().map(|p| pin(p, &from)).collect(),
                 span: e.what.span,
@@ -845,7 +898,7 @@ impl Reader<'_> {
                 return;
             }
             self.entries += 1;
-            let area = e.place.region.clone().or_else(|| scope.area.clone());
+            let mut area = e.place.region.clone().or_else(|| scope.area.clone());
             let at = e.place.at.clone().or_else(|| scope.at.clone());
             let along = e.place.along.clone().or_else(|| scope.along.clone());
             // this entry's path under an enclosing definition call: its
@@ -949,6 +1002,23 @@ impl Reader<'_> {
                             }
                             Along::Line(_) => unplaced.push(("at= a drawn line", Some(a.span))),
                         },
+                        // a dirt, grass or cliff follows a line by its strip
+                        Some(a) if element.place.contains(&PlaceWord::Along) => {
+                            match self.strip(&a.value, element.name) {
+                                Ok(name) => {
+                                    area = Some(Spanned {
+                                        value: name,
+                                        span: a.span,
+                                    });
+                                }
+                                Err((msg, help)) => {
+                                    ok = false;
+                                    self.errors.push(
+                                        Diag::at(src, a.span, "dt::type", msg, "here").help(help),
+                                    );
+                                }
+                            }
+                        }
                         // inherited from a definition call: for the elements
                         // that place by it only, the others ignore it
                         Some(a) if e.place.along.is_some() => {
@@ -1048,7 +1118,21 @@ impl Reader<'_> {
                             None => ok = false,
                         }
                     }
-                    let controls = self.controls(e, element, scope, pending);
+                    let mut controls = self.controls(e, element, scope, pending);
+                    // a scatter along a line with a width covers its strip: half
+                    // the width either side, unless `reach=` says otherwise
+                    if let (Some(cs), Some(name)) = (controls.as_mut(), &line)
+                        && let Some(w) = self.widths.get(name)
+                        && e.control("reach").is_none()
+                    {
+                        cs.retain(|c| c.name != "reach");
+                        cs.push(Setting {
+                            name: "reach".to_owned(),
+                            value: dt_elements::Value::Number(w / 2.0),
+                            span: e.what.span,
+                            src: Arc::clone(src),
+                        });
+                    }
                     if ok && let Some(controls) = controls {
                         let inner = Scope {
                             area: area.clone(),
@@ -1126,6 +1210,27 @@ impl Reader<'_> {
                     self.expand(&def.stack, &inner, out, pending);
                 }
             }
+        }
+    }
+
+    /// The strip a surface follows when it is placed `at=` `along`: the
+    /// name of the region the line's width makes.
+    ///
+    /// # Errors
+    /// What is wrong and how to write it: an edge has no width, and a
+    /// line needs one.
+    fn strip(&self, along: &Along, element: &str) -> Result<String, (String, String)> {
+        match along {
+            Along::Line(name) if self.widths.contains_key(name) => Ok(strip_name(name)),
+            Along::Line(name) => Err((
+                format!("`{element}` follows the strip of a line, and `{name}` has no width"),
+                format!("give it one: `line {name} width=9 {{ through … }}`"),
+            )),
+            Along::Edges(_) => Err((
+                format!("`{element}` follows the strip of a line, and a tile edge has no width"),
+                "write a region beside the edge and use it: `region rim { within 6 of=northEdge }`, then `at=rim`"
+                    .to_owned(),
+            )),
         }
     }
 

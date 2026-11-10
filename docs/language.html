@@ -236,7 +236,7 @@ let tallWallHeight     72.3</code></pre>
 <p>A wall or cliff on a tile edge always stands inside the tile, its outer face flush with the edge. That is the DungeonBlocks slab standard, and it means an author never has to work out which side of a line a wall is on.</p>
 
 <h3 id="lines">Lines</h3>
-<p>A drawn line runs through points. With a <code>width</code> it is a strip, and an element <code>at=</code> it covers the strip. <code>wobble</code> lets it wander up to that many mm off its points.</p>
+<p>A drawn line runs through points. With a <code>width</code> it is a strip, and a dirt, grass or cliff <code>at=</code> it fills the strip (within half the width, wobble included), and a scatter reaches half the width either side unless it writes <code>reach</code>. A surface along a line with no width, or along a tile edge, is <code>dt::type</code>. <code>wobble</code> lets it wander up to that many mm off its points.</p>
 <pre><code>line trail width=9 wobble=3 { through south "0.65,1" north }</code></pre>
 <p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. <code>side=</code> along a tile edge is an error, because on an edge a wall always stands inside.</p>
 
