@@ -149,12 +149,12 @@ fn a_layer_that_can_never_be_thick_enough_is_refused() {
 }
 
 #[test]
-fn a_cliff_written_in_the_old_form_has_no_band_to_solve() {
-    // `at=` a line is the old form's word, with no top or region of its own for
-    // check to solve (`dharmatiles migrate` writes it as a band); only the
-    // dirt is solved
-    let c = solved(&tile("stack { base\n dirt\n cliff at=north }"));
-    assert_eq!(c.solved.as_ref().unwrap().bodies.len(), 1);
+fn a_cliff_written_at_a_tile_edge_is_refused_with_the_region_to_write() {
+    // `at=north` is the old form's word: an edge has no width, so the cliff
+    // has no region of its own (`dharmatiles migrate` writes it as a band)
+    let e = refused(&tile("stack { base\n dirt\n cliff at=north }"));
+    assert_eq!(e[0].code, "dt::type", "{e:?}");
+    assert!(e[0].help.as_deref().unwrap().contains("within"), "{e:?}");
 }
 
 #[test]
