@@ -84,11 +84,11 @@ fn flat_tile_is_one_ground() {
     let g = &t.stack[0];
     assert_eq!(g.what.value, "dirt");
     assert_eq!(g.kind, Kind::Surface);
-    // Flat at the edge height: its top, and the two words that keep it quiet.
+    // Flat at the edge height: its top, and the word that keeps it quiet.
     assert!(g.top.is_some(), "flat: its top is written");
-    assert_eq!(g.controls.len(), 2, "flat: clods and stones");
+    assert_eq!(g.controls.len(), 1, "flat: clods");
     assert!(t.base.is_some(), "the tile writes its base");
-    let words = g.element().unwrap().control("stones").unwrap();
+    let words = g.element().unwrap().control("clods").unwrap();
     assert_eq!(words.value, Some(Axis::Word));
 }
 
