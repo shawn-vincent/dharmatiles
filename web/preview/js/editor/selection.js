@@ -8,7 +8,7 @@ import { byteToIndex } from '../text.js';
 import { $, pickView, toast, viewer } from './app.js';
 import { texts, canLeave } from './document.js';
 import {
-  controlText, dirty, regionOf, doc, entrySel, isEntry, isMark, mapNode, markSel, same, server, stackItems, stem,
+  controlText, dirty, regionOf, doc, entrySel, isEntry, isMark, isPlace, mapNode, markSel, same, server, stackItems, stem,
   tile, tileSel, view,
 } from './stores.js';
 
@@ -68,7 +68,7 @@ export function linesOf(w) {
   if (!w) return null;
   const d = doc.get(), own = d.file === tile()?.path;
   if (w.kind === 'tile') return own ? [1, (d.text || '').split('\n').length] : null;
-  if (isMark(w)) {
+  if (isPlace(w)) {
     const n = mapNode(w);
     return n?.span && own ? spanLines(n.span) : null;
   }
@@ -77,7 +77,7 @@ export function linesOf(w) {
 }
 
 /** The innermost entry written on line `n` of the file shown, else the tile (its own file) or nothing. */
-function entryAtLine(line) {
+function entryAtLine(line, hover = false) {
   let best = null, width = Infinity;
   stackItems().forEach((it, i) => {
     if (!it.lines || it.file !== texts.file) return;
@@ -87,7 +87,8 @@ function entryAtLine(line) {
   if (best != null) return entrySel(best);
   if (texts.file !== tile()?.path) return null;
   const map = doc.get().map;
-  for (const [kind, list] of [['region', map?.regions], ['line', map?.lines]]) {
+  // a point is only hovered: the caret on one selects the tile
+  for (const [kind, list] of [['region', map?.regions], ['line', map?.lines], ...(hover ? [['point', map?.points]] : [])]) {
     for (const node of list || []) {
       const l = node.span && spanLines(node.span);
       if (l && line >= l[0] && line <= l[1]) return markSel(kind, node.name);
@@ -163,7 +164,7 @@ export function init() {
   // the pane tells which line the caret or the pointer is on
   const caret = texts.cb.onCaretLine;
   texts.cb.onCaretLine = (n) => { caret?.(n); setSel(entryAtLine(n), { from: 'text' }); };
-  texts.cb.onHoverLine = (n) => setHov(n == null ? null : entryAtLine(n));
+  texts.cb.onHoverLine = (n) => setHov(n == null ? null : entryAtLine(n, true));
 
   view.subscribe(['sel', 'hov', 'shown', 'draft', 'tileId'], paintHighlight);
   view.subscribe(['sel', 'tileId'], () => $('tilebtn').classList.toggle('sel', view.get().sel?.kind === 'tile'));

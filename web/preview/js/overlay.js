@@ -255,6 +255,15 @@ export class Overlay {
       if (line.wobble) items.push({ positions: ribbonTriangles(line.pts, this.sq, line.wobble * (this.sq / 35), false, false), color: css('--accent'), role: 'fill', dz: 0.02, alpha: 0.18 });
       items.push({ positions: ribbonTriangles(line.pts, this.sq, 1.5 * half), color: css('--accent'), alpha: 1, dz: 0.04 });
     }
+    // the hovered place, as the selected one is drawn but quieter: it changes nothing else
+    if (m && scene.show !== false) {
+      const hr = m.regions.find((r) => r.name === scene.hovRegion);
+      if (hr) items.push({ positions: regionTriangles(hr, m, this.sq), color: css('--accent'), role: 'fill', alpha: 0.4 });
+      const hl = m.lines.find((l) => l.name === scene.hovLine && l.pts.length > 1);
+      if (hl) items.push({ positions: ribbonTriangles(hl.pts, this.sq, 1.5 * lineHalf(m, this.sq)), color: css('--accent'), role: 'fill', alpha: 0.7, dz: 0.04 });
+      const hp = m.points?.find((p) => p.name === scene.hovPoint);
+      if (hp) items.push({ positions: discTriangles(hp.at, this.sq, 3 * lineHalf(m, this.sq)), color: css('--accent'), role: 'fill', alpha: 0.9, dz: 0.04 });
+    }
     // what the selected region is made from, drawn beside it
     if (focus) for (const w of want) if (w.sel) items.push(...refItems(m, w.r, this.sq, css('--ref')).map((i) => ({ ...i, alpha: i.role === 'fill' ? 0.22 : 1 })));
     const key = JSON.stringify([items.map((i) => [i.color, i.role, i.dz, i.positions.length, i.positions.reduce((a, x, n) => a + x * ((n % 97) + 1), 0)]), focus, z, m && [m.cols, m.rows, m.cells]]);

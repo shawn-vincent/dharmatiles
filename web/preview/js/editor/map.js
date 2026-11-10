@@ -7,7 +7,7 @@ import { byteToIndex } from '../text.js';
 import { failed } from '../problems.js';
 import { $, host, offerMine, viewer } from './app.js';
 import { askDraft, edited, openFile, replaceBytes, texts } from './document.js';
-import { doc, isEntry, mapNode, regionOf, server, stackItems, tile, view } from './stores.js';
+import { doc, isEntry, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
 
 export let tools = null; // the bar's tools (below)
 
@@ -66,11 +66,15 @@ function handles() {
 function drawOverlay() {
   const t = tile(), d = doc.get();
   overlay.setMap(d.tileId === view.get().tileId ? d.map : null, t?.plan?.square_mm);
-  const s = view.get().sel;
+  const { sel: s, hov: h } = view.get();
   overlay.draw({
     tints: tints(),
     selRegion: s?.kind === 'region' ? s.id : null,
     selLine: s?.kind === 'line' ? s.id : null,
+    // the hover (drawn when it is not what is selected)
+    hovRegion: h?.kind === 'region' && !same(h, s) ? h.id : null,
+    hovLine: h?.kind === 'line' && !same(h, s) ? h.id : null,
+    hovPoint: h?.kind === 'point' ? h.id : null,
     all: !!tools?.tool,
     ...(tools?.scene() || {}),
   });
@@ -114,7 +118,7 @@ export function init() {
   viewer.onRender = () => drawOverlay();
   // the map follows the text's last good check and the selection; the ground's heights, the mesh shown
   doc.subscribe(['map', 'tileId'], drawOverlay);
-  view.subscribe(['sel', 'tileId'], () => { tools.paint(); drawOverlay(); });
+  view.subscribe(['sel', 'hov', 'tileId'], () => { tools.paint(); drawOverlay(); });
   server.subscribe(['tiles'], drawOverlay);
   view.subscribe(['shown', 'draft'], () => { if (viewer.payload) surfaceHeights(viewer.payload); });
   // while a tool is placing, Esc, Enter and Backspace are its (before the page's own keys)

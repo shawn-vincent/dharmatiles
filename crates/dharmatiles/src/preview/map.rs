@@ -407,6 +407,19 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
             })
         })
         .collect();
+    // the tile's own `point name "(x, y)"` declarations: where each is and where it is written
+    let named: Vec<Value> = node
+        .and_then(|n| n.children())
+        .map(|c| c.nodes())
+        .unwrap_or_default()
+        .iter()
+        .filter(|n| n.name().value() == "point")
+        .filter_map(|n| {
+            let name = n.entries().first()?.value().as_string()?;
+            let at = t.heights.points.get(name)?;
+            Some(json!({ "name": name, "at": at, "span": [n.span().offset(), n.span().len()] }))
+        })
+        .collect();
     // the tile node itself, for the property sheet when nothing is selected
     let own = node.map(|n| {
         let at = n.name().span().offset();
@@ -432,7 +445,7 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
         });
         json!({ "at": at, "controls": controls, "about": about, "heights": heights(&t.heights.consts) })
     });
-    json!({ "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "places": places(t), "tile": own })
+    json!({ "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "points": named, "places": places(t), "tile": own })
 }
 
 /// The heights a value may name in this tile: its constants (the library's

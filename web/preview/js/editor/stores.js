@@ -106,7 +106,7 @@ export function stackItems() {
 export function mapNode(w) {
   const { map, tileId } = doc.get();
   if (!w || !map || tileId !== view.get().tileId) return null;
-  const list = w.kind === 'region' ? map.regions : w.kind === 'line' ? map.lines : null;
+  const list = w.kind === 'region' ? map.regions : w.kind === 'line' ? map.lines : w.kind === 'point' ? map.points : null;
   return list?.find((n) => n.name === w.id) || null;
 }
 
@@ -117,6 +117,8 @@ export const markSel = (kind, id) => ({ kind, id });
 export const tileSel = () => ({ kind: 'tile', id: view.get().tileId });
 export const isEntry = (w) => w?.kind === 'entry';
 export const isMark = (w) => w?.kind === 'region' || w?.kind === 'line';
+/** A place the map draws: a mark, or a point (which is hovered, not selected). */
+export const isPlace = (w) => isMark(w) || w?.kind === 'point';
 const keyOf = (w) => (!w ? '' : w.kind === 'tile' ? 'tile' : `${w.kind}:${w.id}:${w.piece ?? ''}`);
 export const same = (a, b) => keyOf(a) === keyOf(b);
 
