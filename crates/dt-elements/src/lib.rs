@@ -314,7 +314,52 @@ pub struct Ctx<'a> {
     pub draft: bool,
 }
 
+/// How far either side of a line a scatter spreads when it writes no
+/// `reach`, mm at the 35 mm square.
+pub const LINE_REACH_MM: f64 = 5.0;
+
 impl Ctx<'_> {
+    /// Where a scatter spreads: its area, narrowed to the band within
+    /// `reach_mm` (mm at the 35 mm square) either side of the line it is
+    /// `at=`, when it is.  The band runs to the ends of the line, rounded.
+    #[must_use]
+    pub fn spread_area(&self, frame: &dt_kit::Frame, reach_mm: f64) -> Mask {
+        let mut area = self.area.clone();
+        let Some(path) = self.along else {
+            return area;
+        };
+        let reach = reach_mm * frame.scale();
+        let sq = frame.square_mm;
+        let step = frame.step_mm();
+        let mm: Vec<[f64; 2]> = path.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
+        for (k, bit) in area.bits.iter_mut().enumerate().filter(|(_, b)| **b) {
+            #[allow(clippy::cast_precision_loss)]
+            let (x, y) = (
+                (k % self.area.nx) as f64 * step,
+                (k / self.area.nx) as f64 * step,
+            );
+            *bit = distance_to_path(&mm, x, y) <= reach;
+        }
+        area
+    }
+
+    /// Squares' worth of what a scatter spreads over: the area's squares,
+    /// or the line's length in squares.
+    #[must_use]
+    pub fn spread_squares(&self, frame: &dt_kit::Frame, area: &Mask) -> f64 {
+        match self.along {
+            Some(path) => path
+                .windows(2)
+                .map(|w| libm::hypot(w[1][0] - w[0][0], w[1][1] - w[0][1]))
+                .sum(),
+            #[allow(clippy::cast_precision_loss)]
+            None => {
+                area.count() as f64
+                    / (frame.cells_per_square as f64 * frame.cells_per_square as f64)
+            }
+        }
+    }
+
     /// The planned foot of the solids of `kind` (a word as written), if
     /// the tile has one.
     #[must_use]
@@ -385,9 +430,11 @@ static ELEMENTS: &[(&str, Builder)] = &[
     ("dirt", |_, c, _| Ok(Box::new(dirt::Dirt::new(c)?))),
     ("water", |_, c, _| Ok(Box::new(water::Water::new(c)?))),
     ("scatter", |_, c, ch| {
-        // flowers or rocks: a scatter holds one kind of thing
+        // flowers, trees or rocks: a scatter holds one kind of thing
         if !ch.is_empty() && ch.iter().all(|k| k.name == "flower") {
             Ok(Box::new(flowers::Scatter::new(c, ch)?))
+        } else if !ch.is_empty() && ch.iter().all(|k| k.name == "tree") {
+            Ok(Box::new(tree::Scatter::new(c, ch)?))
         } else {
             Ok(Box::new(rock::Scatter::new(c, ch)?))
         }
@@ -470,4 +517,23 @@ pub fn connector(system: &str) -> Result<Box<dyn Element>, LookError> {
             "the systems are db (DungeonBlocks) and ol (OpenLOCK)",
         )),
     }
+}
+
+/// The distance from `(x, y)` to the nearest point of a polyline, mm.
+fn distance_to_path(path: &[[f64; 2]], x: f64, y: f64) -> f64 {
+    if let [only] = path {
+        return libm::hypot(x - only[0], y - only[1]);
+    }
+    path.windows(2)
+        .map(|w| {
+            let (dx, dy) = (w[1][0] - w[0][0], w[1][1] - w[0][1]);
+            let len2 = dx * dx + dy * dy;
+            let t = if len2 > 0.0 {
+                (((x - w[0][0]) * dx + (y - w[0][1]) * dy) / len2).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            libm::hypot(x - (w[0][0] + t * dx), y - (w[0][1] + t * dy))
+        })
+        .fold(f64::INFINITY, f64::min)
 }

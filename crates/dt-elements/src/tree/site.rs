@@ -3,7 +3,7 @@
 //! its unions leave (shared with the wall, which stands and cleans its
 //! stones the same way).
 
-use dt_kit::{Material, Rng, Scene, Solid, TriMesh, form, graph, union};
+use dt_kit::{Material, Placed, Rng, Scene, Solid, Spread, TriMesh, form, graph, scatter, union};
 
 use super::leaves;
 use crate::{Ctx, LookError};
@@ -282,7 +282,7 @@ pub(super) fn place(
 }
 
 /// The ground (or what a stamped solid stands up to) under `(x, y)`.
-fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
+pub(super) fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
     let node = |f: &dt_kit::Grid| {
         #[allow(
             clippy::cast_possible_truncation,
@@ -300,4 +300,60 @@ fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
         .support()
         .map_or(f64::NEG_INFINITY, |f| f64::from(node(f)));
     g.max(s)
+}
+
+/// Dart-throw a scatter's trees into `area`: each a disc of the radius
+/// given (its crown, or its foot when that is wider; world mm), largest
+/// first, its trunk a radius from the tile edge, `gap` clear of every
+/// other crown and `clear` from what already stands (the support).
+/// Returns what was placed; the caller counts the shortfall.
+pub(super) fn scatter_sites(
+    scene: &Scene,
+    area: &dt_kit::Mask,
+    rng: &mut Rng,
+    radii: &[f64],
+    gap: f64,
+    clear: f64,
+) -> Vec<Placed> {
+    const TRIES: u32 = 300;
+    let frame = *scene.frame();
+    let step = frame.step_mm();
+    let support = scene.support();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let rr = libm::ceil(clear / step) as usize;
+    let node = |x: f64, y: f64| {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let (i, j) = (
+            (libm::round(x / step).max(0.0) as usize).min(area.nx - 1),
+            (libm::round(y / step).max(0.0) as usize).min(area.ny - 1),
+        );
+        (i, j)
+    };
+    let density = |x: f64, y: f64| {
+        let (i, j) = node(x, y);
+        if !area.bits[j * area.nx + i] {
+            return 0.0;
+        }
+        if let Some(sup) = support {
+            for jj in j.saturating_sub(rr)..=(j + rr).min(area.ny - 1) {
+                for ii in i.saturating_sub(rr)..=(i + rr).min(area.nx - 1) {
+                    #[allow(clippy::cast_precision_loss)]
+                    let d =
+                        libm::hypot((ii as f64 - i as f64) * step, (jj as f64 - j as f64) * step);
+                    if d <= clear && sup.z[jj * area.nx + ii].is_finite() {
+                        return 0.0;
+                    }
+                }
+            }
+        }
+        1.0
+    };
+    let spread = Spread {
+        tries: TRIES,
+        inset: [0.0, 1.0],
+        confine: true,
+        gap,
+        factor: 1.0,
+    };
+    scatter(&frame, rng, radii, &spread, &density, &[])
 }

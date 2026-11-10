@@ -693,7 +693,7 @@ static SCATTER: &[Control] = &[
     c(
         "reach",
         Axis::Mm,
-        "with at=foot(…): how far out from the foot",
+        "with at=foot(…): how far out from the foot; with at= a line: how far either side of it (default 5 mm)",
     ),
     c(
         "clumps",
@@ -845,7 +845,7 @@ pub static ELEMENTS: &[Element] = &[
     thing(
         "tree",
         "a space-colonisation tree with foliage clumps and leaves",
-        TREE, false),
+        TREE, true),
     Element {
         name: "wall",
         about: "a masonry wall; on a tile edge it stands inside the tile",
@@ -888,7 +888,7 @@ pub static ELEMENTS: &[Element] = &[
         about: "more than one thing: how many and where; its children say what",
         role: Role::Scatter,
         place: &[PlaceWord::In, PlaceWord::Along, PlaceWord::Against],
-        honours: &[PlaceWord::Against],
+        honours: &[PlaceWord::Along, PlaceWord::Against],
         controls: SCATTER,
         ..Element::BASE
     },

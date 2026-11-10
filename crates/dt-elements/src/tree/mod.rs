@@ -36,7 +36,7 @@ use rayon::prelude::*;
 
 use crate::read::Settings;
 use crate::{Control, Ctx, Degrees, Draw, Element, LookError, Plan, Read, Write};
-use site::{crumbs, fill_pockets, ground_drop, place};
+use site::{crumbs, fill_pockets, ground_at, ground_drop, place, scatter_sites};
 pub(crate) use site::{drop_crumbs, ground_box};
 
 // The tree's fixed numbers, mm at the 35 mm square.
@@ -563,23 +563,69 @@ fn set_trunk_width(g: &mut graph::Graph, w: f64) {
     }
 }
 
-impl Element for Tree {
-    fn plan(&self) -> Plan {
-        Plan {
-            writes: Write::Solid(Kind::Tree),
-            reads: vec![
-                Read::Solids(Kind::Terrain),
-                Read::IfAny(Kind::Wall),
-                Read::IfAny(Kind::Floor),
-            ],
-            cell_mm: None,
-        }
+/// What one built tree noted about itself.
+fn note_built(scene: &mut Scene, b: &Built) {
+    let gr = &b.grown;
+    #[allow(clippy::cast_precision_loss)]
+    for (k, v) in [
+        ("tree.attractors", gr.attractors as f64),
+        ("tree.terminals", gr.terminals as f64),
+        ("tree.nodes", gr.nodes as f64),
+        ("tree.attractors_moved", gr.moved as f64),
+        ("tree.handles_shortened", gr.handles_shortened as f64),
+        ("tree.min_branch_elevation_deg", gr.min_elevation_deg),
+        ("tree.min_curve_elevation_deg", gr.min_curve_elevation_deg),
+        ("tree.trunk_radius_mm", gr.trunk_radius_mm),
+        ("tree.clumps", gr.clumps as f64),
+        ("tree.wood_cut_mm3", gr.wood_cut_mm3),
+        ("tree.slivers_dropped", gr.slivers as f64),
+        ("tree.leaves_placed", gr.leaves_placed as f64),
+        ("tree.leaves", gr.leaves as f64),
+        ("tree.leaves_failed_error", gr.leaves_failed_error as f64),
+        ("tree.x_mm", b.at[0]),
+        ("tree.y_mm", b.at[1]),
+        ("tree.height_mm", b.top_mm - b.at[2]),
+    ] {
+        scene.note(k, v);
     }
+}
 
-    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
+/// Stamp a built tree's trunk on the ground and add it to the scene.
+fn plant(scene: &mut Scene, path: &str, b: Built) {
+    // the trunk's footprint: grass keeps out, things stand clear
+    let frame = *scene.frame();
+    let (nx, ny) = frame.nodes();
+    let step = frame.step_mm();
+    let mut mask = dt_kit::Mask::new(nx, ny, false);
+    for (k, bit) in mask.bits.iter_mut().enumerate() {
+        #[allow(clippy::cast_precision_loss)]
+        let (x, y) = ((k % nx) as f64 * step, (k / nx) as f64 * step);
+        *bit = libm::hypot(x - b.at[0], y - b.at[1]) <= b.stamp_r_mm;
+    }
+    // stamped at its foot, not its crown top: the support is what
+    // later things stand on, and nothing stands on a tree (a second
+    // tree there would be planted in this one's crown)
+    scene.stamp(&mask, b.at[2]);
+    scene.add(
+        Tag {
+            kind: Kind::Tree,
+            owner: path.to_owned(),
+        },
+        b.solid,
+    );
+}
+
+impl Tree {
+    /// How far a tree's trunk keeps from the tile's edge, mm: its crown
+    /// radius as `grow` draws it (the same stream), or its flared foot when
+    /// that is wider.  Draws from `seed` the way `grow` does.
+    ///
+    /// # Errors
+    /// [`LookError`] for a trunk wider than the tile.
+    fn footprint(&self, scene: &Scene, seed: Seed) -> Result<f64, LookError> {
         let s = scene.frame().scale();
         // the crown radius as `grow` draws it (the same stream)
-        let mut rng = Rng::new(ctx.seed.key("sizes"));
+        let mut rng = Rng::new(seed.key("sizes"));
         let _ = draw_dist(&self.p.height, &mut rng);
         let _ = draw_dist(&self.p.trunk, &mut rng);
         let mut margin = 0.5 * draw_dist(&self.p.width, &mut rng) * s;
@@ -607,52 +653,171 @@ impl Element for Tree {
             }
             margin = margin.max(foot);
         }
+        Ok(margin)
+    }
+}
+
+impl Element for Tree {
+    fn plan(&self) -> Plan {
+        Plan {
+            writes: Write::Solid(Kind::Tree),
+            reads: vec![
+                Read::Solids(Kind::Terrain),
+                Read::IfAny(Kind::Wall),
+                Read::IfAny(Kind::Floor),
+            ],
+            cell_mm: None,
+        }
+    }
+
+    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
+        let s = scene.frame().scale();
+        let margin = self.footprint(scene, ctx.seed)?;
         let at = place(scene, ctx, margin, 3.0 * s)?;
         let b = self.grow(scene, ctx.seed, at, &ctx.printer)?;
-        let gr = &b.grown;
-        #[allow(clippy::cast_precision_loss)]
-        for (k, v) in [
-            ("tree.attractors", gr.attractors as f64),
-            ("tree.terminals", gr.terminals as f64),
-            ("tree.nodes", gr.nodes as f64),
-            ("tree.attractors_moved", gr.moved as f64),
-            ("tree.handles_shortened", gr.handles_shortened as f64),
-            ("tree.min_branch_elevation_deg", gr.min_elevation_deg),
-            ("tree.min_curve_elevation_deg", gr.min_curve_elevation_deg),
-            ("tree.trunk_radius_mm", gr.trunk_radius_mm),
-            ("tree.clumps", gr.clumps as f64),
-            ("tree.wood_cut_mm3", gr.wood_cut_mm3),
-            ("tree.slivers_dropped", gr.slivers as f64),
-            ("tree.leaves_placed", gr.leaves_placed as f64),
-            ("tree.leaves", gr.leaves as f64),
-            ("tree.leaves_failed_error", gr.leaves_failed_error as f64),
-            ("tree.x_mm", b.at[0]),
-            ("tree.y_mm", b.at[1]),
-            ("tree.height_mm", b.top_mm - b.at[2]),
-        ] {
-            scene.note(k, v);
+        note_built(scene, &b);
+        plant(scene, ctx.path, b);
+        Ok(())
+    }
+}
+
+/// How far crowns keep from one another when a scatter writes no `gap`,
+/// mm at the 35 mm square.
+const SCATTER_GAP_MM: f64 = 1.0;
+/// How many layouts a scatter of trees tries before it says they do not fit.
+const LAYOUTS: usize = 64;
+
+/// `scatter { tree … }`: many trees, by count or per square, each a tree
+/// of its own seed, crowns clear of one another.  Placed as a whole
+/// first (largest crown first), then grown one after another: every
+/// tree's slots are reserved in sequence, so the source ids do not depend
+/// on the threads.
+pub struct Scatter {
+    count: Option<Draw>,
+    per_square: Draw,
+    gap: f64,
+    reach: f64,
+    /// Each tree and its share of the mix.
+    trees: Vec<(Tree, f64)>,
+}
+
+impl Scatter {
+    /// From its controls and its children (each a tree and its weight).
+    ///
+    /// # Errors
+    /// [`LookError`] for a child that is not a tree, or bad controls.
+    pub fn new(controls: &[Control], children: &[crate::Child]) -> Result<Self, LookError> {
+        let set = Settings::new(controls);
+        let mut trees = Vec::new();
+        for ch in children {
+            if ch.name != "tree" {
+                return Err(LookError::general(
+                    format!("a scatter of `{}` with trees is not built", ch.name),
+                    "a scatter holds one kind of thing: rocks, flowers or trees",
+                ));
+            }
+            trees.push((Tree::new(&ch.controls)?, ch.weight));
         }
-        // the trunk's footprint: grass keeps out, things stand clear
+        if trees.is_empty() {
+            return Err(LookError::general(
+                "a scatter needs a child to say what it scatters",
+                "write `scatter count=3 { tree }`",
+            ));
+        }
+        Ok(Self {
+            count: set.dist("count")?,
+            per_square: set.dist_or("perSquare", Draw::flat(1.0, 1.0))?,
+            gap: set.number_or("gap", SCATTER_GAP_MM)?,
+            reach: set.number_or("reach", crate::LINE_REACH_MM)?,
+            trees,
+        })
+    }
+}
+
+impl Element for Scatter {
+    fn plan(&self) -> Plan {
+        Plan {
+            writes: Write::Solid(Kind::Tree),
+            reads: vec![
+                Read::Solids(Kind::Terrain),
+                Read::IfAny(Kind::Wall),
+                Read::IfAny(Kind::Floor),
+            ],
+            cell_mm: None,
+        }
+    }
+
+    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
+        if ctx.against.is_some() {
+            return Err(LookError::general(
+                "trees are not gathered at a foot",
+                "scatter trees `at=` a region or a line",
+            ));
+        }
         let frame = *scene.frame();
-        let (nx, ny) = frame.nodes();
-        let step = frame.step_mm();
-        let mut mask = dt_kit::Mask::new(nx, ny, false);
-        for (k, bit) in mask.bits.iter_mut().enumerate() {
-            #[allow(clippy::cast_precision_loss)]
-            let (x, y) = ((k % nx) as f64 * step, (k / nx) as f64 * step);
-            *bit = libm::hypot(x - b.at[0], y - b.at[1]) <= b.stamp_r_mm;
+        let s = frame.scale();
+        let mut rng = Rng::new(ctx.seed.key("scatter"));
+        let area = ctx.spread_area(&frame, self.reach);
+        let squares = ctx.spread_squares(&frame, &area);
+        // a whole number: the ends round and every one is as likely as any
+        let n = match &self.count {
+            Some(r) => r.int_by(1.0, &mut rng),
+            None => self.per_square.int_by(squares, &mut rng),
+        };
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let n = n.clamp(0, 10_000) as usize;
+        let total: f64 = self.trees.iter().map(|t| t.1).sum();
+        // each tree: which, its own seed, and the room its crown needs
+        let mut items: Vec<(&Tree, Seed)> = Vec::with_capacity(n);
+        let mut radii = Vec::with_capacity(n);
+        for i in 0..n {
+            let item = ctx.seed.key("item").index(i as u64);
+            let mut r = Rng::new(item);
+            let mut u = r.random() * total;
+            let (tree, _) = self
+                .trees
+                .iter()
+                .find(|t| {
+                    let hit = u < t.1;
+                    u -= t.1;
+                    hit
+                })
+                .unwrap_or(&self.trees[self.trees.len() - 1]);
+            radii.push(tree.footprint(scene, item)?);
+            items.push((tree, item));
         }
-        // stamped at its foot, not its crown top: the support is what
-        // later things stand on, and nothing stands on a tree (a second
-        // tree there would be planted in this one's crown)
-        scene.stamp(&mask, b.at[2]);
-        scene.add(
-            Tag {
-                kind: Kind::Tree,
-                owner: ctx.path.to_owned(),
-            },
-            b.solid,
-        );
+        // darts land where they land, and a tight row can fill up with a
+        // gap no crown fits: lay it out again (the next draws of the same
+        // stream) until every tree has room, up to LAYOUTS times
+        let mut placed = Vec::new();
+        for _ in 0..LAYOUTS {
+            let layout = scatter_sites(scene, &area, &mut rng, &radii, self.gap * s, 3.0 * s);
+            if layout.len() > placed.len() {
+                placed = layout;
+            }
+            if placed.len() == n {
+                break;
+            }
+        }
+        if placed.len() < n {
+            return Err(LookError::general(
+                format!(
+                    "room for {} of the {n} trees: crowns keep clear of one another and the tile's edge",
+                    placed.len()
+                ),
+                "ask for fewer, make `gap` or the crown `width` smaller, or give a line more `reach`",
+            ));
+        }
+        let mut leaves = 0.0;
+        for p in &placed {
+            let (tree, seed) = items[p.index];
+            let at = [p.at[0], p.at[1], ground_at(scene, p.at[0], p.at[1])];
+            let b = tree.grow(scene, seed, at, &ctx.printer)?;
+            leaves += b.grown.leaves as f64;
+            plant(scene, ctx.path, b);
+        }
+        scene.note("trees", placed.len() as f64);
+        scene.note("trees.leaves", leaves);
         Ok(())
     }
 }
