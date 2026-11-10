@@ -504,26 +504,64 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         return Err(errors);
     }
     let plans: Vec<_> = elements.iter().map(|l| l.plan()).collect();
-    let hoisted: Vec<bool> = tile.stack.iter().map(|e| e.hoisted).collect();
-    let steps = plan::schedule(&plans, &hoisted).map_err(|r| {
-        let (msg, entry) = match &r {
+    let steps = plan::schedule(&plans).map_err(|r| {
+        // the entry's element and line, for a help that names another entry
+        let named = |i: usize| match tile.stack.get(i) {
+            Some(e) => {
+                let line = Diag::at(&e.src, e.span, "", "", "")
+                    .location()
+                    .map_or(String::new(), |(_, l, _)| format!(" (line {l})"));
+                format!("`{}`{line}", e.what.value)
+            }
+            None => "an entry".to_owned(),
+        };
+        let (msg, entry, help, code) = match &r {
             Refusal::NoWriter { entry, kind } => (
                 format!("this reads every {kind}, and nothing in the tile makes one"),
                 *entry,
+                "remove the read, or add what it reads to the stack".to_owned(),
+                "dt::plan",
             ),
-            Refusal::SurfaceReadsSolid { entry } => {
-                ("a surface cannot read solids yet".to_owned(), *entry)
+            Refusal::SurfaceReadsSolid { entry } => (
+                "a surface cannot read solids yet".to_owned(),
+                *entry,
+                "remove the read, or add what it reads to the stack".to_owned(),
+                "dt::plan",
+            ),
+            Refusal::Early {
+                entry,
+                later,
+                kind,
+            } => {
+                let (what, fix) = match kind {
+                    Some(dt_elements::Kind::Terrain) => (
+                        "stands on the ground, and the ground is painted below it in the stack"
+                            .to_owned(),
+                        "the stack is built in the order it is listed: list a `ground` or `dirt` above it".to_owned(),
+                    ),
+                    Some(k) => (
+                        format!("reads every {k}, and the first one is listed below it in the stack"),
+                        "the stack is built in the order it is listed: list it after what it reads".to_owned(),
+                    ),
+                    None => (
+                        "lies on the ground, and a surface is painted below it in the stack"
+                            .to_owned(),
+                        "the stack is built in the order it is listed: list it after every `ground` or `dirt` it lies on".to_owned(),
+                    ),
+                };
+                (
+                    format!("this {what}"),
+                    *entry,
+                    format!("{fix}; {} comes after it", named(*later)),
+                    "dt::order",
+                )
             }
-            Refusal::Cycle { entries } => (
-                "these entries read each other's solids".to_owned(),
-                entries[0],
-            ),
         };
         let d = match tile.stack.get(entry) {
-            Some(e) => Diag::at(&e.src, e.span, "dt::plan", msg, "cannot be satisfied"),
-            None => Diag::plain("dt::plan", msg),
+            Some(e) => Diag::at(&e.src, e.span, code, msg, "listed too early"),
+            None => Diag::plain(code, msg),
         };
-        vec![d.help("remove the read, or add what it reads to the stack")]
+        vec![d.help(help)]
     })?;
     let seed = opts.seed.unwrap_or(tile.seed);
     // the Solve phase: bands and pins, no meshes, on the lattice the build

@@ -257,13 +257,6 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// Whether a solid of this kind lays its top into the surface laid after
-    /// it (a loose rock does; see [`Scene::lay_tops`]).
-    #[must_use]
-    pub const fn lays_top(self) -> bool {
-        matches!(self, Self::Rock)
-    }
-
     /// Every kind.
     pub const ALL: [Self; 11] = [
         Self::Terrain,

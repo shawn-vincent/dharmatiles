@@ -177,7 +177,7 @@ let wallHeight         33.1
 let tallWallHeight     72.3</code></pre>
 <p>A tile adds its own names with <code>let</code> and replaces a library one with <code>override</code> (<code>override waterBedHeight 0.8</code> deepens the water's bed everywhere on the tile, and moves every library height that reads it). Every name is declared once, of any kind: a <code>let</code> on a name that exists, or an <code>override</code> of one that does not, is refused (<code>dt::name</code>), and the message gives the other keyword or the nearest name. See <a href="elements/let.html"><code>let</code></a>.</p>
 <p>A height may use numbers, names, <code>x</code> and <code>y</code> (squares), <code>bottom</code> (the surface under this body, or under the thing), <code>+ - * /</code>, a range in brackets anywhere (<code>groundHeight + [1 .. 2]</code>), and the functions <code>sin</code> and <code>cos</code> (degrees), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Measures are checked: <code>groundHeight + x</code> adds squares to millimetres and is refused (<code>dt::type</code>).</p>
-<p>A <em>body</em> of the stack (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>) says how high it may be with its <code>top=</code>, a band: a single height fixes the surface, a range leaves it room. A <a href="elements/pin.html"><code>pin</code></a> holds the band to a height at a place; where pins overlap the later one wins, and the library's defaults (below) are read first. The stack is written bottom up: <a href="elements/base.html"><code>base</code></a> first, the land in order, things and grass in any order, <code>water</code> last.</p>
+<p>A <em>body</em> of the stack (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>) says how high it may be with its <code>top=</code>, a band: a single height fixes the surface, a range leaves it room. A <a href="elements/pin.html"><code>pin</code></a> holds the band to a height at a place; where pins overlap the later one wins, and the library's defaults (below) are read first. The stack is written bottom up: <a href="elements/base.html"><code>base</code></a> first, the land in order, things and grass where you want them, <code>water</code> last. The stack is built in the order it is written.</p>
 <pre><code>stack {
     base
     dirt top="[groundHeight .. groundHeight + 2.5]" {
@@ -292,7 +292,8 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 <p>A scatter must have exactly one of <code>count</code> and <code>perSquare</code>; <code>reach</code> needs <code>at="foot(…)"</code>. A scatter inside a surface (<code>dirt { scatter … }</code>) lands on that surface.</p>
 
 <h3 id="stack-order">Stack order</h3>
-<p>Order is free for solids. Every solid (rocks, trees, walls, cliffs, boulders, scattered or not) is planned before anything grows, and grass and dirt banks grow round every solid wherever they are listed. Order of land bodies is stack order, each one the higher of what is below and its own top: a dirt along a path, listed after the whole-tile dirt, takes the higher of the two there. A dirt is the one surface that reads order among solids: a <code>dirt</code> listed <em>after</em> a rock or a scatter of rocks lies on their tops (where they are flatter than its <code>maxSlope</code>), because the plan stands those rocks on the land before it; a dirt listed <em>before</em> them is laid first and the rocks bed into it. A scatter that also holds trees or flowers stands on the lifted ground, so dirt does not lie on its rocks. Each element is a surface, a thing, a run or a scatter, and that decides how it is planned.</p>
+<p><strong>The stack is built in the order it is listed.</strong> Each entry stands on the terrain as laid so far, and what is listed after it is laid over or beside it. Land bodies are laid in stack order, each the higher of what is below and its own top: a dirt along a path, listed after the whole-tile dirt, takes the higher of the two there. A <code>dirt</code> listed <em>after</em> a rock, a tree, a flower or a scatter of them is built after them: it lies on the tops of rocks where they are flatter than its <code>maxSlope</code>, banks up to a trunk or a stone (a rise is no drop), and covers a flower's foot, as written. A tree's crown is never a surface for dirt. A dirt listed <em>before</em> them is laid first, and they stand on it (a rock beds into it). Grass grows round what is listed before it, so list the grass after the rocks, trees and flowers it should grow round; the same goes for water, which fills over what is above it.</p>
+<p>The plan refuses what the listed order cannot satisfy, with <code>dt::order</code> and the entry's place, and never reorders to cure it: a tree, grass or wall listed above the first <code>ground</code> or <code>dirt</code> it stands on, a thing that reads another kind (grass that needs rocks) with the first of that kind listed below it, a <code>water</code> or floor listed above a surface it lies on. Two things are placed by what they are, not by where they are written: the lift (the one solid the surfaces make together) comes right after the last surface, water or floor, and <code>base</code>, which reads the finished tile, is built last.</p>
 
 <h2 id="elements">6. The elements</h2>
 <p>Each element has a page of its own, with what it makes, a picture, an example and every control it takes, generated from the program: <code>dharmatiles elements NAME</code> prints the same list. Each element leads with a few controls named for what you see. A word in a choice (<code>rock mixed</code>, <code>flow wild</code>) expands to documented numbers; a number is always accepted instead.</p>
@@ -409,19 +410,18 @@ tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none stones=none
-        long-grass                      // grows round the trunk, wherever it is listed
-
         tree size=40 {               // anywhere on the tile; or at="1,1"
             trunk height=30             // bare trunk below the crown
             crown width=30 clumps=32 shape=round branching=normal
             leaf length=4.5 width=3
         }
+        long-grass                      // listed after the tree, so it grows round the trunk
     }
 }</code></pre>
 <ul>
   <li>No region: the whole tile is the default area.</li>
   <li>The tree has no <code>at=</code>, so it goes anywhere on the tile. <code>at="0.6..1.4,0.6..1.4"</code> would keep it near the middle.</li>
-  <li>The grass is listed before the tree and still grows round the trunk, because solids are planned first.</li>
+  <li>The grass is listed after the tree, so it grows round the trunk; listed before it, the tree would stand in the grass.</li>
   <li><code>long-grass</code> grows standing blades.</li>
 </ul>
 
@@ -547,7 +547,7 @@ cliff top="dirtEdgeHeight + 55" at=crag {
   <li>The whole tile is the default area. A region is flat: its fill points and its <code>within</code> discs, less what it <code>except</code>s. One word, <code>at=</code>, names any place (a point, a line or a region), and each element refuses the kinds it cannot use with <code>dt::type</code>: a body or grass fills a region or follows a line, a scatter fills a region or spreads along a line (never a point), a thing stands at a point or fills a region. <code>foot(cliff)</code> is the band at that kind's foot.</li>
   <li>A stack that uses the heights language is written bottom up: <code>base</code> first, the land in order, <code>water</code> last. Heights are mm above zero; a pin is exact where it is and the later pin wins; the library's defaults are read before the tile.</li>
   <li>Every name is declared once, in camelCase, and so is every control: <code>perSquare=55</code>, not <code>per-square=55</code>. A hyphenated control name is an <code>unknown-control</code> error that gives the new one, and <code>dharmatiles migrate</code> rewrites old tiles. <code>let</code> adds a name, <code>override</code> replaces a library one, and neither works on the other's names.</li>
-  <li>Stack order is free for solids: every solid is planned first and everything grows round it. Land bodies are laid in stack order, each the higher of what is below it and its own top.</li>
+  <li>Stack order is build order: every entry is built in the order it is listed, standing on the terrain laid so far, and the plan refuses (<code>dt::order</code>) what that order cannot satisfy rather than reorder it. Land bodies are laid in stack order, each the higher of what is below it and its own top.</li>
   <li>Character controls are words that stand for documented numbers; a number is always accepted too.</li>
   <li>A wall or cliff on a tile edge stands inside the tile.</li>
   <li><code>scatter</code> places many things; a thing on its own is one, placed with <code>at=</code>. An <code>at=</code> may be a range, drawn once from the tile seed; with none, a thing goes anywhere in its area, kept inside the tile and never clipped.</li>

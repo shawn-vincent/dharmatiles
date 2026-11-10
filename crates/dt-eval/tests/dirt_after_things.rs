@@ -1,0 +1,74 @@
+//! The stack is built in the order it is listed: a dirt listed after a tree
+//! is built after it and banks against the trunk; a thing listed above the
+//! ground it stands on is refused, never reordered.
+
+#![allow(clippy::unwrap_used)]
+
+use dt_eval::plan::Step;
+use dt_eval::{Built, Memory, Options, build, check};
+use dt_kit::Material;
+
+fn mem(text: &str) -> Memory {
+    Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect())
+}
+
+const TREE: &str = "tree at=\"0.5,0.5\" size=20 { trunk height=10; crown width=12 clumps=12 shape=round branching=normal; leaf length=4.5 width=3 }";
+
+fn tile(stack: &str) -> String {
+    format!("tile size=\"1x1\" seed=3 {{\n    stack {{\n        base\n{stack}\n    }}\n}}\n")
+}
+
+/// The highest earth vertex within `r` mm of the tile's middle.
+fn earth_top(b: &Built, r: f64) -> f64 {
+    let mut top = f64::MIN;
+    for (t, m) in b.export.mesh.triangles.iter().zip(&b.materials) {
+        if *m != Material::Earth {
+            continue;
+        }
+        for &i in t {
+            let p = b.export.mesh.positions[i as usize];
+            if (p[0] - 17.5).hypot(p[1] - 17.5) <= r {
+                top = top.max(p[2]);
+            }
+        }
+    }
+    top
+}
+
+#[test]
+fn a_dirt_after_a_tree_is_built_after_it_and_banks_on_the_trunk() {
+    let after = tile(&format!(
+        "        dirt stones=none clods=none\n        {TREE}\n        dirt top=\"bottom + [1.0 .. 1.2]\" stones=none clods=none"
+    ));
+    let checked = check(&mem(&after), "t.dtile", &Options::default()).unwrap();
+    // the base (the connector) is built last; the lift follows the last dirt, and the tree is between
+    let order: Vec<Step> = checked.steps.clone();
+    assert_eq!(
+        order,
+        vec![
+            Step::Entry(0),
+            Step::Entry(1),
+            Step::Entry(2),
+            Step::Lift,
+            Step::Entry(3)
+        ]
+    );
+    let with = build(&mem(&after), "t.dtile", &Options::default()).unwrap();
+    let before = tile(&format!(
+        "        dirt stones=none clods=none\n        {TREE}"
+    ));
+    let without = build(&mem(&before), "t.dtile", &Options::default()).unwrap();
+    // beside the trunk the second dirt lies about a millimetre higher
+    let (a, b) = (earth_top(&with, 6.0), earth_top(&without, 6.0));
+    assert!(a > b + 0.6, "dirt banks on the trunk: {a} against {b}");
+}
+
+#[test]
+fn a_tree_above_its_ground_is_refused_not_reordered() {
+    let text = tile(&format!("        {TREE}\n        dirt"));
+    let Err(e) = check(&mem(&text), "t.dtile", &Options::default()) else {
+        panic!("a tree above its ground is refused");
+    };
+    assert_eq!(e[0].code, "dt::order");
+    assert!(e[0].help.as_deref().unwrap().contains("`dirt`"));
+}

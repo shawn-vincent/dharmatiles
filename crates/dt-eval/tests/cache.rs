@@ -56,8 +56,9 @@ fn an_edit_late_in_the_plan_reuses_the_steps_before_it() {
     assert!(reused >= 2, "only {reused} steps reused");
 }
 
-/// Grass keeps the ground; the dirt's level is the first step, so nothing
-/// can be reused.
+/// The stack is built in the order it is listed: the grass comes after the
+/// dirt and the land's rocks, and keeps both; the dirt's level is the first
+/// step, so nothing can be reused.
 #[test]
 fn an_edit_reuses_only_what_comes_before_it() {
     let reused = edit(
@@ -66,7 +67,7 @@ fn an_edit_reuses_only_what_comes_before_it() {
         "bare=\"25%\"",
         &Options::default(),
     );
-    assert!(reused >= 3, "only {reused} steps reused");
+    assert!(reused >= 2, "only {reused} steps reused");
     let reused = edit(
         "lib:tiles/test/2x2-shore.dtile",
         "top=dirtEdgeHeight",

@@ -1010,8 +1010,9 @@ impl Element for Dirt {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Surface,
-            // it lies on what the stack laid before it, whatever that is
-            reads: vec![crate::Read::Laid],
+            // it lies on what the stack laid above it: the plan builds the
+            // stack in the order it is listed
+            reads: Vec::new(),
             cell_mm: Some(crate::CellMm::mm(CELL_MM)),
         }
     }

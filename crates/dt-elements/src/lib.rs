@@ -212,31 +212,30 @@ pub enum Write {
     Solid(Kind),
     /// Solids of each of these kinds (a scatter that mixes things).
     Solids(&'static [Kind]),
-    /// A solid of this kind laid with the land it stands on: after every
-    /// surface and fill, before the lift (a floor), so the lift sees it
-    /// and it reads no lifted ground.
+    /// A solid of this kind laid with the land it stands on: listed after
+    /// the surfaces it lies on, and before the lift (a floor), so the lift
+    /// sees it and it reads no lifted ground.
     Laid(Kind),
-    /// The surface again, filled over what it reads (water): after the
-    /// solids it reads and before the lift, which lifts it with the ground.
+    /// The surface again, filled over the ground listed above it (water):
+    /// before the lift, which lifts it with the ground.
     Fill,
 }
 
 /// What a stack entry reads before it can build.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Read {
-    /// Every solid of this kind (`rock`, `tree`, …).
+    /// Every solid of this kind (`rock`, `tree`, …) listed above it: the
+    /// terrain is the surfaces painted above it, as laid so far. The plan
+    /// refuses a read when nothing writes the kind, or when the first that
+    /// does is listed below it.
     Solids(Kind),
-    /// Every other solid in the tile, the lifted ground included.
+    /// Every other solid in the tile, the lifted ground included: built
+    /// last, whatever its place in the stack.
     AllSolids,
-    /// Every solid of this kind if the tile has any (water's rocks, what a
-    /// thing may stand on such as a wall on a floor); nothing to wait for
-    /// if not.
+    /// Every solid of this kind listed above it, if there is any (water's
+    /// rocks, what a thing may stand on such as a wall on a floor); a kind
+    /// listed below it is not read, and nothing is refused.
     IfAny(Kind),
-    /// The tops laid before it in the stack: every solid listed earlier that
-    /// lays its top ([`Kind::lays_top`]) and stands on the land, so the
-    /// plan builds it first. A surface may read this and nothing else; it
-    /// lies on them like on any surface under it.
-    Laid,
 }
 
 /// An element's plan.

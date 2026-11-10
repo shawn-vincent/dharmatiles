@@ -58,7 +58,7 @@
         grass
     }
 }</code></pre>
-<p>Rocks, trees, walls and flowers are built before the grass wherever they are listed, so the blades always grow round them. Most library tiles use a preset:</p>
+<p>The stack is built in the order it is listed: the blades grow round the rocks, trees, walls and flowers listed above the grass, so list the grass after them. Most library tiles use a preset:</p>
 <pre><code>use "parts/grass" lawn          // or long-grass: longer, taller blades
 
 tile size="2x2" seed=4 {

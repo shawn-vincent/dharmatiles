@@ -48,19 +48,19 @@
 <p>No two seeds grow the same tree, but every tree has the same character.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A tree goes anywhere in its area, kept a crown's radius from the tile edge, or where <code>at=</code> says. Grass grows round the trunk wherever the grass is listed:</p>
+<p>A tree goes anywhere in its area, kept a crown's radius from the tile edge, or where <code>at=</code> says. Grass grows round the trunk when it is listed after the tree; a dirt listed after the tree banks against the trunk:</p>
 <pre><code>use "parts/grass" long-grass
 
 tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none stones=none
-        long-grass
         tree size=40 {                  // or: tree at="1,1" size=40
             trunk height=30             // bare trunk below the crown
             crown width=30 clumps=32 shape=round branching=normal
             leaf length=4.5 width=3
         }
+        long-grass                      // after the tree: grows round the trunk
     }
 }</code></pre>
 <p><code>leaves clumps-only</code> leaves off the separate leaves; <code>leaves bare</code> makes a winter tree. The six branching knobs (<code>branch split=… eagerness=…</code>) are expert controls, allowed only in a parts file:</p>

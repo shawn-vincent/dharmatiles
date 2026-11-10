@@ -103,9 +103,6 @@ pub struct Entry {
     pub line: Option<String>,
     /// A scatter's children: each thing, its controls and its weight.
     pub children: Vec<Child>,
-    /// A scatter written inside a surface: its own entry, built after the
-    /// lift, so no surface lies on it.
-    pub hoisted: bool,
     /// The text it came from.
     pub src: Src,
     /// The whole node.
@@ -994,7 +991,7 @@ impl Reader<'_> {
                     }
                     let mut children = Vec::new();
                     // a scatter inside a surface scatters on that surface:
-                    // its own entry, in the surface's area, built after the lift
+                    // its own entry, in the surface's area, listed right after it
                     let mut hoisted: Vec<model::Entry> = Vec::new();
                     for c in &e.children {
                         if element.role == Role::Surface
@@ -1060,16 +1057,12 @@ impl Reader<'_> {
                             against,
                             line,
                             children,
-                            hoisted: false,
                             src: Arc::clone(src),
                             span: e.span,
                         });
                         if !hoisted.is_empty() {
-                            let from = out.len();
+                            // listed right after the surface it is written in
                             self.expand(&hoisted, &inner, out, pending);
-                            for h in &mut out[from..] {
-                                h.hoisted = true;
-                            }
                         }
                     }
                 }
