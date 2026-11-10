@@ -98,6 +98,9 @@ pub struct Entry {
     pub at: Option<[Draw; 2]>,
     /// `at=foot(…)`: the kind of thing it gathers at the foot of.
     pub against: Option<String>,
+    /// `at=` a drawn line (a scatter's): its name; the build reads the
+    /// line's points from [`Tile::lines`], so a new seed's wobble reaches it.
+    pub line: Option<String>,
     /// A scatter's children: each thing, its controls and its weight.
     pub children: Vec<Child>,
     /// The text it came from.
@@ -744,22 +747,10 @@ impl Reader<'_> {
                     el
                 }
                 _ => {
-                    // a thing, a coat or a part: its top and an `at=` that
-                    // is a line or a region are not built yet
+                    // a thing, a coat or a part: its top is not built yet
                     let name = e.what.value.as_str();
                     if let Some(t) = &e.top {
                         pending.push(not_yet(src, t.span, &format!("`top=` on `{name}` is")));
-                    }
-                    if let Some(a) = e
-                        .at_place
-                        .as_ref()
-                        .filter(|_| e.place.at.is_none() && e.place.region.is_none())
-                    {
-                        pending.push(not_yet(
-                            src,
-                            a.span,
-                            &format!("`at=` a line on `{name}` is"),
-                        ));
                     }
                     things.push(thing(e));
                     continue;
@@ -931,6 +922,7 @@ impl Reader<'_> {
                     // at= a path of edges and at= a point, for the elements
                     // that place by them; the rest is not built yet
                     let mut path = None;
+                    let mut line = None;
                     let mut point = None;
                     let against = if element.honours(PlaceWord::Against) {
                         e.place.against.as_ref().map(|a| a.value.clone())
@@ -944,6 +936,9 @@ impl Reader<'_> {
                     match &along {
                         Some(a) if element.honours(PlaceWord::Along) => match &a.value {
                             Along::Edges(edges) => path = Some(edge_path(edges, self.dims)),
+                            Along::Line(name) if element.name == "scatter" => {
+                                line = Some(name.clone());
+                            }
                             Along::Line(_) => unplaced.push(("at= a drawn line", Some(a.span))),
                         },
                         // inherited from a definition call: for the elements
@@ -1060,6 +1055,7 @@ impl Reader<'_> {
                             along: path,
                             at: point,
                             against,
+                            line,
                             children,
                             src: Arc::clone(src),
                             span: e.span,

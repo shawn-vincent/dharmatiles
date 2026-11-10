@@ -698,15 +698,14 @@ impl Decoder<'_> {
             return;
         }
         let class = self.class_of(entry);
-        let (can_region, can_line, can_point, can_foot, pending_line) = match entry.element() {
+        let (can_region, can_line, can_point, can_foot) = match entry.element() {
             Some(l) => (
                 l.place.contains(&W::In),
                 l.place.contains(&W::Along),
                 l.place.contains(&W::At),
                 l.place.contains(&W::Against),
-                l.role == Role::Thing,
             ),
-            None => (true, true, class == Class::Thing, true, false),
+            None => (true, true, class == Class::Thing, true),
         };
         let Some(s) = e.value().as_string() else {
             if can_point {
@@ -860,9 +859,6 @@ impl Decoder<'_> {
                             value: along,
                             span: r.span,
                         });
-                    } else if pending_line && !BUILTIN_LINES.contains(&n.as_str()) {
-                        // checked here; the evaluator says it is not built yet
-                        entry.at_place = Some(r);
                     } else {
                         self.place_refusal(entry, span, t, "a line", can_line);
                     }
@@ -909,7 +905,7 @@ impl Decoder<'_> {
                 .to_owned()
         } else if kind == "a line" && entry.element().is_some_and(|l| l.role == Role::Thing) {
             format!(
-                "one {owner} stands at a point; several along a line are `scatter at=<line> perSquare=… {{ {owner} }}`"
+                "one {owner} stands at a point, and a line has no one place on it; several along a line are `scatter at=<line> count=3 {{ {owner} }}`"
             )
         } else if run {
             "a wall is built along a line: `at=north`, an edge path such as \"north west\", or a drawn line"

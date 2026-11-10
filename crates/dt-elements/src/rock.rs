@@ -765,7 +765,14 @@ impl Element for Single {
                 a
             }
             None => {
-                let placed = place(scene, ctx, &mut rng, &[item.r * s], 1.5 * s);
+                let placed = place(
+                    scene,
+                    ctx,
+                    &mut rng,
+                    &[item.r * s],
+                    1.5 * s,
+                    crate::LINE_REACH_MM,
+                );
                 let Some(p) = placed.first() else {
                     return Err(LookError::build(format!(
                         "no room for a {} {d:.1} mm wide here",
@@ -784,8 +791,9 @@ impl Element for Single {
 
 /// The entry's area less the core of a cliff's stones: nothing is set down
 /// on it (it lies behind the stones, and what stood on it would be loose).
-fn open_area(scene: &Scene, ctx: &Ctx<'_>) -> dt_kit::Mask {
-    let mut area = ctx.area.clone();
+fn open_area(scene: &Scene, ctx: &Ctx<'_>, reach: f64) -> dt_kit::Mask {
+    // at= a line: the band either side of it
+    let mut area = ctx.spread_area(scene.frame(), reach);
     if let Some(rest) = scene.rest() {
         for (a, c) in area.bits.iter_mut().zip(&rest.core.bits) {
             *a &= !*c;
@@ -795,9 +803,16 @@ fn open_area(scene: &Scene, ctx: &Ctx<'_>) -> dt_kit::Mask {
 }
 
 /// Dart-throw radii (world mm) into the entry's area, largest first.
-fn place(scene: &Scene, ctx: &Ctx<'_>, rng: &mut Rng, radii: &[f64], gap: f64) -> Vec<Placed> {
+fn place(
+    scene: &Scene,
+    ctx: &Ctx<'_>,
+    rng: &mut Rng,
+    radii: &[f64],
+    gap: f64,
+    reach: f64,
+) -> Vec<Placed> {
     let frame = *scene.frame();
-    let area = &open_area(scene, ctx);
+    let area = &open_area(scene, ctx, reach);
     let step = frame.step_mm();
     let inside = |x: f64, y: f64| {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -834,7 +849,7 @@ fn place_at_foot(
     let s = frame.scale();
     let step = frame.step_mm();
     let size = frame.size_mm();
-    let area = &open_area(scene, ctx);
+    let area = &open_area(scene, ctx, reach);
     let total: f64 = foot.cells.iter().map(|c| c.2).sum();
     if foot.cells.is_empty() || total <= 0.0 {
         return Vec::new();
@@ -898,8 +913,9 @@ pub struct Scatter {
     count: Option<Draw>,
     per_square: Draw,
     gap: f64,
-    /// `at=foot(…)`: how far from the foot stones lie, mean mm.
-    reach: f64,
+    /// `at=foot(…)`: how far from the foot stones lie, mean mm; `at=` a
+    /// line: how far either side of it.  `None` is each one's default.
+    reach: Option<f64>,
     things: Vec<Thing>,
 }
 
@@ -924,18 +940,21 @@ impl Scatter {
             count: None,
             per_square: PER_SQUARE,
             gap: GAP_MM,
-            reach: SCREE_REACH_MM,
+            reach: None,
             things: Vec::new(),
         };
         s.count = set.dist("count")?;
         s.per_square = set.dist_or("perSquare", PER_SQUARE)?;
-        s.reach = set.number_or("reach", s.reach)?;
+        s.reach = set.number("reach")?;
         s.gap = set.number_or("gap", s.gap)?;
         for ch in children {
             if !is_thing(&ch.name) {
                 return Err(LookError::general(
-                    format!("a scatter of `{}` is not built yet", ch.name),
-                    "a scatter holds rock, stone, boulder and pebble, or flowers; not a mix of the two",
+                    format!(
+                        "a scatter of `{}` with other things is not built yet",
+                        ch.name
+                    ),
+                    "a scatter holds one kind of thing: rocks (rock, stone, boulder, pebble), flowers or trees; a mix is not built yet",
                 ));
             }
             s.things
@@ -976,11 +995,9 @@ impl Element for Scatter {
         };
         // squares the area covers
         #[allow(clippy::cast_precision_loss)]
+        let line_reach = self.reach.unwrap_or(crate::LINE_REACH_MM);
         let squares = foot.map_or_else(
-            || {
-                ctx.area.count() as f64
-                    / (frame.cells_per_square as f64 * frame.cells_per_square as f64)
-            },
+            || ctx.spread_squares(&frame, &ctx.spread_area(&frame, line_reach)),
             |f| f.squares,
         );
         // a whole number: the ends round and every one is as likely as any
@@ -1016,8 +1033,16 @@ impl Element for Scatter {
         }
         let radii: Vec<f64> = items.iter().map(|it| it.r * s).collect();
         let placed = match foot {
-            Some(foot) => place_at_foot(scene, ctx, &mut rng, foot, &items, &kinds, self.reach),
-            None => place(scene, ctx, &mut rng, &radii, self.gap * s),
+            Some(foot) => place_at_foot(
+                scene,
+                ctx,
+                &mut rng,
+                foot,
+                &items,
+                &kinds,
+                self.reach.unwrap_or(SCREE_REACH_MM),
+            ),
+            None => place(scene, ctx, &mut rng, &radii, self.gap * s, line_reach),
         };
         let posed: Vec<(&Item, [f64; 2], f64)> = placed
             .iter()

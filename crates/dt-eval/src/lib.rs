@@ -861,7 +861,14 @@ impl<'a> Plan<'a> {
             area: &self.masks[job.mask],
             path: &job.path,
             seed: job.seed,
-            along: entry.and_then(|e| e.along.as_deref()),
+            along: entry.and_then(|e| {
+                e.along.as_deref().or_else(|| {
+                    e.line
+                        .as_ref()
+                        .and_then(|n| self.tile.lines.get(n))
+                        .map(Vec::as_slice)
+                })
+            }),
             at: entry.and_then(|e| e.at.as_ref()),
             printer: *self.opts.printer,
             against: entry.and_then(|e| e.against.as_deref()),

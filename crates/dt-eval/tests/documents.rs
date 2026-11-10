@@ -320,6 +320,41 @@ fn a_rock_placed_past_the_edge_is_refused() {
     );
 }
 
+/// A tile with a drawn line and `body` in its stack.
+fn on_a_line(body: &str) -> String {
+    format!(
+        "tile size=\"2x1\" seed=3 {{\n  line road {{ through \"0.1,0.5\" \"1.9,0.5\" }}\n  stack {{\n    dirt\n    {body}\n  }}\n}}\n"
+    )
+}
+
+#[test]
+fn a_scatter_at_a_line_builds_for_rocks_and_flowers() {
+    for (body, material) in [
+        (
+            "scatter at=road perSquare=4 reach=3 { rock }",
+            dt_kit::Material::Rock,
+        ),
+        (
+            "scatter at=road count=8 reach=3 { flower }",
+            dt_kit::Material::Flower,
+        ),
+    ] {
+        let src = mem(&[("t.dtile", &on_a_line(body))]);
+        let b = build(&src, "t.dtile", &Options::default()).unwrap();
+        assert!(b.materials.contains(&material), "{body}");
+    }
+}
+
+#[test]
+fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
+    let ok = on_a_line("scatter at=road count=3 { tree size=24 }");
+    let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &Options::default()).unwrap();
+    assert!(c.pending().is_empty(), "{:?}", c.pending());
+    let e = errors(&on_a_line("tree at=road"));
+    assert_eq!(e[0].code, "dt::type");
+    assert!(e[0].help.as_deref().unwrap().contains("scatter at=<line>"));
+}
+
 #[test]
 fn water_alone_builds_a_tile() {
     let src = mem(&[(

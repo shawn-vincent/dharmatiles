@@ -223,16 +223,17 @@ fn a_dirts_top_and_pins_build() {
 }
 
 #[test]
-fn a_things_top_and_place_are_checked_but_not_built_yet() {
+fn a_things_top_is_checked_but_not_built_yet_and_a_line_is_refused() {
     let c = solved(&tile(
         "region canopy { within 15 of=center }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=canopy }",
     ));
     // the region is built (a thing at a region stands in it); the top is not
     assert_eq!(c.pending().len(), 1, "{:?}", c.pending());
-    let c = solved(&tile(
+    // a line has no one place on it: refused, not pending
+    let e = refused(&tile(
         "line trail { through southCenter northCenter }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=trail }",
     ));
-    assert_eq!(c.pending().len(), 2, "{:?}", c.pending());
+    assert_eq!(e[0].code, "dt::type", "{e:?}");
 }
 
 #[test]

@@ -42,7 +42,7 @@ dirt { scatter perSquare=40 { pebble } }                     // inside a surface
 <tr id="c-count"><td><code>count</code></td><td>count, 0 to 10000, or a range, or a weighted range</td><td>—</td><td>how many, in total</td></tr>
 <tr id="c-perSquare"><td><code>perSquare</code></td><td>per square, a number, a range or a weighted range</td><td>—</td><td>how many per square of the area, or of length along a line</td></tr>
 <tr id="c-spread"><td><code>spread</code></td><td>mm</td><td>—</td><td>a cluster within this distance of a point <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
-<tr id="c-reach"><td><code>reach</code></td><td>mm</td><td>—</td><td>with at=foot(…): how far out from the foot</td></tr>
+<tr id="c-reach"><td><code>reach</code></td><td>mm</td><td>—</td><td>with at=foot(…): how far out from the foot; with at= a line: how far either side of it (default 5 mm)</td></tr>
 <tr id="c-clumps"><td><code>clumps</code></td><td>per square</td><td>—</td><td>gathers them into clumps; default spread evenly <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
 <tr id="c-gap"><td><code>gap</code></td><td>mm</td><td>—</td><td>least space between neighbours</td></tr>
 </tbody></table></div>
@@ -63,6 +63,7 @@ dirt { scatter perSquare=40 { pebble } }                     // inside a surface
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-plateau.dtile"><code>2x2-cliff-plateau.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-plateau.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-flowers.dtile"><code>1x1-grass-flowers.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-flowers.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-tree.dtile"><code>1x1-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-tree.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/2x1-tree-row.dtile"><code>2x1-tree-row.dtile</code></a> <span class="muted small">lib:tiles/ground/2x1-tree-row.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-angle.dtile"><code>1x1-water+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-angle.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-corner.dtile"><code>1x1-water+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-corner.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-tree.dtile"><code>1x1-water+grass-tree.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-tree.dtile</span></li>
@@ -78,6 +79,8 @@ dirt { scatter perSquare=40 { pebble } }                     // inside a surface
 <h2 id="notes">Notes</h2>
 <dl class="defs">
   <dt>at=foot(cliff)</dt><dd>Gathers at the foot of that kind of thing: <code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code>. Scattered at a cliff's foot, rocks take the cliff's rock: that is scree.</dd>
+  <dt>at=<em>line</em></dt><dd>Spreads along a drawn line, an edge or an edge path, within <code>reach</code> mm either side of it (default 5 mm), to the ends of the line rounded. <code>perSquare</code> counts the line's length in squares. It builds for rocks, flowers and trees alike: <code>scatter at=road count=3 reach=3 { tree size="26..32" }</code>. A single thing at a line is refused (a line has no one place on it); a scatter is how several stand along one.</dd>
+  <dt>trees</dt><dd>A scatter of trees places every crown clear of the others (centres at least both crown radii and <code>gap</code> apart, default 1 mm), each trunk a crown radius in from the tile edge and clear of what already stands, then grows them one after another, each from its own seed. A tree is a heavy build: ask for few. If the crowns cannot all fit it is an error naming how many do, never fewer trees without a word.</dd>
   <dt>count, perSquare</dt><dd>Take a weighted range: <code>perSquare="low(2..8, 3)"</code>. Each whole number of a range is as likely as any other. See <a href="../language.html#weighted">weighted ranges</a>.</dd>
   <dt>inside a surface</dt><dd>A scatter written inside <code>dirt</code> or <code>grass</code> is placed on that surface, in its area.</dd>
 </dl>

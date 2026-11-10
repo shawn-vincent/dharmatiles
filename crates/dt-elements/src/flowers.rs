@@ -310,7 +310,7 @@ fn stand(
 /// there. `gap` is mm at the 35 mm square.
 fn place(
     scene: &Scene,
-    ctx: &Ctx<'_>,
+    area: &dt_kit::Mask,
     rng: &mut Rng,
     reaches: &[f64],
     gap: f64,
@@ -344,10 +344,10 @@ fn place(
             let (px, py) = (x + widest * libm::cos(a), y + widest * libm::sin(a));
             let (i, j) = ground.node(px.clamp(0.0, w), py.clamp(0.0, h));
             let q = j * nx + i;
-            ctx.area.bits[q] && !wet.bits[q] && !blocker.bits[q]
+            area.bits[q] && !wet.bits[q] && !blocker.bits[q]
         });
         let (i, j) = ground.node(x, y);
-        if ok && ctx.area.bits[j * nx + i] {
+        if ok && area.bits[j * nx + i] {
             1.0
         } else {
             0.0
@@ -417,7 +417,7 @@ impl Element for Flower {
                 }]
             }
             None => {
-                let placed = place(scene, ctx, &mut rng, &[outer], GAP_MM)?;
+                let placed = place(scene, ctx.area, &mut rng, &[outer], GAP_MM)?;
                 if placed.is_empty() {
                     return Err(LookError::build(format!(
                         "no room for a flower {:.1} mm wide here",
@@ -437,6 +437,7 @@ pub struct Scatter {
     count: Option<Draw>,
     per_square: Draw,
     gap: f64,
+    reach: f64,
     plants: Vec<Plant>,
 }
 
@@ -467,6 +468,7 @@ impl Scatter {
             count: set.dist("count")?,
             per_square: set.dist_or("perSquare", Draw::flat(PER_SQUARE, PER_SQUARE))?,
             gap: set.number_or("gap", GAP_MM)?,
+            reach: set.number_or("reach", crate::LINE_REACH_MM)?,
             plants,
         })
     }
@@ -486,8 +488,9 @@ impl Element for Scatter {
         }
         let frame = *scene.frame();
         let mut rng = Rng::new(ctx.seed.key("flowers"));
-        let squares = ctx.area.count() as f64
-            / (frame.cells_per_square as f64 * frame.cells_per_square as f64);
+        // at= a line: the band either side of it
+        let band = ctx.spread_area(&frame, self.reach);
+        let squares = ctx.spread_squares(&frame, &band);
         // a whole number: the ends round and every one is as likely as any
         let n = match &self.count {
             Some(r) => r.int_by(1.0, &mut rng),
@@ -512,7 +515,7 @@ impl Element for Scatter {
             flowers.push((plant, plant.reach(&mut r)));
         }
         let reaches: Vec<f64> = flowers.iter().map(|f| f.1).collect();
-        let placed = place(scene, ctx, &mut rng, &reaches, self.gap)?;
+        let placed = place(scene, &band, &mut rng, &reaches, self.gap)?;
         stand(scene, ctx, &mut rng, &flowers, &placed)
     }
 }

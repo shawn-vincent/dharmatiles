@@ -14,7 +14,7 @@
   <div class="eyebrow"><i class="fam-mark fam-plant" title="moss: a plant"></i>Element · thing</div>
   <h1>tree</h1>
   <p class="lede">One deciduous tree: a twisting barked trunk that forks into branches, each ending in a rounded clump of foliage covered in separate, chunky leaves. The look is slightly cartoonish. Every branch climbs at least 26° and every leaf on an underside lies flat, so the tree prints without supports.</p>
-  <p class="small">A ready-made tree is a <a href="define.html">definition</a>: <code>use "parts/trees" oak</code>. Several trees are a <a href="scatter.html"><code>scatter</code></a>: <code>scatter count=2 { oak }</code>.</p>
+  <p class="small">A ready-made tree is a <a href="define.html">definition</a>: <code>use "parts/trees" oak</code>. Several trees are a <a href="scatter.html"><code>scatter</code></a>: <code>scatter count=2 { oak }</code>, or a row along a line: <code>scatter at=road count=3 reach=3 { oak }</code>. A scatter of trees keeps every crown clear of the others; a single tree <code>at=</code> a line is refused, a line has no one place on it.</p>
   <figure class="shot hero-one"><img src="img/el-tree.jpg" alt="A one-square grass tile with one leafy tree"><figcaption><code>lib:tiles/ground/1x1-grass-tree.dtile</code>, built by the program today. The audit measured no face past 55°.</figcaption></figure>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v">40 mm tall by default (20–120); crown about 30 mm across</div></div>
@@ -115,6 +115,7 @@ tile size="2x2" seed=3 {
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-tree.dtile"><code>1x1-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-tree.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/2x1-tree-row.dtile"><code>2x1-tree-row.dtile</code></a> <span class="muted small">lib:tiles/ground/2x1-tree-row.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/2x2-grass-tree.dtile"><code>2x2-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/2x2-grass-tree.dtile</span></li>
   <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-tree.dtile"><code>1x1-water+grass-tree.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-tree.dtile</span></li>
 </ul>

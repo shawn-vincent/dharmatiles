@@ -945,14 +945,18 @@ impl Decoder<'_> {
         }
         if let Some(s) = entry.control("reach")
             && entry.place.against.is_none()
+            && entry.place.along.is_none()
         {
             self.err(
                 "dt::scatter",
                 s.name.span,
-                "`reach` is how far out from the foot of what it is `at=foot(…)`",
-                "no foot",
+                "`reach` is how far out from a line or a foot: the scatter is `at=` neither",
+                "no line or foot",
             )
-            .help = Some("write `scatter at=\"foot(cliff)\" reach=4 …`".to_owned());
+            .help = Some(
+                "write `scatter at=road reach=4 …`, or `scatter at=\"foot(cliff)\" reach=4 …`"
+                    .to_owned(),
+            );
         }
         if entry.children.is_empty() {
             self.err(

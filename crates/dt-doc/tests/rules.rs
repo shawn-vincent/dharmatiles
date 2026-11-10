@@ -587,7 +587,15 @@ fn scatter_rules() {
         ),
         (
             "tile { stack { scatter count=3 reach=5 { rock } } }",
-            "`at=foot(…)`",
+            "a line or a foot",
+        ),
+        (
+            "tile { line road { through \"0,0.5\" \"1,0.5\" } stack { tree at=road } }",
+            "a line has no one place on it",
+        ),
+        (
+            "tile { line road { through \"0,0.5\" \"1,0.5\" } stack { rock at=road } }",
+            "`scatter at=<line> count=3",
         ),
         ("tile { stack { scatter count=3 } }", "children say what"),
         (
