@@ -152,7 +152,7 @@ function stepper(root, steps, draw){
       ctx.beginPath(); ctx.moveTo((x-vx*L)*px,(y-vy*L)*px); ctx.lineTo((x+vx*L)*px,(y+vy*L)*px); ctx.stroke(); ctx.beginPath(); ctx.arc((x+vx*L)*px,(y+vy*L)*px,1.6,0,7); ctx.fillStyle="rgba(20,30,25,.9)"; ctx.fill(); } }
   function lensDraw(){ for(const L of lenses){ ctx.save(); ctx.translate(L.x*px,L.y*px); ctx.rotate(th0); ctx.beginPath(); for(let k=0;k<=60;k++){ const u=-L.a+2*L.a*k/60; const v=L.b*Math.sqrt(Math.max(0,1-Math.abs(u)/L.a)); ctx.lineTo(u*px,v*px); } for(let k=60;k>=0;k--){ const u=-L.a+2*L.a*k/60; const v=-L.b*Math.sqrt(Math.max(0,1-Math.abs(u)/L.a)); ctx.lineTo(u*px,v*px); } ctx.closePath(); ctx.fillStyle="rgba(120,86,52,.85)"; ctx.fill(); ctx.restore(); } }
   // strands
-  const seeds=[]; const sp=2.65; for(let y=0;y<W;y+=sp) for(let x=0;x<W;x+=sp) seeds.push([x+R()*sp, y+R()*sp, 15+R()*15]);
+  const seeds=[]; const sp=1.9; for(let y=0;y<W;y+=sp) for(let x=0;x<W;x+=sp) seeds.push([x+R()*sp, y+R()*sp, 15+R()*15]);
   function trace(x,y,len){ const pts=[[x,y]]; const h=.5; for(let d=0; d<len; d+=h){ const [a,b]=dir(x,y,2); const [c,e]=dir(x+a*h/2,y+b*h/2,2); x+=c*h; y+=e*h; if(x<1||y<1||x>W-1||y>W-1||inLens(x,y)) break; pts.push([x,y]); } return pts; }
   let strands=null;
   function getStrands(){ if(!strands) strands=seeds.map(s=>trace(s[0],s[1],s[2])); return strands; }
@@ -165,7 +165,7 @@ function stepper(root, steps, draw){
       ctx.beginPath(); left.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); right.reverse().forEach(p=>ctx.lineTo(p[0],p[1])); ctx.closePath();
       ctx.fillStyle="#7f9a4c"; ctx.fill(); ctx.strokeStyle="rgba(30,45,20,.75)"; ctx.lineWidth=.9; ctx.stroke();
       ctx.strokeStyle="rgba(230,240,190,.55)"; ctx.lineWidth=.8; ctx.beginPath(); q.slice(0,n-1).forEach((p,i)=>i?ctx.lineTo(p[0]*px,p[1]*px):ctx.moveTo(p[0]*px,p[1]*px)); ctx.stroke(); } }
-  const steps=["Hills: rises-only noise, slope capped at 34°, feathered to the 3.4 mm edge level","Direction field: one angle per point (regional noise), so no vortices are possible","In-phase meander: A·sin(2πs/15 mm) along the flow coordinate s","Clearings: eye-shaped lenses aligned to the flow, which parts upstream and rejoins","Strands: Poisson seeds 2.65 mm apart, traced 15–30 mm with RK2","Blades: fronds along each strand, shingled upstream first, shortened (never sliced) at clearings"];
+  const steps=["Hills: rises-only noise, slope capped at 34°, feathered to the 3.4 mm edge level","Direction field: one angle per point (regional noise), so no vortices are possible","In-phase meander: A·sin(2πs/15 mm) along the flow coordinate s","Clearings: eye-shaped lenses aligned to the flow, which parts upstream and rejoins","Strands: Poisson seeds 1.9 mm apart, traced 15–30 mm with RK2","Blades: fronds along each strand, shingled upstream first, shortened (never sliced) at clearings"];
   function draw(step){ ctx.clearRect(0,0,cv.width,cv.height); hills(); if(step>=3) lensDraw();
     if(step===1) arrows(0); else if(step===2) arrows(1); else if(step===3) arrows(2);
     if(step===4){ ctx.strokeStyle="rgba(25,40,20,.75)"; ctx.lineWidth=1; for(const p of getStrands()){ ctx.beginPath(); p.forEach((q,i)=>i?ctx.lineTo(q[0]*px,q[1]*px):ctx.moveTo(q[0]*px,q[1]*px)); ctx.stroke(); } }

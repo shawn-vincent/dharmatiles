@@ -10,7 +10,7 @@ use rayon::prelude::*;
 
 use super::flow::{Flow, Swaths, poisson_sites};
 
-pub const STRAND_SPACING_MM: f64 = 2.65;
+pub const STRAND_SPACING_MM: f64 = 1.9;
 const STRAND_LEN_MM: (f64, f64) = (15.0, 30.0);
 const STRAND_BACK_FRAC: (f64, f64) = (0.2, 0.6);
 const STRAND_MARGIN_MM: f64 = 8.0;
