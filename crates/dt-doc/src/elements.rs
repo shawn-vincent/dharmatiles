@@ -111,27 +111,12 @@ const BUMP_SIZE: Control = c(
     "how wide the hills are in its band: broad and rolling, or choppy",
 )
 .limits(5.0, 70.0);
-static STONES: &[Word] = &[
-    // (4, 7) stones per 2×2 is `some`; `many` is provisional.
-    w(
-        "none",
-        "bare dirt, no stones",
-        &[("min", 0.0), ("max", 0.0)],
-    ),
-    w("some", "a few bedded stones", &[("min", 4.0), ("max", 7.0)]),
-    w(
-        "many",
-        "a stony patch (provisional)",
-        &[("min", 8.0), ("max", 12.0)],
-    ),
-];
-
 static CLODS: &[Word] = &[
     // a clod density of 0.7 is `some`; few and many are provisional. `none`
-    // with `stones none` is plain dirt: no texture at all.
+    // is plain dirt: no texture at all.
     w(
         "none",
-        "no clods (with `stones=none`: plain, untextured dirt)",
+        "no clods: plain, untextured dirt",
         &[("density", 0.0)],
     ),
     w(
@@ -743,13 +728,6 @@ pub static ELEMENTS: &[Element] = &[
                 .words(CLODS)
                 .default("some"),
             c(
-                "stones",
-                Axis::Word,
-                "a few stones bedded in the dirt",
-            )
-            .words(STONES)
-            .default("some"),
-            c(
                 "maxSlope",
                 Axis::Deg,
                 "the steepest surface under it that dirt stays on; on anything steeper it slides off and leaves it bare",
@@ -936,7 +914,7 @@ pub static RENAMED: &[(&str, &str)] = &[
     ),
     (
         "stones",
-        "a cliff's mix is `rock mixed`, or `rock columns=… blocks=…`",
+        "dirt beds no stones: scatter rocks on it after it, `scatter perSquare=1 { rock size=\"4..8\" }`, or delete `stones=none`; a cliff's mix is `rock mixed`, or `rock columns=… blocks=…`",
     ),
     ("shatter", "write `shattered patches=… width=…`"),
     (

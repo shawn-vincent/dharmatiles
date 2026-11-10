@@ -5,6 +5,6 @@ tile size="1x1" seed=3 {
         base
         dirt
         scatter count=2 { rock shape=flat size="14..17" }
-        dirt top="bottom + [0.6 .. 1.2]" stones=none
+        dirt top="bottom + [0.6 .. 1.2]"
     }
 }

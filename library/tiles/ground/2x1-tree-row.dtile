@@ -7,7 +7,7 @@ tile size="2x1" seed=21 {
     line row wobble=3 { through "0,0.5" "1,0.58" "2,0.5" }
     stack {
         base
-        dirt clods=none stones=none
+        dirt clods=none
         scatter at=row count=3 reach=3 gap=1 {      // trees first: grass grows round the trunks
             tree size="26..32" {
                 trunk height=14

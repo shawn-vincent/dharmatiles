@@ -4,6 +4,6 @@
 tile size="1x1" seed=1 {
     about "Flat dirt at the edge level (3.4 mm) with no base: no connector, flat from zero."
     stack {
-        dirt top=dirtEdgeHeight clods=none stones=none
+        dirt top=dirtEdgeHeight clods=none
     }
 }

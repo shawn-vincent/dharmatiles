@@ -2,7 +2,7 @@ dt::unknown-control
 
   × `tree` has no control `count`
     ╭─[library/tiles/ground/2x2-grass-tree.dtile:9:22]
-  8 │         dirt clods=none stones=none
+  8 │         dirt clods=none
   9 │         tree size=40 count=3 {               // anywhere on the tile; or at="1,1"
     ·                      ──┬──
     ·                        ╰── unknown control

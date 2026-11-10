@@ -3,7 +3,6 @@ tile size="2x2" seed=1 {
     stack {
         base
         dirt top=dirtEdgeHeight {
-            stones none
         }
         grass
     }

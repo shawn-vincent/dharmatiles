@@ -28,7 +28,6 @@ const TILES: &[&str] = &[
     "lib:tiles/test/2x2-dirt.dtile",
     "lib:tiles/test/2x2-rocks.dtile",
     "lib:tiles/test/2x2-water.dtile",
-    "lib:tiles/test/2x2-dirt-stones.dtile",
     "lib:tiles/test/2x2-grass.dtile",
     "lib:tiles/test/2x2-meadow.dtile",
     "lib:tiles/test/2x2-shore.dtile",
@@ -219,7 +218,6 @@ fn the_edge_height_is_the_most_the_rim_reaches() {
     const ROUND: f64 = 0.2;
     for path in [
         "lib:tiles/test/2x2-dirt.dtile",
-        "lib:tiles/test/2x2-dirt-stones.dtile",
         "lib:tiles/ground/1x1-soil.dtile",
     ] {
         let b = built(path);
@@ -420,7 +418,6 @@ fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
     for path in [
         "lib:tiles/test/2x2-rocks.dtile",
         "lib:tiles/test/2x2-water.dtile",
-        "lib:tiles/test/2x2-dirt-stones.dtile",
     ] {
         let b = built(path);
         let a = &b.audit;

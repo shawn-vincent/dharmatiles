@@ -4,7 +4,6 @@ tile size="2x2" seed=1 {
         base
         dirt bumpSize=14 top="[dirtEdgeHeight + 0.3 .. dirtEdgeHeight + 0.3 + 3.2]" {
             clods some
-            stones none
         }
     }
 }

@@ -141,6 +141,7 @@ pub fn heights(text: &str) -> Result<Option<String>, EditError> {
     step(places)?;
     step(tree_size)?;
     step(flowers)?;
+    step(dirt_stones)?;
     Ok(changed.then_some(now))
 }
 
@@ -408,6 +409,83 @@ pub fn tree_size(text: &str) -> Result<Option<String>, EditError> {
     let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
     let mut edits = Vec::new();
     walk(doc.nodes(), &mut edits);
+    if edits.is_empty() {
+        return Ok(None);
+    }
+    edits.sort_by_key(|e| std::cmp::Reverse(e.start));
+    let mut out = text.to_owned();
+    for e in edits {
+        out.replace_range(e.start..e.end, &e.with);
+    }
+    Ok(Some(out))
+}
+
+/// Dirt beds no stones: `stones=none` on a `dirt` line is dropped (it is
+/// what dirt is now).  `stones=some` or `many` is left as written: the
+/// decoder says to scatter rocks instead.  `Ok(None)` when no dirt writes
+/// `stones=none`.
+///
+/// # Errors
+/// If the text is not KDL.
+pub fn dirt_stones(text: &str) -> Result<Option<String>, EditError> {
+    fn walk(nodes: &[KdlNode], text: &str, edits: &mut Vec<Edit>) {
+        for n in nodes {
+            if n.name().value() == "dirt" {
+                // `stones none` as a line of its own in the dirt's block
+                for c in n.children().into_iter().flat_map(KdlDocument::nodes) {
+                    if c.name().value() == "stones"
+                        && c.entries().len() == 1
+                        && c.entries()[0].value().as_string() == Some("none")
+                        && c.children().is_none()
+                    {
+                        let a = c.span().offset();
+                        let line_start = text[..a].rfind('\n').map_or(0, |i| i + 1);
+                        let mut end = a + c.span().len();
+                        let rest = &text[end..];
+                        let on_own_line = text[line_start..a].trim().is_empty()
+                            && rest.trim_start_matches([' ', '\t', ';']).starts_with('\n');
+                        if on_own_line {
+                            end += rest.find('\n').map_or(rest.len(), |i| i + 1);
+                            edits.push(Edit {
+                                start: line_start,
+                                end,
+                                with: String::new(),
+                            });
+                        } else {
+                            let start = text[..a].trim_end().len();
+                            let rest = &text[end..];
+                            end += rest.len() - rest.trim_start_matches(';').len();
+                            edits.push(Edit {
+                                start,
+                                end,
+                                with: String::new(),
+                            });
+                        }
+                    }
+                }
+                for e in n.entries() {
+                    if e.name().is_some_and(|k| k.value() == "stones")
+                        && e.value().as_string() == Some("none")
+                    {
+                        let end = e.span().offset() + e.span().len();
+                        // the entry and the space before it
+                        let start = text[..e.span().offset()].trim_end().len();
+                        edits.push(Edit {
+                            start,
+                            end,
+                            with: String::new(),
+                        });
+                    }
+                }
+            }
+            if let Some(kids) = n.children() {
+                walk(kids.nodes(), text, edits);
+            }
+        }
+    }
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut edits = Vec::new();
+    walk(doc.nodes(), text, &mut edits);
     if edits.is_empty() {
         return Ok(None);
     }
@@ -1196,7 +1274,6 @@ fn heights_only(text: &str) -> Result<Option<String>, EditError> {
                 }
                 if is_ground {
                     props.push("clods=none".to_owned());
-                    props.push("stones=none".to_owned());
                 }
                 let inner = brace.map(|b| {
                     let close = node_text.rfind('}').unwrap_or(node_text.len());
@@ -1319,10 +1396,7 @@ mod tests {
     fn a_plain_ground_is_a_quiet_dirt() {
         let old = "tile size=\"1x1\" seed=1 {\n    stack {\n        ground level=edge\n    }\n}\n";
         let new = heights(old).unwrap().unwrap();
-        assert!(
-            new.contains("dirt top=dirtEdgeHeight clods=none stones=none"),
-            "{new}"
-        );
+        assert!(new.contains("dirt top=dirtEdgeHeight clods=none"), "{new}");
     }
 
     #[test]
@@ -1467,6 +1541,26 @@ mod thing_tests {
         assert_eq!(
             flowers("tile { stack { scatter { rock } } }").unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn dirt_stones_none_is_dropped() {
+        let old = "tile size=\"1x1\" {\n    stack {\n        base\n        dirt clods=none stones=none\n        dirt stones=none { pin top=4 at=edges }\n        dirt stones=some\n    }\n}\n";
+        let new = dirt_stones(old).unwrap().unwrap();
+        assert!(new.contains("        dirt clods=none\n"), "{new}");
+        assert!(
+            new.contains("        dirt { pin top=4 at=edges }\n"),
+            "{new}"
+        );
+        assert!(new.contains("dirt stones=some"), "{new}");
+        assert!(dirt_stones(&new).unwrap().is_none());
+        let old = "tile {\n    stack {\n        dirt top=4 { stones none }\n        dirt {\n            stones none\n            pin top=4 at=edges\n        }\n    }\n}\n";
+        let new = dirt_stones(old).unwrap().unwrap();
+        assert!(new.contains("dirt top=4 {}"), "{new}");
+        assert!(
+            new.contains("        dirt {\n            pin top=4 at=edges\n"),
+            "{new}"
         );
     }
 }

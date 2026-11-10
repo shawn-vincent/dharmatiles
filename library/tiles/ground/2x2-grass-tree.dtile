@@ -5,7 +5,7 @@ use "parts/grass" long-grass
 tile size="2x2" seed=84 {
     stack {
         base
-        dirt clods=none stones=none
+        dirt clods=none
         tree size=40 {               // anywhere on the tile; or at="1,1"
             trunk height=30             // bare trunk below the crown
             crown width=30 clumps=32 shape=round branching=normal

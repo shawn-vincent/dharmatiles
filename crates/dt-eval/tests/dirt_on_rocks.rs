@@ -15,14 +15,14 @@ fn built(text: &str) -> Built {
 /// or before it.
 fn tile(rock: &str, after: bool, extra: &str) -> String {
     let rock = format!("rock at=\"0.5,0.5\" {rock}");
-    let over = format!("dirt top=\"bottom + [0.6 .. 1.2]\" stones=none {extra}");
+    let over = format!("dirt top=\"bottom + [0.6 .. 1.2]\" {extra}");
     let (a, b) = if after {
         (&rock, &over)
     } else {
         (&over, &rock)
     };
     format!(
-        "tile size=\"1x1\" seed=3 {{\n    stack {{\n        base\n        dirt stones=none\n        {a}\n        {b}\n    }}\n}}\n"
+        "tile size=\"1x1\" seed=3 {{\n    stack {{\n        base\n        dirt\n        {a}\n        {b}\n    }}\n}}\n"
     )
 }
 

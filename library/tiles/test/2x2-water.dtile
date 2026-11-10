@@ -17,7 +17,6 @@ tile size="2x2" seed=1 {
         dirt top=6 {
             pin top="[waterBedHeight .. 6]" at=shoreBand   // anywhere from the bed to the land
             pin top=waterBedHeight at=pool   // the bed, written last so it wins
-            stones none
         }
         rock at="1.314,1.086" size=15
         water

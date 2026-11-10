@@ -4,7 +4,7 @@
 tile size="2x2" seed=5 {
     stack {
         base
-        dirt clods=none stones=none
+        dirt clods=none
         scatter count=9 gap=1.5 {
             tree size="30..36" weight=2 {
                 trunk height=16
@@ -14,6 +14,6 @@ tile size="2x2" seed=5 {
             rock shape=flat size="4..8" weight=2
             flower size="4..6" weight=2
         }
-        dirt top="bottom + [0.6 .. 1.2]" stones=none
+        dirt top="bottom + [0.6 .. 1.2]"
     }
 }

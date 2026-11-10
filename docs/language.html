@@ -45,7 +45,7 @@ tile size="1x1" {
     about "Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end."
     stack {
         base
-        dirt top=dirtEdgeHeight clods=none stones=none   // flat, at the edge height (3.4 mm)
+        dirt top=dirtEdgeHeight clods=none   // flat, at the edge height (3.4 mm)
     }
 }</code></pre>
 <p>Its stack starts with <code>base</code>, the connector; a stack with no <code>base</code> line has no base, and prints flat on the bed from zero. <code>dharmatiles build lib:tiles/test/1x1-flat.dtile</code> builds it for DungeonBlocks, the default system.</p>
@@ -369,7 +369,7 @@ define oak {
 
   × no element or definition is called `hills`
    ╭─[library/tiles/ground/2x2-grass-tree.dtile:8:9]
- 8 │         hills clods=none stones=none
+ 8 │         hills clods=none
    ·         ──┬──
    ·           ╰── unknown
   help: `hills` is now `dirt`</code></pre>
@@ -408,7 +408,7 @@ use "parts/grass" long-grass
 tile size="2x2" seed=84 {
     stack {
         base
-        dirt clods=none stones=none
+        dirt clods=none
         tree size=40 {               // anywhere on the tile; or at="1,1"
             trunk height=30             // bare trunk below the crown
             crown width=30 clumps=32 shape=round branching=normal

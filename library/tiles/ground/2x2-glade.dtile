@@ -7,7 +7,7 @@ use "parts/grass" lawn
 tile size="2x2" seed=5 {
     stack {
         base
-        dirt clods=none stones=none
+        dirt clods=none
         scatter count=10 gap=1.5 {
             tree size="30..36" weight=1 {
                 trunk height=16

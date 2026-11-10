@@ -3,7 +3,7 @@ dt::unknown-element
   × no element or definition is called `hills`
    ╭─[library/tiles/ground/2x2-grass-tree.dtile:8:9]
  7 │         base
- 8 │         hills clods=none stones=none
+ 8 │         hills clods=none
    ·         ──┬──
    ·           ╰── unknown
  9 │         tree size=40 {               // anywhere on the tile; or at="1,1"

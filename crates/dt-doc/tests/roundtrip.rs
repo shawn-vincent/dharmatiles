@@ -145,7 +145,7 @@ fn insertion_goes_on_the_line_as_a_property() {
     assert!(
         changed_lines(text, &new)[0]
             .2
-            .starts_with("        dirt clods=none stones=none bumpSize=20")
+            .starts_with("        dirt clods=none bumpSize=20")
     );
     redecode(name, &new);
 

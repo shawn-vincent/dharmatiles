@@ -15,7 +15,7 @@ commands:
            build a tile at each seed and lay its four views (painted, top,
            low, 20 mm close-up) out as one contact sheet, a row per seed:
            out/sheet/<tile>[-<system>]/contact-sheet.png. <tile> is a path, a lib:
-           path, or a short name for a test tile (flat, dirt, dirt-stones,
+           path, or a short name for a test tile (flat, dirt,
            rocks, water, grass, tree, wall-cut-stone, wall-brick,
            wall-regular-brick, wall-fieldstone, floor-stone,
            floor-fieldstone, flagstones-heaved, planks, cliff,
@@ -132,7 +132,7 @@ fn tile_for(name: &str) -> String {
     let test = |t: &str| format!("lib:tiles/test/{t}.dtile");
     match name {
         "flat" => test("1x1-flat"),
-        "dirt" | "dirt-stones" | "rocks" | "water" | "grass" => test(&format!("2x2-{name}")),
+        "dirt" | "rocks" | "water" | "grass" => test(&format!("2x2-{name}")),
         "tree" | "cliff" | "planks" => test(&format!("1x1-{name}")),
         n if n.starts_with("wall-")
             || n.starts_with("floor-")

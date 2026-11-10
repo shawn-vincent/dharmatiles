@@ -38,7 +38,7 @@ fn earth_top(b: &Built, r: f64) -> f64 {
 #[test]
 fn a_dirt_after_a_tree_is_built_after_it_and_banks_on_the_trunk() {
     let after = tile(&format!(
-        "        dirt stones=none clods=none\n        {TREE}\n        dirt top=\"bottom + [1.0 .. 1.2]\" stones=none clods=none"
+        "        dirt clods=none\n        {TREE}\n        dirt top=\"bottom + [1.0 .. 1.2]\" clods=none"
     ));
     let checked = check(&mem(&after), "t.dtile", &Options::default()).unwrap();
     // the base (the connector) is built last; the lift follows the last dirt, and the tree is between
@@ -54,9 +54,7 @@ fn a_dirt_after_a_tree_is_built_after_it_and_banks_on_the_trunk() {
         ]
     );
     let with = build(&mem(&after), "t.dtile", &Options::default()).unwrap();
-    let before = tile(&format!(
-        "        dirt stones=none clods=none\n        {TREE}"
-    ));
+    let before = tile(&format!("        dirt clods=none\n        {TREE}"));
     let without = build(&mem(&before), "t.dtile", &Options::default()).unwrap();
     // beside the trunk the second dirt lies about a millimetre higher
     let (a, b) = (earth_top(&with, 6.0), earth_top(&without, 6.0));
