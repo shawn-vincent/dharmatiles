@@ -87,7 +87,7 @@ impl Refused {
     }
 
     /// A mistake in the document.
-    fn mistake(message: impl Into<String>) -> Self {
+    pub(crate) fn mistake(message: impl Into<String>) -> Self {
         Self {
             hard: true,
             ..Self::value(message)

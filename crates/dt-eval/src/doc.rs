@@ -141,6 +141,9 @@ pub struct Region {
     pub bounded_by: Vec<Spanned<String>>,
     /// Fill points, in squares from the south-west corner.
     pub fills: Vec<[f64; 2]>,
+    /// The fill points written with a range, by their place in `fills`:
+    /// each is drawn once from the tile seed ([`Tile::reseed`] draws again).
+    pub fill_draws: Vec<(usize, [Draw; 2])>,
     /// `within MM of=PLACE`: a distance in mm at the reference square, and
     /// the place it is round.
     pub within: Vec<Within>,
@@ -276,6 +279,8 @@ pub struct Tile {
     pub lines: BTreeMap<String, Vec<[f64; 2]>>,
     /// The width, mm at the reference square, of each line that has one.
     pub widths: BTreeMap<String, f64>,
+    /// The lines with a point drawn from a range.
+    pub drawn_lines: BTreeMap<String, DrawnLine>,
     /// The wobbled lines as drawn (points in squares) and their wobble,
     /// mm, so [`Tile::reseed`] can wobble them again.
     pub wobbles: BTreeMap<String, (Vec<[f64; 2]>, f64)>,
@@ -313,6 +318,110 @@ impl Tile {
             self.lines
                 .insert(name.clone(), wobbled(pts, *wobble, seed, name));
         }
+        for (name, l) in &self.drawn_lines {
+            let (base, pts) = l.lay(seed, name);
+            if l.wobble > 0.0 {
+                self.wobbles.insert(name.clone(), (base, l.wobble));
+            }
+            self.lines.insert(name.clone(), pts);
+        }
+        for r in &mut self.regions {
+            for (i, d) in &r.fill_draws {
+                r.fills[*i] = draw_spot(d, fill_key(seed, &r.name, *i));
+            }
+        }
+    }
+}
+
+/// A line some of whose points are drawn from ranges.
+#[derive(Clone, Debug)]
+pub struct DrawnLine {
+    /// Its points in order.
+    pub spots: Vec<Spot>,
+    /// `closed=#true`.
+    pub closed: bool,
+    /// How far it wanders off its points, mm.
+    pub wobble: f64,
+}
+
+/// A point of a line: written, or drawn from the ranges it holds.
+#[derive(Clone, Debug)]
+pub enum Spot {
+    /// A fixed place, in squares.
+    Fixed([f64; 2]),
+    /// A range for each coordinate, drawn once.
+    Drawn([Draw; 2]),
+}
+
+impl DrawnLine {
+    /// The line for tile seed `seed`: its points as drawn (closed when it
+    /// is), and those wobbled.
+    fn lay(&self, seed: u64, name: &str) -> (Vec<[f64; 2]>, Vec<[f64; 2]>) {
+        let mut pts: Vec<[f64; 2]> = self
+            .spots
+            .iter()
+            .enumerate()
+            .map(|(i, s)| match s {
+                Spot::Fixed(xy) => *xy,
+                Spot::Drawn(d) => draw_spot(d, through_key(seed, name, i)),
+            })
+            .collect();
+        if self.closed && pts.len() > 1 {
+            pts.push(pts[0]);
+        }
+        let out = if self.wobble > 0.0 {
+            wobbled(&pts, self.wobble, seed, name)
+        } else {
+            pts.clone()
+        };
+        (pts, out)
+    }
+}
+
+/// The key of the `i`th point of line `name`'s draw.
+fn through_key(seed: u64, name: &str, i: usize) -> Seed {
+    Seed::new(seed).key("through").key(name).key(&i.to_string())
+}
+
+/// The key of the `i`th fill point of region `name`'s draw.
+fn fill_key(seed: u64, name: &str, i: usize) -> Seed {
+    Seed::new(seed).key("fill").key(name).key(&i.to_string())
+}
+
+/// A point drawn once from its ranges (a number never draws), in squares.
+fn draw_spot(d: &[Draw; 2], key: Seed) -> [f64; 2] {
+    let mut rng = dt_kit::Rng::new(key);
+    let mut one = |c: &Draw| {
+        if c.is_point() {
+            c.lo()
+        } else {
+            c.draw(&mut rng)
+        }
+    };
+    let x = one(&d[0]);
+    let y = one(&d[1]);
+    [x, y]
+}
+
+/// A written point as a [`Spot`]: fixed, or its ranges to draw from.
+fn spot(
+    p: &dt_doc::place::Point,
+    cols: f64,
+    rows: f64,
+    named: &BTreeMap<String, [f64; 2]>,
+) -> Result<Spot, crate::lower::Refused> {
+    if let Some(xy) = fixed_point(p, cols, rows, named) {
+        return Ok(Spot::Fixed(xy));
+    }
+    match p {
+        Point::Pair { x, y } => Ok(Spot::Drawn([
+            crate::lower::coordinate(x)?,
+            crate::lower::coordinate(y)?,
+        ])),
+        // a name no point declares: decode found it already
+        _ => Err(crate::lower::Refused::mistake(
+            "this point has no place".to_owned(),
+        )),
     }
 }
 
@@ -589,6 +698,7 @@ impl Reader<'_> {
             seed,
             lines: BTreeMap::new(),
             widths: BTreeMap::new(),
+            drawn_lines: BTreeMap::new(),
             wobbles: BTreeMap::new(),
             regions: Vec::new(),
             heights: Heights::default(),
@@ -622,6 +732,7 @@ impl Reader<'_> {
                             name: strip_name(&l.name.value),
                             bounded_by: Vec::new(),
                             fills: Vec::new(),
+                            fill_draws: Vec::new(),
                             within: vec![Within {
                                 mm: v / 2.0,
                                 range: None,
@@ -658,33 +769,45 @@ impl Reader<'_> {
                     0.0
                 }
             };
-            let mut pts = Vec::new();
+            let mut spots = Vec::new();
             for p in &l.through {
-                match fixed_point(&p.value, cols, rows, &self.points) {
-                    Some(xy) => pts.push(xy),
-                    None => t
-                        .pending
-                        .push(not_yet(src, p.span, "a point drawn from a range is")),
+                match spot(&p.value, cols, rows, &self.points) {
+                    Ok(sp) => spots.push(sp),
+                    Err(r) => {
+                        let mut d = Diag::at(src, p.span, r.code, r.message, "here");
+                        d.help = r.help;
+                        self.errors.push(d);
+                    }
                 }
             }
-            if l.closed && pts.len() > 1 {
-                pts.push(pts[0]);
-            }
+            let line = DrawnLine {
+                spots,
+                closed: l.closed,
+                wobble,
+            };
+            let (base, pts) = line.lay(t.seed, &l.name.value);
             if wobble > 0.0 {
-                t.wobbles
-                    .insert(l.name.value.clone(), (pts.clone(), wobble));
-                pts = wobbled(&pts, wobble, t.seed, &l.name.value);
+                t.wobbles.insert(l.name.value.clone(), (base, wobble));
+            }
+            if line.spots.iter().any(|s| matches!(s, Spot::Drawn(_))) {
+                t.drawn_lines.insert(l.name.value.clone(), line);
             }
             t.lines.insert(l.name.value.clone(), pts);
         }
         for r in &def.regions {
             let mut fills = Vec::new();
+            let mut fill_draws = Vec::new();
             for p in &r.fills {
-                match fixed_point(&p.value, cols, rows, &self.points) {
-                    Some(xy) => fills.push(xy),
-                    None => {
-                        t.pending
-                            .push(not_yet(src, p.span, "a fill point drawn from a range is"))
+                match spot(&p.value, cols, rows, &self.points) {
+                    Ok(Spot::Fixed(xy)) => fills.push(xy),
+                    Ok(Spot::Drawn(d)) => {
+                        fill_draws.push((fills.len(), d.clone()));
+                        fills.push(draw_spot(&d, fill_key(t.seed, &r.name.value, fills.len())));
+                    }
+                    Err(e) => {
+                        let mut d = Diag::at(src, p.span, e.code, e.message, "here");
+                        d.help = e.help;
+                        self.errors.push(d);
                     }
                 }
             }
@@ -743,6 +866,7 @@ impl Reader<'_> {
                 name: r.name.value.clone(),
                 bounded_by: r.bounded_by.clone(),
                 fills,
+                fill_draws,
                 within,
                 except: r.except.iter().map(|e| e.value.clone()).collect(),
                 span: r.name.span,

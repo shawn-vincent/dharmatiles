@@ -30,7 +30,7 @@ stack { base; dirt { pin top="groundHeight + 4" at=knoll } }</code></pre>
 <thead><tr><th>Written</th><th>Takes</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>point NAME</code></td><td>a name</td><td>Its name. <strong>Required.</strong> camelCase, declared once.</td></tr>
-<tr><td>the value</td><td><code>"(x, y)"</code></td><td>Squares east and north of the south-west corner, on the tile. <strong>Required.</strong> Not a range.</td></tr>
+<tr><td>the value</td><td><code>"(x, y)"</code></td><td>Squares east and north of the south-west corner, on the tile. <strong>Required.</strong> Not a range: a declared point is fixed; a range goes where the point is written, in a line's <code>through</code>, a region's <code>fill</code> or an <code>at=</code>.</td></tr>
 </tbody></table></div>
 <p>Built in on every tile, with no declaration: <code>southWestCorner southCenter southEastCorner westCenter center eastCenter northWestCorner northCenter northEastCorner</code>. The four edge lines are <code>northEdge eastEdge southEdge westEdge</code>, and <code>edges</code> is all four; <code>tile</code> is the whole tile, which is also what no <code>at=</code> means.</p>
 <h2 id="notes">Notes</h2>

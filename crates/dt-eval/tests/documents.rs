@@ -609,3 +609,61 @@ fn a_scattered_thing_takes_no_place_word_of_its_own() {
     ));
     assert!(e.iter().any(|d| d.code == "dt::place"), "{e:?}");
 }
+
+#[test]
+fn a_point_drawn_from_a_range_is_drawn_once_from_the_tile_seed() {
+    let text = |seed: u32| {
+        format!(
+            "tile size=\"1x1\" seed={seed} {{\n line shore {{ through \"0,0.3..0.6\" \"bell(0.3..0.7), 0.4..0.6\" \"1,0.3..0.6\" }}\n region low {{ boundedBy shore; fill \"0.4..0.6,0.05..0.15\" }}\n stack {{\n dirt top=8 {{\n pin top=5 at=low\n }}\n }}\n}}\n"
+        )
+    };
+    let check_of = |t: &str, seed: Option<u64>| {
+        let o = Options {
+            seed,
+            ..Options::default()
+        };
+        check(&mem(&[("t.dtile", t)]), "t.dtile", &o).unwrap()
+    };
+    let c = check_of(&text(3), None);
+    assert!(c.pending().is_empty(), "{:?}", c.pending());
+    let t = c.tile.as_ref().unwrap();
+    let shore = &t.lines["shore"];
+    assert_eq!(shore.len(), 3);
+    // each point lands inside its range, and a plain number stays put
+    assert!((0.3..=0.6).contains(&shore[0][1]) && shore[0][0] == 0.0);
+    assert!((0.3..=0.7).contains(&shore[1][0]) && (0.4..=0.6).contains(&shore[1][1]));
+    assert!((0.05..=0.15).contains(&t.regions[0].fills[0][1]));
+    // the same seed draws the same line; another seed, and `--seed`, draw again
+    assert_eq!(
+        &check_of(&text(3), None).tile.unwrap().lines["shore"],
+        shore
+    );
+    assert_ne!(
+        &check_of(&text(4), None).tile.unwrap().lines["shore"],
+        shore
+    );
+    let moved = check_of(&text(3), Some(4)).tile.unwrap();
+    assert_eq!(
+        moved.lines["shore"],
+        check_of(&text(4), None).tile.unwrap().lines["shore"]
+    );
+    assert_eq!(
+        moved.regions[0].fills,
+        check_of(&text(4), None).tile.unwrap().regions[0].fills
+    );
+    // and it builds
+    build(
+        &mem(&[("t.dtile", text(3).as_str())]),
+        "t.dtile",
+        &Options::default(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_drawn_point_off_the_tile_is_refused_where_it_is_written() {
+    let e = errors(&tile_with(
+        "line s { through \"0,0.5\" \"0.5..1.5,0.5\" }\n stack {\n dirt\n }",
+    ));
+    assert!(e[0].location().is_some(), "{e:?}");
+}
