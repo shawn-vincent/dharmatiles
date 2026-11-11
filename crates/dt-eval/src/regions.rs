@@ -25,6 +25,8 @@
 //! format 0 counts them (format 1's north-west move comes with the
 //! coordinate functions).
 
+use dt_doc::consts::ConstTable;
+use dt_doc::model::PlaceRef;
 use dt_geom::Mask;
 use dt_kit::Frame;
 
@@ -642,6 +644,112 @@ impl RegionTree {
 }
 
 impl RegionTree {
+    /// Work out every literal point a body's pins hold, in the frame it was
+    /// written in (a named region's, once its box is known), and refuse one
+    /// that lies outside the region the body acts in.  The pins end as plain
+    /// points in squares from the south-west corner.
+    ///
+    /// The decoder runs before this tree exists, so it kept those points as
+    /// written ([`PlaceRef::Framed`]) and they are settled here, in one pass
+    /// over the tile, rather than the reader guessing a box.
+    #[must_use]
+    pub fn resolve_pins(&self, tile: &mut Tile, units: dt_doc::units::Units) -> Vec<Diag> {
+        let coords = crate::coords::Coords::new(self, units.square_mm, units.layer_mm);
+        let mut out = Vec::new();
+        for b in &mut tile.heights.bodies {
+            let Some(&own) = self.of_entry.get(b.entry) else {
+                continue;
+            };
+            for p in &mut b.pins {
+                let xy = match &p.at {
+                    PlaceRef::Name(_) => continue,
+                    PlaceRef::Point(x, y) => [*x, *y],
+                    PlaceRef::Framed(f) => match self.framed_xy(f, own, &b.table, &coords, units) {
+                        Ok(xy) => xy,
+                        Err((msg, help)) => {
+                            out.push(
+                                Diag::at(&p.from.src, p.at_span, "dt::point", msg, "here")
+                                    .help(help),
+                            );
+                            continue;
+                        }
+                    },
+                };
+                if !self.contains(own, xy) {
+                    let here = self.chain(own);
+                    out.push(
+                        Diag::at(
+                            &p.from.src,
+                            p.at_span,
+                            "dt::point",
+                            format!("this point is outside the region it sits in, {here}"),
+                            "outside its region",
+                        )
+                        .help(format!(
+                            "a pin holds the body where it is: put the point inside {here}, or write it in the frame of a region that covers it"
+                        )),
+                    );
+                    continue;
+                }
+                p.at = PlaceRef::Point(xy[0], xy[1]);
+            }
+        }
+        out
+    }
+
+    /// One framed point in squares from the south-west corner.
+    fn framed_xy(
+        &self,
+        f: &dt_doc::framed::Framed,
+        own: usize,
+        table: &ConstTable,
+        coords: &crate::coords::Coords<'_>,
+        units: dt_doc::units::Units,
+    ) -> Result<[f64; 2], (String, String)> {
+        let frame = coords.region(&f.frame, own, table).map_err(|m| {
+            (
+                m,
+                "`$tile` is the root of the regions, `$region` is the one the body acts in, and `parent($region)` the region containing it".to_owned(),
+            )
+        })?;
+        let sample = |e: &dt_doc::expr::Expr| -> Result<f64, (String, String)> {
+            if e.is_range() {
+                return Err((
+                    "a pin holds one place: this point is a range".to_owned(),
+                    "write one point, not a range".to_owned(),
+                ));
+            }
+            e.sample(&|_| None, 0.0)
+                .map_err(|m| (m.to_string(), "write plain numbers and units".to_owned()))
+        };
+        match &f.at {
+            dt_doc::framed::FramedAt::Xy { .. } => {
+                let Some(b) = self.bbox(frame) else {
+                    return Err((
+                        format!("`{}` covers nothing, so it has no box", self.chain(frame)),
+                        "point into a region that covers ground".to_owned(),
+                    ));
+                };
+                let pair = f
+                    .xy_in([b.x0, b.y0, b.x1, b.y1], units)
+                    .map_err(|ke| (ke.message, ke.help.unwrap_or_default()))?;
+                let (x, y) = pair.ok_or_else(|| (String::new(), String::new()))?;
+                Ok([sample(&x)?, sample(&y)?])
+            }
+            dt_doc::framed::FramedAt::Polar { d, a_deg } => {
+                coords.field(frame).polar(*d, *a_deg).ok_or_else(|| {
+                    (
+                        format!(
+                            "`{}` covers nothing, so it has no deepest point",
+                            self.chain(frame)
+                        ),
+                        "point into a region that covers ground".to_owned(),
+                    )
+                })
+            }
+        }
+    }
+
     /// Every `$a` or `a(region, …)` a formula reads of a region with a hole
     /// (land round a pond, a ring): there is no "round" in it, so `check`
     /// refuses it at the formula, before any build.

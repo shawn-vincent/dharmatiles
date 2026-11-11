@@ -88,7 +88,7 @@ function clearDocument() {
   texts.clear();
   loadKey = null;
   run.history = []; run.at = -1; run.lastKind = null;
-  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, conflict: null, note: null });
+  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, format: 0, conflict: null, note: null });
   renderHistory();
 }
 function record(text, kind, label = null) {
@@ -171,6 +171,7 @@ async function check() {
   const patch = { note: null, checked: text, ok: !!r.body.ok, errors: r.body.errors || [] };
   if (r.body.ok && r.body.stack) patch.stack = r.body.stack; // the last good stack stays while there are mistakes
   if (r.body.ok && r.body.map) patch.map = r.body.map;
+  if (typeof r.body.format === 'number') patch.format = r.body.format; // known even while there are mistakes
   doc.set(patch);
   return true;
 }
@@ -269,7 +270,7 @@ export async function loadText(file) {
         tileId: t.id, file: v.file, text: v.text, base: v.text, writable: v.writable,
         conflict: null, note: null,
         checked: v.text, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's
-        ...(fresh ? { map: null } : {}),
+        ...(fresh ? { map: null, format: 0 } : {}),
       });
       if (fresh && carried && carried.history[carried.at]?.text === v.text) {
         run.history = carried.history; run.at = carried.at; renderHistory(); // a rename keeps its undo
@@ -337,7 +338,7 @@ const comp = { s: null, i: 0 };
 function openComp(force) {
   const elements = server.get().elements;
   if (!doc.get().writable || !elements.length) return closeComp();
-  const s = suggest(texts.caret(), texts.text, elements, force);
+  const s = suggest(texts.caret(), texts.text, elements, force, doc.get().format >= 1 ? doc.get().map?.language : null);
   if (!s) return closeComp();
   comp.s = s; comp.i = 0;
   renderComp();

@@ -297,8 +297,12 @@ test('the sheet asks the program to check a typed value', async () => {
   };
   try {
     const r = await browserHost().checkValue('tree', 'size', '150');
-    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'size', typed: '150' }]]);
+    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'size', typed: '150', format: 0 }]]);
     assert.equal(r.body.message, 'takes 20 to 120');
+    // a format 1 document's values are read with their units: the page says which it is
+    sent.length = 0;
+    await browserHost().checkValue('tree', 'size', '150dmm', 1);
+    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'size', typed: '150dmm', format: 1 }]]);
   } finally {
     globalThis.fetch = realFetch;
   }

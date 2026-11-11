@@ -412,3 +412,144 @@ fn an_element_reads_only_the_names_it_sets() {
     ));
     assert_eq!(e[0].code, "dt::type", "{e:#?}");
 }
+
+// ---- points in a named region's frame ----
+
+/// A tile cut across the middle by `shore` (y = 0.5 sq from the north); `bank`
+/// is the north half, and `nw` its west half, so `parent($region)` of a body
+/// at `nw` is `bank`.
+fn banks(pin_at: &str, body_at: &str) -> String {
+    tile1(
+        "2x2",
+        &format!(
+            "line shore {{ through \"(0, 1sq)\" \"(2sq, 1sq)\" }}\n line cut {{ through \"(1sq, 0)\" \"(1sq, 1sq)\" }}\n region bank {{ boundedBy shore; fill \"(1sq, 0.5sq)\" }}\n region nw {{ boundedBy shore cut; fill \"(0.5sq, 0.5sq)\" }}\n stack {{ base\n dirt at={body_at} {{\n pin top=\"$groundHeight\" at={pin_at} }} }}"
+        ),
+    )
+}
+
+/// The place the first body's first pin holds once `check` has worked it out.
+fn pin_place(text: &str) -> [f64; 2] {
+    let c = ok(text);
+    let tile = c.tile.as_ref().unwrap();
+    match &tile.heights.bodies[0].pins[0].at {
+        dt_doc::model::PlaceRef::Point(x, y) => [*x, *y],
+        other => panic!("a pin still holds `{other}`"),
+    }
+}
+
+#[test]
+fn a_point_in_a_named_regions_frame_is_a_share_of_its_box_from_its_north_west() {
+    let c = ok(&banks("\"(50%, 50%)\"", "bank"));
+    let t = tree(&c);
+    let id = t.nodes.iter().position(|n| n.label == "bank").unwrap();
+    let b = t.bbox(id).unwrap();
+    let at = pin_place(&banks("\"(50%, 50%)\"", "bank"));
+    assert!(close(at[0], b.x0 + 0.5 * (b.x1 - b.x0)), "{at:?} {b:?}");
+    assert!(close(at[1], b.y1 - 0.5 * (b.y1 - b.y0)), "{at:?} {b:?}");
+    // a length counts from the box's north-west corner, down
+    let at = pin_place(&banks("\"(0.25sq, 0.25sq)\"", "bank"));
+    assert!(
+        close(at[0], b.x0 + 0.25) && close(at[1], b.y1 - 0.25),
+        "{at:?} {b:?}"
+    );
+    // the frame by name: `$region` is the same, `$tile` is the whole tile
+    assert_eq!(
+        pin_place(&banks("\"point($region, 25%, 50%)\"", "bank")),
+        pin_place(&banks("\"(25%, 50%)\"", "bank")),
+    );
+    let tiled = pin_place(&banks("\"point($tile, 50%, 25%)\"", "bank"));
+    assert!(close(tiled[0], 1.0) && close(tiled[1], 1.5), "{tiled:?}");
+}
+
+#[test]
+fn parent_and_polar_name_other_frames() {
+    // `bank` is the north half: x 0 to 2, y 1 to 2 (from the south)
+    let up = pin_place(&banks("\"point(parent($region), 25%, 25%)\"", "nw"));
+    assert!(
+        (up[0] - 0.5).abs() < 0.02 && (up[1] - 1.75).abs() < 0.02,
+        "{up:?}"
+    );
+    // 0% out is the deepest point: the middle of the region
+    let mid = pin_place(&banks("\"polar($region, 0%, 0deg)\"", "bank"));
+    assert!(
+        (mid[0] - 1.0).abs() < 0.1 && (mid[1] - 1.5).abs() < 0.1,
+        "{mid:?}"
+    );
+    // a quarter turn is straight down the page, a share of the depth out
+    let down = pin_place(&banks("\"polar($region, 50%, 90deg)\"", "bank"));
+    assert!(
+        (down[0] - mid[0]).abs() < 0.05 && down[1] < mid[1],
+        "{down:?} {mid:?}"
+    );
+    // round the parent's centre (1, 1.5), half its depth (0.5) out to the west
+    let own = pin_place(&banks("\"polar(parent($region), 50%, 180deg)\"", "nw"));
+    assert!(
+        (own[0] - 0.75).abs() < 0.05 && (own[1] - 1.5).abs() < 0.05,
+        "{own:?}"
+    );
+}
+
+#[test]
+fn a_point_outside_the_region_it_sits_in_is_refused_at_check() {
+    for at in [
+        // the south half is not `bank`
+        "\"(50%, 150%)\"",
+        "\"point($tile, 50%, 75%)\"",
+        "\"point(parent($region), 75%, 25%)\"",
+    ] {
+        let body = if at.contains("parent") { "nw" } else { "bank" };
+        let e = refused(&banks(at, body));
+        assert_eq!(e[0].code, "dt::point", "{at}: {e:#?}");
+        assert!(e[0].message.contains("outside the region"), "{at}: {e:#?}");
+        assert!(e[0].message.contains("`"), "{at}: {e:#?}");
+    }
+    // it points at the point, not the body
+    let text = banks("\"(50%, 150%)\"", "bank");
+    let e = refused(&text);
+    let at = e[0].location().unwrap();
+    assert_eq!(at.1, 7 + 2, "line of the pin");
+    // a point the region covers is fine
+    ok(&banks("\"(50%, 50%)\"", "bank"));
+    // tile level: the tile itself is the region, and off it is the old error
+    let e = refused(&tile1(
+        "1x1",
+        "stack { base\n dirt {\n pin top=\"$groundHeight\" at=\"(1.5sq, 0)\" } }",
+    ));
+    assert!(e[0].message.contains("off the tile"), "{e:#?}");
+}
+
+#[test]
+fn the_tile_has_no_parent_for_a_point_either() {
+    let e = refused(&banks(
+        "\"point(parent(parent(parent($region))), 25%, 25%)\"",
+        "nw",
+    ));
+    assert!(
+        e.iter()
+            .any(|d| d.code == "dt::point" && d.message.contains("no parent")),
+        "{e:#?}"
+    );
+    let e = refused(&tile1(
+        "1x1",
+        "stack { base\n dirt {\n pin top=\"$groundHeight\" at=\"point(parent($region), 0, 0)\" } }",
+    ));
+    assert!(e.iter().any(|d| d.message.contains("no parent")), "{e:#?}");
+}
+
+#[test]
+fn a_points_in_a_part_are_worked_out_at_each_call_site() {
+    // the same part, called on two tile sizes, puts its rock at the middle of
+    // each: a part has no tile of its own
+    let at = |size: &str| {
+        let text = format!(
+            "dharmatiles version=1\ndefine knoll {{\n stack {{ rock at=\"(50%, 25%)\" size=\"8dmm\" }}\n}}\ntile size=\"{size}\" seed=3 {{\n stack {{ base\n dirt\n knoll }}\n}}\n"
+        );
+        let c = ok(&text);
+        let tile = c.tile.as_ref().unwrap();
+        let rock = tile.stack.iter().find(|e| e.what.value == "rock").unwrap();
+        let d = rock.at.as_ref().unwrap();
+        [d[0].lo(), d[1].lo()]
+    };
+    assert_eq!(at("2x1"), [1.0, 0.75]);
+    assert_eq!(at("1x3"), [0.5, 2.25]);
+}

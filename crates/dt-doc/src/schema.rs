@@ -140,6 +140,49 @@ impl Control {
         self.words.iter().find(|w| w.word == word)
     }
 
+    /// The default as an author writes it in a document of the format: in
+    /// format 1 a length carries `dmm` and an angle `deg` (`6..10` is
+    /// `6dmm..10dmm`); a word, a count and a share are written as ever.
+    #[must_use]
+    pub fn default_in(&self, format1: bool) -> String {
+        let unit = match self.value {
+            Some(Axis::Mm) if format1 => "dmm",
+            Some(Axis::Deg) if format1 => "deg",
+            _ => return self.default.to_owned(),
+        };
+        if self.words.iter().any(|w| w.word == self.default) {
+            return self.default.to_owned();
+        }
+        // a number gets the unit after it; a name or an operator is left
+        let mut out = String::new();
+        let chars: Vec<char> = self.default.chars().collect();
+        let mut i = 0;
+        while i < chars.len() {
+            let c = chars[i];
+            let word_before =
+                i > 0 && (chars[i - 1].is_alphanumeric() || "_$.".contains(chars[i - 1]));
+            if c.is_ascii_digit() && !word_before {
+                let start = i;
+                while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
+                    // `..` is a range's dots, not a decimal point
+                    if chars[i] == '.' && chars.get(i + 1) == Some(&'.') {
+                        break;
+                    }
+                    i += 1;
+                }
+                out.extend(&chars[start..i]);
+                let after = chars.get(i);
+                if after.is_none_or(|a| !a.is_alphabetic() && *a != '%') {
+                    out.push_str(unit);
+                }
+            } else {
+                out.push(c);
+                i += 1;
+            }
+        }
+        out
+    }
+
     /// The default as a decoded value: one of its words, or a number (a
     /// range for some); `None` without a default.
     #[must_use]

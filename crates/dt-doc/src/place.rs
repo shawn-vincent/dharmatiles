@@ -152,6 +152,9 @@ pub enum Point {
     /// A built-in point (`northCenter`, `center`) or a declared `point`,
     /// by name; the evaluator knows where it is.
     Named(String),
+    /// A point in a region's frame, found once the tile's regions exist
+    /// (format 1; see [`crate::framed`]).
+    Framed(Box<crate::framed::Framed>),
 }
 
 impl Point {
@@ -173,6 +176,11 @@ impl Point {
                 ((x, x), (y, y))
             }
             Point::Named(n) => return Err(format!("the point `{n}` has no fixed place yet")),
+            Point::Framed(f) => {
+                return Err(format!(
+                    "the point `{f}` is in a region's frame, found when the tile's regions are known"
+                ));
+            }
         })
     }
 
@@ -190,6 +198,7 @@ impl fmt::Display for Point {
             Point::Corner(c) => f.write_str(c.as_str()),
             Point::Edge(e) => f.write_str(e.as_str()),
             Point::Named(n) => f.write_str(n),
+            Point::Framed(p) => write!(f, "{p}"),
         }
     }
 }

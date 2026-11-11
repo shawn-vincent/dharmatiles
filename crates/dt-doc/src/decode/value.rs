@@ -2,7 +2,7 @@
 
 use kdl::{KdlEntry, KdlValue};
 
-use super::{Ctx, Decoder, sub_span, value_span};
+use super::{Ctx, Decoder, sub_span, units, value_span};
 use crate::elements::TAGS;
 use crate::expr::{self, Expr, Unit};
 use crate::model::{Num, Spanned, Value};
@@ -563,6 +563,71 @@ pub fn check_text(k: &'static Control, owner: &str, typed: &str) -> Option<Refus
         return None;
     }
     range_flaw(&x, unit, axis, Some(k), (owner, k.name))
+}
+
+/// [`check_text`] for a document in format 1 (`format1`), where a length
+/// carries its unit (`8dmm`, `0.5sq`), an angle is `deg` or `rad`, and a
+/// bare number is refused as the reader refuses it.  `units` says what `mm`,
+/// `in` and `layer` are worth on the build target.  Format 0 is read as
+/// before.
+#[must_use]
+pub fn check_text_in(
+    k: &'static Control,
+    owner: &str,
+    typed: &str,
+    format1: bool,
+    units: crate::units::Units,
+) -> Option<Refusal> {
+    if !format1 {
+        return check_text(k, owner, typed);
+    }
+    let axis = k.value?;
+    let t = typed.trim();
+    if t.is_empty() {
+        return None;
+    }
+    let x = match expr::parse_units(t) {
+        Ok(x) => x,
+        Err(_) if !axis.is_numeric() => return None,
+        Err(e) => {
+            return Some(Refusal {
+                message: format!("`{t}` does not read as a number: {}", e.message),
+                label: "not a number",
+                help: e.help.or_else(|| Some(describe(k))),
+            });
+        }
+    };
+    if let Some((_, r)) = percent_flaw(&x, axis, Some(k), (owner, k.name), axis.describe(), true) {
+        return Some(r);
+    }
+    if !axis.is_numeric() {
+        return None;
+    }
+    // what a unit-free `$name` or a `let` is worth is the reader's to say
+    // (`check`, with the document); the kinds and units of what is written
+    // are checked here
+    let names = |_: &str| None;
+    if let Err(ke) = crate::units::expect(&x, units::want_of(axis), &names, false) {
+        return Some(Refusal {
+            message: ke.message,
+            label: "wrong kind",
+            help: ke.help,
+        });
+    }
+    let lowered = match crate::units::lower(&x, crate::units::Base::Dmm, units, None) {
+        Ok(l) => l,
+        Err(ke) => {
+            return Some(Refusal {
+                message: ke.message,
+                label: "wrong unit",
+                help: ke.help,
+            });
+        }
+    };
+    if !lowered.names().is_empty() {
+        return None;
+    }
+    range_flaw(&lowered, None, axis, Some(k), (owner, k.name))
 }
 
 /// What the reader says of an annotation that is not a unit.

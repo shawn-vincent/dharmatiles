@@ -55,10 +55,18 @@ function handles() {
     const c = (it?.place || []).find((x) => x.name === 'at');
     if (!c || it.file !== file) return [];
     const v = valueOf(c.text, 'at');
-    const m = v.text.match(/^"(-?[\d.]+),(-?[\d.]+)"$/);
-    if (!m) return [];
+    // a fixed point: where the program reads it (a format 1 point is a written
+    // pair with units, from the north-west; the program says where it is)
+    let q = null;
+    if (doc.get().format >= 1) {
+      if (/^"[^"]*[\d(]/.test(v.text)) q = it.at;
+    } else {
+      const m = v.text.match(/^"(-?[\d.]+),(-?[\d.]+)"$/);
+      if (m) q = [Number(m[1]), Number(m[2])];
+    }
+    if (!q) return [];
     const start = c.span[0] + new TextEncoder().encode(c.text.slice(0, v.at)).length;
-    return [{ q: [Number(m[1]), Number(m[2])], span: [start, new TextEncoder().encode(v.text).length], snap: false }];
+    return [{ q, span: [start, new TextEncoder().encode(v.text).length], snap: false }];
   }
   return [];
 }
@@ -105,6 +113,7 @@ export function init() {
     defs: () => [...(doc.get().text || '').matchAll(/^\s*define\s+([\w+\-.]+)/gm)].map((m) => m[1]),
     sq: () => tile()?.plan?.square_mm || 35,
     size: () => [tile()?.plan?.cols || 1, tile()?.plan?.rows || 1],
+    format: () => doc.get().format,
     map: () => doc.get().map,
     writable: () => doc.get().writable,
     offerMine: () => offerMine(),

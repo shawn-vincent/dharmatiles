@@ -206,6 +206,22 @@ impl RegionField {
         1.0 - self.depth[k] / deepest
     }
 
+    /// `polar(region, d, a)`: out from the deepest point of the region's
+    /// largest piece by `d` (a fraction of that piece's depth; 100% is 1),
+    /// `a_deg` degrees round it (0 east, turning towards the south), in
+    /// squares from the south-west corner.  `None` for a region with no
+    /// ground.
+    #[must_use]
+    pub fn polar(&self, d: f64, a_deg: f64) -> Option<[f64; 2]> {
+        let piece =
+            (0..self.deepest.len()).max_by(|&a, &b| self.deepest[a].total_cmp(&self.deepest[b]))?;
+        let c = self.centre[piece];
+        let r = d * self.deepest[piece];
+        let (sin, cos) = a_deg.to_radians().sin_cos();
+        // east is +x, south is -y
+        Some([(c[0] + r * cos) / self.per, (c[1] - r * sin) / self.per])
+    }
+
     /// `a(region, …)` at a node as a fraction of a turn, 0 to 1.
     fn turn(&self, k: usize) -> f64 {
         if let Some((pts, acc)) = &self.along {

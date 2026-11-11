@@ -83,6 +83,9 @@ impl<'a> Places<'a> {
         let (cols, rows) = (f64::from(self.tile.cols), f64::from(self.tile.rows));
         match p {
             PlaceRef::Point(x, y) => Ok(self.point([*x, *y])),
+            PlaceRef::Framed(f) => Err(format!(
+                "the point `{f}` is in a region's frame, found once the tile's regions are known"
+            )),
             PlaceRef::Name(n) => {
                 if n == BUILTIN_REGION {
                     return Ok(Mask::new(nx, ny, true));

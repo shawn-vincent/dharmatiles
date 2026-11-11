@@ -25,8 +25,20 @@ impl Drop for Running {
 }
 
 fn start(paths: &[&str], eager: bool) -> Running {
+    start_with(paths, eager, &Options::default())
+}
+
+/// [`start`] for the build target `opts` (the format in development is read
+/// when `opts.format_preview`, as the preview's boundary sets it from
+/// `DT_FORMAT_PREVIEW`).
+fn start_with(paths: &[&str], eager: bool, opts: &Options) -> Running {
     let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
-    let shared = Arc::new(Shared::new(&paths));
+    let roots = if paths.is_empty() {
+        Vec::new()
+    } else {
+        vec![Root::new("Files", RootKind::Files)]
+    };
+    let shared = Arc::new(Shared::with_roots(roots, &paths, opts));
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let addr = listener.local_addr().unwrap();
     server::spawn(listener, Arc::clone(&shared));
@@ -1590,4 +1602,196 @@ fn the_weightings_route_reads_a_value_and_refuses_with_the_programs_words() {
     assert!(v["error"].is_string());
     let (h, _) = curve_of(&r, "/api/weightings?fn=wobble&range=1..6");
     assert!(h.starts_with("HTTP/1.1 400"), "{h}");
+}
+
+// ---- format 1 in the editor and the preview ----
+
+const FORMAT_1: &str = "dharmatiles version=1\ntile size=\"2x2\" seed=3 {\n    point knoll \"(0.5sq, 0.5sq)\"\n    line shore { through west \"(0, 0.38sq)\" knoll \"(1.5sq, 1.25sq)\" east }\n    region bay { boundedBy shore; fill \"(0.5sq, 1.6sq)\" }\n    stack {\n        base\n        dirt\n        rock at=\"(1.5sq, 0.5sq)\" size=\"8dmm\"\n    }\n}\n";
+
+fn preview_opts() -> Options {
+    Options {
+        format_preview: true,
+        ..Options::default()
+    }
+}
+
+#[test]
+fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
+    let dir = std::env::temp_dir().join(format!("dt-f1-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    std::fs::write(&file, FORMAT_1).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start_with(&[&path], true, &preview_opts());
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let call = |p: &str, body: Value| post(&r, p, Some(&token), None, &body.to_string()).1;
+    // it opens: the build comes back ready, with no errors
+    let t = wait_for(&r, "ready", |t| {
+        t["status"] == "ready" || t["status"] == "failed"
+    });
+    assert_eq!(t["status"], "ready", "{t}");
+    // its check: the format, and every point as the program reads it (the
+    // north-west counting is the program's, not the page's)
+    let check = format!("/api/tiles/{}/check", id0(&r));
+    let v = call(&check, serde_json::json!({ "text": FORMAT_1 }));
+    assert_eq!(v["ok"], true, "{v}");
+    assert_eq!(v["format"], 1);
+    let map = &v["map"];
+    assert_eq!(map["format"], 1);
+    assert!(
+        map["language"]["names"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n == "$bottom")
+    );
+    let shore = &map["lines"][0];
+    let m = shore["markers"].as_array().unwrap();
+    let labels: Vec<_> = m.iter().map(|m| m["label"].as_str().unwrap()).collect();
+    assert_eq!(
+        labels,
+        ["west", "(0, 0.38sq)", "knoll", "(1.5sq, 1.25sq)", "east"]
+    );
+    let kinds: Vec<_> = m.iter().map(|m| m["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["name", "literal", "name", "literal", "name"]);
+    assert_eq!(m[1]["at"], serde_json::json!([0.0, 1.62]));
+    assert_eq!(m[2]["at"], serde_json::json!([0.5, 1.5]));
+    assert_eq!(m[3]["at"], serde_json::json!([1.5, 0.75]));
+    let bay = &map["regions"][0];
+    let fill = bay["markers"][0]["at"].as_array().unwrap();
+    assert!((fill[0].as_f64().unwrap() - 0.5).abs() < 1e-9);
+    assert!((fill[1].as_f64().unwrap() - 0.4).abs() < 1e-9, "{fill:?}");
+    // a placed thing says where it stands, for its handle
+    let rock = v["stack"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["what"] == "rock")
+        .unwrap();
+    assert_eq!(rock["at"], serde_json::json!([1.5, 1.5]));
+    // a mistake is shown where it is made, with its help: a bare size
+    let bad = FORMAT_1.replace("size=\"8dmm\"", "size=8");
+    let v = call(&check, serde_json::json!({ "text": bad }));
+    assert_eq!(v["ok"], false, "{v}");
+    assert_eq!(
+        v["format"], 1,
+        "the page still writes in the document's format: {v}"
+    );
+    assert_eq!(v["errors"][0]["code"], "dt::unit", "{v}");
+    assert!(
+        v["errors"][0]["help"].as_str().unwrap().contains("dmm"),
+        "{v}"
+    );
+    // and a point outside its region, at check
+    let off = FORMAT_1.replace("(1.5sq, 0.5sq)", "(1.5sq, 2.5sq)");
+    let v = call(&check, serde_json::json!({ "text": off }));
+    assert_eq!(v["ok"], false, "{v}");
+    assert!(
+        v["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("off the tile"),
+        "{v}"
+    );
+    // the sheet's check of a typed value is read with units
+    let cv = |control: &str, typed: &str, format: u32| {
+        let v = call(
+            "/api/check-value",
+            serde_json::json!({ "element": "rock", "control": control, "typed": typed, "format": format }),
+        );
+        // the message, with its help after it
+        match v["message"].as_str() {
+            None => Value::Null,
+            Some(m) => Value::String(format!("{m} {}", v["help"].as_str().unwrap_or_default())),
+        }
+    };
+    assert!(cv("size", "8dmm", 1).is_null());
+    assert!(cv("size", "6dmm..10dmm", 1).is_null());
+    assert!(cv("size", "2sq", 1).is_null());
+    assert!(cv("size", "$x", 1).is_null() || cv("size", "$x", 1).is_string());
+    assert!(
+        cv("size", "8", 1).as_str().unwrap().contains("dmm"),
+        "a bare number needs its unit"
+    );
+    assert!(
+        cv("size", "250dmm", 1)
+            .as_str()
+            .unwrap()
+            .starts_with("`rock size` is ")
+    );
+    assert!(cv("size", "8deg", 1).as_str().unwrap().contains("length"));
+    assert!(cv("size", "low(20dmm..60dmm, 3)", 1).is_null());
+    assert!(
+        cv("size", "low(20dmm..60dmm, -2)", 1)
+            .as_str()
+            .unwrap()
+            .starts_with("low's ratio must be above 0, not -2")
+    );
+    // a format 0 value is read as ever
+    assert!(cv("size", "8", 0).is_null());
+    // what the sheet writes lands as a string with its unit, and checks
+    let at = FORMAT_1.find("rock").unwrap();
+    let v = call(
+        "/api/edit",
+        serde_json::json!({ "text": FORMAT_1, "at": at, "name": "size", "value": "9dmm" }),
+    );
+    let edited = v["text"].as_str().unwrap();
+    assert!(edited.contains("size=\"9dmm\""), "{v}");
+    let v = call(&check, serde_json::json!({ "text": edited }));
+    assert_eq!(v["ok"], true, "{v}");
+    // the controls come with their defaults as a format 1 document writes them
+    let els: Value = serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
+    let tree = els
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["name"] == "tree")
+        .unwrap();
+    let crown = tree["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "crown")
+        .unwrap();
+    let width = crown["subs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "width")
+        .unwrap();
+    assert_eq!(width["default"], "30");
+    assert_eq!(width["default1"], "30dmm");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn format_1_is_read_only_where_the_preview_reads_it() {
+    let dir = std::env::temp_dir().join(format!("dt-f1-off-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    std::fs::write(&file, FORMAT_1).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    // the default preview does not read format 1: the check says so
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let v = post(
+        &r,
+        &format!("/api/tiles/{}/check", id0(&r)),
+        Some(&token),
+        None,
+        &serde_json::json!({ "text": FORMAT_1 }).to_string(),
+    )
+    .1;
+    assert_eq!(v["ok"], false, "{v}");
+    assert_eq!(v["format"], 0, "{v}");
+    assert!(
+        v["errors"][0]["help"]
+            .as_str()
+            .unwrap()
+            .contains("DT_FORMAT_PREVIEW"),
+        "{v}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

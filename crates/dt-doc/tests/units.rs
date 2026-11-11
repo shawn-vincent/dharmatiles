@@ -376,19 +376,35 @@ fn fills_places_and_pins_take_points_too() {
         "dt::point",
         "parentheses",
     );
-    // a point in the frame of a named region is not available yet: written
-    // against the tile instead
+    // a point in the frame of a named region is kept as written, and worked
+    // out by `check` once the tile's regions exist
     let in_region = |at: &str| {
         tile(&format!(
             "line shore {{ through \"(0, 0.5sq)\" \"(1sq, 0.5sq)\" }}\n region bank {{ boundedBy shore; fill \"(0.5sq, 0.2sq)\" }}\n stack {{ base\n dirt at=bank {{\n pin top=\"$groundHeight\" at={at} }} }}"
         ))
     };
-    refused(
-        &in_region("\"(0.5sq, 0.5sq)\""),
-        "dt::point",
-        "frame of the region `bank`",
-    );
+    ok(&in_region("\"(0.5sq, 0.5sq)\""));
+    ok(&in_region("\"(50%, 50%)\""));
     ok(&in_region("\"point($tile, 0.5sq, 0.5sq)\""));
+    ok(&in_region("\"point($region, 50%, 50%)\""));
+    ok(&in_region("\"point(parent($region), 50%, 50%)\""));
+    ok(&in_region("\"polar($region, 0%, 0deg)\""));
+    ok(&in_region("\"polar(parent($region), 40%, 90deg)\""));
+    refused(
+        &in_region("\"point(parent(parent($tile)), 50%, 50%)\""),
+        "dt::point",
+        "no parent",
+    );
+    refused(
+        &in_region("\"point(bank, 50%, 50%)\""),
+        "dt::point",
+        "not a frame",
+    );
+    refused(
+        &in_region("\"(50%, 50% * 1mm)\""),
+        "dt::type",
+        "length by a length",
+    );
 }
 
 #[test]
@@ -428,10 +444,18 @@ fn a_printer_and_a_slope_take_units() {
 }
 
 #[test]
-fn a_part_has_no_tile_to_read_a_point_in() {
+fn a_point_in_a_part_waits_for_the_call() {
+    // a part has no tile to flip against: its point is kept as written and
+    // worked out where it is called
+    ok("dharmatiles version=1\ndefine knoll { stack { rock at=\"(50%, 50%)\" } }\n");
     refused(
-        "dharmatiles version=1\ndefine run { stack { wall at=\"(0.5sq, 0.5sq)\" } }\n",
+        "dharmatiles version=1\ndefine knoll { stack { rock at=\"0.5,0.5\" } }\n",
         "dt::point",
-        "a part has no tile",
+        "parentheses",
+    );
+    refused(
+        "dharmatiles version=1\ndefine knoll { stack { rock at=\"point($tile, 50%, 1mm + 2sq * 3sq)\" } }\n",
+        "dt::type",
+        "length by a length",
     );
 }

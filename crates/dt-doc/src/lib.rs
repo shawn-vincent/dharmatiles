@@ -26,6 +26,7 @@ pub mod edit;
 pub mod elements;
 pub mod error;
 pub mod expr;
+pub mod framed;
 pub mod header;
 pub mod known;
 pub mod migrate;

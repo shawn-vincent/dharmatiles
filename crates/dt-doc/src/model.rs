@@ -240,6 +240,9 @@ pub enum PlaceRef {
     Name(String),
     /// `"(0.3, 0.7)"`, in squares from the south-west corner.
     Point(f64, f64),
+    /// A point in a region's frame, found once the tile's regions exist
+    /// (format 1; `check` replaces it by a [`PlaceRef::Point`]).
+    Framed(Box<crate::framed::Framed>),
 }
 
 impl std::fmt::Display for PlaceRef {
@@ -247,6 +250,7 @@ impl std::fmt::Display for PlaceRef {
         match self {
             PlaceRef::Name(n) => f.write_str(n),
             PlaceRef::Point(x, y) => write!(f, "({x}, {y})"),
+            PlaceRef::Framed(p) => write!(f, "{p}"),
         }
     }
 }

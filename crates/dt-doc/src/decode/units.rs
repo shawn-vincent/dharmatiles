@@ -9,10 +9,11 @@ use miette::SourceSpan;
 
 use super::{Ctx, Decoder, sub_span};
 use crate::dim::Dim;
-use crate::expr::{self, BinOp, Expr};
+use crate::expr::{self, Expr};
+use crate::framed::{Framed, FramedAt, fold, north_west};
 use crate::place::{Corner, Edge, Point};
 use crate::schema::Axis;
-use crate::units::{Base, Kind, KindError, Want, expect, kind_of, lower};
+use crate::units::{Base, Kind, KindError, Want, expect, lower};
 
 /// What a control's axis wants of a value.
 pub(crate) fn want_of(axis: Axis) -> Want {
@@ -109,9 +110,15 @@ impl Decoder<'_> {
 
     /// A point written in format 1: a corner or an edge word, `"(x, y)"`,
     /// `point(frame, x, y)` or `polar(frame, d, a)`.  The point is read in
-    /// the frame the declaration sits in and returned in squares from the
-    /// south-west corner, as geometry keeps it: across is `x`, up is
-    /// `rows - y`.
+    /// the frame the declaration sits in.  Against the tile it is returned in
+    /// squares from the south-west corner, as geometry keeps it: across is
+    /// `x`, up is `rows - y`.  Against a named region (a pin of a body that
+    /// acts in one, `parent(...)`, any point in a part, which has no tile)
+    /// it is kept as written, [`Point::Framed`], and worked out per call site
+    /// or once `check` has the region tree: the decoder runs before the tree
+    /// exists, so a point records what it said rather than the reader
+    /// guessing a box (the same way a formula's `parent(...)` is recorded
+    /// for `check`).
     ///
     /// `at` is where the text starts inside `span`.
     pub(crate) fn point1(
@@ -130,37 +137,12 @@ impl Decoder<'_> {
         if let Some(e) = Edge::parse(t) {
             return Some(Point::Edge(e));
         }
-        let Some((cols, rows)) = ctx.size.map(|(c, r)| (f64::from(c), f64::from(r))) else {
-            self.err(
-                "dt::point",
-                span,
-                "a point is read in the tile it sits in, and a part has no tile",
-                "no tile here",
-            )
-            .help = Some(
-                "write the point in the tile that calls the part, or name a place the tile declares"
-                    .to_owned(),
-            );
-            return None;
-        };
+        let size = ctx.size.map(|(c, r)| (f64::from(c), f64::from(r)));
         let call = t.starts_with("point(") || t.starts_with("polar(");
         if call && t.ends_with(')') {
-            return self.point_call(t, span, inner(0, t.len()), (cols, rows), ctx);
+            return self.point_call(t, inner(0, t.len()), size, ctx);
         }
         if t.starts_with('(') && crate::place::encloses(t) {
-            if let Some(region) = self.frame_region.clone() {
-                self.err(
-                    "dt::point",
-                    inner(0, t.len()),
-                    format!("this point is in the frame of the region `{region}`, whose box is known only when the tile is built"),
-                    "in a region's frame",
-                )
-                .help = Some(
-                    "write it against the tile: `point($tile, 0.5sq, 0.5sq)`; a point in a named region's own frame is not available yet"
-                        .to_owned(),
-                );
-                return None;
-            }
             let body = &t[1..t.len() - 1];
             let commas = crate::place::top_commas(body);
             let [comma] = commas[..] else {
@@ -181,17 +163,14 @@ impl Decoder<'_> {
             };
             let halves = [(&body[..comma], 1), (&body[comma + 1..], comma + 2)];
             let mut out = Vec::new();
-            for (k, (text, off)) in halves.iter().enumerate() {
-                let extent = if k == 0 { cols } else { rows };
-                let half_span = inner(*off, off + text.len());
-                out.push(self.point_half(text, half_span, ctx, extent)?);
+            for (text, off) in &halves {
+                out.push(self.half_expr(text, inner(*off, off + text.len()), ctx)?);
             }
             let y = out.pop()?;
             let x = out.pop()?;
-            return Some(Point::Pair {
-                x,
-                y: north_west(rows, y),
-            });
+            // the frame is the region the declaration sits in
+            let here = Expr::Name("$region".to_owned());
+            return self.framed_xy(&here, x, y, span, size);
         }
         // a point without its parentheses
         let parts: Vec<&str> = t.split(',').map(str::trim).collect();
@@ -218,15 +197,12 @@ impl Decoder<'_> {
         None
     }
 
-    /// One half of a tuple: a length, `%` meaning a share of the frame's
-    /// size across or down (`extent`, squares), in squares.
-    fn point_half(&mut self, text: &str, span: SourceSpan, ctx: &Ctx, extent: f64) -> Option<Expr> {
+    /// One half of a point as written: a length (a `%` is a share of the
+    /// frame's size across or down), kinds checked, plain names in place.
+    fn half_expr(&mut self, text: &str, span: SourceSpan, ctx: &Ctx) -> Option<Expr> {
         let parsed = match expr::parse_units(text) {
             Ok(x) => x,
             Err(err) => {
-                let lead = text.len() - text.trim_start().len();
-                let at = span.offset() + lead;
-                let _ = at;
                 self.err(
                     err.code.unwrap_or("dt::point"),
                     sub_span(span, err.start, err.end),
@@ -239,18 +215,55 @@ impl Decoder<'_> {
                 return None;
             }
         };
-        let x = self.plain_names_only(&parsed, span, ctx)?;
+        self.length_half(&parsed, span, ctx, "a point's half")
+    }
+
+    /// A half already parsed: kind-checked as a length, plain names put in.
+    fn length_half(
+        &mut self,
+        parsed: &Expr,
+        span: SourceSpan,
+        ctx: &Ctx,
+        what: &str,
+    ) -> Option<Expr> {
+        let x = self.plain_names_only(parsed, span, ctx)?;
         let names = |_: &str| None;
         if let Err(ke) = expect(&x, Want::Length, &names, true) {
-            self.kind_error(&ke, span, "a point's half");
+            self.kind_error(&ke, span, what);
             return None;
         }
-        match lower(&x, Base::Squares, self.known.units(), Some(extent)) {
-            Ok(l) => Some(fold(l)),
-            Err(ke) => {
-                self.kind_error(&ke, span, "a point's half");
-                None
+        // a unit the target does not have is found here, not at check
+        if let Err(ke) = lower(&x, Base::Squares, self.known.units(), Some(1.0)) {
+            self.kind_error(&ke, span, what);
+            return None;
+        }
+        Some(x)
+    }
+
+    /// A point's halves in `frame`: against the tile worked out now, else
+    /// kept as written.
+    fn framed_xy(
+        &mut self,
+        frame: &Expr,
+        x: Expr,
+        y: Expr,
+        span: SourceSpan,
+        size: Option<(f64, f64)>,
+    ) -> Option<Point> {
+        match (self.frame_kind(frame, span, size)?, size) {
+            (FrameKind::Tile, Some((cols, rows))) => {
+                let units = self.known.units();
+                let x = lower(&x, Base::Squares, units, Some(cols)).ok()?;
+                let y = lower(&y, Base::Squares, units, Some(rows)).ok()?;
+                Some(Point::Pair {
+                    x: fold(x),
+                    y: north_west(rows, y),
+                })
             }
+            _ => Some(Point::Framed(Box::new(Framed {
+                frame: frame.clone(),
+                at: FramedAt::Xy { x, y },
+            }))),
         }
     }
 
@@ -322,9 +335,8 @@ impl Decoder<'_> {
     fn point_call(
         &mut self,
         t: &str,
-        _outer: SourceSpan,
         span: SourceSpan,
-        (cols, rows): (f64, f64),
+        size: Option<(f64, f64)>,
         ctx: &Ctx,
     ) -> Option<Point> {
         let parsed = match expr::parse_v2_units(t) {
@@ -359,44 +371,25 @@ impl Decoder<'_> {
             .help = Some(help.to_owned());
             return None;
         }
-        // the frame: only a region whose box is known where it is written
-        self.frame_is_tile(&args[0], span, ctx)?;
-        // lengths in the frame's own size, as a tuple's halves are
-        let half = |this: &mut Self, e: &Expr, extent: f64| -> Option<Expr> {
-            let x = this.plain_names_only(e, span, ctx)?;
-            let names = |_: &str| None;
-            if let Err(ke) = expect(&x, Want::Length, &names, true) {
-                this.kind_error(&ke, span, &format!("`{name}`"));
-                return None;
-            }
-            match lower(&x, Base::Squares, this.known.units(), Some(extent)) {
-                Ok(l) => Some(fold(l)),
-                Err(ke) => {
-                    this.kind_error(&ke, span, &format!("`{name}`"));
-                    None
-                }
-            }
-        };
+        let what = format!("`{name}`");
         if name == "point" {
-            let x = half(self, &args[1], cols)?;
-            let y = half(self, &args[2], rows)?;
-            return Some(Point::Pair {
-                x,
-                y: north_west(rows, y),
-            });
+            let x = self.length_half(&args[1], span, ctx, &what)?;
+            let y = self.length_half(&args[2], span, ctx, &what)?;
+            return self.framed_xy(&args[0], x, y, span, size);
         }
-        // polar: out from the middle by a share of the way to the nearest
-        // edge, at an angle round it (0 east, turning towards the south, the
-        // way the page reads: a quarter turn is straight down)
+        // polar: out from the deepest point by a share of the depth, at an
+        // angle round it (0 east, turning towards the south, the way the page
+        // reads: a quarter turn is straight down)
+        let frame = self.frame_kind(&args[0], span, size)?;
         let d = self.plain_names_only(&args[1], span, ctx)?;
         let a = self.plain_names_only(&args[2], span, ctx)?;
         let names = |_: &str| None;
         if let Err(ke) = expect(&d, Want::Plain, &names, false) {
-            self.kind_error(&ke, span, "`polar`");
+            self.kind_error(&ke, span, &what);
             return None;
         }
         if let Err(ke) = expect(&a, Want::Angle, &names, false) {
-            self.kind_error(&ke, span, "`polar`");
+            self.kind_error(&ke, span, &what);
             return None;
         }
         let units = self.known.units();
@@ -416,122 +409,132 @@ impl Decoder<'_> {
             }
         };
         let (d, a) = (value(self, &d)?, value(self, &a)?);
-        let r = d * 0.5 * cols.min(rows);
-        let (cx, cy_nw) = (0.5 * cols, 0.5 * rows);
-        let (x, y_nw) = (cx + r * expr::cos_deg(a), cy_nw + r * expr::sin_deg(a));
-        Some(Point::Pair {
-            x: Expr::num(x),
-            y: Expr::num(rows - y_nw),
-        })
+        match (frame, size) {
+            (FrameKind::Tile, Some((cols, rows))) => {
+                let r = d * 0.5 * cols.min(rows);
+                let (cx, cy_nw) = (0.5 * cols, 0.5 * rows);
+                let (x, y_nw) = (cx + r * expr::cos_deg(a), cy_nw + r * expr::sin_deg(a));
+                Some(Point::Pair {
+                    x: Expr::num(x),
+                    y: Expr::num(rows - y_nw),
+                })
+            }
+            _ => Some(Point::Framed(Box::new(Framed {
+                frame: args[0].clone(),
+                at: FramedAt::Polar { d, a_deg: a },
+            }))),
+        }
     }
 
-    /// A point's frame must be a region whose box is known where the point
-    /// is written: `$tile`, or `$region` where the declaration sits in the
-    /// tile itself.
-    fn frame_is_tile(&mut self, frame: &Expr, span: SourceSpan, ctx: &Ctx) -> Option<()> {
-        let here = if ctx.in_tile && self.frame_region.is_none() {
-            "the tile"
-        } else {
-            ""
-        };
+    /// A point's frame must be a region: `$tile`, `$region` (the one the
+    /// declaration sits in) or `parent(…)` of one.  Against the tile it is
+    /// worked out now; against anything else, or in a part (which has no tile
+    /// yet), later.
+    fn frame_kind(
+        &mut self,
+        frame: &Expr,
+        span: SourceSpan,
+        size: Option<(f64, f64)>,
+    ) -> Option<FrameKind> {
+        let at_tile = size.is_some() && self.frame_region.is_none();
+        let known = size.is_some();
         match frame {
-            Expr::Name(n) if n == "$tile" => Some(()),
-            Expr::Name(n) if n == "$region" && !here.is_empty() => Some(()),
-            Expr::Name(n) if n == "$region" => {
-                self.err(
-                    "dt::point",
-                    span,
-                    "`$region` here is a region whose box is known only when the tile is built",
-                    "not the tile",
-                )
-                .help = Some(
-                    "write the frame as `$tile`: `point($tile, 50%, 50%)`; a point in a named region's own frame is not available yet"
-                        .to_owned(),
-                );
-                None
-            }
+            Expr::Name(n) if n == "$tile" => Some(if known {
+                FrameKind::Tile
+            } else {
+                FrameKind::Later
+            }),
+            Expr::Name(n) if n == "$region" => Some(if at_tile {
+                FrameKind::Tile
+            } else {
+                FrameKind::Later
+            }),
             Expr::Call { name, args } if name == "parent" && args.len() == 1 => {
-                self.err(
-                    "dt::point",
-                    span,
-                    "the frame is the tile here, and the tile has no parent",
-                    "no parent",
-                )
-                .help = Some(
-                    "a point at tile level is in `$tile`; `parent(…)` is for a thing inside a region"
-                        .to_owned(),
-                );
-                None
+                // the chain of parents ends at `$tile` or `$region`
+                let mut inner = &args[0];
+                while let Expr::Call { name, args } = inner
+                    && name == "parent"
+                    && args.len() == 1
+                {
+                    inner = &args[0];
+                }
+                let tile_itself = matches!(inner, Expr::Name(n) if n == "$tile")
+                    || (at_tile && matches!(inner, Expr::Name(n) if n == "$region"));
+                if tile_itself {
+                    self.err(
+                        "dt::point",
+                        span,
+                        "the frame is the tile here, and the tile has no parent",
+                        "no parent",
+                    )
+                    .help = Some(
+                        "a point at tile level is in `$tile`; `parent(…)` is for a thing inside a region"
+                            .to_owned(),
+                    );
+                    return None;
+                }
+                if !matches!(inner, Expr::Name(n) if n == "$region" || n == "$tile") {
+                    return self.not_a_frame(frame, span);
+                }
+                Some(FrameKind::Later)
             }
-            other => {
-                let names = |n: &str| self.kind_of_name(ctx, n);
-                let why = match kind_of(other, &names, false) {
-                    Ok(Kind::Region) => {
-                        "that region's box is not known where the point is written".to_owned()
-                    }
-                    Ok(k) => format!("a frame is a region, not {}", k.describe()),
-                    Err(ke) => ke.message,
-                };
-                self.err(
-                    "dt::point",
-                    span,
-                    format!("`{other}`: {why}"),
-                    "not a frame",
-                )
-                .help = Some("the frame is the first value: `$tile`".to_owned());
-                None
-            }
+            other => self.not_a_frame(other, span),
         }
+    }
+
+    fn not_a_frame(&mut self, frame: &Expr, span: SourceSpan) -> Option<FrameKind> {
+        self.err(
+            "dt::point",
+            span,
+            format!("`{frame}` is not a frame"),
+            "not a frame",
+        )
+        .help = Some(
+            "the frame is the first value: `$tile`, `$region` or `parent($region)`".to_owned(),
+        );
+        None
     }
 }
 
-/// `rows - y`: a north-west `y` in the geometry's own frame.  A number is
-/// worked out here, exactly as the mirror image written by hand would be.
-fn north_west(rows: f64, y: Expr) -> Expr {
-    fold(Expr::Bin {
-        op: BinOp::Sub,
-        lhs: Box::new(Expr::num(rows)),
-        rhs: Box::new(y),
-    })
+/// Whether a point's frame is known where it is written.
+enum FrameKind {
+    /// The tile, whose size is known: the point is worked out now.
+    Tile,
+    /// A region (or a part's tile): worked out per call site, or by `check`.
+    Later,
 }
 
-/// A sum or product of plain numbers, worked out: the same operations in the
-/// same order, so no float differs.
-fn fold(e: Expr) -> Expr {
-    match &e {
-        Expr::Bin { op, lhs, rhs } => {
-            let (a, b) = (fold(*lhs.clone()), fold(*rhs.clone()));
-            if let (
-                Expr::Num {
-                    value: x,
-                    percent: false,
-                },
-                Expr::Num {
-                    value: y,
-                    percent: false,
-                },
-            ) = (&a, &b)
-            {
-                return Expr::num(match op {
-                    BinOp::Add => x + y,
-                    BinOp::Sub => x - y,
-                    BinOp::Mul => x * y,
-                    BinOp::Div => x / y,
-                });
-            }
-            Expr::Bin {
-                op: *op,
-                lhs: Box::new(a),
-                rhs: Box::new(b),
-            }
-        }
-        Expr::Neg(a) => match fold(*a.clone()) {
-            Expr::Num {
-                value,
-                percent: false,
-            } => Expr::num(-value),
-            other => Expr::Neg(Box::new(other)),
-        },
-        _ => e,
+/// A point as written in a format 1 document (`"(0.5sq, 25%)"`,
+/// `point($tile, …)`, a corner or edge word), read against a tile of `size`
+/// squares: the program's own reading, for what shows a written point (the
+/// editor's map) rather than builds it.  The point comes back in squares
+/// from the south-west corner, as geometry keeps it.  A `let`'s name is not
+/// known to this reading.
+///
+/// # Errors
+/// In words: what is wrong with the point.
+pub fn point_text(
+    text: &str,
+    size: (u32, u32),
+    units: crate::units::Units,
+) -> Result<Point, String> {
+    let known = crate::known::Known::new()
+        .with_format_preview(true)
+        .with_units(units);
+    let src = std::sync::Arc::new(miette::NamedSource::new("point", text.to_owned()));
+    let mut d = Decoder::new(src, &known);
+    d.format1 = true;
+    let ctx = Ctx {
+        size: Some(size),
+        in_tile: true,
+        ..Ctx::default()
+    };
+    let span = SourceSpan::new(0.into(), text.len().max(1));
+    match d.point1(text, span, 0, &ctx) {
+        Some(p) => Ok(p),
+        None => Err(d
+            .errors
+            .first()
+            .map_or_else(|| "not a point".to_owned(), |e| e.message.clone())),
     }
 }

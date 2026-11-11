@@ -176,6 +176,8 @@ fn control_json(takes: Option<&'static Element>, path: &str, c: &Control) -> Val
         "weighted": c.weighted,
         "takes": c.takes(),
         "default": (!c.default.is_empty()).then_some(c.default),
+        // as a format 1 document writes it (a length with its unit)
+        "default1": (!c.default.is_empty()).then(|| c.default_in(true)),
         "required": c.required,
         "expert": c.expert,
         "taken": taken(takes, path, c),

@@ -1303,6 +1303,55 @@ impl Reader<'_> {
         }
     }
 
+    /// A point written in a part (which has no tile) now that the tile it is
+    /// called in is known: in squares from the south-west corner.  Its frame
+    /// is `$tile`, or `$region` where the call acts on the whole tile
+    /// (`in_region` false); a named region's box is known only once `check`
+    /// has the region tree, and a thing is placed before that.
+    fn in_tile_frame(
+        &self,
+        f: &dt_doc::framed::Framed,
+        in_region: bool,
+    ) -> Result<(Expr, Expr), crate::lower::Refused> {
+        use dt_doc::expr::Expr as E;
+        let (cols, rows) = self.dims;
+        let tile = match &f.frame {
+            E::Name(n) if n == "$tile" => true,
+            E::Name(n) if n == "$region" => !in_region,
+            _ => false,
+        };
+        if !tile {
+            return Err(crate::lower::Refused::mistake(format!(
+                "`{}` is in the frame of a region, and this part is called where the thing is placed before the region's box is known",
+                f.frame
+            ))
+            .with_help(
+                "write the point against the tile: `point($tile, 50%, 50%)`, or call the part on the whole tile",
+            ));
+        }
+        match f.xy_in([0.0, 0.0, cols, rows], self.units) {
+            Ok(Some(xy)) => Ok(xy),
+            Ok(None) => {
+                let dt_doc::framed::FramedAt::Polar { d, a_deg } = &f.at else {
+                    return Err(crate::lower::Refused::mistake("this point has no place"));
+                };
+                let r = d * 0.5 * cols.min(rows);
+                let (cx, cy) = (0.5 * cols, 0.5 * rows);
+                Ok((
+                    E::num(cx + r * dt_doc::expr::cos_deg(*a_deg)),
+                    E::num(cy - r * dt_doc::expr::sin_deg(*a_deg)),
+                ))
+            }
+            Err(ke) => {
+                let r = crate::lower::Refused::mistake(ke.message);
+                Err(match ke.help {
+                    Some(h) => r.with_help(h),
+                    None => r,
+                })
+            }
+        }
+    }
+
     /// Inline `entries` into `out`: built elements become [`Entry`]s, what
     /// is not built yet goes to `pending`.
     fn expand(
@@ -1490,6 +1539,17 @@ impl Reader<'_> {
                                     }),
                                 Point::Pair { x, y } => crate::lower::coordinate(x)
                                     .and_then(|x| Ok([x, crate::lower::coordinate(y)?]))
+                                    .map_err(|r| (r.code, r.message, r.help)),
+                                // a part's point: its frame is the tile of
+                                // the call site, so it is worked out here
+                                Point::Framed(f) => self
+                                    .in_tile_frame(f, area.is_some())
+                                    .and_then(|(x, y)| {
+                                        Ok([
+                                            crate::lower::coordinate(&x)?,
+                                            crate::lower::coordinate(&y)?,
+                                        ])
+                                    })
                                     .map_err(|r| (r.code, r.message, r.help)),
                                 v => v
                                     .bounds(self.dims.0, self.dims.1)

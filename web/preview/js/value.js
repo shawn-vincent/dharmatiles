@@ -25,6 +25,10 @@ export function unquote(written) {
 // what KDL takes without quotes: a number (with a unit, `(h)1.2`), a word,
 // a switch; a word that KDL reads as something else is quoted
 const NUMBER = /^(\(\w+\))?-?\d+(\.\d+)?$/;
+// format 1 writes a unit after a number (`8dmm`, `0.5sq`, `40deg`, `25%`); the program says which unit a control takes
+const UNIT = '(?:dmm|mm|sq|in|layer|deg|rad|%)?';
+const UNITED = new RegExp(`^-?\\d+(\\.\\d+)?${UNIT}$`);
+const UNITED_RANGE = new RegExp(`^-?\\d+(\\.\\d+)?${UNIT}\\s*\\.\\.\\s*-?\\d+(\\.\\d+)?${UNIT}$`);
 const WORD = /^[A-Za-z_][\w-]*$/;
 const KEYWORD = new Set(['true', 'false', 'null', 'inf', 'nan']);
 
@@ -40,8 +44,8 @@ export function written(typed) {
 export function formOf(typed) {
   const t = typed.trim();
   if (!t) return 'empty';
-  if (/^-?\d+(\.\d+)?%?$/.test(t) || NUMBER.test(t)) return 'number';
-  if (/^-?\d+(\.\d+)?%?\s*\.\.\s*-?\d+(\.\d+)?%?$/.test(t)) return 'range';
+  if (UNITED.test(t) || NUMBER.test(t)) return 'number';
+  if (UNITED_RANGE.test(t)) return 'range';
   if (WORD.test(t)) return 'word';
   return 'expression';
 }

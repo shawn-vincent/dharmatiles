@@ -461,6 +461,29 @@ impl Decoder<'_> {
                     }
                 }
             };
+            if let place::Point::Framed(f) = p {
+                if what == "point" || what == "of" {
+                    self.err(
+                        "dt::point",
+                        span,
+                        format!(
+                            "a `{what}` is worked out once, in the tile: this is in the frame of a region"
+                        ),
+                        "in a region's frame",
+                    )
+                    .help = Some(format!(
+                        "write it against the tile: `{what} \"(0.5sq, 0.5sq)\"` or `point($tile, …)`"
+                    ));
+                    return None;
+                }
+                return Some((
+                    Spanned {
+                        value: PlaceRef::Framed(f),
+                        span,
+                    },
+                    PlaceKind::Point,
+                ));
+            }
             let none = |_: &str| None;
             let xy = match &p {
                 place::Point::Pair { x, y } if !x.is_range() && !y.is_range() => {
@@ -826,7 +849,7 @@ impl Decoder<'_> {
                 y,
                 span: n.span(),
             }),
-            PlaceRef::Name(_) => {
+            PlaceRef::Name(_) | PlaceRef::Framed(_) => {
                 self.err(
                     "dt::place",
                     r.span,
@@ -1151,6 +1174,12 @@ impl Decoder<'_> {
                                 span: r.span,
                             });
                         }
+                        PlaceRef::Framed(f) => {
+                            entry.place.at = Some(Spanned {
+                                value: place::Point::Framed(f.clone()),
+                                span: r.span,
+                            });
+                        }
                     }
                     entry.at_place = Some(r);
                 }
@@ -1369,7 +1398,16 @@ impl Decoder<'_> {
                     return true;
                 }
                 // a point in a pin is in the frame of the region it acts in
-                self.frame_region = entry.place.region.as_ref().map(|r| r.value.clone());
+                // (a drawn line's strip is the region a body on it acts in)
+                self.frame_region = entry
+                    .place
+                    .region
+                    .as_ref()
+                    .map(|r| r.value.clone())
+                    .or_else(|| match entry.place.along.as_ref().map(|a| &a.value) {
+                        Some(crate::place::Along::Line(n)) => Some(n.clone()),
+                        _ => None,
+                    });
                 let pin = self.pin_node(c, ctx);
                 self.frame_region = None;
                 if let Some(p) = pin {

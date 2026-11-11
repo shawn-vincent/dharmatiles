@@ -13,7 +13,7 @@
 // The editor's calls, each -> {status, body} (status 0 when disconnected):
 //   weightings(query)                       the weighting functions over a range, or one value, with the program's curves (a read; no token)
 //   check(id, {text, file?})                what the text would build
-//   checkValue(element, control, typed)     what the reader refuses in a typed value: {message, label, help} (message null when it takes it)
+//   checkValue(element, control, typed, format)  what the reader refuses in a typed value (read as the document's format): {message, label, help} (message null when it takes it)
 //   draft(id, {text, file?})                a quick build of the text: {status, buffer} (the mesh), 409 when a newer draft took its place
 //   save(id, {text, base, file?})           write the text to its file
 //   rename(id, name)                        rename a tile's file: the new tile's {path, id}
@@ -147,7 +147,7 @@ export function browserHost() {
     },
     check: (id, body) => call(tile(id, 'check'), body),
     weightings: (query) => read('/api/weightings', query),
-    checkValue: (element, control, typed) => call('/api/check-value', { element, control, typed }),
+    checkValue: (element, control, typed, format = 0) => call('/api/check-value', { element, control, typed, format }),
     draft: (id, body) => call(tile(id, 'draft'), body, true),
     save: (id, body) => call(tile(id, 'save'), body),
     rename: (id, name) => call(tile(id, 'rename'), { name }),

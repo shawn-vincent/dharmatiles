@@ -10,6 +10,8 @@
 //   api.set(at, name, value)            write a control on the node at byte
 //                                       `at` (value null: take it out)
 //   api.makeMine()                      offer a copy of a library tile
+//   api.format()                        the language format of the document (0, or 1:
+//                                       lengths and angles written with units)
 //   api.checkValue(element, control, typed) -> Promise<string|null>
 //                                       the program's check of a typed value
 //   api.weighting(query) -> Promise<reply|null>
@@ -88,6 +90,12 @@ export class Lens {
     this.root.append(empty);
   }
   get dragging() { return !!this.drag; }
+
+  /** The document's format: 0, or 1 where a length carries its unit. */
+  get format() { return this.api.format?.() ?? 0; }
+
+  /** A control's default as the document writes it (a length with its unit in format 1). */
+  dflt(c) { return this.format >= 1 ? (c.default1 ?? c.default) : c.default; }
 
   /**
    * Show `model`: {title, kind (the element it edits), href, note, actions, groups: [{heading, at, element, schema, written: [setting]}]},
@@ -192,7 +200,7 @@ export class Lens {
     const cell = el('span', 'cell');
     row.append(cell);
     const v = s ? valueOf(s.text, c.name) : null;
-    const shown = v ? v.text : (c.default ?? '');
+    const shown = v ? v.text : (this.dflt(c) ?? '');
     const words = c.words?.length ? c.words : null;
     if (words && c.unit === 'several') {
       const cur = new Set(shown.split(/\s+/).filter(Boolean).map((w) => unquote(w)));
@@ -293,7 +301,7 @@ export class Lens {
       if (e.button !== 0) return;
       e.preventDefault();
       this.moved = false;
-      if (!s) { this.moved = true; this.put(g, c.name, parseValue(c.default ?? '0')); return; } // write the default; drag again
+      if (!s) { this.moved = true; this.put(g, c.name, parseValue(this.dflt(c) ?? '0')); return; } // write the default; drag again
       n.setPointerCapture(e.pointerId);
       const start = Number(n.textContent);
       const step = STEP[c.unit] ?? 0.1;
@@ -342,7 +350,7 @@ export class Lens {
     const text = c.unit === 'text'; // plain words: typed without quotes, written as a KDL string
     // a number, range or expression: typed bare, quoted as it is written
     const num = isNumeric(c);
-    const shownText = v ? v.text : (c.default ?? '');
+    const shownText = v ? v.text : (this.dflt(c) ?? '');
     input.value = text || num ? unquote(shownText) : shownText;
     const was = input.value;
     input.spellcheck = false;
@@ -398,7 +406,7 @@ export class Lens {
    */
   valuePop(input, c, element, write = null) {
     const pop = el('div', 'value-pop');
-    const takes = el('div', 'vp-takes', [[c.unit, c.takes].filter(Boolean).join(', '), c.default && `default ${c.default}`].filter(Boolean).join(' · '));
+    const takes = el('div', 'vp-takes', [[c.unit, c.takes].filter(Boolean).join(', '), this.dflt(c) && `default ${this.dflt(c)}`].filter(Boolean).join(' · '));
     const check = el('div', 'vp-check');
     const forms = el('div', 'words vp-forms');
     const list = el('div', 'vp-list');
@@ -412,7 +420,8 @@ export class Lens {
       range.onclick = () => { input.value = asRange(input.value); update(); };
       forms.append(one, range);
       // a draw takes odds along its range: the gallery of weighting functions
-      if (c.weighted && this.api.weighting) {
+      // (the gallery writes plain numbers; a format 1 value carries its units, so it is typed)
+      if (c.weighted && this.api.weighting && this.format < 1) {
         weighted = el('button', '', 'weighted');
         weighted.onclick = () => {
           if (formOf(input.value) === 'number') input.value = asRange(input.value);

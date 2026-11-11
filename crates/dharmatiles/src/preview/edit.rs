@@ -88,7 +88,7 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         return edit(&v).into();
     }
     if path == "/api/check-value" {
-        return check_value(&v).into();
+        return check_value(shared, &v).into();
     }
     if path == "/api/new" {
         return new_tile(shared, &v).into();
@@ -405,7 +405,7 @@ fn kdl_value(v: &Value) -> Option<kdl::KdlValue> {
 }
 
 /// `/api/check-value`: the reader's check of one typed value.
-fn check_value(v: &Value) -> (&'static str, Value) {
+fn check_value(shared: &Shared, v: &Value) -> (&'static str, Value) {
     let (Some(element), Some(control), Some(typed)) = (
         v["element"].as_str(),
         v["control"].as_str(),
@@ -415,14 +415,18 @@ fn check_value(v: &Value) -> (&'static str, Value) {
     };
     // a control the schema does not know (the tile's own, a line's) has
     // nothing to check against here
+    // `format` is the format of the document the value is typed into; a
+    // format 1 value is read with units, as the reader reads one
+    let opts = shared.options();
+    let format1 = v["format"].as_u64().is_some_and(|f| f >= 1) && opts.format_preview;
     let flaw = dt_doc::schema::element(element)
         .and_then(|e| e.control(control))
-        .and_then(|c| dt_doc::decode::check_text(c, element, typed));
+        .and_then(|c| dt_doc::decode::check_text_in(c, element, typed, format1, opts.units()));
     // the reader's check first; then the weighting's numbers against their
     // limits, which the reader only meets when the value is lowered
     let body = match flaw {
         Some(r) => json!({ "message": r.message, "label": r.label, "help": r.help }),
-        None => match dt_eval::weighting_flaw(typed) {
+        None => match dt_eval::weighting_flaw_in(typed, format1, opts.units()) {
             Some(w) => json!({ "message": w.message, "label": "here", "help": w.help }),
             None => json!({ "message": null }),
         },
@@ -541,6 +545,12 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
     };
     let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
     let opts = shared.options();
+    // the language format the text is written in, known even while it has
+    // mistakes, so the page writes what it adds in the same one
+    let format = dt_doc::header::check_text_with(file, text, opts.format_preview)
+        .ok()
+        .flatten()
+        .map_or(0, |h| h.format);
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
             let stack = c.tile.as_ref().map(|t| stack::items(t, &opts.system));
@@ -555,12 +565,12 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
             };
             (
                 "200 OK",
-                json!({ "ok": true, "errors": [], "stack": stack, "map": map::json(&c, &own) }),
+                json!({ "ok": true, "format": format, "errors": [], "stack": stack, "map": map::json(&c, &own, opts.units()) }),
             )
         }
         Err(errs) => (
             "200 OK",
-            json!({ "ok": false, "errors": errors_json(&errs) }),
+            json!({ "ok": false, "format": format, "errors": errors_json(&errs) }),
         ),
     }
 }

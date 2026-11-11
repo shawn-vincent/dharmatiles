@@ -35,7 +35,7 @@ pub use cache::Cache;
 pub use diag::Diag;
 pub use doc::{Region, Tile, Within};
 pub use dt_kit::Progress;
-pub use lower::{RangeRefusal, Ranged, ranged, weighting_flaw};
+pub use lower::{RangeRefusal, Ranged, ranged, weighting_flaw, weighting_flaw_in};
 pub use source::{Files, LIB, Library, Memory, Source};
 
 use crate::plan::{Refusal, Step};
@@ -138,6 +138,16 @@ impl std::fmt::Debug for Profile {
 }
 
 impl Options {
+    /// What a unit is worth on this build target: the system's square and
+    /// the printer's layer (`mm`, `in` and `layer` in a format 1 document).
+    #[must_use]
+    pub fn units(&self) -> dt_doc::units::Units {
+        dt_doc::units::Units {
+            square_mm: Frame::for_system(&self.system, 1, 1).square_mm,
+            layer_mm: self.printer.layer_mm,
+        }
+    }
+
     /// The build target: the base system, and the printer unless it is the
     /// default one (`db`, `ol`, `db-fine`). It names the output folder and
     /// files and the build record.
@@ -421,10 +431,7 @@ impl Checked {
 /// # Errors
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
-    let units = dt_doc::units::Units {
-        square_mm: Frame::for_system(&opts.system, 1, 1).square_mm,
-        layer_mm: opts.printer.layer_mm,
-    };
+    let units = opts.units();
     let read = doc::read_with(sources, path, opts.format_preview, units)?;
     let Some(mut tile) = read.tile else {
         return Ok(Checked {
@@ -529,6 +536,11 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         errors.extend(tree.hole_flaws(&tile));
         tree
     });
+    // format 1: a pin's point is worked out in the frame it was written in,
+    // and must lie in the region its body acts in
+    if let Some(tree) = &region_tree {
+        errors.extend(tree.resolve_pins(&mut tile, units));
+    }
     if !errors.is_empty() {
         return Err(errors);
     }

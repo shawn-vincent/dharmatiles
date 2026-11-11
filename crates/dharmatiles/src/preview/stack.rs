@@ -133,6 +133,12 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
             .map(|(name, text, span)| json!({ "name": name, "text": text, "span": span }))
             .collect::<Vec<_>>()
     );
+    // where a fixed `at=` point is, in squares from the south-west corner,
+    // as the program reads it (the page never reads a written point)
+    v["at"] =
+        json!(e.at.as_ref().and_then(|d| {
+            (d[0].is_point() && d[1].is_point()).then(|| [d[0].lo(), d[1].lo()])
+        }));
     // a scatter's things, each with its own controls, for the lens; a
     // node is addressed by the offset its name starts at
     v["things"] = json!(

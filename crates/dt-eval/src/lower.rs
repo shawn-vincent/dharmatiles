@@ -100,7 +100,7 @@ impl Refused {
         }
     }
 
-    fn with_help(mut self, help: impl Into<String>) -> Self {
+    pub(crate) fn with_help(mut self, help: impl Into<String>) -> Self {
         self.help = Some(help.into());
         self
     }
@@ -568,6 +568,31 @@ pub fn ranged(src: &str) -> Result<Ranged, RangeRefusal> {
 #[must_use]
 pub fn weighting_flaw(src: &str) -> Option<RangeRefusal> {
     let e = dt_doc::expr::parse(src.trim()).ok()?;
+    if e.range_count() == 0 {
+        return None;
+    }
+    let r = lower(&e, &Lets::default(), 0).err()?;
+    (r.hard && matches!(r.code, "dt::range" | "dt::weighting")).then(|| RangeRefusal {
+        code: r.code.to_owned(),
+        message: r.message,
+        help: r.help,
+    })
+}
+
+/// [`weighting_flaw`] for a value typed into a format 1 document
+/// (`low(1dmm .. 6dmm, 11)`): its units are lowered first, as the reader
+/// lowers them.
+#[must_use]
+pub fn weighting_flaw_in(
+    src: &str,
+    format1: bool,
+    units: dt_doc::units::Units,
+) -> Option<RangeRefusal> {
+    if !format1 {
+        return weighting_flaw(src);
+    }
+    let e = dt_doc::expr::parse_units(src.trim()).ok()?;
+    let e = dt_doc::units::lower(&e, dt_doc::units::Base::Dmm, units, None).ok()?;
     if e.range_count() == 0 {
         return None;
     }

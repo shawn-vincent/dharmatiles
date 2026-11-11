@@ -62,6 +62,7 @@ export const view = createStore({
 export const doc = createStore({
   tileId: null, file: null, base: null, text: null, writable: false,
   checked: null, ok: true, errors: [], stack: null, map: null,
+  format: 0,           // the language format of the text checked last (0, or 1 where the program reads it)
   note: null, conflict: null, saving: false,
   selectAt: null,      // the byte of a node a gesture just wrote: select it once it is checked
 });

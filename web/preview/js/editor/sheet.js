@@ -25,8 +25,9 @@ export const lens = new Lens($('lens'), {
   replace: replaceBytes,
   set: setControl,
   makeMine: () => offerMine(),
+  format: () => doc.get().format,
   checkValue: async (element, control, typed) => {
-    const r = await host.checkValue(element, control, typed);
+    const r = await host.checkValue(element, control, typed, doc.get().format);
     if (failed(`Could not check what was typed for ${control}`, r)) return null;
     return r.body?.message ?? null; // offline: nothing to say yet; the edit is checked again when it is sent
   },
@@ -116,9 +117,9 @@ function renderMarkLens(kind, m) {
   if (kind === 'line') {
     controls = [
       nameRow,
-      { name: 'wobble', unit: 'mm', default: '0', about: 'how far the line may wander off its points' },
+      { name: 'wobble', unit: 'mm', default: '0', default1: '0dmm', about: 'how far the line may wander off its points' },
       { name: 'width', unit: 'mm', about: 'makes the line a strip; an element at= it covers the strip' },
-      { name: 'through', unit: 'raw', required: true, about: 'the points it runs through: "x,y" in squares, corners, or edge middles (south, east, north, west); drag a number or click to type' },
+      { name: 'through', unit: 'raw', required: true, about: 'the points it runs through: "x,y" in squares from the south-west corner (format 1: "(x, y)" with units, from the north-west), corners, or edge middles (south, east, north, west); drag a number or click to type' },
     ];
     written.push(...sh.controls.map(asWritten));
     const th = runWritten('through', sh.through);

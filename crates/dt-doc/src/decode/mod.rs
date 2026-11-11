@@ -7,7 +7,8 @@ mod heights;
 pub(crate) mod syntax;
 mod units;
 mod value;
-pub use value::check_text;
+pub use units::point_text;
+pub use value::{check_text, check_text_in};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -123,9 +124,10 @@ pub(crate) struct Decoder<'k> {
     pub stack_consts: Vec<crate::model::Const>,
     /// Reading format 1: `$` names, `let` in any block, reserved words.
     pub format1: bool,
-    /// Format 1: the named region the entry being read acts in, where a pin
-    /// is written (its points are in that region's frame, whose box the
-    /// reader does not know yet).
+    /// Format 1: the named region (or drawn line) the entry being read acts
+    /// in, where a pin is written: its points are in that region's frame,
+    /// whose box is known only once `check` has the region tree, so they are
+    /// kept as written ([`crate::framed::Framed`]) and worked out there.
     pub frame_region: Option<String>,
     /// Format 1: the last height read, as written (units unlowered).
     pub last_raw: Option<crate::expr::Expr>,
@@ -182,7 +184,7 @@ fn refs(node: &KdlNode, names: &HashSet<String>, out: &mut Vec<String>) {
 }
 
 impl<'k> Decoder<'k> {
-    fn new(src: Src, known: &'k Known) -> Self {
+    pub(crate) fn new(src: Src, known: &'k Known) -> Self {
         Self {
             src,
             errors: Vec::new(),

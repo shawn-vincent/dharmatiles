@@ -34,12 +34,13 @@ function names(text) {
  * What can go at the caret: {from, to, items: [{label, insert, about, kind}]},
  * or null.  `caret` is TextPane.caret(); `force` lists even with nothing typed.
  */
-export function suggest(caret, text, elements, force = false) {
+export function suggest(caret, text, elements, force = false, language = null) {
   const before = caret.before;
   // the node the caret is in on this line: after the last `{` or `;`
   const seg = before.slice(Math.max(before.lastIndexOf('{'), before.lastIndexOf(';')) + 1);
   const line = before.slice(before.lastIndexOf('\n') + 1);
-  if (/\/\//.test(line) || (before.split('"').length % 2 === 0)) return null; // in a comment or a string
+  if (/\/\//.test(line)) return null; // in a comment
+  if (before.split('"').length % 2 === 0) return language ? inValue(caret, before, line, language, force) : null; // in a string
   const n = names(text);
   const el = (name) => elements.find((e) => e.name === name);
   const rank = (items, word) => items
@@ -91,5 +92,31 @@ export function suggest(caret, text, elements, force = false) {
   const seen = new Set();
   items = items.filter((i) => !seen.has(i.label) && seen.add(i.label));
   const out = rank(items, word);
+  return out.length ? { from: caret.index - word.length, to: caret.index, items: out.slice(0, 40) } : null;
+}
+
+/**
+ * Inside a written value of a format 1 document (`top="$bo|"`, `size="8d|"`):
+ * the `$` names, the functions and, straight after a number, the units, all
+ * from the program's own word lists (`language`, in the map).  Other strings
+ * (a description, a name) are the author's.
+ */
+function inValue(caret, before, line, language, force) {
+  const quote = before.lastIndexOf('"');
+  const lead = before.slice(0, quote).trimEnd();
+  const first = line.trim().split(/\s+/)[0];
+  if (!lead.endsWith('=') && !['through', 'fill', 'let', 'override', 'point', 'slope', 'pin'].includes(first)) return null;
+  const word = (before.slice(quote + 1).match(/\$?[A-Za-z_]\w*$/) || [''])[0];
+  const afterNumber = /\d$/.test(before.slice(quote + 1, before.length - word.length));
+  if (!word && !force) return null;
+  const items = [];
+  if (afterNumber) items.push(...language.units.map((u) => ({ label: u, insert: u, about: 'a unit', kind: 'unit' })));
+  else {
+    items.push(...language.names.map((n) => ({ label: n, insert: n, about: 'a name set where it is worked out', kind: 'name' })));
+    if (!word.startsWith('$')) items.push(...language.functions.map((f) => ({ label: f, insert: f, about: 'a function', kind: 'function' })));
+  }
+  const out = items
+    .filter((i) => i.label.startsWith(word) && i.label !== word)
+    .sort((a, b) => a.label.length - b.label.length || a.label.localeCompare(b.label));
   return out.length ? { from: caret.index - word.length, to: caret.index, items: out.slice(0, 40) } : null;
 }

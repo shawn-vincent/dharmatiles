@@ -9,6 +9,27 @@ use serde_json::{Value, json};
 /// on DungeonBlocks, 0.5 on OpenLOCK) and meets its lines.
 const CELLS: u32 = dt_eval::DRAFT_CELLS;
 
+/// How the map reads a written point: format 0 as `x,y` squares from the
+/// south-west corner, format 1 as the document's own `"(0.5sq, 25%)"`
+/// forms, which only the program's reader ([`dt_doc::decode::point_text`])
+/// knows how to read.
+#[derive(Clone, Copy)]
+struct Reading {
+    format1: bool,
+    units: dt_doc::units::Units,
+}
+
+impl Reading {
+    /// The point a text writes, if it writes one.
+    fn point(self, t: &dt_eval::Tile, text: &str) -> Option<dt_doc::place::Point> {
+        if self.format1 {
+            dt_doc::decode::point_text(text.trim(), (t.cols, t.rows), self.units).ok()
+        } else {
+            dt_doc::place::parse_point(text).ok()
+        }
+    }
+}
+
 /// A written value: its text and its byte span.
 type Written = (String, [usize; 2]);
 
@@ -164,19 +185,17 @@ fn clauses(text: &str, node: &kdl::KdlNode, parsed: &[dt_eval::Within]) -> Vec<V
 /// Where a place a region is made from lies: its name, what kind of place
 /// it is, and its geometry in squares (a line's points, a point; a region
 /// is found by name among the map's regions).
-fn place_ref(t: &dt_eval::Tile, name: &str) -> Value {
+fn place_ref(t: &dt_eval::Tile, name: &str, rd: Reading) -> Value {
     use dt_doc::place::{
         BUILTIN_LINES, BUILTIN_POINTS, BUILTIN_REGION, builtin_line, builtin_point,
     };
     let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
-    if let Some(inner) = name.strip_prefix('(').and_then(|n| n.strip_suffix(')')) {
-        let xy: Vec<f64> = inner
-            .split(',')
-            .filter_map(|v| v.trim().parse().ok())
-            .collect();
-        if let [x, y] = xy[..] {
-            return json!({ "name": name, "kind": "point", "at": [x, y] });
-        }
+    if (name.starts_with('(') || name.starts_with("point(") || name.starts_with("polar("))
+        && let Some(p) = rd.point(t, name)
+        && let Ok(((x0, x1), (y0, y1))) = p.bounds(cols, rows)
+    {
+        let at = [f64::midpoint(x0, x1), f64::midpoint(y0, y1)];
+        return json!({ "name": name, "kind": "point", "at": at });
     }
     if name == BUILTIN_REGION {
         let ring = builtin_line("edges", cols, rows);
@@ -209,10 +228,10 @@ fn place_ref(t: &dt_eval::Tile, name: &str) -> Value {
 /// A coordinate drawn from a range or written as an expression is placed
 /// where its range middles; a name nothing declares has no place.  The
 /// reading is the program's own ([`dt_doc::place::parse_point`]), not the page's.
-fn locate(t: &dt_eval::Tile, text: &str) -> (&'static str, Option<[f64; 2]>) {
-    use dt_doc::place::{BUILTIN_POINTS, Point, builtin_point, parse_point};
+fn locate(t: &dt_eval::Tile, text: &str, rd: Reading) -> (&'static str, Option<[f64; 2]>) {
+    use dt_doc::place::{BUILTIN_POINTS, Point, builtin_point};
     let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
-    if let Ok(p) = parse_point(text) {
+    if let Some(p) = rd.point(t, text) {
         let kind = if matches!(p, Point::Pair { .. }) {
             "literal"
         } else {
@@ -239,17 +258,17 @@ fn locate(t: &dt_eval::Tile, text: &str) -> (&'static str, Option<[f64; 2]>) {
 /// written: the coordinates, or the point's name), where it is, and the
 /// written value's byte span.  `ranged` is true when it lies somewhere in a
 /// range, so `at` is only the middle of where it may land.
-fn marker(t: &dt_eval::Tile, text: &str, span: Option<[usize; 2]>) -> Value {
-    let (kind, at) = locate(t, text);
-    let ranged = dt_doc::place::parse_point(text).is_ok_and(|p| p.is_range());
+fn marker(t: &dt_eval::Tile, text: &str, span: Option<[usize; 2]>, rd: Reading) -> Value {
+    let (kind, at) = locate(t, text, rd);
+    let ranged = rd.point(t, text).is_some_and(|p| p.is_range());
     json!({ "label": text.trim(), "kind": kind, "at": at, "span": span, "ranged": ranged })
 }
 
 /// The `of` points of a region's `within` clauses: the ones written as a
 /// literal pair or as the name of a point (a line or region is drawn as
 /// itself, not as a point).
-fn within_markers(t: &dt_eval::Tile, node: &kdl::KdlNode, text: &str) -> Vec<Value> {
-    use dt_doc::place::{BUILTIN_POINTS, Point, parse_point};
+fn within_markers(t: &dt_eval::Tile, node: &kdl::KdlNode, text: &str, rd: Reading) -> Vec<Value> {
+    use dt_doc::place::{BUILTIN_POINTS, Point};
     node.children()
         .map(kdl::KdlDocument::nodes)
         .unwrap_or_default()
@@ -265,8 +284,8 @@ fn within_markers(t: &dt_eval::Tile, node: &kdl::KdlNode, text: &str) -> Vec<Val
             let name = w.trim();
             let is_point = t.heights.points.contains_key(name)
                 || BUILTIN_POINTS.contains(&name)
-                || matches!(parse_point(&w), Ok(Point::Pair { .. }));
-            is_point.then(|| marker(t, &w, Some(span)))
+                || matches!(rd.point(t, &w), Some(Point::Pair { .. }));
+            is_point.then(|| marker(t, &w, Some(span), rd))
         })
         .collect()
 }
@@ -279,27 +298,28 @@ fn markers_of(
     r: &dt_eval::Region,
     fills: Option<&[Written]>,
     text: &str,
+    rd: Reading,
 ) -> Vec<Value> {
     let mut out: Vec<Value> = fills
         .unwrap_or_default()
         .iter()
-        .map(|(x, sp)| marker(t, x, Some(*sp)))
+        .map(|(x, sp)| marker(t, x, Some(*sp), rd))
         .collect();
     if let Some(node) = tile.and_then(|n| mark_node(n, "region", &r.name)) {
-        out.extend(within_markers(t, node, text));
+        out.extend(within_markers(t, node, text, rd));
     }
     out
 }
 
 /// The places a region is made from, each once: the lines that bound it,
 /// the places its `within`s are round, the regions it excepts.
-fn region_refs(t: &dt_eval::Tile, r: &dt_eval::Region) -> Vec<Value> {
+fn region_refs(t: &dt_eval::Tile, r: &dt_eval::Region, rd: Reading) -> Vec<Value> {
     let mut names: Vec<String> = r.bounded_by.iter().map(|b| b.value.clone()).collect();
     names.extend(r.within.iter().map(|w| w.of.to_string()));
     names.extend(r.except.iter().cloned());
     let mut seen = std::collections::BTreeSet::new();
     names.retain(|n| *n != r.name && seen.insert(n.clone()));
-    names.iter().map(|n| place_ref(t, n)).collect()
+    names.iter().map(|n| place_ref(t, n, rd)).collect()
 }
 
 /// Every place a tile has, for a choice among them: the built-in edges and
@@ -351,9 +371,13 @@ fn points(w: &[(String, [usize; 2])], at: Option<&Vec<[f64; 2]>>) -> Vec<Value> 
 
 /// The map of checked tile `c`, its spans from `text` (the tile's own
 /// document as checked).
-pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
+pub(super) fn json(c: &dt_eval::Checked, text: &str, units: dt_doc::units::Units) -> Value {
     let Some(t) = &c.tile else {
         return Value::Null;
+    };
+    let rd = Reading {
+        format1: t.format >= 1,
+        units,
     };
     let doc = kdl::KdlDocument::parse(text).ok();
     let node = doc
@@ -371,7 +395,7 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
                 "pts": pts,
                 "wobble": t.wobbles.get(name).map(|(_, w)| w),
                 "span": w.as_ref().map(|w| w.0),
-                "markers": w.as_ref().map(|(_, w)| w.iter().map(|(x, sp)| marker(t, x, Some(*sp))).collect::<Vec<_>>()).unwrap_or_default(),
+                "markers": w.as_ref().map(|(_, w)| w.iter().map(|(x, sp)| marker(t, x, Some(*sp), rd)).collect::<Vec<_>>()).unwrap_or_default(),
                 "points": w.map(|(_, w)| points(&w, control)).unwrap_or_default(),
                 "sheet": node.and_then(|n| mark_node(n, "line", name)).map(|l| json!({
                     "at": l.name().span().offset(),
@@ -395,7 +419,7 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
                 "bounded_by": r.bounded_by.iter().map(|b| b.value.clone()).collect::<Vec<_>>(),
                 "nx": m.nx, "ny": m.ny, "bits": bits,
                 "span": w.as_ref().map(|w| w.0),
-                "markers": markers_of(t, node, r, w.as_ref().map(|(_, w)| w.as_slice()), text),
+                "markers": markers_of(t, node, r, w.as_ref().map(|(_, w)| w.as_slice()), text, rd),
                 "fills": w.map(|(_, w)| points(&w, Some(&r.fills))).unwrap_or_default(),
                 "sheet": node.and_then(|n| mark_node(n, "region", &r.name)).map(|g| json!({
                     "at": g.name().span().offset(),
@@ -403,7 +427,7 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
                     "fill": args_of(text, g, "fill"),
                     "clauses": clauses(text, g, &r.within),
                 })),
-                "refs": region_refs(t, r),
+                "refs": region_refs(t, r, rd),
             })
         })
         .collect();
@@ -445,7 +469,32 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str) -> Value {
         });
         json!({ "at": at, "controls": controls, "about": about, "heights": heights(&t.heights.consts) })
     });
-    json!({ "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "points": named, "places": places(t), "tile": own })
+    json!({ "format": t.format, "language": language(t), "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "points": named, "places": places(t), "tile": own })
+}
+
+/// The words a format 1 value is written from, for completion: the `$`
+/// names (what an element sets, the regions, the tile's heights), the units
+/// and the functions.  Nothing for format 0.
+fn language(t: &dt_eval::Tile) -> Value {
+    if t.format < 1 {
+        return Value::Null;
+    }
+    use dt_doc::words::{COORDINATES, FUNCTIONS, POINT_NAMES, REGION_NAMES, UNITS};
+    let mut names: Vec<String> = POINT_NAMES
+        .iter()
+        .chain(REGION_NAMES)
+        .map(|n| (*n).to_owned())
+        .collect();
+    names.extend(
+        t.heights
+            .consts
+            .entries()
+            .iter()
+            .filter(|e| e.name.starts_with('$'))
+            .map(|e| e.name.clone()),
+    );
+    let functions: Vec<&str> = [FUNCTIONS, COORDINATES].concat();
+    json!({ "names": names, "units": UNITS, "functions": functions })
 }
 
 /// The heights a value may name in this tile: its constants (the library's
