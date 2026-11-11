@@ -98,3 +98,46 @@ fn a_cliff_is_not_carved_again_for_its_boulders() {
     );
     assert!(reused >= 3, "only {reused} steps reused");
 }
+
+/// A tree whose top reads the region it is scattered in: editing that
+/// region rebuilds the tree, never serving the one the cache kept.  (A
+/// step whose formula reads regions keys on every region's shape, so this
+/// holds however far up `parent()` reaches.)
+#[test]
+fn editing_a_region_a_trees_top_reads_rebuilds_the_tree() {
+    let tile = |r: &str| {
+        format!(
+            "dharmatiles version=\"1.0.0\"\n\
+             tile size=\"2x2\" seed=4 {{\n\
+             \x20   region clearing {{ within \"{r}\" of=center }}\n\
+             \x20   stack {{\n\
+             \x20       base\n\
+             \x20       dirt clods=none\n\
+             \x20       scatter at=clearing count=2 gap=\"4dmm\" {{\n\
+             \x20           tree top=\"$bottom + 55dmm + 12dmm * d(parent(parent($region)), %)\"\n\
+             \x20       }}\n\
+             \x20   }}\n\
+             }}\n"
+        )
+    };
+    let path = "mem/tile.dtile";
+    let src = |t: &str| Memory(BTreeMap::from([(path.to_owned(), t.to_owned())]));
+    let opts = draft();
+    let cache = Cache::new();
+    let before = tile("22dmm");
+    let after = tile("30dmm");
+    build_cached(&src(&before), path, &opts, &Progress::none(), Some(&cache)).unwrap();
+    let cached = build_cached(&src(&after), path, &opts, &Progress::none(), Some(&cache)).unwrap();
+    let plain = build(&src(&after), path, &opts).unwrap();
+    let old = build(&src(&before), path, &opts).unwrap();
+    assert_ne!(
+        old.export.mesh.content_hash(),
+        plain.export.mesh.content_hash(),
+        "the edit must change the trees, or this test proves nothing"
+    );
+    assert_eq!(
+        fingerprint(&cached),
+        fingerprint(&plain),
+        "the cache served trees built for the old region"
+    );
+}

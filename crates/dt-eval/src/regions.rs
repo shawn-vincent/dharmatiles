@@ -123,6 +123,24 @@ pub struct RegionTree {
     pub frame: Frame,
 }
 
+impl RegionTree {
+    /// Everything a formula can read of the regions, hashed: each node's
+    /// parent, mask, box, radius and line.  A step whose formulas read
+    /// regions keys its cache on it, so editing a region it reads (a
+    /// grove's `parent($region)`) rebuilds it.
+    #[must_use]
+    pub fn content_hash(&self) -> u64 {
+        self.nodes.iter().fold(crate::hash::OFFSET, |h, n| {
+            let text = format!(
+                "{:?}|{:?}|{:?}|{:?}|{:?}",
+                n.parent, n.entry, n.bbox, n.radius, n.along
+            );
+            let h = crate::hash::field(h, text.as_bytes());
+            crate::hash::step(h, n.mask.as_ref().map_or(0, Mask::content_hash))
+        })
+    }
+}
+
 /// What a size written as a range or a weighted range is taken as, before
 /// anything is drawn: the middle of it (as `within` takes it).
 fn middle(v: &dt_elements::Value) -> Option<f64> {

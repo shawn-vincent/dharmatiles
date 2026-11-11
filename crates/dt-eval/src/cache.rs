@@ -153,13 +153,14 @@ pub(crate) fn step_keys(base: u64, tile: &Tile, steps: &[Step], jobs: &[Job]) ->
                     // past the stack: the connector, which the base key's
                     // system names
                     let text = format!(
-                        "{i}|{}|{}|{:?}|{}|{}|{}",
+                        "{i}|{}|{}|{:?}|{}|{}|{}|{}",
                         entry.unwrap_or_else(|| "connector".to_owned()),
                         jobs.get(i).map_or("", |j| j.path.as_str()),
                         jobs[i].seed,
                         jobs[i].area_hash,
                         jobs[i].band_hash,
-                        jobs[i].under_hash
+                        jobs[i].under_hash,
+                        jobs[i].regions_hash
                     );
                     mix(h, text.as_bytes())
                 }

@@ -848,6 +848,10 @@ pub(crate) struct Job {
     /// `Ctx::under`; 0 if nothing), so editing the water never serves a
     /// stale dirt.
     pub under_hash: u64,
+    /// The regions' hash when its controls hold a formula that reads them
+    /// (a tree's `top=`), else 0, so editing a region it reads never
+    /// serves a stale tree.
+    pub regions_hash: u64,
 }
 
 /// What a build works out before any step runs.
@@ -928,6 +932,16 @@ impl<'a> Plan<'a> {
                     band.odds().map_or(plain, |o| hash::step(plain, o.key()))
                 }),
                 under_hash: 0,
+                regions_hash: tile
+                    .stack
+                    .get(i)
+                    .filter(|e| {
+                        e.controls
+                            .iter()
+                            .any(|c| matches!(c.value, dt_elements::Value::Formula(_)))
+                    })
+                    .and(c.regions.as_ref())
+                    .map_or(0, regions::RegionTree::content_hash),
             })
             .collect();
         let mut plan = Self {
