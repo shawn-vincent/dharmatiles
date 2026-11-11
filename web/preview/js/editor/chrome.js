@@ -185,8 +185,8 @@ async function showAbout() {
     $('about-semver').textContent = m ? m[1] : a.version;
     $('about-build').textContent = build.length ? `+${build.join('.')}` : '';
     $('about-dirty').hidden = !dirty;
-    // Formats are major versions: 0 reads as "0.x", any version starting with 0.
-    $('about-formats').textContent = String(a.formats).split(/[,\s]+/).filter(Boolean).map((f) => `${f}.x`).join(', ');
+    // Formats are major versions, written "0.x": any version starting with 0.
+    $('about-formats').textContent = a.formats;
   } catch (e) {
     err.textContent = `Could not read the version: ${e.message}`;
     err.hidden = false;

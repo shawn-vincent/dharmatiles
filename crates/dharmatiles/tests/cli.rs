@@ -76,7 +76,7 @@ fn the_version_is_drawn_from_git_and_lists_the_tile_formats() {
     let text = String::from_utf8(o.stdout).unwrap();
     let v = text.trim().strip_prefix("dharmatiles ").unwrap();
     let (v, formats) = v.split_once(" (tile formats ").unwrap();
-    assert_eq!(formats, "0)", "{text}");
+    assert_eq!(formats, "0.x)", "{text}");
     let rest = v.strip_prefix(env!("CARGO_PKG_VERSION")).unwrap();
     // plain at the tag, else `+[branch.]N.gHASH[.dirty]` (or `+dirty`)
     if let Some(meta) = rest.strip_prefix('+') {

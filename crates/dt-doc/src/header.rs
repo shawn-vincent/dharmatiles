@@ -21,15 +21,14 @@ pub const NODE: &str = "dharmatiles";
 /// with no header.
 pub const FORMAT: u32 = 0;
 
-/// The formats this program reads, for `--version` and the About box: `0`,
-/// or `0-N` once there is more than one.
+/// The formats this program reads, for `--version` and the About box, each
+/// as its major versions: `0.x`, then `0.x, 1.x` once there are two.
 #[must_use]
 pub fn formats() -> String {
-    if FORMAT == 0 {
-        "0".to_owned()
-    } else {
-        format!("0-{FORMAT}")
-    }
+    (0..=FORMAT)
+        .map(|f| format!("{f}.x"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The format in development: read only when the reader is told to preview
