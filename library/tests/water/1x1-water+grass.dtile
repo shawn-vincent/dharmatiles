@@ -15,8 +15,8 @@ tile size="1x1" seed=97 {
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
             pin top=waterBedHeight at=pool   // the bed, written last so it wins
         }
-        water
         scatter at=pool count=2 { rock size="6..10" }
+        water
         grass at=bank
     }
 }

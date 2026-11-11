@@ -14,7 +14,6 @@ tile size="1x1" seed=53 {
             pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
             pin top=waterBedHeight at=pool   // the bed, written last so it wins
         }
-        water
         scatter at=bank perSquare=3 gap=7 {    // rocks first: grass grows round them
             boulder size="7..9" shape=angular
         }
@@ -24,6 +23,7 @@ tile size="1x1" seed=53 {
             leaf length=4.5 width=3
         }
         scatter at=pool count=3 { rock size="5..9" }
+        water
         long-grass at=bank                       // grows round the trunk and rocks
     }
 }
