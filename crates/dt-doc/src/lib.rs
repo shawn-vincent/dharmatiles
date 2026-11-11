@@ -32,6 +32,7 @@ pub mod migrate;
 pub mod model;
 pub mod place;
 pub mod schema;
+pub mod units;
 pub mod words;
 
 pub use decode::{decode, uses};

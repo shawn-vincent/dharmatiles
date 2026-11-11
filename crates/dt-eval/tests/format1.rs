@@ -90,7 +90,7 @@ fn a_format_one_tile_solves_as_format_zero_does() {
 #[test]
 fn override_replaces_a_library_height_and_the_ones_that_read_it() {
     let c = ok(&tile1(
-        "override $groundHeight 8\n stack { base\n dirt top=\"$groundHeight\" }",
+        "override $groundHeight \"8dmm\"\n stack { base\n dirt top=\"$groundHeight\" }",
     ));
     let d = &c.solved.as_ref().unwrap().bodies[0];
     let mid = d.at(0.5, 0.5);
@@ -107,12 +107,12 @@ fn a_let_is_read_where_it_is_used_so_it_follows_an_override_below_it() {
     // `$hump` reads `$groundHeight`; the override sits in the stack block,
     // below the `let`, and the dirt in the block sees it
     let c = ok(&tile1(
-        "let $hump \"$groundHeight + 1\"\n stack { override $groundHeight 8\n base\n dirt top=\"$hump\" }",
+        "let $hump \"$groundHeight + 1dmm\"\n stack { override $groundHeight \"8dmm\"\n base\n dirt top=\"$hump\" }",
     ));
     let mid = c.solved.as_ref().unwrap().bodies[0].at(0.5, 0.5);
     // the same as writing the sum where it is used (the rim eases it a little)
     let direct = ok(&tile1(
-        "stack { override $groundHeight 8\n base\n dirt top=\"$groundHeight + 1\" }",
+        "stack { override $groundHeight \"8dmm\"\n base\n dirt top=\"$groundHeight + 1dmm\" }",
     ));
     let want = direct.solved.as_ref().unwrap().bodies[0].at(0.5, 0.5);
     assert!(close(mid.lo, want.lo) && mid.lo > 8.5, "{mid:?} {want:?}");
@@ -121,7 +121,7 @@ fn a_let_is_read_where_it_is_used_so_it_follows_an_override_below_it() {
 #[test]
 fn an_override_may_read_the_value_it_replaces() {
     let c = ok(&tile1(
-        "override $groundHeight \"$groundHeight + 2\"\n stack { base\n dirt top=\"$groundHeight\" }",
+        "override $groundHeight \"$groundHeight + 2dmm\"\n stack { base\n dirt top=\"$groundHeight\" }",
     ));
     let mid = c.solved.as_ref().unwrap().bodies[0].at(0.5, 0.5);
     assert!(close(mid.lo, 7.0), "{mid:?}");
@@ -156,13 +156,13 @@ fn override_of_a_name_no_caller_installed_suggests_the_near_one() {
 fn a_block_scope_ends_with_its_block() {
     // `$q` is installed inside the scatter only: the dirt after it can't read it
     let e = refused(&tile1(
-        "stack { base\n scatter count=2 { let $q 3\n rock size=\"$q\" }\n dirt top=\"$q\" }",
+        "stack { base\n scatter count=2 { let $q \"3dmm\"\n rock size=\"$q\" }\n dirt top=\"$q\" }",
     ));
     assert_eq!(codes(&e), ["dt::unknown-name"]);
     assert!(e[0].message.contains("`$q`"));
     // and inside it works
     let c = ok(&tile1(
-        "stack { base\n scatter count=2 { let $q 3\n rock size=\"$q\" } }",
+        "stack { base\n scatter count=2 { let $q \"3dmm\"\n rock size=\"$q\" } }",
     ));
     assert_eq!(rock_sizes(&c), [3.0]);
 }
@@ -170,11 +170,12 @@ fn a_block_scope_ends_with_its_block() {
 #[test]
 fn a_scope_changes_the_context_for_what_it_calls_only() {
     let parts = "dharmatiles version=1\n\
-        define smaller { stack { override $s 2\n scatter count=2 { rock size=\"$s\" } } }\n\
+        define smaller { stack { override $s \"2dmm\"\n scatter count=2 { rock size=\"$s\" } } }\n\
         define plain { stack { scatter count=2 { rock size=\"$s\" } } }\n";
-    let tile =
-        tile1("let $s 5\n stack { base\n smaller\n plain\n scatter count=2 { rock size=\"$s\" } }")
-            .replace("tile size", "use \"./parts\" smaller plain\ntile size");
+    let tile = tile1(
+        "let $s \"5dmm\"\n stack { base\n smaller\n plain\n scatter count=2 { rock size=\"$s\" } }",
+    )
+    .replace("tile size", "use \"./parts\" smaller plain\ntile size");
     let c = check(
         &mem(&[("t.dtile", &tile), ("parts.dtile", parts)]),
         "t.dtile",
@@ -189,7 +190,7 @@ fn a_scope_changes_the_context_for_what_it_calls_only() {
 fn a_definition_reads_the_context_of_its_caller_and_check_says_where_it_is_missing() {
     let parts = "dharmatiles version=1\n\
         define stones { stack { scatter count=2 { rock size=\"$stoneSize\" } } }\n";
-    let with = tile1("let $stoneSize 6\n stack { base\n stones }")
+    let with = tile1("let $stoneSize \"6dmm\"\n stack { base\n stones }")
         .replace("tile size", "use \"./parts\" stones\ntile size");
     let c = check(
         &mem(&[("t.dtile", &with), ("parts.dtile", parts)]),
@@ -219,7 +220,7 @@ fn a_position_is_not_drawn_once_so_it_cannot_be_a_size() {
     assert_eq!(codes(&e), ["dt::type"]);
     // through a let, too: the rule follows the names a formula reads
     let e = refused(&tile1(
-        "let $w \"$x + 4\"\n stack { base\n scatter count=2 { rock size=\"$w\" } }",
+        "let $w \"$x * 1dmm + 4dmm\"\n stack { base\n scatter count=2 { rock size=\"$w\" } }",
     ));
     assert_eq!(codes(&e), ["dt::type"]);
     // a library height that reads no position is a fine size
@@ -228,7 +229,7 @@ fn a_position_is_not_drawn_once_so_it_cannot_be_a_size() {
     ));
     // and where a height is worked out at each point it is welcome
     ok(&tile1(
-        "let $wave \"$groundHeight + 0.4 * cos(720 * $x)\"\n stack { base\n dirt top=\"$wave\" }",
+        "let $wave \"$groundHeight + 0.4dmm * cos(720deg * $x)\"\n stack { base\n dirt top=\"$wave\" }",
     ));
 }
 
@@ -268,8 +269,8 @@ fn reserved_words_cannot_name_a_let() {
 #[test]
 fn a_param_hides_nothing_of_the_context() {
     let parts = "dharmatiles version=1\n\
-        define lawn { param length 4\n stack { scatter count=2 { rock size=length } } }\n";
-    let tile = tile1("stack { base\n lawn length=7 }")
+        define lawn { param length \"4dmm\"\n stack { scatter count=2 { rock size=length } } }\n";
+    let tile = tile1("stack { base\n lawn length=\"7dmm\" }")
         .replace("tile size", "use \"./parts\" lawn\ntile size");
     let c = check(
         &mem(&[("t.dtile", &tile), ("parts.dtile", parts)]),

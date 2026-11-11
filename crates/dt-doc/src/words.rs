@@ -19,13 +19,14 @@ pub const WEIGHTINGS: &[&str] = &[
 pub const UNITS: &[&str] = &["sq", "mm", "in", "layer", "deg", "rad", "pi", "dmm"];
 
 /// The `$` names an element sets at each point it works a height out:
-/// where it is, what it stands on.  `check` knows these; no `let` or
-/// `override` may take one.
-pub const POINT_NAMES: &[&str] = &["$x", "$y", "$bottom"];
+/// where it is in the tile (`$x`, `$y`, squares from the north-west corner,
+/// plain numbers), how far in from the edge of its own region (`$d`) and how
+/// far round it (`$a`), both fractions, and what it stands on (`$bottom`).
+/// `check` knows these; no `let` or `override` may take one.
+pub const POINT_NAMES: &[&str] = &["$x", "$y", "$d", "$a", "$bottom"];
 
-/// The `$` names an element will set in later steps of format 1
-/// (`$d $a`): reserved now so no tile takes them.
-pub const RESERVED_POINT_NAMES: &[&str] = &["$d", "$a"];
+/// `$` names reserved and not yet set by any element: none now.
+pub const RESERVED_POINT_NAMES: &[&str] = &[];
 
 /// The `$` names that are regions: `$tile`, the root, and `$region`, the
 /// region of the thing being built (at a declaration, the enclosing one).
@@ -33,9 +34,13 @@ pub const RESERVED_POINT_NAMES: &[&str] = &["$d", "$a"];
 /// the coordinate functions, never to arithmetic.
 pub const REGION_NAMES: &[&str] = &["$tile", "$region"];
 
-/// The `$` names an element sets while it builds a height at each point:
-/// what every element with a `top=` declares ([`sets`]).
-pub const TOP_SETS: &[&str] = &["$x", "$y", "$bottom", "$region"];
+/// What a body (dirt, water, floors, a cliff) sets at each node of its
+/// region as it works its top and pins out ([`sets`]).
+pub const BODY_SETS: &[&str] = &["$x", "$y", "$d", "$a", "$bottom", "$region"];
+
+/// What a tree sets: its top is worked out once for each tree, over the
+/// ground at its foot, so it has no position of its own to read.
+pub const TREE_SETS: &[&str] = &["$bottom", "$region"];
 
 /// The `$` names `element` sets when it calls a formula it was given (its
 /// `top=` or a pin's): `check` refuses a read of any other that no caller
@@ -43,7 +48,8 @@ pub const TOP_SETS: &[&str] = &["$x", "$y", "$bottom", "$region"];
 #[must_use]
 pub fn sets(element: &str) -> &'static [&'static str] {
     match element {
-        "dirt" | "water" | "flagstones" | "planks" | "cliff" | "tree" => TOP_SETS,
+        "dirt" | "water" | "flagstones" | "planks" | "cliff" => BODY_SETS,
+        "tree" => TREE_SETS,
         _ => &["$region"],
     }
 }

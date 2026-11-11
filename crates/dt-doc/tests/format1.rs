@@ -40,7 +40,7 @@ fn lets_work_in_any_block_and_in_a_define() {
         "t.dtile",
         &format!(
             "dharmatiles version=1\n{}",
-            "define lawn { let $blade 3\n stack { override $blade 4\n scatter count=2 { let $q 1\n rock size=\"$q\" } } }\n"
+            "define lawn { let $blade \"3dmm\"\n stack { override $blade \"4dmm\"\n scatter count=2 { let $q \"1dmm\"\n rock size=\"$q\" } } }\n"
         ),
         &known(),
     )
@@ -83,9 +83,10 @@ fn words_and_names() {
         codes(&tile("stack { base\n dirt top=\"bottom + 1\" }")),
         ["dt::name"]
     );
+    // `$d` is set by a body at each node, a plain fraction: not a height
     assert_eq!(
         codes(&tile("stack { base\n dirt top=\"$d\" }")),
-        ["dt::unknown-name"]
+        ["dt::type"]
     );
 }
 

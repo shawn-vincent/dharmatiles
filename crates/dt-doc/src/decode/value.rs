@@ -180,6 +180,21 @@ impl Decoder<'_> {
         } else {
             axis.describe()
         };
+        if self.format1
+            && let Some(t) = e.ty()
+        {
+            self.err(
+                "dt::unit",
+                t.span(),
+                format!("`({})` is not written in format 1", t.value()),
+                "an annotation",
+            )
+            .help = Some(
+                "write the unit after the number, in a string: `\"4.5dmm\"`; `(h)` is gone"
+                    .to_owned(),
+            );
+            return None;
+        }
         let unit = match e.ty() {
             None => None,
             Some(t) => match Unit::parse(t.value()) {
@@ -233,7 +248,12 @@ impl Decoder<'_> {
             }
             KdlValue::String(s) => {
                 let at = self.inner_at(e, s);
-                match expr::parse(s) {
+                let parsed = if self.format1 {
+                    expr::parse_units(s)
+                } else {
+                    expr::parse(s)
+                };
+                match parsed {
                     Ok(x) => (x, sub_span(span, at, at + s.len())),
                     Err(err) => {
                         let help = err.help.clone().unwrap_or_else(|| {
@@ -251,7 +271,7 @@ impl Decoder<'_> {
                 }
             }
         };
-        if let Some((code, r)) = percent_flaw(&x, axis, k, (owner, name), kind) {
+        if let Some((code, r)) = percent_flaw(&x, axis, k, (owner, name), kind, self.format1) {
             self.err(code, span, r.message, r.label).help = r.help;
             return None;
         }
@@ -369,6 +389,13 @@ impl Decoder<'_> {
             .help = Some(help);
             return None;
         }
+        let x = if self.format1 {
+            let what = format!("`{owner} {name}`");
+            self.check_lower(&x, super::units::want_of(axis), ctx, span, &what)?
+                .0
+        } else {
+            x
+        };
         if x.names().is_empty()
             && let Some(r) = range_flaw(&x, unit, axis, k, (owner, name))
         {
@@ -392,10 +419,28 @@ impl Decoder<'_> {
                 expr: Expr::num(as_f64(v).unwrap_or(f64::NAN)),
                 unit,
             }),
-            KdlValue::String(s) => match expr::parse(s) {
-                Ok(x) if x.names().is_empty() => Value::Num(Num { expr: x, unit }),
-                _ => Value::Text(s.clone()),
-            },
+            KdlValue::String(s) => {
+                // format 1: a value with a unit is read in the references
+                // (a length in design millimetres, an angle in degrees)
+                let parsed = if self.format1 {
+                    expr::parse_units(s).and_then(|x| {
+                        crate::units::lower(&x, crate::units::Base::Dmm, self.known.units(), None)
+                            .map_err(|ke| expr::ExprError {
+                                message: ke.message,
+                                code: None,
+                                help: ke.help,
+                                start: 0,
+                                end: 0,
+                            })
+                    })
+                } else {
+                    expr::parse(s)
+                };
+                match parsed {
+                    Ok(x) if x.names().is_empty() => Value::Num(Num { expr: x, unit }),
+                    _ => Value::Text(s.clone()),
+                }
+            }
             KdlValue::Null => {
                 self.err("dt::value", span, "a value can't be #null", "null");
                 return None;
@@ -413,9 +458,11 @@ fn percent_flaw(
     k: Option<&'static Control>,
     (owner, name): (&str, &str),
     kind: &str,
+    format1: bool,
 ) -> Option<(&'static str, Refusal)> {
-    // Percent: required for a share, refused elsewhere.
-    if axis == Axis::Share && !x.all_percent() && x.names().is_empty() {
+    // Percent: required for a share (format 0; in format 1 a share is a
+    // percent or a plain fraction), refused elsewhere.
+    if axis == Axis::Share && !format1 && !x.all_percent() && x.names().is_empty() {
         let help = match x.bounds(&|_| None) {
             // 0.3 is a fraction (30%); 135 already means 135%.
             Ok((lo, hi)) if (lo - hi).abs() < 1e-12 => {
@@ -509,7 +556,7 @@ pub fn check_text(k: &'static Control, owner: &str, typed: &str) -> Option<Refus
             });
         }
     };
-    if let Some((_, r)) = percent_flaw(&x, axis, Some(k), (owner, k.name), axis.describe()) {
+    if let Some((_, r)) = percent_flaw(&x, axis, Some(k), (owner, k.name), axis.describe(), false) {
         return Some(r);
     }
     if !x.names().is_empty() || !axis.is_numeric() {

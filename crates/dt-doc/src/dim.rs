@@ -17,6 +17,8 @@ pub enum Dim {
     Mm,
     /// Squares: `x` and `y`, and angles made from them.
     Squares,
+    /// An angle (format 1): `90deg`, `2 pi rad`.
+    Angle,
     /// A region (format 1): `$tile`, `$region`, `parent(…)`.  It goes to
     /// `parent()` only; as a number it is an error.
     Region,
@@ -30,6 +32,7 @@ impl Dim {
             Dim::Scalar => "a plain number",
             Dim::Mm => "a height or length in mm",
             Dim::Squares => "squares (x or y)",
+            Dim::Angle => "an angle",
             Dim::Region => "a region",
         }
     }
@@ -64,6 +67,10 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
             Some("write the number of mm"),
         ),
         Expr::Num { .. } => Ok(Dim::Scalar),
+        Expr::Unit(u) => err(
+            format!("`{}` is a unit, and format 0 writes none", u.word()),
+            Some("units belong to format 1"),
+        ),
         Expr::Name(n) => name(n).map_or_else(|| err(format!("unknown name `{n}`"), None), Ok),
         Expr::Neg(a) => not_region(dim_of(a, name)?, "a negation"),
         Expr::Range { lo, hi } => unify(dim_of(lo, name)?, dim_of(hi, name)?, "a range"),

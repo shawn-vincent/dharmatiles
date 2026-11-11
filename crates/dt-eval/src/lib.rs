@@ -11,6 +11,7 @@
 //! needs an element not built yet set aside (see its module docs).
 
 mod cache;
+pub mod coords;
 pub mod crash_switch;
 pub mod diag;
 pub mod doc;
@@ -420,7 +421,11 @@ impl Checked {
 /// # Errors
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
-    let read = doc::read(sources, path, opts.format_preview)?;
+    let units = dt_doc::units::Units {
+        square_mm: Frame::for_system(&opts.system, 1, 1).square_mm,
+        layer_mm: opts.printer.layer_mm,
+    };
+    let read = doc::read_with(sources, path, opts.format_preview, units)?;
     let Some(mut tile) = read.tile else {
         return Ok(Checked {
             file: read.file,
@@ -521,6 +526,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     let region_tree = (tile.format >= 1 && errors.is_empty()).then(|| {
         let tree = regions::RegionTree::build(&tile, &frame);
         errors.extend(tree.parent_flaws(&tile));
+        errors.extend(tree.hole_flaws(&tile));
         tree
     });
     if !errors.is_empty() {
@@ -590,7 +596,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     // the Solve phase: bands and pins, no meshes, on the lattice the build
     // makes its bodies on: `check` and `build` share this one solve
     let writes: Vec<dt_elements::Write> = plans.iter().map(|p| p.writes).collect();
-    let mut solved = solve::solve(&tile, &frame, opts, &writes)?;
+    let mut solved = solve::solve(&tile, &frame, opts, &writes, region_tree.as_ref())?;
     solved.notes.extend(tile.notes.iter().cloned());
     if let Some(tree) = &region_tree {
         solved.explain.extend(tree.explain(&tile));

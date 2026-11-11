@@ -9,8 +9,10 @@
 //!   crown disc, a rock's or flower's disc, a wall's strip.  Its parent is
 //!   the region it is written in (its `at=` region, else the tile).
 //! * A body (`dirt`, `water`, floors, `cliff`) and a coat have the region
-//!   they act in: their `at=` region, else the tile.  A scatter's region is
-//!   the same, or the strip of the line it runs along.
+//!   they act in: their `at=` region, else the tile.
+//! * A scatter has a region of its own: the area it scatters over (its
+//!   `at=` region, the strip of the line it runs along, else the whole
+//!   tile), under the region it is written in.
 //! * Each thing a scatter places has its own region under the scatter's.  A
 //!   scatter's things are not placed until the build, so the tree holds one
 //!   node for each kind of thing the scatter lists (kind [`Kind::Placed`]),
@@ -43,6 +45,10 @@ pub enum Kind {
     Disc,
     /// A wall's strip along its line.
     Run,
+    /// A scatter: the area it scatters over (its `at=` region, the strip of
+    /// its line, else the whole tile), its own region under the region it
+    /// is written in.
+    Scatter,
     /// One kind of thing a scatter places: each thing placed has a disc of
     /// this size under the scatter's region.
     Placed,
@@ -58,6 +64,7 @@ impl Kind {
             Kind::Strip => "strip",
             Kind::Disc => "disc",
             Kind::Run => "wall strip",
+            Kind::Scatter => "scatter",
             Kind::Placed => "placed disc",
         }
     }
@@ -96,6 +103,9 @@ pub struct Node {
     /// A disc's radius in squares: the size a [`Kind::Placed`] thing's disc
     /// will have, and the radius of a [`Kind::Disc`].
     pub radius: Option<f64>,
+    /// The line a strip runs along (squares from the south-west corner,
+    /// first through point to last): `a(…)` of it runs along the line.
+    pub along: Option<Vec<[f64; 2]>>,
 }
 
 /// The region tree of one tile.
@@ -292,6 +302,7 @@ impl RegionTree {
                 y1: f64::from(tile.rows),
             }),
             radius: None,
+            along: None,
         }];
         // the tile's named regions, then their parents by fill point
         let places = Places::new(tile, frame);
@@ -309,6 +320,13 @@ impl RegionTree {
                 bbox: bbox_of(frame, &mask),
                 mask: Some(mask),
                 radius: None,
+                along: if r.strip {
+                    r.name
+                        .strip_suffix(" strip")
+                        .and_then(|l| tile.lines.get(l).cloned())
+                } else {
+                    None
+                },
             });
         }
         let counts: Vec<usize> = nodes[first..]
@@ -375,6 +393,7 @@ impl RegionTree {
                         mask: None,
                         bbox: None,
                         radius,
+                        along: None,
                     })
                 })
                 .collect();
@@ -402,11 +421,28 @@ impl RegionTree {
         let frame = self.frame;
         let what = e.what.value.as_str();
         if what == "scatter" {
-            return e
+            // the area it scatters over: a line's strip, else the region it
+            // is written in (the whole tile at tile level)
+            let area = e
                 .line
                 .as_deref()
                 .and_then(|l| region_node(&strip_name(l)))
                 .unwrap_or(base);
+            let (nx, ny) = frame.nodes();
+            let mask = self.nodes[area]
+                .mask
+                .clone()
+                .unwrap_or_else(|| Mask::new(nx, ny, true));
+            return self.push(Node {
+                label: format!("scatter (entry {})", i + 1),
+                kind: Kind::Scatter,
+                parent: Some(base),
+                entry: Some(i),
+                bbox: self.nodes[area].bbox,
+                mask: Some(mask),
+                radius: None,
+                along: self.nodes[area].along.clone(),
+            });
         }
         let Some((width, is_disc)) = footprint(what, &e.controls) else {
             return base;
@@ -427,6 +463,7 @@ impl RegionTree {
                 bbox: bbox_of(&frame, &mask),
                 mask: Some(mask),
                 radius: Some(radius),
+                along: None,
             });
         }
         let pts = e
@@ -445,6 +482,7 @@ impl RegionTree {
             bbox: bbox_of(&frame, &mask),
             mask: Some(mask),
             radius: Some(radius),
+            along: Some(pts),
         })
     }
 
@@ -601,6 +639,126 @@ impl RegionTree {
         }
         out
     }
+}
+
+impl RegionTree {
+    /// Every `$a` or `a(region, …)` a formula reads of a region with a hole
+    /// (land round a pond, a ring): there is no "round" in it, so `check`
+    /// refuses it at the formula, before any build.
+    #[must_use]
+    pub fn hole_flaws(&self, tile: &Tile) -> Vec<Diag> {
+        let coords = crate::coords::Coords::new(self, 1.0, 1.0);
+        let mut out = Vec::new();
+        for r in &tile.region_reads {
+            let own = self.owner(r.owner);
+            let mut targets = Vec::new();
+            angle_reads(&r.expr, &r.table, 0, &mut targets);
+            for target in targets {
+                let id = match &target {
+                    None => own,
+                    Some(e) => match coords.region(e, own, &r.table) {
+                        Ok(id) => id,
+                        // `parent_flaws` reports a region that is not there
+                        Err(_) => continue,
+                    },
+                };
+                if self.nodes[id].mask.is_none() || !coords.field(id).hole {
+                    continue;
+                }
+                let (what, text) = match &target {
+                    None => ("$a".to_owned(), "$a"),
+                    Some(_) => ("a(…)".to_owned(), "a("),
+                };
+                let at = find_word(r, text).unwrap_or(r.span);
+                out.push(
+                    Diag::at(
+                        &r.src,
+                        at,
+                        "dt::region",
+                        format!(
+                            "`{what}` goes round a region, and `{}` has a hole",
+                            self.nodes[id].label
+                        ),
+                        "no \"round\" in a region with a hole",
+                    )
+                    .help(
+                        "an angle is measured round the deepest point; land round a pond or a ring has none. Use `x(…)` and `y(…)`, or `d(…)`, or a line's strip: `a` along a line runs from its first through point to its last",
+                    ),
+                );
+            }
+        }
+        out
+    }
+}
+
+/// The region of every angle a formula reads, through the names it reads:
+/// `None` is `$a` (its own region), `Some(r)` is `a(r, …)`.
+fn angle_reads(
+    e: &dt_doc::expr::Expr,
+    table: &dt_doc::consts::ConstTable,
+    depth: usize,
+    out: &mut Vec<Option<dt_doc::expr::Expr>>,
+) {
+    use dt_doc::expr::Expr;
+    if depth > 64 {
+        return;
+    }
+    match e {
+        Expr::Name(n) if n == "$a" => out.push(None),
+        Expr::Name(n) => {
+            if let Some(c) = table.get(n) {
+                angle_reads(&c.expr, table, depth + 1, out);
+            }
+        }
+        Expr::Call { name, args } if name == "a" && args.len() == 2 => {
+            out.push(Some(args[0].clone()));
+        }
+        Expr::Num { .. } | Expr::Unit(_) => {}
+        Expr::Neg(a) => angle_reads(a, table, depth, out),
+        Expr::Bin { lhs, rhs, .. } => {
+            angle_reads(lhs, table, depth, out);
+            angle_reads(rhs, table, depth, out);
+        }
+        Expr::Range { lo, hi } => {
+            angle_reads(lo, table, depth, out);
+            angle_reads(hi, table, depth, out);
+        }
+        Expr::Weighted { range, .. } => angle_reads(range, table, depth, out),
+        Expr::List { items } => items
+            .iter()
+            .for_each(|(v, _)| angle_reads(v, table, depth, out)),
+        Expr::Call { args, .. } => args.iter().for_each(|a| angle_reads(a, table, depth, out)),
+    }
+}
+
+/// Where `word` is written in a formula's own text, as a span.
+fn find_word(r: &crate::doc::RegionRead, word: &str) -> Option<miette::SourceSpan> {
+    let text = r.src.inner();
+    let (off, len) = (r.span.offset(), r.span.len());
+    let whole = text.get(off..off + len)?;
+    let i = whole.find(word)?;
+    let end = if word == "a(" {
+        // through the closing parenthesis
+        let mut depth = 0_usize;
+        let mut end = i + word.len();
+        for (k, c) in whole[i..].char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = i + k + 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        end
+    } else {
+        i + word.len()
+    };
+    Some(miette::SourceSpan::new((off + i).into(), end - i))
 }
 
 /// The text of the first `parent(…)` in a formula that has no parent where

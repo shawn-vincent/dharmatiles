@@ -311,7 +311,7 @@ fn number(n: &Num, lets: &Lets) -> Result<Lowered, Refused> {
 fn visit<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
     f(e);
     match e {
-        Expr::Num { .. } | Expr::Name(_) => {}
+        Expr::Num { .. } | Expr::Name(_) | Expr::Unit(_) => {}
         Expr::Neg(a) => visit(a, f),
         Expr::Bin { lhs, rhs, .. } | Expr::Range { lo: lhs, hi: rhs } => {
             visit(lhs, f);
@@ -436,7 +436,7 @@ fn lower(e: &Expr, lets: &Lets, depth: usize) -> Result<Part, Refused> {
                 "`{name}` is given a range: a function takes numbers"
             )));
         }
-        Expr::Num { .. } => Part::Num(e.sample(&env, 0.0)?),
+        Expr::Num { .. } | Expr::Unit(_) => Part::Num(e.sample(&env, 0.0)?),
     })
 }
 

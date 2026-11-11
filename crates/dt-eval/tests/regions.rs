@@ -58,9 +58,9 @@ fn parent_label(t: &RegionTree, id: usize) -> Option<&str> {
 }
 
 const POOL_AND_BANK: &str = r#"
-    line shore wobble=0 { through "0,0.5" "1,0.5" }
-    region pool { boundedBy shore; fill "0.5,0.2" }
-    region bank { boundedBy shore; fill "0.5,0.8" }
+    line shore wobble=0 { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.8sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.2sq)" }
 "#;
 
 #[test]
@@ -99,7 +99,8 @@ fn a_pool_and_its_bank_are_siblings_and_a_body_acts_in_its_region() {
     assert!(masks[0].count() > 0 && masks[1].count() > 0);
     assert!(t.contains(pool, [0.5, 0.2]) && !t.contains(pool, [0.5, 0.8]));
     assert!(t.contains(bank, [0.5, 0.8]));
-    // bounding boxes: the pool is the south half, the bank the north
+    // bounding boxes (the geometry's, from the south-west corner): the pool
+    // is the south half, the bank the north
     let (bp, bb) = (t.bbox(pool).unwrap(), t.bbox(bank).unwrap());
     assert!(bp.y1 <= 0.51 && bb.y0 >= 0.49, "{bp:?} {bb:?}");
     // bodies act in their at= region (entry 0 is the base line's dirt? no:
@@ -129,10 +130,10 @@ fn a_region_inside_another_has_it_as_its_parent() {
     let c = ok(&tile1(
         "2x2",
         r#"
-    line outer closed=#true { through "0.2,0.2" "1.8,0.2" "1.8,1.8" "0.2,1.8" }
-    line inner closed=#true { through "0.8,0.8" "1.2,0.8" "1.2,1.2" "0.8,1.2" }
-    region meadow { boundedBy outer; fill "0.5,0.5" }
-    region pond { boundedBy inner; fill "1,1" }
+    line outer closed=#true { through "(0.2sq, 1.8sq)" "(1.8sq, 1.8sq)" "(1.8sq, 0.2sq)" "(0.2sq, 0.2sq)" }
+    line inner closed=#true { through "(0.8sq, 1.2sq)" "(1.2sq, 1.2sq)" "(1.2sq, 0.8sq)" "(0.8sq, 0.8sq)" }
+    region meadow { boundedBy outer; fill "(0.5sq, 1.5sq)" }
+    region pond { boundedBy inner; fill "(1sq, 1sq)" }
     stack { base
  dirt at=meadow
  water at=pond }
@@ -152,7 +153,7 @@ fn a_scatter_of_trees_in_a_region_gives_each_tree_a_region_under_the_scatters() 
     let c = ok(&tile1(
         "2x2",
         &format!(
-            "{POOL_AND_BANK}\n stack {{ base\n dirt at=bank\n scatter at=bank count=3 {{ tree top=\"$bottom + 35\"\n rock size=\"6..10\" }} }}"
+            "{POOL_AND_BANK}\n stack {{ base\n dirt at=bank\n scatter at=bank count=3 {{ tree top=\"$bottom + 35dmm\"\n rock size=\"6dmm..10dmm\" }} }}"
         ),
     ));
     let t = tree(&c);
@@ -163,14 +164,19 @@ fn a_scatter_of_trees_in_a_region_gives_each_tree_a_region_under_the_scatters() 
         .iter()
         .position(|e| e.what.value == "scatter")
         .unwrap();
-    // the scatter's region is the region it acts in
-    assert_eq!(t.of_entry[sc], bank);
+    // the scatter has a region of its own: its area, under the region it is
+    // written in
+    let own = t.of_entry[sc];
+    assert_eq!(t.nodes[own].kind, Kind::Scatter);
+    assert_eq!(t.parent(own), Some(bank));
+    assert_eq!(t.nodes[own].mask, t.nodes[bank].mask);
     let kids = &t.of_child[sc];
     assert_eq!(kids.len(), 2);
     for &k in kids {
-        assert_eq!(t.parent(k), Some(bank));
+        assert_eq!(t.parent(k), Some(own));
         assert_eq!(t.nodes[k].kind, Kind::Placed);
-        assert_eq!(t.parents(k), 2);
+        // the scatter, the region, the tile
+        assert_eq!(t.parents(k), 3);
     }
     // a tree's disc is its crown diameter (30 mm by default) round it
     let r = t.nodes[kids[0]].radius.unwrap();
@@ -187,7 +193,7 @@ fn a_scatter_of_trees_in_a_region_gives_each_tree_a_region_under_the_scatters() 
 fn a_tree_at_a_point_makes_its_crown_disc_in_the_tile() {
     let c = ok(&tile1(
         "2x2",
-        "stack { base\n dirt\n tree at=\"1,1\" top=\"$bottom + 35\" { crown width=20 } }",
+        "stack { base\n dirt\n tree at=\"(1sq, 1sq)\" top=\"$bottom + 35dmm\" { crown width=\"20dmm\" } }",
     ));
     let t = tree(&c);
     let tile = c.tile.as_ref().unwrap();
@@ -210,7 +216,7 @@ fn a_tree_at_a_point_makes_its_crown_disc_in_the_tile() {
 fn a_wall_makes_a_strip_along_its_line() {
     let c = ok(&tile1(
         "2x1",
-        "line run { through \"0.2,0.5\" \"1.8,0.5\" }\n stack { base\n dirt\n wall at=run thickness=7 }",
+        "line run { through \"(0.2sq, 0.5sq)\" \"(1.8sq, 0.5sq)\" }\n stack { base\n dirt\n wall at=run thickness=\"7dmm\" }",
     ));
     let t = tree(&c);
     let tile = c.tile.as_ref().unwrap();
@@ -293,7 +299,7 @@ fn how_far_parent_reaches_depends_on_where_the_formula_is_called() {
     let mut c = ok(&tile1(
         "1x1",
         &format!(
-            "{POOL_AND_BANK}\n stack {{ base\n dirt\n tree at=\"0.5,0.5\" top=\"$bottom + 35\"\n scatter at=bank count=2 {{ tree top=\"$bottom + 35\" }} }}"
+            "{POOL_AND_BANK}\n stack {{ base\n dirt\n tree at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 35dmm\"\n scatter at=bank count=2 {{ tree top=\"$bottom + 35dmm\" }} }}"
         ),
     ));
     // a body at tile level: `$region` is the tile
@@ -306,18 +312,23 @@ fn how_far_parent_reaches_depends_on_where_the_formula_is_called() {
     let e = reach(&mut c, "tree", None, "1 + parent(parent($region))");
     assert_eq!(e.len(), 1, "{e:#?}");
     assert_eq!(pointed(&e[0]), "parent(parent($region))");
-    // a tree in a scatter in a region has two (the region, the tile)
-    let e = reach(&mut c, "scatter", Some(0), "parent(parent($region))");
-    assert!(e.is_empty(), "{e:#?}");
+    // a tree in a scatter in a region has three (the scatter, the region, the tile)
     let e = reach(
         &mut c,
         "scatter",
         Some(0),
         "parent(parent(parent($region)))",
     );
+    assert!(e.is_empty(), "{e:#?}");
+    let e = reach(
+        &mut c,
+        "scatter",
+        Some(0),
+        "parent(parent(parent(parent($region))))",
+    );
     assert_eq!(e.len(), 1, "{e:#?}");
     assert!(e[0].message.contains("reaches past the tile"), "{e:#?}");
-    assert!(e[0].message.contains("3 up, and there are 2"), "{e:#?}");
+    assert!(e[0].message.contains("4 up, and there are 3"), "{e:#?}");
     // the tile has no parent, wherever it is asked
     let e = reach(&mut c, "scatter", Some(0), "parent($tile)");
     assert!(
@@ -331,7 +342,7 @@ fn the_reader_records_each_formula_with_the_thing_that_calls_it() {
     let c = ok(&tile1(
         "1x1",
         &format!(
-            "{POOL_AND_BANK}\n stack {{ base\n dirt at=bank top=\"$groundHeight\"\n tree at=\"0.5,0.5\" top=\"$bottom + 35\"\n scatter at=bank count=2 {{ rock\n tree top=\"$bottom + 35\" }} }}"
+            "{POOL_AND_BANK}\n stack {{ base\n dirt at=bank top=\"$groundHeight\"\n tree at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 35dmm\"\n scatter at=bank count=2 {{ rock\n tree top=\"$bottom + 35dmm\" }} }}"
         ),
     ));
     let tile = c.tile.as_ref().unwrap();
@@ -347,7 +358,7 @@ fn the_reader_records_each_formula_with_the_thing_that_calls_it() {
 }
 
 #[test]
-fn a_region_name_cannot_be_declared_and_d_and_a_stay_reserved() {
+fn a_region_name_cannot_be_declared_and_d_and_a_are_fractions() {
     for line in ["let $tile 5", "override $region 5"] {
         let e = refused(&tile1("1x1", &format!("{line}\n stack {{ base\n dirt }}")));
         assert_eq!(e[0].code, "dt::name", "{line}: {e:#?}");
@@ -356,8 +367,13 @@ fn a_region_name_cannot_be_declared_and_d_and_a_stay_reserved() {
             "{line}: {e:#?}"
         );
     }
+    // `$d` and `$a` are set by a body now: a fraction, so not a height
     let e = refused(&tile1("1x1", "stack { base\n dirt top=\"$d\" }"));
-    assert!(e[0].message.contains("no element sets"), "{e:#?}");
+    assert_eq!(e[0].code, "dt::type", "{e:#?}");
+    ok(&tile1(
+        "1x1",
+        "stack { base\n dirt top=\"$groundHeight + 4dmm * $d\" }",
+    ));
 }
 
 #[test]

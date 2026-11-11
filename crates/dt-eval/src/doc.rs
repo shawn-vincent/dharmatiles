@@ -505,7 +505,23 @@ pub fn use_path(from: &str, u: &Use) -> String {
 /// # Errors
 /// Every problem found, each at its text.
 pub fn read(sources: &dyn Source, path: &str, preview: bool) -> Result<Read, Vec<Diag>> {
+    read_with(sources, path, preview, dt_doc::units::Units::default())
+}
+
+/// [`read`] for a build target: `units` says what `mm`, `in` and `layer`
+/// are worth in a format 1 document (the system's square, the printer's
+/// layer).  A format 0 document does not read them.
+///
+/// # Errors
+/// Every problem found, each at its text.
+pub fn read_with(
+    sources: &dyn Source,
+    path: &str,
+    preview: bool,
+    units: dt_doc::units::Units,
+) -> Result<Read, Vec<Diag>> {
     let mut r = Reader {
+        units,
         preview,
         entry_tables: BTreeMap::new(),
         pending_reads: Vec::new(),
@@ -598,14 +614,21 @@ fn read_flaw(src: &Src, span: SourceSpan, flaw: &dt_doc::consts::ReadFlaw) -> Di
             "a count or size is not per point",
         )
         .help("a position or a height under goes where a height is worked out at each point: a top, a pin or a level"),
-        ReadFlaw::NotSet { name } => Diag::at(
+        ReadFlaw::NotSet {
+            name,
+            element,
+            sets,
+        } => Diag::at(
             src,
             span,
             "dt::unknown-name",
-            format!("no element sets `{name}` yet"),
-            "reserved",
+            format!("`{element}` does not set `{name}`"),
+            "not set here",
         )
-        .help("`$d`, `$a` and `$region` are reserved for the elements that will set them"),
+        .help(format!(
+            "`{element}` sets {}; a body (dirt, water, a floor, a cliff) works its top out at each node and sets the position and the depth and angle round its region, a tree's top is worked out once over the ground at its foot",
+            sets.join(", ")
+        )),
         ReadFlaw::Loop => Diag::at(
             src,
             span,
@@ -615,6 +638,15 @@ fn read_flaw(src: &Src, span: SourceSpan, flaw: &dt_doc::consts::ReadFlaw) -> Di
         )
         .help("a `let` that reads itself needs `override`, which reads the value it replaces"),
     }
+}
+
+/// Where a formula is read: drawn once (a count, a size), or worked out at
+/// each point by an element, which sets only the names
+/// [`dt_doc::words::sets`] says.
+#[derive(Clone, Copy)]
+enum Reads<'a> {
+    Once,
+    At(&'a str),
 }
 
 /// A parameter's value and the text it was written in.
@@ -663,6 +695,8 @@ struct Reader<'s> {
     widths: BTreeMap<String, f64>,
     /// Read the format in development (format 1) too.
     preview: bool,
+    /// What `mm`, `in` and `layer` are worth (format 1).
+    units: dt_doc::units::Units,
     /// The context each of the tile's own stack entries is read in, by the
     /// offset of its text.
     entry_tables: BTreeMap<usize, Arc<ConstTable>>,
@@ -724,7 +758,9 @@ impl Reader<'_> {
                 return None;
             }
         };
-        let mut known = Known::new().with_format_preview(self.preview);
+        let mut known = Known::new()
+            .with_format_preview(self.preview)
+            .with_units(self.units);
         // this file's format, to hold the files it uses to it (a header
         // that is wrong is reported when the file is decoded)
         let format = dt_doc::header::check_text_with(path, &text, self.preview)
@@ -817,12 +853,16 @@ impl Reader<'_> {
         expr: &Expr,
         span: SourceSpan,
         src: &Src,
-        per_point: bool,
+        reads: Reads<'_>,
     ) -> bool {
         if !table.is_dollar() {
             return true;
         }
-        match table.check_reads(expr, per_point) {
+        let checked = match reads {
+            Reads::Once => table.check_reads(expr, false),
+            Reads::At(element) => table.check_reads_for(expr, element),
+        };
+        match checked {
             Ok(()) => true,
             Err(flaw) => {
                 self.errors.push(read_flaw(src, span, &flaw));
@@ -901,7 +941,7 @@ impl Reader<'_> {
         }
         for l in &def.lines {
             if let Some(w) = l.width.as_ref()
-                && self.readable(&consts, &w.value.expr, w.span, src, false)
+                && self.readable(&consts, &w.value.expr, w.span, src, Reads::Once)
             {
                 match wobble_mm(&w.value, &lets) {
                     Ok(v) if v.is_finite() && v > 0.0 && v <= MAX_LINE_WIDTH_MM => {
@@ -936,7 +976,7 @@ impl Reader<'_> {
             let wobble_read = l
                 .wobble
                 .as_ref()
-                .is_none_or(|w| self.readable(&consts, &w.value.expr, w.span, src, false));
+                .is_none_or(|w| self.readable(&consts, &w.value.expr, w.span, src, Reads::Once));
             let wobble = match l
                 .wobble
                 .as_ref()
@@ -1001,7 +1041,7 @@ impl Reader<'_> {
             }
             let mut within = Vec::new();
             for w in &r.within {
-                if !self.readable(&consts, &w.mm.value, w.mm.span, src, false) {
+                if !self.readable(&consts, &w.mm.value, w.mm.span, src, Reads::Once) {
                     continue;
                 }
                 // a distance is a band: the odds of a weighting have nothing to act on
@@ -1171,10 +1211,16 @@ impl Reader<'_> {
             // format 1: what the body reads must be there, at each point
             let mut readable = true;
             if let Some(t) = &e.top {
-                readable &= self.readable(&table, &t.value, t.span, src, true);
+                readable &= self.readable(&table, &t.value, t.span, src, Reads::At(&e.what.value));
             }
             for p in &e.pins {
-                readable &= self.readable(&table, &p.top.value, p.top.span, src, true);
+                readable &= self.readable(
+                    &table,
+                    &p.top.value,
+                    p.top.span,
+                    src,
+                    Reads::At(&e.what.value),
+                );
             }
             if !readable {
                 continue;
@@ -1841,7 +1887,7 @@ impl Reader<'_> {
                 .or_else(|| e.top.clone().map(|t| (t, Arc::clone(src))))
         {
             if let Some(table) = scope.lets.table.clone() {
-                if !self.readable(&table, &t.value, t.span, &at, true) {
+                if !self.readable(&table, &t.value, t.span, &at, Reads::At("tree")) {
                     return None;
                 }
                 if table.is_dollar() {
@@ -1948,7 +1994,7 @@ impl Reader<'_> {
                 // that is worked out at each point
                 if let Value::Num(n) = &b.value.value
                     && let Some(table) = scope.lets.table.clone()
-                    && !self.readable(&table, &n.expr, b.value.span, &b.src, false)
+                    && !self.readable(&table, &n.expr, b.value.span, &b.src, Reads::Once)
                 {
                     ok = false;
                     continue;

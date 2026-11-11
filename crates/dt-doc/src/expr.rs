@@ -57,6 +57,74 @@ impl Unit {
     }
 }
 
+/// A unit word (format 1): a length, an angle, `pi` (a plain number), or
+/// `%` as the unit a coordinate counts in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnitWord {
+    /// `sq`: one square.
+    Sq,
+    /// `mm`: a printed millimetre.
+    Mm,
+    /// `in`: a printed inch.
+    In,
+    /// `dmm`: a design millimetre, 1/35 of a square.
+    Dmm,
+    /// `layer`: one printed layer.
+    Layer,
+    /// `deg`: a degree.
+    Deg,
+    /// `rad`: a radian.
+    Rad,
+    /// `pi`: the number, 3.14….
+    Pi,
+    /// `%` as a coordinate's unit: a fraction of the frame's own size.
+    Pct,
+}
+
+impl UnitWord {
+    /// Every unit written as a word, in the order help lists them.
+    pub const WORDS: [(&'static str, UnitWord); 8] = [
+        ("sq", UnitWord::Sq),
+        ("mm", UnitWord::Mm),
+        ("in", UnitWord::In),
+        ("dmm", UnitWord::Dmm),
+        ("layer", UnitWord::Layer),
+        ("deg", UnitWord::Deg),
+        ("rad", UnitWord::Rad),
+        ("pi", UnitWord::Pi),
+    ];
+
+    /// The unit a word names.
+    #[must_use]
+    pub fn parse(word: &str) -> Option<Self> {
+        Self::WORDS
+            .iter()
+            .find(|(w, _)| *w == word)
+            .map(|(_, u)| *u)
+    }
+
+    /// The word as written.
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        Self::WORDS
+            .iter()
+            .find(|(_, u)| *u == self)
+            .map_or("%", |(w, _)| w)
+    }
+}
+
+/// The coordinate and point functions of format 1, with how many values each
+/// takes: `x(region, unit)`, `y`, `d`, `a`, `point(frame, x, y)` and
+/// `polar(frame, d, a)`.
+pub const COORD_CALLS: [(&str, usize); 6] = [
+    ("x", 2),
+    ("y", 2),
+    ("d", 2),
+    ("a", 2),
+    ("point", 3),
+    ("polar", 3),
+];
+
 /// Arithmetic operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
@@ -82,6 +150,10 @@ pub enum Expr {
     },
     /// A parameter or a named level.
     Name(String),
+    /// A unit word (format 1): the factor in `8dmm` is [`Expr::Bin`] of `8`
+    /// times this.  The reader lowers every one away before anything is
+    /// built, except the unit a coordinate counts in: `x($tile, sq)`.
+    Unit(UnitWord),
     /// Unary minus.
     Neg(Box<Expr>),
     /// Binary arithmetic.
@@ -125,7 +197,9 @@ pub enum Expr {
         items: Vec<(Expr, Option<f64>)>,
     },
     /// A function call, `cos(720 * x)`: `sin`, `cos` (degrees), `abs`,
-    /// `min`, `max`, `clamp` and `smooth`.  Only in [`parse_v2`] values.
+    /// `min`, `max`, `clamp` and `smooth`; in format 1 also the coordinates
+    /// and `point` and `polar` ([`COORD_CALLS`]).  Only in [`parse_v2`]
+    /// values (and format 1's).
     Call {
         /// The function.
         name: String,
@@ -194,9 +268,11 @@ enum Tok {
     RBracket,
     Comma,
     Colon,
+    /// A `%` standing alone: a coordinate's unit (format 1).
+    Percent,
 }
 
-fn lex(src: &str, v2: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
+fn lex(src: &str, v2: bool, units: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
     let b = src.as_bytes();
     let mut out = Vec::new();
     let mut i = 0;
@@ -229,7 +305,7 @@ fn lex(src: &str, v2: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
             let percent = b.get(i) == Some(&b'%');
             if percent {
                 i += 1;
-            } else if b.get(i).is_some_and(u8::is_ascii_alphabetic) {
+            } else if !units && b.get(i).is_some_and(u8::is_ascii_alphabetic) {
                 // A unit glued on: "4.5mm".  Units are not written.
                 let unit_start = i;
                 while i < b.len() && b[i].is_ascii_alphabetic() {
@@ -299,6 +375,10 @@ fn lex(src: &str, v2: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
                 i += 1;
                 Tok::Comma
             }
+            b'%' if units => {
+                i += 1;
+                Tok::Percent
+            }
             b':' => {
                 i += 1;
                 Tok::Colon
@@ -324,6 +404,8 @@ struct Parser<'a> {
     pos: usize,
     len: usize,
     v2: bool,
+    /// Format 1: units follow numbers (`8dmm`), and the coordinate calls exist.
+    units: bool,
     /// A control value with two bare ranges or more, or one beside a bracket
     /// or a call: `..` binds tighter than `+ - * /`, so `1..2 + 3..4` is two
     /// ranges added.  Off, a bare range reaches over sums, as ever
@@ -438,7 +520,7 @@ impl Parser<'_> {
         match self.peek().cloned() {
             Some(Tok::Num(value, percent)) => {
                 self.pos += 1;
-                Ok(Expr::Num { value, percent })
+                self.juxtapose(Expr::Num { value, percent })
             }
             Some(Tok::Name(n)) => {
                 let at = self.here();
@@ -447,13 +529,38 @@ impl Parser<'_> {
                     if WEIGHTINGS.iter().any(|(w, _)| *w == n) {
                         return self.weighted(n);
                     }
-                    if self.v2 && (n == "parent" || FUNCTIONS.iter().any(|(f, _)| *f == n)) {
+                    if self.v2
+                        && (n == "parent"
+                            || FUNCTIONS.iter().any(|(f, _)| *f == n)
+                            || (self.units && COORD_CALLS.iter().any(|(f, _)| *f == n)))
+                    {
                         return self.call(n);
                     }
                     return Err(unknown_function(&n, at, self.v2));
                 }
+                if self.units
+                    && let Some(u) = UnitWord::parse(&n)
+                {
+                    // `pi` is a number; the other units follow a number
+                    if u == UnitWord::Pi {
+                        return self.juxtapose(Expr::Unit(u));
+                    }
+                    return Err(ExprError::coded(
+                        "dt::unit",
+                        format!("`{n}` is a unit, and a unit follows a number"),
+                        format!("write a number and its unit together: `8{n}`"),
+                        at,
+                    ));
+                }
                 Ok(Expr::Name(n))
             }
+            Some(Tok::Percent) => ExprError::coded(
+                "dt::unit",
+                "`%` on its own is a coordinate's unit".to_owned(),
+                "write a number before it for a fraction (`50%`), or `x($tile, %)` for a coordinate in percent".to_owned(),
+                self.here(),
+            )
+            .into(),
             Some(Tok::LBracket) => self.bracket_range(),
             Some(Tok::RBracket | Tok::Comma) if !self.v2 => {
                 let ch = if self.peek() == Some(&Tok::RBracket) {
@@ -470,12 +577,71 @@ impl Parser<'_> {
                     return self.err("missing `)`");
                 }
                 self.pos += 1;
-                Ok(e)
+                self.juxtapose(e)
             }
             Some(Tok::DotDot) => self.err("a range needs a low end, as in \"8..14\""),
             Some(Tok::Op('^')) => self.err(SKEW_HELP),
             Some(_) => self.err("expected a number or a name"),
             None => self.err("expected a value"),
+        }
+    }
+}
+
+impl<T> From<ExprError> for Result<T, ExprError> {
+    fn from(e: ExprError) -> Self {
+        Err(e)
+    }
+}
+
+impl Parser<'_> {
+    /// A number or a parenthesised group followed by unit words and `pi`
+    /// multiplies by them, tighter than `*` and `/`: `2 pi rad`, `(2 * pi) rad`,
+    /// `8dmm`, a spaced `4.5 mm`.  Any other name beside it is an error that
+    /// lists the units; a call's name, a minus and a `$` name are not units, so
+    /// they never join (`sin (x)` stays a call, `a -b` subtracts).
+    fn juxtapose(&mut self, mut e: Expr) -> Result<Expr, ExprError> {
+        if !self.units {
+            return Ok(e);
+        }
+        loop {
+            let at = self.here();
+            let Some(Tok::Name(n)) = self.peek().cloned() else {
+                return Ok(e);
+            };
+            if let Some(u) = UnitWord::parse(&n) {
+                // a name followed by `(` is a call, not a unit
+                if matches!(self.toks.get(self.pos + 1), Some((Tok::LParen, ..))) {
+                    return Ok(e);
+                }
+                self.pos += 1;
+                e = Expr::Bin {
+                    op: BinOp::Mul,
+                    lhs: Box::new(e),
+                    rhs: Box::new(Expr::Unit(u)),
+                };
+                continue;
+            }
+            if n.starts_with('$') {
+                return Ok(e);
+            }
+            let list: Vec<&str> = UnitWord::WORDS.iter().map(|(w, _)| *w).collect();
+            let sci = n.len() > 1
+                && n.starts_with(['e', 'E'])
+                && n[1..].chars().all(|c| c.is_ascii_digit());
+            let help = if sci {
+                "there is no scientific notation: write 1000, not 1e3".to_owned()
+            } else {
+                format!(
+                    "the units are {}; a unit goes right after its number",
+                    list.join(", ")
+                )
+            };
+            return Err(ExprError::coded(
+                "dt::unit",
+                format!("`{n}` is not a unit"),
+                help,
+                at,
+            ));
         }
     }
 }
@@ -795,13 +961,37 @@ impl Parser<'_> {
         end
     }
 
+    /// A call's argument: a value, or in format 1 a unit by itself (`sq`,
+    /// `%`) where a coordinate counts in one.
+    fn call_arg(&mut self) -> Result<Expr, ExprError> {
+        if self.units {
+            let ends = |t: Option<&(Tok, usize, usize)>| {
+                matches!(t.map(|t| &t.0), Some(Tok::Comma | Tok::RParen))
+            };
+            match self.peek().cloned() {
+                Some(Tok::Percent) if ends(self.toks.get(self.pos + 1)) => {
+                    self.pos += 1;
+                    return Ok(Expr::Unit(UnitWord::Pct));
+                }
+                Some(Tok::Name(n)) if ends(self.toks.get(self.pos + 1)) => {
+                    if let Some(u) = UnitWord::parse(&n) {
+                        self.pos += 1;
+                        return Ok(Expr::Unit(u));
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.sum()
+    }
+
     /// `name(` arguments `)`: the name is already read.
     fn call(&mut self, name: String) -> Result<Expr, ExprError> {
         self.pos += 1; // the `(`
         let mut args = Vec::new();
         if self.peek() != Some(&Tok::RParen) {
             loop {
-                args.push(self.sum()?);
+                args.push(self.call_arg()?);
                 match self.peek() {
                     Some(Tok::Comma) => self.pos += 1,
                     Some(Tok::RParen) => break,
@@ -855,13 +1045,37 @@ fn binds_tight(toks: &[(Tok, usize, usize)]) -> bool {
     bare >= 2 || (bare == 1 && other)
 }
 
+/// [`parse`] a control value of format 1: the same, with units after
+/// numbers (`6dmm..10dmm`, `low(1dmm .. 6dmm, 11)`).
+///
+/// # Errors
+/// Returns the first problem with its byte range inside `src`.
+pub fn parse_units(src: &str) -> Result<Expr, ExprError> {
+    parse_full(src, false, true)
+}
+
+/// [`parse_v2`] for format 1: units after numbers and juxtaposed (`8dmm`,
+/// `2 pi rad`, `(2 * pi) rad`), and the coordinate calls `x($tile, sq)`,
+/// `d($region, %)`, `a(…)`, `point(…)` and `polar(…)`.
+///
+/// # Errors
+/// Returns the first problem with its byte range inside `src`.
+pub fn parse_v2_units(src: &str) -> Result<Expr, ExprError> {
+    parse_full(src, true, true)
+}
+
 fn parse_with(src: &str, v2: bool) -> Result<Expr, ExprError> {
-    let toks = lex(src, v2)?;
+    parse_full(src, v2, false)
+}
+
+fn parse_full(src: &str, v2: bool, units: bool) -> Result<Expr, ExprError> {
+    let toks = lex(src, v2, units)?;
     let mut p = Parser {
         toks: &toks,
         pos: 0,
         len: src.len(),
         v2,
+        units,
         tight: !v2 && binds_tight(&toks),
     };
     let e = p.value()?;
@@ -1023,7 +1237,7 @@ impl Expr {
     #[must_use]
     pub fn map_names(&self, f: &mut dyn FnMut(&str) -> Option<Expr>) -> Expr {
         match self {
-            Expr::Num { .. } => self.clone(),
+            Expr::Num { .. } | Expr::Unit(_) => self.clone(),
             Expr::Name(n) => f(n).unwrap_or_else(|| self.clone()),
             Expr::Neg(e) => Expr::Neg(Box::new(e.map_names(f))),
             Expr::Bin { op, lhs, rhs } => Expr::Bin {
@@ -1056,10 +1270,19 @@ impl Expr {
         }
     }
 
+    /// Call `f` with the name of every function called.
+    pub fn visit_calls(&self, f: &mut impl FnMut(&str)) {
+        self.visit(&mut |e| {
+            if let Expr::Call { name, .. } = e {
+                f(name);
+            }
+        });
+    }
+
     fn visit<'a>(&'a self, f: &mut impl FnMut(&'a Expr)) {
         f(self);
         match self {
-            Expr::Num { .. } | Expr::Name(_) => {}
+            Expr::Num { .. } | Expr::Name(_) | Expr::Unit(_) => {}
             Expr::Neg(e) => e.visit(f),
             Expr::Bin { lhs, rhs, .. } | Expr::Range { lo: lhs, hi: rhs } => {
                 lhs.visit(f);
@@ -1117,6 +1340,9 @@ impl Expr {
                 }
             }
             Expr::Name(n) => env(n).ok_or_else(|| format!("unknown name `{n}`"))?,
+            Expr::Unit(u) => {
+                return Err(format!("`{}` is a unit, not a number here", u.word()));
+            }
             Expr::Neg(e) => -e.draw_at(env, at, next, None)?,
             Expr::Bin { op, lhs, rhs } => {
                 let a = lhs.draw_at(env, at, next, None)?;
@@ -1215,7 +1441,7 @@ impl Expr {
                 let a: Vec<String> = args.iter().map(Expr::unweighted_text).collect();
                 format!("{name}({})", a.join(", "))
             }
-            Expr::Num { .. } | Expr::Name(_) => self.to_string(),
+            Expr::Num { .. } | Expr::Name(_) | Expr::Unit(_) => self.to_string(),
         }
     }
 
@@ -1283,6 +1509,7 @@ impl fmt::Display for Expr {
                 Ok(())
             }
             Expr::Name(n) => write!(f, "{n}"),
+            Expr::Unit(u) => f.write_str(u.word()),
             Expr::Neg(e) => write!(f, "-{}", Operand(e)),
             Expr::Bin { op, lhs, rhs } => {
                 let c = match op {

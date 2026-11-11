@@ -114,7 +114,14 @@ impl Decoder<'_> {
         self.known
             .consts()
             .iter()
-            .map(|c| (format!("{dollar}{}", c.name.value), c.dim))
+            // format 1's library heights are lengths, whatever format 0 let
+            // a plain number stand for
+            .map(|c| {
+                (
+                    format!("{dollar}{}", c.name.value),
+                    if self.format1 { Dim::Mm } else { c.dim },
+                )
+            })
             .collect()
     }
 
@@ -143,6 +150,17 @@ impl Decoder<'_> {
     ) -> Option<(Spanned<Expr>, Dim)> {
         let span = value_span(e);
         if let Some(t) = e.ty() {
+            if self.format1 {
+                self.err(
+                    "dt::unit",
+                    t.span(),
+                    format!("`({})` is not written in format 1", t.value()),
+                    "an annotation",
+                )
+                .help =
+                    Some("write the unit after the number, in a string: `\"4.5dmm\"`".to_owned());
+                return None;
+            }
             self.err(
                 "dt::unit",
                 t.span(),
@@ -155,7 +173,11 @@ impl Decoder<'_> {
         let expr = match e.value() {
             KdlValue::Integer(i) => Expr::num(i.to_string().parse().unwrap_or(f64::NAN)),
             KdlValue::Float(f) => Expr::num(*f),
-            KdlValue::String(s) => match expr::parse_v2(s) {
+            KdlValue::String(s) => match if self.format1 {
+                expr::parse_v2_units(s)
+            } else {
+                expr::parse_v2(s)
+            } {
                 Ok(x) => x,
                 Err(err) => {
                     let at = self.inner_at(e, s);
@@ -199,7 +221,10 @@ impl Decoder<'_> {
             return None;
         }
         for n in expr.names() {
-            let special = matches!(n, "x" | "y" | "bottom" | "$x" | "$y" | "$bottom");
+            let special = matches!(
+                n,
+                "x" | "y" | "bottom" | "$x" | "$y" | "$bottom" | "$d" | "$a" | "$_y"
+            );
             if special && mode == Mode::Length {
                 self.err(
                     "dt::type",
@@ -233,6 +258,9 @@ impl Decoder<'_> {
                 .help = Some(help);
                 return None;
             }
+        }
+        if self.format1 {
+            return self.height_v1(expr, ctx, what, mode, span);
         }
         let dollar_dim = |n: &str| {
             Self::name_dim(ctx, n)
@@ -269,6 +297,47 @@ impl Decoder<'_> {
             }
             Ok(d) => Some((Spanned { value: expr, span }, d)),
         }
+    }
+
+    /// A height or length of format 1: its kind checked (a top is a length,
+    /// a `let` holds any), its units lowered to design millimetres and
+    /// degrees.  The value as written is kept in `last_raw` for the points
+    /// that read a `let`.
+    fn height_v1(
+        &mut self,
+        expr: Expr,
+        ctx: &Ctx,
+        what: &str,
+        mode: Mode,
+        span: miette::SourceSpan,
+    ) -> Option<(Spanned<Expr>, Dim)> {
+        use crate::units::{Kind, Want};
+        let want = if mode == Mode::Const {
+            Want::Any
+        } else {
+            Want::Length
+        };
+        let (lowered, kind) = self.check_lower(&expr, want, ctx, span, what)?;
+        if kind == Kind::Point {
+            self.err(
+                "dt::type",
+                span,
+                format!("{what} is a number, and this is a point"),
+                "a point",
+            )
+            .help =
+                Some("a point is written where a place goes: `fill`, `through`, `at=`".to_owned());
+            return None;
+        }
+        self.last_raw = Some(expr);
+        let dim = super::units::dim_of_kind(kind);
+        Some((
+            Spanned {
+                value: lowered,
+                span,
+            },
+            dim,
+        ))
     }
 
     /// Where `name` is written inside the quoted value of `e`.
@@ -321,18 +390,6 @@ impl Decoder<'_> {
                             "`${n}` is read from the context: the element working out the height at each point sets it"
                         ));
                     }
-                    "$d" | "$a" => {
-                        ok = false;
-                        self.err(
-                            "dt::unknown-name",
-                            at,
-                            format!("no element sets `{n}` yet"),
-                            "reserved",
-                        )
-                        .help = Some(
-                            "`$d` and `$a` are reserved for the elements that will set them; the point names are `$x`, `$y` and `$bottom`, and the regions `$region` and `$tile`".to_owned(),
-                        );
-                    }
                     _ => {}
                 }
             } else if n.starts_with('$') {
@@ -368,22 +425,40 @@ impl Decoder<'_> {
             return None;
         };
         let t = s.trim();
-        if t.starts_with('(') {
-            let p = match place::parse_point(t) {
-                Ok(p) => p,
-                Err(err) => {
-                    let at = self.inner_at(e, s);
-                    self.err(
-                        "dt::place",
-                        sub_span(span, at + err.start, at + err.end),
-                        format!("can't read `{what}`: {}", err.message),
-                        "here",
-                    )
-                    .help = Some(
-                        "write a point as \"(x, y)\" in squares from the south-west corner"
-                            .to_owned(),
-                    );
-                    return None;
+        let format1_point = self.format1
+            && (t.starts_with('(') || t.starts_with("point(") || t.starts_with("polar("));
+        // format 1: a bare pair is a mistake worth its own help
+        if self.format1
+            && !format1_point
+            && t.chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_digit() || c == '.' || c == '-')
+        {
+            let at = self.inner_at(e, s);
+            self.point1(s, span, at, ctx)?;
+            return None;
+        }
+        if t.starts_with('(') || format1_point {
+            let p = if self.format1 {
+                let at = self.inner_at(e, s);
+                self.point1(s, span, at, ctx)?
+            } else {
+                match place::parse_point(t) {
+                    Ok(p) => p,
+                    Err(err) => {
+                        let at = self.inner_at(e, s);
+                        self.err(
+                            "dt::place",
+                            sub_span(span, at + err.start, at + err.end),
+                            format!("can't read `{what}`: {}", err.message),
+                            "here",
+                        )
+                        .help = Some(
+                            "write a point as \"(x, y)\" in squares from the south-west corner"
+                                .to_owned(),
+                        );
+                        return None;
+                    }
                 }
             };
             let none = |_: &str| None;
@@ -408,13 +483,26 @@ impl Decoder<'_> {
             if let Some((c, r)) = ctx.size
                 && (x < 0.0 || y < 0.0 || x > f64::from(c) || y > f64::from(r))
             {
+                let (shown, help) = if self.format1 {
+                    (
+                        t.to_owned(),
+                        format!(
+                            "this tile is {c}x{r} squares: across runs 0 to {c}, down from the north 0 to {r}"
+                        ),
+                    )
+                } else {
+                    (
+                        format!("({x}, {y})"),
+                        format!("this tile is {c}x{r}: x runs 0 to {c}, y 0 to {r}"),
+                    )
+                };
                 self.err(
                     "dt::point",
                     span,
-                    format!("`({x}, {y})` is off the tile"),
+                    format!("`{shown}` is off the tile"),
                     "outside the tile",
                 )
-                .help = Some(format!("this tile is {c}x{r}: x runs 0 to {c}, y 0 to {r}"));
+                .help = Some(help);
                 return None;
             }
             return Some((
@@ -690,6 +778,13 @@ impl Decoder<'_> {
         match ctx.consts.iter_mut().find(|(k, _)| *k == name.value) {
             Some(slot) => slot.1 = dim,
             None => ctx.consts.push((name.value.clone(), dim)),
+        }
+        if self.format1
+            && !name.value.starts_with('$')
+            && let Some(raw) = self.last_raw.take()
+        {
+            ctx.raw.retain(|(k, _)| *k != name.value);
+            ctx.raw.push((name.value.clone(), raw));
         }
         Some(Const {
             kind,
@@ -1160,10 +1255,14 @@ impl Decoder<'_> {
 
     fn slope_value(&mut self, entry: &mut Entry, e: &KdlEntry) {
         let span = value_span(e);
-        let v = match e.value() {
-            KdlValue::Integer(i) => i.to_string().parse::<f64>().ok(),
-            KdlValue::Float(f) => Some(*f),
-            _ => None,
+        let v = if self.format1 {
+            self.angle_v1(e)
+        } else {
+            match e.value() {
+                KdlValue::Integer(i) => i.to_string().parse::<f64>().ok(),
+                KdlValue::Float(f) => Some(*f),
+                _ => None,
+            }
         };
         match v {
             Some(d) if d > 0.0 && d < 90.0 => {
@@ -1173,6 +1272,7 @@ impl Decoder<'_> {
                     entry.slope = Some(Spanned { value: d, span });
                 }
             }
+            None if self.format1 => {}
             _ => {
                 self.err(
                     "dt::value",
@@ -1180,7 +1280,59 @@ impl Decoder<'_> {
                     "a slope is an angle in degrees, above 0 and below 90",
                     "not an angle",
                 )
-                .help = Some("write `slope 30`".to_owned());
+                .help = Some(
+                    if self.format1 {
+                        "write `slope \"30deg\"`"
+                    } else {
+                        "write `slope 30`"
+                    }
+                    .to_owned(),
+                );
+            }
+        }
+    }
+
+    /// An angle written in format 1 as a string with its unit, in degrees;
+    /// a mistake is reported and gives `None`.
+    pub(crate) fn angle_v1(&mut self, e: &KdlEntry) -> Option<f64> {
+        let span = value_span(e);
+        let text = match e.value() {
+            KdlValue::String(s) => s.clone(),
+            KdlValue::Integer(i) => i.to_string(),
+            KdlValue::Float(f) => f.to_string(),
+            _ => {
+                self.err(
+                    "dt::value",
+                    span,
+                    "an angle is a number with its unit",
+                    "not an angle",
+                )
+                .help = Some("write an angle with its unit: \"30deg\"".to_owned());
+                return None;
+            }
+        };
+        let at = self.inner_at(e, &text);
+        let x = match expr::parse_units(&text) {
+            Ok(x) => x,
+            Err(err) => {
+                self.err(
+                    err.code.unwrap_or("dt::value"),
+                    sub_span(span, at + err.start, at + err.end),
+                    format!("can't read an angle: {}", err.message),
+                    "here",
+                )
+                .help = err.help;
+                return None;
+            }
+        };
+        let names = |_: &str| None;
+        match crate::units::expect(&x, crate::units::Want::Angle, &names, false).and_then(|_| {
+            crate::units::lower(&x, crate::units::Base::Dmm, self.known.units(), None)
+        }) {
+            Ok(l) => l.sample(&|_| None, 0.0).ok(),
+            Err(ke) => {
+                self.kind_error(&ke, span, "an angle");
+                None
             }
         }
     }
@@ -1216,7 +1368,11 @@ impl Decoder<'_> {
                     );
                     return true;
                 }
-                if let Some(p) = self.pin_node(c, ctx) {
+                // a point in a pin is in the frame of the region it acts in
+                self.frame_region = entry.place.region.as_ref().map(|r| r.value.clone());
+                let pin = self.pin_node(c, ctx);
+                self.frame_region = None;
+                if let Some(p) = pin {
                     entry.pins.push(p);
                 }
                 true

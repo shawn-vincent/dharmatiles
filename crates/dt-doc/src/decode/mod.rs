@@ -5,6 +5,7 @@
 mod entry;
 mod heights;
 pub(crate) mod syntax;
+mod units;
 mod value;
 pub use value::check_text;
 
@@ -16,6 +17,7 @@ use miette::{NamedSource, SourceSpan};
 
 use crate::dim::Dim;
 use crate::error::{DocError, Src};
+use crate::expr;
 use crate::known::{DefInfo, Known};
 use crate::model::{
     Base, DefKind, Definition, Document, Line, Param, Printer, Region, Source, Spanned, TileHeader,
@@ -91,6 +93,10 @@ pub(crate) struct Ctx {
     /// The heights language's constants visible here, with what each
     /// measures: the library's, then the tile's own in order.
     pub consts: Vec<(String, Dim)>,
+    /// Format 1: each plain name's value as written, units and all, for the
+    /// points that read it (a point is worked out in squares, which the
+    /// lowered value, in design millimetres, no longer says).
+    pub raw: Vec<(String, crate::expr::Expr)>,
     /// Every place by name: the built-in ones and the declared ones.
     pub places: Vec<(String, PlaceKind)>,
     /// The tile's size, inside a tile.
@@ -117,6 +123,12 @@ pub(crate) struct Decoder<'k> {
     pub stack_consts: Vec<crate::model::Const>,
     /// Reading format 1: `$` names, `let` in any block, reserved words.
     pub format1: bool,
+    /// Format 1: the named region the entry being read acts in, where a pin
+    /// is written (its points are in that region's frame, whose box the
+    /// reader does not know yet).
+    pub frame_region: Option<String>,
+    /// Format 1: the last height read, as written (units unlowered).
+    pub last_raw: Option<crate::expr::Expr>,
 }
 
 /// The span of an entry's value (an entry's span covers `name=value`).
@@ -182,6 +194,8 @@ impl<'k> Decoder<'k> {
             stack_base: None,
             stack_consts: Vec::new(),
             format1: false,
+            frame_region: None,
+            last_raw: None,
         }
     }
 
@@ -1234,21 +1248,26 @@ impl<'k> Decoder<'k> {
             .help = Some("a point is a name from `point`, or \"(x, y)\" in squares".to_owned());
             return None;
         }
-        let p = match crate::place::parse_point(s) {
-            Ok(p) => p,
-            Err(err) => {
-                let inner = self.inner_at(e, s);
-                self.err(
-                    "dt::point",
-                    sub_span(span, inner + err.start, inner + err.end),
-                    format!("can't read `{control}`: {}", err.message),
-                    "here",
-                )
-                .help = Some(
-                    "write a point as \"x,y\" in squares from the south-west corner, y north"
-                        .to_owned(),
-                );
-                return None;
+        let p = if self.format1 {
+            let at = self.inner_at(e, s);
+            self.point1(s, span, at, ctx)?
+        } else {
+            match crate::place::parse_point(s) {
+                Ok(p) => p,
+                Err(err) => {
+                    let inner = self.inner_at(e, s);
+                    self.err(
+                        "dt::point",
+                        sub_span(span, inner + err.start, inner + err.end),
+                        format!("can't read `{control}`: {}", err.message),
+                        "here",
+                    )
+                    .help = Some(
+                        "write a point as \"x,y\" in squares from the south-west corner, y north"
+                            .to_owned(),
+                    );
+                    return None;
+                }
             }
         };
         if let Some((cols, rows)) = ctx.size
@@ -1256,15 +1275,28 @@ impl<'k> Decoder<'k> {
         {
             let (c, r) = (f64::from(cols), f64::from(rows));
             if x0 < 0.0 || x1 > c || y0 < 0.0 || y1 > r || x0 > x1 || y0 > y1 {
+                let (shown, help) = if self.format1 {
+                    (
+                        s.trim().to_owned(),
+                        format!(
+                            "this tile is {cols}x{rows} squares: across runs 0 to {cols}, down from the north 0 to {rows}"
+                        ),
+                    )
+                } else {
+                    (
+                        p.to_string(),
+                        format!(
+                            "this tile is {cols}x{rows}: x runs 0 to {cols}, y 0 to {rows}, low end first"
+                        ),
+                    )
+                };
                 self.err(
                     "dt::point",
                     span,
-                    format!("`{p}` is off the tile"),
+                    format!("`{shown}` is off the tile"),
                     "outside the tile",
                 )
-                .help = Some(format!(
-                    "this tile is {cols}x{rows}: x runs 0 to {cols}, y 0 to {rows}, low end first"
-                ));
+                .help = Some(help);
                 return None;
             }
         }
@@ -1276,6 +1308,56 @@ impl<'k> Decoder<'k> {
         let repr = e.format().map_or("", |f| f.value_repr.as_str());
         let ty = e.ty().map_or(0, |t| t.value().len() + 2);
         ty + repr.find(s).unwrap_or(0)
+    }
+
+    /// A printer's number in format 1: printed millimetres (`0.4mm`), or an
+    /// angle (`55deg`).  A mistake is reported and gives `None`.
+    fn printer_value(&mut self, key: &str, e: &KdlEntry) -> Option<f64> {
+        use crate::units::{Base, Want, expect, lower};
+        let span = value_span(e);
+        let KdlValue::String(s) = e.value() else {
+            self.err(
+                "dt::unit",
+                span,
+                format!("`{key}` is written with its unit"),
+                "no unit",
+            )
+            .help = Some(if matches!(key, "overhang" | "steepest") {
+                format!("write `{key} \"55deg\"`")
+            } else {
+                format!("write `{key} \"0.4mm\"`")
+            });
+            return None;
+        };
+        let at = self.inner_at(e, s);
+        let x = match expr::parse_units(s) {
+            Ok(x) => x,
+            Err(err) => {
+                self.err(
+                    err.code.unwrap_or("dt::printer"),
+                    sub_span(span, at + err.start, at + err.end),
+                    format!("can't read `{key}`: {}", err.message),
+                    "here",
+                )
+                .help = err.help;
+                return None;
+            }
+        };
+        let want = if matches!(key, "overhang" | "steepest") {
+            Want::Angle
+        } else {
+            Want::Length
+        };
+        let names = |_: &str| None;
+        match expect(&x, want, &names, false)
+            .and_then(|_| lower(&x, Base::Mm, self.known.units(), None))
+        {
+            Ok(l) => l.sample(&|_| None, 0.0).ok(),
+            Err(ke) => {
+                self.kind_error(&ke, span, &format!("`{key}`"));
+                None
+            }
+        }
     }
 
     fn printer(&mut self, n: &KdlNode) -> Option<Printer> {
@@ -1295,10 +1377,14 @@ impl<'k> Decoder<'k> {
                 return;
             };
             let span = value_span(e);
-            let v = match e.value() {
-                kdl::KdlValue::Integer(i) => i.to_string().parse().ok(),
-                kdl::KdlValue::Float(f) => Some(*f),
-                _ => None,
+            let v = if this.format1 {
+                this.printer_value(key, e)
+            } else {
+                match e.value() {
+                    kdl::KdlValue::Integer(i) => i.to_string().parse().ok(),
+                    kdl::KdlValue::Float(f) => Some(*f),
+                    _ => None,
+                }
             };
             let max = if matches!(key, "overhang" | "steepest") {
                 90.0

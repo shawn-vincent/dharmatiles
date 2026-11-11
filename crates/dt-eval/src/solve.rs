@@ -12,15 +12,17 @@
 //! pin are the node itself, which for a pin's place is its nearest point.
 
 use dt_doc::consts::ConstTable;
-use dt_doc::expr::{BinOp, Expr, sin_deg, smooth};
+use dt_doc::expr::{BinOp, Expr, UnitWord, sin_deg, smooth};
 use dt_doc::model::PlaceRef;
 use dt_elements::Write;
 use dt_kit::{Band, Ease, Field, Frame, Iv, Lint, Mask, Pin, Refusal, lints, solve_traced};
 
 use crate::Options;
+use crate::coords::Coords;
 use crate::diag::Diag;
 use crate::doc::{DefaultBody, PinDecl, Tile};
 use crate::places::Places;
+use crate::regions::RegionTree;
 
 /// The deepest chain of constants naming each other.
 const DEPTH: usize = 64;
@@ -134,10 +136,14 @@ struct Vars {
     x: Iv,
     y: Iv,
     bottom: Iv,
+    /// The node, for the coordinates of format 1.
+    k: usize,
 }
 
 struct Eval<'a> {
     table: &'a ConstTable,
+    /// Format 1: the regions' coordinates, and the region `$region` is.
+    coords: Option<(&'a Coords<'a>, usize)>,
 }
 
 impl Eval<'_> {
@@ -148,10 +154,13 @@ impl Eval<'_> {
         let mut n = Needs::default();
         let mut names = Vec::new();
         collect(e, &mut names);
+        // the coordinates are worked out at a node too
+        e.visit_calls(&mut |f| n.xy |= matches!(f, "x" | "y" | "d" | "a"));
         for name in names {
             match name.as_str() {
-                "x" | "y" | "$x" | "$y" => n.xy = true,
+                "x" | "y" | "$x" | "$y" | "$d" | "$a" | "$_y" => n.xy = true,
                 "bottom" | "$bottom" => n.bottom = true,
+                "$region" | "$tile" => {}
                 c => {
                     let entry = self
                         .table
@@ -174,9 +183,27 @@ impl Eval<'_> {
             Expr::Num { value, percent } => {
                 Iv::point(if *percent { value / 100.0 } else { *value })
             }
+            Expr::Unit(u) => return Err(format!("`{}` is a unit, not a number here", u.word())),
             Expr::Name(n) => match n.as_str() {
                 "x" | "$x" => v.x,
-                "y" | "$y" => v.y,
+                // format 1's `$y` counts south from the north-west corner:
+                // `y($tile, sq)`; the library's own `y` (format 0 names) is
+                // the geometry's, running north
+                "$y" => match self.coords {
+                    Some((c, _)) => Iv::point(c.y(RegionTree::TILE, v.k, UnitWord::Sq)),
+                    None => v.y,
+                },
+                "y" | "$_y" => v.y,
+                "$d" | "$a" => {
+                    let Some((c, own)) = self.coords else {
+                        return Err(format!("`{n}` is read only in format 1"));
+                    };
+                    Iv::point(if n == "$d" {
+                        c.d(own, v.k, UnitWord::Pct)
+                    } else {
+                        c.a(own, v.k, UnitWord::Pct)
+                    })
+                }
                 "bottom" | "$bottom" => v.bottom,
                 c => {
                     let entry = self
@@ -206,6 +233,21 @@ impl Eval<'_> {
                         a * Iv::new(1.0 / b.hi, 1.0 / b.lo)
                     }
                 }
+            }
+            Expr::Call { name, args } if matches!(name.as_str(), "x" | "y" | "d" | "a") => {
+                let Some((c, own)) = self.coords else {
+                    return Err(format!("`{name}(…)` is read only in format 1"));
+                };
+                let (Some(region), Some(Expr::Unit(unit))) = (args.first(), args.get(1)) else {
+                    return Err(format!("`{name}` takes a region and a unit"));
+                };
+                let id = c.region(region, own, self.table)?;
+                Iv::point(match name.as_str() {
+                    "x" => c.x(id, v.k, *unit),
+                    "y" => c.y(id, v.k, *unit),
+                    "d" => c.d(id, v.k, *unit),
+                    _ => c.a(id, v.k, *unit),
+                })
             }
             Expr::Call { name, args } => {
                 let a = args
@@ -239,7 +281,7 @@ fn band_flaw(msg: &str) -> (&'static str, Option<String>) {
 fn collect(e: &Expr, out: &mut Vec<String>) {
     match e {
         Expr::Name(n) => out.push(n.clone()),
-        Expr::Num { .. } => {}
+        Expr::Num { .. } | Expr::Unit(_) => {}
         Expr::Neg(a) => collect(a, out),
         Expr::Range { lo, hi } => {
             collect(lo, out);
@@ -251,6 +293,8 @@ fn collect(e: &Expr, out: &mut Vec<String>) {
             collect(lhs, out);
             collect(rhs, out);
         }
+        // a coordinate's region is not a height: its names are the region's
+        Expr::Call { name, .. } if matches!(name.as_str(), "x" | "y" | "d" | "a") => {}
         Expr::Call { args, .. } => args.iter().for_each(|a| collect(a, out)),
     }
 }
@@ -301,15 +345,17 @@ fn call(name: &str, a: &[Iv]) -> Result<Iv, String> {
 }
 
 /// The lattice and the stack so far, shared by every body.
-struct Ground {
+struct Ground<'a> {
     nx: usize,
     ny: usize,
     step: f64,
     per: f64,
     scale: f64,
+    /// Format 1: the regions' coordinates.
+    coords: Option<&'a Coords<'a>>,
 }
 
-impl Ground {
+impl Ground<'_> {
     /// A top as a band at every node in `only` (every node if `None`), world
     /// mm; `under` is what `bottom` means.  Heights are written at the
     /// reference square and scale with the system.
@@ -319,13 +365,18 @@ impl Ground {
         e: &Expr,
         under: &Band,
         only: Option<&Mask>,
+        own: usize,
     ) -> Result<Band, String> {
-        let eval = Eval { table };
+        let eval = Eval {
+            table,
+            coords: self.coords.map(|c| (c, own)),
+        };
         let needs = eval.needs(e, 0)?;
         let none = Vars {
             x: Iv::point(0.0),
             y: Iv::point(0.0),
             bottom: Iv::point(0.0),
+            k: 0,
         };
         if !needs.xy && !needs.bottom {
             let iv = eval.iv(e, &none, 0)?;
@@ -354,6 +405,7 @@ impl Ground {
                 x: Iv::point(x),
                 y: Iv::point(y),
                 bottom: Iv::new(b.lo / self.scale, b.hi / self.scale),
+                k,
             };
             match eval.iv(e, &vars, 0) {
                 Ok(iv) => Iv::new(iv.lo * self.scale, iv.hi * self.scale),
@@ -400,8 +452,9 @@ pub fn solve(
     frame: &Frame,
     opts: &Options,
     writes: &[Write],
+    regions: Option<&RegionTree>,
 ) -> Result<SolveReport, Vec<Diag>> {
-    solve_on(tile, frame, opts, writes)
+    solve_on(tile, frame, opts, writes, regions)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -410,16 +463,19 @@ fn solve_on(
     f: &Frame,
     opts: &Options,
     writes: &[Write],
+    regions: Option<&RegionTree>,
 ) -> Result<SolveReport, Vec<Diag>> {
     let h = &tile.heights;
     let cells = f.cells_per_square;
     let (nx, ny) = f.nodes();
+    let coords = regions.map(|t| Coords::new(t, f.square_mm, opts.printer.layer_mm));
     let g = Ground {
         nx,
         ny,
         step: f.step_mm(),
         per: f64::from(cells),
         scale: f.square_mm / dt_kit::REFERENCE_SQUARE_MM,
+        coords: coords.as_ref(),
     };
     let places = Places::new(tile, f);
     let mut errors = Vec::new();
@@ -494,7 +550,8 @@ fn solve_on(
         } else {
             &default.map_or_else(|| tile.src.clone(), |d| d.from.src.clone())
         };
-        let own = match g.band(&b.table, top, &under, None) {
+        let region_id = regions.map_or(0, |t| t.of_entry.get(b.entry).copied().unwrap_or(0));
+        let own = match g.band(&b.table, top, &under, None, region_id) {
             Ok(x) => x,
             Err(msg) => {
                 let (code, help) = band_flaw(&msg);
@@ -535,7 +592,7 @@ fn solve_on(
                     continue;
                 }
             };
-            let band = match g.band(&b.table, &p.top, &under, Some(&place)) {
+            let band = match g.band(&b.table, &p.top, &under, Some(&place), region_id) {
                 Ok(x) => x,
                 Err(msg) => {
                     let (code, help) = band_flaw(&msg);

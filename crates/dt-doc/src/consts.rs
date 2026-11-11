@@ -94,10 +94,15 @@ pub enum ReadFlaw {
         /// The name, `$x`, `$y` or `$bottom`.
         name: String,
     },
-    /// A name no element sets yet (`$d`, `$a`, `$region`).
+    /// A name the element that calls the formula does not set (a tree's top
+    /// has no `$x`: it is worked out once, not at each point).
     NotSet {
-        /// The name.
+        /// The name, or the coordinate call.
         name: String,
+        /// The element.
+        element: String,
+        /// What it does set.
+        sets: Vec<String>,
     },
     /// Names that read each other round a loop.
     Loop,
@@ -123,6 +128,10 @@ pub enum ParentFlaw {
 enum RegionBase {
     Own,
     Tile,
+}
+
+fn depth0() -> usize {
+    0
 }
 
 /// `name` as the context knows it: `groundHeight` is `$groundHeight`, and
@@ -196,10 +205,12 @@ impl ConstTable {
         for c in library {
             let name = dollar_of(&c.name.value);
             t.index.insert(name.clone(), t.entries.len());
+            // the library's heights are written in the geometry's own frame
+            // (`y` running north), so its `y` is not format 1's `$y`
             let expr = c
                 .value
                 .value
-                .map_names(&mut |n| Some(Expr::Name(dollar_of(n))));
+                .map_names(&mut |n| (n != "y").then(|| Expr::Name(dollar_of(n))));
             t.entries.push(Entry {
                 text: show(&expr),
                 name,
@@ -329,24 +340,73 @@ impl ConstTable {
     /// # Errors
     /// The first name that cannot be read.
     pub fn check_reads(&self, expr: &Expr, per_point: bool) -> Result<(), ReadFlaw> {
-        self.reads_at(expr, per_point, 0)
+        self.reads_at(expr, per_point.then_some(None), depth0())
     }
 
-    fn reads_at(&self, expr: &Expr, per_point: bool, depth: usize) -> Result<(), ReadFlaw> {
+    /// [`ConstTable::check_reads`] for a formula an element calls at each
+    /// point: it may read only the `$` names that element sets
+    /// ([`crate::words::sets`]).
+    ///
+    /// # Errors
+    /// The first name that cannot be read.
+    pub fn check_reads_for(&self, expr: &Expr, element: &str) -> Result<(), ReadFlaw> {
+        self.reads_at(expr, Some(Some(element)), depth0())
+    }
+
+    /// `per`: `None` where a value is drawn once; `Some(None)` where a height
+    /// is worked out at each point by no one in particular; `Some(Some(el))`
+    /// by `el`, which sets what [`crate::words::sets`] says.
+    fn reads_at(
+        &self,
+        expr: &Expr,
+        per: Option<Option<&str>>,
+        depth: usize,
+    ) -> Result<(), ReadFlaw> {
         if depth > 64 {
             return Err(ReadFlaw::Loop);
+        }
+        let not_set = |name: &str, el: &str| ReadFlaw::NotSet {
+            name: name.to_owned(),
+            element: el.to_owned(),
+            sets: crate::words::sets(el)
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect(),
+        };
+        // the coordinates `x(…)`, `y(…)`, `d(…)`, `a(…)` are worked out at a
+        // point too
+        let mut coord: Option<String> = None;
+        expr.visit_calls(&mut |n| {
+            if matches!(n, "x" | "y" | "d" | "a") {
+                coord.get_or_insert_with(|| n.to_owned());
+            }
+        });
+        if let Some(c) = coord.as_deref() {
+            match per {
+                None => {
+                    return Err(ReadFlaw::PerPoint {
+                        name: format!("{c}(…)"),
+                    });
+                }
+                Some(Some(el)) if !crate::words::sets(el).contains(&"$x") => {
+                    return Err(not_set(&format!("{c}(…)"), el));
+                }
+                Some(_) => {}
+            }
         }
         for n in expr.names() {
             if crate::words::REGION_NAMES.contains(&n) {
                 // a region is the context's own: always there
-            } else if crate::words::POINT_NAMES.contains(&n) {
-                if !per_point {
-                    return Err(ReadFlaw::PerPoint { name: n.to_owned() });
+            } else if crate::words::POINT_NAMES.contains(&n) || n == "$_y" {
+                match per {
+                    None => return Err(ReadFlaw::PerPoint { name: n.to_owned() }),
+                    Some(Some(el)) if !crate::words::sets(el).contains(&n) => {
+                        return Err(not_set(n, el));
+                    }
+                    Some(_) => {}
                 }
-            } else if crate::words::RESERVED_POINT_NAMES.contains(&n) {
-                return Err(ReadFlaw::NotSet { name: n.to_owned() });
             } else if let Some(e) = self.get(n) {
-                self.reads_at(&e.expr, per_point, depth + 1)?;
+                self.reads_at(&e.expr, per, depth + 1)?;
             } else if n.starts_with('$') {
                 let names: Vec<&str> = self
                     .entries
@@ -378,7 +438,7 @@ impl ConstTable {
         }
         let again = |x: &Expr| self.parent_flaw_at(x, parents, depth);
         match e {
-            Expr::Num { .. } => None,
+            Expr::Num { .. } | Expr::Unit(_) => None,
             Expr::Name(n) => self
                 .get(n)
                 .and_then(|c| self.parent_flaw_at(&c.expr, parents, depth + 1)),

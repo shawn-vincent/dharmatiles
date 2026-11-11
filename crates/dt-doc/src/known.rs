@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 use crate::model::{Const, ConstKind, Definition, Document};
 use crate::schema::{Control, Kind};
+use crate::units::Units;
 
 /// What a call needs to know about a definition in another file.
 #[derive(Debug, Clone)]
@@ -57,6 +58,7 @@ pub struct Known {
     files: BTreeMap<String, BTreeMap<String, DefInfo>>,
     consts: Vec<Const>,
     format_preview: bool,
+    units: Units,
 }
 
 impl Known {
@@ -73,6 +75,21 @@ impl Known {
     pub fn with_format_preview(mut self, on: bool) -> Self {
         self.format_preview = on;
         self
+    }
+
+    /// What `mm`, `in` and `layer` are worth on the build target (format 1):
+    /// its square and the printer's layer.  Without it, DungeonBlocks with
+    /// the default printer.
+    #[must_use]
+    pub fn with_units(mut self, units: Units) -> Self {
+        self.units = units;
+        self
+    }
+
+    /// The units in force.
+    #[must_use]
+    pub fn units(&self) -> Units {
+        self.units
     }
 
     /// True when the format in development is read.

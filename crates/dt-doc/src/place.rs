@@ -297,7 +297,7 @@ fn perr(message: impl Into<String>, start: usize, end: usize) -> PlaceError {
 }
 
 /// True when the `(` that starts `t` closes at its very end.
-fn encloses(t: &str) -> bool {
+pub(crate) fn encloses(t: &str) -> bool {
     let mut depth = 0usize;
     for (i, c) in t.char_indices() {
         match c {
@@ -315,7 +315,7 @@ fn encloses(t: &str) -> bool {
 }
 
 /// The commas of `s` outside every parenthesis and bracket.
-fn top_commas(s: &str) -> Vec<usize> {
+pub(crate) fn top_commas(s: &str) -> Vec<usize> {
     let mut depth = 0usize;
     let mut out = Vec::new();
     for (i, c) in s.char_indices() {
