@@ -126,6 +126,13 @@ tile size="2x2" seed=1 {
 <p class="muted small">Generated from <code>dharmatiles elements rock</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->
 
+<h3 id="top">A rock's top</h3>
+<p>A rock takes a <code>top=</code> like a tree's: a cloud, a low surface, a high surface and one weighting, as a height above zero, where <code>$bottom</code> is the land at the rock's foot. It is worked out once for each stone, at the stone's middle: <code>$x</code> and <code>$y</code> are the tile's coordinates there, <code>$d</code> is 0% and <code>$region</code> is the stone's own disc, so <code>parent($region)</code> is the region it stands in (<code>d(parent($region), %)</code> reads how far into it the stone is). The stone rolls one number in the cloud and its peak stands there: the rock keeps its width and its facets and is stretched or squeezed upward to the height the cloud gives it, so it never undercuts.</p>
+<pre><code>rock at="(0.5sq, 0.5sq)" size="10dmm" top="$bottom + [4dmm .. 9dmm]"
+scatter count=8 { rock top="$bottom + high(3dmm .. 9dmm)" }          // a few low, most tall
+scatter count=8 { boulder top="$bottom + 3dmm + 6dmm * (1 - d(parent($region), %))" }</code></pre>
+<p>Rolls are one smooth field over the tile (stones a square apart are alike), read by rank over the stones of the entry so a weighting's odds hold; a lone stone draws its own roll from its seed. Each stone of a cluster rolls on its own. A plain range builds with every height equally likely. A top that leaves a peak under 1 mm or over 120 mm above the stone's foot is refused with <code>top</code> on the rock's line. A rock without a <code>top=</code> builds as it always has. <code>stone</code>, <code>boulder</code> and <code>pebble</code> take it the same way.</p>
+
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
   <li><strong>Rocks.</strong> <code>6dmm</code> to <code>15dmm</code> wide, every size equally likely (write <code>size="low(6dmm .. 15dmm, 3)"</code> to lean small); 2.5–9 dmm tall (height 0.45–0.85 of the width, slabs lower). Stones in a cluster are at least <code>4dmm</code> wide.</li>
@@ -145,6 +152,7 @@ tile size="2x2" seed=1 {
   <li>Three scales of texture: rough faces, chipped corners and a fine grain. The largest faces stay small.</li>
   <li>Large stones carry engraved cracks a wash can pool in.</li>
   <li>Stones stand bedded in the dirt around them.</li>
+  <li>A <code>top=</code> is read at each stone's middle; the stone keeps its width and facets and its peak stands at the roll, never wider above the ground than at it.</li>
   <li><code>buried</code> is a share written as a percent, <code>buried="20%..50%"</code> (weighted forms too), from 0% to 100%; <code>%</code> is a plain fraction, so <code>buried=0.3</code> is the same 30% and <code>buried=30</code> is out of range; a length there is <code>dt::type</code>.</li>
   <li>A rock is seated on the land as it is laid, grain included: its foot is under the lowest land it can touch, so no gap shows under it (the build notes <code>seat_gap_max</code> and <code>seat_gap_stones</code> measure it).</li>
 </ul>

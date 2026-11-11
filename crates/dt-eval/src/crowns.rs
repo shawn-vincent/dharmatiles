@@ -25,7 +25,7 @@ impl CrownTops for Crowns<'_> {
         let Some(top) = self.tile.tree_tops.get(id) else {
             return Err(LookError {
                 control: None,
-                message: format!("a tree's top (number {id}) is not in the tile's table"),
+                message: format!("a top (number {id}) is not in the tile's table"),
                 help: None,
                 code: None,
             });

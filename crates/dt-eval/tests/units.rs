@@ -383,7 +383,8 @@ fn a_body_works_its_top_out_in_the_new_coordinates() {
 
 #[test]
 fn an_element_reads_only_the_names_it_sets() {
-    // a tree sets the point names too, at each of its branch tips
+    // a tree sets the point names too, at each of its branch tips, and a
+    // rock at its middle
     for top in [
         "$bottom + 35dmm * $x",
         "$bottom + 35dmm * x($tile, %)",
@@ -394,10 +395,14 @@ fn an_element_reads_only_the_names_it_sets() {
             &format!("stack {{ base\n dirt\n tree at=\"(0.5sq, 0.5sq)\" top=\"{top}\" }}"),
         ));
     }
-    // a rock sets only its region
-    let e = refused(&tile1(
+    ok(&tile1(
         "1x1",
         "stack { base\n dirt\n scatter count=2 { rock top=\"$bottom + 3dmm * $x\" } }",
+    ));
+    // a rock sets no more than that
+    let e = refused(&tile1(
+        "1x1",
+        "stack { base\n dirt\n scatter count=2 { rock top=\"$bottom + 3dmm * $nope\" } }",
     ));
     assert!(!e.is_empty(), "{e:#?}");
     // a body sets them all

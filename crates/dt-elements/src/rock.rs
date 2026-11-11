@@ -448,6 +448,9 @@ pub struct Item {
     pub r: f64,
     /// How much of its width sinks under the ground, a share range.
     pub bury: Draw,
+    /// The tile's formula for its `top=` (a cloud over its place), when it
+    /// has one: each stone's peak stands at the cloud's roll there.
+    pub top: Option<usize>,
 }
 
 /// One stone, or (a quarter of the time when `clusters`) a cluster of 2
@@ -469,6 +472,7 @@ pub fn make_item(
             stones: vec![([0.0, 0.0], main)],
             r: d / 2.0,
             bury: Draw::flat(0.0, 0.0),
+            top: None,
         });
     }
     let k = rng.int(CLUSTER_STONES.0, CLUSTER_STONES.1);
@@ -488,6 +492,7 @@ pub fn make_item(
         stones,
         r,
         bury: Draw::flat(0.0, 0.0),
+        top: None,
     })
 }
 
@@ -505,6 +510,8 @@ pub struct Thing {
     pub weight: f64,
     /// How much of its width sinks under the ground, a share range.
     pub buried: Draw,
+    /// Its `top=`: the number of the tile's formula, when written.
+    pub top: Option<usize>,
 }
 
 /// The things a rock element builds, with their default size (dt-doc's
@@ -547,8 +554,21 @@ impl Thing {
             mix: FAMILIES,
             weight,
             buried: Draw::flat(0.0, 0.0),
+            top: None,
         };
         let s = Settings::new(controls);
+        if let Some(c) = s.control("top") {
+            match &c.value {
+                crate::Value::Formula(f) => t.top = Some(f.id),
+                _ => {
+                    return Err(LookError::control(
+                        "top",
+                        format!("a {kind}'s top is a formula the tile works out where it stands"),
+                        "write `top=\"$bottom + [4dmm .. 9dmm]\"`".into(),
+                    ));
+                }
+            }
+        }
         t.size = s.dist_or("size", t.size)?;
         if let Some(r) = s.dist("buried")? {
             t.buried = share(r)?;
@@ -581,6 +601,8 @@ pub(crate) struct Tally {
     widths: Vec<f64>,
     hover_max: f64,
     hovering: usize,
+    /// Stones whose peak a `top=` cloud set.
+    topped: usize,
 }
 
 /// Build placed items into the scene: grain, seat on `ground`, add as
@@ -590,6 +612,7 @@ pub(crate) fn add_items(
     owner: &str,
     seed: Seed,
     items: &[(&Item, [f64; 2], f64)],
+    crowns: Option<&dyn crate::CrownTops>,
     tally: &mut Tally,
 ) -> Result<(), LookError> {
     let s = scene.frame().scale();
@@ -600,13 +623,25 @@ pub(crate) fn add_items(
         .slots(n as u32, Material::Rock)
         .map_err(LookError::build)?;
     let g = Grain::default();
-    let mut k = 0u32;
     let ticks = scene.progress().counter("stones", n, 0.0, 1.0);
     // seated on the land as it is laid, grain and all; a tile with no land
     // under it is the base
     let land = scene.land_view();
-    let mut built = Vec::with_capacity(n);
-    for (item, at, yaw) in items {
+    // each stone's place and foot first: a `top=` rolls over all of them
+    struct Foot {
+        stone: Stone,
+        item: usize,
+        p: [f64; 2],
+        yaw: f64,
+        /// The land at its middle, mm.
+        bottom: f64,
+        /// Where its foot is set, mm.
+        z0: f64,
+        k: u32,
+    }
+    let mut feet: Vec<Foot> = Vec::with_capacity(n);
+    let mut k = 0u32;
+    for (ii, (item, at, yaw)) in items.iter().enumerate() {
         tally.placements += 1;
         tally.clusters += usize::from(item.stones.len() > 1);
         let (sn, cs) = (libm::sin(yaw.to_radians()), libm::cos(yaw.to_radians()));
@@ -625,21 +660,52 @@ pub(crate) fn add_items(
                 let mut br = Rng::new(seed.key("bury").index(u64::from(k)));
                 z0 -= item.bury.draw(&mut br) * st.width;
             }
-            let mesh = grain(&st.convex, &g, seed.index(u64::from(k)).value())
-                .map_err(LookError::build)?;
-            built.push(
-                solid(slots.get(k), &mesh)
-                    .map_err(LookError::build)?
-                    .turn(*yaw, 1.0)
-                    .translate([p[0], p[1], z0]),
-            );
+            feet.push(Foot {
+                bottom: land.as_ref().map_or(0.0, |l| l.top(p[0], p[1])),
+                stone: st,
+                item: ii,
+                p,
+                yaw: *yaw,
+                z0,
+                k,
+            });
             tally.facets.push(stone.facets);
             tally.chips.push(stone.chips);
             tally.chip_loss = tally.chip_loss.max(stone.chip_loss);
-            tally.widths.push(st.width);
+            tally.widths.push(feet[feet.len() - 1].stone.width);
             k += 1;
-            ticks.tick();
         }
+    }
+    // a `top=` stands each stone's peak at its cloud's roll
+    let peaks = peaks_under_clouds(
+        &feet
+            .iter()
+            .map(|f| (f.item, f.p, f.stone.radius(), f.bottom, f.z0, f.k))
+            .collect::<Vec<_>>(),
+        items,
+        seed,
+        scene.frame(),
+        crowns,
+    )?;
+    let mut built = Vec::with_capacity(n);
+    for (f, peak) in feet.into_iter().zip(peaks) {
+        let st = match peak {
+            Some(h) => {
+                tally.topped += 1;
+                let z = h / f.stone.height();
+                f.stone.scaled(1.0, z)
+            }
+            None => f.stone,
+        };
+        let mesh =
+            grain(&st.convex, &g, seed.index(u64::from(f.k)).value()).map_err(LookError::build)?;
+        built.push(
+            solid(slots.get(f.k), &mesh)
+                .map_err(LookError::build)?
+                .turn(f.yaw, 1.0)
+                .translate([f.p[0], f.p[1], f.z0]),
+        );
+        ticks.tick();
     }
     // how each foot rests on the land: the gap under it
     if let Some(land) = &land {
@@ -671,6 +737,99 @@ pub(crate) fn add_items(
     Ok(())
 }
 
+/// A rock's peak stands at least this far over its foot, mm at the 35 mm
+/// square, and at most [`MAX_PEAK_MM`].
+const MIN_PEAK_MM: f64 = 1.0;
+const MAX_PEAK_MM: f64 = 120.0;
+
+/// One stone as a `top=` reads it: its item, its middle (mm), its footprint
+/// radius, the land at its middle, the height its foot is set at, its
+/// number.
+type Stood = (usize, [f64; 2], f64, f64, f64, u32);
+
+/// The height over its foot each stone with a `top=` is stood at (`None` for
+/// a stone without one), mm.  The formula is worked out at the stone's
+/// middle (so `$d` is 0% there, `$region` the disc of the stone) and gives a
+/// cloud; the stone rolls one number in it.  The rolls come from one smooth
+/// field over the tile (stones a square apart are alike), ranked over the
+/// topped stones so a weighting's odds hold; a lone stone draws its own.
+fn peaks_under_clouds(
+    stood: &[Stood],
+    items: &[(&Item, [f64; 2], f64)],
+    seed: Seed,
+    frame: &dt_kit::Frame,
+    crowns: Option<&dyn crate::CrownTops>,
+) -> Result<Vec<Option<f64>>, LookError> {
+    let topped: Vec<(usize, usize)> = stood
+        .iter()
+        .enumerate()
+        .filter_map(|(i, f)| items[f.0].0.top.map(|id| (i, id)))
+        .collect();
+    let mut out = vec![None; stood.len()];
+    if topped.is_empty() {
+        return Ok(out);
+    }
+    let Some(crowns) = crowns else {
+        return Err(LookError::build(
+            "a rock's top is worked out by the tile it is built in",
+        ));
+    };
+    let (s, sq) = (frame.scale(), frame.square_mm);
+    let mut clouds = Vec::with_capacity(topped.len());
+    for &(i, id) in &topped {
+        let (_, p, r, bottom, _, _) = stood[i];
+        clouds.push(crowns.cloud(
+            id,
+            &crate::Tip {
+                at: [p[0] / sq, p[1] / sq],
+                centre: [p[0] / sq, p[1] / sq],
+                radius: r / sq,
+                bottom_dmm: bottom / s,
+            },
+        )?);
+    }
+    // the rolls: one smooth field, ranked
+    let key = seed.key("roll");
+    let m = topped.len();
+    let mut rank = vec![0.5; m];
+    if m == 1 {
+        rank[0] = Rng::new(key).random();
+    } else {
+        let rolls: Vec<f64> = topped
+            .iter()
+            .map(|&(i, _)| dt_kit::noise_at(key, sq, &[stood[i].1[0]], &[stood[i].1[1]])[0])
+            .collect();
+        let mut order: Vec<usize> = (0..m).collect();
+        order.sort_by(|&a, &b| rolls[a].total_cmp(&rolls[b]).then(a.cmp(&b)));
+        #[allow(clippy::cast_precision_loss)]
+        for (r, &j) in order.iter().enumerate() {
+            rank[j] = (r as f64 + 0.5) / m as f64;
+        }
+    }
+    for (j, &(i, _)) in topped.iter().enumerate() {
+        let c = &clouds[j];
+        let t = c.odds.as_ref().map_or(rank[j], |w| w.unit(rank[j]));
+        let top = (c.lo + (c.hi - c.lo) * t) * s;
+        let (_, p, _, _, z0, _) = stood[i];
+        let height = top - z0;
+        if !(MIN_PEAK_MM * s..=MAX_PEAK_MM * s).contains(&height) {
+            return Err(LookError::control(
+                "top",
+                format!(
+                    "this top is {:.1} mm over the foot of the rock at ({:.1}, {:.1}) mm (the land there is {:.1} mm up); a rock's peak stands {MIN_PEAK_MM} to {MAX_PEAK_MM} mm over its foot",
+                    height / s,
+                    p[0] / s,
+                    p[1] / s,
+                    stood[i].3 / s
+                ),
+                "write the top over the ground at its foot: `$bottom + [4dmm .. 9dmm]`".into(),
+            ));
+        }
+        out[i] = Some(height);
+    }
+    Ok(out)
+}
+
 pub(crate) fn note(scene: &mut Scene, t: &Tally) {
     #[allow(clippy::cast_precision_loss)]
     let mean = |v: &[u32]| v.iter().map(|&x| f64::from(x)).sum::<f64>() / v.len().max(1) as f64;
@@ -696,6 +855,10 @@ pub(crate) fn note(scene: &mut Scene, t: &Tally) {
         ("seat_gap_stones", t.hovering as f64),
     ] {
         scene.note(k, v);
+    }
+    if t.topped > 0 {
+        #[allow(clippy::cast_precision_loss)]
+        scene.note("topped_stones", t.topped as f64);
     }
 }
 
@@ -737,7 +900,8 @@ impl Element for Single {
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let mut rng = Rng::new(ctx.seed.key("rock"));
         let d = self.thing.draw(&mut rng);
-        let item = make_item(&mut rng, d, self.thing.mix, false, false)?;
+        let mut item = make_item(&mut rng, d, self.thing.mix, false, false)?;
+        item.top = self.thing.top;
         let yaw = rng.uniform(0.0, 360.0);
         let s = scene.frame().scale();
         let sq = scene.frame().square_mm;
@@ -794,7 +958,14 @@ impl Element for Single {
             }
         };
         let mut t = Tally::default();
-        add_items(scene, ctx.path, ctx.seed, &[(&item, at, yaw)], &mut t)?;
+        add_items(
+            scene,
+            ctx.path,
+            ctx.seed,
+            &[(&item, at, yaw)],
+            ctx.crowns,
+            &mut t,
+        )?;
         note(scene, &t);
         Ok(())
     }
@@ -1042,6 +1213,7 @@ impl Element for Scatter {
                 None => make_item(&mut r, d, thing.mix, true, thing.buried.hi() > 0.0)?,
             };
             item.bury = thing.buried.clone();
+            item.top = thing.top;
             items.push(item);
             kinds.push(thing.kind.as_str());
         }
@@ -1063,7 +1235,7 @@ impl Element for Scatter {
             .map(|p| (&items[p.index], p.at, rng.uniform(0.0, 360.0)))
             .collect();
         let mut t = Tally::default();
-        add_items(scene, ctx.path, ctx.seed, &posed, &mut t)?;
+        add_items(scene, ctx.path, ctx.seed, &posed, ctx.crowns, &mut t)?;
         note(scene, &t);
         Ok(())
     }

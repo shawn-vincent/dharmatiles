@@ -931,7 +931,7 @@ impl Decoder<'_> {
     /// scatter's `top=` may stand on.
     fn is_tree_like(&self, entry: &Entry) -> bool {
         match &entry.callee {
-            Callee::Element(l) => l.name == "tree",
+            Callee::Element(l) => crate::words::takes_cloud_top(l.name),
             Callee::Definition(_) => self.class_of(entry) == Class::Thing,
         }
     }

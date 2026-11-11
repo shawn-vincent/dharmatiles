@@ -936,8 +936,10 @@ impl<'a> Plan<'a> {
                     .stack
                     .get(i)
                     .filter(|e| {
+                        // a tree's or rock's `top=`, its own or a scatter child's
                         e.controls
                             .iter()
+                            .chain(e.children.iter().flat_map(|c| c.controls.iter()))
                             .any(|c| matches!(c.value, dt_elements::Value::Formula(_)))
                     })
                     .and(c.regions.as_ref())

@@ -1205,7 +1205,7 @@ impl Reader<'_> {
                     // (for the tree inside it), which the stack reads
                     let name = e.what.value.as_str();
                     let read = match &e.callee {
-                        Callee::Element(el) => el.name == "tree",
+                        Callee::Element(el) => dt_doc::words::takes_cloud_top(el.name),
                         Callee::Definition(_) => true,
                     };
                     if let Some(t) = e.top.as_ref().filter(|_| !read) {
@@ -1763,7 +1763,7 @@ impl Reader<'_> {
         let src = &scope.file.src;
         if let Some(t) = &e.top {
             let holds_tree = def.stack.iter().any(|x| match &x.callee {
-                Callee::Element(el) => el.name == "tree",
+                Callee::Element(el) => dt_doc::words::takes_cloud_top(el.name),
                 Callee::Definition(_) => true,
             });
             if !holds_tree {
@@ -1909,7 +1909,7 @@ impl Reader<'_> {
                 ));
             }
         }
-        if cl.name != "tree"
+        if !dt_doc::words::takes_cloud_top(cl.name)
             && let Some(t) = &thing.top
         {
             ok = false;
@@ -1982,14 +1982,14 @@ impl Reader<'_> {
         let mut out = Vec::new();
         let mut ok = true;
         // a tree's height is its `top`: the outermost call's, else its own
-        if element.name == "tree"
+        if dt_doc::words::takes_cloud_top(element.name)
             && let Some((t, at)) = scope
                 .top
                 .clone()
                 .or_else(|| e.top.clone().map(|t| (t, Arc::clone(src))))
         {
             if let Some(table) = scope.lets.table.clone() {
-                if !self.readable(&table, &t.value, t.span, &at, Reads::At("tree")) {
+                if !self.readable(&table, &t.value, t.span, &at, Reads::At(element.name)) {
                     return None;
                 }
                 if table.is_dollar() {
@@ -2022,7 +2022,10 @@ impl Reader<'_> {
                         .iter()
                         .any(|n| matches!(*n, "x" | "y" | "$x" | "$y" | "$d" | "$a" | "$_y"))
             };
-            if !per_point && let Err(why) = crate::lower::tree_top(&t.value, &scope.lets) {
+            if element.name == "tree"
+                && !per_point
+                && let Err(why) = crate::lower::tree_top(&t.value, &scope.lets)
+            {
                 let mut d = Diag::at(&at, t.span, why.code, why.message, "here");
                 d.help = why.help;
                 if why.hard {

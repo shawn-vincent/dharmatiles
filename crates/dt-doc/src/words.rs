@@ -38,10 +38,18 @@ pub const REGION_NAMES: &[&str] = &["$tile", "$region"];
 /// region as it works its top and pins out ([`sets`]).
 pub const BODY_SETS: &[&str] = &["$x", "$y", "$d", "$a", "$bottom", "$region"];
 
-/// What a tree sets at each branch tip as it works its top out: the tip's
-/// place, its place in the tree's own disc, the ground at its foot and the
-/// disc ([`sets`]).
+/// What a tree sets at each branch tip, and a rock at its middle, as it works
+/// its top out: the place, its place in the thing's own disc, the ground at
+/// its foot and the disc ([`sets`]).
 pub const TREE_SETS: &[&str] = &["$x", "$y", "$d", "$a", "$bottom", "$region"];
+
+/// The things whose `top=` is a cloud worked out where the thing stands: a
+/// tree (at each branch tip) and a rock, stone, boulder or pebble (at its
+/// middle).
+#[must_use]
+pub fn takes_cloud_top(element: &str) -> bool {
+    matches!(element, "tree" | "rock" | "stone" | "boulder" | "pebble")
+}
 
 /// The `$` names `element` sets when it calls a formula it was given (its
 /// `top=` or a pin's): `check` refuses a read of any other that no caller
@@ -50,7 +58,7 @@ pub const TREE_SETS: &[&str] = &["$x", "$y", "$d", "$a", "$bottom", "$region"];
 pub fn sets(element: &str) -> &'static [&'static str] {
     match element {
         "dirt" | "water" | "flagstones" | "planks" | "cliff" => BODY_SETS,
-        "tree" => TREE_SETS,
+        e if takes_cloud_top(e) => TREE_SETS,
         _ => &["$region"],
     }
 }

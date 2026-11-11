@@ -237,15 +237,15 @@ fn a_dirts_top_and_pins_build() {
 }
 
 #[test]
-fn a_trees_top_is_its_height_a_rocks_waits_and_a_line_is_refused() {
+fn a_trees_top_is_its_height_a_flowers_waits_and_a_line_is_refused() {
     // a tree's top is its height: read, nothing pending
     let c = solved(&tile(
         "region canopy { within 15 of=center }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=canopy }",
     ));
     assert!(c.pending().is_empty(), "{:?}", c.pending());
-    // a rock's top is not built yet
+    // a flower's top is not built yet (a rock's is a cloud, like a tree's)
     let c = solved(&tile(
-        "region canopy { within 15 of=center }\n stack { base\n dirt\n rock top=\"bottom + 8\" at=canopy }",
+        "region canopy { within 15 of=center }\n stack { base\n dirt\n flower top=\"bottom + 8\" at=canopy }",
     ));
     assert_eq!(c.pending().len(), 1, "{:?}", c.pending());
     // a line has no one place on it: refused, not pending

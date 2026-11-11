@@ -171,6 +171,7 @@ impl Element for Scatter {
                     let mut it =
                         rock::make_item(&mut r, d, thing.mix, true, thing.buried.hi() > 0.0)?;
                     it.bury = thing.buried.clone();
+                    it.top = thing.top;
                     rocks.push(it);
                 }
                 Part::Flower(plant) => flowers.push((plant, plant.reach(&mut r))),
@@ -209,7 +210,7 @@ impl Element for Scatter {
                 .map(|p| (&rocks[p.index], p.at, rng.uniform(0.0, 360.0)))
                 .collect();
             let mut t = Tally::default();
-            rock::add_items(scene, ctx.path, ctx.seed, &posed, &mut t)?;
+            rock::add_items(scene, ctx.path, ctx.seed, &posed, ctx.crowns, &mut t)?;
             rock::note(scene, &t);
         }
 

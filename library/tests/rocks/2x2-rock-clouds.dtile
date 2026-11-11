@@ -1,0 +1,12 @@
+dharmatiles version="1.0.0"
+
+tile size="2x2" seed=5 {
+    about "Rocks under clouds: each rock's top is a weighted range over the ground at its foot, so a few stand low and most stand tall. A test tile."
+    stack {
+        base
+        dirt top="$dirtEdgeHeight"
+        scatter count=10 gap="1.5dmm" {
+            rock size="9dmm .. 14dmm" top="$bottom + high(3dmm .. 9dmm)"
+        }
+    }
+}
