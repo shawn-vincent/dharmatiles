@@ -6,7 +6,7 @@ import { Layout } from '../layout.js';
 import { rememberView, shortcutViews } from '../view-presets.js';
 import { VIEWS } from '../viewer.js';
 import { legendRows } from '../debug-layer.js';
-import { $, pickView, viewer } from './app.js';
+import { $, host, pickView, viewer } from './app.js';
 import { server, tile, view } from './stores.js';
 
 // ---- the view's controls: views and the display menu -------------------
@@ -169,6 +169,22 @@ const layout = new Layout($('app'), (st) => {
   for (const b of $('layout-seg').children) b.classList.toggle('on', b.dataset.preset === preset);
   $('t-right').checked = st.side === 'right';
 });
+/** The About box: the application version and the tile formats it reads, asked of the program. */
+async function showAbout() {
+  closePopovers();
+  const err = $('about-error');
+  err.hidden = true;
+  $('about').showModal();
+  try {
+    const a = await host.about();
+    $('about-version').textContent = a.version;
+    $('about-formats').textContent = a.formats;
+  } catch (e) {
+    err.textContent = `Could not read the version: ${e.message}`;
+    err.hidden = false;
+    throw e;
+  }
+}
 const showKeys = () => { closePopovers(); $('keys').showModal(); };
 /** ⌘1/⌘2/⌘3: put the keyboard in the source, the view or the properties (showing the pane first). */
 function focusPane(n) {
@@ -240,6 +256,7 @@ export function init() {
   for (const b of $('layout-seg').children) b.onclick = () => layout.preset(b.dataset.preset);
   $('t-right').onchange = (e) => layout.set({ side: e.target.checked ? 'right' : 'left' });
   $('b-keys').onclick = showKeys;
+  $('b-about').onclick = showAbout;
   addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && ['1', '2', '3'].includes(e.key)) {
       e.preventDefault(); focusPane(Number(e.key)); return;

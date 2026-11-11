@@ -4,7 +4,7 @@
 
 mod entry;
 mod heights;
-mod syntax;
+pub(crate) mod syntax;
 mod value;
 pub use value::check_text;
 
@@ -38,8 +38,16 @@ pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<Doc
         Ok(d) => d,
         Err(e) => return Err(syntax::syntax_errors(&src, text, &e)),
     };
+    // the header line first: a format this program doesn't read stops here,
+    // since the rest of the file may not mean what this decoder thinks
+    let (header, header_errors) = crate::header::read(&src, &kdl);
+    if header_errors.iter().any(|e| e.code == "dt::format-newer") {
+        return Err(header_errors);
+    }
     let mut d = Decoder::new(src, known);
-    let doc = d.document(&kdl);
+    d.errors.extend(header_errors);
+    let mut doc = d.document(&kdl);
+    doc.header = header;
     if d.errors.is_empty() {
         Ok(doc)
     } else {
@@ -215,6 +223,7 @@ impl<'k> Decoder<'k> {
             printer: None,
             consts: Vec::new(),
             defaults: Vec::new(),
+            header: None,
         };
         for n in kdl.nodes() {
             if n.name().value() == "define"
@@ -312,6 +321,8 @@ impl<'k> Decoder<'k> {
         for n in kdl.nodes() {
             match n.name().value() {
                 "use" | "define" | "tile" | "let" | "override" | "defaults" => {}
+                // read and checked by `header`
+                crate::header::NODE => {}
                 "printer" => doc.printer = self.printer(n),
                 other => {
                     let help = crate::elements::camel_of(other)

@@ -952,4 +952,22 @@ mod clause_tests {
             "tile size=\"1x1\" {\n    region pool {\n        within 6 of=center\n    }\n}\n"
         );
     }
+
+    #[test]
+    fn the_header_line_is_left_exactly_as_written() {
+        const T: &str = "tile size=\"1x1\" {\n    line shore { through \"0,0.38\" east }\n    stack {\n        dirt at=bank // hi\n        rock at=\"0.5,0.5\"\n    }\n}\n";
+        let head = "dharmatiles   version=\"0.9.0+5.gf9481c8.dirty\" // as written\n";
+        let text = format!("{head}{T}");
+        let (t, _) = insert_node(&text, Place::Stack, "boulder at=\"0.2,0.3\"").unwrap();
+        assert!(t.starts_with(head), "{t}");
+        let (t, at) = insert_node(&text, Place::Tile, "line path { through west east }").unwrap();
+        assert!(t.starts_with(head), "{t}");
+        let t = remove_node_at(&t, at).unwrap();
+        assert_eq!(t, text);
+        let at = text.find("rock").unwrap();
+        let t = remove_node_at(&text, at).unwrap();
+        assert!(t.starts_with(head), "{t}");
+        let t = rename_mark(&text, Mark::Line, "shore", "bank").unwrap();
+        assert!(t.starts_with(head), "{t}");
+    }
 }

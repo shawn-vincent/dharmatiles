@@ -127,6 +127,11 @@ impl Palette {
             }
             let mut w = line.split_whitespace();
             let first = w.next().unwrap_or("");
+            // the header line (`dharmatiles version=…`): dt-doc checks it,
+            // and callers run that check before reading a palette
+            if first == "dharmatiles" {
+                continue;
+            }
             if first == "ramp" {
                 let name = w.next().unwrap_or("");
                 if !RAMPS.contains(&name) {

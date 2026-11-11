@@ -1,13 +1,26 @@
-//! The engine version for the build record: the workspace version, plus
-//! the commit when built from git, and `-dirty` when the engine's inputs
-//! differ from it: `0.0.0+g1ad8119`, `0.0.0+g1ad8119-dirty`, or plain
-//! `0.0.0` without git.
+//! The application version for the build record and `--version`, drawn
+//! from git and never typed.  With `X.Y.Z` the workspace version:
 //!
-//! Only the engine's inputs count (the Rust crates, the bundled library
-//! and the workspace manifests), so a docs edit elsewhere in the
-//! repository neither marks the engine dirty nor re-runs this script.  An
-//! unrelated git tag never names the engine (`git describe` once printed
-//! `walls-fieldstone-e27-125-g…`).
+//! - built at the tag `vX.Y.Z`: `X.Y.Z`;
+//! - on main (or a detached HEAD), N commits past that tag:
+//!   `X.Y.Z+N.gHASH`;
+//! - on another branch: `X.Y.Z+<branch>.N.gHASH`, the branch cleaned to
+//!   letters, digits and hyphens (all semver build metadata allows);
+//! - with uncommitted changes to the engine's inputs, `.dirty` is added
+//!   (`X.Y.Z+5.gHASH.dirty`; at the tag itself, `X.Y.Z+dirty`);
+//! - without git, plain `X.Y.Z`.
+//!
+//! Only `v*` tags count, so an unrelated tag never names the engine
+//! (`git describe` once printed `walls-fieldstone-e27-125-g…`).  If the tag
+//! `vX.Y.Z` doesn't exist yet (the version was bumped by hand, or the
+//! checkout has no tags), the count runs from the nearest `v*` tag that is
+//! an ancestor, and from the first commit when there is none: some number
+//! always shows how far the code is from a release.
+//!
+//! Only the engine's inputs count for `.dirty` (the Rust crates, the
+//! bundled library and the workspace manifests), so a docs edit elsewhere
+//! in the repository neither marks the engine dirty nor re-runs this
+//! script.
 
 use std::path::Path;
 use std::process::Command;
@@ -33,14 +46,54 @@ fn git(root: &Path, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
+/// The commits past the release: counted from the tag `v{version}`, else
+/// from the nearest `v*` tag, else from the first commit.
+fn distance(root: &Path, version: &str) -> Option<u64> {
+    let tag = format!("refs/tags/v{version}");
+    let base = if git(root, &["rev-parse", "-q", "--verify", &tag]).is_some() {
+        Some(tag)
+    } else {
+        git(
+            root,
+            &["describe", "--tags", "--match", "v*", "--abbrev=0", "HEAD"],
+        )
+        .filter(|t| !t.is_empty())
+    };
+    let range = base.map_or_else(|| "HEAD".to_owned(), |b| format!("{b}..HEAD"));
+    git(root, &["rev-list", "--count", &range])?.parse().ok()
+}
+
+/// The branch, cleaned for build metadata; `None` on main or a detached HEAD.
+fn branch(root: &Path) -> Option<String> {
+    let name = git(root, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+    if name == "HEAD" || name == "main" {
+        return None;
+    }
+    let clean: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    Some(clean)
+}
+
 fn main() {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
     let root = Path::new(&manifest).join("../..");
     let version = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
-    // Re-run on a commit or checkout (HEAD, the index) and on any edit to
-    // the inputs (a directory is scanned whole).
-    for p in ["HEAD", "index"] {
-        if let Some(path) = git(&root, &["rev-parse", "--git-path", p]) {
+    // Re-run on a commit, a checkout or a tag (HEAD, the branch's ref, the
+    // index, the tags) and on any edit to the inputs (a directory is
+    // scanned whole).
+    let mut watch = vec![
+        "HEAD".to_owned(),
+        "index".to_owned(),
+        "packed-refs".to_owned(),
+    ];
+    if let Some(r) = git(&root, &["symbolic-ref", "-q", "HEAD"]) {
+        watch.push(r);
+    }
+    watch.push("refs/tags".to_owned());
+    for p in watch {
+        if let Some(path) = git(&root, &["rev-parse", "--git-path", &p]) {
             println!("cargo::rerun-if-changed={}", root.join(path).display());
         }
     }
@@ -52,7 +105,21 @@ fn main() {
             let mut status = vec!["status", "--porcelain", "--"];
             status.extend(INPUTS);
             let dirty = git(&root, &status).is_some_and(|s| !s.is_empty());
-            format!("{version}+g{hash}{}", if dirty { "-dirty" } else { "" })
+            let n = distance(&root, &version).unwrap_or(0);
+            let mut meta: Vec<String> = Vec::new();
+            if n > 0 {
+                meta.extend(branch(&root));
+                meta.push(n.to_string());
+                meta.push(format!("g{hash}"));
+            }
+            if dirty {
+                meta.push("dirty".to_owned());
+            }
+            if meta.is_empty() {
+                version
+            } else {
+                format!("{version}+{}", meta.join("."))
+            }
         }
         None => version,
     };

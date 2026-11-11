@@ -94,6 +94,7 @@
         </div>
         <label class="switch"><input type="checkbox" id="t-right"> Panes on the right</label>
         <button id="b-keys" class="btn" type="button">Keys <kbd>?</kbd></button>
+        <button id="b-about" class="btn" type="button">About dharmatiles</button>
       </div>
     </div>
     <div id="debug-legend" class="card" hidden>
@@ -195,6 +196,20 @@
       </dl>
     </div>
     <p class="dialog-note">Single keys work when you are not typing.</p>
+    <div class="row-btns"><button class="btn on" value="close" autofocus>Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="about" aria-labelledby="about-title">
+  <form method="dialog">
+    <div class="eyebrow">dharmatiles</div>
+    <h2 id="about-title">About</h2>
+    <dl>
+      <dt>Version</dt><dd id="about-version">…</dd>
+      <dt>Tile formats</dt><dd id="about-formats">…</dd>
+    </dl>
+    <p class="dialog-note">A version ending in <code>.dirty</code> was built with uncommitted changes. The tile format is the major part of the version a tile's first line names: <code>dharmatiles version=1</code>.</p>
+    <p id="about-error" class="dialog-note" hidden></p>
     <div class="row-btns"><button class="btn on" value="close" autofocus>Close</button></div>
   </form>
 </dialog>

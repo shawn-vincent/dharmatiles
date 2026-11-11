@@ -20,7 +20,7 @@
 use std::io::Write;
 use std::process::ExitCode;
 
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command};
 
 /// One line to stdout; see [`emit`].
@@ -92,7 +92,8 @@ fn install_panic_hook() {
 
 fn main() -> ExitCode {
     install_panic_hook();
-    let cli = Cli::parse();
+    let cli = Cli::from_arg_matches(&Cli::command().version(cli::version_line()).get_matches())
+        .unwrap_or_else(|e| e.exit());
     // the crash switch of the exit-code tests; nothing in a shipped build
     dt_eval::crash_switch::panic_in_main();
     disk_library();
@@ -132,11 +133,7 @@ fn main() -> ExitCode {
                 Some(Ok(t)) => t,
                 None => None,
             };
-            let palette = match palette.as_ref().map(|p| {
-                std::fs::read_to_string(p)
-                    .map_err(|e| format!("cannot read {}: {e}", p.display()))
-                    .and_then(|t| dt_kit::Palette::parse(&t))
-            }) {
+            let palette = match palette.as_deref().map(library::read_palette) {
                 None => dt_kit::Palette::default(),
                 Some(Ok(p)) => p,
                 Some(Err(e)) => {

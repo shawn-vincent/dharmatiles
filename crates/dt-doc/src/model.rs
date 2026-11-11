@@ -43,6 +43,9 @@ pub struct Document {
     /// A `defaults { … }` block: the tops and pins every body of its
     /// element starts with (library/parts/edges.dtile).
     pub defaults: Vec<Entry>,
+    /// The `dharmatiles version=…` header line, when the file has one
+    /// (no header: format 0).
+    pub header: Option<crate::header::Header>,
 }
 
 impl Document {

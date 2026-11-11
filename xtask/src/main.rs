@@ -28,6 +28,9 @@ commands:
            fill each docs/elements/ page's generated reference block from
            the element schema; --check changes nothing and fails if stale
   release <version> "<summary>" [--no-tests] [--no-push]
+           refuses a dirty working tree (commit first); unless --no-tests,
+           also rebuilds tests/baseline/library-db.tsv and the element
+           pictures from the committed tree and refuses if they differ;
            number a release: the changelog's Unreleased entry becomes
            <version>, dated today and led by <summary>; Cargo.toml's
            version is bumped; fmt, clippy, docs --check and the tests run

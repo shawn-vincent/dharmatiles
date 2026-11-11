@@ -4,6 +4,11 @@
 //! led by the summary; the workspace version in `Cargo.toml` is bumped;
 //! the checks run; then one commit (`<version>`), an annotated tag
 //! (`v<version>`), and a push of both.
+//!
+//! Nothing dirty is released or checked in: the working tree must be
+//! clean (commit first), and unless the tests are skipped the checked-in
+//! baselines and pictures are rebuilt from that committed tree and the
+//! release is refused if any of them differs from what is committed.
 
 use std::path::Path;
 use std::process::Command;
@@ -177,6 +182,34 @@ fn cargo(root: &Path, args: &[&str]) -> Result<(), String> {
     run(c.current_dir(root).args(args))
 }
 
+/// Rebuild every checked-in baseline (`tests/baseline/library-db.tsv`) and
+/// the element pictures from the committed tree, and refuse if any file
+/// now differs from what is committed: engine code and the baselines it
+/// changes land in one commit, so a baseline may have been built from a
+/// dirty tree, and only a rebuild from this one proves it holds.
+fn rebuilt_matches_committed(root: &Path) -> Result<(), String> {
+    println!("rebuilding the baselines and pictures from the committed tree");
+    let mut c = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
+    run(c.current_dir(root).env("DT_BASELINE", "write").args([
+        "test",
+        "--release",
+        "-p",
+        "dt-eval",
+        "--test",
+        "baseline",
+        "--",
+        "--ignored",
+    ]))?;
+    crate::pictures::run(root, &[])?;
+    let changed = git(root, &["status", "--porcelain"])?;
+    if changed.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "rebuilt from the committed tree, these differ from what is committed (they are left in the working tree, see git diff):\n{changed}\ncommit the rebuilt files (or fix what makes them differ), then release again"
+    ))
+}
+
 pub fn run_release(root: &Path, args: &[String]) -> Result<(), String> {
     let flag = |f: &str| args.iter().any(|a| a == f);
     let words: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
@@ -193,7 +226,10 @@ pub fn run_release(root: &Path, args: &[String]) -> Result<(), String> {
         return Err("release from main".into());
     }
     if !git(root, &["status", "--porcelain"])?.is_empty() {
-        return Err("the working tree has changes; commit them first".into());
+        return Err(
+            "the working tree has changes (git status); commit first: a release is built from committed files"
+                .into(),
+        );
     }
     if !git(root, &["tag", "-l", &tag])?.is_empty() {
         return Err(format!("{tag} is already tagged"));
@@ -223,6 +259,7 @@ pub fn run_release(root: &Path, args: &[String]) -> Result<(), String> {
     crate::docs::run(root, true)?;
     if !flag("--no-tests") {
         cargo(root, &["test", "--release", "--workspace"])?;
+        rebuilt_matches_committed(root)?;
     }
 
     // the release

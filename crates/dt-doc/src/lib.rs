@@ -11,6 +11,8 @@
 //! - [`Known`] holds what a file can see: the library's heights
 //!   and the files it `use`s.
 //! - [`schema`] and [`elements`] hold every element's controls and words.
+//! - [`header`] reads the `dharmatiles version=…` first line, which names a
+//!   document's format.
 //! - [`edit`] changes, inserts and removes controls without disturbing
 //!   anything else in the file.
 //!
@@ -24,6 +26,7 @@ pub mod edit;
 pub mod elements;
 pub mod error;
 pub mod expr;
+pub mod header;
 pub mod known;
 pub mod migrate;
 pub mod model;

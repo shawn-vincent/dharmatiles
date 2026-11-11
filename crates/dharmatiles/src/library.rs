@@ -198,3 +198,21 @@ pub(crate) fn preview_options(
         r => r,
     }
 }
+
+/// Read a palette document: its header line is checked as in every kind of
+/// document, then its colours and ramps.
+///
+/// # Errors
+/// In words naming the file: unreadable, a bad header (shown as a
+/// diagnostic), or a bad line.
+pub(crate) fn read_palette(path: &std::path::Path) -> Result<dt_kit::Palette, String> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| format!("cannot read the palette {}: {e}", path.display()))?;
+    dt_doc::header::check_text(&path.display().to_string(), &text).map_err(|errs| {
+        errs.into_iter()
+            .map(|e| format!("{:?}", miette::Report::new(e)))
+            .collect::<Vec<_>>()
+            .join("\n")
+    })?;
+    dt_kit::Palette::parse(&text).map_err(|e| format!("palette {}: {e}", path.display()))
+}

@@ -8,7 +8,7 @@ use crate::error::{DocError, Src};
 
 const KNOWN: [&str; 3] = ["write #", "ranges, percents", "units are not"];
 
-pub(super) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<DocError> {
+pub(crate) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<DocError> {
     let mut out: Vec<DocError> = Vec::new();
     for diag in &e.diagnostics {
         let from = diag.span.offset().min(text.len());

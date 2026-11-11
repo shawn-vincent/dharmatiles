@@ -55,6 +55,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #properties-pane #lens .lt { padding-right: 34px; }
 #reopen { display: flex; gap: 6px; }
 #reopen[hidden] { display: none; }
+#about dt { color: var(--muted); } #about dd { margin: 0; color: var(--ink); font-family: var(--f-code); overflow-wrap: anywhere; }
 #keys { width: min(520px, calc(100% - 32px)); }
 #keys .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 24px; }
 #keys dl { grid-template-columns: auto 1fr; font-size: 13px; }

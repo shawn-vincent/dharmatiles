@@ -14,6 +14,7 @@
 //! | `POST /api/tiles/ID/draft` | build the posted text quickly; the reply is its mesh |
 //! | `GET /api/events?epoch=E&since=N` | server-sent events: a snapshot (or, resuming, what changed since revision N), then one event per change |
 //! | `GET /api/session` | this run's token, which every other `POST` must carry |
+//! | `GET /api/about` | the application version and the tile formats it reads, for the About box |
 //! | `GET /api/elements` | the elements and their controls |
 //! | `GET /api/weightings?range=` / `?text=` | the weighting functions, each with its curve ([`crate::weightings`]) |
 //! | `POST /api/…` | the editor's calls: check, draft, save, rename, new, export… ([`edit`]) |
@@ -421,11 +422,7 @@ impl Shared {
         let Some(f) = &self.palette else {
             return Ok(dt_kit::Palette::default());
         };
-        std::fs::read_to_string(f)
-            .map_err(|e| format!("cannot read the palette {}: {e}", f.display()))
-            .and_then(|t| {
-                dt_kit::Palette::parse(&t).map_err(|e| format!("palette {}: {e}", f.display()))
-            })
+        crate::library::read_palette(f)
     }
 
     /// The paint now, for a view: the palette document, else the default

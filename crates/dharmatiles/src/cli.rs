@@ -4,10 +4,22 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+/// What `--version` prints after the name: the application version from
+/// git and the tile formats this program reads.
+pub(crate) fn version_line() -> &'static str {
+    static LINE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    LINE.get_or_init(|| {
+        format!(
+            "{} (tile formats {})",
+            env!("DT_ENGINE_VERSION"),
+            dt_doc::header::formats()
+        )
+    })
+}
+
 #[derive(Parser)]
 #[command(
     name = "dharmatiles",
-    version = env!("DT_ENGINE_VERSION"),
     about = "Build printable terrain tiles from .dtile documents",
     after_help = "With no command, opens the preview in the browser: your tiles ($DT_HOME, else ~/dharmatiles) and the library."
 )]

@@ -685,6 +685,14 @@ fn a_library_tile_is_never_written() {
 }
 
 #[test]
+fn about_gives_the_version_and_the_formats() {
+    let r = start(&[], false);
+    let v: Value = serde_json::from_slice(&get(&r, "/api/about").1).unwrap();
+    assert_eq!(v["version"], env!("DT_ENGINE_VERSION"));
+    assert_eq!(v["formats"], dt_doc::header::formats());
+}
+
+#[test]
 fn serves_every_element_for_the_lens() {
     let r = start(&[], false);
     let v: Value = serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();

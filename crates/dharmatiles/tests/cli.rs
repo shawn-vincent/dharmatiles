@@ -71,15 +71,25 @@ fn a_missing_document_is_a_source_error() {
 }
 
 #[test]
-fn the_engine_version_is_the_workspace_version_and_commit() {
+fn the_version_is_drawn_from_git_and_lists_the_tile_formats() {
     let o = Command::new(EXE).arg("--version").output().unwrap();
     let text = String::from_utf8(o.stdout).unwrap();
     let v = text.trim().strip_prefix("dharmatiles ").unwrap();
+    let (v, formats) = v.split_once(" (tile formats ").unwrap();
+    assert_eq!(formats, "0)", "{text}");
     let rest = v.strip_prefix(env!("CARGO_PKG_VERSION")).unwrap();
-    assert!(
-        rest.is_empty() || (rest.starts_with("+g") && rest.len() >= 9),
-        "{v}"
-    );
+    // plain at the tag, else `+[branch.]N.gHASH[.dirty]` (or `+dirty`)
+    if let Some(meta) = rest.strip_prefix('+') {
+        let ok =
+            |i: &str| !i.is_empty() && i.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-');
+        assert!(meta.split('.').all(ok), "{v}");
+        assert!(
+            meta == "dirty" || meta.split('.').any(|i| i.starts_with('g') && i.len() == 8),
+            "{v}"
+        );
+    } else {
+        assert!(rest.is_empty(), "{v}");
+    }
 }
 
 #[test]

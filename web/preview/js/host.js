@@ -135,6 +135,11 @@ export function browserHost() {
       if (!r.ok) throw new Error(`text: ${await reasonOf(r)}`);
       return r.json();
     },
+    async about() {
+      const r = await fetch('/api/about', { cache: 'no-store' });
+      if (!r.ok) throw new Error(`about: ${await reasonOf(r)}`);
+      return r.json();
+    },
     async elements() {
       const r = await fetch('/api/elements', { cache: 'force-cache' });
       if (!r.ok) throw new Error(`elements: ${await reasonOf(r)}`);

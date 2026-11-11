@@ -38,7 +38,12 @@
   <li><code>line</code> and <code>region</code>: only for tiles divided into areas;</li>
   <li><code>stack</code>: exactly one, listing the elements and definitions that make the tile.</li>
 </ul>
-<p>Above the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>edges</code> (the edge contract). Anything else at the top level is an error.</p>
+<p>Above the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>edges</code> (the edge contract). Anything else at the top level is an error, apart from the header line below.</p>
+<h3 id="header">The header line and the format</h3>
+<p>A document of any kind (a tile, a parts file, a printer profile, a palette) may start with one line that says which version of the language it is written in:</p>
+<pre><code>dharmatiles version=0</code></pre>
+<p>It is the first node of the file, once; it takes <code>version=</code> and nothing else. A whole number may be bare; anything with a second dot or a <code>+</code> is quoted, since KDL reads a bare <code>1.10</code> as the number 1.1: <code>version="0.9"</code>, <code>version="0.9.0+120.gf9481c8"</code>. Only the major part matters: it is the document's <strong>format</strong>. A document with no header line is format 0, which is every tile in the library. This program reads format 0; a document of a newer format is refused (<code>dt::format-newer</code>: &ldquo;this tile is format 2; this dharmatiles reads up to 0&rdquo;), and a header out of place, repeated or malformed is refused with its own error (<code>dt::header</code>, <code>dt::header-first</code>, <code>dt::header-twice</code>, <code>dt::header-version</code>). The header is not an element, and editing a tile in the editor leaves it exactly as written. <code>dharmatiles --version</code> and the editor's <em>About</em> box (in the view's <kbd>⋯</kbd> menu) give the program's own version and the formats it reads: <code>dharmatiles 0.9.0+120.gf9481c8 (tile formats 0)</code>.</p>
+<p>The program's version is drawn from git: <code>X.Y.Z</code> at the release tag <code>vX.Y.Z</code>; <code>X.Y.Z+N.gHASH</code> on main, N commits past it; <code>X.Y.Z+branch.N.gHASH</code> on another branch; and <code>.dirty</code> added when the engine's files have uncommitted changes. A build record carries it.</p>
 <p>The smallest tile in the library:</p>
 <pre><code>// library/tests/ground/1x1-flat.dtile
 tile size="1x1" {
@@ -538,6 +543,7 @@ cliff top="dirtEdgeHeight + 55" at=crag {
 <h2 id="rules">Rules of the language</h2>
 <ul class="rules">
   <li>A tile is a declarative document, not a program: KDL v2 underneath, saved as a <code>.dtile</code> file.</li>
+  <li>A document may start with <code>dharmatiles version=…</code>, once, first; its major part is the format, and none is format 0. A format newer than the program reads is refused.</li>
   <li>Sizes are millimetres at the 35 mm DungeonBlocks square; heights are millimetres or <code>let</code> names. Units are not written: <code>4.5</code>, never <code>"4.5mm"</code> (<code>(mm)4.5</code> is an optional check).</li>
   <li>Every size a tile writes scales with the system, like a photocopy; hidden printability floors keep it printable. Print-scale detail (grain, blades, leaves) keeps its printed size.</li>
   <li>Ranges and percents are quoted: <code>size="6..10"</code>, <code>cover="35%"</code>.</li>
