@@ -7,7 +7,7 @@ dharmatiles version="1.0.0"
 // defaults apply to the first land layer only; the water default to every
 // water.  A floor, flagstones or planks, is a pieces body: its band is the
 // floor height and the edge pin holds it flush with the tile's edge.  A cliff
-// is one too: its band is the standard 35 mm over the edge height, a plane its
+// is one too: its band is the standard 35dmm over the edge height, a plane its
 // stones' tops touch.
 defaults {
     dirt  top="[$groundHeight .. $groundHeight + 1dmm]" { pin top="$dirtEdgeHeight" at=edges }

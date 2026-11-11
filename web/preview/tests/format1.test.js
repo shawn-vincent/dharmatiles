@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { suggest } from '../js/complete.js';
-import { pointLabel, pointText, rangeText } from '../js/points.js';
+import { placeText, pointLabel, pointText } from '../js/points.js';
 import { asNumber, asRange, formOf, written } from '../js/value.js';
 
 test('a point is written as the document counts it', () => {
@@ -18,10 +18,10 @@ test('a point is written as the document counts it', () => {
   assert.equal(pointText([1 / 3, 1], 1, 1), '"(0.33sq, 0sq)"');
 });
 
-test('a dragged box is a point drawn from ranges, low end first', () => {
-  assert.equal(rangeText([1, 0.5], [0.5, 0.25], 1, 0), '"0.5..1,0.25..0.5"');
-  // rows - y flips the order: the north end of the box is the low end down the page
-  assert.equal(rangeText([1, 0.5], [0.5, 0.25], 1, 1), '"(0.5sq..1sq, 0.5sq..0.75sq)"');
+test('a placed thing writes one point for its at=, never a range', () => {
+  assert.equal(placeText([0.5, 0.25], 1, 1), 'at="(0.5sq, 0.75sq)"');
+  assert.equal(placeText([0.5, 0.25], 1, 0), 'at="0.5,0.25"');
+  for (const f of [0, 1]) assert.ok(!placeText([0.1, 0.9], 2, f).includes('..'));
 });
 
 test('typed values with units are numbers and ranges, and are written as strings', () => {

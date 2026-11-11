@@ -12,7 +12,7 @@ tile size="1x1" seed=62 {
         // On a tile edge a wall always stands inside, its outer face
         // flush with the edge.
         wall at="north west" style=cut-stone seed=12 {
-            height full                     // up to the wall-top level (33.1 mm)
+            height full                     // up to the wall-top level (33.1dmm)
             thickness "7dmm"
         }
 

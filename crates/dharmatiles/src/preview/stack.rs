@@ -155,7 +155,7 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
 }
 
 /// The controls written on an entry (a default is not written: its span
-/// is the entry's name): name, the text written (`size="6..10"`, or a
+/// is the entry's name): name, the text written (`size="6dmm .. 10dmm"`, or a
 /// child line `height 35`) and its byte span, and the file it is in (a
 /// definition's controls are written in the definition's file).
 fn settings(

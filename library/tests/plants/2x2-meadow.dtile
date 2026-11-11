@@ -11,7 +11,7 @@ tile size="2x2" seed=1 {
         dirt top="$dirtEdgeHeight" {
         }
         scatter perSquare="1.5..2.25" gap="1.5dmm" {
-            rock                       // size="6..15"
+            rock                       // size="6dmm .. 15dmm"
         }
         grass bare="20%"
     }

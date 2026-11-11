@@ -176,7 +176,7 @@ impl Decoder<'_> {
     ) -> Option<Spanned<Num>> {
         let span = value_span(e);
         let kind = if lets {
-            "a length: mm, a `let` name, or an expression like \"groundHeight - 1\""
+            "a length: a number with a unit, a `$` name, or an expression like \"$groundHeight - 1dmm\""
         } else {
             axis.describe()
         };

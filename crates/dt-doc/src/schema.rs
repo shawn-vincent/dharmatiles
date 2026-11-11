@@ -367,7 +367,7 @@ pub fn check(
         {
             let shown = |v: f64| match axis {
                 Axis::Share => format!("{}%", fmt(v * 100.0)),
-                Axis::Mm => format!("{} mm", fmt(v)),
+                Axis::Mm => format!("{}dmm", fmt(v)),
                 _ => fmt(v),
             };
             let limits = l.describe(shown);

@@ -277,7 +277,14 @@ impl Decoder<'_> {
                         format!("`{}` takes one value", key.value),
                         "a second value",
                     )
-                    .help = Some("ranges are quoted: \"1..6\"; points too: \"1,1\"".to_owned());
+                    .help = Some(
+                        if self.format1 {
+                            "ranges are quoted: \"1dmm .. 6dmm\"; points too: \"(1sq, 1sq)\""
+                        } else {
+                            "ranges are quoted: \"1..6\"; points too: \"1,1\""
+                        }
+                        .to_owned(),
+                    );
                 }
                 let props: Vec<KdlEntry> = props.into_iter().cloned().collect();
                 self.control(

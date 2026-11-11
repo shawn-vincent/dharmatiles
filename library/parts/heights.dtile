@@ -1,6 +1,6 @@
 dharmatiles version="1.0.0"
 
-// The standard heights, in mm above zero (the base's top) at the
+// The standard heights, in dmm above zero (the base's top) at the
 // DungeonBlocks reference (35 mm square).  Every tile sees these without a
 // `use` line; a tile's own `let` adds names, and `override` replaces one of
 // these for that tile.  Sizes scale with the system.

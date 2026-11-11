@@ -196,7 +196,7 @@ fn elements_dirt_lists_its_controls() {
         .lines()
         .find(|l| l.trim_start().starts_with("bumpSize "))
         .unwrap();
-    assert!(size.contains("mm, 5 to 70"), "{size}");
+    assert!(size.contains("dmm, 5 to 70"), "{size}");
     // the old forms are gone
     assert!(!text.lines().any(|l| l.trim_start().starts_with("level ")));
     assert!(!text.lines().any(|l| l.trim_start().starts_with("bumps ")));

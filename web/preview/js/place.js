@@ -17,7 +17,7 @@
 // A tool stays in hand until Esc (placing places again at each click);
 // the others put down what they made and select it.
 
-import { pointLabel, pointText, rangeText } from './points.js';
+import { pointLabel, placeText, pointText } from './points.js';
 
 const enc = new TextEncoder();
 const bytes = (s) => enc.encode(s).length;
@@ -135,7 +135,7 @@ export class Tools {
     this.tool = tool;
     this.canvas.classList.add('tool');
     const say = {
-      place: `Click to place ${tool.name}; drag a box to give it a range`,
+      place: `Click to place ${tool.name}`,
       scatter: 'Click or drag over a region to scatter in it',
       paint: `Click a region to lay ${tool.name} there`,
       run: `Click a line or near an edge to run ${tool.name} along it`,
@@ -267,9 +267,7 @@ export class Tools {
     const node = (more) => [t.name, t.extra, more].filter(Boolean).join(' ');
     const size = this.api.size();
     if (t.kind === 'place') {
-      const a = press.q, b = p.q;
-      const [f, rows] = [this.api.format?.() ?? 0, size[1]];
-      const at = `at=${press.moved ? rangeText(a, b, rows, f) : pointText(b, rows, f)}`;
+      const at = placeText(p.q, size[1], this.api.format?.() ?? 0);
       await this.api.insert('stack', node(at));
       this.paint();
     } else if (t.kind === 'scatter') {
@@ -355,8 +353,7 @@ export class Tools {
     if (t && h) {
       const size = this.api.size();
       if (t.kind === 'place') {
-        if (this.press?.moved) s.box = [this.press.q, h.q];
-        else s.ring = { q: h.q, r: this.footprint() };
+        s.ring = { q: h.q, r: this.footprint() };
         s.label = { q: h.q, text: pointLabel(h.q, size[1], this.api.format?.() ?? 0) };
       } else if (t.kind === 'scatter') {
         s.selRegion = this.overlay.regionAt(this.press?.q || h.q);

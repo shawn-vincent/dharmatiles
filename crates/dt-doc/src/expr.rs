@@ -413,8 +413,14 @@ struct Parser<'a> {
     tight: bool,
 }
 
-const SKEW_HELP: &str =
-    "a range is weighted by a function round it, as in `low(1..6, 4)`, not with `^`";
+/// The hint for a `^` in a range; `v2` is format 1, whose lengths carry units.
+fn skew_help(v2: bool) -> &'static str {
+    if v2 {
+        "a range is weighted by a function round it, as in `low(1dmm .. 6dmm, 4)`, not with `^`"
+    } else {
+        "a range is weighted by a function round it, as in `low(1..6, 4)`, not with `^`"
+    }
+}
 
 impl Parser<'_> {
     fn peek(&self) -> Option<&Tok> {
@@ -580,7 +586,7 @@ impl Parser<'_> {
                 self.juxtapose(e)
             }
             Some(Tok::DotDot) => self.err("a range needs a low end, as in \"8..14\""),
-            Some(Tok::Op('^')) => self.err(SKEW_HELP),
+            Some(Tok::Op('^')) => self.err(skew_help(self.v2)),
             Some(_) => self.err("expected a number or a name"),
             None => self.err("expected a value"),
         }
@@ -661,7 +667,7 @@ fn unknown_function(name: &str, (start, end): (usize, usize), v2: bool) -> ExprE
             .join(", ");
         format!("functions are {fns}; weightings are {weightings}")
     } else {
-        format!("weightings are {weightings}: size=\"low(1..6, 4)\"")
+        format!("weightings are {weightings}: size=\"low(1..6, 4)\" (format 0)")
     };
     ExprError::coded(
         "dt::value",
@@ -1084,7 +1090,7 @@ fn parse_full(src: &str, v2: bool, units: bool) -> Result<Expr, ExprError> {
             Some(Tok::DotDot) => p.err(
                 "only one `..` is allowed in a range: a range has two ends, and ranges added are each written once",
             ),
-            Some(Tok::Op('^')) => p.err(SKEW_HELP),
+            Some(Tok::Op('^')) => p.err(skew_help(v2)),
             Some(Tok::RBracket) if !v2 => p.err("unexpected `]`"),
             Some(Tok::Comma) if !v2 => p.err("unexpected `,`"),
             _ => p.err("unexpected text after the value"),

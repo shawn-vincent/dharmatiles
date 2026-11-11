@@ -12,7 +12,7 @@ tile size="1x1" seed=65 {
         // On a tile edge a wall always stands inside, its outer face
         // flush with the edge.
         wall at="north" style=brick seed=15 {
-            height full                     // up to the wall-top level (33.1 mm)
+            height full                     // up to the wall-top level (33.1dmm)
             thickness "7dmm"
         }
 

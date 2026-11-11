@@ -262,7 +262,11 @@ fn a_range_is_weighted_by_a_function_not_caret_or_mostly() {
         "tile { stack { rock mostly=even } }",
         "tile { stack { stone { mostly small } } }",
     ] {
-        assert_fails(text, "dt::unknown-control", "size=\"low(1..6, 11)\"");
+        assert_fails(
+            text,
+            "dt::unknown-control",
+            "size=\"low(1dmm .. 6dmm, 11)\"",
+        );
     }
     let e = first("tile { stack { scatter count=3 { stone size=\"low(1..6, 11)\" } } }");
     assert!(

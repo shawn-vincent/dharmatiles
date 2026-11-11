@@ -541,7 +541,7 @@ fn solve_on(
                     format!("`{}` needs a `top=`", b.element),
                     "no top",
                 )
-                .help("write the band it fills, such as `top=\"dirtEdgeHeight + 35\"`"),
+                .help("write the band it fills, such as `top=\"$dirtEdgeHeight + 35dmm\"`"),
             );
             continue;
         };

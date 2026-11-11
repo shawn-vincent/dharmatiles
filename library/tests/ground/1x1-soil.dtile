@@ -9,7 +9,7 @@ tile size="1x1" seed=13 {
     stack {
         base
         dirt bumpSize="14dmm" top="[$groundHeight .. $groundHeight + 2.5dmm]" {
-   // rises up to 2.5 mm, about 14 mm across
+   // rises up to 2.5dmm, about 14dmm across
             clods some                  // or: few, many
         }
     }

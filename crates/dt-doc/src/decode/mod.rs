@@ -972,8 +972,12 @@ impl<'k> Decoder<'k> {
                         format!("{} point(s)", c.entries().len()),
                     )
                     .help = Some(
-                        "write `through south \"0.65,1\" north`: points, corners or edge middles"
-                            .to_owned(),
+                        if self.format1 {
+                            "write `through south \"(0.65sq, 0sq)\" north`: points, corners or edge middles"
+                        } else {
+                            "write `through south \"0.65,1\" north`: points, corners or edge middles"
+                        }
+                        .to_owned(),
                     );
                 }
             } else if let [e] = c.entries()
@@ -1013,7 +1017,14 @@ impl<'k> Decoder<'k> {
                 "a line needs `through`",
                 "no points",
             )
-            .help = Some("write `line trail { through south \"0.65,1\" north }`".to_owned());
+            .help = Some(
+                if self.format1 {
+                    "write `line trail { through south \"(0.65sq, 0sq)\" north }`"
+                } else {
+                    "write `line trail { through south \"0.65,1\" north }`"
+                }
+                .to_owned(),
+            );
         }
         Some(line)
     }
@@ -1117,7 +1128,14 @@ impl<'k> Decoder<'k> {
                     }
                     if c.entries().is_empty() {
                         self.err("dt::region", c.span(), "`fill` takes a point", "no point")
-                            .help = Some("write `fill \"0.15,1\"`".to_owned());
+                            .help = Some(
+                            if self.format1 {
+                                "write `fill \"(0.15sq, 0sq)\"`"
+                            } else {
+                                "write `fill \"0.15,1\"`"
+                            }
+                            .to_owned(),
+                        );
                     }
                 }
                 other => {
@@ -1171,7 +1189,11 @@ impl<'k> Decoder<'k> {
     /// `within MM of=PLACE`: a disc round a point, a strip beside a line, a
     /// ring round a region.
     fn within_node(&mut self, c: &KdlNode, ctx: &Ctx) -> Option<Within> {
-        let help = "write `within 4.5 of=stream`: a distance in mm, round a place";
+        let help = if self.format1 {
+            "write `within \"4.5dmm\" of=stream`: a distance round a place"
+        } else {
+            "write `within 4.5 of=stream`: a distance in mm, round a place"
+        };
         let mut mm = None;
         let mut of = None;
         for e in c.entries() {

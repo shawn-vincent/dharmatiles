@@ -148,12 +148,12 @@ pub(crate) fn element_value(v: &Value, lets: &Lets) -> Result<Lowered, Refused> 
 pub(crate) const TREE_HEIGHT_MM: (f64, f64) = (20.0, 120.0);
 
 /// A tree's `top=` as the tree takes it: `("height", …)` when it is written
-/// over the tree's foot (`bottom + 40`: the tree is 40 mm tall wherever it
+/// over the tree's foot (`$bottom + 40dmm`: the tree is 40dmm tall wherever it
 /// stands, drawn as a `size` was), or `("top", …)` for a height above zero
-/// (`groundHeight + 40`: the tree's height is that less the ground at its
+/// (`$groundHeight + 40dmm`: the tree's height is that less the ground at its
 /// foot, found where it stands).
 pub(crate) fn tree_top(e: &Expr, lets: &Lets) -> Result<(&'static str, Lowered), Refused> {
-    let help = "a tree's top is `bottom + 40` (40 mm over the ground at its foot) or a height above zero such as `groundHeight + 40`";
+    let help = "a tree's top is `$bottom + 40dmm` (40dmm over the ground at its foot) or a height above zero such as `$groundHeight + 40dmm`";
     let Some(rest) = over_bottom(e).map_err(|m| Refused::mistake(m).with_help(help))? else {
         let num = Num {
             expr: e.clone(),
@@ -177,14 +177,14 @@ pub(crate) fn tree_top(e: &Expr, lets: &Lets) -> Result<(&'static str, Lowered),
     if !(lo >= min && hi <= max) {
         let fmt = |v: f64| format!("{}", (v * 10.0).round() / 10.0);
         let made = if (hi - lo).abs() < 1e-9 {
-            format!("{} mm", fmt(lo))
+            format!("{}dmm", fmt(lo))
         } else {
-            format!("{} to {} mm", fmt(lo), fmt(hi))
+            format!("{} to {}dmm", fmt(lo), fmt(hi))
         };
         return Err(Refused::mistake(format!(
-            "a tree is {min} mm to {max} mm tall over its foot, and this top makes it {made}"
+            "a tree is {min}dmm to {max}dmm tall over its foot, and this top makes it {made}"
         ))
-        .with_help("write the height over the ground at its foot: `bottom + 40`"));
+        .with_help("write the height over the ground at its foot: `$bottom + 40dmm`"));
     }
     Ok(("height", low))
 }

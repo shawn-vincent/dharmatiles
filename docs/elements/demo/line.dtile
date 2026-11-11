@@ -1,6 +1,6 @@
 dharmatiles version="1.0.0"
 
-// The line page's picture: a line through three points, wobbled 5 mm,
+// The line page's picture: a line through three points, wobbled 5dmm,
 // dividing a lawn from bare dirt.  The page shows it beside the same line
 // with wobble=0 (cargo xtask pictures makes both).
 tile size="1x1" seed=3 {

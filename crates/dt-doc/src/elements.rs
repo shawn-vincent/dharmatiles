@@ -674,7 +674,7 @@ static SCATTER: &[Control] = &[
     c(
         "reach",
         Axis::Mm,
-        "with at=foot(…): how far out from the foot; with at= a line: how far either side of it (default 5 mm)",
+        "with at=foot(…): how far out from the foot; with at= a line: how far either side of it (default 5dmm)",
     ),
     c(
         "clumps",
@@ -801,14 +801,14 @@ pub static ELEMENTS: &[Element] = &[
         ..Element::BASE
     },
     thing("rock", "one rock", &ROCK, true),
-    thing("stone", "a rock with stone sizes, about 1–6 mm", &STONE, true),
+    thing("stone", "a rock with stone sizes, about 1–6dmm", &STONE, true),
     thing(
         "boulder",
-        "a rock with boulder sizes, about 4.5–8 mm",
+        "a rock with boulder sizes, about 4.5–8dmm",
         &BOULDER, true),
     thing(
         "pebble",
-        "a rock with pebble sizes, about 1–2.2 mm",
+        "a rock with pebble sizes, about 1–2.2dmm",
         &PEBBLE, true),
     thing(
         "flower",
@@ -868,7 +868,8 @@ pub static ELEMENTS: &[Element] = &[
     },
 ];
 
-/// Old words, with what replaces them.  Used for hints only.
+/// Old words, with what replaces them, shown for a document that still
+/// writes one (the hint's examples are format 1).  Used for hints only.
 pub static RENAMED: &[(&str, &str)] = &[
     ("hills", "`hills` is now `dirt`"),
     ("meadow", "`meadow` is now `grass`"),
@@ -884,33 +885,33 @@ pub static RENAMED: &[(&str, &str)] = &[
     ),
     (
         "level",
-        "a floor's `level` is now its `top=`: `flagstones top=floorHeight`",
+        "a floor's `level` is now its `top=`: `flagstones top=\"$floorHeight\"`",
     ),
     ("self", "`self=` is now `at=`"),
     ("near", "`near=` is now `at=\"foot(…)\"`"),
-    ("heights", "`heights` is now `let`: `let foot 4`, in mm"),
-    ("levels", "`levels` is now `let`: `let foot 4`, in mm"),
+    ("heights", "`heights` is now `let`: `let $foot \"4dmm\"`"),
+    ("levels", "`levels` is now `let`: `let $foot \"4dmm\"`"),
     ("cols", "a tile's size is `size=\"2x1\"`, columns first"),
     ("rows", "a tile's size is `size=\"2x1\"`, columns first"),
     ("tips", "a tree's branch ends are `crown clumps=…`"),
-    ("canopy", "a tree's crown is `crown width=…`, in mm"),
+    ("canopy", "a tree's crown is `crown width=…`, in dmm"),
     ("foliage", "foliage is `leaves on`, `clumps-only` or `bare`"),
     ("mass", "stone size is `stoneSize rubble|broken|massive`"),
     (
         "form",
-        "a cliff's form is its region: `cliff top=\"dirtEdgeHeight + 35\" at=crag`; run `dharmatiles migrate`",
+        "a cliff's form is its region: `cliff top=\"$dirtEdgeHeight + 35dmm\" at=crag`; run `dharmatiles migrate`",
     ),
     (
         "bank",
-        "a bank is drawn: a wide-band `pin top=\"[dirtEdgeHeight .. dirtEdgeHeight + 3.5]\" at=apron` on the dirt; run `dharmatiles migrate`",
+        "a bank is drawn: a wide-band `pin top=\"[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]\" at=apron` on the dirt; run `dharmatiles migrate`",
     ),
     (
         "dirt-on-tops",
-        "dirt on a cliff's top is a dirt layer: `dirt top=\"bottom + [0.6 .. 1.2]\" at=crag`",
+        "dirt on a cliff's top is a dirt layer: `dirt top=\"$bottom + [0.6dmm .. 1.2dmm]\" at=crag`",
     ),
     (
         "stones",
-        "dirt beds no stones: scatter rocks on it after it, `scatter perSquare=1 { rock size=\"4..8\" }`, or delete `stones=none`; a cliff's mix is `rock mixed`, or `rock columns=… blocks=…`",
+        "dirt beds no stones: scatter rocks on it after it, `scatter perSquare=1 { rock size=\"4dmm .. 8dmm\" }`, or delete `stones=none`; a cliff's mix is `rock mixed`, or `rock columns=… blocks=…`",
     ),
     ("shatter", "write `shattered patches=… width=…`"),
     (
@@ -920,7 +921,7 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("organic", "a line's wobble is `line name width=… wobble=…`"),
     (
         "mostly",
-        "write the weighting on the size: `size=\"low(1..6, 11)\"` for mostly=small, `high(1..6)` for large, the plain range for even; `dharmatiles migrate` rewrites old tiles",
+        "write the weighting on the size: `size=\"low(1dmm .. 6dmm, 11)\"` for mostly=small, `high(1dmm .. 6dmm)` for large, the plain range for even; `dharmatiles migrate` rewrites old tiles",
     ),
     ("lines", "a region is `boundedBy` its lines"),
     (
@@ -1100,7 +1101,7 @@ mod tests {
         assert!(check_text(tree, "tree", "30..50").is_none());
         assert_eq!(
             check_text(tree, "tree", "250").unwrap().message,
-            "`tree height` is 0 mm to 200 mm, not 250 mm"
+            "`tree height` is 0dmm to 200dmm, not 250dmm"
         );
         assert_eq!(
             check_text(tree, "tree", "50..30").unwrap().message,

@@ -7,7 +7,7 @@ tile size="2x2" seed=1 {
         dirt top="$dirtEdgeHeight" {
         }
         scatter perSquare="2.25..3" gap="1.5dmm" {
-            rock                       // size="6..15"
+            rock                       // size="6dmm .. 15dmm"
         }
     }
 }

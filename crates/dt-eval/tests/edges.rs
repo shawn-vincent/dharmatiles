@@ -153,6 +153,6 @@ fn a_value_out_of_range_is_refused_when_read() {
     );
     assert_eq!(
         e[0].message,
-        "a tree is 20 mm to 120 mm tall over its foot, and this top makes it 150 mm"
+        "a tree is 20dmm to 120dmm tall over its foot, and this top makes it 150dmm"
     );
 }

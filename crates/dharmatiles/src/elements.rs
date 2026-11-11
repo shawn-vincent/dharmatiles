@@ -75,6 +75,16 @@ fn unit(a: Axis) -> &'static str {
     }
 }
 
+/// The unit as the text table shows it: how a format 1 document writes it
+/// (`6dmm`, `34deg`); the JSON keeps `unit`'s names for the editor.
+fn unit_text(a: Axis) -> &'static str {
+    match a {
+        Axis::Mm => "dmm",
+        Axis::Deg => "deg",
+        other => unit(other),
+    }
+}
+
 /// Whether this build takes `path` (`bumps`, or `bumps/up` for a
 /// sub-control).  A group counts as taken when any of its subs is.
 fn taken(built: Option<&'static Element>, path: &str, c: &Control) -> bool {
@@ -233,7 +243,7 @@ fn rows(
 ) {
     let mut kind = c
         .value
-        .map_or_else(|| "group".to_owned(), |a| unit(a).to_owned());
+        .map_or_else(|| "group".to_owned(), |a| unit_text(a).to_owned());
     if let Some(t) = c.takes() {
         let _ = write!(kind, ", {t}");
     }
@@ -256,7 +266,7 @@ fn rows(
     out.push(Row {
         name: format!("{indent}{}{eq}", c.name),
         kind,
-        default: c.default.to_owned(),
+        default: c.default_in(true),
         about,
         words: c.words,
     });
@@ -342,7 +352,7 @@ fn show(l: &'static Element) {
     if takes_weighting(l.controls) {
         say!("");
         say!(
-            "A control that takes \"a weighted range\" takes odds, written round the range: size=\"low(1..6, 4)\""
+            "A control that takes \"a weighted range\" takes odds, written round the range: size=\"low(1dmm .. 6dmm, 4)\""
         );
         let wn = dt_kit::WEIGHTINGS
             .iter()

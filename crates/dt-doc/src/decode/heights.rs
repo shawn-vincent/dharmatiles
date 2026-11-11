@@ -833,7 +833,14 @@ impl Decoder<'_> {
                     "`point` is `point name \"(x, y)\"`",
                     "here",
                 )
-                .help = Some("write `point knoll \"(0.28, 0.72)\"`, in squares".to_owned());
+                .help = Some(
+                    if self.format1 {
+                        "write `point knoll \"(0.28sq, 0.28sq)\"`, counted from the north-west corner"
+                    } else {
+                        "write `point knoll \"(0.28, 0.72)\"`, in squares"
+                    }
+                    .to_owned(),
+                );
                 return None;
             }
         };
@@ -860,7 +867,14 @@ impl Decoder<'_> {
                     "a point is written \"(x, y)\"",
                     "not a pair",
                 )
-                .help = Some("write `point knoll \"(0.28, 0.72)\"`".to_owned());
+                .help = Some(
+                    if self.format1 {
+                        "write `point knoll \"(0.28sq, 0.28sq)\"`"
+                    } else {
+                        "write `point knoll \"(0.28, 0.72)\"`"
+                    }
+                    .to_owned(),
+                );
                 None
             }
         }

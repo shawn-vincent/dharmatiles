@@ -6,7 +6,7 @@ dharmatiles version="1.0.0"
 // are expert controls, accepted in parts files only; a tile says
 // `crown branching=open|normal|dense` instead.
 
-// A call's `top=` is the tree's: `oak top="bottom + 40"` is a 40 mm oak.
+// A call's `top=` is the tree's: `oak top="$bottom + 40dmm"` is a 40dmm oak.
 define oak {
     stack {
         tree top="$bottom + 50dmm" {

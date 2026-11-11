@@ -11,13 +11,13 @@ export function pointText(q, rows, format = 0) {
   return format >= 1 ? `"(${round(q[0])}sq, ${round(rows - q[1])}sq)"` : `"${round(q[0])},${round(q[1])}"`;
 }
 
-/** The box between points `a` and `b` as a point drawn from ranges, quotes included. */
-export function rangeText(a, b, rows, format = 0) {
-  const x = [Math.min(a[0], b[0]), Math.max(a[0], b[0])];
-  const y = [Math.min(a[1], b[1]), Math.max(a[1], b[1])];
-  return format >= 1
-    ? `"(${round(x[0])}sq..${round(x[1])}sq, ${round(rows - y[1])}sq..${round(rows - y[0])}sq)"`
-    : `"${round(x[0])}..${round(x[1])},${round(y[0])}..${round(y[1])}"`;
+/**
+ * What a placed thing writes for its place: `at=` and one point.  A thing's
+ * `at=` takes exactly one point (a range there is `dt::place`), so a drag
+ * writes where it ended, as a click does.
+ */
+export function placeText(q, rows, format = 0) {
+  return `at=${pointText(q, rows, format)}`;
 }
 
 /** The point as a label (no quotes), in the document's own words. */
