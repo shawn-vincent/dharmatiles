@@ -832,7 +832,10 @@ fn hold(
         }
     }
     let area = held_area(frame, ctx.area, &surface, max_slope_deg);
-    let band = Band::new(flo, fhi).map_err(|_| *left_out += 1).ok()?;
+    let band = Band::new(flo, fhi)
+        .map_err(|_| *left_out += 1)
+        .ok()?
+        .with_odds(band.odds().cloned());
     Some(Held { area, band })
 }
 

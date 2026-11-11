@@ -405,19 +405,29 @@ impl Element for Water {
         let trough = SWELL_TROUGH_MM * s;
         let mut raw = vec![0.0; nn];
         let mut present = vec![false; nn];
+        let mut waves = vec![0.0; nn];
         for k in 0..nn {
             let up = ((hi.z[k] - wlk[k]) / crest).clamp(0.0, 1.0);
             let down = ((wlk[k] - lo.z[k]) / trough).clamp(0.0, 1.0);
             let wave = if z[k] >= 0.0 { z[k] * up } else { z[k] * down };
             let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
-            let v = wlk[k] + wave * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k];
-            // a soft stop at the band's ends, so no wave is sliced flat
-            raw[k] = -smax(
-                -smax(v, lo.z[k], SOFT_STOP_MM * s),
-                -hi.z[k],
-                SOFT_STOP_MM * s,
-            );
+            waves[k] =
+                wlk[k] + wave * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k];
             present[k] = ctx.area.bits[k] && (water[k] || thing_mask[k]);
+        }
+        // a cloud: where the band has odds the surface is the height the
+        // waves' rank gives under them, so crests and troughs come up as
+        // often as the weighting says
+        let rolled = band.rolled(&waves, |k| water[k] && hi.z[k] > lo.z[k]);
+        for k in 0..nn {
+            raw[k] = rolled[k].unwrap_or_else(|| {
+                // a soft stop at the band's ends, so no wave is sliced flat
+                -smax(
+                    -smax(waves[k], lo.z[k], SOFT_STOP_MM * s),
+                    -hi.z[k],
+                    SOFT_STOP_MM * s,
+                )
+            });
         }
         // the water's own surface, inside its band by type; the stack mesher
         // lifts it as a layer of its own and cuts the shore where it meets

@@ -33,7 +33,9 @@
 //! Refusals ([`Refusal`]) and lints ([`Lint`]) carry numbers: where, how
 //! much, which pin. Nothing here draws a random number.
 
-use dt_geom::{Iv, Mask, distance_nearest};
+use std::sync::Arc;
+
+use dt_geom::{Iv, Mask, Weighting, distance_nearest};
 
 use crate::Field;
 
@@ -192,10 +194,115 @@ pub struct Shadowed {
 }
 
 /// A body's top: a low and a high at every node, `lo <= hi` everywhere.
+///
+/// A band with [`Odds`] is a **cloud**: a low surface, a high surface and a
+/// weighting that says how often each height between them comes up. The
+/// body supplies a roll from 0 to 1 at each node and the weighting places
+/// it ([`Band::rolled`]). A band with none is the plain range: every height
+/// between equally, and the body's own field is kept as it is.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Band {
     lo: Field,
     hi: Field,
+    odds: Option<Arc<Odds>>,
+}
+
+/// The weighting at a node meaning "no odds": the plain range.
+const FLAT: u32 = u32::MAX;
+
+/// The odds of a cloud at every node of the lattice: a few weightings and,
+/// for each node, which one (or none: the plain range there). A formula
+/// whose factor changes sign puts a weighting and its mirror side by side.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Odds {
+    table: Vec<Weighting>,
+    id: Vec<u32>,
+}
+
+impl Odds {
+    /// The weighting at node `k`, `None` for the plain range.
+    #[must_use]
+    pub fn at(&self, k: usize) -> Option<&Weighting> {
+        match self.id.get(k).copied() {
+            Some(i) if i != FLAT => self.table.get(i as usize),
+            _ => None,
+        }
+    }
+
+    /// The weightings in use, each once.
+    #[must_use]
+    pub fn weightings(&self) -> &[Weighting] {
+        &self.table
+    }
+
+    /// A number that is the same for the same odds: what a cache keys on.
+    #[must_use]
+    pub fn key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for w in &self.table {
+            format!("{w:?}").hash(&mut h);
+        }
+        self.id.hash(&mut h);
+        h.finish()
+    }
+}
+
+/// Builds [`Odds`] one node at a time.
+#[derive(Debug)]
+pub struct OddsBuilder {
+    table: Vec<Weighting>,
+    id: Vec<u32>,
+    last: Option<u32>,
+}
+
+impl OddsBuilder {
+    /// Odds over `n` nodes, every one the plain range.
+    #[must_use]
+    pub fn new(n: usize) -> Self {
+        Self {
+            table: Vec::new(),
+            id: vec![FLAT; n],
+            last: None,
+        }
+    }
+
+    /// Node `k` has weighting `w` (`None` or a flat one: the plain range).
+    ///
+    /// # Panics
+    /// If `k` is not a node, or there are over four billion distinct
+    /// weightings.
+    pub fn set(&mut self, k: usize, w: Option<&Weighting>) {
+        let Some(w) = w.filter(|w| !w.is_flat()) else {
+            self.id[k] = FLAT;
+            return;
+        };
+        let same = |i: u32| self.table.get(i as usize).is_some_and(|t| t == w);
+        let i = match self.last.filter(|&i| same(i)) {
+            Some(i) => i,
+            None => match self.table.iter().position(|t| t == w) {
+                Some(i) => u32::try_from(i).expect("fewer weightings than nodes"),
+                None => {
+                    self.table.push(w.clone());
+                    u32::try_from(self.table.len() - 1).expect("fewer weightings than nodes")
+                }
+            },
+        };
+        self.last = Some(i);
+        self.id[k] = i;
+    }
+
+    /// The odds, `None` when no node has any.
+    #[must_use]
+    pub fn finish(self) -> Option<Odds> {
+        if self.table.is_empty() {
+            return None;
+        }
+        Some(Odds {
+            table: self.table,
+            id: self.id,
+        })
+    }
 }
 
 /// A field surface inside its band. Only [`Band::fit`] makes one, so a
@@ -244,7 +351,7 @@ impl Band {
                 hi: hi.z[k],
             });
         }
-        Ok(Self { lo, hi })
+        Ok(Self { lo, hi, odds: None })
     }
 
     /// The band of zero width at `height`: the surface is fixed.
@@ -253,6 +360,7 @@ impl Band {
         Self {
             lo: height.clone(),
             hi: height.clone(),
+            odds: None,
         }
     }
 
@@ -263,6 +371,7 @@ impl Band {
         Self {
             lo: Field::filled(nx, ny, step, lo),
             hi: Field::filled(nx, ny, step, hi),
+            odds: None,
         }
     }
 
@@ -277,7 +386,59 @@ impl Band {
             lo.z[k] = v.lo.min(v.hi);
             hi.z[k] = v.lo.max(v.hi);
         }
-        Self { lo, hi }
+        Self { lo, hi, odds: None }
+    }
+
+    /// The same band as a cloud with `odds` (`None`: the plain range).
+    #[must_use]
+    pub fn with_odds(mut self, odds: Option<Odds>) -> Self {
+        self.odds = odds.map(Arc::new);
+        self
+    }
+
+    /// The cloud's odds, `None` for the plain range everywhere.
+    #[must_use]
+    pub fn odds(&self) -> Option<&Odds> {
+        self.odds.as_deref()
+    }
+
+    /// The weighting at node `k`, `None` for the plain range there.
+    #[must_use]
+    pub fn weighting(&self, k: usize) -> Option<&Weighting> {
+        self.odds.as_deref().and_then(|o| o.at(k))
+    }
+
+    /// **rolled**: where the band has odds, the height each node's roll
+    /// gives. `roll` is the body's own field of rolls, on any scale: it is
+    /// **ranked** over the nodes `take` accepts that have odds, the least
+    /// roll first, and the rank (0 to 1) is what the weighting reads, so
+    /// the heights come up as often as the weighting says whatever the
+    /// field's own distribution. A node with no odds, or `take` refuses, is
+    /// `None`: the body keeps its own value there. Equal rolls rank in node
+    /// order, so the result never depends on a thread.
+    ///
+    /// # Panics
+    /// If `roll` is not one value per node.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn rolled(&self, roll: &[f64], take: impl Fn(usize) -> bool) -> Vec<Option<f64>> {
+        let n = self.lo.z.len();
+        assert_eq!(roll.len(), n, "rolled: one roll per node");
+        let mut out = vec![None; n];
+        let Some(odds) = self.odds.as_deref() else {
+            return out;
+        };
+        let mut nodes: Vec<usize> = (0..n)
+            .filter(|&k| odds.at(k).is_some() && take(k) && roll[k].is_finite())
+            .collect();
+        nodes.sort_by(|&a, &b| roll[a].total_cmp(&roll[b]).then(a.cmp(&b)));
+        let m = nodes.len() as f64;
+        for (rank, &k) in nodes.iter().enumerate() {
+            let Some(w) = odds.at(k) else { continue };
+            let t = w.unit((rank as f64 + 0.5) / m);
+            out[k] = Some(self.lo.z[k] + (self.hi.z[k] - self.lo.z[k]) * t);
+        }
+        out
     }
 
     /// The low field.
@@ -550,6 +711,8 @@ pub fn solve_traced(own: &Band, pins: &[Pin], ease: Ease) -> Result<Solved, Refu
     let mut under: Vec<Iv> = (0..n).map(|k| own.at(k)).collect();
     // a weight that rounds to 1 away from every place: that pin's band
     let mut exact: Vec<Option<(f64, f64)>> = vec![None; n];
+    // and which pin, at which of its nodes, the odds of that band come from
+    let mut exact_from: Vec<Option<(usize, usize)>> = vec![None; n];
     for (i, p) in pins.iter().enumerate() {
         // a pin reaches out from where it wins: a later pin over its whole
         // place leaves it nothing to ease from (its tail would pull the
@@ -575,6 +738,7 @@ pub fn solve_traced(own: &Band, pins: &[Pin], ease: Ease) -> Result<Solved, Refu
             }
             if w >= EXACT {
                 exact[k] = Some((p.band.lo.z[q], p.band.hi.z[q]));
+                exact_from[k] = Some((i, q));
                 lead[k] = Some(i);
                 continue;
             }
@@ -609,8 +773,30 @@ pub fn solve_traced(own: &Band, pins: &[Pin], ease: Ease) -> Result<Solved, Refu
             hi.z[k] = num_hi[k] / den[k];
         }
     }
+    // the odds: a pin's where it holds (a plain range if it has none: the
+    // pin replaces the cloud there), the body's own everywhere else
+    let odds = if own.odds.is_some() || pins.iter().any(|p| p.band.odds.is_some()) {
+        let mut b = OddsBuilder::new(n);
+        for k in 0..n {
+            let w = if let Some(i) = owner[k] {
+                pins[i].band.weighting(k)
+            } else if let Some((i, q)) = exact_from[k].filter(|_| exact[k].is_some()) {
+                pins[i].band.weighting(q)
+            } else {
+                own.weighting(k)
+            };
+            b.set(k, w);
+        }
+        b.finish()
+    } else {
+        None
+    };
     Ok(Solved {
-        band: Band { lo, hi },
+        band: Band {
+            lo,
+            hi,
+            odds: odds.map(Arc::new),
+        },
         owner,
         lead,
     })
@@ -1208,5 +1394,101 @@ mod tests {
             }
             g
         }
+    }
+
+    /// A cloud over a 100 by 100 lattice: `lo` to `hi` everywhere with `w`.
+    fn cloud(lo: f64, hi: f64, w: &Weighting) -> Band {
+        let mut b = OddsBuilder::new(100 * 100);
+        for k in 0..100 * 100 {
+            b.set(k, Some(w));
+        }
+        Band::flat(100, 100, 1.0, lo, hi).with_odds(b.finish())
+    }
+
+    /// The roll of a smooth-looking field that is far from uniform: its
+    /// square, so the ranks are what make the heights come up as they say.
+    fn rolls() -> Vec<f64> {
+        (0..100 * 100)
+            .map(|k| {
+                let (i, j) = ((k % 100) as f64, (k / 100) as f64);
+                let v = (0.07 * i).sin() * (0.05 * j).cos() + 0.001 * i;
+                v * v * v
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_cloud_is_rolled_by_rank_so_the_heights_come_up_as_the_weighting_says() {
+        let w = Weighting::Low(4.0);
+        let band = cloud(0.0, 10.0, &w);
+        let rolled = band.rolled(&rolls(), |_| true);
+        let heights: Vec<f64> = rolled.iter().map(|v| v.unwrap()).collect();
+        assert!(heights.iter().all(|h| (0.0..=10.0).contains(h)));
+        // the share below the middle is the weighting's own mass there:
+        // (1 - 4^-0.5) / (1 - 4^-1) = 2/3
+        let low = heights.iter().filter(|&&h| h < 5.0).count() as f64 / heights.len() as f64;
+        assert!((low - 2.0 / 3.0).abs() < 0.01, "{low}");
+        // the roll's order is kept: a higher roll is never a lower height
+        let r = rolls();
+        let mut by_roll: Vec<usize> = (0..r.len()).collect();
+        by_roll.sort_by(|&a, &b| r[a].total_cmp(&r[b]).then(a.cmp(&b)));
+        assert!(by_roll.windows(2).all(|p| heights[p[0]] <= heights[p[1]]));
+        // a mirrored weighting is the mirror image: mostly high
+        let high = cloud(0.0, 10.0, &w.mirrored()).rolled(&rolls(), |_| true);
+        let above = high.iter().filter(|v| v.unwrap() > 5.0).count() as f64 / 10_000.0;
+        assert!((above - 2.0 / 3.0).abs() < 0.01, "{above}");
+    }
+
+    #[test]
+    fn the_plain_range_and_the_nodes_not_taken_are_not_rolled() {
+        let plain = Band::flat(100, 100, 1.0, 0.0, 10.0);
+        assert!(plain.rolled(&rolls(), |_| true).iter().all(Option::is_none));
+        let flat = cloud(0.0, 10.0, &Weighting::Flat);
+        assert!(flat.odds().is_none(), "a flat weighting is no odds at all");
+        let band = cloud(0.0, 10.0, &Weighting::High(4.0));
+        let rolled = band.rolled(&rolls(), |k| k % 2 == 0);
+        assert!(
+            rolled
+                .iter()
+                .enumerate()
+                .all(|(k, v)| v.is_some() == (k % 2 == 0))
+        );
+    }
+
+    #[test]
+    fn a_pin_replaces_the_cloud_and_the_body_eases_back_into_it() {
+        let w = Weighting::Low(4.0);
+        let own = cloud(5.0, 9.0, &w);
+        // a pin of one height over the middle column, and a cloud of its own
+        // over the last
+        let mut place = Mask::new(100, 100, false);
+        let mut cloudy = Mask::new(100, 100, false);
+        for j in 0..100 {
+            place.bits[j * 100 + 50] = true;
+            cloudy.bits[j * 100 + 99] = true;
+        }
+        let one = Pin::new(place, Band::flat(100, 100, 1.0, 12.0, 12.0)).unwrap();
+        let mut b = OddsBuilder::new(100 * 100);
+        for j in 0..100 {
+            b.set(j * 100 + 99, Some(&Weighting::High(4.0)));
+        }
+        let two = Pin::new(
+            cloudy,
+            Band::flat(100, 100, 1.0, 12.0, 14.0).with_odds(b.finish()),
+        )
+        .unwrap();
+        let solved = solve(&own, &[one, two], Ease::Slope(24.0)).unwrap();
+        let at = |i: usize| i + 100 * 20;
+        assert_eq!(
+            solved.weighting(at(50)),
+            None,
+            "a pin of one height has none"
+        );
+        assert_eq!(solved.weighting(at(99)), Some(&Weighting::High(4.0)));
+        assert_eq!(
+            solved.weighting(at(5)),
+            Some(&w),
+            "away from the pins: the body's"
+        );
     }
 }

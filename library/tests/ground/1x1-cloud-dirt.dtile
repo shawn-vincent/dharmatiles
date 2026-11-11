@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// A cloud for a top: dirt between the ground height and 3dmm over it, mostly low, a few rises.
+// The weighting says how often each height comes up; the hills are one smooth surface whose
+// heights come up that often. The library's rim pin brings it down to the edge height.
+
+tile size="1x1" seed=21 {
+    about "Dirt whose top is a cloud: low(0dmm .. 3dmm) over the ground height, mostly flat with a few rises."
+    stack {
+        base
+        dirt top="$groundHeight + low(0dmm .. 3dmm)" bumpSize="12dmm"
+    }
+}

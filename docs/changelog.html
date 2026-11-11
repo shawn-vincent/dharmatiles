@@ -40,6 +40,12 @@
 
 <p>Versions before 0.1.0 were never published; their numbers and dates are given after the fact, from the project's history, and are approximate.</p>
 
+<h2 id="unreleased">Unreleased</h2>
+
+<ul>
+  <li><strong>Clouds on every top:</strong> a body's <code>top=</code> and a pin's top may be a weighted range, a low surface, a high surface and one weighting (<code>dirt top="$groundHeight + low(0dmm .. 3dmm)"</code>), instead of <code>dt::weighting</code>. Dirt and water roll one smooth surface whose heights come up as often as the weighting says (the roll is read by rank); flagstones, planks and cliffs take their heaved target from it. A pin replaces the cloud where it holds and the body eases back as it does today. Arithmetic: <code>+ - * /</code> by numbers, <code>min max clamp smooth</code> keep the weighting; a negative factor swaps low and high with the odds turned round; two clouds, dividing by one and <code>sin</code>, <code>cos</code>, <code>abs</code> of one are <code>dt::cloud</code> errors with the rewrite in the help. A plain range builds as before: no existing hash moves. Trees and rocks follow in later steps.</li>
+</ul>
+
 <h2 id="v1.0.0">1.0.0 <small>11 November 2026</small></h2>
 <p>Format 1: units with dmm, points from the north-west, $ names and the context, regions with parents, dharmatiles migrate and migrate-on-load</p>
 <ul>

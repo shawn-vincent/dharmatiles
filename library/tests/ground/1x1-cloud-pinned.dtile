@@ -1,0 +1,23 @@
+dharmatiles version="1.0.0"
+
+// Pins replace a cloud where they hold and the dirt eases back into the cloud no steeper than its
+// slope. The top is a cloud written with arithmetic (a cloud shifted and stretched by numbers);
+// the knoll is a pin that is a cloud of its own, rolled with the body's roll, and the trodden
+// path is a pin of one height.
+
+tile size="1x1" seed=8 {
+    about "A cloud top with two pins: a knoll that is a cloud itself, and a trodden path."
+
+    point knoll "(0.3sq, 0.28sq)"
+    line trail wobble="3dmm" { through "(0.3sq, 0.7sq)" "(0.55sq, 0.62sq)" "(0.78sq, 0.72sq)" }
+    region hill { within "3dmm" of=knoll }
+    region path { within "3dmm" of=trail }
+
+    stack {
+        base
+        dirt top="$groundHeight + 1.5 * bell(0dmm .. 2dmm)" bumpSize="10dmm" {
+            pin top="$groundHeight + 4dmm + high(0dmm .. 1.5dmm)" at=hill
+            pin top="$groundHeight - 1dmm" at=path
+        }
+    }
+}

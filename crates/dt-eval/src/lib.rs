@@ -915,11 +915,14 @@ impl<'a> Plan<'a> {
                 area_hash: hashes[mask],
                 band_hash: solved.by_entry[i].map_or(0, |b| {
                     let band = &solved.bodies[b].band;
-                    band.lo()
+                    let plain = band
+                        .lo()
                         .z
                         .iter()
                         .chain(&band.hi().z)
-                        .fold(hash::OFFSET, |h, v| hash::step(h, v.to_bits()))
+                        .fold(hash::OFFSET, |h, v| hash::step(h, v.to_bits()));
+                    // a cloud's odds are part of what its body is built on
+                    band.odds().map_or(plain, |o| hash::step(plain, o.key()))
                 }),
                 under_hash: 0,
             })

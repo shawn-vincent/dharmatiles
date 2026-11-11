@@ -169,31 +169,32 @@ fn an_unknown_function_lists_the_functions() {
 }
 
 #[test]
-fn a_band_refuses_a_weighting_but_takes_flat() {
+fn a_band_takes_a_weighting_as_a_cloud() {
+    let ok = |text: String| {
+        check(&mem(&text), "t.dtile", &legacy()).unwrap_or_else(|e| panic!("{text}\n{e:?}"))
+    };
     let top = |v: &str| tile("", &format!("        dirt top=\"{v}\""));
-    let d = refused(
-        &top("low([groundHeight .. groundHeight + 2.5])"),
-        "dt::weighting",
-        "write the range alone: [groundHeight .. groundHeight + 2.5]",
-    );
-    assert_eq!(d.message, "a weighted range does not go on a band");
     for v in [
+        "low([groundHeight .. groundHeight + 2.5])",
         "bell([groundHeight .. groundHeight + 2.5])",
         "peak([2 .. 4])",
         "high([2 .. 4], 3)",
+        "flat([groundHeight .. groundHeight + 2.5])",
     ] {
-        refused(&top(v), "dt::weighting", "write the range alone");
+        ok(top(v));
     }
-    assert!(
-        check(
-            &mem(&top("flat([groundHeight .. groundHeight + 2.5])")),
-            "t.dtile",
-            &legacy()
-        )
-        .is_ok()
-    );
-    // a pin's top and a distance are bands too
-    refused(
+    // a pin's top is a cloud too
+    ok(tile(
+        "",
+        "        dirt { pin top=\"bell([2 .. 6])\" at=southCenter }",
+    ));
+    // through a name: the cloud is solved where the let is read
+    ok(tile(
+        "    let hump \"low([4 .. 7])\"",
+        "        dirt top=\"hump\"",
+    ));
+    // a distance is a band the solver reads, not a draw: still refused
+    let d = refused(
         &tile(
             "    line l { through \"0,0.5\" \"1,0.5\" }\n    region r { within \"low([2 .. 6])\" of=l }",
             "        dirt at=r",
@@ -201,24 +202,7 @@ fn a_band_refuses_a_weighting_but_takes_flat() {
         "dt::weighting",
         "write the range alone",
     );
-    // a pin's top
-    refused(
-        &tile(
-            "",
-            "        dirt { pin top=\"bell([2 .. 6])\" at=southCentre }",
-        ),
-        "dt::weighting",
-        "write the range alone",
-    );
-    // through a name: the band is solved where the let is read
-    refused(
-        &tile(
-            "    let hump \"low([4 .. 7])\"",
-            "        dirt top=\"hump\"",
-        ),
-        "dt::weighting",
-        "write the range alone",
-    );
+    assert_eq!(d.message, "a weighted range does not go on a distance");
 }
 
 #[test]
@@ -486,7 +470,7 @@ fn the_new_functions_check_their_limits() {
 }
 
 #[test]
-fn a_band_refuses_a_list_a_steps_an_ends_and_a_mix() {
+fn a_band_takes_a_list_a_steps_an_ends_and_a_mix() {
     let top = |v: &str| tile("", &format!("        dirt top=\"{v}\""));
     for v in [
         "[2, 4]",
@@ -495,7 +479,8 @@ fn a_band_refuses_a_list_a_steps_an_ends_and_a_mix() {
         "steps([2 .. 4], 1, 2)",
         "mix(low([2 .. 4]), 1, flat([2 .. 4]), 1)",
     ] {
-        refused(&top(v), "dt::weighting", "write the range alone");
+        let text = top(v);
+        check(&mem(&text), "t.dtile", &legacy()).unwrap_or_else(|e| panic!("{text}\n{e:?}"));
     }
 }
 

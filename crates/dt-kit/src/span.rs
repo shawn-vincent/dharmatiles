@@ -267,7 +267,10 @@ pub struct Hills {
 /// from it no steeper than `slope_deg`, so a bank drawn between two places
 /// stays a bank and a flat top gets hills that reach both its edges.
 /// The noise is scaled by its least and greatest value over the nodes where
-/// the band has room.
+/// the band has room. Where the band is a cloud ([`Band::odds`]) the surface
+/// is instead the height the noise's rank gives under the odds
+/// ([`Band::rolled`]), a smooth field whose heights come up as often as the
+/// weighting says.
 ///
 /// # Panics
 /// If the noise is on another lattice than the band.
@@ -305,7 +308,7 @@ pub fn hills(noise: &Field, band: &Band, hill_mm: f64, slope_deg: f64, scale: f6
         converged,
     } = relax(band, scale);
     let reach = 2.0 * libm::tan(slope_deg.to_radians());
-    let raw = lo.with_z(
+    let mut raw = lo.with_z(
         (0..n)
             .map(|k| {
                 let t = if span > 0.0 {
@@ -318,6 +321,13 @@ pub fn hills(noise: &Field, band: &Band, hill_mm: f64, slope_deg: f64, scale: f6
             })
             .collect(),
     );
+    // a cloud: where the band has odds the surface is the height the noise's
+    // rank gives under them, so the heights come up as often as they say
+    for (k, v) in band.rolled(&noise.z, |k| room[k]).into_iter().enumerate() {
+        if let Some(v) = v {
+            raw.z[k] = v;
+        }
+    }
     Hills {
         shape: band.fit(&raw),
         converged,

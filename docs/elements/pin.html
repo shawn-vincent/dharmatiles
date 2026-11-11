@@ -34,7 +34,7 @@
 <thead><tr><th>Written</th><th>Takes</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>pin NAME</code></td><td>a name</td><td>Optional, for messages.</td></tr>
-<tr><td><code>top=</code></td><td>a height or a range</td><td>The band at the place: a single height holds it exactly; a range <code>[low .. high]</code> leaves the body free inside it. <strong>Required.</strong> In it, <code>$x</code> and <code>$y</code> are where the point is on the tile and <code>$d</code> and <code>$a</code> are its place in the body's own region, so a pin along an edge can be a function along the edge.</td></tr>
+<tr><td><code>top=</code></td><td>a height or a range</td><td>The band at the place: a single height holds it exactly; a range <code>[low .. high]</code> leaves the body free inside it; a weighted range is a cloud of its own, rolled with the body's roll, and replaces the body's cloud where the pin holds (see <a href="../language.html#clouds">Clouds</a>). <strong>Required.</strong> In it, <code>$x</code> and <code>$y</code> are where the point is on the tile and <code>$d</code> and <code>$a</code> are its place in the body's own region, so a pin along an edge can be a function along the edge.</td></tr>
 <tr><td><code>at=</code></td><td>any place</td><td>A name or a literal point (<code>"(50%, 50%)"</code>); a point, a line or a region. A literal point is in the frame of the body's region, and one outside it is <code>dt::point</code>. <strong>Required.</strong></td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>

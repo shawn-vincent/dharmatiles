@@ -171,6 +171,7 @@ dirt top="$bottom + [0.6dmm .. 1.2dmm]"   // on the tops of the flat ones</code>
 <ul>
   <li><strong>Tile.</strong> Any size in 35 mm squares.</li>
   <li><strong>Edge height.</strong> The library pins the first dirt to <code>$dirtEdgeHeight</code>, <code>3.4dmm</code> above the base, at every tile edge (<code>library/parts/edges.dtile</code>); a pin the tile writes later wins where they overlap.</li>
+  <li><strong>A cloud top.</strong> <code>top="$groundHeight + low(0dmm .. 3dmm)"</code>: the hills are one smooth surface whose heights come up as often as the weighting says (<a href="../language.html#clouds">Clouds</a>); a pin replaces the cloud where it holds and the dirt eases back at its slope.</li>
   <li><strong>Hills in a band.</strong> The default top is <code>[$groundHeight .. $groundHeight + 1dmm]</code>: broad hills (<code>bumpSize</code>) spanning that band, easing down to the edge pin at the dirt's slope, <code>24deg</code> unless it says otherwise. Where the band is wide (a bank drawn between a bed and the land) the dirt takes the smoothest surface the band allows.</li>
   <li><strong>Pebbles.</strong> Per square: 45–75 small pebbles (0.5–1.5 mm) and 8–13 medium (2.2–4.5 mm).</li>
   <li><strong>Flat ground.</strong> A single height for <code>top</code> is flat, exactly: <code>dirt top="$groundHeight"</code>.</li>

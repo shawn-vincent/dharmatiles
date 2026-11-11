@@ -186,6 +186,10 @@ impl Cliff {
             for v in b.lo().z.iter().chain(&b.hi().z) {
                 v.to_bits().hash(&mut h);
             }
+            // a cloud's odds shape the heaved target: another cloud, another plan
+            if let Some(o) = b.odds() {
+                o.key().hash(&mut h);
+            }
         }
         h.finish()
     }

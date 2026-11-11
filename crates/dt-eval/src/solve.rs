@@ -15,7 +15,10 @@ use dt_doc::consts::ConstTable;
 use dt_doc::expr::{BinOp, Expr, UnitWord, sin_deg, smooth};
 use dt_doc::model::PlaceRef;
 use dt_elements::Write;
-use dt_kit::{Band, Ease, Field, Frame, Iv, Lint, Mask, Pin, Refusal, lints, solve_traced};
+use dt_geom::{Dist, Weighting};
+use dt_kit::{
+    Band, Ease, Field, Frame, Iv, Lint, Mask, OddsBuilder, Pin, Refusal, lints, solve_traced,
+};
 
 use crate::Options;
 use crate::coords::Coords;
@@ -96,6 +99,17 @@ impl SolvedBody {
         let node = |v: f64, n: usize| (v * self.per).round().clamp(0.0, (n - 1) as f64) as usize;
         self.band.at(node(y, self.ny) * self.nx + node(x, self.nx))
     }
+
+    /// The odds along the band at a point in squares from the south-west
+    /// corner: `None` where it is the plain range (a pin of one height or a
+    /// plain range holds there, or the top is no cloud).
+    #[must_use]
+    pub fn odds_at(&self, x: f64, y: f64) -> Option<&Weighting> {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let node = |v: f64, n: usize| (v * self.per).round().clamp(0.0, (n - 1) as f64) as usize;
+        self.band
+            .weighting(node(y, self.ny) * self.nx + node(x, self.nx))
+    }
 }
 
 /// What the Solve phase found.
@@ -175,36 +189,41 @@ impl Eval<'_> {
         Ok(n)
     }
 
-    fn iv(&self, e: &Expr, v: &Vars, depth: usize) -> Result<Iv, String> {
+    /// The formula at one node: its heights, and the odds along them when it
+    /// is a cloud.
+    #[allow(clippy::too_many_lines)]
+    fn iv(&self, e: &Expr, v: &Vars, depth: usize) -> Result<Val, Flaw> {
         if depth > DEPTH {
-            return Err("constants refer to each other in a loop".to_owned());
+            return Err("constants refer to each other in a loop".to_owned().into());
         }
         Ok(match e {
             Expr::Num { value, percent } => {
-                Iv::point(if *percent { value / 100.0 } else { *value })
+                Val::num(Iv::point(if *percent { value / 100.0 } else { *value }))
             }
-            Expr::Unit(u) => return Err(format!("`{}` is a unit, not a number here", u.word())),
+            Expr::Unit(u) => {
+                return Err(format!("`{}` is a unit, not a number here", u.word()).into());
+            }
             Expr::Name(n) => match n.as_str() {
-                "x" | "$x" => v.x,
+                "x" | "$x" => Val::num(v.x),
                 // format 1's `$y` counts south from the north-west corner:
                 // `y($tile, sq)`; the library's own `y` (format 0 names) is
                 // the geometry's, running north
-                "$y" => match self.coords {
+                "$y" => Val::num(match self.coords {
                     Some((c, _)) => Iv::point(c.y(RegionTree::TILE, v.k, UnitWord::Sq)),
                     None => v.y,
-                },
-                "y" | "$_y" => v.y,
+                }),
+                "y" | "$_y" => Val::num(v.y),
                 "$d" | "$a" => {
                     let Some((c, own)) = self.coords else {
-                        return Err(format!("`{n}` is read only in format 1"));
+                        return Err(format!("`{n}` is read only in format 1").into());
                     };
-                    Iv::point(if n == "$d" {
+                    Val::num(Iv::point(if n == "$d" {
                         c.d(own, v.k, UnitWord::Pct)
                     } else {
                         c.a(own, v.k, UnitWord::Pct)
-                    })
+                    }))
                 }
-                "bottom" | "$bottom" => v.bottom,
+                "bottom" | "$bottom" => Val::num(v.bottom),
                 c => {
                     let entry = self
                         .table
@@ -213,69 +232,291 @@ impl Eval<'_> {
                     self.iv(&entry.expr, v, depth + 1)?
                 }
             },
-            Expr::Neg(a) => -self.iv(a, v, depth)?,
-            Expr::Range { lo, hi } => self.iv(lo, v, depth)?.hull(self.iv(hi, v, depth)?),
-            // the plain range is a band; odds have nothing to act on there
-            Expr::Weighted { range, .. } if e.weighted().is_none() => self.iv(range, v, depth)?,
-            Expr::Weighted { .. } | Expr::List { .. } => {
-                return Err(format!("{WEIGHTED_BAND}: `{e}`"));
+            Expr::Neg(a) => self.iv(a, v, depth)?.negated(),
+            Expr::Range { lo, hi } => {
+                let (l, h) = (self.iv(lo, v, depth)?, self.iv(hi, v, depth)?);
+                if l.odds.is_some() || h.odds.is_some() {
+                    return Err(Flaw::cloud(
+                        format!("`{e}` has a cloud at the end of a range"),
+                        "the ends of a range are numbers: write the cloud around the whole range",
+                    ));
+                }
+                Val {
+                    iv: l.iv.hull(h.iv),
+                    odds: None,
+                    ranged: true,
+                }
+            }
+            // the plain range is a band: `flat(…)`, and `low` or `high` of
+            // ratio 1, are what a range alone is
+            Expr::Weighted { range, .. } if e.weighted().is_none() => {
+                let mut r = self.iv(range, v, depth)?;
+                r.ranged = true;
+                r
+            }
+            Expr::Weighted {
+                name,
+                args,
+                range,
+                parts,
+            } => {
+                let r = self.iv(range, v, depth)?;
+                if r.odds.is_some() {
+                    return Err(Flaw::cloud(
+                        format!("`{e}` weights a range that has odds already"),
+                        "a cloud has one weighting: write one call over a plain range",
+                    ));
+                }
+                let w = if name == "mix" {
+                    let mut made = Vec::with_capacity(parts.len());
+                    for ((n, a), weight) in parts.iter().zip(args) {
+                        made.push((
+                            *weight,
+                            Weighting::from_call(n, a).map_err(Flaw::weighting)?,
+                        ));
+                    }
+                    Weighting::mix(made)
+                } else {
+                    Weighting::from_call(name, args)
+                }
+                .map_err(Flaw::weighting)?;
+                Val {
+                    iv: r.iv,
+                    odds: (!w.is_flat()).then_some(w),
+                    ranged: true,
+                }
+            }
+            Expr::List { items } => {
+                let mut values = Vec::with_capacity(items.len());
+                for (item, weight) in items {
+                    let x = self.iv(item, v, depth)?;
+                    if x.ranged || x.iv.width() > 0.0 {
+                        return Err(Flaw::cloud(
+                            format!(
+                                "`{item}` is a range inside a list: the values of a list are numbers"
+                            ),
+                            "write numbers: [1dmm:4, 2dmm:5, 3dmm:1]",
+                        ));
+                    }
+                    values.push((x.iv.lo, *weight));
+                }
+                let d = Dist::list(&values).map_err(Flaw::weighting)?;
+                Val {
+                    iv: Iv::new(d.lo, d.hi),
+                    odds: Some(d.weighting),
+                    ranged: true,
+                }
             }
             Expr::Bin { op, lhs, rhs } => {
                 let (a, b) = (self.iv(lhs, v, depth)?, self.iv(rhs, v, depth)?);
-                match op {
-                    BinOp::Add => a + b,
-                    BinOp::Sub => a - b,
-                    BinOp::Mul => a * b,
-                    BinOp::Div => {
-                        if b.contains(0.0) {
-                            return Err("dividing by something that can be zero".to_owned());
-                        }
-                        a * Iv::new(1.0 / b.hi, 1.0 / b.lo)
-                    }
-                }
+                arith(e, *op, a, b)?
             }
             Expr::Call { name, args } if matches!(name.as_str(), "x" | "y" | "d" | "a") => {
                 let Some((c, own)) = self.coords else {
-                    return Err(format!("`{name}(…)` is read only in format 1"));
+                    return Err(format!("`{name}(…)` is read only in format 1").into());
                 };
                 let (Some(region), Some(Expr::Unit(unit))) = (args.first(), args.get(1)) else {
-                    return Err(format!("`{name}` takes a region and a unit"));
+                    return Err(format!("`{name}` takes a region and a unit").into());
                 };
                 let id = c.region(region, own, self.table)?;
-                Iv::point(match name.as_str() {
+                Val::num(Iv::point(match name.as_str() {
                     "x" => c.x(id, v.k, *unit),
                     "y" => c.y(id, v.k, *unit),
                     "d" => c.d(id, v.k, *unit),
                     _ => c.a(id, v.k, *unit),
-                })
+                }))
             }
             Expr::Call { name, args } => {
-                let a = args
+                let vals = args
                     .iter()
                     .map(|x| self.iv(x, v, depth))
                     .collect::<Result<Vec<_>, _>>()?;
-                call(name, &a)?
+                function(e, name, vals)?
             }
         })
     }
 }
 
-/// What a band says of a weighted range it reaches through a name (`dt::weighting`).
-const WEIGHTED_BAND: &str = "a weighted range does not go on a band";
+/// A formula at one node: the heights it can be, the odds along them if it
+/// is a cloud (the plain range has none), and whether it holds a range.
+#[derive(Clone, Debug)]
+struct Val {
+    iv: Iv,
+    odds: Option<Weighting>,
+    ranged: bool,
+}
 
-/// The diagnostic code and help for a band's failure.
-fn band_flaw(msg: &str) -> (&'static str, Option<String>) {
-    if msg.starts_with(WEIGHTED_BAND) {
-        (
-            "dt::weighting",
-            Some(
-                "write the range alone in the `let`, or make the weighted one a plain range"
-                    .to_owned(),
-            ),
-        )
-    } else {
-        ("dt::value", None)
+impl Val {
+    const fn num(iv: Iv) -> Self {
+        Self {
+            iv,
+            odds: None,
+            ranged: false,
+        }
     }
+
+    /// Every height times -1: low and high swap, and the odds turn round
+    /// with them, so low stays the lower surface.
+    fn negated(self) -> Self {
+        Self {
+            iv: -self.iv,
+            odds: self.odds.map(|w| w.mirrored()),
+            ranged: self.ranged,
+        }
+    }
+
+    fn is_cloud(&self) -> bool {
+        self.odds.is_some()
+    }
+}
+
+/// Why a formula cannot be worked out: the diagnostic's code, what is wrong
+/// and what to write.
+struct Flaw {
+    code: &'static str,
+    message: String,
+    help: Option<String>,
+}
+
+impl From<String> for Flaw {
+    fn from(message: String) -> Self {
+        Self {
+            code: "dt::value",
+            message,
+            help: None,
+        }
+    }
+}
+
+impl Flaw {
+    /// Arithmetic a cloud does not have (`dt::cloud`).
+    fn cloud(message: String, help: &str) -> Self {
+        Self {
+            code: "dt::cloud",
+            message,
+            help: Some(help.to_owned()),
+        }
+    }
+
+    fn weighting(w: dt_geom::WeightingError) -> Self {
+        Self {
+            code: w.code,
+            message: w.message,
+            help: Some(w.help),
+        }
+    }
+}
+
+/// What a cloud may be written with (the help of every refusal).
+const CLOUD_RULE: &str = "a cloud may be shifted and scaled by numbers (`+ - * /`) and held by `min`, `max`, `clamp` and `smooth` of numbers; write the result as one range with its odds, such as `high($bottom .. $bottom + 20dmm)`";
+
+/// `a op b` where either may be a cloud (rule B): a number added or
+/// multiplied moves or stretches both surfaces and keeps the weighting; a
+/// negative factor swaps them, with the odds turned round. Two ranges of
+/// which one has odds are two rolls, and an element supplies one.
+fn arith(e: &Expr, op: BinOp, a: Val, b: Val) -> Result<Val, Flaw> {
+    let cloud = a.is_cloud() || b.is_cloud();
+    if cloud && a.ranged && b.ranged {
+        return Err(Flaw::cloud(
+            format!(
+                "`{e}` combines two ranges and one has odds: an element rolls one value at each point, so two clouds have no weighting"
+            ),
+            CLOUD_RULE,
+        ));
+    }
+    let ranged = a.ranged || b.ranged;
+    Ok(match op {
+        BinOp::Add => Val {
+            iv: a.iv + b.iv,
+            odds: a.odds.or(b.odds),
+            ranged,
+        },
+        BinOp::Sub => Val {
+            iv: a.iv - b.iv,
+            odds: a.odds.or_else(|| b.odds.map(|w| w.mirrored())),
+            ranged,
+        },
+        BinOp::Mul => {
+            let (cloud_side, k) = if a.is_cloud() { (&a, &b) } else { (&b, &a) };
+            if cloud && k.iv.width() > 0.0 {
+                return Err(Flaw::cloud(
+                    format!("`{e}` multiplies a cloud by something that is a range at the point"),
+                    "multiply a cloud by a number; the factor must be one value at each point",
+                ));
+            }
+            let mut odds = cloud_side.odds.clone();
+            if k.iv.lo < 0.0 {
+                odds = odds.map(|w| w.mirrored());
+            }
+            if cloud && k.iv.lo == 0.0 {
+                odds = None;
+            }
+            Val {
+                iv: a.iv * b.iv,
+                odds,
+                ranged,
+            }
+        }
+        BinOp::Div => {
+            if b.iv.contains(0.0) {
+                return Err("dividing by something that can be zero".to_owned().into());
+            }
+            if b.is_cloud() {
+                return Err(Flaw::cloud(
+                    format!(
+                        "`{e}` divides by a cloud: the odds of its inverse are not a weighting"
+                    ),
+                    CLOUD_RULE,
+                ));
+            }
+            if a.is_cloud() && b.iv.width() > 0.0 {
+                return Err(Flaw::cloud(
+                    format!("`{e}` divides a cloud by something that is a range at the point"),
+                    "divide a cloud by a number; the divisor must be one value at each point",
+                ));
+            }
+            let odds = if b.iv.hi < 0.0 {
+                a.odds.map(|w| w.mirrored())
+            } else {
+                a.odds
+            };
+            Val {
+                iv: a.iv * Iv::new(1.0 / b.iv.hi, 1.0 / b.iv.lo),
+                odds,
+                ranged,
+            }
+        }
+    })
+}
+
+/// A function of values, any of which may be a cloud: `min`, `max`, `clamp`
+/// and `smooth` act on its two surfaces and keep the weighting; `sin`, `cos`
+/// and `abs` can fold the surfaces over each other, so a cloud is refused
+/// there.
+fn function(e: &Expr, name: &str, vals: Vec<Val>) -> Result<Val, Flaw> {
+    let clouds = vals.iter().filter(|x| x.is_cloud()).count();
+    if clouds > 0 && matches!(name, "sin" | "cos" | "abs") {
+        return Err(Flaw::cloud(
+            format!(
+                "`{e}` takes `{name}` of a cloud: it can fold the low and high surfaces over each other"
+            ),
+            "write the function inside the range, over its ends, and the cloud round the result: high(sin(…) .. sin(…))",
+        ));
+    }
+    if clouds > 0 && vals.iter().filter(|x| x.ranged).count() > 1 {
+        return Err(Flaw::cloud(
+            format!(
+                "`{e}` combines two ranges and one has odds: an element rolls one value at each point, so two clouds have no weighting"
+            ),
+            CLOUD_RULE,
+        ));
+    }
+    let ivs: Vec<Iv> = vals.iter().map(|x| x.iv).collect();
+    Ok(Val {
+        iv: call(name, &ivs)?,
+        odds: vals.iter().find_map(|x| x.odds.clone()),
+        ranged: vals.iter().any(|x| x.ranged),
+    })
 }
 
 fn collect(e: &Expr, out: &mut Vec<String>) {
@@ -366,7 +607,7 @@ impl Ground<'_> {
         under: &Band,
         only: Option<&Mask>,
         own: usize,
-    ) -> Result<Band, String> {
+    ) -> Result<Band, Flaw> {
         let eval = Eval {
             table,
             coords: self.coords.map(|c| (c, own)),
@@ -378,17 +619,26 @@ impl Ground<'_> {
             bottom: Iv::point(0.0),
             k: 0,
         };
+        let odds = std::cell::RefCell::new(OddsBuilder::new(self.nx * self.ny));
         if !needs.xy && !needs.bottom {
-            let iv = eval.iv(e, &none, 0)?;
+            let val = eval.iv(e, &none, 0)?;
+            let iv = val.iv;
+            if val.odds.is_some() {
+                let mut o = odds.borrow_mut();
+                for k in 0..self.nx * self.ny {
+                    o.set(k, val.odds.as_ref());
+                }
+            }
             return Ok(Band::flat(
                 self.nx,
                 self.ny,
                 self.step,
                 iv.lo * self.scale,
                 iv.hi * self.scale,
-            ));
+            )
+            .with_odds(odds.into_inner().finish()));
         }
-        let err: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
+        let err: std::cell::RefCell<Option<Flaw>> = std::cell::RefCell::new(None);
         let band = Band::from_fn(self.nx, self.ny, self.step, |px, py| {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let (i, j) = (
@@ -408,14 +658,20 @@ impl Ground<'_> {
                 k,
             };
             match eval.iv(e, &vars, 0) {
-                Ok(iv) => Iv::new(iv.lo * self.scale, iv.hi * self.scale),
+                Ok(val) => {
+                    odds.borrow_mut().set(k, val.odds.as_ref());
+                    Iv::new(val.iv.lo * self.scale, val.iv.hi * self.scale)
+                }
                 Err(m) => {
                     err.borrow_mut().get_or_insert(m);
                     Iv::point(0.0)
                 }
             }
         });
-        err.into_inner().map_or(Ok(band), Err)
+        match err.into_inner() {
+            Some(f) => Err(f),
+            None => Ok(band.with_odds(odds.into_inner().finish())),
+        }
     }
 }
 
@@ -553,16 +809,15 @@ fn solve_on(
         let region_id = regions.map_or(0, |t| t.of_entry.get(b.entry).copied().unwrap_or(0));
         let own = match g.band(&b.table, top, &under, None, region_id) {
             Ok(x) => x,
-            Err(msg) => {
-                let (code, help) = band_flaw(&msg);
+            Err(f) => {
                 let mut d = Diag::at(
                     top_src,
                     *top_span,
-                    code,
-                    format!("can't work out this top: {msg}"),
+                    f.code,
+                    format!("can't work out this top: {}", f.message),
                     "here",
                 );
-                d.help = help;
+                d.help = f.help;
                 errors.push(d);
                 continue;
             }
@@ -594,16 +849,15 @@ fn solve_on(
             };
             let band = match g.band(&b.table, &p.top, &under, Some(&place), region_id) {
                 Ok(x) => x,
-                Err(msg) => {
-                    let (code, help) = band_flaw(&msg);
+                Err(f) => {
                     let mut d = Diag::at(
                         &p.from.src,
                         p.top_span,
-                        code,
-                        format!("can't work out this pin's top: {msg}"),
+                        f.code,
+                        format!("can't work out this pin's top: {}", f.message),
                         "here",
                     );
-                    d.help = help;
+                    d.help = f.help;
                     errors.push(d);
                     ok = false;
                     continue;

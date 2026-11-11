@@ -212,14 +212,15 @@ impl Decoder<'_> {
         if !self.check_name_forms(&expr, e, span) {
             return None;
         }
-        // A top, a pin and a distance are bands the solver fits, not draws:
-        // the odds of a weighting have nothing to act on.
-        if !matches!(mode, Mode::Const | Mode::Draw) && expr.weighted().is_some() {
+        // A distance is a band the solver reads, not a draw: the odds of a
+        // weighting have nothing to act on.  A top or a pin's top may be a
+        // cloud (a range with odds), and a thing's top a draw.
+        if mode == Mode::Length && expr.weighted().is_some() {
             self.err(
                 "dt::weighting",
                 span,
-                "a weighted range does not go on a band",
-                format!("{what} is a band the solver fits, not a draw"),
+                "a weighted range does not go on a distance",
+                format!("{what} is a length, not a draw"),
             )
             .help = Some(format!("write the range alone: {}", expr.unweighted_text()));
             return None;

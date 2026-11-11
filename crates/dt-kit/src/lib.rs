@@ -71,8 +71,8 @@ pub use audit::{
 };
 pub use bambu::{bambu_project, bed_centre, project_settings};
 pub use band::{
-    Band, Banded, Ease, Lint, Pin, Refusal, Shadowed, Solved, Steep, drop_mm, lints, solve,
-    solve_traced,
+    Band, Banded, Ease, Lint, Odds, OddsBuilder, Pin, Refusal, Shadowed, Solved, Steep, drop_mm,
+    lints, solve, solve_traced,
 };
 pub use dt_geom::Convex;
 pub use dt_geom::{
