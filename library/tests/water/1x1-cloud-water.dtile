@@ -17,6 +17,6 @@ tile size="1x1" seed=33 {
             pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand
             pin top="$waterBedHeight" at=pool
         }
-        water at=shoreBand top="$waterSurfaceHeight + bell(-0.8dmm .. 0.8dmm)"
+        water top="$waterSurfaceHeight + bell(-0.8dmm .. 0.8dmm)"
     }
 }
