@@ -1,0 +1,22 @@
+// A stream with its banks drawn (the proposal's water example): the banks are a wide band from
+// the bed up to the land, the bed is pinned low and written later so it wins inside the banks.
+
+tile size="1x1" seed=62 {
+    about "A stream west to east with its banks drawn, a rock in it: the heights language, migrated by hand."
+
+    point crossing "(0.65, 0.5)"
+    line stream wobble=0.5 { through westCenter eastCenter }
+    region banks { within 11.5 of=stream }
+    region bed   { within 1.5 of=stream }
+
+    stack {
+        base
+        dirt {
+            pin top="[waterBedHeight .. groundHeight + 1]" at=banks       // anywhere from the bed to the land
+            pin top="[waterBedHeight .. waterBedHeight + 0.3]" at=bed     // later, so it wins inside the bed
+        }
+        rock size="6..10" at=crossing
+        water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" at=banks
+        grass
+    }
+}

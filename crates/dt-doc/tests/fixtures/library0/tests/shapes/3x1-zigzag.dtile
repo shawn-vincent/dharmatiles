@@ -1,0 +1,18 @@
+// A long thin tile and a sawtooth shore: a line with eight turns, each
+// tooth narrower than a square, water on one side and dirt on the other.
+
+tile size="3x1" seed=3 {
+    about "A sawtooth shore along a 3×1: many turns and narrow teeth."
+    line shore { through "0,0.3" "0.4,0.7" "0.8,0.3" "1.2,0.7" "1.6,0.3" "2,0.7" "2.4,0.3" "2.8,0.7" "3,0.5" }
+    region sea { boundedBy shore; fill "0.4,0.1" }
+    region land { boundedBy shore; fill "0.4,0.95" }
+    region bank { within 5 of=shore }
+    stack {
+        base
+        dirt {
+            pin top="[waterBedHeight .. dirtEdgeHeight]" at=bank
+            pin top=waterBedHeight at=sea
+        }
+        water
+    }
+}

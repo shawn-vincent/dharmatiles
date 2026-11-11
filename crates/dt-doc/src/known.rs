@@ -57,7 +57,6 @@ impl From<&Definition> for DefInfo {
 pub struct Known {
     files: BTreeMap<String, BTreeMap<String, DefInfo>>,
     consts: Vec<Const>,
-    format_preview: bool,
     units: Units,
 }
 
@@ -66,15 +65,6 @@ impl Known {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Read the format in development too (format 1), as the reader's
-    /// explicit option: the command line and the preview set it from
-    /// `DT_FORMAT_PREVIEW=1`, tests set it directly.
-    #[must_use]
-    pub fn with_format_preview(mut self, on: bool) -> Self {
-        self.format_preview = on;
-        self
     }
 
     /// What `mm`, `in` and `layer` are worth on the build target (format 1):
@@ -90,12 +80,6 @@ impl Known {
     #[must_use]
     pub fn units(&self) -> Units {
         self.units
-    }
-
-    /// True when the format in development is read.
-    #[must_use]
-    pub fn format_preview(&self) -> bool {
-        self.format_preview
     }
 
     /// Decode the library's heights (library/parts/heights.dtile, read from

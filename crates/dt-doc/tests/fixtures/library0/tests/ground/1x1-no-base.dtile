@@ -1,0 +1,9 @@
+// No base line: the tile has no base. It is printed flat on the bed from zero
+// up, on either system, and the connector checks do not apply.
+
+tile size="1x1" seed=1 {
+    about "Flat dirt at the edge level (3.4 mm) with no base: no connector, flat from zero."
+    stack {
+        dirt top=dirtEdgeHeight clods=none
+    }
+}

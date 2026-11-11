@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // The wall page's drystone: a flagstone floor with a fieldstone wall on it.
 tile size="1x1" seed=4 {
     about "Drystone flagstones with a fieldstone wall along the north edge."

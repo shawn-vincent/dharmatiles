@@ -19,7 +19,7 @@ pub const NODE: &str = "dharmatiles";
 
 /// The highest document format this program reads.  Format 0 is a document
 /// with no header.
-pub const FORMAT: u32 = 0;
+pub const FORMAT: u32 = 1;
 
 /// The formats this program reads, for `--version` and the About box, each
 /// as its major versions: `0.x`, then `0.x, 1.x` once there are two.
@@ -29,19 +29,6 @@ pub fn formats() -> String {
         .map(|f| format!("{f}.x"))
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-/// The format in development: read only when the reader is told to preview
-/// it (`DT_FORMAT_PREVIEW=1` at the command line and the preview), until
-/// 1.0.0 ships it.  Format 1 is the `$` names, `let` and `override` in any
-/// block and the reserved words.
-pub const PREVIEW_FORMAT: u32 = 1;
-
-/// The highest format this reader reads: [`FORMAT`], or [`PREVIEW_FORMAT`]
-/// when previewing.
-#[must_use]
-pub fn max_format(preview: bool) -> u32 {
-    if preview { PREVIEW_FORMAT } else { FORMAT }
 }
 
 /// A document's header, as written.
@@ -107,7 +94,6 @@ fn read_node(
     n: &KdlNode,
     kdl: &KdlDocument,
     errors: &mut Vec<DocError>,
-    preview: bool,
 ) -> Option<Header> {
     let mut ok = true;
     if let Some(c) = n.children() {
@@ -200,13 +186,9 @@ fn read_node(
         ));
         return None;
     };
-    let max = max_format(preview);
+    let max = FORMAT;
     if format > max {
-        let help = if format == PREVIEW_FORMAT {
-            "format 1 is in development and is read only when DT_FORMAT_PREVIEW=1 is set; until 1.0.0 ships, use a copy of the file in format 0"
-        } else {
-            "use a newer dharmatiles, or a copy of the file in the older format"
-        };
+        let help = "use a newer dharmatiles, or a copy of the file in the older format";
         errors.push(err(
             src,
             "dt::format-newer",
@@ -228,7 +210,7 @@ fn read_node(
 
 /// The header of a parsed document, with every problem with it: not
 /// first, repeated, malformed, or of a format newer than [`FORMAT`].
-pub(crate) fn read(src: &Src, kdl: &KdlDocument, preview: bool) -> (Option<Header>, Vec<DocError>) {
+pub(crate) fn read(src: &Src, kdl: &KdlDocument) -> (Option<Header>, Vec<DocError>) {
     let mut errors = Vec::new();
     let mut header = None;
     let mut seen = false;
@@ -255,7 +237,7 @@ pub(crate) fn read(src: &Src, kdl: &KdlDocument, preview: bool) -> (Option<Heade
                 "move `dharmatiles version=…` to the top of the file",
             ));
         } else {
-            header = read_node(src, n, kdl, &mut errors, preview);
+            header = read_node(src, n, kdl, &mut errors);
         }
         seen = true;
     }
@@ -268,24 +250,12 @@ pub(crate) fn read(src: &Src, kdl: &KdlDocument, preview: bool) -> (Option<Heade
 /// The text isn't KDL v2, or its header is malformed, misplaced, repeated
 /// or of a newer format.
 pub fn check_text(name: &str, text: &str) -> Result<Option<Header>, Vec<DocError>> {
-    check_text_with(name, text, false)
-}
-
-/// [`check_text`], reading the format in development too when `preview`.
-///
-/// # Errors
-/// As [`check_text`].
-pub fn check_text_with(
-    name: &str,
-    text: &str,
-    preview: bool,
-) -> Result<Option<Header>, Vec<DocError>> {
     let src = Arc::new(NamedSource::new(name, text.to_owned()));
     let kdl = match KdlDocument::parse(text) {
         Ok(d) => d,
         Err(e) => return Err(syntax::syntax_errors(&src, text, &e)),
     };
-    let (h, errors) = read(&src, &kdl, preview);
+    let (h, errors) = read(&src, &kdl);
     if errors.is_empty() {
         Ok(h)
     } else {
@@ -316,12 +286,19 @@ mod tests {
         ] {
             assert_eq!(check_text("t", t).unwrap().unwrap().format, 0, "{t}");
         }
+        for t in [
+            "dharmatiles version=1\n",
+            "dharmatiles version=\"1.0\"\n",
+            "dharmatiles version=\"1.0.0+5.gf9481c8.dirty\"\n",
+        ] {
+            assert_eq!(check_text("t", t).unwrap().unwrap().format, 1, "{t}");
+        }
         assert_eq!(check_text("t", "tile size=\"1x1\"").unwrap(), None);
     }
 
     #[test]
     fn a_bad_header_is_refused_with_a_code() {
-        assert_eq!(code("dharmatiles version=\"1.0\"\n"), ["dt::format-newer"]);
+        assert_eq!(code("dharmatiles version=\"2.0\"\n"), ["dt::format-newer"]);
         assert_eq!(code("dharmatiles version=2\n"), ["dt::format-newer"]);
         assert_eq!(code("dharmatiles\n"), ["dt::header-version"]);
         assert_eq!(code("dharmatiles version=0.9\n"), ["dt::header-version"]);
@@ -346,14 +323,11 @@ mod tests {
     }
 
     #[test]
-    fn format_one_is_read_only_when_previewed() {
+    fn format_one_is_read_and_format_two_is_newer() {
         let t = "dharmatiles version=1\n";
-        let e = check_text("t", t).unwrap_err();
-        assert_eq!(e[0].code, "dt::format-newer");
-        assert!(e[0].help.as_deref().unwrap().contains("in development"));
-        assert_eq!(check_text_with("t", t, true).unwrap().unwrap().format, 1);
+        assert_eq!(check_text("t", t).unwrap().unwrap().format, 1);
         assert_eq!(
-            check_text_with("t", "dharmatiles version=2\n", true).unwrap_err()[0].code,
+            check_text("t", "dharmatiles version=2\n").unwrap_err()[0].code,
             "dt::format-newer"
         );
     }
@@ -363,7 +337,7 @@ mod tests {
         let e = check_text("t", "dharmatiles version=2\ntile size=\"1x1\"\n").unwrap_err();
         assert_eq!(
             e[0].message,
-            "this tile is format 2; this dharmatiles reads up to 0"
+            "this tile is format 2; this dharmatiles reads up to 1"
         );
     }
 }

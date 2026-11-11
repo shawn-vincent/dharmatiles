@@ -9,7 +9,7 @@ use dt_doc::expr::{parse_units, parse_v2_units};
 use dt_doc::{DocError, Known, decode};
 
 fn known() -> Known {
-    let mut k = Known::new().with_format_preview(true);
+    let mut k = Known::new();
     k.add_heights("library/parts/heights.dtile", common::HEIGHTS)
         .unwrap();
     k

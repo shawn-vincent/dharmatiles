@@ -1,9 +1,11 @@
+dharmatiles version="1.0.0"
+
 // No region: the whole tile is the default area.
 
 tile size="1x1" seed=1 {
     about "Flat ground at the edge level (3.4 mm) on one square: the first tile built end to end."
     stack {
         base
-        dirt top=dirtEdgeHeight clods=none   // flat, at the edge height (3.4 mm)
+        dirt top="$dirtEdgeHeight" clods=none   // flat, at the edge height (3.4 mm)
     }
 }

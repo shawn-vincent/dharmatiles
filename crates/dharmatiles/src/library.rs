@@ -86,13 +86,6 @@ pub(crate) fn options(system: &str, printer: &str, seed: Option<u64>) -> Result<
     )
 }
 
-/// True when `DT_FORMAT_PREVIEW=1`: read the format in development
-/// (format 1, until 1.0.0 ships it).  The environment is read here, at
-/// the boundary, and passed on as an option.
-pub(crate) fn format_preview() -> bool {
-    std::env::var("DT_FORMAT_PREVIEW").is_ok_and(|v| v == "1")
-}
-
 /// [`options`], with the user's printers read from `home`.
 pub(crate) fn options_in(
     system: &str,
@@ -107,7 +100,6 @@ pub(crate) fn options_in(
         system: system.to_owned(),
         seed,
         engine: env!("DT_ENGINE_VERSION").to_owned(),
-        format_preview: format_preview(),
         ..Options::default()
     };
     o.use_printer(printer, home).map_err(|e| {

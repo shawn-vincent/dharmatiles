@@ -1,0 +1,18 @@
+// A fine printer profile: an FDM printer with a 0.25 mm nozzle and 0.12 mm
+// layers.  Choose it with `--printer fine`, or from the title bar's chip in
+// the preview.  Your own profiles go in `printers/` beside your tiles
+// (`$DT_HOME`, else `~/dharmatiles`), one file each, named like the file:
+// `printers/mine.dtile` is `--printer mine`.  A profile of yours with the
+// name of a library one replaces it.
+//
+// A profile holds the printer's floors only; the base system (DungeonBlocks
+// or OpenLOCK) is chosen beside it, and edge and corner rounding belong to
+// materials, not to printers.
+
+printer fine {
+    line     0.3        // one extruded line, mm: the thinnest wall that prints
+    layer    0.12       // one layer, mm
+    overhang 55         // what every element aims for, degrees from vertical
+    steepest 65         // small patches up to here
+    gap      0.15       // the narrowest gap that stays open, mm
+}

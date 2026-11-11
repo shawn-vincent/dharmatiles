@@ -591,7 +591,7 @@ mod tests {
     use super::*;
     use crate::{Known, decode};
 
-    const HEIGHTS: &str = include_str!("../../../library/parts/heights.dtile");
+    const HEIGHTS: &str = include_str!("../tests/fixtures/library0/parts/heights.dtile");
 
     fn standard() -> Known {
         let mut k = Known::new();

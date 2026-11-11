@@ -43,7 +43,7 @@ pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<Doc
     };
     // the header line first: a format this program doesn't read stops here,
     // since the rest of the file may not mean what this decoder thinks
-    let (header, header_errors) = crate::header::read(&src, &kdl, known.format_preview());
+    let (header, header_errors) = crate::header::read(&src, &kdl);
     if header_errors.iter().any(|e| e.code == "dt::format-newer") {
         return Err(header_errors);
     }

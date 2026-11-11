@@ -1,12 +1,14 @@
+dharmatiles version="1.0.0"
+
 // The reeds page's picture: a pool, a grassy bank, and reeds at the shore.
 tile size="1x1" seed=97 {
-    line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { boundedBy shore; fill "0.5,0.25" }
-    region bank { boundedBy shore; fill "0.5,0.75" }
-    region shoreBand { within 7 of=shore }
+    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
-        dirt { pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand; pin top=waterBedHeight at=pool }
+        dirt { pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand; pin top="$waterBedHeight" at=pool }
         reeds at=bank
         water
         grass at=bank

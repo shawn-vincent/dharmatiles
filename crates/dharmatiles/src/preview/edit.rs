@@ -387,8 +387,10 @@ fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
         Ok(s) => s,
         Err(e) => return e,
     };
+    // a new document is written in the current format, with its header
+    let version = dt_doc::migrate::format1::stamp(env!("DT_ENGINE_VERSION"));
     let text = format!(
-        "tile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        base\n        dirt\n    }}\n}}\n"
+        "dharmatiles version=\"{version}\"\n\ntile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        base\n        dirt\n    }}\n}}\n"
     );
     match home(shared).and_then(|h| write_new(&h, &stem, &text)) {
         Ok(dest) => listed(shared, &dest),
@@ -423,7 +425,7 @@ fn check_value(shared: &Shared, v: &Value) -> (&'static str, Value) {
     // `format` is the format of the document the value is typed into; a
     // format 1 value is read with units, as the reader reads one
     let opts = shared.options();
-    let format1 = v["format"].as_u64().is_some_and(|f| f >= 1) && opts.format_preview;
+    let format1 = v["format"].as_u64().is_some_and(|f| f >= 1);
     let flaw = dt_doc::schema::element(element)
         .and_then(|e| e.control(control))
         .and_then(|c| dt_doc::decode::check_text_in(c, element, typed, format1, opts.units()));
@@ -552,7 +554,7 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
     let opts = shared.options();
     // the language format the text is written in, known even while it has
     // mistakes, so the page writes what it adds in the same one
-    let format = dt_doc::header::check_text_with(file, text, opts.format_preview)
+    let format = dt_doc::header::check_text(file, text)
         .ok()
         .flatten()
         .map_or(0, |h| h.format);

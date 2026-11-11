@@ -66,6 +66,6 @@ fn a_newer_format_is_the_only_complaint() {
     assert_eq!(errs.len(), 1, "{shown}");
     assert_eq!(
         errs[0].message,
-        "this tile is format 2; this dharmatiles reads up to 0"
+        "this tile is format 2; this dharmatiles reads up to 1"
     );
 }

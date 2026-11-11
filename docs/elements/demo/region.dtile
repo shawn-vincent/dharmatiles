@@ -1,15 +1,17 @@
+dharmatiles version="1.0.0"
+
 // The region page's picture: two lines make three regions, each its own
 // surface.
 tile size="1x1" seed=8 {
-    line upper wobble=3 { through "0,0.5" "1,0.56" }
-    line lower wobble=4 { through "0,0.2" "1,0.26" }
-    region yard { boundedBy upper; fill "0.5,0.85" }
-    region bank { boundedBy upper lower; fill "0.5,0.38" }
-    region pool { boundedBy lower; fill "0.5,0.1" }
-    region shoreBand { within 7 of=lower }
+    line upper wobble="3dmm" { through "(0sq, 0.5sq)" "(1sq, 0.44sq)" }
+    line lower wobble="4dmm" { through "(0sq, 0.8sq)" "(1sq, 0.74sq)" }
+    region yard { boundedBy upper; fill "(0.5sq, 0.15sq)" }
+    region bank { boundedBy upper lower; fill "(0.5sq, 0.62sq)" }
+    region pool { boundedBy lower; fill "(0.5sq, 0.9sq)" }
+    region shoreBand { within "7dmm" of=lower }
     stack {
         base
-        dirt { pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand; pin top=waterBedHeight at=pool }
+        dirt { pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand; pin top="$waterBedHeight" at=pool }
         water
         flagstones at=yard slabs=4
         grass at=bank

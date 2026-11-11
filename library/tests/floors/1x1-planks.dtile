@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 tile size="1x1" seed=5 {
     about "A plank floor of mixed-length boards, for golden tests."
     stack {

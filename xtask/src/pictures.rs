@@ -111,7 +111,7 @@ pub fn run(root: &Path, only: &[String]) -> Result<(), String> {
     if want("line") {
         let line = read(&demo.join("line.dtile"))?;
         let points = points_of(&line)?;
-        let straight = line.replace("wobble=5", "wobble=0");
+        let straight = line.replace("wobble=\"5dmm\"", "wobble=\"0dmm\"");
         for (name, text, out) in [
             (
                 "line-straight",
@@ -171,8 +171,19 @@ pub fn run(root: &Path, only: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// The quoted `"x,y"` points of the first `through` in `text`.
+/// The quoted `"(Xsq, Ysq)"` points of the first `through` in `text`, in
+/// squares with y up (format 1 counts down from the north-west corner, so
+/// y is taken from the tile's `rows`).
 fn points_of(text: &str) -> Result<Vec<(f64, f64)>, String> {
+    let size = text
+        .split_once("size=\"")
+        .and_then(|(_, rest)| rest.split_once('"'))
+        .ok_or("line.dtile: no `size=\"…\"`")?
+        .0;
+    let rows: f64 = size
+        .split_once('x')
+        .and_then(|(_, r)| r.parse().ok())
+        .ok_or_else(|| format!("line.dtile: bad size {size:?}"))?;
     let body = text
         .split_once("{ through")
         .and_then(|(_, rest)| rest.split_once('}'))
@@ -183,10 +194,16 @@ fn points_of(text: &str) -> Result<Vec<(f64, f64)>, String> {
         .step_by(2)
         .map(|p| {
             let (x, y) = p
+                .trim_matches(['(', ')'])
                 .split_once(',')
                 .ok_or_else(|| format!("bad point {p:?}"))?;
-            let num = |v: &str| v.trim().parse::<f64>().map_err(|e| format!("{p:?}: {e}"));
-            Ok((num(x)?, num(y)?))
+            let num = |v: &str| {
+                v.trim()
+                    .trim_end_matches("sq")
+                    .parse::<f64>()
+                    .map_err(|e| format!("{p:?}: {e}"))
+            };
+            Ok((num(x)?, rows - num(y)?))
         })
         .collect()
 }

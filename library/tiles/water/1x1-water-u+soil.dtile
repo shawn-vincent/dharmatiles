@@ -1,18 +1,20 @@
+dharmatiles version="1.0.0"
+
 // A cove of water cut in from the east edge through dirt.
 
 tile size="1x1" seed=54 {
     about "A cove of water cut in from the east edge through dirt."
-    line shore wobble=1.5 { through "1,0.43" "0.62,0.3" "0.38,0.43" "0.44,0.57" "0.64,0.7" "1,0.57" }
-    region cove { boundedBy shore; fill "0.85,0.5" }
-    region bank { boundedBy shore; fill "0.2,0.5" }
-    region shoreBand { within 7 of=shore }
+    line shore wobble="1.5dmm" { through "(1sq, 0.57sq)" "(0.62sq, 0.7sq)" "(0.38sq, 0.57sq)" "(0.44sq, 0.43sq)" "(0.64sq, 0.3sq)" "(1sq, 0.43sq)" }
+    region cove { boundedBy shore; fill "(0.85sq, 0.5sq)" }
+    region bank { boundedBy shore; fill "(0.2sq, 0.5sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
-            pin top=waterBedHeight at=cove   // the bed, written last so it wins
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand   // anywhere from the bed to the land
+            pin top="$waterBedHeight" at=cove   // the bed, written last so it wins
         }
-        scatter at=cove count=2 { rock size="5..9" }
+        scatter at=cove count=2 { rock size="5dmm .. 9dmm" }
         water
     }
 }

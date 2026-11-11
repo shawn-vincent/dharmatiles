@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // A heaved floor: sixteen slabs in a band three millimetres wide, each at
 // its own height and tilt; the slabs on the edge stay at floorEdgeHeight.
 tile size="1x1" seed=11 {
@@ -5,6 +7,6 @@ tile size="1x1" seed=11 {
     stack {
         base
         dirt
-        flagstones slabs=4 top="[floorHeight - 1.5 .. floorHeight + 1.5]"
+        flagstones slabs=4 top="[$floorHeight - 1.5dmm .. $floorHeight + 1.5dmm]"
     }
 }

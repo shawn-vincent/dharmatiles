@@ -1,0 +1,19 @@
+// The dirt page's picture of dirt listed after things: the stack is built in
+// the order it is listed, so the second dirt lies on the tops of the flat
+// rocks, banks against the trunk and covers the flowers' feet.
+tile size="2x2" seed=5 {
+    stack {
+        base
+        dirt clods=none
+        scatter count=9 gap=1.5 {
+            tree top="bottom + [30 .. 36]" weight=2 {
+                trunk height=16
+                crown width=18 clumps=24 shape=round branching=normal
+                leaf length=4.5 width=3
+            }
+            rock shape=flat size="4..8" weight=2
+            flower size="4..6" weight=2
+        }
+        dirt top="bottom + [0.6 .. 1.2]"
+    }
+}

@@ -14,7 +14,8 @@ use crate::place::{self, BUILTIN_LINES, BUILTIN_POINTS, BUILTIN_REGION, Edge};
 use crate::schema::{self, Role, did_you_mean};
 
 /// Help for a format 1 word in a format 0 document.
-pub(crate) const NOT_FORMAT_1: &str = "format 1 is in development (read with DT_FORMAT_PREVIEW=1): start the file with `dharmatiles version=1` to use it";
+pub(crate) const NOT_FORMAT_1: &str =
+    "this is a format 1 form: start the file with `dharmatiles version=1` to use it";
 
 /// What a place name stands for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -5,7 +5,7 @@ expression: summary(&c)
 cells per square: 234
 notes: []
 dirt (55225 nodes)
-  pin top=dirtEdgeHeight at=edges wins 936/936
+  pin top="$dirtEdgeHeight" at=edges wins 936/936
   pin knoll top=knollTop at=knoll wins 1/1
   y=1.00  3.40  3.40  3.40  3.40  3.40
   y=0.75  3.40  5.00..6.00  5.00..6.00  5.00..6.00  3.40

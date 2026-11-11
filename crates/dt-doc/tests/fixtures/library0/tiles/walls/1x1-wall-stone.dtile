@@ -1,0 +1,19 @@
+// A chipped cut-stone wall along the north edge of a grassy 1×1.
+
+use "parts/grass" lawn
+
+tile size="1x1" seed=61 {
+    stack {
+        base
+        dirt                                // bare earth at the ground level
+
+        // On a tile edge a wall always stands inside, its outer face
+        // flush with the edge.
+        wall at="north" style=cut-stone seed=11 {
+            height full                     // up to the wall-top level (33.1 mm)
+            thickness 7
+        }
+
+        lawn
+    }
+}

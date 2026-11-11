@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // A 2×2 grass meadow with one tree.
 
 use "parts/grass" long-grass
@@ -6,10 +8,10 @@ tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none
-        tree top="bottom + 40" {     // anywhere on the tile; or at="1,1"
-            trunk height=30             // bare trunk below the crown
-            crown width=30 clumps=32 shape=round branching=normal
-            leaf length=4.5 width=3
+        tree top="$bottom + 40dmm" {     // anywhere on the tile; or at="1,1"
+            trunk height="30dmm"             // bare trunk below the crown
+            crown width="30dmm" clumps=32 shape=round branching=normal
+            leaf length="4.5dmm" width="3dmm"
         }
         long-grass                      // listed after the tree, so it grows round the trunk
     }

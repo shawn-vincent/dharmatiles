@@ -1,24 +1,26 @@
+dharmatiles version="1.0.0"
+
 tile size="2x2" seed=1 {
     about "Water by a bank, with a rock in it: a test tile."
-    line shore wobble=4 {
-        through "0.486,0" "0.486,2"
+    line shore wobble="4dmm" {
+        through "(0.486sq, 2sq)" "(0.486sq, 0sq)"
     }
     region bank {
         boundedBy shore
-        fill "0.2,1"
+        fill "(0.2sq, 1sq)"
     }
     region pool {
         boundedBy shore
-        fill "1.5,1"
+        fill "(1.5sq, 1sq)"
     }
-    region shoreBand { within 7 of=shore }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
-        dirt top=6 {
-            pin top="[waterBedHeight .. 6]" at=shoreBand   // anywhere from the bed to the land
-            pin top=waterBedHeight at=pool   // the bed, written last so it wins
+        dirt top="6dmm" {
+            pin top="[$waterBedHeight .. 6dmm]" at=shoreBand   // anywhere from the bed to the land
+            pin top="$waterBedHeight" at=pool   // the bed, written last so it wins
         }
-        rock at="1.314,1.086" size=15
+        rock at="(1.314sq, 0.914sq)" size="15dmm"
         water
     }
 }

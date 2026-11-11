@@ -1,0 +1,19 @@
+// A closed line: a small island of grass standing in water. No library
+// tile draws a loop; this one keeps the inside and the outside apart, and
+// a region no tile edge touches.
+
+tile size="1x1" seed=7 {
+    about "An island in a pond: a closed line, grass inside, water round it."
+    line coast closed=#true wobble=3 { through "0.5,0.3" "0.72,0.5" "0.5,0.72" "0.28,0.5" }
+    region island { boundedBy coast; fill "0.5,0.5" }
+    region pond { boundedBy coast; fill "0.1,0.1" }
+    stack {
+        base
+        dirt {
+            pin top=waterBedHeight at=pond
+            pin top=groundHeight at=island
+        }
+        water
+        grass at=island
+    }
+}

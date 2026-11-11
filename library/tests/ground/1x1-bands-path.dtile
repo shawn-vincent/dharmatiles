@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // A meadow with a path (the proposal's grass example): the path is trodden below the land, and
 // it reaches the south and north rims, where the tile's pin wins over the library's rim pin.
 
@@ -6,17 +8,17 @@ use "parts/grass" lawn
 tile size="1x1" seed=7 {
     about "A meadow with a path, rocks on the verge: the heights language, migrated by hand."
 
-    line trail wobble=3 { through southCenter "(0.55, 0.5)" northCenter }
-    region path  { within 4.5 of=trail }
+    line trail wobble="3dmm" { through southCenter "(0.55sq, 0.5sq)" northCenter }
+    region path  { within "4.5dmm" of=trail }
     region verge { except path }
 
     stack {
         base
         dirt {
-            pin top="groundHeight - [0.8 .. 1.2]" at=path     // trodden, rutted
+            pin top="$groundHeight - [0.8dmm .. 1.2dmm]" at=path     // trodden, rutted
         }
         scatter count=2 at=verge {
-            rock size="4..10" shape=rounded buried="30%"
+            rock size="4dmm .. 10dmm" shape=rounded buried="30%"
         }
         lawn cover="85%" at=verge
     }

@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // A fine printer profile: an FDM printer with a 0.25 mm nozzle and 0.12 mm
 // layers.  Choose it with `--printer fine`, or from the title bar's chip in
 // the preview.  Your own profiles go in `printers/` beside your tiles
@@ -10,9 +12,9 @@
 // materials, not to printers.
 
 printer fine {
-    line     0.3        // one extruded line, mm: the thinnest wall that prints
-    layer    0.12       // one layer, mm
-    overhang 55         // what every element aims for, degrees from vertical
-    steepest 65         // small patches up to here
-    gap      0.15       // the narrowest gap that stays open, mm
+    line     "0.3mm"        // one extruded line, mm: the thinnest wall that prints
+    layer    "0.12mm"       // one layer, mm
+    overhang "55deg"         // what every element aims for, degrees from vertical
+    steepest "65deg"         // small patches up to here
+    gap      "0.15mm"       // the narrowest gap that stays open, mm
 }

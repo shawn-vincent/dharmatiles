@@ -27,6 +27,11 @@ struct Frozen {
     cache: Mutex<BTreeMap<String, String>>,
     /// Files the older step already changed.
     legacy: BTreeMap<String, String>,
+    /// Every document of the run as it was at the start (older step
+    /// applied), by its canonical path: a `lib:` path or a relative one
+    /// that names one of them reads this, whatever the run has written
+    /// since.
+    start: BTreeMap<PathBuf, String>,
 }
 
 impl Source for Frozen {
@@ -38,9 +43,15 @@ impl Source for Frozen {
         if let Some(t) = cache.get(path) {
             return Ok(t.clone());
         }
-        let text = match self.legacy.get(path) {
-            Some(t) => t.clone(),
-            None => dt_eval::Files.read(path)?,
+        let disk = dt_eval::library_file(path).unwrap_or_else(|| PathBuf::from(path));
+        // a file that is not there has no snapshot: the read below says so
+        let at_start = disk
+            .canonicalize()
+            .ok()
+            .and_then(|canonical| self.start.get(&canonical));
+        let text = match (self.legacy.get(path), at_start) {
+            (Some(t), _) | (None, Some(t)) => t.clone(),
+            (None, None) => dt_eval::Files.read(path)?,
         };
         cache.insert(path.to_owned(), text.clone());
         Ok(text)
@@ -138,13 +149,6 @@ pub(crate) fn run(paths: &[PathBuf], check: bool, guard: bool) -> u8 {
     }
 
     // format 1
-    // format 1 is read only through the preview switch until 1.0.0 ships it
-    if dt_doc::header::max_format(library::format_preview()) < dt_doc::migrate::format1::TARGET {
-        tell!(
-            "error: migrating to format 1 needs DT_FORMAT_PREVIEW=1 until 1.0.0 ships it (format 1 is in development): run `DT_FORMAT_PREVIEW=1 dharmatiles migrate …`"
-        );
-        return ERROR;
-    }
     let opts = match library::options("db", "default", None) {
         Ok(o) => o,
         Err(e) => {
@@ -153,9 +157,34 @@ pub(crate) fn run(paths: &[PathBuf], check: bool, guard: bool) -> u8 {
         }
     };
     let version = env!("DT_ENGINE_VERSION");
+    // every document as it is now, before this run writes any of them
+    let mut start: BTreeMap<PathBuf, String> = BTreeMap::new();
+    for p in &files {
+        let key = p.to_string_lossy().into_owned();
+        let text = match legacy.get(&key) {
+            Some(t) => t.clone(),
+            None => match std::fs::read_to_string(p) {
+                Ok(t) => t,
+                Err(e) => {
+                    tell!("error: {key}: {e}");
+                    return ERROR;
+                }
+            },
+        };
+        match p.canonicalize() {
+            Ok(c) => {
+                start.insert(c, text);
+            }
+            Err(e) => {
+                tell!("error: {key}: {e}");
+                return ERROR;
+            }
+        }
+    }
     let frozen = Frozen {
         cache: Mutex::new(BTreeMap::new()),
         legacy,
+        start,
     };
     let mut done: BTreeSet<String> = BTreeSet::new();
     for p in &files {
@@ -231,15 +260,18 @@ fn one(
     guard: bool,
     opts: &dt_eval::Options,
 ) -> Result<Vec<Moved>, Vec<dt_eval::Diag>> {
-    let mut group = upgrade::dependencies(frozen, path)?;
+    // the document was written against the library as it was in format 0:
+    // that is what it is migrated, and built "before", against
+    let old = upgrade::Legacy(frozen);
+    let mut group = upgrade::dependencies(&old, path)?;
     group.push(path.to_owned());
-    let moved = upgrade::migrate_files(frozen, &group, version)?;
-    let text = frozen
+    let moved = upgrade::migrate_files(&old, &group, version)?;
+    let text = old
         .read(path)
         .map_err(|e| vec![dt_eval::Diag::plain("dt::source", e)])?;
     if guard && upgrade::has_tile(&text) {
-        let after = Overlay::new(frozen, &moved);
-        if let Some(d) = upgrade::guard(frozen, &after, path, opts)? {
+        let after = Overlay::new(&old, &moved);
+        if let Some(d) = upgrade::guard(&old, &after, path, opts)? {
             return Err(vec![
                 dt_eval::Diag::plain(
                     "dt::migrate-moved",

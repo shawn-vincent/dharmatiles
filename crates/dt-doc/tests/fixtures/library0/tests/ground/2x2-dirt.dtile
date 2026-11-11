@@ -1,0 +1,9 @@
+tile size="2x2" seed=1 {
+    about "Bare earth on a 2×2 tile: a test tile."
+    stack {
+        base
+        dirt bumpSize=14 top="[dirtEdgeHeight + 0.3 .. dirtEdgeHeight + 0.3 + 3.2]" {
+            clods some
+        }
+    }
+}

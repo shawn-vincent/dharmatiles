@@ -1,9 +1,11 @@
+dharmatiles version="1.0.0"
+
 tile size="1x1" seed=17 {
     about "A whole square of open water."
     stack {
         base
-        dirt top=waterBedHeight clods=none {
-            pin top=waterBedHeight at=edges   // the bed meets the rim
+        dirt top="$waterBedHeight" clods=none {
+            pin top="$waterBedHeight" at=edges   // the bed meets the rim
         }
         water
     }

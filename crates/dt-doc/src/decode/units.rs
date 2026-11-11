@@ -518,9 +518,7 @@ pub fn point_text(
     size: (u32, u32),
     units: crate::units::Units,
 ) -> Result<Point, String> {
-    let known = crate::known::Known::new()
-        .with_format_preview(true)
-        .with_units(units);
+    let known = crate::known::Known::new().with_units(units);
     let src = std::sync::Arc::new(miette::NamedSource::new("point", text.to_owned()));
     let mut d = Decoder::new(src, &known);
     d.format1 = true;

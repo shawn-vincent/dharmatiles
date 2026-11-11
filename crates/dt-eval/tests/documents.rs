@@ -6,6 +6,15 @@
 
 use dt_eval::{Diag, Library, Memory, Options, build, check};
 
+/// These tests write format 0 documents: built as written, not migrated as
+/// they load (that is `migrate.rs`'s business).
+fn legacy() -> Options {
+    Options {
+        current_format: 0,
+        ..Options::default()
+    }
+}
+
 fn mem(files: &[(&str, &str)]) -> Memory {
     Memory(
         files
@@ -16,7 +25,7 @@ fn mem(files: &[(&str, &str)]) -> Memory {
 }
 
 fn errors(text: &str) -> Vec<Diag> {
-    match check(&mem(&[("t.dtile", text)]), "t.dtile", &Options::default()) {
+    match check(&mem(&[("t.dtile", text)]), "t.dtile", &legacy()) {
         Ok(_) => panic!("expected an error"),
         Err(e) => e,
     }
@@ -75,9 +84,9 @@ fn an_unknown_control_names_the_ones_there_are() {
 fn a_control_not_built_yet_is_checked_but_not_built() {
     let text = "tile {\n  stack {\n    rock wear=worn\n  }\n}\n";
     let src = mem(&[("t.dtile", text)]);
-    let c = check(&src, "t.dtile", &Options::default()).unwrap();
+    let c = check(&src, "t.dtile", &legacy()).unwrap();
     assert_eq!(c.pending().len(), 1); // `wear`
-    let Err(e) = build(&src, "t.dtile", &Options::default()) else {
+    let Err(e) = build(&src, "t.dtile", &legacy()) else {
         panic!("built a control that is not built yet");
     };
     assert_eq!(e[0].code, "dt::not-yet");
@@ -89,7 +98,7 @@ fn a_control_not_built_yet_is_checked_but_not_built() {
 fn library_tiles_check_and_say_which_look_is_missing_when_built() {
     // the full cliff run (bank, scree, pebbles on the dirt) is built now
     let path = "lib:tests/cliffs/2x1-cliff-full.dtile";
-    let c = check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+    let c = check(&Library, path, &legacy()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     assert!(c.pending().is_empty(), "{path}: {:?}", c.pending());
     // (a palette is not a tile document)
     for path in Library::paths()
@@ -97,28 +106,23 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
         .into_iter()
         .filter(|p| !p.contains("palettes/"))
     {
-        check(&Library, &path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+        check(&Library, &path, &legacy()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     }
 }
 
 #[test]
 fn heights_and_printer_come_from_the_library() {
-    let c = check(
-        &Library,
-        "lib:tests/ground/1x1-flat.dtile",
-        &Options::default(),
-    )
-    .unwrap();
+    let c = check(&Library, "lib:tests/ground/1x1-flat.dtile", &legacy()).unwrap();
     let t = c.tile.unwrap();
     let height = |n: &str| {
-        let e = t.heights.consts.get(n)?;
+        let e = t.heights.consts.get(&format!("${n}"))?;
         t.heights.consts.scalar(&e.expr, 0.5, &|_| None).ok()
     };
     assert_eq!(height("dirtEdgeHeight"), Some(3.4));
     assert_eq!(height("groundHeight"), Some(5.0));
     assert_eq!(height("waterSurfaceHeight"), Some(2.6));
     assert_eq!(height("wallHeight"), Some(33.1));
-    let p = Options::default().printer;
+    let p = legacy().printer;
     assert_eq!(
         (p.line_mm, p.layer_mm, p.overhang_deg, p.gap_mm),
         (0.45, 0.2, 55.0, 0.2)
@@ -127,10 +131,10 @@ fn heights_and_printer_come_from_the_library() {
 
 #[test]
 fn a_parts_file_checks_but_does_not_build() {
-    let c = check(&Library, "lib:parts/grass.dtile", &Options::default()).unwrap();
+    let c = check(&Library, "lib:parts/grass.dtile", &legacy()).unwrap();
     assert!(c.tile.is_none());
     assert_eq!(c.file.doc.definitions.len(), 2);
-    let Err(e) = build(&Library, "lib:parts/grass.dtile", &Options::default()) else {
+    let Err(e) = build(&Library, "lib:parts/grass.dtile", &legacy()) else {
         panic!("built a parts file");
     };
     assert_eq!(e[0].code, "dt::no-tile");
@@ -164,15 +168,10 @@ fn use_paths_name_the_library_or_the_project() {
         ("proj/tiles/b.dtile", "lib:parts/raised.dtile"),
         ("proj/tiles/c.dtile", "proj/parts/raised.dtile"),
     ] {
-        let t = check(&src, path, &Options::default())
-            .unwrap()
-            .tile
-            .unwrap();
+        let t = check(&src, path, &legacy()).unwrap().tile.unwrap();
         assert_eq!(t.stack[0].src.name(), from, "{path}");
     }
-    let e = check(&src, "proj/tiles/d.dtile", &Options::default())
-        .err()
-        .unwrap();
+    let e = check(&src, "proj/tiles/d.dtile", &legacy()).err().unwrap();
     assert_eq!(e[0].location().unwrap().1, 1);
     assert!(
         e[0].message.contains("proj/tiles/raised.dtile"),
@@ -187,10 +186,7 @@ fn definition_parameters_take_arguments_and_defaults() {
         "t.dtile",
         "define sized {\n  param by 8\n  stack { rock size=by }\n}\ntile {\n  stack { dirt; sized by=6 }\n}\n",
     )]);
-    let t = check(&src, "t.dtile", &Options::default())
-        .unwrap()
-        .tile
-        .unwrap();
+    let t = check(&src, "t.dtile", &legacy()).unwrap().tile.unwrap();
     assert_eq!(
         t.stack[1].controls[0].value,
         dt_elements::Value::Number(6.0)
@@ -223,11 +219,11 @@ fn imports_inline_definitions_and_lets_resolve() {
             "use \"../parts/flats\" raised\ntile { let foot 4; stack { dirt; raised } }\n",
         ),
     ]);
-    let c = check(&src, "tiles/t.dtile", &Options::default()).unwrap();
+    let c = check(&src, "tiles/t.dtile", &legacy()).unwrap();
     let t = c.tile.unwrap();
     assert_eq!(t.stack.len(), 2);
     assert_eq!(t.stack[1].src.name(), "parts/flats.dtile");
-    let b = build(&src, "tiles/t.dtile", &Options::default()).unwrap();
+    let b = build(&src, "tiles/t.dtile", &legacy()).unwrap();
     assert!(b.materials.contains(&dt_kit::Material::Rock));
 }
 
@@ -247,9 +243,9 @@ fn a_line_and_two_regions_make_a_step() {
 }
 "#,
     )]);
-    let b = build(&src, "t.dtile", &Options::default()).unwrap();
+    let b = build(&src, "t.dtile", &legacy()).unwrap();
     assert!(
-        b.audit.failures(&Options::default().printer).is_empty(),
+        b.audit.failures(&legacy().printer).is_empty(),
         "{:?}",
         b.audit
     );
@@ -310,7 +306,7 @@ fn a_rock_placed_past_the_edge_is_refused() {
 }
 "#,
     )]);
-    let Err(e) = build(&src, "t.dtile", &Options::default()) else {
+    let Err(e) = build(&src, "t.dtile", &legacy()) else {
         panic!("built a rock standing past the tile's edge");
     };
     assert!(
@@ -340,7 +336,7 @@ fn a_scatter_at_a_line_builds_for_rocks_and_flowers() {
         ),
     ] {
         let src = mem(&[("t.dtile", &on_a_line(body))]);
-        let b = build(&src, "t.dtile", &Options::default()).unwrap();
+        let b = build(&src, "t.dtile", &legacy()).unwrap();
         assert!(b.materials.contains(&material), "{body}");
     }
 }
@@ -348,7 +344,7 @@ fn a_scatter_at_a_line_builds_for_rocks_and_flowers() {
 #[test]
 fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
     let ok = on_a_line("scatter at=road count=3 { tree top=\"bottom + 24\" }");
-    let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &Options::default()).unwrap();
+    let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &legacy()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
     let e = errors(&on_a_line("tree at=road"));
     assert_eq!(e[0].code, "dt::type");
@@ -363,10 +359,10 @@ fn a_mixed_scatter_builds_and_is_deterministic() {
         "scatter at=road count=8 reach=3 { rock size=\"4..6\" weight=2; flower }",
     ] {
         let src = mem(&[("t.dtile", &on_a_line(body))]);
-        let a = build(&src, "t.dtile", &Options::default()).unwrap();
+        let a = build(&src, "t.dtile", &legacy()).unwrap();
         assert!(a.materials.contains(&dt_kit::Material::Rock), "{body}");
         assert!(a.materials.contains(&dt_kit::Material::Flower), "{body}");
-        let b = build(&src, "t.dtile", &Options::default()).unwrap();
+        let b = build(&src, "t.dtile", &legacy()).unwrap();
         assert_eq!(a.materials, b.materials, "{body}");
         assert_eq!(
             format!("{:?}", a.stages),
@@ -380,7 +376,7 @@ fn a_mixed_scatter_builds_and_is_deterministic() {
 fn a_mix_with_trees_checks() {
     let ok =
         on_a_line("scatter at=road count=4 reach=3 { tree top=\"bottom + 24\"; rock; flower }");
-    let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &Options::default()).unwrap();
+    let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &legacy()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
 }
 
@@ -393,7 +389,7 @@ fn water_alone_builds_a_tile() {
 }
 "#,
     )]);
-    let b = build(&src, "t.dtile", &Options::default()).unwrap();
+    let b = build(&src, "t.dtile", &legacy()).unwrap();
     assert!(b.materials.contains(&dt_kit::Material::Water));
 }
 
@@ -414,11 +410,11 @@ fn a_seed_wobbles_the_lines_again() {
     let hash = |seed| {
         let o = Options {
             seed: Some(seed),
-            ..Options::default()
+            ..legacy()
         };
         build(&src, "t.dtile", &o).unwrap().stages
     };
-    let plain = build(&src, "t.dtile", &Options::default()).unwrap().stages;
+    let plain = build(&src, "t.dtile", &legacy()).unwrap().stages;
     // the tile's own seed again changes nothing; another moves the line
     assert_eq!(hash(3), plain);
     assert_ne!(hash(4), plain);
@@ -432,8 +428,7 @@ fn the_floor_and_wall_tiles_build_with_grass() {
         "lib:tests/walls/1x1-wall-stone+grass.dtile",
         "lib:tests/walls/1x1-wall-brick-corner+grass.dtile",
     ] {
-        let b =
-            build(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+        let b = build(&Library, path, &legacy()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
         assert_eq!(b.audit.overhang_mm2, 0.0, "{path}");
     }
 }
@@ -454,7 +449,7 @@ fn a_wall_in_a_definition_needs_its_place_from_the_call() {
         "{def}tile size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner at=\"north\"\n    }}\n}}\n"
     );
     let src = mem(&[("t.dtile", &with)]);
-    assert!(check(&src, "t.dtile", &Options::default()).is_ok());
+    assert!(check(&src, "t.dtile", &legacy()).is_ok());
 }
 
 /// The naming standard (docs/standards/tile-system.html, "File names"): a
@@ -489,7 +484,7 @@ fn library_tile_file_names_follow_the_standard() {
             ));
             continue;
         }
-        let c = check(&Library, &path, &Options::default()).unwrap();
+        let c = check(&Library, &path, &legacy()).unwrap();
         if let Some(t) = &c.tile {
             let want = format!("{}x{}", t.cols, t.rows);
             if want != size {
@@ -512,14 +507,14 @@ fn a_lines_width_makes_a_strip_that_a_surface_follows() {
         "line trail width=12 { through southCenter northCenter }\n stack {\n base\n dirt\n grass at=trail\n }",
     );
     let src = mem(&[("t.dtile", text.as_str())]);
-    let c = check(&src, "t.dtile", &Options::default()).unwrap();
+    let c = check(&src, "t.dtile", &legacy()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
-    let b = build(&src, "t.dtile", &Options::default()).unwrap();
+    let b = build(&src, "t.dtile", &legacy()).unwrap();
     assert!(b.materials.contains(&dt_kit::Material::Grass));
     // a wider strip is another tile
     let wide = text.replace("width=12", "width=24");
     let hash = |t: &str| {
-        build(&mem(&[("t.dtile", t)]), "t.dtile", &Options::default())
+        build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
             .unwrap()
             .stages
     };
@@ -565,7 +560,7 @@ fn a_scatter_along_a_line_reaches_half_its_width_unless_told() {
         ))
     };
     let hash = |t: &str| {
-        build(&mem(&[("t.dtile", t)]), "t.dtile", &Options::default())
+        build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
             .unwrap()
             .stages
     };
@@ -584,11 +579,11 @@ fn a_scatter_holds_a_definition_of_one_thing() {
             )
         )
     };
-    let build_of = |t: &str| build(&mem(&[("t.dtile", t)]), "t.dtile", &Options::default());
+    let build_of = |t: &str| build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy());
     let c = check(
         &mem(&[("t.dtile", text("5").as_str())]),
         "t.dtile",
-        &Options::default(),
+        &legacy(),
     )
     .unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
@@ -615,10 +610,7 @@ fn a_point_drawn_from_a_range_is_drawn_once_from_the_tile_seed() {
         )
     };
     let check_of = |t: &str, seed: Option<u64>| {
-        let o = Options {
-            seed,
-            ..Options::default()
-        };
+        let o = Options { seed, ..legacy() };
         check(&mem(&[("t.dtile", t)]), "t.dtile", &o).unwrap()
     };
     let c = check_of(&text(3), None);
@@ -649,12 +641,7 @@ fn a_point_drawn_from_a_range_is_drawn_once_from_the_tile_seed() {
         check_of(&text(4), None).tile.unwrap().regions[0].fills
     );
     // and it builds
-    build(
-        &mem(&[("t.dtile", text(3).as_str())]),
-        "t.dtile",
-        &Options::default(),
-    )
-    .unwrap();
+    build(&mem(&[("t.dtile", text(3).as_str())]), "t.dtile", &legacy()).unwrap();
 }
 
 #[test]

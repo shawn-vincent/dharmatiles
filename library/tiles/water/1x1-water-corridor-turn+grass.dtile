@@ -1,19 +1,21 @@
+dharmatiles version="1.0.0"
+
 // A channel turning from the west edge to the north edge.
 
 tile size="1x1" seed=64 {
     about "A channel turning from the west edge to the north edge."
-    line shore-outer wobble=1.5 { through "0,0.43" "0.54,0.46" "0.57,1" }
-    line shore-inner wobble=1.5 { through "0,0.57" "0.46,0.54" "0.43,1" }
-    region channel { boundedBy shore-outer shore-inner; fill "0.2,0.5" }
-    region bank { boundedBy shore-outer shore-inner; fill "0.82,0.18"; fill "0.18,0.88" }
-    region shoreBand { within 7 of=shore-outer; within 7 of=shore-inner }
+    line shore-outer wobble="1.5dmm" { through "(0sq, 0.57sq)" "(0.54sq, 0.54sq)" "(0.57sq, 0sq)" }
+    line shore-inner wobble="1.5dmm" { through "(0sq, 0.43sq)" "(0.46sq, 0.46sq)" "(0.43sq, 0sq)" }
+    region channel { boundedBy shore-outer shore-inner; fill "(0.2sq, 0.5sq)" }
+    region bank { boundedBy shore-outer shore-inner; fill "(0.82sq, 0.82sq)"; fill "(0.18sq, 0.12sq)" }
+    region shoreBand { within "7dmm" of=shore-outer; within "7dmm" of=shore-inner }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
-            pin top=waterBedHeight at=channel   // the bed, written last so it wins
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand   // anywhere from the bed to the land
+            pin top="$waterBedHeight" at=channel   // the bed, written last so it wins
         }
-        rock at=channel size="6..10"
+        rock at=channel size="6dmm .. 10dmm"
         water
         grass at=bank
     }

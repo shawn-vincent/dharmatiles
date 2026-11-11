@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // The default printer profile: an FDM printer with a 0.4 mm nozzle.
 //
 // Elements read this to keep what they build printable.  Every size an
@@ -7,9 +9,9 @@
 // them, whatever the scale (R6.5).
 
 printer default {
-    line     0.45       // one extruded line, mm: the thinnest wall that prints
-    layer    0.2        // one layer, mm
-    overhang 55         // what every element aims for, degrees from vertical
-    steepest 65         // small patches up to here (0.2 mm layer: 0.43 mm step, under a line)
-    gap      0.2        // the narrowest gap that stays open, mm
+    line     "0.45mm"       // one extruded line, mm: the thinnest wall that prints
+    layer    "0.2mm"        // one layer, mm
+    overhang "55deg"         // what every element aims for, degrees from vertical
+    steepest "65deg"         // small patches up to here (0.2 mm layer: 0.43 mm step, under a line)
+    gap      "0.2mm"        // the narrowest gap that stays open, mm
 }

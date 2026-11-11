@@ -1,0 +1,20 @@
+// Grass presets shared by tiles: `use "parts/grass" lawn long-grass`.
+
+// Short, tidy grass: the standard blades.
+define lawn {
+    param length "3.5..6.5"   // blade length along the ground, mm
+    param height "1.5..2"     // how tall a blade stands over the ground, mm
+    param clearings 0         // patches of bare earth per square
+    param cover "100%"        // share of the ground grassed over
+
+    stack {
+        grass length=length height=height clearings=clearings cover=cover
+    }
+}
+
+// Long, tall blades: the species of 2x2-grass-tree.
+define long-grass {
+    stack {
+        lawn length="5..9" height="2..3"
+    }
+}

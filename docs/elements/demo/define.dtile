@@ -1,12 +1,14 @@
+dharmatiles version="1.0.0"
+
 // The define page's picture: one definition, lawn, called three ways.
 use "parts/grass" lawn long-grass
 
 tile size="1x1" seed=6 {
-    line a wobble=2 { through "0.33,0" "0.33,1" }
-    line b wobble=2 { through "0.67,0" "0.67,1" }
-    region west { boundedBy a; fill "0.1,0.5" }
-    region middle { boundedBy a b; fill "0.5,0.5" }
-    region east { boundedBy b; fill "0.9,0.5" }
+    line a wobble="2dmm" { through "(0.33sq, 1sq)" "(0.33sq, 0sq)" }
+    line b wobble="2dmm" { through "(0.67sq, 1sq)" "(0.67sq, 0sq)" }
+    region west { boundedBy a; fill "(0.1sq, 0.5sq)" }
+    region middle { boundedBy a b; fill "(0.5sq, 0.5sq)" }
+    region east { boundedBy b; fill "(0.9sq, 0.5sq)" }
     stack {
         base
         dirt

@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // A free-standing stepped mound.
 
 tile size="1x1" seed=1 {
@@ -5,31 +7,31 @@ tile size="1x1" seed=1 {
         A free-standing stepped mound.
         """
 
-    region crag { within 13.5 of=center }
-    region crag2 { within 10.5 of=center }
-    region crag3 { within 7.5 of=center }
-    region crag4 { within 5 of=center }
-    region crag5 { within 4 of=center }
-    region apron { within 6.5 of=crag }
+    region crag { within "13.5dmm" of=center }
+    region crag2 { within "10.5dmm" of=center }
+    region crag3 { within "7.5dmm" of=center }
+    region crag4 { within "5dmm" of=center }
+    region crag5 { within "4dmm" of=center }
+    region apron { within "6.5dmm" of=crag }
 
     stack {
         base
-        dirt top=dirtEdgeHeight {
-            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
-            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
-            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
+        dirt top="$dirtEdgeHeight" {
+            pin top="[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]" at=apron
+            pin top="$dirtEdgeHeight + [1.5dmm .. 3.5dmm]" at=crag
+            scatter perSquare=45 { pebble size="1dmm .. 2.2dmm" buried="20%..50%" }
         }
 
-        cliff top="dirtEdgeHeight + [3 .. 6]" at=crag {
-            pin top="dirtEdgeHeight + [10 .. 13]" at=crag2
-            pin top="dirtEdgeHeight + [17 .. 20]" at=crag3
-            pin top="dirtEdgeHeight + [24 .. 27]" at=crag4
-            pin top="dirtEdgeHeight + [31 .. 34]" at=crag5
+        cliff top="$dirtEdgeHeight + [3dmm .. 6dmm]" at=crag {
+            pin top="$dirtEdgeHeight + [10dmm .. 13dmm]" at=crag2
+            pin top="$dirtEdgeHeight + [17dmm .. 20dmm]" at=crag3
+            pin top="$dirtEdgeHeight + [24dmm .. 27dmm]" at=crag4
+            pin top="$dirtEdgeHeight + [31dmm .. 34dmm]" at=crag5
             rock mixed
             stoneSize massive
         }
 
-        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
+        scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone size="low(1dmm .. 6dmm, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5dmm .. 8dmm" }
     }
 }

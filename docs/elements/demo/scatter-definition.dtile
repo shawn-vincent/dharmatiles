@@ -1,18 +1,20 @@
+dharmatiles version="1.0.0"
+
 // A scatter holds a definition whose stack is one thing, as it holds the
 // thing itself: `boulder` and `daisy` are definitions, `size` a parameter the
 // scatter sets, and `weight=` shares the mix between them.
 define boulder {
-    param size "6..9"
+    param size "6dmm .. 9dmm"
     stack { rock size=size shape=angular }
 }
 define daisy {
-    stack { flower size="4..6" }
+    stack { flower size="4dmm .. 6dmm" }
 }
 tile size="1x1" seed=7 {
     stack {
         base
         dirt
         grass
-        scatter count=3 { boulder size="7..10" weight=1; daisy weight=5 }
+        scatter count=3 { boulder size="7dmm .. 10dmm" weight=1; daisy weight=5 }
     }
 }

@@ -1,10 +1,12 @@
+dharmatiles version="1.0.0"
+
 tile size="1x1" seed=104 {
     about "A dirt path in a T, open to the west, east and north edges."
-    line south-margin wobble=3 { through "0,0.33" "1,0.33" }
-    line northwest-margin wobble=2.2 { through "0,0.67" "0.34,0.68" "0.33,1" }
-    line northeast-margin wobble=2.2 { through "0.67,1" "0.66,0.68" "1,0.67" }
-    region path { boundedBy south-margin northwest-margin northeast-margin; fill "0.5,0.5" }
-    region meadow { boundedBy south-margin northwest-margin northeast-margin; fill "0.18,0.88"; fill "0.82,0.88"; fill "0.5,0.18" }
+    line south-margin wobble="3dmm" { through "(0sq, 0.67sq)" "(1sq, 0.67sq)" }
+    line northwest-margin wobble="2.2dmm" { through "(0sq, 0.33sq)" "(0.34sq, 0.32sq)" "(0.33sq, 0sq)" }
+    line northeast-margin wobble="2.2dmm" { through "(0.67sq, 0sq)" "(0.66sq, 0.32sq)" "(1sq, 0.33sq)" }
+    region path { boundedBy south-margin northwest-margin northeast-margin; fill "(0.5sq, 0.5sq)" }
+    region meadow { boundedBy south-margin northwest-margin northeast-margin; fill "(0.18sq, 0.12sq)"; fill "(0.82sq, 0.12sq)"; fill "(0.5sq, 0.82sq)" }
     stack {
         base
         dirt

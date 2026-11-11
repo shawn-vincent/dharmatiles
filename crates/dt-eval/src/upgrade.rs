@@ -51,7 +51,7 @@ pub fn has_tile(text: &str) -> bool {
 /// # Errors
 /// A header that is malformed.
 pub fn format_of(path: &str, text: &str) -> Result<u32, Vec<Diag>> {
-    header::check_text_with(path, text, true)
+    header::check_text(path, text)
         .map(|h| h.map_or(0, |h| h.format))
         .map_err(|es| es.iter().map(Diag::from).collect())
 }
@@ -116,10 +116,10 @@ fn known_in(
     text: &str,
     stack: &mut Vec<String>,
 ) -> Result<Known, Vec<Diag>> {
-    let mut known = Known::new().with_format_preview(true);
+    let mut known = Known::new();
     if path != HEIGHTS {
         let h = sources.read(HEIGHTS).map_err(|e| plain(HEIGHTS, &e))?;
-        let doc = decoded(HEIGHTS, &h, &Known::new().with_format_preview(true))?;
+        let doc = decoded(HEIGHTS, &h, &Known::new())?;
         // names as a format 0 document reads them: plain
         let consts: Vec<dt_doc::model::Const> = doc
             .consts
@@ -266,13 +266,14 @@ pub fn guard(
     path: &str,
     opts: &Options,
 ) -> Result<Option<Drift>, Vec<Diag>> {
-    // both read in the same way: format 1 is read in its development
-    let opts = Options {
-        format_preview: true,
+    // the old text is built as it is written (format 0), not migrated as it
+    // loads: that is the point of the proof
+    let as_written = Options {
+        current_format: 0,
         ..opts.clone()
     };
-    let before = mesh_hash(old, path, &opts)?;
-    let after = mesh_hash(new, path, &opts)?;
+    let before = mesh_hash(old, path, &as_written)?;
+    let after = mesh_hash(new, path, opts)?;
     Ok((before != after).then(|| Drift {
         path: path.to_owned(),
         before,
@@ -382,6 +383,26 @@ impl Source for Upgrading<'_> {
                 ))
             }
         }
+    }
+}
+
+/// The library's shared files as they were written in format 0 (heights,
+/// edge defaults, the grass and tree parts), kept only so a program that
+/// builds format 0 (the hash guard's "before" build, the tests of the old
+/// language) reads a format 0 document against the library it was written
+/// for.  Everything else is read from `inner`.
+pub struct Legacy<'s>(pub &'s dyn Source);
+
+impl Source for Legacy<'_> {
+    fn read(&self, path: &str) -> Result<String, String> {
+        let text = match path {
+            "lib:parts/heights.dtile" => include_str!("legacy/heights.dtile"),
+            "lib:parts/edges.dtile" => include_str!("legacy/edges.dtile"),
+            "lib:parts/grass.dtile" => include_str!("legacy/grass.dtile"),
+            "lib:parts/trees.dtile" => include_str!("legacy/trees.dtile"),
+            _ => return self.0.read(path),
+        };
+        Ok(text.to_owned())
     }
 }
 

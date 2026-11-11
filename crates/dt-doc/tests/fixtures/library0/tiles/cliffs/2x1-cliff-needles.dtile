@@ -1,0 +1,37 @@
+// A cluster of thin pillars.
+
+tile size="2x1" seed=1 {
+    about "A cluster of thin pillars."
+
+    region crag { within 15.5 of="(1, 0.5)"; within 12.5 of="(0.7, 0.61)"; within 11.5 of="(1.21, 0.41)" }
+    region mid1 { within 9 of="(1, 0.5)" }
+    region mid2 { within 7 of="(0.7, 0.61)" }
+    region mid3 { within 6.5 of="(1.21, 0.41)" }
+    region top1 { within 5 of="(1, 0.5)" }
+    region top2 { within 4 of="(0.7, 0.61)" }
+    region top3 { within 4 of="(1.21, 0.41)" }
+    region apron { within 6.5 of=crag }
+
+    stack {
+        base
+        dirt top=dirtEdgeHeight {
+            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
+            pin top=dirtEdgeHeight at=edges
+            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
+        }
+
+        cliff top="dirtEdgeHeight + [3 .. 10]" at=crag {
+            pin top="dirtEdgeHeight + [14 .. 26]" at=mid1
+            pin top="dirtEdgeHeight + [10 .. 22]" at=mid2
+            pin top="dirtEdgeHeight + [9 .. 20]" at=mid3
+            pin top="dirtEdgeHeight + [44 .. 55]" at=top1
+            pin top="dirtEdgeHeight + [34 .. 44]" at=top2
+            pin top="dirtEdgeHeight + [31 .. 41]" at=top3
+            rock columns
+            stoneSize massive
+        }
+
+        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
+    }
+}

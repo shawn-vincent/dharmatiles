@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 tile size="1x1" seed=1 {
     about "A regular-brick wall on bare dirt: a test tile."
     stack {

@@ -300,7 +300,7 @@ pub struct RegionRead {
 /// What the evaluator needs from a tile document.
 #[derive(Clone, Debug)]
 pub struct Tile {
-    /// The document's format (0, or 1 in development).
+    /// The document's format (0 is only read to be migrated).
     pub format: u32,
     /// Formulas read where a thing calls them, for the region checks of
     /// format 1 (empty in format 0).
@@ -504,8 +504,8 @@ pub fn use_path(from: &str, u: &Use) -> String {
 ///
 /// # Errors
 /// Every problem found, each at its text.
-pub fn read(sources: &dyn Source, path: &str, preview: bool) -> Result<Read, Vec<Diag>> {
-    read_with(sources, path, preview, dt_doc::units::Units::default())
+pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
+    read_with(sources, path, dt_doc::units::Units::default())
 }
 
 /// [`read`] for a build target: `units` says what `mm`, `in` and `layer`
@@ -517,12 +517,10 @@ pub fn read(sources: &dyn Source, path: &str, preview: bool) -> Result<Read, Vec
 pub fn read_with(
     sources: &dyn Source,
     path: &str,
-    preview: bool,
     units: dt_doc::units::Units,
 ) -> Result<Read, Vec<Diag>> {
     let mut r = Reader {
         units,
-        preview,
         entry_tables: BTreeMap::new(),
         pending_reads: Vec::new(),
         reads: Vec::new(),
@@ -553,7 +551,7 @@ pub fn read_with(
 /// # Errors
 /// Every problem found; a file with no `printer` is one.
 pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<Diag>> {
-    let r = read(sources, path, false)?;
+    let r = read(sources, path)?;
     let Some(p) = &r.file.doc.printer else {
         return Err(vec![
             Diag::plain("dt::printer", format!("`{path}` has no `printer`"))
@@ -693,8 +691,6 @@ struct Reader<'s> {
     points: BTreeMap<String, [f64; 2]>,
     /// The width of each line that has one, mm at the reference square.
     widths: BTreeMap<String, f64>,
-    /// Read the format in development (format 1) too.
-    preview: bool,
     /// What `mm`, `in` and `layer` are worth (format 1).
     units: dt_doc::units::Units,
     /// The context each of the tile's own stack entries is read in, by the
@@ -758,12 +754,10 @@ impl Reader<'_> {
                 return None;
             }
         };
-        let mut known = Known::new()
-            .with_format_preview(self.preview)
-            .with_units(self.units);
+        let mut known = Known::new().with_units(self.units);
         // this file's format, to hold the files it uses to it (a header
         // that is wrong is reported when the file is decoded)
-        let format = dt_doc::header::check_text_with(path, &text, self.preview)
+        let format = dt_doc::header::check_text(path, &text)
             .ok()
             .flatten()
             .map_or(0, |h| h.format);

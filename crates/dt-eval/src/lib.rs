@@ -37,7 +37,7 @@ pub use diag::Diag;
 pub use doc::{Region, Tile, Within};
 pub use dt_kit::Progress;
 pub use lower::{RangeRefusal, Ranged, ranged, weighting_flaw, weighting_flaw_in};
-pub use source::{Files, LIB, Library, Memory, Source};
+pub use source::{Files, LIB, Library, Memory, Source, library_file};
 
 use crate::plan::{Refusal, Step};
 
@@ -108,10 +108,6 @@ pub struct Options {
     /// Collect the editor's debug layer ([`dt_kit::debug`]): grass starts
     /// and spines, band sheets.  Changes nothing that is built.
     pub debug: bool,
-    /// Read the format in development (format 1) too.  The command line and
-    /// the preview set it from `DT_FORMAT_PREVIEW=1`; nothing here reads
-    /// the environment.
-    pub format_preview: bool,
     /// The format this program builds ([`dt_doc::header::FORMAT`]): a
     /// document of an older format is migrated in memory as it is read,
     /// with a `dt::migrated` warning, and the file is left as it is.  Only
@@ -272,7 +268,6 @@ impl Default for Options {
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
             draft: false,
             debug: false,
-            format_preview: false,
             current_format: dt_doc::header::FORMAT,
         }
     }
@@ -445,7 +440,20 @@ impl Checked {
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
     if opts.current_format < dt_doc::migrate::format1::TARGET {
-        return check_in(sources, path, opts);
+        // a program that builds format 0 reads a format 0 document against
+        // the library as it was; a document of a newer format reads the
+        // library as it is.  (A document that cannot be read is reported
+        // where `check_in` reads it.)
+        let old = sources
+            .read(path)
+            .ok()
+            .and_then(|t| upgrade::format_of(path, &t).ok())
+            == Some(0);
+        return if old {
+            check_in(&upgrade::Legacy(sources), path, opts)
+        } else {
+            check_in(sources, path, opts)
+        };
     }
     // a document older than the format this program builds is migrated as it
     // is read, and says so
@@ -479,7 +487,7 @@ fn migrated_warnings(done: &[upgrade::Upgrade]) -> Vec<Diag> {
 
 fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
     let units = opts.units();
-    let read = doc::read_with(sources, path, opts.format_preview, units)?;
+    let read = doc::read_with(sources, path, units)?;
     let Some(mut tile) = read.tile else {
         return Ok(Checked {
             file: read.file,

@@ -9,6 +9,15 @@ use std::fmt::Write as _;
 
 use dt_eval::{Checked, Diag, Library, Memory, Options, build, check};
 
+/// These tests write format 0 documents: built as written, not migrated as
+/// they load (that is `migrate.rs`'s business).
+fn legacy() -> Options {
+    Options {
+        current_format: 0,
+        ..Options::default()
+    }
+}
+
 fn mem(text: &str) -> Memory {
     Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect())
 }
@@ -18,11 +27,11 @@ fn tile(body: &str) -> String {
 }
 
 fn solved(text: &str) -> Checked {
-    check(&mem(text), "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{text}\n{e:#?}"))
+    check(&mem(text), "t.dtile", &legacy()).unwrap_or_else(|e| panic!("{text}\n{e:#?}"))
 }
 
 fn refused(text: &str) -> Vec<Diag> {
-    match check(&mem(text), "t.dtile", &Options::default()) {
+    match check(&mem(text), "t.dtile", &legacy()) {
         Ok(_) => panic!("expected a refusal:\n{text}"),
         Err(e) => e,
     }
@@ -35,7 +44,7 @@ fn library(name: &str) -> Checked {
         "ground"
     };
     let path = format!("lib:tests/{group}/{name}.dtile");
-    check(&Library, &path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:#?}"))
+    check(&Library, &path, &legacy()).unwrap_or_else(|e| panic!("{path}: {e:#?}"))
 }
 
 fn close(a: f64, b: f64) -> bool {
@@ -183,7 +192,7 @@ fn heights_scale_with_the_system() {
         "t.dtile",
         &Options {
             system: "ol".into(),
-            ..Options::default()
+            ..legacy()
         },
     )
     .unwrap();
@@ -224,7 +233,7 @@ fn a_dirts_top_and_pins_build() {
     let text = tile("stack { base\n dirt top=6 { pin top=4 at=center } }");
     let c = solved(&text);
     assert!(c.pending().is_empty(), "{:?}", c.pending());
-    assert!(build(&mem(&text), "t.dtile", &Options::default()).is_ok());
+    assert!(build(&mem(&text), "t.dtile", &legacy()).is_ok());
 }
 
 #[test]
@@ -331,8 +340,7 @@ fn the_stream_banks_fall_from_the_land_to_the_bed() {
 
 /// The height a built tile's one tree came to, mm.
 fn tree_height(text: &str) -> f64 {
-    let b = build(&mem(text), "t.dtile", &Options::default())
-        .unwrap_or_else(|e| panic!("{text}\n{e:#?}"));
+    let b = build(&mem(text), "t.dtile", &legacy()).unwrap_or_else(|e| panic!("{text}\n{e:#?}"));
     b.notes
         .iter()
         .find(|(k, _)| k == "tree.height_mm")
@@ -355,11 +363,7 @@ fn a_trees_top_over_its_foot_or_above_zero_is_its_height() {
     assert!((above - over).abs() < 0.3, "{above} vs {over}");
     assert!(taller > over + 10.0, "{taller} vs {over}");
     // a top that leaves the tree too short where it stands is refused there
-    let e = match build(
-        &mem(&tree("groundHeight + 10")),
-        "t.dtile",
-        &Options::default(),
-    ) {
+    let e = match build(&mem(&tree("groundHeight + 10")), "t.dtile", &legacy()) {
         Ok(_) => panic!("a 10 mm tree built"),
         Err(e) => e,
     };

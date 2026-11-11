@@ -1,0 +1,19 @@
+// Taller than wide (rows over columns), split corner to corner: catches a
+// swapped axis, and a region that narrows to a point at two corners.
+
+tile size="1x2" seed=2 {
+    about "A 1×2 split corner to corner: water below the diagonal, grass above."
+    line split { through "0,0" "1,2" }
+    region low { boundedBy split; fill "0.8,0.3" }
+    region high { boundedBy split; fill "0.2,1.7" }
+    region bank { within 5 of=split }
+    stack {
+        base
+        dirt {
+            pin top="[waterBedHeight .. dirtEdgeHeight]" at=bank
+            pin top=waterBedHeight at=low
+        }
+        water
+        grass at=high
+    }
+}

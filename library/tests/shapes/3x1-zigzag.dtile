@@ -1,17 +1,19 @@
+dharmatiles version="1.0.0"
+
 // A long thin tile and a sawtooth shore: a line with eight turns, each
 // tooth narrower than a square, water on one side and dirt on the other.
 
 tile size="3x1" seed=3 {
     about "A sawtooth shore along a 3×1: many turns and narrow teeth."
-    line shore { through "0,0.3" "0.4,0.7" "0.8,0.3" "1.2,0.7" "1.6,0.3" "2,0.7" "2.4,0.3" "2.8,0.7" "3,0.5" }
-    region sea { boundedBy shore; fill "0.4,0.1" }
-    region land { boundedBy shore; fill "0.4,0.95" }
-    region bank { within 5 of=shore }
+    line shore { through "(0sq, 0.7sq)" "(0.4sq, 0.3sq)" "(0.8sq, 0.7sq)" "(1.2sq, 0.3sq)" "(1.6sq, 0.7sq)" "(2sq, 0.3sq)" "(2.4sq, 0.7sq)" "(2.8sq, 0.3sq)" "(3sq, 0.5sq)" }
+    region sea { boundedBy shore; fill "(0.4sq, 0.9sq)" }
+    region land { boundedBy shore; fill "(0.4sq, 0.05sq)" }
+    region bank { within "5dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. dirtEdgeHeight]" at=bank
-            pin top=waterBedHeight at=sea
+            pin top="[$waterBedHeight .. $dirtEdgeHeight]" at=bank
+            pin top="$waterBedHeight" at=sea
         }
         water
     }

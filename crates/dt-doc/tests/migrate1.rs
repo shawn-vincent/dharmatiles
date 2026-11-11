@@ -17,7 +17,7 @@ fn known() -> Known {
 
 fn lib(path: &str) -> String {
     std::fs::read_to_string(format!(
-        "{}/../../library/{path}",
+        "{}/tests/fixtures/library0/{path}",
         env!("CARGO_MANIFEST_DIR")
     ))
     .unwrap()
@@ -102,7 +102,7 @@ fn a_decimal_flips_to_the_decimal_the_reader_flips_back() {
         out.contains(r#"through "(0.1sq, 0.9sq)" "(0.3sq, 0.3sq)""#),
         "{out}"
     );
-    let doc = decode("t", &out, &known().with_format_preview(true)).unwrap();
+    let doc = decode("t", &out, &known()).unwrap();
     let line = &doc.tile().unwrap().lines[0];
     let dt_doc::place::Point::Pair { x, y } = &line.through[0].value else {
         panic!()
@@ -309,7 +309,7 @@ fn a_printer_takes_printed_units() {
     assert!(out.contains(r#"line     "0.45mm""#), "{out}");
     // the same numbers
     let old = decode("old", &lib("printers/default.dtile"), &known()).unwrap();
-    let new = decode("new", &out, &known().with_format_preview(true)).unwrap();
+    let new = decode("new", &out, &known()).unwrap();
     let (a, b) = (old.printer.unwrap(), new.printer.unwrap());
     assert_eq!(
         (
@@ -421,7 +421,7 @@ fn a_file_with_its_own_errors_is_not_migrated() {
 
 #[test]
 fn the_result_reads_as_format_1_and_migrating_it_again_changes_nothing() {
-    let k = known().with_format_preview(true);
+    let k = known();
     for p in [
         "tiles/water/1x1-water+soil-angle.dtile",
         "tiles/ground/1x1-soil-u+grass.dtile",

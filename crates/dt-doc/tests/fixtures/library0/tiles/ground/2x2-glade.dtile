@@ -1,0 +1,22 @@
+// A 2×2 glade: one scatter of a tree, rocks and wildflowers. The tree is
+// placed first and the rocks and flowers fill the room around it; each
+// child's weight is its share of the mix.
+
+use "parts/grass" lawn
+
+tile size="2x2" seed=5 {
+    stack {
+        base
+        dirt clods=none
+        scatter count=10 gap=1.5 {
+            tree top="bottom + [30 .. 36]" weight=1 {
+                trunk height=16
+                crown width=18 clumps=24 shape=round branching=normal
+                leaf length=4.5 width=3
+            }
+            rock size="4..8" weight=3
+            flower size="4..6" weight=3
+        }
+        lawn                                     // grows round all three
+    }
+}

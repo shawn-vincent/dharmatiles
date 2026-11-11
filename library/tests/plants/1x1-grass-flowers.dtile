@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // A copy of the library's tiles/ground/1x1-grass-flowers, kept as a test tile so the
 // library's own can change without touching the tests.
 // The flowers stand first, so the grass knows their footprints and grows
@@ -10,7 +12,7 @@ tile size="1x1" seed=7 {
     stack {
         base
         dirt
-        scatter perSquare=4 { flower size=5 petals=5 centre=1.5 stem=1 dome=1 petal=0.5 }
+        scatter perSquare=4 { flower size="5dmm" petals=5 centre="1.5dmm" stem="1dmm" dome="1dmm" petal="0.5dmm" }
         lawn
     }
 }

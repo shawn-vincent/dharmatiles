@@ -1,21 +1,23 @@
+dharmatiles version="1.0.0"
+
 // The shoreline wanders (bays, headlands) about a third of the way across.
 
 tile size="2x2" seed=1 {
     about "A meadow meeting water, with reeds: a test tile."
-    line shore wobble=11 { through "0.94,0" "0.94,2" }
-    region land { boundedBy shore; fill "0.3,1" }
-    region lake { boundedBy shore; fill "1.6,1" }
-    region shoreBand { within 7 of=shore }
+    line shore wobble="11dmm" { through "(0.94sq, 2sq)" "(0.94sq, 0sq)" }
+    region land { boundedBy shore; fill "(0.3sq, 1sq)" }
+    region lake { boundedBy shore; fill "(1.6sq, 1sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
-        dirt top=dirtEdgeHeight {
-            pin top="[waterBedHeight .. dirtEdgeHeight]" at=shoreBand   // anywhere from the bed to the land
-            pin top=waterBedHeight at=lake   // the bed, written last so it wins
+        dirt top="$dirtEdgeHeight" {
+            pin top="[$waterBedHeight .. $dirtEdgeHeight]" at=shoreBand   // anywhere from the bed to the land
+            pin top="$waterBedHeight" at=lake   // the bed, written last so it wins
         }
-        scatter at=land perSquare="1.5..2" gap=1.5 {
+        scatter at=land perSquare="1.5..2" gap="1.5dmm" {
             rock
         }
-        scatter at=lake count=3 { rock size="6..10" }
+        scatter at=lake count=3 { rock size="6dmm .. 10dmm" }
         reeds
         water
         grass at=land bare="15%"

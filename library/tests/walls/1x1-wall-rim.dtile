@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // A wall right round the rim of a dirt 1×1: the golden test for a wall
 // meeting the tile edge on all four sides (every corner a quoin).
 
@@ -8,7 +10,7 @@ tile size="1x1" seed=5 {
         dirt
         wall at="north east south west" style=fieldstone seed=3 {
             height full
-            thickness 6
+            thickness "6dmm"
         }
     }
 }

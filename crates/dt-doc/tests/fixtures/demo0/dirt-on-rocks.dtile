@@ -1,0 +1,10 @@
+// The dirt page's picture of dirt over loose rocks: the second dirt is listed
+// after the boulders, so it lies on the tops of the flat ones.
+tile size="1x1" seed=3 {
+    stack {
+        base
+        dirt
+        scatter count=2 { rock shape=flat size="14..17" }
+        dirt top="bottom + [0.6 .. 1.2]"
+    }
+}

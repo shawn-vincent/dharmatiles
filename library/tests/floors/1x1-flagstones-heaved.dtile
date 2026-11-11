@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // A heaved flagstone floor: a wide band, so each slab is drawn at its own
 // height and tilt inside it; the edge pin keeps the slabs on the tile's
 // edges at floorEdgeHeight.
@@ -7,6 +9,6 @@ tile size="1x1" seed=3 {
     stack {
         base
         dirt
-        flagstones slabs=3 top="[floorHeight - 1.5 .. floorHeight + 1.5]"
+        flagstones slabs=3 top="[$floorHeight - 1.5dmm .. $floorHeight + 1.5dmm]"
     }
 }

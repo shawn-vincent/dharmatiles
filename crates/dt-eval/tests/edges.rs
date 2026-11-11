@@ -5,6 +5,15 @@
 
 use dt_eval::{Memory, Options, check};
 
+/// These tests write format 0 documents: built as written, not migrated as
+/// they load (that is `migrate.rs`'s business).
+fn legacy() -> Options {
+    Options {
+        current_format: 0,
+        ..Options::default()
+    }
+}
+
 fn mem(files: &[(&str, &str)]) -> Memory {
     Memory(
         files
@@ -21,7 +30,7 @@ fn a_use_from_a_file_above_the_working_folder_keeps_its_dot_dots() {
         ("../u/sub/p.dtile", "define p { stack { dirt } }\n"),
         ("u/sub/p.dtile", "define p { stack { rock size=9 } }\n"),
     ]);
-    let t = check(&src, "../u/sub/t.dtile", &Options::default())
+    let t = check(&src, "../u/sub/t.dtile", &legacy())
         .unwrap()
         .tile
         .unwrap();
@@ -29,7 +38,7 @@ fn a_use_from_a_file_above_the_working_folder_keeps_its_dot_dots() {
 }
 
 fn errors(text: &str) -> Vec<dt_eval::Diag> {
-    match check(&mem(&[("t.dtile", text)]), "t.dtile", &Options::default()) {
+    match check(&mem(&[("t.dtile", text)]), "t.dtile", &legacy()) {
         Ok(_) => panic!("expected an error"),
         Err(e) => e,
     }
@@ -61,7 +70,7 @@ fn a_fill_point_beside_its_line_is_not_empty() {
         "t.dtile",
         "tile {\n  line split { through west east }\n  region s { boundedBy split; fill \"0.5,0.2\" }\n  stack { dirt at=s }\n}\n",
     )]);
-    assert!(check(&src, "t.dtile", &Options::default()).is_ok());
+    assert!(check(&src, "t.dtile", &legacy()).is_ok());
 }
 
 #[test]
@@ -101,10 +110,7 @@ fn ten_thousand_entries_are_allowed() {
             vec!["d"; 99].join("; ")
         ),
     )]);
-    let t = check(&src, "t.dtile", &Options::default())
-        .unwrap()
-        .tile
-        .unwrap();
+    let t = check(&src, "t.dtile", &legacy()).unwrap().tile.unwrap();
     assert_eq!(t.stack.len(), 9900);
 }
 
@@ -115,10 +121,7 @@ fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
         "t.dtile",
         "define two { stack { rock; rock size=9 } }\ntile { stack { two id=x; two seed=5 } }\n",
     )]);
-    let t = check(&src, "t.dtile", &Options::default())
-        .unwrap()
-        .tile
-        .unwrap();
+    let t = check(&src, "t.dtile", &legacy()).unwrap().tile.unwrap();
     let ids: Vec<_> = t.stack.iter().map(|e| e.id.clone()).collect();
     assert_eq!(
         ids,

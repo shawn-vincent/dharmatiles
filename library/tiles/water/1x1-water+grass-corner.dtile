@@ -1,18 +1,20 @@
+dharmatiles version="1.0.0"
+
 // Water over most of the square, a dirt spit in the south-west corner.
 
 tile size="1x1" seed=60 {
     about "Water over most of the square, a dirt spit in the south-west corner."
-    line shore wobble=2.5 { through "0,0.6" "0.6,0" }
-    region pool { boundedBy shore; fill "0.75,0.75" }
-    region bank { boundedBy shore; fill "0.15,0.15" }
-    region shoreBand { within 7 of=shore }
+    line shore wobble="2.5dmm" { through "(0sq, 0.4sq)" "(0.6sq, 1sq)" }
+    region pool { boundedBy shore; fill "(0.75sq, 0.25sq)" }
+    region bank { boundedBy shore; fill "(0.15sq, 0.85sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
-            pin top=waterBedHeight at=pool   // the bed, written last so it wins
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand   // anywhere from the bed to the land
+            pin top="$waterBedHeight" at=pool   // the bed, written last so it wins
         }
-        scatter at=pool count=2 { rock size="6..10" }
+        scatter at=pool count=2 { rock size="6dmm .. 10dmm" }
         water
         grass at=bank
     }

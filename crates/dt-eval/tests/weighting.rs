@@ -6,6 +6,15 @@
 
 use dt_eval::{Diag, Memory, Options, build, check};
 
+/// These tests write format 0 documents: built as written, not migrated as
+/// they load (that is `migrate.rs`'s business).
+fn legacy() -> Options {
+    Options {
+        current_format: 0,
+        ..Options::default()
+    }
+}
+
 fn mem(text: &str) -> Memory {
     Memory(
         [("t.dtile".to_owned(), text.to_owned())]
@@ -19,7 +28,7 @@ fn tile(lets: &str, stack: &str) -> String {
 }
 
 fn errors(text: &str) -> Vec<Diag> {
-    match check(&mem(text), "t.dtile", &Options::default()) {
+    match check(&mem(text), "t.dtile", &legacy()) {
         Ok(c) => panic!("expected an error; notes {:?}", c.notes()),
         Err(e) => e,
     }
@@ -30,7 +39,7 @@ fn errors(text: &str) -> Vec<Diag> {
 fn hash(text: &str) -> Vec<(String, u64)> {
     let draft = Options {
         draft: true,
-        ..Options::default()
+        ..legacy()
     };
     let b = build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
     b.stages.iter().map(|s| (s.name.clone(), s.hash)).collect()
@@ -99,7 +108,7 @@ fn every_use_of_a_let_is_its_own_draw() {
         "    let small \"low(1..6, 11)\"",
         "        dirt\n        scatter count=2 { stone size=\"small\" }",
     );
-    assert!(check(&mem(&text), "t.dtile", &Options::default()).is_ok());
+    assert!(check(&mem(&text), "t.dtile", &legacy()).is_ok());
 }
 
 #[test]
@@ -179,7 +188,7 @@ fn a_band_refuses_a_weighting_but_takes_flat() {
         check(
             &mem(&top("flat([groundHeight .. groundHeight + 2.5])")),
             "t.dtile",
-            &Options::default()
+            &legacy()
         )
         .is_ok()
     );
@@ -217,7 +226,7 @@ fn a_weighted_range_of_no_width_is_a_note() {
     let c = check(
         &mem(&tile("", "        dirt\n        rock size=\"low(5..5)\"")),
         "t.dtile",
-        &Options::default(),
+        &legacy(),
     )
     .unwrap();
     let n = c.notes();
@@ -407,7 +416,7 @@ fn the_new_functions_check_their_limits() {
         check(
             &mem(&rock(&format!("steps(6..10, {})", many(32)))),
             "t.dtile",
-            &Options::default()
+            &legacy()
         )
         .is_ok()
     );
@@ -426,7 +435,7 @@ fn the_new_functions_check_their_limits() {
                     .join(", ")
             ))),
             "t.dtile",
-            &Options::default()
+            &legacy()
         )
         .is_ok()
     );
@@ -446,7 +455,7 @@ fn the_new_functions_check_their_limits() {
         check(
             &mem(&rock(&format!("mix({})", parts(16)))),
             "t.dtile",
-            &Options::default()
+            &legacy()
         )
         .is_ok()
     );

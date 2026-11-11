@@ -93,8 +93,7 @@ pub(crate) enum Command {
     /// format 1 (the header line, `$` names, units, points from the
     /// north-west corner).  Each tile is built before and after, and a mesh
     /// that moves stops it.  A document already at the format is left alone,
-    /// whatever its minor or build part.  Until 1.0.0 ships format 1 this
-    /// needs DT_FORMAT_PREVIEW=1.
+    /// whatever its minor or build part.
     Migrate {
         /// Documents, or folders of them.
         #[arg(required = true)]

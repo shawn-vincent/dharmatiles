@@ -1,32 +1,34 @@
+dharmatiles version="1.0.0"
+
 // A rounded heap of rock.
 
 tile size="1x1" seed=1 {
     about "A rounded heap of rock."
 
-    region crag { within 13.5 of=center; within 9 of="(0.42, 0.55)"; within 8 of="(0.6, 0.45)" }
-    region lump2 { within 9 of="(0.47, 0.53)"; within 6.5 of="(0.58, 0.44)" }
-    region lump3 { within 6.5 of="(0.5, 0.5)"; within 4.5 of="(0.4, 0.57)" }
-    region lump4 { within 3.8 of="(0.52, 0.47)" }
-    region apron { within 6.5 of=crag }
+    region crag { within "13.5dmm" of=center; within "9dmm" of="(0.42sq, 0.45sq)"; within "8dmm" of="(0.6sq, 0.55sq)" }
+    region lump2 { within "9dmm" of="(0.47sq, 0.47sq)"; within "6.5dmm" of="(0.58sq, 0.56sq)" }
+    region lump3 { within "6.5dmm" of="(0.5sq, 0.5sq)"; within "4.5dmm" of="(0.4sq, 0.43sq)" }
+    region lump4 { within "3.8dmm" of="(0.52sq, 0.53sq)" }
+    region apron { within "6.5dmm" of=crag }
 
     stack {
         base
-        dirt top=dirtEdgeHeight {
-            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
-            pin top=dirtEdgeHeight at=edges
-            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
+        dirt top="$dirtEdgeHeight" {
+            pin top="[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]" at=apron
+            pin top="$dirtEdgeHeight" at=edges
+            scatter perSquare=45 { pebble size="1dmm .. 2.2dmm" buried="20%..50%" }
         }
 
-        cliff top="dirtEdgeHeight + [3 .. 12]" at=crag {
-            pin top="dirtEdgeHeight + [9 .. 22]" at=lump2
-            pin top="dirtEdgeHeight + [17 .. 30]" at=lump3
-            pin top="dirtEdgeHeight + [25 .. 34]" at=lump4
+        cliff top="$dirtEdgeHeight + [3dmm .. 12dmm]" at=crag {
+            pin top="$dirtEdgeHeight + [9dmm .. 22dmm]" at=lump2
+            pin top="$dirtEdgeHeight + [17dmm .. 30dmm]" at=lump3
+            pin top="$dirtEdgeHeight + [25dmm .. 34dmm]" at=lump4
             rock mixed
             stoneSize broken
         }
-        dirt top="bottom + [0.6 .. 1.2]" at=lump4
+        dirt top="$bottom + [0.6dmm .. 1.2dmm]" at=lump4
 
-        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
+        scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone size="low(1dmm .. 6dmm, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5dmm .. 8dmm" }
     }
 }

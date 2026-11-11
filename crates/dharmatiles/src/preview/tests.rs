@@ -24,13 +24,19 @@ impl Drop for Running {
     }
 }
 
+/// [`start`]ed as a program that builds format 0 as written: most tests
+/// here write small format 0 documents and check what the editor says of
+/// them, not that they are migrated as they load (the tests that are about
+/// that say so with [`start_with`]).
 fn start(paths: &[&str], eager: bool) -> Running {
-    start_with(paths, eager, &Options::default())
+    let opts = Options {
+        current_format: 0,
+        ..Options::default()
+    };
+    start_with(paths, eager, &opts)
 }
 
-/// [`start`] for the build target `opts` (the format in development is read
-/// when `opts.format_preview`, as the preview's boundary sets it from
-/// `DT_FORMAT_PREVIEW`).
+/// [`start`] for the build target `opts`.
 fn start_with(paths: &[&str], eager: bool, opts: &Options) -> Running {
     let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
     let roots = if paths.is_empty() {
@@ -281,14 +287,10 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
     std::thread::sleep(Duration::from_millis(50));
     let line = text
         .lines()
-        .position(|l| l.contains("dirt top=dirtEdgeHeight"))
-        .expect("the flat tile writes `dirt top=dirtEdgeHeight`")
+        .position(|l| l.contains("dirt top=\"$dirtEdgeHeight\""))
+        .expect("the flat tile writes `dirt top=\"$dirtEdgeHeight\"`")
         + 1;
-    std::fs::write(
-        &doc,
-        text.replace("dirt top=dirtEdgeHeight", "dirtt top=dirtEdgeHeight"),
-    )
-    .unwrap();
+    std::fs::write(&doc, text.replace("dirt top=", "dirtt top=")).unwrap();
     let t = wait_for(&r, "failure", |t| t["status"] == "failed");
     let e = &t["errors"][0];
     assert_eq!(e["file"], path.as_str());
@@ -1610,7 +1612,6 @@ const FORMAT_1: &str = "dharmatiles version=1\ntile size=\"2x2\" seed=3 {\n    p
 
 fn preview_opts() -> Options {
     Options {
-        format_preview: true,
         ..Options::default()
     }
 }
@@ -1766,37 +1767,6 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
 }
 
 #[test]
-fn format_1_is_read_only_where_the_preview_reads_it() {
-    let dir = std::env::temp_dir().join(format!("dt-f1-off-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("t.dtile");
-    std::fs::write(&file, FORMAT_1).unwrap();
-    let path = file.to_string_lossy().into_owned();
-    // the default preview does not read format 1: the check says so
-    let r = start(&[&path], false);
-    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
-    let token = token["token"].as_str().unwrap().to_owned();
-    let v = post(
-        &r,
-        &format!("/api/tiles/{}/check", id0(&r)),
-        Some(&token),
-        None,
-        &serde_json::json!({ "text": FORMAT_1 }).to_string(),
-    )
-    .1;
-    assert_eq!(v["ok"], false, "{v}");
-    assert_eq!(v["format"], 0, "{v}");
-    assert!(
-        v["errors"][0]["help"]
-            .as_str()
-            .unwrap()
-            .contains("DT_FORMAT_PREVIEW"),
-        "{v}"
-    );
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
 fn an_older_tile_opens_migrated_with_a_warning_and_update_this_file_offers_the_new_text() {
     // a program whose current format is 1 (1.0.0's), reading a format 0 file
     let old = "tile size=\"1x1\" seed=3 {\n    line shore { through \"0,0.4\" \"1,0.6\" }\n    region pool { boundedBy shore; fill \"0.5,0.1\" }\n    stack {\n        base\n        dirt top=\"[groundHeight .. groundHeight + 1]\"\n    }\n}\n";
@@ -1806,7 +1776,6 @@ fn an_older_tile_opens_migrated_with_a_warning_and_update_this_file_offers_the_n
     std::fs::write(&file, old).unwrap();
     let path = file.to_string_lossy().into_owned();
     let opts = Options {
-        format_preview: true,
         current_format: 1,
         ..Options::default()
     };

@@ -8,8 +8,43 @@ use std::collections::BTreeMap;
 use dt_eval::upgrade::{Moved, Overlay, Upgrading, dependencies, format_of, guard, migrate_files};
 use dt_eval::{Library, Memory, Options, Source, build, check, doc};
 
+/// The library as it was written in format 0, kept as test fixtures
+/// (`crates/dt-doc/tests/fixtures/library0/`): these tests migrate real
+/// format 0 files to format 1 and prove no mesh moves.
+#[derive(Clone, Copy)]
+struct Library0;
+
+fn library0_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../dt-doc/tests/fixtures/library0")
+}
+
+impl Source for Library0 {
+    fn read(&self, path: &str) -> Result<String, String> {
+        let rel = path
+            .strip_prefix("lib:")
+            .ok_or_else(|| format!("`{path}` is not in the library"))?;
+        std::fs::read_to_string(library0_dir().join(rel)).map_err(|e| format!("{path}: {e}"))
+    }
+}
+
+fn walk(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) {
+    for e in std::fs::read_dir(dir).unwrap() {
+        let p = e.unwrap().path();
+        if p.is_dir() {
+            walk(root, &p, out);
+        } else if p.extension().is_some_and(|x| x == "dtile") {
+            let rel = p.strip_prefix(root).unwrap();
+            out.push(format!("lib:{}", rel.to_string_lossy()));
+        }
+    }
+}
+
 fn all_paths() -> Vec<String> {
-    Library::paths().unwrap()
+    let root = library0_dir();
+    let mut v = Vec::new();
+    walk(&root, &root, &mut v);
+    v.sort();
+    v
 }
 
 fn mem(tile: &str) -> Memory {
@@ -40,7 +75,7 @@ fn same_mesh_after(sources: &dyn Source, path: &str) -> Vec<Moved> {
 #[test]
 fn water_with_the_tide_builds_the_same_mesh() {
     // the tide reads `$y` the other way up, and the pins read `$waterEdgeHeight`
-    let moved = same_mesh_after(&Library, "lib:tiles/water/1x1-water+soil-angle.dtile");
+    let moved = same_mesh_after(&Library0, "lib:tiles/water/1x1-water+soil-angle.dtile");
     let heights = moved.iter().find(|m| m.path == doc::HEIGHTS).unwrap();
     assert!(
         heights.text.contains("cos(720deg * ($x - $y))"),
@@ -60,20 +95,20 @@ fn water_with_the_tide_builds_the_same_mesh() {
 fn the_mesh_is_the_same_on_openlock_too() {
     // `dmm` and `sq` scale with the system as a written size always did
     let path = "lib:tiles/water/1x1-water+soil-angle.dtile";
-    let mut group = dependencies(&Library, path).unwrap();
+    let mut group = dependencies(&Library0, path).unwrap();
     group.push(path.to_owned());
-    let moved = migrate_files(&Library, &group, "1.0.0").unwrap();
-    let after = Overlay::new(&Library, &moved);
+    let moved = migrate_files(&Library0, &group, "1.0.0").unwrap();
+    let after = Overlay::new(&Library0, &moved);
     let ol = Options {
         system: "ol".to_owned(),
         ..Options::default()
     };
-    assert_eq!(guard(&Library, &after, path, &ol).unwrap(), None);
+    assert_eq!(guard(&Library0, &after, path, &ol).unwrap(), None);
 }
 
 #[test]
 fn a_three_square_tide_builds_the_same_mesh() {
-    same_mesh_after(&Library, "lib:tiles/water/3x3-water.dtile");
+    same_mesh_after(&Library0, "lib:tiles/water/3x3-water.dtile");
 }
 
 #[test]
@@ -107,7 +142,7 @@ fn pins_at_a_region_and_at_the_tile_build_the_same_mesh() {
 #[test]
 fn a_definition_with_parameters_builds_the_same_mesh() {
     // the grass part's parameters are lengths, counts and shares, from their uses
-    let moved = same_mesh_after(&Library, "lib:tests/plants/1x1-grass-flowers.dtile");
+    let moved = same_mesh_after(&Library0, "lib:tests/plants/1x1-grass-flowers.dtile");
     let grass = moved
         .iter()
         .find(|m| m.path == "lib:parts/grass.dtile")
@@ -142,14 +177,14 @@ fn a_weighted_range_and_a_plain_let_build_the_same_mesh() {
 #[test]
 fn a_printer_migrates_to_the_same_numbers() {
     let moved = migrate_files(
-        &Library,
+        &Library0,
         &["lib:printers/default.dtile".to_owned()],
         "1.0.0",
     )
     .unwrap();
-    let after = Overlay::new(&Library, &moved);
-    let new = doc::read(&after, "lib:printers/default.dtile", true).unwrap();
-    let old = doc::read(&Library, "lib:printers/default.dtile", false).unwrap();
+    let after = Overlay::new(&Library0, &moved);
+    let new = doc::read(&after, "lib:printers/default.dtile").unwrap();
+    let old = doc::read(&Library0, "lib:printers/default.dtile").unwrap();
     let (a, b) = (
         old.file.doc.printer.as_ref().unwrap(),
         new.file.doc.printer.as_ref().unwrap(),
@@ -194,12 +229,16 @@ tile size="1x1" seed=7 {
 }
 "#;
 
-/// A program whose current format is 1 (as 1.0.0 will be), reading format 1
-/// through its preview switch.
+/// This program: its current format is 1.
 fn current_one() -> Options {
+    Options::default()
+}
+
+/// A program that builds format 0 as it is written (the hash guard's
+/// "before"): a format 0 document reads the library as it was.
+fn as_written() -> Options {
     Options {
-        format_preview: true,
-        current_format: 1,
+        current_format: 0,
         ..Options::default()
     }
 }
@@ -207,7 +246,7 @@ fn current_one() -> Options {
 #[test]
 fn an_older_tile_is_migrated_as_it_loads_with_a_warning_and_the_file_untouched() {
     let src = mem(OLD);
-    let old = build(&src, "t.dtile", &Options::default()).unwrap();
+    let old = build(&src, "t.dtile", &as_written()).unwrap();
     let new = build(&src, "t.dtile", &current_one()).unwrap();
     // the same mesh, from the migrated text
     assert_eq!(
@@ -253,8 +292,8 @@ fn check_says_a_document_was_migrated() {
             .iter()
             .any(|u| u.path == "t.dtile" && u.from == 0)
     );
-    // the library's own format 0 files were migrated to read it, in memory
-    assert!(c.migrated.iter().any(|u| u.path == doc::HEIGHTS));
+    // the library's own files are format 1: nothing of them is migrated
+    assert!(!c.migrated.iter().any(|u| u.path == doc::HEIGHTS));
 }
 
 #[test]
@@ -266,7 +305,7 @@ fn a_tile_at_the_current_format_loads_without_a_warning() {
         .unwrap()
         .text;
     let c = check(&mem(&text), "t.dtile", &current_one()).unwrap();
-    // only the library's own files (format 0 today) are migrated
+    assert!(c.migrated.is_empty());
     assert!(!c.migrated.iter().any(|u| u.path == "t.dtile"));
     assert!(!c.notes().iter().any(|n| n.message.contains("t.dtile")));
 }
@@ -293,10 +332,10 @@ fn what_migrate_refuses_loading_refuses_with_the_same_error() {
 
 #[test]
 fn a_program_that_builds_format_0_does_not_migrate() {
-    // today: format 0 is current, so nothing is read as another format
-    let c = check(&mem(OLD), "t.dtile", &Options::default()).unwrap();
+    // format 0 as current: nothing is read as another format
+    let c = check(&mem(OLD), "t.dtile", &as_written()).unwrap();
     assert!(c.migrated.is_empty());
-    let up = Upgrading::new(&Library, 0, "1.0.0");
+    let up = Upgrading::new(&Library0, 0, "1.0.0");
     assert!(
         up.read(doc::HEIGHTS)
             .unwrap()
@@ -305,13 +344,12 @@ fn a_program_that_builds_format_0_does_not_migrate() {
     assert!(up.upgraded().is_empty());
 }
 
-/// What step 3c turns on: once the library, its tests and its parts are
+/// Once the library, its tests and its parts are
 /// converted and format 1 is current, no shipped file needs migrating, so no
 /// library tile ever shows the `dt::migrated` warning.
 #[test]
-#[ignore = "3c: enable when the library is converted to format 1 and format 1 is the default"]
 fn no_library_or_test_file_needs_migrating() {
-    let moved = migrate_files(&Library, &all_paths(), "1.0.0").unwrap();
+    let moved = migrate_files(&Library, &Library::paths().unwrap(), "1.0.0").unwrap();
     let stale: Vec<&str> = moved.iter().map(|m| m.path.as_str()).collect();
     assert!(
         stale.is_empty(),
@@ -331,9 +369,9 @@ fn no_library_or_test_file_needs_migrating() {
 #[ignore = "builds every library and test tile twice, about half an hour"]
 fn every_library_tile_builds_the_same_mesh_after_migrating() {
     let paths = all_paths();
-    let moved = migrate_files(&Library, &paths, "1.0.0").unwrap();
+    let moved = migrate_files(&Library0, &paths, "1.0.0").unwrap();
     assert_eq!(moved.len(), paths.len(), "every library file migrates");
-    let after = Overlay::new(&Library, &moved);
+    let after = Overlay::new(&Library0, &moved);
     let tiles: Vec<&String> = paths
         .iter()
         .filter(|p| p.starts_with("lib:tiles/") || p.starts_with("lib:tests/"))
@@ -342,7 +380,7 @@ fn every_library_tile_builds_the_same_mesh_after_migrating() {
     let (mut same, mut drift, mut failed) = (Vec::new(), Vec::new(), Vec::new());
     for p in tiles {
         let t = std::time::Instant::now();
-        match guard(&Library, &after, p, &Options::default()) {
+        match guard(&Library0, &after, p, &Options::default()) {
             Ok(None) => {
                 println!("same   {p} ({:.1}s)", t.elapsed().as_secs_f64());
                 same.push(p.clone());

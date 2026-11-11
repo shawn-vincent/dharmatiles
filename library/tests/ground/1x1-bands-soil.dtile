@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // 1x1-soil+grass in the heights language: grass on the left half, a dirt knoll on the right.
 // The dirt takes the library's top and rim pin; the one pin is the knoll.
 
@@ -6,11 +8,11 @@ use "parts/grass" lawn
 tile size="1x1" seed=42 {
     about "Grass on the left half, bare dirt with a knoll on the right: the heights language, migrated by hand."
 
-    let knollTop "groundHeight + [1.5 .. 2]"
+    let knollTop "$groundHeight + [1.5dmm .. 2dmm]"
 
-    point knoll "(0.7, 0.5)"
-    line margin wobble=5 { through "(0.48, 1)" "(0.52, 0)" }
-    region meadow { boundedBy margin; fill "(0.25, 0.5)" }
+    point knoll "(0.7sq, 0.5sq)"
+    line margin wobble="5dmm" { through "(0.48sq, 0sq)" "(0.52sq, 1sq)" }
+    region meadow { boundedBy margin; fill "(0.25sq, 0.5sq)" }
 
     stack {
         base

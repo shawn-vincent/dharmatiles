@@ -1,11 +1,13 @@
+dharmatiles version="1.0.0"
+
 tile size="1x1" seed=42 {
     about "One tree on flat ground: the 1×1 grass-tree tile without its grass and rocks."
     stack {
         base
         dirt clods=none
-        tree top="bottom + 35" {
-            trunk height=30
-            crown width=24 clumps=32 shape=round branching=normal
+        tree top="$bottom + 35dmm" {
+            trunk height="30dmm"
+            crown width="24dmm" clumps=32 shape=round branching=normal
             // Leaves off until the leaf placer's blades pass the overhang
             // gate (they add 105–170 mm² per tree): clumps only.
             leaves on

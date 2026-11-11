@@ -63,8 +63,8 @@ pub struct Migration {
 
 /// The version a migrated document is stamped with: the program's own
 /// when its major is the format, else the format's first release with the
-/// program's build details (a program before 1.0.0 writes format 1 for its
-/// preview).
+/// program's build details (a program before 1.0.0 writes format 1 with its own
+/// build details).
 #[must_use]
 pub fn stamp(app_version: &str) -> String {
     let major: Option<u32> = app_version
@@ -253,7 +253,7 @@ pub fn migrate(
         Ok(d) => d,
         Err(e) => return Err(syntax::syntax_errors(&src, text, &e)),
     };
-    let (header, header_errors) = crate::header::read(&src, &kdl, true);
+    let (header, header_errors) = crate::header::read(&src, &kdl);
     if !header_errors.is_empty() {
         return Err(header_errors);
     }
@@ -262,7 +262,6 @@ pub fn migrate(
     {
         return Ok(Outcome::Current(h.format));
     }
-    let preview = known.clone().with_format_preview(true);
     // a palette (colours) or any document of none of the language's nodes
     // has nothing to carry over but its header
     let language = [
@@ -284,7 +283,7 @@ pub fn migrate(
     {
         // a fresh format 1 document that forgot its header, or a mix
         let with_header = format!("dharmatiles version={TARGET}\n{text}");
-        return Err(if decode(name, &with_header, &preview).is_ok() {
+        return Err(if decode(name, &with_header, known).is_ok() {
             vec![err(
                 &src,
                 "dt::migrate-header",
@@ -304,8 +303,7 @@ pub fn migrate(
             )]
         });
     }
-    let known0 = known.clone().with_format_preview(false);
-    let doc = decode(name, text, &known0)?;
+    let doc = decode(name, text, known)?;
     let defs = defs_of(name, text, known, &doc);
     let mut w = Walk::new(Arc::clone(&src), defs);
 
@@ -382,7 +380,7 @@ pub fn migrate(
         )]);
     };
     // proof the result is a format 1 document the reader accepts
-    decode(name, &out, &preview)?;
+    decode(name, &out, known)?;
     Ok(Outcome::Migrated(Migration {
         text: out,
         from: 0,

@@ -1,0 +1,12 @@
+// A heaved flagstone floor: a wide band, so each slab is drawn at its own
+// height and tilt inside it; the edge pin keeps the slabs on the tile's
+// edges at floorEdgeHeight.
+
+tile size="1x1" seed=3 {
+    about "Heaved flagstones: nine slabs in a band two floor-heights wide."
+    stack {
+        base
+        dirt
+        flagstones slabs=3 top="[floorHeight - 1.5 .. floorHeight + 1.5]"
+    }
+}

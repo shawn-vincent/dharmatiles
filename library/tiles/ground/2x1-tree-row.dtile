@@ -1,18 +1,20 @@
+dharmatiles version="1.0.0"
+
 // A 2×1 meadow with a row of three trees along a line: a hedge or the
 // edge of a road.
 
 use "parts/grass" long-grass
 
 tile size="2x1" seed=21 {
-    line row wobble=3 { through "0,0.5" "1,0.58" "2,0.5" }
+    line row wobble="3dmm" { through "(0sq, 0.5sq)" "(1sq, 0.42sq)" "(2sq, 0.5sq)" }
     stack {
         base
         dirt clods=none
-        scatter at=row count=3 reach=3 gap=1 {      // trees first: grass grows round the trunks
-            tree top="bottom + [26 .. 32]" {
-                trunk height=14
-                crown width=16 clumps=24 shape=round branching=normal
-                leaf length=4.5 width=3
+        scatter at=row count=3 reach="3dmm" gap="1dmm" {      // trees first: grass grows round the trunks
+            tree top="$bottom + [26dmm .. 32dmm]" {
+                trunk height="14dmm"
+                crown width="16dmm" clumps=24 shape=round branching=normal
+                leaf length="4.5dmm" width="3dmm"
             }
         }
         long-grass                                   // grows round the trunks

@@ -1,16 +1,15 @@
-//! Format 1, in development: `$` names read from the context, `let` and
-//! `override` in any block, reserved words, and `check` refusing a read
-//! nothing installed.  Format 1 is read only with the explicit
-//! `format_preview` option (the command line sets it from
-//! `DT_FORMAT_PREVIEW=1`), so these tests never touch the environment.
+//! Format 1: `$` names read from the context, `let` and `override` in any
+//! block, reserved words, and `check` refusing a read nothing installed.
 
 #![allow(clippy::unwrap_used)]
 
 use dt_eval::{Checked, Diag, Memory, Options, check};
 
+/// The tests here read format 0 documents too (to refuse their mixing with
+/// format 1 and their `$` names): built as written, not migrated as loaded.
 fn preview() -> Options {
     Options {
-        format_preview: true,
+        current_format: 0,
         ..Options::default()
     }
 }
@@ -64,17 +63,6 @@ fn rock_sizes(c: &Checked) -> Vec<f64> {
             }
         })
         .collect()
-}
-
-#[test]
-fn format_one_needs_the_preview_and_says_so() {
-    let text = tile1("stack { base\n dirt }");
-    let e = check(&mem(&[("t.dtile", &text)]), "t.dtile", &Options::default())
-        .err()
-        .unwrap();
-    assert_eq!(codes(&e), ["dt::format-newer"]);
-    assert!(e[0].help.as_deref().unwrap().contains("in development"));
-    ok(&text);
 }
 
 #[test]

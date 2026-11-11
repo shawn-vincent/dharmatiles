@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // The use page's picture: an oak from parts/trees and a lawn from
 // parts/grass, brought in by two use lines.
 use "parts/trees" oak
@@ -7,7 +9,7 @@ tile size="1x1" seed=12 {
     stack {
         base
         dirt
-        oak top="bottom + 40"
+        oak top="$bottom + 40dmm"
         lawn
     }
 }

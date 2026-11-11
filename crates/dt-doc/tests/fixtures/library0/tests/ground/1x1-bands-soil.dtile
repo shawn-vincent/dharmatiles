@@ -1,0 +1,20 @@
+// 1x1-soil+grass in the heights language: grass on the left half, a dirt knoll on the right.
+// The dirt takes the library's top and rim pin; the one pin is the knoll.
+
+use "parts/grass" lawn
+
+tile size="1x1" seed=42 {
+    about "Grass on the left half, bare dirt with a knoll on the right: the heights language, migrated by hand."
+
+    let knollTop "groundHeight + [1.5 .. 2]"
+
+    point knoll "(0.7, 0.5)"
+    line margin wobble=5 { through "(0.48, 1)" "(0.52, 0)" }
+    region meadow { boundedBy margin; fill "(0.25, 0.5)" }
+
+    stack {
+        base
+        dirt { pin knoll top=knollTop at=knoll }
+        lawn at=meadow
+    }
+}

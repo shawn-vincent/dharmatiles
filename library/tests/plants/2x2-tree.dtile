@@ -1,13 +1,15 @@
+dharmatiles version="1.0.0"
+
 tile size="2x2" seed=84 {
     about "One 40 mm tree on bare earth, anywhere on a 2×2 tile."
     stack {
         base
-        dirt bumpSize=14 top="[groundHeight .. groundHeight + 2]" {
+        dirt bumpSize="14dmm" top="[$groundHeight .. $groundHeight + 2dmm]" {
             clods some
         }
-        tree top="bottom + 40" {
-            trunk height=30
-            crown width=30 clumps=32 shape=round branching=normal
+        tree top="$bottom + 40dmm" {
+            trunk height="30dmm"
+            crown width="30dmm" clumps=32 shape=round branching=normal
             // Leaves off until the leaf placer's blades pass the overhang
             // gate (they add 105–170 mm² per tree): clumps only.
             leaves on

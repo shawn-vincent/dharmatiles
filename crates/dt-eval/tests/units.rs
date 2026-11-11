@@ -11,7 +11,6 @@ use dt_eval::{Built, Checked, Diag, Memory, Options, build, check};
 
 fn preview() -> Options {
     Options {
-        format_preview: true,
         ..Options::default()
     }
 }

@@ -8,7 +8,7 @@ mod common;
 use dt_doc::{Known, decode};
 
 fn known() -> Known {
-    let mut k = Known::new().with_format_preview(true);
+    let mut k = Known::new();
     k.add_heights("library/parts/heights.dtile", common::HEIGHTS)
         .unwrap();
     k
@@ -23,15 +23,6 @@ fn codes(text: &str) -> Vec<&'static str> {
 
 fn tile(body: &str) -> String {
     format!("dharmatiles version=1\ntile size=\"1x1\" {{\n{body}\n}}\n")
-}
-
-#[test]
-fn the_gate_is_the_readers_option() {
-    let text = tile("stack { base }");
-    assert!(decode("t", &text, &known()).is_ok());
-    let closed = Known::new();
-    let e = decode("t", &text, &closed).unwrap_err();
-    assert_eq!(e[0].code, "dt::format-newer");
 }
 
 #[test]

@@ -1,17 +1,19 @@
+dharmatiles version="1.0.0"
+
 // A region that is only a sliver: a pool cut off one corner, a few
 // millimetres across, with grass right round it.
 
 tile size="1x1" seed=5 {
     about "A sliver of water in one corner: the smallest region a tile can hold."
-    line cut { through "0.86,1" "1,0.86" }
-    region nook { boundedBy cut; fill "0.97,0.97" }
-    region rest { boundedBy cut; fill "0.3,0.3" }
-    region bank { within 5 of=cut }
+    line cut { through "(0.86sq, 0sq)" "(1sq, 0.14sq)" }
+    region nook { boundedBy cut; fill "(0.97sq, 0.03sq)" }
+    region rest { boundedBy cut; fill "(0.3sq, 0.7sq)" }
+    region bank { within "5dmm" of=cut }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. dirtEdgeHeight]" at=bank
-            pin top=waterBedHeight at=nook
+            pin top="[$waterBedHeight .. $dirtEdgeHeight]" at=bank
+            pin top="$waterBedHeight" at=nook
         }
         water
         grass at=rest

@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // The composing page's meadow: rocks bedded in dirt, grass growing round them.
 use "parts/grass" lawn
 
@@ -7,7 +9,7 @@ tile size="2x2" seed=1 {
         base
         dirt                                         // the ground, and the bare earth between the grass
         scatter perSquare=2 {                       // about 8 rocks on a 2×2
-            rock size="2..10" shape=angular buried="30%"
+            rock size="2dmm .. 10dmm" shape=angular buried="30%"
         }
         lawn cover="80%"                             // grass over 80% of the ground; it grows round the rocks
     }

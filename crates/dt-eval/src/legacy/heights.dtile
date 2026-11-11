@@ -1,0 +1,15 @@
+// The standard heights, in mm above zero (the base's top) at the
+// DungeonBlocks reference (35 mm square).  Every tile sees these without a
+// `use` line; a tile's own `let` adds names, and `override` replaces one of
+// these for that tile.  Sizes scale with the system.
+
+let waterBedHeight     0.4            // the bottom of standing water: two print layers
+let waterSurfaceHeight 2.6            // calm water
+let waterEdgeHeight    "waterSurfaceHeight + 0.6 * cos(720 * (x + y))"   // water at a tile edge: two waves a square
+let dirtEdgeHeight     3.4            // where dirt meets a tile edge
+let groundHeight       5              // open land
+let floorHeight        7.4            // a built floor's top
+let floorEdgeHeight    floorHeight    // where a built floor meets a tile edge: flush
+let shortWallHeight    16.55          // half the wall top
+let wallHeight         33.1           // the standard wall top
+let tallWallHeight     72.3

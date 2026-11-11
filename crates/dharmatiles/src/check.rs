@@ -9,10 +9,7 @@ pub(crate) fn check(paths: &[String], json: bool, explain: bool) -> u8 {
     let mut code = OK;
     let mut reports = Vec::new();
     for p in paths {
-        let opts = Options {
-            format_preview: crate::library::format_preview(),
-            ..Options::default()
-        };
+        let opts = Options::default();
         match dt_eval::check(&Files, p, &opts) {
             Ok(c) => {
                 let pending = c.pending();

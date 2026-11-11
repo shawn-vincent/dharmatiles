@@ -1,18 +1,23 @@
 //! Format 1's region tree: every thing makes its region, named regions get
 //! parents by their fill points, and `check` refuses a `parent(…)` that
-//! reaches past the tile.  Read with the `format_preview` option, as the
-//! step 1 tests are.
+//! reaches past the tile.
 
 #![allow(clippy::unwrap_used)]
 
 use dt_eval::regions::{Kind, RegionTree};
 use dt_eval::{Checked, Diag, Memory, Options, check};
 
-fn preview() -> Options {
+/// These tests write format 0 documents: built as written, not migrated as
+/// they load (that is `migrate.rs`'s business).
+fn legacy() -> Options {
     Options {
-        format_preview: true,
+        current_format: 0,
         ..Options::default()
     }
+}
+
+fn preview() -> Options {
+    Options { ..legacy() }
 }
 
 fn mem(text: &str) -> Memory {
@@ -80,7 +85,7 @@ fn the_tile_is_the_root_and_has_no_parent() {
 #[test]
 fn a_format_zero_tile_has_no_region_tree() {
     let text = "tile size=\"1x1\" seed=3 {\n stack { base\n dirt }\n}\n";
-    let c = check(&mem(text), "t.dtile", &Options::default()).unwrap();
+    let c = check(&mem(text), "t.dtile", &legacy()).unwrap();
     assert!(c.regions.is_none());
 }
 

@@ -9,7 +9,7 @@ macro_rules! lib {
     ($path:literal) => {
         (
             concat!("library/", $path),
-            include_str!(concat!("../../../../library/", $path)),
+            include_str!(concat!("../fixtures/library0/", $path)),
         )
     };
 }
@@ -43,7 +43,7 @@ pub const ALL: [(&str, &str); 9] = [
 pub const TILES: [(&str, &str); 5] = [FLAT, GRASS_TREE, WALL_CORNER, CLIFF_RUN, PATH_ROCKS];
 
 /// The library's heights, as the tests read them.
-pub const HEIGHTS: &str = include_str!("../../../../library/parts/heights.dtile");
+pub const HEIGHTS: &str = include_str!("../fixtures/library0/parts/heights.dtile");
 
 /// What every tile sees: the library's heights and the shared parts,
 /// registered under the keys their `use` lines name.

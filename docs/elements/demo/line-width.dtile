@@ -1,9 +1,11 @@
+dharmatiles version="1.0.0"
+
 // A line's width: a path across a lawn.  `verge` is a strip 24 mm wide,
 // so the grass that follows it covers the strip; `trail` is the same path
 // 10 mm wide, and pebbles scatter within half that width either side of it.
 tile size="1x1" seed=5 {
-    line verge width=24 wobble=3 { through southCenter "0.45,0.5" northCenter }
-    line trail width=10 wobble=3 { through southCenter "0.45,0.5" northCenter }
+    line verge width="24dmm" wobble="3dmm" { through southCenter "(0.45sq, 0.5sq)" northCenter }
+    line trail width="10dmm" wobble="3dmm" { through southCenter "(0.45sq, 0.5sq)" northCenter }
     stack {
         base
         dirt

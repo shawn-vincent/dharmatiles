@@ -1,19 +1,21 @@
+dharmatiles version="1.0.0"
+
 // A channel of water west to east between two dirt banks.
 
 tile size="1x1" seed=53 {
     about "A channel of water west to east between two dirt banks."
-    line shore-north wobble=1.5 { through "0,0.57" "1,0.57" }
-    line shore-south wobble=1.5 { through "0,0.43" "1,0.43" }
-    region channel { boundedBy shore-north shore-south; fill "0.5,0.5" }
-    region bank { boundedBy shore-north shore-south; fill "0.5,0.85"; fill "0.5,0.15" }
-    region shoreBand { within 7 of=shore-north; within 7 of=shore-south }
+    line shore-north wobble="1.5dmm" { through "(0sq, 0.43sq)" "(1sq, 0.43sq)" }
+    line shore-south wobble="1.5dmm" { through "(0sq, 0.57sq)" "(1sq, 0.57sq)" }
+    region channel { boundedBy shore-north shore-south; fill "(0.5sq, 0.5sq)" }
+    region bank { boundedBy shore-north shore-south; fill "(0.5sq, 0.15sq)"; fill "(0.5sq, 0.85sq)" }
+    region shoreBand { within "7dmm" of=shore-north; within "7dmm" of=shore-south }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
-            pin top=waterBedHeight at=channel   // the bed, written last so it wins
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand   // anywhere from the bed to the land
+            pin top="$waterBedHeight" at=channel   // the bed, written last so it wins
         }
-        rock at=channel size="6..10"
+        rock at=channel size="6dmm .. 10dmm"
         water
     }
 }

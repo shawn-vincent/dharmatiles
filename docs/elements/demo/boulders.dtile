@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // The boulder page's picture: a few boulders on plain dirt.
 tile size="1x1" seed=5 {
     stack {

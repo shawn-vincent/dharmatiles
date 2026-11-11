@@ -79,8 +79,8 @@ fn an_edit_reuses_only_what_comes_before_it() {
     assert!(reused >= 2, "only {reused} steps reused");
     let reused = edit(
         "lib:tests/water/2x2-shore.dtile",
-        "top=dirtEdgeHeight",
-        "top=\"dirtEdgeHeight + 0.5\"",
+        "top=\"$dirtEdgeHeight\"",
+        "top=\"$dirtEdgeHeight + 0.5dmm\"",
         &draft(),
     );
     assert_eq!(reused, 0);

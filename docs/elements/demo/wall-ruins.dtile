@@ -1,3 +1,5 @@
+dharmatiles version="1.0.0"
+
 // The wall page's ruins: a cut-stone wall with 70% of it fallen.
 use "parts/grass" lawn
 

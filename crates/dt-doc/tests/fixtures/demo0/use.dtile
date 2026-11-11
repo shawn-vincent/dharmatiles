@@ -1,0 +1,13 @@
+// The use page's picture: an oak from parts/trees and a lawn from
+// parts/grass, brought in by two use lines.
+use "parts/trees" oak
+use "parts/grass" lawn
+
+tile size="1x1" seed=12 {
+    stack {
+        base
+        dirt
+        oak top="bottom + 40"
+        lawn
+    }
+}

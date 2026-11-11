@@ -5,16 +5,16 @@ expression: summary(&c)
 cells per square: 234
 notes: ["dt::edge"]
 dirt (55225 nodes)
-  pin top=dirtEdgeHeight at=edges wins 448/936
-  pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand wins 8556/16838
-  pin top=waterBedHeight at=pool wins 17520/17520
+  pin top="$dirtEdgeHeight" at=edges wins 448/936
+  pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand wins 8556/16838
+  pin top="$waterBedHeight" at=pool wins 17520/17520
   y=1.00  3.40  3.40  3.40  3.40  3.40
   y=0.75  3.40  5.00..6.00  5.00..6.00  5.00..6.00  3.40
   y=0.50  0.40..6.00  5.00..6.00  5.00..6.00  5.00..6.00  0.40..6.00
   y=0.25  0.40  0.40  0.40  0.40  0.40
   y=0.00  0.40  0.40  0.40  0.40  0.40
 water (16838 nodes)
-  pin top=waterEdgeHeight at=edges wins 936/936
+  pin top="$waterEdgeHeight" at=edges wins 936/936
   y=1.00  3.20  2.00  3.20  2.00  3.20
   y=0.75  2.00  0.70..5.59  0.71..5.59  0.70..5.59  2.00
   y=0.50  3.20  0.70..5.60  0.70..5.60  0.71..5.59  3.20
