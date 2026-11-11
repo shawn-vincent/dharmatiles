@@ -103,6 +103,28 @@ pub enum ReadFlaw {
     Loop,
 }
 
+/// Why a `parent(…)` cannot be satisfied where a formula is called.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParentFlaw {
+    /// `parent` of the tile: it has no parent.
+    Tile,
+    /// `parent` taken `hops` times from `$region`, which has only `parents`
+    /// above it before the tile.
+    Past {
+        /// How many `parent`s are written.
+        hops: usize,
+        /// How many parents the thing's region has.
+        parents: usize,
+    },
+}
+
+/// Where a region value starts.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RegionBase {
+    Own,
+    Tile,
+}
+
 /// `name` as the context knows it: `groundHeight` is `$groundHeight`, and
 /// the format 0 positions `x`, `y` and `bottom` are `$x`, `$y`, `$bottom`.
 #[must_use]
@@ -315,7 +337,9 @@ impl ConstTable {
             return Err(ReadFlaw::Loop);
         }
         for n in expr.names() {
-            if crate::words::POINT_NAMES.contains(&n) {
+            if crate::words::REGION_NAMES.contains(&n) {
+                // a region is the context's own: always there
+            } else if crate::words::POINT_NAMES.contains(&n) {
                 if !per_point {
                     return Err(ReadFlaw::PerPoint { name: n.to_owned() });
                 }
@@ -337,6 +361,65 @@ impl ConstTable {
             }
         }
         Ok(())
+    }
+
+    /// Whether every `parent(…)` in `expr`, reached through the names it reads,
+    /// has a parent where it is called: `parents` is how many regions lie
+    /// above the thing's own `$region` before the tile (0 for a thing whose
+    /// region is the tile).
+    #[must_use]
+    pub fn parent_flaw(&self, expr: &Expr, parents: usize) -> Option<ParentFlaw> {
+        self.parent_flaw_at(expr, parents, 0)
+    }
+
+    fn parent_flaw_at(&self, e: &Expr, parents: usize, depth: usize) -> Option<ParentFlaw> {
+        if depth > 64 {
+            return None;
+        }
+        let again = |x: &Expr| self.parent_flaw_at(x, parents, depth);
+        match e {
+            Expr::Num { .. } => None,
+            Expr::Name(n) => self
+                .get(n)
+                .and_then(|c| self.parent_flaw_at(&c.expr, parents, depth + 1)),
+            Expr::Neg(a) => again(a),
+            Expr::Bin { lhs, rhs, .. } => again(lhs).or_else(|| again(rhs)),
+            Expr::Range { lo, hi } => again(lo).or_else(|| again(hi)),
+            Expr::Weighted { range, .. } => again(range),
+            Expr::List { items } => items.iter().find_map(|(v, _)| again(v)),
+            Expr::Call { name, args } => {
+                if name == "parent"
+                    && let Some((base, hops)) = self.region_chain(e, depth)
+                {
+                    match base {
+                        RegionBase::Tile => return Some(ParentFlaw::Tile),
+                        RegionBase::Own if hops > parents => {
+                            return Some(ParentFlaw::Past { hops, parents });
+                        }
+                        RegionBase::Own => {}
+                    }
+                }
+                args.iter().find_map(again)
+            }
+        }
+    }
+
+    /// A region value: where it starts and how many `parent`s are taken.
+    fn region_chain(&self, e: &Expr, depth: usize) -> Option<(RegionBase, usize)> {
+        if depth > 64 {
+            return None;
+        }
+        match e {
+            Expr::Name(n) if n == "$region" => Some((RegionBase::Own, 0)),
+            Expr::Name(n) if n == "$tile" => Some((RegionBase::Tile, 0)),
+            Expr::Name(n) => self
+                .get(n)
+                .and_then(|c| self.region_chain(&c.expr, depth + 1)),
+            Expr::Call { name, args } if name == "parent" && args.len() == 1 => {
+                self.region_chain(&args[0], depth).map(|(b, h)| (b, h + 1))
+            }
+            _ => None,
+        }
     }
 
     /// A constant by name.

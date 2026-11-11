@@ -288,6 +288,17 @@ impl Decoder<'_> {
                     .help = Some(super::heights::NOT_FORMAT_1.to_owned());
                     return None;
                 }
+                if crate::words::REGION_NAMES.contains(&n) {
+                    self.err(
+                        "dt::type",
+                        at,
+                        format!("`{n}` is a region, and `{owner} {name}` is a number"),
+                        "a region is not a number",
+                    )
+                    .help =
+                        Some("a region goes to `parent(…)`; nothing else reads one yet".to_owned());
+                    return None;
+                }
                 if crate::words::POINT_NAMES.contains(&n)
                     || crate::words::RESERVED_POINT_NAMES.contains(&n)
                 {

@@ -17,6 +17,9 @@ pub enum Dim {
     Mm,
     /// Squares: `x` and `y`, and angles made from them.
     Squares,
+    /// A region (format 1): `$tile`, `$region`, `parent(…)`.  It goes to
+    /// `parent()` only; as a number it is an error.
+    Region,
 }
 
 impl Dim {
@@ -27,6 +30,7 @@ impl Dim {
             Dim::Scalar => "a plain number",
             Dim::Mm => "a height or length in mm",
             Dim::Squares => "squares (x or y)",
+            Dim::Region => "a region",
         }
     }
 }
@@ -61,7 +65,7 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
         ),
         Expr::Num { .. } => Ok(Dim::Scalar),
         Expr::Name(n) => name(n).map_or_else(|| err(format!("unknown name `{n}`"), None), Ok),
-        Expr::Neg(a) => dim_of(a, name),
+        Expr::Neg(a) => not_region(dim_of(a, name)?, "a negation"),
         Expr::Range { lo, hi } => unify(dim_of(lo, name)?, dim_of(hi, name)?, "a range"),
         Expr::Weighted { range, .. } => dim_of(range, name),
         Expr::List { items } => {
@@ -77,6 +81,8 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
         }
         Expr::Bin { op, lhs, rhs } => {
             let (a, b) = (dim_of(lhs, name)?, dim_of(rhs, name)?);
+            not_region(a, "arithmetic")?;
+            not_region(b, "arithmetic")?;
             match op {
                 BinOp::Add | BinOp::Sub => unify(a, b, "a sum"),
                 BinOp::Mul => match (a, b) {
@@ -100,6 +106,29 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
                 },
             }
         }
+        Expr::Call { name: f, args } if f == "parent" => {
+            if args.len() != 1 {
+                return err(
+                    format!("`parent` takes 1 value, not {}", args.len()),
+                    Some("`parent($region)` is the region containing this one"),
+                );
+            }
+            if matches!(&args[0], Expr::Name(n) if n == "$tile") {
+                return err(
+                    "the tile has no parent",
+                    Some(
+                        "`$tile` is the root; `parent($region)` is the region containing a thing's own",
+                    ),
+                );
+            }
+            match dim_of(&args[0], name)? {
+                Dim::Region => Ok(Dim::Region),
+                d => err(
+                    format!("`parent` takes a region, not {}", d.describe()),
+                    Some("write `parent($region)`: the region containing this thing's own"),
+                ),
+            }
+        }
         Expr::Call { name: f, args } => {
             let Some((_, n)) = FUNCTIONS.iter().find(|(k, _)| k == f) else {
                 let names: Vec<&str> = FUNCTIONS.iter().map(|(k, _)| *k).collect();
@@ -118,6 +147,9 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
                 .iter()
                 .map(|a| dim_of(a, name))
                 .collect::<Result<Vec<_>, _>>()?;
+            for d in &ds {
+                not_region(*d, &format!("`{f}`"))?;
+            }
             match f.as_str() {
                 "sin" | "cos" => match ds[0] {
                     Dim::Mm => err(
@@ -141,7 +173,20 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
     }
 }
 
+/// A region is not a number: it goes to `parent()` and nothing else yet.
+fn not_region(d: Dim, what: &str) -> Result<Dim, DimError> {
+    if d == Dim::Region {
+        return err(
+            format!("a region is not a number, and {what} needs one"),
+            Some("a region goes to `parent(…)`; it has no size to add or multiply"),
+        );
+    }
+    Ok(d)
+}
+
 fn unify(a: Dim, b: Dim, what: &str) -> Result<Dim, DimError> {
+    not_region(a, what)?;
+    not_region(b, what)?;
     match (a, b) {
         (x, y) if x == y => Ok(x),
         (Dim::Scalar, Dim::Mm) | (Dim::Mm, Dim::Scalar) => Ok(Dim::Mm),
@@ -164,6 +209,7 @@ mod tests {
             "x" | "y" => Some(Dim::Squares),
             "bottom" | "groundHeight" => Some(Dim::Mm),
             "count" => Some(Dim::Scalar),
+            "$region" | "$tile" => Some(Dim::Region),
             _ => None,
         }
     }
@@ -195,5 +241,30 @@ mod tests {
         assert!(dim("cos(groundHeight)").is_err());
         assert!(dim("20%").is_err());
         assert!(dim("clamp(x, 1)").is_err());
+    }
+
+    #[test]
+    fn a_region_is_its_own_kind() {
+        assert_eq!(dim("parent($region)"), Ok(Dim::Region));
+        assert_eq!(dim("parent(parent($region))"), Ok(Dim::Region));
+        assert_eq!(dim("$tile"), Ok(Dim::Region));
+        let e = dim("parent($tile)").unwrap_err();
+        assert!(e.message.contains("no parent"), "{e:?}");
+        for bad in [
+            "$region + 1",
+            "2 * $region",
+            "-$region",
+            "min($region, 1)",
+            "[$region .. 2]",
+        ] {
+            let e = dim(bad).unwrap_err();
+            assert!(e.message.contains("not a number"), "{bad}: {e:?}");
+        }
+        assert!(
+            dim("parent(1)")
+                .unwrap_err()
+                .message
+                .contains("takes a region")
+        );
     }
 }

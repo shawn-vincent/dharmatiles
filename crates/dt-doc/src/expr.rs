@@ -447,7 +447,7 @@ impl Parser<'_> {
                     if WEIGHTINGS.iter().any(|(w, _)| *w == n) {
                         return self.weighted(n);
                     }
-                    if self.v2 && FUNCTIONS.iter().any(|(f, _)| *f == n) {
+                    if self.v2 && (n == "parent" || FUNCTIONS.iter().any(|(f, _)| *f == n)) {
                         return self.call(n);
                     }
                     return Err(unknown_function(&n, at, self.v2));

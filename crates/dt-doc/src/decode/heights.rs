@@ -122,6 +122,7 @@ impl Decoder<'_> {
         match n {
             "x" | "y" | "$x" | "$y" => Some(Dim::Squares),
             "bottom" | "$bottom" => Some(Dim::Mm),
+            "$region" | "$tile" => Some(Dim::Region),
             _ => ctx
                 .consts
                 .iter()
@@ -256,6 +257,16 @@ impl Decoder<'_> {
                 );
                 None
             }
+            Ok(Dim::Region) if mode != Mode::Const => {
+                self.err(
+                    "dt::type",
+                    span,
+                    format!("{what} is a number, and this is a region"),
+                    "a region",
+                )
+                .help = Some("a region goes to `parent(…)`; nothing else reads one yet".to_owned());
+                None
+            }
             Ok(d) => Some((Spanned { value: expr, span }, d)),
         }
     }
@@ -310,7 +321,7 @@ impl Decoder<'_> {
                             "`${n}` is read from the context: the element working out the height at each point sets it"
                         ));
                     }
-                    "$d" | "$a" | "$region" => {
+                    "$d" | "$a" => {
                         ok = false;
                         self.err(
                             "dt::unknown-name",
@@ -319,7 +330,7 @@ impl Decoder<'_> {
                             "reserved",
                         )
                         .help = Some(
-                            "`$d`, `$a` and `$region` are reserved for the elements that will set them; the point names are `$x`, `$y` and `$bottom`".to_owned(),
+                            "`$d` and `$a` are reserved for the elements that will set them; the point names are `$x`, `$y` and `$bottom`, and the regions `$region` and `$tile`".to_owned(),
                         );
                     }
                     _ => {}

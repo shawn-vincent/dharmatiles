@@ -55,7 +55,8 @@ const MAX_LINE_WIDTH_MM: f64 = 70.0;
 
 /// The name of the strip a line's width makes.  It has a space, which no
 /// written name can, so a document never names it.
-fn strip_name(line: &str) -> String {
+#[must_use]
+pub fn strip_name(line: &str) -> String {
     format!("{line} strip")
 }
 
@@ -269,9 +270,41 @@ pub struct ThingDecl {
     pub span: SourceSpan,
 }
 
+/// Who a formula is called for: a stack entry, or one of a scatter's
+/// children (each thing a scatter places has its own region).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Owner {
+    /// The stack entry ([`Tile::stack`]).
+    pub entry: usize,
+    /// The child of that entry (a scatter's), when it is one.
+    pub child: Option<usize>,
+}
+
+/// A formula the tile writes, read where a thing calls it: `check` settles
+/// what `parent(…)` in it can reach once the tile's regions are known
+/// (format 1).
+#[derive(Clone, Debug)]
+pub struct RegionRead {
+    /// The formula.
+    pub expr: Expr,
+    /// Where it is written.
+    pub span: SourceSpan,
+    /// Its text.
+    pub src: Src,
+    /// The context it is read in.
+    pub table: Arc<ConstTable>,
+    /// Who calls it.
+    pub owner: Owner,
+}
+
 /// What the evaluator needs from a tile document.
 #[derive(Clone, Debug)]
 pub struct Tile {
+    /// The document's format (0, or 1 in development).
+    pub format: u32,
+    /// Formulas read where a thing calls them, for the region checks of
+    /// format 1 (empty in format 0).
+    pub region_reads: Vec<RegionRead>,
     /// Squares across.
     pub cols: u32,
     /// Squares up.
@@ -475,6 +508,8 @@ pub fn read(sources: &dyn Source, path: &str, preview: bool) -> Result<Read, Vec
     let mut r = Reader {
         preview,
         entry_tables: BTreeMap::new(),
+        pending_reads: Vec::new(),
+        reads: Vec::new(),
         sources,
         files: BTreeMap::new(),
         loading: Vec::new(),
@@ -631,6 +666,10 @@ struct Reader<'s> {
     /// The context each of the tile's own stack entries is read in, by the
     /// offset of its text.
     entry_tables: BTreeMap<usize, Arc<ConstTable>>,
+    /// Formulas read for the entry being expanded, until it is pushed.
+    pending_reads: Vec<RegionRead>,
+    /// Formulas read for the tile's entries, owners settled.
+    reads: Vec<RegionRead>,
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A
@@ -829,6 +868,8 @@ impl Reader<'_> {
             }),
         };
         let mut t = Tile {
+            format: file.doc.format(),
+            region_reads: Vec::new(),
             cols: header.cols,
             rows: header.rows,
             seed,
@@ -1048,6 +1089,7 @@ impl Reader<'_> {
             .clone()
             .unwrap_or_else(|| Arc::new(consts.clone()));
         t.heights = self.heights(file, def, consts, &root, &t.stack, &mut t.pending);
+        t.region_reads = std::mem::take(&mut self.reads);
         Some(t)
     }
 
@@ -1136,6 +1178,23 @@ impl Reader<'_> {
             }
             if !readable {
                 continue;
+            }
+            if table.is_dollar() {
+                let owner = Owner { entry, child: None };
+                let formulas = e
+                    .top
+                    .iter()
+                    .map(|t| (&t.value, t.span))
+                    .chain(e.pins.iter().map(|p| (&p.top.value, p.top.span)));
+                for (expr, span) in formulas {
+                    self.reads.push(RegionRead {
+                        expr: expr.clone(),
+                        span,
+                        src: Arc::clone(src),
+                        table: Arc::clone(&table),
+                        owner,
+                    });
+                }
             }
             bodies.push(BodyDecl {
                 entry,
@@ -1408,6 +1467,8 @@ impl Reader<'_> {
                         }
                     }
                     let mut children = Vec::new();
+                    // formulas read for this entry, until it is pushed
+                    let mark = self.pending_reads.len();
                     // a scatter inside a surface scatters on that surface:
                     // its own entry, in the surface's area, listed right after it
                     let mut hoisted: Vec<model::Entry> = Vec::new();
@@ -1438,8 +1499,14 @@ impl Reader<'_> {
                             );
                             continue;
                         }
+                        let before = self.pending_reads.len();
                         match self.scatter_child(c, scope, pending) {
-                            Some(child) => children.push(child),
+                            Some(child) => {
+                                for r in &mut self.pending_reads[before..] {
+                                    r.owner.child = Some(children.len());
+                                }
+                                children.push(child);
+                            }
                             None => ok = false,
                         }
                     }
@@ -1478,10 +1545,17 @@ impl Reader<'_> {
                             src: Arc::clone(src),
                             span: e.span,
                         });
+                        let entry = out.len() - 1;
+                        for mut r in self.pending_reads.drain(mark..) {
+                            r.owner.entry = entry;
+                            self.reads.push(r);
+                        }
                         if !hoisted.is_empty() {
                             // listed right after the surface it is written in
                             self.expand(&hoisted, &inner, out, pending);
                         }
+                    } else {
+                        self.pending_reads.truncate(mark);
                     }
                 }
                 Callee::Definition(name) => {
@@ -1766,10 +1840,22 @@ impl Reader<'_> {
                 .clone()
                 .or_else(|| e.top.clone().map(|t| (t, Arc::clone(src))))
         {
-            if let Some(table) = scope.lets.table.clone()
-                && !self.readable(&table, &t.value, t.span, &at, true)
-            {
-                return None;
+            if let Some(table) = scope.lets.table.clone() {
+                if !self.readable(&table, &t.value, t.span, &at, true) {
+                    return None;
+                }
+                if table.is_dollar() {
+                    self.pending_reads.push(RegionRead {
+                        expr: t.value.clone(),
+                        span: t.span,
+                        src: Arc::clone(&at),
+                        table,
+                        owner: Owner {
+                            entry: usize::MAX,
+                            child: None,
+                        },
+                    });
+                }
             }
             match crate::lower::tree_top(&t.value, &scope.lets) {
                 Ok((name, Lowered { value, note })) => {

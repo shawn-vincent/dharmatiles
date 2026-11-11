@@ -19,6 +19,7 @@ mod lower;
 pub mod places;
 pub mod plan;
 pub mod progress;
+pub mod regions;
 pub mod solve;
 pub mod source;
 
@@ -369,6 +370,9 @@ pub struct Checked {
     /// The Solve phase, for a tile that uses the heights language: its
     /// bodies' bands, and the lints that came with them.
     pub solved: Option<solve::SolveReport>,
+    /// The region tree of a format 1 tile (every thing's region, and what
+    /// each region's parent is), on the build's lattice.
+    pub regions: Option<regions::RegionTree>,
 }
 
 impl Checked {
@@ -428,6 +432,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             frame: Frame::dungeonblocks(1, 1),
             seed: 0,
             solved: None,
+            regions: None,
         });
     };
     if let Some(seed) = opts.seed {
@@ -512,6 +517,12 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             Err(le) => errors.push(Diag::plain("dt::system", le.message).maybe_help(le.help)),
         }
     }
+    // format 1: every thing's region, and what each formula can reach
+    let region_tree = (tile.format >= 1 && errors.is_empty()).then(|| {
+        let tree = regions::RegionTree::build(&tile, &frame);
+        errors.extend(tree.parent_flaws(&tile));
+        tree
+    });
     if !errors.is_empty() {
         return Err(errors);
     }
@@ -581,6 +592,9 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     let writes: Vec<dt_elements::Write> = plans.iter().map(|p| p.writes).collect();
     let mut solved = solve::solve(&tile, &frame, opts, &writes)?;
     solved.notes.extend(tile.notes.iter().cloned());
+    if let Some(tree) = &region_tree {
+        solved.explain.extend(tree.explain(&tile));
+    }
     let solved = Some(solved);
     Ok(Checked {
         file: read.file,
@@ -592,6 +606,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         frame,
         seed,
         solved,
+        regions: region_tree,
     })
 }
 

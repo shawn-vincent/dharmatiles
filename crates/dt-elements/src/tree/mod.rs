@@ -97,6 +97,11 @@ struct Params {
     leaf_width: Draw,
 }
 
+/// A tree's crown diameter when none is written, mm at the 35 mm square:
+/// the crown's radius is half of it.  `check` makes the tree's region, a
+/// disc, from the crown width a tree will have.
+pub const DEFAULT_CROWN_WIDTH_MM: f64 = 30.0;
+
 /// The heights a tree may stand over its foot, mm at the 35 mm square.
 const MIN_HEIGHT_MM: f64 = 20.0;
 const MAX_HEIGHT_MM: f64 = 120.0;
@@ -112,7 +117,7 @@ impl Default for Params {
             top: None,
             trunk: Draw::flat(30.0, 30.0),
             trunk_width: None,
-            width: Draw::flat(30.0, 30.0),
+            width: Draw::flat(DEFAULT_CROWN_WIDTH_MM, DEFAULT_CROWN_WIDTH_MM),
             shape: crown::ROUND,
             clumps: 32,
             clump_size: Draw::flat(5.5, 5.5),
