@@ -128,6 +128,13 @@
 .btn:hover { border-color: var(--line-2); background: color-mix(in srgb, var(--raised) 80%, var(--ink) 4%); }
 .btn[aria-pressed="true"], .btn.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.icon { padding: 6px; width: 30px; height: 30px; justify-content: center; font-size: 15px; }
+/* copy: one control for copying a value, anywhere.  A copy icon that turns into a check mark once copied
+   (web/preview/js/copy.js); with a label it is a normal button whose words read "Copied". */
+.copy { --copy-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E"); }
+.copy.done { --copy-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); color: var(--accent); }
+.btn.icon.copy { width: 26px; height: 26px; padding: 5px; vertical-align: middle; }
+.copy-glyph { display: inline-block; width: 14px; height: 14px; flex: none; background: currentColor;
+  -webkit-mask: var(--copy-glyph) center / contain no-repeat; mask: var(--copy-glyph) center / contain no-repeat; }
 
 /* segmented control: a row of choices, one chosen */
 .seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: calc(var(--r) + 2px); flex-wrap: wrap; }

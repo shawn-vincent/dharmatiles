@@ -7,6 +7,7 @@ import { rememberView, shortcutViews } from '../view-presets.js';
 import { VIEWS } from '../viewer.js';
 import { legendRows } from '../debug-layer.js';
 import { $, host, pickView, viewer } from './app.js';
+import { copyButton, versionParts } from '../copy.js';
 import { server, tile, view } from './stores.js';
 
 // ---- the view's controls: views and the display menu -------------------
@@ -177,14 +178,13 @@ async function showAbout() {
   $('about').showModal();
   try {
     const a = await host.about();
-    // 0.9.0+122.gcb8fbaf.dirty: the semantic version large, the build quiet, "dirty" said in words only when it is.
-    const m = /^([^+]+)(?:\+(.*))?$/.exec(a.version);
-    const parts = m && m[2] ? m[2].split('.') : [];
-    const dirty = parts.at(-1) === 'dirty';
-    const build = dirty ? parts.slice(0, -1) : parts;
-    $('about-semver').textContent = m ? m[1] : a.version;
-    $('about-build').textContent = build.length ? `+${build.join('.')}` : '';
-    $('about-dirty').hidden = !dirty;
+    // 0.9.0+123.gfd383a7.dirty: the semantic version large, the whole build part after it (dirty included), and a copy button for all of it.
+    const v = versionParts(a.version);
+    $('about-semver').textContent = v.semver;
+    $('about-build').textContent = v.build;
+    $('about-dirty').hidden = !v.dirty;
+    $('about-version').querySelector('.copy')?.remove();
+    $('about-version').append(copyButton(a.version, { title: 'Copy the version' }));
     // Formats are major versions, written "0.x": any version starting with 0.
     $('about-formats').textContent = a.formats;
   } catch (e) {

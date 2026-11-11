@@ -6,6 +6,7 @@ import { openFile } from './document.js';
 import { dirty, doc, progressOf, renameable, rootOf, server, stem, tile, view } from './stores.js';
 import { fmt, row, showProgress } from './title.js';
 import { targetLabel } from './target.js';
+import { copyButton } from '../copy.js';
 
 let timer = 0;
 const buildStart = new Map(); // tile id -> when its build was first seen under way
@@ -79,10 +80,7 @@ function drawErrors(t) {
     const pre = document.createElement('pre'); pre.textContent = p.details;
     more.append(sum, pre);
     const acts = document.createElement('div'); acts.className = 'acts';
-    const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'btn'; copy.textContent = 'Copy details';
-    copy.onclick = async () => {
-      try { await navigator.clipboard.writeText(p.details); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select the details and copy them yourself'; }
-    };
+    const copy = copyButton(p.details, { label: 'Copy details', title: 'Copy the details' });
     const close = document.createElement('button'); close.type = 'button'; close.className = 'btn'; close.textContent = 'Dismiss';
     close.onclick = () => dismiss(p);
     acts.append(copy, close);
