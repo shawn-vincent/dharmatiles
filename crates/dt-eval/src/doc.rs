@@ -218,6 +218,9 @@ pub struct BodyDecl {
     pub slope: Option<f64>,
     /// Its pins, in order.
     pub pins: Vec<PinDecl>,
+    /// The context its top and pins are read in: the constants of the scope
+    /// the body is written in (the tile's, in format 0).
+    pub table: Arc<ConstTable>,
     /// Its element's name in the text.
     pub span: SourceSpan,
 }
@@ -468,8 +471,10 @@ pub fn use_path(from: &str, u: &Use) -> String {
 ///
 /// # Errors
 /// Every problem found, each at its text.
-pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
+pub fn read(sources: &dyn Source, path: &str, preview: bool) -> Result<Read, Vec<Diag>> {
     let mut r = Reader {
+        preview,
+        entry_tables: BTreeMap::new(),
         sources,
         files: BTreeMap::new(),
         loading: Vec::new(),
@@ -497,7 +502,7 @@ pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
 /// # Errors
 /// Every problem found; a file with no `printer` is one.
 pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<Diag>> {
-    let r = read(sources, path)?;
+    let r = read(sources, path, false)?;
     let Some(p) = &r.file.doc.printer else {
         return Err(vec![
             Diag::plain("dt::printer", format!("`{path}` has no `printer`"))
@@ -533,6 +538,48 @@ fn not_yet(src: &Src, span: SourceSpan, what: &str) -> Diag {
         "not built yet",
     )
     .help("`check` accepts this; `build` does not, yet")
+}
+
+/// A read that cannot be satisfied, at its text.
+fn read_flaw(src: &Src, span: SourceSpan, flaw: &dt_doc::consts::ReadFlaw) -> Diag {
+    use dt_doc::consts::ReadFlaw;
+    match flaw {
+        ReadFlaw::Unknown { name, near } => Diag::at(
+            src,
+            span,
+            "dt::unknown-name",
+            format!("nothing installed `{name}` where this is read"),
+            "not in the context",
+        )
+        .help(match near {
+            Some(n) => format!("did you mean `{n}`? a `$` name is read from the context of whoever calls, and the library installs its heights at the root"),
+            None => format!("a `$` name is read from the context of whoever calls: the library installs its heights at the root, and `let {name} …` in an enclosing block installs one of your own"),
+        }),
+        ReadFlaw::PerPoint { name } => Diag::at(
+            src,
+            span,
+            "dt::type",
+            format!("`{name}` is worked out at each point, and this is drawn once"),
+            "a count or size is not per point",
+        )
+        .help("a position or a height under goes where a height is worked out at each point: a top, a pin or a level"),
+        ReadFlaw::NotSet { name } => Diag::at(
+            src,
+            span,
+            "dt::unknown-name",
+            format!("no element sets `{name}` yet"),
+            "reserved",
+        )
+        .help("`$d`, `$a` and `$region` are reserved for the elements that will set them"),
+        ReadFlaw::Loop => Diag::at(
+            src,
+            span,
+            "dt::value",
+            "names read each other in a loop",
+            "a loop",
+        )
+        .help("a `let` that reads itself needs `override`, which reads the value it replaces"),
+    }
 }
 
 /// A parameter's value and the text it was written in.
@@ -579,6 +626,11 @@ struct Reader<'s> {
     points: BTreeMap<String, [f64; 2]>,
     /// The width of each line that has one, mm at the reference square.
     widths: BTreeMap<String, f64>,
+    /// Read the format in development (format 1) too.
+    preview: bool,
+    /// The context each of the tile's own stack entries is read in, by the
+    /// offset of its text.
+    entry_tables: BTreeMap<usize, Arc<ConstTable>>,
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A
@@ -633,7 +685,13 @@ impl Reader<'_> {
                 return None;
             }
         };
-        let mut known = Known::new();
+        let mut known = Known::new().with_format_preview(self.preview);
+        // this file's format, to hold the files it uses to it (a header
+        // that is wrong is reported when the file is decoded)
+        let format = dt_doc::header::check_text_with(path, &text, self.preview)
+            .ok()
+            .flatten()
+            .map_or(0, |h| h.format);
         if path != HEIGHTS {
             // every file sees the library's heights
             let heights = self.load(HEIGHTS, None)?;
@@ -643,6 +701,23 @@ impl Reader<'_> {
         self.loading.push(path.to_owned());
         for u in &uses {
             match self.load(&use_path(path, u), Some((&src, u.path.span))) {
+                Some(f) if f.doc.format() != format => {
+                    ok = false;
+                    self.errors.push(
+                        Diag::at(
+                            &src,
+                            u.path.span,
+                            "dt::format-mixed",
+                            format!(
+                                "`{}` is format {}, and this document is format {format}",
+                                u.key(),
+                                f.doc.format()
+                            ),
+                            "a part of another format",
+                        )
+                        .help("a tile and the parts it uses share a format; bring the part to this document's format (`dharmatiles migrate` will do it, once format 1 ships)"),
+                    );
+                }
                 Some(f) => known.add(u.key(), &f.doc),
                 None => ok = false,
             }
@@ -668,6 +743,55 @@ impl Reader<'_> {
         }
     }
 
+    /// What went wrong entering a scope, each at its text in `src`.
+    fn scope_errors(&mut self, src: &Src, errors: Vec<dt_doc::consts::ScopeError>) {
+        for e in errors {
+            self.errors
+                .push(Diag::at(src, e.span, e.code, e.message, e.label).maybe_help(e.help));
+        }
+    }
+
+    /// The scope a block makes: `scope` with the block's `let`s and
+    /// `override`s (format 1; nothing else has any).
+    fn scoped(&mut self, scope: &Scope, consts: &[model::Const]) -> Scope {
+        let Some(table) = scope.lets.table.as_ref().filter(|t| t.is_dollar()) else {
+            return scope.clone();
+        };
+        if consts.is_empty() {
+            return scope.clone();
+        }
+        let (table, errors) = table.enter(consts);
+        self.scope_errors(&scope.file.src, errors);
+        Scope {
+            lets: Arc::new(Lets::from_consts(&table)),
+            ..scope.clone()
+        }
+    }
+
+    /// Whether `expr`, written at `span` in `src`, can be read in the
+    /// context `table` (format 1): every `$` name is installed, and a
+    /// position or height under is only read where a height is worked out
+    /// at each point.  A mistake is reported at its text.
+    fn readable(
+        &mut self,
+        table: &ConstTable,
+        expr: &Expr,
+        span: SourceSpan,
+        src: &Src,
+        per_point: bool,
+    ) -> bool {
+        if !table.is_dollar() {
+            return true;
+        }
+        match table.check_reads(expr, per_point) {
+            Ok(()) => true,
+            Err(flaw) => {
+                self.errors.push(read_flaw(src, span, &flaw));
+                false
+            }
+        }
+    }
+
     fn tile(&mut self, file: &Arc<File>) -> Option<Tile> {
         let def = file.doc.tile()?;
         let header = def.header()?;
@@ -680,7 +804,16 @@ impl Reader<'_> {
             .filter(|c| c.kind == dt_doc::model::ConstKind::Let)
             .cloned()
             .collect();
-        let consts = ConstTable::build(&library_consts, &def.consts);
+        let format1 = file.doc.format() >= 1;
+        let consts = if format1 {
+            // format 1: the library's heights are `$` names at the root, and
+            // the tile's `let`s and `override`s are its first scope
+            let (t, errors) = ConstTable::root(&library_consts).enter(&def.consts);
+            self.scope_errors(src, errors);
+            t
+        } else {
+            ConstTable::build(&library_consts, &def.consts)
+        };
         let lets = Arc::new(Lets::from_consts(&consts));
         let seed = match header.seed {
             None => 1,
@@ -726,7 +859,9 @@ impl Reader<'_> {
             self.points.insert(p.name.value.clone(), [p.x, p.y]);
         }
         for l in &def.lines {
-            if let Some(w) = l.width.as_ref() {
+            if let Some(w) = l.width.as_ref()
+                && self.readable(&consts, &w.value.expr, w.span, src, false)
+            {
                 match wobble_mm(&w.value, &lets) {
                     Ok(v) if v.is_finite() && v > 0.0 && v <= MAX_LINE_WIDTH_MM => {
                         self.widths.insert(l.name.value.clone(), v);
@@ -757,7 +892,16 @@ impl Reader<'_> {
                     }
                 }
             }
-            let wobble = match l.wobble.as_ref().map(|w| (w, wobble_mm(&w.value, &lets))) {
+            let wobble_read = l
+                .wobble
+                .as_ref()
+                .is_none_or(|w| self.readable(&consts, &w.value.expr, w.span, src, false));
+            let wobble = match l
+                .wobble
+                .as_ref()
+                .filter(|_| wobble_read)
+                .map(|w| (w, wobble_mm(&w.value, &lets)))
+            {
                 None => 0.0,
                 Some((_, Ok(v))) if v.is_finite() && (0.0..=35.0).contains(&v) => v,
                 Some((w, got)) => {
@@ -816,6 +960,9 @@ impl Reader<'_> {
             }
             let mut within = Vec::new();
             for w in &r.within {
+                if !self.readable(&consts, &w.mm.value, w.mm.span, src, false) {
+                    continue;
+                }
                 // a distance is a band: the odds of a weighting have nothing to act on
                 if let Some(text) = consts.weighted_in(&w.mm.value) {
                     let mut d = Diag::at(
@@ -890,11 +1037,17 @@ impl Reader<'_> {
         };
         let mut stack = Vec::new();
         let mut pending = Vec::new();
-        self.expand(&def.stack, &scope, &mut stack, &mut pending);
+        let stack_scope = self.scoped(&scope, &def.stack_consts);
+        self.expand(&def.stack, &stack_scope, &mut stack, &mut pending);
         t.stack = stack;
         t.pending.extend(pending);
         t.notes = std::mem::take(&mut self.notes);
-        t.heights = self.heights(file, def, consts, &t.stack, &mut t.pending);
+        let root = stack_scope
+            .lets
+            .table
+            .clone()
+            .unwrap_or_else(|| Arc::new(consts.clone()));
+        t.heights = self.heights(file, def, consts, &root, &t.stack, &mut t.pending);
         Some(t)
     }
 
@@ -906,6 +1059,7 @@ impl Reader<'_> {
         file: &Arc<File>,
         def: &Definition,
         consts: ConstTable,
+        root: &Arc<ConstTable>,
         stack: &[Entry],
         pending: &mut Vec<Diag>,
     ) -> Heights {
@@ -915,9 +1069,15 @@ impl Reader<'_> {
             src: Arc::clone(src),
             default: false,
         };
-        let pin = |p: &model::Pin, from: &Provenance| PinDecl {
+        let pin = |p: &model::Pin, from: &Provenance, dollar: bool| PinDecl {
             name: p.name.as_ref().map(|n| n.value.clone()),
-            top: p.top.value.clone(),
+            top: if dollar {
+                p.top
+                    .value
+                    .map_names(&mut |n| Some(Expr::Name(dt_doc::consts::dollar_of(n))))
+            } else {
+                p.top.value.clone()
+            },
             top_span: p.top.span,
             at: p.at.value.clone(),
             at_span: p.at.span,
@@ -961,10 +1121,27 @@ impl Reader<'_> {
                 // reporting why (an error, or something not built)
                 continue;
             };
+            let table = self
+                .entry_tables
+                .get(&e.span.offset())
+                .cloned()
+                .unwrap_or_else(|| Arc::clone(root));
+            // format 1: what the body reads must be there, at each point
+            let mut readable = true;
+            if let Some(t) = &e.top {
+                readable &= self.readable(&table, &t.value, t.span, src, true);
+            }
+            for p in &e.pins {
+                readable &= self.readable(&table, &p.top.value, p.top.span, src, true);
+            }
+            if !readable {
+                continue;
+            }
             bodies.push(BodyDecl {
                 entry,
                 element: el.name.to_owned(),
                 label: e.label.as_ref().map(|l| l.value.clone()),
+                table,
                 top: e.top.as_ref().map(|t| (t.value.clone(), t.span)),
                 region: e
                     .place
@@ -976,11 +1153,21 @@ impl Reader<'_> {
                         _ => None,
                     }),
                 slope: e.slope.as_ref().map(|s| s.value),
-                pins: e.pins.iter().map(|p| pin(p, &from)).collect(),
+                pins: e.pins.iter().map(|p| pin(p, &from, false)).collect(),
                 span: e.what.span,
             });
         }
         let mut defaults = Vec::new();
+        // the library's defaults are written in format 0: in a format 1 tile
+        // their names are the context's `$` names
+        let dollar = root.is_dollar();
+        let rename = |e: &Expr| {
+            if dollar {
+                e.map_names(&mut |n| Some(Expr::Name(dt_doc::consts::dollar_of(n))))
+            } else {
+                e.clone()
+            }
+        };
         if let Some(f) = self.load(EDGES, None) {
             let dfrom = Provenance {
                 path: f.path.clone(),
@@ -990,8 +1177,8 @@ impl Reader<'_> {
             for d in &f.doc.defaults {
                 defaults.push(DefaultBody {
                     element: d.what.value.clone(),
-                    top: d.top.as_ref().map(|t| (t.value.clone(), t.span)),
-                    pins: d.pins.iter().map(|p| pin(p, &dfrom)).collect(),
+                    top: d.top.as_ref().map(|t| (rename(&t.value), t.span)),
+                    pins: d.pins.iter().map(|p| pin(p, &dfrom, dollar)).collect(),
                     from: dfrom.clone(),
                 });
             }
@@ -1023,8 +1210,19 @@ impl Reader<'_> {
         let src = &scope.file.src;
         let mut seen: BTreeMap<String, usize> = BTreeMap::new();
         for e in entries {
+            // an entry's own block of `let`s and `override`s holds for it
+            let entry_scope;
+            let scope = if e.consts.is_empty() {
+                scope
+            } else {
+                entry_scope = self.scoped(scope, &e.consts);
+                &entry_scope
+            };
             if scope.depth == 0 {
                 self.top = Some((Arc::clone(src), e.span));
+                if let Some(t) = &scope.lets.table {
+                    self.entry_tables.insert(e.span.offset(), Arc::clone(t));
+                }
             }
             if self.entries >= MAX_ENTRIES {
                 if self.entries == MAX_ENTRIES {
@@ -1321,6 +1519,9 @@ impl Reader<'_> {
                         id,
                         depth: scope.depth + 1,
                     };
+                    // a definition's own `let`s and `override`s hold for its body
+                    let inner = self.scoped(&inner, &def.consts);
+                    let inner = self.scoped(&inner, &def.stack_consts);
                     self.expand(&def.stack, &inner, out, pending);
                 }
             }
@@ -1393,6 +1594,14 @@ impl Reader<'_> {
         scope: &Scope,
         pending: &mut Vec<Diag>,
     ) -> Option<Child> {
+        // a child's own block of `let`s and `override`s holds for it
+        let child_scope;
+        let scope = if c.consts.is_empty() {
+            scope
+        } else {
+            child_scope = self.scoped(scope, &c.consts);
+            &child_scope
+        };
         let src = &scope.file.src;
         let (cl, inner, thing) = match &c.callee {
             Callee::Element(cl) if cl.scattered => (*cl, scope.clone(), c.clone()),
@@ -1451,6 +1660,8 @@ impl Reader<'_> {
                     id: None,
                     depth: scope.depth + 1,
                 };
+                let inner = self.scoped(&inner, &def.consts);
+                let inner = self.scoped(&inner, &def.stack_consts);
                 let mut child = self.scatter_child(one, &inner, pending)?;
                 // the call's own name is where it is shown
                 child.what.span = c.what.span;
@@ -1555,6 +1766,11 @@ impl Reader<'_> {
                 .clone()
                 .or_else(|| e.top.clone().map(|t| (t, Arc::clone(src))))
         {
+            if let Some(table) = scope.lets.table.clone()
+                && !self.readable(&table, &t.value, t.span, &at, true)
+            {
+                return None;
+            }
             match crate::lower::tree_top(&t.value, &scope.lets) {
                 Ok((name, Lowered { value, note })) => {
                     if let Some(note) = note {
@@ -1642,6 +1858,15 @@ impl Reader<'_> {
             } in items
             {
                 let b = bind(v, src, scope);
+                // format 1: a count or size reads installed names, and none
+                // that is worked out at each point
+                if let Value::Num(n) = &b.value.value
+                    && let Some(table) = scope.lets.table.clone()
+                    && !self.readable(&table, &n.expr, b.value.span, &b.src, false)
+                {
+                    ok = false;
+                    continue;
+                }
                 let value = match value(&b, &scope.lets) {
                     Ok(Lowered { value, note }) => {
                         if let Some(note) = note {

@@ -40,11 +40,12 @@ pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<Doc
     };
     // the header line first: a format this program doesn't read stops here,
     // since the rest of the file may not mean what this decoder thinks
-    let (header, header_errors) = crate::header::read(&src, &kdl);
+    let (header, header_errors) = crate::header::read(&src, &kdl, known.format_preview());
     if header_errors.iter().any(|e| e.code == "dt::format-newer") {
         return Err(header_errors);
     }
     let mut d = Decoder::new(src, known);
+    d.format1 = header.as_ref().is_some_and(|h| h.format >= 1);
     d.errors.extend(header_errors);
     let mut doc = d.document(&kdl);
     doc.header = header;
@@ -112,6 +113,10 @@ pub(crate) struct Decoder<'k> {
     pub param_controls: HashMap<String, &'static Control>,
     /// The `base` line of the stack last decoded.
     pub stack_base: Option<Base>,
+    /// The `let`s of the stack block last decoded (format 1).
+    pub stack_consts: Vec<crate::model::Const>,
+    /// Reading format 1: `$` names, `let` in any block, reserved words.
+    pub format1: bool,
 }
 
 /// The span of an entry's value (an entry's span covers `name=value`).
@@ -175,6 +180,8 @@ impl<'k> Decoder<'k> {
             imported: HashMap::new(),
             param_controls: HashMap::new(),
             stack_base: None,
+            stack_consts: Vec::new(),
+            format1: false,
         }
     }
 
@@ -537,6 +544,7 @@ impl<'k> Decoder<'k> {
             about: None,
             params: Vec::new(),
             consts: Vec::new(),
+            stack_consts: Vec::new(),
             points: Vec::new(),
             lines: Vec::new(),
             regions: Vec::new(),
@@ -573,7 +581,7 @@ impl<'k> Decoder<'k> {
         let taken = self.declare_places(body, &mut ctx);
         for n in body.nodes() {
             match n.name().value() {
-                "let" | "override" if !is_tile => {
+                "let" | "override" if !is_tile && !self.format1 => {
                     self.err(
                         "dt::unknown-node",
                         n.name().span(),
@@ -649,6 +657,7 @@ impl<'k> Decoder<'k> {
                     }
                     let path = vec![step.clone(), "stack".to_owned()];
                     def.stack.extend(self.entries(n, &ctx, &path));
+                    def.stack_consts.append(&mut self.stack_consts);
                     if let Some(b) = self.stack_base.take() {
                         def.base = Some(b);
                     }
@@ -790,6 +799,30 @@ impl<'k> Decoder<'k> {
 
     fn param(&mut self, n: &KdlNode, ctx: &Ctx) -> Option<Param> {
         let name = self.name_arg(n, "parameter")?;
+        if self.format1 {
+            if name.value.starts_with('$') {
+                self.err(
+                    "dt::name",
+                    name.span,
+                    format!("`{}` is a `$` name, and a parameter is a plain name", name.value),
+                    "a context name",
+                )
+                .help = Some("a parameter is lexical: write `param length 10`; the context's `$` names are read, not passed".to_owned());
+                return None;
+            }
+            if crate::words::is_reserved(&name.value) {
+                self.err(
+                    "dt::name",
+                    name.span,
+                    format!("`{}` is a word of the language", name.value),
+                    crate::words::kind(&name.value),
+                )
+                .help = Some(
+                    "a plain name can't take a coordinate, function, weighting or unit; choose another name".to_owned(),
+                );
+                return None;
+            }
+        }
         let control = self.param_controls.get(&name.value).copied();
         let default = match n.entries() {
             [_] => None,

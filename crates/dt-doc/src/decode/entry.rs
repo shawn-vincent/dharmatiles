@@ -32,6 +32,11 @@ enum Target {
     None,
 }
 
+/// A `let` or `override` node.
+pub(super) fn is_const_node(n: &KdlNode) -> bool {
+    matches!(n.name().value(), "let" | "override")
+}
+
 fn step_names(nodes: &[KdlNode]) -> Vec<String> {
     let mut seen: Vec<&str> = Vec::new();
     nodes
@@ -67,7 +72,22 @@ impl Decoder<'_> {
         let steps = step_names(kids.nodes());
         let mut base: Option<Base> = None;
         let mut out: Vec<Entry> = Vec::new();
+        // format 1: the block's own `let`s and `override`s, for what is in it
+        let mut block_ctx: Option<Ctx> = None;
+        self.stack_consts.clear();
+        if self.format1 {
+            for n in kids.nodes().iter().filter(|n| is_const_node(n)) {
+                let c = block_ctx.get_or_insert_with(|| ctx.clone());
+                if let Some(k) = self.const_node(n, c, &[]) {
+                    self.stack_consts.push(k);
+                }
+            }
+        }
+        let ctx = block_ctx.as_ref().unwrap_or(ctx);
         for (n, step) in kids.nodes().iter().zip(steps) {
+            if self.format1 && is_const_node(n) {
+                continue;
+            }
             if n.name().value() == "base" {
                 match self.base_node(n, out.len()) {
                     Some(b) if base.is_some() => {
@@ -143,6 +163,7 @@ impl Decoder<'_> {
             place: Place::default(),
             controls: Vec::new(),
             children: Vec::new(),
+            consts: Vec::new(),
             top: None,
             at_place: None,
             pins: Vec::new(),
@@ -210,7 +231,21 @@ impl Decoder<'_> {
 
         let kids: &[KdlNode] = node.children().map_or(&[], |c| c.nodes());
         let steps = step_names(kids);
+        // format 1: the block's own `let`s and `override`s, for what is in it
+        let mut block_ctx: Option<Ctx> = None;
+        if self.format1 {
+            for c in kids.iter().filter(|c| is_const_node(c)) {
+                let b = block_ctx.get_or_insert_with(|| ctx.clone());
+                if let Some(k) = self.const_node(c, b, &[]) {
+                    entry.consts.push(k);
+                }
+            }
+        }
+        let ctx = block_ctx.as_ref().unwrap_or(ctx);
         for (c, step) in kids.iter().zip(steps) {
+            if self.format1 && is_const_node(c) {
+                continue;
+            }
             if self.heights_child(&mut entry, c, ctx) {
                 continue;
             }

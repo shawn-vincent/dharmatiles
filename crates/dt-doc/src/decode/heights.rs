@@ -13,6 +13,9 @@ use crate::model::{Base, Callee, Const, ConstKind, Entry, Pin, PlaceRef, PointDe
 use crate::place::{self, BUILTIN_LINES, BUILTIN_POINTS, BUILTIN_REGION, Edge};
 use crate::schema::{self, Role, did_you_mean};
 
+/// Help for a format 1 word in a format 0 document.
+pub(crate) const NOT_FORMAT_1: &str = "format 1 is in development (read with DT_FORMAT_PREVIEW=1): start the file with `dharmatiles version=1` to use it";
+
 /// What a place name stands for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PlaceKind {
@@ -106,17 +109,19 @@ pub(crate) fn builtin_places() -> Vec<(String, PlaceKind)> {
 impl Decoder<'_> {
     /// The library's constants as a context's starting list.
     pub(crate) fn library_consts(&self) -> Vec<(String, Dim)> {
+        // in format 1 the library's heights are `$` names, installed at the root
+        let dollar = if self.format1 { "$" } else { "" };
         self.known
             .consts()
             .iter()
-            .map(|c| (c.name.value.clone(), c.dim))
+            .map(|c| (format!("{dollar}{}", c.name.value), c.dim))
             .collect()
     }
 
     fn name_dim(ctx: &Ctx, n: &str) -> Option<Dim> {
         match n {
-            "x" | "y" => Some(Dim::Squares),
-            "bottom" => Some(Dim::Mm),
+            "x" | "y" | "$x" | "$y" => Some(Dim::Squares),
+            "bottom" | "$bottom" => Some(Dim::Mm),
             _ => ctx
                 .consts
                 .iter()
@@ -177,6 +182,9 @@ impl Decoder<'_> {
                 return None;
             }
         };
+        if !self.check_name_forms(&expr, e, span) {
+            return None;
+        }
         // A top, a pin and a distance are bands the solver fits, not draws:
         // the odds of a weighting have nothing to act on.
         if !matches!(mode, Mode::Const | Mode::Draw) && expr.weighted().is_some() {
@@ -190,7 +198,7 @@ impl Decoder<'_> {
             return None;
         }
         for n in expr.names() {
-            let special = matches!(n, "x" | "y" | "bottom");
+            let special = matches!(n, "x" | "y" | "bottom" | "$x" | "$y" | "$bottom");
             if special && mode == Mode::Length {
                 self.err(
                     "dt::type",
@@ -200,6 +208,11 @@ impl Decoder<'_> {
                 )
                 .help = Some("a length is a number or a constant".to_owned());
                 return None;
+            }
+            // a `$` name is read from the context of whoever calls: `check`
+            // finds out where it is installed, call site by call site
+            if self.format1 && n.starts_with('$') {
+                continue;
             }
             if !special && Self::name_dim(ctx, n).is_none() {
                 let names: Vec<&str> = ctx.consts.iter().map(|(k, _)| k.as_str()).collect();
@@ -220,7 +233,11 @@ impl Decoder<'_> {
                 return None;
             }
         }
-        match dim_of(&expr, &|n| Self::name_dim(ctx, n)) {
+        let dollar_dim = |n: &str| {
+            Self::name_dim(ctx, n)
+                .or_else(|| (self.format1 && n.starts_with('$')).then_some(Dim::Scalar))
+        };
+        match dim_of(&expr, &dollar_dim) {
             Err(de) => {
                 self.err("dt::type", span, format!("{what}: {}", de.message), "here")
                     .help = de.help;
@@ -241,6 +258,84 @@ impl Decoder<'_> {
             }
             Ok(d) => Some((Spanned { value: expr, span }, d)),
         }
+    }
+
+    /// Where `name` is written inside the quoted value of `e`.
+    pub(crate) fn name_span(&self, e: &KdlEntry, name: &str) -> miette::SourceSpan {
+        let span = value_span(e);
+        let Some(s) = e.value().as_string() else {
+            return span;
+        };
+        let at = self.inner_at(e, s);
+        let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '$';
+        let mut from = 0;
+        while let Some(i) = s[from..].find(name) {
+            let (a, b) = (from + i, from + i + name.len());
+            let before = s[..a].chars().next_back().is_none_or(|c| !is_ident(c));
+            let after = s[b..].chars().next().is_none_or(|c| !is_ident(c));
+            if before && after {
+                return sub_span(span, at + a, at + b);
+            }
+            from = b;
+        }
+        span
+    }
+
+    /// The forms a name takes in the document's format: `$` names are
+    /// format 1's, and a bare `x`, `y` or `bottom` is format 0's.
+    pub(crate) fn check_name_forms(
+        &mut self,
+        expr: &Expr,
+        e: &KdlEntry,
+        span: miette::SourceSpan,
+    ) -> bool {
+        let mut ok = true;
+        for n in expr.names() {
+            let at = if matches!(n, "x" | "y" | "bottom") || n.starts_with('$') {
+                self.name_span(e, n)
+            } else {
+                span
+            };
+            if self.format1 {
+                match n {
+                    "x" | "y" | "bottom" => {
+                        ok = false;
+                        self.err(
+                            "dt::name",
+                            at,
+                            format!("`{n}` is written `${n}` in format 1"),
+                            "a position or height the element sets",
+                        )
+                        .help = Some(format!(
+                            "`${n}` is read from the context: the element working out the height at each point sets it"
+                        ));
+                    }
+                    "$d" | "$a" | "$region" => {
+                        ok = false;
+                        self.err(
+                            "dt::unknown-name",
+                            at,
+                            format!("no element sets `{n}` yet"),
+                            "reserved",
+                        )
+                        .help = Some(
+                            "`$d`, `$a` and `$region` are reserved for the elements that will set them; the point names are `$x`, `$y` and `$bottom`".to_owned(),
+                        );
+                    }
+                    _ => {}
+                }
+            } else if n.starts_with('$') {
+                ok = false;
+                self.err(
+                    "dt::name",
+                    at,
+                    format!("`{n}` is a format 1 name; this document is format 0"),
+                    "a context name",
+                )
+                .help = Some(NOT_FORMAT_1.to_owned());
+            }
+        }
+        ok
     }
 
     /// `x`, `y`: a place named or written: a built-in or declared name, or
@@ -384,6 +479,91 @@ impl Decoder<'_> {
         true
     }
 
+    /// A name for a `let` or `override` in format 1: a `$` name, or a plain
+    /// camelCase one that is not a word of the language.
+    fn declared_name_v1(&mut self, name: &Spanned<String>, kind: ConstKind) -> bool {
+        let n = name.value.as_str();
+        if let Some(rest) = n.strip_prefix('$') {
+            if !is_ident(rest) {
+                self.err(
+                    "dt::name",
+                    name.span,
+                    format!("`{n}` is not a name"),
+                    "not a `$` name",
+                )
+                .help =
+                    Some("a `$` name is `$` and then letters and digits: `$treeLine`".to_owned());
+                return false;
+            }
+            if crate::words::is_element_set(n) {
+                self.err(
+                    "dt::name",
+                    name.span,
+                    format!("`{n}` is set by the element that builds, so it can't be declared"),
+                    "set by an element",
+                )
+                .help = Some(format!(
+                    "read `{n}` where a height is worked out at each point (a top, a pin, a level); `let` and `override` can't change it"
+                ));
+                return false;
+            }
+            return true;
+        }
+        if kind == ConstKind::Override {
+            self.err(
+                "dt::name",
+                name.span,
+                format!("`override` replaces a `$` name, and `{n}` is a plain name"),
+                "a plain name",
+            )
+            .help = Some(format!(
+                "write `override ${n} …` to replace the context's `${n}`, or `let {n} …` for a plain name of this scope"
+            ));
+            return false;
+        }
+        if !is_ident(n) {
+            let help = if n.contains('-') || n.contains('_') {
+                format!(
+                    "names are camelCase, since a hyphen subtracts: `{}`",
+                    camel(n)
+                )
+            } else {
+                "a name is letters and digits, starting with a letter".to_owned()
+            };
+            self.err(
+                "dt::name",
+                name.span,
+                format!("`{n}` is not a name"),
+                "not camelCase",
+            )
+            .help = Some(help);
+            return false;
+        }
+        if crate::words::is_reserved(n) {
+            self.err(
+                "dt::name",
+                name.span,
+                format!("`{n}` is a word of the language"),
+                crate::words::kind(n),
+            )
+            .help = Some(format!(
+                "a plain name can't take a coordinate, function, weighting or unit; choose another name (a `$` name is a separate namespace, so `${n}` is allowed)"
+            ));
+            return false;
+        }
+        if reserved(n) || schema::element(n).is_some() {
+            self.err(
+                "dt::name",
+                name.span,
+                format!("`{n}` is already a word of the language"),
+                "taken",
+            )
+            .help = Some("built-in places and element names cannot be reused or overridden; pick another name".to_owned());
+            return false;
+        }
+        true
+    }
+
     /// `let NAME VALUE` / `override NAME VALUE`.
     pub(crate) fn const_node(
         &mut self,
@@ -423,11 +603,33 @@ impl Decoder<'_> {
             value: s.to_owned(),
             span: value_span(name_e),
         };
-        if !self.declared_name(&name) {
+        if self.format1 {
+            if !self.declared_name_v1(&name, kind) {
+                return None;
+            }
+            // a `$` name is the context's: whether it is there depends on
+            // who calls, so `check` settles it where the scope is entered
+            if !name.value.starts_with('$') && Self::name_dim(ctx, &name.value).is_some()
+                || (!name.value.starts_with('$') && taken.contains(&name.value))
+            {
+                self.err(
+                    "dt::name",
+                    name.span,
+                    format!("`{}` is already declared", name.value),
+                    "a second time",
+                )
+                .help = Some(
+                    "a plain name is declared once and never shadowed: choose another name"
+                        .to_owned(),
+                );
+                return None;
+            }
+        } else if !self.declared_name(&name) {
             return None;
         }
         let exists = Self::name_dim(ctx, &name.value).is_some();
         match kind {
+            _ if self.format1 => {}
             ConstKind::Let if exists || taken.contains(&name.value) => {
                 let is_const = exists;
                 self.err(
@@ -552,7 +754,7 @@ impl Decoder<'_> {
                 Some("another place already has this name")
             } else if reserved(&name) && kind != PlaceKind::Point {
                 Some("a built-in place has this name")
-            } else if self.known.consts().iter().any(|c| c.name.value == name) {
+            } else if !self.format1 && self.known.consts().iter().any(|c| c.name.value == name) {
                 Some("a library constant has this name")
             } else {
                 None

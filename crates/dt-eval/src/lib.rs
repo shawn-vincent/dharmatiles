@@ -105,6 +105,10 @@ pub struct Options {
     /// Collect the editor's debug layer ([`dt_kit::debug`]): grass starts
     /// and spines, band sheets.  Changes nothing that is built.
     pub debug: bool,
+    /// Read the format in development (format 1) too.  The command line and
+    /// the preview set it from `DT_FORMAT_PREVIEW=1`; nothing here reads
+    /// the environment.
+    pub format_preview: bool,
 }
 
 /// A printer profile in use: the gate's numbers and the name they were read
@@ -250,6 +254,7 @@ impl Default for Options {
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
             draft: false,
             debug: false,
+            format_preview: false,
         }
     }
 }
@@ -411,7 +416,7 @@ impl Checked {
 /// # Errors
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
-    let read = doc::read(sources, path)?;
+    let read = doc::read(sources, path, opts.format_preview)?;
     let Some(mut tile) = read.tile else {
         return Ok(Checked {
             file: read.file,

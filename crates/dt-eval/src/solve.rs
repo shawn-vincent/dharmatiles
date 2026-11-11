@@ -150,8 +150,8 @@ impl Eval<'_> {
         collect(e, &mut names);
         for name in names {
             match name.as_str() {
-                "x" | "y" => n.xy = true,
-                "bottom" => n.bottom = true,
+                "x" | "y" | "$x" | "$y" => n.xy = true,
+                "bottom" | "$bottom" => n.bottom = true,
                 c => {
                     let entry = self
                         .table
@@ -175,9 +175,9 @@ impl Eval<'_> {
                 Iv::point(if *percent { value / 100.0 } else { *value })
             }
             Expr::Name(n) => match n.as_str() {
-                "x" => v.x,
-                "y" => v.y,
-                "bottom" => v.bottom,
+                "x" | "$x" => v.x,
+                "y" | "$y" => v.y,
+                "bottom" | "$bottom" => v.bottom,
                 c => {
                     let entry = self
                         .table
@@ -301,28 +301,34 @@ fn call(name: &str, a: &[Iv]) -> Result<Iv, String> {
 }
 
 /// The lattice and the stack so far, shared by every body.
-struct Ground<'a> {
+struct Ground {
     nx: usize,
     ny: usize,
     step: f64,
     per: f64,
     scale: f64,
-    eval: Eval<'a>,
 }
 
-impl Ground<'_> {
+impl Ground {
     /// A top as a band at every node in `only` (every node if `None`), world
     /// mm; `under` is what `bottom` means.  Heights are written at the
     /// reference square and scale with the system.
-    fn band(&self, e: &Expr, under: &Band, only: Option<&Mask>) -> Result<Band, String> {
-        let needs = self.eval.needs(e, 0)?;
+    fn band(
+        &self,
+        table: &ConstTable,
+        e: &Expr,
+        under: &Band,
+        only: Option<&Mask>,
+    ) -> Result<Band, String> {
+        let eval = Eval { table };
+        let needs = eval.needs(e, 0)?;
         let none = Vars {
             x: Iv::point(0.0),
             y: Iv::point(0.0),
             bottom: Iv::point(0.0),
         };
         if !needs.xy && !needs.bottom {
-            let iv = self.eval.iv(e, &none, 0)?;
+            let iv = eval.iv(e, &none, 0)?;
             return Ok(Band::flat(
                 self.nx,
                 self.ny,
@@ -349,7 +355,7 @@ impl Ground<'_> {
                 y: Iv::point(y),
                 bottom: Iv::new(b.lo / self.scale, b.hi / self.scale),
             };
-            match self.eval.iv(e, &vars, 0) {
+            match eval.iv(e, &vars, 0) {
                 Ok(iv) => Iv::new(iv.lo * self.scale, iv.hi * self.scale),
                 Err(m) => {
                     err.borrow_mut().get_or_insert(m);
@@ -414,7 +420,6 @@ fn solve_on(
         step: f.step_mm(),
         per: f64::from(cells),
         scale: f.square_mm / dt_kit::REFERENCE_SQUARE_MM,
-        eval: Eval { table: &h.consts },
     };
     let places = Places::new(tile, f);
     let mut errors = Vec::new();
@@ -431,6 +436,19 @@ fn solve_on(
 
     for o in h.consts.overridden() {
         explain.push(format!("override {} {} → {}", o.name, o.from, o.to));
+    }
+    // overrides made inside blocks (format 1), once each
+    let mut seen = h.consts.overridden().len();
+    for b in &h.bodies {
+        for o in b
+            .table
+            .overridden()
+            .iter()
+            .skip(seen.min(b.table.overridden().len()))
+        {
+            explain.push(format!("override {} {} → {}", o.name, o.from, o.to));
+        }
+        seen = seen.max(b.table.overridden().len());
     }
 
     for b in &h.bodies {
@@ -476,7 +494,7 @@ fn solve_on(
         } else {
             &default.map_or_else(|| tile.src.clone(), |d| d.from.src.clone())
         };
-        let own = match g.band(top, &under, None) {
+        let own = match g.band(&b.table, top, &under, None) {
             Ok(x) => x,
             Err(msg) => {
                 let (code, help) = band_flaw(&msg);
@@ -517,7 +535,7 @@ fn solve_on(
                     continue;
                 }
             };
-            let band = match g.band(&p.top, &under, Some(&place)) {
+            let band = match g.band(&b.table, &p.top, &under, Some(&place)) {
                 Ok(x) => x,
                 Err(msg) => {
                     let (code, help) = band_flaw(&msg);
@@ -829,8 +847,13 @@ fn solve_on(
         .iter()
         .any(|b| b.role == Role::Fluid)
         .then(|| {
+            let calm = if h.consts.is_dollar() {
+                "$waterSurfaceHeight"
+            } else {
+                "waterSurfaceHeight"
+            };
             h.consts
-                .scalar(&Expr::Name("waterSurfaceHeight".to_owned()), 0.5, &|_| None)
+                .scalar(&Expr::Name(calm.to_owned()), 0.5, &|_| None)
                 .ok()
                 .map(|v| v * g.scale)
         })

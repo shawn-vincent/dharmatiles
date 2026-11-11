@@ -23,13 +23,19 @@ pub(crate) struct Lets {
     /// Each name that holds a range, directly or through another name: its
     /// expression, to be lowered where it is used.
     pub draws: Vec<(String, Expr)>,
+    /// The context these were made from (format 1: the `$` names of this
+    /// scope), which also says what a formula may read here.
+    pub table: Option<std::sync::Arc<ConstTable>>,
 }
 
 impl Lets {
     /// Every constant of the table, as a number and, when it draws, as its
     /// expression.
     pub(crate) fn from_consts(consts: &ConstTable) -> Self {
-        let mut l = Self::default();
+        let mut l = Self {
+            table: Some(std::sync::Arc::new(consts.clone())),
+            ..Self::default()
+        };
         for e in consts.entries() {
             if let Ok(mm) = consts.scalar(&e.expr, 0.5, &|_| None) {
                 l.nums.push((e.name.clone(), mm));
@@ -187,7 +193,8 @@ pub(crate) fn tree_top(e: &Expr, lets: &Lets) -> Result<(&'static str, Lowered),
 /// `30 + [1 .. 2]`); `None` when it names no `bottom`.
 fn over_bottom(e: &Expr) -> Result<Option<Expr>, String> {
     use dt_doc::expr::BinOp::{Add, Sub};
-    let has = |x: &Expr| x.names().contains(&"bottom");
+    let is_bottom = |n: &str| n == "bottom" || n == "$bottom";
+    let has = |x: &Expr| x.names().iter().any(|n| is_bottom(n));
     if !has(e) {
         return Ok(None);
     }
@@ -196,11 +203,11 @@ fn over_bottom(e: &Expr) -> Result<Option<Expr>, String> {
             .to_owned()
     };
     Ok(Some(match e {
-        Expr::Name(n) if n == "bottom" => Expr::num(0.0),
+        Expr::Name(n) if is_bottom(n) => Expr::num(0.0),
         Expr::Bin { op, lhs, rhs } if matches!(op, Add | Sub) => match (has(lhs), has(rhs)) {
             (true, false) => {
                 let l = over_bottom(lhs)?.ok_or_else(alone)?;
-                if matches!(lhs.as_ref(), Expr::Name(n) if n == "bottom") {
+                if matches!(lhs.as_ref(), Expr::Name(n) if is_bottom(n)) {
                     if *op == Add {
                         rhs.as_ref().clone()
                     } else {
@@ -216,7 +223,7 @@ fn over_bottom(e: &Expr) -> Result<Option<Expr>, String> {
             }
             (false, true) if *op == Add => {
                 let r = over_bottom(rhs)?.ok_or_else(alone)?;
-                if matches!(rhs.as_ref(), Expr::Name(n) if n == "bottom") {
+                if matches!(rhs.as_ref(), Expr::Name(n) if is_bottom(n)) {
                     lhs.as_ref().clone()
                 } else {
                     Expr::Bin {

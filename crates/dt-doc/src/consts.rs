@@ -57,6 +57,57 @@ pub struct ConstTable {
     entries: Vec<Entry>,
     index: HashMap<String, usize>,
     overridden: Vec<Overridden>,
+    /// Format 1: the table is a context of `$` names (and the plain names
+    /// of the scopes written in it), made by [`ConstTable::root`] and
+    /// [`ConstTable::enter`].
+    dollar: bool,
+}
+
+/// What is wrong with a `let` or an `override` entering a scope.
+#[derive(Debug, Clone)]
+pub struct ScopeError {
+    /// The diagnostic code.
+    pub code: &'static str,
+    /// What is wrong.
+    pub message: String,
+    /// The label under the name.
+    pub label: &'static str,
+    /// Where the name is written.
+    pub span: SourceSpan,
+    /// What to do about it.
+    pub help: Option<String>,
+}
+
+/// Why a formula cannot be read in a scope.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadFlaw {
+    /// No caller installed the name (`near`: the closest that is).
+    Unknown {
+        /// The name.
+        name: String,
+        /// The closest name there is.
+        near: Option<String>,
+    },
+    /// A position or height under it, worked out at each point, where a
+    /// value is drawn once.
+    PerPoint {
+        /// The name, `$x`, `$y` or `$bottom`.
+        name: String,
+    },
+    /// A name no element sets yet (`$d`, `$a`, `$region`).
+    NotSet {
+        /// The name.
+        name: String,
+    },
+    /// Names that read each other round a loop.
+    Loop,
+}
+
+/// `name` as the context knows it: `groundHeight` is `$groundHeight`, and
+/// the format 0 positions `x`, `y` and `bottom` are `$x`, `$y`, `$bottom`.
+#[must_use]
+pub fn dollar_of(name: &str) -> String {
+    format!("${name}")
 }
 
 /// An expression as text, for notes.
@@ -109,6 +160,183 @@ impl ConstTable {
             text: show(&c.value.value),
             span,
         });
+    }
+
+    /// Format 1: the context at the root, the library's heights as `$`
+    /// names (their formulas read `$x` and the like in place of format 0's
+    /// `x`, and each other as `$` names).
+    #[must_use]
+    pub fn root(library: &[Const]) -> Self {
+        let mut t = Self {
+            dollar: true,
+            ..Self::default()
+        };
+        for c in library {
+            let name = dollar_of(&c.name.value);
+            t.index.insert(name.clone(), t.entries.len());
+            let expr = c
+                .value
+                .value
+                .map_names(&mut |n| Some(Expr::Name(dollar_of(n))));
+            t.entries.push(Entry {
+                text: show(&expr),
+                name,
+                expr,
+                dim: c.dim,
+                origin: Origin::Library,
+                span: None,
+            });
+        }
+        t
+    }
+
+    /// True for a format 1 context.
+    #[must_use]
+    pub fn is_dollar(&self) -> bool {
+        self.dollar
+    }
+
+    /// The scope a block makes: this context with the block's `let`s and
+    /// `override`s, in written order; the old values are back when the block
+    /// ends, since this table is not changed.
+    ///
+    /// A `$` name is read where it is used, so a `let` that holds a formula
+    /// follows an `override` made below it.  A plain name is lexical: its
+    /// formula is captured here, so what it reads is what is written.  An
+    /// `override` that reads its own name reads the value it replaces.
+    #[must_use]
+    pub fn enter(&self, consts: &[Const]) -> (Self, Vec<ScopeError>) {
+        let mut t = self.clone();
+        let mut errors = Vec::new();
+        for c in consts {
+            let name = c.name.value.as_str();
+            let expr = {
+                let here = &t;
+                c.value.value.map_names(&mut |n| {
+                    if n.starts_with('$') {
+                        None
+                    } else {
+                        here.get(n).map(|e| e.expr.clone())
+                    }
+                })
+            };
+            let has = t.index.contains_key(name);
+            match (c.kind, name.starts_with('$')) {
+                (ConstKind::Let, true) if has => errors.push(ScopeError {
+                    code: "dt::name",
+                    message: format!("the context already has `{name}`"),
+                    label: "already installed",
+                    span: c.name.span,
+                    help: Some(format!(
+                        "`override {name} …` replaces it for this scope and everything called from it"
+                    )),
+                }),
+                (ConstKind::Override, true) if !has => {
+                    let names: Vec<&str> = t
+                        .entries
+                        .iter()
+                        .map(|e| e.name.as_str())
+                        .filter(|n| n.starts_with('$'))
+                        .collect();
+                    let help = match crate::schema::did_you_mean(name, names.iter().copied()) {
+                        Some(m) => format!(
+                            "did you mean `override {m} …`? or `let {name} …` installs a new one"
+                        ),
+                        None => format!(
+                            "`let {name} …` installs a new `$` name; `override` replaces one a caller installed"
+                        ),
+                    };
+                    errors.push(ScopeError {
+                        code: "dt::name",
+                        message: format!("no caller installed `{name}` to override"),
+                        label: "not in the context",
+                        span: c.name.span,
+                        help: Some(help),
+                    });
+                }
+                (ConstKind::Override, true) => {
+                    let prev = t.entries[t.index[name]].clone();
+                    // an override reading its own name reads the value it replaces
+                    let expr = expr.map_names(&mut |n| (n == name).then(|| prev.expr.clone()));
+                    t.overridden.push(Overridden {
+                        name: name.to_owned(),
+                        from: show(&prev.expr),
+                        to: show(&expr),
+                        span: c.span,
+                    });
+                    let i = t.index[name];
+                    t.entries[i] = Entry {
+                        name: name.to_owned(),
+                        text: show(&expr),
+                        expr,
+                        dim: c.dim,
+                        origin: Origin::Override,
+                        span: Some(c.span),
+                    };
+                }
+                (ConstKind::Override, false) => {}
+                (ConstKind::Let, _) => {
+                    let e = Entry {
+                        name: name.to_owned(),
+                        text: show(&expr),
+                        expr,
+                        dim: c.dim,
+                        origin: Origin::Tile,
+                        span: Some(c.span),
+                    };
+                    match t.index.get(name) {
+                        // a plain name of an outer scope the decoder let by
+                        // (a definition's own, called from a scope with one)
+                        Some(&i) => t.entries[i] = e,
+                        None => {
+                            t.index.insert(name.to_owned(), t.entries.len());
+                            t.entries.push(e);
+                        }
+                    }
+                }
+            }
+        }
+        (t, errors)
+    }
+
+    /// Whether a formula can be read here: every `$` name it reaches, through
+    /// the names it reads in turn, is in the context, and a position or a
+    /// height under (`$x $y $bottom`) is only read where `per_point` says a
+    /// height is worked out at each point.
+    ///
+    /// # Errors
+    /// The first name that cannot be read.
+    pub fn check_reads(&self, expr: &Expr, per_point: bool) -> Result<(), ReadFlaw> {
+        self.reads_at(expr, per_point, 0)
+    }
+
+    fn reads_at(&self, expr: &Expr, per_point: bool, depth: usize) -> Result<(), ReadFlaw> {
+        if depth > 64 {
+            return Err(ReadFlaw::Loop);
+        }
+        for n in expr.names() {
+            if crate::words::POINT_NAMES.contains(&n) {
+                if !per_point {
+                    return Err(ReadFlaw::PerPoint { name: n.to_owned() });
+                }
+            } else if crate::words::RESERVED_POINT_NAMES.contains(&n) {
+                return Err(ReadFlaw::NotSet { name: n.to_owned() });
+            } else if let Some(e) = self.get(n) {
+                self.reads_at(&e.expr, per_point, depth + 1)?;
+            } else if n.starts_with('$') {
+                let names: Vec<&str> = self
+                    .entries
+                    .iter()
+                    .map(|e| e.name.as_str())
+                    .filter(|k| k.starts_with('$'))
+                    .collect();
+                return Err(ReadFlaw::Unknown {
+                    name: n.to_owned(),
+                    near: crate::schema::did_you_mean(n, names.iter().copied()).map(str::to_owned),
+                });
+            }
+        }
+        Ok(())
     }
 
     /// A constant by name.

@@ -249,7 +249,14 @@ fn lex(src: &str, v2: bool) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
             out.push((Tok::Num(value, percent), start, i));
             continue;
         }
-        if c.is_ascii_alphabetic() || c == b'_' {
+        // A `$` name is a context name (format 1): `$groundHeight`, `$x`.
+        let dollar = c == b'$'
+            && b.get(i + 1)
+                .is_some_and(|d| d.is_ascii_alphabetic() || *d == b'_');
+        if c.is_ascii_alphabetic() || c == b'_' || dollar {
+            if dollar {
+                i += 1;
+            }
             // Names written in camelCase (v2) never hold a hyphen: it subtracts.
             while i < b.len()
                 && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || (b[i] == b'-' && !v2))
@@ -1009,6 +1016,44 @@ impl Expr {
         let mut any = false;
         self.visit(&mut |e| any |= matches!(e, Expr::Range { .. } | Expr::List { .. }));
         any
+    }
+
+    /// A copy with every name replaced by what `f` gives for it (`None`
+    /// keeps the name), a name's replacement being any expression.
+    #[must_use]
+    pub fn map_names(&self, f: &mut dyn FnMut(&str) -> Option<Expr>) -> Expr {
+        match self {
+            Expr::Num { .. } => self.clone(),
+            Expr::Name(n) => f(n).unwrap_or_else(|| self.clone()),
+            Expr::Neg(e) => Expr::Neg(Box::new(e.map_names(f))),
+            Expr::Bin { op, lhs, rhs } => Expr::Bin {
+                op: *op,
+                lhs: Box::new(lhs.map_names(f)),
+                rhs: Box::new(rhs.map_names(f)),
+            },
+            Expr::Range { lo, hi } => Expr::Range {
+                lo: Box::new(lo.map_names(f)),
+                hi: Box::new(hi.map_names(f)),
+            },
+            Expr::Weighted {
+                name,
+                args,
+                range,
+                parts,
+            } => Expr::Weighted {
+                name: name.clone(),
+                args: args.clone(),
+                range: Box::new(range.map_names(f)),
+                parts: parts.clone(),
+            },
+            Expr::List { items } => Expr::List {
+                items: items.iter().map(|(v, w)| (v.map_names(f), *w)).collect(),
+            },
+            Expr::Call { name, args } => Expr::Call {
+                name: name.clone(),
+                args: args.iter().map(|a| a.map_names(f)).collect(),
+            },
+        }
     }
 
     fn visit<'a>(&'a self, f: &mut impl FnMut(&'a Expr)) {

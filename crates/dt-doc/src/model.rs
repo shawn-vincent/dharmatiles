@@ -49,6 +49,12 @@ pub struct Document {
 }
 
 impl Document {
+    /// The document's format: its header's major, or 0 with no header.
+    #[must_use]
+    pub fn format(&self) -> u32 {
+        self.header.as_ref().map_or(0, |h| h.format)
+    }
+
     /// A definition by name.
     #[must_use]
     pub fn definition(&self, name: &str) -> Option<&Definition> {
@@ -132,6 +138,9 @@ pub struct Definition {
     pub params: Vec<Param>,
     /// `let` and `override` constants, in written order.
     pub consts: Vec<Const>,
+    /// The `let`s and `override`s written inside the `stack` block (format
+    /// 1): they hold for the entries in it.
+    pub stack_consts: Vec<Const>,
     /// Declared `point`s.
     pub points: Vec<PointDecl>,
     /// Drawn lines.
@@ -357,6 +366,9 @@ pub struct Entry {
     pub controls: Vec<Setting>,
     /// A scatter's things, or the scatters inside a surface.
     pub children: Vec<Entry>,
+    /// The `let`s and `override`s written inside this entry's block
+    /// (format 1): they hold for everything inside it.
+    pub consts: Vec<Const>,
     /// `top=`: a body's band, or a thing's height limit.
     pub top: Option<Spanned<Expr>>,
     /// `at=` as the heights language writes it (a name or `"(x, y)"`).

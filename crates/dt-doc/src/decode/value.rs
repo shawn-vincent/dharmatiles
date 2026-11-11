@@ -262,6 +262,7 @@ impl Decoder<'_> {
                 .iter()
                 .filter(|(l, d)| {
                     *d != crate::dim::Dim::Squares
+                        && !l.starts_with('$')
                         && !self.known.consts().iter().any(|c| c.name.value == *l)
                 })
                 .map(|(l, _)| l.as_str())
@@ -270,6 +271,41 @@ impl Decoder<'_> {
             Vec::new()
         };
         for n in x.names() {
+            if n.starts_with('$') {
+                let at = {
+                    let text = &self.text()[inner.offset()..inner.offset() + inner.len()];
+                    text.find(n).map_or(inner, |i| {
+                        miette::SourceSpan::new((inner.offset() + i).into(), n.len())
+                    })
+                };
+                if !self.format1 {
+                    self.err(
+                        "dt::name",
+                        at,
+                        format!("`{n}` is a format 1 name; this document is format 0"),
+                        "a context name",
+                    )
+                    .help = Some(super::heights::NOT_FORMAT_1.to_owned());
+                    return None;
+                }
+                if crate::words::POINT_NAMES.contains(&n)
+                    || crate::words::RESERVED_POINT_NAMES.contains(&n)
+                {
+                    self.err(
+                        "dt::type",
+                        at,
+                        format!("`{n}` is worked out at each point, and `{owner} {name}` is drawn once"),
+                        "a size or count is not per point",
+                    )
+                    .help = Some(
+                        "a position or a height under it goes where a height is worked out at each point: a top, a pin or a level".to_owned(),
+                    );
+                    return None;
+                }
+                // any other `$` name is read from the context of whoever
+                // calls: `check` settles where it is installed
+                continue;
+            }
             let ok = ctx.params.iter().any(|p| p == n)
                 || own.contains(&n)
                 || (lets
