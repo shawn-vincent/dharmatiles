@@ -17,7 +17,7 @@
   <figure class="shot">
   <ol class="stack-steps">
     <li><img src="img/el-stack-1.jpg" alt="" loading="lazy" width="520" height="374"><code>dirt { pin … at=shoreBand; pin … at=pool }</code></li>
-    <li><img src="img/el-stack-2.jpg" alt="" loading="lazy" width="520" height="377"><code>scatter at=pool count=2 { rock size="6..10" }</code></li>
+    <li><img src="img/el-stack-2.jpg" alt="" loading="lazy" width="520" height="377"><code>scatter at=pool count=2 { rock size="6dmm .. 10dmm" }</code></li>
     <li><img src="img/el-stack-3.jpg" alt="" loading="lazy" width="520" height="386"><code>water</code></li>
     <li><img src="img/el-stack-4.jpg" alt="" loading="lazy" width="520" height="390"><code>grass at=bank</code></li>
   </ol>
@@ -32,10 +32,11 @@
 <article class="doc">
 <h2 id="use">Writing it</h2>
 <pre><code>stack {
-    dirt level=edge { scatter perSquare=40 { pebble } }
-    cliff top="dirtEdgeHeight + 35" at=crag
-    scatter at="foot(cliff)" perSquare=55 reach=4 { stone }
-    grass                    // grows round the cliff and the stones, wherever it is listed
+    base
+    dirt top="$dirtEdgeHeight" { scatter perSquare=40 { pebble } }
+    cliff top="$dirtEdgeHeight + 35dmm" at=crag
+    scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone }
+    grass                    // listed last: it grows round the cliff and the stones
 }</code></pre>
 <h2 id="reference">Reference</h2>
 <p>Every entry in a stack takes these, whatever it is:</p>
@@ -45,12 +46,12 @@
 <tr><td><code>seed=</code></td><td>a whole number</td><td>—</td><td>Pins this entry's randomness while the tile seed changes everything else.</td></tr>
 <tr><td><code>id=</code></td><td>a name</td><td>—</td><td>Names the entry among same-named siblings, for edits and diagnostics.</td></tr>
 <tr><td><code>weight=</code></td><td>a number</td><td>1</td><td>Only on a child of a <a href="scatter.html"><code>scatter</code></a>: its share of the mix.</td></tr>
-<tr><td>place words</td><td></td><td></td><td><code>at=</code> and <code>side=</code>. <code>at=</code> takes a place by name or <code>"(x, y)"</code>, an edge or edge path, or <code>foot(cliff)</code>; each element page lists the kinds of place it takes (a point, a line, a region, a foot) and refuses the rest with <code>dt::type</code>.</td></tr>
-<tr><td><code>top=</code></td><td>a height or a range</td><td>—</td><td>On a body (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>): the band it fills. On a thing: its height limit. Heights are mm above zero; see <a href="let.html">let</a>.</td></tr>
+<tr><td>place words</td><td></td><td></td><td><code>at=</code> and <code>side=</code>. <code>at=</code> takes a place by name or <code>"(across, down)"</code> with units, an edge or edge path, or <code>foot(cliff)</code>; each element page lists the kinds of place it takes (a point, a line, a region, a foot) and refuses the rest with <code>dt::type</code>.</td></tr>
+<tr><td><code>top=</code></td><td>a height or a range</td><td>—</td><td>On a body (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>): the band it fills. On a tree: its height. Heights are lengths above zero (<code>"$groundHeight + 2dmm"</code>); see <a href="let.html">let</a>.</td></tr>
 <tr><td>a name</td><td>a name</td><td>—</td><td>After a body's element, <code>dirt hillDirt</code>: its name in messages.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>A stack may start with <a href="base.html"><code>base</code></a>, and a tile that uses the heights language is written bottom up: the base first, the land in order, things, grass and <code>water</code> where they are listed, each over what is listed above it. Water usually goes after the rocks it should ring and before the grass that should see its shore. The pins of a body go in its block: <a href="pin.html"><code>pin top=… at=…</code></a>.</p>
+<p>A stack may start with <a href="base.html"><code>base</code></a>, and a tile is written bottom up: the base first, the land in order, things, grass and <code>water</code> where they are listed, each over what is listed above it. Water usually goes after the rocks it should ring and before the grass that should see its shore. The pins of a body go in its block: <a href="pin.html"><code>pin top=… at=…</code></a>.</p>
 <p>The build plans the stack by what each element reads and writes: surfaces first (a floor is laid with them, on the land they made), then the ground is lifted, then solids, and surfaces that grow round solids after them. A stack that asks for something nothing makes is refused with an error at the entry. The preview lists the stack under the tile's name, each entry linked to its page here.</p>
 </article>
 </div>

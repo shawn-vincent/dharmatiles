@@ -13,7 +13,7 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>point</h1>
-  <p class="lede">A named point on the tile, in squares from the south-west corner. Pins, things, lines and regions use it by name.</p>
+  <p class="lede">A named point on the tile, counted from the north-west corner. Pins, things, lines and regions use it by name.</p>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>
@@ -22,19 +22,19 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>point knoll "(0.28, 0.72)"
+<pre><code>point knoll "(0.28sq, 0.28sq)"
 line path { through southCenter knoll northCenter }
-stack { base; dirt { pin top="groundHeight + 4" at=knoll } }</code></pre>
+stack { base; dirt { pin top="$groundHeight + 4dmm" at=knoll } }</code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>point NAME</code></td><td>a name</td><td>Its name. <strong>Required.</strong> camelCase, declared once.</td></tr>
-<tr><td>the value</td><td><code>"(x, y)"</code></td><td>Squares east and north of the south-west corner, on the tile. <strong>Required.</strong> Not a range: a declared point is fixed; a range goes where the point is written, in a line's <code>through</code>, a region's <code>fill</code> or an <code>at=</code>.</td></tr>
+<tr><td>the value</td><td><code>"(across, down)"</code>, <code>point(…)</code> or <code>polar(…)</code></td><td>Across from the west edge, then down from the north edge, each half a length with its unit (<code>"(0.28sq, 0.28sq)"</code>) or a share of the frame (<code>"(50%, 0.25sq)"</code>). <strong>Required.</strong> Not a range: a declared point is fixed; a range goes where the point is written, in a line's <code>through</code> or a region's <code>fill</code>.</td></tr>
 </tbody></table></div>
 <p>Built in on every tile, with no declaration: <code>southWestCorner southCenter southEastCorner westCenter center eastCenter northWestCorner northCenter northEastCorner</code>. The four edge lines are <code>northEdge eastEdge southEdge westEdge</code>, and <code>edges</code> is all four; <code>tile</code> is the whole tile, which is also what no <code>at=</code> means.</p>
 <h2 id="notes">Notes</h2>
-<p>A point may also be written where a place is wanted, as the literal <code>"(0.28, 0.72)"</code>: <code>at="(0.28, 0.72)"</code>, <code>fill "(0.5, 0.25)"</code>, <code>through "(0, 0.38)"</code>. Today's <code>"0.65,1"</code> still reads. A point is flat: it says where, never how high.</p>
+<p>A point may also be written where a place is wanted, as the literal <code>"(0.28sq, 0.28sq)"</code>: <code>at="(0.28sq, 0.28sq)"</code>, <code>fill "(0.5sq, 0.75sq)"</code>, <code>through "(0sq, 0.62sq)"</code>. Naming the frame makes the point explicit: <code>point($tile, 25%, 75%)</code> is a quarter across and three quarters down the tile, and <code>polar($tile, 40%, 90deg)</code> is 40% of the way out from the middle, straight down (0 is east, turning towards the south). A point written inside a pin of a body that acts in a named region is in that region's own frame, and a point outside it is <code>dt::point</code>. A point is flat: it says where, never how high.</p>
 </article>
 </div>
 </body>

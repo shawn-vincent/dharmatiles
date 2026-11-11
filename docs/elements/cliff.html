@@ -16,9 +16,9 @@
   <h1>cliff</h1>
   <p class="lede">A storey of stacked, broken rock: big blocks resting on each other under gravity, cleaved into columns, cracked across their joints and grained. It is a body of the stack: its <code>at=</code> region is where the stones stand and its <code>top=</code> band is how high their tops are, so a run, a corner, a mound or a spire is a region and a band, not a form.</p>
   <p class="small">Scree is not part of the cliff: it is <a href="stone.html"><code>stone</code></a>s and <a href="boulder.html"><code>boulder</code></a>s in a <a href="scatter.html"><code>scatter</code></a> <code>at="foot(cliff)"</code>; the earth at its foot is the dirt's own pins, and dirt on its top is a second <a href="dirt.html"><code>dirt</code></a> laid on it.</p>
-  <figure class="shot hero-one"><img src="img/el-cliff.jpg" alt="A two-square escarpment: a storey-high cliff of stacked blocks along the north edge, its face stepping in and out, with scree and dirt at its foot" width="699" height="743"><figcaption><code>lib:tiles/cliffs/2x1-cliff-escarpment.dtile</code>: a band whose top ramps from 10 to 40 mm, dirt on the stone tops (here and there: it lies only where a top is flat and clear of every lip).</figcaption></figure>
+  <figure class="shot hero-one"><img src="img/el-cliff.jpg" alt="A two-square escarpment: a storey-high cliff of stacked blocks along the north edge, its face stepping in and out, with scree and dirt at its foot" width="699" height="743"><figcaption><code>lib:tiles/cliffs/2x1-cliff-escarpment.dtile</code>: a band whose top ramps from <code>10dmm</code> to <code>40dmm</code>, dirt on the stone tops (here and there: it lies only where a top is flat and clear of every lip).</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">35 mm tall by default; runs on any length of edge</div></div>
+    <div><div class="k">Sizes</div><div class="v"><code>35dmm</code> tall by default; runs on any length of edge</div></div>
     <div><div class="k">Shapes</div><div class="v">a region and a band: runs, corners, canyons, heaps, spires</div></div>
     <div><div class="k">Printing</div><div class="v">no supports: every stone is seated at the overhang limit</div></div>
     <div><div class="k">In the library</div><div class="v"><code>tiles/cliffs/</code>: 13 tiles, every shape</div></div>
@@ -28,7 +28,7 @@
     <dl class="defs">
       <dt>crag</dt><dd>The region a cliff fills. Its north face, ends and top plane are bound; its front is free.</dd>
       <dt>band</dt><dd>The cliff's <code>top=</code>: a single height is a plane every stone top touches, a wide band a jagged crest.</dd>
-      <dt>dirt on the tops</dt><dd>A second <code>dirt</code> whose top is <code>bottom + [0.6 .. 1.2]</code>: it lies on the stone's tops like on any surface.</dd>
+      <dt>dirt on the tops</dt><dd>A second <code>dirt</code> whose top is <code>$bottom + [0.6dmm .. 1.2dmm]</code>: it lies on the stone's tops like on any surface.</dd>
       <dt>shelf</dt><dd>A step down the free face, below the band, a miniature can stand on (<code>ledges</code>).</dd>
       <dt>joint</dt><dd>The seam between two stones. It reads as a dark groove.</dd>
       <dt>crack</dt><dd>A thin slot cut into a stone face, edge to edge.</dd>
@@ -50,43 +50,45 @@
 <p>No two seeds make the same cliff, but every seed reads as the same stone.</p>
 
 <h3 id="forms">Shapes</h3>
-<p>One generator stacks every shape. The shape is the region and the band; <code>dharmatiles migrate</code> writes the old <code>form=</code> words this way.</p>
+<p>One generator stacks every shape. The shape is the region and the band.</p>
 <div class="tbl"><table>
 <thead><tr><th>Shape</th><th>How it is written</th></tr></thead>
 <tbody>
-<tr><td>run</td><td>a region <code>within "[10 .. 20]" of=northEdge</code>, band <code>dirtEdgeHeight + 35</code></td></tr>
+<tr><td>run</td><td>a region <code>within "[10dmm .. 20dmm]" of=northEdge</code>, band <code>$dirtEdgeHeight + 35dmm</code></td></tr>
 <tr><td>corner</td><td>two <code>within</code> lines (two edges) in one region</td></tr>
-<tr><td>canyon</td><td>the west and east edges, <code>"[8 .. 14]"</code></td></tr>
-<tr><td>escarpment</td><td>a run whose band ramps: <code>dirtEdgeHeight + 10 + 30 * sin(90 * x / 2) + [-4 .. 0]</code></td></tr>
-<tr><td>plateau</td><td>a disc <code>within 26 of=center</code>, one height</td></tr>
-<tr><td>massif, mound, spire</td><td>regions drawn as lumps, not circles: the outer one the cliff's own band, each inner one a <code>pin</code> with a wide band over it (<code>migrate</code> writes two discs and one pin; the library tiles are drawn by hand)</td></tr>
+<tr><td>canyon</td><td>the west and east edges, <code>"[8dmm .. 14dmm]"</code></td></tr>
+<tr><td>escarpment</td><td>a run whose band ramps: <code>$dirtEdgeHeight + 10dmm + 30dmm * sin(90deg * $x / 2) + [-4dmm .. 0dmm]</code></td></tr>
+<tr><td>plateau</td><td>a disc <code>within "26dmm" of=center</code>, one height</td></tr>
+<tr><td>massif, mound, spire</td><td>regions drawn as lumps, not circles: the outer one the cliff's own band, each inner one a <code>pin</code> with a wide band over it (the library tiles are drawn by hand)</td></tr>
 <tr><td>needles</td><td>the pillars' feet as one region, a <code>pin</code> to each summit</td></tr>
 </tbody></table></div>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A cliff fills a region, its face toward the open ground. This is the library's run: the dirt is given a wide band across the apron beside it (the bank, drawn) and held at the standard edge height where the cliff meets the tile's edge, the cliff is a plane of stone tops 35 mm over the edge height, and dirt lies on its top:</p>
-<pre><code>tile size="2x1" seed=1 {
-    region crag  { within "[10 .. 20]" of=northEdge }   // its depth wanders along the edge
-    region apron { within 6.5 of=crag }
+<p>A cliff fills a region, its face toward the open ground. This is the library's run: the dirt is given a wide band across the apron beside it (the bank, drawn) and held at the standard edge height where the cliff meets the tile's edge, the cliff is a plane of stone tops <code>35dmm</code> over the edge height, and dirt lies on its top:</p>
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="2x1" seed=1 {
+    region crag  { within "[10dmm .. 20dmm]" of=northEdge }   // its depth wanders along the edge
+    region apron { within "6.5dmm" of=crag }
 
     stack {
         base
-        dirt top=dirtEdgeHeight {
-            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
-            pin top=dirtEdgeHeight at=edges             // the rim stays at the standard edge height
-            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
+        dirt top="$dirtEdgeHeight" {
+            pin top="[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]" at=apron
+            pin top="$dirtEdgeHeight" at=edges             // the rim stays at the standard edge height
+            scatter perSquare=45 { pebble size="1dmm .. 2.2dmm" buried="20%..50%" }
         }
-        cliff top="dirtEdgeHeight + 35" at=crag {   // or leave top out: the library's 35 mm
+        cliff top="$dirtEdgeHeight + 35dmm" at=crag {   // or leave top out: the library's 35dmm
             rock mixed                  // or: columns, blocks, slabs
             stoneSize massive          // or: rubble, broken
-            shattered patches=3 width="5..10"
+            shattered patches=3 width="5dmm .. 10dmm"
         }
-        dirt top="bottom + [0.6 .. 1.2]" at=crag    // dirt on its top
-        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
+        dirt top="$bottom + [0.6dmm .. 1.2dmm]" at=crag    // dirt on its top
+        scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone size="low(1dmm .. 6dmm, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5dmm .. 8dmm" }
     }
 }</code></pre>
-<p>A wide band makes a jagged crest: <code>cliff top="dirtEdgeHeight + [28 .. 42]" at=crag</code> has stone tops anywhere from 28 to 42 mm. A <code>pin</code> holds the band to a height at a place. A mound or a spire is a few lumps, each region a different shape and each pinned to a wide band (8 to 15 mm) that overlaps the next one's, so the stones land at their own heights and the steps read as rough crags; concentric circles with narrow bands make a wedding cake. A cliff steps to a pin; write <code>slope DEG</code> in its block to let the band ease between pins, which a stone only follows as far as it can lean.</p>
+<p>A wide band makes a jagged crest: <code>cliff top="$dirtEdgeHeight + [28dmm .. 42dmm]" at=crag</code> has stone tops anywhere from 28 to 42 design millimetres over the edge height. A <code>pin</code> holds the band to a height at a place. A mound or a spire is a few lumps, each region a different shape and each pinned to a wide band (<code>8dmm</code> to <code>15dmm</code>) that overlaps the next one's, so the stones land at their own heights and the steps read as rough crags; concentric circles with narrow bands make a wedding cake. A cliff steps to a pin; write <code>slope "30deg"</code> in its block to let the band ease between pins, which a stone only follows as far as it can lean.</p>
 <p>Let neighbouring pins' bands overlap, so a stone that stands over two of them has room under the lower one's high. Write the pin's band wide enough for a stone: a stone's top is one plane, so a band that jumps across a stone (a pin's edge inside it) is not stacked across; the stacker keeps each stone to where the band holds its height.</p>
 <p>Both ends of a run finish in the standard end section, so runs butt end to end. The stone face on the tile edge is textured to the plane and never passes it.</p>
 
@@ -112,7 +114,7 @@
 <tr id="c-ledges-height"><td><code>ledges height</code></td><td>percent</td><td>—</td><td>how far up the shelf is, as a share of the cliff</td></tr>
 <tr id="c-shattered"><td><code>shattered</code></td><td>group</td><td>—</td><td>broken patches with more cracks and scree</td></tr>
 <tr id="c-shattered-patches"><td><code>shattered patches</code></td><td>count</td><td>—</td><td>broken patches along the run</td></tr>
-<tr id="c-shattered-width"><td><code>shattered width</code></td><td>mm, a number, a range or a weighted range</td><td>—</td><td>how wide each patch is</td></tr>
+<tr id="c-shattered-width"><td><code>shattered width</code></td><td>length (dmm), a number, a range or a weighted range</td><td>—</td><td>how wide each patch is</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
@@ -136,9 +138,9 @@
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
   <li><strong>Tile.</strong> Any size from 1×1 squares (35 mm each). A run fits on a 1×1.</li>
-  <li><strong>Height.</strong> The cliff top is 35 mm over the edge height by default, and flat: the top edge is straight, with dirt on it.</li>
-  <li><strong>Foot.</strong> The ground in front of the cliff sits at the standard 3.4 mm edge level, so cliff tiles meet other ground tiles flush (see <a href="../standards/tile-system.html#edges">edges</a>).</li>
-  <li><strong>Stones.</strong> Widths vary at least four times over. Scree at the foot is 1–6 mm, with a few fallen blocks of 4.5–8 mm.</li>
+  <li><strong>Height.</strong> The cliff top is <code>35dmm</code> over the edge height by default, and flat: the top edge is straight, with dirt on it.</li>
+  <li><strong>Foot.</strong> The ground in front of the cliff sits at the standard <code>3.4dmm</code> edge level, so cliff tiles meet other ground tiles flush (see <a href="../standards/tile-system.html#edges">edges</a>).</li>
+  <li><strong>Stones.</strong> Widths vary at least four times over. Scree at the foot is <code>1dmm .. 6dmm</code>, with a few fallen blocks of <code>4.5dmm .. 8dmm</code>.</li>
 </ul>
 
 <h3 id="edges">Edges and joining tiles</h3>
@@ -161,9 +163,9 @@
   <li>Seams between stacked stones read as grooves. Cracks are thin, run their full width and depth to an edge, joint or other crack, and carry on round a convex corner onto the next face.</li>
   <li>The fine grain is strong enough to read and to drybrush at print scale.</li>
   <li>Run ends are a standard section, so runs meet end to end; a few millimetres of mismatch reads as one more joint.</li>
-  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high its stones' tops may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. The library's default top is <code>dirtEdgeHeight + 35</code>. A cliff steps between its pins unless it is given a <code>slope</code>. A stone over the band's high is a bug in the body (<code>dt::band</code>), refused. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
-  <li>Its core is the pile set in from its faces, laid as a rock layer of the terrain before the lift and kept clear of the stones' faces, so a gap between stones is a recess and nothing of the core stands loose. Dirt laid on the cliff (<code>dirt top="bottom + [0.6 .. 1.2]"</code>) is an ordinary <a href="dirt.html">dirt</a>: it lies on the finished stones' tops, uneven as they are, and stays only where they are flatter than its <code>maxSlope</code> and clear of a lip. So it slides off a face, never bridges the gap between two stones, and lies only on a stone that stands.</li>
-  <li>Where the cliff meets a tile's edge, write <code>pin top=dirtEdgeHeight at=edges</code> after the dirt's other pins: the dirt keeps the standard edge height there, so the side of the tile under the stones carries the dirt's grain like the rest of the rim and the tile still butts a standard one.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high its stones' tops may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. The library's default top is <code>$dirtEdgeHeight + 35dmm</code>. A cliff steps between its pins unless it is given a <code>slope</code>. A stone over the band's high is a bug in the body (<code>dt::band</code>), refused. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
+  <li>Its core is the pile set in from its faces, laid as a rock layer of the terrain before the lift and kept clear of the stones' faces, so a gap between stones is a recess and nothing of the core stands loose. Dirt laid on the cliff (<code>dirt top="$bottom + [0.6dmm .. 1.2dmm]"</code>) is an ordinary <a href="dirt.html">dirt</a>: it lies on the finished stones' tops, uneven as they are, and stays only where they are flatter than its <code>maxSlope</code> and clear of a lip. So it slides off a face, never bridges the gap between two stones, and lies only on a stone that stands.</li>
+  <li>Where the cliff meets a tile's edge, write <code>pin top="$dirtEdgeHeight" at=edges</code> after the dirt's other pins: the dirt keeps the standard edge height there, so the side of the tile under the stones carries the dirt's grain like the rest of the rim and the tile still butts a standard one.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

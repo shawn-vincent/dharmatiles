@@ -13,7 +13,7 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-thing" title="stone: a thing, a run or a scatter"></i>Element · thing</div>
   <h1>stone</h1>
-  <p class="lede">A <a href="rock.html"><code>rock</code></a> with stone sizes, about 1–6 mm across. It is the same element as <code>rock</code> with a different default size; everything on the rock page applies.</p>
+  <p class="lede">A <a href="rock.html"><code>rock</code></a> with stone sizes, about <code>1dmm</code> to <code>6dmm</code> across. It is the same element as <code>rock</code> with a different default size; everything on the rock page applies.</p>
   <figure class="shot"><img src="img/el-stone.jpg" alt="Stones scattered on dirt"><figcaption>Stones scattered on dirt: <a href="demo/stones.dtile"><code>demo/stones.dtile</code></a>.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
@@ -23,8 +23,8 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>stone at="0.5,0.5"                       // one, there
-scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }</code></pre>
+<pre><code>stone at="(0.5sq, 0.5sq)"                       // one, there
+scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone size="low(1dmm .. 6dmm, 11)" }</code></pre>
 <p>A thing is one of itself. Scattered against a cliff, stones are its scree. Many of them are a <a href="scatter.html"><code>scatter</code></a>.</p>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference stone -->
@@ -37,7 +37,7 @@ scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }</co
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-size"><td><code>size</code></td><td>mm, over 0, up to 200, or a range, or a weighted range</td><td><code>1..6</code></td><td>rock width</td></tr>
+<tr id="c-size"><td><code>size</code></td><td>length (dmm), over 0, up to 200, or a range, or a weighted range</td><td><code>1dmm..6dmm</code></td><td>rock width</td></tr>
 <tr id="c-shape"><td><code>shape</code></td><td>word</td><td>—</td><td>river stones, broken rock, flat slabs<dl class="words"><dt><code>rounded</code></dt><dd>river stones</dd><dt><code>angular</code></dt><dd>broken rock</dd><dt><code>flat</code></dt><dd>flat slabs</dd></dl></td></tr>
 <tr id="c-wear"><td><code>wear</code></td><td>word</td><td>—</td><td>sharp, or chipped and rounded edges <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span><dl class="words"><dt><code>crisp</code></dt><dd>sharp edges</dd><dt><code>worn</code></dt><dd>chipped and rounded edges</dd></dl></td></tr>
 <tr id="c-buried"><td><code>buried</code></td><td>percent, 0% to 100%, or a range, or a weighted range</td><td>—</td><td>how much of each rock is under the ground</td></tr>

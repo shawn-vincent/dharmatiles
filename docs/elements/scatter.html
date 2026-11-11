@@ -23,12 +23,12 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>scatter at=pool count=2 { rock size="6..10" }                 // two rocks in the pool
-scatter at="foot(cliff)" perSquare=55 reach=4 { stone }         // scree at the cliff's foot
-scatter perSquare=3 { stone weight=3; boulder }              // a mix, three stones to a boulder
-scatter perSquare=3 { rock size="4..8" weight=3; flower; tree size="18..24" weight=1 }   // a glade
-dirt { scatter perSquare=40 { pebble } }                     // inside a surface: lands on it</code></pre>
-<p>A scatter needs exactly one of <code>count</code> and <code>perSquare</code>. <code>reach</code> needs <code>at=foot(…)</code>. A scatter holds rocks, flowers and trees, alone or mixed, and definitions whose stack is one such thing (<code>scatter count=3 { boulder size="7..10" }</code>: the child's properties are the definition's params, a tree's <code>top=</code> is its height, <code>weight=</code> is its share, and a place word on the child is <code>dt::place</code>; see <code>demo/scatter-definition.dtile</code>). With several children, each child's <code>weight=</code> is its share of the mix (default: equal), whatever the kind. A mix is placed with one <code>gap</code> (default 1 mm) between every two things: trees first (largest crown first, laid out together; an error names how many fit when not all do), then rocks clear of the crowns, then flowers on dry ground clear of both. A mix is not gathered at a foot; <code>at=</code> a region or a line works as for any scatter. A scatter is built where it is listed: a dirt listed after it lies on its rocks and banks against its trunks, and grass listed after it grows round it. Every scattered thing keeps inside the tile and clear of other solids: it is nudged inward, never clipped.</p>
+<pre><code>dirt { scatter perSquare=40 { pebble } }                       // inside a surface: lands on it
+scatter at=pool count=2 { rock size="6dmm .. 10dmm" }            // two rocks in the pool
+scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone }      // scree at the cliff's foot
+scatter perSquare=3 { stone weight=3; boulder }                // a mix, three stones to a boulder
+scatter perSquare=3 { rock size="4dmm .. 8dmm" weight=3; flower; tree top="$bottom + [22dmm .. 30dmm]" weight=1 }   // a glade</code></pre>
+<p>A scatter needs exactly one of <code>count</code> and <code>perSquare</code>. <code>reach</code> needs <code>at=foot(…)</code>. A scatter holds rocks, flowers and trees, alone or mixed, and definitions whose stack is one such thing (<code>scatter count=3 { boulder size="7dmm .. 10dmm" }</code>: the child's properties are the definition's params, a tree's <code>top=</code> is its height, <code>weight=</code> is its share, and a place word on the child is <code>dt::place</code>; see <code>demo/scatter-definition.dtile</code>). With several children, each child's <code>weight=</code> is its share of the mix (default: equal), whatever the kind. A mix is placed with one <code>gap</code> (default <code>1dmm</code>) between every two things: trees first (largest crown first, laid out together; an error names how many fit when not all do), then rocks clear of the crowns, then flowers on dry ground clear of both. A mix is not gathered at a foot; <code>at=</code> a region or a line works as for any scatter. A scatter is built where it is listed: a dirt listed after it lies on its rocks and banks against its trunks, and grass listed after it grows round it. Every scattered thing keeps inside the tile and clear of other solids: it is nudged inward, never clipped.</p>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference scatter -->
 <div class="facts">
@@ -42,10 +42,10 @@ dirt { scatter perSquare=40 { pebble } }                     // inside a surface
 <tbody>
 <tr id="c-count"><td><code>count</code></td><td>count, 0 to 10000, or a range, or a weighted range</td><td>—</td><td>how many, in total</td></tr>
 <tr id="c-perSquare"><td><code>perSquare</code></td><td>per square, a number, a range or a weighted range</td><td>—</td><td>how many per square of the area, or of length along a line</td></tr>
-<tr id="c-spread"><td><code>spread</code></td><td>mm</td><td>—</td><td>a cluster within this distance of a point <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
-<tr id="c-reach"><td><code>reach</code></td><td>mm</td><td>—</td><td>with at=foot(…): how far out from the foot; with at= a line: how far either side of it (default 5 mm)</td></tr>
+<tr id="c-spread"><td><code>spread</code></td><td>length (dmm)</td><td>—</td><td>a cluster within this distance of a point <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-reach"><td><code>reach</code></td><td>length (dmm)</td><td>—</td><td>with at=foot(…): how far out from the foot; with at= a line: how far either side of it (default 5 mm)</td></tr>
 <tr id="c-clumps"><td><code>clumps</code></td><td>per square</td><td>—</td><td>gathers them into clumps; default spread evenly <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
-<tr id="c-gap"><td><code>gap</code></td><td>mm</td><td>—</td><td>least space between neighbours</td></tr>
+<tr id="c-gap"><td><code>gap</code></td><td>length (dmm)</td><td>—</td><td>least space between neighbours</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
@@ -81,12 +81,12 @@ dirt { scatter perSquare=40 { pebble } }                     // inside a surface
 <h2 id="notes">Notes</h2>
 <dl class="defs">
   <dt>at=foot(cliff)</dt><dd>Gathers at the foot of that kind of thing: <code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code>. Scattered at a cliff's foot, rocks take the cliff's rock: that is scree.</dd>
-  <dt>at=<em>line</em></dt><dd>Spreads along a drawn line, an edge or an edge path, within <code>reach</code> mm either side of it (default 5 mm), to the ends of the line rounded. <code>perSquare</code> counts the line's length in squares. It builds for rocks, flowers and trees alike: <code>scatter at=road count=3 reach=3 { tree size="26..32" }</code>. A single thing at a line is refused (a line has no one place on it); a scatter is how several stand along one.</dd>
-  <dt>trees</dt><dd>A scatter of trees places every crown clear of the others (centres at least both crown radii and <code>gap</code> apart, default 1 mm), each trunk a crown radius in from the tile edge and clear of what already stands, then grows them one after another, each from its own seed. A tree is a heavy build: ask for few. If the crowns cannot all fit it is an error naming how many do, never fewer trees without a word.</dd>
-  <dt>count, perSquare</dt><dd>Take a weighted range: <code>perSquare="low(2..8, 3)"</code>. Each whole number of a range is as likely as any other. See <a href="../language.html#weighted">weighted ranges</a>.</dd>
+  <dt>at=<em>line</em></dt><dd>Spreads along a drawn line, an edge or an edge path, within <code>reach</code> either side of it (default <code>5dmm</code>), to the ends of the line rounded. <code>perSquare</code> counts the line's length in squares. It builds for rocks, flowers and trees alike: <code>scatter at=road count=3 reach="3dmm" { tree top="$bottom + [26dmm .. 32dmm]" }</code>. A single thing at a line is refused (a line has no one place on it); a scatter is how several stand along one.</dd>
+  <dt>trees</dt><dd>A scatter of trees places every crown clear of the others (centres at least both crown radii and <code>gap</code> apart, default <code>1dmm</code>), each trunk a crown radius in from the tile edge and clear of what already stands, then grows them one after another, each from its own seed. A tree is a heavy build: ask for few. If the crowns cannot all fit it is an error naming how many do, never fewer trees without a word.</dd>
+  <dt>count, perSquare</dt><dd>Take a weighted range (of plain numbers): <code>perSquare="low(2..8, 3)"</code>. Each whole number of a range is as likely as any other. See <a href="../language.html#weighted">weighted ranges</a>.</dd>
   <dt>inside a surface</dt><dd>A scatter written inside <code>dirt</code> or <code>grass</code> is placed on that surface, in its area.</dd>
 </dl>
-<p>A single thing never takes a count: <code>tree count=3</code> is an error whose help says to use a scatter. See <a href="../language.html#placement">placement</a> in the language guide.</p>
+<p>A scatter is a <a href="../language.html#region-tree">region</a> of its own, its <code>at=</code> area (or the tile), and the things it places are its children: a tree in a scatter has the scatter, then the tile, as parents. A single thing never takes a count: <code>tree count=3</code> is an error whose help says to use a scatter. See <a href="../language.html#placement">placement</a> in the language guide.</p>
 </article>
 </div>
 </body>

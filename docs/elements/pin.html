@@ -23,23 +23,23 @@
 <article class="doc">
 <h2 id="use">Writing it</h2>
 <pre><code>dirt {
-    slope 30
-    pin top=dirtEdgeHeight at=edges               // exact at every rim
-    pin knollTop top=knollTop at=knoll            // a point
-    pin top="[waterBedHeight .. groundHeight + 1]" at=banks   // anywhere from the bed to the land
-    pin top="[waterBedHeight .. waterBedHeight + 0.3]" at=bed // later, so it wins inside the bed
+    slope "30deg"
+    pin top="$dirtEdgeHeight" at=edges               // exact at every rim
+    pin knollTop top="$groundHeight + 4dmm" at=knoll // a point
+    pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=banks   // anywhere from the bed to the land
+    pin top="[$waterBedHeight .. $waterBedHeight + 0.3dmm]" at=bed // later, so it wins inside the bed
 }</code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>pin NAME</code></td><td>a name</td><td>Optional, for messages.</td></tr>
-<tr><td><code>top=</code></td><td>a height or a range</td><td>The band at the place: a single height holds it exactly; a range <code>[low .. high]</code> leaves the body free inside it. <strong>Required.</strong> In it, <code>x</code> and <code>y</code> are the nearest point of the place, so a pin along an edge is a function along the edge.</td></tr>
-<tr><td><code>at=</code></td><td>any place</td><td>A name or a literal point; a point, a line or a region. <strong>Required.</strong></td></tr>
+<tr><td><code>top=</code></td><td>a height or a range</td><td>The band at the place: a single height holds it exactly; a range <code>[low .. high]</code> leaves the body free inside it. <strong>Required.</strong> In it, <code>$x</code> and <code>$y</code> are where the point is on the tile and <code>$d</code> and <code>$a</code> are its place in the body's own region, so a pin along an edge can be a function along the edge.</td></tr>
+<tr><td><code>at=</code></td><td>any place</td><td>A name or a literal point (<code>"(50%, 50%)"</code>); a point, a line or a region. A literal point is in the frame of the body's region, and one outside it is <code>dt::point</code>. <strong>Required.</strong></td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
 <p>Pins go inside a body's block (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>). Where pins overlap, the later one wins. The library's defaults are read before the tile, so a pin the tile writes always wins over a default. A pin says where and how high, nothing else: how the body meets it is the body's (dirt eases toward it no steeper than its slope, water settles over 9 mm, cliffs and floors step).</p>
-<p><code>check</code> solves the bands and notes what it finds: a pin that wins nowhere because later pins cover all of its place (<code>dt::shadowed</code>), dirt forced steeper than its slope (<code>dt::steep</code>, with both heights and the distance), a pin whose place is empty (<code>dt::empty</code>, refused), and a stretch where the tile's own pins move the rim off the library's edge height (<code>dt::edge</code>). <code>check --explain</code> gives each pin's share of its place where it wins. Building a tile with tops and pins is not done yet: <code>build</code> refuses it and says which lines.</p>
+<p><code>check</code> solves the bands and notes what it finds: a pin that wins nowhere because later pins cover all of its place (<code>dt::shadowed</code>), dirt forced steeper than its slope (<code>dt::steep</code>, with both heights and the distance), a pin whose place is empty (<code>dt::empty</code>, refused), and a stretch where the tile's own pins move the rim off the library's edge height (<code>dt::edge</code>). <code>check --explain</code> gives each pin's share of its place where it wins.</p>
 </article>
 </div>
 </body>

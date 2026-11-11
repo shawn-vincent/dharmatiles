@@ -23,14 +23,14 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble=5 { through "(0, 0.38)" "(1, 0.42)" }
-region pool { boundedBy shore; fill "(0.5, 0.25)" }
-region bank { boundedBy shore; fill "(0.5, 0.75)" }
-region reach { within 5 of=shore }          // a strip beside the line
+<pre><code>line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
+region reach { within "5dmm" of=shore }     // a strip beside the line
 region dry { except pool }                  // everything but the pool
 stack {
     base
-    dirt { pin top=waterBedHeight at=pool }   // a region is a place a pin holds
+    dirt { pin top="$waterBedHeight" at=pool }   // a region is a place a pin holds
     water                                     // fills its area up to its top
     grass at=bank                             // and where a coat grows, off the wet ground
 }</code></pre>
@@ -40,12 +40,12 @@ stack {
 <tbody>
 <tr><td><code>region NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>at=</code>. <strong>Required.</strong></td></tr>
 <tr><td><code>boundedBy</code></td><td>line names</td><td>—</td><td>The lines that bound it.</td></tr>
-<tr><td><code>fill</code></td><td>a point</td><td>—</td><td>A point inside it, <code>"(x, y)"</code> or a point's name; a coordinate may be a range, drawn once from the tile seed like a line's points (<code>demo/line-drawn.dtile</code>). Several fill points on different sides of a line join those areas into one region.</td></tr>
-<tr><td><code>within MM of=PLACE</code></td><td>a length, a place</td><td>—</td><td>Everything within that distance of a point, a line or a region: a disc round a point, a strip beside a line, a ring round a region (the region itself included). The length scales with the system. A range in it, <code>within "[10 .. 20]" of=northEdge</code>, draws the depth along the place: masses 6 to 15 mm long, each as deep as the range draws it (the same for the region and place whatever the seed), the middle of the range at both ends so runs butt.</td></tr>
+<tr><td><code>fill</code></td><td>a point</td><td>—</td><td>A point inside it, <code>"(across, down)"</code> with units or a point's name; a half may be a range, drawn once from the tile seed like a line's points (<code>demo/line-drawn.dtile</code>). Several fill points on different sides of a line join those areas into one region.</td></tr>
+<tr><td><code>within LENGTH of=PLACE</code></td><td>a length, a place</td><td>—</td><td>Everything within that distance of a point, a line or a region: a disc round a point, a strip beside a line, a ring round a region (the region itself included). A length in <code>dmm</code> or <code>sq</code> scales with the system. A range in it, <code>within "[10dmm .. 20dmm]" of=northEdge</code>, draws the depth along the place: masses 6 to 15 design millimetres long, each as deep as the range draws it (the same for the region and place whatever the seed), the middle of the range at both ends so runs butt.</td></tr>
 <tr><td><code>except</code></td><td>region names</td><td>—</td><td>Takes those regions out. A region that only excepts starts from the whole tile.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>The whole tile is the default area, so an undivided tile needs no region. The words add together: the fills, then each <code>within</code>, then <code>except</code> takes away. A region is flat, a footprint and nothing else; how high a body is over it is the body's <code>top</code> and <code>pin</code>. Bodies, grass and <code>scatter</code> take a region with <code>at=</code>; a point or a line is refused (<code>dt::type</code>). A region whose fill points all lie on its lines is an error.</p>
+<p>The whole tile is the default area, so an undivided tile needs no region. The words add together: the fills, then each <code>within</code>, then <code>except</code> takes away. A region is flat, a footprint and nothing else; it is also a frame (<a href="../language.html#region-tree">every thing makes a region</a>): <code>$region</code>, <code>$tile</code> and <code>parent()</code> name regions in a formula, and <code>x($region, sq)</code>, <code>d($region, %)</code> and <code>a($region, %)</code> measure in one. how high a body is over it is the body's <code>top</code> and <code>pin</code>. Bodies, grass and <code>scatter</code> take a region with <code>at=</code>; a point or a line is refused (<code>dt::type</code>). A region whose fill points all lie on its lines is an error.</p>
 </article>
 </div>
 </body>

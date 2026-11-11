@@ -22,20 +22,22 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>// library/parts/edges.dtile
+<pre><code>dharmatiles version="1.0.0"
+
+// library/parts/edges.dtile
 defaults {
-    dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
-    water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" { pin top=waterEdgeHeight at=edges }
+    dirt  top="[$groundHeight .. $groundHeight + 1dmm]" { pin top="$dirtEdgeHeight" at=edges }
+    water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" { pin top="$waterEdgeHeight" at=edges }
 }</code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Line</th><th>Means</th></tr></thead>
 <tbody>
-<tr><td><code>dirt</code></td><td>The first dirt meets every tile edge at <code>dirtEdgeHeight</code>, 3.4 mm; its top is <code>[groundHeight .. groundHeight + 1]</code>.</td></tr>
-<tr><td><code>water</code></td><td>Water meets the tile edge at <code>waterEdgeHeight</code>: <code>waterSurfaceHeight</code>, 2.6 mm, plus 0.6 mm of a shared tide, <code>cos(720 (x + y))</code>, two waves a square, so two water tiles butt any way round.</td></tr>
-<tr><td><code>floor</code></td><td>A built floor meets the edge at <code>floorEdgeHeight</code>, flush with its top, 7.4 mm.</td></tr>
+<tr><td><code>dirt</code></td><td>The first dirt meets every tile edge at <code>$dirtEdgeHeight</code>, <code>3.4dmm</code>; its top is <code>[$groundHeight .. $groundHeight + 1dmm]</code>.</td></tr>
+<tr><td><code>water</code></td><td>Water meets the tile edge at <code>$waterEdgeHeight</code>: <code>$waterSurfaceHeight</code>, <code>2.6dmm</code>, plus <code>0.6dmm</code> of a shared tide, <code>cos(720deg * ($x - $y))</code>, two waves a square, so two water tiles butt any way round.</td></tr>
+<tr><td><code>flagstones</code>, <code>planks</code></td><td>A built floor meets the edge at <code>$floorEdgeHeight</code>, flush with its top, <code>7.4dmm</code>.</td></tr>
 </tbody></table></div>
-<p>The heights are the constants of <code>library/parts/heights.dtile</code>; a tile may <code>override</code> them (and the edge note says it no longer butts a standard tile).</p>
+<p>The heights are the <code>$</code> names of <code>library/parts/heights.dtile</code>; a tile may <code>override</code> them (and the edge note says it no longer butts a standard tile).</p>
 <h2 id="notes">Notes</h2>
 <p>Runs on an edge (walls, cliffs) end in the standard end section, so runs butt together too. See <a href="../standards/tile-system.html#edge-contract">how tiles meet</a>.</p>
 </article>

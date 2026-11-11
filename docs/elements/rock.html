@@ -15,10 +15,10 @@
   <div class="eyebrow"><i class="fam-mark fam-thing" title="stone: a thing, a run or a scatter"></i>Element · thing</div>
   <h1>rock</h1>
   <p class="lede">One chiselled rock: a convex body cut by tilted planes into crisp facets of mixed sizes, chipped at its sharpest corners, grained, and bedded into the ground beneath it. Alone it is a landmark; scattered it is a rocky field, a stream bed or a cliff's scree.</p>
-  <p class="small">Three elements are rocks with other default sizes, each with its own page: <a href="stone.html"><code>stone</code></a> (1–6 mm), <a href="boulder.html"><code>boulder</code></a> (4.5–8 mm) and <a href="pebble.html"><code>pebble</code></a> (1–2.2 mm). Many rocks are a <a href="scatter.html"><code>scatter</code></a>.</p>
+  <p class="small">Three elements are rocks with other default sizes, each with its own page: <a href="stone.html"><code>stone</code></a> (<code>1dmm .. 6dmm</code>), <a href="boulder.html"><code>boulder</code></a> (<code>4.5dmm .. 8dmm</code>) and <a href="pebble.html"><code>pebble</code></a> (<code>1dmm .. 2.2dmm</code>). Many rocks are a <a href="scatter.html"><code>scatter</code></a>.</p>
   <figure class="shot hero-one"><img src="img/el-rock.jpg" alt="A two-square tile of dirt with faceted grey rocks scattered over it"><figcaption><code>lib:tests/rocks/2x2-rocks.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">2–10 mm across by default; any range with <code>size=</code></div></div>
+    <div><div class="k">Sizes</div><div class="v"><code>6dmm .. 15dmm</code> across by default; any range with <code>size=</code></div></div>
     <div><div class="k">Printing</div><div class="v">no supports: a flat base, nothing pointing down past 30°</div></div>
     <div><div class="k">Bases</div><div class="v">DungeonBlocks and OpenLOCK</div></div>
     <div><div class="k">In the library</div><div class="v">the water tiles' pools, scree at every cliff</div></div>
@@ -56,15 +56,17 @@
 </tbody></table></div>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A thing is one of itself. Place one rock with <code>at=</code> (a point in squares; a range is drawn once from the seed), or leave <code>at=</code> out to let it land anywhere in its area:</p>
-<pre><code>rock at="0.5,0.5" size="6..10"     // one rock, there
-rock at=pool                       // one rock, anywhere in the pool region</code></pre>
+<p>A thing is one of itself. Place one rock with <code>at=</code> (a point, counted from the north-west corner), or leave <code>at=</code> out to let it land anywhere in its area:</p>
+<pre><code>rock at="(0.5sq, 0.5sq)" size="6dmm .. 10dmm"     // one rock, there
+rock at=pool                                      // one rock, anywhere in the pool region</code></pre>
 <p>Many rocks are a <a href="scatter.html"><code>scatter</code></a>:</p>
-<pre><code>tile size="2x2" seed=1 {
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="2x2" seed=1 {
     stack {
         base
-        dirt top=dirtEdgeHeight
-        scatter perSquare="2.25..3" gap=1.5 { rock }
+        dirt top="$dirtEdgeHeight"
+        scatter perSquare="2.25..3" gap="1.5dmm" { rock }
     }
 }</code></pre>
 <p>Scattered <code>at="foot(cliff)"</code>, stones and boulders gather at the cliff's foot as scree. Every rock is seated into the ground under it, and grass grows round it wherever the grass is listed. A rock lays its top into the surface laid after it: a <a href="dirt.html"><code>dirt</code></a> listed after the rock lies on its top where that is flatter than the dirt's <code>maxSlope</code>, and a dirt listed before it is laid first and the rock beds into it.</p>
@@ -80,7 +82,7 @@ rock at=pool                       // one rock, anywhere in the pool region</cod
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-size"><td><code>size</code></td><td>mm, over 0, up to 200, or a range, or a weighted range</td><td><code>6..15</code></td><td>rock width</td></tr>
+<tr id="c-size"><td><code>size</code></td><td>length (dmm), over 0, up to 200, or a range, or a weighted range</td><td><code>6dmm..15dmm</code></td><td>rock width</td></tr>
 <tr id="c-shape"><td><code>shape</code></td><td>word</td><td>—</td><td>river stones, broken rock, flat slabs<dl class="words"><dt><code>rounded</code></dt><dd>river stones</dd><dt><code>angular</code></dt><dd>broken rock</dd><dt><code>flat</code></dt><dd>flat slabs</dd></dl></td></tr>
 <tr id="c-wear"><td><code>wear</code></td><td>word</td><td>—</td><td>sharp, or chipped and rounded edges <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span><dl class="words"><dt><code>crisp</code></dt><dd>sharp edges</dd><dt><code>worn</code></dt><dd>chipped and rounded edges</dd></dl></td></tr>
 <tr id="c-buried"><td><code>buried</code></td><td>percent, 0% to 100%, or a range, or a weighted range</td><td>—</td><td>how much of each rock is under the ground</td></tr>
@@ -126,9 +128,9 @@ rock at=pool                       // one rock, anywhere in the pool region</cod
 
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
-  <li><strong>Rocks.</strong> 6–15 mm wide, every size equally likely (write <code>size="low(6..15, 3)"</code> to lean small); 2.5–9 mm tall (height 0.45–0.85 of the width, slabs lower). Stones in a cluster are at least 4 mm wide.</li>
-  <li><strong>Density.</strong> 9–12 placements on a 2×2 tile, at least 1.5 mm apart. A placement that finds no free spot is dropped.</li>
-  <li><strong>Ground.</strong> The dirt surface sits 4.0 mm above the base datum, inside the DungeonBlocks dirt band. Rocks sink 0.55 mm into it, so no gap shows under them.</li>
+  <li><strong>Rocks.</strong> <code>6dmm</code> to <code>15dmm</code> wide, every size equally likely (write <code>size="low(6dmm .. 15dmm, 3)"</code> to lean small); 2.5–9 dmm tall (height 0.45–0.85 of the width, slabs lower). Stones in a cluster are at least <code>4dmm</code> wide.</li>
+  <li><strong>Density.</strong> 9–12 placements on a 2×2 tile, at least <code>1.5dmm</code> apart. A placement that finds no free spot is dropped.</li>
+  <li><strong>Ground.</strong> The dirt surface sits <code>4dmm</code> above the base datum, inside the DungeonBlocks dirt band. Rocks sink <code>0.55dmm</code> into it, so no gap shows under them.</li>
 </ul>
 
 <h3 id="edges">Edges and joining tiles</h3>
@@ -143,7 +145,7 @@ rock at=pool                       // one rock, anywhere in the pool region</cod
   <li>Three scales of texture: rough faces, chipped corners and a fine grain. The largest faces stay small.</li>
   <li>Large stones carry engraved cracks a wash can pool in.</li>
   <li>Stones stand bedded in the dirt around them.</li>
-  <li><code>buried</code> is a share written as a percent, <code>buried="20%..50%"</code> (weighted forms too), from 0% to 100%. A bare number is refused with <code>dt::percent</code>; it is never read as a percent.</li>
+  <li><code>buried</code> is a share written as a percent, <code>buried="20%..50%"</code> (weighted forms too), from 0% to 100%; <code>%</code> is a plain fraction, so <code>buried=0.3</code> is the same 30% and <code>buried=30</code> is out of range; a length there is <code>dt::type</code>.</li>
   <li>A rock is seated on the land as it is laid, grain included: its foot is under the lowest land it can touch, so no gap shows under it (the build notes <code>seat_gap_max</code> and <code>seat_gap_stones</code> measure it).</li>
 </ul>
 

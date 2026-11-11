@@ -51,7 +51,22 @@ addEventListener("DOMContentLoaded", () => {
 // commands, are left as they are.
 addEventListener('DOMContentLoaded', () => {
   const esc = (t) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  const shell = /^\s*(\$|cargo |git |cd |\.\/|dharmatiles |brew |python|cp |mkdir |export |ls )/;
+  const shell = /^\s*(\$|cargo |git |cd |\.\/|dharmatiles (?!version=)|brew |python|cp |mkdir |export |ls )/;
+  // inside a string: a `$name` (read from the context) takes the node colour,
+  // a number with its unit (8dmm, 90deg, 50%) the number colour; the rest
+  // stays a string.  Only strings that are values: an `about` text is left alone.
+  const value = /\$[A-Za-z_]|\d(?:%|sq|dmm|mm|in|layer|deg|rad)\b/;
+  const inner = /(\$[A-Za-z_]\w*)|(-?\b\d+(?:\.\d+)?(?:%|(?:sq|dmm|mm|in|layer|deg|rad)\b))/g;
+  const hlString = (str) => {
+    if (!value.test(str)) return `<span class="hl-s">${esc(str)}</span>`;
+    let o = '', at = 0;
+    for (const m of str.matchAll(inner)) {
+      if (m.index > at) o += `<span class="hl-s">${esc(str.slice(at, m.index))}</span>`;
+      o += `<span class="${m[1] ? 'hl-n' : 'hl-v'}">${esc(m[0])}</span>`;
+      at = m.index + m[0].length;
+    }
+    return o + (at < str.length ? `<span class="hl-s">${esc(str.slice(at))}</span>` : '');
+  };
   const tok = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*")|(\b[A-Za-z][\w+-]*(?==))|((?:^|(?<=[{;]))[ \t]*[A-Za-z][\w+-]*)|(-?\b\d+(?:\.\d+)?\b)/gm;
   for (const code of document.querySelectorAll('pre > code')) {
     if (code.children.length || code.closest('.no-hl')) continue;
@@ -62,7 +77,7 @@ addEventListener('DOMContentLoaded', () => {
     text.replace(tok, (m, com, str, prop, node, num, at) => {
       out += esc(text.slice(last, at));
       if (com) out += `<span class="hl-c">${esc(com)}</span>`;
-      else if (str) out += `<span class="hl-s">${esc(str)}</span>`;
+      else if (str) out += hlString(str);
       else if (prop) out += `<span class="hl-p">${esc(prop)}</span>`;
       else if (node) { const ws = node.match(/^[ \t]*/)[0]; out += `${ws}<span class="hl-n">${esc(node.slice(ws.length))}</span>`; }
       else out += `<span class="hl-v">${esc(num)}</span>`;

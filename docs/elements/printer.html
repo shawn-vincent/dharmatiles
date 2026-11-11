@@ -22,26 +22,28 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>// library/printers/default.dtile
+<pre><code>dharmatiles version="1.0.0"
+
+// library/printers/default.dtile
 printer default {
-    line     0.45       // one extruded line, mm: the thinnest wall that prints
-    layer    0.2        // one layer, mm
-    overhang 55         // what every element aims for, degrees from vertical
-    steepest 65         // small patches up to here (0.2 mm layer: 0.43 mm step, under a line)
-    gap      0.2        // the narrowest gap that stays open, mm
+    line     "0.45mm"   // one extruded line: the thinnest wall that prints
+    layer    "0.2mm"    // one layer
+    overhang "55deg"    // what every element aims for, from vertical
+    steepest "65deg"    // small patches up to here (0.2 mm layer: 0.43 mm step, under a line)
+    gap      "0.2mm"    // the narrowest gap that stays open
 }</code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>Means</th></tr></thead>
 <tbody>
-<tr><td><code>line</code></td><td>mm</td><td>0.45</td><td>One extruded line: the thinnest wall that prints.</td></tr>
-<tr><td><code>layer</code></td><td>mm</td><td>0.2</td><td>One layer.</td></tr>
-<tr><td><code>overhang</code></td><td>degrees</td><td>55</td><td>The overhang every element aims for, from vertical. Faces between it and <code>steepest</code> are the band: orange in renders, allowed up to 0.1% of the downward-facing area.</td></tr>
-<tr><td><code>steepest</code></td><td>degrees</td><td>65</td><td>Past this, overhang is red: allowed up to another 0.1%, more fails. It must be past <code>overhang</code>, and no steeper than the angle at which a layer steps out one line (<code>atan(line / layer)</code>: 66° for 0.45 and 0.2).</td></tr>
-<tr><td><code>gap</code></td><td>mm</td><td>0.2</td><td>The narrowest gap that stays open.</td></tr>
+<tr><td><code>line</code></td><td>length (mm)</td><td><code>0.45mm</code></td><td>One extruded line: the thinnest wall that prints.</td></tr>
+<tr><td><code>layer</code></td><td>length (mm)</td><td><code>0.2mm</code></td><td>One layer.</td></tr>
+<tr><td><code>overhang</code></td><td>angle (deg)</td><td><code>55deg</code></td><td>The overhang every element aims for, from vertical. Faces between it and <code>steepest</code> are the band: orange in renders, allowed up to 0.1% of the downward-facing area.</td></tr>
+<tr><td><code>steepest</code></td><td>angle (deg)</td><td><code>65deg</code></td><td>Past this, overhang is red: allowed up to another 0.1%, more fails. It must be past <code>overhang</code>, and no steeper than the angle at which a layer steps out one line (<code>atan(line / layer)</code>: 66° for 0.45 and 0.2).</td></tr>
+<tr><td><code>gap</code></td><td>length (mm)</td><td><code>0.2mm</code></td><td>The narrowest gap that stays open.</td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>See <a href="../standards/printing.html">printing</a> for the gate every build passes.</p>
+<p>A printer's numbers are printed lengths and angles: <code>mm</code> and <code>deg</code>. <code>sq</code>, <code>dmm</code> and <code>layer</code> have no meaning here and are refused, and a bare number has no unit (<code>dt::unit</code>). See <a href="../standards/printing.html">printing</a> for the gate every build passes.</p>
 </article>
 </div>
 </body>

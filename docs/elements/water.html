@@ -17,7 +17,7 @@
   <p class="small">Water needs a bed under it: <a href="dirt.html"><code>dirt</code></a> pinned below the water. Reeds at the shore are their own element, <a href="reeds.html"><code>reeds</code></a>.</p>
   <figure class="shot hero-one"><img src="img/el-water.jpg" alt="A one-square tile of blue water with sculpted swells"><figcaption><code>lib:tiles/water/1x1-water.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">any tile size; waves 2–16 mm long</div></div>
+    <div><div class="k">Sizes</div><div class="v">any tile size; waves 2–16dmm long</div></div>
     <div><div class="k">Printing</div><div class="v">no supports: one height field</div></div>
     <div><div class="k">Edges</div><div class="v">the shared tide: any two water tiles butt any way round</div></div>
     <div><div class="k">In the library</div><div class="v"><code>tiles/water/</code>: pools, rivers, corridors and banks</div></div>
@@ -25,7 +25,7 @@
   <details class="words">
     <summary>Words used on this page</summary>
     <dl class="defs">
-      <dt>water level</dt><dd>The calm surface height, 2.6 mm above the base's top. Waves rise and fall around it.</dd>
+      <dt>water level</dt><dd>The calm surface height, <code>2.6dmm</code> above the base's top. Waves rise and fall around it.</dd>
       <dt>swell</dt><dd>A long, low, rounded wave, 5–16 mm from crest to crest.</dd>
       <dt>chop</dt><dd>Short, sharper waves, 2–4.5 mm apart, round the rocks and reeds that stand in the water.</dd>
       <dt>emitter</dt><dd>Anything the waves come from: the land, a rock, a reed, or a faint source at an open-water corner.</dd>
@@ -57,26 +57,30 @@
 
 <h2 id="use">Using it in a tile</h2>
 <p>A pool is a bed of <a href="dirt.html"><code>dirt</code></a> pinned below the water's top, then <code>water</code>, which fills everything lower than its top over the ground listed above it:</p>
-<pre><code>tile size="1x1" seed=7 {
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="1x1" seed=7 {
     stack {
         base
-        dirt top=waterBedHeight { pin top=waterBedHeight at=edges }   // the bed, 2.2 mm under the water
-        water                                                          // fills to its top, about 2.6 mm
+        dirt top="$waterBedHeight" { pin top="$waterBedHeight" at=edges }   // the bed, 2.2dmm under the water
+        water                                                                // fills to its top, about 2.6dmm
     }
 }</code></pre>
 <p>A shore is a line dividing the tile into a pool and a bank. Water is built where it is listed, like every other layer. List it after the rocks and reeds and before the grass: the water sees the rocks and rings them with chop, and the grass, listed after the water, sees the shore and keeps off the wet ground:</p>
-<pre><code>tile size="1x1" seed=97 {
-    line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { boundedBy shore; fill "0.5,0.25" }
-    region bank { boundedBy shore; fill "0.5,0.75" }
-    region shoreBand { within 7 of=shore }
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="1x1" seed=97 {
+    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // a bank drawn between the bed and the land
-            pin top=waterBedHeight at=pool                                // later, so it wins in the pool
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand   // a bank drawn between the bed and the land
+            pin top="$waterBedHeight" at=pool                                  // later, so it wins in the pool
         }
-        scatter at=pool count=2 { rock size="6..10" }
+        scatter at=pool count=2 { rock size="6dmm .. 10dmm" }
         water                                                         // after the rocks: it rings them
         grass at=bank                                                 // after the water: it sees the shore
     }
@@ -122,12 +126,12 @@
 
 <h3 id="sizes">Sizes and levels</h3>
 <div class="tbl"><table>
-<thead><tr><th>Height above the base top</th><th class="num">mm</th><th>Notes</th></tr></thead>
+<thead><tr><th>Height above the base top</th><th class="num">dmm</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td>Calm water level</td><td class="num">2.6</td><td>The named level <code>water</code>.</td></tr>
+<tr><td>Calm water level</td><td class="num">2.6</td><td><code>$waterSurfaceHeight</code>.</td></tr>
 <tr><td>Wave relief</td><td class="num">−0.74 to +2.2</td><td>About the water level; troughs are softly floored at −1.1.</td></tr>
 <tr><td>Tide at the tile edge</td><td class="num">±0.6</td><td>The shared edge profile (below).</td></tr>
-<tr><td>Water bed</td><td class="num">0.4</td><td>2.2 below the water level, where the bank ends.</td></tr>
+<tr><td>Water bed</td><td class="num">0.4</td><td><code>$waterBedHeight</code>, 2.2 below the water level, where the bank ends.</td></tr>
 <tr><td>Land top</td><td class="num">6.0</td><td>The DungeonBlocks grass band.</td></tr>
 <tr><td>Meadow ground (shore)</td><td class="num">≥ 3.4</td><td>Hills, with grass on top.</td></tr>
 <tr><td>Reeds</td><td class="num">8–13 tall</td><td>A tall reed can push the tile onto the tall base peg.</td></tr>
@@ -149,7 +153,7 @@
   <li>Waves come from the obstacles: land sends strong ones, rocks and reeds listed before the water weak ones and small rings. Each kind of object sends its own range of wavelengths.</li>
   <li>A source's waves grow less clear with distance; open corners are very faint sources.</li>
   <li>Ripples are smoother at the shore and round rocks, and stroke ends fade like ripples.</li>
-  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. Every water starts with the library's top, <code>[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]</code>, and a pin at <code>edges</code> at <code>waterEdgeHeight</code>, the tide. Water is built where it is listed, over the ground listed above it: what is listed after it stands in it or on the shore and reads it (grass keeps off the wet ground), and a dirt or ground listed after it lies over it. It eases over 9 mm round a pin. <code>check</code> reads and solves these; <code>build</code> does not build tops and pins yet. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. Every water starts with the library's top, <code>[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]</code>, and a pin at <code>edges</code> at <code>$waterEdgeHeight</code>, the tide. Water is built where it is listed, over the ground listed above it: what is listed after it stands in it or on the shore and reads it (grass keeps off the wet ground), and a dirt or ground listed after it lies over it. It eases over 9 mm round a pin. <code>check</code> reads and solves these and <code>build</code> fills them. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

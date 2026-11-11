@@ -66,7 +66,7 @@
 <div class="specimen">
   <div><span class="k">Big Shoulders Display<br>names and headings</span><span class="sp-d">2x1-cliff-escarpment</span></div>
   <div><span class="k">IBM Plex Sans<br>reading and controls</span><span class="sp-b">Every tile passes a printability gate before it is written.</span></div>
-  <div><span class="k">JetBrains Mono<br>what you type</span><span class="sp-c">scatter at=pool count=2 { rock size="6..10" }</span></div>
+  <div><span class="k">JetBrains Mono<br>what you type</span><span class="sp-c">scatter at=pool count=2 { rock size="6dmm .. 10dmm" }</span></div>
 </div>
 <p>All three are self-hosted in <code>docs/assets/fonts/</code> (SIL Open Font License), so the preview works offline. Headings and labels are sentence case, with no all-caps labels. Monospace is only for text you would type into a <code>.dtile</code> or a terminal. Numbers in records use tabular figures.</p>
 
@@ -88,7 +88,7 @@
   <dt>.scrolls</dt><dd>A scrolling panel in the preview's chrome (never the 3D view): a soft shadow, <code>--scroll-shadow</code>, at each edge that has more content beyond it, gone when scrolled to that edge. <code>js/scroll-shadows.js</code> sets the edge classes.</dd>
   <dt>.copy</dt><dd>Copying a value, anywhere: a small copy icon that turns into an accent check mark for a moment once the value is on the clipboard, or a labelled button whose words read “Copied”. Made by <code>copyButton()</code> in the preview's <code>js/copy.js</code>; never a hand-made copy button. If the browser refuses the clipboard, the button says so.</dd>
   <dt>Focus</dt><dd>A 2 px accent outline on every control.</dd>
-  <dt>.dtile code</dt><dd>Coloured by <code>site.js</code>: node names use the accent, properties water, strings moss, numbers earth, comments muted.</dd>
+  <dt>.dtile code</dt><dd>Coloured by <code>site.js</code>: node names (and the header line's <code>dharmatiles</code>) use the accent, properties water, strings moss, comments muted. Inside a string, a <code>$name</code> takes the node colour and a number with its unit (<code>8dmm</code>, <code>90deg</code>, <code>50%</code>) the number colour, earth.</dd>
 </dl>
 
 <h2 id="rules">Rules</h2>

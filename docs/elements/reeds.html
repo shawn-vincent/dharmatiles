@@ -23,12 +23,13 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>line shore wobble=5 { through "0,0.38" "1,0.42" }
-region pool { boundedBy shore; fill "0.5,0.25" }
-region bank { boundedBy shore; fill "0.5,0.75" }
+<pre><code>line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
+region shoreBand { within "7dmm" of=shore }
 stack {
     base
-    dirt { pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand; pin top=waterBedHeight at=pool }
+    dirt { pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand; pin top="$waterBedHeight" at=pool }
     water                    // the pool fills over the dirt above it
     reeds at=bank            // stand along the shore, leaning out over the pool
     grass at=bank
@@ -47,7 +48,7 @@ stack {
 <tbody>
 <tr id="c-clumps"><td><code>clumps</code></td><td>count, 0 to 30, or a range, or a weighted range</td><td><code>3..5</code></td><td>how many clumps along the shore</td></tr>
 <tr id="c-stems"><td><code>stems</code></td><td>count, 1 to 30, or a range, or a weighted range</td><td><code>5..9</code></td><td>stems in a clump</td></tr>
-<tr id="c-height"><td><code>height</code></td><td>mm, over 0, or a range, or a weighted range</td><td><code>8..13</code></td><td>how tall a stem stands</td></tr>
+<tr id="c-height"><td><code>height</code></td><td>length (dmm), over 0, or a range, or a weighted range</td><td><code>8dmm..13dmm</code></td><td>how tall a stem stands</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <p>No shipped library tile writes <code>reeds</code> yet.</p>
@@ -58,7 +59,7 @@ stack {
 <ul class="rules">
   <li>Reeds are simple chunky blades that rise from one base and curve gently outward.</li>
   <li>Tips are sharp but fairly blunt, blending smoothly into the blade. No cattails.</li>
-  <li>A clump roots by a height window on the land: where the land lies from 1.1 mm under the water's calm level to 0.2 mm over it. Reeds read the land and the library's calm height, never the water; the water reads the reeds.</li>
+  <li>A clump roots by a height window on the land: where the land lies from <code>1.1dmm</code> under the water's calm level to <code>0.2dmm</code> over it. Reeds read the land and the library's calm height (<code>$waterSurfaceHeight</code>), never the water; the water reads the reeds.</li>
   <li>A range of clumps or of stems gives every whole number an equal chance, the ends included.</li>
   <li>Where a stem crosses the water's surface it is a thing standing in the water: its real section there sends the ripple rings round it.</li>
 </ul>

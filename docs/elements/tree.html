@@ -14,10 +14,10 @@
   <div class="eyebrow"><i class="fam-mark fam-plant" title="moss: a plant"></i>Element · thing</div>
   <h1>tree</h1>
   <p class="lede">One deciduous tree: a twisting barked trunk that forks into branches, each ending in a rounded clump of foliage covered in separate, chunky leaves. The look is slightly cartoonish. Every branch climbs at least 26° and every leaf on an underside lies flat, so the tree prints without supports.</p>
-  <p class="small">A ready-made tree is a <a href="define.html">definition</a>: <code>use "parts/trees" oak</code>. Several trees are a <a href="scatter.html"><code>scatter</code></a>: <code>scatter count=2 { oak }</code>, or a row along a line: <code>scatter at=road count=3 reach=3 { oak }</code>. A scatter of trees keeps every crown clear of the others; a single tree <code>at=</code> a line is refused, a line has no one place on it.</p>
+  <p class="small">A ready-made tree is a <a href="define.html">definition</a>: <code>use "parts/trees" oak</code>. Several trees are a <a href="scatter.html"><code>scatter</code></a>: <code>scatter count=2 { oak }</code>, or a row along a line: <code>scatter at=road count=3 reach="3dmm" { oak }</code>. A scatter of trees keeps every crown clear of the others; a single tree <code>at=</code> a line is refused, a line has no one place on it.</p>
   <figure class="shot hero-one"><img src="img/el-tree.jpg" alt="A one-square grass tile with one leafy tree"><figcaption><code>lib:tiles/ground/1x1-grass-tree.dtile</code>, built by the program today. The audit measured no face past 55°.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">40 mm tall by default (20–120 over its foot); crown about 30 mm across</div></div>
+    <div><div class="k">Sizes</div><div class="v"><code>40dmm</code> tall by default (20 to 120 over its foot); crown about <code>30dmm</code> across</div></div>
     <div><div class="k">Variants</div><div class="v">leafy, foliage clumps only, or bare (winter)</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; branches at least 26° above horizontal</div></div>
     <div><div class="k">In the library</div><div class="v"><code>ground/1x1-grass-tree</code>, <code>ground/2x2-grass-tree</code>, <code>water/1x1-water+grass-tree</code></div></div>
@@ -48,30 +48,35 @@
 <p>No two seeds grow the same tree, but every tree has the same character.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A tree's height is its <code>top=</code>, written like every top in mm above zero, where <code>bottom</code> is the ground at the tree's foot: <code>top="bottom + 40"</code> is a 40 mm tree wherever it stands, and <code>top="groundHeight + 40"</code> reaches 40 mm over the ground height, shorter on a mound and taller in a hollow. Each tree draws its own height, so a range or a weighted range rolls per tree (<code>top="bottom + low(30..40, 4)"</code>). Without <code>top=</code> a tree is 40 mm over its foot.</p>
+<p>A tree's height is its <code>top=</code>, written like every top as a length above zero, where <code>$bottom</code> is the ground at the tree's foot: <code>top="$bottom + 40dmm"</code> is a 40dmm tree wherever it stands, and <code>top="$groundHeight + 40dmm"</code> reaches 40dmm over the ground height, shorter on a mound and taller in a hollow. Each tree draws its own height, so a range or a weighted range rolls per tree (<code>top="$bottom + low(30dmm .. 40dmm, 4)"</code>). Without <code>top=</code> a tree is <code>40dmm</code> over its foot. A tree's top is worked out once, so it reads only <code>$bottom</code> and <code>$region</code>: a read of <code>$x</code>, <code>$d</code> or <code>x(…)</code> there is refused at <code>check</code>.</p>
 <p>A tree goes anywhere in its area, kept a crown's radius from the tile edge, or where <code>at=</code> says. Grass grows round the trunk when it is listed after the tree; a dirt listed after the tree banks against the trunk:</p>
-<pre><code>use "parts/grass" long-grass
+<pre><code>dharmatiles version="1.0.0"
+
+use "parts/grass" long-grass
 
 tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none
-        tree top="bottom + 40" {        // or: tree at="1,1" top="bottom + 40"
-            trunk height=30             // bare trunk below the crown
-            crown width=30 clumps=32 shape=round branching=normal
-            leaf length=4.5 width=3
+        tree top="$bottom + 40dmm" {        // or: tree at="(1sq, 1sq)" top="$bottom + 40dmm"
+            trunk height="30dmm"            // bare trunk below the crown
+            crown width="30dmm" clumps=32 shape=round branching=normal
+            leaf length="4.5dmm" width="3dmm"
         }
-        long-grass                      // after the tree: grows round the trunk
+        long-grass                          // after the tree: grows round the trunk
     }
 }</code></pre>
 <p><code>leaves clumps-only</code> leaves off the separate leaves; <code>leaves bare</code> makes a winter tree. The six branching knobs (<code>branch split=… eagerness=…</code>) are expert controls, allowed only in a parts file:</p>
-<pre><code>use "parts/trees" oak
+<pre><code>dharmatiles version="1.0.0"
+
+use "parts/trees" oak
 
 tile size="2x2" seed=3 {
     stack {
+        base
         dirt
-        scatter count=2 { oak }         // a definition whose stack is one thing is a thing
-        oak at="1,1" top="bottom + 60"  // a call's top= is its tree's
+        scatter count=2 { oak }                         // a definition whose stack is one thing is a thing
+        oak at="(1sq, 1sq)" top="$bottom + 60dmm"       // a call's top= is its tree's
     }
 }</code></pre>
 
@@ -87,30 +92,30 @@ tile size="2x2" seed=3 {
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr id="c-trunk"><td><code>trunk</code></td><td>group</td><td>—</td><td>the bare trunk</td></tr>
-<tr id="c-trunk-height"><td><code>trunk height</code></td><td>mm, 0 to 200, or a range, or a weighted range</td><td><code>30</code></td><td>bare trunk below the crown</td></tr>
-<tr id="c-trunk-width"><td><code>trunk width</code></td><td>mm, 0.5 to 40, or a range, or a weighted range</td><td>—</td><td>trunk thickness at the ground</td></tr>
+<tr id="c-trunk-height"><td><code>trunk height</code></td><td>length (dmm), 0 to 200, or a range, or a weighted range</td><td><code>30dmm</code></td><td>bare trunk below the crown</td></tr>
+<tr id="c-trunk-width"><td><code>trunk width</code></td><td>length (dmm), 0.5 to 40, or a range, or a weighted range</td><td>—</td><td>trunk thickness at the ground</td></tr>
 <tr id="c-crown"><td><code>crown</code></td><td>group</td><td>—</td><td>the crown</td></tr>
-<tr id="c-crown-width"><td><code>crown width</code></td><td>mm, 2 to 200, or a range, or a weighted range</td><td><code>30</code></td><td>crown width</td></tr>
+<tr id="c-crown-width"><td><code>crown width</code></td><td>length (dmm), 2 to 200, or a range, or a weighted range</td><td><code>30dmm</code></td><td>crown width</td></tr>
 <tr id="c-crown-shape"><td><code>crown shape</code></td><td>word</td><td><code>round</code></td><td>silhouette<dl class="words"><dt><code>round</code></dt><dd>a round crown</dd><dt><code>cone</code></dt><dd>pointed at the top, like a fir (provisional)</dd><dt><code>wide</code></dt><dd>a broad, flat-bottomed spread (provisional)</dd><dt><code>tall</code></dt><dd>a narrow column (provisional)</dd></dl></td></tr>
 <tr id="c-crown-clumps"><td><code>crown clumps</code></td><td>count, 8 to 200</td><td><code>32</code></td><td>clumps of foliage, one per branch end</td></tr>
-<tr id="c-crown-clumpSize"><td><code>crown clumpSize</code></td><td>mm, 1 to 20, or a range, or a weighted range</td><td><code>5.5</code></td><td>size of each clump</td></tr>
+<tr id="c-crown-clumpSize"><td><code>crown clumpSize</code></td><td>length (dmm), 1 to 20, or a range, or a weighted range</td><td><code>5.5dmm</code></td><td>size of each clump</td></tr>
 <tr id="c-crown-branching"><td><code>crown branching</code></td><td>word</td><td><code>normal</code></td><td>few long limbs, or many forks; the only branching control in a tile<dl class="words"><dt><code>open</code></dt><dd>few long limbs (provisional)</dd><dt><code>normal</code></dt><dd>between the two: some long limbs, some forks</dd><dt><code>dense</code></dt><dd>many forks (provisional)</dd></dl></td></tr>
 <tr id="c-leaves"><td><code>leaves</code></td><td>word</td><td><code>on</code></td><td>separate leaves, just clumps, or a winter tree<dl class="words"><dt><code>on</code></dt><dd>separate leaves over the clumps</dd><dt><code>clumps-only</code></dt><dd>just foliage clumps</dd><dt><code>bare</code></dt><dd>a winter tree</dd></dl></td></tr>
 <tr id="c-leaf"><td><code>leaf</code></td><td>group</td><td>—</td><td>one leaf</td></tr>
-<tr id="c-leaf-length"><td><code>leaf length</code></td><td>mm, 0.5 to 20, or a range, or a weighted range</td><td><code>4.5</code></td><td>leaf length</td></tr>
-<tr id="c-leaf-width"><td><code>leaf width</code></td><td>mm, 0.5 to 20, or a range, or a weighted range</td><td><code>3</code></td><td>leaf width</td></tr>
+<tr id="c-leaf-length"><td><code>leaf length</code></td><td>length (dmm), 0.5 to 20, or a range, or a weighted range</td><td><code>4.5dmm</code></td><td>leaf length</td></tr>
+<tr id="c-leaf-width"><td><code>leaf width</code></td><td>length (dmm), 0.5 to 20, or a range, or a weighted range</td><td><code>3dmm</code></td><td>leaf width</td></tr>
 </tbody></table></div>
 <details><summary>Expert controls (parts files only)</summary>
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr id="c-branch"><td><code>branch</code></td><td>group</td><td>—</td><td>the generator's six branching knobs (expert: parts files only)</td></tr>
-<tr id="c-branch-split"><td><code>branch split</code></td><td>degrees, 1 to 89</td><td>—</td><td>half-angle of the cone a branch keeps</td></tr>
+<tr id="c-branch-split"><td><code>branch split</code></td><td>angle (deg), 1 to 89</td><td>—</td><td>half-angle of the cone a branch keeps</td></tr>
 <tr id="c-branch-eagerness"><td><code>branch eagerness</code></td><td>number, 0 to 1</td><td>—</td><td>1 splits early, 0 only near the tips</td></tr>
 <tr id="c-branch-target"><td><code>branch target</code></td><td>number, 0 to 1</td><td>—</td><td>aim point in the attractor cloud, 0 low to 1 high</td></tr>
 <tr id="c-branch-balance"><td><code>branch balance</code></td><td>number, 0 to 1</td><td>—</td><td>how evenly a fork shares its attractors, 0 to 1</td></tr>
 <tr id="c-branch-exponent"><td><code>branch exponent</code></td><td>number, 1 to 8</td><td>—</td><td>pipe-model exponent</td></tr>
-<tr id="c-branch-minRadius"><td><code>branch minRadius</code></td><td>mm, 0.2 to 5</td><td>—</td><td>branch radius at a tip</td></tr>
+<tr id="c-branch-minRadius"><td><code>branch minRadius</code></td><td>length (dmm), 0.2 to 5</td><td>—</td><td>branch radius at a tip</td></tr>
 </tbody></table></div>
 </details>
 <h3 id="in-the-library">In the library</h3>
@@ -126,27 +131,27 @@ tile size="2x2" seed=3 {
 
 <h3 id="sizes">Sizes</h3>
 <ul>
-  <li><strong>Tree.</strong> 40 mm over its foot by default (<code>top="bottom + 40"</code>), 20 to 120 mm; the 1×1 library tile uses 35 mm with a 24 mm crown, the 2×2 tile 40 mm with a 30 mm crown.</li>
+  <li><strong>Tree.</strong> <code>40dmm</code> over its foot by default (<code>top="$bottom + 40dmm"</code>), 20 to 120dmm; the 1×1 library tile uses <code>35dmm</code> with a <code>24dmm</code> crown, the 2×2 tile <code>40dmm</code> with a <code>30dmm</code> crown.</li>
   <li><strong>Leaves.</strong> 4.5 mm long, 3 mm wide, 0.24 mm thick, rooted 0.75 mm into the clump. A full tree carries about 2,000–2,400 leaves.</li>
   <li><strong>Trunk and branches.</strong> Branch tips are 1 mm in radius; the trunk is as thick as its branches need (a pipe model), so it is never set directly. Bark grooves are about 0.8 mm deep and 2.25 mm apart.</li>
 </ul>
 
 <h3 id="edges">Edges and neighbours</h3>
 <ul>
-  <li>A trunk is kept at least one crown radius in from every tile edge (<code>src/dharmatiles/scatter/distribute.py:78</code>), so the crown stays over its own tile.</li>
-  <li>Grass stays out of a circle round the trunk and grows taller close to it, so the tree sits in a small tuft (<code>src/dharmatiles/trees/layer.py:291</code>).</li>
+  <li>A trunk is kept at least one crown radius in from every tile edge, so the crown stays over its own tile.</li>
+  <li>Grass stays out of a circle round the trunk and grows taller close to it, so the tree sits in a small tuft.</li>
   <li>The tree does not change the tile edge; the ground around it meets other tiles as described on the <a href="../standards/tile-system.html">tile system</a> page.</li>
 </ul>
 
 <h3 id="rules">Rules</h3>
 <p>What this element always does. A change to one of these is a change to the element.</p>
 <ul class="rules">
-  <li>Leaves are visible, discrete and big enough to print (4.5 × 3 × 0.24 mm), on a blobby, slightly cartoonish crown of clumps (32 by default).</li>
+  <li>Leaves are visible, discrete and big enough to print (<code>4.5dmm</code> × <code>3dmm</code> × 0.24 mm), on a blobby, slightly cartoonish crown of clumps (32 by default).</li>
   <li>Leaves are placed organically: no visible order, complete coverage, each pointing down-slope with smooth variation. Overlapping leaves sit at different heights.</li>
   <li>Leaves on the crown's underside are flattened until they print, never culled; the underside is an end-to-end arch.</li>
   <li>Wood and clumps are bevelled wherever they would hang.</li>
   <li>Only the crown's branching is a tile control (open, normal, dense); the branch details are expert controls in parts files.</li>
-  <li>A tree's height is its <code>top=</code>, a height above zero like every top; <code>bottom</code> is the ground at its foot. It is 20 to 120 mm over its foot, or the build stops with the top's span. <code>size=</code> is not a tree's: <code>dharmatiles migrate</code> rewrites <code>size=40</code> to <code>top="bottom + 40"</code>. A call's <code>top=</code> (<code>oak top="bottom + 60"</code>) is the tree's inside it.</li>
+  <li>A tree's height is its <code>top=</code>, a height above zero like every top; <code>$bottom</code> is the ground at its foot. It is 20 to 120dmm over its foot, or the build stops with the top's span. A call's <code>top=</code> (<code>oak top="$bottom + 60dmm"</code>) is the tree's inside it. A tree sets only <code>$bottom</code> and <code>$region</code>.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

@@ -159,8 +159,11 @@ impl Control {
         let mut i = 0;
         while i < chars.len() {
             let c = chars[i];
-            let word_before =
-                i > 0 && (chars[i - 1].is_alphanumeric() || "_$.".contains(chars[i - 1]));
+            // `..` is a range's dots: the number after them is a number of its own
+            let word_before = i > 0
+                && (chars[i - 1].is_alphanumeric()
+                    || "_$".contains(chars[i - 1])
+                    || (chars[i - 1] == '.' && !(i > 1 && chars[i - 2] == '.')));
             if c.is_ascii_digit() && !word_before {
                 let start = i;
                 while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
@@ -662,6 +665,16 @@ mod tests {
         assert!(matches!(height.default_value(), Some(Value::Num(_))));
         let boards = element("planks").unwrap().control("boards").unwrap();
         assert!(matches!(boards.default_value(), Some(Value::Num(_))));
+    }
+
+    #[test]
+    fn a_default_in_format_1_carries_its_unit_at_both_ends() {
+        let rock = element("rock").unwrap();
+        let size = rock.control("size").unwrap();
+        assert_eq!(size.default_in(false), size.default);
+        assert_eq!(size.default_in(true), "6dmm..15dmm");
+        let crown = element("tree").unwrap().control("crown").unwrap();
+        assert_eq!(crown.sub("shape").unwrap().default_in(true), "round");
     }
 
     #[test]

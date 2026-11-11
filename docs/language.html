@@ -13,54 +13,59 @@
 <header class="hero">
   <div class="eyebrow">The tile language · guide</div>
   <h1>The tile language</h1>
-  <p class="lede">A tile is a short <code>.dtile</code> text file that names built-in elements (ground, dirt, grass, rock, tree, wall, cliff) and says where they go. You write millimetres for a 35 mm square, name tile edges instead of walking lines, describe character in words, and list things in any order. The files are KDL v2 underneath. This page is the guide; every element has its own page in the <a href="elements/index.html">elements reference</a>.</p>
+  <p class="lede">A tile is a short <code>.dtile</code> text file that names built-in elements (ground, dirt, grass, rock, tree, wall, cliff) and says where they go. Every length carries its unit (<code>8dmm</code>), points are written across and down from the tile's north-west corner (<code>"(0.65sq, 1sq)"</code>), heights read the library's <code>$</code> names, and character is described in words. Things are built in the order they are listed. The files are KDL v2 underneath. This page is the guide; every element has its own page in the <a href="elements/index.html">elements reference</a>.</p>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#document">1. What a tile document is</a></li>
   <li><a href="#syntax">2. Syntax basics</a></li>
-  <li><a href="#units">3. Units, heights and scaling</a></li>
-  <li><a href="#places">4. Edges, points, lines and regions</a></li>
-  <li><a href="#placement">5. Placement and scatter</a></li>
-  <li><a href="#elements">6. The elements</a></li>
-  <li><a href="#parts">7. Parts: use, define, param</a></li>
-  <li><a href="#errors">8. Errors</a></li>
-  <li><a href="#examples">9. Worked examples</a></li>
+  <li><a href="#names">3. Names: <code>$</code> names, <code>let</code> and <code>override</code></a></li>
+  <li><a href="#units">4. Units and kinds</a></li>
+  <li><a href="#heights">5. Heights: tops and pins</a></li>
+  <li><a href="#places">6. Coordinates, points, lines and regions</a></li>
+  <li><a href="#placement">7. Placement and scatter</a></li>
+  <li><a href="#elements">8. The elements</a></li>
+  <li><a href="#parts">9. Parts: use, define, param</a></li>
+  <li><a href="#errors">10. Errors</a></li>
+  <li><a href="#examples">11. Worked examples</a></li>
   <li><a href="#rules">Rules of the language</a></li>
 </ol></nav>
 <article class="doc">
 
-
 <h2 id="document">1. What a tile document is</h2>
-<p>A tile document is one <code>.dtile</code> file holding exactly one <code>tile</code> node. The tile has a size and a seed, and a body with (its file name is its name: <code>tile</code> takes none):</p>
+<p>A tile document is one <code>.dtile</code> file holding exactly one <code>tile</code> node, after a header line. The tile has a size and a seed, and a body with (its file name is its name: <code>tile</code> takes none):</p>
 <ul>
   <li><code>about</code>: optional free text, one string;</li>
-  <li><code>let</code> and <code>override</code>: optional named heights this tile adds or replaces;</li>
-  <li><code>line</code> and <code>region</code>: only for tiles divided into areas;</li>
+  <li><code>let</code> and <code>override</code>: optional names this tile adds or replaces (<a href="#names">section 3</a>);</li>
+  <li><code>point</code>, <code>line</code> and <code>region</code>: places, for tiles divided into areas;</li>
   <li><code>stack</code>: exactly one, listing the elements and definitions that make the tile.</li>
 </ul>
-<p>Above the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>edges</code> (the edge contract). Anything else at the top level is an error, apart from the header line below.</p>
+<p>Between the header and the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>defaults</code> (the edge contract). Anything else at the top level is an error.</p>
 <h3 id="header">The header line and the format</h3>
-<p>A document of any kind (a tile, a parts file, a printer profile, a palette) may start with one line that says which version of the language it is written in:</p>
-<pre><code>dharmatiles version=0</code></pre>
-<p>It is the first node of the file, once; it takes <code>version=</code> and nothing else. A whole number may be bare; anything with a second dot or a <code>+</code> is quoted, since KDL reads a bare <code>1.10</code> as the number 1.1: <code>version="0.9"</code>, <code>version="0.9.0+120.gf9481c8"</code>. Only the major part matters: it is the document's <strong>format</strong>. A document with no header line is format 0, which is every tile in the library. This program reads format 0; a document of a newer format is refused (<code>dt::format-newer</code>: &ldquo;this tile is format 2; this dharmatiles reads up to 0&rdquo;), and a header out of place, repeated or malformed is refused with its own error (<code>dt::header</code>, <code>dt::header-first</code>, <code>dt::header-twice</code>, <code>dt::header-version</code>). The header is not an element, and editing a tile in the editor leaves it exactly as written. <code>dharmatiles --version</code> and the editor's <em>About</em> box (in the view's <kbd>⋯</kbd> menu) give the program's own version and the formats it reads: <code>dharmatiles 0.9.0+120.gf9481c8 (tile formats 0.x)</code>.</p>
-<p>The program's version is drawn from git: <code>X.Y.Z</code> at the release tag <code>vX.Y.Z</code>; <code>X.Y.Z+N.gHASH</code> on main, N commits past it; <code>X.Y.Z+branch.N.gHASH</code> on another branch; and <code>.dirty</code> added when the engine's files have uncommitted changes. A build record carries it.</p>
+<p>A document of any kind (a tile, a parts file, a printer profile, a palette) starts with one line that says which version of the language it is written in:</p>
+<pre><code>dharmatiles version="1.0.0"</code></pre>
+<p>It is the first node of the file, once; it takes <code>version=</code> and nothing else. By hand the major number is enough: <code>dharmatiles version=1</code>. A version with a second dot or a <code>+</code> is quoted, since KDL reads a bare <code>1.10</code> as the number 1.1. Only the major part matters to reading: it is the document's <strong>format</strong>, and this program reads format 1. The editor and <code>dharmatiles migrate</code> write the full version of the program that wrote the file, as the library's files do (<code>"1.0.0"</code>); re-saving a document leaves the line as it is.</p>
+<p>A document with no header is format 0, the language before this one. It still loads: the program carries it to format 1 in memory, builds that, and shows a <code>dt::migrated</code> warning wherever the tile is shown (the CLI, the preview, the editor). The file is untouched until you ask: <code>dharmatiles migrate FILE</code> rewrites it in place (comments and layout kept; <code>--check</code> says what would change and writes nothing), after building the tile both ways and checking that the mesh is identical, and the editor offers <em>Update this file</em>. A document with no header that already uses a format 1 form is refused with <code>dt::migrate-header</code> (&ldquo;add <code>dharmatiles version=1</code> at the top&rdquo;), and a document of a newer format than the program reads is refused with <code>dt::format-newer</code>. A tile and the parts it uses share a format (<code>dt::format-mixed</code>). A header out of place, repeated or malformed has its own error (<code>dt::header</code>, <code>dt::header-first</code>, <code>dt::header-twice</code>, <code>dt::header-version</code>).</p>
+<p><code>dharmatiles --version</code> and the editor's <em>About</em> box (in the view's <kbd>⋯</kbd> menu) give the program's own version and the formats it reads. The program's version is drawn from git: <code>X.Y.Z</code> at the release tag <code>vX.Y.Z</code>; <code>X.Y.Z+N.gHASH</code> on main, N commits past it; <code>X.Y.Z+branch.N.gHASH</code> on another branch; and <code>.dirty</code> added when the engine's files have uncommitted changes. A build record carries it.</p>
 <p>The smallest tile in the library:</p>
-<pre><code>// library/tests/ground/1x1-flat.dtile
+<pre><code>dharmatiles version="1.0.0"
+
+// library/tests/ground/1x1-flat.dtile
 tile size="1x1" {
     about "Flat ground at the edge height (3.4 mm) on one square: the first tile built end to end."
     stack {
         base
-        dirt top=dirtEdgeHeight clods=none   // flat, at the edge height (3.4 mm)
+        dirt top="$dirtEdgeHeight" clods=none   // flat, at the edge height (3.4 mm)
     }
 }</code></pre>
 <p>Its stack starts with <code>base</code>, the connector; a stack with no <code>base</code> line has no base, and prints flat on the bed from zero. <code>dharmatiles build lib:tests/ground/1x1-flat.dtile</code> builds it for DungeonBlocks, the default system.</p>
 
 <dl class="defs">
   <dt>element</dt><dd>Anything a document can write: the document's own (<code>tile</code>, <code>line</code>, <code>region</code>, <code>stack</code>, …) and the built-in terrain (<code>dirt</code>, <code>grass</code>, <code>rock</code>, <code>tree</code>, <code>wall</code>, <code>cliff</code>, …), plus <code>scatter</code>. Each has a page in the <a href="elements/index.html">elements reference</a>.</dd>
-  <dt>control</dt><dd>A setting of an element, written as a property (<code>height=40</code>) or as a child line (<code>height 40</code>).</dd>
-  <dt>group</dt><dd>A control that holds only sub-controls, written as properties on its own line: <code>leaf length=4.5 width=3</code>.</dd>
+  <dt>control</dt><dd>A setting of an element, written as a property (<code>height="40dmm"</code>) or as a child line (<code>height "40dmm"</code>).</dd>
+  <dt>group</dt><dd>A control that holds only sub-controls, written as properties on its own line: <code>leaf length="4.5dmm" width="3dmm"</code>.</dd>
   <dt>thing</dt><dd>One solid object: a rock, a tree, or a definition whose stack is one thing (an <code>oak</code>).</dd>
   <dt>definition</dt><dd>A named, reusable stack (<code>define lawn { … }</code>) that a tile calls like an element.</dd>
+  <dt>tile, square, cell</dt><dd>The whole printed output; one 35 mm DungeonBlocks unit (25.4 mm for OpenLOCK) of it; one subdivision of a square that the program works in. <code>sq</code> is the unit for a square.</dd>
 </dl>
 
 <h2 id="syntax">2. Syntax basics</h2>
@@ -68,61 +73,60 @@ tile size="1x1" {
 <div class="tbl"><table>
 <thead><tr><th>Rule</th><th>Example</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td>A node is a name, then values and properties, then an optional block.</td><td><code>rock size=8 shape=flat { … }</code></td><td>Properties are <code>key=value</code>; a block is <code>{ … }</code>.</td></tr>
-<tr><td>A control may go on the line or as a child line.</td><td><code>cliff height=35</code> or <code>cliff { height 35 }</code></td><td>Both decode the same. Edits keep whichever form is written; new controls go on the line.</td></tr>
-<tr><td>Ranges, percents and points are quoted.</td><td><code>size="1..6"</code>, <code>cover="85%"</code>, <code>at="0.65,1"</code></td><td>KDL numbers can't contain <code>..</code>, <code>%</code> or <code>,</code>. A forgotten quote gets an error that says what to write.</td></tr>
+<tr><td>A node is a name, then values and properties, then an optional block.</td><td><code>rock size="8dmm" shape=flat { … }</code></td><td>Properties are <code>key=value</code>; a block is <code>{ … }</code>.</td></tr>
+<tr><td>A control may go on the line or as a child line.</td><td><code>cliff height="35dmm"</code> or <code>cliff { height "35dmm" }</code></td><td>Both decode the same. Edits keep whichever form is written; new controls go on the line.</td></tr>
+<tr><td>Anything with a unit, a range, a <code>$</code>, a percent or a point is quoted.</td><td><code>size="1dmm .. 6dmm"</code>, <code>cover="85%"</code>, <code>at="(0.65sq, 1sq)"</code>, <code>top="$groundHeight"</code></td><td>KDL numbers can't contain letters, <code>..</code>, <code>%</code>, <code>$</code> or <code>,</code>. A forgotten quote gets an error that says what to write. A bare number is for counts, densities and fractions (<code>count=3</code>, <code>perSquare=45</code>).</td></tr>
 <tr><td>Switches are <code>#true</code> and <code>#false</code>.</td><td>—</td><td>Bare <code>true</code> is KDL v1 and an error. Few controls are switches: most take a word (<code>clods some</code>, <code>leaves bare</code>).</td></tr>
 <tr><td><code>//</code> comments a line; <code>/-</code> switches off the next node.</td><td><code>/- tree</code></td><td></td></tr>
 <tr><td><code>"""</code> opens a multi-line string.</td><td><code>about """ … """</code></td><td></td></tr>
-<tr><td>Several nodes on one line are separated by <code>;</code>.</td><td><code>region verge { boundedBy trail; fill "0.15,1" }</code></td><td></td></tr>
+<tr><td>Several nodes on one line are separated by <code>;</code>.</td><td><code>region verge { boundedBy trail; fill "(0.15sq, 0sq)" }</code></td><td></td></tr>
 </tbody></table></div>
 
 <h3 id="expressions">Values inside quotes</h3>
 <p>A quoted value is a tiny expression:</p>
-<pre><code>value  := sum ( ".." sum )?        a range "lo..hi", drawn afresh per thing
+<pre data-check="skip"><code>value  := sum ( ".." sum )?        a range "lo .. hi", drawn afresh per thing
 sum    := prod ( ("+" | "-") prod )*
 prod   := unary ( ("*" | "/") unary )*
 unary  := "-" unary | atom
-atom   := number "%"? | name | "(" sum ")" | "[" sum ".." sum "]" | weighting      see Weighted ranges</code></pre>
-<p>A range is written <code>lo..hi</code> or <code>[lo .. hi]</code>, in a control value as in a height, and the brackets go anywhere a number does: <code>size="[1 .. 2] + [3 .. 4]"</code> adds two ranges. A bare <code>lo..hi</code> reaches over sums, so <code>1..2 + 3</code> is <code>1..5</code>; but when a value holds two bare ranges, or one beside a bracket or a weighting, each <code>..</code> binds tighter than the arithmetic and <code>1..2 + 3..4</code> is two ranges added. The brackets always say it plainly.</p>
-<p>A name is a parameter of the enclosing definition or, where a height is expected, a <code>let</code> name: <code>level="groundHeight - 1"</code>, <code>level="wallHeight / 2"</code>. The only calls in a quoted control value are the weightings below; there are no loops or assignments. <code>%</code> is the only suffix.</p>
+atom   := number unit? | number "%" | name | "$" name | call | "(" sum ")" | "[" sum ".." sum "]" | weighting      see Weighted ranges</code></pre>
+<p>A range is written <code>lo .. hi</code> or <code>[lo .. hi]</code> in a control value, and the brackets go anywhere a number does: <code>size="[1dmm .. 2dmm] + [3dmm .. 4dmm]"</code> adds two ranges. In a height (a <code>top=</code>, a <code>let</code>) and inside a call, a range is always in brackets. A bare <code>lo .. hi</code> in a control value reaches over sums, so <code>1dmm .. 2dmm + 3dmm</code> is <code>1dmm .. 5dmm</code>; but when a value holds two bare ranges, or one beside a bracket or a weighting, each <code>..</code> binds tighter than the arithmetic. The brackets always say it plainly.</p>
+<p>A name is a parameter of the enclosing definition or a <code>let</code> of the tile (a <em>plain name</em>), or a name starting with <code>$</code> that the context supplies (<a href="#names">section 3</a>). The calls are the weightings below, the functions <code>sin cos abs min max clamp smooth</code>, the coordinates <code>x y d a</code> and <code>parent</code>, and <code>point</code> and <code>polar</code> (<a href="#places">section 6</a>); there are no loops or assignments. A number may be followed by a unit (<code>8dmm</code>, <code>90deg</code>), and by <code>%</code> (<a href="#units">section 4</a>).</p>
 
 <h3 id="weighted">Weighted ranges</h3>
 <p>A range that is drawn once per thing can say which parts of it are likelier. The range goes inside a function:</p>
-<pre><code>weighting := ("flat" | "low" | "high" | "bell" | "peak" | "ends") "(" range ( "," number )* ")"
+<pre data-check="skip"><code>weighting := ("flat" | "low" | "high" | "bell" | "peak" | "ends") "(" range ( "," number )* ")"
            | "steps" "(" range ( "," weight )+ ")"
            | "mix" "(" part "," weight ( "," part "," weight )+ ")"       part := a call above, over the same range
 list      := "[" item ( "," item )+ "]"                                   item := value ( ":" weight )?
 range     := sum ".." sum | "[" sum ".." sum "]"</code></pre>
-<p>Nine functions in all. A comma inside brackets makes a list; <code>..</code> makes a range.</p>
-<pre><code>scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-scatter perSquare=3 { rock size="bell(6..10)" }
-scatter perSquare=3 { stone size="[3, 4:3, 5.5]" }
-let small "low(1..6, 11)"</code></pre>
+<p>Nine functions in all. A comma inside brackets makes a list; <code>..</code> makes a range. The range carries its units like any other value (<a href="#units">section 4</a>): <code>1dmm .. 6dmm</code> for a size, <code>0.2sq .. 0.6sq</code> for a position. The numbers after the range are plain numbers and have none.</p>
+<pre><code>scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone size="low(1dmm .. 6dmm, 11)" }
+scatter perSquare=3 { rock size="bell(6dmm .. 10dmm)" }
+scatter perSquare=3 { stone size="[3dmm, 4dmm:3, 5.5dmm]" }</code></pre>
 <div class="weights" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0">
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>flat</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,43.6 8.3,43.6 10.6,43.6 12.9,43.6 15.2,43.6 17.5,43.6 19.8,43.6 22.1,43.6 24.4,43.6 26.7,43.6 29.0,43.6 31.3,43.6 33.6,43.6 35.9,43.6 38.2,43.6 40.5,43.6 42.8,43.6 45.1,43.6 47.4,43.6 49.7,43.6 52.0,43.6 54.3,43.6 56.6,43.6 58.9,43.6 61.2,43.6 63.5,43.6 65.8,43.6 68.1,43.6 70.4,43.6 72.7,43.6 75.0,43.6 77.3,43.6 79.6,43.6 81.9,43.6 84.2,43.6 86.5,43.6 88.8,43.6 91.1,43.6 93.4,43.6 95.7,43.6 98.0,43.6 100.3,43.6 102.6,43.6 104.9,43.6 107.2,43.6 109.5,43.6 111.8,43.6 114.1,43.6 116.4,43.6 118.7,43.6 121.0,43.6 123.3,43.6 125.6,43.6 127.9,43.6 130.2,43.6 132.5,43.6 134.8,43.6 137.1,43.6 139.4,43.6 141.7,43.6 144.0,43.6" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>1..6</code> or <code>flat(1..6)</code></div><div class="muted small">Every value equally likely.</div></figure>
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>low</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,28.1 8.3,28.9 10.6,29.7 12.9,30.4 15.2,31.1 17.5,31.8 19.8,32.5 22.1,33.2 24.4,33.9 26.7,34.5 29.0,35.1 31.3,35.7 33.6,36.3 35.9,36.9 38.2,37.5 40.5,38.1 42.8,38.6 45.1,39.1 47.4,39.7 49.7,40.2 52.0,40.7 54.3,41.2 56.6,41.6 58.9,42.1 61.2,42.6 63.5,43.0 65.8,43.4 68.1,43.9 70.4,44.3 72.7,44.7 75.0,45.1 77.3,45.5 79.6,45.8 81.9,46.2 84.2,46.6 86.5,46.9 88.8,47.3 91.1,47.6 93.4,47.9 95.7,48.3 98.0,48.6 100.3,48.9 102.6,49.2 104.9,49.5 107.2,49.8 109.5,50.0 111.8,50.3 114.1,50.6 116.4,50.8 118.7,51.1 121.0,51.3 123.3,51.6 125.6,51.8 127.9,52.1 130.2,52.3 132.5,52.5 134.8,52.7 137.1,52.9 139.4,53.1 141.7,53.3 144.0,53.5" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>low(1..6, 4)</code></div><div class="muted small">Mostly low. The ratio is how many times likelier the low end is than the high end: 1 is flat, 4 the default, a fraction leans high.</div></figure>
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>high</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,53.5 8.3,53.3 10.6,53.1 12.9,52.9 15.2,52.7 17.5,52.5 19.8,52.3 22.1,52.1 24.4,51.8 26.7,51.6 29.0,51.3 31.3,51.1 33.6,50.8 35.9,50.6 38.2,50.3 40.5,50.0 42.8,49.8 45.1,49.5 47.4,49.2 49.7,48.9 52.0,48.6 54.3,48.3 56.6,47.9 58.9,47.6 61.2,47.3 63.5,46.9 65.8,46.6 68.1,46.2 70.4,45.8 72.7,45.5 75.0,45.1 77.3,44.7 79.6,44.3 81.9,43.9 84.2,43.4 86.5,43.0 88.8,42.6 91.1,42.1 93.4,41.6 95.7,41.2 98.0,40.7 100.3,40.2 102.6,39.7 104.9,39.1 107.2,38.6 109.5,38.1 111.8,37.5 114.1,36.9 116.4,36.3 118.7,35.7 121.0,35.1 123.3,34.5 125.6,33.9 127.9,33.2 130.2,32.5 132.5,31.8 134.8,31.1 137.1,30.4 139.4,29.7 141.7,28.9 144.0,28.1" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>high(1..6, 4)</code></div><div class="muted small">Mostly high: the mirror of <code>low</code>.</div></figure>
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>bell</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,60.3 8.3,60.0 10.6,59.5 12.9,59.0 15.2,58.4 17.5,57.7 19.8,56.9 22.1,56.0 24.4,55.0 26.7,53.9 29.0,52.6 31.3,51.3 33.6,49.8 35.9,48.2 38.2,46.5 40.5,44.8 42.8,42.9 45.1,41.1 47.4,39.2 49.7,37.3 52.0,35.4 54.3,33.6 56.6,31.9 58.9,30.2 61.2,28.8 63.5,27.5 65.8,26.4 68.1,25.5 70.4,24.9 72.7,24.5 75.0,24.4 77.3,24.5 79.6,24.9 81.9,25.5 84.2,26.4 86.5,27.5 88.8,28.8 91.1,30.2 93.4,31.9 95.7,33.6 98.0,35.4 100.3,37.3 102.6,39.2 104.9,41.1 107.2,42.9 109.5,44.8 111.8,46.5 114.1,48.2 116.4,49.8 118.7,51.3 121.0,52.6 123.3,53.9 125.6,55.0 127.9,56.0 130.2,56.9 132.5,57.7 134.8,58.4 137.1,59.0 139.4,59.5 141.7,60.0 144.0,60.3" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>bell(1..6, 0.2, 0.5)</code></div><div class="muted small">Mostly in the middle. Spread is a share of the width (0.05 to 1); the centre is optional. Cut at the range.</div></figure>
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>peak</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,62.0 8.3,60.8 10.6,59.5 12.9,58.3 15.2,57.0 17.5,55.8 19.8,54.5 22.1,53.3 24.4,52.0 26.7,50.8 29.0,49.6 31.3,48.3 33.6,47.1 35.9,45.8 38.2,44.6 40.5,43.3 42.8,42.1 45.1,40.8 47.4,39.6 49.7,38.4 52.0,37.1 54.3,35.9 56.6,34.6 58.9,33.4 61.2,32.1 63.5,30.9 65.8,29.6 68.1,28.4 70.4,27.2 72.7,25.9 75.0,24.7 77.3,25.9 79.6,27.2 81.9,28.4 84.2,29.6 86.5,30.9 88.8,32.1 91.1,33.4 93.4,34.6 95.7,35.9 98.0,37.1 100.3,38.4 102.6,39.6 104.9,40.8 107.2,42.1 109.5,43.3 111.8,44.6 114.1,45.8 116.4,47.1 118.7,48.3 121.0,49.6 123.3,50.8 125.6,52.0 127.9,53.3 130.2,54.5 132.5,55.8 134.8,57.0 137.1,58.3 139.4,59.5 141.7,60.8 144.0,62.0" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>peak(1..6, 0.5, 0.5)</code></div><div class="muted small">A favourite value falling off in a straight line over the spread. Cut at the range, so a wide spread leaves the ends above zero; a centre at 0 or 1 makes a ramp.</div></figure>
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>ends</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,24.6 8.3,25.8 10.6,27.1 12.9,28.3 15.2,29.6 17.5,30.8 19.8,32.1 22.1,33.3 24.4,34.6 26.7,35.8 29.0,37.1 31.3,38.3 33.6,39.6 35.9,40.8 38.2,42.1 40.5,43.3 42.8,44.5 45.1,45.8 47.4,47.0 49.7,48.3 52.0,49.5 54.3,50.8 56.6,52.0 58.9,53.3 61.2,54.5 63.5,55.8 65.8,57.0 68.1,58.3 70.4,59.5 72.7,60.8 75.0,62.0 77.3,60.8 79.6,59.5 81.9,58.3 84.2,57.0 86.5,55.8 88.8,54.5 91.1,53.3 93.4,52.0 95.7,50.8 98.0,49.5 100.3,48.3 102.6,47.0 104.9,45.8 107.2,44.5 109.5,43.3 111.8,42.1 114.1,40.8 116.4,39.6 118.7,38.3 121.0,37.1 123.3,35.8 125.6,34.6 127.9,33.3 130.2,32.1 132.5,30.8 134.8,29.6 137.1,28.3 139.4,27.1 141.7,25.8 144.0,24.6" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>ends(1..6, 1, 0.5)</code></div><div class="muted small">The bell turned over: a valley at the centre, rising as a power. 1 is a straight V, 2 a parabola, 0 flat; a centre at an end makes a ramp away from it.</div></figure>
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>steps</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,54.0 52.0,54.0 52.0,29.9 98.0,29.9 98.0,46.0 144.0,46.0" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>steps(1..6, 1, 4, 2)</code></div><div class="muted small">Drawn by hand: the range cut into equal bins, one weight each (up to 32), flat inside a bin. A weight of 0 leaves a gap.</div></figure>
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>list</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><line x1="6.0" y1="62" x2="6.0" y2="41.2" stroke="var(--accent)" stroke-width="2"/><circle cx="6.0" cy="41.2" r="3" fill="var(--accent)"/><line x1="75.0" y1="62" x2="75.0" y2="36.0" stroke="var(--accent)" stroke-width="2"/><circle cx="75.0" cy="36.0" r="3" fill="var(--accent)"/><line x1="144.0" y1="62" x2="144.0" y2="56.8" stroke="var(--accent)" stroke-width="2"/><circle cx="144.0" cy="56.8" r="3" fill="var(--accent)"/></svg><div class="small"><code>[1:4, 2:5, 3:1]</code></div><div class="muted small">One of the values written, each as likely as its weight (1 when left out). Values need not be whole or evenly spaced, and a list has no range of its own.</div></figure>
-<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>mix</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,56.1 8.3,55.8 10.6,55.5 12.9,55.1 15.2,54.6 17.5,54.1 19.8,53.5 22.1,52.8 24.4,52.0 26.7,51.2 29.0,50.3 31.3,49.2 33.6,48.1 35.9,46.9 38.2,45.7 40.5,44.4 42.8,43.0 45.1,41.6 47.4,40.1 49.7,38.7 52.0,37.3 54.3,35.9 56.6,34.6 58.9,33.4 61.2,32.3 63.5,31.4 65.8,30.5 68.1,29.9 70.4,29.4 72.7,29.1 75.0,29.0 77.3,29.1 79.6,29.4 81.9,29.9 84.2,30.5 86.5,31.4 88.8,32.3 91.1,33.4 93.4,34.6 95.7,35.9 98.0,37.3 100.3,38.7 102.6,40.1 104.9,41.6 107.2,43.0 109.5,44.4 111.8,45.7 114.1,46.9 116.4,48.1 118.7,49.2 121.0,50.3 123.3,51.2 125.6,52.0 127.9,52.8 130.2,53.5 132.5,54.1 134.8,54.6 137.1,55.1 139.4,55.5 141.7,55.8 144.0,56.1" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>mix(bell(1..6), 3, flat(1..6), 1)</code></div><div class="muted small">A blend of weightings over the same range, each part as likely as its weight: mostly typical, a few anywhere.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>flat</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,43.6 8.3,43.6 10.6,43.6 12.9,43.6 15.2,43.6 17.5,43.6 19.8,43.6 22.1,43.6 24.4,43.6 26.7,43.6 29.0,43.6 31.3,43.6 33.6,43.6 35.9,43.6 38.2,43.6 40.5,43.6 42.8,43.6 45.1,43.6 47.4,43.6 49.7,43.6 52.0,43.6 54.3,43.6 56.6,43.6 58.9,43.6 61.2,43.6 63.5,43.6 65.8,43.6 68.1,43.6 70.4,43.6 72.7,43.6 75.0,43.6 77.3,43.6 79.6,43.6 81.9,43.6 84.2,43.6 86.5,43.6 88.8,43.6 91.1,43.6 93.4,43.6 95.7,43.6 98.0,43.6 100.3,43.6 102.6,43.6 104.9,43.6 107.2,43.6 109.5,43.6 111.8,43.6 114.1,43.6 116.4,43.6 118.7,43.6 121.0,43.6 123.3,43.6 125.6,43.6 127.9,43.6 130.2,43.6 132.5,43.6 134.8,43.6 137.1,43.6 139.4,43.6 141.7,43.6 144.0,43.6" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>1dmm .. 6dmm</code> or <code>flat(1dmm .. 6dmm)</code></div><div class="muted small">Every value equally likely.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>low</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,28.1 8.3,28.9 10.6,29.7 12.9,30.4 15.2,31.1 17.5,31.8 19.8,32.5 22.1,33.2 24.4,33.9 26.7,34.5 29.0,35.1 31.3,35.7 33.6,36.3 35.9,36.9 38.2,37.5 40.5,38.1 42.8,38.6 45.1,39.1 47.4,39.7 49.7,40.2 52.0,40.7 54.3,41.2 56.6,41.6 58.9,42.1 61.2,42.6 63.5,43.0 65.8,43.4 68.1,43.9 70.4,44.3 72.7,44.7 75.0,45.1 77.3,45.5 79.6,45.8 81.9,46.2 84.2,46.6 86.5,46.9 88.8,47.3 91.1,47.6 93.4,47.9 95.7,48.3 98.0,48.6 100.3,48.9 102.6,49.2 104.9,49.5 107.2,49.8 109.5,50.0 111.8,50.3 114.1,50.6 116.4,50.8 118.7,51.1 121.0,51.3 123.3,51.6 125.6,51.8 127.9,52.1 130.2,52.3 132.5,52.5 134.8,52.7 137.1,52.9 139.4,53.1 141.7,53.3 144.0,53.5" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>low(1dmm .. 6dmm, 4)</code></div><div class="muted small">Mostly low. The ratio is how many times likelier the low end is than the high end: 1 is flat, 4 the default, a fraction leans high.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>high</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,53.5 8.3,53.3 10.6,53.1 12.9,52.9 15.2,52.7 17.5,52.5 19.8,52.3 22.1,52.1 24.4,51.8 26.7,51.6 29.0,51.3 31.3,51.1 33.6,50.8 35.9,50.6 38.2,50.3 40.5,50.0 42.8,49.8 45.1,49.5 47.4,49.2 49.7,48.9 52.0,48.6 54.3,48.3 56.6,47.9 58.9,47.6 61.2,47.3 63.5,46.9 65.8,46.6 68.1,46.2 70.4,45.8 72.7,45.5 75.0,45.1 77.3,44.7 79.6,44.3 81.9,43.9 84.2,43.4 86.5,43.0 88.8,42.6 91.1,42.1 93.4,41.6 95.7,41.2 98.0,40.7 100.3,40.2 102.6,39.7 104.9,39.1 107.2,38.6 109.5,38.1 111.8,37.5 114.1,36.9 116.4,36.3 118.7,35.7 121.0,35.1 123.3,34.5 125.6,33.9 127.9,33.2 130.2,32.5 132.5,31.8 134.8,31.1 137.1,30.4 139.4,29.7 141.7,28.9 144.0,28.1" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>high(1dmm .. 6dmm, 4)</code></div><div class="muted small">Mostly high: the mirror of <code>low</code>.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>bell</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,60.3 8.3,60.0 10.6,59.5 12.9,59.0 15.2,58.4 17.5,57.7 19.8,56.9 22.1,56.0 24.4,55.0 26.7,53.9 29.0,52.6 31.3,51.3 33.6,49.8 35.9,48.2 38.2,46.5 40.5,44.8 42.8,42.9 45.1,41.1 47.4,39.2 49.7,37.3 52.0,35.4 54.3,33.6 56.6,31.9 58.9,30.2 61.2,28.8 63.5,27.5 65.8,26.4 68.1,25.5 70.4,24.9 72.7,24.5 75.0,24.4 77.3,24.5 79.6,24.9 81.9,25.5 84.2,26.4 86.5,27.5 88.8,28.8 91.1,30.2 93.4,31.9 95.7,33.6 98.0,35.4 100.3,37.3 102.6,39.2 104.9,41.1 107.2,42.9 109.5,44.8 111.8,46.5 114.1,48.2 116.4,49.8 118.7,51.3 121.0,52.6 123.3,53.9 125.6,55.0 127.9,56.0 130.2,56.9 132.5,57.7 134.8,58.4 137.1,59.0 139.4,59.5 141.7,60.0 144.0,60.3" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>bell(1dmm .. 6dmm, 0.2, 0.5)</code></div><div class="muted small">Mostly in the middle. Spread is a share of the width (0.05 to 1); the centre is optional. Cut at the range.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>peak</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,62.0 8.3,60.8 10.6,59.5 12.9,58.3 15.2,57.0 17.5,55.8 19.8,54.5 22.1,53.3 24.4,52.0 26.7,50.8 29.0,49.6 31.3,48.3 33.6,47.1 35.9,45.8 38.2,44.6 40.5,43.3 42.8,42.1 45.1,40.8 47.4,39.6 49.7,38.4 52.0,37.1 54.3,35.9 56.6,34.6 58.9,33.4 61.2,32.1 63.5,30.9 65.8,29.6 68.1,28.4 70.4,27.2 72.7,25.9 75.0,24.7 77.3,25.9 79.6,27.2 81.9,28.4 84.2,29.6 86.5,30.9 88.8,32.1 91.1,33.4 93.4,34.6 95.7,35.9 98.0,37.1 100.3,38.4 102.6,39.6 104.9,40.8 107.2,42.1 109.5,43.3 111.8,44.6 114.1,45.8 116.4,47.1 118.7,48.3 121.0,49.6 123.3,50.8 125.6,52.0 127.9,53.3 130.2,54.5 132.5,55.8 134.8,57.0 137.1,58.3 139.4,59.5 141.7,60.8 144.0,62.0" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>peak(1dmm .. 6dmm, 0.5, 0.5)</code></div><div class="muted small">A favourite value falling off in a straight line over the spread. Cut at the range, so a wide spread leaves the ends above zero; a centre at 0 or 1 makes a ramp.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>ends</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,24.6 8.3,25.8 10.6,27.1 12.9,28.3 15.2,29.6 17.5,30.8 19.8,32.1 22.1,33.3 24.4,34.6 26.7,35.8 29.0,37.1 31.3,38.3 33.6,39.6 35.9,40.8 38.2,42.1 40.5,43.3 42.8,44.5 45.1,45.8 47.4,47.0 49.7,48.3 52.0,49.5 54.3,50.8 56.6,52.0 58.9,53.3 61.2,54.5 63.5,55.8 65.8,57.0 68.1,58.3 70.4,59.5 72.7,60.8 75.0,62.0 77.3,60.8 79.6,59.5 81.9,58.3 84.2,57.0 86.5,55.8 88.8,54.5 91.1,53.3 93.4,52.0 95.7,50.8 98.0,49.5 100.3,48.3 102.6,47.0 104.9,45.8 107.2,44.5 109.5,43.3 111.8,42.1 114.1,40.8 116.4,39.6 118.7,38.3 121.0,37.1 123.3,35.8 125.6,34.6 127.9,33.3 130.2,32.1 132.5,30.8 134.8,29.6 137.1,28.3 139.4,27.1 141.7,25.8 144.0,24.6" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>ends(1dmm .. 6dmm, 1, 0.5)</code></div><div class="muted small">The bell turned over: a valley at the centre, rising as a power. 1 is a straight V, 2 a parabola, 0 flat; a centre at an end makes a ramp away from it.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>steps</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,54.0 52.0,54.0 52.0,29.9 98.0,29.9 98.0,46.0 144.0,46.0" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>steps(1dmm .. 6dmm, 1, 4, 2)</code></div><div class="muted small">Drawn by hand: the range cut into equal bins, one weight each (up to 32), flat inside a bin. A weight of 0 leaves a gap.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>list</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><line x1="6.0" y1="62" x2="6.0" y2="41.2" stroke="var(--accent)" stroke-width="2"/><circle cx="6.0" cy="41.2" r="3" fill="var(--accent)"/><line x1="75.0" y1="62" x2="75.0" y2="36.0" stroke="var(--accent)" stroke-width="2"/><circle cx="75.0" cy="36.0" r="3" fill="var(--accent)"/><line x1="144.0" y1="62" x2="144.0" y2="56.8" stroke="var(--accent)" stroke-width="2"/><circle cx="144.0" cy="56.8" r="3" fill="var(--accent)"/></svg><div class="small"><code>[1dmm:4, 2dmm:5, 3dmm:1]</code></div><div class="muted small">One of the values written, each as likely as its weight (1 when left out). Values need not be whole or evenly spaced, and a list has no range of its own.</div></figure>
+<figure style="margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--raised)"><figcaption><strong>mix</strong></figcaption><svg viewBox="0 0 150 70" role="img" aria-hidden="true" width="150" height="70"><line x1="6" y1="62" x2="144" y2="62" stroke="var(--line-2)"/><line x1="6" y1="43.3" x2="144" y2="43.3" stroke="var(--line-2)" stroke-dasharray="2 3"/><polyline points="6.0,56.1 8.3,55.8 10.6,55.5 12.9,55.1 15.2,54.6 17.5,54.1 19.8,53.5 22.1,52.8 24.4,52.0 26.7,51.2 29.0,50.3 31.3,49.2 33.6,48.1 35.9,46.9 38.2,45.7 40.5,44.4 42.8,43.0 45.1,41.6 47.4,40.1 49.7,38.7 52.0,37.3 54.3,35.9 56.6,34.6 58.9,33.4 61.2,32.3 63.5,31.4 65.8,30.5 68.1,29.9 70.4,29.4 72.7,29.1 75.0,29.0 77.3,29.1 79.6,29.4 81.9,29.9 84.2,30.5 86.5,31.4 88.8,32.3 91.1,33.4 93.4,34.6 95.7,35.9 98.0,37.3 100.3,38.7 102.6,40.1 104.9,41.6 107.2,43.0 109.5,44.4 111.8,45.7 114.1,46.9 116.4,48.1 118.7,49.2 121.0,50.3 123.3,51.2 125.6,52.0 127.9,52.8 130.2,53.5 132.5,54.1 134.8,54.6 137.1,55.1 139.4,55.5 141.7,55.8 144.0,56.1" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="small"><code>mix(bell(1dmm .. 6dmm), 3, flat(1dmm .. 6dmm), 1)</code></div><div class="muted small">A blend of weightings over the same range, each part as likely as its weight: mostly typical, a few anywhere.</div></figure>
 
 </div>
 <p class="muted small">Each curve is the density over the range: higher means likelier, the dotted line is the plain range. A list has no density, so its values stand as bars, as tall as their share.</p>
-<p><strong>The numbers.</strong> <code>low</code> and <code>high</code> take a ratio over 0 (4 by default, no upper limit). <code>bell</code> and <code>peak</code> take a spread of 0.05 to 1 and a centre of 0 to 1. <code>ends</code> takes a power of 0 to 8 (1 by default) and the valley's centre. <code>steps</code> takes 2 to 32 weights and <code>mix</code> 2 to 16 parts; a list holds up to 64 values. A weight is 0 or more, and at least one must be above 0. A number outside its limits is <code>dt::range</code>, with the limits in the help; <code>dharmatiles elements rock</code> lists every function with its defaults and limits.</p>
-<p><strong>Lists.</strong> <code>[1:4, 2:5, 3:1]</code> draws 1, 2 or 3, each as likely as its weight; a missing weight is 1, so <code>[1, 2, 3, 4, 5, 6]</code> is a six-sided die, and on a count (<code>count</code>, <code>stems</code>) the same as <code>1..6</code>. On a size, <code>1..6</code> is every size between and the list is only the sizes written: <code>size="[2, 5:3, 8.5]"</code>. A weight of 0 is allowed beside one above 0. A value written twice is a <code>dt::weighting</code> error, and its help gives the list to write: <code>[1:4, 2:6]</code> for <code>[1:4, 2:5, 2:1]</code>. Values are drawn in ascending order, so a list moves and scales like any range.</p>
-<p><strong>Mix.</strong> <code>mix(bell(1..6), 3, flat(1..6), 1)</code> is three parts bell to one part flat. Every part is written over the same range (a different one is a <code>dt::weighting</code> error), and a part is a call, never a list or another mix.</p>
-<p>Written alone, a range is flat on every element. <code>a..b</code> and <code>[a .. b]</code> both read inside a call, in a quoted control value and in a height. The numbers after the range are plain numbers; a strength outside its limits is <code>dt::range</code>, with the limits in the help.</p>
+<p><strong>The numbers.</strong> Only the range has units; the numbers after it are plain. <code>low</code> and <code>high</code> take a ratio over 0 (4 by default, no upper limit). <code>bell</code> and <code>peak</code> take a spread of 0.05 to 1 and a centre of 0 to 1. <code>ends</code> takes a power of 0 to 8 (1 by default) and the valley's centre. <code>steps</code> takes 2 to 32 weights and <code>mix</code> 2 to 16 parts; a list holds up to 64 values. A weight is 0 or more, and at least one must be above 0. A number outside its limits is <code>dt::range</code>, with the limits in the help; <code>dharmatiles elements rock</code> lists every function with its defaults and limits.</p>
+<p><strong>Lists.</strong> <code>[1:4, 2:5, 3:1]</code> on a count draws 1, 2 or 3, each as likely as its weight; a missing weight is 1, so <code>[1, 2, 3, 4, 5, 6]</code> is a six-sided die, and on a count (<code>count</code>, <code>stems</code>) the same as <code>1..6</code>. On a size, <code>1dmm .. 6dmm</code> is every size between and the list is only the sizes written: <code>size="[2dmm, 5dmm:3, 8.5dmm]"</code>. A weight of 0 is allowed beside one above 0. A value written twice is a <code>dt::weighting</code> error, and its help gives the list to write: <code>[1:4, 2:6]</code> for <code>[1:4, 2:5, 2:1]</code>. Values are drawn in ascending order, so a list moves and scales like any range.</p>
+<p><strong>Mix.</strong> <code>mix(bell(1dmm .. 6dmm), 3, flat(1dmm .. 6dmm), 1)</code> is three parts bell to one part flat. Every part is written over the same range (a different one is a <code>dt::weighting</code> error), and a part is a call, never a list or another mix.</p>
+<p>Written alone, a range is flat on every element. <code>a .. b</code> and <code>[a .. b]</code> both read in a quoted control value; inside a call, or in a height, the brackets are the way to write it. The numbers after the range are plain numbers; a strength outside its limits is <code>dt::range</code>, with the limits in the help.</p>
 <ul>
-  <li><strong>Every range is its own draw.</strong> Write a range twice and it rolls twice: <code>[1 .. 2] + [3 .. 4]</code> is two dice. Each range draws from its value's own key and its position in the value, so editing one value never moves another's draws.</li>
+  <li><strong>Every range is its own draw.</strong> Write a range twice and it rolls twice: <code>[1dmm .. 2dmm] + [3dmm .. 4dmm]</code> is two dice. Each range draws from its value's own key and its position in the value, so editing one value never moves another's draws.</li>
   <li><strong>A weighted range goes on a draw, not on a band.</strong> A body's <code>top=</code>, a pin's top and a <code>within</code> distance are bands the solver fits, not draws (a tree's <code>top=</code> is a draw, one per tree): <code>low(…)</code> there is a <code>dt::weighting</code> error whose help gives the range to write. <code>flat(…)</code> is the plain range and is accepted anywhere a range is.</li>
-  <li><strong>A <code>let</code> name holds a distribution.</strong> <code>let small "low(1..6, 11)"</code> stands for that range with its odds, and a control that names <code>small</code> draws from it, each use its own roll. A tile's own <code>let</code> may be named by a size, count or density control; the library's heights may not.</li>
+  <li><strong>A <code>let</code> name holds a distribution.</strong> <code>let small "low(1dmm .. 6dmm, 11)"</code> stands for that range with its odds, and a control that names <code>small</code> draws from it, each use its own roll. A tile's own <code>let</code> may be named by a size, count or density control; the library's <code>$</code> heights may not.</li>
   <li><strong>A count has an equal chance for every whole number.</strong> A range on a count (<code>count</code>, <code>perSquare</code> as the number it makes, reeds' <code>clumps</code> and <code>stems</code>) is cut into one bin per whole number, ends rounded: <code>2..5</code> gives 2, 3, 4 and 5 a quarter each, the ends no rarer than the middle. A weighting moves the odds across the bins; a sum falls in the bin of its drawn place along its ends.</li>
-  <li><strong>Sums are dice.</strong> <code>size="[1 .. 2] + [3 .. 4]"</code> (or <code>"1..2 + 3..4"</code>) adds two rolls and lands anywhere in 4..6, most often near 5. A name holds the range, not a roll, so <code>s - s</code> with <code>let s "[1 .. 2]"</code> is two rolls, anywhere in -1..1. Numbers and names shift and scale, and a negative factor mirrors. Dividing by a range is refused. On a count the sum is rounded, and a band (<code>top=</code>, a pin) reads a sum as the interval it spans.</li>
-  <li>A weighting wraps a plain range: <code>low(bell(1..6))</code> and <code>low(3)</code> are <code>dt::weighting</code> errors. An unknown function is <code>dt::value</code>. A weighting on a range of no width has no effect, and <code>check</code> says so in a note.</li>
+  <li><strong>Sums are dice.</strong> <code>size="[1dmm .. 2dmm] + [3dmm .. 4dmm]"</code> adds two rolls and lands anywhere in 4dmm to 6dmm, most often near 5dmm. A name holds the range, not a roll, so <code>s - s</code> with <code>let s "[1dmm .. 2dmm]"</code> is two rolls, anywhere in -1dmm to 1dmm. Numbers and names shift and scale, and a negative factor mirrors. Dividing by a range is refused. On a count the sum is rounded, and a band (<code>top=</code>, a pin) reads a sum as the interval it spans.</li>
+  <li>A weighting wraps a plain range: <code>low(bell(1dmm .. 6dmm))</code> and <code>low(3)</code> are <code>dt::weighting</code> errors. An unknown function is <code>dt::value</code>. A weighting on a range of no width has no effect, and <code>check</code> says so in a note.</li>
   <li><strong>Every control that draws takes a weighting.</strong> A size, a count, a density, a course or a bay of a wall, a blade's length or height, how deep a rock is buried, how wide a shattered patch is, a tree's heights and a point's range in <code>at=</code>. A control that is a band never does. The "takes" column of each element page says <em>weighted range</em> where it applies.</li>
 </ul>
 
@@ -135,137 +139,273 @@ let small "low(1..6, 11)"</code></pre>
   <li>The place words its element accepts (<a href="#placement">section 5</a>).</li>
 </ul>
 
-<h2 id="units">3. Units, heights and scaling</h2>
-<p class="callout">The rule for an author is one sentence: <strong>write sizes in millimetres for a 35 mm square; other systems scale them for you.</strong></p>
-<p>No unit is ever written. Each control knows what it measures:</p>
+
+<h2 id="names">3. Names: <code>$</code> names, <code>let</code> and <code>override</code></h2>
+<p>A name is one of two kinds, and the <code>$</code> says which.</p>
 <div class="tbl"><table>
-<thead><tr><th>Kind of value</th><th>Written as</th><th>On another system</th></tr></thead>
+<thead><tr><th>Kind</th><th>Written</th><th>Where its value comes from</th></tr></thead>
 <tbody>
-<tr><td>Size</td><td>mm at the DungeonBlocks reference: <code>thickness 7</code></td><td>Scales like a photocopy</td></tr>
-<tr><td>Level</td><td>a named level, mm above the tile base, or an expression: <code>level=foot</code>, <code>level="ground - 1"</code></td><td>Scales like a photocopy</td></tr>
-<tr><td>Position</td><td>squares from the south-west corner: <code>at="0.65,1"</code></td><td>Follows the square</td></tr>
-<tr><td>Density</td><td>per square: <code>perSquare=45</code></td><td>Follows the square</td></tr>
-<tr><td>Angle</td><td>degrees: <code>branch split=34</code></td><td>Unchanged</td></tr>
-<tr><td>Share</td><td>percent, quoted: <code>cover="85%"</code></td><td>Unchanged</td></tr>
-<tr><td>Count, word, switch</td><td><code>count=5</code>, <code>rock mixed</code>, <code>#true</code></td><td>Unchanged</td></tr>
+<tr><td><code>$</code> names</td><td><code>$x</code>, <code>$d</code>, <code>$bottom</code>, <code>$region</code>, <code>$groundHeight</code></td><td>The <strong>context</strong>: a record of <code>$</code> names that every formula is called with. The library installs its heights in it, an element sets the position names at each point it works out, and a <code>let $name</code> adds one of your own. Whatever calls a formula or a definition passes its context on, changed only where it says so.</td></tr>
+<tr><td>plain names</td><td><code>knollTop</code>, a definition's <code>length</code></td><td>The place they were written: a tile's own <code>let</code>, a definition's <code>param</code>. They are never passed to a definition you call.</td></tr>
 </tbody></table></div>
-<p>Two optional annotations exist. <code>(mm)4.5</code> is only a check. <code>(h)1.2</code> writes a height in wall tops (h is the 33.1 mm official wall top); you never need it. <code>"4.5mm"</code> is an error.</p>
+<p>The two are separate namespaces: a parameter called <code>length</code> never hides anything with a <code>$</code>, and <code>$high</code> is a fine name though <code>high</code> is a weighting.</p>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Does</th><th>Error when</th></tr></thead>
+<tbody>
+<tr><td><code>let $treeLine "40dmm"</code></td><td>puts a new <code>$</code> name in the context, for everything in this block</td><td>the context already has it: use <code>override</code> (<code>dt::name</code>)</td></tr>
+<tr><td><code>override $groundHeight "6dmm"</code></td><td>replaces a <code>$</code> name for this block and everything called from it; when the block ends the old value is back</td><td>no caller installed it (the message offers the nearest name), or an element sets it itself (<code>$x $y $d $a $bottom $region $tile</code>)</td></tr>
+<tr><td><code>let knollTop "$groundHeight + 4dmm"</code></td><td>declares a plain name, once</td><td>the name is already declared, or is a word of the language</td></tr>
+</tbody></table></div>
+<p><code>let</code> and <code>override</code> work at the top of a tile and inside any block (<code>scatter { override $treeLine "40dmm"; tree … }</code>), and take effect for the rest of that block, the entry they sit in included. A <code>let</code> holds a formula, read where it is used: <code>let $floorEdgeHeight "$floorHeight"</code> follows an <code>override $floorHeight</code> made below it. A <code>$</code> name read where no caller installed it is <code>dt::unknown-name</code> at that spot, and <code>check</code> works out which names each part reads at each place it is called, so a part that reads a name its caller does not have is refused at that call. Plain names are camelCase, since a hyphen would read as subtraction (<code>dt::name</code>).</p>
+<pre><code>dharmatiles version="1.0.0"
 
-<h3 id="scaling">What scales</h3>
-<p>Every size the author writes scales with the system. At OpenLOCK's 25.4 mm square a 7 mm wall prints 5.08 mm thick and a 4.5 mm leaf 3.27 mm long. The hidden printability floors never shrink: they come from the printer profile, <code>library/printers/default.dtile</code>:</p>
-<pre><code>printer default {
-    line     0.45       // one extruded line, mm: the thinnest wall that prints
-    layer    0.2        // one layer, mm
-    overhang 55         // what every element aims for, degrees from vertical
-    steepest 65         // small patches up to here
-    gap      0.2        // the narrowest gap that stays open, mm
-}</code></pre>
-<p>Other profiles sit beside it in <code>library/printers/</code> (<code>fine</code>), and your own in a <code>printers/</code> folder beside your tiles; <code>--printer</code> chooses one. A profile holds the printer's floors only: the base system is chosen with <code>--system</code>, and edge and corner rounding belong to materials.</p>
-<p>Elements apply these after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
-
-<h3 id="levels">level and height</h3>
-<p><code>level</code> is where a surface sits. <code>height</code> is how tall a thing stands above what it stands on: mm (<code>cliff height=35</code>), a word (<code>wall … height full</code>, up to <code>wallHeight</code>), or a share of the thing it belongs to (<code>ledges 1 height="40%"</code>).</p>
-<p>Named heights are <code>let</code> constants. The library's come from <code>library/parts/heights.dtile</code> and every file sees them without a <code>use</code> line: <code>dirtEdgeHeight</code> 3.4 mm, <code>groundHeight</code> 5, <code>waterSurfaceHeight</code> 2.6, <code>wallHeight</code> 33.1 and the rest of that file.</p>
-<p>A tile adds its own with <code>let foot 4</code> and replaces a library one with <code>override</code>. A <code>level</code> or a line's <code>wobble</code> may name any of them (those that depend on <code>x</code> or <code>y</code> excepted). Heights scale with the system like every other size. See <a href="elements/let.html"><code>let</code></a>.</p>
-
-<h3 id="heights">Heights: let, override, tops and pins</h3>
-<p>Heights are written in one way everywhere: millimetres above zero, the top of the <a href="elements/base.html">base</a>. A number (<code>top=8</code>), a named height, or an expression of them. Named heights are <code>let</code> constants in camelCase, since a hyphen would read as subtraction; the library's are in <code>library/parts/heights.dtile</code> and every tile sees them:</p>
-<pre><code>let waterBedHeight     0.4     // the bottom of standing water: two print layers
-let waterSurfaceHeight 2.6     // calm water
-let waterEdgeHeight    "waterSurfaceHeight + 0.6 * cos(720 * (x + y))"   // the tide at a tile edge
-let dirtEdgeHeight     3.4     // where dirt meets a tile edge
-let groundHeight       5       // open land
-let floorHeight        7.4     // a built floor's top
-let floorEdgeHeight    floorHeight
-let shortWallHeight    16.55
-let wallHeight         33.1
-let tallWallHeight     72.3</code></pre>
-<p>A tile adds its own names with <code>let</code> and replaces a library one with <code>override</code> (<code>override waterBedHeight 0.8</code> deepens the water's bed everywhere on the tile, and moves every library height that reads it). Every name is declared once, of any kind: a <code>let</code> on a name that exists, or an <code>override</code> of one that does not, is refused (<code>dt::name</code>), and the message gives the other keyword or the nearest name. See <a href="elements/let.html"><code>let</code></a>.</p>
-<p>A height may use numbers, names, <code>x</code> and <code>y</code> (squares), <code>bottom</code> (the surface under this body, or under the thing), <code>+ - * /</code>, a range in brackets anywhere (<code>groundHeight + [1 .. 2]</code>), and the functions <code>sin</code> and <code>cos</code> (degrees), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Measures are checked: <code>groundHeight + x</code> adds squares to millimetres and is refused (<code>dt::type</code>).</p>
-<p>A <em>body</em> of the stack (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>) says how high it may be with its <code>top=</code>, a band: a single height fixes the surface, a range leaves it room. A <a href="elements/pin.html"><code>pin</code></a> holds the band to a height at a place; where pins overlap the later one wins, and the library's defaults (below) are read first. The stack is written bottom up: <a href="elements/base.html"><code>base</code></a> first, the land in order, things and grass where you want them, <code>water</code> after the ground it fills over and the rocks and reeds it should ring, and before the grass that should see its shore. The stack is built in the order it is written.</p>
-<pre><code>stack {
-    base
-    dirt top="[groundHeight .. groundHeight + 2.5]" {
-        slope 30                                  // how steeply this dirt lies; 24 by default
-        pin top=knollTop at=knoll
+tile size="1x1" seed=31 {
+    let knollTop "$groundHeight + 4dmm"        // a plain name: this tile's own
+    let $treeLine "40dmm"                      // a $ name: the context, read by whatever is called below
+    override $waterBedHeight "0.8dmm"          // deeper water, everywhere on this tile
+    stack {
+        base
+        dirt { pin top="knollTop" at=center }
+        scatter count=3 {
+            override $treeLine "30dmm"         // for this block only
+            tree top="$bottom + $treeLine"
+        }
     }
-    water at=banks                                // fills over the ground listed above it
-    grass at=meadow                               // listed after the water: keeps off the wet ground
+}</code></pre>
+
+<h3 id="library-names">The names the library installs</h3>
+<p>The library's heights come from <code>library/parts/heights.dtile</code> and every file sees them without a <code>use</code> line, as <code>$</code> names in design millimetres above zero (the top of the <a href="elements/base.html">base</a>):</p>
+<pre><code>let $waterBedHeight     "0.4dmm"            // the bottom of standing water: two print layers
+let $waterSurfaceHeight "2.6dmm"            // calm water
+let $waterEdgeHeight    "$waterSurfaceHeight + 0.6dmm * cos(720deg * ($x - $y))"   // water at a tile edge: two waves a square
+let $dirtEdgeHeight     "3.4dmm"            // where dirt meets a tile edge
+let $groundHeight       "5dmm"              // open land
+let $floorHeight        "7.4dmm"            // a built floor's top
+let $floorEdgeHeight    "$floorHeight"      // where a built floor meets a tile edge: flush
+let $shortWallHeight    "16.55dmm"          // half the wall top
+let $wallHeight         "33.1dmm"           // the standard wall top
+let $tallWallHeight     "72.3dmm"</code></pre>
+<p>Beside them an element sets the names a formula may read at each point it works out:</p>
+<div class="tbl"><table>
+<thead><tr><th>Name</th><th>Is</th><th>Kind</th></tr></thead>
+<tbody>
+<tr><td><code>$x</code>, <code>$y</code></td><td>where the point is in the <em>tile</em>, in squares from its north-west corner: <code>x($tile, sq)</code> and <code>y($tile, sq)</code></td><td>plain number</td></tr>
+<tr><td><code>$d</code></td><td>how far in from the edge of the thing's own region: 0 wherever deepest in the interior, 1 right at the edge</td><td>plain fraction</td></tr>
+<tr><td><code>$a</code></td><td>how far round the region: 0 at east, turning towards the south as the page reads (a quarter is straight down), 1 a full turn</td><td>plain fraction</td></tr>
+<tr><td><code>$bottom</code></td><td>what the thing stands on at that point: the surface below it in the stack (the base for a first dirt, the dirt under a second, the ground at a tree's foot, a water's bed)</td><td>length</td></tr>
+<tr><td><code>$region</code></td><td>the region of the thing being built (<a href="#region-tree">section 6</a>)</td><td>region</td></tr>
+<tr><td><code>$tile</code></td><td>the whole tile, the root region</td><td>region</td></tr>
+</tbody></table></div>
+<p>A body (<code>dirt</code>, <code>water</code>, <code>flagstones</code>, <code>planks</code>, <code>cliff</code>) sets all of these at each point of its region. A tree's top is worked out once per tree, over the ground at its foot, so a tree sets only <code>$bottom</code> and <code>$region</code>; every other element sets <code>$region</code>. <code>check</code> knows this before any build: reading a name the element does not set is <code>dt::unknown-name</code> at the exact spot, with what the element does set. Because <code>$x</code> and <code>$y</code> are the tile's, neighbouring tiles' heights meet, like the water's shared tide. Local position in a region is one call away: <code>x($region, sq)</code>.</p>
+
+<h3 id="reserved">Reserved words</h3>
+<p>A plain name (a <code>let</code>, a <code>param</code>) may not be a word of the language; it is a <code>dt::name</code> error that names the word and its kind.</p>
+<div class="tbl"><table>
+<tbody>
+<tr><th>coordinates</th><td><code>x y d a parent</code></td></tr>
+<tr><th>functions</th><td><code>sin cos abs min max clamp smooth point polar</code></td></tr>
+<tr><th>weightings</th><td><code>flat low high bell peak ends steps mix</code></td></tr>
+<tr><th>units</th><td><code>sq mm in layer deg rad pi dmm</code></td></tr>
+</tbody></table></div>
+<p><code>let a 3</code> is refused, with help to choose another name. Node names (<code>line</code>, <code>layer</code> in a printer file) are not plain names, so they keep theirs.</p>
+
+<h2 id="units">4. Units and kinds</h2>
+<p class="callout">The rule for an author is one sentence: <strong>write every length with its unit; <code>dmm</code> is the design millimetre, 1/35 of a square, and scales with the system.</strong></p>
+<p>Nothing is guessed. A length is a number and a unit; an angle is a number and <code>deg</code> or <code>rad</code>; everything else (a count, a density, a share, a fraction) is a plain number.</p>
+<div class="tbl"><table>
+<thead><tr><th>Unit</th><th>Measures</th><th>Is</th><th>Scales with the system?</th></tr></thead>
+<tbody>
+<tr><td><code>sq</code></td><td>length</td><td>one square: 35 mm on DungeonBlocks, 25.4 mm on OpenLOCK</td><td>yes: it is the grid</td></tr>
+<tr><td><code>dmm</code></td><td>length</td><td>a design millimetre: exactly 1/35 of a square, so 1 mm on DungeonBlocks and about 0.73 mm on OpenLOCK</td><td>yes, with the grid</td></tr>
+<tr><td><code>mm</code>, <code>in</code></td><td>length</td><td>a printed millimetre, a printed inch: what calipers and the slicer measure</td><td>no</td></tr>
+<tr><td><code>layer</code></td><td>length</td><td>one printed layer: 0.2 mm on the default printer</td><td>no: it is the printer's</td></tr>
+<tr><td><code>deg</code>, <code>rad</code></td><td>angle</td><td>degrees; radians (<code>pi</code> is a number word, so a turn is <code>360deg</code> or <code>2 pi rad</code>)</td><td>no</td></tr>
+<tr><td><code>%</code></td><td>plain fraction</td><td><code>50%</code> is 0.5 everywhere (<code>cover="100%"</code>, <code>buried="20%..50%"</code>)</td><td>no</td></tr>
+</tbody></table></div>
+<p>Sizes in the library are written in <code>dmm</code>, so at OpenLOCK's 25.4 mm square a <code>7dmm</code> wall prints 5.08 mm thick and a <code>4.5dmm</code> leaf 3.27 mm long, and a stone that must fit a 28 mm miniature is written in <code>mm</code>. Write <code>sq</code> or a share to follow the grid exactly. Densities (<code>perSquare=45</code>) follow the square; counts, words and switches never change.</p>
+<h3 id="scaling">What scales</h3>
+<p>Every size written in <code>dmm</code> or <code>sq</code> scales with the system, like a photocopy. The hidden printability floors never shrink: they come from the printer profile, <code>library/printers/default.dtile</code>, written in printed units:</p>
+<pre><code>dharmatiles version="1.0.0"
+
+printer default {
+    line     "0.45mm"       // one extruded line: the thinnest wall that prints
+    layer    "0.2mm"        // one layer
+    overhang "55deg"        // what every element aims for, degrees from vertical
+    steepest "65deg"        // small patches up to here
+    gap      "0.2mm"        // the narrowest gap that stays open
+}</code></pre>
+<p>Other profiles sit beside it in <code>library/printers/</code> (<code>fine</code>), and your own in a <code>printers/</code> folder beside your tiles; <code>--printer</code> chooses one. A profile holds the printer's floors only: the base system is chosen with <code>--system</code>, and edge and corner rounding belong to materials. Elements apply the floors after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
+<h3 id="juxtaposition">Writing a unit</h3>
+<ul>
+  <li>A unit goes right after its number and multiplies it: <code>2layer</code> is 0.4 mm on the default printer, <code>0.5sq</code> is half a square, <code>2 pi rad</code> is a full turn. House style writes no space (<code>4.5dmm</code>, as <code>50%</code> already is); a spaced <code>4.5 dmm</code> still reads.</li>
+  <li>A digit followed by letters is always a number and a unit, since plain names can't start with a digit. An unknown suffix, <code>2foot</code>, is <code>dt::unit</code>: &ldquo;<code>foot</code> is not a unit&rdquo;, listing the units.</li>
+  <li>A bare <code>0</code> is the same in every unit and fits any of them.</li>
+  <li>As a coordinate's second argument a unit divides instead: <code>d($region, mm)</code> is the distance in from the edge counted in printed millimetres, a plain number (<a href="#coordinates">section 6</a>).</li>
+  <li><code>%</code> on its own is a plain fraction. It is a length only inside a point, <code>"(50%, 2sq)"</code>, where the frame gives it a size, and a coordinate's unit divides by the frame's own size: <code>x($region, %)</code> is 0 at the region's west edge and 1 at its east. An angle is always <code>deg</code> or <code>rad</code>: <code>polar($tile, 40%, 90deg)</code>.</li>
+  <li>Printer files take printed units only: <code>line "0.45mm"</code>, <code>layer "0.2mm"</code>, <code>overhang "55deg"</code>. <code>sq</code>, <code>dmm</code> and <code>layer</code> have no meaning there and are refused.</li>
+</ul>
+<h3 id="kinds">The kind check</h3>
+<p>Lengths, angles and plain numbers are checked apart, before anything is built. A control wants a kind, and a formula has the kind its parts give it:</p>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Kind</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><code>$bottom + 2layer</code></td><td>length</td><td>length + length</td></tr>
+<tr><td><code>1 - $d * $d</code></td><td>plain</td><td><code>$d</code> is a fraction</td></tr>
+<tr><td><code>$bottom + 30dmm * (1 - $d * $d)</code></td><td>length</td><td>length + length × plain</td></tr>
+<tr><td><code>$groundHeight + 20%</code></td><td>error</td><td>a length plus a plain fraction; write <code>$groundHeight + 20% * 10dmm</code></td></tr>
+<tr><td><code>$groundHeight + $x</code></td><td>error</td><td>squares counted are plain; write <code>$groundHeight + 4dmm * $x</code></td></tr>
+<tr><td><code>2dmm * 3dmm</code></td><td>error</td><td>no area exists in this language</td></tr>
+<tr><td><code>size=5</code></td><td>error</td><td>a size is a length: <code>dt::unit</code> says to write <code>5dmm</code> or <code>5mm</code></td></tr>
+<tr><td><code>sin(360 * $x)</code></td><td>error</td><td><code>sin</code> takes an angle: write <code>sin(360deg * $x)</code></td></tr>
+<tr><td><code>$region + 1</code></td><td>error</td><td>a region is not a number</td></tr>
+</tbody></table></div>
+<p>A mismatch is <code>dt::type</code>, a number missing its unit <code>dt::unit</code>; both point at the value and say what to write. A <code>let</code> holds whatever its formula is, so <code>let reach "3dmm"</code> is a length wherever it is read and <code>let n 3</code> a plain number. A <code>param</code> takes its kind from the control it fills (<a href="#parts">section 9</a>).</p>
+
+<h2 id="heights">5. Heights: tops and pins</h2>
+<p>Heights are written one way everywhere: lengths above zero, the top of the <a href="elements/base.html">base</a>. A height is a length (<code>top="8dmm"</code>), a <code>$</code> name from <a href="#library-names">the library's heights</a>, or a formula of them. <code>height</code> is a different word: how tall a thing stands above what it stands on, a length (<code>thickness "7dmm"</code>, <code>stones height="2.2dmm .. 5.2dmm"</code>) or a word (<code>wall … height full</code>, up to <code>$wallHeight</code>).</p>
+<p>A height may use numbers with units, plain and <code>$</code> names, <code>$x</code> and <code>$y</code> (squares, plain), <code>$d</code> and <code>$a</code> (fractions), <code>$bottom</code> (the surface under this body, or under the thing), <code>+ - * /</code>, a range in brackets anywhere (<code>$groundHeight + [1dmm .. 2dmm]</code>), the coordinate calls (<a href="#coordinates">section 6</a>), and the functions <code>sin</code> and <code>cos</code> (of an angle), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Kinds are checked (<a href="#kinds">section 4</a>): <code>$groundHeight + $x</code> adds squares to a length and is refused.</p>
+<p>A <em>body</em> of the stack (<code>dirt</code>, <code>water</code>, <code>cliff</code>, <code>flagstones</code>, <code>planks</code>) says how high it may be with its <code>top=</code>, a band: a single height fixes the surface, a range leaves it room. A <a href="elements/pin.html"><code>pin</code></a> holds the band to a height at a place; where pins overlap the later one wins, and the library's defaults (below) are read first. The stack is written bottom up: <a href="elements/base.html"><code>base</code></a> first, the land in order, things and grass where you want them, <code>water</code> after the ground it fills over and the rocks and reeds it should ring, and before the grass that should see its shore. The stack is built in the order it is written.</p>
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="1x1" {
+    point knoll "(0.28sq, 0.28sq)"
+    region banks { within "11.5dmm" of=center }
+    stack {
+        base
+        dirt top="[$groundHeight .. $groundHeight + 2.5dmm]" {
+            slope "30deg"                                  // how steeply this dirt lies; 24deg by default
+            pin top="$groundHeight + 4dmm" at=knoll
+        }
+        water at=banks                                // fills over the ground listed above it
+        grass at=banks                                // listed after the water: keeps off the wet ground
+    }
 }</code></pre>
 <p><strong>Defaults.</strong> <code>library/parts/edges.dtile</code> also holds the tops and pins every body starts with, read before the tile's own lines:</p>
-<pre><code>defaults {
-    dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
-    flagstones top=floorHeight                     { pin top=floorEdgeHeight at=edges }
-    planks top=floorHeight                         { pin top=floorEdgeHeight at=edges }
-    water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" { pin top=waterEdgeHeight at=edges }
+<pre><code>dharmatiles version="1.0.0"
+
+defaults {
+    dirt  top="[$groundHeight .. $groundHeight + 1dmm]" { pin top="$dirtEdgeHeight" at=edges }
+    cliff top="$dirtEdgeHeight + 35dmm"
+    flagstones top="$floorHeight"                     { pin top="$floorEdgeHeight" at=edges }
+    planks top="$floorHeight"                         { pin top="$floorEdgeHeight" at=edges }
+    water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" { pin top="$waterEdgeHeight" at=edges }
 }</code></pre>
-<p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The dirt default applies to the first dirt only, so a second dirt laid over what is under it (<code>dirt top="bottom + [0.6 .. 1.2]"</code>) is not pulled to the rim; the water, flagstones and planks defaults apply to every water and every floor. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override waterBedHeight 0.4 → 0.8</code>), and each pin's share of its place.</p>
-<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and types, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease: their stones and slabs step), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it, and a floor draws each slab's or board's height and tilt inside it. A cliff draws its stones inside its band, as a floor draws its slabs. A tree's <code>top=</code> is its height: <code>bottom</code> is the ground at its foot, so <code>top="bottom + 40"</code> is 40 mm tall wherever it stands and <code>top="groundHeight + 40"</code> reaches that height above zero. Each tree draws its own top, so unlike a band it takes a weighting. A rock's or a flower's <code>top=</code> is checked but not built yet (their <code>size=</code> is a width), and says so.</p>
+<p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The dirt default applies to the first dirt only, so a second dirt laid over what is under it (<code>dirt top="$bottom + [0.6dmm .. 1.2dmm]"</code>) is not pulled to the rim; the water, flagstones and planks defaults apply to every water and every floor. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override $waterBedHeight 0.4dmm → 0.8dmm</code>), each pin's share of its place, and the region tree (<a href="#region-tree">section 6</a>).</p>
+<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and kinds, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease: their stones and slabs step), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it, and a floor draws each slab's or board's height and tilt inside it. A cliff draws its stones inside its band, as a floor draws its slabs. A tree's <code>top=</code> is its height: <code>$bottom</code> is the ground at its foot, so <code>top="$bottom + 40dmm"</code> is 40 design millimetres tall wherever it stands and <code>top="$groundHeight + 40dmm"</code> reaches that height above zero. Each tree draws its own top, so unlike a band it takes a weighting.</p>
 <p>A complete tile that builds:</p>
-<pre><code>tile size="1x1" seed=62 {
-    point crossing "(0.65, 0.5)"
-    line stream wobble=0.5 { through westCenter eastCenter }
-    region banks { within 11.5 of=stream }
-    region bed   { within 1.5 of=stream }
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="1x1" seed=62 {
+    point crossing "(0.65sq, 0.5sq)"
+    line stream wobble="0.5dmm" { through westCenter eastCenter }
+    region banks { within "11.5dmm" of=stream }
+    region bed   { within "1.5dmm" of=stream }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=banks       // anywhere from the bed to the land
-            pin top="[waterBedHeight .. waterBedHeight + 0.3]" at=bed     // later, so it wins inside the bed
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=banks       // anywhere from the bed to the land
+            pin top="[$waterBedHeight .. $waterBedHeight + 0.3dmm]" at=bed     // later, so it wins in the bed
         }
-        water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" at=banks
-        rock size="6..10" at=crossing
+        rock size="6dmm .. 10dmm" at=crossing
+        water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" at=banks
         grass
     }
 }</code></pre>
 
 <h3 id="edge-contract">The edge contract</h3>
-<p>Every tile also reads <code>library/parts/edges.dtile</code>, without a <code>use</code> line. Its <code>defaults</code> block gives the first dirt, and every water, a top and a pin at the tile's edges, so that neighbours butt with no step:</p>
-<pre><code>defaults {
-    dirt  top="[groundHeight .. groundHeight + 1]" { pin top=dirtEdgeHeight at=edges }
-    water top="[waterSurfaceHeight - 1.9 .. waterSurfaceHeight + 3]" { pin top=waterEdgeHeight at=edges }
-}</code></pre>
-<p>So any dirt tile butts any other with no step, and any two water tiles meet in the same wave. A pin the tile writes later wins over a default where they overlap. See <a href="elements/edges.html"><code>edges</code></a>.</p>
+<p>Every tile also reads <code>library/parts/edges.dtile</code>, without a <code>use</code> line. Its <code>defaults</code> block (above) gives the first dirt, and every water and floor, a top and a pin at the tile's edges, so that neighbours butt with no step. So any dirt tile butts any other with no step, and any two water tiles meet in the same wave. A pin the tile writes later wins over a default where they overlap. See <a href="elements/edges.html"><code>edges</code></a>.</p>
 
-<h2 id="places">4. Edges, points, lines and regions</h2>
-<p>Positions are in squares from the south-west corner, x running east and y running north.</p>
+<h2 id="places">6. Coordinates, points, lines and regions</h2>
+<p>A tile is rows and columns. Every position counts from the <strong>north-west corner</strong>: across the row from the west edge, then down the column from the north edge. A <code>size="2x1"</code> tile is 2 squares across and 1 down.</p>
+<h3 id="coordinates">Coordinates</h3>
+<p>A coordinate is a function of a region and a unit. <code>x</code> and <code>y</code> are where a point is (across, down), <code>d</code> is how far in from the edge, <code>a</code> is how far round. The unit says what to count in, and divides, so the result is a plain number.</p>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>x($tile, sq)</code>, <code>y($tile, sq)</code></td><td>squares from the tile's north-west corner (<code>$x</code> and <code>$y</code> for short)</td></tr>
+<tr><td><code>x($region, sq)</code>, <code>y($region, sq)</code></td><td>squares from the region's own north-west corner</td></tr>
+<tr><td><code>x($region, %)</code>, <code>y($region, %)</code></td><td>0 at the west (north) edge of the region's bounding box and 1 at its east (south): across the region by share. On <code>$tile</code> it scales with the tile's size, so a 2×2 and a 4×4 give different values the same distance from the corner; anything that must meet across tiles, like the tide, stays in <code>sq</code></td></tr>
+<tr><td><code>d($region, %)</code></td><td>0 wherever deepest in the interior, 1 right at the edge, scaled by the deepest part of each separate piece (a puddle beside a lake has its own 0). A region thinner than a cell is given a depth of one cell (<code>$d</code> for short)</td></tr>
+<tr><td><code>d($region, mm)</code></td><td>the distance in from the edge in printed millimetres: 0 at the edge, rising inward</td></tr>
+<tr><td><code>a($region, %)</code>, <code>a($region, deg)</code></td><td>how far round the region: 0 at east, turning towards the south as the page reads (90deg is straight down), a full turn 1 or 360deg; so a wave round it is <code>sin(360deg * $a)</code> (<code>$a</code> for short)</td></tr>
+</tbody></table></div>
+<p>The shorthands <code>$x</code> and <code>$y</code> are always the tile's, so neighbouring tiles meet; <code>$d</code> and <code>$a</code> are always the thing's own region. In a region with a hole (land round a pond) &ldquo;round&rdquo; has no meaning for <code>$a</code>, and a thing that cannot read a name (<a href="#library-names">a tree reads no position</a>) is refused at <code>check</code>, at the spot.</p>
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="2x1" seed=4 {
+    region hill { within "[8dmm .. 14dmm]" of=center }
+    stack {
+        base
+        // a dome over the hill's own region: 3dmm higher where deepest, level at its rim
+        dirt at=hill top="$groundHeight + 3dmm * (1 - $d * $d)"
+        dirt top="$groundHeight + 0.6dmm * sin(360deg * $x / 2)"      // a swell along the tile
+    }
+}</code></pre>
+<h3 id="points">Points</h3>
+<p>A point has two halves, across and down, written in parentheses and quoted, each half a length: <code>"(0.65sq, 1sq)"</code>. A half may be in any length unit, or a <code>%</code>, which here is a length: the share of the frame's width (or height), <code>"(50%, 0.25sq)"</code>. A tuple is a point in the frame it is written in: the tile, unless it sits in a pin of a body that acts in a named region, where it is that region's own corner.</p>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>"(0.65sq, 1sq)"</code></td><td>across 0.65 squares from the west edge, down 1 square from the north edge</td></tr>
+<tr><td><code>"(50%, 2dmm)"</code></td><td>half way across, 2 design millimetres down</td></tr>
+<tr><td><code>point($tile, 25%, 75%)</code></td><td>the frame always named: <code>$tile</code>, <code>$region</code> (the region the point sits in) or <code>parent($region)</code>, then across and down</td></tr>
+<tr><td><code>polar($tile, 40%, 90deg)</code></td><td>out from the frame's deepest point by a share of its depth, at an angle round it (0 east, 90deg straight down)</td></tr>
+<tr><td><code>north</code>, <code>southEast</code>… a point's name</td><td>corner and edge words, the built-in names and declared points, unchanged</td></tr>
+</tbody></table></div>
+<p>A point outside the tile, or outside the region it is written in, is <code>dt::point</code> at <code>check</code>, with the box it should be inside. In a <code>line</code>'s <code>through</code> and a region's <code>fill</code> either half may be a range, drawn once from the tile seed (<code>"(0sq .. 0.1sq, 0.3sq .. 0.5sq)"</code>, or a weighting such as <code>bell(…)</code>), keyed by the line's name and the point's place in the list, so another seed draws another line and editing one point moves no other. A thing's <code>at=</code> is one fixed point, not a range. A part, which has no tile of its own, writes points the same way and they are worked out at each place it is called.</p>
 <div class="tbl"><table>
 <thead><tr><th>Thing</th><th>Written as</th><th>Means</th></tr></thead>
 <tbody>
 <tr><td>Tile size</td><td><code>size="2x1"</code></td><td>Columns first. Default <code>"1x1"</code>.</td></tr>
 <tr><td>Edge</td><td><code>north</code>, <code>south</code>, <code>east</code>, <code>west</code></td><td>For a thing, a point: the middle of that edge. For a wall, surface or scatter, a line: that edge.</td></tr>
 <tr><td>Edge path</td><td><code>at="north west"</code></td><td>Several edges in order, quoted. Two edges meeting make a corner.</td></tr>
-<tr><td>Corner</td><td><code>north-west</code>, <code>south-east</code>, …</td><td>A point at that corner.</td></tr>
-<tr><td>Point</td><td><code>"0.65,1"</code></td><td>One quoted pair. Either coordinate may be a range, weighted or not: <code>"0.6..1.4,0.6..1.4"</code> or <code>"bell(0.6..1.4), 0.5"</code>, drawn once from the tile seed.</td></tr>
+<tr><td>Corner</td><td><code>northWestCorner</code>, <code>southEastCorner</code>, …</td><td>A point at that corner.</td></tr>
 </tbody></table></div>
 <p>A wall or cliff on a tile edge always stands inside the tile, its outer face flush with the edge. That is the DungeonBlocks slab standard, and it means an author never has to work out which side of a line a wall is on.</p>
 
 <h3 id="lines">Lines</h3>
-<p>A drawn line runs through points. With a <code>width</code> it is a strip, and a dirt, grass or cliff <code>at=</code> it fills the strip (within half the width, wobble included), and a scatter reaches half the width either side unless it writes <code>reach</code>. A surface along a line with no width, or along a tile edge, is <code>dt::type</code>. <code>wobble</code> lets it wander up to that many mm off its points.</p>
-<pre><code>line trail width=9 wobble=3 { through south "0.65,1" north }</code></pre>
+<p>A drawn line runs through points. With a <code>width</code> it is a strip, and a dirt, grass or cliff <code>at=</code> it fills the strip (within half the width, wobble included), and a scatter reaches half the width either side unless it writes <code>reach</code>. A surface along a line with no width, or along a tile edge, is <code>dt::type</code>. <code>wobble</code> lets it wander up to that far off its points.</p>
+<pre><code>line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 0sq)" north }</code></pre>
 <p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. <code>side=</code> along a tile edge is an error, because on an edge a wall always stands inside.</p>
 
 <h3 id="regions">Regions</h3>
-<p>The whole tile is the default area, so an undivided tile needs no region. A region exists only when lines divide the tile. It is the paint-bucket model from the design conversation: name the lines that bound it, then drop one or more fill points.</p>
-<pre><code>region verge { boundedBy trail; fill "0.15,1"; fill "0.85,1" }</code></pre>
+<p>The whole tile is the default area, so an undivided tile needs no region. A region exists when lines divide the tile. It is the paint-bucket model: name the lines that bound it, then drop one or more fill points.</p>
+<pre><code>region verge { boundedBy trail; fill "(0.15sq, 0.5sq)"; fill "(0.85sq, 0.5sq)" }</code></pre>
 <p>Several fill points on different sides of a line join areas without union, intersection or difference. Elements act inside a region with <code>at=verge</code>.</p>
+
+<h3 id="region-tree">Every thing makes a region</h3>
+<p>Every frame is a region, and regions nest. A point or a line says where a thing goes; the thing's size makes its region: a tree's crown round its point, a rock's disc, a wall's strip along its line, a scatter's area. A <code>$region</code> is the region of the thing being built (at a declaration, the region the declaration sits in), <code>$tile</code> is the root, and <code>parent($region)</code> is the region containing it.</p>
+<ul>
+  <li>The tile has no parent: <code>parent($tile)</code> is <code>dt::region</code> &ldquo;the tile has no parent&rdquo;.</li>
+  <li>A named region's parent is the smallest strictly larger region that holds its first fill point, else the tile. Regions that only share a line, like a pool and its bank, are siblings.</li>
+  <li>A <code>scatter</code> is a region of its own, its <code>at=</code> area (or the tile); the things it places are its children: a tree in a scatter at tile level has the scatter, then <code>$tile</code>.</li>
+  <li>A body, coat or scatter with no region of its own acts in its <code>at=</code> region, else the tile.</li>
+</ul>
+<p>A region is its own kind of value: it goes to <code>parent()</code> and to the coordinate calls, never to arithmetic. <code>check</code> refuses a read of a parent that is not there before any build, at the exact spot. <code>dharmatiles check --explain</code> prints the tree:</p>
+<pre data-check="skip"><code>regions
+  $tile: tile, parent none
+    scatter (entry 2): scatter, parent $tile
+      tree (entry 2, thing 1): placed disc, 18.0 mm across, parent scatter (entry 2)
+      rock (entry 2, thing 2): placed disc, 6.0 mm across, parent scatter (entry 2)
+  entry 1 `dirt` acts in $tile
+  entry 2 `scatter` acts in scatter (entry 2)</code></pre>
 
 <h3 id="named-places">Places by name</h3>
 <p>A place is a point, a line or a region, all flat: they say where, never how high. Every tile has them built in, named in camelCase:</p>
 <div class="tbl"><table>
 <thead><tr><th>Kind</th><th>Declared</th><th>Built in on every tile</th></tr></thead>
 <tbody>
-<tr><td>point</td><td><code>point knoll "(0.28, 0.72)"</code></td><td><code>northWestCorner northCenter northEastCorner westCenter center eastCenter southWestCorner southCenter southEastCorner</code></td></tr>
-<tr><td>line</td><td><code>line stream wobble=4 { through … }</code>, <code>closed=#true</code> for a loop</td><td><code>northEdge eastEdge southEdge westEdge</code>, and <code>edges</code> for all four</td></tr>
-<tr><td>region</td><td><code>region meadow { … }</code></td><td><code>tile</code>, the whole tile (which is also what no <code>at=</code> means)</td></tr>
+<tr><td>point</td><td><code>point knoll "(0.28sq, 0.72sq)"</code></td><td><code>northWestCorner northCenter northEastCorner westCenter center eastCenter southWestCorner southCenter southEastCorner</code></td></tr>
+<tr><td>line</td><td><code>line stream wobble="4dmm" { through … }</code>, <code>closed=#true</code> for a loop</td><td><code>northEdge eastEdge southEdge westEdge</code>, and <code>edges</code> for all four</td></tr>
+<tr><td>region</td><td><code>region meadow { … }</code></td><td>the whole tile is what no <code>at=</code> means</td></tr>
 </tbody></table></div>
-<p>A place is written as a name or as a literal point <code>"(x, y)"</code> in squares from the south-west corner; today's <code>"x,y"</code> still reads. A region is its fill points and its discs less what it excepts:</p>
-<pre><code>region banks { within 4.5 of=stream }                     // a disc round a point, a strip beside a line, a ring round a region
+<p>A place is written as a name or as a literal point <code>"(x, y)"</code>. A region is its fill points and its discs less what it excepts:</p>
+<pre data-check="skip"><code>region banks { within "4.5dmm" of=stream }                // a disc round a point, a strip beside a line, a ring round a region
 region verge { except path }                              // a region that only excepts is the whole tile less those
-region knoll { boundedBy foot; fill center }             // the paint bucket, as before</code></pre>
-<p>One place word, <code>at=</code>, says where an entry goes, and it takes any place: a point, a line or a region. Each element takes the kinds that mean something to it and refuses the others with <code>dt::type</code> and a help line: a body, <code>grass</code> or <code>reeds</code> fills a region (a body or <code>grass</code> may also follow a line); a wall follows a line; a thing stands at a point or fills a region, and given a line it is refused (a line has no one place on it: write a scatter); a <code>scatter</code> fills a region or spreads along a line, within <code>reach</code> mm either side of it, and given a point it is refused (write a region round it, <code>within 5 of=knoll</code>). With no <code>at=</code> an entry covers the whole tile. <code>within</code>, <code>except</code> and <code>boundedBy</code> build places; they never use one. See <a href="elements/point.html"><code>point</code></a>, <a href="elements/line.html"><code>line</code></a> and <a href="elements/region.html"><code>region</code></a>.</p>
+region knoll { boundedBy foot; fill center }             // the paint bucket</code></pre>
+<p>One place word, <code>at=</code>, says where an entry goes, and it takes any place: a point, a line or a region. Each element takes the kinds that mean something to it and refuses the others with <code>dt::type</code> and a help line: a body, <code>grass</code> or <code>reeds</code> fills a region (a body or <code>grass</code> may also follow a line); a wall follows a line; a thing stands at a point or fills a region, and given a line it is refused (a line has no one place on it: write a scatter); a <code>scatter</code> fills a region or spreads along a line, within <code>reach</code> either side of it, and given a point it is refused (write a region round it, <code>within "5dmm" of=knoll</code>). With no <code>at=</code> an entry covers the whole tile. <code>within</code>, <code>except</code> and <code>boundedBy</code> build places; they never use one. See <a href="elements/point.html"><code>point</code></a>, <a href="elements/line.html"><code>line</code></a> and <a href="elements/region.html"><code>region</code></a>.</p>
 
-<h2 id="placement">5. Placement and scatter</h2>
+<h2 id="placement">7. Placement and scatter</h2>
 <h3 id="place-words">Place words</h3>
 <p>One word, <code>at=</code>, names the place, and <code>side=</code> adjusts a line. Each element page lists the kinds of place it takes.</p>
 <div class="tbl"><table>
@@ -273,14 +413,14 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 <tbody>
 <tr><td><code>at=</code> a region</td><td>a region name</td><td>Acts only inside that region. Default: the whole tile.</td></tr>
 <tr><td><code>at=</code> a line</td><td>a line, an edge or an edge path</td><td>Built or spread along it. On a tile edge, always inside.</td></tr>
-<tr><td><code>at=</code> a point</td><td>a point, ranges allowed, or a corner or edge word</td><td>Centred there, or drawn once within the range. No <code>at=</code>: anywhere in the area.</td></tr>
+<tr><td><code>at=</code> a point</td><td>a point (<code>"(0.65sq, 1sq)"</code>, <code>point(…)</code>, <code>polar(…)</code>), a point's name, or a corner or edge word</td><td>Centred there. No <code>at=</code>: anywhere in the area.</td></tr>
 <tr><td><code>at="foot(cliff)"</code></td><td><code>foot(</code> <code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code> <code>)</code>, quoted</td><td>The band at the foot of that kind of thing, where a scatter gathers. <code>reach=</code> says how far out.</td></tr>
 <tr><td><code>side=</code></td><td><code>left</code>, <code>right</code> or <code>centre</code></td><td>Along a drawn line, which side the element stands, as you walk the line. Not on a tile edge.</td></tr>
 </tbody></table></div>
-<p>A wall must have <code>at=</code> a line; a cliff needs it for the edge forms (<code>run</code>, <code>corner</code>, <code>escarpment</code>) but not the free-standing ones. Surfaces take a region and usually a line; things take a point or a region. An entry has one place: a second <code>at=</code> is <code>dt::duplicate</code>, and the old <code>in=</code>, <code>along=</code> and <code>against=</code> are <code>dt::unknown-control</code> naming <code>at=</code> (<code>dharmatiles migrate</code> rewrites old tiles).</p>
+<p>A wall must have <code>at=</code> a line; a cliff needs it for the edge forms (<code>run</code>, <code>corner</code>, <code>escarpment</code>) but not the free-standing ones. Surfaces take a region and usually a line; things take a point or a region. An entry has one place: a second <code>at=</code> is <code>dt::duplicate</code>.</p>
 
 <h3 id="one-thing">One thing</h3>
-<p>Things share one vocabulary. A rock (and <code>stone</code>, <code>boulder</code>, <code>pebble</code>), a <code>tree</code> and a <code>flower</code> are placed the same way, with <code>at=</code> a point or a region they stand in, and sized the same way, by <code>size=</code>, which takes a number, a range or any weighting (<code>size="low(1..6, 11)"</code>); a tree's <code>size</code> is its height and a flower's the width across its petals. Many of them are a <code>scatter</code> whose children are things: <code>scatter at=meadow perSquare=4 { flower size="4..6" }</code>. A scatter holds rocks, flowers and trees, alone or mixed: each placed item picks its child by <code>weight=</code>, and one <code>gap</code> keeps every two things apart (trees are placed first, then rocks, then flowers); trees keep their crowns clear of one another, and <code>scatter at=road count=3 { tree }</code> is a row of trees along a line. A thing is one of itself. How many is never its own control: <code>tree count=3</code> is an error whose help says to use a scatter. With no <code>at=</code> a thing goes anywhere in its area. Either way its footprint is kept inside the tile and clear of other solids, nudged inward rather than clipped (D12).</p>
+<p>Things share one vocabulary. A rock (and <code>stone</code>, <code>boulder</code>, <code>pebble</code>), a <code>tree</code> and a <code>flower</code> are placed the same way, with <code>at=</code> a point or a region they stand in, and sized the same way, by <code>size=</code>, which takes a number, a range or any weighting (<code>size="low(1dmm .. 6dmm, 11)"</code>); a tree's <code>size</code> is its height and a flower's the width across its petals. Many of them are a <code>scatter</code> whose children are things: <code>scatter at=meadow perSquare=4 { flower size="4dmm .. 6dmm" }</code>. A scatter holds rocks, flowers and trees, alone or mixed: each placed item picks its child by <code>weight=</code>, and one <code>gap</code> keeps every two things apart (trees are placed first, then rocks, then flowers); trees keep their crowns clear of one another, and <code>scatter at=road count=3 { tree }</code> is a row of trees along a line. A thing is one of itself. How many is never its own control: <code>tree count=3</code> is an error whose help says to use a scatter. With no <code>at=</code> a thing goes anywhere in its area. Either way its footprint is kept inside the tile and clear of other solids, nudged inward rather than clipped.</p>
 
 <h3 id="scatter">scatter</h3>
 <p>More than one of a thing is a <code>scatter</code>. It says how many and where; its children say what.</p>
@@ -289,9 +429,9 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 <tbody>
 <tr><td><code>count</code></td><td>number, or a weighted range</td><td>How many, in total.</td></tr>
 <tr><td><code>perSquare</code></td><td>number, or a weighted range</td><td>How many per square of the area, or per square of length along a line.</td></tr>
-<tr><td><code>reach</code></td><td>mm</td><td>With <code>at="foot(…)"</code>: how far out from the foot.</td></tr>
+<tr><td><code>reach</code></td><td>a length</td><td>With <code>at="foot(…)"</code>: how far out from the foot.</td></tr>
 <tr><td><code>clumps</code></td><td>per square</td><td>Gathers them into clumps. Default: spread evenly.</td></tr>
-<tr><td><code>gap</code></td><td>mm</td><td>Least space between neighbours.</td></tr>
+<tr><td><code>gap</code></td><td>a length</td><td>Least space between neighbours.</td></tr>
 <tr><td>child <code>weight=</code></td><td>number</td><td>Share of the mix when there are several children. Default: equal.</td></tr>
 </tbody></table></div>
 <p>A scatter must have exactly one of <code>count</code> and <code>perSquare</code>; <code>reach</code> needs <code>at="foot(…)"</code>. A scatter inside a surface (<code>dirt { scatter … }</code>) lands on that surface.</p>
@@ -300,7 +440,7 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 <p><strong>The stack is built in the order it is listed.</strong> Each entry stands on the terrain as laid so far, and what is listed after it is laid over or beside it. Land bodies are laid in stack order, each the higher of what is below and its own top: a dirt along a path, listed after the whole-tile dirt, takes the higher of the two there. A <code>dirt</code> listed <em>after</em> a rock, a tree, a flower or a scatter of them is built after them: it lies on the tops of rocks where they are flatter than its <code>maxSlope</code>, banks up to a trunk or a stone (a rise is no drop), and covers a flower's foot, as written. A tree's crown is never a surface for dirt. A dirt listed <em>before</em> them is laid first, and they stand on it (a rock beds into it). Grass grows round what is listed before it, so list the grass after the rocks, trees and flowers it should grow round; the same goes for water, which fills over the ground listed above it and sees the rocks and reeds listed above it (each sends its own chop). What is listed <em>after</em> the water stands in it or on its shore and reads it: a rock stands in the pool, and grass keeps off the wet ground. A <code>dirt</code> or <code>ground</code> listed after the water lies over it: where its top is higher than the water the earth shows, where it is lower the water stays. Water is built where it is listed, like every other layer; nothing is written about it last.</p>
 <p>The plan refuses what the listed order cannot satisfy, with <code>dt::order</code> and the entry's place, and never reorders to cure it: a tree, grass or wall listed above the first <code>ground</code> or <code>dirt</code> it stands on, a thing that reads another kind (grass that needs rocks) with the first of that kind listed below it, a floor listed above a surface it lies on. Two things are placed by what they are, not by where they are written: the lift (the one solid the surfaces make together) comes right after the last surface, water or floor, and <code>base</code>, which reads the finished tile, is built last.</p>
 
-<h2 id="elements">6. The elements</h2>
+<h2 id="elements">8. The elements</h2>
 <p>Each element has a page of its own, with what it makes, a picture, an example and every control it takes, generated from the program: <code>dharmatiles elements NAME</code> prints the same list. Each element leads with a few controls named for what you see. A word in a choice (<code>rock mixed</code>, <code>flow wild</code>) expands to documented numbers; a number is always accepted instead.</p>
 <div class="tbl"><table>
 <thead><tr><th>Kind</th><th>Elements</th></tr></thead>
@@ -313,17 +453,19 @@ region knoll { boundedBy foot; fill center }             // the paint bucket, as
 </tbody></table></div>
 <p>The document's own elements are <a href="elements/tile.html"><code>tile</code></a>, <a href="elements/let.html"><code>let</code></a>, <a href="elements/line.html"><code>line</code></a>, <a href="elements/region.html"><code>region</code></a>, <a href="elements/stack.html"><code>stack</code></a>, <a href="elements/use.html"><code>use</code></a> and <a href="elements/define.html"><code>define</code></a>.</p>
 
-<h2 id="parts">7. Parts: use, define, param</h2>
+<h2 id="parts">9. Parts: use, define, param</h2>
 <p>Parts files hold definitions that tiles bring in by name. A <code>use</code> line names the file and the definitions it brings in, so a reader knows where every name came from:</p>
 <pre><code>use "parts/grass" lawn long-grass</code></pre>
 <p>A bare path such as <code>"parts/grass"</code> is the bundled library, and <code>"lib:parts/grass"</code> says so explicitly. <code>"./mine"</code> or <code>"../shared/x"</code> is a file in the author's project. Anything else is an error.</p>
 <p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like an element; its params are set as properties, and a place (<code>at=</code>) passes through to the elements inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<code>dt::loop</code>).</p>
-<pre><code>// library/parts/grass.dtile
+<pre><code>dharmatiles version="1.0.0"
+
+// library/parts/grass.dtile
 define lawn {
-    param length "3.5..6.5"   // blade length along the ground, mm
-    param height "1.5..2"     // how tall a blade stands over the ground, mm
-    param clearings 0         // patches of bare earth per square
-    param cover "100%"        // share of the ground grassed over
+    param length "3.5dmm .. 6.5dmm"   // blade length along the ground
+    param height "1.5dmm .. 2dmm"     // how tall a blade stands over the ground
+    param clearings 0                 // patches of bare earth per square
+    param cover "100%"                // share of the ground grassed over
 
     stack {
         grass length=length height=height clearings=clearings cover=cover
@@ -333,79 +475,95 @@ define lawn {
 // Long, tall blades: the species of 2x2-grass-tree.
 define long-grass {
     stack {
-        lawn length="5..9" height="2..3"
+        lawn length="5dmm .. 9dmm" height="2dmm .. 3dmm"
     }
 }</code></pre>
-<p>A param's default is typed by the control it fills, so <code>param length 10</code> is checked as a size in mm. A param without a default must be given by the caller. A tile has no params. Expert controls live in parts files:</p>
-<pre><code>// library/parts/trees.dtile
-define oak {
-    param height 50           // ground to the top of the crown, mm
+<p>A param takes its kind from its default or, with none, from the control it fills: <code>param length "3.5dmm .. 6.5dmm"</code> is a length, <code>param clearings 0</code> a plain number, and a caller that writes <code>length=5</code> gets <code>dt::unit</code> asking for <code>5dmm</code>. A param without a default must be given by the caller. A tile has no params. Expert controls live in parts files:</p>
+<pre><code>dharmatiles version="1.0.0"
 
+// library/parts/trees.dtile
+define oak {
     stack {
-        tree size=height {
-            trunk height=18
-            crown width=44 clumps=60 shape=wide
-            branch split=34 eagerness=0.6 target=0.25 balance=0.8 exponent=3 minRadius=0.9
+        tree top="$bottom + 50dmm" {
+            trunk height="18dmm"
+            crown width="44dmm" clumps=60 shape=wide
+            branch split="34deg" eagerness=0.6 target=0.25 balance=0.8 exponent=3 minRadius="0.9dmm"
         }
     }
 }</code></pre>
-<p>A tile places one oak as <code>oak at="1,1" height=60</code>, or several as <code>scatter count=2 { oak }</code>.</p>
+<p>A call's <code>top=</code> is the tree's. A tile places one oak as <code>oak at="(1sq, 1sq)" top="$bottom + 60dmm"</code>, or several as <code>scatter count=2 { oak }</code>.</p>
 
-<h2 id="errors">8. Errors</h2>
-<p>Every mistake gets a message with a stable code (such as <code>dt::unknown-control</code>), the line it is on with the spot underlined, and a hint that says what to write instead. The program reads on past a mistake, so all of a file's mistakes come together. <code>dharmatiles check my-tile.dtile</code> reports them without building; the <a href="preview.html">preview</a> shows them beside the tile. Some examples:</p>
-<pre><code>dt::syntax
+<h2 id="errors">10. Errors</h2>
+<p>Every mistake gets a message with a stable code (such as <code>dt::unit</code>), the line it is on with the spot underlined, and a hint that says what to write instead. The program reads on past a mistake, so all of a file's mistakes come together. <code>dharmatiles check my-tile.dtile</code> reports them without building; the <a href="preview.html">preview</a> shows them beside the tile. Two examples, from one file:</p>
+<pre data-check="skip"><code>dt::unit
 
-  × `1..6` must be quoted
-    ╭─[library/tiles/cliffs/2x1-cliff.dtile:27:66]
- 27 │         scatter at="foot(cliff)" perSquare=55 reach=4 { stone size=1..6 }
-    ·                                                                  ──┬─
-    ·                                                                    ╰── not a KDL number
-  help: ranges, percents, points and sizes are written as strings: "1..6"</code></pre>
-<pre><code>dt::unknown-control
+  × `pebble size`: `1.2` has no unit, and a length is written with one
+   ╭─[my-tile.dtile:7:44]
+ 6 │         dirt
+ 7 │         scatter perSquare=40 { pebble size=1.2 }
+   ·                                            ─┬─
+   ·                                             ╰── here
+ 8 │         grass cover="85%"
+   ╰────
+  help: write 1.2dmm or 1.2mm (`dmm` is 1/35 of a square: 1 mm on
+        DungeonBlocks; `mm` is a printed millimetre)
+
+dt::unknown-control
 
   × `tree` has no control `count`
-    ╭─[library/tiles/ground/2x2-grass-tree.dtile:9:32]
-  9 │         tree top="bottom + 40" count=3 {     // anywhere on the tile; or at="1,1"
-    ·                                ──┬──
-    ·                                  ╰── unknown control
-  help: a tree is one tree; how many and how spread is a scatter's job: `scatter
-        count=… { tree }`</code></pre>
-<pre><code>dt::unknown-element
+    ╭─[my-tile.dtile:9:36]
+  8 │         grass cover="85%"
+  9 │         tree top="$bottom + 40dmm" count=3
+    ·                                    ──┬──
+    ·                                      ╰── unknown control
+ 10 │     }
+    ╰────
+  help: a tree is one tree; how many and how spread is a scatter's job:
+        `scatter count=… { tree }`</code></pre>
+<pre data-check="skip"><code>dt::unknown-element
 
-  × no element or definition is called `hills`
-   ╭─[library/tiles/ground/2x2-grass-tree.dtile:8:9]
- 8 │         hills clods=none
+  × no element or definition is called `dirrt`
+   ╭─[my-tile.dtile:6:9]
+ 5 │         base
+ 6 │         dirrt clods=none
    ·         ──┬──
    ·           ╰── unknown
-  help: `hills` is now `dirt`</code></pre>
-<p>Other mistakes caught the same way: a misspelt control (<code>clumsp</code>, did you mean <code>clumps</code>?), a unit written in (<code>"4.5mm"</code>), an expert control in a tile, a wall without <code>at=</code>, <code>side=</code> on a tile edge, and old KDL v1 syntax.</p>
+ 7 │     }
+   ╰────
+  help: did you mean `dirt`?</code></pre>
+<p>Other mistakes caught the same way: a misspelt control (<code>clumsp</code>, did you mean <code>clumps</code>?), a range or a size that is not quoted, an expert control in a tile, a wall without <code>at=</code>, <code>side=</code> on a tile edge, and KDL v1 syntax.</p>
 
-
-<h3 id="refusals">Refusals of the heights language</h3>
+<h3 id="refusals">Refusals of the names, units and heights</h3>
 <p>Three phases, each as early as it can know. The static ones are found reading the document; the solve ones when <code>check</code> works out the bands. Every refusal gives the place, the values and what would fit.</p>
 <div class="tbl"><table>
 <thead><tr><th>Code</th><th>Phase</th><th>When, and an example</th></tr></thead>
 <tbody>
-<tr><td><code>dt::name</code></td><td>static</td><td>A name declared twice, a <code>let</code> on a name that exists, an <code>override</code> of one that does not, a built-in place or element name reused, a name that is not camelCase.<br><code>`groundHeight` is already declared</code> — help: <code>override groundHeight …</code> replaces it for this tile</td></tr>
-<tr><td><code>dt::type</code></td><td>static</td><td>Measures that do not agree, or a place of the wrong kind.<br><code>`dirt` fills a region, and `northEdge` is a line</code>; <code>`top`: a sum mixes a plain number and squares (x or y)</code></td></tr>
-<tr><td><code>dt::unknown-name</code>, <code>dt::place</code></td><td>static</td><td>A height or a place that nothing declares, with the nearest name.<br><code>no place is called `southCentre`</code> — help: did you mean `southCenter`?</td></tr>
+<tr><td><code>dt::migrate-header</code>, <code>dt::format-newer</code>, <code>dt::format-mixed</code>, <code>dt::header…</code></td><td>static</td><td>No header on a document that uses format 1 forms; a format newer than the program reads; a tile and a part of different formats; a header out of place, twice or malformed.<br><code>this document is written in format 1 and has no header</code> — help: <code>add `dharmatiles version=1` at the top</code></td></tr>
+<tr><td><code>dt::name</code></td><td>static</td><td>A plain name declared twice or taking a word of the language; a <code>let $name</code> the context already has; an <code>override</code> of a name nothing installed, or of one an element sets; a built-in place or element name reused; a name that is not camelCase.<br><code>the context already has `$floorEdgeHeight`</code> — help: <code>override $floorEdgeHeight …</code> replaces it for this scope</td></tr>
+<tr><td><code>dt::unit</code></td><td>static</td><td>A length or angle with no unit, or a unit that is not one.<br><code>`rock size`: `5` has no unit, and a length is written with one</code> — help: write <code>5dmm</code> or <code>5mm</code></td></tr>
+<tr><td><code>dt::type</code></td><td>static</td><td>Kinds that do not agree, or a place of the wrong kind.<br><code>`dirt top`: `($groundHeight + 20%)` mixes a length and a plain number</code>; <code>`dirt` fills a region, and `northEdge` is a line</code></td></tr>
+<tr><td><code>dt::unknown-name</code>, <code>dt::place</code></td><td>static</td><td>A height, a <code>$</code> name or a place that nothing declares or sets, with the nearest name.<br><code>nothing installed `$groundHeihgt` where this is read</code> — help: did you mean <code>$groundHeight</code>?</td></tr>
+<tr><td><code>dt::point</code>, <code>dt::region</code></td><td>static</td><td>A point outside the tile or its region; a <code>parent()</code> that is not there.<br><code>`(2sq, 0.5sq)` is off the tile</code>; <code>the tile has no parent</code></td></tr>
 <tr><td><code>dt::pin</code></td><td>static</td><td>A pin without <code>top=</code> or <code>at=</code>, or a pin on something that is not a body.<br><code>a pin needs at=</code></td></tr>
 <tr><td><code>dt::base-order</code></td><td>static</td><td><code>base</code> anywhere but first, or a second one.<br><code>the base is the first line of the stack</code></td></tr>
 <tr><td><code>dt::weighting</code></td><td>static</td><td>A weighted range on a band (a body's <code>top</code>, a pin, <code>within</code>), a weighting that does not wrap a plain range, or a control that takes none yet.<br><code>a weighted range does not go on a band</code> — help: write the range alone</td></tr>
 <tr><td><code>dt::empty</code></td><td>solve</td><td>A pin whose place covers nothing.<br><code>this pin's place `nowhere` covers nothing</code></td></tr>
 <tr><td><code>dt::thin</code></td><td>solve</td><td>A layer that can never be as thick as the printer's skin (three layers).<br><code>the dirt is at most 0.30 mm thick at (17.50, 17.50) mm, under the 0.60 mm the printer's skin needs</code></td></tr>
 <tr><td><code>dt::missing-control</code></td><td>solve</td><td>A body with no top and no default, such as a cliff.</td></tr>
+<tr><td><code>dt::migrated</code></td><td>note</td><td>A format 0 document read as format 1 in memory.<br><code>this document is format 0, read as format 1 in memory</code> — help: run <code>dharmatiles migrate</code></td></tr>
 <tr><td><code>dt::steep</code></td><td>note</td><td>Pins force dirt past its slope.<br><code>the dirt is forced to 43.8°, steeper than its 24° slope: 5.33 mm up to 5.59 mm over 0.27 mm</code></td></tr>
 <tr><td><code>dt::shadowed</code></td><td>note</td><td>A pin of the tile’s own that wins nowhere because later pins cover all of its place. A pin the library supplies is never reported: covering it is how a tile overrides it.</td></tr>
 <tr><td><code>dt::edge</code></td><td>note</td><td>Where the tile's own pins move a body off the library's edge height, so it no longer butts a standard tile.<br><code>the dirt meets the tile's edge at a height of its own … along the south edge 0.00 to 1.00 (squares)</code></td></tr>
 </tbody></table></div>
 <p>A note does not stop the build; <code>check</code> prints it after the tile's line. The pins named in a note are the ones that cause it.</p>
 
-<h2 id="examples">9. Worked examples</h2>
+<h2 id="examples">11. Worked examples</h2>
 <p>Whole tiles, each with what it shows. Every one builds as written: copy it into a <code>.dtile</code> file and run <code>dharmatiles preview</code> on it.</p>
 
 <h3 id="ex-grass-tree">A grass meadow with one tree</h3>
-<pre><code>// library/tiles/ground/2x2-grass-tree.dtile
+<pre><code>dharmatiles version="1.0.0"
+
+// library/tiles/ground/2x2-grass-tree.dtile
 // A 2×2 grass meadow with one tree.
 
 use "parts/grass" long-grass
@@ -414,23 +572,25 @@ tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none
-        tree top="bottom + 40" {     // anywhere on the tile; or at="1,1"
-            trunk height=30             // bare trunk below the crown
-            crown width=30 clumps=32 shape=round branching=normal
-            leaf length=4.5 width=3
+        tree top="$bottom + 40dmm" {     // anywhere on the tile; or at="(1sq, 1sq)"
+            trunk height="30dmm"             // bare trunk below the crown
+            crown width="30dmm" clumps=32 shape=round branching=normal
+            leaf length="4.5dmm" width="3dmm"
         }
         long-grass                      // listed after the tree, so it grows round the trunk
     }
 }</code></pre>
 <ul>
   <li>No region: the whole tile is the default area.</li>
-  <li>The tree has no <code>at=</code>, so it goes anywhere on the tile. <code>at="0.6..1.4,0.6..1.4"</code> would keep it near the middle.</li>
+  <li>The tree has no <code>at=</code>, so it goes anywhere on the tile. <code>at="(1sq, 1sq)"</code> would put it in the middle.</li>
   <li>The grass is listed after the tree, so it grows round the trunk; listed before it, the tree would stand in the grass.</li>
   <li><code>long-grass</code> grows standing blades.</li>
 </ul>
 
 <h3 id="ex-wall">A fieldstone wall turning a corner</h3>
-<pre><code>// library/tiles/walls/1x1-wall-fieldstone-corner.dtile
+<pre><code>dharmatiles version="1.0.0"
+
+// library/tiles/walls/1x1-wall-fieldstone-corner.dtile
 use "parts/grass" lawn
 
 tile size="1x1" seed=64 {
@@ -440,15 +600,15 @@ tile size="1x1" seed=64 {
 
         // Along the north edge, then the west edge.  On a tile edge a
         // wall always stands inside, its outer face flush with the edge.
-        wall at="north west" style=fieldstone seed=14 {
-            height full                     // up to wallHeight (33.1 mm)
-            thickness 7
+        wall at="north west" style=fieldstone seed=15 {
+            height full                     // up to $wallHeight (33.1dmm)
+            thickness "7dmm"
             coping loose                    // or: on-edge
 
             // fieldstone's own defaults, written out to show them
-            stones height="2.2..5.2" length="5..16"
-            joints width=0 depth=2.8        // how deep the gaps between stones look
-            edges rounding="1.3..2.6"       // worn corners
+            stones height="2.2dmm .. 5.2dmm" length="5dmm .. 16dmm"
+            joints width="0dmm" depth="2.8dmm"        // how deep the gaps between stones look
+            edges rounding="1.3dmm .. 2.6dmm"       // worn corners
         }
 
         lawn
@@ -456,67 +616,70 @@ tile size="1x1" seed=64 {
 }</code></pre>
 <ul>
   <li>Two edges in <code>at=</code> make a corner.</li>
-  <li>The wall's <code>seed=14</code> pins its stones while the tile seed varies everything else.</li>
-  <li>On OpenLOCK, the 7 mm thickness and the stone sizes all shrink with the square.</li>
+  <li>The wall's <code>seed=15</code> pins its stones while the tile seed varies everything else.</li>
+  <li>On OpenLOCK, the <code>7dmm</code> thickness and the stone sizes all shrink with the square.</li>
 </ul>
 
 <h3 id="ex-cliff">A cliff run</h3>
-<pre><code>// library/tiles/cliffs/2x1-cliff.dtile
+<pre><code>dharmatiles version="1.0.0"
 
+// library/tiles/cliffs/2x1-cliff.dtile
 tile size="2x1" seed=1 {
     about """
         Rock band against the north edge. Both ends finish in the
         standard end section, so runs butt end to end.
         """
 
-    region crag  { within "[10 .. 20]" of=northEdge }
-    region apron { within 6.5 of=crag }
+    region crag  { within "[10dmm .. 20dmm]" of=northEdge }
+    region apron { within "6.5dmm" of=crag }
 
     stack {
         base
-        dirt top=dirtEdgeHeight {
-            pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron   // the bank, drawn
-            pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
-            scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
+        dirt top="$dirtEdgeHeight" {
+            pin top="[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]" at=apron   // the bank, drawn
+            pin top="$dirtEdgeHeight" at=edges
+            scatter perSquare=45 { pebble size="1dmm .. 2.2dmm" buried="20%..50%" }
         }
 
-        cliff top="dirtEdgeHeight + 35" at=crag {
+        cliff top="$dirtEdgeHeight + 35dmm" at=crag {
             rock mixed                  // or: columns, blocks, slabs
             stoneSize massive          // or: rubble, broken
-            shattered patches=3 width="5..10"
+            shattered patches=3 width="5dmm .. 10dmm"
         }
-        dirt top="bottom + [0.6 .. 1.2]" at=crag   // dirt on the cliff's top
+        dirt top="$bottom + [0.6dmm .. 1.2dmm]" at=crag   // dirt on the cliff's top
 
         // scree: fallen stones gathered at the cliff's foot
-        scatter at="foot(cliff)" perSquare=55 reach=4 { stone size="low(1..6, 11)" }
-        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5..8" }
+        scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone size="low(1dmm .. 6dmm, 11)" }
+        scatter at="foot(cliff)" perSquare=2.5 { boulder size="4.5dmm .. 8dmm" }
     }
 }</code></pre>
 <ul>
-  <li><code>let foot 4</code> adds a height for this tile.</li>
   <li>The dirt is listed before the cliff and still banks <code>at="foot(cliff)"</code>. Its pebbles are scattered on the dirt.</li>
   <li>Scree is stones and boulders scattered against the cliff; they take their fragment shapes from the cliff's rock.</li>
+  <li><code>$bottom</code> on the second dirt is the cliff's top: it lies 0.6 to 1.2 design millimetres over it.</li>
 </ul>
 
 <h3 id="ex-path">A divided tile: grass, a path and rocks</h3>
-<p>A path of bare dirt winding up a 1×2 tile through grass, with rocks beside it: lines, regions and <code>at=</code> together. (It is a test document in the repository, <code>crates/dt-doc/tests/fixtures/1x2-grass-path-rocks.dtile</code>.)</p>
-<pre><code>use "parts/grass" lawn
+<p>A path of bare dirt winding up a 1×2 tile through grass, with rocks beside it: lines, regions and <code>at=</code> together.</p>
+<pre><code>dharmatiles version="1.0.0"
+
+use "parts/grass" lawn
 
 tile size="1x2" seed=7 {
 
     // From the middle of the south edge to the middle of the north edge,
-    // 9 mm wide, wandering up to 3 mm off its points.
-    line trail width=9 wobble=3 { through south "0.65,1" north }
+    // 9 design millimetres wide, wandering up to 3 off its points.
+    line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 1sq)" north }
 
     // Everything beside the path: one fill point on each side of it.
-    region verge { boundedBy trail; fill "0.15,1"; fill "0.85,1" }
+    region verge { boundedBy trail; fill "(0.15sq, 1sq)"; fill "(0.85sq, 1sq)" }
 
     stack {
         dirt                                    // the whole tile, at the ground height
         dirt at=trail                        // the path, a second dirt along it
 
         scatter at=verge count=5 {
-            rock size="4..10" shape=rounded buried="30%"   // shape: or angular, flat
+            rock size="4dmm .. 10dmm" shape=rounded buried="30%"   // shape: or angular, flat
         }
 
         lawn at=verge cover="85%"
@@ -524,18 +687,18 @@ tile size="1x2" seed=7 {
 }</code></pre>
 <ul>
   <li>The second <code>dirt</code> is laid after the first along the path; each land body is the higher of what is below it and its own top.</li>
-  <li><code>verge</code> is the tile less the path: one fill point on each side of the line.</li>
+  <li><code>verge</code> is the tile less the path: one fill point on each side of the line. Points count down from the north, so <code>(0.65sq, 1sq)</code> is a square down from the north edge, half way along a 1×2 tile.</li>
 </ul>
 
 <h3 id="ex-snippets">Two short ones</h3>
 <pre><code>// A straight wall on the south edge
 wall at=south style=cut-stone {
     height full
-    thickness 7
+    thickness "7dmm"
 }
 
 // A taller cliff with a ledge
-cliff top="dirtEdgeHeight + 55" at=crag {
+cliff top="$dirtEdgeHeight + 55dmm" at=crag {
     rock blocks
     ledges 1                        // a shelf stepped down the free face
 }</code></pre>
@@ -543,21 +706,24 @@ cliff top="dirtEdgeHeight + 55" at=crag {
 <h2 id="rules">Rules of the language</h2>
 <ul class="rules">
   <li>A tile is a declarative document, not a program: KDL v2 underneath, saved as a <code>.dtile</code> file.</li>
-  <li>A document may start with <code>dharmatiles version=…</code>, once, first; its major part is the format, and none is format 0. A format newer than the program reads is refused.</li>
-  <li>Sizes are millimetres at the 35 mm DungeonBlocks square; heights are millimetres or <code>let</code> names. Units are not written: <code>4.5</code>, never <code>"4.5mm"</code> (<code>(mm)4.5</code> is an optional check).</li>
-  <li>Every size a tile writes scales with the system, like a photocopy; hidden printability floors keep it printable. Print-scale detail (grain, blades, leaves) keeps its printed size.</li>
-  <li>Ranges and percents are quoted: <code>size="6..10"</code>, <code>cover="35%"</code>.</li>
-  <li>A plain range is flat, on every element. A weighting is written round it, <code>size="low(6..10, 3)"</code>; every range in a value is its own draw; a weighted range goes on a draw, not on a band; a <code>let</code> name holds a distribution.</li>
-  <li>Points are quoted pairs in squares (<code>"(0.5, 1)"</code>), a point's name, or a corner or edge word.</li>
+  <li>A document starts with <code>dharmatiles version=…</code>, once, first; its major part is the format, and this program reads format 1. A document with no header is format 0: it is carried to format 1 in memory as it loads, with a <code>dt::migrated</code> warning, and <code>dharmatiles migrate</code> rewrites the file. A format newer than the program reads is refused.</li>
+  <li>Every length is written with its unit and every angle with <code>deg</code> or <code>rad</code>; a bare number is a count, a density or a fraction. <code>dmm</code> is 1/35 of a square and scales with the system, as <code>sq</code> does; <code>mm</code>, <code>in</code> and <code>layer</code> are printed lengths and never scale. A mismatch of kinds is refused before any build (<code>dt::type</code>, <code>dt::unit</code>).</li>
+  <li><code>%</code> is a plain fraction (<code>50%</code> is 0.5); it is a length only inside a point, and it divides as a coordinate's unit.</li>
+  <li>A name starting with <code>$</code> is read from the context every formula is called with; a plain name is declared by a <code>let</code> or <code>param</code> where it is written. <code>let $name</code> adds to the context, <code>override $name</code> replaces a value for its block, and neither may name a <code>$</code> name an element sets (<code>$x $y $d $a $bottom $region $tile</code>). A plain name is declared once and may not be a word of the language.</li>
+  <li>A formula reads only the names its element sets: a body reads all of them, a tree reads <code>$bottom</code> and <code>$region</code>; <code>check</code> refuses the rest before any build.</li>
+  <li>Positions count from the north-west corner: across, then down. A point is <code>"(across, down)"</code>, with units, in the frame it is written in; <code>point($tile, …)</code> and <code>polar($tile, …)</code> name their frame.</li>
+  <li>Every frame is a region and regions nest: the tile has no parent, a scatter is a region holding the things it places, and a read of a parent that is not there is refused at <code>check</code>.</li>
+  <li>Ranges, percents, units and points are quoted: <code>size="6dmm .. 10dmm"</code>, <code>cover="35%"</code>.</li>
+  <li>A plain range is flat, on every element. A weighting is written round it, <code>size="low(6dmm .. 10dmm, 3)"</code>, and its extra numbers are plain; every range in a value is its own draw; a weighted range goes on a draw, not on a band; a <code>let</code> name holds a distribution.</li>
   <li>The whole tile is the default area. A region is flat: its fill points and its <code>within</code> discs, less what it <code>except</code>s. One word, <code>at=</code>, names any place (a point, a line or a region), and each element refuses the kinds it cannot use with <code>dt::type</code>: a body or grass fills a region or follows a line, a scatter fills a region or spreads along a line (never a point), a thing stands at a point or fills a region. <code>foot(cliff)</code> is the band at that kind's foot.</li>
-  <li>A stack that uses the heights language is written bottom up: <code>base</code> first, the land in order, <code>water</code> after the ground and the rocks, before the grass. Heights are mm above zero; a pin is exact where it is and the later pin wins; the library's defaults are read before the tile.</li>
-  <li>Every name is declared once, in camelCase, and so is every control: <code>perSquare=55</code>, not <code>per-square=55</code>. A hyphenated control name is an <code>unknown-control</code> error that gives the new one, and <code>dharmatiles migrate</code> rewrites old tiles. <code>let</code> adds a name, <code>override</code> replaces a library one, and neither works on the other's names.</li>
+  <li>A stack is written bottom up: <code>base</code> first, the land in order, <code>water</code> after the ground and the rocks, before the grass. Heights are lengths above zero; a pin is exact where it is and the later pin wins; the library's defaults are read before the tile.</li>
+  <li>Every control is camelCase, <code>perSquare=55</code>, not <code>per-square=55</code>.</li>
   <li>Stack order is build order: every entry is built in the order it is listed, standing on the terrain laid so far, and the plan refuses (<code>dt::order</code>) what that order cannot satisfy rather than reorder it. Land bodies are laid in stack order, each the higher of what is below it and its own top.</li>
   <li>Character controls are words that stand for documented numbers; a number is always accepted too.</li>
   <li>A wall or cliff on a tile edge stands inside the tile.</li>
-  <li><code>scatter</code> places many things; a thing on its own is one, placed with <code>at=</code>. An <code>at=</code> may be a range, drawn once from the tile seed; with none, a thing goes anywhere in its area, kept inside the tile and never clipped.</li>
+  <li><code>scatter</code> places many things; a thing on its own is one, placed with <code>at=</code>. With no <code>at=</code> a thing goes anywhere in its area, kept inside the tile and never clipped.</li>
   <li>Water fills its area up to its top; the shoreline comes from the dirt beneath.</li>
-  <li>The library's heights (<code>groundHeight</code>, <code>dirtEdgeHeight</code>, <code>waterSurfaceHeight</code>, <code>wallHeight</code> and the rest) are always there.</li>
+  <li>The library's heights (<code>$groundHeight</code>, <code>$dirtEdgeHeight</code>, <code>$waterSurfaceHeight</code>, <code>$wallHeight</code> and the rest) are always there.</li>
   <li><code>z = 0</code> is the top of the base; the base owns everything below it.</li>
   <li>Materials are named in the document and given colours separately, by a palette.</li>
   <li>Controls sit on the element's line as properties, or as child lines.</li>

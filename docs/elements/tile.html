@@ -23,20 +23,22 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>tile size="1x1" seed=97 {
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="1x1" seed=97 {
     about "Water in the lower half, a meadow bank in the upper."
-    line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { boundedBy shore; fill "0.5,0.25" }
-    region bank { boundedBy shore; fill "0.5,0.75" }
-    region shoreBand { within 7 of=shore }
+    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
-            pin top=waterBedHeight at=pool                                // later, so it wins in the pool
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand   // anywhere from the bed to the land
+            pin top="$waterBedHeight" at=pool                                  // later, so it wins in the pool
         }
         water
-        scatter at=pool count=2 { rock size="6..10" }
+        scatter at=pool count=2 { rock size="6dmm .. 10dmm" }
         grass at=bank
     }
 }</code></pre>
@@ -44,16 +46,17 @@
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>size=</code></td><td><code>"CxR"</code></td><td><code>"1x1"</code></td><td>Squares across, then up. A square is 35 mm (DungeonBlocks) or 25.4 mm (OpenLOCK).</td></tr>
+<tr><td><code>size=</code></td><td><code>"CxR"</code></td><td><code>"1x1"</code></td><td>Squares across, then down. A square is 35 mm (DungeonBlocks) or 25.4 mm (OpenLOCK).</td></tr>
 <tr><td><code>seed=</code></td><td>a whole number</td><td>1</td><td>The root seed. Every element's randomness is keyed from it and the stack, never from the file name, so renaming a tile never changes it; <code>dharmatiles build --seed</code> overrides it.</td></tr>
 <tr><td><code>about</code></td><td>a string</td><td>—</td><td>Free text: what the tile is.</td></tr>
-<tr><td><a href="let.html"><code>let</code></a></td><td>a name and a height</td><td>—</td><td>Heights this tile adds; <code>override</code> replaces a library one.</td></tr>
+<tr><td><a href="let.html"><code>let</code></a></td><td>a name and a value</td><td>—</td><td>Names this tile adds; <code>override</code> replaces a <code>$</code> name.</td></tr>
+<tr><td><a href="point.html"><code>point</code></a></td><td>a name and a point</td><td>—</td><td>Named points.</td></tr>
 <tr><td><a href="line.html"><code>line</code></a></td><td></td><td>—</td><td>Lines, for divided tiles.</td></tr>
 <tr><td><a href="region.html"><code>region</code></a></td><td></td><td>—</td><td>Areas bounded by lines.</td></tr>
 <tr><td><a href="stack.html"><code>stack</code></a></td><td></td><td>—</td><td>What the tile is made of. <strong>Exactly one.</strong></td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>Above the tile a file may have <a href="use.html"><code>use</code></a> lines. Anything else at the top level of a tile document is an error. Positions in the tile are in squares from the south-west corner, x east and y north. The build adds the <a href="dungeonblocks.html">DungeonBlocks</a> or <a href="openlock.html">OpenLOCK</a> base; the document never names it.</p>
+<p>The document starts with its <a href="../language.html#header">header line</a>, and above the tile it may have <a href="use.html"><code>use</code></a> lines. Anything else at the top level of a tile document is an error. Positions in the tile count from the north-west corner: across the row, then down the column. The tile is the root <a href="../language.html#region-tree">region</a>, <code>$tile</code>. The build adds the <a href="dungeonblocks.html">DungeonBlocks</a> or <a href="openlock.html">OpenLOCK</a> base; the document never names it.</p>
 <p>The file name is the tile's name everywhere: in the preview, the tile list and the STL (<code>1x1-water+grass.dtile</code> builds <code>1x1-water+grass-db.stl</code>). To rename a tile, rename its file. Library tiles follow the <a href="../standards/tile-system.html#naming">tile-system naming</a>; your own can be called anything.</p>
 </article>
 </div>

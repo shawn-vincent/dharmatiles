@@ -50,14 +50,17 @@
 <p>At the tile edge the ground comes down to the standard edge level, so a meadow tile meets any other ground or grass tile with no step.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A tile is a short document that lists elements in a <code>stack</code>. Solids (rocks, trees, walls, cliffs) are planned before anything grows, so grass and dirt grow round every solid wherever it is listed. A meadow in the as-built vocabulary looks like this:</p>
-<pre><code>use "parts/grass" lawn
+<p>A tile is a short document that lists elements in a <code>stack</code>. The stack is built in the order it is listed, so grass grows round the solids (rocks, trees, walls, cliffs) listed above it. A meadow looks like this:</p>
+<pre><code>dharmatiles version="1.0.0"
+
+use "parts/grass" lawn
 
 tile size="2x2" seed=1 {
     stack {
+        base
         dirt                                         // the ground, and the bare earth between the grass
         scatter perSquare=2 {                       // about 8 rocks on a 2×2
-            rock size="2..10" shape=angular buried="30%"
+            rock size="2dmm .. 10dmm" shape=angular buried="30%"
         }
         lawn cover="80%"                             // grass over 80% of the ground; it grows round the rocks
     }
@@ -71,10 +74,10 @@ tile size="2x2" seed=1 {
 <thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
 <tbody>
 <tr><td>stack order</td><td>the order elements are listed</td><td>—</td><td>Built in the order listed: each entry stands on the terrain laid so far. Land bodies are laid in order, each the higher of what is below it and its own top; water is built where it is listed: rocks and reeds listed before it stand in it and get ripple rings, and grass listed after it sees its shore.</td></tr>
-<tr><td><code>at=</code></td><td>a region, a line, an edge or edge path, a point (a range allowed, in squares), or <code>foot(cliff)</code></td><td>whole tile</td><td>Where the element goes. A region is filled, a line is followed (a path, a wall), a point is where one thing stands, and <code>foot(cliff)</code> is the band at the foot of that kind of solid, where scatters gather. Footprints are kept inside the tile and clear of other solids.</td></tr>
-<tr><td>grass <code>cover</code></td><td>percent</td><td>100%</td><td>Share of the ground grassed over. A meadow uses about 80%.</td></tr>
+<tr><td><code>at=</code></td><td>a region, a line, an edge or edge path, a point (<code>"(0.5sq, 0.5sq)"</code>, counted from the north-west corner), or <code>foot(cliff)</code></td><td>whole tile</td><td>Where the element goes. A region is filled, a line is followed (a path, a wall), a point is where one thing stands, and <code>foot(cliff)</code> is the band at the foot of that kind of solid, where scatters gather. Footprints are kept inside the tile and clear of other solids.</td></tr>
+<tr><td>grass <code>cover</code></td><td>percent (a plain fraction)</td><td>100%</td><td>Share of the ground grassed over. A meadow uses about 80%.</td></tr>
 <tr><td>scatter <code>count</code> / <code>perSquare</code></td><td>number</td><td>—</td><td>How many solids. The meadow uses 6–9 rocks on a 2×2.</td></tr>
-<tr><td>rock <code>buried</code></td><td>percent</td><td>—</td><td>How much of each rock is under the ground.</td></tr>
+<tr><td>rock <code>buried</code></td><td>percent (a plain fraction)</td><td>—</td><td>How much of each rock is under the ground.</td></tr>
 <tr><td><code>region</code></td><td><code>boundedBy</code> lines, <code>fill</code> points</td><td>—</td><td>Divides the tile, like a paint bucket: name the lines, drop fill points.</td></tr>
 </tbody></table></div>
 <p>How rocks and grass meet is fixed and has no control: rock tops stand at least max(1.5 mm, 0.45 × rock height) above the grass; grass is half height at a rock's face, back to full height 1.2 mm out; about 35% of rocks get an apron; bare earth is filled to 20% with natural-size patches. The full language is on the <a href="language.html#placement">language page</a>.</p>
@@ -83,17 +86,17 @@ tile size="2x2" seed=1 {
 <div class="tbl"><table>
 <thead><tr><th>Name</th><th>Height above the base</th><th>Used for</th></tr></thead>
 <tbody>
-<tr><td><code>dirtEdgeHeight</code></td><td>3.4 mm</td><td>Where dirt meets every tile edge.</td></tr>
-<tr><td><code>groundHeight</code></td><td>5 mm</td><td>Open land: the library's grass and soil.</td></tr>
-<tr><td><code>waterSurfaceHeight</code></td><td>2.6 mm</td><td>The calm water surface beside a shore.</td></tr>
-<tr><td><code>wallHeight</code></td><td>33.1 mm</td><td>The DungeonBlocks wall top.</td></tr>
+<tr><td><code>$dirtEdgeHeight</code></td><td><code>3.4dmm</code></td><td>Where dirt meets every tile edge.</td></tr>
+<tr><td><code>$groundHeight</code></td><td><code>5dmm</code></td><td>Open land: the library's grass and soil.</td></tr>
+<tr><td><code>$waterSurfaceHeight</code></td><td><code>2.6dmm</code></td><td>The calm water surface beside a shore.</td></tr>
+<tr><td><code>$wallHeight</code></td><td><code>33.1dmm</code></td><td>The DungeonBlocks wall top.</td></tr>
 </tbody></table></div>
-<p>Every tile gets these, and the others in <code>library/parts/heights.dtile</code>, without a <code>use</code> line. A tile's own <code>let</code> adds names and <code>override</code> replaces one.</p>
+<p>Every tile gets these, and the others in <code>library/parts/heights.dtile</code>, as <code>$</code> names without a <code>use</code> line. A tile's own <code>let</code> adds names and <code>override</code> replaces a <code>$</code> name.</p>
 
 <h3 id="edges">Edges and joining tiles</h3>
 <p>Every tile obeys one edge contract, so any two tiles butt with no step:</p>
 <ul>
-  <li><strong>Ground</strong> meets every tile edge at 3.4 mm and rises from there; nothing inside dips below it.</li>
+  <li><strong>Ground</strong> meets every tile edge at <code>3.4dmm</code> and rises from there; nothing inside dips below it.</li>
   <li><strong>Water</strong> meets the edge at a calm, fixed profile.</li>
   <li><strong>Lines</strong> such as paths and shores leave the tile only at fixed anchor positions.</li>
   <li><strong>Cliffs</strong> end in a standard end section; <strong>walls</strong> end in a clean vertical cut.</li>
@@ -119,7 +122,7 @@ tile size="2x2" seed=1 {
 <p>The full printing rules are on the <a href="standards/printing.html">printing</a> page.</p>
 
 <h2 id="how">How it is made</h2>
-<p>The program orders the stack by what each element reads and writes, so the order a tile lists them in does not decide what grows round what.</p>
+<p>The program plans the stack by what each element reads and writes, in the order it is listed: surfaces first, then the lift, then solids, with what grows round solids listed after them. It refuses (<code>dt::order</code>) what the listed order cannot satisfy, never reorders it.</p>
 <ol>
   <li><strong>Surfaces.</strong> Dirt is the ground; floors (flagstones, planks) are laid on it. A later land body is the higher of what is below it and its own top.</li>
   <li><strong>Solids.</strong> Rocks, trees, walls and cliffs claim their footprints and are bedded into the ground, kept inside the tile and clear of each other.</li>

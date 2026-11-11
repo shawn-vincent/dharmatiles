@@ -154,7 +154,7 @@
 </tbody></table></div>
 
 <h2 id="edges">Edges and orientation</h2>
-<p>A boundary between two terrains, such as a river bank, leaves the tile only at fixed points on its edges called <strong>anchors</strong>, so it lines up with the next tile. Anchors sit at 0.5 (the middle of an edge) for half-tile and corner shapes, and at 0.33 and 0.67 for corridors. Positions are measured from the south-west end of each edge: left to right along the bottom and top, bottom to top along the sides.</p>
+<p>A boundary between two terrains, such as a river bank, leaves the tile only at fixed points on its edges called <strong>anchors</strong>, so it lines up with the next tile. Anchors sit at 0.5 (the middle of an edge) for half-tile and corner shapes, and at 0.33 and 0.67 for corridors. Positions are measured from the north-west end of each edge: left to right along the top and bottom, top to bottom along the sides.</p>
 <figure class="diagram">
 <svg viewBox="0 0 420 300" role="img" aria-label="A square tile with its four edges named and the standard anchor positions 0.33, 0.5 and 0.67 marked">
   <style>
@@ -174,16 +174,16 @@
   <circle class="a" cx="110" cy="184" r="5"/><circle class="b" cx="110" cy="150" r="5"/><circle class="a" cx="110" cy="116" r="5"/>
   <circle class="a" cx="310" cy="184" r="5"/><circle class="b" cx="310" cy="150" r="5"/><circle class="a" cx="310" cy="116" r="5"/>
   <text class="m" x="166" y="242">.33</text><text class="m" x="200" y="242">.5</text><text class="m" x="234" y="242">.67</text>
-  <text class="m" x="118" y="188">.33</text><text class="m" x="118" y="120">.67</text>
-  <text class="m" x="72" y="268">t = 0</text>
-  <path d="M125 235 L170 235" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
-  <path d="M125 235 L125 195" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+  <text class="m" x="118" y="120">.33</text><text class="m" x="118" y="188">.67</text>
+  <text class="m" x="72" y="62">t = 0</text>
+  <path d="M125 65 L170 65" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+  <path d="M125 65 L125 105" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
   <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="currentColor"/></marker></defs>
-  <text class="m" x="132" y="228">x, t</text>
+  <text class="m" x="132" y="84">x, t</text>
 </svg>
-<figcaption>Anchor positions. Green: corridor points at 0.33 and 0.67. Blue: half-tile and corner points at 0.5. The origin is the bottom-left (south-west) corner.</figcaption>
+<figcaption>Anchor positions. Green: corridor points at 0.33 and 0.67. Blue: half-tile and corner points at 0.5. The origin is the top-left (north-west) corner: x runs across, down the sides is t.</figcaption>
 </figure>
-<p>Inside the tile a boundary may wander, but it passes exactly through its anchors. x runs east (right), y north (up), z up from the datum, with the origin at the bottom-left corner. The tile language names edges by compass (<code>north</code>, <code>south</code>, <code>east</code>, <code>west</code>) and writes positions in squares from the south-west corner.</p>
+<p>Inside the tile a boundary may wander, but it passes exactly through its anchors. x runs east (right) along a row and y runs south (down) a column, with the origin at the top-left, north-west corner; z is up from the datum. The tile language names edges by compass (<code>north</code>, <code>south</code>, <code>east</code>, <code>west</code>) and writes positions as <code>"(across, down)"</code> with units, from the north-west corner.</p>
 
 <h2 id="edge-contract">How tiles meet</h2>
 <p>The <strong>edge contract</strong> is what every tile does at its border so that two tiles side by side meet with no step:</p>

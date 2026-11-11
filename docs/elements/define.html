@@ -23,19 +23,21 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>// library/parts/grass.dtile
+<pre><code>dharmatiles version="1.0.0"
+
+// library/parts/grass.dtile
 define lawn {
-    param length "3.5..6.5"   // blade length along the ground, mm
-    param height "1.5..2"     // how tall a blade stands, mm
-    param clearings 0         // patches of bare earth per square
-    param cover "100%"        // share of the ground grassed over
+    param length "3.5dmm .. 6.5dmm"   // blade length along the ground
+    param height "1.5dmm .. 2dmm"     // how tall a blade stands
+    param clearings 0                 // patches of bare earth per square
+    param cover "100%"                // share of the ground grassed over
     stack {
         grass length=length height=height clearings=clearings cover=cover
     }
 }
 
-define long-grass {           // a definition can call another
-    stack { lawn length="5..9" height="2..3" }
+define long-grass {                   // a definition can call another
+    stack { lawn length="5dmm .. 9dmm" height="2dmm .. 3dmm" }
 }</code></pre>
 <p>A tile then writes <code>use "parts/grass" lawn</code> and <code>lawn cover="80%"</code> in its stack.</p>
 <h2 id="reference">Reference</h2>
@@ -43,11 +45,11 @@ define long-grass {           // a definition can call another
 <thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>define NAME</code></td><td>a name</td><td>—</td><td>What callers write. <strong>Required.</strong></td></tr>
-<tr><td><code>param NAME</code></td><td>a default, or none</td><td>—</td><td>A control callers may set. Its default is checked as whatever control it fills (<code>param length 10</code> is mm). With no default, the caller must give it.</td></tr>
+<tr><td><code>param NAME</code></td><td>a default, or none</td><td>—</td><td>A control callers may set. Its kind is its default's: <code>param length "3.5dmm .. 6.5dmm"</code> is a length, <code>param clearings 0</code> a count, and a caller that writes <code>length=5</code> is asked for <code>5dmm</code> (<code>dt::unit</code>). With no default, the caller must give it, and its kind is the control it fills.</td></tr>
 <tr><td><code>stack</code></td><td></td><td>—</td><td>What it makes. <strong>Exactly one.</strong></td></tr>
 </tbody></table></div>
 <h2 id="notes">Notes</h2>
-<p>A place given to the call (<code>at=</code>) pass through to the elements inside, and a call's <code>top=</code> is the height of the tree inside it (<code>oak top="bottom + 40"</code>). Expert controls, such as a tree's <code>branch</code> knobs, are allowed only in parts files. Definitions that call each other in a loop are an error (<code>dt::loop</code>). A tile has no params.</p>
+<p>A place given to the call (<code>at=</code>) pass through to the elements inside, and a call's <code>top=</code> is the height of the tree inside it (<code>oak top="$bottom + 40dmm"</code>). Expert controls, such as a tree's <code>branch</code> knobs, are allowed only in parts files. Definitions that call each other in a loop are an error (<code>dt::loop</code>). A tile has no params. A part has no tile of its own, so a point it writes (<code>"(50%, 0.5sq)"</code>) is worked out at each place it is called, and a <code>$</code> name it reads comes from its caller: <code>check</code> refuses a call whose context lacks one.</p>
 </article>
 </div>
 </body>

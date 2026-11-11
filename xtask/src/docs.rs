@@ -291,7 +291,14 @@ fn reference(element: &Value, tiles: &[(String, String)]) -> String {
 }
 
 fn takes(c: &Value) -> String {
-    let unit = c["unit"].as_str().unwrap_or("group");
+    // the schema's axis names, as a format 1 document writes the value: a
+    // length and an angle carry their unit (the limits are in that unit)
+    let unit = match c["unit"].as_str() {
+        Some("mm") => "length (dmm)",
+        Some("degrees") => "angle (deg)",
+        Some(u) => u,
+        None => "group",
+    };
     let mut t = esc(unit);
     if let Some(takes) = c["takes"].as_str() {
         let _ = write!(t, ", {}", esc(takes));
@@ -317,7 +324,8 @@ fn table(s: &mut String, controls: &[&Value]) {
 fn row(s: &mut String, c: &Value, parent: Option<&str>) {
     let name = c["name"].as_str().unwrap_or_default();
     let shown = parent.map_or_else(|| name.to_owned(), |p| format!("{p} {name}"));
-    let default = c["default"]
+    // `default1` is the default as a format 1 document writes it (`5dmm`, `34deg`)
+    let default = c["default1"]
         .as_str()
         .map_or_else(|| "—".to_owned(), |d| format!("<code>{}</code>", esc(d)));
     let mut about = prose(c["about"].as_str().unwrap_or_default());

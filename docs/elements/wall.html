@@ -14,12 +14,12 @@
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-thing" title="stone: a thing, a run or a scatter"></i>Element · run</div>
   <h1>wall</h1>
-  <p class="lede">A masonry wall standing on a tile edge: cut stone, fieldstone, brick or regular brick, laid in courses with real joints, its top at the official wall-top level (33.1 mm). On a tile edge it always stands inside the tile, its outer face flush with the edge, so walls on neighbouring tiles line up.</p>
+  <p class="lede">A masonry wall standing on a tile edge: cut stone, fieldstone, brick or regular brick, laid in courses with real joints, its top at the official wall-top level (<code>$wallHeight</code>, <code>33.1dmm</code>). On a tile edge it always stands inside the tile, its outer face flush with the edge, so walls on neighbouring tiles line up.</p>
   <p class="small">Floors are their own elements, <a href="flagstones.html"><code>flagstones</code></a> and <a href="planks.html"><code>planks</code></a>; walls stand on them. Doors, windows and hatches are not built yet.</p>
   <figure class="shot hero-one"><img src="img/el-wall.jpg" alt="A one-square tile with a cut-stone wall turning a corner along the north and west edges, grass in front"><figcaption><code>lib:tiles/walls/1x1-wall-stone-corner.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
     <div><div class="k">Styles</div><div class="v">cut stone, fieldstone, brick, regular brick</div></div>
-    <div><div class="k">Sizes</div><div class="v">full height (33.1 mm) by default, 7 mm thick</div></div>
+    <div><div class="k">Sizes</div><div class="v">full height (<code>33.1dmm</code>) by default, <code>7dmm</code> thick</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; no stone stands more than 0.45 mm proud of the one under it</div></div>
     <div><div class="k">In the library</div><div class="v"><code>tiles/walls/</code>, <code>floors/1x1-floor-stone-wall</code></div></div>
   </div>
@@ -78,30 +78,33 @@
 </div>
 <h2 id="use">Using it in a tile</h2>
 <p>A wall must have <code>at=</code> a line: a tile edge, an edge path (two edges make a corner), or a drawn <a href="line.html">line</a>:</p>
-<pre><code>use "parts/grass" lawn
+<pre><code>dharmatiles version="1.0.0"
+
+use "parts/grass" lawn
 
 tile size="1x1" seed=62 {
     stack {
+        base
         dirt
         wall at="north west" style=cut-stone seed=12 {
-            height full                 // up to the wall-top level (33.1 mm)
-            thickness 7
+            height full                 // up to the wall-top level, $wallHeight
+            thickness "7dmm"
         }
         lawn                            // grows up to the wall's foot
     }
 }</code></pre>
 <p>The styles: <code>style=cut-stone</code> (the default), <code>fieldstone</code> (drystone, no mortar), <code>brick</code> and <code>regular-brick</code>. Each sets its own stone sizes and finish; <code>stones</code>, <code>joints</code> and <code>edges</code> adjust them:</p>
 <pre><code>wall at=north style=fieldstone {
-    stones height="2.2..5.2" length="5..16" texture=worn
+    stones height="2.2dmm .. 5.2dmm" length="5dmm .. 16dmm" texture=worn
     coping on-edge                      // what tops a drystone wall
 }</code></pre>
 <p>Along a drawn line, <code>side=left</code>, <code>right</code> or <code>centre</code> says which side of the line the wall stands, as you walk it: <code>left</code> puts the body to the left of the direction the line is drawn, with the line as its outer face; <code>right</code> puts it to the right; <code>centre</code> (the default) centres it on the line. The wall follows the line as the tile has it, wobble included, so a new tile seed moves the wall with the line.</p>
-<pre><code>line lane wobble=6 { through "0,0.5" "0.85,0.78" "1.35,1.38" "2,1.5" }
+<pre><code>line lane wobble="6dmm" { through "(0sq, 1.5sq)" "(0.85sq, 1.22sq)" "(1.35sq, 0.62sq)" "(2sq, 0.5sq)" }
 stack {
     dirt
     wall at=lane side=left style=cut-stone
 }</code></pre>
-<p>The line is cut into straight runs that stray no more than 0.35 mm from it, and a run turns at each vertex. A left turn of exactly a right angle is a corner like an edge path's, the two runs taking turns passing through it. Any other turn is a bend: the two runs overlap, the one on the outside of the turn running on past the vertex so its face is whole. A wall turns at most 150 degrees at one point. The free ends of an open line are textured ends; a line that returns to its first point makes a ring. A line that meets a tile edge ends flush with it when it meets it square, and otherwise runs on past it and is cut at the tile edge. Library: <a href="../../library/tiles/walls/2x2-wall-curve.dtile"><code>lib:tiles/walls/2x2-wall-curve.dtile</code></a>. Pin a wall's look with <code>seed=</code> while the rest of the tile changes.</p>
+<p>The line is cut into straight runs that stray no more than <code>0.35dmm</code> from it, and a run turns at each vertex. A left turn of exactly a right angle is a corner like an edge path's, the two runs taking turns passing through it. Any other turn is a bend: the two runs overlap, the one on the outside of the turn running on past the vertex so its face is whole. A wall turns at most 150 degrees at one point. The free ends of an open line are textured ends; a line that returns to its first point makes a ring. A line that meets a tile edge ends flush with it when it meets it square, and otherwise runs on past it and is cut at the tile edge. Library: <a href="../../library/tiles/walls/2x2-wall-curve.dtile"><code>lib:tiles/walls/2x2-wall-curve.dtile</code></a>. Pin a wall's look with <code>seed=</code> while the rest of the tile changes.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference wall -->
@@ -116,17 +119,17 @@ stack {
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
 <tr id="c-style"><td><code>style</code></td><td>word</td><td><code>cut-stone</code></td><td>how stones are made and laid<dl class="words"><dt><code>fieldstone</code></dt><dd>drystone fieldstone</dd><dt><code>cut-stone</code></dt><dd>dressed ashlar</dd><dt><code>brick</code></dt><dd>irregular brick</dd><dt><code>regular-brick</code></dt><dd>uniform brick in running bond</dd></dl></td></tr>
-<tr id="c-height"><td><code>height</code></td><td>mm, 6 to 200</td><td><code>full</code></td><td>height above what it stands on<dl class="words"><dt><code>full</code></dt><dd>up to the wall-top level</dd><dt><code>low</code></dt><dd>half the wall top (provisional)</dd></dl></td></tr>
-<tr id="c-thickness"><td><code>thickness</code></td><td>mm, 2 to 40</td><td><code>7</code></td><td>wall thickness</td></tr>
+<tr id="c-height"><td><code>height</code></td><td>length (dmm), 6 to 200</td><td><code>full</code></td><td>height above what it stands on<dl class="words"><dt><code>full</code></dt><dd>up to the wall-top level</dd><dt><code>low</code></dt><dd>half the wall top (provisional)</dd></dl></td></tr>
+<tr id="c-thickness"><td><code>thickness</code></td><td>length (dmm), 2 to 40</td><td><code>7dmm</code></td><td>wall thickness</td></tr>
 <tr id="c-stones"><td><code>stones</code></td><td>group</td><td>—</td><td>stone size</td></tr>
-<tr id="c-stones-height"><td><code>stones height</code></td><td>mm, 1 to 40, or a range, or a weighted range</td><td>—</td><td>course height</td></tr>
-<tr id="c-stones-length"><td><code>stones length</code></td><td>mm, 2 to 80, or a range, or a weighted range</td><td>—</td><td>stone length along the wall</td></tr>
+<tr id="c-stones-height"><td><code>stones height</code></td><td>length (dmm), 1 to 40, or a range, or a weighted range</td><td>—</td><td>course height</td></tr>
+<tr id="c-stones-length"><td><code>stones length</code></td><td>length (dmm), 2 to 80, or a range, or a weighted range</td><td>—</td><td>stone length along the wall</td></tr>
 <tr id="c-stones-texture"><td><code>stones texture</code></td><td>word</td><td>—</td><td>surface finish of each stone<dl class="words"><dt><code>chipped</code></dt><dd>chipped cut stone (Hirst Arts m50)</dd><dt><code>worn</code></dt><dd>soft, weathered</dd><dt><code>hewn</code></dt><dd>rough-hewn all over</dd><dt><code>dressed</code></dt><dd>near-smooth ashlar, crisp edges</dd></dl></td></tr>
 <tr id="c-joints"><td><code>joints</code></td><td>group</td><td>—</td><td>the gaps between stones</td></tr>
-<tr id="c-joints-width"><td><code>joints width</code></td><td>mm, 0 to 3</td><td>—</td><td>mortar gap</td></tr>
-<tr id="c-joints-depth"><td><code>joints depth</code></td><td>mm, 0 to 5</td><td>—</td><td>how deep the gaps between stones look</td></tr>
+<tr id="c-joints-width"><td><code>joints width</code></td><td>length (dmm), 0 to 3</td><td>—</td><td>mortar gap</td></tr>
+<tr id="c-joints-depth"><td><code>joints depth</code></td><td>length (dmm), 0 to 5</td><td>—</td><td>how deep the gaps between stones look</td></tr>
 <tr id="c-edges"><td><code>edges</code></td><td>group</td><td>—</td><td>the stone corners</td></tr>
-<tr id="c-edges-rounding"><td><code>edges rounding</code></td><td>mm, 0 to 5, or a range, or a weighted range</td><td>—</td><td>how worn the stone corners are</td></tr>
+<tr id="c-edges-rounding"><td><code>edges rounding</code></td><td>length (dmm), 0 to 5, or a range, or a weighted range</td><td>—</td><td>how worn the stone corners are</td></tr>
 <tr id="c-coping"><td><code>coping</code></td><td>word</td><td>—</td><td>what tops a drystone wall<dl class="words"><dt><code>loose</code></dt><dd>loose stones perched on top</dd><dt><code>on-edge</code></dt><dd>stones set on edge</dd></dl></td></tr>
 <tr id="c-bond"><td><code>bond</code></td><td>word</td><td>—</td><td>random courses, or brick-style offsets<dl class="words"><dt><code>irregular</code></dt><dd>random courses and bays</dd><dt><code>running</code></dt><dd>uniform courses, half-unit offsets</dd></dl></td></tr>
 <tr id="c-ruin"><td><code>ruin</code></td><td>percent, 0% to 100%</td><td>—</td><td>how much has fallen</td></tr>
@@ -148,15 +151,15 @@ stack {
 
 <h3 id="floor-spec">Floors</h3>
 <ul>
-  <li><strong>The <a href="flagstones.html"><code>flagstones</code></a> element</strong> is a stone pavement: dressed slabs standing on the land to 7.4 mm (the official interior floor), one per square by default (<code>slabs</code> subdivides). About 4% of slabs are missing (dirt shows in the pits), 10% spalled and 20% cracked.</li>
+  <li><strong>The <a href="flagstones.html"><code>flagstones</code></a> element</strong> is a stone pavement: dressed slabs standing on the land to <code>$floorHeight</code>, <code>7.4dmm</code> (the official interior floor), one per square by default (<code>slabs</code> subdivides). About 4% of slabs are missing (dirt shows in the pits), 10% spalled and 20% cracked.</li>
   <li><strong>The slabs are the top.</strong> A wall written after a floor stands on the slabs, its top still at the wall-top level.</li>
   <li><strong>Drystone floor:</strong> <code>flagstones style=fieldstone</code> lays a fieldstone wall's stones and chinking flat, as flags.</li>
 </ul>
 
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
-  <li><strong>Height.</strong> The wall top is 33.1 mm above the base datum, the official DungeonBlocks wall top (about 29.6 mm of visible wall above ordinary ground). A tall wall reaches about 72.3 mm.</li>
-  <li><strong>Thickness.</strong> 7 mm, like the official wall slab. On a tile edge the outer face is flush with the edge and the wall stands inside the tile.</li>
+  <li><strong>Height.</strong> The wall top is <code>33.1dmm</code> above the base datum, the official DungeonBlocks wall top (about 29.6 mm of visible wall above ordinary ground). A tall wall reaches <code>72.3dmm</code>.</li>
+  <li><strong>Thickness.</strong> <code>7dmm</code>, like the official wall slab. On a tile edge the outer face is flush with the edge and the wall stands inside the tile.</li>
   <li><strong>Seat.</strong> The bottom course sinks 2.5 mm into the ground, with a soil skirt around the foot. Walls assume flat ground.</li>
 </ul>
 
@@ -171,7 +174,7 @@ stack {
 <h3 id="rules">Rules</h3>
 <p>What this element always does. A change to one of these is a change to the element.</p>
 <ul class="rules">
-  <li>A wall is a footprint with a texture applied, DungeonBlocks-compatible by default, standing at the wall-top level (33.1 mm).</li>
+  <li>A wall is a footprint with a texture applied, DungeonBlocks-compatible by default, standing at the wall-top level (<code>33.1dmm</code>).</li>
   <li>The cap is flat, textured as the tops of its stones. Wall ends are always textured. Walls butt-join at tile seams.</li>
   <li>Straight runs, right-angle corners and bends, on flat ground. A wall at a drawn line follows it in straight runs; its stones do not curve.</li>
   <li>Fieldstone reads as stacked stones with no mortar: each stone a distinct, morphed pebble, never fused with its neighbours, with rough little rocks as hearting.</li>

@@ -23,13 +23,16 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>use "parts/grass" lawn
+<pre><code>dharmatiles version="1.0.0"
+
+use "parts/grass" lawn
 
 tile size="1x1" seed=7 {
     stack {
+        base
         dirt
-        scatter perSquare=4 { flower size="4..6" petals=5 }   // many, each its own size
-        flower at="0.5,0.5" size=5                            // or one, where you say
+        scatter perSquare=4 { flower size="4dmm .. 6dmm" petals=5 }   // many, each its own size
+        flower at="(0.5sq, 0.5sq)" size="5dmm"                        // or one, where you say
         lawn
     }
 }</code></pre>
@@ -45,12 +48,12 @@ tile size="1x1" seed=7 {
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-size"><td><code>size</code></td><td>mm, 1 to 20, or a range, or a weighted range</td><td><code>5</code></td><td>width across the petals' tips</td></tr>
+<tr id="c-size"><td><code>size</code></td><td>length (dmm), 1 to 20, or a range, or a weighted range</td><td><code>5dmm</code></td><td>width across the petals' tips</td></tr>
 <tr id="c-petals"><td><code>petals</code></td><td>count, 0 to 12</td><td><code>5</code></td><td>petals round the centre</td></tr>
-<tr id="c-centre"><td><code>centre</code></td><td>mm, 0.3 to 8</td><td><code>1.5</code></td><td>radius of the centre dome</td></tr>
-<tr id="c-stem"><td><code>stem</code></td><td>mm, 0.3 to 6</td><td><code>1</code></td><td>height of the column under each dome</td></tr>
-<tr id="c-dome"><td><code>dome</code></td><td>mm, 0.2 to 4</td><td><code>1</code></td><td>height of the centre dome</td></tr>
-<tr id="c-petal"><td><code>petal</code></td><td>mm, 0.2 to 4</td><td><code>0.5</code></td><td>height of each petal dome</td></tr>
+<tr id="c-centre"><td><code>centre</code></td><td>length (dmm), 0.3 to 8</td><td><code>1.5dmm</code></td><td>radius of the centre dome</td></tr>
+<tr id="c-stem"><td><code>stem</code></td><td>length (dmm), 0.3 to 6</td><td><code>1dmm</code></td><td>height of the column under each dome</td></tr>
+<tr id="c-dome"><td><code>dome</code></td><td>length (dmm), 0.2 to 4</td><td><code>1dmm</code></td><td>height of the centre dome</td></tr>
+<tr id="c-petal"><td><code>petal</code></td><td>length (dmm), 0.2 to 4</td><td><code>0.5dmm</code></td><td>height of each petal dome</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
@@ -60,7 +63,7 @@ tile size="1x1" seed=7 {
 <p class="muted small">Generated from <code>dharmatiles elements flower</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->
 <h2 id="notes">Notes</h2>
-<p>Flowers paint in the <code>flower</code> colour of the <a href="palette.html">palette</a>. Every size is mm at the 35 mm square and scales with the system.</p>
+<p>Flowers paint in the <code>flower</code> colour of the <a href="palette.html">palette</a>. Every size is a length: in <code>dmm</code> it scales with the system.</p>
 </article>
 </div>
 </body>

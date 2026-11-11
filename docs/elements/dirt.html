@@ -43,42 +43,47 @@
 <article class="doc">
 
 <h2 id="look">What it looks like</h2>
-<p>Miniature bare earth, readable at four scales at once. Broad, low rises swell up to about 3 mm from the edge level, with flat plains between. Over them lie soil clods: lumpy crumbs in patches, with smoother tamped ground between the patches. A fine grit and a few sand grains cover everything. Pebbles gather in loose clusters, mostly in the low ground, as if washed there: many small ones (0.5–1.5 mm) and some medium (2.2–4.5 mm). Dirt beds no larger stones: rocks on it are a <a href="scatter.html"><code>scatter</code></a> listed after it (<code>scatter perSquare=1 { rock size="4..8" }</code>), or a single <a href="rock.html"><code>rock</code></a>. There are no footprints, no tracks and, by default, no cracks.</p>
+<p>Miniature bare earth, readable at four scales at once. Broad, low rises swell up to about 3 mm from the edge level, with flat plains between. Over them lie soil clods: lumpy crumbs in patches, with smoother tamped ground between the patches. A fine grit and a few sand grains cover everything. Pebbles gather in loose clusters, mostly in the low ground, as if washed there: many small ones (0.5–1.5 mm) and some medium (2.2–4.5 mm). Dirt beds no larger stones: rocks on it are a <a href="scatter.html"><code>scatter</code></a> listed after it (<code>scatter perSquare=1 { rock size="4dmm .. 8dmm" }</code>), or a single <a href="rock.html"><code>rock</code></a>. There are no footprints, no tracks and, by default, no cracks.</p>
 <p>Every patch of the surface keeps at least one printed layer of relief, so a dark primer and a drybrush pick out the clod tops and pebble facets everywhere, not just in a render.</p>
 
 <p>The dirt texture is also the exposed ground in every other lab: grass stands on it, water's shore and banks use it, and rocks sit in it.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>The plainest tile is dirt on its own: the library's top, hills spanning 1 mm over the ground height. <code>top</code> sets how high it may be, <code>bumpSize</code> how wide its hills are, and <code>clods</code> how cloddy the soil is:</p>
-<pre><code>tile size="1x1" seed=13 {
+<p>The plainest tile is dirt on its own: the library's top, hills spanning <code>1dmm</code> over the ground height. <code>top</code> sets how high it may be, <code>bumpSize</code> how wide its hills are, and <code>clods</code> how cloddy the soil is:</p>
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="1x1" seed=13 {
     stack {
         base
-        dirt top="[groundHeight .. groundHeight + 2.5]" bumpSize=14 {   // hills up to 2.5 mm, about 14 mm across
+        dirt top="[$groundHeight .. $groundHeight + 2.5dmm]" bumpSize="14dmm" {   // hills up to 2.5dmm, about 14dmm across
             clods some                  // or: none, few, many
         }
     }
 }</code></pre>
 <p>With <code>clods=none</code> the dirt is plain: its hills alone, with no soil roughness, clods, grit or pebbles. A pond's bed, or ground a tree or a wall stands on, can be written so.</p>
 <p>Under other elements, write <code>dirt</code> first and let the rest stand on it. Restrict it to a <a href="region.html">region</a> with <code>at=</code>:</p>
-<pre><code>tile size="1x1" seed=42 {
-    line margin wobble=5 { through "0.48,1" "0.52,0" }
-    region meadow { boundedBy margin; fill "0.25,0.5" }
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="1x1" seed=42 {
+    line margin wobble="5dmm" { through "(0.48sq, 0sq)" "(0.52sq, 1sq)" }
+    region meadow { boundedBy margin; fill "(0.25sq, 0.5sq)" }
     stack {
+        base
         dirt
         grass at=meadow
     }
 }</code></pre>
 <p>Against a cliff, the bank is drawn: the dirt is pinned high under the cliff and given a wide band across the apron beside it, and a <a href="scatter.html"><code>scatter</code></a> written inside it lands on it (from <code>2x1-cliff</code>). A second dirt laid on the cliff's stones lies on their tops, as it would on any surface:</p>
-<pre><code>dirt top=dirtEdgeHeight {
-    pin top="[dirtEdgeHeight .. dirtEdgeHeight + 3.5]" at=apron
-    pin top="dirtEdgeHeight + [1.5 .. 3.5]" at=crag
-    scatter perSquare=45 { pebble size="1..2.2" buried="20%..50%" }
+<pre><code>dirt top="$dirtEdgeHeight" {
+    pin top="[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]" at=apron
+    pin top="$dirtEdgeHeight + [1.5dmm .. 3.5dmm]" at=crag
+    scatter perSquare=45 { pebble size="1dmm .. 2.2dmm" buried="20%..50%" }
 }
-dirt top="bottom + [0.6 .. 1.2]" at=crag     // 0.6 to 1.2 mm over whatever is under it, where that is under 35°</code></pre>
+dirt top="$bottom + [0.6dmm .. 1.2dmm]" at=crag     // 0.6 to 1.2dmm over whatever is under it, where that is under 35°</code></pre>
 <p>A dirt lies on loose rocks the same way, when it is listed after them: the stack is built in the order it is listed, so the rocks stand first, and the dirt lies on their tops where they are flat enough (a dome is steeper than 35°, so a flat-topped slab holds dirt and a boulder does not). The same holds for a scatter that mixes rocks with trees and flowers, and for a dirt listed after a tree: it banks against the trunk and never lies on a crown, and it covers the foot of a flower. A dirt listed before them is laid first, and they stand on it, the rocks bedding into it as always.</p>
 <pre><code>dirt
-scatter count=2 { rock shape=flat size="14..17" }
-dirt top="bottom + [0.6 .. 1.2]"   // on the tops of the flat ones</code></pre>
+scatter count=2 { rock shape=flat size="14dmm .. 17dmm" }
+dirt top="$bottom + [0.6dmm .. 1.2dmm]"   // on the tops of the flat ones</code></pre>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference dirt -->
@@ -92,9 +97,9 @@ dirt top="bottom + [0.6 .. 1.2]"   // on the tops of the flat ones</code></pre>
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-bumpSize"><td><code>bumpSize</code></td><td>mm, 5 to 70</td><td>—</td><td>how wide the hills are in its band: broad and rolling, or choppy</td></tr>
+<tr id="c-bumpSize"><td><code>bumpSize</code></td><td>length (dmm), 5 to 70</td><td>—</td><td>how wide the hills are in its band: broad and rolling, or choppy</td></tr>
 <tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>none</code></dt><dd>no clods: plain, untextured dirt</dd><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>clods here and there</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
-<tr id="c-maxSlope"><td><code>maxSlope</code></td><td>degrees, 5 to 85</td><td><code>35</code></td><td>the steepest surface under it that dirt stays on; on anything steeper it slides off and leaves it bare</td></tr>
+<tr id="c-maxSlope"><td><code>maxSlope</code></td><td>angle (deg), 5 to 85</td><td><code>35deg</code></td><td>the steepest surface under it that dirt stays on; on anything steeper it slides off and leaves it bare</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">
@@ -165,10 +170,10 @@ dirt top="bottom + [0.6 .. 1.2]"   // on the tops of the flat ones</code></pre>
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
   <li><strong>Tile.</strong> Any size in 35 mm squares.</li>
-  <li><strong>Edge height.</strong> The library pins the first dirt to <code>dirtEdgeHeight</code>, 3.4 mm above the base, at every tile edge (<code>library/parts/edges.dtile</code>); a pin the tile writes later wins where they overlap.</li>
-  <li><strong>Hills in a band.</strong> The default top is <code>[groundHeight .. groundHeight + 1]</code>: broad hills (<code>bumpSize</code>) spanning that band, easing down to the edge pin at the dirt's slope, 24° unless it says otherwise. Where the band is wide (a bank drawn between a bed and the land) the dirt takes the smoothest surface the band allows.</li>
+  <li><strong>Edge height.</strong> The library pins the first dirt to <code>$dirtEdgeHeight</code>, <code>3.4dmm</code> above the base, at every tile edge (<code>library/parts/edges.dtile</code>); a pin the tile writes later wins where they overlap.</li>
+  <li><strong>Hills in a band.</strong> The default top is <code>[$groundHeight .. $groundHeight + 1dmm]</code>: broad hills (<code>bumpSize</code>) spanning that band, easing down to the edge pin at the dirt's slope, <code>24deg</code> unless it says otherwise. Where the band is wide (a bank drawn between a bed and the land) the dirt takes the smoothest surface the band allows.</li>
   <li><strong>Pebbles.</strong> Per square: 45–75 small pebbles (0.5–1.5 mm) and 8–13 medium (2.2–4.5 mm).</li>
-  <li><strong>Flat ground.</strong> A single height for <code>top</code> is flat, exactly: <code>dirt top=groundHeight</code>.</li>
+  <li><strong>Flat ground.</strong> A single height for <code>top</code> is flat, exactly: <code>dirt top="$groundHeight"</code>.</li>
 </ul>
 
 <h3 id="edges">Edges and joining tiles</h3>
@@ -185,15 +190,15 @@ dirt top="bottom + [0.6 .. 1.2]"   // on the tops of the flat ones</code></pre>
 <ul class="rules">
   <li>Plain earth with clods, grit and half-sunk pebbles: no footprints, no cracks.</li>
   <li>Dirt beds no stones. Rocks on dirt are a <code>rock</code> or a <code>scatter</code> of rocks, listed in the stack like anything else.</li>
-  <li>Dirt lies in its region on the surface under it, whatever that is (ground, a floor, a cliff's stones, the tops of loose rocks listed before it), and that surface is its uneven base: its band (<code>top="bottom + [0.6 .. 1.2]"</code>) is measured from the surface, wherever it stands, and its grain is the same on stone as on soil. It does not know what it lies on. A dirt lies on a rock only when it is listed after the rock; listed before, the rock beds into it. This holds for a mixed scatter too, since the stack is built in the order it is listed; a tree's crown is never a surface for dirt, a trunk is a rise the dirt banks against, and a flower the dirt covers is covered.</li>
-  <li>Dirt stays only where the surface under it is flatter than <code>maxSlope</code> (35° by default: an angle, which never scales). On anything steeper it slides off and leaves the surface bare, so a cliff's faces are clean. It is not laid where the surface drops away: on the high side of a drop deeper than 1 mm, nor within 1.5 mm of one (at the 35 mm square, scaled with the system like every size), so it never hangs over an edge or bridges a slit between two stones. A rise is no drop: dirt runs up to the foot of a stone and banks against it, where it cannot overhang. The outline is rounded to a few cells so it has no comb. Where dirt is under 2 mm thick over what is under it, no stone is bedded in it.</li>
+  <li>Dirt lies in its region on the surface under it, whatever that is (ground, a floor, a cliff's stones, the tops of loose rocks listed before it), and that surface is its uneven base: its band (<code>top="$bottom + [0.6dmm .. 1.2dmm]"</code>) is measured from the surface, wherever it stands, and its grain is the same on stone as on soil. It does not know what it lies on. A dirt lies on a rock only when it is listed after the rock; listed before, the rock beds into it. This holds for a mixed scatter too, since the stack is built in the order it is listed; a tree's crown is never a surface for dirt, a trunk is a rise the dirt banks against, and a flower the dirt covers is covered.</li>
+  <li>Dirt stays only where the surface under it is flatter than <code>maxSlope</code> (<code>35deg</code> by default: an angle, which never scales). On anything steeper it slides off and leaves the surface bare, so a cliff's faces are clean. It is not laid where the surface drops away: on the high side of a drop deeper than 1 mm, nor within 1.5 mm of one (at the 35 mm square, scaled with the system like every size), so it never hangs over an edge or bridges a slit between two stones. A rise is no drop: dirt runs up to the foot of a stone and banks against it, where it cannot overhang. The outline is rounded to a few cells so it has no comb. Where dirt is under 2 mm thick over what is under it, no stone is bedded in it.</li>
 
   <li>Pebbles stay off ground steeper than about 22 to 34 degrees (a bank), and off the rim; with <code>clods=none</code> there is no texture at all.</li>
   <li>Strong contrast between cloddy and smooth patches, and texture everywhere that shows at 0.2 mm layers.</li>
   <li>Pebbles big enough to read at tabletop distance.</li>
   <li>No frame or rim at the tile edge.</li>
   <li>Exposed ground is dirt on every tile; there is no separate mud texture.</li>
-  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. The first dirt (the first land layer) starts with the library's top, <code>[groundHeight .. groundHeight + 1]</code>, and a pin at <code>edges</code> at <code>dirtEdgeHeight</code>; a tile's own top replaces the top, and its pins win over the rim pin where they overlap. A second dirt, such as <code>top="bottom + [0.6 .. 1.2]"</code>, is a distinct layer and gets no defaults. <code>slope DEG</code> in the block sets how steeply this dirt lies (24° by default). <code>check</code> reads and solves these; <code>build</code> does not build tops and pins yet. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
+  <li>It is a <em>body</em> of the stack: <code>top=</code> says how high it may be, as a band (a height, or a range <code>[low .. high]</code>), <code>pin</code> lines hold the band to a height at a place, and <code>at=</code> names the region it fills. The first dirt (the first land layer) starts with the library's top, <code>[$groundHeight .. $groundHeight + 1dmm]</code>, and a pin at <code>edges</code> at <code>$dirtEdgeHeight</code>; a tile's own top replaces the top, and its pins win over the rim pin where they overlap. A second dirt, such as <code>top="$bottom + [0.6dmm .. 1.2dmm]"</code>, is a distinct layer and gets no defaults. <code>slope "30deg"</code> in the block sets how steeply this dirt lies (<code>24deg</code> by default). <code>check</code> reads and solves these and <code>build</code> fills them. In a top or a pin, <code>$d</code> and <code>$a</code> are the dirt's place in its own region (how far in from its edge, how far round), so <code>top="$groundHeight + 3dmm * (1 - $d * $d)"</code> is a dome over it. See <a href="pin.html">pin</a>, <a href="let.html">let</a> and <a href="../language.html#heights">heights</a>.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

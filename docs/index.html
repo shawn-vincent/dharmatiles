@@ -53,20 +53,22 @@
   </div>
   </div>
   <div class="bench plate">
-<pre class="bench-src"><code>// my-pond.dtile
+<pre class="bench-src"><code>dharmatiles version="1.0.0"
+
+// my-pond.dtile
 tile size="1x1" seed=97 {
-    line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { boundedBy shore; fill "0.5,0.25" }
-    region bank { boundedBy shore; fill "0.5,0.75" }
-    region shoreBand { within 7 of=shore }
+    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand   // anywhere from the bed to the land
-            pin top=waterBedHeight at=pool                                // later, so it wins in the pool
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand   // anywhere from the bed to the land
+            pin top="$waterBedHeight" at=pool                                  // later, so it wins in the pool
         }
         water
-        scatter at=pool count=2 { rock size="6..10" }
+        scatter at=pool count=2 { rock size="6dmm .. 10dmm" }
         grass at=bank
     }
 }</code></pre>
@@ -75,7 +77,7 @@ tile size="1x1" seed=97 {
 </header>
 
 <h2 id="first">A first tile</h2>
-<p>A <a href="elements/line.html"><code>line</code></a> divides the tile, <a href="elements/region.html">regions</a> name its sides, and the <a href="elements/stack.html"><code>stack</code></a> says what goes where: <a href="elements/dirt.html"><code>dirt</code></a> pinned down to the water's bed in the pool, <a href="elements/grass.html"><code>grass</code></a> on the bank, two rocks and <a href="elements/water.html"><code>water</code></a> in the pool. Sizes are millimetres at the 35 mm square; the OpenLOCK build scales them for you.</p>
+<p>A <a href="elements/line.html"><code>line</code></a> divides the tile, <a href="elements/region.html">regions</a> name its sides, and the <a href="elements/stack.html"><code>stack</code></a> says what goes where: <a href="elements/dirt.html"><code>dirt</code></a> pinned down to the water's bed in the pool, <a href="elements/grass.html"><code>grass</code></a> on the bank, two rocks and <a href="elements/water.html"><code>water</code></a> in the pool. Every length carries its unit, and <code>dmm</code> is 1/35 of a square, so the OpenLOCK build scales sizes for you; points are counted from the north-west corner.</p>
 <div class="tbl"><table>
   <thead><tr><th>To</th><th>Run</th></tr></thead>
   <tbody>
@@ -109,7 +111,7 @@ cargo build --release                 # a few minutes, once
 
 <h2 id="reference">The reference</h2>
 <ul class="doclist">
-  <li><a href="language.html">The language</a><span class="sum">How a document is written: syntax, units and heights, edges, points, lines and regions, placement, parts, and errors.</span></li>
+  <li><a href="language.html">The language</a><span class="sum">How a document is written: syntax, names and the context, units and kinds, heights, coordinates, points, lines and regions, placement, parts, and errors.</span></li>
   <li><a href="elements/index.html">Elements</a><span class="sum">Every element a document can write, one page each: what it makes, screenshots, an example, every control (generated from the program), its rules, and how it is made.</span></li>
   <li><a href="composing.html">Composing a tile</a><span class="sum">How elements share a tile: rocks bedded in the ground, grass growing up to them, and tiles that meet their neighbours.</span></li>
   <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; the DungeonBlocks and OpenLOCK bases; file names; edges.</span></li>
@@ -131,7 +133,7 @@ cargo build --release                 # a few minutes, once
   <a class="lookcard" href="elements/water.html"><img src="elements/img/el-water.jpg" alt="" loading="lazy"><span class="lc-t">water</span><span class="lc-d">Sculpted water: swells off the shore and chop round rocks.</span></a>
   <a class="lookcard" href="elements/wall.html"><img src="elements/img/el-wall.jpg" alt="" loading="lazy"><span class="lc-t">wall · flagstones</span><span class="lc-d">Cut stone, fieldstone and brick walls on a tile edge, and stone and plank floors.</span></a>
   <a class="lookcard" href="elements/tree.html"><img src="elements/img/el-tree.jpg" alt="" loading="lazy"><span class="lc-t">tree</span><span class="lc-d">A barked, forking trunk and clumps of foliage covered in separate leaves.</span></a>
-  <a class="lookcard" href="elements/index.html"><img src="elements/img/el-stack-6.jpg" alt="" loading="lazy"><span class="lc-t">All elements</span><span class="lc-d">tile, let, line, region, stack, use, define, scatter, the bases and the library files.</span></a>
+  <a class="lookcard" href="elements/index.html"><img src="elements/img/el-stack-4.jpg" alt="" loading="lazy"><span class="lc-t">All elements</span><span class="lc-d">tile, let, line, region, stack, use, define, scatter, the bases and the library files.</span></a>
 </div>
 
 <h2 id="status">Status</h2>

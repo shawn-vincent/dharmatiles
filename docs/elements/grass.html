@@ -18,7 +18,7 @@
   <p class="small">Two more plants grow on a tile: <a href="flower.html"><code>flower</code></a>, a thing the grass grows round, and <a href="reeds.html"><code>reeds</code></a> at the waterline. The presets <code>lawn</code> and <code>long-grass</code> are <a href="define.html">definitions</a> in <code>parts/grass</code>.</p>
   <figure class="shot hero-one"><img src="img/el-grass.jpg" alt="A one-square tile covered in combed grass blades over dirt"><figcaption><code>lib:tiles/ground/1x1-grass.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">any tile size; blades 3.5–6.5 mm long by default</div></div>
+    <div><div class="k">Sizes</div><div class="v">any tile size; blades <code>3.5dmm .. 6.5dmm</code> long by default</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; blades are whole 0.45 mm lines on 0.2 mm layers</div></div>
     <div><div class="k">Bases</div><div class="v">DungeonBlocks and OpenLOCK</div></div>
     <div><div class="k">In the library</div><div class="v"><code>ground/1x1-grass</code>, the meadow tiles, walls and water banks</div></div>
@@ -52,24 +52,30 @@
 
 <h2 id="use">Using it in a tile</h2>
 <p>Grass grows on the surface the stack painted, so write <a href="dirt.html"><code>dirt</code></a> first; the dirt shows between the blades and in the clearings:</p>
-<pre><code>tile size="1x1" seed=1 {
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="1x1" seed=1 {
     stack {
+        base
         dirt
         grass
     }
 }</code></pre>
 <p>The stack is built in the order it is listed: the blades grow round the rocks, trees, walls and flowers listed above the grass, so list the grass after them. Most library tiles use a preset:</p>
-<pre><code>use "parts/grass" lawn          // or long-grass: longer, taller blades
+<pre><code>dharmatiles version="1.0.0"
+
+use "parts/grass" lawn          // or long-grass: longer, taller blades
 
 tile size="2x2" seed=4 {
     stack {
+        base
         dirt
-        scatter perSquare=1 { rock size="4..8" }
+        scatter perSquare=1 { rock size="4dmm .. 8dmm" }
         lawn cover="85%"         // a definition's params are set like controls
     }
 }</code></pre>
 <p>Every control at once, at its default:</p>
-<pre><code>grass length="3.5..6.5" height="1.5..2" clearings=0 cover="100%" bare="0%" flow=wavy</code></pre>
+<pre><code>grass length="3.5dmm .. 6.5dmm" height="1.5dmm .. 2dmm" clearings=0 cover="100%" bare="0%" flow=wavy</code></pre>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference grass -->
@@ -83,8 +89,8 @@ tile size="2x2" seed=4 {
 <div class="tbl"><table class="controls">
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr id="c-length"><td><code>length</code></td><td>mm, over 0, or a range, or a weighted range</td><td><code>3.5..6.5</code></td><td>blade length along the ground</td></tr>
-<tr id="c-height"><td><code>height</code></td><td>mm, over 0, or a range, or a weighted range</td><td><code>1.5..2</code></td><td>how tall a blade stands over the ground</td></tr>
+<tr id="c-length"><td><code>length</code></td><td>length (dmm), over 0, or a range, or a weighted range</td><td><code>3.5dmm..6.5dmm</code></td><td>blade length along the ground</td></tr>
+<tr id="c-height"><td><code>height</code></td><td>length (dmm), over 0, or a range, or a weighted range</td><td><code>1.5dmm..2dmm</code></td><td>how tall a blade stands over the ground</td></tr>
 <tr id="c-clearings"><td><code>clearings</code></td><td>per square, 0 to 20</td><td><code>0</code></td><td>patches of bare earth the grass parts round</td></tr>
 <tr id="c-cover"><td><code>cover</code></td><td>percent, 0% to 100%</td><td><code>100%</code></td><td>share of the ground grassed over</td></tr>
 <tr id="c-bare"><td><code>bare</code></td><td>percent, 0% to 90%</td><td><code>0%</code></td><td>the least share left bare: clearings are added until the bare earth, rocks included, reaches it</td></tr>
