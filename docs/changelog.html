@@ -16,7 +16,7 @@
   <p class="lede">What changed in each version, newest first. Install the current one with <code>brew install shawn-vincent/dharmatiles/dharmatiles</code>.</p>
 </header>
 <nav class="toc" aria-label="Versions"><div class="eyebrow">Versions</div><ol>
-  <li><a href="#unreleased">Unreleased</a></li>
+  <li><a href="#v1.0.0">1.0.0 · 11 Nov 2026</a></li>
   <li><a href="#v0.9.0">0.9.0 · 7 Nov 2026</a></li>
   <li><a href="#v0.8.0">0.8.0 · 7 Nov 2026</a></li>
   <li><a href="#v0.7.0">0.7.0 · 7 Nov 2026</a></li>
@@ -40,8 +40,8 @@
 
 <p>Versions before 0.1.0 were never published; their numbers and dates are given after the fact, from the project's history, and are approximate.</p>
 
-<h2 id="unreleased">Unreleased</h2>
-<p>In the source, not yet in a numbered version.</p>
+<h2 id="v1.0.0">1.0.0 <small>11 November 2026</small></h2>
+<p>Format 1: units with dmm, points from the north-west, $ names and the context, regions with parents, dharmatiles migrate and migrate-on-load</p>
 <ul>
   <li><strong>Format 0 leftovers:</strong> <code>dharmatiles elements</code> shows units as <code>dmm</code> and <code>deg</code> with format 1 defaults and a weighting example with units; the help in error messages (a missing <code>top=</code>, a tree's top, a line with too few points, a <code>fill</code>, a <code>point</code>, <code>within</code>, a <code>^</code> in a range) writes <code>$</code> names, units and points from the north-west corner; the hints for words from before format 0 give their examples in format 1; a control's limits are given in <code>dmm</code>. The editor's place tool writes one point for a thing's <code>at=</code> whatever the drag (a thing's <code>at=</code> takes one point, never a range), and the library's comments are in format 1.</li>
   <li><strong>Tiles are format 1:</strong> every library tile, test tile, part, printer and palette, and the element pages' demo tiles, are now written in format 1 (a <code>dharmatiles version="…"</code> header, <code>$</code> names, units on lengths and angles, points counted from the north-west corner; see the <a href="language.html">language guide</a> and the element pages), and the builds are bit for bit what they were (the baseline hashes did not move). The program writes format 1: <code>dharmatiles migrate FILE|FOLDER…</code> carries your own documents over in place (each tile built before and after, and a mesh that moves stops it), and a document in format 0 is migrated in memory as it loads, with a <code>dt::migrated</code> warning, the file left as it is (the editor's <em>Update this file</em> writes the new text). The development switch <code>DT_FORMAT_PREVIEW</code> is gone; <code>dharmatiles --version</code> and the About box say <code>0.x, 1.x</code>, and the editor's <em>New tile</em> writes the header. The editor's weighting gallery is not yet available for a format 1 value (type the weighting). The site is written in format 1 to match: the language guide and every element page state the format 1 rules and show format 1 source (each example is checked with <code>dharmatiles check</code>), the generated controls tables show defaults as format 1 values (<code>5dmm</code>, <code>34deg</code>, ranges with a unit at both ends), and the code colouring marks the header line, <code>$</code> names and units.</li>
