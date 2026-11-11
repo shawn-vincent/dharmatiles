@@ -1,12 +1,12 @@
 dharmatiles version="1.0.0"
 
 tile size="1x1" seed=2 {
-    about "One of each rock thing with a top of its own: a flat range, a dome over its disc, and a top that rises across the tile. A test tile."
+    about "One of each rock thing with a top of its own: a flat range, a cloud weighted toward its low end, and a top that rises across the tile. A test tile."
     stack {
         base
         dirt top="$dirtEdgeHeight"
         rock at="(0.25sq, 0.3sq)" size="11dmm" top="$bottom + [3dmm .. 4dmm]"
-        boulder at="(0.72sq, 0.28sq)" size="8dmm" top="$bottom + [5dmm .. 8dmm] * (1 - $d * $d)"
+        boulder at="(0.72sq, 0.28sq)" size="8dmm" top="$bottom + low(5dmm .. 8dmm)"
         stone at="(0.3sq, 0.75sq)" size="5dmm" top="$bottom + 2dmm + 4dmm * $x"
         pebble at="(0.75sq, 0.72sq)" size="2dmm" top="$bottom + 1.5dmm"
     }
