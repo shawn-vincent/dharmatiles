@@ -49,3 +49,5 @@ initMap();
 initExport();
 initTarget();
 initLive();
+// everything is wired: from here on failures go to the problems panel, not the start-up banner
+globalThis.dtStarted = true;

@@ -91,6 +91,7 @@ fn serves_the_viewer_and_its_vendored_three() {
         "/js/viewer.js",
         "/js/view-presets.js",
         "/js/scroll-shadows.js",
+        "/js/copy.js",
         "/js/history.js",
         "/js/payload.js",
         "/js/host.js",

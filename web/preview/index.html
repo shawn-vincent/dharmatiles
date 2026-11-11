@@ -224,6 +224,24 @@
     <div class="row-btns"><button class="btn danger" id="leave-discard" value="discard">Discard changes</button><button class="btn on" value="cancel" autofocus>Keep editing</button></div>
   </form>
 </dialog>
-<script type="module" src="/js/main.js"></script>
+<div id="boot-error" role="alert" hidden><b>The editor didn't start.</b> <span id="boot-why"></span> <button class="btn" type="button" onclick="location.reload()">Reload</button></div>
+<script>
+// Until main.js has wired everything (it sets dtStarted last), any failure to load or start is shown here,
+// loudly: one module that fails to load stops all of them, and the page would otherwise sit there half-drawn.
+(function () {
+  function fail(why) {
+    if (window.dtStarted) return;
+    document.getElementById('boot-why').textContent = why;
+    document.getElementById('boot-error').hidden = false;
+  }
+  window.dtBootFail = fail;
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    fail(t && t.src ? 'Could not load ' + t.src + '.' : String(e.message || e.error));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) { fail(String(e.reason && e.reason.message || e.reason)); });
+})();
+</script>
+<script type="module" src="/js/main.js" onerror="dtBootFail('Could not load the editor\'s scripts (a file is missing, or the program stopped). See the browser console for which.')"></script>
 </body>
 </html>
