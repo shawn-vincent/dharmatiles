@@ -117,10 +117,13 @@ impl Decoder<'_> {
             // format 1's library heights are lengths, whatever format 0 let
             // a plain number stand for
             .map(|c| {
-                (
-                    format!("{dollar}{}", c.name.value),
-                    if self.format1 { Dim::Mm } else { c.dim },
-                )
+                // a library written in format 1 has its `$` already
+                let name = if c.name.value.starts_with('$') {
+                    c.name.value.clone()
+                } else {
+                    format!("{dollar}{}", c.name.value)
+                };
+                (name, if self.format1 { Dim::Mm } else { c.dim })
             })
             .collect()
     }

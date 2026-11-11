@@ -203,14 +203,24 @@ impl ConstTable {
             ..Self::default()
         };
         for c in library {
-            let name = dollar_of(&c.name.value);
+            // a library written in format 1 already has its `$` names, and
+            // its `$y` is format 1's; one written in format 0 gains them
+            let own = c.name.value.starts_with('$');
+            let name = if own {
+                c.name.value.clone()
+            } else {
+                dollar_of(&c.name.value)
+            };
             t.index.insert(name.clone(), t.entries.len());
-            // the library's heights are written in the geometry's own frame
-            // (`y` running north), so its `y` is not format 1's `$y`
-            let expr = c
-                .value
-                .value
-                .map_names(&mut |n| (n != "y").then(|| Expr::Name(dollar_of(n))));
+            // a format 0 library's heights are written in the geometry's own
+            // frame (`y` running north), so its `y` is not format 1's `$y`
+            let expr = if own {
+                c.value.value.clone()
+            } else {
+                c.value
+                    .value
+                    .map_names(&mut |n| (n != "y").then(|| Expr::Name(dollar_of(n))))
+            };
             t.entries.push(Entry {
                 text: show(&expr),
                 name,

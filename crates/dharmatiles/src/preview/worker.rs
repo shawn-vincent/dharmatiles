@@ -224,7 +224,13 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             );
             shared.update(id, |t| {
                 t.status = State::Ready;
-                t.errors = shared.palette_problem();
+                // what to say beside a good build: the palette, and a document
+                // read as an older format
+                t.errors = shared
+                    .palette_problem()
+                    .into_iter()
+                    .chain(errors_json(&b.warnings))
+                    .collect();
                 t.progress = None;
                 t.sketches.clear();
                 t.record = Some(record);

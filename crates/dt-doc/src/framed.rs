@@ -83,11 +83,81 @@ impl fmt::Display for Framed {
     }
 }
 
+/// How many decimals a written north-west coordinate is worked out to: a
+/// point written with up to this many decimals comes back, flipped to the
+/// south-west frame and back, as the same decimal (a subtraction alone
+/// gives `0.09999999999999998` for `1 - 0.9`).  Far past anything a tile
+/// needs, and far under a float's own noise at a tile's size.
+const FLIP_DECIMALS: f64 = 1e12;
+
+/// `top - v` worked out to [`FLIP_DECIMALS`]: how a north-west coordinate
+/// becomes the geometry's.
+#[must_use]
+pub fn flip(top: f64, v: f64) -> f64 {
+    snap(top - v)
+}
+
+fn snap(v: f64) -> f64 {
+    (v * FLIP_DECIMALS).round() / FLIP_DECIMALS
+}
+
 /// `top - y`: a north-west `y` (running south) in the geometry's own frame,
-/// `top` being the frame's north edge.  A number is worked out here, exactly
-/// as the mirror image written by hand would be.
+/// `top` being the frame's north edge.  A number, a range of numbers and
+/// the odds `low`, `high` and `flat` along one are turned here (a range
+/// runs from its far end, its odds the other way round), each number worked
+/// out to [`FLIP_DECIMALS`], so a point written as a decimal reads back as
+/// the decimal.
 #[must_use]
 pub fn north_west(top: f64, y: Expr) -> Expr {
+    let num = |e: &Expr| match e {
+        Expr::Num {
+            value,
+            percent: false,
+        } => Some(*value),
+        _ => None,
+    };
+    let flip_range = |range: &Expr| match range {
+        Expr::Range { lo, hi } => match (num(lo), num(hi)) {
+            (Some(a), Some(b)) => Some(Expr::Range {
+                lo: Box::new(Expr::num(snap(top - b))),
+                hi: Box::new(Expr::num(snap(top - a))),
+            }),
+            _ => None,
+        },
+        _ => None,
+    };
+    match &y {
+        Expr::Num {
+            value,
+            percent: false,
+        } => return Expr::num(snap(top - value)),
+        Expr::Range { .. } => {
+            if let Some(r) = flip_range(&y) {
+                return r;
+            }
+        }
+        Expr::Weighted {
+            name,
+            args,
+            range,
+            parts,
+        } if parts.is_empty() && matches!(name.as_str(), "low" | "high" | "flat") => {
+            if let Some(r) = flip_range(range) {
+                let name = match name.as_str() {
+                    "low" => "high",
+                    "high" => "low",
+                    other => other,
+                };
+                return Expr::Weighted {
+                    name: name.to_owned(),
+                    args: args.clone(),
+                    range: Box::new(r),
+                    parts: Vec::new(),
+                };
+            }
+        }
+        _ => {}
+    }
     fold(Expr::Bin {
         op: BinOp::Sub,
         lhs: Box::new(Expr::num(top)),

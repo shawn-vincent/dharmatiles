@@ -1279,11 +1279,22 @@ impl Reader<'_> {
                 src: Arc::clone(&f.src),
                 default: true,
             };
+            // written in format 1 they have their `$` names already
+            let old = dollar && f.doc.format() == 0;
             for d in &f.doc.defaults {
                 defaults.push(DefaultBody {
                     element: d.what.value.clone(),
-                    top: d.top.as_ref().map(|t| (rename(&t.value), t.span)),
-                    pins: d.pins.iter().map(|p| pin(p, &dfrom, dollar)).collect(),
+                    top: d.top.as_ref().map(|t| {
+                        (
+                            if old {
+                                rename(&t.value)
+                            } else {
+                                t.value.clone()
+                            },
+                            t.span,
+                        )
+                    }),
+                    pins: d.pins.iter().map(|p| pin(p, &dfrom, old)).collect(),
                     from: dfrom.clone(),
                 });
             }

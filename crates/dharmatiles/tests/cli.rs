@@ -552,3 +552,137 @@ fn the_worst_outcome_of_a_sweep_wins() {
     assert_eq!(run(None), Some(1));
     assert_eq!(run(Some("1x1-flat")), Some(101));
 }
+
+// ---- migrate -----------------------------------------------------------
+
+const OLD_TILE: &str = r#"// A pond.
+tile size="1x1" seed=3 {
+    line shore wobble=2 { through "0,0.4" "1,0.6" }
+    region pool { boundedBy shore; fill "0.5,0.1" }
+    stack {
+        base
+        dirt top="[groundHeight .. groundHeight + 1]" { pin top=waterBedHeight at=pool }
+        water
+    }
+}
+"#;
+
+fn migrate(args: &[&str], preview: bool) -> std::process::Output {
+    let mut c = Command::new(EXE);
+    c.arg("migrate").args(args);
+    if preview {
+        c.env("DT_FORMAT_PREVIEW", "1");
+    } else {
+        c.env_remove("DT_FORMAT_PREVIEW");
+    }
+    c.output().unwrap()
+}
+
+#[test]
+fn migrating_to_format_1_says_it_needs_the_preview_switch() {
+    let d = scratch("migrate-switch");
+    let doc = d.join("pond.dtile");
+    std::fs::write(&doc, OLD_TILE).unwrap();
+    let o = migrate(&[doc.to_str().unwrap()], false);
+    assert_eq!(o.status.code(), Some(1));
+    let e = String::from_utf8_lossy(&o.stderr);
+    assert!(e.contains("DT_FORMAT_PREVIEW=1"), "{e}");
+    assert_eq!(std::fs::read_to_string(&doc).unwrap(), OLD_TILE);
+}
+
+#[test]
+fn migrate_check_reports_and_writes_nothing() {
+    let d = scratch("migrate-check");
+    let doc = d.join("pond.dtile");
+    std::fs::write(&doc, OLD_TILE).unwrap();
+    let o = migrate(&["--check", d.to_str().unwrap()], true);
+    // as `cargo fmt --check`: something would change
+    assert_eq!(
+        o.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let e = String::from_utf8_lossy(&o.stderr);
+    assert!(
+        e.contains("would migrate") && e.contains("pond.dtile"),
+        "{e}"
+    );
+    assert_eq!(std::fs::read_to_string(&doc).unwrap(), OLD_TILE);
+}
+
+#[test]
+fn migrate_rewrites_a_tile_after_proving_its_mesh_and_leaves_a_migrated_one_alone() {
+    let d = scratch("migrate-write");
+    let doc = d.join("pond.dtile");
+    std::fs::write(&doc, OLD_TILE).unwrap();
+    let o = migrate(&[doc.to_str().unwrap()], true);
+    assert_eq!(
+        o.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let new = std::fs::read_to_string(&doc).unwrap();
+    assert!(new.starts_with("dharmatiles version=\"1.0.0"), "{new}");
+    assert!(new.contains("// A pond."), "{new}");
+    assert!(
+        new.contains(r#"through "(0sq, 0.6sq)" "(1sq, 0.4sq)""#),
+        "{new}"
+    );
+    assert!(
+        new.contains(r#"top="[$groundHeight .. $groundHeight + 1dmm]""#),
+        "{new}"
+    );
+    // again: a tile at the format is left alone, whatever its minor or build part
+    let o = migrate(&[doc.to_str().unwrap()], true);
+    assert_eq!(o.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("unchanged"));
+    assert_eq!(std::fs::read_to_string(&doc).unwrap(), new);
+    let by_hand = new.replacen(new.lines().next().unwrap(), "dharmatiles version=1", 1);
+    std::fs::write(&doc, &by_hand).unwrap();
+    let o = migrate(&[doc.to_str().unwrap()], true);
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(std::fs::read_to_string(&doc).unwrap(), by_hand);
+}
+
+#[test]
+fn migrate_takes_the_parts_a_tile_uses_along_and_stops_at_a_unit_it_cannot_tell() {
+    let d = scratch("migrate-parts");
+    std::fs::write(
+        d.join("mound.dtile"),
+        "define mound {\n    param blade 4\n    stack { grass length=blade }\n}\n",
+    )
+    .unwrap();
+    let tile = d.join("hill.dtile");
+    std::fs::write(
+        &tile,
+        "use \"./mound\" mound\ntile size=\"1x1\" seed=1 {\n    stack {\n        base\n        dirt\n        mound blade=2\n    }\n}\n",
+    )
+    .unwrap();
+    let o = migrate(&[tile.to_str().unwrap()], true);
+    assert_eq!(
+        o.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let part = std::fs::read_to_string(d.join("mound.dtile")).unwrap();
+    assert!(part.contains(r#"param blade "4dmm""#), "{part}");
+    let t = std::fs::read_to_string(&tile).unwrap();
+    assert!(t.contains(r#"mound blade="2dmm""#), "{t}");
+
+    // a parameter nothing uses stops that file, naming it; nothing is written
+    let e = scratch("migrate-stop");
+    let bad = e.join("bad.dtile");
+    let text = "define d {\n    param spare 3\n    stack { dirt }\n}\n";
+    std::fs::write(&bad, text).unwrap();
+    let o = migrate(&[bad.to_str().unwrap()], true);
+    assert_eq!(o.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&o.stderr).contains("spare"),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert_eq!(std::fs::read_to_string(&bad).unwrap(), text);
+}

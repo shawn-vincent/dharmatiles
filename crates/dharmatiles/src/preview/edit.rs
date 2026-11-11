@@ -18,6 +18,10 @@
 //!   `text` in place of its document (or of `file`, one it uses): the
 //!   errors, the stack and the map (see `map`), under a second, for the
 //!   text pane and the overlay as you type.
+//! - `/api/tiles/ID/migrate` `{text, file?}`: the text carried to the
+//!   format this program writes, for the page's "Update this file" (a
+//!   file the program migrated in memory as it read it); `{ok, text}`, or
+//!   `{ok: false, errors}` where a hand fix is needed.  Nothing is written.
 //! - `/api/tiles/ID/save` `{text, base, file?}`: write the document (or a
 //!   file it uses) when what is on disk is still `base`; else `409` with
 //!   what is there.  Library files are never written.  The worker sees the
@@ -123,6 +127,7 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     };
     match what {
         "check" => check(shared, &tile, &file, &v).into(),
+        "migrate" => migrate(shared, &file, &v).into(),
         "save" => save(&file, &v).into(),
         "mine" => mine(shared, &tile, &files).into(),
         "rename" => rename(shared, &tile, &v).into(),
@@ -565,12 +570,42 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
             };
             (
                 "200 OK",
-                json!({ "ok": true, "format": format, "errors": [], "stack": stack, "map": map::json(&c, &own, opts.units()) }),
+                json!({
+                    "ok": true,
+                    "format": format,
+                    "errors": [],
+                    // files read as an older format and migrated in memory: the
+                    // page offers to update the file it is showing
+                    "migrated": c.migrated.iter().map(|u| json!({ "path": u.path, "from": u.from })).collect::<Vec<_>>(),
+                    "stack": stack,
+                    "map": map::json(&c, &own, opts.units()),
+                }),
             )
         }
         Err(errs) => (
             "200 OK",
             json!({ "ok": false, "format": format, "errors": errors_json(&errs) }),
+        ),
+    }
+}
+
+/// `/api/tiles/ID/migrate` `{text, file?}`: the text of `file` carried to the
+/// format this program writes ("Update this file"); nothing is written, the
+/// page puts it in the editor and saves it as any edit.
+fn migrate(shared: &Shared, file: &str, v: &Value) -> (&'static str, Value) {
+    let Some(text) = v["text"].as_str() else {
+        return bad("give the text");
+    };
+    let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
+    let version = shared.options().engine;
+    match dt_eval::upgrade::migrate_files(&src, &[file.to_owned()], &version) {
+        Ok(moved) => (
+            "200 OK",
+            json!({ "ok": true, "text": moved.into_iter().next().map_or_else(|| text.to_owned(), |m| m.text) }),
+        ),
+        Err(errs) => (
+            "200 OK",
+            json!({ "ok": false, "errors": errors_json(&errs) }),
         ),
     }
 }

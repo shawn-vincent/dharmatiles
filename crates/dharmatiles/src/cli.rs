@@ -88,12 +88,23 @@ pub(crate) enum Command {
         #[arg(long)]
         explain: bool,
     },
-    /// Carry tiles written in the old forms (`ground`, `level=`, `bumps=`) to
-    /// the heights language, in place; a tile already in it is left alone.
+    /// Carry documents to the format this program writes, in place: the older
+    /// language changes first (`ground`, `level=`, `bumps=`), then format 0 to
+    /// format 1 (the header line, `$` names, units, points from the
+    /// north-west corner).  Each tile is built before and after, and a mesh
+    /// that moves stops it.  A document already at the format is left alone,
+    /// whatever its minor or build part.  Until 1.0.0 ships format 1 this
+    /// needs DT_FORMAT_PREVIEW=1.
     Migrate {
-        /// Tile documents.
+        /// Documents, or folders of them.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
+        /// Say what would change and write nothing; exits 1 when something would.
+        #[arg(long)]
+        check: bool,
+        /// Skip the hash guard: build no tile before and after.
+        #[arg(long)]
+        no_guard: bool,
     },
     /// List the elements a stack can hold, or one element's controls.
     Elements {

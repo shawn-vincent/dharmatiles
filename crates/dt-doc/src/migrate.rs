@@ -27,6 +27,8 @@
 
 use kdl::{KdlDocument, KdlNode, KdlValue};
 
+pub mod format1;
+
 use crate::edit::EditError;
 
 /// How wide the strip round a line is, mm at the reference square: the

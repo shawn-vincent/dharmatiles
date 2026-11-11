@@ -23,6 +23,7 @@ pub mod progress;
 pub mod regions;
 pub mod solve;
 pub mod source;
+pub mod upgrade;
 
 use std::path::{Path, PathBuf};
 
@@ -111,6 +112,11 @@ pub struct Options {
     /// the preview set it from `DT_FORMAT_PREVIEW=1`; nothing here reads
     /// the environment.
     pub format_preview: bool,
+    /// The format this program builds ([`dt_doc::header::FORMAT`]): a
+    /// document of an older format is migrated in memory as it is read,
+    /// with a `dt::migrated` warning, and the file is left as it is.  Only
+    /// the newest format is ever built; format 0 is read only to migrate it.
+    pub current_format: u32,
 }
 
 /// A printer profile in use: the gate's numbers and the name they were read
@@ -267,6 +273,7 @@ impl Default for Options {
             draft: false,
             debug: false,
             format_preview: false,
+            current_format: dt_doc::header::FORMAT,
         }
     }
 }
@@ -318,6 +325,9 @@ pub struct Built {
     pub pieces: Vec<u16>,
     /// The debug layer's marks, when [`Options::debug`] asked for them.
     pub debug: Option<dt_kit::debug::Debug>,
+    /// What to say beside the result: a document read as an older format
+    /// (`dt::migrated`).
+    pub warnings: Vec<Diag>,
 }
 
 /// No stack entry made this triangle.
@@ -384,6 +394,9 @@ pub struct Checked {
     /// The region tree of a format 1 tile (every thing's region, and what
     /// each region's parent is), on the build's lattice.
     pub regions: Option<regions::RegionTree>,
+    /// The files read as an older format and migrated in memory (the file
+    /// on disk is as it was).
+    pub migrated: Vec<upgrade::Upgrade>,
 }
 
 impl Checked {
@@ -431,6 +444,40 @@ impl Checked {
 /// # Errors
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
+    if opts.current_format < dt_doc::migrate::format1::TARGET {
+        return check_in(sources, path, opts);
+    }
+    // a document older than the format this program builds is migrated as it
+    // is read, and says so
+    let up = upgrade::Upgrading::new(sources, opts.current_format, &opts.engine);
+    match check_in(&up, path, opts) {
+        Ok(mut c) => {
+            c.migrated = up.upgraded();
+            let warnings = migrated_warnings(&c.migrated);
+            if let Some(s) = &mut c.solved {
+                s.notes.extend(warnings);
+            }
+            Ok(c)
+        }
+        Err(errors) => {
+            let failures = up.failures();
+            Err(if failures.is_empty() {
+                errors
+            } else {
+                failures
+            })
+        }
+    }
+}
+
+/// The `dt::migrated` warning of each file read as an older format.
+fn migrated_warnings(done: &[upgrade::Upgrade]) -> Vec<Diag> {
+    done.iter()
+        .map(|u| upgrade::migrated_note(&u.path, u.from))
+        .collect()
+}
+
+fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
     let units = opts.units();
     let read = doc::read_with(sources, path, opts.format_preview, units)?;
     let Some(mut tile) = read.tile else {
@@ -445,6 +492,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             seed: 0,
             solved: None,
             regions: None,
+            migrated: Vec::new(),
         });
     };
     if let Some(seed) = opts.seed {
@@ -625,6 +673,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         seed,
         solved,
         regions: region_tree,
+        migrated: Vec::new(),
     })
 }
 
@@ -747,6 +796,7 @@ pub fn build_cached(
     progress: &Progress,
     cache: Option<&Cache>,
 ) -> Result<Built, Vec<Diag>> {
+    // the file as it is: its hash is the document's, whatever it is read as
     let text = sources
         .read(path)
         .map_err(|e| vec![Diag::plain("dt::source", e)])?;
@@ -762,7 +812,10 @@ pub fn build_cached(
     }
     let plan = Plan::new(&c, tile, opts)?;
     let ran = plan.run(progress, cache)?;
-    plan.finish(path, &text, ran, progress)
+    let mut built = plan.finish(path, &text, ran, progress)?;
+    built.record.read_from = c.migrated.iter().find(|u| u.path == path).map(|u| u.from);
+    built.warnings = migrated_warnings(&c.migrated);
+    Ok(built)
 }
 
 fn build_error(e: String) -> Vec<Diag> {
@@ -1193,6 +1246,7 @@ impl<'a> Plan<'a> {
             seed: c.seed,
             system: opts.system.clone(),
             printer: opts.printer.name.clone(),
+            read_from: None,
         };
         Ok(Built {
             export,
@@ -1231,6 +1285,7 @@ impl<'a> Plan<'a> {
             entries,
             pieces,
             debug: scene.debug_marks().cloned(),
+            warnings: Vec::new(),
         })
     }
 }

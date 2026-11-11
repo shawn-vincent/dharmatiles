@@ -146,6 +146,7 @@ export function browserHost() {
       return r.json();
     },
     check: (id, body) => call(tile(id, 'check'), body),
+    migrate: (id, body) => call(tile(id, 'migrate'), body),
     weightings: (query) => read('/api/weightings', query),
     checkValue: (element, control, typed, format = 0) => call('/api/check-value', { element, control, typed, format }),
     draft: (id, body) => call(tile(id, 'draft'), body, true),

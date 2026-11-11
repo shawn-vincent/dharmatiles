@@ -1795,3 +1795,75 @@ fn format_1_is_read_only_where_the_preview_reads_it() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn an_older_tile_opens_migrated_with_a_warning_and_update_this_file_offers_the_new_text() {
+    // a program whose current format is 1 (1.0.0's), reading a format 0 file
+    let old = "tile size=\"1x1\" seed=3 {\n    line shore { through \"0,0.4\" \"1,0.6\" }\n    region pool { boundedBy shore; fill \"0.5,0.1\" }\n    stack {\n        base\n        dirt top=\"[groundHeight .. groundHeight + 1]\"\n    }\n}\n";
+    let dir = std::env::temp_dir().join(format!("dt-up-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    std::fs::write(&file, old).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let opts = Options {
+        format_preview: true,
+        current_format: 1,
+        ..Options::default()
+    };
+    let r = start_with(&[&path], true, &opts);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let call = |p: &str, body: Value| post(&r, p, Some(&token), None, &body.to_string()).1;
+    // it builds, and says it was read as another format
+    let t = wait_for(&r, "ready", |t| {
+        t["status"] == "ready" || t["status"] == "failed"
+    });
+    assert_eq!(t["status"], "ready", "{t}");
+    assert!(
+        t["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["code"] == "dt::migrated"),
+        "{t}"
+    );
+    // the editor's check names the file that was migrated
+    let id = id0(&r);
+    let v = call(
+        &format!("/api/tiles/{id}/check"),
+        serde_json::json!({ "text": old }),
+    );
+    assert_eq!(v["ok"], true, "{v}");
+    assert!(
+        v["migrated"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["from"] == 0 && m["path"] == path.as_str()),
+        "{v}"
+    );
+    // "Update this file": the text in the newest format; nothing is written
+    let v = call(
+        &format!("/api/tiles/{id}/migrate"),
+        serde_json::json!({ "text": old }),
+    );
+    assert_eq!(v["ok"], true, "{v}");
+    let new = v["text"].as_str().unwrap();
+    assert!(new.starts_with("dharmatiles version=\""), "{new}");
+    assert!(new.contains("fill \"(0.5sq, 0.9sq)\""), "{new}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), old);
+    // and the new text is a tile at the format: no longer migrated
+    let v = call(
+        &format!("/api/tiles/{id}/check"),
+        serde_json::json!({ "text": new }),
+    );
+    assert_eq!(v["ok"], true, "{v}");
+    assert!(
+        !v["migrated"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["path"] == path.as_str()),
+        "{v}"
+    );
+}
