@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from '/vendor/OrbitControls.js';
 import { ownerVertices, worstFlagged } from './payload.js';
-import { classInfo, segments, sheetGeometry, sheetTokens } from './debug-layer.js';
+import { classInfo, columnGeometry, segments, shadeAlpha, SHADE_COLUMN, SHADE_SHEET, sheetGeometry, sheetTokens } from './debug-layer.js';
 
 THREE.ColorManagement.enabled = false; // colours are already display values
 
@@ -175,8 +175,10 @@ const DOT_VERT = `attribute vec3 color; varying vec3 vC; uniform float uSize;
 void main() { vC = color; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = uSize; }`;
 const DOT_FRAG = `varying vec3 vC;
 void main() { float r = length(gl_PointCoord - 0.5); if (r > 0.5) discard; gl_FragColor = vec4(r > 0.36 ? vC * 0.35 : vC, 1.0); }`;
-// band sheets: soft fill, a brighter contour
-const SHEET_ALPHA = { 'band-lo': 0.16, 'band-hi': 0.26 }, CONTOUR_ALPHA = 0.95;
+// cloud sheets: a fill whose opacity is each node's shade (how often that
+// height comes up), a brighter contour
+const CONTOUR_ALPHA = 0.95;
+// a cloud at a point: a marker at the height the roll gave, a fixed size on screen
 
 // The hover: with nothing selected the rest dims a little round what is
 // under the pointer; with a selection, what is under the pointer lifts
@@ -604,15 +606,46 @@ export class Viewer {
     // the sheets first, depth-tested so the terrain hides what is under it
     const tokens = sheetTokens(d);
     (d.sheets ?? []).forEach((s, k) => {
-      const { positions, contour } = sheetGeometry(s);
+      const { positions, contour, shade } = sheetGeometry(s);
       const c = colour(tokens[k]);
       const fill = new THREE.BufferGeometry();
       fill.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      over(new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: SHEET_ALPHA[s.class] ?? 0.2, side: THREE.DoubleSide, depthWrite: false })), 10);
+      const rgba = new Float32Array(shade.length * 4);
+      shade.forEach((v, n) => rgba.set([c.r, c.g, c.b, shadeAlpha(v, SHADE_SHEET)], 4 * n));
+      fill.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
+      over(new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, side: THREE.DoubleSide, depthWrite: false })), 10);
       const edge = new THREE.BufferGeometry();
       edge.setAttribute('position', new THREE.BufferAttribute(contour, 3));
       over(new THREE.LineSegments(edge, new THREE.LineBasicMaterial({ color: c.clone().lerp(new THREE.Color(1, 1, 1), 0.35), transparent: true, opacity: CONTOUR_ALPHA })), 11);
     });
+    // the clouds at a point: a line from low to high shaded at each end, the
+    // rolled height marked on it; in front of the solids so a crown's tips show
+    const cloudMarks = { depthTest: false, depthWrite: false, transparent: true };
+    const mpos = [], mcol = [];
+    for (const [cls, flat] of Object.entries(d.columns ?? {})) {
+      const g = columnGeometry(flat);
+      const c = colour('--dbg-cloud');
+      const line = new THREE.BufferGeometry();
+      line.setAttribute('position', new THREE.BufferAttribute(g.lines, 3));
+      const rgba = new Float32Array(g.lineShade.length * 4);
+      g.lineShade.forEach((v, n) => rgba.set([c.r, c.g, c.b, shadeAlpha(v, SHADE_COLUMN)], 4 * n));
+      line.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
+      over(new THREE.LineSegments(line, new THREE.LineBasicMaterial({ vertexColors: true, ...cloudMarks })), 19);
+      for (let n = 0; n < g.n; n++) {
+        mpos.push(g.marks[3 * n], g.marks[3 * n + 1], g.marks[3 * n + 2]);
+        // the marker's shade: its colour toward the plate where the height is rare
+        const t = shadeAlpha(g.markShade[n], SHADE_COLUMN);
+        const m = c.clone().lerp(new THREE.Color(this.debugColour('--plate')), 1 - t);
+        mcol.push(m.r, m.g, m.b);
+      }
+    }
+    if (mpos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(mpos), 3));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(mcol), 3));
+      const size = 6 * Math.min(2, this.renderer.getPixelRatio());
+      over(new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: { uSize: { value: size } }, vertexShader: DOT_VERT, fragmentShader: DOT_FRAG, ...cloudMarks })), 20);
+    }
     // then the marks, over everything: they lie on the ground under the blades
     const marks = { depthTest: false, depthWrite: false, transparent: true };
     for (const [cls, trails] of Object.entries(d.trails ?? {})) {

@@ -70,11 +70,12 @@ function renderDebugLegend(d) {
     const li = document.createElement('li');
     const sw = document.createElement('i');
     sw.className = `sw ${r.kind}`;
-    sw.style.background = cssToken(r.token);
+    // a ramp is the shading itself: clear to full strength
+    sw.style.background = r.kind === 'ramp' ? `linear-gradient(90deg, transparent, ${cssToken(r.token)})` : cssToken(r.token);
     const label = document.createElement('span');
     label.textContent = r.label;
     li.append(sw, label);
-    if (r.kind !== 'sheet') {
+    if (r.kind === 'dot' || r.kind === 'line' || r.kind === 'column') {
       const n = document.createElement('span');
       n.className = 'n';
       n.textContent = r.n;
@@ -84,7 +85,7 @@ function renderDebugLegend(d) {
   });
   if (!rows.length) {
     const li = document.createElement('li');
-    li.textContent = 'Nothing in this tile shows here yet: grass and banded surfaces do.';
+    li.textContent = 'Nothing in this tile shows here yet: grass, clouds (a top with a range) and the trees and rocks under them do.';
     rows.push(li);
   }
   $('debug-rows').replaceChildren(...rows);

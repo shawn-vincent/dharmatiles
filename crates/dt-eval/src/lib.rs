@@ -1094,8 +1094,45 @@ impl<'a> Plan<'a> {
             .zip(lo.z.iter().zip(&hi.z))
             .any(|(&a, (l, h))| a && h - l > 0.05);
         if deep {
-            d.sheet(path, i, "band-lo", lo, area.clone());
-            d.sheet(path, i, "band-hi", hi, area.clone());
+            // how often each sheet's height comes up at each node: the
+            // weighting's density at the low end and at the high end
+            let band = &body.band;
+            let (bx, by) = (band.lo().nx, band.lo().ny);
+            let node = |n: usize| {
+                if (bx, by) == (area.nx, area.ny) {
+                    return n;
+                }
+                // another lattice: the band's node nearest this one
+                let (i, j) = (n % area.nx, n / area.nx);
+                let k = self.c.frame.step_mm() / band.lo().step;
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let (i, j) = (
+                    ((i as f64 * k).round() as usize).min(bx - 1),
+                    ((j as f64 * k).round() as usize).min(by - 1),
+                );
+                j * bx + i
+            };
+            let shades = |u: f64| -> Vec<f32> {
+                // one weighting is read at many nodes: ask once each
+                let mut seen: Vec<(*const dt_geom::Weighting, f32)> = Vec::new();
+                (0..area.bits.len())
+                    .map(|n| match band.weighting(node(n)) {
+                        None => dt_kit::debug::shade_of(None, u),
+                        Some(w) => {
+                            let p: *const dt_geom::Weighting = w;
+                            if let Some(&(_, v)) = seen.iter().find(|(q, _)| *q == p) {
+                                v
+                            } else {
+                                let v = dt_kit::debug::shade_of(Some(w), u);
+                                seen.push((p, v));
+                                v
+                            }
+                        }
+                    })
+                    .collect()
+            };
+            d.sheet(path, i, "band-lo", lo, area.clone(), shades(0.0));
+            d.sheet(path, i, "band-hi", hi, area.clone(), shades(1.0));
         }
     }
 

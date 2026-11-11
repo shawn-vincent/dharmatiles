@@ -313,6 +313,8 @@ pub struct Built {
     pub at: [f64; 3],
     pub top_mm: f64,
     pub stamp_r_mm: f64,
+    /// The cloud at each branch tip, for the debug layer (empty with it off).
+    pub clouds: Vec<dt_kit::debug::Column>,
 }
 
 impl Tree {
@@ -417,7 +419,8 @@ impl Tree {
         let pts = crown::bulge(&pts, &labels, &env, BULGE_MM * s);
         // each tip rolls smoothly inside the cloud over it and the crown is
         // stretched or squeezed to meet it
-        let pts = under_the_cloud(&pts, &env, cap, seed, radius, s, &cloud_at)?;
+        let mut clouds = scene.debug().is_some().then(Vec::new);
+        let pts = under_the_cloud(&pts, &env, cap, seed, radius, s, &cloud_at, clouds.as_mut())?;
         let step = SEGMENT_MM * s;
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let max_steps = (libm::ceil(height / step) as usize * 4).max(60);
@@ -618,6 +621,7 @@ impl Tree {
             at,
             top_mm,
             stamp_r_mm: (r0 * STAMP_RADII).max(STAMP_MIN_MM * s),
+            clouds: clouds.unwrap_or_default(),
         })
     }
 }
@@ -689,6 +693,12 @@ fn plant(scene: &mut Scene, path: &str, b: Built) {
     // later things stand on, and nothing stands on a tree (a second
     // tree there would be planted in this one's crown)
     scene.stamp(&mask, b.at[2]);
+    if let Some(d) = scene.debug() {
+        for mut c in b.clouds {
+            c.owner = path.to_owned();
+            d.column(c);
+        }
+    }
     scene.add(
         Tag {
             kind: Kind::Tree,
@@ -962,6 +972,7 @@ fn dt_kit_tip(frame: &dt_kit::Frame, foot: [f64; 3], at: [f64; 2], radius: f64) 
 /// # Errors
 /// [`LookError`] when the cloud leaves a tip no room above the crown's base
 /// or the formula cannot be worked out there.
+#[allow(clippy::too_many_arguments)] // the crown's inputs, and the debug layer's list
 fn under_the_cloud(
     pts: &[[f64; 3]],
     env: &crown::Envelope,
@@ -970,6 +981,7 @@ fn under_the_cloud(
     radius: f64,
     s: f64,
     cloud_at: &dyn Fn(f64, f64) -> Result<crate::TopCloud, LookError>,
+    mut marks: Option<&mut Vec<dt_kit::debug::Column>>,
 ) -> Result<Vec<[f64; 3]>, LookError> {
     let clouds: Vec<crate::TopCloud> = pts
         .iter()
@@ -1014,6 +1026,20 @@ fn under_the_cloud(
                 ),
                 "raise the top where it is low, or lower the trunk".into(),
             ));
+        }
+        if let Some(m) = marks.as_deref_mut() {
+            m.push(dt_kit::debug::Column {
+                owner: String::new(),
+                class: "tip-cloud",
+                at: [p[0], p[1]],
+                span: [c.lo * s, c.hi * s],
+                rolled: top,
+                shade: [
+                    dt_kit::debug::shade_of(c.odds.as_ref(), 0.0),
+                    dt_kit::debug::shade_of(c.odds.as_ref(), 1.0),
+                    dt_kit::debug::shade_of(c.odds.as_ref(), t),
+                ],
+            });
         }
         let share = ((p[2] - base) / h0).max(0.0);
         out.push([p[0], p[1], (base + share * room).min(base + room)]);

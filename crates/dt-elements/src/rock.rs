@@ -677,6 +677,8 @@ pub(crate) fn add_items(
         }
     }
     // a `top=` stands each stone's peak at its cloud's roll
+    let frame = *scene.frame();
+    let mut marks = scene.debug_marks().is_some().then(Vec::new);
     let peaks = peaks_under_clouds(
         &feet
             .iter()
@@ -684,8 +686,10 @@ pub(crate) fn add_items(
             .collect::<Vec<_>>(),
         items,
         seed,
-        scene.frame(),
+        &frame,
         crowns,
+        owner,
+        marks.as_mut(),
     )?;
     let mut built = Vec::with_capacity(n);
     for (f, peak) in feet.into_iter().zip(peaks) {
@@ -725,6 +729,11 @@ pub(crate) fn add_items(
         let tops = crate::cliff::tops::stone_tops(scene.frame(), &meshes, 0.0);
         scene.lay_tops(&tops);
     }
+    if let (Some(m), Some(d)) = (marks, scene.debug()) {
+        for c in m {
+            d.column(c);
+        }
+    }
     for sol in built {
         scene.add(
             Tag {
@@ -759,6 +768,8 @@ fn peaks_under_clouds(
     seed: Seed,
     frame: &dt_kit::Frame,
     crowns: Option<&dyn crate::CrownTops>,
+    owner: &str,
+    mut marks: Option<&mut Vec<dt_kit::debug::Column>>,
 ) -> Result<Vec<Option<f64>>, LookError> {
     let topped: Vec<(usize, usize)> = stood
         .iter()
@@ -824,6 +835,17 @@ fn peaks_under_clouds(
                 ),
                 "write the top over the ground at its foot: `$bottom + [4dmm .. 9dmm]`".into(),
             ));
+        }
+        if let Some(m) = marks.as_deref_mut() {
+            let shade = |u| dt_kit::debug::shade_of(c.odds.as_ref(), u);
+            m.push(dt_kit::debug::Column {
+                owner: owner.to_owned(),
+                class: "stone-cloud",
+                at: p,
+                span: [c.lo * s, c.hi * s],
+                rolled: top,
+                shade: [shade(0.0), shade(1.0), shade(t)],
+            });
         }
         out[i] = Some(height);
     }

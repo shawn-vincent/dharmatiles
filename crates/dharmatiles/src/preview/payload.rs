@@ -157,6 +157,9 @@ pub const DEBUG_DOTS: usize = 40_000;
 pub const DEBUG_TRAIL_POINTS: usize = 150_000;
 /// The most nodes a debug sheet is sent with across or up.
 pub const DEBUG_SHEET_NODES: usize = 72;
+/// The most debug clouds at a point (branch tips, stones) sent; more are
+/// thinned evenly, class by class.
+pub const DEBUG_COLUMNS: usize = 20_000;
 
 /// A coordinate to a hundredth of a millimetre: the JSON stays short.
 fn mm(v: f64) -> f64 {
@@ -166,8 +169,10 @@ fn mm(v: f64) -> f64 {
 /// The debug layer's marks as the page draws them, thinned to
 /// [`DEBUG_DOTS`], [`DEBUG_TRAIL_POINTS`] and [`DEBUG_SHEET_NODES`]:
 /// `{"dots": {class: [x, y, z, …]}, "trails": {class: [[x, y, z, …], …]},
-/// "sheets": [{entry, owner, class, nx, ny, step, z: [h or null, …]}],
-/// "thinned": bool}`; `null` when the build collected none.
+/// "sheets": [{entry, owner, class, nx, ny, step, z: [h or null, …],
+/// shade: [0 to 1, …]}], "columns": {class: [x, y, low, high, rolled,
+/// shade low, shade high, shade rolled, …]}, "thinned": bool}`; `null` when
+/// the build collected none.
 #[must_use]
 pub fn debug_json(b: &Built) -> Value {
     use std::collections::BTreeMap;
@@ -185,6 +190,19 @@ pub fn debug_json(b: &Built) -> Value {
         let n = seen.entry(p.class).or_default();
         if n.is_multiple_of(k_dot) {
             dots.entry(p.class).or_default().extend(p.at.map(mm));
+        }
+        *n += 1;
+    }
+    let k_col = every(d.columns.len(), DEBUG_COLUMNS);
+    thinned |= k_col > 1;
+    let mut columns: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    for c in &d.columns {
+        let n = seen.entry(c.class).or_default();
+        if n.is_multiple_of(k_col) {
+            let v = columns.entry(c.class).or_default();
+            v.extend([c.at[0], c.at[1], c.span[0], c.span[1], c.rolled].map(mm));
+            v.extend(c.shade.map(|s| (f64::from(s) * 100.0).round() / 100.0));
         }
         *n += 1;
     }
@@ -220,13 +238,18 @@ pub fn debug_json(b: &Built) -> Value {
                     }
                 })
                 .collect();
+            let shade: Vec<f64> = (0..ny)
+                .flat_map(|j| (0..nx).map(move |i| (i * k, j * k)))
+                .map(|(i, j)| (f64::from(s.shade[j * s.z.nx + i]) * 100.0).round() / 100.0)
+                .collect();
             json!({
                 "entry": s.entry, "owner": s.owner, "class": s.class,
                 "nx": nx, "ny": ny, "step": s.z.step * k as f64, "z": z,
+                "shade": shade,
             })
         })
         .collect();
-    json!({"dots": dots, "trails": trails, "sheets": sheets, "thinned": thinned})
+    json!({"dots": dots, "trails": trails, "sheets": sheets, "columns": columns, "thinned": thinned})
 }
 
 /// The most triangles a draft or a sketch is sent with; more are thinned
@@ -438,5 +461,33 @@ mod tests {
             b.len(),
             8 + u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize
         );
+    }
+
+    #[test]
+    fn debug_json_sends_each_cloud_with_its_shade() {
+        let text = "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=21 {\n stack {\n  base\n  dirt top=\"$groundHeight + low(0dmm .. 3dmm)\"\n  scatter count=3 { rock size=\"9dmm .. 12dmm\" top=\"$bottom + high(3dmm .. 9dmm)\" }\n }\n}\n";
+        let m = dt_eval::Memory([("t.dtile".to_owned(), text.to_owned())].into());
+        let opts = dt_eval::Options {
+            debug: true,
+            ..dt_eval::Options::default()
+        };
+        let b = dt_eval::build(&m, "t.dtile", &opts).unwrap();
+        let d = debug_json(&b);
+        let sheets = d["sheets"].as_array().unwrap();
+        assert!(sheets.iter().any(|s| s["class"] == "band-hi"));
+        for s in sheets {
+            let n = s["nx"].as_u64().unwrap() * s["ny"].as_u64().unwrap();
+            assert_eq!(s["shade"].as_array().unwrap().len() as u64, n);
+            assert_eq!(s["z"].as_array().unwrap().len() as u64, n);
+        }
+        let stones = d["columns"]["stone-cloud"].as_array().unwrap();
+        assert!(
+            stones.len() >= 3 * 8 && stones.len().is_multiple_of(8),
+            "{}",
+            stones.len()
+        );
+        // off: nothing at all
+        let off = dt_eval::build(&m, "t.dtile", &dt_eval::Options::default()).unwrap();
+        assert!(debug_json(&off).is_null());
     }
 }

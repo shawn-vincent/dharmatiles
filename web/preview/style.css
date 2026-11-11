@@ -403,6 +403,8 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 #debug-rows .sw { flex: none; width: 12px; height: 12px; border-radius: 3px; }
 #debug-rows .sw.dot { border-radius: 50%; box-shadow: inset 0 0 0 2px rgb(0 0 0 / .35); }
 #debug-rows .sw.line { height: 3px; border-radius: 2px; }
+#debug-rows .sw.column { width: 4px; height: 14px; border-radius: 2px; margin: 0 4px; }
+#debug-rows .sw.ramp { width: 36px; height: 8px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); }
 #debug-rows .sw.sheet { opacity: .6; outline: 1px solid currentColor; }
 #debug-rows .n { margin-left: auto; color: var(--muted); font: 11px var(--f-code); }
 #debug-thinned { margin: 6px 0 0; color: var(--muted); font-size: 11.5px; }
