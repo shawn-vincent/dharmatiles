@@ -9,7 +9,7 @@ dharmatiles version="1.0.0"
 // A call's `top=` is the tree's: `oak top="$bottom + 40dmm"` is a 40dmm oak.
 define oak {
     stack {
-        tree top="$bottom + 50dmm" {
+        tree top="$bottom + 59dmm" {
             trunk height="18dmm"
             crown width="44dmm" clumps=60 shape=wide
             branch split="34deg" eagerness=0.6 target=0.25 balance=0.8 exponent=3 minRadius="0.9dmm"

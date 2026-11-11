@@ -8,7 +8,7 @@ tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none
-        tree top="$bottom + 40dmm" {     // anywhere on the tile; or at="(1sq, 1sq)"
+        tree top="$bottom + 49dmm" {     // anywhere on the tile; or at="(1sq, 1sq)"
             trunk height="30dmm"             // bare trunk below the crown
             crown width="30dmm" clumps=32 shape=round branching=normal
             leaf length="4.5dmm" width="3dmm"

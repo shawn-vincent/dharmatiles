@@ -171,7 +171,7 @@ pub(crate) fn tree_top(e: &Expr, lets: &Lets) -> Result<(&'static str, Lowered),
         dt_elements::Value::Range(a, b) => (*a, *b),
         dt_elements::Value::Dist(d) => (d.lo, d.hi),
         dt_elements::Value::Draw(d) => d.bounds(),
-        dt_elements::Value::Word(_) => (f64::NAN, f64::NAN),
+        dt_elements::Value::Word(_) | dt_elements::Value::Formula(_) => (f64::NAN, f64::NAN),
     };
     let (min, max) = TREE_HEIGHT_MM;
     if !(lo >= min && hi <= max) {

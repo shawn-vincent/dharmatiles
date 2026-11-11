@@ -1,0 +1,22 @@
+dharmatiles version="1.0.0"
+
+// A grove whose height is a cloud: every tree's top is read in the grove's own
+// frame, so the trees at the middle of the clearing stand taller than the ones
+// at its rim. `d(parent($region), %)` is 0% at the middle of the region the
+// trees are scattered in and 100% at its edge; the tree's own roll places each
+// tip inside the cloud, mostly near the high.
+
+tile size="2x2" seed=8 {
+    about "A grove of five trees in a round clearing, taller in the middle: top is a cloud, and d(parent($region), %) is the distance from the clearing's middle."
+    region clearing { within "28dmm" of=center }
+    stack {
+        base
+        dirt clods=none
+        scatter at=clearing count=5 gap="4dmm" {
+            tree top="$bottom + high(34dmm .. 40dmm) + 22dmm * (1 - d(parent($region), %))" {
+                trunk height="13dmm"
+                crown width="14dmm" clumps=24 shape=round branching=normal
+            }
+        }
+    }
+}

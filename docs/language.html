@@ -196,7 +196,7 @@ let $tallWallHeight     "72.3dmm"</code></pre>
 <tr><td><code>$region</code></td><td>the region of the thing being built (<a href="#region-tree">section 6</a>)</td><td>region</td></tr>
 <tr><td><code>$tile</code></td><td>the whole tile, the root region</td><td>region</td></tr>
 </tbody></table></div>
-<p>A body (<code>dirt</code>, <code>water</code>, <code>flagstones</code>, <code>planks</code>, <code>cliff</code>) sets all of these at each point of its region. A tree's top is worked out once per tree, over the ground at its foot, so a tree sets only <code>$bottom</code> and <code>$region</code>; every other element sets <code>$region</code>. <code>check</code> knows this before any build: reading a name the element does not set is <code>dt::unknown-name</code> at the exact spot, with what the element does set. Because <code>$x</code> and <code>$y</code> are the tile's, neighbouring tiles' heights meet, like the water's shared tide. Local position in a region is one call away: <code>x($region, sq)</code>.</p>
+<p>A body (<code>dirt</code>, <code>water</code>, <code>flagstones</code>, <code>planks</code>, <code>cliff</code>) sets all of these at each point of its region. A tree sets all of these at each branch tip, with <code>$region</code> its own disc round the trunk and <code>$bottom</code> the ground at its foot; every other element sets <code>$region</code>. <code>check</code> knows this before any build: reading a name the element does not set is <code>dt::unknown-name</code> at the exact spot, with what the element does set. Because <code>$x</code> and <code>$y</code> are the tile's, neighbouring tiles' heights meet, like the water's shared tide. Local position in a region is one call away: <code>x($region, sq)</code>.</p>
 
 <h3 id="reserved">Reserved words</h3>
 <p>A plain name (a <code>let</code>, a <code>param</code>) may not be a word of the language; it is a <code>dt::name</code> error that names the word and its kind.</p>
@@ -291,7 +291,7 @@ defaults {
     water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" { pin top="$waterEdgeHeight" at=edges }
 }</code></pre>
 <p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The dirt default applies to the first dirt only, so a second dirt laid over what is under it (<code>dirt top="$bottom + [0.6dmm .. 1.2dmm]"</code>) is not pulled to the rim; the water, flagstones and planks defaults apply to every water and every floor. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override $waterBedHeight 0.4dmm → 0.8dmm</code>), each pin's share of its place, and the region tree (<a href="#region-tree">section 6</a>).</p>
-<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and kinds, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease: their stones and slabs step), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it, and a floor draws each slab's or board's height and tilt inside it. A cliff draws its stones inside its band, as a floor draws its slabs. A tree's <code>top=</code> is its height: <code>$bottom</code> is the ground at its foot, so <code>top="$bottom + 40dmm"</code> is 40 design millimetres tall wherever it stands and <code>top="$groundHeight + 40dmm"</code> reaches that height above zero. Each tree draws its own top, so unlike a band it takes a weighting.</p>
+<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and kinds, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease: their stones and slabs step), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it, and a floor draws each slab's or board's height and tilt inside it. A cliff draws its stones inside its band, as a floor draws its slabs. A tree's <code>top=</code> is its height: <code>$bottom</code> is the ground at its foot, so <code>top="$bottom + 40dmm"</code> is 40 design millimetres tall wherever it stands and <code>top="$groundHeight + 40dmm"</code> reaches that height above zero. A tree's top is a cloud like a band's: each branch tip rolls smoothly inside it and the crown stays under its high.</p>
 <p>A complete tile that builds:</p>
 <pre><code>dharmatiles version="1.0.0"
 
@@ -314,7 +314,7 @@ tile size="1x1" seed=62 {
 
 <h3 id="clouds">Clouds: a top with odds</h3>
 <p>A top may be a <em>cloud</em>: a low surface, a high surface and one weighting that says how often each height between them comes up. Write a weighted range in the top: <code>top="$groundHeight + low(0dmm .. 3dmm)"</code> is dirt between the ground height and 3dmm over it, mostly low with a few rises. A plain range, <code>[a .. b]</code>, is a cloud with every height equally likely, and builds exactly as it always did.</p>
-<p>The body supplies a roll from 0 to 1 at each point and the weighting places it between low and high. How neighbouring rolls relate is the element's own business: <code>dirt</code> and <code>water</code> roll one smooth surface (hills, waves), <code>flagstones</code>, <code>planks</code> and <code>cliff</code> draw their slabs and stacks of stones from one smooth heaved surface, so neighbours are alike. A weighting other than flat reads the roll by its <em>rank</em> over the body's points, so even a smooth field's heights come up as often as the weighting says. Rolls are fixed by the tile's seed and are the same on any number of threads. Trees and rocks keep their own draw for now: a tree's <code>top=</code> is one draw per tree, and a rock has no top.</p>
+<p>The body supplies a roll from 0 to 1 at each point and the weighting places it between low and high. How neighbouring rolls relate is the element's own business: <code>dirt</code> and <code>water</code> roll one smooth surface (hills, waves), <code>flagstones</code>, <code>planks</code> and <code>cliff</code> draw their slabs and stacks of stones from one smooth heaved surface, so neighbours are alike. A weighting other than flat reads the roll by its <em>rank</em> over the body's points, so even a smooth field's heights come up as often as the weighting says. Rolls are fixed by the tile's seed and are the same on any number of threads. A tree rolls one smooth field of rolls over its branch tips, ranked through the weighting, so neighbouring tips are alike and the crown stays under the cloud's high; a rock has no top yet.</p>
 <ul class="rules">
   <li><strong>A pin replaces the cloud where it holds.</strong> Away from it the surface eases back into the cloud the way the body eases: dirt no steeper than its slope, water over 9 mm, cliffs and floors step. A pin's own top may be a cloud (<code>pin top="$waterBedHeight + high(0dmm .. 0.3dmm)"</code>), rolled with the body's roll; where pins overlap the later one wins. The library's rim pin is the edge height, so the top never leaves its cloud or its pins.</li>
   <li><strong>Arithmetic on a cloud keeps two surfaces and one weighting.</strong> <code>+ - * /</code> by a number, or a formula that is a number at the point, shifts or stretches both surfaces and keeps the weighting; <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code> of one cloud and numbers act on the surfaces (<code>min(high(0dmm .. 20dmm), 10dmm)</code> is <code>high(0dmm .. 10dmm)</code>: no shelf).</li>
@@ -347,7 +347,7 @@ tile size="1x1" seed=21 {
 <tr><td><code>d($region, mm)</code></td><td>the distance in from the edge in printed millimetres: 0 at the edge, rising inward</td></tr>
 <tr><td><code>a($region, %)</code>, <code>a($region, deg)</code></td><td>how far round the region: 0 at east, turning towards the south as the page reads (90deg is straight down), a full turn 1 or 360deg; so a wave round it is <code>sin(360deg * $a)</code> (<code>$a</code> for short)</td></tr>
 </tbody></table></div>
-<p>The shorthands <code>$x</code> and <code>$y</code> are always the tile's, so neighbouring tiles meet; <code>$d</code> and <code>$a</code> are always the thing's own region. In a region with a hole (land round a pond) &ldquo;round&rdquo; has no meaning for <code>$a</code>, and a thing that cannot read a name (<a href="#library-names">a tree reads no position</a>) is refused at <code>check</code>, at the spot.</p>
+<p>The shorthands <code>$x</code> and <code>$y</code> are always the tile's, so neighbouring tiles meet; <code>$d</code> and <code>$a</code> are always the thing's own region. In a region with a hole (land round a pond) &ldquo;round&rdquo; has no meaning for <code>$a</code>, and a thing that cannot read a name (a rock sets only <code>$region</code>) is refused at <code>check</code>, at the spot.</p>
 <pre><code>dharmatiles version="1.0.0"
 
 tile size="2x1" seed=4 {
@@ -502,7 +502,7 @@ define long-grass {
 // library/parts/trees.dtile
 define oak {
     stack {
-        tree top="$bottom + 50dmm" {
+        tree top="$bottom + 59dmm" {
             trunk height="18dmm"
             crown width="44dmm" clumps=60 shape=wide
             branch split="34deg" eagerness=0.6 target=0.25 balance=0.8 exponent=3 minRadius="0.9dmm"
@@ -591,7 +591,7 @@ tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none
-        tree top="$bottom + 40dmm" {     // anywhere on the tile; or at="(1sq, 1sq)"
+        tree top="$bottom + 49dmm" {     // anywhere on the tile; or at="(1sq, 1sq)"
             trunk height="30dmm"             // bare trunk below the crown
             crown width="30dmm" clumps=32 shape=round branching=normal
             leaf length="4.5dmm" width="3dmm"

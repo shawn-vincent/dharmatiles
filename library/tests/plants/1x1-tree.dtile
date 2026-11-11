@@ -5,7 +5,7 @@ tile size="1x1" seed=42 {
     stack {
         base
         dirt clods=none
-        tree top="$bottom + 35dmm" {
+        tree top="$bottom + 44dmm" {
             trunk height="30dmm"
             crown width="24dmm" clumps=32 shape=round branching=normal
             // Leaves off until the leaf placer's blades pass the overhang

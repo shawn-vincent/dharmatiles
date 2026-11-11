@@ -146,21 +146,52 @@ struct Needs {
     bottom: bool,
 }
 
-struct Vars {
-    x: Iv,
-    y: Iv,
-    bottom: Iv,
+pub(crate) struct Vars {
+    pub(crate) x: Iv,
+    pub(crate) y: Iv,
+    pub(crate) bottom: Iv,
     /// The node, for the coordinates of format 1.
-    k: usize,
+    pub(crate) k: usize,
 }
 
-struct Eval<'a> {
-    table: &'a ConstTable,
+/// A tree's own region: a disc, in squares from the south-west corner.  Its
+/// coordinates are worked out where they are asked, not on the lattice.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Disc {
+    pub(crate) centre: [f64; 2],
+    pub(crate) radius: f64,
+}
+
+pub(crate) struct Eval<'a> {
+    pub(crate) table: &'a ConstTable,
     /// Format 1: the regions' coordinates, and the region `$region` is.
-    coords: Option<(&'a Coords<'a>, usize)>,
+    pub(crate) coords: Option<(&'a Coords<'a>, usize)>,
+    /// Where `$region` is a tree's disc, the disc (it has no mask).
+    pub(crate) disc: Option<Disc>,
 }
 
 impl Eval<'_> {
+    /// A coordinate of the tree's own disc at the point `v`.
+    fn on_disc(&self, c: &Coords<'_>, d: Disc, name: &str, unit: UnitWord, v: &Vars) -> f64 {
+        let (x, y) = (v.x.lo, v.y.lo);
+        let (dx, dy) = (x - d.centre[0], y - d.centre[1]);
+        let dist = dx.hypot(dy);
+        match name {
+            "x" => c.unit_of(x - (d.centre[0] - d.radius), 2.0 * d.radius, unit),
+            "y" => c.unit_of(d.centre[1] + d.radius - y, 2.0 * d.radius, unit),
+            "d" if unit == UnitWord::Pct => (dist / d.radius.max(1e-9)).min(1.0),
+            "d" => c.unit_of((d.radius - dist).max(0.0), 0.0, unit),
+            _ => {
+                let turn = ((-dy).atan2(dx) / std::f64::consts::TAU).rem_euclid(1.0);
+                match unit {
+                    UnitWord::Deg => turn * 360.0,
+                    UnitWord::Rad => turn * std::f64::consts::TAU,
+                    _ => turn,
+                }
+            }
+        }
+    }
+
     fn needs(&self, e: &Expr, depth: usize) -> Result<Needs, String> {
         if depth > DEPTH {
             return Err("constants refer to each other in a loop".to_owned());
@@ -192,7 +223,7 @@ impl Eval<'_> {
     /// The formula at one node: its heights, and the odds along them when it
     /// is a cloud.
     #[allow(clippy::too_many_lines)]
-    fn iv(&self, e: &Expr, v: &Vars, depth: usize) -> Result<Val, Flaw> {
+    pub(crate) fn iv(&self, e: &Expr, v: &Vars, depth: usize) -> Result<Val, Flaw> {
         if depth > DEPTH {
             return Err("constants refer to each other in a loop".to_owned().into());
         }
@@ -217,11 +248,16 @@ impl Eval<'_> {
                     let Some((c, own)) = self.coords else {
                         return Err(format!("`{n}` is read only in format 1").into());
                     };
-                    Val::num(Iv::point(if n == "$d" {
-                        c.d(own, v.k, UnitWord::Pct)
+                    if let Some(disc) = self.disc {
+                        let name = if n == "$d" { "d" } else { "a" };
+                        Val::num(Iv::point(self.on_disc(c, disc, name, UnitWord::Pct, v)))
                     } else {
-                        c.a(own, v.k, UnitWord::Pct)
-                    }))
+                        Val::num(Iv::point(if n == "$d" {
+                            c.d(own, v.k, UnitWord::Pct)
+                        } else {
+                            c.a(own, v.k, UnitWord::Pct)
+                        }))
+                    }
                 }
                 "bottom" | "$bottom" => Val::num(v.bottom),
                 c => {
@@ -319,6 +355,9 @@ impl Eval<'_> {
                     return Err(format!("`{name}` takes a region and a unit").into());
                 };
                 let id = c.region(region, own, self.table)?;
+                if let (Some(disc), true) = (self.disc, id == own) {
+                    return Ok(Val::num(Iv::point(self.on_disc(c, disc, name, *unit, v))));
+                }
                 Val::num(Iv::point(match name.as_str() {
                     "x" => c.x(id, v.k, *unit),
                     "y" => c.y(id, v.k, *unit),
@@ -340,10 +379,10 @@ impl Eval<'_> {
 /// A formula at one node: the heights it can be, the odds along them if it
 /// is a cloud (the plain range has none), and whether it holds a range.
 #[derive(Clone, Debug)]
-struct Val {
-    iv: Iv,
-    odds: Option<Weighting>,
-    ranged: bool,
+pub(crate) struct Val {
+    pub(crate) iv: Iv,
+    pub(crate) odds: Option<Weighting>,
+    pub(crate) ranged: bool,
 }
 
 impl Val {
@@ -372,10 +411,10 @@ impl Val {
 
 /// Why a formula cannot be worked out: the diagnostic's code, what is wrong
 /// and what to write.
-struct Flaw {
-    code: &'static str,
-    message: String,
-    help: Option<String>,
+pub(crate) struct Flaw {
+    pub(crate) code: &'static str,
+    pub(crate) message: String,
+    pub(crate) help: Option<String>,
 }
 
 impl From<String> for Flaw {
@@ -611,6 +650,7 @@ impl Ground<'_> {
         let eval = Eval {
             table,
             coords: self.coords.map(|c| (c, own)),
+            disc: None,
         };
         let needs = eval.needs(e, 0)?;
         let none = Vars {

@@ -11,7 +11,7 @@ tile size="2x2" seed=5 {
         base
         dirt clods=none
         scatter count=10 gap="1.5dmm" {
-            tree top="$bottom + [30dmm .. 36dmm]" weight=1 {
+            tree top="$bottom + [39dmm .. 45dmm]" weight=1 {
                 trunk height="16dmm"
                 crown width="18dmm" clumps=24 shape=round branching=normal
                 leaf length="4.5dmm" width="3dmm"

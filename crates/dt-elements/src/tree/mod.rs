@@ -64,6 +64,14 @@ const TIP_FLOOR_MM: f64 = 0.6;
 /// one radius up, and is sunk this far into the ground.
 const FLARE: f64 = 0.45;
 const SINK_MM: f64 = 1.0;
+/// How far a clump and its leaves stand above the branch tip it sits on, as
+/// the clump's radius times this and a few mm besides: the crown's tips are
+/// held this far under the cloud.
+const CAP_CLUMPS: f64 = 1.6;
+const CAP_MM: f64 = 1.0;
+/// How wide the smooth roll of the tips is, in crown radii: tips nearer
+/// than this roll alike.
+const ROLL_RADII: f64 = 1.0;
 /// `crown base radius` is the crown radius less this (both library tiles).
 const BASE_INSET_MM: f64 = 1.0;
 /// Grass keeps out of a disc this many trunk radii across.
@@ -76,9 +84,10 @@ const STAMP_MIN_MM: f64 = 1.6;
 struct Params {
     /// Its height over its foot (`top="bottom + 40"`, and the default).
     height: Draw,
-    /// Its top above zero (`top="groundHeight + 40"`): the height is this
-    /// less the ground at its foot.
-    top: Option<Draw>,
+    /// Its `top=`: the formula (a cloud over its tips) the tile worked out,
+    /// by its number in the tile's table; `None` stands the tree
+    /// `height` over its foot.
+    crown: Option<usize>,
     trunk: Draw,
     trunk_width: Option<Draw>,
     width: Draw,
@@ -114,7 +123,7 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             height: Draw::flat(40.0, 40.0),
-            top: None,
+            crown: None,
             trunk: Draw::flat(30.0, 30.0),
             trunk_width: None,
             width: Draw::flat(DEFAULT_CROWN_WIDTH_MM, DEFAULT_CROWN_WIDTH_MM),
@@ -208,7 +217,18 @@ impl Tree {
         let s = Settings::new(controls);
         // the stack writes a tree's `top=` as one of these two
         p.height = s.dist_or("height", p.height)?;
-        p.top = s.dist("top")?;
+        if let Some(c) = s.control("top") {
+            match &c.value {
+                crate::Value::Formula(f) => p.crown = Some(f.id),
+                _ => {
+                    return Err(LookError::control(
+                        "top",
+                        "a tree's top is a formula the tile works out at each branch tip".into(),
+                        "write `top=\"$bottom + 40dmm\"`".into(),
+                    ));
+                }
+            }
+        }
         p.trunk = s.dist_or("trunk/height", p.trunk)?;
         p.trunk_width = s.dist("trunk/width")?.or(p.trunk_width);
         p.width = s.dist_or("crown/width", p.width)?;
@@ -307,30 +327,17 @@ impl Tree {
         seed: Seed,
         at: [f64; 3],
         printer: &dt_kit::Printer,
+        crowns: Option<&dyn crate::CrownTops>,
     ) -> Result<Built, LookError> {
         let p = &self.p;
         let stand_rule = dt_kit::Stand::for_printer(printer);
         let s = scene.frame().scale();
         let mut rng = Rng::new(seed.key("sizes"));
-        let height = match &p.top {
-            None => draw_dist(&p.height, &mut rng) * s,
-            Some(top) => {
-                let h = draw_dist(top, &mut rng) * s - at[2];
-                let (lo, hi) = (MIN_HEIGHT_MM * s, MAX_HEIGHT_MM * s);
-                if !(lo..=hi).contains(&h) {
-                    return Err(LookError::control(
-                        "top",
-                        format!(
-                            "this top is {:.1} mm over the ground at the tree's foot ({:.1} mm up); a tree is {MIN_HEIGHT_MM} to {MAX_HEIGHT_MM} mm tall",
-                            h / s,
-                            at[2] / s
-                        ),
-                        "write the height over its foot: `bottom + 40`".into(),
-                    ));
-                }
-                h
-            }
-        };
+        // no `top=`: the tree stands `height` over its foot
+        let flat_top = p
+            .crown
+            .is_none()
+            .then(|| at[2] / s + draw_dist(&p.height, &mut rng));
         let trunk = draw_dist(&p.trunk, &mut rng) * s;
         let radius = 0.5 * draw_dist(&p.width, &mut rng) * s;
         let clump_r = draw_dist(&p.clump_size, &mut rng) * s;
@@ -339,22 +346,61 @@ impl Tree {
             width_mm: draw_dist(&p.leaf_width, &mut rng) * s,
         };
         let trunk_width = p.trunk_width.as_ref().map(|v| draw_dist(v, &mut rng) * s);
-        if trunk >= height - 1e-6 {
+        let frame = *scene.frame();
+        let tip_at = |x: f64, y: f64| dt_kit_tip(&frame, at, [x, y], radius);
+        // the crown's cloud at each tip, one formula for the tree
+        let cloud_at = |x: f64, y: f64| -> Result<crate::TopCloud, LookError> {
+            match (p.crown, crowns, flat_top) {
+                (Some(id), Some(c), _) => c.cloud(id, &tip_at(x, y)),
+                (Some(_), None, _) => Err(LookError::build(
+                    "a tree's top is worked out by the tile it is built in",
+                )),
+                (None, _, Some(t)) => Ok(crate::TopCloud {
+                    lo: t,
+                    hi: t,
+                    odds: None,
+                }),
+                (None, _, None) => Err(LookError::build("a tree has neither a top nor a height")),
+            }
+        };
+        // the middle of the cloud at the trunk is the tree's height: what
+        // the crown's envelope is measured on and what `top` must allow
+        let c0 = cloud_at(at[0], at[1])?;
+        let top_here = c0.lo + (c0.hi - c0.lo) * c0.odds.as_ref().map_or(0.5, |w| w.unit(0.5));
+        let height = top_here * s - at[2];
+        let (min_h, max_h) = (MIN_HEIGHT_MM * s, MAX_HEIGHT_MM * s);
+        if !(min_h..=max_h).contains(&height) {
+            return Err(LookError::control(
+                "top",
+                format!(
+                    "this top is {:.1} mm over the ground at the tree's foot ({:.1} mm up); a tree is {MIN_HEIGHT_MM} to {MAX_HEIGHT_MM} mm tall",
+                    height / s,
+                    at[2] / s
+                ),
+                "write the height over its foot: `$bottom + 40dmm`".into(),
+            ));
+        }
+        // the clumps and leaves stand above the tips: the tips are held
+        // that far under the cloud so the crown stays under its high
+        let cap = (CAP_CLUMPS * clump_r + CAP_MM * s).max(0.0);
+        let env_height = height - cap;
+        if trunk >= env_height - 1e-6 {
             return Err(LookError::control(
                 "trunk/height",
                 format!(
-                    "the trunk ({:.1} mm) is as tall as the tree ({:.1} mm): no crown",
+                    "the trunk ({:.1} mm) leaves no room for a crown under the top ({:.1} mm over the foot): the crown's tips stand {:.1} mm under it so its clumps stay below",
                     trunk / s,
-                    height / s
+                    height / s,
+                    cap / s
                 ),
-                "make trunk height less than height".into(),
+                "make trunk height less, or the top higher".into(),
             ));
         }
         let env = crown::Envelope::new(
             at[0],
             at[1],
             at[2],
-            height,
+            env_height,
             trunk,
             radius,
             (radius - BASE_INSET_MM * s).max(0.0),
@@ -369,6 +415,9 @@ impl Tree {
         let k = crown::n_groups(&env, g_mm, g_mm);
         let labels = crown::groups(&pts, k, &mut crng, 1.0);
         let pts = crown::bulge(&pts, &labels, &env, BULGE_MM * s);
+        // each tip rolls smoothly inside the cloud over it and the crown is
+        // stretched or squeezed to meet it
+        let pts = under_the_cloud(&pts, &env, cap, seed, radius, s, &cloud_at)?;
         let step = SEGMENT_MM * s;
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let max_steps = (libm::ceil(height / step) as usize * 4).max(60);
@@ -660,7 +709,9 @@ impl Tree {
         let s = scene.frame().scale();
         // the crown radius as `grow` draws it (the same stream)
         let mut rng = Rng::new(seed.key("sizes"));
-        let _ = draw_dist(self.p.top.as_ref().unwrap_or(&self.p.height), &mut rng);
+        if self.p.crown.is_none() {
+            let _ = draw_dist(&self.p.height, &mut rng);
+        }
         let _ = draw_dist(&self.p.trunk, &mut rng);
         let mut margin = 0.5 * draw_dist(&self.p.width, &mut rng) * s;
         let _ = draw_dist(&self.p.clump_size, &mut rng);
@@ -708,7 +759,7 @@ impl Element for Tree {
         let s = scene.frame().scale();
         let margin = self.footprint(scene, ctx.seed)?;
         let at = place(scene, ctx, margin, 3.0 * s)?;
-        let b = self.grow(scene, ctx.seed, at, &ctx.printer)?;
+        let b = self.grow(scene, ctx.seed, at, &ctx.printer, ctx.crowns)?;
         note_built(scene, &b);
         plant(scene, ctx.path, b);
         Ok(())
@@ -880,7 +931,7 @@ pub(crate) fn grow_all(
     for p in placed {
         let (tree, seed) = items[p.index];
         let at = [p.at[0], p.at[1], ground_at(scene, p.at[0], p.at[1])];
-        let b = tree.grow(scene, seed, at, &ctx.printer)?;
+        let b = tree.grow(scene, seed, at, &ctx.printer, ctx.crowns)?;
         leaves += b.grown.leaves as f64;
         plant(scene, ctx.path, b);
     }
@@ -888,3 +939,87 @@ pub(crate) fn grow_all(
     scene.note("trees.leaves", leaves);
     Ok(())
 }
+
+/// A tip's place for the tile's formulas: squares from the south-west
+/// corner, the tree's disc and the ground at its foot.
+fn dt_kit_tip(frame: &dt_kit::Frame, foot: [f64; 3], at: [f64; 2], radius: f64) -> crate::Tip {
+    let sq = frame.square_mm;
+    crate::Tip {
+        at: [at[0] / sq, at[1] / sq],
+        centre: [foot[0] / sq, foot[1] / sq],
+        radius: radius / sq,
+        bottom_dmm: foot[2] / frame.scale(),
+    }
+}
+
+/// The crown's tips held under the cloud over them. Each tip gets a smooth
+/// roll (neighbouring tips alike), ranked over the tips so the weighting's
+/// odds hold, and the height the cloud gives it there; its height over the
+/// crown's base is then the envelope's height share of it, so the crown
+/// keeps its shape stretched or squeezed to the cloud, and no tip, with
+/// the clump that stands on it, passes the cloud's high.
+///
+/// # Errors
+/// [`LookError`] when the cloud leaves a tip no room above the crown's base
+/// or the formula cannot be worked out there.
+fn under_the_cloud(
+    pts: &[[f64; 3]],
+    env: &crown::Envelope,
+    cap: f64,
+    seed: Seed,
+    radius: f64,
+    s: f64,
+    cloud_at: &dyn Fn(f64, f64) -> Result<crate::TopCloud, LookError>,
+) -> Result<Vec<[f64; 3]>, LookError> {
+    let clouds: Vec<crate::TopCloud> = pts
+        .iter()
+        .map(|p| cloud_at(p[0], p[1]))
+        .collect::<Result<_, _>>()?;
+    // one smooth field of rolls over the tile; its rank is the roll
+    let key = seed.key("roll");
+    let rolls: Vec<f64> = pts
+        .iter()
+        .map(|p| {
+            dt_kit::noise_at(
+                key,
+                (ROLL_RADII * radius / s).max(1.0) * s,
+                &[p[0]],
+                &[p[1]],
+            )[0]
+        })
+        .collect();
+    let mut order: Vec<usize> = (0..pts.len()).collect();
+    order.sort_by(|&a, &b| rolls[a].total_cmp(&rolls[b]).then(a.cmp(&b)));
+    let mut rank = vec![0.0; pts.len()];
+    #[allow(clippy::cast_precision_loss)]
+    for (r, &i) in order.iter().enumerate() {
+        rank[i] = (r as f64 + 0.5) / pts.len() as f64;
+    }
+    let base = env.base_z();
+    let h0 = env.crown_height();
+    let mut out = Vec::with_capacity(pts.len());
+    for ((p, c), u) in pts.iter().zip(&clouds).zip(&rank) {
+        let t = c.odds.as_ref().map_or(*u, |w| w.unit(*u));
+        let top = (c.lo + (c.hi - c.lo) * t) * s;
+        let room = top - cap - base;
+        if room < MIN_CROWN_MM * s {
+            return Err(LookError::control(
+                "top",
+                format!(
+                    "the top leaves the crown {:.1} mm to stand in over its base at ({:.1}, {:.1}) mm; its clumps need at least {:.1} mm",
+                    room / s,
+                    p[0] / s,
+                    p[1] / s,
+                    MIN_CROWN_MM + 0.0
+                ),
+                "raise the top where it is low, or lower the trunk".into(),
+            ));
+        }
+        let share = ((p[2] - base) / h0).max(0.0);
+        out.push([p[0], p[1], (base + share * room).min(base + room)]);
+    }
+    Ok(out)
+}
+
+/// The least the crown's tips stand over its base, mm at the 35 mm square.
+const MIN_CROWN_MM: f64 = 2.0;

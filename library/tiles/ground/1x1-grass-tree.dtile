@@ -11,7 +11,7 @@ tile size="1x1" seed=42 {
         scatter perSquare=3 gap="7dmm" {    // rocks first: grass grows round them
             boulder size="7dmm .. 9dmm" shape=angular
         }
-        tree top="$bottom + 35dmm" {     // anywhere on the tile
+        tree top="$bottom + 44dmm" {     // anywhere on the tile
             trunk height="30dmm"
             crown width="24dmm" clumps=32 shape=round branching=normal
             leaf length="4.5dmm" width="3dmm"

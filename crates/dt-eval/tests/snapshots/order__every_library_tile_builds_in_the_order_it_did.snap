@@ -32,6 +32,7 @@ lib:tests/plants/1x1-grass-flowers.dtile: [Entry(0), Lift, Entry(1), Entry(2), E
 lib:tests/plants/1x1-soil+grass.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/plants/1x1-tree.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/plants/2x2-grass.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
+lib:tests/plants/2x2-grove.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/plants/2x2-meadow.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entry(3)]
 lib:tests/plants/2x2-tree.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/rocks/2x2-rocks.dtile: [Entry(0), Lift, Entry(1), Entry(2)]

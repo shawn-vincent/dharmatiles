@@ -11,7 +11,7 @@ tile size="2x1" seed=21 {
         base
         dirt clods=none
         scatter at=row count=3 reach="3dmm" gap="1dmm" {      // trees first: grass grows round the trunks
-            tree top="$bottom + [26dmm .. 32dmm]" {
+            tree top="$bottom + [35dmm .. 41dmm]" {
                 trunk height="14dmm"
                 crown width="16dmm" clumps=24 shape=round branching=normal
                 leaf length="4.5dmm" width="3dmm"

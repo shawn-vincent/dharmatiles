@@ -354,6 +354,10 @@ impl<'a> Coords<'a> {
     }
 
     /// A length in squares counted in `unit`; `%` is a share of `extent`.
+    pub(crate) fn unit_of(&self, sq: f64, extent: f64, unit: UnitWord) -> f64 {
+        self.in_unit(sq, extent, unit)
+    }
+
     fn in_unit(&self, sq: f64, extent: f64, unit: UnitWord) -> f64 {
         match unit {
             UnitWord::Sq => sq,

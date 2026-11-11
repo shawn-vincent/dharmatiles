@@ -47,6 +47,55 @@ pub enum Value {
     /// its own, then the arithmetic.  Controls that draw take it like a
     /// weighted range; a control that reads a range takes its ends.
     Draw(Draw),
+    /// A tree's `top=`: a formula the tile worked out where the tree stands
+    /// (see [`CrownTops`]).
+    Formula(Formula),
+}
+
+/// A formula the build evaluates at the places an element asks: its number
+/// in the tile's table of them, and its text with every name expanded (what
+/// the caches and equality read).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Formula {
+    /// Its place in the tile's table of formulas.
+    pub id: usize,
+    /// The formula with the names it reads expanded.
+    pub key: String,
+}
+
+/// Where a tree's tip stands, for the formula its `top=` is: the tile's
+/// squares from the south-west corner, and the tree's own disc.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tip {
+    /// The tip's place, squares.
+    pub at: [f64; 2],
+    /// The trunk's place, squares.
+    pub centre: [f64; 2],
+    /// The crown's radius, squares: the tree's region is this disc.
+    pub radius: f64,
+    /// The ground at the tree's foot, mm at the 35 mm square (`$bottom`).
+    pub bottom_dmm: f64,
+}
+
+/// A cloud at one tip: its low and high surfaces (mm at the 35 mm square)
+/// and its weighting (`None`: every height between equally).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TopCloud {
+    /// The low surface.
+    pub lo: f64,
+    /// The high surface.
+    pub hi: f64,
+    /// How often each height between comes up.
+    pub odds: Option<Weighting>,
+}
+
+/// What works a tree's `top=` formula out at a tip.
+pub trait CrownTops {
+    /// The cloud formula `id` makes at `tip`.
+    ///
+    /// # Errors
+    /// [`LookError`] naming what the formula cannot do there.
+    fn cloud(&self, id: usize, tip: &Tip) -> Result<TopCloud, LookError>;
 }
 
 /// A number or a range `lo..hi` as an element reads it: one number is the
@@ -132,6 +181,7 @@ impl std::fmt::Display for Value {
                 write!(f, "\"{lo}..{hi}\" (sum of {} ranges)", d.ranges())
             }
             Self::Word(w) => write!(f, "`{w}`"),
+            Self::Formula(x) => write!(f, "`{}`", x.key),
         }
     }
 }
@@ -323,6 +373,9 @@ pub struct Ctx<'a> {
     /// whose cost is in fixed-millimetre detail (a cliff's carving) may
     /// make it coarser.  Never printed.
     pub draft: bool,
+    /// Works a tree's `top=` formula out at each branch tip; `None` where
+    /// the build has no tile (the element's own tests).
+    pub crowns: Option<&'a dyn CrownTops>,
 }
 
 /// Which side of a drawn line a thing stands on, as you walk it.

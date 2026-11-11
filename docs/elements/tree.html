@@ -15,7 +15,7 @@
   <h1>tree</h1>
   <p class="lede">One deciduous tree: a twisting barked trunk that forks into branches, each ending in a rounded clump of foliage covered in separate, chunky leaves. The look is slightly cartoonish. Every branch climbs at least 26° and every leaf on an underside lies flat, so the tree prints without supports.</p>
   <p class="small">A ready-made tree is a <a href="define.html">definition</a>: <code>use "parts/trees" oak</code>. Several trees are a <a href="scatter.html"><code>scatter</code></a>: <code>scatter count=2 { oak }</code>, or a row along a line: <code>scatter at=road count=3 reach="3dmm" { oak }</code>. A scatter of trees keeps every crown clear of the others; a single tree <code>at=</code> a line is refused, a line has no one place on it.</p>
-  <figure class="shot hero-one"><img src="img/el-tree.jpg" alt="A one-square grass tile with one leafy tree"><figcaption><code>lib:tiles/ground/1x1-grass-tree.dtile</code>, built by the program today. The audit measured no face past 55°.</figcaption></figure>
+  <figure class="shot hero-one"><img src="img/el-tree.jpg" alt="A one-square grass tile with one leafy tree"><figcaption><code>lib:tiles/ground/1x1-grass-tree.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v"><code>40dmm</code> tall by default (20 to 120 over its foot); crown about <code>30dmm</code> across</div></div>
     <div><div class="k">Variants</div><div class="v">leafy, foliage clumps only, or bare (winter)</div></div>
@@ -48,7 +48,8 @@
 <p>No two seeds grow the same tree, but every tree has the same character.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A tree's height is its <code>top=</code>, written like every top as a length above zero, where <code>$bottom</code> is the ground at the tree's foot: <code>top="$bottom + 40dmm"</code> is a 40dmm tree wherever it stands, and <code>top="$groundHeight + 40dmm"</code> reaches 40dmm over the ground height, shorter on a mound and taller in a hollow. Each tree draws its own height, so a range or a weighted range rolls per tree (<code>top="$bottom + low(30dmm .. 40dmm, 4)"</code>). Without <code>top=</code> a tree is <code>40dmm</code> over its foot. A tree's top is worked out once, so it reads only <code>$bottom</code> and <code>$region</code>: a read of <code>$x</code>, <code>$d</code> or <code>x(…)</code> there is refused at <code>check</code>.</p>
+<p>A tree's height is its <code>top=</code>, written like every top as a length above zero, where <code>$bottom</code> is the ground at the tree's foot: <code>top="$bottom + 40dmm"</code> is a 40dmm tree wherever it stands, and <code>top="$groundHeight + 40dmm"</code> reaches 40dmm over the ground height, shorter on a mound and taller in a hollow. Without <code>top=</code> a tree is <code>40dmm</code> over its foot.</p>
+<p>The top is a cloud like every top: a low surface, a high surface and one weighting, worked out at each branch tip. The tree's own region is a disc round its trunk, so <code>$d</code> is 0% at the trunk and 100% at the crown's rim, <code>$a</code> runs round it, <code>$x</code> and <code>$y</code> are the tile's, and <code>parent($region)</code> is the region the tree stands in (its scatter's, else the tile). A dome is <code>top="$bottom + 40dmm - 6dmm * $d * $d"</code>; a grove taller in the middle is <code>top="$bottom + 36dmm + 20dmm * (1 - d(parent($region), %))"</code>, read at each tip in the grove's region. Each tip rolls smoothly inside its cloud (neighbouring tips alike, so the crown is not speckled) and the weighting is read by the tip's rank over the whole crown, so <code>top="$bottom + high(34dmm .. 44dmm)"</code> gives mostly tall tips. The crown is stretched or squeezed to meet its tips, and <strong>it stays under the cloud's high</strong>: the tips stand a clump's depth under it, so the clumps and leaves above them do not pass it. A top that leaves a tip no room above the bare trunk is refused where it is low (<code>trunk height</code> is the height of the crown's base).</p>
 <p>A tree goes anywhere in its area, kept a crown's radius from the tile edge, or where <code>at=</code> says. Grass grows round the trunk when it is listed after the tree; a dirt listed after the tree banks against the trunk:</p>
 <pre><code>dharmatiles version="1.0.0"
 
@@ -58,7 +59,7 @@ tile size="2x2" seed=84 {
     stack {
         base
         dirt clods=none
-        tree top="$bottom + 40dmm" {        // or: tree at="(1sq, 1sq)" top="$bottom + 40dmm"
+        tree top="$bottom + 49dmm" {        // or: tree at="(1sq, 1sq)" top="$bottom + 49dmm"
             trunk height="30dmm"            // bare trunk below the crown
             crown width="30dmm" clumps=32 shape=round branching=normal
             leaf length="4.5dmm" width="3dmm"
@@ -77,6 +78,22 @@ tile size="2x2" seed=3 {
         dirt
         scatter count=2 { oak }                         // a definition whose stack is one thing is a thing
         oak at="(1sq, 1sq)" top="$bottom + 60dmm"       // a call's top= is its tree's
+    }
+}</code></pre>
+<p>A top that reads <code>d(parent($region), %)</code> is read in the region the tree stands in, so a grove is taller in the middle (<code>library/tests/plants/2x2-grove.dtile</code>):</p>
+<pre><code>dharmatiles version="1.0.0"
+
+tile size="2x2" seed=8 {
+    region clearing { within "28dmm" of=center }
+    stack {
+        base
+        dirt clods=none
+        scatter at=clearing count=5 gap="4dmm" {
+            tree top="$bottom + high(34dmm .. 40dmm) + 22dmm * (1 - d(parent($region), %))" {
+                trunk height="13dmm"
+                crown width="14dmm" clumps=24 shape=round branching=normal
+            }
+        }
     }
 }</code></pre>
 
@@ -131,7 +148,7 @@ tile size="2x2" seed=3 {
 
 <h3 id="sizes">Sizes</h3>
 <ul>
-  <li><strong>Tree.</strong> <code>40dmm</code> over its foot by default (<code>top="$bottom + 40dmm"</code>), 20 to 120dmm; the 1×1 library tile uses <code>35dmm</code> with a <code>24dmm</code> crown, the 2×2 tile <code>40dmm</code> with a <code>30dmm</code> crown.</li>
+  <li><strong>Tree.</strong> <code>40dmm</code> over its foot by default (<code>top="$bottom + 40dmm"</code>), 20 to 120dmm at the trunk, and the crown stays under it; the 1×1 library tile uses <code>44dmm</code> with a <code>24dmm</code> crown, the 2×2 tile <code>49dmm</code> with a <code>30dmm</code> crown.</li>
   <li><strong>Leaves.</strong> 4.5 mm long, 3 mm wide, 0.24 mm thick, rooted 0.75 mm into the clump. A full tree carries about 2,000–2,400 leaves.</li>
   <li><strong>Trunk and branches.</strong> Branch tips are 1 mm in radius; the trunk is as thick as its branches need (a pipe model), so it is never set directly. Bark grooves are about 0.8 mm deep and 2.25 mm apart.</li>
 </ul>
@@ -151,7 +168,7 @@ tile size="2x2" seed=3 {
   <li>Leaves on the crown's underside are flattened until they print, never culled; the underside is an end-to-end arch.</li>
   <li>Wood and clumps are bevelled wherever they would hang.</li>
   <li>Only the crown's branching is a tile control (open, normal, dense); the branch details are expert controls in parts files.</li>
-  <li>A tree's height is its <code>top=</code>, a height above zero like every top; <code>$bottom</code> is the ground at its foot. It is 20 to 120dmm over its foot, or the build stops with the top's span. A call's <code>top=</code> (<code>oak top="$bottom + 60dmm"</code>) is the tree's inside it. A tree sets only <code>$bottom</code> and <code>$region</code>.</li>
+  <li>A tree's height is its <code>top=</code>, a cloud like every top; <code>$bottom</code> is the ground at its foot. The height at the trunk is 20 to 120dmm over its foot, or the build stops with the top's span. The crown's tips roll smoothly inside the cloud and the crown, its clumps and leaves included, stays under the cloud's high. A tree sets <code>$x</code>, <code>$y</code>, <code>$d</code>, <code>$a</code>, <code>$bottom</code> and <code>$region</code>; a call's <code>top=</code> (<code>oak top="$bottom + 60dmm"</code>) is the tree's inside it.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>

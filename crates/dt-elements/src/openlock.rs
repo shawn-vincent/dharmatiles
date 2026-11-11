@@ -451,6 +451,7 @@ mod tests {
             under: None,
             calm_mm: None,
             draft: false,
+            crowns: None,
         };
         OpenLock::default().build(&mut scene, &ctx).unwrap();
         scene.parts()[0].solid.volume()

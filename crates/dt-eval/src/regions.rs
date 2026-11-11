@@ -134,7 +134,7 @@ fn middle(v: &dt_elements::Value) -> Option<f64> {
             let (a, b) = d.bounds();
             Some(0.5 * (a + b))
         }
-        dt_elements::Value::Word(_) => None,
+        dt_elements::Value::Word(_) | dt_elements::Value::Formula(_) => None,
     }
 }
 

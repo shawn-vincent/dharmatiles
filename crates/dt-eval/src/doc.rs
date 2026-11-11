@@ -297,9 +297,28 @@ pub struct RegionRead {
     pub owner: Owner,
 }
 
+/// A tree's `top=`: the formula its tips are worked out from, with the
+/// context it is read in and who calls it.
+#[derive(Clone, Debug)]
+pub struct TreeTop {
+    /// The formula, every name it reads expanded.
+    pub expr: Expr,
+    /// Where it is written.
+    pub span: SourceSpan,
+    /// Its text.
+    pub src: Src,
+    /// The context it is read in (what `$region` is, which regions are
+    /// named).
+    pub table: Arc<ConstTable>,
+    /// Who calls it.
+    pub owner: Owner,
+}
+
 /// What the evaluator needs from a tile document.
 #[derive(Clone, Debug)]
 pub struct Tile {
+    /// The `top=` of every tree, by the number its setting carries.
+    pub tree_tops: Vec<TreeTop>,
     /// The document's format (0 is only read to be migrated).
     pub format: u32,
     /// Formulas read where a thing calls them, for the region checks of
@@ -524,6 +543,8 @@ pub fn read_with(
         entry_tables: BTreeMap::new(),
         pending_reads: Vec::new(),
         reads: Vec::new(),
+        pending_tops: Vec::new(),
+        tops: Vec::new(),
         sources,
         files: BTreeMap::new(),
         loading: Vec::new(),
@@ -700,6 +721,10 @@ struct Reader<'s> {
     pending_reads: Vec<RegionRead>,
     /// Formulas read for the tile's entries, owners settled.
     reads: Vec<RegionRead>,
+    /// Trees' tops for the entry being expanded, until it is pushed.
+    pending_tops: Vec<TreeTop>,
+    /// Trees' tops for the tile's entries, owners settled.
+    tops: Vec<TreeTop>,
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A
@@ -903,6 +928,7 @@ impl Reader<'_> {
         };
         let mut t = Tile {
             format: file.doc.format(),
+            tree_tops: Vec::new(),
             region_reads: Vec::new(),
             cols: header.cols,
             rows: header.rows,
@@ -1124,6 +1150,7 @@ impl Reader<'_> {
             .unwrap_or_else(|| Arc::new(consts.clone()));
         t.heights = self.heights(file, def, consts, &root, &t.stack, &mut t.pending);
         t.region_reads = std::mem::take(&mut self.reads);
+        t.tree_tops = std::mem::take(&mut self.tops);
         Some(t)
     }
 
@@ -1580,6 +1607,7 @@ impl Reader<'_> {
                     let mut children = Vec::new();
                     // formulas read for this entry, until it is pushed
                     let mark = self.pending_reads.len();
+                    let tmark = self.pending_tops.len();
                     // a scatter inside a surface scatters on that surface:
                     // its own entry, in the surface's area, listed right after it
                     let mut hoisted: Vec<model::Entry> = Vec::new();
@@ -1611,10 +1639,14 @@ impl Reader<'_> {
                             continue;
                         }
                         let before = self.pending_reads.len();
+                        let tbefore = self.pending_tops.len();
                         match self.scatter_child(c, scope, pending) {
                             Some(child) => {
                                 for r in &mut self.pending_reads[before..] {
                                     r.owner.child = Some(children.len());
+                                }
+                                for t in &mut self.pending_tops[tbefore..] {
+                                    t.owner.child = Some(children.len());
                                 }
                                 children.push(child);
                             }
@@ -1661,12 +1693,17 @@ impl Reader<'_> {
                             r.owner.entry = entry;
                             self.reads.push(r);
                         }
+                        for mut t in self.pending_tops.drain(tmark..) {
+                            t.owner.entry = entry;
+                            self.tops.push(t);
+                        }
                         if !hoisted.is_empty() {
                             // listed right after the surface it is written in
                             self.expand(&hoisted, &inner, out, pending);
                         }
                     } else {
                         self.pending_reads.truncate(mark);
+                        self.pending_tops.truncate(tmark);
                     }
                 }
                 Callee::Definition(name) => {
@@ -1968,30 +2005,53 @@ impl Reader<'_> {
                     });
                 }
             }
-            match crate::lower::tree_top(&t.value, &scope.lets) {
-                Ok((name, Lowered { value, note })) => {
-                    if let Some(note) = note {
-                        self.notes
-                            .push(Diag::at(&at, t.span, "dt::weighting", note, "here"));
-                    }
-                    out.push(Setting {
-                        name: name.to_owned(),
-                        value,
-                        span: t.span,
-                        src: at,
-                    });
+            // a top that reads no place keeps the old checks of a tree's
+            // height (20 to 120dmm over its foot, `bottom` added once)
+            let table = scope
+                .lets
+                .table
+                .clone()
+                .unwrap_or_else(|| Arc::new(ConstTable::default()));
+            let expr = expand_names(&t.value, &table, 0);
+            let per_point = {
+                let mut calls = false;
+                expr.visit_calls(&mut |f| calls |= matches!(f, "x" | "y" | "d" | "a"));
+                calls
+                    || expr
+                        .names()
+                        .iter()
+                        .any(|n| matches!(*n, "x" | "y" | "$x" | "$y" | "$d" | "$a" | "$_y"))
+            };
+            if !per_point && let Err(why) = crate::lower::tree_top(&t.value, &scope.lets) {
+                let mut d = Diag::at(&at, t.span, why.code, why.message, "here");
+                d.help = why.help;
+                if why.hard {
+                    self.errors.push(d);
+                } else {
+                    pending.push(d);
                 }
-                Err(why) => {
-                    let mut d = Diag::at(&at, t.span, why.code, why.message, "here");
-                    d.help = why.help;
-                    if why.hard {
-                        self.errors.push(d);
-                    } else {
-                        pending.push(d);
-                    }
-                    return None;
-                }
+                return None;
             }
+            let id = self.tops.len() + self.pending_tops.len();
+            out.push(Setting {
+                name: "top".to_owned(),
+                value: dt_elements::Value::Formula(dt_elements::Formula {
+                    id,
+                    key: expr.to_string(),
+                }),
+                span: t.span,
+                src: Arc::clone(&at),
+            });
+            self.pending_tops.push(TreeTop {
+                expr,
+                span: t.span,
+                src: at,
+                table,
+                owner: Owner {
+                    entry: usize::MAX,
+                    child: None,
+                },
+            });
         }
         for s in &e.controls {
             // the control's own value, then its sub-controls as `control/sub`
@@ -2150,7 +2210,7 @@ fn checked(
             let (lo, hi) = d.bounds();
             (lo, hi, true)
         }
-        dt_elements::Value::Word(_) => return Ok(()),
+        dt_elements::Value::Word(_) | dt_elements::Value::Formula(_) => return Ok(()),
     };
     c.check(owner, lo, hi, range).map_err(|r| {
         let mut d = Diag::at(&b.src, b.value.span, "dt::range", r.message, r.label);
@@ -2283,4 +2343,22 @@ fn wobble_mm(n: &model::Num, lets: &Lets) -> Result<f64, String> {
         return Err(format!("`{x}` is a range; one number is needed here"));
     }
     n.mm(&lets.nums)
+}
+
+/// A formula with every name it reads that the context holds replaced by
+/// what it holds, so what a tree's top is can be read, compared and keyed
+/// without the context.  The names a place sets (`$x`, `$d`, `$bottom`, …)
+/// and the regions stay.
+fn expand_names(e: &Expr, table: &ConstTable, depth: usize) -> Expr {
+    e.map_names(&mut |n| {
+        let stays = matches!(n, "x" | "y" | "bottom" | "$_y")
+            || dt_doc::words::POINT_NAMES.contains(&n)
+            || dt_doc::words::REGION_NAMES.contains(&n);
+        if stays || depth > 64 {
+            return None;
+        }
+        table
+            .get(n)
+            .map(|c| expand_names(&c.expr, table, depth + 1))
+    })
 }

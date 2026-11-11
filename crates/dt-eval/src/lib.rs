@@ -13,6 +13,7 @@
 mod cache;
 pub mod coords;
 pub mod crash_switch;
+mod crowns;
 pub mod diag;
 pub mod doc;
 mod hash;
@@ -872,6 +873,8 @@ struct Plan<'a> {
     /// scene's (a scene a cache kept serves a build whose later steps
     /// differ).
     plan_stage: Stage,
+    /// Works trees' `top=` formulas out at their branch tips.
+    crowns: crowns::Crowns<'a>,
 }
 
 /// The scene after the last step, and how it got there.
@@ -937,6 +940,15 @@ impl<'a> Plan<'a> {
             under: Vec::new(),
             solved,
             fills: c.writes.contains(&dt_elements::Write::Fill),
+            crowns: crowns::Crowns {
+                tile,
+                regions: c.regions.as_ref(),
+                coords: c.regions.as_ref().map(|t| {
+                    let u = opts.units();
+                    coords::Coords::new(t, u.square_mm, u.layer_mm)
+                }),
+                frame: c.frame,
+            },
             stages: progress::stage_keys(tile, &c.steps),
             plan_stage: Stage {
                 name: "plan".to_owned(),
@@ -1034,6 +1046,7 @@ impl<'a> Plan<'a> {
             calm_mm: self.solved.calm_mm,
             under: self.under.get(i).and_then(Option::as_ref),
             draft: self.opts.draft,
+            crowns: Some(&self.crowns),
         }
     }
 

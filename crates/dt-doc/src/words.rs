@@ -38,9 +38,10 @@ pub const REGION_NAMES: &[&str] = &["$tile", "$region"];
 /// region as it works its top and pins out ([`sets`]).
 pub const BODY_SETS: &[&str] = &["$x", "$y", "$d", "$a", "$bottom", "$region"];
 
-/// What a tree sets: its top is worked out once for each tree, over the
-/// ground at its foot, so it has no position of its own to read.
-pub const TREE_SETS: &[&str] = &["$bottom", "$region"];
+/// What a tree sets at each branch tip as it works its top out: the tip's
+/// place, its place in the tree's own disc, the ground at its foot and the
+/// disc ([`sets`]).
+pub const TREE_SETS: &[&str] = &["$x", "$y", "$d", "$a", "$bottom", "$region"];
 
 /// The `$` names `element` sets when it calls a formula it was given (its
 /// `top=` or a pin's): `check` refuses a read of any other that no caller

@@ -427,6 +427,7 @@ mod tests {
             under: None,
             calm_mm: None,
             draft: false,
+            crowns: None,
         };
         cliff.pile_plan(&frame, &ctx).unwrap()
     }
