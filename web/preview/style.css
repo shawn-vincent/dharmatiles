@@ -56,6 +56,11 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #reopen { display: flex; gap: 6px; }
 #reopen[hidden] { display: none; }
 #about dt { color: var(--muted); } #about dd { margin: 0; color: var(--ink); font-family: var(--f-code); overflow-wrap: anywhere; }
+#about .about-hero { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0 14px; }
+#about .about-hero .mark { width: 96px; height: 96px; color: var(--accent); }
+#about .about-hero .wordmark { font-size: 34px; margin: 0; }
+#about .semver { font-size: 1.5em; font-weight: 600; }
+#about .build { color: var(--muted); margin-left: 4px; }
 #keys { width: min(520px, calc(100% - 32px)); }
 #keys .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 24px; }
 #keys dl { grid-template-columns: auto 1fr; font-size: 13px; }

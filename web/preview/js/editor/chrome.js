@@ -177,8 +177,16 @@ async function showAbout() {
   $('about').showModal();
   try {
     const a = await host.about();
-    $('about-version').textContent = a.version;
-    $('about-formats').textContent = a.formats;
+    // 0.9.0+122.gcb8fbaf.dirty: the semantic version large, the build quiet, "dirty" said in words only when it is.
+    const m = /^([^+]+)(?:\+(.*))?$/.exec(a.version);
+    const parts = m && m[2] ? m[2].split('.') : [];
+    const dirty = parts.at(-1) === 'dirty';
+    const build = dirty ? parts.slice(0, -1) : parts;
+    $('about-semver').textContent = m ? m[1] : a.version;
+    $('about-build').textContent = build.length ? `+${build.join('.')}` : '';
+    $('about-dirty').hidden = !dirty;
+    // Formats are major versions: 0 reads as "0.x", any version starting with 0.
+    $('about-formats').textContent = String(a.formats).split(/[,\s]+/).filter(Boolean).map((f) => `${f}.x`).join(', ');
   } catch (e) {
     err.textContent = `Could not read the version: ${e.message}`;
     err.hidden = false;

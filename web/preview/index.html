@@ -202,13 +202,15 @@
 
 <dialog id="about" aria-labelledby="about-title">
   <form method="dialog">
-    <div class="eyebrow">dharmatiles</div>
-    <h2 id="about-title">About</h2>
+    <div class="about-hero">
+      <i class="mark" role="img" aria-label="dharmatiles lotus"></i>
+      <h2 id="about-title" class="wordmark"><span class="txt">dharmatiles</span></h2>
+    </div>
     <dl>
-      <dt>Version</dt><dd id="about-version">…</dd>
-      <dt>Tile formats</dt><dd id="about-formats">…</dd>
+      <dt>Version</dt><dd><span id="about-semver" class="semver">…</span><span id="about-build" class="build"></span></dd>
+      <dt>Reads tiles</dt><dd id="about-formats">…</dd>
     </dl>
-    <p class="dialog-note">A version ending in <code>.dirty</code> was built with uncommitted changes. The tile format is the major part of the version a tile's first line names: <code>dharmatiles version=1</code>.</p>
+    <p id="about-dirty" class="dialog-note" hidden>Built with uncommitted changes.</p>
     <p id="about-error" class="dialog-note" hidden></p>
     <div class="row-btns"><button class="btn on" value="close" autofocus>Close</button></div>
   </form>
