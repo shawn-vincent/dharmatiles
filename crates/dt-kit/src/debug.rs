@@ -27,7 +27,8 @@ pub struct Debug {
 /// A point, classed by what it is (`grew`, `crowded`, …).
 #[derive(Clone, Debug)]
 pub struct Dot {
-    /// The stack entry that made it (`stack/2:grass`).
+    /// The stack entry that made it, by its path (`tile/grass/0`: the
+    /// element and its place among that element's entries, or its `id=`).
     pub owner: String,
     /// Its class: the legend's key.
     pub class: &'static str,

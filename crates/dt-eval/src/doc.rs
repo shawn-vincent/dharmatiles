@@ -809,7 +809,7 @@ impl Reader<'_> {
                             ),
                             "a part of another format",
                         )
-                        .help("a tile and the parts it uses share a format; bring the part to this document's format (`dharmatiles migrate` will do it, once format 1 ships)"),
+                        .help("a tile and the parts it uses share a format; bring the part to this document's format (`dharmatiles migrate` does it)"),
                     );
                 }
                 Some(f) => known.add(u.key(), &f.doc),

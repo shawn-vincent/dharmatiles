@@ -392,8 +392,10 @@ pub struct Checked {
     /// What each element writes, from its plan.
     writes: Vec<dt_elements::Write>,
     /// Each step's area: `None` for the whole tile, else a region index.
-    /// Masks are only made by `build` (one per distinct area), so `check`
-    /// holds no grid however long the stack.
+    /// `check` holds no masks of its own: it makes each region's mask to
+    /// look for empty ones and for ones that cannot be made, and drops it,
+    /// and `build` makes one mask per distinct area. The region tree (format
+    /// 1) is the one place `check` keeps masks.
     areas: Vec<Option<usize>>,
     frame: Frame,
     seed: u64,

@@ -309,7 +309,9 @@ impl std::fmt::Display for Kind {
 pub struct Tag {
     /// What other elements read it as.
     pub kind: Kind,
-    /// The stack path that made it, such as `tile/flat/stack/0`.
+    /// The path of the stack entry that made it: `tile/<element>/<k>`, the
+    /// k-th entry of that element (from 0), or `tile/<element>/<id>` for an
+    /// entry with an `id=`, such as `tile/grass/0`.
     pub owner: String,
 }
 
