@@ -23,6 +23,43 @@ pub struct Places<'a> {
 }
 
 impl<'a> Places<'a> {
+    /// Places of `tile` on `frame`'s lattice, with every region's mask
+    /// already made (`masks`, one per region of the tile, as
+    /// [`Places::all_regions`] gave them): asking for a region is a copy.
+    #[must_use]
+    pub fn with_masks(tile: &'a Tile, frame: &'a Frame, masks: &[Mask]) -> Self {
+        let places = Self::new(tile, frame);
+        places.regions.borrow_mut().extend(
+            tile.regions
+                .iter()
+                .zip(masks)
+                .map(|(r, m)| (r.name.clone(), m.clone())),
+        );
+        places
+    }
+
+    /// Every region of the tile as a mask, made once: each region by its
+    /// index, or every region that cannot be made with its reason.
+    ///
+    /// # Errors
+    /// Each region that cannot be made (regions that name each other round a
+    /// loop, a name that is no place), as (its index, why).
+    pub fn all_regions(&self) -> Result<Vec<Mask>, Vec<(usize, String)>> {
+        let mut out = Vec::new();
+        let mut flaws = Vec::new();
+        for (i, r) in self.tile.regions.iter().enumerate() {
+            match self.region(r) {
+                Ok(m) => out.push(m),
+                Err(why) => flaws.push((i, why)),
+            }
+        }
+        if flaws.is_empty() {
+            Ok(out)
+        } else {
+            Err(flaws)
+        }
+    }
+
     /// Places of `tile` on `frame`'s lattice.
     #[must_use]
     pub fn new(tile: &'a Tile, frame: &'a Frame) -> Self {
@@ -41,17 +78,11 @@ impl<'a> Places<'a> {
         f64::from(self.frame.cells_per_square)
     }
 
-    fn node(&self, v: f64, n: usize) -> usize {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let k = (v * self.per()).round().clamp(0.0, (n - 1) as f64) as usize;
-        k
-    }
-
     /// The node nearest a point in squares.
     fn point(&self, xy: [f64; 2]) -> Mask {
         let (nx, ny) = self.dims();
         let mut m = Mask::new(nx, ny, false);
-        let (i, j) = (self.node(xy[0], nx), self.node(xy[1], ny));
+        let (i, j) = self.frame.node_at(xy);
         m.bits[j * nx + i] = true;
         m
     }
@@ -185,7 +216,12 @@ impl<'a> Places<'a> {
     /// # Errors
     /// As [`Places::mask`].
     pub fn region(&self, r: &Region) -> Result<Mask, String> {
-        self.region_at(r, 0)
+        if let Some(m) = self.regions.borrow().get(&r.name) {
+            return Ok(m.clone());
+        }
+        let m = self.region_at(r, 0)?;
+        self.regions.borrow_mut().insert(r.name.clone(), m.clone());
+        Ok(m)
     }
 
     fn region_at(&self, r: &Region, depth: usize) -> Result<Mask, String> {

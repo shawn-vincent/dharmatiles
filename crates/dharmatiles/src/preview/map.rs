@@ -365,16 +365,20 @@ fn points(w: &[(String, [usize; 2])], at: Option<&Vec<[f64; 2]>>) -> Vec<Value> 
 
 /// The map of checked tile `c`, its spans from `text` (the tile's own
 /// document as checked).
-pub(super) fn json(c: &dt_eval::Checked, text: &str, units: dt_doc::units::Units) -> Value {
+pub(super) fn json(
+    c: &dt_eval::Checked,
+    text: &str,
+    units: dt_doc::units::Units,
+) -> Result<Value, Vec<dt_eval::Diag>> {
     let Some(t) = &c.tile else {
-        return Value::Null;
+        return Ok(Value::Null);
     };
     let rd = Reading { units };
     let doc = kdl::KdlDocument::parse(text).ok();
     let node = doc
         .as_ref()
         .and_then(|d| d.nodes().iter().find(|n| n.name().value() == "tile"));
-    let masks = c.region_masks(CELLS);
+    let masks = c.region_masks(CELLS)?;
     let lines: Vec<Value> = t
         .lines
         .iter()
@@ -460,7 +464,9 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str, units: dt_doc::units::Units
         });
         json!({ "at": at, "controls": controls, "about": about, "heights": heights(&t.heights.consts) })
     });
-    json!({ "language": language(t), "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "points": named, "places": places(t), "tile": own })
+    Ok(
+        json!({ "language": language(t), "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "points": named, "places": places(t), "tile": own }),
+    )
 }
 
 /// The words a value is written from, for completion: the `$` names (what

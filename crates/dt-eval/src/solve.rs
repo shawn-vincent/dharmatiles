@@ -95,8 +95,7 @@ impl SolvedBody {
     /// The solved band at a point in squares from the south-west corner.
     #[must_use]
     pub fn at(&self, x: f64, y: f64) -> Iv {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let node = |v: f64, n: usize| (v * self.per).round().clamp(0.0, (n - 1) as f64) as usize;
+        let node = |v: f64, n: usize| dt_kit::node_of(self.per, v, n);
         self.band.at(node(y, self.ny) * self.nx + node(x, self.nx))
     }
 
@@ -105,8 +104,7 @@ impl SolvedBody {
     /// plain range holds there, or the top is no cloud).
     #[must_use]
     pub fn odds_at(&self, x: f64, y: f64) -> Option<&Weighting> {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let node = |v: f64, n: usize| (v * self.per).round().clamp(0.0, (n - 1) as f64) as usize;
+        let node = |v: f64, n: usize| dt_kit::node_of(self.per, v, n);
         self.band
             .weighting(node(y, self.ny) * self.nx + node(x, self.nx))
     }
@@ -856,6 +854,7 @@ pub fn solve(
     f: &Frame,
     opts: &Options,
     regions: Option<&RegionTree>,
+    masks: &[Mask],
 ) -> Result<SolveReport, Vec<Diag>> {
     let h = &tile.heights;
     let cells = f.cells_per_square;
@@ -869,7 +868,7 @@ pub fn solve(
         scale: f.square_mm / dt_kit::REFERENCE_SQUARE_MM,
         coords: coords.as_ref(),
     };
-    let places = Places::new(tile, f);
+    let places = Places::with_masks(tile, f, masks);
     let mut errors = Vec::new();
     let mut notes = Vec::new();
     let mut explain = Vec::new();

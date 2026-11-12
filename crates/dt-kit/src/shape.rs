@@ -110,12 +110,7 @@ pub fn area(frame: &Frame, lines: &[Vec<[f64; 2]>], fills: &[[f64; 2]]) -> Mask 
     }
     let mut out = Mask::new(nx, ny, false);
     for p in fills {
-        let node = |v: f64, n: usize| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let k = (v * per).round().clamp(0.0, (n - 1) as f64) as usize;
-            k
-        };
-        let region = dt_geom::fill(&walls, (node(p[0], nx), node(p[1], ny)));
+        let region = dt_geom::fill(&walls, frame.node_at(*p));
         out.bits
             .iter_mut()
             .zip(region.bits)

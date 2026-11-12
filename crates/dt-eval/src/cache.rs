@@ -19,9 +19,10 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use dt_elements::Foot;
 use dt_kit::{Frame, Scene};
 
+use crate::build::Job;
 use crate::doc::Tile;
+use crate::options::Options;
 use crate::plan::Step;
-use crate::{Job, Options};
 
 /// The scenes one tile's last build left, step by step.  Give each tile
 /// (and its drafts) its own: a build keeps only its own steps.  Builds

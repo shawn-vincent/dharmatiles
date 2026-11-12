@@ -581,14 +581,18 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
                     );
                 }
             };
+            let map = match map::json(&c, &own, opts.units()) {
+                Ok(m) => m,
+                Err(errs) => {
+                    return (
+                        "200 OK",
+                        json!({ "ok": false, "errors": errors_json(&errs) }),
+                    );
+                }
+            };
             (
                 "200 OK",
-                json!({
-                    "ok": true,
-                    "errors": [],
-                    "stack": stack,
-                    "map": map::json(&c, &own, opts.units()),
-                }),
+                json!({ "ok": true, "errors": [], "stack": stack, "map": map }),
             )
         }
         Err(errs) => (

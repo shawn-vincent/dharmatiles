@@ -37,6 +37,19 @@ pub const REFERENCE_SQUARE_MM: f64 = 35.0;
 /// The OpenLOCK square (one inch).
 pub const OPENLOCK_SQUARE_MM: f64 = 25.4;
 
+/// The node nearest `v` squares along an axis of `n` nodes, `per` cells to
+/// the square: the one rule for a point's cell, clamped to the lattice.
+#[must_use]
+pub fn node_of(per: f64, v: f64, n: usize) -> usize {
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    let k = (v * per).round().clamp(0.0, (n - 1) as f64) as usize;
+    k
+}
+
 impl Frame {
     /// A DungeonBlocks frame at the default resolution (128 cells per
     /// square).
@@ -92,6 +105,20 @@ impl Frame {
             (self.cols as usize).saturating_mul(per).saturating_add(1),
             (self.rows as usize).saturating_mul(per).saturating_add(1),
         )
+    }
+
+    /// The node nearest `v` squares from the south-west corner, along an
+    /// axis of `n` nodes: clamped to the lattice.
+    #[must_use]
+    pub fn node_of(&self, v: f64, n: usize) -> usize {
+        node_of(f64::from(self.cells_per_square), v, n)
+    }
+
+    /// The node nearest a point in squares, as `(i, j)`.
+    #[must_use]
+    pub fn node_at(&self, xy: [f64; 2]) -> (usize, usize) {
+        let (nx, ny) = self.nodes();
+        (self.node_of(xy[0], nx), self.node_of(xy[1], ny))
     }
 
     /// Node spacing in mm.

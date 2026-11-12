@@ -275,19 +275,6 @@ fn bbox_of(frame: &Frame, m: &Mask) -> Option<BBox> {
     })
 }
 
-/// A node's index for a point in squares, clamped to the lattice.
-fn node_at(frame: &Frame, xy: [f64; 2]) -> (usize, usize) {
-    let per = f64::from(frame.cells_per_square);
-    let (nx, ny) = frame.nodes();
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
-    let k = |v: f64, n: usize| (v * per).round().clamp(0.0, (n - 1) as f64) as usize;
-    (k(xy[0], nx), k(xy[1], ny))
-}
-
 impl RegionTree {
     /// The tile's node.
     pub const TILE: usize = 0;
@@ -296,7 +283,7 @@ impl RegionTree {
     ///
     /// # Errors
     /// A region that cannot be made, at the region.
-    pub fn build(tile: &Tile, frame: &Frame) -> Result<Self, Diag> {
+    pub fn build(tile: &Tile, frame: &Frame, masks: &[Mask]) -> Result<Self, Diag> {
         let mut nodes = vec![Node {
             label: "$tile".to_owned(),
             kind: Kind::Tile,
@@ -313,7 +300,7 @@ impl RegionTree {
             along: None,
         }];
         // the tile's named regions, then their parents by fill point
-        let places = Places::new(tile, frame);
+        let places = Places::with_masks(tile, frame, masks);
         let first = nodes.len();
         for r in &tile.regions {
             let mask = places.region(r).map_err(|msg| {
@@ -349,7 +336,7 @@ impl RegionTree {
             let Some(fill) = r.fills.first() else {
                 continue;
             };
-            let (i, j) = node_at(frame, *fill);
+            let (i, j) = frame.node_at(*fill);
             // the smallest region that holds the fill point and is larger
             // than this one (equal regions are siblings: neither holds the
             // other, so no two can hold each other)
@@ -520,7 +507,7 @@ impl RegionTree {
     pub fn contains(&self, id: usize, xy: [f64; 2]) -> bool {
         match &self.nodes[id].mask {
             Some(m) => {
-                let (i, j) = node_at(&self.frame, xy);
+                let (i, j) = self.frame.node_at(xy);
                 m.bits[j * m.nx + i]
             }
             None => self.nodes[id].kind == Kind::Tile,
