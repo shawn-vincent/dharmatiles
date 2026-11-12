@@ -327,6 +327,8 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
 fn rebuild_plates(shared: &Arc<Shared>, id: &str, path: &str, scene: Option<&Scene>) {
     let t0 = Instant::now();
     let scene_json = scene.map(|s| s.json.clone());
+    let kept: Vec<Note> = scene.map_or_else(Vec::new, |s| s.notes.clone());
+    shared.update(id, |t| t.scene_notes = kept);
     let no_notes = (Vec::new(), Vec::new());
     let (notes, diags) = scene.map_or(no_notes, |s| (s.notes.clone(), s.diags.clone()));
     let is_map = scene.is_some_and(|s| s.json["map"].as_bool() == Some(true));

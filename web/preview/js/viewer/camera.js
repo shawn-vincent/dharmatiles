@@ -278,7 +278,10 @@ export const cameraMethods = {
     const [, , elev, azim, close] = v;
     const centre = new THREE.Vector3(...b.lo.map((l, k) => 0.5 * (l + b.hi[k])));
     let diag = Math.hypot(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]);
-    if (close) {
+    if (close && b.fit) {
+      // a piece of a map: all of it, a little nearer than the whole map
+      diag *= 0.8;
+    } else if (close) {
       diag = Math.hypot(20, 20, Math.max(8, b.hi[2] - 0.5));
       centre.z = (0.5 + b.hi[2]) / 2;
     }

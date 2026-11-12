@@ -147,6 +147,9 @@ pub struct Slot {
     status: State,
     /// A print list: the plate in view, from 0.
     plate: usize,
+    /// What a map's last reading said that is not a mistake (a crown over a taller neighbour): kept so a
+    /// check of the text that finds nothing wrong does not take it from the stream.
+    scene_notes: Vec<scene::Note>,
     plan: Option<Value>,
     record: Option<Value>,
     errors: Vec<Value>,
@@ -206,6 +209,7 @@ impl Slot {
             size: None,
             status: State::Idle,
             plate: 0,
+            scene_notes: Vec::new(),
             plan: None,
             record: None,
             errors: Vec::new(),

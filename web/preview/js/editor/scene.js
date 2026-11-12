@@ -182,7 +182,7 @@ function frameFor(name) {
   if (!mounted || name !== 'close') return null;
   const p = selected()[0] ?? pieces().find((q) => q.at);
   if (!p?.at) return null;
-  return M.worldBox(p, 14);
+  return { ...M.worldBox(p, 14), fit: true };
 }
 
 // ---- the tiers ----------------------------------------------------------------------------------------
@@ -335,6 +335,37 @@ export function statusLines() {
 /** The title bar's chip: `3 in inventory · 11 to print`. */
 export const chip = () => M.totalsText(pieces(), server.get().inventory);
 
+// ---- pills on the pieces -------------------------------------------------------------------------------
+
+let pillsOn = true;
+const tags = new Map(); // piece index -> its element
+
+/** A small pill over each piece the program has a word for: have (on your shelf), to print, or the caution of the other colour mode. */
+function drawTags() {
+  const box = $('mpills');
+  if (!mounted || !pillsOn) { if (box.childElementCount) { box.replaceChildren(); tags.clear(); } return; }
+  const ps = pieces().filter((p) => p.at && !p.error);
+  const states = M.pills(ps, server.get().inventory);
+  const live2 = new Set();
+  for (const p of ps) {
+    const st = states.get(p.index);
+    if (!st) continue;
+    const c = M.toWorld(p.at ? { ...p, at: live.get(p.index) ?? p.at } : p, p.size[0] / 2, p.size[1] / 2, 14);
+    const px = screenSize(p);
+    if (px < 34) continue;
+    const s = viewer.project(c);
+    let e = tags.get(p.index);
+    if (!e) { e = document.createElement('span'); box.append(e); tags.set(p.index, e); }
+    const word = { have: 'have', need: 'to print', other: 'have, other colour', skip: 'left off' }[st.state];
+    const cls = `mp-tag ${st.state === 'have' ? 'have' : st.state === 'other' ? 'caution' : 'need'}`;
+    if (e.className !== cls) e.className = cls;
+    if (e.textContent !== word) e.textContent = word;
+    e.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) translate(-50%, -100%)`;
+    live2.add(p.index);
+  }
+  for (const [i, e] of tags) if (!live2.has(i)) { e.remove(); tags.delete(i); }
+}
+
 // ---- hover and click ---------------------------------------------------------------------------------
 
 let hovered = -1;
@@ -399,7 +430,10 @@ export function init() {
   c.addEventListener('pointermove', onPointerMove);
   c.addEventListener('pointerleave', () => hover(-1));
   const prev = viewer.onRender;
-  viewer.onRender = () => { prev?.(); cameraMoved(); };
+  viewer.onRender = () => { prev?.(); cameraMoved(); drawTags(); };
+  try { pillsOn = localStorage.getItem('dt-pills') !== '0'; } catch { /* private mode: the default stands */ }
+  $('t-pills').checked = pillsOn;
+  $('t-pills').onchange = (e) => { pillsOn = e.target.checked; try { localStorage.setItem('dt-pills', pillsOn ? '1' : '0'); } catch { /* private mode */ } viewer.draw(); };
   server.subscribe(['tiles', 'inventory'], sync);
   view.subscribe(['tileId', 'dmode'], sync);
   view.subscribe(['msel'], () => { evaluate(true); });

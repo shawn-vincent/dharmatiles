@@ -47,7 +47,29 @@ pub(super) fn check_text(shared: &Shared, tile: &str, text: &str) -> (&'static s
     let id = super::tile_id(tile);
     match result {
         Ok(()) => {
-            shared.report(&id, Scope::Check, |_| Vec::new());
+            // what the last reading of a map noted (its crowns) is still true of this text
+            let notes = lock(&shared.tiles)
+                .iter()
+                .find(|t| t.id == id)
+                .map(|t| t.scene_notes.clone())
+                .unwrap_or_default();
+            shared.report(&id, Scope::Check, |name| {
+                notes
+                    .iter()
+                    .map(|n| {
+                        crate::message::Message::new(
+                            crate::message::Kind::Note,
+                            crate::message::Severity::Note,
+                            Scope::Check,
+                            &id,
+                            name,
+                            n.text.clone(),
+                        )
+                        .code(n.code)
+                        .help(n.help.as_deref())
+                    })
+                    .collect()
+            });
             ("200 OK", json!({"ok": true, "errors": []}))
         }
         Err(e) => {

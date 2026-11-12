@@ -768,3 +768,11 @@ body.map #place { display: none; }
 .dr-folder b { font-weight: 650; }
 body.drawer #toast { bottom: 262px; }
 body.drawer #hint { display: none; }
+
+/* ---- have and need on the map's pieces (js/editor/scene.js): over the view, never orange or red (those are overhang) ---- */
+#mpills { position: absolute; inset: 0 0 calc(26px + var(--msgh)) 0; overflow: hidden; pointer-events: none; z-index: 1; }
+body:not(.map) #mpills { display: none; }
+.mp-tag { position: absolute; left: 0; top: 0; padding: 1px 7px; border-radius: 999px; font: 600 11px/1.5 var(--f-body); white-space: nowrap; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 3px rgba(0, 0, 0, .25); will-change: transform; }
+.mp-tag.have { background: color-mix(in srgb, var(--accent) 78%, var(--bg)); color: var(--on-accent, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, #000), 0 1px 3px rgba(0, 0, 0, .3); }
+.mp-tag.need { color: var(--muted); font-weight: 500; }
+.mp-tag.caution { box-shadow: inset 3px 0 0 var(--caution), inset 0 0 0 1px var(--line-2), 0 1px 3px rgba(0, 0, 0, .25); }
