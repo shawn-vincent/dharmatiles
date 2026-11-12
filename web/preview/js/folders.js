@@ -18,6 +18,8 @@
  */
 export const KINDS = [
   { kind: 'tile', exts: ['.dtile'], noun: 'tile', plural: 'tiles', actions: true },
+  // a print list: the tiles to print, laid on a printer's plates (docs/plates.html); opened on its plates, not as a tile
+  { kind: 'map', exts: ['.dmap'], noun: 'print list', plural: 'print lists', actions: false },
   { kind: 'stl', exts: ['.stl'], noun: 'model', plural: 'models', actions: false },
 ];
 
@@ -27,7 +29,7 @@ export const kindOf = (path) => {
   return KINDS.find((k) => k.exts.some((e) => p.endsWith(e)));
 };
 
-/** The file's name without its extension (`2x1-cliff`; an `.stl` keeps its suffix, as the menu always showed it). */
+/** The file's name without its extension (`2x1-cliff`; an `.stl` and a `.dmap` keep their suffix, as the menu always showed an `.stl`). */
 export const stemOf = (path) => String(path || '').replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.dtile$/i, '');
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

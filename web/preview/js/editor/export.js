@@ -2,7 +2,7 @@
 
 import { failed, showError } from '../problems.js';
 import { $, host } from './app.js';
-import { dirty, doc, renameable, server, stem, tile, view } from './stores.js';
+import { dirty, doc, isPlates, renameable, server, stem, tile, view } from './stores.js';
 import { targetLabel } from './target.js';
 
 // ---- export: the same build as `dharmatiles build`, written to out/ ----------
@@ -20,7 +20,7 @@ function exportBlock() {
 }
 function renderExport() {
   const t = tile();
-  $('export').hidden = !t;
+  $('export').hidden = !t || isPlates(t); // a print list exports from its own panel (plates.js)
   const why = exporting.busy ? null : exportBlock();
   $('export-target').textContent = `For ${targetLabel(server.get())}: change it from the chip in the title bar.`;
   $('export-go').disabled = !!why || exporting.busy;
@@ -62,7 +62,7 @@ function renderTitle() {
   $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile; double-click or F2 to rename` : `${t.path}\nClick for the tile`;
   document.title = `${stem(t)} · dharmatiles`;
   const p = t.plan;
-  $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares` : '';
+  $('tileplan').textContent = isPlates(t) ? (p?.plates?.label ?? '') : p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares` : '';
 }
 
 /** Wire this part of the page (once, at load). */

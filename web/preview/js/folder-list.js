@@ -165,7 +165,7 @@ function folderLevel(data, on, { rowOf, wrap, text, label, note }) {
     for (const { tile: t, where } of v.items) {
       const b = rowOf('tile', t.id);
       const sub = [sizeLine(t), searching && where ? where : ''].filter(Boolean).join(' · ');
-      b.append(sizeThumb(t), text(stemOf(t.path) + (/\.stl$/i.test(t.path) ? '.stl' : ''), sub));
+      b.append(sizeThumb(t), text(stemOf(t.path), sub));
       const d = el('span', dotClass(t));
       d.title = t.status;
       b.append(d);

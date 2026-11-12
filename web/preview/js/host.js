@@ -35,6 +35,9 @@
 //   setTarget({system?, printer?})          choose the build target (base system, printer profile) for every build
 //   exportTile(id, body)                    write STL / 3MF ({where: true} asks where it would go)
 //   reveal(path)                            show a written file in the file manager
+//   platesShow(id, plate)                   the plate of a print list the view shows (from 0)
+//   platesSet(id, key, value)               set a word of the list's `plates` line (printer, mode, group, gap, margin, turn); value null removes it
+//   platesExport(id)                        build every piece in full and write the plates: {ok, files, format, plates, failures}
 //
 // The event stream: a snapshot, then one event per change, each with a
 // revision.  When the stream drops it is opened again with the epoch (which
@@ -225,5 +228,8 @@ export function browserHost() {
     setTarget: (body) => call('/api/target', body),
     exportTile: (id, body) => call(tile(id, 'export'), body),
     reveal: (path) => call('/api/reveal', { path }),
+    platesShow: (id, plate) => call('/api/plates/show', { tile: id, plate }),
+    platesSet: (id, key, value) => call('/api/plates/set', { tile: id, key, value }),
+    platesExport: (id) => call('/api/plates/export', { tile: id }),
   };
 }

@@ -102,6 +102,9 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     if path.to_ascii_lowercase().ends_with(".stl") {
         return rebuild_stl(shared, id, opts, &path);
     }
+    if super::plates::is_plates(&path) {
+        return super::plates::rebuild(shared, id, &path);
+    }
     let rec = Recording::watching(&path);
     // every file the build reads, with its text: what the disk cache's key covers
     let tracked = dt_eval::Tracked::new(&rec);

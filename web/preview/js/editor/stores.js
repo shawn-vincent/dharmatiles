@@ -118,7 +118,9 @@ export const regionOf = (it) => {
   return at && doc.get().map?.regions.some((r) => r.name === at) ? at : undefined;
 };
 /** The file stem (`2x1-cliff`, `1x1-water+grass-tree`): the menu's name for a tile, whatever the document calls it. */
-export const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.(dtile|stl)$/i, '') + (/\.stl$/i.test(t.path) ? '.stl' : '');
+export const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.dtile$/i, '');
+/** Is the document a print list (its panel and view are the plates', editor/plates.js)? */
+export const isPlates = (t) => !!t && /\.dmap$/i.test(t.path);
 
 /** The stack of the text now: the last clean check of it while editing, else the last build's. */
 // The list is made once for each stack it comes from (the check's, or the build's plan) and handed out again: callers read it, never change it.

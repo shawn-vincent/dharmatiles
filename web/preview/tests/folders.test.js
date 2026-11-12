@@ -117,8 +117,10 @@ test('a long path keeps its end, and the home folder is a tilde', () => {
 });
 
 test('the kinds a folder lists are one table', () => {
-  assert.deepEqual(KINDS.map((k) => k.kind), ['tile', 'stl']);
+  assert.deepEqual(KINDS.map((k) => k.kind), ['tile', 'map', 'stl']);
   assert.equal(kindOf('/a/b.DTILE').kind, 'tile');
+  assert.equal(kindOf('kit.dmap').kind, 'map', 'a print list is listed in its folder');
+  assert.equal(kindOf('kit.dmap').actions, false);
   assert.equal(kindOf('lib:tiles/x.dtile').actions, true);
   assert.equal(kindOf('x.stl').actions, false);
   assert.equal(kindOf('notes.txt'), undefined);

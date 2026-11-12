@@ -74,6 +74,7 @@ mod messages;
 mod offers;
 pub mod payload;
 pub(crate) mod places;
+mod plates;
 pub(crate) mod roots;
 mod server;
 mod stack;
@@ -140,6 +141,8 @@ pub struct Slot {
     /// is listed: for the folder rows, before any build.
     size: Option<String>,
     status: State,
+    /// A print list: the plate in view, from 0.
+    plate: usize,
     plan: Option<Value>,
     record: Option<Value>,
     errors: Vec<Value>,
@@ -187,6 +190,7 @@ impl Slot {
             .next()
             .unwrap_or(path)
             .trim_end_matches(".dtile")
+            .trim_end_matches(".dmap")
             .to_owned();
         Self {
             id: tile_id(path),
@@ -196,6 +200,7 @@ impl Slot {
             group,
             size: None,
             status: State::Idle,
+            plate: 0,
             plan: None,
             record: None,
             errors: Vec::new(),

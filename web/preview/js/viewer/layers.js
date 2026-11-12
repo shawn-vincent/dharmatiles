@@ -229,6 +229,45 @@ export const layersMethods = {
     this.grid.frustumCulled = false;
     this.grid.visible = this.showGrid;
     this.scene.add(this.grid);
+    this.buildBed();
+  },
+
+  /**
+   * A printer's bed, when the mesh shown is a plate (`meta.bed`, mm): its edge as a line on the plate, and
+   * each excluded zone (`meta.excluded`, [x0, y0, x1, y1] from the front-left corner) as a faint filled box
+   * with its edge.  Ink is the grid's, so it follows the theme.
+   */
+  buildBed() {
+    if (this.bedGroup) {
+      this.scene.remove(this.bedGroup);
+      this.bedGroup.traverse((o) => { o.geometry?.dispose(); if (o.material) { this.fatMaterials.delete(o.material); o.material.dispose(); } });
+      this.bedGroup = null;
+    }
+    const bed = this.payload?.meta?.bed;
+    if (!bed) return;
+    const group = new THREE.Group();
+    const ink = this.gridInk?.clone() ?? new THREE.Color(0.17, 0.2, 0.25);
+    const z = (this.plan?.datum_z ?? 0) - GRID_BELOW_MM * 0.5;
+    const rect = (x0, y0, x1, y1, fill, px, alpha) => {
+      // the edge, drawn a few pixels wide whatever the zoom
+      const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      const pos = new Float32Array(24), rgba = new Float32Array(32);
+      for (let k = 0; k < 4; k++) {
+        const [a, b] = [c[k], c[(k + 1) % 4]];
+        pos.set([a[0], a[1], z, b[0], b[1], z], 6 * k);
+        for (const v of [0, 1]) rgba.set([ink.r, ink.g, ink.b, alpha], 8 * k + 4 * v);
+      }
+      const edge = this.fatLines(pos, rgba, px);
+      edge.renderOrder = 2; edge.frustumCulled = false;
+      group.add(edge);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), new THREE.MeshBasicMaterial({ color: ink, transparent: true, opacity: fill, depthWrite: false, side: THREE.DoubleSide }));
+      m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z); m.renderOrder = 0; m.frustumCulled = false;
+      group.add(m);
+    };
+    rect(0, 0, bed[0], bed[1], 0.07, 2.5, 0.85);
+    for (const [x0, y0, x1, y1] of this.payload.meta.excluded ?? []) rect(x0, y0, x1, y1, 0.3, 1.5, 0.7);
+    this.bedGroup = group;
+    this.scene.add(group);
   },
 
   /** Set the grid's opacity independently of the tile's paint. */
@@ -243,6 +282,7 @@ export const layersMethods = {
     this.gridInk ??= new THREE.Color(0.17, 0.2, 0.25);
     this.gridInk.setStyle(css); // a bad theme token is a bug: let it throw to the page's error panel
     if (this.grid) this.grid.material.uniforms.uInk.value.copy(this.gridInk);
+    if (this.bedGroup) this.buildBed();
     this.draw();
   },
 

@@ -178,6 +178,9 @@ export class Viewer {
   setPlan(plan) { this.plan = plan; this.buildGrid(); this.draw(); }
 
   bounds() {
+    // a plate: the bed is what is framed, with the pieces' height
+    const bed = this.payload?.meta?.bed;
+    if (bed) return { lo: [0, 0, 0], hi: [bed[0], bed[1], Math.max(this.payload.meta.hi[2], 1)] };
     if (this.payload) return { lo: this.payload.meta.lo, hi: this.payload.meta.hi };
     if (this.plan) return { lo: [0, 0, 0], hi: [...this.plan.size_mm, 1] };
     return null;

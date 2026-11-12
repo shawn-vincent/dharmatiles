@@ -196,12 +196,20 @@ fn always(_: &std::path::Path) -> bool {
 }
 
 /// The document kinds, in the order the page lists them.
-pub(super) const KINDS: [DocKind; 2] = [
+pub(super) const KINDS: [DocKind; 3] = [
     DocKind {
         ext: "dtile",
         kind: "tile",
         actions: true,
         is_one: is_tile_file,
+    },
+    // a print list: shown in its folder and opened on the plates; renaming,
+    // moving and the rest of the folder actions are for tiles until a list has its own
+    DocKind {
+        ext: "dmap",
+        kind: "map",
+        actions: false,
+        is_one: always,
     },
     DocKind {
         ext: "stl",

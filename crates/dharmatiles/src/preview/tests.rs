@@ -13,6 +13,8 @@ use serde_json::Value;
 
 use super::*;
 
+mod plates;
+
 struct Running {
     addr: std::net::SocketAddr,
     stop: Arc<AtomicBool>,

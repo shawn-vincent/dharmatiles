@@ -295,7 +295,7 @@ export function carryHistory() { carried = { history: run.history, at: run.at };
 /** Show `file` of the tile shown (null: its own document); resolves true once it is there. */
 export async function loadText(file) {
   const t = tile();
-  if (!t || /\.stl$/i.test(t.path)) { clearDocument(); return false; }
+  if (!t || /\.(stl|dmap)$/i.test(t.path)) { clearDocument(); return false; } // a model, or a print list, has no tile text to edit here
   const want = file || t.path;
   if (dirty() && texts.file !== want && !(await canLeave())) return false;
   // unsaved changes to this file stay; a new build of the same file brings nothing new

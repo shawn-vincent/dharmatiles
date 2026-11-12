@@ -15,6 +15,7 @@
 <div id="app">
   <header id="title">
     <span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i><span class="txt">dharmatiles</span></span>
+    <div class="seg" id="modes" role="group" aria-label="What you are making"><button type="button" data-mode="tile" aria-pressed="true" title="A tile: its source and what it is made of">Tile</button><button type="button" data-mode="plates" aria-pressed="false" title="Plates: a print list laid on a printer's bed">Plates</button></div>
     <span id="tileplan" class="muted"></span>
     <span id="savestate" role="status"></span>
     <div id="history-controls" aria-label="Document history">
@@ -73,6 +74,7 @@
             <section class="lvl" id="lvl-element" data-depth="1" tabindex="-1" aria-label="One thing of the tile" hidden><div id="lens" class="lvlbox" role="region" aria-label="Properties of the selection"></div></section>
             <section class="lvl" id="lvl-prop" data-depth="2" tabindex="-1" aria-label="One control" hidden><div id="lens-prop" class="lvlbox"></div></section>
           </div>
+          <section id="platespanel" aria-label="The plates of a print list"><div id="lens-plates" class="lvlbox"></div></section>
           <section id="source" aria-label="The source">
             <div id="partbar" hidden><span id="sourcepath"></span><button class="back" id="part-back" type="button">Back to the tile</button></div>
             <div id="code" role="list"></div>
