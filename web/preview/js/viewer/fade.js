@@ -64,6 +64,7 @@ export const fadeMethods = {
 
   refreshPaint() {
     if (this.mesh) this.mesh.geometry.setAttribute('paint', this.currentPaint());
+    this.refreshScenePaint?.();
     this.draw();
   },
 

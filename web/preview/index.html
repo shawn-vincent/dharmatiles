@@ -16,7 +16,7 @@
   <header id="title">
     <button id="panelbtn" class="btn icon" type="button" aria-pressed="true" title="Show or hide the panel (\)" aria-label="Panel"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.4"/></svg></button>
     <span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i><span class="txt">dharmatiles</span></span>
-    <div class="seg" id="modes" role="group" aria-label="What you are making"><button type="button" data-mode="tile" aria-pressed="true" title="A tile: its source and what it is made of">Tile</button><button type="button" data-mode="plates" aria-pressed="false" title="Plates: a print list laid on a printer's bed">Plates</button></div>
+    <div class="seg" id="modes" role="group" aria-label="What you are making"><button type="button" data-mode="tile" aria-pressed="true" title="A tile: its source and what it is made of">Tile</button><button type="button" data-mode="map" aria-pressed="false" title="Map: tiles placed on a table, to see the scene before anything prints">Map</button><button type="button" data-mode="plates" aria-pressed="false" title="Plates: a print list laid on a printer's bed">Plates</button></div>
     <span id="tileplan" class="muted"></span>
     <span id="savestate" role="status"></span>
     <div id="history-controls" aria-label="Document history">
@@ -76,6 +76,7 @@
             <section class="lvl" id="lvl-prop" data-depth="2" tabindex="-1" aria-label="One control" hidden><div id="lens-prop" class="lvlbox"></div></section>
           </div>
           <section id="platespanel" aria-label="The plates of a print list"><div id="lens-plates" class="lvlbox"></div></section>
+          <section id="mappanel" aria-label="The map"><div id="lens-map" class="lvlbox"></div></section>
           <section id="inventorypanel" aria-label="The inventory"><div id="lens-inventory" class="lvlbox"></div></section>
           <section id="source" aria-label="The source">
             <div id="partbar" hidden><span id="sourcepath"></span><button class="back" id="part-back" type="button">Back to the tile</button></div>

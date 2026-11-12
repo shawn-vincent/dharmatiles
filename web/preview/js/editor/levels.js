@@ -26,9 +26,10 @@ import { $, toast } from './app.js';
 import { texts } from './document.js';
 import { linesOf, setSel } from './selection.js';
 import {
-  doc, entrySel, isInventory, isMark, isPlates, itemOf, mapNode, markSel, server, stackItems, stackIndex, tile, tileSel, view,
+  doc, entrySel, isInventory, isMapView, isMark, isPlates, itemOf, mapNode, markSel, server, stackItems, stackIndex, tile, tileSel, view,
 } from './stores.js';
 import { contextLines } from './plates.js';
+import { contextLines as mapLines } from './scene-panel.js';
 import { contextLines as inventoryLines } from './inventory.js';
 
 const PANES = ['lvl-tile', 'lvl-element', 'lvl-prop'];
@@ -208,7 +209,7 @@ function renderContext() {
     entry = { note: i < 0 ? sel.kind : `${sel.kind} ${i + 1} of ${list.length}` };
   }
   const lines = contextFor({ depth, tile: tileInfo, entry, thing: depth === 2 ? thingName() : '', control: control?.name, value });
-  $('ctx-lines').replaceChildren(...(isPlates(t) ? contextLines() : isInventory(t) ? inventoryLines() : lines).map((l) => el('div', 'ln', l)));
+  $('ctx-lines').replaceChildren(...(isPlates(t) ? (isMapView() ? mapLines() : contextLines()) : isInventory(t) ? inventoryLines() : lines).map((l) => el('div', 'ln', l)));
 }
 
 function focusLevel() {
@@ -283,7 +284,7 @@ function render() {
   const plates = isPlates(tile());
   const inventory = isInventory(tile());
   // a print list's panel is the plates', or its source (the same switch as a tile's); the inventory's own view has its own switch
-  $('stage').dataset.face = plates ? (face === 'source' ? 'source' : 'plates') : inventory ? 'inventory' : face;
+  $('stage').dataset.face = plates ? (face === 'source' ? 'source' : isMapView() ? 'map' : 'plates') : inventory ? 'inventory' : face;
   $('face').hidden = inventory;
   renderCrumbs();
   renderContext();
@@ -421,7 +422,7 @@ export function init() {
   }
   $('lvl-tile').addEventListener('focusin', rowFocus);
   $('lvl-tile').addEventListener('focusout', rowBlur);
-  view.subscribe(['sel', 'control', 'tileId', 'page', 'face'], render);
+  view.subscribe(['sel', 'control', 'tileId', 'page', 'face', 'dmode'], render);
   // the thing's name in the crumbs and the strip follow the text
   doc.subscribe(['stack', 'map', 'file', 'tileId', 'checked'], () => { renderCrumbs(); renderContext(); tryPending(); });
   server.subscribe(['tiles', 'system'], () => { renderCrumbs(); renderContext(); });

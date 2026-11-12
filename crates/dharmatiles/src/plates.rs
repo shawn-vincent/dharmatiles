@@ -507,6 +507,8 @@ pub(crate) fn layout_json(plan: &Plan, layout: &Layout) -> Value {
                     "pieces": on.iter().map(|p| json!({
                         "kind": p.kind, "copy": p.copy, "name": plan.kinds[p.kind].name,
                         "x": p.at.x, "y": p.at.y, "w": p.at.w, "d": p.at.d, "turned": p.at.turned,
+                        "piece": plan.kinds[p.kind].copies.get(p.copy),
+                        "pinned": layout.pinned.contains(&(p.kind, p.copy)),
                     })).collect::<Vec<_>>(),
                 })
             })

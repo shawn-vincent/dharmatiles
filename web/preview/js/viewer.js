@@ -7,6 +7,7 @@ import { FADE, FOV, FRAG, MASK_FRAG, OUTLINE_FRAG, OUTLINE_PX, OUTLINE_VERT, PIC
 import { cameraMethods } from './viewer/camera.js';
 import { fadeMethods } from './viewer/fade.js';
 import { layersMethods } from './viewer/layers.js';
+import { sceneMethods } from './viewer/scene.js';
 
 export { VIEWS } from './viewer/consts.js';
 
@@ -99,6 +100,7 @@ export class Viewer {
     this.fatDpr = 1;
     this.fatMaterials = new Set();
     this.debugColour = () => '#808080'; // the page gives the theme's tokens (setDebugColours)
+    this.initScene();
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
   }
@@ -179,6 +181,8 @@ export class Viewer {
   setPlan(plan) { this.plan = plan; this.buildGrid(); this.draw(); }
 
   bounds() {
+    // a map: the pieces placed
+    if (this.sceneOn && this.sceneBox) return this.sceneBox;
     // a plate: the bed is what is framed, with the pieces' height
     const bed = this.payload?.meta?.bed;
     if (bed) return { lo: [0, 0, 0], hi: [bed[0], bed[1], Math.max(this.payload.meta.hi[2], 1)] };
@@ -236,7 +240,7 @@ export class Viewer {
 
   /** Render the pick scene's one pixel under (x, y) into pickBytes. */
   pickPixel(x, y) {
-    if (!this.pickMesh) return false;
+    if (!this.pickMesh && !this.sceneOn) return false;
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (x < 0 || y < 0 || x >= w || y >= h) return false;
     const cam = this.camera;
@@ -288,6 +292,7 @@ export class Viewer {
   }
 
   render() {
+    if (this.sceneOn) this.hideTileMesh();
     const t = this.controls.target, p = this.camera.position;
     const off = p.clone().sub(t);
     const azim = (Math.atan2(off.y, off.x) * 180) / Math.PI;
@@ -296,14 +301,35 @@ export class Viewer {
     this.uniforms.uDir.value.copy(t).sub(p).normalize();
     this.uniforms.uL1.value.copy(dirv(18, azim - 20));
     this.uniforms.uL2.value.copy(dirv(elev - 20, azim + 110));
-    this.renderer.render(this.scene, this.camera);
+    this.renderScene();
     this.renderOutline();
     this.onRender?.();
   }
 
+  /** The tile's own mesh (and what stands on it) does not show under a map's pieces. */
+  hideTileMesh() {
+    if (this.mesh) this.mesh.visible = false;
+    for (const g of this.ghosts) g.visible = false;
+    for (const s of this.sketches.values()) for (const m of s.meshes) m.visible = false;
+    if (this.bedGroup) this.bedGroup.visible = false;
+  }
+
+  /** One frame of the scene: the backdrop first (when there is one), then the pieces over it. */
+  renderScene() {
+    const r = this.renderer;
+    if (!this.backdrop || !this.backdrop.on()) { r.render(this.scene, this.camera); return; }
+    const auto = r.autoClear;
+    r.autoClear = false;
+    r.clear();
+    this.backdrop.render(r, this.camera);
+    r.clearDepth();
+    r.render(this.scene, this.camera);
+    r.autoClear = auto;
+  }
+
   /** The selection's outline over the frame: its whole shape, through what stands in front. */
   renderOutline() {
-    if (!this.maskMesh || this.uniforms.uSel.value.x < 0 || this.stale || this.sketches.size > 0) return;
+    if (this.sceneOn ? this.sceneSel.size === 0 : (!this.maskMesh || this.uniforms.uSel.value.x < 0 || this.stale || this.sketches.size > 0)) return;
     const r = this.renderer;
     const clear = r.getClearAlpha(), auto = r.autoClear;
     r.setRenderTarget(this.maskTarget);
@@ -318,4 +344,4 @@ export class Viewer {
   }
 }
 
-Object.assign(Viewer.prototype, cameraMethods, fadeMethods, layersMethods);
+Object.assign(Viewer.prototype, cameraMethods, fadeMethods, layersMethods, sceneMethods);

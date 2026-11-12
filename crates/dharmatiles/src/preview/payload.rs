@@ -203,6 +203,32 @@ pub fn from_built(
     )
 }
 
+/// A piece of a map: the mesh with its colours and what tier it is, with
+/// no stack, clouds or debug marks (the page only draws it).  A build that
+/// has not been through the gate says so (`checked: false`); one that has
+/// carries the gate's failures.
+///
+/// # Errors
+/// If the build's per-triangle lists do not match its mesh.
+pub fn for_map(
+    b: &Built,
+    tier: &str,
+    opts: &dt_eval::Options,
+    palette: &dt_kit::Palette,
+) -> Result<Vec<u8>, String> {
+    let (painted, clean) = b.colours_pair(palette);
+    let (lo, hi) = dt_kit::box_of(&b.export.mesh);
+    let meta = json!({
+        "tier": tier,
+        "checked": b.checked,
+        "failures": if b.checked { b.audit.failures(&opts.printer) } else { Vec::new() },
+        "overhang_deg": opts.printer.overhang_deg,
+        "footprint": b.footprint,
+        "tile_lo": lo, "tile_hi": hi,
+    });
+    encode(&b.export.mesh, &painted, &clean, &meta)
+}
+
 /// The stack a build was made from, as the mesh header carries it: for each
 /// entry its place (the number the mesh's triangles carry), its key (its id,
 /// which survives edits to the text), its words and its element.

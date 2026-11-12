@@ -14,7 +14,8 @@ import { $, host, viewer } from './app.js';
 import { openFile, saveWords, texts } from './document.js';
 import { showSourceLine } from './levels.js';
 import { showWorst } from './selection.js';
-import { doc, entrySel, log, progressOf, server, tile, view } from './stores.js';
+import { doc, entrySel, isMapView, log, progressOf, server, tile, view } from './stores.js';
+import { sceneStore, statusLines } from './scene.js';
 import { fmt, secs } from './title.js';
 
 let filter = 'all';
@@ -41,8 +42,13 @@ async function showLine(file, line) {
 function renderBar() {
   const t = tile(), v = viewOf();
   const s = statusOf(v, { t, live: server.get().live, p: t ? progressOf(t.id) : null });
-  $('sb-verdict').textContent = s.verdict;
-  $('sb-counts').textContent = s.counts;
+  // on a map the line says what the shelf says of it, and that what is drawn is not yet checked
+  const map = isMapView() && sceneStore.get().scene ? statusLines() : null;
+  // the plates of a map may not lay out (a tile needs more filaments than the printer has): that is the plates' to say
+  const platesOnly = (t?.errors ?? []).every((e) => /^dt::(slots|plates|inventory|printer)$/.test(e.code));
+  const calm = map && (s.tone === 'ok' || s.tone === 'note' || (s.tone === 'bad' && platesOnly));
+  $('sb-verdict').textContent = calm ? map.verdict : s.verdict;
+  $('sb-counts').textContent = map ? [s.counts, map.counts].filter(Boolean).join(' · ') : s.counts;
   $('sb-dot').className = s.tone;
   $('statusbar').dataset.tone = s.tone;
   $('sb-bar').style.width = s.progress == null ? '0' : `${Math.round(s.progress * 100)}%`;
@@ -302,7 +308,8 @@ export function init() {
   log.subscribe(() => { renderBar(); renderPanel(); });
   server.subscribe(['tiles', 'live', 'system', 'printer', 'overhangDeg', 'steepestDeg'], () => { renderBar(); renderPanel(); });
   server.subscribe(['progress'], () => { renderBar(); tickRunning(); });
-  view.subscribe(['tileId'], () => { renderBar(); renderPanel(); });
+  view.subscribe(['tileId', 'dmode'], () => { renderBar(); renderPanel(); });
+  sceneStore.subscribe(['counts', 'pieces', 'scene'], renderBar);
   view.subscribe(['panel'], () => { renderBar(); renderPanel(); });
   view.subscribe(['draft', 'shown'], renderPanel); // the worst face is known once the mesh is
   doc.subscribe(['base', 'writable', 'saving', 'note', 'conflict', 'ok', 'checked', 'text'], renderBar);

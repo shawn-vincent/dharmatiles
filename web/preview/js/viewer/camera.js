@@ -27,7 +27,7 @@ export const cameraMethods = {
     // (perspective dollies along the cursor ray, orthographic changes zoom and shifts)
     this.controls.zoomToCursor = true;
     this.controls.minDistance = 4;
-    this.controls.maxDistance = 600;
+    this.controls.maxDistance = this.maxDistance ?? 600;
     this.controls.minZoom = 0.2;
     this.controls.maxZoom = 40;
     this.controls.target.copy(target);
@@ -272,7 +272,7 @@ export const cameraMethods = {
   },
 
   /** Put the camera on a named view, framing the tile (or bounds `b`) as render.rs does. */
-  setView(name, animate = true, b = this.bounds()) {
+  setView(name, animate = true, b = this.frameFor?.(name) ?? this.bounds()) {
     const v = VIEWS.find((x) => x[0] === name);
     if (!v || !b) return;
     const [, , elev, azim, close] = v;

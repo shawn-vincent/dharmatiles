@@ -72,12 +72,14 @@ pub(crate) mod fail;
 mod inventory;
 mod lists;
 mod map;
+mod maps;
 mod messages;
 mod offers;
 pub mod payload;
 pub(crate) mod places;
 mod plates;
 pub(crate) mod roots;
+mod scene;
 mod server;
 mod stack;
 mod worker;
@@ -932,14 +934,21 @@ impl Shared {
     /// The tile's mesh at a lower tier (`low` or `super-low`), the page's
     /// payload: read from the cache or built there.  Not yet checked: the
     /// header says so (`checked: false`, `tier`).
-    fn tier_mesh(&self, id: &str, tier: Option<&str>) -> route::Reply {
-        let tier = match tier {
+    ///
+    /// `?seed=N&system=db|ol&printer=NAME` build a piece of a map as the map
+    /// places it (the tile's own seed, the target's system and printer where
+    /// none is given); `?tier=full` is the checked build, kept beside the
+    /// others, thinned to [`MAP_FULL_TRIANGLES`] for the page.  A map's piece
+    /// is sent without the stack and the clouds: only what is drawn.
+    fn tier_mesh<'a>(&self, id: &str, param: &dyn Fn(&str) -> Option<&'a str>) -> route::Reply {
+        let tier = match param("tier") {
             Some("low") => dt_eval::Tier::Low,
             Some("super-low") => dt_eval::Tier::SuperLow,
+            Some("full") => dt_eval::Tier::Full,
             _ => {
                 return fail::refused(
                     "400 Bad Request",
-                    "give ?tier=low or ?tier=super-low (the full build is /mesh)",
+                    "give ?tier=low, ?tier=super-low or ?tier=full",
                 )
                 .into();
             }
@@ -951,7 +960,30 @@ impl Shared {
         else {
             return route::Reply::Text("404 Not Found", "no such tile");
         };
-        let opts = self.options();
+        let mut opts = self.options();
+        match param("system") {
+            None => {}
+            Some(s @ ("db" | "ol")) => opts.system = s.to_owned(),
+            Some(_) => return fail::refused("400 Bad Request", "the system is db or ol").into(),
+        }
+        if let Some(s) = param("seed") {
+            match s.parse::<u64>() {
+                Ok(n) => opts.seed = Some(n),
+                Err(_) => {
+                    return fail::refused("400 Bad Request", "the seed is a whole number").into();
+                }
+            }
+        }
+        if let Some(p) = param("printer")
+            && p != opts.printer.name
+            && let Err(e) = opts.use_printer(p, self.home.as_deref())
+        {
+            return fail::refused(
+                "400 Bad Request",
+                e.first().map_or_else(String::new, |d| d.message.clone()),
+            )
+            .into();
+        }
         let built = dt_eval::build_tier(
             &dt_eval::Files,
             &path,
@@ -960,7 +992,14 @@ impl Shared {
             &dt_eval::Progress::none(),
             None,
             self.store.as_deref(),
-        );
+        )
+        .map(|b| {
+            if tier == dt_eval::Tier::Full {
+                dt_eval::tiers::thin_built(b, MAP_FULL_TRIANGLES)
+            } else {
+                b
+            }
+        });
         match built {
             Err(errs) => fail::refused(
                 "422 Unprocessable Entity",
@@ -970,7 +1009,7 @@ impl Shared {
                     .join("; "),
             )
             .into(),
-            Ok(b) => match payload::from_built(&b, opts.printer.overhang_deg, &self.palette()) {
+            Ok(b) => match payload::for_map(&b, tier.name(), &opts, &self.palette()) {
                 Ok(bytes) => route::Reply::Bytes(Arc::new(bytes)),
                 Err(e) => fail::failure(
                     "500 Internal Server Error",
@@ -1019,6 +1058,9 @@ impl Shared {
         });
     }
 }
+
+/// The most triangles one piece of a map has at full detail in the page.
+const MAP_FULL_TRIANGLES: usize = 600_000;
 
 /// Open `url` in the default browser.
 fn open_browser(url: &str) {

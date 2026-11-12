@@ -23,6 +23,7 @@ use dt_kit::{Material, TriMesh};
 use serde_json::{Value, json};
 
 use super::messages::Scope;
+use super::scene::{self, Note, Scene};
 use super::{Shared, State, edit, fail, lock, messages, payload};
 use crate::message::{Kind, Message, Severity};
 use crate::{errors_json, plates as cli};
@@ -277,9 +278,58 @@ fn say(shared: &Shared, id: &str, scope: Scope, make: impl FnOnce(&str) -> Vec<M
     shared.report(id, scope, make);
 }
 
-/// Open or rebuild a print list for the page.
+/// The notes of a map as messages: its crowns over taller neighbours, and a
+/// piece's own mistakes.
+fn scene_messages(notes: &[Note], diags: &[Diag], id: &str, name: &str) -> Vec<Message> {
+    let mut out = messages::of_errors(diags, Scope::Check, id, name, &[]);
+    for n in notes {
+        out.push(
+            Message::new(
+                Kind::Note,
+                Severity::Note,
+                Scope::Check,
+                id,
+                name,
+                n.text.clone(),
+            )
+            .code(n.code)
+            .help(n.help.as_deref()),
+        );
+    }
+    out
+}
+
+/// Open or rebuild a print list or a map for the page: the map's scene first
+/// (cheap: nothing is built but what the crown check looks at), then its plates.
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
+    let rev = std::fs::read_to_string(path).map_or(0, |t| dt_eval::doc::text_hash(&t));
+    let scene = cli::read_list(Path::new(path)).ok().map(|list| {
+        let mut sc = scene::read(shared, path, &list, rev);
+        // the scene reaches the page now, before anything is built: a map shows its pieces
+        // (as boxes, then their meshes) while its plates are still being laid out
+        shared.update(id, |t| {
+            let mut plan = t.plan.clone().unwrap_or_else(|| {
+                let mut loose = loose_json(&list, &Overrides::default(), shared.home.as_deref());
+                loose["writable"] = json!(true);
+                json!({"kind": "plates", "size_mm": [0, 0], "writable": true, "plates": loose})
+            });
+            plan["scene"] = sc.json.clone();
+            t.plan = Some(plan);
+        });
+        if sc.pieces.iter().filter(|p| p.at.is_some()).count() > 1 {
+            sc.notes = scene::crowns(shared, &sc);
+        }
+        (list, sc)
+    });
+    rebuild_plates(shared, id, path, scene.as_ref().map(|(_, s)| s));
+}
+
+fn rebuild_plates(shared: &Arc<Shared>, id: &str, path: &str, scene: Option<&Scene>) {
     let t0 = Instant::now();
+    let scene_json = scene.map(|s| s.json.clone());
+    let no_notes = (Vec::new(), Vec::new());
+    let (notes, diags) = scene.map_or(no_notes, |s| (s.notes.clone(), s.diags.clone()));
+    let is_map = scene.is_some_and(|s| s.json["map"].as_bool() == Some(true));
     let mut files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
     // the inventory decides what prints: the list is laid out again when it changes
     if let Some(h) = shared.home.as_deref() {
@@ -295,8 +345,26 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         .find(|t| t.id == id)
         .map_or(0, |t| t.plate);
     let fail_with = |list: Option<&dt_doc::map::PrintList>, errs: Vec<Diag>, scope: Scope| {
+        // a map whose every piece is on your shelf has nothing to print: that is a fact about
+        // the plates, not a mistake in the map
+        let calm = is_map && errs.len() == 1 && errs[0].code == "dt::inventory";
         say(shared, id, scope, |name| {
-            messages::of_errors(&errs, scope, id, name, &[])
+            if calm {
+                let mut out = scene_messages(&notes, &diags, id, name);
+                out.push(Message::new(
+                    Kind::Note,
+                    Severity::Info,
+                    scope,
+                    id,
+                    name,
+                    "Everything on this map is already in your inventory: there is nothing to print".to_owned(),
+                ));
+                out
+            } else {
+                let mut out = messages::of_errors(&errs, scope, id, name, &[]);
+                out.extend(scene_messages(&notes, &diags, id, name));
+                out
+            }
         });
         let mut loose = list.map_or_else(
             || json!({"planned": false, "printers": printers_json(shared.home.as_deref())}),
@@ -304,15 +372,16 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         );
         loose["writable"] = json!(writable);
         shared.update(id, |t| {
-            t.status = State::Failed;
+            t.status = if calm { State::Ready } else { State::Failed };
             t.progress = None;
             t.shown = None;
-            t.errors = errors_json(&errs);
+            t.errors = if calm { Vec::new() } else { errors_json(&errs) };
             t.files = files.clone();
             t.mesh = None;
-            t.plan = Some(
-                json!({"kind": "plates", "plates": loose, "writable": writable, "size_mm": [0, 0]}),
-            );
+            t.plan = Some(json!({
+                "kind": "plates", "plates": loose, "writable": writable, "size_mm": [0, 0],
+                "scene": scene_json,
+            }));
         });
     };
     let (list, plan) = match plan_for(shared, path, &Overrides::default()) {
@@ -334,6 +403,20 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
                 s.machine.label()
             ),
         )];
+        out.extend(scene_messages(&notes, &diags, id, name));
+        for (pin, why) in &plan.loose_pins {
+            out.push(
+                Message::new(
+                    Kind::Note,
+                    Severity::Note,
+                    Scope::Check,
+                    id,
+                    name,
+                    format!("The pin on {pin} is not used: {why}"),
+                )
+                .code("dt::pin"),
+            );
+        }
         if let Some(v) = &s.machine.verify {
             out.push(
                 Message::new(
@@ -386,6 +469,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             shared.home.as_deref(),
         );
         sp["plates"]["pieces"] = pieces_json(&list);
+        sp["scene"] = scene_json.clone().unwrap_or(Value::Null);
         let meta = json!({
             "overhang_deg": shared.options().printer.overhang_deg,
             "footprint": s.machine.bed,
@@ -451,6 +535,19 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             ),
         )
         .data(json!({"low": low, "plates": layout.plates.len(), "build_s": t0.elapsed().as_secs_f64()}))];
+        for (pin, why) in &layout.bad_pins {
+            out.push(
+                Message::new(
+                    Kind::Note,
+                    Severity::Note,
+                    Scope::Build,
+                    id,
+                    name,
+                    format!("The pin on {pin} could not hold: {why}; it is packed like the rest"),
+                )
+                .code("dt::pin"),
+            );
+        }
         if let Some(n) = layout.grouping_cost {
             out.push(
                 Message::new(

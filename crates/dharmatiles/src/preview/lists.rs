@@ -27,11 +27,11 @@ use super::messages::Scope;
 use super::{Shared, edit, fail, lock, places};
 use crate::errors_json;
 
-fn bad(msg: &str) -> (&'static str, Value) {
+pub(super) fn bad(msg: &str) -> (&'static str, Value) {
     fail::refused("400 Bad Request", msg)
 }
 
-fn diags(e: &[dt_doc::DocError]) -> (&'static str, Value) {
+pub(super) fn diags(e: &[dt_doc::DocError]) -> (&'static str, Value) {
     let d: Vec<Diag> = e.iter().map(Diag::from).collect();
     ("200 OK", json!({"ok": false, "errors": errors_json(&d)}))
 }
@@ -69,7 +69,7 @@ fn printer_for(shared: &Shared) -> String {
     }
 }
 
-fn list_path(shared: &Shared, id: &str) -> Result<String, (&'static str, Value)> {
+pub(super) fn list_path(shared: &Shared, id: &str) -> Result<String, (&'static str, Value)> {
     lock(&shared.tiles)
         .iter()
         .find(|t| t.id == id && super::plates::is_plates(&t.path))
@@ -78,7 +78,7 @@ fn list_path(shared: &Shared, id: &str) -> Result<String, (&'static str, Value)>
 }
 
 /// A list's text changed: written, and planned again.
-fn write(shared: &Shared, path: &str, text: &str) -> Result<(), (&'static str, Value)> {
+pub(super) fn write(shared: &Shared, path: &str, text: &str) -> Result<(), (&'static str, Value)> {
     std::fs::write(path, text).map_err(|e| {
         fail::failure(
             "500 Internal Server Error",
@@ -89,7 +89,7 @@ fn write(shared: &Shared, path: &str, text: &str) -> Result<(), (&'static str, V
     Ok(())
 }
 
-fn read(path: &str) -> Result<String, (&'static str, Value)> {
+pub(super) fn read(path: &str) -> Result<String, (&'static str, Value)> {
     std::fs::read_to_string(path).map_err(|e| {
         fail::failure(
             "500 Internal Server Error",
@@ -99,7 +99,7 @@ fn read(path: &str) -> Result<String, (&'static str, Value)> {
 }
 
 /// What a call that changed a list answers.
-fn done(path: &str, before: Option<String>, extra: Value) -> (&'static str, Value) {
+pub(super) fn done(path: &str, before: Option<String>, extra: Value) -> (&'static str, Value) {
     let mut v = json!({
         "ok": true, "list": super::tile_id(path), "path": path, "before": before,
     });
@@ -123,7 +123,7 @@ pub(super) fn new_list(shared: &Shared, v: &Value) -> (&'static str, Value) {
         Some(r) => r,
         None => edit::home(shared),
     };
-    let text = dt_doc::map::new_list(
+    let mut text = dt_doc::map::new_list(
         &dt_doc::header::stamp(env!("DT_ENGINE_VERSION")),
         "Tiles to print.",
         &[],
@@ -131,6 +131,14 @@ pub(super) fn new_list(shared: &Shared, v: &Value) -> (&'static str, Value) {
         &shared.options().system,
         None,
     );
+    // a map has a grid (it is what opens a document as a map, before a piece is placed)
+    if v["map"].as_bool() == Some(true) {
+        text = text.replacen(
+            "    about \"Tiles to print.\"",
+            "    grid cols=8 rows=6\n    about \"A map.\"",
+            1,
+        );
+    }
     match into.and_then(|d| edit::write_new_ext(&d, &stem, "dmap", text.as_bytes())) {
         Ok(dest) => edit::listed(shared, &dest),
         Err(e) => e,

@@ -11,7 +11,7 @@ import { canLeave, supersedeDrafts } from './document.js';
 import { levelOfParams } from '../folders.js';
 import { parseHash } from '../nav.js';
 import { toast } from './app.js';
-import { isEntry, server, stackIndex, stem, tile, tileById, view } from './stores.js';
+import { isEntry, isMapView, server, stackIndex, stem, tile, tileById, view } from './stores.js';
 
 // ---- choosing a tile ---------------------------------------------------
 
@@ -84,7 +84,8 @@ function follow() {
   // a rescan or a reconnect: keep the view, catch up on a newer plan or mesh
   if (planChanged(t.plan)) { viewer.setPlan(t.plan); followBuild(); }
   const shown = view.get().shown;
-  if (t.mesh_version != null && !(shown && shown.id === t.id && shown.epoch === epoch && shown.version === t.mesh_version)) loadMesh(t);
+  // a map draws its pieces, not the plates' mesh: that comes when the plates are shown
+  if (!isMapView() && t.mesh_version != null && !(shown && shown.id === t.id && shown.epoch === epoch && shown.version === t.mesh_version)) loadMesh(t);
 }
 
 let loadToken = 0;
@@ -124,7 +125,7 @@ function showDraft() {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  view.subscribe(['tileId'], follow);
+  view.subscribe(['tileId', 'dmode'], follow);
   server.subscribe(['tiles', 'ready', 'epoch'], follow);
   view.subscribe(['draft'], showDraft);
 }

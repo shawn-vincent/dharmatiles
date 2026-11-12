@@ -32,7 +32,8 @@ pub struct Checked {
     /// cannot be made).
     pub(crate) masks: Vec<Mask>,
     pub(crate) frame: Frame,
-    pub(crate) seed: u64,
+    /// The seed the tile builds with: the build's, else the tile's own.
+    pub seed: u64,
     /// The Solve phase, for a tile that uses the heights language: its
     /// bodies' bands, and the lints that came with them.
     pub solved: Option<solve::SolveReport>,

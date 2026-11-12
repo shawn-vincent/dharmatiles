@@ -2,7 +2,8 @@
 
 import { failed, showError } from '../problems.js';
 import { $, host } from './app.js';
-import { dirty, doc, isInventory, isPlates, renameable, server, stem, tile, view } from './stores.js';
+import { dirty, doc, isInventory, isMapView, isPlates, renameable, server, stem, tile, view } from './stores.js';
+import { chip as mapChip, sceneStore } from './scene.js';
 import { targetLabel } from './target.js';
 
 // ---- export: the same build as `dharmatiles build`, written to out/ ----------
@@ -62,13 +63,14 @@ function renderTitle() {
   $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile; double-click or F2 to rename` : `${t.path}\nClick for the tile`;
   document.title = `${stem(t)} · dharmatiles`;
   const p = t.plan;
-  $('tileplan').textContent = isInventory(t) ? 'what you have printed' : isPlates(t) ? (p?.plates?.label ?? '') : p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares` : '';
+  $('tileplan').textContent = isInventory(t) ? 'what you have printed' : isPlates(t) ? (isMapView() ? mapChip() : p?.plates?.label ?? '') : p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares` : '';
 }
 
 /** Wire this part of the page (once, at load). */
 export function init() {
   server.subscribe(['tiles', 'roots', 'live', 'ever', 'system', 'printer'], renderTitle);
-  view.subscribe(['tileId'], renderTitle);
+  view.subscribe(['tileId', 'dmode'], renderTitle);
+  sceneStore.subscribe(['pieces'], renderTitle);
   doc.subscribe(['base', 'writable', 'saving'], renderTitle);
   doc.subscribe(['text'], renderExport); // the export button waits for a save
   renderTitle();

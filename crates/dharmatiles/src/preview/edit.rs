@@ -132,6 +132,14 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "/api/lists/count" => return super::lists::set_count(shared, &v).into(),
         "/api/lists/remove" => return super::lists::remove(shared, &v).into(),
         "/api/lists/restore" => return super::lists::restore(shared, &v).into(),
+        "/api/maps/add" => return super::maps::add(shared, &v).into(),
+        "/api/maps/set" => return super::maps::set(shared, &v).into(),
+        "/api/maps/batch" => return super::maps::batch(shared, &v).into(),
+        "/api/maps/dup" => return super::maps::dup(shared, &v).into(),
+        "/api/maps/remove" => return super::maps::remove(shared, &v).into(),
+        "/api/maps/pin" => return super::maps::pin(shared, &v).into(),
+        "/api/maps/unpin" => return super::maps::unpin(shared, &v).into(),
+        "/api/maps/unpin-all" => return super::maps::unpin_all(shared, &v).into(),
         _ => {}
     }
     if path == "/api/reveal" {

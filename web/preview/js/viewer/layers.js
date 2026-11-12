@@ -210,14 +210,16 @@ export const layersMethods = {
   buildGrid() {
     if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); this.grid.material.dispose(); this.grid = null; }
     const b = this.bounds();
-    const sq = this.plan?.square_mm;
+    // a map's grid is the map's: its squares over its extent, at the lowest underside
+    const sg = this.sceneOn ? this.sceneGridSpec : null;
+    const sq = sg ? sg.sq : this.plan?.square_mm;
     if (!b || !sq) return;
-    const [w, h] = this.plan.size_mm;
-    const z = (this.plan.datum_z ?? b.lo[2]) - GRID_BELOW_MM;
+    const [w, h] = sg ? [sg.w, sg.h] : this.plan.size_mm;
+    const z = (sg ? sg.z : (this.plan.datum_z ?? b.lo[2])) - GRID_BELOW_MM;
     const reach = Math.max(w, h) * 6;
     const mat = new THREE.ShaderMaterial({
       uniforms: {
-        uSq: { value: sq }, uDim: { value: this.gridDim ?? 1 }, uCentre: { value: new THREE.Vector2(w / 2, h / 2) },
+        uSq: { value: sq }, uDim: { value: this.gridDim ?? 1 }, uCentre: { value: new THREE.Vector2(sg ? sg.cx : w / 2, sg ? sg.cy : h / 2) },
         uR0: { value: Math.max(w, h) * 1.2 }, uR1: { value: reach * 0.5 },
         uInk: { value: this.gridInk?.clone() ?? new THREE.Color(0.17, 0.2, 0.25) },
       },
@@ -226,7 +228,7 @@ export const layersMethods = {
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
     });
     this.grid = new THREE.Mesh(new THREE.PlaneGeometry(reach, reach), mat);
-    this.grid.position.set(w / 2, h / 2, z);
+    this.grid.position.set(sg ? sg.cx : w / 2, sg ? sg.cy : h / 2, z);
     this.grid.renderOrder = 1;
     this.grid.frustumCulled = false;
     this.grid.visible = this.showGrid;

@@ -16,7 +16,7 @@ import { cloudAtCaret, cloudOnLine, cloudsIn } from '../cloud.js';
 import { $, pickView, toast, viewer } from './app.js';
 import { texts, canLeave } from './document.js';
 import {
-  controlText, dirty, log, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, stackItems, stem,
+  controlText, dirty, isMapView, log, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, stackItems, stem,
   tile, tileSel, view,
 } from './stores.js';
 
@@ -241,15 +241,16 @@ export function init() {
     const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
     if (e.key === 'f' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && view.get().sel) frameSel();
   });
-  canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now(), b: e.button }; $('hint').style.display = 'none'; });
+  canvas.addEventListener('pointerdown', (e) => { if (isMapView()) return; down = { x: e.clientX, y: e.clientY, t: performance.now(), b: e.button }; $('hint').style.display = 'none'; });
   canvas.addEventListener('pointerup', (e) => {
     const d = down; down = null;
+    if (isMapView()) return;
     if (!d || d.b !== 0 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4 || performance.now() - d.t > 600) return;
     const r = canvas.getBoundingClientRect();
     clickHit(viewer.pick(e.clientX - r.left, e.clientY - r.top));
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (e.buttons || e.pointerType === 'touch') return;
+    if (e.buttons || e.pointerType === 'touch' || isMapView()) return;
     lastMove = e;
     if (hoverRaf) return;
     hoverRaf = requestAnimationFrame(() => {

@@ -11,7 +11,8 @@ import { seg } from './controls.js';
 import { exists, plateTotals, systemName, wantLine } from '../inventory.js';
 import { say, today } from './inventory.js';
 import { removePiece, setCount } from './lists.js';
-import { isInventory, isPlates, server, stem, tile, view } from './stores.js';
+import { isInventory, isMapView, isPlates, server, stem, tile, view } from './stores.js';
+import { chooseMode, setChosen } from './scene.js';
 
 const el = (tag, cls, text) => {
   const x = document.createElement(tag);
@@ -346,11 +347,11 @@ function render() {
   const box = $('lens-plates');
   const t = tile();
   if (!box) return;
-  const plates = isPlates(t);
-  if (plates) { lastList = t.path; } else if (t && !isInventory(t)) lastTile = t.path;
+  const doc = isPlates(t);
+  if (doc) { lastList = t.path; } else if (t && !isInventory(t)) lastTile = t.path;
   syncModes();
-  document.body.classList.toggle('plates', plates); // the tile's Place or draw box is not for a print list
-  if (!plates) return;
+  document.body.classList.toggle('plates', doc); // the tile's Place or draw box is not for a print list or a map
+  if (!doc || isMapView()) return; // a map has its own panel (scene-panel.js)
   const p = plan();
   // a build's progress ticks come through here too: draw again only when what is drawn changed
   const sig = JSON.stringify([t.id, t.plan, t.status, t.errors, exporting.busy, exporting.files, exporting.error, exporting.failures, after.open, after.plate, [...after.bad], after.busy, server.get().inventory?.exists, server.get().inventory?.pieces?.length]);
@@ -391,23 +392,31 @@ function render() {
 /** The title bar's switch: Tile or Plates, following the document in view; pressing the other one goes to the last of its kind. */
 function syncModes() {
   const on = isPlates(tile());
-  for (const b of $('modes').children) b.setAttribute('aria-pressed', String(b.dataset.mode === (on ? 'plates' : 'tile')));
+  const now = on ? (isMapView() ? 'map' : 'plates') : 'tile';
+  for (const b of $('modes').children) b.setAttribute('aria-pressed', String(b.dataset.mode === now));
 }
 
 function pickMode(mode) {
-  const here = isPlates(tile()) ? 'plates' : 'tile';
+  const here = isPlates(tile()) ? (isMapView() ? 'map' : 'plates') : 'tile';
   if (mode === here) return;
-  const path = mode === 'plates' ? lastList : lastTile;
+  // the map and the plates are two views of one document
+  if (mode !== 'tile' && isPlates(tile())) { chooseMode(mode); return; }
+  const path = mode === 'tile' ? lastTile : lastList;
   const t = server.get().tiles.find((x) => x.path === path);
-  if (t) { view.set({ tileId: t.id, page: 'edit', sel: null, control: null }); return; }
+  if (t) {
+    if (mode !== 'tile') setChosen(t.path, mode);
+    view.set({ tileId: t.id, page: 'edit', sel: null, control: null });
+    return;
+  }
   view.set({ page: 'browse' });
-  toast(mode === 'plates' ? 'Choose a print list (.dmap) from a folder.' : 'Choose a tile.');
+  toast(mode === 'map' ? 'Choose a map (.dmap) from a folder.' : mode === 'plates' ? 'Choose a print list (.dmap) from a folder.' : 'Choose a tile.');
 }
 
 /** Wire this part of the page (once, at load). */
 export function init() {
   for (const b of $('modes').children) b.onclick = () => pickMode(b.dataset.mode);
   server.subscribe(['tiles'], render);
+  view.subscribe(['dmode'], () => { drawn = null; render(); });
   view.subscribe(['tileId'], () => { drawn = null; exporting.files = null; exporting.error = null; exporting.failures = []; after.open = false; after.bad.clear(); render(); });
   server.subscribe(['inventory'], () => { drawn = null; render(); });
   render();

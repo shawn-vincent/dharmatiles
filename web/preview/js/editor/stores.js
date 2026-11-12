@@ -74,6 +74,10 @@ export const view = createStore({
   draft: null,         // {tileId, payload}: a draft shown in its place
   textFile: null,      // the file the text pane should show (null: the tile's own)
   page: 'browse',      // the sidebar's page: the tile browser, or the editor ('edit')
+  dmode: null,         // a .dmap's mode: 'map' or 'plates' (null: not a .dmap, or its plan has not come)
+  msel: [],            // the pieces selected on the map (indices into the map's pieces)
+  mprop: null,         // the property open as a level on the selected piece: 'height' | 'seed' | 'print' (editor/scene-panel.js)
+  drawer: false,       // the catalog drawer along the bottom of the map is open
   panel: false,        // the messages panel is open
   popover: null,       // the id of the open popover, if any
 });
@@ -121,6 +125,10 @@ export const regionOf = (it) => {
 export const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.dtile$/i, '');
 /** Is the document a print list (its panel and view are the plates', editor/plates.js)? */
 export const isPlates = (t) => !!t && /\.dmap$/i.test(t.path);
+/** Is a .dmap's map the view (the title bar's Map), not its plates? */
+export const isMapView = () => isPlates(tile()) && view.get().dmode === 'map';
+/** Is a .dmap's plates the view? */
+export const isPlatesView = () => isPlates(tile()) && view.get().dmode !== 'map';
 /** Is the document the inventory (its view is editor/inventory.js)? */
 export const isInventory = (t) => !!t && /\.dinv$/i.test(t.path);
 

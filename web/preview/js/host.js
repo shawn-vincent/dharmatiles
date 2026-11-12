@@ -8,6 +8,7 @@
 //   reportMessage(body)                     a failure of the page's own, to join the stream: {tile?, what, text, help?, causes?, backtrace?}
 //   fetchMesh(id) -> ArrayBuffer            the tile's binary mesh
 //   fetchSketch(id, sketch) -> ArrayBuffer  one stage's sketch while it builds (null once the build has moved on)
+//   fetchTier(id, {tier, seed?, system?, printer?}) -> ArrayBuffer   a tile's mesh at a tier (`super-low`, `low`, `full`) for a map's piece: from the cache or built, not checked unless full; a piece as the map builds it (its seed, its system, the map's printer)
 //   build(id, {debug?})                     build a tile not built yet; `debug` says whether the debug layer is on for it (its marks are collected only then)
 //   text(id, file?) -> {file, text, writable}
 //   elements() -> [element]                 the element schema
@@ -42,6 +43,12 @@
 //   listsAdd({tile, list?, seed?, system?}) one more copy of a tile in a list (a new list when none is named): {ok, list, path, count, made, before}
 //   listsCount({list, index, count})        a piece's copies; listsRemove({list, index}) takes the piece out; both answer with `before`
 //   listsRestore({list, text})              Undo: the text a change replaced, written back
+//   mapsAdd({list, tile, at, rot?, seed?, system?})   a new placed piece (at is `(2sq, 1sq)`): {ok, list, before, id, index, scene}
+//   mapsSet({list, index, set})             words of one piece (at, rot, height, seed, print, system; null takes one off)
+//   mapsBatch({list, edits: [{index, set}]})  the same for several pieces in one change
+//   mapsDup({list, index, at}) / mapsRemove({list, index})   a copy of a piece at a place / a piece taken out (and its pin)
+//   mapsPin({list, index, plate, x, y, turn}) / mapsUnpin({list, index}) / mapsUnpinAll({list})   a piece kept where it was dropped on a plate
+//     (every one answers with `before` for Undo, and `scene`: the map as it now reads, with its `rev`)
 //   inventoryHave(body)                     one good print of a tile: {tile, colour, system?, seed?, count?, on?}; {ok, lines} (docs/inventory.html)
 //   inventoryRecord(body)                   the sheet after a print: {list, plate, failed: [n…], on?}
 //   inventoryGone(body)                     one of a piece lost: {tile, seed, system, colour, note?, on?}
@@ -170,6 +177,15 @@ export function browserHost() {
       if (!r.ok) throw await replyError(r, 'mesh');
       return r.arrayBuffer();
     },
+    async fetchTier(id, { tier, seed, system, printer }) {
+      const q = new URLSearchParams({ tier });
+      if (seed != null) q.set('seed', String(seed));
+      if (system) q.set('system', system);
+      if (printer) q.set('printer', printer);
+      const r = await netFetch(tile(id, `tier?${q}`), { cache: 'no-store' });
+      if (!r.ok) throw await replyError(r, `the ${tier} mesh`);
+      return r.arrayBuffer();
+    },
     async fetchSketch(id, sketch) {
       const r = await netFetch(tile(id, `sketch?id=${sketch}`), { cache: 'no-store' });
       if (r.status === 404) return null; // the build moved on: its sketches are gone
@@ -245,6 +261,14 @@ export function browserHost() {
     listsCount: (body) => call('/api/lists/count', body),
     listsRemove: (body) => call('/api/lists/remove', body),
     listsRestore: (body) => call('/api/lists/restore', body),
+    mapsAdd: (body) => call('/api/maps/add', body),
+    mapsSet: (body) => call('/api/maps/set', body),
+    mapsBatch: (body) => call('/api/maps/batch', body),
+    mapsDup: (body) => call('/api/maps/dup', body),
+    mapsRemove: (body) => call('/api/maps/remove', body),
+    mapsPin: (body) => call('/api/maps/pin', body),
+    mapsUnpin: (body) => call('/api/maps/unpin', body),
+    mapsUnpinAll: (body) => call('/api/maps/unpin-all', body),
     inventoryHave: (body) => call('/api/inventory/have', body),
     inventoryRecord: (body) => call('/api/inventory/record', body),
     inventoryGone: (body) => call('/api/inventory/gone', body),
