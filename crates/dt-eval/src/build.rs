@@ -14,6 +14,7 @@ use crate::doc::{self, Tile};
 use crate::options::Options;
 use crate::plan::Step;
 use crate::source::{LIB, Source};
+use crate::store::{CacheState, CacheUse, Store, Tracked};
 use crate::{cache, hash, regions, solve};
 use crate::{coords, crowns, progress};
 use dt_kit::Progress;
@@ -71,6 +72,9 @@ pub struct Built {
     pub clouds: Option<dt_kit::debug::Debug>,
     /// The debug layer's marks ([`Options::debug`]): dots and trails only.
     pub debug: Option<dt_kit::debug::Debug>,
+    /// Whether the disk cache ([`Store`]) was used for this build, and what
+    /// went wrong with it, if anything ([`build_stored`]).
+    pub cache: CacheUse,
 }
 
 /// No stack entry made this triangle.
@@ -156,6 +160,82 @@ pub fn build_cached(
         .read(path)
         .map_err(|e| vec![Diag::plain("dt::source", e)])?;
     let c = check(sources, path, opts)?;
+    build_checked(&c, path, &text, opts, progress, cache)
+}
+
+/// [`build_cached`] and the disk cache: a build whose key (see [`Store::key`])
+/// is kept is read, not made, and a build that is made is kept.  The result
+/// is the same, byte for byte, as without the store; [`Built::cache`] says
+/// which it was and what went wrong with the cache, if anything (a damaged
+/// entry is removed and the build made again; an entry that cannot be
+/// written is told, and the build stands).
+///
+/// A stored build always carries the clouds (as the editor's builds do), so
+/// one made for the command line serves the editor.  What `opts` did not ask
+/// for (clouds, debug marks) is left off the result.
+///
+/// # Errors
+/// As [`build`].
+pub fn build_stored(
+    sources: &dyn Source,
+    path: &str,
+    opts: &Options,
+    progress: &Progress,
+    cache: Option<&Cache>,
+    store: Option<&Store>,
+) -> Result<Built, Vec<Diag>> {
+    let Some(store) = store else {
+        return build_cached(sources, path, opts, progress, cache);
+    };
+    let tracked = Tracked::new(sources);
+    let text = tracked
+        .read(path)
+        .map_err(|e| vec![Diag::plain("dt::source", e)])?;
+    let stored = Options {
+        clouds: true,
+        ..opts.clone()
+    };
+    let c = check(&tracked, path, &stored)?;
+    let key = store.key(&tracked.reads(), path, opts);
+    let mut problems = Vec::new();
+    let want = dt_kit::debug::Collect {
+        clouds: opts.clouds,
+        marks: opts.debug,
+    };
+    match store.get(&key, want) {
+        Ok(Some(mut b)) => {
+            // the engine label is not part of the key: it is the one asked for
+            b.record.engine.clone_from(&opts.engine);
+            b.cache.state = CacheState::Hit;
+            return Ok(b);
+        }
+        Ok(None) => {}
+        Err(e) => problems.push(e),
+    }
+    let mut b = build_checked(&c, path, &text, &stored, progress, cache)?;
+    if let Err(e) = store.put(&key, &b) {
+        problems.push(e);
+    }
+    if !opts.clouds {
+        b.clouds = None;
+    }
+    b.cache = CacheUse {
+        state: CacheState::Miss,
+        made_by: None,
+        problems,
+    };
+    Ok(b)
+}
+
+/// A checked document through the plan, the union and the gate.
+fn build_checked(
+    c: &Checked,
+    path: &str,
+    text: &str,
+    opts: &Options,
+    progress: &Progress,
+    cache: Option<&Cache>,
+) -> Result<Built, Vec<Diag>> {
     let Some(tile) = &c.tile else {
         return Err(vec![
             Diag::plain("dt::no-tile", format!("`{path}` has no tile to build"))
@@ -165,9 +245,9 @@ pub fn build_cached(
     if !tile.pending.is_empty() {
         return Err(tile.pending.clone());
     }
-    let plan = Plan::new(&c, tile, opts)?;
+    let plan = Plan::new(c, tile, opts)?;
     let ran = plan.run(progress, cache)?;
-    let built = plan.finish(path, &text, ran, progress)?;
+    let built = plan.finish(path, text, ran, progress)?;
     Ok(built)
 }
 
@@ -725,6 +805,7 @@ impl<'a> Plan<'a> {
             stack: tile.names(&opts.system),
             clouds: opts.clouds.then(|| cloud_part(scene.collected())).flatten(),
             debug: opts.debug.then(|| mark_part(scene.collected())).flatten(),
+            cache: CacheUse::default(),
         })
     }
 }
