@@ -368,6 +368,7 @@ dependencies = [
  "kdl",
  "libm",
  "miette",
+ "rayon",
  "serde_json",
 ]
 

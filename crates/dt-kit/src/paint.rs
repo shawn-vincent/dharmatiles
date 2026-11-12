@@ -14,6 +14,7 @@
 //! coarse stones are both given their full range of tones.
 
 use dt_geom::TriMesh;
+use rayon::prelude::*;
 
 use crate::render::{ORANGE, RED, SurfacePaint};
 use crate::{Material, Palette};
@@ -126,6 +127,13 @@ impl Scale {
     }
 }
 
+/// One material's three scales: fine relief, coarse relief, height.
+type Scales = (Scale, Scale, Scale);
+
+/// What one face is measured as: relief, coarse relief, up-facing, height
+/// above the ground, centre and unit normal.
+type Measure = (f32, f32, f32, f32, [f64; 3], [f64; 3]);
+
 const fn slot(m: Material) -> usize {
     match m {
         Material::Earth => 0,
@@ -182,32 +190,36 @@ pub fn paint_mesh(
     let nf = mesh.triangles.len();
     let (fine, coarse) = relief(mesh);
     // per face: relief, coarse relief, up-facing, height above the ground
-    let mut fr = vec![0.0f32; nf];
-    let mut fc = vec![0.0f32; nf];
-    let mut up = vec![0.0f32; nf];
-    let mut hgt = vec![0.0f32; nf];
-    let mut cen = vec![[0.0f64; 3]; nf];
-    let mut nrm = vec![[0.0f64; 3]; nf];
-    for (k, t) in mesh.triangles.iter().enumerate() {
-        let p = t.map(|i| mesh.positions[i as usize]);
-        let c = [0, 1, 2].map(|d| (p[0][d] + p[1][d] + p[2][d]) / 3.0);
-        let n = unit(cross(
-            [0, 1, 2].map(|d| p[1][d] - p[0][d]),
-            [0, 1, 2].map(|d| p[2][d] - p[0][d]),
-        ));
-        cen[k] = c;
-        nrm[k] = n;
-        fr[k] = t.iter().map(|&i| fine[i as usize]).sum::<f32>() / 3.0;
-        fc[k] = t.iter().map(|&i| coarse[i as usize]).sum::<f32>() / 3.0;
-        #[allow(clippy::cast_possible_truncation)]
-        {
-            up[k] = (0.5 + 0.5 * n[2]) as f32;
-            hgt[k] = surface.map_or(c[2], |s| c[2] - s.ground_z(c)) as f32;
-        }
-    }
+    // every face is read and written alone, so the threads change nothing
+    let per: Vec<Measure> = mesh
+        .triangles
+        .par_iter()
+        .map(|t| {
+            let p = t.map(|i| mesh.positions[i as usize]);
+            let c = [0, 1, 2].map(|d| (p[0][d] + p[1][d] + p[2][d]) / 3.0);
+            let n = unit(cross(
+                [0, 1, 2].map(|d| p[1][d] - p[0][d]),
+                [0, 1, 2].map(|d| p[2][d] - p[0][d]),
+            ));
+            let r = t.iter().map(|&i| fine[i as usize]).sum::<f32>() / 3.0;
+            let rc = t.iter().map(|&i| coarse[i as usize]).sum::<f32>() / 3.0;
+            #[allow(clippy::cast_possible_truncation)]
+            let (u, h) = (
+                (0.5 + 0.5 * n[2]) as f32,
+                surface.map_or(c[2], |s| c[2] - s.ground_z(c)) as f32,
+            );
+            (r, rc, u, h, c, n)
+        })
+        .collect();
+    let fr: Vec<f32> = per.iter().map(|f| f.0).collect();
+    let fc: Vec<f32> = per.iter().map(|f| f.1).collect();
+    let up: Vec<f32> = per.iter().map(|f| f.2).collect();
+    let hgt: Vec<f32> = per.iter().map(|f| f.3).collect();
+    let cen: Vec<[f64; 3]> = per.iter().map(|f| f.4).collect();
+    let nrm: Vec<[f64; 3]> = per.iter().map(|f| f.5).collect();
     // one scale per material
-    let mut scales: Vec<Option<(Scale, Scale, Scale)>> = (0..9).map(|_| None).collect();
-    for m in [
+    let mut scales: Vec<Option<Scales>> = (0..9).map(|_| None).collect();
+    let made: Vec<(Material, Option<Scales>)> = [
         Material::Earth,
         Material::Connector,
         Material::Rock,
@@ -217,7 +229,9 @@ pub fn paint_mesh(
         Material::Masonry,
         Material::Wood,
         Material::Leaf,
-    ] {
+    ]
+    .into_par_iter()
+    .map(|m| {
         let of = |v: &[f32]| -> Vec<f32> {
             materials
                 .iter()
@@ -228,55 +242,61 @@ pub fn paint_mesh(
         };
         let r = of(&fr);
         if r.is_empty() {
-            continue;
+            return (m, None);
         }
-        scales[slot(m)] = Some((Scale::of(r), Scale::of(of(&fc)), Scale::of(of(&hgt))));
+        (
+            m,
+            Some((Scale::of(r), Scale::of(of(&fc)), Scale::of(of(&hgt)))),
+        )
+    })
+    .collect();
+    for (m, sc) in made {
+        scales[slot(m)] = sc;
     }
-    let mut out = Vec::with_capacity(nf);
-    for k in 0..nf {
-        // every caller builds `materials` face for face from the same mesh
-        let m = materials
-            .get(k)
-            .copied()
-            .expect("paint_mesh: one material per face");
-        if overhang.get(k).copied().unwrap_or(false) {
-            out.push(RED);
-            continue;
-        }
-        let ground = |m: Material| -> Option<[f32; 3]> {
-            let s = surface?;
-            match m {
-                Material::Earth => s.face(cen[k], nrm[k][2], palette),
-                Material::Water => s.water(cen[k], palette),
-                _ => None,
+    let mut out: Vec<[f32; 3]> = (0..nf)
+        .into_par_iter()
+        .map(|k| {
+            // every caller builds `materials` face for face from the same mesh
+            let m = materials
+                .get(k)
+                .copied()
+                .expect("paint_mesh: one material per face");
+            if overhang.get(k).copied().unwrap_or(false) {
+                return RED;
             }
-        };
-        if let Some(c) = ground(m) {
-            out.push(c);
-            continue;
-        }
-        let Some((sr, sc, sh)) = &scales[slot(m)] else {
-            out.push([0.7; 3]);
-            continue;
-        };
-        let (r, c, h) = (sr.at(fr[k]), sc.at(fc[k]), sh.at(hgt[k]));
-        // the drybrush catches what stands out, and leans to what faces up
-        let t = match m {
-            // roots dark, tips light
-            Material::Grass => 0.35 * r + 0.20 * c + 0.45 * h,
-            Material::Leaf => 0.12 * r + 0.40 * c + 0.20 * h + 0.28 * up[k],
-            Material::Flower => 0.5 * r + 0.2 * c + 0.3 * up[k],
-            _ => 0.62 * r + 0.18 * c + 0.20 * up[k],
-        };
-        // a little contrast: the darks deeper, the pale edges brighter
-        let t = ((t - 0.5) * 1.25 + 0.5).clamp(0.0, 1.0);
-        // drybrush is sparing: most of a surface stays in the base tones
-        let t = t.powf(match m {
-            Material::Grass | Material::Flower => 1.5,
-            _ => 2.0,
-        });
-        out.push(palette.sample(ramp_name(m, brick), t));
-    }
+            let ground = |m: Material| -> Option<[f32; 3]> {
+                let s = surface?;
+                match m {
+                    Material::Earth => s.face(cen[k], nrm[k][2], palette),
+                    Material::Water => s.water(cen[k], palette),
+                    _ => None,
+                }
+            };
+            if let Some(c) = ground(m) {
+                return c;
+            }
+            let Some((sr, sc, sh)) = &scales[slot(m)] else {
+                return [0.7; 3];
+            };
+            let (r, c, h) = (sr.at(fr[k]), sc.at(fc[k]), sh.at(hgt[k]));
+            // the drybrush catches what stands out, and leans to what faces up
+            let t = match m {
+                // roots dark, tips light
+                Material::Grass => 0.35 * r + 0.20 * c + 0.45 * h,
+                Material::Leaf => 0.12 * r + 0.40 * c + 0.20 * h + 0.28 * up[k],
+                Material::Flower => 0.5 * r + 0.2 * c + 0.3 * up[k],
+                _ => 0.62 * r + 0.18 * c + 0.20 * up[k],
+            };
+            // a little contrast: the darks deeper, the pale edges brighter
+            let t = ((t - 0.5) * 1.25 + 0.5).clamp(0.0, 1.0);
+            // drybrush is sparing: most of a surface stays in the base tones
+            let t = t.powf(match m {
+                Material::Grass | Material::Flower => 1.5,
+                _ => 2.0,
+            });
+            palette.sample(ramp_name(m, brick), t)
+        })
+        .collect();
     for (c, _) in out.iter_mut().zip(band).filter(|(_, b)| **b) {
         *c = ORANGE;
     }

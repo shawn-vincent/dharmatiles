@@ -28,6 +28,7 @@
 
 use dt_eval::Built;
 use dt_kit::TriMesh;
+use rayon::prelude::*;
 use serde_json::{Value, json};
 
 /// First four bytes of every payload.
@@ -119,38 +120,48 @@ pub fn encode_traced(
     while !(8 + j.len()).is_multiple_of(4) {
         j.push(b' ');
     }
-    let mut out = Vec::with_capacity(8 + j.len() + n * 90);
-    out.extend_from_slice(MAGIC);
-    out.extend_from_slice(&u32::try_from(j.len()).unwrap_or(u32::MAX).to_le_bytes());
-    out.extend_from_slice(&j);
-    let mut normals = Vec::with_capacity(n * 36);
-    for t in &mesh.triangles {
-        let p = t.map(|i| mesh.positions[i as usize]);
-        for v in p {
-            for c in v {
-                out.extend_from_slice(&(c as f32).to_le_bytes());
+    let head = 8 + j.len();
+    // the sections laid out in one buffer, each filled by the threads in
+    // runs of triangles: the bytes are the ones a single pass would write
+    let mut out = vec![0u8; head + n * 36 + n * 36 + n * 9 * 2 + n * 4];
+    out[..4].copy_from_slice(MAGIC);
+    out[4..8].copy_from_slice(&u32::try_from(j.len()).unwrap_or(u32::MAX).to_le_bytes());
+    out[8..head].copy_from_slice(&j);
+    let (positions, rest) = out[head..].split_at_mut(n * 36);
+    let (normals, rest) = rest.split_at_mut(n * 36);
+    let (colours, ids) = rest.split_at_mut(n * 18);
+    positions
+        .par_chunks_mut(36)
+        .zip(normals.par_chunks_mut(36))
+        .zip(&mesh.triangles)
+        .for_each(|((pos, nrm), t)| {
+            let p = t.map(|i| mesh.positions[i as usize]);
+            let nf = unit_normal(p);
+            for (a, v) in p.iter().enumerate() {
+                for (k, c) in v.iter().enumerate() {
+                    let at = 12 * a + 4 * k;
+                    pos[at..at + 4].copy_from_slice(&(*c as f32).to_le_bytes());
+                }
+                for (k, c) in nf.iter().enumerate() {
+                    let at = 12 * a + 4 * k;
+                    nrm[at..at + 4].copy_from_slice(&c.to_le_bytes());
+                }
             }
-        }
-        let nf = unit_normal(p);
-        for _ in 0..3 {
-            for c in nf {
-                normals.extend_from_slice(&c.to_le_bytes());
-            }
-        }
-    }
-    out.extend_from_slice(&normals);
-    for set in [painted, clean] {
-        for colour in set {
+        });
+    let (painted_out, clean_out) = colours.split_at_mut(n * 9);
+    for (dst, set) in [(painted_out, painted), (clean_out, clean)] {
+        dst.par_chunks_mut(9).zip(set).for_each(|(d, colour)| {
             let c = colour.map(byte);
-            for _ in 0..3 {
-                out.extend_from_slice(&c);
+            for a in 0..3 {
+                d[3 * a..3 * a + 3].copy_from_slice(&c);
             }
-        }
+        });
     }
-    for set in [entries, pieces] {
-        for f in 0..n {
-            out.extend_from_slice(&set.get(f).copied().unwrap_or(NO_ENTRY).to_le_bytes());
-        }
+    let (entries_out, pieces_out) = ids.split_at_mut(n * 2);
+    for (dst, set) in [(entries_out, entries), (pieces_out, pieces)] {
+        dst.par_chunks_mut(2).enumerate().for_each(|(f, d)| {
+            d.copy_from_slice(&set.get(f).copied().unwrap_or(NO_ENTRY).to_le_bytes());
+        });
     }
     while !out.len().is_multiple_of(4) {
         out.push(0);
@@ -168,8 +179,7 @@ pub fn from_built(
     overhang_deg: f64,
     palette: &dt_kit::Palette,
 ) -> Result<Vec<u8>, String> {
-    let painted = b.colours_with(palette, true);
-    let clean = b.colours_with(palette, false);
+    let (painted, clean) = b.colours_pair(palette);
     let meta = json!({
         "overhang_faces": b.audit.overhang.iter().filter(|&&o| o).count(),
         "band_faces": b.audit.band.iter().filter(|&&o| o).count(),
@@ -434,8 +444,7 @@ pub fn from_draft(
     overhang_deg: f64,
     palette: &dt_kit::Palette,
 ) -> Result<Vec<u8>, String> {
-    let painted = b.colours_with(palette, true);
-    let clean = b.colours_with(palette, false);
+    let (painted, clean) = b.colours_pair(palette);
     let (mesh, kept) = thinned(&b.export.mesh, VIEW_BUDGET);
     let triangles = b.export.mesh.triangles.len();
     if painted.len() != triangles || clean.len() != triangles {
@@ -633,6 +642,124 @@ mod tests {
             h["triangles"].as_u64().unwrap()
         };
         assert_eq!(tri(&kept), tri(&seen));
+    }
+
+    /// The encoder as it was written before the threads: one triangle after
+    /// another into a growing buffer.
+    fn encode_in_order(
+        mesh: &TriMesh,
+        painted: &[[f32; 3]],
+        clean: &[[f32; 3]],
+        entries: &[u16],
+        pieces: &[u16],
+        j: &[u8],
+    ) -> Vec<u8> {
+        let n = mesh.triangles.len();
+        let mut out = Vec::new();
+        out.extend_from_slice(MAGIC);
+        out.extend_from_slice(&(j.len() as u32).to_le_bytes());
+        out.extend_from_slice(j);
+        let mut normals = Vec::new();
+        for t in &mesh.triangles {
+            let p = t.map(|i| mesh.positions[i as usize]);
+            for v in p {
+                for c in v {
+                    out.extend_from_slice(&(c as f32).to_le_bytes());
+                }
+            }
+            let nf = unit_normal(p);
+            for _ in 0..3 {
+                for c in nf {
+                    normals.extend_from_slice(&c.to_le_bytes());
+                }
+            }
+        }
+        out.extend_from_slice(&normals);
+        for set in [painted, clean] {
+            for colour in set {
+                let c = colour.map(byte);
+                for _ in 0..3 {
+                    out.extend_from_slice(&c);
+                }
+            }
+        }
+        for set in [entries, pieces] {
+            for f in 0..n {
+                out.extend_from_slice(&set.get(f).copied().unwrap_or(NO_ENTRY).to_le_bytes());
+            }
+        }
+        while !out.len().is_multiple_of(4) {
+            out.push(0);
+        }
+        out
+    }
+
+    /// The view's bytes are what they were: the colours from one painting
+    /// are the two paintings' colours (overhang red and orange laid over
+    /// the clean paint), and the threaded encoder writes the bytes the
+    /// one-by-one encoder wrote, on tiles with ground, water, grass, trees
+    /// and overhang.
+    #[test]
+    fn the_view_bytes_are_unchanged_by_painting_once_and_threading() {
+        let pal = dt_kit::Palette::default();
+        for tile in [
+            "lib:tests/plants/1x1-tree.dtile",
+            "lib:tests/plants/1x1-soil+grass.dtile",
+            "lib:tiles/walls/1x1-wall-stone.dtile",
+        ] {
+            let b = dt_eval::build(&dt_eval::Library, tile, &dt_eval::Options::default()).unwrap();
+            let (painted, clean) = b.colours_pair(&pal);
+            assert_eq!(painted, b.colours_with(&pal, true), "{tile}: painted");
+            assert_eq!(clean, b.colours_with(&pal, false), "{tile}: clean");
+            let (over, band) = (
+                b.audit.overhang.iter().any(|&o| o),
+                b.audit.band.iter().any(|&o| o),
+            );
+            eprintln!("{tile}: overhang {over}, band {band}");
+            let bytes = from_built(&b, 55.0, &pal).unwrap();
+            let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+            let want = encode_in_order(
+                &b.export.mesh,
+                &painted,
+                &clean,
+                &b.entries,
+                &b.pieces,
+                &bytes[8..8 + jl],
+            );
+            let first = bytes.iter().zip(&want).position(|(a, b)| a != b);
+            assert!(
+                bytes == want,
+                "{tile}: the threaded encoding differs: lengths {} and {}, first at {first:?} (head {})",
+                bytes.len(),
+                want.len(),
+                8 + jl
+            );
+        }
+    }
+
+    /// Not a test: `DT_TIME_TILE=lib:tiles/…` prints what encoding a finished
+    /// build for the view costs, and the payload's hash.
+    #[test]
+    #[ignore = "a timing run: DT_TIME_TILE=lib:tiles/cliffs/2x1-cliff-blocks.dtile"]
+    fn time_the_view_encoding() {
+        let Ok(tile) = std::env::var("DT_TIME_TILE") else {
+            return;
+        };
+        let opts = dt_eval::Options::default();
+        let b = dt_eval::build(&dt_eval::Library, &tile, &opts).unwrap();
+        let pal = dt_kit::Palette::default();
+        let t = std::time::Instant::now();
+        let bytes = from_built(&b, 55.0, &pal).unwrap();
+        eprintln!(
+            "{tile}: {} triangles, view encoding {:.3} s, {} bytes, fnv {:016x}",
+            b.export.mesh.triangles.len(),
+            t.elapsed().as_secs_f64(),
+            bytes.len(),
+            bytes
+                .iter()
+                .fold(0xcbf2_9ce4_8422_2325u64, |h, &x| (h ^ u64::from(x))
+                    .wrapping_mul(0x0100_0000_01b3))
+        );
     }
 
     #[test]

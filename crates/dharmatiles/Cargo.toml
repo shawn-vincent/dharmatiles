@@ -26,6 +26,7 @@ dt-eval.workspace = true
 dt-kit.workspace = true
 dt-elements.workspace = true
 libm.workspace = true
+rayon.workspace = true
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 serde_json.workspace = true
 

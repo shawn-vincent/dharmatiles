@@ -6,6 +6,7 @@
 use dt_geom::TriMesh;
 use dt_geom::vec3::{cross, dot, unit};
 use libm::{cos, sin, tan};
+use rayon::prelude::*;
 
 use crate::Material;
 
@@ -144,8 +145,15 @@ const GATE_SAME_MM: f64 = 0.8;
 )]
 fn gated(z: &[f64], nx: usize, ny: usize, sigma: f64, blurred: Vec<f64>) -> Vec<f64> {
     let reach = (3.0 * sigma).ceil() as i64;
+    // the weight of a tap by its squared distance in nodes (a whole number),
+    // each the one value the tap's own `exp` gives
+    let weight: Vec<f64> = (0..=2 * reach * reach)
+        .map(|d2| (-(d2 as f64) / (2.0 * sigma * sigma)).exp())
+        .collect();
     let mut out = blurred;
-    for k in 0..z.len() {
+    // every node reads `z` and writes its own: the nodes are independent,
+    // so the threads change nothing of the result
+    out.par_iter_mut().enumerate().for_each(|(k, o)| {
         let (i, j) = ((k % nx) as i64, (k / nx) as i64);
         // only where the ground round it falls away: a sample of the ring
         let away = (0..12).any(|a| {
@@ -161,7 +169,7 @@ fn gated(z: &[f64], nx: usize, ny: usize, sigma: f64, blurred: Vec<f64>) -> Vec<
                 && (z[jj as usize * nx + ii as usize] - z[k]).abs() > GATE_MM
         });
         if !away {
-            continue;
+            return;
         }
         let (mut sum, mut wsum) = (0.0, 0.0);
         for jj in (j - reach).max(0)..=(j + reach).min(ny as i64 - 1) {
@@ -170,14 +178,13 @@ fn gated(z: &[f64], nx: usize, ny: usize, sigma: f64, blurred: Vec<f64>) -> Vec<
                 if (z[q] - z[k]).abs() > GATE_SAME_MM {
                     continue;
                 }
-                let d2 = ((ii - i) * (ii - i) + (jj - j) * (jj - j)) as f64;
-                let w = (-d2 / (2.0 * sigma * sigma)).exp();
+                let w = weight[((ii - i) * (ii - i) + (jj - j) * (jj - j)) as usize];
                 sum += w * z[q];
                 wsum += w;
             }
         }
-        out[k] = sum / wsum;
-    }
+        *o = sum / wsum;
+    });
     out
 }
 
@@ -204,14 +211,15 @@ impl SurfacePaint {
     #[must_use]
     pub fn new(g: &dt_geom::Grid, stone: &dt_geom::Mask) -> Self {
         let z: Vec<f64> = g.z.iter().map(|&v| f64::from(v)).collect();
-        let b1 = dt_geom::blur(&z, g.nx, g.ny, 0.8 / g.step);
-        let b2 = dt_geom::blur(&z, g.nx, g.ny, 4.0 / g.step);
-        let w2 = dt_geom::blur(&z, g.nx, g.ny, 2.0 / g.step);
-        let w6 = dt_geom::blur(&z, g.nx, g.ny, 6.0 / g.step);
+        let blur = |mm: f64| dt_geom::blur(&z, g.nx, g.ny, mm / g.step);
+        let ((b1, b2), (w2, w6)) = rayon::join(
+            || rayon::join(|| blur(0.8), || blur(4.0)),
+            || rayon::join(|| blur(2.0), || blur(6.0)),
+        );
         let low = z.iter().copied().fold(f64::INFINITY, f64::min);
-        let (b1, b2) = (
-            gated(&z, g.nx, g.ny, 0.8 / g.step, b1),
-            gated(&z, g.nx, g.ny, 4.0 / g.step, b2),
+        let (b1, b2) = rayon::join(
+            || gated(&z, g.nx, g.ny, 0.8 / g.step, b1),
+            || gated(&z, g.nx, g.ny, 4.0 / g.step, b2),
         );
         Self {
             nx: g.nx,

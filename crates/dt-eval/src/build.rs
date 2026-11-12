@@ -88,6 +88,27 @@ impl Built {
         self.colours_with(&dt_kit::Palette::default(), true)
     }
 
+    /// The painted colours (overhang red and orange) and the clean ones
+    /// (none), as [`Built::colours_with`] gives them, from one painting:
+    /// the overhang paint lies over the clean colour, so the second set
+    /// is the first with those faces replaced and costs no second pass
+    /// through the painter (and its ground surface).
+    #[must_use]
+    pub fn colours_pair(&self, palette: &dt_kit::Palette) -> (Vec<[f32; 3]>, Vec<[f32; 3]>) {
+        let clean = self.colours_with(palette, false);
+        let mut painted = clean.clone();
+        let (over, band) = (&self.audit.overhang, &self.audit.band);
+        for (k, c) in painted.iter_mut().enumerate() {
+            // as the painter lays it: orange over red over the paint
+            if band.get(k).copied().unwrap_or(false) {
+                *c = dt_kit::ORANGE;
+            } else if over.get(k).copied().unwrap_or(false) {
+                *c = dt_kit::RED;
+            }
+        }
+        (painted, clean)
+    }
+
     /// [`Built::colours`] with the ramps of `palette`; without
     /// `overhang`, no red or orange (the viewer's overhang toggle).
     #[must_use]
