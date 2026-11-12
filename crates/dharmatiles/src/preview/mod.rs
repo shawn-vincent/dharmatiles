@@ -80,6 +80,7 @@ mod offers;
 pub mod payload;
 pub(crate) mod places;
 mod plates;
+mod printers;
 pub(crate) mod roots;
 mod scene;
 mod server;
@@ -523,6 +524,15 @@ impl Shared {
         lock(&self.target).clone()
     }
 
+    /// Tell every page the state again (the printers there are changed on disk).
+    fn announce(&self) {
+        let tiles = lock(&self.tiles);
+        let mut ev = lock(&self.events);
+        let rev = ev.bump(Change::List);
+        let snap = self.snapshot_of(&tiles, rev);
+        ev.send(&snap);
+    }
+
     /// Choose the build target: the base system and the printer (either
     /// may be left as it is).  Every tile built so far is built again for
     /// it, the page is sent the new state, and the choice is remembered in
@@ -710,10 +720,7 @@ impl Shared {
             "epoch": self.epoch,
             "system": target.system,
             "printer": target.printer.name,
-            "printers": dt_eval::printer_names(self.home.as_deref())
-                .into_iter()
-                .map(|(n, k)| json!({"name": n, "mine": k == dt_eval::ProfileKind::Mine}))
-                .collect::<Vec<_>>(),
+            "printers": plates::printers_json(self.home.as_deref()),
             "overhang_deg": target.printer.overhang_deg,
             "steepest_deg": target.printer.steepest_deg,
             "roots": lock(&self.roots).iter().enumerate().map(|(i, r)| r.json(i)).collect::<Vec<_>>(),

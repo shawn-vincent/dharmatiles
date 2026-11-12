@@ -16,6 +16,7 @@ import { showSourceLine } from './levels.js';
 import { showWorst } from './selection.js';
 import { doc, entrySel, isMapView, log, progressOf, server, tile, view } from './stores.js';
 import { sceneStore, statusLines } from './scene.js';
+import { targetWords } from './target.js';
 import { fmt, secs } from './title.js';
 
 let filter = 'all';
@@ -55,8 +56,7 @@ function renderBar() {
   $('statusbar').dataset.tone = tone;
   $('sb-bar').style.width = s.progress == null ? '0' : `${Math.round(s.progress * 100)}%`;
   $('sb-bar').hidden = s.progress == null;
-  const sv = server.get();
-  $('sb-target').textContent = `${sv.system === 'ol' ? 'OpenLOCK' : 'DungeonBlocks'} · ${sv.printer}`;
+  $('sb-target').textContent = targetWords();
   const w = saveWords();
   $('sb-saved').textContent = w && w.text !== 'saved' ? w.text : '';
   $('sb-saved').classList.toggle('bad', !!w?.bad);

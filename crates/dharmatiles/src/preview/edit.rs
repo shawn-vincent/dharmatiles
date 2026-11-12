@@ -119,6 +119,8 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "/api/folders/rename" => return places::rename_folder(shared, &v).into(),
         "/api/folders/trash" => return places::trash_folder(shared, &v).into(),
         "/api/trash/undo" => return places::undo_trash(shared, &v).into(),
+        "/api/printers/scan" => return super::printers::scan(&v).into(),
+        "/api/printers/import" => return super::printers::import(shared, &v).into(),
         "/api/plates/show" => return super::plates::show(shared, &v).into(),
         "/api/plates/set" => return super::plates::set(shared, &v).into(),
         "/api/plates/export" => return super::plates::export(shared, &v).into(),

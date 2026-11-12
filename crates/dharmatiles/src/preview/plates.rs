@@ -190,19 +190,26 @@ pub(super) fn pieces_json(list: &dt_doc::map::PrintList) -> Value {
     )
 }
 
-/// Every profile that holds a bed, for the chooser: brand, then model.
-fn printers_json(home: Option<&Path>) -> Value {
+/// Every profile, for the choosers: brand, then model.  One with no bed
+/// (`default`, `fine`) is only floors: it builds tiles but cannot hold plates.
+/// A profile that does not read is still listed, with what is wrong with it,
+/// so it is never missing without a word.
+pub(super) fn printers_json(home: Option<&Path>) -> Value {
     let mut out = Vec::new();
     for (name, kind) in dt_eval::printer_names(home) {
-        let Ok(m) = dt_eval::printer_machine(&name, home) else {
-            continue;
-        };
-        let Some(bed) = m.bed else { continue };
-        out.push(json!({
-            "name": name, "brand": m.brand, "model": m.model, "label": m.label(),
-            "bed": bed, "slots": m.slot_count(), "verify": m.verify,
-            "mine": kind == dt_eval::ProfileKind::Mine,
-        }));
+        let mine = kind == dt_eval::ProfileKind::Mine;
+        match dt_eval::printer_machine(&name, home) {
+            Ok(m) => out.push(json!({
+                "name": name, "brand": m.brand, "model": m.model, "label": m.label(),
+                "bed": m.bed, "height": m.height, "slots": m.slot_count(), "verify": m.verify,
+                "zones": m.excluded.len(), "from_slicer": m.from_slicer, "mine": mine,
+            })),
+            Err(e) => out.push(json!({
+                "name": name, "brand": null, "model": null, "label": name, "bed": null,
+                "slots": 1, "mine": mine,
+                "broken": e.first().map_or_else(|| "does not read".to_owned(), |d| d.message.clone()),
+            })),
+        }
     }
     Value::Array(out)
 }

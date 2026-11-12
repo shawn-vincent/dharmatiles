@@ -251,6 +251,8 @@ export function browserHost() {
     undoTrash: (undo) => call('/api/trash/undo', { undo }),
     edit: (body) => call('/api/edit', body),
     setTarget: (body) => call('/api/target', body),
+    printersScan: (slicer) => call('/api/printers/scan', slicer ? { slicer } : {}),
+    printersImport: (body) => call('/api/printers/import', body),
     exportTile: (id, body) => call(tile(id, 'export'), body),
     reveal: (path) => call('/api/reveal', { path }),
     platesShow: (id, plate) => call('/api/plates/show', { tile: id, plate }),

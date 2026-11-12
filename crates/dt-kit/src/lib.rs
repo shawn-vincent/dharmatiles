@@ -92,8 +92,7 @@ pub use paint::paint_mesh;
 pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
 pub use plates::{
     PlatePart, PlateSet, PlateStand, bambu_columns, bambu_plate_origin, bambu_plates, box_of,
-    stand_positions,
-    filaments_of, plate_3mf, plate_stl,
+    filaments_of, plate_3mf, plate_stl, stand_positions,
 };
 pub use progress::{Counter, Event, Progress, Reporter};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};

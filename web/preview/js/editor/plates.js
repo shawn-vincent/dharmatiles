@@ -8,6 +8,7 @@
 import { failed, showError } from '../problems.js';
 import { $, host, toast } from './app.js';
 import { seg } from './controls.js';
+import { printerChooser } from './printer-chooser.js';
 import { exists, plateTotals, systemName, wantLine } from '../inventory.js';
 import { say, today } from './inventory.js';
 import { removePiece, setCount } from './lists.js';
@@ -61,42 +62,20 @@ async function show(plate) {
   } catch (e) { showError('Could not show that plate', e); }
 }
 
+let chooser = null, chooserSig = null;
+
 function printerSection(p, ro) {
   const sec = el('section', 'pl-sec');
   sec.append(el('h3', null, 'Printer'));
-  const printers = p.printers ?? [];
-  const brands = [...new Set(printers.map((x) => x.brand || 'Yours'))];
-  const cur = printers.find((x) => x.name === p.printer);
-  const brand = cur ? (cur.brand || 'Yours') : brands[0];
-  const row = el('div', 'pl-field');
-  row.append(el('span', 'pl-lab', 'Brand'));
-  const sb = el('select', 'word-select');
-  sb.setAttribute('aria-label', 'Printer brand'); sb.disabled = ro;
-  for (const b of brands) { const o = el('option', null, b); o.value = b; o.selected = b === brand; sb.append(o); }
-  sb.onchange = () => {
-    const first = printers.find((x) => (x.brand || 'Yours') === sb.value);
-    if (first) set('printer', first.name);
-  };
-  row.append(sb);
-  sec.append(row);
-  const row2 = el('div', 'pl-field');
-  row2.append(el('span', 'pl-lab', 'Model'));
-  const sm = el('select', 'word-select');
-  sm.setAttribute('aria-label', 'Printer model'); sm.disabled = ro;
-  for (const x of printers.filter((q) => (q.brand || 'Yours') === brand)) {
-    const o = el('option', null, `${x.model || x.name} · ${plural(x.slots, 'filament')}${x.verify ? ' · verify' : ''}`);
-    o.value = x.name; o.selected = x.name === p.printer;
-    sm.append(o);
+  // every profile there is (the server's list, which an import changes), not only the ones this plan was made with
+  const printers = server.get().printers;
+  // the same chooser as the title bar's: kept while the list is unchanged, so a search or an import stays open
+  const sig = JSON.stringify([printers, p.printer, ro]);
+  if (sig !== chooserSig || !chooser) {
+    chooserSig = sig;
+    chooser = printerChooser({ printers, current: p.printer, onPick: (name) => set('printer', name), needBed: true, disabled: ro, key: 'plates' });
   }
-  sm.onchange = () => set('printer', sm.value);
-  row2.append(sm);
-  sec.append(row2);
-  // the AMS question, answered once and easy to change: an -ams profile and its plain one
-  const base = p.printer.replace(/-ams$/, '');
-  const has = (n) => printers.some((x) => x.name === n);
-  if (has(`${base}-ams`) && has(base)) {
-    sec.append(seg('Filaments', [[base, 'No AMS', 'One filament'], [`${base}-ams`, 'AMS', 'Four filaments a unit']], p.printer, (v) => set('printer', v), ro));
-  }
+  sec.append(chooser);
   if (p.bed) sec.append(el('p', 'note', `${mm(p.bed[0])} × ${mm(p.bed[1])} mm bed${p.excluded?.length ? `, ${plural(p.excluded.length, 'zone')} kept clear` : ''} · ${plural(p.slots, 'filament slot')}`));
   if (p.verify) sec.append(el('p', 'note verify', `Not yet checked against the maker: ${p.verify}`));
   return sec;
@@ -449,6 +428,6 @@ export function init() {
   server.subscribe(['tiles'], render);
   view.subscribe(['dmode'], () => { drawn = null; render(); });
   view.subscribe(['tileId'], () => { drawn = null; exporting.files = null; exporting.error = null; exporting.failures = []; after.open = false; after.bad.clear(); render(); });
-  server.subscribe(['inventory'], () => { drawn = null; render(); });
+  server.subscribe(['inventory', 'printers'], () => { drawn = null; render(); });
   render();
 }
