@@ -191,9 +191,7 @@ function renderContext() {
     entry = { note: `${sel.kind} ${sel.id}` };
   }
   const lines = contextFor({ depth, tile: tileInfo, entry, thing: depth === 2 ? thingName() : '', control: control?.name, value });
-  const box = $('ctx');
-  box.replaceChildren(...lines.map((l) => el('div', 'ln', l)));
-  box.hidden = !lines.length;
+  $('ctx-lines').replaceChildren(...lines.map((l) => el('div', 'ln', l)));
 }
 
 function focusLevel() {
@@ -218,11 +216,17 @@ function showDepth(d, animate) {
   const opts = { duration: SLIDE_MS, easing: EASE, fill: 'both' };
   to.animate([{ transform: `translateX(${dir * 100}%)` }, { transform: 'translateX(0)' }], opts);
   const gone = out.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-dir * 100}%)` }], opts);
-  gone.onfinish = () => {
+  // the old level leaves when the slide ends; a timer backs that up, so a page whose frames are paused still ends on one level
+  let over = false;
+  const done = () => {
+    if (over) return;
+    over = true;
     for (const a of to.getAnimations()) a.cancel();
-    if (shown === d) out.hidden = true;
     gone.cancel();
+    if (shown === d) out.hidden = true;
   };
+  gone.onfinish = done;
+  setTimeout(done, SLIDE_MS + 100);
 }
 // the scroll of a level is kept by the level (the scroll listener in init), and given back when it is shown
 function restore(d) {
@@ -285,6 +289,11 @@ function syncAddress() {
   if (push) history.pushState(null, '', h); else history.replaceState(null, '', h);
 }
 
+/** Where the panel is, to be taken again after the tile is swapped for its copy (a first change to a library tile, a rename). */
+export const levelSnapshot = () => ({ sel: view.get().sel && entryLike(view.get().sel) ? { ...view.get().sel } : { kind: 'tile' }, control: view.get().control, face: view.get().face });
+/** Go back to a level kept by `levelSnapshot`, once the tile now shown has it. */
+export const restoreLevel = (l) => wantLevel(l);
+
 /** Take the level an address asks for, as soon as the tile has it (its text is checked). */
 function wantLevel(want) {
   pending = want;
@@ -298,7 +307,8 @@ function tryPending() {
   pending = null;
   applying = true;
   try {
-    const { sel, control, face } = want;
+    const { control, face } = want;
+    const sel = want.sel.kind === 'tile' ? tileSel() : want.sel;
     let ok = true;
     if (sel.kind === 'entry') ok = stackIndex(sel.id) >= 0;
     else if (isMark(sel)) ok = !!mapNode(sel);

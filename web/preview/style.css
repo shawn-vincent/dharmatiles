@@ -32,20 +32,23 @@ button { font: inherit; color: inherit; }
 #crumb { flex: none; display: flex; align-items: center; gap: 2px; min-height: 40px; padding: 4px 8px; border-bottom: 1px solid var(--line); background: var(--bg); min-width: 0; }
 #crumb .sep { color: var(--line-2); padding: 0 1px; flex: none; }
 #crumb .grow { flex: 1 1 0; min-width: 4px; }
-#crumb > button, #crumbs-deep .crumb { background: none; border: 1px solid transparent; border-radius: var(--r); padding: 3px 6px; color: var(--muted); cursor: pointer; font-size: 13px; white-space: nowrap; min-width: 0; max-width: 11em; overflow: hidden; text-overflow: ellipsis; }
+#crumb > button, #crumbs-deep .crumb { background: none; border: 1px solid transparent; border-radius: var(--r); padding: 3px 6px; color: var(--muted); cursor: pointer; font-size: 13px; white-space: nowrap; min-width: 2.2em; max-width: 12em; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+/* the ones behind give way first, so where you are is always readable */
+#crumb > button:not(.cur), #crumbs-deep .crumb:not(.cur) { flex-shrink: 4; }
 #crumb > button:hover, #crumbs-deep .crumb:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
 #crumb .cur, #crumbs-deep .crumb.cur { color: var(--ink); font-weight: 650; }
 #crumbs-deep { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; }
-#back { flex: none; display: inline-flex; align-items: center; gap: 5px; }
+#back { flex: none !important; display: inline-flex; align-items: center; gap: 5px; max-width: 10em !important; }
 #back span:first-child { font-size: 17px; line-height: 1; }
-#back #tilewhere { max-width: 8em; overflow: hidden; text-overflow: ellipsis; }
-#tilebtn { flex: 0 1 auto; }
-#face { flex: none; margin-left: 6px; }
-#face button { padding: 2px 10px; font-size: 12px; }
-/* what the level sits in: a line or two, never the parent's own panel */
-#ctx { flex: none; padding: 6px 12px 7px; border-bottom: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 12px; line-height: 1.45; min-height: 0; }
+#back #tilewhere { overflow: hidden; text-overflow: ellipsis; }
+#rochip { flex: none; margin-left: 4px; }
+/* what the level sits in: a line or two, never the parent's own panel; the Tile | Source switch is at its right */
+#ctx { flex: none; display: flex; align-items: center; gap: 10px; padding: 6px 8px 7px 12px; border-bottom: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 12px; line-height: 1.45; }
+#ctx-lines { flex: 1; min-width: 0; }
 #ctx .ln { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #ctx .ln:first-child { color: var(--ink); opacity: .82; }
+#face { flex: none; }
+#face button { padding: 2px 10px; font-size: 12px; }
 /* one level on screen, full height; a deeper one comes in from the right (js/editor/levels.js) */
 #stage { flex: 1; min-height: 0; position: relative; overflow: clip; }
 #levels { position: absolute; inset: 0; overflow: clip; }

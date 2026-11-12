@@ -53,15 +53,17 @@
           <button id="back" type="button" title="All the tiles (⌘[ from the tile)"><span aria-hidden="true">‹</span> <span id="tilewhere">Tiles</span></button>
           <span class="sep" aria-hidden="true">›</span>
           <button id="tilebtn" type="button" title="The tile"><span id="tilename"></span></button>
-          <span id="rochip" hidden title="A library tile. Your first change copies it into My tiles and makes the change there.">library</span>
           <nav id="crumbs-deep" aria-label="Where you are in the tile"></nav>
           <span class="grow"></span>
+          <span id="rochip" hidden title="A library tile. Your first change copies it into My tiles and makes the change there.">library</span>
+        </div>
+        <div id="ctx" role="note">
+          <div id="ctx-lines"></div>
           <div class="seg" id="face" role="group" aria-label="What the panel shows">
             <button type="button" data-face="tile" title="The tile, level by level (⌘3)">Tile</button>
             <button type="button" data-face="source" title="The source of the tile (⌘1)">Source</button>
           </div>
         </div>
-        <div id="ctx" role="note"></div>
         <div id="stage" data-face="tile">
           <div id="levels">
             <section class="lvl" id="lvl-tile" data-depth="0" tabindex="-1" aria-label="The tile"><div id="lens-tile" class="lvlbox"></div></section>

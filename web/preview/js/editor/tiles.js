@@ -6,6 +6,7 @@ import { $, host, onMakeMine, toast } from './app.js';
 import { abandonChanges, applyPatchOnCopy, canLeave, carryHistory, whenChecked } from './document.js';
 import { copiedNote } from '../mine.js';
 import { attachSizeGrid } from '../size-grid.js';
+import { levelSnapshot, restoreLevel } from './levels.js';
 import { select } from './open.js';
 import { doc, inRoot, renameable, rootOf, server, stem, tile, view, whenListed } from './stores.js';
 
@@ -125,8 +126,8 @@ export function startRename() {
     input.remove(); $('tilebtn').hidden = false;
     doc.set({ note: null });
     carryHistory();
-    const id = r.body.id;
-    if (await whenListed(id)) await select(id, true);
+    const id = r.body.id, here = levelSnapshot();
+    if (await whenListed(id)) { await select(id, true); restoreLevel(here); }
   };
   input.onkeydown = (e) => {
     e.stopPropagation();
@@ -181,7 +182,9 @@ async function mineIt(replay) {
     }
     const copy = { id: r.body.id, name: stem({ path: r.body.path }) };
     if (!(await whenListed(copy.id))) { showError('The copy did not appear', new Error(`${copy.name} was made but is not in the list`)); return false; }
+    const here = levelSnapshot(); // the copy opens on the same level (its entries have the same keys)
     await select(copy.id, true);
+    restoreLevel(here);
     if (!(await whenChecked(copy.id))) { showError('The copy did not open', new Error(`${copy.name} was made but did not open`)); return false; }
     let applied = false;
     if (replay?.patch) applied = applyPatchOnCopy(replay.patch, lib.text);
