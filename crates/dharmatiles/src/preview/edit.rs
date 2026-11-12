@@ -5,11 +5,19 @@
 //!   everything else byte for byte; `value: null` takes it out.  With
 //!   `op: insert` `{place: stack|tile, node}` it writes a new node (at the
 //!   end of the stack, or before it) and says at which byte; with
+//!   `place: before` and `at` it writes the node on a line of its own above
+//!   the node at `at` (an entry between two others); with `op: move`
+//!   `{at, before?}` it moves the node at `at` whole (its comments and
+//!   children) to stand before its sibling at byte `before`, or last, and
+//!   says at which byte it now starts; with
 //!   `op: remove` it takes out the node at `at`; with `place: in` and `at`
 //!   it writes `node` as the last child of the node at `at` (a clause of a
 //!   region), and `op: remove-children` `{at, names}` takes out that node's
 //!   children called one of `names` (a region's `boundedBy` and `fill`).  Nothing is written to
 //!   disk: the page saves the result.
+//! - `/api/tiles/ID/offers` `{text, at, file?}`: what the Add menu may offer
+//!   at place `at` of the stack, each with the node it would write and
+//!   whether the plan lets it stand there (see `offers`).
 //! - `/api/names` `{text}`: the definitions, regions, lines and points the
 //!   text makes, read by the parser (`{ok, defs, regions, lines, points}`),
 //!   for completion between checks.
@@ -80,7 +88,7 @@ impl Source for Overlay {
     }
 }
 
-fn bad(msg: impl Into<String>) -> (&'static str, Value) {
+pub(super) fn bad(msg: impl Into<String>) -> (&'static str, Value) {
     fail::refused("400 Bad Request", msg.into())
 }
 
@@ -136,6 +144,7 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "rename" => rename(shared, &tile, &v).into(),
         "export" => export(shared, &tile, &v).into(),
         "draft" => draft(shared, id, &tile, &file, &v),
+        "offers" => offers::offers(shared, &tile, &file, &v).into(),
         _ => fail::refused("404 Not Found", "no such call").into(),
     }
 }
@@ -530,12 +539,31 @@ fn edit(v: &Value) -> (&'static str, Value) {
                 };
                 return done(dt_doc::edit::insert_child_at(text, at, node));
             }
-            let place = if v["place"].as_str() == Some("tile") {
-                dt_doc::edit::Place::Tile
-            } else {
-                dt_doc::edit::Place::Stack
+            let place = match v["place"].as_str() {
+                Some("tile") => dt_doc::edit::Place::Tile,
+                Some("before") => {
+                    let Some(at) = at else {
+                        return bad("give the byte of the node to write above");
+                    };
+                    dt_doc::edit::Place::Before(at)
+                }
+                _ => dt_doc::edit::Place::Stack,
             };
             return done(dt_doc::edit::insert_node(text, place, node));
+        }
+        // a node moved among its siblings: {op: move, at, before?}
+        Some("move") => {
+            let Some(at) = at else {
+                return bad("give the node's byte");
+            };
+            let before = match &v["before"] {
+                Value::Null => None,
+                b => match b.as_u64().and_then(|b| usize::try_from(b).ok()) {
+                    Some(b) => Some(b),
+                    None => return bad("before is the byte of a sibling, or left out"),
+                },
+            };
+            return done(dt_doc::edit::move_node(text, at, before));
         }
         // a node out: {op: remove, at}
         Some("remove") => {

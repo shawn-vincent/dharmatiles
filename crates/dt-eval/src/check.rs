@@ -42,6 +42,15 @@ pub struct Checked {
 }
 
 impl Checked {
+    /// What each element of the plan reads and writes, in stack order, the
+    /// connector last when the tile has a `base`: the plan's own input, for
+    /// asking whether another entry could stand somewhere in the stack
+    /// ([`plan::schedule`]).
+    #[must_use]
+    pub fn plans(&self) -> Vec<dt_elements::Plan> {
+        self.elements.iter().map(|l| l.plan()).collect()
+    }
+
     /// Lints and notes from the Solve phase: the tile checks, but look here.
     #[must_use]
     pub fn notes(&self) -> &[Diag] {

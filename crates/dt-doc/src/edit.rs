@@ -44,6 +44,8 @@ pub enum EditError {
     Exists(String),
     /// A name that can't be used here, and why.
     BadName(String),
+    /// The edit cannot be made on text written this way, and what to change.
+    Cannot(String),
 }
 
 impl std::fmt::Display for EditError {
@@ -53,7 +55,7 @@ impl std::fmt::Display for EditError {
             EditError::NoNode(s) => write!(f, "no node matches `{s}`"),
             EditError::NoEntry(s) => write!(f, "the node has no `{s}`"),
             EditError::Exists(s) => write!(f, "`{s}` is already written"),
-            EditError::BadName(s) => f.write_str(s),
+            EditError::BadName(s) | EditError::Cannot(s) => f.write_str(s),
         }
     }
 }
@@ -482,6 +484,9 @@ pub enum Place {
     Stack,
     /// The tile's own body, before its `stack`: a `line` or a `region`.
     Tile,
+    /// Before the node whose name starts at this byte, among its siblings:
+    /// a stack entry written between two others.
+    Before(usize),
 }
 
 const INDENT: &str = "    ";
@@ -512,16 +517,7 @@ fn add_child(
     let pind = indent_of(text, pspan.offset());
     let inner = format!("{pind}{INDENT}");
     if let Some(b) = before {
-        let at = b.span().offset();
-        let ls = text[..at].rfind('\n').map_or(0, |n| n + 1);
-        if text[ls..at].trim().is_empty() {
-            let ind = &text[ls..at];
-            return (
-                splice(ls, &format!("{ind}{}\n", reindent(node, ind))),
-                ls + ind.len(),
-            );
-        }
-        return (splice(at, &format!("{node}; ")), at);
+        return insert_above(text, b.span().offset(), node);
     }
     let end = pspan.offset() + pspan.len();
     match parent.children() {
@@ -558,6 +554,147 @@ fn add_child(
     }
 }
 
+/// Write `node` as a line of its own above the node starting at byte `at`
+/// (above the `//` comment lines that sit on top of it, which belong to
+/// it), at its indent; or, when it shares its line, in front of it as
+/// `node; `.  Returns the text and the byte the new node starts at.
+fn insert_above(text: &str, at: usize, node: &str) -> (String, usize) {
+    let splice = |at: usize, s: &str| format!("{}{s}{}", &text[..at], &text[at..]);
+    let ls = text[..at].rfind('\n').map_or(0, |n| n + 1);
+    if text[ls..at].trim().is_empty() {
+        let ind = &text[ls..at];
+        let top = lead_start(text, at);
+        return (
+            splice(top, &format!("{ind}{}\n", reindent(node, ind))),
+            top + ind.len(),
+        );
+    }
+    (splice(at, &format!("{node}; ")), at)
+}
+
+/// The start of the line holding byte `at`, moved up over the `//` comment
+/// lines directly above it: the comments that belong to the node there.
+fn lead_start(text: &str, at: usize) -> usize {
+    let mut ls = text[..at].rfind('\n').map_or(0, |n| n + 1);
+    while ls > 0 {
+        let prev = text[..ls - 1].rfind('\n').map_or(0, |n| n + 1);
+        if text[prev..ls - 1].trim_start().starts_with("//") {
+            ls = prev;
+        } else {
+            break;
+        }
+    }
+    ls
+}
+
+/// The sibling nodes, in order, one of which starts at byte `at`.
+fn siblings_at(nodes: &[KdlNode], at: usize) -> Option<&[KdlNode]> {
+    if nodes.iter().any(|n| n.span().offset() == at) {
+        return Some(nodes);
+    }
+    nodes
+        .iter()
+        .filter_map(KdlNode::children)
+        .find_map(|c| siblings_at(c.nodes(), at))
+}
+
+/// The lines a node takes up, as a byte range: from the comment lines
+/// above it to the end of its own last line.
+///
+/// # Errors
+/// [`EditError::Cannot`] when it shares a line with another node.
+fn block_of(text: &str, node: &KdlNode) -> Result<(usize, usize), EditError> {
+    let sp = node.span();
+    let (s, mut e) = (sp.offset(), sp.offset() + sp.len());
+    if text[e..].starts_with(';') {
+        e += 1;
+    }
+    let ls = text[..s].rfind('\n').map_or(0, |n| n + 1);
+    let le = text[e..].find('\n').map_or(text.len(), |n| e + n);
+    let rest = text[e..le].trim();
+    if !text[ls..s].trim().is_empty() || !(rest.is_empty() || rest.starts_with("//")) {
+        return Err(EditError::Cannot(
+            "a node that shares its line with another cannot be moved: write each on a line of its own"
+                .into(),
+        ));
+    }
+    Ok((lead_start(text, s), (le + 1).min(text.len())))
+}
+
+/// Move the node starting at byte `from` to stand before its sibling
+/// starting at byte `before`, or after its last sibling when `before` is
+/// `None`.  The node goes whole: its children, the comment lines directly
+/// above it and a comment after it on its line.  Blank lines stay where
+/// they are, except that the gap it leaves never keeps one on both sides.
+/// Returns the new text and the byte the moved node starts at; the text is
+/// unchanged when the node is already there.
+///
+/// # Errors
+/// If the text doesn't parse, `from` or `before` starts no node, they are
+/// not siblings, or a node shares its line with another.
+pub fn move_node(
+    text: &str,
+    from: usize,
+    before: Option<usize>,
+) -> Result<(String, usize), EditError> {
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let sibs =
+        siblings_at(doc.nodes(), from).ok_or_else(|| EditError::NoNode(format!("byte {from}")))?;
+    let pos = |at: usize| sibs.iter().position(|n| n.span().offset() == at);
+    let i = pos(from).ok_or_else(|| EditError::NoNode(format!("byte {from}")))?;
+    let j = match before {
+        Some(b) => pos(b).ok_or_else(|| {
+            EditError::Cannot("a node moves among its own siblings: the target is not one".into())
+        })?,
+        None => sibs.len(),
+    };
+    // already there: it stays where it is, byte for byte
+    if j == i || j == i + 1 {
+        return Ok((text.to_owned(), from));
+    }
+    let (bs, be) = block_of(text, &sibs[i])?;
+    // where it goes: above the target's own comments, else after the last sibling
+    let p = match sibs.get(j) {
+        Some(t) => {
+            block_of(text, t)?;
+            lead_start(text, t.span().offset())
+        }
+        None => block_of(text, &sibs[sibs.len() - 1])?.1,
+    };
+    // the gap it leaves does not keep a blank line on both sides
+    let blank_below = be < text.len()
+        && text[be..]
+            .split('\n')
+            .next()
+            .is_some_and(|l| l.trim().is_empty());
+    let blank_above = bs > 0 && {
+        let prev = text[..bs - 1].rfind('\n').map_or(0, |n| n + 1);
+        text[prev..bs - 1].trim().is_empty()
+    };
+    let rm_end = if blank_above && blank_below {
+        text[be..].find('\n').map_or(text.len(), |n| be + n + 1)
+    } else {
+        be
+    };
+    let mut block = text[bs..be].to_owned();
+    if !block.ends_with('\n') {
+        block.push('\n');
+    }
+    let inside = from - bs;
+    Ok(if p < bs {
+        (
+            format!("{}{block}{}{}", &text[..p], &text[p..bs], &text[rm_end..]),
+            p + inside,
+        )
+    } else {
+        let p = p.max(rm_end);
+        (
+            format!("{}{}{block}{}", &text[..bs], &text[rm_end..p], &text[p..]),
+            p - (rm_end - bs) + inside,
+        )
+    })
+}
+
 /// Write a new node (one or more lines of KDL, unindented) into the
 /// file's tile: at the end of its stack, or in its body before the stack.
 /// Everything else stays byte for byte.  Returns the new text and the
@@ -585,6 +722,10 @@ pub fn insert_node(text: &str, place: Place, node: &str) -> Result<(String, usiz
             (t, at + "stack {\n".len() + ind + INDENT.len())
         }
         (Place::Tile, s) => add_child(text, tile, s, node),
+        (Place::Before(at), _) => {
+            siblings_at(doc.nodes(), at).ok_or_else(|| EditError::NoNode(format!("byte {at}")))?;
+            insert_above(text, at, node)
+        }
     })
 }
 
@@ -1037,5 +1178,119 @@ mod clause_tests {
         assert!(t.starts_with(head), "{t}");
         let t = rename_mark(&text, Mark::Line, "shore", "bank").unwrap();
         assert!(t.starts_with(head), "{t}");
+    }
+}
+
+#[cfg(test)]
+mod move_tests {
+    use super::*;
+
+    const S: &str = "tile size=\"1x1\" {\n    stack {\n        base\n        // the bank\n        dirt at=bank // soil\n\n        // stones\n        rock at=\"0.5,0.5\"\n        scatter count=3 {\n            pebble\n        }\n        grass\n    }\n}\n";
+
+    fn at(text: &str, word: &str) -> usize {
+        text.find(word).unwrap()
+    }
+
+    #[test]
+    fn a_node_moves_down_with_its_comments_and_children() {
+        let (t, to) = move_node(S, at(S, "dirt"), Some(at(S, "scatter"))).unwrap();
+        assert_eq!(
+            t,
+            "tile size=\"1x1\" {\n    stack {\n        base\n\n        // stones\n        rock at=\"0.5,0.5\"\n        // the bank\n        dirt at=bank // soil\n        scatter count=3 {\n            pebble\n        }\n        grass\n    }\n}\n"
+        );
+        assert!(t[to..].starts_with("dirt at=bank"));
+        KdlDocument::parse(&t).unwrap();
+    }
+
+    #[test]
+    fn a_node_with_children_moves_up_and_to_the_end() {
+        let (t, to) = move_node(S, at(S, "scatter"), Some(at(S, "dirt"))).unwrap();
+        assert!(
+            t.contains(
+                "base\n        scatter count=3 {\n            pebble\n        }\n        // the bank\n        dirt at=bank // soil\n"
+            ),
+            "{t}"
+        );
+        assert!(t[to..].starts_with("scatter count=3 {"));
+        let (t, to) = move_node(S, at(S, "rock"), None).unwrap();
+        assert!(
+            t.ends_with(
+                "        grass\n        // stones\n        rock at=\"0.5,0.5\"\n    }\n}\n"
+            ),
+            "{t}"
+        );
+        assert!(t[to..].starts_with("rock at"));
+        KdlDocument::parse(&t).unwrap();
+    }
+
+    #[test]
+    fn a_blank_line_is_not_doubled_where_the_node_left() {
+        let t = "tile {\n    stack {\n        base\n\n        dirt\n\n        rock\n        grass\n    }\n}\n";
+        let (m, _) = move_node(t, at(t, "dirt"), None).unwrap();
+        assert_eq!(
+            m,
+            "tile {\n    stack {\n        base\n\n        rock\n        grass\n        dirt\n    }\n}\n"
+        );
+    }
+
+    #[test]
+    fn a_node_already_in_place_changes_nothing() {
+        let (t, to) = move_node(S, at(S, "rock"), Some(at(S, "scatter"))).unwrap();
+        assert_eq!(t, S);
+        assert_eq!(to, at(S, "rock"));
+        let (t, _) = move_node(S, at(S, "grass"), None).unwrap();
+        assert_eq!(t, S);
+        let (t, _) = move_node(S, at(S, "rock"), Some(at(S, "rock"))).unwrap();
+        assert_eq!(t, S);
+    }
+
+    #[test]
+    fn a_hidden_entry_stays_where_it_is_and_hides_only_itself() {
+        let t = "tile {\n    stack {\n        dirt\n        /- grass\n        rock\n        tree\n    }\n}\n";
+        let (m, to) = move_node(t, at(t, "dirt"), Some(at(t, "tree"))).unwrap();
+        assert_eq!(
+            m,
+            "tile {\n    stack {\n        /- grass\n        rock\n        dirt\n        tree\n    }\n}\n"
+        );
+        assert!(m[to..].starts_with("dirt"));
+        let (m, _) = move_node(t, at(t, "tree"), Some(at(t, "rock"))).unwrap();
+        assert_eq!(
+            m,
+            "tile {\n    stack {\n        dirt\n        /- grass\n        tree\n        rock\n    }\n}\n"
+        );
+    }
+
+    #[test]
+    fn what_cannot_be_moved_is_refused_in_words() {
+        let one = "tile { stack { rock; tree } }";
+        assert!(matches!(
+            move_node(one, at(one, "rock"), None),
+            Err(EditError::Cannot(_))
+        ));
+        // a target that is not a sibling
+        assert!(matches!(
+            move_node(S, at(S, "dirt"), Some(at(S, "pebble"))),
+            Err(EditError::Cannot(_))
+        ));
+        assert!(matches!(move_node(S, 3, None), Err(EditError::NoNode(_))));
+        assert!(matches!(
+            move_node("tile {", 0, None),
+            Err(EditError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn a_new_entry_goes_between_two_others_above_the_comments_on_the_second() {
+        let (t, at_new) = insert_node(S, Place::Before(at(S, "rock")), "boulder").unwrap();
+        assert!(
+            t.contains("dirt at=bank // soil\n\n        boulder\n        // stones\n        rock"),
+            "{t}"
+        );
+        assert!(t[at_new..].starts_with("boulder"));
+        KdlDocument::parse(&t).unwrap();
+        assert!(matches!(
+            insert_node(S, Place::Before(3), "boulder"),
+            Err(EditError::NoNode(_))
+        ));
     }
 }

@@ -71,6 +71,7 @@ mod edit;
 pub(crate) mod fail;
 mod map;
 mod messages;
+mod offers;
 pub mod payload;
 pub(crate) mod roots;
 mod server;

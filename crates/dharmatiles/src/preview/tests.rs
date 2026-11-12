@@ -2170,3 +2170,175 @@ fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_
         1
     );
 }
+
+// ---- editing from the structure --------------------------------------------
+
+const ROWS: &str = "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=3 {\n    line shore { through west \"(1sq, 0.5sq)\" }\n    stack {\n        base\n        // the soil\n        dirt\n        rock at=\"(0.3sq, 0.4sq)\"\n        grass\n    }\n}\n";
+
+#[test]
+fn an_entry_moves_whole_and_a_new_one_goes_between_two() {
+    let (r, _, token) = editable("move", ROWS);
+    let call = |body: Value| post(&r, "/api/edit", Some(&token), None, &body.to_string()).1;
+    let dirt = ROWS.find("dirt").unwrap();
+    let grass = ROWS.find("grass").unwrap();
+    let v = call(json!({ "text": ROWS, "op": "move", "at": dirt, "before": null }));
+    let moved = v["text"].as_str().unwrap();
+    // the comment on top of it went with it, and the reply says where it now starts
+    assert!(
+        moved.contains("grass\n        // the soil\n        dirt\n    }"),
+        "{v}"
+    );
+    let at = usize::try_from(v["at"].as_u64().unwrap()).unwrap();
+    assert!(moved[at..].starts_with("dirt"), "{v}");
+    // before a sibling
+    let v = call(json!({ "text": ROWS, "op": "move", "at": grass, "before": dirt }));
+    assert!(
+        v["text"]
+            .as_str()
+            .unwrap()
+            .contains("base\n        grass\n        // the soil\n        dirt"),
+        "{v}"
+    );
+    // a target that is not a sibling is refused in words
+    let (head, body) = post(
+        &r,
+        "/api/edit",
+        Some(&token),
+        None,
+        &json!({ "text": ROWS, "op": "move", "at": dirt, "before": ROWS.find("shore").unwrap() })
+            .to_string(),
+    );
+    assert!(head.starts_with("HTTP/1.1 422"), "{head}");
+    assert!(body.to_string().contains("siblings"), "{body}");
+    // a new entry written above another
+    let v = call(
+        json!({ "text": ROWS, "op": "insert", "place": "before", "at": grass, "node": "boulder" }),
+    );
+    let t = v["text"].as_str().unwrap();
+    assert!(
+        t.contains("rock at=\"(0.3sq, 0.4sq)\"\n        boulder\n        grass"),
+        "{v}"
+    );
+    assert!(t[usize::try_from(v["at"].as_u64().unwrap()).unwrap()..].starts_with("boulder"));
+}
+
+fn offer<'a>(v: &'a Value, name: &str) -> &'a Value {
+    v["offers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["name"] == name)
+        .unwrap_or_else(|| panic!("no offer called {name}: {v}"))
+}
+
+#[test]
+fn the_add_menu_offers_what_the_plan_lets_stand_there_and_says_why_not() {
+    let (r, _, token) = editable("offers", ROWS);
+    let id = id0(&r);
+    let ask = |text: &str, at: u64| {
+        let (h, v) = post(
+            &r,
+            &format!("/api/tiles/{id}/offers"),
+            Some(&token),
+            None,
+            &json!({ "text": text, "at": at }).to_string(),
+        );
+        assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+        v
+    };
+    // the stack is dirt, rock, grass (the base is not one of its entries)
+    let end = ask(ROWS, 3);
+    assert_eq!(end["ok"], true, "{end}");
+    assert_eq!(offer(&end, "tree")["ok"], true, "{end}");
+    assert_eq!(offer(&end, "water")["ok"], true);
+    // a wall runs along the drawn line
+    assert_eq!(offer(&end, "wall")["node"], "wall at=shore");
+    // the tile has its base already
+    assert_eq!(offer(&end, "base")["ok"], false);
+    assert!(
+        offer(&end, "base")["why"]
+            .as_str()
+            .unwrap()
+            .contains("already")
+    );
+    // above the dirt, a tree would stand on ground not yet painted
+    let top = ask(ROWS, 0);
+    assert_eq!(offer(&top, "tree")["ok"], false, "{top}");
+    assert!(
+        offer(&top, "tree")["why"]
+            .as_str()
+            .unwrap()
+            .contains("ground"),
+        "{top}"
+    );
+    // things that read nothing stand anywhere
+    assert_eq!(offer(&top, "rock")["ok"], true);
+    // a floor lies on the ground above it: a dirt listed after it is refused, naming the floor
+    let floor = ROWS.replace("        grass\n", "        planks\n");
+    let after = ask(&floor, 3);
+    assert_eq!(offer(&after, "dirt")["ok"], false, "{after}");
+    assert!(
+        offer(&after, "dirt")["why"]
+            .as_str()
+            .unwrap()
+            .contains("planks"),
+        "{after}"
+    );
+    assert_eq!(offer(&ask(&floor, 1), "dirt")["ok"], true);
+    // a tile with a mistake has no plan to ask
+    let broken = ask(&ROWS.replace("rock at", "rock at=nowhere at"), 0);
+    assert_eq!(broken["ok"], false, "{broken}");
+    assert!(broken["why"].as_str().is_some());
+}
+
+#[test]
+fn every_element_can_be_offered_with_nothing_set() {
+    let (r, _, token) = editable("offers-all", ROWS);
+    let (_, v) = post(
+        &r,
+        &format!("/api/tiles/{}/offers", id0(&r)),
+        Some(&token),
+        None,
+        &json!({ "text": ROWS, "at": 3 }).to_string(),
+    );
+    let names: Vec<&str> = v["offers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|o| o["name"].as_str())
+        .collect();
+    for want in [
+        "dirt",
+        "grass",
+        "reeds",
+        "water",
+        "rock",
+        "tree",
+        "wall",
+        "flagstones",
+        "planks",
+        "cliff",
+        "scatter",
+        "flower",
+        "base",
+    ] {
+        assert!(names.contains(&want), "{want} in {names:?}");
+    }
+    // the line each would write is one the reader accepts in a stack
+    let mut bad = Vec::new();
+    for o in v["offers"].as_array().unwrap() {
+        if o["ok"] != true || o["name"] == "base" {
+            continue;
+        }
+        let node = o["node"].as_str().unwrap();
+        let text = ROWS.replace(
+            "        grass\n",
+            &format!("        {}\n", node.replace('\n', "\n        ")),
+        );
+        let c = check_text(&r, &token, &text);
+        if c["ok"] != true {
+            bad.push(format!("{node}: {}", c["errors"][0]["message"]));
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}
