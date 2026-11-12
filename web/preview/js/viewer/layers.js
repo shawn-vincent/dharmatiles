@@ -1,0 +1,283 @@
+// The viewer's layers over the mesh: the debug dots, the clouds, the region map, the
+// grid and the build's sketches.
+//
+// Methods of `Viewer`, installed on its prototype by `viewer.js`: they run
+// with `this` the viewer.
+
+import * as THREE from 'three';
+import { classInfo, segments } from '../debug-layer.js';
+import { cloudOf, columnGeometry, shadeAlpha, SHADE_COLUMN, SHADE_SHEET, sheetGeometry } from '../cloud.js';
+import { FAT_FRAG, FAT_VERT, fatGeometry } from '../fatline.js';
+import { CLOUD_CONTOUR_PX, CLOUD_HOVER, CLOUD_SPAN_PX, CONTOUR_ALPHA, DOT_FRAG, DOT_VERT, GRID_BELOW_MM, GRID_FRAG } from './consts.js';
+
+export const layersMethods = {
+  /** The debug layer's objects, made again from `this.debug` while it is shown. */
+  buildDebug() {
+    if (this.debugGroup) {
+      this.scene.remove(this.debugGroup);
+      this.debugGroup.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+      this.debugGroup = null;
+    }
+    const d = this.debug;
+    this.onDebugChange?.(this.showDebug ? d : null);
+    if (!this.showDebug || !d) return;
+    const group = new THREE.Group();
+    const colour = (token) => new THREE.Color().setStyle(this.debugColour(token)); // a bad token is a bug: let it throw
+    const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
+    // then the marks, over everything: they lie on the ground under the blades
+    const marks = { depthTest: false, depthWrite: false, transparent: true };
+    for (const [cls, trails] of Object.entries(d.trails ?? {})) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(segments(trails), 3));
+      over(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: colour(classInfo(cls).token), opacity: cls === 'flow' ? 0.6 : 1, ...marks })), cls === 'flow' ? 20 : 21);
+    }
+    const pos = [], col = [];
+    for (const [cls, xyz] of Object.entries(d.dots ?? {})) {
+      const c = colour(classInfo(cls).token);
+      for (let k = 0; k < xyz.length; k += 3) { pos.push(xyz[k], xyz[k + 1], xyz[k + 2]); col.push(c.r, c.g, c.b); }
+    }
+    if (pos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3));
+      const size = 5 * Math.min(2, this.renderer.getPixelRatio());
+      over(new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: { uSize: { value: size } }, vertexShader: DOT_VERT, fragmentShader: DOT_FRAG, ...marks })), 22);
+    }
+    this.debugGroup = group;
+    this.scene.add(group);
+  },
+
+  /**
+   * The selected cloud: `sel` and `hov` are stack entries (or null), the
+   * one whose `top=` or pin the caret is in or the sheet's top field has
+   * focus, and the one under the pointer.  Drawn from the payload's clouds
+   * in the accent, as a selected place is: its low and high sheets shaded by
+   * how often each height comes up, and a line from low to high at each
+   * branch tip or stone with the rolled height marked.  The hovered one is
+   * quieter.
+   */
+  setCloud(sel, hov) {
+    if (this.cloudSel === sel && this.cloudHov === hov) return;
+    this.cloudSel = sel;
+    this.cloudHov = hov;
+    this.buildCloud();
+    this.draw();
+  },
+
+  /** Segments drawn `px` CSS pixels wide (see fatline.js): `pos` six numbers a segment, `rgba` four a vertex (two a segment). */
+  fatLines(pos, rgba, px) {
+    const f = fatGeometry(pos, rgba);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(f.position, 3));
+    g.setAttribute('other', new THREE.BufferAttribute(f.other, 3));
+    g.setAttribute('side', new THREE.BufferAttribute(f.side, 1));
+    g.setAttribute('color', new THREE.BufferAttribute(f.color, 4));
+    g.setIndex(new THREE.BufferAttribute(f.index, 1));
+    const m = new THREE.ShaderMaterial({
+      uniforms: { uRes: this.fatRes, uWidth: { value: px * this.fatDpr } },
+      vertexShader: FAT_VERT, fragmentShader: FAT_FRAG,
+      transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+    });
+    m.userData.px = px;
+    this.fatMaterials.add(m);
+    return new THREE.Mesh(g, m);
+  },
+
+  buildCloud() {
+    if (this.cloudGroup) {
+      this.scene.remove(this.cloudGroup);
+      this.cloudGroup.traverse((o) => {
+        o.geometry?.dispose();
+        o.material?.dispose();
+        this.fatMaterials.delete(o.material);
+      });
+      this.cloudGroup = null;
+    }
+    const d = this.clouds;
+    const wanted = [[this.cloudSel, 1], [this.cloudHov !== this.cloudSel ? this.cloudHov : null, CLOUD_HOVER]].filter(([e]) => e != null);
+    if (!d || !wanted.length) return;
+    const group = new THREE.Group();
+    // the cloud's own colour, not the selection's accent: a rock's cloud sits on the rock's outline
+    const c = new THREE.Color().setStyle(this.debugColour('--cloud')); // a bad token is a bug: let it throw
+    const plate = new THREE.Color(this.debugColour('--plate'));
+    const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
+    // drawn over the solids, as a selected place is: the low sheet is
+    // under the ground it bounds
+    const flat = { depthTest: false, depthWrite: false, transparent: true };
+    const mpos = [], mcol = [];
+    for (const [entry, strength] of wanted) {
+      const { sheets, columns } = cloudOf(d, entry);
+      for (const s of sheets) {
+        const { positions, contour, shade } = sheetGeometry(s);
+        const fill = new THREE.BufferGeometry();
+        fill.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const rgba = new Float32Array(shade.length * 4);
+        shade.forEach((v, n) => rgba.set([c.r, c.g, c.b, strength * shadeAlpha(v, SHADE_SHEET)], 4 * n));
+        fill.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
+        over(new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, ...flat })), 30);
+        const rgbaEdge = new Float32Array((contour.length / 3) * 4);
+        for (let n = 0; n < rgbaEdge.length; n += 4) rgbaEdge.set([c.r, c.g, c.b, strength * CONTOUR_ALPHA], n);
+        over(this.fatLines(contour, rgbaEdge, CLOUD_CONTOUR_PX), 31);
+      }
+      for (const col of columns) {
+        const g = columnGeometry(col.v);
+        const rgba = new Float32Array(g.lineShade.length * 4);
+        g.lineShade.forEach((v, n) => rgba.set([c.r, c.g, c.b, strength * shadeAlpha(v, SHADE_COLUMN)], 4 * n));
+        over(this.fatLines(g.lines, rgba, CLOUD_SPAN_PX), 32);
+        for (let n = 0; n < g.n; n++) {
+          mpos.push(g.marks[3 * n], g.marks[3 * n + 1], g.marks[3 * n + 2]);
+          // the marker toward the plate where its height is rare, and when only hovered
+          const t = strength * shadeAlpha(g.markShade[n], SHADE_COLUMN);
+          const m = c.clone().lerp(plate, 1 - t);
+          mcol.push(m.r, m.g, m.b);
+        }
+      }
+    }
+    if (mpos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(mpos), 3));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(mcol), 3));
+      const size = 6 * Math.min(2, this.renderer.getPixelRatio());
+      over(new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: { uSize: { value: size } }, vertexShader: DOT_VERT, fragmentShader: DOT_FRAG, ...flat })), 33);
+    }
+    this.cloudGroup = group;
+    this.scene.add(group);
+  },
+
+  /**
+   * The map's regions in the 3D scene, flat at level zero (the datum).
+   * `layer`: {focus (one region is selected: opaque, the rest of the tile
+   * fades), z (mm), items: [{positions (Float32Array of triangles), color, alpha}]}; null for none.
+   * Seen through the faded tile, depth-tested against it; with the fade
+   * off (or a stale mesh) it can't be seen inside the solid, so it is
+   * drawn over the tile instead.
+   */
+  setRegionLayer(layer) {
+    if (this.regionLayer?.group) {
+      this.scene.remove(this.regionLayer.group);
+      for (const m of this.regionLayer.group.children) { m.geometry.dispose(); m.material.dispose(); }
+    }
+    this.regionLayer = null;
+    if (layer?.items?.length) {
+      const group = new THREE.Group();
+      for (const it of layer.items) {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(it.positions, 3));
+        const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: it.color, side: THREE.DoubleSide, transparent: true }));
+        m.frustumCulled = false;
+        m.userData.alpha = it.alpha;
+        m.userData.ref = !!it.role; // a place the selected region is made from, not the region
+        m.userData.line = it.role === 'line';
+        m.position.z = it.dz ?? 0;
+        group.add(m);
+      }
+      group.position.z = layer.z;
+      this.scene.add(group);
+      this.regionLayer = { focus: !!layer.focus, group };
+    }
+    this.applyFade();
+    this.draw();
+  },
+
+  /** Opaque and in depth order before the fade for the selected region; faint and over everything otherwise. */
+  styleRegions() {
+    const L = this.regionLayer;
+    if (!L) return;
+    const seen = L.focus && this.fade && !this.stale && this.sketches.size === 0;
+    for (const m of L.group.children) {
+      const mat = m.material;
+      mat.depthTest = seen;
+      mat.depthWrite = seen;
+      // the region itself is opaque; what it is made from is quieter: a line solid, a region's fill faint
+      const solid = !m.userData.ref || m.userData.line;
+      mat.opacity = L.focus ? (solid ? (seen ? 1 : 0.7) : m.userData.alpha) : m.userData.alpha;
+      mat.transparent = !(L.focus && seen && solid);
+      m.renderOrder = seen ? 0 : 9;
+      mat.needsUpdate = true;
+    }
+  },
+
+  /**
+   * The ground grid, ruled at the square size (35 mm DungeonBlocks, 25.4
+   * OpenLOCK): theme-contrasting lines, bold at every square and fine in between, a
+   * plane at the tile's datum (z = 0, where the base meets the tile body;
+   * an STL has none, so its lowest point) that fades out toward the
+   * horizon.  It is drawn after the tile, without writing depth, a hair
+   * below the datum so it never fights the tile's flat underside.
+   */
+  buildGrid() {
+    if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); this.grid.material.dispose(); this.grid = null; }
+    const b = this.bounds();
+    const sq = this.plan?.square_mm;
+    if (!b || !sq) return;
+    const [w, h] = this.plan.size_mm;
+    const z = (this.plan.datum_z ?? b.lo[2]) - GRID_BELOW_MM;
+    const reach = Math.max(w, h) * 6;
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSq: { value: sq }, uDim: { value: this.gridDim ?? 1 }, uCentre: { value: new THREE.Vector2(w / 2, h / 2) },
+        uR0: { value: Math.max(w, h) * 1.2 }, uR1: { value: reach * 0.5 },
+        uInk: { value: this.gridInk?.clone() ?? new THREE.Color(0.17, 0.2, 0.25) },
+      },
+      vertexShader: 'varying vec2 vXY; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXY = w.xy; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: GRID_FRAG,
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    });
+    this.grid = new THREE.Mesh(new THREE.PlaneGeometry(reach, reach), mat);
+    this.grid.position.set(w / 2, h / 2, z);
+    this.grid.renderOrder = 1;
+    this.grid.frustumCulled = false;
+    this.grid.visible = this.showGrid;
+    this.scene.add(this.grid);
+  },
+
+  /** Set the grid's opacity independently of the tile's paint. */
+  setGridDim(v) {
+    this.gridDim = v;
+    if (this.grid) this.grid.material.uniforms.uDim.value = v;
+    this.draw();
+  },
+
+  /** The theme's grid ink: dark by day, pale against Moonpool's twilight. */
+  setGridColor(css) {
+    this.gridInk ??= new THREE.Color(0.17, 0.2, 0.25);
+    this.gridInk.setStyle(css); // a bad theme token is a bug: let it throw to the page's error panel
+    if (this.grid) this.grid.material.uniforms.uInk.value.copy(this.gridInk);
+    this.draw();
+  },
+
+  /** The sketches of a build running: [{id, rough, payload}], replacing those shown. */
+  setSketches(list) {
+    const want = new Set(list.map((k) => k.id));
+    for (const [id, k] of this.sketches) {
+      if (want.has(id)) continue;
+      this.scene.remove(...k.meshes);
+      k.geometry.dispose();
+      this.sketches.delete(id);
+    }
+    for (const { id, rough, payload } of list) {
+      if (this.sketches.has(id)) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(payload.positions, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(payload.normals, 3));
+      g.setAttribute('paint', new THREE.BufferAttribute(payload.clean, 3, true));
+      g.setAttribute('who', new THREE.BufferAttribute(new Float32Array(2 * payload.triangles * 3), 2));
+      const look = rough ? this.sketchLooks.rough : this.sketchLooks.parts;
+      const meshes = [look.depth, look.colour].map((m, i) => {
+        const gm = new THREE.Mesh(g, m);
+        gm.frustumCulled = false; gm.renderOrder = (rough ? 5 : 3) + i;
+        return gm;
+      });
+      this.scene.add(...meshes);
+      this.sketches.set(id, { geometry: g, meshes, rough, bounds: payload.meta?.lo && { lo: payload.meta.lo, hi: payload.meta.hi } });
+    }
+    this.applyFade();
+    this.pulse();
+    this.draw();
+  },
+
+  /** The bounds of each sketch shown: [{lo, hi}]. */
+  sketchBounds() {
+    return [...this.sketches.values()].map((k) => k.bounds).filter(Boolean);
+  }
+};
