@@ -43,6 +43,7 @@
 <h2 id="unreleased">Unreleased</h2>
 
 <ul>
+  <li><strong>The drawn cloud follows the caret:</strong> typing inside a <code>top=</code> or moving the caret there by any means now moves the highlighted cloud at once, and a cloud no longer stays drawn from the previous tile after you open another.</li>
   <li><strong>No stale draft after a drag:</strong> a quick preview that came back late, for a value you had already moved past or after the real build had landed, no longer replaces the newer mesh; the last step of a drag now asks for a preview too.</li>
   <li><strong>Page errors are shown, not swallowed:</strong> a bug in one part of the editor page used to be taken for a lost connection, or stopped the other parts from following a change, with nothing on screen; it now lands in the error panel and the rest of the page carries on.</li>
   <li><strong>The sheet and the map wait for a clean check:</strong> a change made from the property sheet (a control, Hide, Delete), a handle dragged on the map or a node placed from the view is refused, with a note saying why, while the source has an edit not yet checked or a mistake in it; before, it could write at the wrong place in the source.</li>

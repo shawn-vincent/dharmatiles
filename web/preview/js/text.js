@@ -181,7 +181,7 @@ export class TextPane {
   /**
    * `code` is the element the editor fills.  Callbacks: onCaretLine(n) when
    * the caret moves to a line by a click or a key, onHoverLine(n|null),
-   * onEdit(text, kind) after the user changes the text, onReadOnly() when
+   * onCaret() after any move of the caret or edit of the text, onEdit(text, kind) after the user changes the text, onReadOnly() when
    * they try to type into a file they cannot write, onKey(e) first, for
    * completion (return true when it took the key), and onHistory(step).
    */
@@ -243,6 +243,8 @@ export class TextPane {
     if (u.selectionSet && !quiet && u.transactions.some((tr) => tr.isUserEvent('select'))) {
       this.cb.onCaretLine?.(this.caretLine());
     }
+    // the caret is somewhere else now, by a move or by typing: whatever follows the caret (a cloud) asks again
+    if ((u.selectionSet || u.docChanged) && !quiet) this.cb.onCaret?.();
   }
 
   /** Change the document from the page (not typing): only the changed middle, so folds and scroll stay. */

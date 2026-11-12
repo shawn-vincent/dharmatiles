@@ -178,14 +178,15 @@ let down = null, hoverRaf = 0, lastMove = null;
 export function init() {
   // the pane tells which line the caret or the pointer is on
   const caret = texts.cb.onCaretLine;
-  texts.cb.onCaretLine = (n) => { caret?.(n); setSel(entryAtLine(n), { from: 'text' }); caretCloud(); };
+  texts.cb.onCaretLine = (n) => { caret?.(n); setSel(entryAtLine(n), { from: 'text' }); };
+  texts.cb.onCaret = caretCloud; // on every move of the caret and every edit, not only a click or a key
   texts.cb.onHoverLine = (n) => {
     setHov(n == null ? null : entryAtLine(n, true));
     view.set({ cloudHov: n == null ? null : cloudOnLine(texts.text, shownClouds(), n)?.entry ?? null });
   };
   view.subscribe(['cloudText', 'cloudSheet', 'cloudHov', 'cloudSheetHov'], paintCloud);
   // another tile, or a stack checked again (its entries may have moved): ask the caret again
-  view.subscribe(['tileId'], () => view.set({ cloudSheet: null, cloudHov: null, cloudSheetHov: null }));
+  view.subscribe(['tileId'], () => view.set({ cloudText: null, cloudSheet: null, cloudHov: null, cloudSheetHov: null }));
   doc.subscribe(['stack', 'file', 'tileId'], caretCloud);
 
   view.subscribe(['sel', 'hov', 'shown', 'draft', 'tileId'], paintHighlight);
