@@ -2,13 +2,13 @@
 // mesh (or a draft in its place), its camera.  Follows the server store (the
 // tile's builds) and the view store (which tile).
 
-import { NO_ENTRY, parsePayload } from '../payload.js';
+import { meshIndex, parsePayload, piecesByKey } from '../payload.js';
 import { isOffline } from '../host.js';
 import { showError } from '../problems.js';
 import { host, pickView, viewer } from './app.js';
 import { beginFollow, endFollow, followBuild } from './build.js';
 import { canLeave, supersedeDrafts } from './document.js';
-import { inRoot, isEntry, server, stackItems, stem, tile, tileById, view } from './stores.js';
+import { inRoot, isEntry, server, stackIndex, stem, tile, tileById, view } from './stores.js';
 
 // ---- choosing a tile ---------------------------------------------------
 
@@ -27,16 +27,6 @@ export async function select(id, guarded = false) {
   const to = t ? t.id : null;
   view.set(to === cur.tileId ? {} : { tileId: to, sel: null, hov: null, activeView: null, textFile: null });
   return true;
-}
-
-/** The pieces each entry's geometry has, from the mesh's triangles. */
-function countPieces(p) {
-  const pieces = new Map();
-  for (let t = 0; t < p.triangles; t++) {
-    const e = p.entry[t];
-    if (e !== NO_ENTRY) pieces.set(e, Math.max(pieces.get(e) || 0, p.piece[t] + 1));
-  }
-  return pieces;
 }
 
 /** A plan that differs from the one the view has. */
@@ -100,7 +90,7 @@ async function loadMesh(t) {
     const p = parsePayload(buf);
     viewer.setMesh(p); // the new mesh swaps in place: the camera is kept
     supersedeDrafts();
-    view.set({ pieces: countPieces(p), shown: { id: t.id, epoch, version }, draft: null });
+    view.set({ pieces: piecesByKey(p), shown: { id: t.id, epoch, version }, draft: null });
     if (first) {
       const saved = cameras.get(t.path);
       if (saved) {
@@ -109,9 +99,9 @@ async function loadMesh(t) {
       } else pickView(view.get().mode, endFollow(t.id));
     }
     endFollow(t.id);
-    // a selection the new build no longer has goes
+    // a selection that neither the text nor the new build has goes
     const sel = view.get().sel;
-    if (isEntry(sel) && sel.id >= stackItems().length) view.set({ sel: null });
+    if (isEntry(sel) && stackIndex(sel.id) < 0 && meshIndex(p, sel.id) < 0) view.set({ sel: null });
   } catch (e) {
     if (!isOffline(e)) showError(`Could not show ${stem(t)}`, e); // offline: the chip says so, and the mesh is fetched again
   }
@@ -122,7 +112,7 @@ function showDraft() {
   const d = view.get().draft;
   if (!d || d.tileId !== view.get().tileId) return;
   viewer.setMesh(d.payload);
-  view.set({ pieces: countPieces(d.payload) });
+  view.set({ pieces: piecesByKey(d.payload) });
 }
 
 /** Wire this part of the page (once, at load). */

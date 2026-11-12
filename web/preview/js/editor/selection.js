@@ -1,20 +1,39 @@
 // The selection: what is selected and hovered, in the view and the text, and
 // the pointer on the canvas.  It keeps `view.sel` and `view.hov` (one shape:
-// {kind, id, piece?}) and reflects them in the 3D view's tint, the text
-// pane's marks and the title's button; the sheet and the map subscribe to
-// the same keys themselves.
+// {kind, id, piece?}; an entry's id is its key) and reflects them in the 3D
+// view's tint, the text pane's marks and the title's button; the sheet and
+// the map subscribe to the same keys themselves.
+//
+// An entry is selected by key, and each part resolves it against the stack
+// it needs: the view (hover, click, tint, pieces, framing) against the stack
+// of the mesh on screen, which may be older than the text; the text and the
+// sheet (lines, files, labels) against the stack of the text now.  So an
+// insert or a move in the source cannot point the selection at another entry.
 
 import { byteToIndex } from '../text.js';
+import { entryKey, meshIndex, meshStack } from '../payload.js';
 import { cloudAtCaret, cloudOnLine, cloudsIn } from '../cloud.js';
 import { $, pickView, toast, viewer } from './app.js';
 import { texts, canLeave } from './document.js';
 import {
-  controlText, dirty, regionOf, doc, entrySel, isEntry, isMark, isPlace, mapNode, markSel, same, server, stackItems, stem,
+  controlText, dirty, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, stackItems, stem,
   tile, tileSel, view,
 } from './stores.js';
 
+/** The entry `key` as the mesh on screen has it (`{key, label, element, what}`), or null: the view's stack, not the text's. */
+const meshOf = (key) => {
+  const i = meshIndex(viewer.payload, key);
+  return i < 0 ? null : meshStack(viewer.payload)[i];
+};
+
 // only a scatter's things are picked one by one (a dirt's clods or a grass's clumps are the entry)
-const piecesOf = (e) => (stackItems()[e]?.what === 'scatter' ? view.get().pieces.get(e) || 0 : 0);
+const piecesOf = (key) => (meshOf(key)?.what === 'scatter' ? view.get().pieces.get(key) || 0 : 0);
+
+/** What the pointer found in the view, `{entry, piece}` against the mesh's stack, as `{key, piece}` (null: nothing owned). */
+function hitKey(hit) {
+  const key = hit ? entryKey(viewer.payload, hit.entry) : null;
+  return key == null ? null : { key, piece: hit.piece };
+}
 
 // ---- the selection ----------------------------------------------------------
 
@@ -22,7 +41,8 @@ function describe(w) {
   if (!w) return '';
   if (w.kind === 'tile') return tile() ? `tile ${stem(tile())}` : 'tile';
   if (isMark(w)) return `${w.kind} ${w.id}`;
-  const it = stackItems()[w.id];
+  // the text's stack names it; the mesh's still does when the text has moved on
+  const it = itemOf(w) ?? meshOf(w.id);
   if (!it) return '';
   const n = piecesOf(w.id);
   if (w.piece != null && n > 1) return `${it.label} · ${w.piece + 1} of ${n}`;
@@ -32,7 +52,7 @@ function describe(w) {
 /** Select `w` (or nothing); the text follows to the selection's own file. */
 export function setSel(w, { from, guarded = false } = {}) {
   if (same(w, view.get().sel)) return;
-  const targetFile = isEntry(w) ? stackItems()[w.id]?.file : w ? tile()?.path : null;
+  const targetFile = isEntry(w) ? itemOf(w)?.file : w ? tile()?.path : null;
   if (!guarded && targetFile && targetFile !== texts.file && dirty()) {
     canLeave().then((ok) => { if (ok) setSel(w, { from, guarded: true }); });
     return;
@@ -51,7 +71,11 @@ function setHov(w) { if (!same(w, view.get().hov)) view.set({ hov: w }); }
 
 // ---- the selection in the view, the text and the title ------------------------
 
-const tint = (w) => (isEntry(w) ? { entry: w.id, piece: w.piece } : null);
+/** The view's tint for a selection: its place in the mesh on screen (none when that mesh has no such entry). */
+function tint(w) {
+  const entry = isEntry(w) ? meshIndex(viewer.payload, w.id) : -1;
+  return entry < 0 ? null : { entry, piece: w.piece };
+}
 function paintHighlight() {
   const { sel, hov } = view.get();
   viewer.setHighlight(tint(sel), isEntry(hov) && !same(hov, sel) ? tint(hov) : null);
@@ -73,18 +97,18 @@ export function linesOf(w) {
     const n = mapNode(w);
     return n?.span && own ? spanLines(n.span) : null;
   }
-  const it = stackItems()[w.id];
+  const it = itemOf(w);
   return it?.lines && it.file === d.file ? it.lines : null;
 }
 
 /** The innermost entry written on line `n` of the file shown, else the tile (its own file) or nothing. */
 function entryAtLine(line, hover = false) {
   let best = null, width = Infinity;
-  stackItems().forEach((it, i) => {
-    if (!it.lines || it.file !== texts.file) return;
+  for (const it of stackItems()) {
+    if (!it.key || !it.lines || it.file !== texts.file) continue;
     const [a, b] = it.lines;
-    if (line >= a && line <= b && b - a < width) { best = i; width = b - a; }
-  });
+    if (line >= a && line <= b && b - a < width) { best = it.key; width = b - a; }
+  }
   if (best != null) return entrySel(best);
   if (texts.file !== tile()?.path) return null;
   const map = doc.get().map;
@@ -113,7 +137,7 @@ const shownClouds = () => cloudsIn(texts.text, stackItems(), texts.file);
 /** The cloud the caret is in, as its stack entry. */
 function caretCloud() {
   const c = texts.text ? cloudAtCaret(shownClouds(), texts.caret().index) : null;
-  view.set({ cloudText: c ? c.entry : null });
+  view.set({ cloudText: c ? c.key : null });
 }
 function paintCloud() {
   const v = view.get();
@@ -125,19 +149,20 @@ function selectWritten() {
   const d = doc.get();
   if (d.selectAt == null || !d.ok) return;
   doc.set({ selectAt: null });
-  const i = stackItems().findIndex((it) => it.span && it.span[0] === d.selectAt && it.file === d.file);
-  if (i >= 0) setSel(entrySel(i), { from: 'view' });
+  const it = stackItems().find((x) => x.key && x.span && x.span[0] === d.selectAt && x.file === d.file);
+  if (it) setSel(entrySel(it.key), { from: 'view' });
 }
 
 /** A click in the view on `hit`: select it, or climb when it is already selected. */
-function clickHit(hit) {
+function clickHit(found) {
+  const hit = hitKey(found);
   if (!hit) return setSel(null);
   const s = view.get().sel;
-  const many = piecesOf(hit.entry) > 1;
-  const inOf = (e) => (stackItems()[e] ? regionOf(stackItems()[e]) : null);
-  if (s?.kind === 'region' && inOf(hit.entry) === s.id) return setSel(tileSel(), { from: 'view' }); // the region -> the tile
-  if (!isEntry(s) || s.id !== hit.entry) return setSel(entrySel(hit.entry, many ? hit.piece : null), { from: 'view' });
-  if (s.piece != null) return setSel(entrySel(hit.entry), { from: 'view' }); // the piece -> its entry
+  const many = piecesOf(hit.key) > 1;
+  const inOf = (key) => { const it = itemOf(entrySel(key)); return it ? regionOf(it) : null; };
+  if (s?.kind === 'region' && inOf(hit.key) === s.id) return setSel(tileSel(), { from: 'view' }); // the region -> the tile
+  if (!isEntry(s) || s.id !== hit.key) return setSel(entrySel(hit.key, many ? hit.piece : null), { from: 'view' });
+  if (s.piece != null) return setSel(entrySel(hit.key), { from: 'view' }); // the piece -> its entry
   const inr = inOf(s.id);
   if (inr && doc.get().map?.regions.some((r) => r.name === inr)) return setSel(markSel('region', inr), { from: 'view' }); // the entry -> its region
   return setSel(tileSel(), { from: 'view' }); // the entry -> the tile
@@ -147,7 +172,8 @@ function clickHit(hit) {
 export function frameSel() {
   const { sel, mode } = view.get();
   if (!isEntry(sel)) return pickView(mode);
-  const b = viewer.centreOf(sel.id, sel.piece);
+  const at = meshIndex(viewer.payload, sel.id);
+  const b = at < 0 ? null : viewer.centreOf(at, sel.piece);
   if (!b) return;
   const pose = viewer.pose();
   const size = Math.max(8, Math.hypot(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]));
@@ -159,7 +185,7 @@ export function frameSel() {
 function showWorst() {
   const f = viewer.worstFlagged();
   if (!f) return;
-  if (f.entry != null) setSel(entrySel(f.entry, f.piece), { from: 'view' });
+  if (f.key != null) setSel(entrySel(f.key, f.piece), { from: 'view' });
   const pose = viewer.pose();
   const size = Math.max(4, Math.hypot(f.hi[0] - f.lo[0], f.hi[1] - f.lo[1], f.hi[2] - f.lo[2]));
   pose.target.set((f.lo[0] + f.hi[0]) / 2, (f.lo[1] + f.hi[1]) / 2, (f.lo[2] + f.hi[2]) / 2);
@@ -182,7 +208,7 @@ export function init() {
   texts.cb.onCaret = caretCloud; // on every move of the caret and every edit, not only a click or a key
   texts.cb.onHoverLine = (n) => {
     setHov(n == null ? null : entryAtLine(n, true));
-    view.set({ cloudHov: n == null ? null : cloudOnLine(texts.text, shownClouds(), n)?.entry ?? null });
+    view.set({ cloudHov: n == null ? null : cloudOnLine(texts.text, shownClouds(), n)?.key ?? null });
   };
   view.subscribe(['cloudText', 'cloudSheet', 'cloudHov', 'cloudSheetHov'], paintCloud);
   // another tile, or a stack checked again (its entries may have moved): ask the caret again
@@ -218,10 +244,10 @@ export function init() {
       hoverRaf = 0;
       const r = canvas.getBoundingClientRect();
       const x = lastMove.clientX - r.left, y = lastMove.clientY - r.top;
-      const hit = viewer.pick(x, y);
-      const many = hit && piecesOf(hit.entry) > 1;
+      const hit = hitKey(viewer.pick(x, y));
+      const many = hit && piecesOf(hit.key) > 1;
       // hover shows what a click would select
-      let w = hit && entrySel(hit.entry, many ? hit.piece : null);
+      let w = hit && entrySel(hit.key, many ? hit.piece : null);
       const sel = view.get().sel;
       if (w && isEntry(sel) && sel.id === w.id) w = sel;
       setHov(w);

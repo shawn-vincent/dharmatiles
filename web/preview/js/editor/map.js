@@ -8,7 +8,8 @@ import { failed } from '../problems.js';
 import { token } from '../tokens.js';
 import { $, host, offerMine, viewer } from './app.js';
 import { askDraft, edited, openFile, replaceBytes, spansUsable, texts } from './document.js';
-import { doc, isEntry, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
+import { meshStack } from '../payload.js';
+import { doc, isEntry, itemOf, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
 
 export let tools = null; // the bar's tools (below)
 
@@ -19,10 +20,10 @@ const SURFACES = new Set(['dirt', 'flagstones', 'planks', 'cliff', 'water']);
 const COLOUR = { water: '--water', dirt: '--earth', flagstones: '--stone', cliff: '--stone', planks: '--earth', grass: '--moss', reeds: '--moss', flower: '--bloom' };
 const cssVar = token; // cached: read once per theme, not once per entry per frame
 
-/** The ground's heights, from the surfaces the build made. */
+/** The ground's heights, from the surfaces the build made (what each is, from the mesh's own stack). */
 function surfaceHeights(p) {
-  const items = stackItems();
-  overlay.setHeights(p, (e) => SURFACES.has(items[e]?.element), tile()?.plan?.size_mm || p.meta.footprint);
+  const stack = meshStack(p);
+  overlay.setHeights(p, (e) => SURFACES.has(stack[e]?.element), tile()?.plan?.size_mm || p.meta.footprint);
 }
 
 /** Each region's tint: the colour of the last thing laid in it. */
@@ -52,7 +53,7 @@ function handles() {
   }
   if (s.kind === 'region') return (mapNode(s)?.fills || []).filter((f) => f.at).map((f) => ({ q: f.at, span: f.span, snap: false, move(q) { f.at = q; } }));
   if (isEntry(s)) {
-    const it = stackItems()[s.id];
+    const it = itemOf(s);
     const c = (it?.place || []).find((x) => x.name === 'at');
     if (!c || it.file !== file) return [];
     const v = valueOf(c.text, 'at');

@@ -4,12 +4,43 @@
 //   f32 positions[9n] | f32 normals[9n] | u8 painted[9n] | u8 clean[9n] |
 //   u16 entry[n] | u16 piece[n] | padding to 4
 //
-// entry is the index of the stack entry that made each triangle (the base is
-// the stack's length, 65535 none); piece counts the things within it (rock 0,
-// rock 1 of a scatter).  Everything is a typed-array view onto the one
-// buffer: no copies, no JSON numbers.
+// entry is a place in the header's `stack`, the stack the mesh was built
+// from (the connector, when the tile has a base, is last; 65535 none);
+// piece counts the things within it (rock 0, rock 1 of a scatter).
+// Everything is a typed-array view onto the one buffer: no copies, no JSON
+// numbers.
+//
+// The text on screen may have moved on since the mesh was built (an entry
+// inserted, deleted, moved), so an entry number is only ever read against
+// the mesh's own stack, and what the page keeps of an entry is its key (its
+// id, `tile/grass/0`), looked up in whichever stack a part of the page needs.
 
 export const NO_ENTRY = 65535;
+
+/** The stack the mesh was built from: `[{index, key, label, element, what}]` (none for a mesh made without one). */
+export const meshStack = (payload) => payload?.meta?.stack ?? [];
+
+/** The entry that mesh entry number `index` is (null for none), decoded against the mesh's own stack. */
+export function meshEntry(payload, index) {
+  if (index == null || index === NO_ENTRY) return null;
+  return meshStack(payload)[index] ?? null;
+}
+
+/** The key of mesh entry number `index`, or null. */
+export const entryKey = (payload, index) => meshEntry(payload, index)?.key ?? null;
+
+/** The mesh's entry number for `key`, or -1 when the mesh has no such entry. */
+export const meshIndex = (payload, key) => (key == null ? -1 : meshStack(payload).findIndex((e) => e.key === key));
+
+/** How many pieces each entry's geometry has, by key: `Map(key -> n)`. */
+export function piecesByKey(payload) {
+  const pieces = new Map();
+  for (let t = 0; t < payload.triangles; t++) {
+    const key = entryKey(payload, payload.entry[t]);
+    if (key != null) pieces.set(key, Math.max(pieces.get(key) || 0, payload.piece[t] + 1));
+  }
+  return pieces;
+}
 
 /**
  * Expand per-triangle ownership to the mesh's three vertices for the GPU.
@@ -50,7 +81,7 @@ export function worstFlagged(payload) {
     const xs = [q[k], q[k + 3], q[k + 6]], ys = [q[k + 1], q[k + 4], q[k + 7]], zs = [q[k + 2], q[k + 5], q[k + 8]];
     best = {
       priority, area, kind: red ? 'red' : 'orange', triangle: t,
-      entry: payload.entry[t] === NO_ENTRY ? null : payload.entry[t], piece: payload.piece[t],
+      entry: payload.entry[t] === NO_ENTRY ? null : payload.entry[t], key: entryKey(payload, payload.entry[t]), piece: payload.piece[t],
       lo: [Math.min(...xs), Math.min(...ys), Math.min(...zs)],
       hi: [Math.max(...xs), Math.max(...ys), Math.max(...zs)],
     };

@@ -33,17 +33,17 @@ function commented(text) {
 
 /**
  * The clouds written in `text` for the stack `items` (as the page holds
- * them: `{file, span: [byte, length], …}`) in `file`: [{entry, from, to,
+ * them: `{key, file, span: [byte, length], …}`) in `file`: [{key, from, to,
  * pin}] as character indices, `pin` the pin's place in its entry (0 on) or
  * null for a `top=`.  Each belongs to the innermost entry written round it,
  * so a scatter's things' tops are the scatter's.
  */
 export function cloudsIn(text, items, file) {
   if (!text) return [];
-  const spans = items.map((it, entry) => {
-    if (!it?.span || it.file !== file) return null;
+  const spans = items.map((it) => {
+    if (!it?.key || !it.span || it.file !== file) return null;
     const from = byteToIndex(text, it.span[0]);
-    return { entry, from, to: byteToIndex(text, it.span[0] + it.span[1]) };
+    return { key: it.key, from, to: byteToIndex(text, it.span[0] + it.span[1]) };
   }).filter(Boolean);
   const owner = (i) => {
     let best = null;
@@ -61,8 +61,8 @@ export function cloudsIn(text, items, file) {
       const s = owner(m.index);
       if (!s) continue;
       let pin = null;
-      if (isPin) { pin = pins.get(s.entry) ?? 0; pins.set(s.entry, pin + 1); }
-      out.push({ entry: s.entry, from: m.index, to: m.index + m[0].trimEnd().length, pin });
+      if (isPin) { pin = pins.get(s.key) ?? 0; pins.set(s.key, pin + 1); }
+      out.push({ key: s.key, from: m.index, to: m.index + m[0].trimEnd().length, pin });
     }
   }
   return out.sort((a, b) => a.from - b.from);
@@ -86,12 +86,12 @@ export function cloudOnLine(text, clouds, n) {
   return clouds.find((c) => c.from <= end && c.to >= start) ?? null;
 }
 
-/** The debug payload's sheets and clouds at a point that belong to stack entry `entry`. */
-export function cloudOf(debug, entry) {
-  if (!debug || entry == null) return { sheets: [], columns: [] };
+/** The debug payload's sheets and clouds at a point that belong to the entry whose key is `key`. */
+export function cloudOf(debug, key) {
+  if (!debug || key == null) return { sheets: [], columns: [] };
   return {
-    sheets: (debug.sheets ?? []).filter((s) => s.entry === entry),
-    columns: (debug.columns ?? []).filter((c) => c.entry === entry),
+    sheets: (debug.sheets ?? []).filter((s) => s.owner === key),
+    columns: (debug.columns ?? []).filter((c) => c.owner === key),
   };
 }
 

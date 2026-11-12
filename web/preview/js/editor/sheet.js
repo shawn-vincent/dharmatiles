@@ -6,7 +6,7 @@ import { byteToIndex } from '../text.js';
 import { failed, showError } from '../problems.js';
 import { $, host, offerMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, spansUsable, undo } from './document.js';
-import { doc, elementNamed, isEntry, isMark, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
+import { doc, elementNamed, isEntry, isMark, itemOf, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 
@@ -192,7 +192,7 @@ function renderMarkLens(kind, m) {
 function renderLens() {
   const s = view.get().sel;
   if (isMark(s)) { renderMarkLens(s.kind, mapNode(s)); return; }
-  const it = isEntry(s) ? stackItems()[s.id] : null;
+  const it = isEntry(s) ? itemOf(s) : null;
   const elements = server.get().elements;
   if (!s || s.kind === 'tile') { renderTileLens(); return; }
   const { file, writable } = doc.get();

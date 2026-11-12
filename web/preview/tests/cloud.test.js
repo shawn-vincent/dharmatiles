@@ -21,23 +21,23 @@ const at = (s) => src.indexOf(s);
 const dirtFrom = at('dirt'), dirtTo = at('}', at('at=path')) + 1;
 const scatFrom = at('scatter'), scatTo = src.indexOf('}', scatFrom) + 1;
 const items = [
-  { file: 't', span: span(dirtFrom, dirtTo) },
-  { file: 't', span: span(scatFrom, scatTo) },
-  { file: 't', span: span(at('grass'), at('grass') + 12) },
+  { key: 'tile/dirt/0', file: 't', span: span(dirtFrom, dirtTo) },
+  { key: 'tile/scatter/0', file: 't', span: span(scatFrom, scatTo) },
+  { key: 'tile/grass/0', file: 't', span: span(at('grass'), at('grass') + 12) },
 ];
 
 test('the tops and pins written in each entry, comments left out', () => {
   const c = cloudsIn(src, items, 't');
-  assert.deepEqual(c.map((x) => [x.entry, x.pin]), [[0, null], [0, 0], [0, 1], [1, null]]);
+  assert.deepEqual(c.map((x) => [x.key, x.pin]), [['tile/dirt/0', null], ['tile/dirt/0', 0], ['tile/dirt/0', 1], ['tile/scatter/0', null]]);
   assert.equal(src.slice(c[0].from, c[0].to), 'top="$groundHeight + bell(0dmm .. 2dmm)"');
   assert.equal(src.slice(c[1].from, c[1].to), 'pin top="$groundHeight + 4dmm" at=hill');
 });
 
 test('the caret in a top or a pin selects its cloud; elsewhere none', () => {
   const c = cloudsIn(src, items, 't');
-  assert.equal(cloudAtCaret(c, at('bell')).entry, 0);
+  assert.equal(cloudAtCaret(c, at('bell')).key, 'tile/dirt/0');
   assert.equal(cloudAtCaret(c, at('at=path')).pin, 1);
-  assert.equal(cloudAtCaret(c, at('high(')).entry, 1);
+  assert.equal(cloudAtCaret(c, at('high(')).key, 'tile/scatter/0');
   assert.equal(cloudAtCaret(c, at('size="9')), null);
   assert.equal(cloudAtCaret(c, at('count')), null);
 });
@@ -56,9 +56,9 @@ test('a hovered line finds the cloud written on it', () => {
 });
 
 test("an entry's sheets and clouds at a point", () => {
-  const d = { sheets: [{ entry: 0 }, { entry: 2 }], columns: [{ entry: 2, class: 'stone-cloud', v: [] }] };
-  assert.deepEqual(cloudOf(d, 2), { sheets: [{ entry: 2 }], columns: [{ entry: 2, class: 'stone-cloud', v: [] }] });
-  assert.deepEqual(cloudOf(null, 2), { sheets: [], columns: [] });
+  const d = { sheets: [{ owner: 'a' }, { owner: 'c' }], columns: [{ owner: 'c', class: 'stone-cloud', v: [] }] };
+  assert.deepEqual(cloudOf(d, 'c'), { sheets: [{ owner: 'c' }], columns: [{ owner: 'c', class: 'stone-cloud', v: [] }] });
+  assert.deepEqual(cloudOf(null, 'c'), { sheets: [], columns: [] });
 });
 
 test('a sheet carries each node shade to its triangles', () => {

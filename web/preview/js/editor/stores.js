@@ -52,16 +52,16 @@ export const server = createStore({
 
 export const view = createStore({
   tileId: null, root: -1,
-  sel: null,           // {kind, id, piece?}: kind entry (id: the stack index), region or line (id: the name), tile; or null
+  sel: null,           // {kind, id, piece?}: kind entry (id: the entry's key), region or line (id: the name), tile; or null
   hov: null,           // the same, under the pointer (view or text)
-  cloudText: null,     // the stack entry whose cloud (a top= or pin) the source's caret is in
-  cloudSheet: null,    // the stack entry whose top field has focus in the sheet
-  cloudHov: null,      // the entry whose cloud is under the pointer in the source
-  cloudSheetHov: null, // the entry whose top row is under the pointer in the sheet
+  cloudText: null,     // the key of the entry whose cloud (a top= or pin) the source's caret is in
+  cloudSheet: null,    // the key of the entry whose top field has focus in the sheet
+  cloudHov: null,      // the key of the entry whose cloud is under the pointer in the source
+  cloudSheetHov: null, // the key of the entry whose top row is under the pointer in the sheet
   mode: 'painted',     // the view's preset
   pick: null,          // {name, animate}: a preset asked for (a fresh object each time, so asking again counts)
   activeView: null,    // the preset the camera is still on, if any
-  pieces: new Map(),   // entry -> how many pieces its geometry has
+  pieces: new Map(),   // entry key -> how many pieces its geometry has (from the mesh shown)
   shown: null,         // {id, epoch, version}: the build's mesh the view holds
   draft: null,         // {tileId, payload}: a draft shown in its place
   textFile: null,      // the file the text pane should show (null: the tile's own)
@@ -121,6 +121,10 @@ export function stackItems() {
   if (stackMemo.from !== from) stackMemo = { from, items: from.map((s) => (typeof s === 'string' ? { label: s } : s)) };
   return stackMemo.items;
 }
+/** Where the entry `key` is in the stack of the text now (the checked one, else the build's plan): -1 when it is not there. */
+export const stackIndex = (key) => (key == null ? -1 : stackItems().findIndex((it) => it.key === key));
+/** The stack item of an entry selection, in the stack of the text now; undefined for another selection or an entry the text no longer has. */
+export const itemOf = (w) => (w?.kind === 'entry' ? stackItems()[stackIndex(w.id)] : undefined);
 /** The map's region or line a selection names. */
 export function mapNode(w) {
   const { map, tileId } = doc.get();
