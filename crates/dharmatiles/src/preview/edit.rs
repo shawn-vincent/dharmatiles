@@ -41,8 +41,11 @@
 //!   (a tile's file name is its name), never over another file, and
 //!   return the new path, id and state (a new path is a new id).  Library
 //!   tiles are not renamed.
-//! - `/api/new` `{name, size}`: make a flat, printable tile called `name`
-//!   in My tiles, never over another file.
+//! - `/api/new` `{name, size, root?, dir?}`: make a flat, printable tile
+//!   called `name` in My tiles (or in folder `dir` of place `root`), never
+//!   over another file.
+//! - the places and what is done in them: add and remove a place, new, rename and
+//!   trash a folder, move, duplicate and trash a tile, undo a trash (see `places`).
 //! - `/api/tiles/ID/draft` `{text, file?}`: build a draft of the tile from
 //!   `text` (see `dt_eval::Options::draft`) ahead of any full build, and
 //!   answer with its mesh: `200` and the binary buffer, `422` when the text
@@ -109,6 +112,15 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     if path == "/api/new" {
         return new_tile(shared, &v).into();
     }
+    match path {
+        "/api/places/add" => return places::add_place(shared).into(),
+        "/api/places/remove" => return places::remove_place(shared, &v).into(),
+        "/api/folders/new" => return places::new_folder(shared, &v).into(),
+        "/api/folders/rename" => return places::rename_folder(shared, &v).into(),
+        "/api/folders/trash" => return places::trash_folder(shared, &v).into(),
+        "/api/trash/undo" => return places::undo_trash(shared, &v).into(),
+        _ => {}
+    }
     if path == "/api/reveal" {
         return reveal(&v).into();
     }
@@ -142,6 +154,9 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "mine" => mine(shared, &tile, &files).into(),
         "delete" => delete(shared, &tile).into(),
         "rename" => rename(shared, &tile, &v).into(),
+        "move" => places::move_tile(shared, &tile, &v).into(),
+        "duplicate" => places::duplicate_tile(shared, &tile).into(),
+        "trash" => places::trash_tile(shared, &tile).into(),
         "export" => export(shared, &tile, &v).into(),
         "draft" => draft(shared, id, &tile, &file, &v),
         "offers" => offers::offers(shared, &tile, &file, &v).into(),
@@ -248,6 +263,15 @@ fn tile_name(v: &Value) -> Result<String, (&'static str, Value)> {
 /// Write `text` as `<stem>.dtile` in `dir`, or `<stem> 2.dtile`, … when
 /// that is taken: created new, so another file is never overwritten.
 fn write_new(dir: &Path, stem: &str, text: &str) -> Result<PathBuf, (&'static str, Value)> {
+    write_new_bytes(dir, stem, text.as_bytes())
+}
+
+/// [`write_new`] for bytes: a copy of a document is written as it was read.
+pub(super) fn write_new_bytes(
+    dir: &Path,
+    stem: &str,
+    text: &[u8],
+) -> Result<PathBuf, (&'static str, Value)> {
     use std::io::Write;
     for n in 1..1000 {
         let dest = dir.join(if n == 1 {
@@ -261,18 +285,15 @@ fn write_new(dir: &Path, stem: &str, text: &str) -> Result<PathBuf, (&'static st
             .open(&dest)
         {
             Ok(mut f) => {
-                return f
-                    .write_all(text.as_bytes())
-                    .map(|()| dest.clone())
-                    .map_err(|e| {
-                        // best-effort cleanup of the half-made file; the write error is what is reported
-                        let _ = std::fs::remove_file(&dest);
-                        fail::failure_from(
-                            "500 Internal Server Error",
-                            format!("cannot write {}: {e}", dest.display()),
-                            &e,
-                        )
-                    });
+                return f.write_all(text).map(|()| dest.clone()).map_err(|e| {
+                    // best-effort cleanup of the half-made file; the write error is what is reported
+                    let _ = std::fs::remove_file(&dest);
+                    fail::failure_from(
+                        "500 Internal Server Error",
+                        format!("cannot write {}: {e}", dest.display()),
+                        &e,
+                    )
+                });
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => {
@@ -290,7 +311,7 @@ fn write_new(dir: &Path, stem: &str, text: &str) -> Result<PathBuf, (&'static st
 /// After a file appears or moves: list it, start its build, say where and
 /// which tile it is (with its state, so the page can show it before the
 /// event that lists it arrives).
-fn listed(shared: &Shared, dest: &Path) -> (&'static str, Value) {
+pub(super) fn listed(shared: &Shared, dest: &Path) -> (&'static str, Value) {
     shared.rescan();
     let path = dest.to_string_lossy().into_owned();
     let id = tile_id(&path);
@@ -306,7 +327,7 @@ fn listed(shared: &Shared, dest: &Path) -> (&'static str, Value) {
 
 fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
     let home = shared
-        .roots
+        .roots()
         .iter()
         .find_map(|r| match &r.kind {
             RootKind::Dir(d) => Some(d.clone()),
@@ -331,20 +352,10 @@ fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
 /// the old name removed.  Only a change of case, on a disk that ignores
 /// case, renames in place.
 fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
-    if tile.starts_with(dt_eval::LIB) {
-        return bad("a library tile is not renamed; make it yours first");
-    }
-    let from = PathBuf::from(tile);
-    if from.extension().and_then(|e| e.to_str()) != Some("dtile") {
-        return bad("only a tile document is renamed");
-    }
-    let in_folder = shared.roots.iter().any(|r| match &r.kind {
-        RootKind::Dir(d) => from.starts_with(d),
-        _ => false,
-    });
-    if !in_folder {
-        return bad("only a tile in a folder the preview lists is renamed here");
-    }
+    let from = match places::owned_tile(shared, tile, "renamed") {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
     let stem = match tile_name(v) {
         Ok(s) => s,
         Err(e) => return e,
@@ -402,20 +413,10 @@ fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
 /// Undo does to the copy it made of a library tile.  Never the library, never
 /// a file outside the folders, never anything but a tile document.
 fn delete(shared: &Shared, tile: &str) -> (&'static str, Value) {
-    if tile.starts_with(dt_eval::LIB) {
-        return bad("a library tile is never deleted");
-    }
-    let path = PathBuf::from(tile);
-    if path.extension().and_then(|e| e.to_str()) != Some("dtile") {
-        return bad("only a tile document is deleted");
-    }
-    let in_folder = shared.roots.iter().any(|r| match &r.kind {
-        RootKind::Dir(d) => path.starts_with(d),
-        _ => false,
-    });
-    if !in_folder {
-        return bad("only a tile in a folder the preview lists is deleted here");
-    }
+    let path = match places::owned_tile(shared, tile, "deleted") {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
     if let Err(e) = std::fs::remove_file(&path) {
         return fail::failure_from(
             "500 Internal Server Error",
@@ -450,7 +451,13 @@ fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
     let text = format!(
         "dharmatiles version=\"{version}\"\n\ntile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        base\n        dirt\n    }}\n}}\n"
     );
-    match home(shared).and_then(|h| write_new(&h, &stem, &text)) {
+    // in a folder of a place (the page's folder level), else in My tiles
+    let into = match places::new_tile_dir(shared, v) {
+        Some(Ok(dir)) => Ok(dir),
+        Some(Err(e)) => Err(e),
+        None => home(shared),
+    };
+    match into.and_then(|h| write_new(&h, &stem, &text)) {
         Ok(dest) => listed(shared, &dest),
         Err(e) => e,
     }

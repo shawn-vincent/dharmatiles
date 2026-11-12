@@ -17,19 +17,81 @@ pub enum RootKind {
     Library(String),
 }
 
+/// What a place is to the user: where it stands in the Places list, and
+/// whether its tiles may be changed from the page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Role {
+    /// My tiles: `$DT_HOME`, else `~/dharmatiles`.
+    Home,
+    /// Files named on the command line.
+    Files,
+    /// A folder named on the command line.
+    Folder,
+    /// A folder the user added with the folder chooser (kept in the settings).
+    Added,
+    /// The library's tiles.
+    Library,
+    /// The library's test tiles.
+    Tests,
+}
+
+impl Role {
+    /// As the page reads it.
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Home => "home",
+            Self::Files => "files",
+            Self::Folder => "folder",
+            Self::Added => "added",
+            Self::Library => "library",
+            Self::Tests => "tests",
+        }
+    }
+}
+
 /// One place the list shows, with its name in the switcher.
 #[derive(Clone, Debug)]
 pub struct Root {
     pub(super) label: String,
     pub(super) kind: RootKind,
+    pub(super) role: Role,
 }
 
 impl Root {
     #[must_use]
     pub fn new(label: &str, kind: RootKind) -> Self {
+        let role = match &kind {
+            RootKind::Files => Role::Files,
+            RootKind::Dir(_) => Role::Folder,
+            RootKind::Library(p) if p.starts_with("tests/") => Role::Tests,
+            RootKind::Library(_) => Role::Library,
+        };
         Self {
             label: label.to_owned(),
             kind,
+            role,
+        }
+    }
+
+    /// The same place, with another role (My tiles, an added folder).
+    #[must_use]
+    pub fn with_role(mut self, role: Role) -> Self {
+        self.role = role;
+        self
+    }
+
+    /// May the page change what is in this place (make, rename, move, trash)?
+    /// Only a folder on disk that is the user's own; the library never.
+    pub(super) fn writable(&self) -> bool {
+        matches!(self.role, Role::Home | Role::Folder | Role::Added)
+            && matches!(self.kind, RootKind::Dir(_))
+    }
+
+    /// The folder on disk, for a place that is one.
+    pub(super) fn dir(&self) -> Option<&std::path::Path> {
+        match &self.kind {
+            RootKind::Dir(d) => Some(d),
+            _ => None,
         }
     }
 
@@ -39,7 +101,23 @@ impl Root {
             RootKind::Dir(d) => ("dir", json!(d.to_string_lossy())),
             RootKind::Library(p) => ("library", json!(format!("lib:{p}"))),
         };
-        json!({"index": index, "label": self.label, "kind": kind, "path": path})
+        json!({
+            "index": index, "label": self.label, "kind": kind, "path": path,
+            "role": self.role.as_str(), "writable": self.writable(),
+            "exists": self.dir().is_none_or(std::path::Path::is_dir),
+        })
+    }
+
+    /// Every folder under this place, as paths below it (`a`, `a/b`), sorted:
+    /// the folders the page lists, empty ones included.  `None` for a place
+    /// that has none to scan (files, the library: its groups are in its
+    /// tiles' paths).
+    pub(super) fn scan_folders(&self) -> Option<Vec<String>> {
+        let d = self.dir()?;
+        let mut v = Vec::new();
+        sub_folders(d, "", 0, &mut v);
+        v.sort();
+        Some(v)
     }
 
     /// The tiles in this root now, sorted; `None` for the named files.
@@ -98,8 +176,84 @@ pub(super) fn is_tile_document(f: &std::path::Path) -> bool {
     })
 }
 
-/// Every tile document (`.dtile` with a `tile` node) and `.stl` under
-/// `dir`, skipping hidden folders and build output.
+/// The kinds of document a folder lists.  A new kind (a map, the inventory)
+/// is one more entry here: the folders list it, and the page's actions
+/// (rename, move, trash, duplicate) apply to the kinds that say `actions`.
+pub(super) struct DocKind {
+    /// The file extension, lower case, without the dot.
+    pub(super) ext: &'static str,
+    /// What the page calls the kind (`tile`).
+    #[allow(dead_code)]
+    pub(super) kind: &'static str,
+    /// Whether the folder actions apply (an `.stl` is shown, not managed).
+    pub(super) actions: bool,
+    /// Whether this file is one of the kind (a `.dtile` that is a tile, not a part).
+    pub(super) is_one: fn(&std::path::Path) -> bool,
+}
+
+fn always(_: &std::path::Path) -> bool {
+    true
+}
+
+/// The document kinds, in the order the page lists them.
+pub(super) const KINDS: [DocKind; 2] = [
+    DocKind {
+        ext: "dtile",
+        kind: "tile",
+        actions: true,
+        is_one: is_tile_file,
+    },
+    DocKind {
+        ext: "stl",
+        kind: "stl",
+        actions: false,
+        is_one: always,
+    },
+];
+
+/// A `.dtile` that is a tile: not the project file, not a part or palette.
+fn is_tile_file(f: &std::path::Path) -> bool {
+    f.file_name()
+        .and_then(|n| n.to_str())
+        .is_none_or(|n| !n.eq_ignore_ascii_case("dharmatiles.dtile"))
+        && is_tile_document(f)
+}
+
+/// The kind a file name is, by its extension.
+pub(super) fn kind_of(name: &str) -> Option<&'static DocKind> {
+    let ext = std::path::Path::new(name)
+        .extension()?
+        .to_str()?
+        .to_ascii_lowercase();
+    KINDS.iter().find(|k| k.ext == ext)
+}
+
+/// The folders under `dir` (below `rel`), hidden ones and build output skipped.
+fn sub_folders(dir: &std::path::Path, rel: &str, depth: usize, out: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        // the same folder is read by `tile_files`, which tells a failure (once)
+        return;
+    };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let p = e.path();
+        if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) || !p.is_dir() {
+            continue;
+        }
+        let here = if rel.is_empty() {
+            name
+        } else {
+            format!("{rel}/{name}")
+        };
+        out.push(here.clone());
+        if depth < 8 {
+            sub_folders(&p, &here, depth + 1, out);
+        }
+    }
+}
+
+/// Every document of a kind the folders list (a `.dtile` that is a tile, an
+/// `.stl`) under `dir`, skipping hidden folders and build output.
 pub(super) fn tile_files(dir: &std::path::Path, depth: usize, out: &mut Vec<String>) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
@@ -135,11 +289,7 @@ pub(super) fn tile_files(dir: &std::path::Path, depth: usize, out: &mut Vec<Stri
             }
             continue;
         }
-        let lower = name.to_ascii_lowercase();
-        let tile =
-            (lower.ends_with(".dtile") && lower != "dharmatiles.dtile" && is_tile_document(&p))
-                || lower.ends_with(".stl");
-        if tile {
+        if kind_of(&name).is_some_and(|k| (k.is_one)(&p)) {
             out.push(p.to_string_lossy().into_owned());
         }
     }
@@ -175,7 +325,7 @@ pub fn personal_home() -> Result<std::path::PathBuf, String> {
 pub fn roots_for(paths: &[String]) -> Result<(Vec<Root>, Vec<String>), String> {
     let lib = Root::new("Library", RootKind::Library("tiles/".to_owned()));
     if paths.is_empty() {
-        let home = Root::new("My tiles", RootKind::Dir(personal_home()?));
+        let home = Root::new("My tiles", RootKind::Dir(personal_home()?)).with_role(Role::Home);
         let tests = Root::new("Tests", RootKind::Library("tests/".to_owned()));
         return Ok((vec![home, lib, tests], Vec::new()));
     }

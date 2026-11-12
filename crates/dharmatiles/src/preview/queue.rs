@@ -147,11 +147,8 @@ impl Shared {
                 return Some(id);
             }
         }
-        let named = |t: &Slot| {
-            self.roots
-                .get(t.root)
-                .is_none_or(|r| r.kind == RootKind::Files)
-        };
+        let roots = self.roots();
+        let named = |t: &Slot| roots.get(t.root).is_none_or(|r| r.kind == RootKind::Files);
         if eager && let Some(t) = tiles.iter().find(|t| t.status == State::Idle && named(t)) {
             return Some(t.id.clone());
         }

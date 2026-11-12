@@ -73,12 +73,14 @@ mod map;
 mod messages;
 mod offers;
 pub mod payload;
+pub(crate) mod places;
 pub(crate) mod roots;
 mod server;
 mod stack;
 mod worker;
 
-pub use roots::{Root, RootKind, roots_for};
+pub use places::Picker;
+pub use roots::{Role, Root, RootKind, roots_for};
 #[cfg(test)]
 use roots::{lib_group, personal_home};
 pub use worker::work;
@@ -134,6 +136,9 @@ pub struct Slot {
     /// The root it is listed under, and its group there.
     root: usize,
     group: Option<String>,
+    /// The size the document writes for the tile (`2x1`), read when the tile
+    /// is listed: for the folder rows, before any build.
+    size: Option<String>,
     status: State,
     plan: Option<Value>,
     record: Option<Value>,
@@ -185,6 +190,7 @@ impl Slot {
             name,
             root,
             group,
+            size: None,
             status: State::Idle,
             plan: None,
             record: None,
@@ -207,6 +213,7 @@ impl Slot {
             "name": self.name,
             "root": self.root,
             "group": self.group,
+            "size": self.size,
             "status": self.status.as_str(),
             "plan": self.plan,
             "record": self.record,
@@ -279,10 +286,26 @@ pub struct Shared {
     cache: Option<std::path::PathBuf>,
     /// A palette document the paint is read from at each build.
     palette: Option<std::path::PathBuf>,
-    /// Where the tiles come from; a slot's `root` indexes this.
-    roots: Vec<Root>,
+    /// Where the tiles come from; a slot's `root` indexes this.  A place the
+    /// user adds is appended, one they remove is taken out (and the slots'
+    /// indexes after it move down: see [`places`]).  Locked after the tiles.
+    roots: Mutex<Vec<Root>>,
+    /// The folders of each folder place, as paths below it (empty ones too):
+    /// what the last scan found, so a new or removed folder is told.
+    folders: Mutex<BTreeMap<usize, Vec<String>>>,
+    /// Held while the places are scanned or changed: one at a time.
+    gate: Mutex<()>,
     /// When the folders were last rescanned.
     scanned: Mutex<Option<Instant>>,
+    /// Where the per-user settings live (the added places); none in the
+    /// tests that must not touch them.
+    settings: Option<std::path::PathBuf>,
+    /// The Trash a tile or folder is moved to; none where there is none known.
+    trash: Option<std::path::PathBuf>,
+    /// What is put in the Trash, for an Undo that names it by number: (where it was, where it is).
+    trashed: Mutex<Vec<(std::path::PathBuf, std::path::PathBuf)>>,
+    /// How a folder is chosen for a new place.
+    picker: Picker,
     /// This run's secret: the editor's calls carry it (see `route`).
     token: String,
     /// Each sketch's id, unique across tiles.
@@ -375,8 +398,14 @@ impl Shared {
             queue_cv: std::sync::Condvar::new(),
             cache: None,
             palette: None,
-            roots,
+            roots: Mutex::new(roots),
+            folders: Mutex::new(BTreeMap::new()),
+            gate: Mutex::new(()),
             scanned: Mutex::new(None),
+            settings: None,
+            trash: None,
+            trashed: Mutex::new(Vec::new()),
+            picker: Picker::Native,
             token: edit::token(),
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
             build_caches: Mutex::new(VecDeque::new()),
@@ -398,6 +427,32 @@ impl Shared {
     fn with_home(mut self, home: std::path::PathBuf) -> Self {
         self.home = Some(home);
         self
+    }
+
+    /// Keep the added places in the settings folder `dir`.
+    #[must_use]
+    pub fn with_settings(mut self, dir: std::path::PathBuf) -> Self {
+        self.settings = Some(dir);
+        self
+    }
+
+    /// Move what is trashed into `dir`.
+    #[must_use]
+    pub fn with_trash(mut self, dir: std::path::PathBuf) -> Self {
+        self.trash = Some(dir);
+        self
+    }
+
+    /// Choose a folder for a new place with `picker`.
+    #[must_use]
+    pub fn with_picker(mut self, picker: Picker) -> Self {
+        self.picker = picker;
+        self
+    }
+
+    /// The places now (a copy: they can change while it is read).
+    fn roots(&self) -> Vec<Root> {
+        lock(&self.roots).clone()
     }
 
     /// Whether the page has the debug layer on for tile `id`: its builds
@@ -463,6 +518,13 @@ impl Shared {
         drop(tiles);
         self.queue_cv.notify_all();
         Ok(())
+    }
+
+    fn with_trash_opt(self, dir: Option<std::path::PathBuf>) -> Self {
+        match dir {
+            Some(d) => self.with_trash(d),
+            None => self,
+        }
     }
 
     fn with_palette_opt(self, f: Option<std::path::PathBuf>) -> Self {
@@ -616,7 +678,11 @@ impl Shared {
                 .collect::<Vec<_>>(),
             "overhang_deg": target.printer.overhang_deg,
             "steepest_deg": target.printer.steepest_deg,
-            "roots": self.roots.iter().enumerate().map(|(i, r)| r.json(i)).collect::<Vec<_>>(),
+            "roots": lock(&self.roots).iter().enumerate().map(|(i, r)| r.json(i)).collect::<Vec<_>>(),
+            "folders": lock(&self.folders).iter()
+                .flat_map(|(r, v)| v.iter().map(move |p| json!({"root": r, "path": p})))
+                .collect::<Vec<_>>(),
+            "home": std::env::var("HOME").ok(),
             "tiles": tiles.iter().map(Slot::summary).collect::<Vec<_>>(),
         })
     }
@@ -647,12 +713,31 @@ impl Shared {
     /// Rescan every root now, telling every browser the new list when it
     /// changed.  True when it did.
     fn rescan(&self) -> bool {
-        let found: Vec<(usize, Vec<String>)> = self
-            .roots
+        let _one_at_a_time = lock(&self.gate);
+        self.rescan_held()
+    }
+
+    /// [`Shared::rescan`], with the gate held by the caller.
+    fn rescan_held(&self) -> bool {
+        let roots = self.roots();
+        let found: Vec<(usize, Vec<String>)> = roots
             .iter()
             .enumerate()
             .filter_map(|(r, root)| Some((r, root.scan()?)))
             .collect();
+        let folders: BTreeMap<usize, Vec<String>> = roots
+            .iter()
+            .enumerate()
+            .filter_map(|(r, root)| Some((r, root.scan_folders()?)))
+            .collect();
+        let folders_changed = {
+            let mut now = lock(&self.folders);
+            let differs = *now != folders;
+            if differs {
+                *now = folders;
+            }
+            differs
+        };
         let mut removed = Vec::new();
         let changed = {
             let mut tiles = lock(&self.tiles);
@@ -668,11 +753,13 @@ impl Shared {
                 });
                 for p in &paths {
                     if !tiles.iter().any(|t| t.root == r && &t.path == p) {
-                        tiles.push(Slot::in_root(p, r, self.roots[r].group(p)));
+                        let mut slot = Slot::in_root(p, r, roots[r].group(p));
+                        slot.size = places::size_of(p);
+                        tiles.push(slot);
                     }
                 }
             }
-            let changed = tiles.len() != before || !removed.is_empty();
+            let changed = tiles.len() != before || !removed.is_empty() || folders_changed;
             if changed {
                 let mut ev = lock(&self.events);
                 let rev = ev.bump(Change::List);
@@ -897,15 +984,38 @@ pub fn run(
         }
     };
     let cache = crate::library::project().out;
+    let settings = match places::settings_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            tell!("error: {e}");
+            return crate::ERROR;
+        }
+    };
+    // the folders added with the chooser: listed after the rest, in the order they were added
+    let mut roots = roots;
+    match places::load_places(&settings) {
+        Ok(added) => roots.extend(
+            added
+                .into_iter()
+                .map(|d| Root::new(&places::label_of(&d), RootKind::Dir(d)).with_role(Role::Added)),
+        ),
+        Err(e) => {
+            tell!("error: {e}");
+            return crate::ERROR;
+        }
+    }
     let shared = Arc::new(
         Shared::with_roots(roots, &files, opts)
             .with_home(home)
+            .with_settings(settings)
+            .with_trash_opt(places::trash_dir())
+            .with_picker(Picker::from_env())
             .with_cache(Timings::file_in(&cache))
             .with_palette_opt(palette),
     );
     let url = format!("http://{addr}/");
     tell!("preview: {url}  (Ctrl-C to stop)");
-    for (i, r) in shared.roots.iter().enumerate() {
+    for (i, r) in shared.roots().iter().enumerate() {
         let n = lock(&shared.tiles).iter().filter(|t| t.root == i).count();
         match &r.kind {
             RootKind::Dir(d) if !d.is_dir() => tell!(
