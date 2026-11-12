@@ -401,6 +401,29 @@ pub fn thinned(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>) {
     }
 }
 
+/// `b` with its mesh thinned to [`VIEW_BUDGET`] ([`thinned`]) and every
+/// per-triangle list kept to match: what a stored preview holds.  A draft's
+/// soup of parts is as heavy as a finished tile, and the view shows no more
+/// than the budget; [`from_draft`] of the result is the same view as of `b`.
+#[must_use]
+pub fn thinned_built(mut b: Built) -> Built {
+    let (mesh, kept) = thinned(&b.export.mesh, VIEW_BUDGET);
+    if kept.len() == b.export.mesh.triangles.len() {
+        return b;
+    }
+    fn pick<T: Copy>(v: &[T], kept: &[usize]) -> Vec<T> {
+        kept.iter().map(|&f| v[f]).collect()
+    }
+    b.export.source = pick(&b.export.source, &kept);
+    b.export.mesh = mesh;
+    b.materials = pick(&b.materials, &kept);
+    b.audit.overhang = pick(&b.audit.overhang, &kept);
+    b.audit.band = pick(&b.audit.band, &kept);
+    b.entries = pick(&b.entries, &kept);
+    b.pieces = pick(&b.pieces, &kept);
+    b
+}
+
 /// [`from_built`] thinned to [`VIEW_BUDGET`]: a draft's soup of parts can
 /// be millions of triangles.
 ///
@@ -575,6 +598,41 @@ mod tests {
         // none at all is allowed: every triangle reads NO_ENTRY
         let b = encode_traced(&tri(), &[grey; 2], &[grey; 2], &[], &[], &json!({})).unwrap();
         assert_eq!(&b[b.len() - 8..b.len() - 4], &[0xff; 4]);
+    }
+
+    #[test]
+    fn a_stored_preview_is_the_draft_thinned_to_what_the_view_shows() {
+        // a draft of a meadow is a soup of well over the budget
+        let opts = dt_eval::Options {
+            draft: true,
+            ..dt_eval::Options::default()
+        };
+        let b =
+            dt_eval::build(&dt_eval::Library, "lib:tests/plants/2x2-grass.dtile", &opts).unwrap();
+        let before = b.export.mesh.triangles.len();
+        assert!(before > VIEW_BUDGET, "{before}");
+        let seen = from_draft(&b, 55.0, &dt_kit::Palette::default()).unwrap();
+        let t = thinned_built(b);
+        let n = t.export.mesh.triangles.len();
+        assert!(n <= VIEW_BUDGET && n > 0, "{n}");
+        for len in [
+            t.export.source.len(),
+            t.materials.len(),
+            t.audit.overhang.len(),
+            t.audit.band.len(),
+            t.entries.len(),
+            t.pieces.len(),
+        ] {
+            assert_eq!(len, n, "every per-triangle list is kept to match");
+        }
+        // the view of it is the same size as the view of the whole draft
+        let kept = from_draft(&t, 55.0, &dt_kit::Palette::default()).unwrap();
+        let tri = |bytes: &[u8]| {
+            let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+            let h: Value = serde_json::from_slice(&bytes[8..8 + jl]).unwrap();
+            h["triangles"].as_u64().unwrap()
+        };
+        assert_eq!(tri(&kept), tri(&seen));
     }
 
     #[test]

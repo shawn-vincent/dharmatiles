@@ -186,7 +186,9 @@ fn clear(store: &Store, json: bool) -> u8 {
 
 /// `cache previews`: the draft ([`Options::draft`]) of every library tile,
 /// kept as the library's previews: the cache, or with `--into` a folder
-/// (laid out as the cache is, so an install copies it into the cache).
+/// (laid out as the cache is, so an install copies it into the cache).  A
+/// draft's soup of parts is as heavy as a finished tile, so what is kept is
+/// the draft thinned to what the view shows (400 000 triangles at most).
 fn previews(store: &Store, system: &str, printer: &str, into: Option<PathBuf>, json: bool) -> u8 {
     let mut opts = match crate::library::options(system, printer, None) {
         Ok(o) => o,
@@ -232,6 +234,42 @@ fn previews(store: &Store, system: &str, printer: &str, into: Option<PathBuf>, j
     code
 }
 
+/// The preview of `path` kept in `store`: found there, or built (the draft),
+/// thinned and kept.  Returns it, and what went wrong with the cache on the way.
+fn stored_preview(
+    store: &Store,
+    path: &str,
+    opts: &Options,
+) -> Result<(dt_eval::Built, Vec<String>), Vec<dt_eval::Diag>> {
+    let tracked = dt_eval::Tracked::new(&Files);
+    let stored = Options {
+        clouds: true,
+        ..opts.clone()
+    };
+    dt_eval::check(&tracked, path, &stored)?;
+    let key = store.key(&tracked.reads(), path, opts);
+    let want = dt_kit::debug::Collect {
+        clouds: true,
+        marks: false,
+    };
+    let mut problems = Vec::new();
+    match store.get(&key, want) {
+        Ok(Some(mut b)) => {
+            b.cache.state = dt_eval::CacheState::Hit;
+            return Ok((b, problems));
+        }
+        Ok(None) => {}
+        Err(e) => problems.push(e),
+    }
+    let b = dt_eval::build_cached(&tracked, path, &stored, &Progress::none(), None)?;
+    let mut b = crate::preview::payload::thinned_built(b);
+    if let Err(e) = store.put(&key, &b) {
+        problems.push(e);
+    }
+    b.cache.state = dt_eval::CacheState::Miss;
+    Ok((b, problems))
+}
+
 fn preview_one(
     store: &Store,
     path: &str,
@@ -241,16 +279,17 @@ fn preview_one(
 ) -> (u8, serde_json::Value) {
     let t0 = Instant::now();
     let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        dt_eval::build_stored(&Files, path, opts, &Progress::none(), None, Some(store))
+        stored_preview(store, path, opts)
     }));
     match built {
-        Ok(Ok(b)) => {
-            for problem in &b.cache.problems {
+        Ok(Ok((b, problems))) => {
+            for problem in &problems {
                 tell!("warning: {path}: {problem}");
             }
-            let how = match b.cache.state {
-                dt_eval::CacheState::Hit => "kept already",
-                _ => "built",
+            let how = if b.cache.state == dt_eval::CacheState::Hit {
+                "kept already"
+            } else {
+                "built"
             };
             if !json {
                 tell!(
@@ -262,7 +301,7 @@ fn preview_one(
             (
                 OK,
                 json!({"path": path, "ok": true, "how": how, "triangles": b.audit.triangles,
-                       "problems": b.cache.problems}),
+                       "problems": problems}),
             )
         }
         Ok(Err(errs)) => {

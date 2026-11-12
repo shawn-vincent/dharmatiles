@@ -150,6 +150,7 @@
   <li><b>Per-viewer conveniences in the browser:</b> <code>localStorage</code> can be unavailable (private windows); a remembered theme, layout or toggle then falls back to its default.</li>
   <li><b>Best-effort cleanup:</b> removing a temporary file or an empty cache folder after the real work has succeeded.</li>
   <li><b>Estimates:</b> the cache of past build times that sizes the progress bar. Losing it changes only the estimate.</li>
+  <li><b>Noting a use:</b> the build cache's entry is touched when it is read, so the least recently used go first. A touch that fails (a read-only folder) only means the entry may go sooner. Nothing else about the build cache is silent: a damaged entry, an entry that cannot be written and a limit that is not a size are told (<a href="../preview.html#cache">the cache of builds</a>).</li>
   <li><b>You cancelled:</b> closing a picker or a menu is not an error.</li>
   <li><b>Offline:</b> a request made while the connection is down, which the page repeats on reconnect, with the chip showing the state.</li>
 </ul>
