@@ -560,7 +560,16 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
         .map_or(0, |h| h.format);
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
-            let stack = c.tile.as_ref().map(|t| stack::items(t, &opts.system));
+            let stack = match c.tile.as_ref().map(|t| stack::items(t, &opts.system)) {
+                Some(Err(e)) => {
+                    return (
+                        "500 Internal Server Error",
+                        json!({ "error": format!("cannot describe the stack of {tile}: {e}") }),
+                    );
+                }
+                Some(Ok(items)) => Some(items),
+                None => None,
+            };
             let own = match src.read(tile) {
                 Ok(t) => t,
                 Err(e) => {

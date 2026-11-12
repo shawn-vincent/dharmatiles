@@ -26,6 +26,9 @@ use serde_json::{Value, json};
 /// First four bytes of every payload.
 pub const MAGIC: &[u8; 4] = b"DTM1";
 
+/// A triangle that belongs to no stack entry (the page's `NO_ENTRY`).
+pub const NO_ENTRY: u16 = u16::MAX;
+
 fn unit_normal(p: [[f64; 3]; 3]) -> [f32; 3] {
     let a = [0, 1, 2].map(|k| p[1][k] - p[0][k]);
     let b = [0, 1, 2].map(|k| p[2][k] - p[0][k]);
@@ -48,13 +51,26 @@ fn byte(c: f32) -> u8 {
 
 /// Encode `mesh` with its two per-face colour sets.  `meta` is merged into
 /// the JSON header beside `triangles`, `lo` and `hi`.
-#[must_use]
-pub fn encode(mesh: &TriMesh, painted: &[[f32; 3]], clean: &[[f32; 3]], meta: &Value) -> Vec<u8> {
+///
+/// # Errors
+/// If a colour set is not one colour per triangle.
+pub fn encode(
+    mesh: &TriMesh,
+    painted: &[[f32; 3]],
+    clean: &[[f32; 3]],
+    meta: &Value,
+) -> Result<Vec<u8>, String> {
     encode_traced(mesh, painted, clean, &[], &[], meta)
 }
 
-/// [`encode`] with each triangle's stack entry and piece.
-#[must_use]
+/// [`encode`] with each triangle's stack entry and piece.  An empty
+/// `entries` or `pieces` means the mesh has none (every triangle reads
+/// [`NO_ENTRY`]); otherwise there is one per triangle.
+///
+/// # Errors
+/// If a colour set, `entries` or `pieces` is neither empty (only for the
+/// last two) nor one per triangle: a short list would give some triangle a
+/// colour or an entry it was never given.
 pub fn encode_traced(
     mesh: &TriMesh,
     painted: &[[f32; 3]],
@@ -62,8 +78,20 @@ pub fn encode_traced(
     entries: &[u16],
     pieces: &[u16],
     meta: &Value,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, String> {
     let n = mesh.triangles.len();
+    for (what, len, may_be_empty) in [
+        ("painted colours", painted.len(), false),
+        ("clean colours", clean.len(), false),
+        ("entries", entries.len(), true),
+        ("pieces", pieces.len(), true),
+    ] {
+        if len != n && !(may_be_empty && len == 0) {
+            return Err(format!(
+                "the view's mesh has {n} triangles but {len} {what}"
+            ));
+        }
+    }
     let mut lo = [f64::INFINITY; 3];
     let mut hi = [f64::NEG_INFINITY; 3];
     for p in &mesh.positions {
@@ -105,8 +133,8 @@ pub fn encode_traced(
     }
     out.extend_from_slice(&normals);
     for set in [painted, clean] {
-        for f in 0..n {
-            let c = set.get(f).copied().unwrap_or([0.7; 3]).map(byte);
+        for colour in set {
+            let c = colour.map(byte);
             for _ in 0..3 {
                 out.extend_from_slice(&c);
             }
@@ -114,24 +142,25 @@ pub fn encode_traced(
     }
     for set in [entries, pieces] {
         for f in 0..n {
-            out.extend_from_slice(
-                &set.get(f)
-                    .copied()
-                    .unwrap_or(if set.is_empty() { u16::MAX } else { 0 })
-                    .to_le_bytes(),
-            );
+            out.extend_from_slice(&set.get(f).copied().unwrap_or(NO_ENTRY).to_le_bytes());
         }
     }
     while !out.len().is_multiple_of(4) {
         out.push(0);
     }
-    out
+    Ok(out)
 }
 
 /// The payload for a finished build: its painted colours (the PNG
 /// renders'), its clean colours, and the gate's face counts.
-#[must_use]
-pub fn from_built(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Vec<u8> {
+///
+/// # Errors
+/// If the build's per-triangle lists do not match its mesh (see [`encode_traced`]).
+pub fn from_built(
+    b: &Built,
+    overhang_deg: f64,
+    palette: &dt_kit::Palette,
+) -> Result<Vec<u8>, String> {
     let painted = b.colours_with(palette, true);
     let clean = b.colours_with(palette, false);
     let meta = json!({
@@ -326,16 +355,38 @@ pub fn thinned(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>) {
 
 /// [`from_built`] thinned to [`VIEW_BUDGET`]: a draft's soup of parts can
 /// be millions of triangles.
-#[must_use]
-pub fn from_draft(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Vec<u8> {
+///
+/// # Errors
+/// If the build's per-triangle lists do not match its mesh (see [`encode_traced`]).
+pub fn from_draft(
+    b: &Built,
+    overhang_deg: f64,
+    palette: &dt_kit::Palette,
+) -> Result<Vec<u8>, String> {
     let painted = b.colours_with(palette, true);
     let clean = b.colours_with(palette, false);
     let (mesh, kept) = thinned(&b.export.mesh, VIEW_BUDGET);
+    let triangles = b.export.mesh.triangles.len();
+    if painted.len() != triangles || clean.len() != triangles {
+        return Err(format!(
+            "the draft's mesh has {triangles} triangles but {} painted and {} clean colours",
+            painted.len(),
+            clean.len()
+        ));
+    }
     let pick = |v: &[[f32; 3]]| kept.iter().map(|&f| v[f]).collect::<Vec<_>>();
-    let pick16 = |v: &[u16]| {
-        kept.iter()
-            .map(|&f| v.get(f).copied().unwrap_or(u16::MAX))
-            .collect::<Vec<_>>()
+    // a list that is empty has none to give (every kept triangle reads NO_ENTRY); a short one is a mismatch
+    let pick16 = |what: &str, v: &[u16]| -> Result<Vec<u16>, String> {
+        if v.is_empty() {
+            return Ok(Vec::new());
+        }
+        if v.len() != triangles {
+            return Err(format!(
+                "the draft's mesh has {triangles} triangles but {} {what}",
+                v.len()
+            ));
+        }
+        Ok(kept.iter().map(|&f| v[f]).collect())
     };
     let meta = json!({
         "overhang_faces": b.audit.overhang.iter().filter(|&&o| o).count(),
@@ -349,26 +400,32 @@ pub fn from_draft(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Ve
         &mesh,
         &pick(&painted),
         &pick(&clean),
-        &pick16(&b.entries),
-        &pick16(&b.pieces),
+        &pick16("entries", &b.entries)?,
+        &pick16("pieces", &b.pieces)?,
         &meta,
     )
 }
 
 /// A sketch of a stage while the build runs ([`dt_kit::Reporter::sketch`]):
 /// painted by material alone, no owner, thinned to [`VIEW_BUDGET`].
-#[must_use]
+///
+/// # Errors
+/// If `materials` is not one per triangle of `mesh`.
 pub fn sketch(
     mesh: &TriMesh,
     materials: &[dt_kit::Material],
     rough: bool,
     palette: &dt_kit::Palette,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, String> {
+    if materials.len() != mesh.triangles.len() {
+        return Err(format!(
+            "a sketch's mesh has {} triangles but {} materials",
+            mesh.triangles.len(),
+            materials.len()
+        ));
+    }
     let (thin, kept) = thinned(mesh, VIEW_BUDGET);
-    let mats: Vec<dt_kit::Material> = kept
-        .iter()
-        .map(|&f| materials.get(f).copied().unwrap_or(dt_kit::Material::Rock))
-        .collect();
+    let mats: Vec<dt_kit::Material> = kept.iter().map(|&f| materials[f]).collect();
     let none = vec![false; mats.len()];
     let colours = dt_kit::paint_mesh(&thin, &mats, &none, &none, None, palette, false);
     encode(
@@ -400,7 +457,7 @@ mod tests {
     fn layout_is_header_then_four_typed_arrays() {
         let red = [1.0, 0.0, 0.0];
         let grey = [0.5, 0.5, 0.5];
-        let b = encode(&tri(), &[red, grey], &[grey, grey], &json!({"x": 1}));
+        let b = encode(&tri(), &[red, grey], &[grey, grey], &json!({"x": 1})).unwrap();
         assert_eq!(&b[..4], MAGIC);
         let jl = u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize;
         assert_eq!((8 + jl) % 4, 0, "arrays start 4-aligned");
@@ -458,8 +515,21 @@ mod tests {
     }
 
     #[test]
+    fn a_short_per_triangle_list_is_an_error_not_a_default() {
+        let grey = [0.5; 3];
+        // two triangles, one entry: the second would have read entry 0
+        let e = encode_traced(&tri(), &[grey; 2], &[grey; 2], &[3], &[], &json!({}));
+        assert!(e.unwrap_err().contains("2 triangles but 1 entries"));
+        let e = encode_traced(&tri(), &[grey], &[grey; 2], &[], &[], &json!({}));
+        assert!(e.unwrap_err().contains("painted colours"));
+        // none at all is allowed: every triangle reads NO_ENTRY
+        let b = encode_traced(&tri(), &[grey; 2], &[grey; 2], &[], &[], &json!({})).unwrap();
+        assert_eq!(&b[b.len() - 8..b.len() - 4], &[0xff; 4]);
+    }
+
+    #[test]
     fn an_empty_mesh_still_has_a_header() {
-        let b = encode(&TriMesh::default(), &[], &[], &json!({}));
+        let b = encode(&TriMesh::default(), &[], &[], &json!({})).unwrap();
         assert_eq!(&b[..4], MAGIC);
         assert_eq!(b.len() % 4, 0);
         assert_eq!(

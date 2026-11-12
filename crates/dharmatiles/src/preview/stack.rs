@@ -42,14 +42,17 @@ fn item(label: String, element: &str) -> Value {
 
 /// The tile's stack as `{label, element, href}` items, in written order,
 /// ending with the base when the stack has a `base` line.
-#[must_use]
-pub fn items(tile: &Tile, system: &str) -> Vec<Value> {
+///
+/// # Errors
+/// If a span the plan holds does not lie in its own source (a bug: the
+/// page would be sent empty text in its place).
+pub fn items(tile: &Tile, system: &str) -> Result<Vec<Value>, String> {
     let mut out = Vec::with_capacity(tile.stack.len() + 1);
     for (i, e) in tile.stack.iter().enumerate() {
         out.push(entry(
             e,
             tile.stack[..i].iter().rev().find(|p| inside(e, p)),
-        ));
+        )?);
     }
     if let Some(span) = tile.base_span {
         let mut v = base(system);
@@ -65,7 +68,7 @@ pub fn items(tile: &Tile, system: &str) -> Vec<Value> {
         v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
         out.push(v);
     }
-    out
+    Ok(out)
 }
 
 /// The base line's connector for the build target: its label and page.
@@ -89,7 +92,7 @@ fn inside(e: &Entry, outer: &Entry) -> bool {
     std::sync::Arc::ptr_eq(&e.src, &outer.src) && a > b && a + e.span.len() <= b + outer.span.len()
 }
 
-fn entry(e: &Entry, within: Option<&Entry>) -> Value {
+fn entry(e: &Entry, within: Option<&Entry>) -> Result<Value, String> {
     let what = e.what.value.as_str();
     let (mut label, element) = if what == "scatter" && !e.children.is_empty() {
         let mut names: Vec<String> = Vec::new();
@@ -122,12 +125,18 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
     };
     v["span"] = json!([start, len]);
     v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
-    v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name()));
+    v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name())?);
     // where it is put (at=), as written, for the map's handles
     const PLACE: [&str; 1] = ["at"];
+    let props = dt_doc::edit::props_at(text, e.what.span.offset()).map_err(|err| {
+        format!(
+            "cannot read the properties of the `{what}` entry at byte {} of {}: {err}",
+            e.what.span.offset(),
+            e.src.name()
+        )
+    })?;
     v["place"] = json!(
-        dt_doc::edit::props_at(text, e.what.span.offset())
-            .unwrap_or_default()
+        props
             .into_iter()
             .filter(|(n, ..)| PLACE.contains(&n.as_str()))
             .map(|(name, text, span)| json!({ "name": name, "text": text, "span": span }))
@@ -141,17 +150,16 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
         }));
     // a scatter's things, each with its own controls, for the lens; a
     // node is addressed by the offset its name starts at
-    v["things"] = json!(
-        e.children
-            .iter()
-            .map(|c| json!({
-                "what": c.what.value,
-                "at": c.what.span.offset(),
-                "controls": settings(&c.controls, &c.what.span, e.src.name()),
-            }))
-            .collect::<Vec<_>>()
-    );
-    v
+    let mut things = Vec::with_capacity(e.children.len());
+    for c in &e.children {
+        things.push(json!({
+            "what": c.what.value,
+            "at": c.what.span.offset(),
+            "controls": settings(&c.controls, &c.what.span, e.src.name())?,
+        }));
+    }
+    v["things"] = json!(things);
+    Ok(v)
 }
 
 /// The controls written on an entry (a default is not written: its span
@@ -162,19 +170,26 @@ fn settings(
     controls: &[dt_eval::doc::Setting],
     name: &miette::SourceSpan,
     file: &str,
-) -> Vec<Value> {
+) -> Result<Vec<Value>, String> {
     controls
         .iter()
         .filter(|c| c.span != *name)
         .map(|c| {
             let (o, l) = (c.span.offset(), c.span.len());
             let text = c.src.inner();
-            json!({
+            let written = text.get(o..o + l).ok_or_else(|| {
+                format!(
+                    "the setting `{}` has a span ({o}, {l}) that is not in {}",
+                    c.name,
+                    c.src.name()
+                )
+            })?;
+            Ok(json!({
                 "name": c.name,
-                "text": text.get(o..o + l).unwrap_or_default(),
+                "text": written,
                 "span": [o, l],
                 "file": (c.src.name() != file).then(|| c.src.name()),
-            })
+            }))
         })
         .collect()
 }
@@ -188,6 +203,7 @@ mod tests {
     fn labels(path: &str, system: &str) -> Vec<String> {
         let c = dt_eval::check(&Files, path, &Options::default()).unwrap();
         super::items(c.tile.as_ref().unwrap(), system)
+            .unwrap()
             .iter()
             .map(|v| v["label"].as_str().unwrap().to_owned())
             .collect()
@@ -210,6 +226,39 @@ mod tests {
     }
 
     #[test]
+    fn every_library_and_test_tile_describes_its_stack_without_a_bad_span() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
+        let mut paths = Vec::new();
+        for group in ["tiles", "tests"] {
+            let mut dirs = vec![root.join(group)];
+            while let Some(d) = dirs.pop() {
+                for e in std::fs::read_dir(d).unwrap() {
+                    let p = e.unwrap().path();
+                    if p.is_dir() {
+                        dirs.push(p);
+                    } else if p.extension().is_some_and(|x| x == "dtile") {
+                        let rel = p
+                            .strip_prefix(&root)
+                            .unwrap()
+                            .to_string_lossy()
+                            .into_owned();
+                        paths.push(format!("lib:{rel}"));
+                    }
+                }
+            }
+        }
+        assert!(paths.len() > 50, "found the library");
+        for path in paths {
+            // a tile with a mistake has no stack to describe
+            if let Ok(c) = dt_eval::check(&Files, &path, &Options::default())
+                && let Some(t) = c.tile.as_ref()
+            {
+                super::items(t, "db").unwrap_or_else(|e| panic!("{path}: {e}"));
+            }
+        }
+    }
+
+    #[test]
     fn every_link_is_on_the_docs_site() {
         let c = dt_eval::check(
             &Files,
@@ -217,7 +266,7 @@ mod tests {
             &Options::default(),
         )
         .unwrap();
-        for v in super::items(c.tile.as_ref().unwrap(), "ol") {
+        for v in super::items(c.tile.as_ref().unwrap(), "ol").unwrap() {
             assert!(v["href"].as_str().unwrap().starts_with(super::DOCS));
         }
     }

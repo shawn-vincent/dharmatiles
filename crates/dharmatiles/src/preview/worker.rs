@@ -46,7 +46,12 @@ impl dt_kit::Reporter for LatestBuild {
         if self.changed() {
             std::panic::resume_unwind(Box::new(Superseded));
         }
-        let bytes = payload::sketch(mesh, materials, rough, &shared.palette());
+        // a sketch that cannot be encoded is a bug: it unwinds into the build's
+        // catch, which shows it as a failed build (never an empty sketch)
+        let bytes = match payload::sketch(mesh, materials, rough, &shared.palette()) {
+            Ok(bytes) => bytes,
+            Err(e) => panic!("a sketch could not be encoded: {e}"),
+        };
         let stage = lock(&self.stage).clone();
         shared.add_sketch(id, &stage, rough, bytes);
     }
@@ -99,17 +104,29 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         Ok(c) => c,
         Err(errs) => return finish_err(rec, &errs),
     };
-    let plan = checked.tile.as_ref().map(|t| {
+    let plan = match checked.tile.as_ref().map(|t| {
         let frame = dt_kit::Frame::for_system(&opts.system, t.cols, t.rows);
         let [w, h] = frame.size_mm();
-        json!({
+        Ok::<_, String>(json!({
             "cols": t.cols, "rows": t.rows,
             "square_mm": frame.square_mm, "size_mm": [w, h],
             // the tile's zero height: where the base meets the tile body
             "datum_z": 0.0,
-            "stack": stack::items(t, &opts.system),
-        })
-    });
+            "stack": stack::items(t, &opts.system)?,
+        }))
+    }) {
+        Some(Err(e)) => {
+            return finish_err(
+                rec,
+                &[Diag::plain(
+                    "dt::stack",
+                    format!("cannot describe the stack: {e}"),
+                )],
+            );
+        }
+        Some(Ok(p)) => Some(p),
+        None => None,
+    };
     if let Some(p) = &plan {
         shared.update(id, |t| t.plan = Some(p.clone()));
     }
@@ -187,11 +204,18 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             );
             encode_progress.begin(ENCODE, "preparing the view");
             let t_encode = Instant::now();
-            let mesh = Arc::new(payload::from_built(
-                &b,
-                opts.printer.overhang_deg,
-                &shared.palette(),
-            ));
+            let mesh = match payload::from_built(&b, opts.printer.overhang_deg, &shared.palette()) {
+                Ok(m) => Arc::new(m),
+                Err(e) => {
+                    return finish_err(
+                        rec,
+                        &[Diag::plain(
+                            "dt::payload",
+                            format!("cannot prepare the view: {e}"),
+                        )],
+                    );
+                }
+            };
             if latest.changed() {
                 tell!("discarded superseded view of {path}");
                 shared.update(id, |t| {
@@ -290,7 +314,10 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     }
     let clean = dt_kit::paint(&materials, &vec![false; materials.len()]);
     let meta = json!({"overhang_deg": opts.printer.overhang_deg, "footprint": footprint});
-    let bytes = Arc::new(payload::encode(&export.mesh, &painted, &clean, &meta));
+    let bytes = match payload::encode(&export.mesh, &painted, &clean, &meta) {
+        Ok(b) => Arc::new(b),
+        Err(e) => return fail(format!("cannot prepare the view of {path}: {e}")),
+    };
     let sq = dt_kit::Frame::for_system(&opts.system, 1, 1).square_mm;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let n = |v: f64| (libm::round(v / sq).max(1.0)) as u32;
@@ -351,7 +378,8 @@ fn draft(shared: &Arc<Shared>, d: &queue::Draft, opts: &Options) {
         // a mistake in the text: the check shows it, the last mesh stays
         Ok(Err(_)) => Outcome::Mistake,
         Ok(Ok(_)) if d.cancel.load(Ordering::Relaxed) => Outcome::Superseded,
-        Ok(Ok(mesh)) => Outcome::Mesh(Arc::new(mesh)),
+        Ok(Ok(Err(why))) => Outcome::Failed(format!("cannot prepare the draft's view: {why}")),
+        Ok(Ok(Ok(mesh))) => Outcome::Mesh(Arc::new(mesh)),
     };
     // Allowed: the requester gave up waiting (its request timed out or its
     // connection closed); there is nobody left to tell.
