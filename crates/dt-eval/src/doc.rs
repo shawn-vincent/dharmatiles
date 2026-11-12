@@ -142,8 +142,10 @@ pub struct Entry {
 pub struct Top {
     /// The formula as written.
     pub expr: Expr,
-    /// Where it is written.
+    /// Where the value is written.
     pub span: SourceSpan,
+    /// The whole property, `top=…`: what the editor selects for the cloud.
+    pub prop: SourceSpan,
     /// Its text.
     pub src: Src,
     /// For a tree or a rock, the formula its tips or peak are worked out
@@ -1657,6 +1659,7 @@ impl Reader<'_> {
                             top = Some(Top {
                                 expr: t.value.clone(),
                                 span: t.span,
+                                prop: property_span(src, t.span, "top"),
                                 src: Arc::clone(src),
                                 crown: None,
                             });
@@ -2071,6 +2074,7 @@ impl Reader<'_> {
             cloud_top = Some(Top {
                 expr: t.value.clone(),
                 span: t.span,
+                prop: property_span(&at, t.span, "top"),
                 src: at,
                 crown: Some(expr),
             });
@@ -2298,6 +2302,32 @@ fn default_value(c: &'static Control, lets: &Lets) -> Option<dt_elements::Value>
     element_value(&c.default_value()?, lets)
         .ok()
         .map(|l| l.value)
+}
+
+/// The whole property `name=value` whose value is written at `value`: the
+/// value's span widened back over the `=` and the name (and the spaces KDL
+/// allows round the `=`).  The decoder keeps a value's own span; the name is
+/// found in front of it, in the same text, by looking at the two tokens
+/// before it.  A value not written as that property keeps its own span.
+fn property_span(src: &Src, value: SourceSpan, name: &str) -> SourceSpan {
+    let text = src.inner();
+    let start = value.offset();
+    let named = text
+        .get(..start)
+        .map(str::trim_end)
+        .and_then(|b| b.strip_suffix('='))
+        .map(str::trim_end)
+        .and_then(|b| b.strip_suffix(name))
+        // `stop=` is not `top=`
+        .filter(|b| {
+            b.chars()
+                .next_back()
+                .is_none_or(|c| c.is_whitespace() || c == '{' || c == ';')
+        });
+    match named {
+        Some(before) => SourceSpan::new(before.len().into(), start + value.len() - before.len()),
+        None => value,
+    }
 }
 
 /// A pin as the evaluator keeps it; `dollar` reads a format 0 library

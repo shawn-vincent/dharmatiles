@@ -591,8 +591,15 @@ mod tests {
         let entries: Vec<u16> = (0..n)
             .map(|t| u16::from_le_bytes(bytes[at + 2 * t..at + 2 * t + 2].try_into().unwrap()))
             .collect();
-        assert!(entries.iter().all(|&e| e == NO_ENTRY || usize::from(e) < stack.len()));
-        assert!(entries.contains(&2), "the base is the last place in the stack");
+        assert!(
+            entries
+                .iter()
+                .all(|&e| e == NO_ENTRY || usize::from(e) < stack.len())
+        );
+        assert!(
+            entries.contains(&2),
+            "the base is the last place in the stack"
+        );
     }
 
     #[test]

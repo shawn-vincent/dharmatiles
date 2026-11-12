@@ -1,68 +1,30 @@
 // A cloud as part of the selection: which cloud the source's caret (or the
 // pointer) is in, and the shapes the view draws for it.  A cloud is written
 // as a `top=` value, a body's or a thing's, or as a `pin` in a body's block;
-// the build sends every cloud's low and high sheets (an entry's band) and
-// every cloud at a point (a tree's branch tips, a rock's middle) in the
-// payload's `debug`, each with its stack entry, and the view draws the
-// selected entry's.
+// the program says where each is written (the stack's `clouds`), and the
+// build sends every cloud's low and high sheets (an entry's band) and every
+// cloud at a point (a tree's branch tips, a rock's middle) in the payload,
+// each with its entry's key, and the view draws the selected entry's.
 
 import { byteToIndex } from './text.js';
 
-// a written `top=` value: quoted (escapes kept) or a bare word; after
-// whitespace, so `stop=` and the like are not it
-const TOP = /(?<=[\s{;])top=(?:"(?:[^"\\\n]|\\.)*"?|[^\s;{}]*)/g;
-// a `pin` node, from its name to the end of its line (or a `;` or `}`)
-const PIN = /(?<=^|[\s{;])pin(?=[\s;{}]|$)(?:"(?:[^"\\\n]|\\.)*"|[^\n;}"])*/gm;
-
-/** A test for "is character `i` in a `//` comment": strings are skipped, a comment runs to its line's end. */
-function commented(text) {
-  const cut = new Int32Array(text.length + 1).fill(0);
-  let inStr = false, on = 0;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === '\n') { inStr = false; on = 0; continue; }
-    if (!on) {
-      if (ch === '\\' && inStr) { i++; continue; }
-      if (ch === '"') inStr = !inStr;
-      else if (!inStr && ch === '/' && text[i + 1] === '/') on = 1;
-    }
-    cut[i] = on;
-  }
-  return (i) => cut[i] === 1;
-}
-
 /**
- * The clouds written in `text` for the stack `items` (as the page holds
- * them: `{key, file, span: [byte, length], …}`) in `file`: [{key, from, to,
- * pin}] as character indices, `pin` the pin's place in its entry (0 on) or
- * null for a `top=`.  Each belongs to the innermost entry written round it,
- * so a scatter's things' tops are the scatter's.
+ * The clouds written in `text`, for the stack `items` (as the page holds
+ * them: `{key, clouds: [{kind, file, span: [byte, length], pin}], …}`) in
+ * `file`: [{key, from, to, pin}] as character indices, sorted by place, `pin`
+ * the pin's place in its entry (0 on) or null for a `top=`.  The program
+ * sends each entry's clouds, read off what it parsed, so a comment, a hidden
+ * (`/-`) node or a raw string holds none, and a call's `top=` is the cloud of
+ * the tree inside the definition.  This only turns bytes into characters.
  */
 export function cloudsIn(text, items, file) {
   if (!text) return [];
-  const spans = items.map((it) => {
-    if (!it?.key || !it.span || it.file !== file) return null;
-    const from = byteToIndex(text, it.span[0]);
-    return { key: it.key, from, to: byteToIndex(text, it.span[0] + it.span[1]) };
-  }).filter(Boolean);
-  const owner = (i) => {
-    let best = null;
-    for (const s of spans) if (i >= s.from && i < s.to && (!best || s.to - s.from < best.to - best.from)) best = s;
-    return best;
-  };
-  const inComment = commented(text);
   const out = [];
-  const pins = new Map();
-  // the pins first: a pin's own top= is the pin
-  for (const [re, isPin] of [[PIN, true], [TOP, false]]) {
-    for (const m of text.matchAll(re)) {
-      if (inComment(m.index)) continue;
-      if (!isPin && out.some((c) => c.pin != null && m.index >= c.from && m.index < c.to)) continue;
-      const s = owner(m.index);
-      if (!s) continue;
-      let pin = null;
-      if (isPin) { pin = pins.get(s.key) ?? 0; pins.set(s.key, pin + 1); }
-      out.push({ key: s.key, from: m.index, to: m.index + m[0].trimEnd().length, pin });
+  for (const it of items) {
+    if (!it?.key) continue;
+    for (const c of it.clouds ?? []) {
+      if (c.file !== file) continue;
+      out.push({ key: it.key, from: byteToIndex(text, c.span[0]), to: byteToIndex(text, c.span[0] + c.span[1]), pin: c.pin ?? null });
     }
   }
   return out.sort((a, b) => a.from - b.from);

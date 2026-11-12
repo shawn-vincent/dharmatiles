@@ -80,7 +80,19 @@ fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
     };
     v["span"] = json!([start, len]);
     v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
-    v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name())?);
+    let mut controls = settings(&e.controls, &e.what.span, e.src.name())?;
+    // a body's band is its `top`: a row of the sheet like any control (a tree's
+    // or rock's is already one), written as `top=…`
+    if let Some(t) = e.top.as_ref().filter(|t| t.crown.is_none()) {
+        controls.push(json!({
+            "name": "top",
+            "text": written(&t.src, t.prop)?,
+            "span": [t.prop.offset(), t.prop.len()],
+            "file": (t.src.name() != e.src.name()).then(|| t.src.name()),
+        }));
+    }
+    v["controls"] = json!(controls);
+    v["clouds"] = json!(clouds(e)?);
     // where it is put (at=), as written, for the map's handles
     const PLACE: [&str; 1] = ["at"];
     let props = dt_doc::edit::props_at(text, e.what.span.offset()).map_err(|err| {
@@ -117,6 +129,47 @@ fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
     Ok(v)
 }
 
+/// The text of `span` in `src`.
+fn written(src: &dt_eval::diag::Src, span: miette::SourceSpan) -> Result<&str, String> {
+    let (o, l) = (span.offset(), span.len());
+    src.inner().get(o..o + l).ok_or_else(|| {
+        format!(
+            "the span ({o}, {l}) is not in {}: the plan holds a bad span",
+            src.name()
+        )
+    })
+}
+
+/// The clouds an entry writes: its `top=` (a body's, a tree's or rock's, or
+/// the call's it was given), each pin of a body, and the `top=` of each thing
+/// of a scatter, each with the file it is written in and its byte span.  They
+/// are read off the parsed entry, so a comment, a hidden (`/-`) node or a raw
+/// string holds none.  `pin` is a pin's place among its entry's pins.
+fn clouds(e: &Entry) -> Result<Vec<Value>, String> {
+    let cloud =
+        |kind: &str, src: &dt_eval::diag::Src, span: miette::SourceSpan, pin: Option<usize>| {
+            // a node's span may run on past its last word
+            let text = written(src, span)?;
+            Ok::<_, String>(json!({
+                "kind": kind, "file": src.name(),
+                "span": [span.offset(), text.trim_end().len()], "pin": pin,
+            }))
+        };
+    let mut out = Vec::new();
+    if let Some(t) = &e.top {
+        out.push(cloud("top", &t.src, t.prop, None)?);
+    }
+    for (k, p) in e.pins.iter().enumerate() {
+        out.push(cloud("pin", &p.from.src, p.span, Some(k))?);
+    }
+    for c in &e.children {
+        if let Some(t) = &c.top {
+            out.push(cloud("top", &t.src, t.prop, None)?);
+        }
+    }
+    Ok(out)
+}
+
 /// The controls written on an entry (a default is not written: its span
 /// is the entry's name): name, the text written (`size="6dmm .. 10dmm"`, or a
 /// child line `height 35`) and its byte span, and the file it is in (a
@@ -151,7 +204,7 @@ fn settings(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
 
     use dt_eval::{Files, Options};
 
@@ -211,6 +264,113 @@ mod tests {
                 super::items(t, "db").unwrap_or_else(|e| panic!("{path}: {e}"));
             }
         }
+    }
+
+    /// The text each cloud of each entry of `text` covers, by entry key.
+    fn clouds_of(text: &str) -> Vec<(String, Vec<(String, String)>)> {
+        let m = dt_eval::Memory([("t.dtile".to_owned(), text.to_owned())].into());
+        let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
+        super::items(c.tile.as_ref().unwrap(), "db")
+            .unwrap()
+            .iter()
+            .filter(|v| v["key"] != "tile/connector")
+            .map(|v| {
+                let cs = v["clouds"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|c| {
+                        let (o, l) = (
+                            c["span"][0].as_u64().unwrap() as usize,
+                            c["span"][1].as_u64().unwrap() as usize,
+                        );
+                        let kind = match c["pin"].as_u64() {
+                            Some(k) => format!("pin {k}"),
+                            None => c["kind"].as_str().unwrap().to_owned(),
+                        };
+                        (kind, text[o..o + l].to_owned())
+                    })
+                    .collect();
+                (v["key"].as_str().unwrap().to_owned(), cs)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_cloud_is_what_the_parser_read_not_what_the_text_looks_like() {
+        // a `top=` in a comment, a block comment, a raw string and a hidden pin are no clouds
+        let text = "dharmatiles version=\"1.0.0\"\n\
+            // dirt top=\"$groundHeight\"\n\
+            tile size=\"1x1\" seed=3 {\n\
+            about #\"top=\"1dmm\" and pin top=\"2dmm\" in a raw string\"#\n\
+            stack {\n base\n\
+            dirt top=\"$groundHeight + 1dmm\" {\n\
+            /- pin top=\"$groundHeight + 9dmm\" at=center\n\
+            pin top=\"$groundHeight + 4dmm\" at=center\n\
+            /* pin top=\"$groundHeight\" at=center */\n\
+            pin top=\"$groundHeight + 2dmm\" at=southCenter\n\
+            }\n\
+            scatter count=2 { rock size=\"9dmm\" top=\"$bottom + high(3dmm .. 9dmm)\" }\n\
+            grass\n }\n}\n";
+        let got = clouds_of(text);
+        let s = |a: &str, b: &str| (a.to_owned(), b.to_owned());
+        assert_eq!(got[0].0, "tile/dirt/0");
+        assert_eq!(
+            got[0].1,
+            [
+                s("top", "top=\"$groundHeight + 1dmm\""),
+                s("pin 0", "pin top=\"$groundHeight + 4dmm\" at=center"),
+                s("pin 1", "pin top=\"$groundHeight + 2dmm\" at=southCenter"),
+            ]
+        );
+        assert_eq!(got[1].0, "tile/scatter/0");
+        assert_eq!(got[1].1, [s("top", "top=\"$bottom + high(3dmm .. 9dmm)\"")]);
+        assert!(got[2].1.is_empty(), "a grass has no cloud");
+    }
+
+    #[test]
+    fn a_top_a_call_gives_is_the_trees_cloud_where_the_call_writes_it() {
+        let m = dt_eval::Memory(
+            [(
+                "t.dtile".to_owned(),
+                "dharmatiles version=\"1.0.0\"\n\
+                 define grove { stack { tree } }\n\
+                 tile size=\"1x1\" seed=3 { stack { base\n dirt\n grove at=\"(0.5sq, 0.5sq)\" top = \"$bottom + 30dmm\" } }\n"
+                    .to_owned(),
+            )]
+            .into(),
+        );
+        let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
+        let items = super::items(c.tile.as_ref().unwrap(), "db").unwrap();
+        let tree = items.iter().find(|v| v["what"] == "tree").unwrap();
+        let cloud = &tree["clouds"][0];
+        let text = c.file.src.inner();
+        let (o, l) = (
+            cloud["span"][0].as_u64().unwrap() as usize,
+            cloud["span"][1].as_u64().unwrap() as usize,
+        );
+        assert_eq!(&text[o..o + l], "top = \"$bottom + 30dmm\"");
+    }
+
+    #[test]
+    fn a_bodys_top_is_a_control_the_sheet_can_show() {
+        let m = dt_eval::Memory(
+            [(
+                "t.dtile".to_owned(),
+                "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=3 { stack { base\n dirt top=\"$groundHeight + 1dmm\" } }\n"
+                    .to_owned(),
+            )]
+            .into(),
+        );
+        let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
+        let items = super::items(c.tile.as_ref().unwrap(), "db").unwrap();
+        let top = items[0]["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["name"] == "top")
+            .unwrap();
+        assert_eq!(top["text"], "top=\"$groundHeight + 1dmm\"");
     }
 
     #[test]

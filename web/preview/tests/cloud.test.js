@@ -18,19 +18,35 @@ const enc = new TextEncoder();
 const byte = (i) => enc.encode(src.slice(0, i)).length;
 const span = (from, to) => [byte(from), byte(to) - byte(from)];
 const at = (s) => src.indexOf(s);
-const dirtFrom = at('dirt'), dirtTo = at('}', at('at=path')) + 1;
-const scatFrom = at('scatter'), scatTo = src.indexOf('}', scatFrom) + 1;
+const cloud = (kind, from, to, pin = null) => ({ kind, file: 't', span: span(from, to), pin });
+const lineEnd = (s) => src.indexOf('\n', at(s));
+// what the program sends: each entry's clouds, read off what it parsed (the comment holds none)
 const items = [
-  { key: 'tile/dirt/0', file: 't', span: span(dirtFrom, dirtTo) },
-  { key: 'tile/scatter/0', file: 't', span: span(scatFrom, scatTo) },
-  { key: 'tile/grass/0', file: 't', span: span(at('grass'), at('grass') + 12) },
+  {
+    key: 'tile/dirt/0',
+    clouds: [
+      cloud('top', at('top="$groundHeight + bell'), src.indexOf('"', at('bell')) + 1),
+      cloud('pin', at('pin top="$groundHeight + 4dmm"'), lineEnd('at=hill'), 0),
+      cloud('pin', at('pin top="$groundHeight - 1dmm"'), lineEnd('at=path'), 1),
+    ],
+  },
+  { key: 'tile/scatter/0', clouds: [cloud('top', at('top="$bottom'), src.indexOf('"', at('high(')) + 1)] },
+  { key: 'tile/grass/0', clouds: [] },
 ];
 
-test('the tops and pins written in each entry, comments left out', () => {
-  const c = cloudsIn(src, items, 't');
+test('the tops and pins the program sends for each entry, as places in the text', () => {
+  const c = cloudsIn(src, items.map((i) => ({ ...i, clouds: i.clouds.map((x) => ({ ...x, file: 't' })) })), 't');
   assert.deepEqual(c.map((x) => [x.key, x.pin]), [['tile/dirt/0', null], ['tile/dirt/0', 0], ['tile/dirt/0', 1], ['tile/scatter/0', null]]);
   assert.equal(src.slice(c[0].from, c[0].to), 'top="$groundHeight + bell(0dmm .. 2dmm)"');
   assert.equal(src.slice(c[1].from, c[1].to), 'pin top="$groundHeight + 4dmm" at=hill');
+});
+
+test('a non-ASCII text moves the places by characters, not bytes', () => {
+  const text = 'tile { // \u00e9\u00e9\n dirt top="1dmm" }';
+  const from = enc.encode(text.slice(0, text.indexOf('top='))).length;
+  const items2 = [{ key: 'k', clouds: [{ kind: 'top', file: 'f', span: [from, 10], pin: null }] }];
+  const [c] = cloudsIn(text, items2, 'f');
+  assert.equal(text.slice(c.from, c.to), 'top="1dmm"');
 });
 
 test('the caret in a top or a pin selects its cloud; elsewhere none', () => {
