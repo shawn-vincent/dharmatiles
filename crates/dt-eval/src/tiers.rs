@@ -103,6 +103,8 @@ pub fn thin_built(mut b: Built, budget: usize) -> Built {
     b.audit.band = pick(&b.audit.band, &kept);
     b.entries = pick(&b.entries, &kept);
     b.pieces = pick(&b.pieces, &kept);
+    b.audit.triangles = b.export.mesh.triangles.len();
+    b.audit.vertices = b.export.mesh.positions.len();
     b
 }
 

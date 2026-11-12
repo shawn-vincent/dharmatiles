@@ -122,6 +122,7 @@ fn build<'a>(
             palette: &dt_kit::Palette::default(),
             cache: Some(&cache),
             store: None,
+            tier: dt_eval::Tier::Full,
         },
         false,
     );

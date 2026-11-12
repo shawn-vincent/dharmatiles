@@ -14,7 +14,7 @@ use crate::doc::{self, Tile};
 use crate::options::Options;
 use crate::plan::Step;
 use crate::source::{LIB, Source};
-use crate::store::{CacheState, CacheUse, Store, Tracked};
+use crate::store::{CacheState, CacheUse, Store, Tier, Tracked};
 use crate::{cache, hash, regions, solve};
 use crate::{coords, crowns, progress};
 use dt_kit::Progress;
@@ -246,6 +246,82 @@ pub fn build_stored(
     }
     if !opts.clouds {
         b.clouds = None;
+    }
+    b.cache = CacheUse {
+        state: CacheState::Miss,
+        made_by: None,
+        problems,
+    };
+    Ok(b)
+}
+
+/// [`build_stored`] at `tier`: what a map or a browser asks for by distance.
+///
+/// - [`Tier::Full`]: the finished build, through the union and the gate.
+/// - [`Tier::Low`]: the same places drawn with less detail, the parts as they
+///   are, each face flagged by its angle alone.  **Not yet checked**
+///   ([`Built::checked`]).
+/// - [`Tier::SuperLow`]: a low build cut down to
+///   [`crate::tiers::SUPER_LOW_BUDGET`] triangles.  It is made from the low
+///   build (found in the store, or made and kept), and kept as its own entry.
+/// - [`Tier::Draft`]: the editor's draft (coarse cells), never kept.
+///
+/// Each tier is its own entry in the store; the options' own `draft` and
+/// `low` are overruled by the tier.  Only a full build may be written out:
+/// check [`Built::checked`] before an export.
+///
+/// # Errors
+/// As [`build`].
+pub fn build_tier(
+    sources: &dyn Source,
+    path: &str,
+    opts: &Options,
+    tier: Tier,
+    progress: &Progress,
+    cache: Option<&Cache>,
+    store: Option<&Store>,
+) -> Result<Built, Vec<Diag>> {
+    let at = |t: Tier| Options {
+        draft: t == Tier::Draft,
+        low: matches!(t, Tier::Low | Tier::SuperLow),
+        ..opts.clone()
+    };
+    if tier != Tier::SuperLow {
+        let o = at(tier);
+        // a draft is never kept: it is the view while a value is dragged
+        let store = if tier == Tier::Draft { None } else { store };
+        return build_stored(sources, path, &o, progress, cache, store);
+    }
+    let Some(store) = store else {
+        let low = build_cached(sources, path, &at(Tier::Low), progress, cache)?;
+        return Ok(crate::tiers::super_low(low));
+    };
+    let tracked = Tracked::new(sources);
+    let o = at(Tier::Low);
+    let stored = Options {
+        clouds: true,
+        ..o.clone()
+    };
+    check(&tracked, path, &stored)?;
+    let key = store.key_at(&tracked.reads(), path, &o, Tier::SuperLow);
+    let want = dt_kit::debug::Collect {
+        clouds: opts.clouds,
+        marks: opts.debug,
+    };
+    let mut problems = Vec::new();
+    match store.get(&key, want) {
+        Ok(Some(mut b)) => {
+            b.record.engine.clone_from(&opts.engine);
+            b.cache.state = CacheState::Hit;
+            return Ok(b);
+        }
+        Ok(None) => {}
+        Err(e) => problems.push(e),
+    }
+    let low = build_stored(&tracked, path, &o, progress, cache, Some(store))?;
+    let mut b = crate::tiers::super_low(low);
+    if let Err(e) = store.put(&key, &b) {
+        problems.push(e);
     }
     b.cache = CacheUse {
         state: CacheState::Miss,
@@ -607,6 +683,7 @@ impl<'a> Plan<'a> {
         let (c, tile) = (self.c, self.tile);
         let mut scene = Scene::new(c.frame, Seed::new(c.seed));
         scene.set_progress(progress.clone());
+        scene.set_low(self.opts.low);
         let want = dt_kit::debug::Collect {
             clouds: self.opts.clouds,
             marks: self.opts.debug,
@@ -794,7 +871,7 @@ impl<'a> Plan<'a> {
             system: opts.system.clone(),
             printer: opts.printer.name.clone(),
         };
-        Ok(Built {
+        let built = Built {
             export,
             materials,
             audit,
@@ -836,6 +913,13 @@ impl<'a> Plan<'a> {
             placed: scene.placed().to_vec(),
             checked: !(opts.draft || opts.low),
             cache: CacheUse::default(),
+        };
+        // a low build keeps to its budget: a cliff's carving is more than a
+        // map can show
+        Ok(if opts.low {
+            crate::tiers::thin_built(built, crate::tiers::LOW_BUDGET)
+        } else {
+            built
         })
     }
 }

@@ -702,8 +702,12 @@ pub(crate) fn add_items(
             }
             None => f.stone,
         };
-        let mesh =
-            grain(&st.convex, &g, seed.index(u64::from(f.k)).value()).map_err(LookError::build)?;
+        // a low build draws the stone as its hull: the facets, no grain
+        let mesh = if scene.low() {
+            st.convex.to_tri_mesh()
+        } else {
+            grain(&st.convex, &g, seed.index(u64::from(f.k)).value()).map_err(LookError::build)?
+        };
         built.push(
             solid(slots.get(f.k), &mesh)
                 .map_err(LookError::build)?

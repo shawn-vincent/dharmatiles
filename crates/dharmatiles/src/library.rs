@@ -86,6 +86,21 @@ pub(crate) fn options(system: &str, printer: &str, seed: Option<u64>) -> Result<
     )
 }
 
+/// The tier a command line word names: `full`, `low` or `super-low`.
+///
+/// # Errors
+/// A word that is none of them.
+pub(crate) fn tier(word: &str) -> Result<dt_eval::Tier, String> {
+    match word {
+        "full" => Ok(dt_eval::Tier::Full),
+        "low" => Ok(dt_eval::Tier::Low),
+        "super-low" => Ok(dt_eval::Tier::SuperLow),
+        _ => Err(format!(
+            "`{word}` is not a tier: use `full`, `low` or `super-low`"
+        )),
+    }
+}
+
 /// [`options`], with the user's printers read from `home`.
 pub(crate) fn options_in(
     system: &str,

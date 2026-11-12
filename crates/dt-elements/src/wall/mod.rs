@@ -208,6 +208,24 @@ impl Mason {
         }
     }
 
+    /// The same masonry drawn for a low build: every unit where it is, with
+    /// no chips, no rounding of its edges, no relief on its face, no
+    /// spalling or cracks and no grain.  The layout (courses, bays, what is
+    /// missing) is the full wall's.
+    #[must_use]
+    pub fn low(&self) -> Self {
+        Self {
+            chip: 0.0,
+            rounding: Draw::flat(0.0, 0.0),
+            relief: None,
+            spall: 0.0,
+            crack: 0.0,
+            grain: 0.0,
+            checks: 0.0,
+            ..self.clone()
+        }
+    }
+
     /// Set a texture preset's chip, rounding and relief.
     pub fn texture(&mut self, (chip, r, rel): (f64, f64, f64)) {
         self.chip = chip;
@@ -335,20 +353,25 @@ impl Element for Wall {
         let frame = *scene.frame();
         let sq = frame.square_mm;
         let pts: Vec<[f64; 2]> = along.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
+        let mason = if scene.low() {
+            self.mason.low()
+        } else {
+            self.mason.clone()
+        };
         let Some(side) = ctx.line_side else {
-            return build(&self.mason, scene, ctx, &pts, Kind::Wall);
+            return build(&mason, scene, ctx, &pts, Kind::Wall);
         };
         // a drawn line: its runs, on the side asked for
         let s = frame.scale();
         let spine = path::drawn(
             &pts,
             side,
-            self.mason.across * s,
+            mason.across * s,
             s,
             frame.size_mm(),
-            0.6 * self.mason.bay.lo() * s,
+            0.6 * mason.bay.lo() * s,
         )?;
-        let mut m = self.mason.clone();
+        let mut m = mason;
         m.drawn = Some(spine.ring);
         build(&m, scene, ctx, &spine.pts, Kind::Wall)
     }

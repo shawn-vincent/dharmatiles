@@ -18,7 +18,7 @@
 //!   and every edge keeps the same chipped profile top and bottom).
 
 use dt_kit::form::{Relief, level_set, relief_weighted};
-use dt_kit::{KitError, Rng, Seed, TriMesh};
+use dt_kit::{Convex, KitError, Rng, Seed, TriMesh};
 
 use super::layout::Seg;
 
@@ -127,6 +127,37 @@ impl Block {
             // y ≤ ly − bot3 + ly1 z + k (x − xc)
             unit([-k, 1.0, -ly1], ly - self.bot[3] - k * xc),
         ]
+    }
+
+    /// The block as a **low** build draws it, in world mm: the polytope
+    /// its six planes bound (sharp edges, no relief), placed on `seg`.
+    pub fn hull(&self, seg: &Seg) -> Result<TriMesh, KitError> {
+        let [lx, ly, lz] = self.size();
+        if lx.min(ly).min(lz) <= 0.0 {
+            return Err(KitError::Shape(
+                "a stone is no bigger than its joints: make the joints narrower or the stones bigger"
+                    .into(),
+            ));
+        }
+        let swing = self.yaw.abs() * lx / 2.0 + self.lean.abs();
+        let tz = (self.tilt[0].abs() * lx + self.tilt[1].abs() * ly) / 2.0;
+        let mut hull = Some(Convex::cuboid(
+            [-1.0, -1.0 - swing, -1.0],
+            [lx + 1.0, ly + 1.0 + swing, lz + 1.0 + tz],
+        ));
+        for (n, c) in self.planes() {
+            hull = hull.and_then(|h| h.cut(n, c));
+        }
+        let mut m = hull
+            .ok_or_else(|| KitError::Shape("a stone's planes leave nothing of it".into()))?
+            .compact()
+            .to_tri_mesh();
+        let (x0, y0, z0) = (self.x[0], self.y[0], self.z[0]);
+        for p in &mut m.positions {
+            let w = seg.at(x0 + p[0], y0 + p[1]);
+            *p = [w[0], w[1], z0 + p[2]];
+        }
+        Ok(m)
     }
 
     /// The block's mesh in world mm: the level set of the smooth max of

@@ -573,6 +573,7 @@ pub(crate) fn solidify(
     let slots = scene.slots(n + 1, material).map_err(LookError::build)?;
     type Piece = Result<(Solid, [f64; 3], [f64; 3], Option<Placed>), LookError>;
     let ticks = scene.progress().counter("stones", units.len(), 0.0, 0.9);
+    let low = scene.low();
     let built: Vec<Piece> = units
         .par_iter()
         .enumerate()
@@ -581,7 +582,12 @@ pub(crate) fn solidify(
             let mut put = None;
             let mesh = match u {
                 Unit::Block(b, plane) => {
-                    let mut mesh = b.mesh(&run.segs[b.seg]).map_err(LookError::build)?;
+                    let mut mesh = if low {
+                        b.hull(&run.segs[b.seg])
+                    } else {
+                        b.mesh(&run.segs[b.seg])
+                    }
+                    .map_err(LookError::build)?;
                     if let Some(plane) = plane {
                         // the relief's high points may stand over the fitted
                         // plane: the block is seated down to it (its tilt

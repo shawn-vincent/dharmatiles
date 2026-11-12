@@ -854,6 +854,7 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
         palette: &palette,
         cache: None,
         store: shared.store.as_deref(),
+        tier: dt_eval::Tier::Full,
     };
     let opts = shared.options();
     let target = opts.target();

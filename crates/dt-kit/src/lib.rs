@@ -92,7 +92,7 @@ pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
 pub use progress::{Counter, Event, Progress, Reporter};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
-    ABSENT_UNDER_MM, CORNER_ROUND_MM, Frame, Kind, LIFT_TOL_MM, LOW_LIFT_TOL_MM, LayerSpec,
+    ABSENT_UNDER_MM, CORNER_ROUND_MM, Carpet, Frame, Kind, LIFT_TOL_MM, LOW_LIFT_TOL_MM, LayerSpec,
     Material, Part, Parts, Placement, REFERENCE_SQUARE_MM, Relief, Rest, Scene, SideSpec, Slot,
     Slots, Solid, Stage, Standing, Tag, Terrain, Under, node_of,
 };

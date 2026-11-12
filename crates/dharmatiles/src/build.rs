@@ -27,6 +27,9 @@ pub(crate) struct Extras<'a> {
     /// The disk cache of builds: a build whose inputs are all unchanged is
     /// read from it, not made (`--no-cache`: none).
     pub(crate) store: Option<&'a dt_eval::Store>,
+    /// How finely to build.  Only the full tier is checked and written as an
+    /// STL; a low one writes the `png` views alone.
+    pub(crate) tier: dt_eval::Tier,
 }
 
 pub(crate) fn build(
@@ -135,7 +138,15 @@ pub(crate) fn build_one(
     let reporter = tracker
         .as_ref()
         .map_or_else(dt_eval::Progress::none, |(_, pr)| pr.clone());
-    let b = match dt_eval::build_stored(sources, p, opts, &reporter, extras.cache, extras.store) {
+    let b = match dt_eval::build_tier(
+        sources,
+        p,
+        opts,
+        extras.tier,
+        &reporter,
+        extras.cache,
+        extras.store,
+    ) {
         Ok(b) => b,
         Err(errs) => {
             if tracker.is_some() {
@@ -151,7 +162,12 @@ pub(crate) fn build_one(
         }
     };
     let built_s = t0.elapsed().as_secs_f64();
-    let failures = b.audit.failures(&opts.printer);
+    // only a full build was checked: a low one has nothing to fail
+    let failures = if b.checked {
+        b.audit.failures(&opts.printer)
+    } else {
+        Vec::new()
+    };
     reporter.begin(progress::WRITE, "writing files");
     let t_write = Instant::now();
     let written = write(&b, &failures, built_s, out, extras);
@@ -176,7 +192,16 @@ pub(crate) fn build_one(
     timings.record(p, &opts.system, &secs);
     timings.save();
     let a = &b.audit;
-    if !json {
+    if !json && !b.checked {
+        tell!(
+            "built {p} → {}\n  {} · not yet checked · {} triangles · build {:.2} s, written {:.2} s",
+            files[0].display(),
+            extras.tier.name(),
+            a.triangles,
+            built_s,
+            total_s
+        );
+    } else if !json {
         tell!(
             "built {p} → {}\n  {} triangles · watertight {} · overhang (over 65°) {:.2}/{:.2} mm² · band (55–65°) {:.2}/{:.2} mm² · {} dropped · {} voids filled · {} holes · build {:.2} s, written {:.2} s",
             files[0].display(),
@@ -253,14 +278,20 @@ pub(crate) fn write(
     let w = |p: &Path, bytes: &[u8]| {
         std::fs::write(p, bytes).map_err(|e| format!("cannot write {}: {e}", p.display()))
     };
-    w(&path, &stl(&b.export.mesh, &b.record))?;
-    let mut files = vec![path.clone()];
+    // a low build is never exported: its views are all it writes
+    let mut files = Vec::new();
+    if b.checked {
+        w(&path, &stl(&b.export.mesh, &b.record))?;
+        files.push(path.clone());
+    }
     let record = path.with_extension("build.json");
     let text = serde_json::to_string_pretty(&tile_json(b, failures, built_s))
         .map_err(|e| e.to_string())?;
-    w(&record, text.as_bytes())?;
-    files.push(record);
-    if extras.threemf {
+    if b.checked {
+        w(&record, text.as_bytes())?;
+        files.push(record);
+    }
+    if extras.threemf && b.checked {
         let p = path.with_extension("3mf");
         let bytes = match extras.template {
             Some(t) => {
@@ -273,10 +304,13 @@ pub(crate) fn write(
     }
     if extras.png {
         let colours = b.colours_with(extras.palette, true);
-        let stem = path
+        let mut stem = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
+        if !b.checked {
+            stem = format!("{stem}-{}", extras.tier.name());
+        }
         for v in &VIEWS {
             let img = render(&b.export.mesh, &colours, v, b.footprint, (1200, 950));
             let p = path.with_file_name(format!("{stem}-{}.png", v.name));
@@ -334,6 +368,10 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
         "edge_mm": b.edge_mm,
         "stats": stats(&b.notes),
     });
+    // a low build says so; a full one's record is unchanged
+    if !b.checked {
+        v["checked"] = json!(false);
+    }
     // only when an element left something out: the record is unchanged otherwise
     if !b.left_out.is_empty() {
         v["left_out"] = b

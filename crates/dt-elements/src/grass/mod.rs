@@ -138,6 +138,102 @@ impl Grass {
     }
 }
 
+/// A low build's carpet: nodes this far apart, mm at the 35 mm square.
+const CARPET_STEP_MM: f64 = 0.45;
+/// The carpet stops this far from the tile's plane, mm (it stands inside
+/// the tile's body, never on its side).
+const CARPET_INSET_MM: f64 = 0.3;
+/// The size of a clump of tufts in the carpet's relief, and of a tuft, mm.
+const CARPET_CLUMP_MM: f64 = 2.4;
+const CARPET_TUFT_MM: f64 = 0.55;
+/// Where the carpet's thickness is at least this share of full, it stands.
+const CARPET_EDGE: f64 = 0.12;
+
+impl Grass {
+    /// The grass of a **low** build: a carpet where the grass would grow (the
+    /// same area, clearings, shore mud and room round what stands on the
+    /// ground as the blades are given), a tuft's height of lumps over the
+    /// ground, in the grass material.  Fewer blades would read as bare earth
+    /// with weeds; the carpet reads as a lawn.
+    fn carpet(
+        &self,
+        scene: &mut Scene,
+        ctx: &Ctx<'_>,
+        surf: &Surface,
+        seat: &Field,
+    ) -> Result<(), LookError> {
+        let frame = *scene.frame();
+        let s = frame.scale();
+        let [w, h] = frame.size_mm();
+        let (step, inset) = (CARPET_STEP_MM * s, CARPET_INSET_MM * s);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let (nx, ny) = (
+            ((w - 2.0 * inset) / step).floor() as usize + 1,
+            ((h - 2.0 * inset) / step).floor() as usize + 1,
+        );
+        let hgt = self.height.scaled(s);
+        let amp = 0.5 * (hgt.lo() + hgt.hi());
+        let lat = Lat {
+            nx,
+            ny,
+            x0: inset,
+            y0: inset,
+            res: step,
+            z: vec![0.0; nx * ny],
+        };
+        let clumps = lat.noise(ctx.seed.key("carpet").key("clumps"), CARPET_CLUMP_MM * s);
+        let tufts = lat.noise(ctx.seed.key("carpet").key("tufts"), CARPET_TUFT_MM * s);
+        let n = nx * ny;
+        let (mut base, mut top, mut present) = (vec![0.0f32; n], vec![0.0f32; n], vec![false; n]);
+        for k in 0..n {
+            let (x, y) = (lat.x(k % nx), lat.y(k / nx));
+            let ground = seat.sample(x, y);
+            let (i, j) = raw_node(&frame, x, y);
+            let mut grown = if surf.outside[j * frame.nodes().0 + i] {
+                0.0
+            } else {
+                (1.0 - surf.soil.sample(x, y)).clamp(0.0, 1.0)
+            };
+            if let Some(near) = &surf.near {
+                grown *= near.sample(x, y);
+            }
+            grown *= self.cover.clamp(0.0, 1.0);
+            // clumps of tufts: a ridged noise has pointed tips and creases
+            let ridge = 1.0 - tufts.z[k].abs().min(1.6) / 1.6;
+            let clump = (0.5 + 0.3 * clumps.z[k]).clamp(0.0, 1.0);
+            let thick = 1.25 * amp * grown * (0.35 + 0.65 * ridge * (0.55 + 0.45 * clump));
+            // f32 is what the mesher takes
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                base[k] = (ground - 0.6 * s).max(0.1) as f32;
+                top[k] = (ground + thick.max(0.05)) as f32;
+            }
+            present[k] = grown > CARPET_EDGE;
+        }
+        // not on the lattice's own edge: no wall stands there
+        for k in 0..n {
+            let (i, j) = (k % nx, k / nx);
+            if i == 0 || j == 0 || i == nx - 1 || j == ny - 1 {
+                present[k] = false;
+            }
+        }
+        scene
+            .lay_carpet(
+                ctx.path,
+                &dt_kit::Carpet {
+                    nx,
+                    ny,
+                    step,
+                    origin: [inset, inset],
+                    base: &base,
+                    top: &top,
+                    present: &present,
+                },
+            )
+            .map_err(LookError::build)
+    }
+}
+
 impl Element for Grass {
     fn plan(&self) -> Plan {
         Plan {
@@ -319,6 +415,11 @@ impl Element for Grass {
             tuck_mm: TUCK_MM,
             edge_dist,
         };
+
+        // a low build: no blades, a carpet of the same extent
+        if scene.low() {
+            return self.carpet(scene, ctx, &surf, &seat);
+        }
 
         // 4 fronds
         let len = self.length.scaled(s);

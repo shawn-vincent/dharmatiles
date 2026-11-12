@@ -446,6 +446,27 @@ impl Slots {
     }
 }
 
+/// The lattice of a low build's grass carpet ([`Scene::lay_carpet`]).
+pub struct Carpet<'a> {
+    /// Nodes across.
+    pub nx: usize,
+    /// Nodes up.
+    pub ny: usize,
+    /// Node spacing, mm.
+    pub step: f64,
+    /// World mm of node (0, 0).
+    pub origin: [f64; 2],
+    /// The plate under the ground, `nx * ny` values.
+    pub base: &'a [f32],
+    /// The carpet's top where present, `nx * ny` values.
+    pub top: &'a [f32],
+    /// Where the carpet stands.
+    pub present: &'a [bool],
+}
+
+/// How close the carpet's relief is kept, mm.
+const CARPET_TOL_MM: f64 = 0.04;
+
 /// A tagged solid in the scene.
 #[derive(Clone)]
 pub struct Part {
@@ -1506,6 +1527,62 @@ impl Scene {
         self.add(
             Tag {
                 kind: Kind::Terrain,
+                owner: owner.clone(),
+            },
+            solid,
+        );
+        Ok(())
+    }
+
+    /// **carpet**: a low build's grass.  A thin closed skin over the ground
+    /// where `present`, its top at `top` (mm) over a lattice of `nx` by `ny`
+    /// nodes `step` mm apart, the first at `origin`; under it, hidden below the
+    /// ground, a plate at `base`.  The lift of the stack mesher, so the solid
+    /// is closed and its relief is kept to a twentieth of a millimetre.
+    /// Nothing is added where nothing is present.
+    ///
+    /// # Errors
+    /// [`KitError::Lift`] when a node is not above zero or the lattice is too
+    /// small; [`KitError::Mesh`] if the kernel refuses the solid.
+    pub fn lay_carpet(
+        &mut self,
+        owner: &crate::EntryId,
+        lattice: &Carpet<'_>,
+    ) -> Result<(), KitError> {
+        if !lattice.present.iter().any(|&p| p) {
+            return Ok(());
+        }
+        let slots = self.slots(2, Material::Grass)?;
+        let layers = [
+            dt_geom::Layer::new(lattice.base, slots.get(0).id),
+            dt_geom::Layer {
+                top: lattice.top,
+                id: slots.get(1).id,
+                present: Some(lattice.present),
+                relief: None,
+            },
+        ];
+        let mut mesh = dt_geom::lift_stack(
+            &dt_geom::Lattice {
+                nx: lattice.nx,
+                ny: lattice.ny,
+                step: lattice.step,
+                tol: CARPET_TOL_MM,
+                max_cells: 8,
+                round: dt_geom::Round::F32,
+            },
+            &layers,
+            &dt_geom::Sides::flat(),
+        )
+        .map_err(|e| KitError::Lift(e.to_string()))?;
+        for p in &mut mesh.positions {
+            p[0] += lattice.origin[0];
+            p[1] += lattice.origin[1];
+        }
+        let solid = Solid(dt_geom::Solid::from_tri_mesh(&mesh).map_err(KitError::Mesh)?);
+        self.add(
+            Tag {
+                kind: Kind::Grass,
                 owner: owner.clone(),
             },
             solid,

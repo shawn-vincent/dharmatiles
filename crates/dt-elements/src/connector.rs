@@ -197,6 +197,7 @@ impl Element for DungeonBlocks {
         let slots = scene
             .slots(3 * n, Material::Connector)
             .map_err(LookError::build)?;
+        let low = scene.low();
         let pegs: Vec<Result<Solid, LookError>> = squares
             .par_iter()
             .enumerate()
@@ -206,6 +207,10 @@ impl Element for DungeonBlocks {
                 let round = base::tile_corners(&f, c, r);
                 let rings = self.rings([x, y], s, peg, &arc, round);
                 let body = loft(slots.get(3 * k), &rings).map_err(LookError::build)?;
+                // a low build draws the peg without the logo cut into its tip
+                if low {
+                    return Ok(body);
+                }
                 let (cx, cy) = (x + s / 2.0, y + s / 2.0);
                 let (z0, z1) = (tip - LOGO_EPS_MM, tip + self.logo_depth_mm);
                 let g = groove.placed(LOGO_VIEWBOX, cx, cy, logo_side);
@@ -219,6 +224,19 @@ impl Element for DungeonBlocks {
             })
             .collect();
         let pegs: Vec<Solid> = pegs.into_iter().collect::<Result<_, _>>()?;
+        if low {
+            // each peg as it is: nothing is joined in a low build
+            for peg in pegs {
+                scene.add(
+                    Tag {
+                        kind: Kind::Connector,
+                        owner: ctx.path.clone(),
+                    },
+                    peg,
+                );
+            }
+            return Ok(());
+        }
         let base = union(&pegs).map_err(LookError::build)?;
         scene.add(
             Tag {

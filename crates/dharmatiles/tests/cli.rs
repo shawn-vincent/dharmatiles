@@ -665,3 +665,56 @@ fn migrate_takes_the_parts_a_tile_uses_along_and_stops_at_a_unit_it_cannot_tell(
     );
     assert_eq!(std::fs::read_to_string(&bad).unwrap(), text);
 }
+
+/// A low tier is not yet checked and is never exported: it writes the PNG
+/// views and no STL, and `--3mf` with it is refused.
+#[test]
+fn a_low_tier_never_writes_an_stl_or_a_3mf() {
+    let d = scratch("low");
+    let out = exe()
+        .args(["build", "lib:tests/ground/1x1-flat.dtile", "--tier", "low"])
+        .arg("--png")
+        .arg("--out")
+        .arg(&d)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("not yet checked"), "{said}");
+    let mut files = Vec::new();
+    let mut todo = vec![d.clone()];
+    while let Some(p) = todo.pop() {
+        for e in std::fs::read_dir(&p).unwrap() {
+            let e = e.unwrap().path();
+            if e.is_dir() {
+                todo.push(e);
+            } else {
+                files.push(e);
+            }
+        }
+    }
+    assert!(
+        files
+            .iter()
+            .any(|f| f.extension().is_some_and(|x| x == "png"))
+    );
+    assert!(
+        !files
+            .iter()
+            .any(|f| f.extension().is_some_and(|x| x == "stl" || x == "3mf")),
+        "{files:?}"
+    );
+    let refused = exe()
+        .args([
+            "build",
+            "lib:tests/ground/1x1-flat.dtile",
+            "--tier",
+            "low",
+            "--3mf",
+        ])
+        .arg("--out")
+        .arg(&d)
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+}

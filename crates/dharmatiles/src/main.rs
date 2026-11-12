@@ -143,7 +143,22 @@ fn main() -> ExitCode {
             palette,
             json,
             no_cache,
+            tier,
         } => {
+            let tier = match library::tier(&tier) {
+                Ok(t) => t,
+                Err(e) => {
+                    tell!("error: {e}");
+                    return ExitCode::from(ERROR);
+                }
+            };
+            if tier != dt_eval::Tier::Full && threemf {
+                tell!(
+                    "error: --tier {} is not yet checked and is never exported: --3mf needs the full tier",
+                    tier.name()
+                );
+                return ExitCode::from(ERROR);
+            }
             let template = match threemf.then(|| bambu::template(bambu_template.as_deref())) {
                 Some(Err(e)) => {
                     tell!("error: {e}");
@@ -203,6 +218,7 @@ fn main() -> ExitCode {
                     palette: &palette,
                     cache: None,
                     store: store.as_ref(),
+                    tier,
                 },
                 json,
             )

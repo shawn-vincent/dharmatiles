@@ -102,6 +102,13 @@ pub(crate) enum Command {
         /// (see `dharmatiles cache`), and do not keep this build in it.
         #[arg(long)]
         no_cache: bool,
+        /// How finely: `full` (the default, through the union and the gate),
+        /// `low` (the same places with less detail, for browsing and the
+        /// map) or `super-low` (a few thousand triangles).  A low tier is
+        /// not yet checked: it writes the `--png` views only, never an STL
+        /// or a 3MF.
+        #[arg(long, default_value = "full")]
+        tier: String,
     },
     /// Read and plan tiles without building geometry.
     Check {

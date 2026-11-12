@@ -273,7 +273,10 @@ impl Element for Cliff {
         let progress = scene.progress();
         let frame = *scene.frame();
         let planned = self.pile_plan(&frame, ctx)?;
-        let site = site(&frame, ctx)?;
+        let mut site = site(&frame, ctx)?;
+        // a low build carves as a draft does: coarse grids, no grain (the
+        // pile, and so every stone's place, is planned the same)
+        site.draft |= scene.low();
         progress.fraction("planning the pile", 0.01);
         if planned.st.rocks.is_empty() {
             return Ok(());

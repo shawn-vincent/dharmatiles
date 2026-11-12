@@ -317,6 +317,9 @@ pub struct Grown {
 /// One built tree: its solid and its numbers.
 pub struct Built {
     pub solid: Solid,
+    /// A low build's other parts (its tree is not joined): the branches
+    /// beside the first, the clumps.  Empty in a full build.
+    pub more: Vec<Solid>,
     pub grown: Grown,
     pub at: [f64; 3],
     pub top_mm: f64,
@@ -479,11 +482,89 @@ impl Tree {
         wood_g.nodes[0][2] -= sink;
         let (curves, shortened) = graph::curves(&wood_g, HANDLE, STRICT_FDM_DEG);
         grown.handles_shortened = shortened;
-        grown.min_curve_elevation_deg = curves
-            .iter()
-            .flatten()
-            .map(graph::Curve::min_elevation)
-            .fold(90.0, f64::min);
+        if scene.low() {
+            // a low build draws the tree as parts: smooth tubes for the wood,
+            // a rounded cone for each clump, no leaves, nothing joined
+            let flare = |ring: &graph::Ring, radii: &mut [f64]| {
+                if wood_g.parents[ring.edge] == Some(0) {
+                    let h = (ring.centre[2] - at[2]).max(0.0);
+                    let f = 1.0 + FLARE * libm::exp(-h / r0.max(1e-6));
+                    radii.iter_mut().for_each(|r| *r *= f);
+                }
+            };
+            let tubes: Vec<TriMesh> = graph::tubes(
+                &wood_g,
+                &curves,
+                &TubeStyle {
+                    step_mm: 3.0 * bark::STEP_MM,
+                    min_radius_mm: MIN_TUBE_RADIUS_MM,
+                    dome_rings: 2,
+                },
+                &|_| LOW_SIDES,
+                &|ring, _, radii| flare(ring, radii),
+            )
+            .into_iter()
+            .filter(|m| !m.triangles.is_empty())
+            .collect();
+            let n = u32::try_from(tubes.len()).map_err(LookError::build)?;
+            let slots = scene.slots(n, Material::Wood).map_err(LookError::build)?;
+            let mut parts: Vec<Solid> = tubes
+                .par_iter()
+                .enumerate()
+                .map(|(k, m)| form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m))
+                .collect::<Result<_, _>>()
+                .map_err(LookError::build)?;
+            if p.clumps_on {
+                let length = CLUSTER_LENGTH_MM * s;
+                let meshes: Vec<TriMesh> = ends
+                    .iter()
+                    .filter_map(|&i| {
+                        let c = curves[i]?;
+                        let (start, start_t, len) = clump::start_on(&c, length);
+                        Some(clump::low(
+                            &clump::Spec {
+                                tip: g.nodes[i],
+                                tip_tangent: c.tangent(1.0),
+                                start,
+                                start_tangent: start_t,
+                                r_wood: g.radii[i].max(MIN_TUBE_RADIUS_MM),
+                                r_foliage: clump_r,
+                                length: len,
+                                key: seed.key("clump").index(i as u64).value(),
+                            },
+                            s,
+                        ))
+                    })
+                    .collect();
+                let n = u32::try_from(meshes.len()).map_err(LookError::build)?;
+                let cslots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
+                let leaves: Vec<Solid> = meshes
+                    .iter()
+                    .enumerate()
+                    .map(|(k, m)| form::solid(cslots.get(u32::try_from(k).unwrap_or(0)), m))
+                    .collect::<Result<_, _>>()
+                    .map_err(LookError::build)?;
+                grown.clumps = leaves.len();
+                parts.extend(leaves);
+            }
+            if parts.is_empty() {
+                return Err(LookError::build("the tree has no wood to draw"));
+            }
+            let top_mm = parts
+                .iter()
+                .filter_map(Solid::top)
+                .fold(at[2] + height, f64::max);
+            let solid = parts.remove(0);
+            return Ok(Built {
+                solid,
+                more: parts,
+                grown,
+                at,
+                top_mm,
+                stamp_r_mm: (r0 * STAMP_RADII).max(STAMP_MIN_MM * s),
+                clouds: clouds.unwrap_or_default(),
+            });
+        }
         let bark = bark::Bark::new(&wood_g, seed.key("bark").value(), at[2], height);
         let ground = at[2];
         let tubes = graph::tubes(
@@ -626,6 +707,7 @@ impl Tree {
         let top_mm = solid.top().unwrap_or(at[2] + height);
         Ok(Built {
             solid,
+            more: Vec::new(),
             grown,
             at,
             top_mm,
@@ -713,13 +795,15 @@ fn plant(scene: &mut Scene, path: &dt_kit::EntryId, b: Built) {
             d.column(c);
         }
     }
-    scene.add(
-        Tag {
-            kind: Kind::Tree,
-            owner: path.clone(),
-        },
-        b.solid,
-    );
+    for solid in std::iter::once(b.solid).chain(b.more) {
+        scene.add(
+            Tag {
+                kind: Kind::Tree,
+                owner: path.clone(),
+            },
+            solid,
+        );
+    }
 }
 
 impl Tree {
@@ -789,6 +873,9 @@ impl Element for Tree {
         Ok(())
     }
 }
+
+/// Sides of a low build's branch.
+const LOW_SIDES: usize = 7;
 
 /// How far crowns keep from one another when a scatter writes no `gap`,
 /// mm at the 35 mm square.

@@ -77,6 +77,18 @@ fn up_perp(t: [f64; 3]) -> [f64; 3] {
 
 /// The complete clump surface, outward wound.
 pub fn mesh(s: &Spec) -> TriMesh {
+    mesh_with(s, N_THETA, RING_RES_MM, true)
+}
+
+/// A low build's clump: a rounded cone of `n_theta` sides, rings `ring_res`
+/// mm apart and no roughening.
+pub fn low(s: &Spec, scale: f64) -> TriMesh {
+    mesh_with(s, 10, 3.5 * scale, false)
+}
+
+/// [`mesh`] with `n_theta` sides, rings `ring_res` mm apart and, with
+/// `rough`, the inward-only noise.
+fn mesh_with(s: &Spec, n_theta: usize, ring_res: f64, rough: bool) -> TriMesh {
     let r_base = s.r_wood;
     let r_tip = s.r_foliage;
     let r_back = r_base.max(BACK_ROUND_FRAC * r_tip);
@@ -107,7 +119,7 @@ pub fn mesh(s: &Spec) -> TriMesh {
     let cone_arc = libm::sqrt(total * total + (r_tip - r_back) * (r_tip - r_back));
     let north_arc = pi2 * r_tip;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let count = |a: f64, m: usize| (libm::ceil(a / RING_RES_MM) as usize).max(m);
+    let count = |a: f64, m: usize| (libm::ceil(a / ring_res) as usize).max(m);
     let (n_south, n_cone, n_north) = (count(south_arc, 3), count(cone_arc, 4), count(north_arc, 4));
     let factor_tip = (1.0 - (r_base + MAX_NOISE_MM) / r_tip.max(1e-6)).max(0.0);
     let dome_shift = (r_tip - r_base - MAX_NOISE_MM).max(0.0);
@@ -174,8 +186,8 @@ pub fn mesh(s: &Spec) -> TriMesh {
         let e2 = cross(*ax, e1);
         reference = e1;
         #[allow(clippy::cast_precision_loss)]
-        for k in 0..N_THETA {
-            let th = std::f64::consts::TAU * k as f64 / N_THETA as f64;
+        for k in 0..n_theta {
+            let th = std::f64::consts::TAU * k as f64 / n_theta as f64;
             let (ct, s) = (libm::cos(th), libm::sin(th));
             v.push([0, 1, 2].map(|a| c[a] + rr * (ct * e1[a] + s * e2[a])));
         }
@@ -184,21 +196,21 @@ pub fn mesh(s: &Spec) -> TriMesh {
     let nr = rings.len();
     let u = |i: usize| u32::try_from(i).unwrap_or(u32::MAX);
     let mut tris = Vec::new();
-    for k in 0..N_THETA {
-        tris.push([0, u(1 + k), u(1 + (k + 1) % N_THETA)]);
+    for k in 0..n_theta {
+        tris.push([0, u(1 + k), u(1 + (k + 1) % n_theta)]);
     }
     for r in 0..nr - 1 {
-        let (a, b) = (1 + r * N_THETA, 1 + (r + 1) * N_THETA);
-        for k in 0..N_THETA {
-            let k1 = (k + 1) % N_THETA;
+        let (a, b) = (1 + r * n_theta, 1 + (r + 1) * n_theta);
+        for k in 0..n_theta {
+            let k1 = (k + 1) % n_theta;
             tris.push([u(a + k), u(b + k), u(b + k1)]);
             tris.push([u(a + k), u(b + k1), u(a + k1)]);
         }
     }
-    let pole = 1 + nr * N_THETA;
-    let last = 1 + (nr - 1) * N_THETA;
-    for k in 0..N_THETA {
-        tris.push([u(pole), u(last + (k + 1) % N_THETA), u(last + k)]);
+    let pole = 1 + nr * n_theta;
+    let last = 1 + (nr - 1) * n_theta;
+    for k in 0..n_theta {
+        tris.push([u(pole), u(last + (k + 1) % n_theta), u(last + k)]);
     }
     let mut m = TriMesh {
         positions: v,
@@ -207,6 +219,9 @@ pub fn mesh(s: &Spec) -> TriMesh {
     };
     if dt_kit::signed_volume(&m) < 0.0 {
         m.triangles.iter_mut().for_each(|t| t.swap(1, 2));
+    }
+    if !rough {
+        return m;
     }
     // inward-only noise, faded out toward the narrow back
     let normals = form::vertex_normals(&m.positions, &m.triangles);

@@ -32,7 +32,7 @@ pub mod tiers;
 
 use std::path::{Path, PathBuf};
 
-pub use build::{Built, NO_ENTRY, build, build_cached, build_stored, build_with};
+pub use build::{Built, NO_ENTRY, build, build_cached, build_stored, build_tier, build_with};
 pub use cache::Cache;
 pub use check::{Checked, check};
 pub use diag::Diag;
