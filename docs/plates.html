@@ -77,6 +77,7 @@ plates printer="bambu/x1c-ams" mode="multicolour" group="filament" gap="3mm" mar
 <ul>
 <li><strong>By real footprint.</strong> A piece is the top-down box of the whole built mesh, not its 35 mm square: a tree's crown that hangs over the edge counts (the <code>1x1-grass-tree</code> crown reaches 9.4 mm past its square, so it takes a 44 by 44 mm box). Nothing hangs off the bed or over its neighbour.</li>
 <li><strong>Large to small, in a fixed order.</strong> Biggest footprint first, then the longer side, then the order written. Each piece goes in the first free spot reading from the front-left corner of the first plate that has one, and a new plate opens when none does. The same list always gives the same plates.</li>
+<li><strong>Centred.</strong> When a plate is full, its pieces move together so the group sits in the middle of the bed, both ways. An excluded zone in the way shortens that move, so no piece ever stands on one.</li>
 <li><strong>Spacing.</strong> The <code>gap</code> and the <code>margin</code> above, and the printer's excluded zones, which are kept clear.</li>
 <li><strong>Turns.</strong> A piece may turn a quarter when that lets it fit.</li>
 <li><strong>Multicolour groups by filament.</strong> Pieces that need the same filaments are put together, the set with the most area first, so a plate needs the fewest filaments and the printer changes the least. When that costs an extra plate, a message says so, with how many, and offers <em>pack by size only</em> (<code>group="size"</code>).</li>

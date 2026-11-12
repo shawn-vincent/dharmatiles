@@ -6,7 +6,10 @@
 //! corner (low y first, then low x) of the first plate that has one, a new
 //! plate opening when none does.  A spot is free when the piece, with the
 //! gap around it, lies inside the margin and clear of the other pieces and of
-//! the bed's excluded zones.
+//! the bed's excluded zones.  When a plate is full, its pieces are moved
+//! together so the group is centred on the bed, both ways; a bed with an
+//! excluded zone in the way takes the largest part of that move that keeps
+//! every piece clear of it.
 //!
 //! Multicolour adds the filaments: a plate may not need more filaments than
 //! the printer has slots, and by default (`Group::Filament`) pieces that share
@@ -243,8 +246,9 @@ fn first_fit(items: &[&Item], spec: &Spec, only_last: bool) -> Packing {
 pub fn pack(items: &[Item], spec: &Spec) -> Packing {
     let mut sized: Vec<&Item> = items.iter().collect();
     by_size(&mut sized);
-    let by_area = first_fit(&sized, spec, false);
+    let mut by_area = first_fit(&sized, spec, false);
     if spec.mode == Mode::Single || spec.group == Group::Size {
+        centre(&mut by_area, spec);
         return by_area;
     }
     // each filament set together: the set with the most area first
@@ -265,7 +269,49 @@ pub fn pack(items: &[Item], spec: &Spec) -> Packing {
     if grouped.plates.len() > by_area.plates.len() {
         grouped.grouping_cost = Some(grouped.plates.len() - by_area.plates.len());
     }
+    centre(&mut grouped, spec);
     grouped
+}
+
+/// Move each plate's pieces together so the group is centred on the bed.
+/// The group already lies inside the margin, so the centred group does too;
+/// an excluded zone in the way shortens the move (three quarters, half, a
+/// quarter of it, then none), so no piece ever stands on one.
+fn centre(packing: &mut Packing, spec: &Spec) {
+    let [bw, bd] = spec.bed;
+    for plate in &mut packing.plates {
+        let Some(first) = plate.placed.first() else {
+            continue;
+        };
+        let mut b = [first.x, first.y, first.x + first.w, first.y + first.d];
+        for p in &plate.placed {
+            b = [
+                b[0].min(p.x),
+                b[1].min(p.y),
+                b[2].max(p.x + p.w),
+                b[3].max(p.y + p.d),
+            ];
+        }
+        let dx = (bw - (b[0] + b[2])) / 2.0;
+        let dy = (bd - (b[1] + b[3])) / 2.0;
+        let clear = |t: f64| {
+            plate.placed.iter().all(|p| {
+                let r = [
+                    p.x + dx * t,
+                    p.y + dy * t,
+                    p.x + p.w + dx * t,
+                    p.y + p.d + dy * t,
+                ];
+                spec.excluded.iter().all(|z| !overlaps(r, *z))
+            })
+        };
+        if let Some(t) = [1.0, 0.75, 0.5, 0.25].into_iter().find(|&t| clear(t)) {
+            for p in &mut plate.placed {
+                p.x += dx * t;
+                p.y += dy * t;
+            }
+        }
+    }
 }
 
 fn key(s: &[Material]) -> Vec<u8> {
@@ -410,11 +456,29 @@ mod tests {
             "70x70, 70x35, then the two squares in id order"
         );
         assert_eq!(a, pack(&items, &s));
-        // the biggest stands at the front-left corner, against the margin
-        assert_eq!(
-            (a.plates[0].placed[0].x, a.plates[0].placed[0].y),
-            (5.0, 5.0)
-        );
+        // the biggest stands at the group's front-left corner, and the group
+        // is centred on the bed both ways
+        let ps = &a.plates[0].placed;
+        let lo = |f: fn(&Placed) -> f64| ps.iter().map(f).fold(f64::MAX, f64::min);
+        let hi = |f: fn(&Placed) -> f64| ps.iter().map(f).fold(f64::MIN, f64::max);
+        assert_eq!((ps[0].x, ps[0].y), (lo(|p| p.x), lo(|p| p.y)));
+        assert!(((lo(|p| p.x) + hi(|p| p.x + p.w)) / 2.0 - 128.0).abs() < 1e-9);
+        assert!(((lo(|p| p.y) + hi(|p| p.y + p.d)) / 2.0 - 128.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_plate_is_centred_unless_a_zone_is_in_the_way() {
+        let s = spec(256.0);
+        let one = pack(&squares(1, 35.0), &s);
+        let p = one.plates[0].placed[0];
+        assert_eq!((p.x, p.y), (110.5, 110.5), "one square in the middle");
+        // a zone over the bed's middle: the square stays clear of it
+        let mut z = spec(256.0);
+        z.excluded = vec![[100.0, 100.0, 156.0, 156.0]];
+        let held = pack(&squares(1, 35.0), &z);
+        assert_valid(&held, &z);
+        let q = held.plates[0].placed[0];
+        assert!(q.x + q.w <= 100.0 + 1e-9 || q.y + q.d <= 100.0 + 1e-9);
     }
 
     #[test]
