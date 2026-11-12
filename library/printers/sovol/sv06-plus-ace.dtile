@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// Sovol SV06 Plus ACE: 300 x 300 x 350 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer sv06-plus-ace {
+    brand   "Sovol"
+    model   "SV06 Plus ACE"
+    bed     "300x300mm"
+    height  "350mm"
+    nozzle  "0.4mm"
+    slots   1
+}

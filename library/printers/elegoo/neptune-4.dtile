@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// Elegoo Neptune 4 / 4 Pro: 225 x 225 x 265 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer neptune-4 {
+    brand   "Elegoo"
+    model   "Neptune 4 / 4 Pro"
+    bed     "225x225mm"
+    height  "265mm"
+    nozzle  "0.4mm"
+    slots   1
+}

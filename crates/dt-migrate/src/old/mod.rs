@@ -1509,6 +1509,8 @@ impl<'k> Decoder<'k> {
             overhang,
             steepest,
             gap,
+            floors_given: [true; 5],
+            machine: dt_doc::model::Machine::default(),
         })
     }
 }

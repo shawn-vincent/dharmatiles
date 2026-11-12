@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// Voron Design Voron 0.2: 120 x 120 x 120 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer v0-2 {
+    brand   "Voron Design"
+    model   "Voron 0.2"
+    bed     "120x120mm"
+    height  "120mm"
+    nozzle  "0.4mm"
+    slots   1
+}

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Printers</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+<style>
+.verify{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:1px 7px;border-radius:99px;border:1px solid var(--muted);color:var(--muted)}
+td code{white-space:nowrap}
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="plates.html">Plates</a><a href="printers.html" aria-current="page">Printers</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Reference · the machine a print list is laid out for</div>
+  <h1>Printers</h1>
+  <p class="lede">A printer profile says what your printer is: how big its bed is, where it cannot print, its nozzle, and how many filaments it can hold. <a href="plates.html">Plates</a> are laid out on a profile's bed, and a profile's floors keep every build printable. The library has 41 models by brand, and you can add your own.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#choose">Choosing one</a></li>
+  <li><a href="#fields">What a profile holds</a></li>
+  <li><a href="#own">Your own</a></li>
+  <li><a href="#library">The library</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="choose">Choosing one</h2>
+<p>A profile is named by its brand and model, <code>bambu/x1c</code>, or by a plain name, <code>fine</code>. <code>--printer bambu/x1c</code> builds for it (the output goes to <code>out/db-bambu-x1c/</code>: the slash becomes a dash), a print list names one in its <code>plates</code> block, and the plates view has a printer chooser that is brand, then model. <code>default</code> and <code>fine</code> are the older floors-only profiles: they hold no bed, so they build tiles but cannot hold plates.</p>
+<p>A machine profile gives only its machine. The printability floors (line, layer, overhang, steepest, gap) are the <code>default</code> profile's unless the profile writes its own, so the gate judges a tile the same on every printer; <code>--printer bambu/x1c</code> builds byte for byte what the default does.</p>
+
+<h2 id="fields">What a profile holds</h2>
+<div class="tbl"><table>
+<thead><tr><th>Word</th><th>Written</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>brand</code>, <code>model</code></td><td><code>"Bambu Lab"</code></td><td>How the chooser names it.</td></tr>
+<tr><td><code>bed</code></td><td><code>"256x256mm"</code></td><td>The printable area: width (x) by depth (y). Plates are laid out inside it.</td></tr>
+<tr><td><code>height</code></td><td><code>"256mm"</code></td><td>The tallest print. A tile taller than this is refused.</td></tr>
+<tr><td><code>excluded</code></td><td><code>{ zone "(0mm, 0mm) (30mm, 10mm)" }</code></td><td>Parts of the bed nothing may stand on, each two corners, counted from the bed's front-left corner, x to the right and y toward the back, as the printer counts. The packer keeps clear of them and the plates view draws them.</td></tr>
+<tr><td><code>nozzle</code></td><td><code>"0.4mm"</code></td><td>The nozzle's diameter (0.4 mm where a profile does not say).</td></tr>
+<tr><td><code>slots</code></td><td><code>4</code></td><td>Filaments loaded at once (1 where a profile does not say). A multicolour print list that needs more is refused before anything builds.</td></tr>
+<tr><td><code>template</code></td><td><code>"bambu.3mf"</code></td><td>Optional. The slicer project whose printer and process settings a Bambu project takes: a file beside your tiles (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>); <code>bambu.3mf</code> there is the one used when a profile names none.</td></tr>
+<tr><td><code>verify</code></td><td><code>"sources disagree"</code></td><td>Optional. Marks numbers not yet checked against the maker; the chooser and the plates view show it.</td></tr>
+<tr><td><code>from</code></td><td><code>"lib:printers/bambu/x1c"</code></td><td>Optional. Start from another profile and change only what is written here.</td></tr>
+<tr><td><code>line</code>, <code>layer</code>, <code>overhang</code>, <code>steepest</code>, <code>gap</code></td><td><code>"0.45mm"</code> …</td><td>The printability floors (see <a href="standards/printing.html#profile">Printing</a>). A profile with a bed or a <code>from</code> may leave them out.</td></tr>
+</tbody></table></div>
+<p>Lengths carry their unit, <code>mm</code>. A mistake is shown at its text: a bed with no unit, a zone that has no area, a <code>slots</code> that is not a whole number.</p>
+<pre><code>dharmatiles version="1.0.0"
+
+printer x1c {
+    brand   "Bambu Lab"
+    model   "X1 Carbon"
+    bed     "256x256mm"
+    height  "256mm"
+    nozzle  "0.4mm"
+    slots   1
+}
+
+// x1c-ams.dtile: the same machine with an AMS
+printer x1c-ams {
+    from    "lib:printers/bambu/x1c"
+    model   "X1 Carbon + AMS"
+    slots   4
+}</code></pre>
+
+<h2 id="own">Your own</h2>
+<p>Put a file in <code>printers/</code> beside your tiles (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>): <code>printers/shed-voron.dtile</code> is <code>shed-voron</code>, and <code>printers/mine/ender.dtile</code> is <code>mine/ender</code>. A profile of yours with the name of a library one replaces it. It may start from a library one:</p>
+<pre><code>dharmatiles version="1.0.0"
+
+printer shed-voron {
+    from    "lib:printers/voron/2-4-300"
+    bed     "296x296mm"           // what you measured
+    slots   1
+    excluded {
+        zone "(0mm, 0mm) (30mm, 10mm)"
+    }
+}</code></pre>
+
+<h2 id="library">The library</h2>
+<p>Hand-entered from the makers' specifications and several reviews. A row marked <span class="verify">verify</span> is one where the sources disagree, where there is only one source, or where the bed depends on the build; its profile carries the same mark in a <code>verify</code> word until it is checked against the maker's own page. Bambu models take an AMS (4 filaments a unit) in a separate <code>-ams</code> profile, the Prusa MK4 an MMU3 (5 filaments).</p>
+<div class="tbl"><table>
+<thead><tr><th>Profile</th><th>Machine</th><th>Bed</th><th>Height</th><th>Slots</th><th>Numbers</th></tr></thead>
+<tbody>
+<tr><td><code>bambu/a1-mini</code></td><td>Bambu Lab A1 mini</td><td>180 × 180 mm</td><td>180 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>bambu/a1-mini-ams</code></td><td>Bambu Lab A1 mini + AMS lite</td><td>180 × 180 mm</td><td>180 mm</td><td>4</td><td>checked</td></tr>
+<tr><td><code>bambu/a1</code></td><td>Bambu Lab A1</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>bambu/a1-ams</code></td><td>Bambu Lab A1 + AMS lite</td><td>256 × 256 mm</td><td>256 mm</td><td>4</td><td>checked</td></tr>
+<tr><td><code>bambu/p1s</code></td><td>Bambu Lab P1S</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>bambu/p1s-ams</code></td><td>Bambu Lab P1S + AMS</td><td>256 × 256 mm</td><td>256 mm</td><td>4</td><td>checked</td></tr>
+<tr><td><code>bambu/p2s</code></td><td>Bambu Lab P2S</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>bambu/x1c</code></td><td>Bambu Lab X1 Carbon</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>bambu/x1c-ams</code></td><td>Bambu Lab X1 Carbon + AMS</td><td>256 × 256 mm</td><td>256 mm</td><td>4</td><td>checked</td></tr>
+<tr><td><code>bambu/x2d</code></td><td>Bambu Lab X2D</td><td>256 × 256 mm</td><td>260 mm</td><td>1</td><td><span class="verify" title="One source only: 256 x 256 x 260.">verify</span> One source only: 256 x 256 x 260.</td></tr>
+<tr><td><code>bambu/h2c</code></td><td>Bambu Lab H2C</td><td>325 × 320 mm</td><td>320 mm</td><td>1</td><td><span class="verify" title="325 to 330 x 320 x 320 to 325 depending on the source.">verify</span> 325 to 330 x 320 x 320 to 325 depending on the source.</td></tr>
+<tr><td><code>bambu/h2s</code></td><td>Bambu Lab H2S</td><td>340 × 320 mm</td><td>340 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>bambu/h2d</code></td><td>Bambu Lab H2D</td><td>350 × 320 mm</td><td>325 mm</td><td>1</td><td><span class="verify" title="Sources disagree. Single-nozzle area reported near 305 x 320 x 325, dual-nozzle overlap 300 x 320 x 325: the printable area depends on the nozzle mode.">verify</span> Sources disagree. Single-nozzle area reported near 305 x 320 x 325, dual-nozzle overlap 300 x 320 x 325: the printable area depends on the nozzle mode.</td></tr>
+<tr><td><code>prusa/mini-plus</code></td><td>Prusa Research MINI+</td><td>180 × 180 mm</td><td>180 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>prusa/core-one</code></td><td>Prusa Research CORE One</td><td>250 × 220 mm</td><td>270 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>prusa/mk3s-plus</code></td><td>Prusa Research MK3S+</td><td>250 × 210 mm</td><td>210 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>prusa/mk4</code></td><td>Prusa Research MK4 / MK4S</td><td>250 × 210 mm</td><td>220 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>prusa/mk4-mmu3</code></td><td>Prusa Research MK4 / MK4S + MMU3</td><td>250 × 210 mm</td><td>220 mm</td><td>5</td><td>checked</td></tr>
+<tr><td><code>prusa/core-one-l</code></td><td>Prusa Research CORE One L</td><td>300 × 300 mm</td><td>330 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>prusa/xl</code></td><td>Prusa Research XL</td><td>360 × 360 mm</td><td>360 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>creality/ender-3-v2</code></td><td>Creality Ender-3 V2</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>creality/ender-3-v3-se</code></td><td>Creality Ender-3 V3 SE</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td><span class="verify" title="Sources disagree or there is only one: check the bed against the maker&#x27;s page.">verify</span> Sources disagree or there is only one: check the bed against the maker&#x27;s page.</td></tr>
+<tr><td><code>creality/k1</code></td><td>Creality K1</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>creality/k1-max</code></td><td>Creality K1 Max</td><td>300 × 300 mm</td><td>300 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>creality/k2-plus</code></td><td>Creality K2 Plus</td><td>350 × 350 mm</td><td>350 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>creality/ender-5-max</code></td><td>Creality Ender-5 Max</td><td>400 × 400 mm</td><td>400 mm</td><td>1</td><td><span class="verify" title="Sources disagree or there is only one: check the bed against the maker&#x27;s page.">verify</span> Sources disagree or there is only one: check the bed against the maker&#x27;s page.</td></tr>
+<tr><td><code>elegoo/neptune-4</code></td><td>Elegoo Neptune 4 / 4 Pro</td><td>225 × 225 mm</td><td>265 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>elegoo/centauri-carbon</code></td><td>Elegoo Centauri Carbon</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td><span class="verify" title="Sources disagree or there is only one: check the bed against the maker&#x27;s page.">verify</span> Sources disagree or there is only one: check the bed against the maker&#x27;s page.</td></tr>
+<tr><td><code>elegoo/centauri-carbon-2</code></td><td>Elegoo Centauri Carbon 2</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>elegoo/neptune-4-max</code></td><td>Elegoo Neptune 4 Max</td><td>420 × 420 mm</td><td>480 mm</td><td>1</td><td><span class="verify" title="Sources disagree or there is only one: check the bed against the maker&#x27;s page.">verify</span> Sources disagree or there is only one: check the bed against the maker&#x27;s page.</td></tr>
+<tr><td><code>anycubic/kobra-2</code></td><td>Anycubic Kobra 2</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>anycubic/kobra-3</code></td><td>Anycubic Kobra 3</td><td>250 × 250 mm</td><td>260 mm</td><td>1</td><td><span class="verify" title="Sources disagree or there is only one: check the bed against the maker&#x27;s page.">verify</span> Sources disagree or there is only one: check the bed against the maker&#x27;s page.</td></tr>
+<tr><td><code>anycubic/kobra-s1</code></td><td>Anycubic Kobra S1</td><td>250 × 250 mm</td><td>250 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>snapmaker/u1</code></td><td>Snapmaker U1</td><td>270 × 270 mm</td><td>270 mm</td><td>4</td><td>checked</td></tr>
+<tr><td><code>sovol/sv06</code></td><td>Sovol SV06</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>sovol/sv06-ace</code></td><td>Sovol SV06 ACE</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>sovol/sv06-plus</code></td><td>Sovol SV06 Plus</td><td>300 × 300 mm</td><td>340 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>sovol/sv06-plus-ace</code></td><td>Sovol SV06 Plus ACE</td><td>300 × 300 mm</td><td>350 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>voron/v0-2</code></td><td>Voron Design Voron 0.2</td><td>120 × 120 mm</td><td>120 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>voron/2-4-300</code></td><td>Voron Design Voron 2.4 (300 build)</td><td>300 × 300 mm</td><td>300 mm</td><td>1</td><td><span class="verify" title="Bed depends on the build.">verify</span> Bed depends on the build.</td></tr>
+<tr><td><code>voron/trident-300</code></td><td>Voron Design Voron Trident (300 build)</td><td>300 × 300 mm</td><td>300 mm</td><td>1</td><td><span class="verify" title="Bed depends on the build.">verify</span> Bed depends on the build.</td></tr>
+</tbody></table></div>
+<p>The Bambu H2D prints on a different area in each nozzle mode (about 305 &times; 320 single-nozzle, 300 &times; 320 where both nozzles reach); the profile gives the largest and says verify.</p>
+
+</article>
+</div>
+</body>
+</html>

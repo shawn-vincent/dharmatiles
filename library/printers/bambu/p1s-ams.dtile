@@ -1,0 +1,10 @@
+dharmatiles version="1.0.0"
+
+// Bambu Lab P1S + AMS: the same machine as `p1s` with 4 filament slots.
+// An AMS holds 4 filaments a unit.
+
+printer p1s-ams {
+    from    "lib:printers/bambu/p1s"
+    model   "P1S + AMS"
+    slots   4
+}

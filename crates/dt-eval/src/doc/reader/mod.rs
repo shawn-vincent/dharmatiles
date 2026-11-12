@@ -90,18 +90,27 @@ pub fn read_with(
     }
 }
 
+/// The printer profile at `path`, as written.
+///
+/// # Errors
+/// Every problem found; a file with no `printer` is one.
+pub fn printer_doc(sources: &dyn Source, path: &str) -> Result<dt_doc::model::Printer, Vec<Diag>> {
+    let r = read(sources, path)?;
+    let Some(p) = r.file.doc.printer.clone() else {
+        return Err(vec![
+            Diag::plain("dt::printer", format!("`{path}` has no `printer`"))
+                .help("a printer file holds `printer name { line …; layer …; overhang …; steepest …; gap … }`, or a machine: `bed \"256x256mm\"` and the rest"),
+        ]);
+    };
+    Ok(p)
+}
+
 /// The printer profile at `path`, for the audit gate.
 ///
 /// # Errors
 /// Every problem found; a file with no `printer` is one.
 pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<Diag>> {
-    let r = read(sources, path)?;
-    let Some(p) = &r.file.doc.printer else {
-        return Err(vec![
-            Diag::plain("dt::printer", format!("`{path}` has no `printer`"))
-                .help("a printer file holds `printer name { line …; layer …; overhang …; steepest …; gap … }`"),
-        ]);
-    };
+    let p = printer_doc(sources, path)?;
     Ok(
         dt_kit::Printer::new(p.line.value, p.layer.value, p.overhang.value, p.gap.value)
             .steepest(p.steepest.value),

@@ -1,0 +1,14 @@
+dharmatiles version="1.0.0"
+
+// Prusa Research XL: 360 x 360 x 360 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer xl {
+    brand   "Prusa Research"
+    model   "XL"
+    bed     "360x360mm"
+    height  "360mm"
+    nozzle  "0.4mm"
+    slots   1
+    // Up to 5 tool heads; this profile is the single-head XL.
+}

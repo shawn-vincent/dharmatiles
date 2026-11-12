@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// Creality K2 Plus: 350 x 350 x 350 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer k2-plus {
+    brand   "Creality"
+    model   "K2 Plus"
+    bed     "350x350mm"
+    height  "350mm"
+    nozzle  "0.4mm"
+    slots   1
+}

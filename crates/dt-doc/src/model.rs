@@ -577,4 +577,46 @@ pub struct Printer {
     pub steepest: Spanned<f64>,
     /// The narrowest gap that stays open, mm.
     pub gap: Spanned<f64>,
+    /// Which of `line`, `layer`, `overhang`, `steepest`, `gap` the profile
+    /// wrote.  A profile that names a bed (a machine) may leave floors out:
+    /// those are the default profile's, or its `from` profile's (the
+    /// evaluator's reader fills them), and the values above stand in until then.
+    pub floors_given: [bool; 5],
+    /// What the machine is: its bed, nozzle and filament slots.
+    pub machine: Machine,
 }
+
+/// The machine a printer profile describes, beyond its printability floors.
+/// Every field is optional in the file; a profile that is used for plates
+/// needs a `bed` (the evaluator says so where it is used).
+#[derive(Debug, Clone, Default)]
+pub struct Machine {
+    /// The maker, `"Bambu Lab"`.
+    pub brand: Option<Spanned<String>>,
+    /// The model, `"X1 Carbon"`.
+    pub model: Option<Spanned<String>>,
+    /// The printable area, mm: width (x) by depth (y).
+    pub bed: Option<Spanned<[f64; 2]>>,
+    /// The tallest print, mm.
+    pub height: Option<Spanned<f64>>,
+    /// Parts of the bed that cannot be printed on, each `[x0, y0, x1, y1]`
+    /// mm, from the bed's front-left corner (x to the right, y toward the
+    /// back, as the printer counts).
+    pub excluded: Vec<Spanned<[f64; 4]>>,
+    /// The nozzle's diameter, mm.
+    pub nozzle: Option<Spanned<f64>>,
+    /// Filaments loaded at once.
+    pub slots: Option<Spanned<u32>>,
+    /// The slicer template the profile uses (`bambu/x1c.3mf`), if any.
+    pub template: Option<Spanned<String>>,
+    /// Why the numbers are not yet checked against the maker (`verify`).
+    pub verify: Option<Spanned<String>>,
+    /// The profile this one starts from (`lib:printers/voron/2-4-300`).
+    pub from: Option<Spanned<String>>,
+}
+
+/// The default profile's floors, in the order `line`, `layer`, `overhang`,
+/// `steepest`, `gap` (mm and degrees): what a machine profile that leaves a
+/// floor out gets.  `library/printers/default.dtile` writes the same numbers
+/// (a test keeps them equal).
+pub const DEFAULT_FLOORS: [f64; 5] = [0.45, 0.2, 55.0, 65.0, 0.2];

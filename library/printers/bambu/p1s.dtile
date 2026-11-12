@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// Bambu Lab P1S: 256 x 256 x 256 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer p1s {
+    brand   "Bambu Lab"
+    model   "P1S"
+    bed     "256x256mm"
+    height  "256mm"
+    nozzle  "0.4mm"
+    slots   1
+}

@@ -1,0 +1,15 @@
+dharmatiles version="1.0.0"
+
+// Elegoo Neptune 4 Max: 420 x 420 x 480 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+// VERIFY: not yet checked against the maker's own page (see `verify` below).
+
+printer neptune-4-max {
+    brand   "Elegoo"
+    model   "Neptune 4 Max"
+    bed     "420x420mm"
+    height  "480mm"
+    nozzle  "0.4mm"
+    slots   1
+    verify  "Sources disagree or there is only one: check the bed against the maker's page."
+}

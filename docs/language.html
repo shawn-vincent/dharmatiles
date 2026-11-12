@@ -234,7 +234,7 @@ printer default {
     steepest "65deg"        // small patches up to here
     gap      "0.2mm"        // the narrowest gap that stays open
 }</code></pre>
-<p>Other profiles sit beside it in <code>library/printers/</code> (<code>fine</code>), and your own in a <code>printers/</code> folder beside your tiles; <code>--printer</code> chooses one. A profile holds the printer's floors only: the base system is chosen with <code>--system</code>, and edge and corner rounding belong to materials. Elements apply the floors after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
+<p>Other profiles sit beside it in <code>library/printers/</code> (<code>fine</code>, and a machine by brand and model, <code>bambu/x1c</code>), and your own in a <code>printers/</code> folder beside your tiles; <code>--printer</code> chooses one. A profile holds the printer's floors, and for a machine its bed and filaments (see <a href="printers.html">Printers</a>): the base system is chosen with <code>--system</code>, and edge and corner rounding belong to materials. Elements apply the floors after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
 <h3 id="juxtaposition">Writing a unit</h3>
 <ul>
   <li>A unit goes right after its number and multiplies it: <code>2layer</code> is 0.4 mm on the default printer, <code>0.5sq</code> is half a square, <code>2 pi rad</code> is a full turn. House style writes no space (<code>4.5dmm</code>, as <code>50%</code> already is); a spaced <code>4.5 dmm</code> still reads.</li>

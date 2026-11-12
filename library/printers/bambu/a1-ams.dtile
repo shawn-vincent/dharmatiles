@@ -1,0 +1,10 @@
+dharmatiles version="1.0.0"
+
+// Bambu Lab A1 + AMS lite: the same machine as `a1` with 4 filament slots.
+// An AMS lite holds 4 filaments.
+
+printer a1-ams {
+    from    "lib:printers/bambu/a1"
+    model   "A1 + AMS lite"
+    slots   4
+}

@@ -1,13 +1,14 @@
 //! How to build: the options every front end passes, the printer profile in
 //! use and where profiles come from.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use dt_kit::{Frame, Printer};
 
 use crate::diag::Diag;
-use crate::doc::{self};
-use crate::source::{self, Files, Library};
+use crate::doc;
+use crate::machine::printer_profile;
+use crate::source::Library;
 
 /// How to build.
 #[derive(Clone, Debug)]
@@ -102,80 +103,6 @@ impl Options {
         };
         Ok(())
     }
-}
-
-/// Where a printer profile is kept.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ProfileKind {
-    /// `library/printers/`, shipped with the program.
-    Library,
-    /// `printers/` beside the user's own tiles (`$DT_HOME`).
-    Mine,
-}
-
-/// A printer profile's name is a file name: letters, digits, `-` and `_`.
-fn profile_name_ok(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-}
-
-/// Every printer profile there is: the library's and those in
-/// `<home>/printers/`, by name, a profile of yours replacing the
-/// library's of the same name.
-#[must_use]
-pub fn printer_names(home: Option<&Path>) -> Vec<(String, ProfileKind)> {
-    let mut found: std::collections::BTreeMap<String, ProfileKind> =
-        std::collections::BTreeMap::new();
-    let mut scan = |dir: PathBuf, kind: ProfileKind| {
-        let Ok(rd) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.extension().is_some_and(|x| x == "dtile")
-                && let Some(n) = p.file_stem().and_then(|n| n.to_str())
-                && profile_name_ok(n)
-            {
-                found.insert(n.to_owned(), kind);
-            }
-        }
-    };
-    if let Some(lib) = source::library_dir() {
-        scan(lib.join("printers"), ProfileKind::Library);
-    }
-    if let Some(h) = home {
-        scan(h.join("printers"), ProfileKind::Mine);
-    }
-    found.into_iter().collect()
-}
-
-/// The printer profile called `name`: `<home>/printers/<name>.dtile` if
-/// there is one, else `lib:printers/<name>.dtile`.
-///
-/// # Errors
-/// Why there is no such profile, or it does not decode.
-pub fn printer_profile(name: &str, home: Option<&Path>) -> Result<Printer, Vec<Diag>> {
-    if !profile_name_ok(name) {
-        return Err(vec![
-            Diag::plain("dt::printer", format!("`{name}` is not a printer name"))
-                .help("a printer name is letters, digits, `-` and `_`"),
-        ]);
-    }
-    let mine = home.map(|h| h.join("printers").join(format!("{name}.dtile")));
-    if let Some(f) = mine.filter(|f| f.is_file()) {
-        return doc::printer(&Files, &f.to_string_lossy());
-    }
-    let lib = format!("lib:printers/{name}.dtile");
-    if source::library_file(&lib).is_some_and(|f| f.is_file()) {
-        return doc::printer(&Library, &lib);
-    }
-    let have: Vec<String> = printer_names(home).into_iter().map(|(n, _)| n).collect();
-    Err(vec![
-        Diag::plain("dt::printer", format!("no printer profile `{name}`"))
-            .help(format!("the profiles are: {}", have.join(", "))),
-    ])
 }
 
 /// Cells per square in a draft (a full build has 128, or finer where an

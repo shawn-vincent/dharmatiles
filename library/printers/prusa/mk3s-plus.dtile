@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// Prusa Research MK3S+: 250 x 210 x 210 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer mk3s-plus {
+    brand   "Prusa Research"
+    model   "MK3S+"
+    bed     "250x210mm"
+    height  "210mm"
+    nozzle  "0.4mm"
+    slots   1
+}

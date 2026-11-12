@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// Bambu Lab A1 mini: 180 x 180 x 180 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer a1-mini {
+    brand   "Bambu Lab"
+    model   "A1 mini"
+    bed     "180x180mm"
+    height  "180mm"
+    nozzle  "0.4mm"
+    slots   1
+}

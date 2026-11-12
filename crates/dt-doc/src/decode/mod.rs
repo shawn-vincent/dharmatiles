@@ -4,6 +4,7 @@
 
 mod entry;
 mod heights;
+mod machine;
 pub(crate) mod syntax;
 mod units;
 mod value;
@@ -1334,6 +1335,7 @@ impl<'k> Decoder<'k> {
         let name = self.name_arg(n, "printer")?;
         let mut vals: [Option<Spanned<f64>>; 5] = [None, None, None, None, None];
         const KEYS: [&str; 5] = ["line", "layer", "overhang", "steepest", "gap"];
+        let mut machine = crate::model::Machine::default();
         let mut set = |this: &mut Self, key: &str, kspan: SourceSpan, e: &KdlEntry| {
             let Some(i) = KEYS.iter().position(|k| *k == key) else {
                 this.err(
@@ -1342,8 +1344,17 @@ impl<'k> Decoder<'k> {
                     format!("a printer has no `{key}`"),
                     "unknown",
                 )
-                .help = hint(did_you_mean(key, KEYS))
-                    .or_else(|| Some(format!("a printer takes: {}", KEYS.join(", "))));
+                .help = hint(did_you_mean(
+                    key,
+                    KEYS.iter().chain(machine::KEYS.iter()).copied(),
+                ))
+                .or_else(|| {
+                    Some(format!(
+                        "a printer takes: {}; and for a machine: {}",
+                        KEYS.join(", "),
+                        machine::KEYS.join(", ")
+                    ))
+                });
                 return;
             };
             let span = value_span(e);
@@ -1371,7 +1382,9 @@ impl<'k> Decoder<'k> {
             }
         }
         for c in n.iter_children() {
-            if let [e] = c.entries() {
+            if machine::KEYS.contains(&c.name().value()) {
+                self.machine_key(c, &mut machine);
+            } else if let [e] = c.entries() {
                 set(self, c.name().value(), c.name().span(), e);
             } else {
                 self.err(
@@ -1380,6 +1393,18 @@ impl<'k> Decoder<'k> {
                     "a printer setting takes one number",
                     "here",
                 );
+            }
+        }
+        let floors_given = [0, 1, 2, 3, 4].map(|i| vals[i].is_some());
+        // a machine (a profile with a bed, or one that starts from another)
+        // may leave the floors to the default profile's
+        if machine.bed.is_some() || machine.from.is_some() {
+            let d = crate::model::DEFAULT_FLOORS;
+            for (v, d) in vals.iter_mut().zip(d) {
+                v.get_or_insert(Spanned {
+                    value: d,
+                    span: name.span,
+                });
             }
         }
         let missing: Vec<&str> = KEYS
@@ -1395,7 +1420,10 @@ impl<'k> Decoder<'k> {
                 format!("this printer has no {}", missing.join(", ")),
                 "incomplete",
             )
-            .help = Some("a printer gives line, layer, overhang, steepest and gap".to_owned());
+            .help = Some(
+                "a printer gives line, layer, overhang, steepest and gap (or a `bed`, and then the default profile's)"
+                    .to_owned(),
+            );
             return None;
         }
         let [
@@ -1447,6 +1475,8 @@ impl<'k> Decoder<'k> {
             overhang,
             steepest,
             gap,
+            floors_given,
+            machine,
         })
     }
 }

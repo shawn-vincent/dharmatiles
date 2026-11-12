@@ -22,14 +22,15 @@ pub struct BuildRecord {
     pub printer: String,
 }
 
-/// `db`, or `db-fine` for the printer `fine`: the printer is left out when
-/// it is `default`.
+/// `db`, or `db-fine` for the printer `fine` (and `db-bambu-x1c` for
+/// `bambu/x1c`, the `/` made a `-` so a target is one folder name): the
+/// printer is left out when it is `default`.
 #[must_use]
 pub fn target_name(system: &str, printer: &str) -> String {
     if printer == "default" {
         system.to_owned()
     } else {
-        format!("{system}-{printer}")
+        format!("{system}-{}", printer.replace('/', "-"))
     }
 }
 

@@ -1,0 +1,15 @@
+dharmatiles version="1.0.0"
+
+// Voron Design Voron 2.4 (300 build): 300 x 300 x 300 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+// VERIFY: not yet checked against the maker's own page (see `verify` below).
+
+printer "2-4-300" {
+    brand   "Voron Design"
+    model   "Voron 2.4 (300 build)"
+    bed     "300x300mm"
+    height  "300mm"
+    nozzle  "0.4mm"
+    slots   1
+    verify  "Bed depends on the build."
+}

@@ -20,6 +20,7 @@ pub mod diag;
 pub mod doc;
 mod hash;
 mod lower;
+pub mod machine;
 mod options;
 pub mod places;
 pub mod plan;
@@ -39,7 +40,8 @@ pub use diag::Diag;
 pub use doc::{Region, Tile, Within};
 pub use dt_kit::Progress;
 pub use lower::{RangeRefusal, Ranged, ranged, weighting_flaw_in};
-pub use options::{DRAFT_CELLS, Options, Profile, ProfileKind, printer_names, printer_profile};
+pub use machine::{Machine, ProfileKind, printer_machine, printer_names, printer_profile};
+pub use options::{DRAFT_CELLS, Options, Profile};
 pub use source::{Files, LIB, Library, Memory, Source, library_file};
 pub use store::{CacheState, CacheUse, Store, Tier, Tracked};
 

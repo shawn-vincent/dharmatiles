@@ -1,0 +1,10 @@
+dharmatiles version="1.0.0"
+
+// Prusa Research MK4 / MK4S + MMU3: the same machine as `mk4` with 5 filament slots.
+// The MMU3 adds 5 filaments.
+
+printer mk4-mmu3 {
+    from    "lib:printers/prusa/mk4"
+    model   "MK4 / MK4S + MMU3"
+    slots   5
+}

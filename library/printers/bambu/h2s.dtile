@@ -1,0 +1,14 @@
+dharmatiles version="1.0.0"
+
+// Bambu Lab H2S: 340 x 320 x 340 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+
+printer h2s {
+    brand   "Bambu Lab"
+    model   "H2S"
+    bed     "340x320mm"
+    height  "340mm"
+    nozzle  "0.4mm"
+    slots   1
+    // Single nozzle, the largest Bambu. Sources agree.
+}
