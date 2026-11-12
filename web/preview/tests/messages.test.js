@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FILTERS, countsText, createLog, detailsFor, filterRows, statusOf } from '../js/messages.js';
+import { FILTERS, MSG_MIN, countsText, createLog, detailsFor, filterRows, fitMsgHeight, statusOf } from '../js/messages.js';
 
 let n = 0;
 const msg = (over = {}) => ({
@@ -188,4 +188,11 @@ test('the copy text of a failure of the program\'s or the page\'s is the whole c
   assert.match(text, /panicked at route\.rs:1/);
   assert.match(text, /backtrace \(Rust\)/);
   assert.match(text, /dharmatiles\s+1\.0\.0/);
+});
+
+test('the messages panel drags between its minimum and leaving the view 80 px', () => {
+  assert.equal(fitMsgHeight(300, 600), 300);
+  assert.equal(fitMsgHeight(10, 600), MSG_MIN);
+  assert.equal(fitMsgHeight(900, 600), 520);
+  assert.equal(fitMsgHeight(250.6, 600), 251);
 });

@@ -202,3 +202,9 @@ export function detailsFor(m, { source = null, env } = {}) {
   if (isProblem(m)) return tileErrorDetails(asTileError(m), opts);
   return `${m.text}${m.data && Object.keys(m.data).length ? `\n${JSON.stringify(m.data)}` : ''}`;
 }
+
+/** The messages panel's height, dragged to `h` px with `room` px above the status line: at least 96, and the view keeps 80 above it. */
+export const MSG_MIN = 96;
+export function fitMsgHeight(h, room) {
+  return Math.round(Math.max(MSG_MIN, Math.min(h, room - 80)));
+}

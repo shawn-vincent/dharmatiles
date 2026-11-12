@@ -9,7 +9,7 @@
 
 import { setReporter, serverErrorIn } from '../problems.js';
 import { copyButton } from '../copy.js';
-import { FILTERS, detailsFor, filterRows, statusOf } from '../messages.js';
+import { FILTERS, detailsFor, filterRows, fitMsgHeight, statusOf } from '../messages.js';
 import { $, host, viewer } from './app.js';
 import { openFile, saveWords, texts } from './document.js';
 import { showSourceLine } from './levels.js';
@@ -247,8 +247,53 @@ async function report(what, err, entry) {
   log.addLocal({ tile: body.tile, text: body.text, help: body.help, data: { origin: 'page', kind: 'bug', route: what, causes: body.causes, backtrace: body.backtrace } });
 }
 
+/** The messages panel's top edge is a sash: drag it up or down, double-click to reset.  The height is remembered in this browser (dt-msgh). */
+function msgSash() {
+  const p = $('msgpanel');
+  const s = document.createElement('div');
+  s.className = 'sash';
+  s.id = 'msg-sash';
+  s.setAttribute('role', 'separator');
+  s.setAttribute('aria-orientation', 'horizontal');
+  s.title = 'Drag to resize; double-click to reset';
+  p.prepend(s);
+  const room = () => p.offsetParent?.clientHeight ?? innerHeight;
+  const setH = (h, save) => {
+    if (h == null) p.style.height = '';
+    else p.style.height = `${fitMsgHeight(h, room() - 26)}px`;
+    if (!save) return;
+    try {
+      if (h == null) localStorage.removeItem('dt-msgh'); else localStorage.setItem('dt-msgh', String(parseInt(p.style.height, 10)));
+    } catch { /* private mode: the height is not kept */ }
+  };
+  let kept = null;
+  try { kept = Number(localStorage.getItem('dt-msgh')) || null; } catch { /* private mode, or nothing kept */ }
+  if (kept) setH(kept, false);
+  addEventListener('resize', () => { if (p.style.height) setH(parseInt(p.style.height, 10), false); });
+  s.addEventListener('dblclick', () => setH(null, true));
+  s.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    s.setPointerCapture(e.pointerId);
+    s.classList.add('on');
+    document.body.classList.add('resizing-rows');
+    const bottom = p.getBoundingClientRect().bottom;
+    const move = (ev) => setH(bottom - ev.clientY, false);
+    const up = () => {
+      s.classList.remove('on');
+      document.body.classList.remove('resizing-rows');
+      s.removeEventListener('pointermove', move);
+      setH(parseInt(p.style.height, 10) || null, true);
+    };
+    s.addEventListener('pointermove', move);
+    s.addEventListener('pointerup', up, { once: true });
+    s.addEventListener('pointercancel', up, { once: true });
+  });
+}
+
 /** Wire this part of the page (once, at load). */
 export function init() {
+  msgSash();
   setReporter((what, err, entry) => { report(what, err, entry).catch((e) => console.error('could not report a failure to the stream', e)); });
   $('sb-main').onclick = () => togglePanel();
   $('msg-close').onclick = () => togglePanel(false);
