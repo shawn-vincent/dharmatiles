@@ -83,6 +83,11 @@ fn shown(shared: &Shared, plan: &Plan, k: usize, want_full: bool) -> Result<Show
     })
 }
 
+/// What a plate's mesh is made of: the mesh, its colours, and each triangle's
+/// piece (its place in the plate's list, so the page can tell which piece a
+/// point is on).
+type PlateMesh = (TriMesh, Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<u16>);
+
 /// The pieces on one plate, as one mesh with each triangle's colour: every
 /// piece baked at its place, resting on the bed.
 fn plate_mesh(
@@ -91,14 +96,21 @@ fn plate_mesh(
     parts: &[Shown],
     plate: usize,
     palette: &dt_kit::Palette,
-) -> (TriMesh, Vec<[f32; 3]>, Vec<[f32; 3]>) {
+) -> PlateMesh {
     let mut mesh = TriMesh::default();
     let (mut painted, mut clean) = (Vec::new(), Vec::new());
+    let mut owner: Vec<u16> = Vec::new();
     let colours: Vec<_> = parts
         .iter()
         .map(|p| p.built.colours_pair(palette))
         .collect();
-    for i in layout.plates.get(plate).map_or(&[][..], Vec::as_slice) {
+    for (n, i) in layout
+        .plates
+        .get(plate)
+        .map_or(&[][..], Vec::as_slice)
+        .iter()
+        .enumerate()
+    {
         let part = &parts[i.kind].built;
         let (lo, hi) = dt_kit::box_of(&part.export.mesh);
         let mid = [0, 1, 2].map(|a| (lo[a] + hi[a]) / 2.0);
@@ -123,9 +135,13 @@ fn plate_mesh(
         );
         painted.extend_from_slice(&colours[i.kind].0);
         clean.extend_from_slice(&colours[i.kind].1);
+        owner.extend(std::iter::repeat_n(
+            u16::try_from(n).unwrap_or(u16::MAX - 1),
+            part.export.mesh.triangles.len(),
+        ));
     }
     let _ = plan;
-    (mesh, painted, clean)
+    (mesh, painted, clean, owner)
 }
 
 /// The settings as written, for a page that has no plan to show (the list
@@ -165,6 +181,8 @@ pub(super) fn pieces_json(list: &dt_doc::map::PrintList) -> Value {
             .map(|(i, p)| {
                 json!({
                     "index": i, "tile": p.tile.value, "count": p.count.value,
+                    "id": p.id.as_ref().map(|i| i.value.clone()),
+                    "pinned": list.plates.pins.iter().any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
                     "seed": p.seed.as_ref().map(|s| s.value),
                     "system": p.system.as_ref().map(|s| s.value.clone()),
                     "print": p.print.word(),
@@ -459,7 +477,7 @@ fn rebuild_plates(shared: &Arc<Shared>, id: &str, path: &str, scene: Option<&Sce
                 parts: &[Shown],
                 running: bool,
                 note: Option<&str>| {
-        let (mesh, painted, clean) = plate_mesh(&plan, layout, parts, view, &palette);
+        let (mesh, painted, clean, owner) = plate_mesh(&plan, layout, parts, view, &palette);
         let exact: Vec<bool> = parts.iter().map(|p| p.full).collect();
         let mut sp = shared_plan(
             &plan,
@@ -479,7 +497,8 @@ fn rebuild_plates(shared: &Arc<Shared>, id: &str, path: &str, scene: Option<&Sce
             "plate": view, "plates": layout.plates.len(),
             "tier": if exact.iter().all(|e| *e) { "full" } else if exact.iter().any(|e| *e) { "mixed" } else { "low" },
         });
-        match payload::encode(&mesh, &painted, &clean, &meta) {
+        let zero = vec![0u16; owner.len()];
+        match payload::encode_traced(&mesh, &painted, &clean, &owner, &zero, &meta) {
             Ok(bytes) => shared.update(id, |t| {
                 t.status = State::Ready;
                 t.plan = Some(sp);

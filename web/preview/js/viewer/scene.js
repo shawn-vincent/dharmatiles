@@ -236,6 +236,40 @@ export const sceneMethods = {
     this.draw();
   },
 
+  /**
+   * A rectangle on the bed (`{x0, y0, x1, y1}`, mm) in the accent, a translucent fill with its edge: where a piece
+   * being dragged on a plate would stand.  Null takes it away.
+   */
+  setGhostRect(r) {
+    if (this.ghostRectGroup) {
+      this.scene.remove(this.ghostRectGroup);
+      this.ghostRectGroup.traverse((o) => { o.geometry?.dispose(); if (o.material) { this.fatMaterials.delete(o.material); o.material.dispose(); } });
+      this.ghostRectGroup = null;
+    }
+    if (r) {
+      const group = new THREE.Group();
+      const z = 0.5;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(r.x1 - r.x0, r.y1 - r.y0), new THREE.MeshBasicMaterial({ color: this.uniforms.uAccent.value, transparent: true, opacity: 0.28, depthWrite: false, depthTest: false, side: THREE.DoubleSide }));
+      m.position.set((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, z);
+      m.renderOrder = 40; m.frustumCulled = false;
+      group.add(m);
+      const c = [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]];
+      const pos = new Float32Array(24), rgba = new Float32Array(32);
+      const a = this.uniforms.uAccent.value;
+      for (let k = 0; k < 4; k++) {
+        const [p, q] = [c[k], c[(k + 1) % 4]];
+        pos.set([p[0], p[1], z, q[0], q[1], z], 6 * k);
+        for (const v of [0, 1]) rgba.set([a.r, a.g, a.b, 1], 8 * k + 4 * v);
+      }
+      const edge = this.fatLines(pos, rgba, 2.5);
+      edge.renderOrder = 41; edge.frustumCulled = false;
+      group.add(edge);
+      this.ghostRectGroup = group;
+      this.scene.add(group);
+    }
+    this.draw();
+  },
+
   /** The piece under canvas point (x, y), CSS pixels, or -1. */
   scenePick(x, y) {
     const h = this.pick(x, y);

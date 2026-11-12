@@ -13,6 +13,7 @@ import { say, today } from './inventory.js';
 import { removePiece, setCount } from './lists.js';
 import { isInventory, isMapView, isPlates, server, stem, tile, view } from './stores.js';
 import { chooseMode, setChosen } from './scene.js';
+import { unpin, unpinAll } from './plates-pin.js';
 
 const el = (tag, cls, text) => {
   const x = document.createElement(tag);
@@ -175,6 +176,36 @@ function platesSection(p) {
   sec.append(el('p', `note${low ? ' warn' : ' ok'}`, low
     ? `${plural(low, 'tile')} shown as low meshes, not yet checked: full builds start for the plate in view; the rest build when you export. The plates are laid out again by what the full builds cover.`
     : 'Every piece is a full build, checked by the printability gate.'));
+  return sec;
+}
+
+/** The pins of the plates: pieces kept where they were dropped.  Dragging a piece on the bed makes one (plates-pin.js). */
+function pinsSection(p, ro) {
+  const sec = el('section', 'pl-sec pl-pins');
+  sec.append(el('h3', null, 'Pins'));
+  const pinned = [];
+  for (const pl of p.layout) for (const q of pl.pieces) if (q.pinned) pinned.push({ plate: pl.plate, q });
+  sec.append(el('p', 'note', pinned.length
+    ? 'A pinned piece stays where it was dropped; the rest are packed around it.'
+    : 'Look down on the bed (Top) and drag a piece: it stays where you drop it, and the rest are packed around it.'));
+  for (const { plate, q } of pinned) {
+    const r = el('div', 'pl-pc');
+    const line = (p.pieces ?? []).find((x) => x.index === q.piece);
+    const lab = el('span', 'pl-pn');
+    lab.append(el('b', null, q.name), el('span', 'pl-ps', `${line?.id ? `${line.id} · ` : ''}plate ${plate}`));
+    const b = el('button', 'linkish', 'Unpin');
+    b.type = 'button'; b.disabled = ro;
+    b.onclick = () => unpin(q.piece, q.name);
+    r.append(lab, b);
+    r.style.gridTemplateColumns = 'minmax(0, 1fr) auto';
+    sec.append(r);
+  }
+  if (pinned.length > 1) {
+    const b = el('button', 'linkish', 'Unpin all');
+    b.type = 'button'; b.disabled = ro;
+    b.onclick = () => unpinAll();
+    sec.append(b);
+  }
   return sec;
 }
 
@@ -380,7 +411,7 @@ function render() {
     }
     if (ro) body.append(el('p', 'note', 'This file cannot be changed here.'));
     // the plates first: the core of it is to open a list, see its plates and export; the settings that decide them follow
-    if (p.planned) body.append(platesSection(p), exportSection(p, ro), afterSection(p));
+    if (p.planned) body.append(platesSection(p), pinsSection(p, ro), exportSection(p, ro), afterSection(p));
     body.append(piecesSection(p, ro), inventorySection(p, ro), printerSection(p, ro), modeSection(p, ro));
     if (p.planned) body.append(spacingSection(p, ro));
   }

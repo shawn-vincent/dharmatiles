@@ -592,3 +592,163 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     );
     assert_eq!(c["ok"], true, "{c}");
 }
+
+const TOWN: &str = "dharmatiles version=1\nmap {\n    grid cols=4 rows=3\n    let $step \"4dmm\"\n    piece p1 \"home:glade\" at=\"(0sq, 0sq)\" rot=0\n    piece p2 \"home:glade\" at=\"(1sq, 0sq)\" rot=90 seed=9 height=\"$step + 1mm\"\n    piece p3 \"home:glade\" at=\"(2sq, 1sq)\" rot=0 height=\"$wallHeight\"\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n";
+
+#[test]
+fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
+    let h = start_home("maps", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
+    let list = h.id("town.dmap");
+    let file = h.dir.join("town.dmap");
+    // opened, a map is a scene before anything is laid out: each piece's place in mm, its height by name
+    let t = h.wait("town.dmap", "the scene", |t| {
+        t["plan"]["scene"]["pieces"]
+            .as_array()
+            .is_some_and(|p| p.len() == 3)
+    });
+    let sc = &t["plan"]["scene"];
+    assert_eq!(sc["map"], true);
+    assert_eq!(sc["grid"]["cols"], 4);
+    assert_eq!(sc["pieces"][1]["at"], serde_json::json!([35.0, 0.0]));
+    assert_eq!(sc["pieces"][1]["rot"], 90);
+    assert_eq!(sc["pieces"][1]["seed"], 9);
+    // 4 dmm + 1 mm on DungeonBlocks, and a standard name: 33.1 dmm
+    assert!((sc["pieces"][1]["height_mm"].as_f64().unwrap() - 5.0).abs() < 1e-9);
+    assert!((sc["pieces"][2]["height_mm"].as_f64().unwrap() - 33.1).abs() < 1e-9);
+    assert_eq!(sc["pieces"][0]["seed_used"], 5, "the tile's own seed");
+    assert!(
+        sc["heights"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["name"] == "wallHeight")
+    );
+    assert!(sc["rev"].as_str().unwrap().len() == 16);
+    // a tile of the map is served at a tier, as the map builds it (its own seed here)
+    let id = h.id("glade.dtile");
+    let (head, body) = get(
+        &h.r,
+        &format!("/api/tiles/{id}/tier?tier=super-low&seed=9&system=db"),
+    );
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert_eq!(&body[..4], b"DTM1");
+    let (head, _) = get(&h.r, &format!("/api/tiles/{id}/tier?tier=low&system=xx"));
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
+    // add: a new piece with its own id, in the answer's scene at once
+    let b = h.ok(
+        "/api/maps/add",
+        serde_json::json!({"list": list, "tile": id, "at": "(3sq, 2sq)", "rot": 180, "seed": 77}),
+    );
+    assert_eq!(
+        (b["id"].as_str(), b["index"].as_u64()),
+        (Some("p4"), Some(3))
+    );
+    assert_eq!(b["scene"]["pieces"].as_array().unwrap().len(), 4);
+    assert_eq!(b["scene"]["pieces"][3]["seed"], 77);
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        text.contains("piece p4 \"home:glade\" at=\"(3sq, 2sq)\" rot=180 seed=77"),
+        "{text}"
+    );
+    assert!(
+        text.contains("grid cols=4 rows=3") && text.contains("let $step"),
+        "every other byte is kept"
+    );
+    // set: move and turn, take a seed off; the toast's Undo is the text it replaced
+    let before = std::fs::read_to_string(&file).unwrap();
+    let b = h.ok(
+        "/api/maps/set",
+        serde_json::json!({"list": list, "index": 1, "set": {"at": "(1sq, 1sq)", "rot": 270, "seed": null}}),
+    );
+    assert_eq!(b["before"], before.as_str());
+    let l = dt_doc::map::decode("t", &std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(l.pieces[1].rot.as_ref().unwrap().value, 270);
+    assert!(l.pieces[1].seed.is_none());
+    // a word the document refuses is shown as data and writes nothing
+    let was = std::fs::read_to_string(&file).unwrap();
+    let (head, v) = h.call(
+        "/api/maps/set",
+        serde_json::json!({"list": list, "index": 1, "set": {"rot": 45}}),
+    );
+    assert!(
+        head.starts_with("HTTP/1.1 200") && v["ok"] == false,
+        "{head} {v}"
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), was);
+    // batch: several pieces in one change
+    let b = h.ok(
+        "/api/maps/batch",
+        serde_json::json!({"list": list, "edits": [{"index": 0, "set": {"seed": 3}}, {"index": 2, "set": {"seed": 4, "print": "skip"}}]}),
+    );
+    assert_eq!(b["changed"], 2);
+    assert_eq!(b["scene"]["pieces"][2]["print"], "skip");
+    // duplicate: its own id, the original's seed, the place asked for; remove takes the piece and its pin
+    let b = h.ok(
+        "/api/maps/dup",
+        serde_json::json!({"list": list, "index": 0, "at": "(0sq, 2sq)"}),
+    );
+    assert_eq!(b["id"], "p5");
+    assert_eq!(b["scene"]["pieces"][1]["id"], "p5");
+    assert_eq!(b["scene"]["pieces"][1]["seed"], 3);
+    // a pin names the piece by its id, a piece with none is given one
+    let b = h.ok(
+        "/api/maps/pin",
+        serde_json::json!({"list": list, "index": 1, "plate": 1, "x": 12.34, "y": 20.0, "turn": true}),
+    );
+    assert_eq!(b["id"], "p5");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        text.contains("pin \"p5\" plate=1 at=\"(12.3mm, 20mm)\" turn=90"),
+        "{text}"
+    );
+    assert_eq!(b["scene"]["pieces"][1]["pinned"], true);
+    h.ok(
+        "/api/maps/unpin",
+        serde_json::json!({"list": list, "index": 1}),
+    );
+    assert!(!std::fs::read_to_string(&file).unwrap().contains("pin "));
+    h.ok(
+        "/api/maps/pin",
+        serde_json::json!({"list": list, "index": 1, "plate": 1, "x": 5.0, "y": 5.0}),
+    );
+    h.ok(
+        "/api/maps/remove",
+        serde_json::json!({"list": list, "index": 1}),
+    );
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        !text.contains("p5") && !text.contains("pin "),
+        "the piece goes with its pin: {text}"
+    );
+    h.ok("/api/maps/unpin-all", serde_json::json!({"list": list}));
+    // undo through the print lists' restore, the scene answered at once
+    let r = h.ok(
+        "/api/lists/restore",
+        serde_json::json!({"list": list, "text": TOWN}),
+    );
+    assert_eq!(r["scene"]["pieces"].as_array().unwrap().len(), 3);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), TOWN);
+    // a new map has a grid, so it opens as a map before a piece is placed
+    let (head, v) = h.call(
+        "/api/lists/new",
+        serde_json::json!({"name": "Table", "map": true}),
+    );
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    let made = std::fs::read_to_string(v["path"].as_str().unwrap()).unwrap();
+    assert!(
+        made.contains("grid cols=8 rows=6") && made.contains("about \"A map.\""),
+        "{made}"
+    );
+    assert!(dt_doc::map::decode("m", &made).is_ok());
+    // the plates see the placed pieces as pieces to print, one each
+    let t = h.wait("town.dmap", "the plates", |t| {
+        t["status"] == "ready" && t["plan"]["plates"]["planned"] == true
+    });
+    assert_eq!(
+        t["plan"]["plates"]["layout"][0]["pieces"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+}
