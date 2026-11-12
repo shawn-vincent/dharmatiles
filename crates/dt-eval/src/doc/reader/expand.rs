@@ -385,6 +385,11 @@ impl Reader<'_> {
                             children,
                             src: Arc::clone(src),
                             span: e.span,
+                            call: if scope.depth > 0 {
+                                self.top.clone()
+                            } else {
+                                None
+                            },
                         });
                         if !hoisted.is_empty() {
                             // listed right after the surface it is written in

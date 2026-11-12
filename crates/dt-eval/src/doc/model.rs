@@ -109,6 +109,11 @@ pub struct Entry {
     pub src: Src,
     /// The whole node.
     pub span: SourceSpan,
+    /// For an entry a definition call makes: the call, as the node the
+    /// document being read writes it (its text and span); `None` for an entry
+    /// the document writes itself.  Entries one call makes share it: a move,
+    /// a hide or a delete of one of them is of the call.
+    pub call: Option<(Src, SourceSpan)>,
 }
 
 /// A `top=` as the document wrote it, with the context it is read in.

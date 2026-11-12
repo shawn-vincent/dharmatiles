@@ -79,6 +79,11 @@ fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
     };
     v["span"] = json!([start, len]);
     v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
+    // an entry a definition call makes: the call, as the document writes it
+    v["call"] = json!(e.call.as_ref().map(|(src, span)| json!({
+        "file": src.name(),
+        "span": [span.offset(), span.len()],
+    })));
     v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name())?);
     v["clouds"] = json!(clouds(e)?);
     // where it is put (at=), as written, for the map's handles

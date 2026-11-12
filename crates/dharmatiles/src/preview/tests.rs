@@ -2342,3 +2342,40 @@ fn every_element_can_be_offered_with_nothing_set() {
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }
+
+#[test]
+fn an_entry_a_definition_call_makes_says_which_call_so_it_can_be_moved() {
+    let text = "dharmatiles version=\"1.0.0\"\n\ndefine knoll {\n    stack {\n        dirt top=\"$groundHeight + 1.5dmm\" clods=none\n    }\n}\n\ntile size=\"1x1\" seed=6 {\n    stack {\n        base\n        knoll\n        rock at=\"(0.3sq, 0.4sq)\"\n    }\n}\n";
+    let (r, _, token) = editable("call", text);
+    let v = check_text(&r, &token, text);
+    assert_eq!(v["ok"], true, "{v}");
+    let stack = v["stack"].as_array().unwrap();
+    let dirt = stack.iter().find(|s| s["what"] == "dirt").unwrap();
+    let rock = stack.iter().find(|s| s["what"] == "rock").unwrap();
+    let call = text.find("        knoll\n").unwrap() + 8;
+    // the dirt is written in the definition; the document's own node for it is the call
+    assert_eq!(
+        dirt["call"]["span"][0].as_u64().unwrap(),
+        call as u64,
+        "{dirt}"
+    );
+    assert!(dirt["call"]["file"].as_str().unwrap().ends_with("t.dtile"));
+    // an entry the document writes itself has no call
+    assert!(rock["call"].is_null(), "{rock}");
+    // and the call moves like any node
+    let moved = post(
+        &r,
+        "/api/edit",
+        Some(&token),
+        None,
+        &json!({ "text": text, "op": "move", "at": call, "before": null }).to_string(),
+    )
+    .1;
+    assert!(
+        moved["text"]
+            .as_str()
+            .unwrap()
+            .contains("rock at=\"(0.3sq, 0.4sq)\"\n        knoll\n    }"),
+        "{moved}"
+    );
+}

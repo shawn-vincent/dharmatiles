@@ -117,6 +117,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/editor/region-sheet.js"),
     ),
     (
+        "/js/editor/rows.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/rows.js"),
+    ),
+    (
         "/js/editor/sheet.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/editor/sheet.js"),
@@ -137,6 +142,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/editor/title.js"),
     ),
     (
+        "/js/menu.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/menu.js"),
+    ),
+    (
         "/js/nav.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/nav.js"),
@@ -155,6 +165,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/js/problems.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/problems.js"),
+    ),
+    (
+        "/js/rows.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/rows.js"),
     ),
     (
         "/js/server-error.js",
