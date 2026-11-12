@@ -307,8 +307,10 @@ impl RegionTree {
     pub const TILE: usize = 0;
 
     /// The regions of `tile` on `frame`'s lattice.
-    #[must_use]
-    pub fn build(tile: &Tile, frame: &Frame) -> Self {
+    ///
+    /// # Errors
+    /// A region that cannot be made, at the region.
+    pub fn build(tile: &Tile, frame: &Frame) -> Result<Self, Diag> {
         let mut nodes = vec![Node {
             label: "$tile".to_owned(),
             kind: Kind::Tile,
@@ -326,12 +328,13 @@ impl RegionTree {
         }];
         // the tile's named regions, then their parents by fill point
         let places = Places::new(tile, frame);
-        let (nx, ny) = frame.nodes();
         let first = nodes.len();
         for r in &tile.regions {
-            let mask = places
-                .region(r)
-                .unwrap_or_else(|_| Mask::new(nx, ny, false));
+            let mask = places.region(r).map_err(|msg| {
+                Diag::at(&tile.src, r.span, "dt::region", msg, "this region").help(
+                    "a region is made of lines, fill points, `within` and `except` of other regions, none of which may lead back to it",
+                )
+            })?;
             nodes.push(Node {
                 label: r.name.clone(),
                 kind: if r.strip { Kind::Strip } else { Kind::Named },
@@ -419,7 +422,7 @@ impl RegionTree {
                 .collect();
             tree.of_child.push(kids);
         }
-        tree
+        Ok(tree)
     }
 
     fn push(&mut self, n: Node) -> usize {

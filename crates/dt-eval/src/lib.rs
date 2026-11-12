@@ -428,9 +428,18 @@ impl Checked {
             cells_per_square: cells.max(1),
             ..self.frame
         };
+        // the map is drawn from a tile that passed the check, which has made
+        // every region (`region_flaws`), so a failure here cannot come up;
+        // were one to, the region is drawn empty and the check's error is
+        // the one shown
         tile.regions
             .iter()
-            .map(|r| region_mask(tile, &frame, r))
+            .map(|r| {
+                region_mask(tile, &frame, r).unwrap_or_else(|_| {
+                    let (nx, ny) = frame.nodes();
+                    Mask::new(nx, ny, false)
+                })
+            })
             .collect()
     }
 }
@@ -574,7 +583,14 @@ fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked,
             .min()
             .map_or(frame, |c| frame.with_cell(c.get()))
     };
-    errors.extend(empty_regions(&tile, &frame, &areas));
+    // a region that cannot be made is said here, where it is written; only
+    // regions that can be made are looked at for being empty
+    let flaws = region_flaws(&tile, &frame);
+    if flaws.is_empty() {
+        errors.extend(empty_regions(&tile, &frame, &areas));
+    } else {
+        errors.extend(flaws);
+    }
     // the connector comes only from a `base` line; with none the tile has
     // no base, printed flat from zero up
     if tile.has_base {
@@ -587,12 +603,21 @@ fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked,
         }
     }
     // format 1: every thing's region, and what each formula can reach
-    let region_tree = (tile.format >= 1 && errors.is_empty()).then(|| {
-        let tree = regions::RegionTree::build(&tile, &frame);
-        errors.extend(tree.parent_flaws(&tile));
-        errors.extend(tree.hole_flaws(&tile));
-        tree
-    });
+    let region_tree = if tile.format >= 1 && errors.is_empty() {
+        match regions::RegionTree::build(&tile, &frame) {
+            Ok(tree) => {
+                errors.extend(tree.parent_flaws(&tile));
+                errors.extend(tree.hole_flaws(&tile));
+                Some(tree)
+            }
+            Err(d) => {
+                errors.push(d);
+                None
+            }
+        }
+    } else {
+        None
+    };
     // format 1: a pin's point is worked out in the frame it was written in,
     // and must lie in the region its body acts in
     if let Some(tree) = &region_tree {
@@ -709,16 +734,31 @@ fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usiz
     found
 }
 
+/// A region that cannot be made (regions that name each other round a loop,
+/// a name that is no place), as an error where the region is written.
+fn region_diag(tile: &Tile, r: &doc::Region, msg: String) -> Diag {
+    Diag::at(&tile.src, r.span, "dt::region", msg, "this region").help(
+        "a region is made of lines, fill points, `within` and `except` of other regions, none of which may lead back to it",
+    )
+}
+
 /// A region's nodes, by paint bucket from its fill points.
-fn region_mask(tile: &Tile, frame: &Frame, r: &doc::Region) -> Mask {
-    // regions that name each other round a loop cover nothing (the solve
-    // reports it)
+fn region_mask(tile: &Tile, frame: &Frame, r: &doc::Region) -> Result<Mask, Diag> {
     places::Places::new(tile, frame)
         .region(r)
-        .unwrap_or_else(|_| {
-            let (nx, ny) = frame.nodes();
-            Mask::new(nx, ny, false)
-        })
+        .map_err(|msg| region_diag(tile, r, msg))
+}
+
+/// Every region of the tile that cannot be made, as an error at the region.
+/// The check runs this over all regions (not only the ones an element uses)
+/// and stops on any, so no later stage (the build's masks, the region tree)
+/// is ever handed a region that fails.
+fn region_flaws(tile: &Tile, frame: &Frame) -> Vec<Diag> {
+    let places = places::Places::new(tile, frame);
+    tile.regions
+        .iter()
+        .filter_map(|r| places.region(r).err().map(|m| region_diag(tile, r, m)))
+        .collect()
 }
 
 /// One error for each region an element acts in that covers no ground: its
@@ -728,7 +768,14 @@ fn empty_regions(tile: &Tile, frame: &Frame, areas: &[Option<usize>]) -> Vec<Dia
     used.into_iter()
         .filter_map(|i| {
             let r = &tile.regions[i];
-            if r.fills.is_empty() || region_mask(tile, frame, r).bits.iter().any(|&b| b) {
+            if r.fills.is_empty() {
+                return None;
+            }
+            let mask = match region_mask(tile, frame, r) {
+                Ok(m) => m,
+                Err(d) => return Some(d),
+            };
+            if mask.bits.iter().any(|&b| b) {
                 return None;
             }
             Some(
@@ -747,24 +794,29 @@ fn empty_regions(tile: &Tile, frame: &Frame, areas: &[Option<usize>]) -> Vec<Dia
 
 /// The masks a build needs, one per distinct area, and each step's index
 /// into them.
-fn masks(tile: &Tile, frame: &Frame, areas: &[Option<usize>]) -> (Vec<Mask>, Vec<usize>) {
+fn masks(
+    tile: &Tile,
+    frame: &Frame,
+    areas: &[Option<usize>],
+) -> Result<(Vec<Mask>, Vec<usize>), Diag> {
     let (nx, ny) = frame.nodes();
     let mut keys: Vec<Option<usize>> = Vec::new();
     let mut out = Vec::new();
-    let index = areas
-        .iter()
-        .map(|a| {
-            keys.iter().position(|k| k == a).unwrap_or_else(|| {
-                keys.push(*a);
-                out.push(match a {
-                    None => Mask::new(nx, ny, true),
-                    Some(i) => region_mask(tile, frame, &tile.regions[*i]),
-                });
-                out.len() - 1
-            })
-        })
-        .collect();
-    (out, index)
+    let mut index = Vec::new();
+    for a in areas {
+        let at = if let Some(at) = keys.iter().position(|k| k == a) {
+            at
+        } else {
+            keys.push(*a);
+            out.push(match a {
+                None => Mask::new(nx, ny, true),
+                Some(i) => region_mask(tile, frame, &tile.regions[*i])?,
+            });
+            out.len() - 1
+        };
+        index.push(at);
+    }
+    Ok((out, index))
 }
 
 /// **build**: `path` for `opts.system`, through the audit gate.
@@ -895,7 +947,7 @@ impl<'a> Plan<'a> {
         let Some(solved) = c.solved.as_ref() else {
             return Err(build_error("the tile was not solved".to_owned()));
         };
-        let (masks, mask_of) = masks(tile, &c.frame, &c.areas);
+        let (masks, mask_of) = masks(tile, &c.frame, &c.areas).map_err(|d| vec![d])?;
         let hashes: Vec<u64> = masks.iter().map(Mask::content_hash).collect();
         let order = c.steps.iter().fold(hash::OFFSET, |h, s| {
             hash::step(

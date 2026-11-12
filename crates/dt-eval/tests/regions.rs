@@ -398,3 +398,19 @@ fn a_let_may_hold_a_region_and_is_a_type_error_where_a_number_is_read() {
     ));
     assert_eq!(e[0].code, "dt::type", "{e:#?}");
 }
+
+#[test]
+fn regions_that_name_each_other_are_an_error_at_the_region_whether_or_not_anything_uses_them() {
+    // nothing uses `a` or `b`: the loop is still said, where each is written
+    let text = tile1(
+        "1x1",
+        "region a { except b }\n region b { except a }\n stack { base\n dirt }",
+    );
+    let e = refused(&text);
+    let d = e
+        .iter()
+        .find(|d| d.code == "dt::region")
+        .unwrap_or_else(|| panic!("no dt::region in {e:#?}"));
+    assert!(d.at.is_some(), "{d:?}");
+    assert!(d.message.contains("names itself"), "{d:?}");
+}
