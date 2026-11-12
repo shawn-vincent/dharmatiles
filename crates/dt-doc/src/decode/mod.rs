@@ -8,7 +8,7 @@ pub(crate) mod syntax;
 mod units;
 mod value;
 pub use units::point_text;
-pub use value::{check_text, check_text_in};
+pub use value::check_text_in;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -47,8 +47,17 @@ pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<Doc
     if header_errors.iter().any(|e| e.code == "dt::format-newer") {
         return Err(header_errors);
     }
+    // this decoder reads format 1 only: `dharmatiles migrate` carries an
+    // older document over
+    if header
+        .as_ref()
+        .is_none_or(|h| h.format < crate::header::FORMAT)
+    {
+        let mut errors = header_errors;
+        errors.push(crate::header::format_old(&src, &kdl, header.as_ref()));
+        return Err(errors);
+    }
     let mut d = Decoder::new(src, known);
-    d.format1 = header.as_ref().is_some_and(|h| h.format >= 1);
     d.errors.extend(header_errors);
     let mut doc = d.document(&kdl);
     doc.header = header;
@@ -122,8 +131,6 @@ pub(crate) struct Decoder<'k> {
     pub stack_base: Option<Base>,
     /// The `let`s of the stack block last decoded (format 1).
     pub stack_consts: Vec<crate::model::Const>,
-    /// Reading format 1: `$` names, `let` in any block, reserved words.
-    pub format1: bool,
     /// Format 1: the named region (or drawn line) the entry being read acts
     /// in, where a pin is written: its points are in that region's frame,
     /// whose box is known only once `check` has the region tree, so they are
@@ -195,7 +202,6 @@ impl<'k> Decoder<'k> {
             param_controls: HashMap::new(),
             stack_base: None,
             stack_consts: Vec::new(),
-            format1: false,
             frame_region: None,
             last_raw: None,
         }
@@ -597,15 +603,6 @@ impl<'k> Decoder<'k> {
         let taken = self.declare_places(body, &mut ctx);
         for n in body.nodes() {
             match n.name().value() {
-                "let" | "override" if !is_tile && !self.format1 => {
-                    self.err(
-                        "dt::unknown-node",
-                        n.name().span(),
-                        format!("a part has no `{}`", n.name().value()),
-                        "in a define",
-                    )
-                    .help = Some("constants belong to a tile".to_owned());
-                }
                 "let" | "override" => {
                     if let Some(c) = self.const_node(n, &mut ctx, &taken) {
                         def.consts.push(c);
@@ -815,19 +812,18 @@ impl<'k> Decoder<'k> {
 
     fn param(&mut self, n: &KdlNode, ctx: &Ctx) -> Option<Param> {
         let name = self.name_arg(n, "parameter")?;
-        if self.format1 {
-            if name.value.starts_with('$') {
-                self.err(
+        if name.value.starts_with('$') {
+            self.err(
                     "dt::name",
                     name.span,
                     format!("`{}` is a `$` name, and a parameter is a plain name", name.value),
                     "a context name",
                 )
                 .help = Some("a parameter is lexical: write `param length 10`; the context's `$` names are read, not passed".to_owned());
-                return None;
-            }
-            if crate::words::is_reserved(&name.value) {
-                self.err(
+            return None;
+        }
+        if crate::words::is_reserved(&name.value) {
+            self.err(
                     "dt::name",
                     name.span,
                     format!("`{}` is a word of the language", name.value),
@@ -836,8 +832,7 @@ impl<'k> Decoder<'k> {
                 .help = Some(
                     "a plain name can't take a coordinate, function, weighting or unit; choose another name".to_owned(),
                 );
-                return None;
-            }
+            return None;
         }
         let control = self.param_controls.get(&name.value).copied();
         let default = match n.entries() {
@@ -972,11 +967,7 @@ impl<'k> Decoder<'k> {
                         format!("{} point(s)", c.entries().len()),
                     )
                     .help = Some(
-                        if self.format1 {
-                            "write `through south \"(0.65sq, 0sq)\" north`: points, corners or edge middles"
-                        } else {
-                            "write `through south \"0.65,1\" north`: points, corners or edge middles"
-                        }
+                        "write `through south \"(0.65sq, 0sq)\" north`: points, corners or edge middles"
                         .to_owned(),
                     );
                 }
@@ -1017,14 +1008,7 @@ impl<'k> Decoder<'k> {
                 "a line needs `through`",
                 "no points",
             )
-            .help = Some(
-                if self.format1 {
-                    "write `line trail { through south \"(0.65sq, 0sq)\" north }`"
-                } else {
-                    "write `line trail { through south \"0.65,1\" north }`"
-                }
-                .to_owned(),
-            );
+            .help = Some("write `line trail { through south \"(0.65sq, 0sq)\" north }`".to_owned());
         }
         Some(line)
     }
@@ -1128,14 +1112,7 @@ impl<'k> Decoder<'k> {
                     }
                     if c.entries().is_empty() {
                         self.err("dt::region", c.span(), "`fill` takes a point", "no point")
-                            .help = Some(
-                            if self.format1 {
-                                "write `fill \"(0.15sq, 0sq)\"`"
-                            } else {
-                                "write `fill \"0.15,1\"`"
-                            }
-                            .to_owned(),
-                        );
+                            .help = Some("write `fill \"(0.15sq, 0sq)\"`".to_owned());
                     }
                 }
                 other => {
@@ -1189,11 +1166,7 @@ impl<'k> Decoder<'k> {
     /// `within MM of=PLACE`: a disc round a point, a strip beside a line, a
     /// ring round a region.
     fn within_node(&mut self, c: &KdlNode, ctx: &Ctx) -> Option<Within> {
-        let help = if self.format1 {
-            "write `within \"4.5dmm\" of=stream`: a distance round a place"
-        } else {
-            "write `within 4.5 of=stream`: a distance in mm, round a place"
-        };
+        let help = "write `within \"4.5dmm\" of=stream`: a distance round a place";
         let mut mm = None;
         let mut of = None;
         for e in c.entries() {
@@ -1272,48 +1245,21 @@ impl<'k> Decoder<'k> {
             .help = Some("a point is a name from `point`, or \"(x, y)\" in squares".to_owned());
             return None;
         }
-        let p = if self.format1 {
+        let p = {
             let at = self.inner_at(e, s);
             self.point1(s, span, at, ctx)?
-        } else {
-            match crate::place::parse_point(s) {
-                Ok(p) => p,
-                Err(err) => {
-                    let inner = self.inner_at(e, s);
-                    self.err(
-                        "dt::point",
-                        sub_span(span, inner + err.start, inner + err.end),
-                        format!("can't read `{control}`: {}", err.message),
-                        "here",
-                    )
-                    .help = Some(
-                        "write a point as \"x,y\" in squares from the south-west corner, y north"
-                            .to_owned(),
-                    );
-                    return None;
-                }
-            }
         };
         if let Some((cols, rows)) = ctx.size
             && let Ok(((x0, x1), (y0, y1))) = p.bounds(f64::from(cols), f64::from(rows))
         {
             let (c, r) = (f64::from(cols), f64::from(rows));
             if x0 < 0.0 || x1 > c || y0 < 0.0 || y1 > r || x0 > x1 || y0 > y1 {
-                let (shown, help) = if self.format1 {
-                    (
-                        s.trim().to_owned(),
-                        format!(
-                            "this tile is {cols}x{rows} squares: across runs 0 to {cols}, down from the north 0 to {rows}"
-                        ),
-                    )
-                } else {
-                    (
-                        p.to_string(),
-                        format!(
-                            "this tile is {cols}x{rows}: x runs 0 to {cols}, y 0 to {rows}, low end first"
-                        ),
-                    )
-                };
+                let (shown, help) = (
+                    s.trim().to_owned(),
+                    format!(
+                        "this tile is {cols}x{rows} squares: across runs 0 to {cols}, down from the north 0 to {rows}"
+                    ),
+                );
                 self.err(
                     "dt::point",
                     span,
@@ -1401,15 +1347,7 @@ impl<'k> Decoder<'k> {
                 return;
             };
             let span = value_span(e);
-            let v = if this.format1 {
-                this.printer_value(key, e)
-            } else {
-                match e.value() {
-                    kdl::KdlValue::Integer(i) => i.to_string().parse().ok(),
-                    kdl::KdlValue::Float(f) => Some(*f),
-                    _ => None,
-                }
-            };
+            let v = this.printer_value(key, e);
             let max = if matches!(key, "overhang" | "steepest") {
                 90.0
             } else {

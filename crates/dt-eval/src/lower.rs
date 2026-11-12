@@ -608,35 +608,12 @@ pub fn ranged(src: &str) -> Result<Ranged, RangeRefusal> {
 
 /// What is wrong with the weighting in a typed value, if anything: a
 /// number past its limits (`dt::range`), a list that repeats a value or any
-/// other `dt::weighting` refusal, as a build would say.  `None` for a
-/// value that does not parse (the reader's check says so) or that names
-/// things only the document knows.
+/// other `dt::weighting` refusal, as a build would say.  The value's units
+/// are lowered first, as the reader lowers them (`low(1dmm .. 6dmm, 11)`).
+/// `None` for a value that does not parse (the reader's check says so) or
+/// that names things only the document knows.
 #[must_use]
-pub fn weighting_flaw(src: &str) -> Option<RangeRefusal> {
-    let e = dt_doc::expr::parse(src.trim()).ok()?;
-    if e.range_count() == 0 {
-        return None;
-    }
-    let r = lower(&e, &Lets::default(), 0).err()?;
-    (r.hard && matches!(r.code, "dt::range" | "dt::weighting")).then(|| RangeRefusal {
-        code: r.code.to_owned(),
-        message: r.message,
-        help: r.help,
-    })
-}
-
-/// [`weighting_flaw`] for a value typed into a format 1 document
-/// (`low(1dmm .. 6dmm, 11)`): its units are lowered first, as the reader
-/// lowers them.
-#[must_use]
-pub fn weighting_flaw_in(
-    src: &str,
-    format1: bool,
-    units: dt_doc::units::Units,
-) -> Option<RangeRefusal> {
-    if !format1 {
-        return weighting_flaw(src);
-    }
+pub fn weighting_flaw_in(src: &str, units: dt_doc::units::Units) -> Option<RangeRefusal> {
     let e = dt_doc::expr::parse_units(src.trim()).ok()?;
     let e = dt_doc::units::lower(&e, dt_doc::units::Base::Dmm, units, None).ok()?;
     if e.range_count() == 0 {
@@ -764,14 +741,15 @@ mod tests {
 
     #[test]
     fn the_editors_check_names_a_weighting_past_its_limits() {
-        assert!(weighting_flaw("low(1..6, 3)").is_none());
-        let e = weighting_flaw("bell(1..6, 9)").unwrap();
+        let flaw = |s: &str| weighting_flaw_in(s, dt_doc::units::Units::default());
+        assert!(flaw("low(1dmm..6dmm, 3)").is_none());
+        let e = flaw("bell(1dmm..6dmm, 9)").unwrap();
         assert_eq!(e.code, "dt::range");
         assert_eq!(e.message, "bell's spread must be from 0.05 to 1, not 9");
-        assert_eq!(weighting_flaw("[1, 1]").unwrap().code, "dt::weighting");
+        assert_eq!(flaw("[1dmm, 1dmm]").unwrap().code, "dt::weighting");
         // a plain number, a plain range, an unreadable value: the reader's to say
-        assert!(weighting_flaw("6").is_none());
-        assert!(weighting_flaw("1..6").is_none());
-        assert!(weighting_flaw("(").is_none());
+        assert!(flaw("6dmm").is_none());
+        assert!(flaw("1dmm..6dmm").is_none());
+        assert!(flaw("(").is_none());
     }
 }

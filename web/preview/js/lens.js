@@ -10,14 +10,16 @@
 //   api.set(at, name, value)            write a control on the node at byte
 //                                       `at` (value null: take it out)
 //   api.makeMine()                      offer a copy of a library tile
-//   api.format()                        the language format of the document (0, or 1:
-//                                       lengths and angles written with units)
 //   api.checkValue(element, control, typed) -> Promise<string|null>
 //                                       the program's check of a typed value
 //   api.weighting(query) -> Promise<reply|null>
 //                                       the program's weighting curves (gallery.js)
 
 import { weightGallery } from './gallery.js';
+
+// The weighting gallery writes plain numbers, and a document's values carry
+// their units: until it writes units it stays parked.
+const GALLERY_WRITES_UNITS = false;
 import { sizeGrid } from './size-grid.js';
 import { asNumber, asRange, debounce, formOf, isNumeric, kdlString, unquote, valueItems, written } from './value.js';
 
@@ -94,11 +96,8 @@ export class Lens {
   }
   get dragging() { return !!this.drag; }
 
-  /** The document's format: 0, or 1 where a length carries its unit. */
-  get format() { return this.api.format?.() ?? 0; }
-
-  /** A control's default as the document writes it (a length with its unit in format 1). */
-  dflt(c) { return this.format >= 1 ? (c.default1 ?? c.default) : c.default; }
+  /** A control's default as the document writes it (a length with its unit). */
+  dflt(c) { return c.default1 ?? c.default; }
 
   /**
    * Show `model`: {title, kind (the element it edits), href, note, actions, groups: [{heading, at, element, schema, written: [setting]}]},
@@ -433,8 +432,8 @@ export class Lens {
       range.onclick = () => { input.value = asRange(input.value); update(); };
       forms.append(one, range);
       // a draw takes odds along its range: the gallery of weighting functions
-      // (the gallery writes plain numbers; a format 1 value carries its units, so it is typed)
-      if (c.weighted && this.api.weighting && this.format < 1) {
+      // (parked: the gallery writes plain numbers, and a value carries its units, so it is typed)
+      if (c.weighted && this.api.weighting && GALLERY_WRITES_UNITS) {
         weighted = el('button', '', 'weighted');
         weighted.onclick = () => {
           if (formOf(input.value) === 'number') input.value = asRange(input.value);

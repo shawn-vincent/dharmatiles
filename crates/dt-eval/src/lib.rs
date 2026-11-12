@@ -24,7 +24,6 @@ pub mod progress;
 pub mod regions;
 pub mod solve;
 pub mod source;
-pub mod upgrade;
 
 use std::path::{Path, PathBuf};
 
@@ -39,7 +38,7 @@ pub use cache::Cache;
 pub use diag::Diag;
 pub use doc::{Region, Tile, Within};
 pub use dt_kit::Progress;
-pub use lower::{RangeRefusal, Ranged, ranged, weighting_flaw, weighting_flaw_in};
+pub use lower::{RangeRefusal, Ranged, ranged, weighting_flaw_in};
 pub use source::{Files, LIB, Library, Memory, Source, library_file};
 
 use crate::plan::{Refusal, Step};
@@ -117,11 +116,6 @@ pub struct Options {
     /// body's band as low and high sheets, and the span at each tree tip or
     /// stone.  As for [`Options::debug`].
     pub clouds: bool,
-    /// The format this program builds ([`dt_doc::header::FORMAT`]): a
-    /// document of an older format is migrated in memory as it is read,
-    /// with a `dt::migrated` warning, and the file is left as it is.  Only
-    /// the newest format is ever built; format 0 is read only to migrate it.
-    pub current_format: u32,
 }
 
 /// A printer profile in use: the gate's numbers and the name they were read
@@ -279,7 +273,6 @@ impl Options {
             draft: false,
             debug: false,
             clouds: false,
-            current_format: dt_doc::header::FORMAT,
         })
     }
 }
@@ -349,9 +342,6 @@ pub struct Built {
     pub clouds: Option<dt_kit::debug::Debug>,
     /// The debug layer's marks ([`Options::debug`]): dots and trails only.
     pub debug: Option<dt_kit::debug::Debug>,
-    /// What to say beside the result: a document read as an older format
-    /// (`dt::migrated`).
-    pub warnings: Vec<Diag>,
 }
 
 /// No stack entry made this triangle.
@@ -420,9 +410,6 @@ pub struct Checked {
     /// The region tree of a format 1 tile (every thing's region, and what
     /// each region's parent is), on the build's lattice.
     pub regions: Option<regions::RegionTree>,
-    /// The files read as an older format and migrated in memory (the file
-    /// on disk is as it was).
-    pub migrated: Vec<upgrade::Upgrade>,
 }
 
 impl Checked {
@@ -479,53 +466,6 @@ impl Checked {
 /// # Errors
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
-    if opts.current_format < dt_doc::migrate::format1::TARGET {
-        // a program that builds format 0 reads a format 0 document against
-        // the library as it was; a document of a newer format reads the
-        // library as it is.  (A document that cannot be read is reported
-        // where `check_in` reads it.)
-        let old = sources
-            .read(path)
-            .ok()
-            .and_then(|t| upgrade::format_of(path, &t).ok())
-            == Some(0);
-        return if old {
-            check_in(&upgrade::Legacy(sources), path, opts)
-        } else {
-            check_in(sources, path, opts)
-        };
-    }
-    // a document older than the format this program builds is migrated as it
-    // is read, and says so
-    let up = upgrade::Upgrading::new(sources, opts.current_format, &opts.engine);
-    match check_in(&up, path, opts) {
-        Ok(mut c) => {
-            c.migrated = up.upgraded();
-            let warnings = migrated_warnings(&c.migrated);
-            if let Some(s) = &mut c.solved {
-                s.notes.extend(warnings);
-            }
-            Ok(c)
-        }
-        Err(errors) => {
-            let failures = up.failures();
-            Err(if failures.is_empty() {
-                errors
-            } else {
-                failures
-            })
-        }
-    }
-}
-
-/// The `dt::migrated` warning of each file read as an older format.
-fn migrated_warnings(done: &[upgrade::Upgrade]) -> Vec<Diag> {
-    done.iter()
-        .map(|u| upgrade::migrated_note(&u.path, u.from))
-        .collect()
-}
-
-fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
     let units = opts.units();
     let read = doc::read_with(sources, path, units)?;
     let Some(mut tile) = read.tile else {
@@ -540,7 +480,6 @@ fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked,
             seed: 0,
             solved: None,
             regions: None,
-            migrated: Vec::new(),
         });
     };
     if let Some(seed) = opts.seed {
@@ -633,7 +572,7 @@ fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked,
         }
     }
     // format 1: every thing's region, and what each formula can reach
-    let region_tree = if tile.format >= 1 && errors.is_empty() {
+    let region_tree = if errors.is_empty() {
         match regions::RegionTree::build(&tile, &frame) {
             Ok(tree) => {
                 errors.extend(tree.parent_flaws(&tile));
@@ -737,7 +676,6 @@ fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked,
         seed,
         solved,
         regions: region_tree,
-        migrated: Vec::new(),
     })
 }
 
@@ -903,9 +841,7 @@ pub fn build_cached(
     }
     let plan = Plan::new(&c, tile, opts)?;
     let ran = plan.run(progress, cache)?;
-    let mut built = plan.finish(path, &text, ran, progress)?;
-    built.record.read_from = c.migrated.iter().find(|u| u.path == path).map(|u| u.from);
-    built.warnings = migrated_warnings(&c.migrated);
+    let built = plan.finish(path, &text, ran, progress)?;
     Ok(built)
 }
 
@@ -1423,7 +1359,6 @@ impl<'a> Plan<'a> {
             seed: c.seed,
             system: opts.system.clone(),
             printer: opts.printer.name.clone(),
-            read_from: None,
         };
         Ok(Built {
             export,
@@ -1464,7 +1399,6 @@ impl<'a> Plan<'a> {
             stack: tile.names(&opts.system),
             clouds: opts.clouds.then(|| cloud_part(scene.collected())).flatten(),
             debug: opts.debug.then(|| mark_part(scene.collected())).flatten(),
-            warnings: Vec::new(),
         })
     }
 }
@@ -1629,8 +1563,7 @@ mod tests {
     fn your_printers_come_first_and_the_library_ones_are_listed() {
         let home = std::env::temp_dir().join(format!("dt-printers-{}", std::process::id()));
         std::fs::create_dir_all(home.join("printers")).unwrap();
-        let mine =
-            "printer fine {\n line 0.6\n layer 0.3\n overhang 50\n steepest 60\n gap 0.3\n}\n";
+        let mine = "dharmatiles version=1\nprinter fine {\n line \"0.6mm\"\n layer \"0.3mm\"\n overhang \"50deg\"\n steepest \"60deg\"\n gap \"0.3mm\"\n}\n";
         std::fs::write(home.join("printers/fine.dtile"), mine).unwrap();
         std::fs::write(home.join("printers/other.dtile"), mine).unwrap();
         std::fs::write(home.join("printers/not a name.dtile"), mine).unwrap();

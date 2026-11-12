@@ -4,16 +4,15 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use dt_eval::regions::{Kind, RegionTree};
 use dt_eval::{Checked, Diag, Memory, Options, check};
 
-/// These tests write format 0 documents: built as written, not migrated as
-/// they load (that is `migrate.rs`'s business).
+/// These tests write their documents in the old form, carried to format 1
+/// by [`common::modern`] as `dharmatiles migrate` carries them.
 fn legacy() -> Options {
-    Options {
-        current_format: 0,
-        ..Options::default()
-    }
+    Options::default()
 }
 
 fn preview() -> Options {
@@ -21,7 +20,7 @@ fn preview() -> Options {
 }
 
 fn mem(text: &str) -> Memory {
-    Memory([("t.dtile".to_owned(), text.to_owned())].into())
+    common::modern(&[("t.dtile", text)])
 }
 
 fn tile1(size: &str, body: &str) -> String {
@@ -80,13 +79,6 @@ fn the_tile_is_the_root_and_has_no_parent() {
     assert_eq!(t.of_entry[0], RegionTree::TILE);
     let bb = t.bbox(RegionTree::TILE).unwrap();
     assert_eq!((bb.x0, bb.y0, bb.x1, bb.y1), (0.0, 0.0, 1.0, 1.0));
-}
-
-#[test]
-fn a_format_zero_tile_has_no_region_tree() {
-    let text = "tile size=\"1x1\" seed=3 {\n stack { base\n dirt }\n}\n";
-    let c = check(&mem(text), "t.dtile", &legacy()).unwrap();
-    assert!(c.regions.is_none());
 }
 
 #[test]

@@ -3,9 +3,9 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::collections::BTreeMap;
+mod common;
 
-use dt_eval::{Memory, Options, build};
+use dt_eval::{Options, build};
 
 const TILE: &str = r#"tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
@@ -25,10 +25,7 @@ const TILE: &str = r#"tile size="1x1" seed=97 {
 
 #[test]
 fn the_debug_layer_changes_nothing_built() {
-    let m = Memory(BTreeMap::from([(
-        "probe.dtile".to_owned(),
-        TILE.to_owned(),
-    )]));
+    let m = common::modern(&[("probe.dtile", TILE)]);
     let off = build(&m, "probe.dtile", &Options::default()).unwrap();
     let on = build(
         &m,

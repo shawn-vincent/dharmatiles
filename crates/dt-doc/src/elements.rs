@@ -1317,7 +1317,9 @@ mod tests {
 
     #[test]
     fn typed_text_is_checked_as_a_written_value_is() {
-        use crate::decode::check_text;
+        let check = |k, owner: &str, typed: &str| {
+            crate::decode::check_text_in(k, owner, typed, crate::units::Units::default())
+        };
         let ctl = |e: &str, c: &str| crate::schema::element(e).unwrap().control(c).unwrap();
         let tree = crate::schema::element("tree")
             .unwrap()
@@ -1325,46 +1327,38 @@ mod tests {
             .unwrap()
             .sub("height")
             .unwrap();
-        assert!(check_text(tree, "tree", "40").is_none());
-        assert!(check_text(tree, "tree", "30..50").is_none());
+        assert!(check(tree, "tree", "40dmm").is_none());
+        assert!(check(tree, "tree", "30dmm..50dmm").is_none());
         assert_eq!(
-            check_text(tree, "tree", "250").unwrap().message,
+            check(tree, "tree", "250dmm").unwrap().message,
             "`tree height` is 0dmm to 200dmm, not 250dmm"
         );
         assert_eq!(
-            check_text(tree, "tree", "50..30").unwrap().message,
+            check(tree, "tree", "50dmm..30dmm").unwrap().message,
             "a range is written low end first"
         );
+        // a bare number is refused: a length carries its unit
+        assert!(check(tree, "tree", "40").is_some());
         // the reader resolves names; a word is not a number
-        assert!(check_text(tree, "tree", "wall-top * 4").is_none());
-        assert!(check_text(tree, "tree", "tall").is_none());
-        // (h) is in wall tops, checked in mm: 1.2 * 33.1 = 39.7
-        assert!(check_text(tree, "tree", "(h)1.2").is_none());
-        // a syntax error and an annotation that is no unit are refused;
-        // nothing typed yet is not
+        assert!(check(tree, "tree", "$wallHeight * 4dmm").is_none());
+        assert!(check(tree, "tree", "tall").is_none());
+        // a syntax error is refused; nothing typed yet is not
         assert!(
-            check_text(tree, "tree", "4 +")
+            check(tree, "tree", "4dmm +")
                 .unwrap()
                 .message
-                .contains("`4 +`")
+                .contains("`4dmm +`")
         );
-        assert!(check_text(tree, "tree", "(mm").is_some());
-        let r = check_text(tree, "tree", "(cm)5").unwrap();
-        assert_eq!(r.message, "`(cm)` is not an annotation");
-        assert!(check_text(tree, "tree", "  ").is_none());
+        assert!(check(tree, "tree", "  ").is_none());
         let ruin = ctl("wall", "ruin");
-        assert!(check_text(ruin, "wall", "40%").is_none());
+        assert!(check(ruin, "wall", "40%").is_none());
         assert_eq!(
-            check_text(ruin, "wall", "150%").unwrap().message,
+            check(ruin, "wall", "150%").unwrap().message,
             "`wall ruin` is 0% to 100%, not 150%"
-        );
-        assert_eq!(
-            check_text(ruin, "wall", "0.4").unwrap().message,
-            "`wall ruin` is a share, written as a percent"
         );
         let boards = ctl("planks", "boards");
         assert!(
-            check_text(boards, "planks", "4..8")
+            check(boards, "planks", "4..8")
                 .unwrap()
                 .message
                 .contains("one number")

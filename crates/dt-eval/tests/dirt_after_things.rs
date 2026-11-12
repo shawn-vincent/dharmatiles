@@ -4,12 +4,14 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use dt_eval::plan::Step;
 use dt_eval::{Built, Memory, Options, build, check};
 use dt_kit::Material;
 
 fn mem(text: &str) -> Memory {
-    Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect())
+    common::modern(&[("t.dtile", text)])
 }
 
 const TREE: &str = "tree at=\"0.5,0.5\" top=\"bottom + 30\" { trunk height=10; crown width=12 clumps=12 shape=round branching=normal; leaf length=4.5 width=3 }";

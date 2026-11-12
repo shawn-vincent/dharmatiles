@@ -24,16 +24,9 @@ impl Drop for Running {
     }
 }
 
-/// [`start`]ed as a program that builds format 0 as written: most tests
-/// here write small format 0 documents and check what the editor says of
-/// them, not that they are migrated as they load (the tests that are about
-/// that say so with [`start_with`]).
+/// [`start`]ed for the default build target.
 fn start(paths: &[&str], eager: bool) -> Running {
-    let opts = Options {
-        current_format: 0,
-        ..Options::default()
-    };
-    start_with(paths, eager, &opts)
+    start_with(paths, eager, &Options::default())
 }
 
 /// [`start`] for the build target `opts`.
@@ -550,7 +543,7 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     let dir = std::env::temp_dir().join(format!("dt-edit-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"1x1\" {\n    stack {\n        dirt\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -604,7 +597,7 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     assert_eq!(v["ok"], true, "{v}");
     let at = v["stack"][0]["span"][0].as_u64().unwrap();
     assert_eq!(&text[usize::try_from(at).unwrap()..][..4], "dirt");
-    let bad = serde_json::json!({ "text": "tile size=\"1x1\" { stack { durt } }" }).to_string();
+    let bad = serde_json::json!({ "text": "dharmatiles version=1\ntile size=\"1x1\" { stack { durt } }" }).to_string();
     let (_, v) = post(
         &r,
         &format!("/api/tiles/{}/check", id0(&r)),
@@ -626,7 +619,7 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
         let b = serde_json::json!({ "element": "rock", "control": control, "typed": typed });
         post(&r, "/api/check-value", Some(&token), None, &b.to_string())
     };
-    let (h, v) = cv("size", "250");
+    let (h, v) = cv("size", "250dmm");
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
     assert!(
         v["message"]
@@ -635,13 +628,13 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
             .starts_with("`rock size` is "),
         "{v}"
     );
-    assert!(cv("size", "40").1["message"].is_null());
+    assert!(cv("size", "40dmm").1["message"].is_null());
     assert!(cv("no-such-control", "150").1["message"].is_null());
     // a weighting's strength outside its limits is the program's dt::range
     // message, as a build would say it
-    let m = cv("size", "low(20..60, -2)").1["message"].clone();
+    let m = cv("size", "low(20dmm..60dmm, -2)").1["message"].clone();
     assert_eq!(m, "low's ratio must be above 0, not -2");
-    assert!(cv("size", "low(20..60, 3)").1["message"].is_null());
+    assert!(cv("size", "low(20dmm..60dmm, 3)").1["message"].is_null());
     // save: only over the text it was edited from
     let s = serde_json::json!({ "text": edited, "base": "something else" }).to_string();
     let (h, v) = post(
@@ -836,7 +829,7 @@ fn a_draft_is_a_request_answered_with_its_mesh() {
         "a draft is not the tile's build"
     );
     // a mistake in the text is a 422, not a mesh
-    let bad = serde_json::json!({ "text": "tile size=\"1x1\" { stack { durt } }" }).to_string();
+    let bad = serde_json::json!({ "text": "dharmatiles version=1\ntile size=\"1x1\" { stack { durt } }" }).to_string();
     let (h, _) = post_raw(&r, &path, Some(&t), None, &bad);
     assert!(h.starts_with("HTTP/1.1 422"), "{h}");
     // nothing is written, and the tile never grew a draft route of its own
@@ -1037,7 +1030,7 @@ fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
     let dir = std::env::temp_dir().join(format!("dt-place-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"1x1\" {\n    line shore { through west \"1,0.5\" }\n    region pool { boundedBy shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"1x1\" {\n    line shore { through west \"(1sq, 0.5sq)\" }\n    region pool { boundedBy shore; fill \"(0.5sq, 0.8sq)\" }\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1047,7 +1040,7 @@ fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
     // a rock placed: the end of the stack, and where it starts
     let v = call(
         "/api/edit",
-        serde_json::json!({ "text": text, "op": "insert", "place": "stack", "node": "rock at=\"0.3,0.6\"" }),
+        serde_json::json!({ "text": text, "op": "insert", "place": "stack", "node": "rock at=\"(0.3sq, 0.4sq)\"" }),
     );
     let placed = v["text"].as_str().unwrap().to_owned();
     let at = usize::try_from(v["at"].as_u64().unwrap()).unwrap();
@@ -1068,7 +1061,7 @@ fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
     assert_eq!(line["name"], "shore");
     let p = &line["points"][1];
     let s = usize::try_from(p["span"][0].as_u64().unwrap()).unwrap();
-    assert_eq!(&text[s..][..7], "\"1,0.5\"");
+    assert_eq!(&text[s..][..14], "\"(1sq, 0.5sq)\"");
     assert_eq!(p["at"], serde_json::json!([1.0, 0.5]));
     assert_eq!(line["points"][0]["text"], "west");
     let pool = &map["regions"][0];
@@ -1086,7 +1079,7 @@ fn the_map_carries_the_tiles_own_controls() {
     let dir = std::env::temp_dir().join(format!("dt-own-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"2x1\" seed=7 {\n    about \"A bank\"\n    let foot 4\n    stack {\n        dirt\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"2x1\" seed=7 {\n    about \"A bank\"\n    let foot \"4dmm\"\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1101,7 +1094,7 @@ fn the_map_carries_the_tiles_own_controls() {
     )
     .1;
     let own = &v["map"]["tile"];
-    assert_eq!(own["at"], 0, "{v}");
+    assert_eq!(own["at"], text.find("\ntile").unwrap() + 1, "{v}");
     let seed = own["controls"]
         .as_array()
         .unwrap()
@@ -1123,7 +1116,7 @@ fn the_map_carries_the_tiles_own_controls() {
             .any(|h| h["name"] == name && h["value"] == value && h["from"] == from)
     };
     assert!(has("foot", 4.0, "tile"), "{heights:?}");
-    assert!(has("dirtEdgeHeight", 3.4, "library"), "{heights:?}");
+    assert!(has("$dirtEdgeHeight", 3.4, "library"), "{heights:?}");
 }
 
 #[test]
@@ -1135,7 +1128,7 @@ fn export_writes_the_stl_by_the_tiles_name_and_reveal_takes_only_what_was_writte
     let file = dir.join("deep/er/flat.dtile");
     std::fs::write(
         &file,
-        "tile size=\"1x1\" {\n    stack {\n        dirt\n    }\n}\n",
+        "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirt\n    }\n}\n",
     )
     .unwrap();
     let path = file.to_string_lossy().into_owned();
@@ -1220,7 +1213,7 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     let dir = std::env::temp_dir().join(format!("dt-marks-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"1x1\" seed=3 {\n    line shore wobble=5 { through \"0,0.38\" \"1,0.42\" }\n    region pool { boundedBy shore; fill \"0.5,0.25\" }\n    region bank { boundedBy shore; fill \"0.5,0.75\" }\n    stack {\n        dirt at=bank\n        water\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"1x1\" seed=3 {\n    line shore wobble=\"5dmm\" { through \"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\" }\n    region pool { boundedBy shore; fill \"(0.5sq, 0.75sq)\" }\n    region bank { boundedBy shore; fill \"(0.5sq, 0.25sq)\" }\n    stack {\n        dirt at=bank\n        water\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1233,13 +1226,16 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     );
     let line = &v["map"]["lines"][0]["sheet"];
     assert_eq!(line["controls"][0]["name"], "wobble", "{v}");
-    assert_eq!(line["controls"][0]["text"], "5");
-    assert_eq!(line["through"]["text"], "\"0,0.38\" \"1,0.42\"");
+    assert_eq!(line["controls"][0]["text"], "\"5dmm\"");
+    assert_eq!(
+        line["through"]["text"],
+        "\"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\""
+    );
     let s = usize::try_from(line["through"]["span"][0].as_u64().unwrap()).unwrap();
-    assert!(text[s..].starts_with("\"0,0.38\" \"1,0.42\" }"));
+    assert!(text[s..].starts_with("\"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\" }"));
     let region = &v["map"]["regions"][1]["sheet"];
     assert_eq!(region["bounded_by"]["text"], "shore");
-    assert_eq!(region["fill"]["text"], "\"0.5,0.75\"");
+    assert_eq!(region["fill"]["text"], "\"(0.5sq, 0.25sq)\"");
     let v = call(
         "/api/edit",
         serde_json::json!({ "op": "rename", "text": text, "mark": "region", "old": "bank", "new": "meadow" }),
@@ -1264,7 +1260,7 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     let dir = std::env::temp_dir().join(format!("dt-clauses-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"2x2\" seed=3 {\n    point knoll \"(0.5, 0.5)\"\n    line shore { through \"0,0.4\" \"2,0.5\" }\n    region crag { within \"[8 .. 14]\" of=westEdge; within 6 of=knoll }\n    region apron { within 6.5 of=crag; except crag }\n    region pool { boundedBy shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"2x2\" seed=3 {\n    point knoll \"(0.5sq, 1.5sq)\"\n    line shore { through \"(0sq, 1.6sq)\" \"(2sq, 1.5sq)\" }\n    region crag { within \"[8dmm .. 14dmm]\" of=westEdge; within \"6dmm\" of=knoll }\n    region apron { within \"6.5dmm\" of=crag; except crag }\n    region pool { boundedBy shore; fill \"(0.5sq, 1.8sq)\" }\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1288,7 +1284,7 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     let clauses = crag["sheet"]["clauses"].as_array().unwrap();
     assert_eq!(clauses.len(), 2, "{crag}");
     assert_eq!(clauses[0]["kind"], "within");
-    assert_eq!(clauses[0]["distance"]["text"], "\"[8 .. 14]\"");
+    assert_eq!(clauses[0]["distance"]["text"], "\"[8dmm .. 14dmm]\"");
     assert_eq!(clauses[0]["range"], serde_json::json!([8.0, 14.0]));
     assert_eq!(clauses[0]["of"]["text"], "westEdge");
     let sp = |c: &Value, k: &str| {
@@ -1296,7 +1292,7 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
         let a = usize::try_from(s[0].as_u64().unwrap()).unwrap();
         a..a + usize::try_from(s[1].as_u64().unwrap()).unwrap()
     };
-    assert_eq!(&text[sp(&clauses[0], "distance")], "\"[8 .. 14]\"");
+    assert_eq!(&text[sp(&clauses[0], "distance")], "\"[8dmm .. 14dmm]\"");
     assert_eq!(&text[sp(&clauses[1], "of")], "knoll");
     // the places it refers to, with their geometry
     let refs = crag["refs"].as_array().unwrap();
@@ -1335,11 +1331,11 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     // the distance is edited through the server, the way the other controls are
     let v = call(
         "/api/edit",
-        serde_json::json!({ "op": "arg", "text": text, "at": clauses[1]["at"], "index": 0, "value": 9 }),
+        serde_json::json!({ "op": "arg", "text": text, "at": clauses[1]["at"], "index": 0, "value": "9dmm" }),
     );
     let t = v["text"].as_str().unwrap();
     assert!(
-        t.contains("within \"[8 .. 14]\" of=westEdge; within 9 of=knoll"),
+        t.contains("within \"[8dmm .. 14dmm]\" of=westEdge; within \"9dmm\" of=knoll"),
         "{t}"
     );
     let v = call(
@@ -1347,7 +1343,7 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
         serde_json::json!({ "op": "set", "text": text, "at": clauses[0]["at"], "name": "of", "value": "eastEdge" }),
     );
     let t = v["text"].as_str().unwrap();
-    assert!(t.contains("of=eastEdge; within 6 of=knoll"), "{t}");
+    assert!(t.contains("of=eastEdge; within \"6dmm\" of=knoll"), "{t}");
 }
 
 #[test]
@@ -1406,7 +1402,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     std::fs::create_dir_all(dir.join("printers")).unwrap();
     std::fs::write(
         dir.join("printers/mine.dtile"),
-        "printer mine {\n line 0.5\n layer 0.2\n overhang 50\n steepest 62\n gap 0.2\n}\n",
+        "dharmatiles version=1\nprinter mine {\n line \"0.5mm\"\n layer \"0.2mm\"\n overhang \"50deg\"\n steepest \"62deg\"\n gap \"0.2mm\"\n}\n",
     )
     .unwrap();
     let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
@@ -1484,7 +1480,7 @@ fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
         ))
     };
     // a document error: 200, ok false, a code and a place
-    let text = "tile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n";
     let body = serde_json::json!({ "text": text }).to_string();
     let (s, v) = call("POST", &format!("/api/tiles/{id}/check"), body.as_bytes());
     assert_eq!((s, v["ok"].clone()), ("200 OK", Value::Bool(false)));
@@ -1617,7 +1613,7 @@ fn the_map_marks_every_point_a_line_or_region_refers_to() {
     let dir = std::env::temp_dir().join(format!("dt-markers-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "tile size=\"2x2\" seed=3 {\n    point knoll \"(0.5, 0.5)\"\n    line shore { through west \"0,0.38\" knoll \"(1.5, 1.25)\" east }\n    line ring closed=#true { through \"0.2,0.2\" \"0.8,0.2\" \"0.5,0.8\" }\n    region bay { boundedBy shore; fill \"0.5,0.2\"; fill center; within 4 of=\"(1.2, 0.3)\"; within 6 of=knoll; within 5 of=shore }\n    stack {\n        dirt\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"2x2\" seed=3 {\n    point knoll \"(0.5sq, 1.5sq)\"\n    line shore { through west \"(0sq, 1.5sq)\" knoll \"(1.5sq, 0.75sq)\" east }\n    line ring closed=#true { through \"(0.25sq, 1.75sq)\" \"(0.75sq, 1.75sq)\" \"(0.5sq, 1.25sq)\" }\n    region bay { boundedBy shore; fill \"(0.5sq, 1.75sq)\"; fill center; within \"4dmm\" of=\"(1.25sq, 1.75sq)\"; within \"6dmm\" of=knoll; within \"5dmm\" of=shore }\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1646,13 +1642,16 @@ fn the_map_marks_every_point_a_line_or_region_refers_to() {
         .unwrap();
     let m = shore["markers"].as_array().unwrap();
     let labels: Vec<_> = m.iter().map(|m| m["label"].as_str().unwrap()).collect();
-    assert_eq!(labels, ["west", "0,0.38", "knoll", "(1.5, 1.25)", "east"]);
+    assert_eq!(
+        labels,
+        ["west", "(0sq, 1.5sq)", "knoll", "(1.5sq, 0.75sq)", "east"]
+    );
     let kinds: Vec<_> = m.iter().map(|m| m["kind"].as_str().unwrap()).collect();
     assert_eq!(kinds, ["name", "literal", "name", "literal", "name"]);
     assert_eq!(m[0]["at"], serde_json::json!([0.0, 1.0]));
     assert_eq!(m[2]["at"], serde_json::json!([0.5, 0.5]));
     assert_eq!(m[3]["at"], serde_json::json!([1.5, 1.25]));
-    assert_eq!(&text[span(&m[3])], "\"(1.5, 1.25)\"");
+    assert_eq!(&text[span(&m[3])], "\"(1.5sq, 0.75sq)\"");
     // a closed line has them all still (its drawn points repeat the first)
     let ring = map["lines"]
         .as_array()
@@ -1661,7 +1660,7 @@ fn the_map_marks_every_point_a_line_or_region_refers_to() {
         .find(|l| l["name"] == "ring")
         .unwrap();
     assert_eq!(ring["markers"].as_array().unwrap().len(), 3);
-    assert_eq!(ring["markers"][1]["at"], serde_json::json!([0.8, 0.2]));
+    assert_eq!(ring["markers"][1]["at"], serde_json::json!([0.75, 0.25]));
     // a region: each fill, then each within centre that is a point (not the line)
     let bay = map["regions"]
         .as_array()
@@ -1673,11 +1672,11 @@ fn the_map_marks_every_point_a_line_or_region_refers_to() {
     let labels: Vec<_> = m.iter().map(|m| m["label"].as_str().unwrap()).collect();
     assert_eq!(
         labels,
-        ["0.5,0.2", "center", "(1.2, 0.3)", "knoll"],
+        ["(0.5sq, 1.75sq)", "center", "(1.25sq, 1.75sq)", "knoll"],
         "{m:?}"
     );
     assert_eq!(m[1]["at"], serde_json::json!([1.0, 1.0]));
-    assert_eq!(m[2]["at"], serde_json::json!([1.2, 0.3]));
+    assert_eq!(m[2]["at"], serde_json::json!([1.25, 0.25]));
 }
 
 fn curve_of(r: &Running, path: &str) -> (String, Value) {
@@ -1810,9 +1809,7 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
     let check = format!("/api/tiles/{}/check", id0(&r));
     let v = call(&check, serde_json::json!({ "text": FORMAT_1 }));
     assert_eq!(v["ok"], true, "{v}");
-    assert_eq!(v["format"], 1);
     let map = &v["map"];
-    assert_eq!(map["format"], 1);
     assert!(
         map["language"]["names"]
             .as_array()
@@ -1848,10 +1845,6 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
     let bad = FORMAT_1.replace("size=\"8dmm\"", "size=8");
     let v = call(&check, serde_json::json!({ "text": bad }));
     assert_eq!(v["ok"], false, "{v}");
-    assert_eq!(
-        v["format"], 1,
-        "the page still writes in the document's format: {v}"
-    );
     assert_eq!(v["errors"][0]["code"], "dt::unit", "{v}");
     assert!(
         v["errors"][0]["help"].as_str().unwrap().contains("dmm"),
@@ -1869,10 +1862,10 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
         "{v}"
     );
     // the sheet's check of a typed value is read with units
-    let cv = |control: &str, typed: &str, format: u32| {
+    let cv = |control: &str, typed: &str| {
         let v = call(
             "/api/check-value",
-            serde_json::json!({ "element": "rock", "control": control, "typed": typed, "format": format }),
+            serde_json::json!({ "element": "rock", "control": control, "typed": typed }),
         );
         // the message, with its help after it
         match v["message"].as_str() {
@@ -1880,30 +1873,28 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
             Some(m) => Value::String(format!("{m} {}", v["help"].as_str().unwrap_or_default())),
         }
     };
-    assert!(cv("size", "8dmm", 1).is_null());
-    assert!(cv("size", "6dmm..10dmm", 1).is_null());
-    assert!(cv("size", "2sq", 1).is_null());
-    assert!(cv("size", "$x", 1).is_null() || cv("size", "$x", 1).is_string());
+    assert!(cv("size", "8dmm").is_null());
+    assert!(cv("size", "6dmm..10dmm").is_null());
+    assert!(cv("size", "2sq").is_null());
+    assert!(cv("size", "$x").is_null() || cv("size", "$x").is_string());
     assert!(
-        cv("size", "8", 1).as_str().unwrap().contains("dmm"),
+        cv("size", "8").as_str().unwrap().contains("dmm"),
         "a bare number needs its unit"
     );
     assert!(
-        cv("size", "250dmm", 1)
+        cv("size", "250dmm")
             .as_str()
             .unwrap()
             .starts_with("`rock size` is ")
     );
-    assert!(cv("size", "8deg", 1).as_str().unwrap().contains("length"));
-    assert!(cv("size", "low(20dmm..60dmm, 3)", 1).is_null());
+    assert!(cv("size", "8deg").as_str().unwrap().contains("length"));
+    assert!(cv("size", "low(20dmm..60dmm, 3)").is_null());
     assert!(
-        cv("size", "low(20dmm..60dmm, -2)", 1)
+        cv("size", "low(20dmm..60dmm, -2)")
             .as_str()
             .unwrap()
             .starts_with("low's ratio must be above 0, not -2")
     );
-    // a format 0 value is read as ever
-    assert!(cv("size", "8", 0).is_null());
     // what the sheet writes lands as a string with its unit, and checks
     let at = FORMAT_1.find("rock").unwrap();
     let v = call(
@@ -1940,72 +1931,43 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
 }
 
 #[test]
-fn an_older_tile_opens_migrated_with_a_warning_and_update_this_file_offers_the_new_text() {
-    // a program whose current format is 1 (1.0.0's), reading a format 0 file
-    let old = "tile size=\"1x1\" seed=3 {\n    line shore { through \"0,0.4\" \"1,0.6\" }\n    region pool { boundedBy shore; fill \"0.5,0.1\" }\n    stack {\n        base\n        dirt top=\"[groundHeight .. groundHeight + 1]\"\n    }\n}\n";
+fn an_older_tile_is_refused_where_it_is_checked_with_help_to_migrate_it() {
+    // a format 0 file: no header
+    let old = "tile size=\"1x1\" seed=3 {\n    stack {\n        base\n        dirt\n    }\n}\n";
     let dir = std::env::temp_dir().join(format!("dt-up-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
     std::fs::write(&file, old).unwrap();
     let path = file.to_string_lossy().into_owned();
-    let opts = Options {
-        current_format: 1,
-        ..Options::default()
-    };
-    let r = start_with(&[&path], true, &opts);
+    let r = start(&[&path], true);
     let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
     let token = token["token"].as_str().unwrap().to_owned();
-    let call = |p: &str, body: Value| post(&r, p, Some(&token), None, &body.to_string()).1;
-    // it builds, and says it was read as another format
-    let t = wait_for(&r, "ready", |t| {
+    // it does not build, and says why
+    let t = wait_for(&r, "failed", |t| {
         t["status"] == "ready" || t["status"] == "failed"
     });
-    assert_eq!(t["status"], "ready", "{t}");
-    assert!(
-        t["errors"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|e| e["code"] == "dt::migrated"),
-        "{t}"
-    );
-    // the editor's check names the file that was migrated
+    assert_eq!(t["status"], "failed", "{t}");
+    // the editor's check gives the same refusal, with the command to run
     let id = id0(&r);
-    let v = call(
+    let v = post(
+        &r,
         &format!("/api/tiles/{id}/check"),
-        serde_json::json!({ "text": old }),
-    );
-    assert_eq!(v["ok"], true, "{v}");
+        Some(&token),
+        None,
+        &serde_json::json!({ "text": old }).to_string(),
+    )
+    .1;
+    assert_eq!(v["ok"], false, "{v}");
+    let e = v["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["code"] == "dt::format-0")
+        .unwrap_or_else(|| panic!("{v}"));
     assert!(
-        v["migrated"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|m| m["from"] == 0 && m["path"] == path.as_str()),
-        "{v}"
+        e["help"].as_str().unwrap().contains("dharmatiles migrate"),
+        "{e}"
     );
-    // "Update this file": the text in the newest format; nothing is written
-    let v = call(
-        &format!("/api/tiles/{id}/migrate"),
-        serde_json::json!({ "text": old }),
-    );
-    assert_eq!(v["ok"], true, "{v}");
-    let new = v["text"].as_str().unwrap();
-    assert!(new.starts_with("dharmatiles version=\""), "{new}");
-    assert!(new.contains("fill \"(0.5sq, 0.9sq)\""), "{new}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), old);
-    // and the new text is a tile at the format: no longer migrated
-    let v = call(
-        &format!("/api/tiles/{id}/check"),
-        serde_json::json!({ "text": new }),
-    );
-    assert_eq!(v["ok"], true, "{v}");
-    assert!(
-        !v["migrated"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|m| m["path"] == path.as_str()),
-        "{v}"
-    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

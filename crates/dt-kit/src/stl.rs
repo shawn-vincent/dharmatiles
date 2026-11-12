@@ -20,9 +20,6 @@ pub struct BuildRecord {
     pub system: String,
     /// The printer profile's name (`default`, or another).
     pub printer: String,
-    /// The format the document was written in, when the program migrated it
-    /// in memory to build it (the hash above is of the file as written).
-    pub read_from: Option<u32>,
 }
 
 /// `db`, or `db-fine` for the printer `fine`: the printer is left out when
@@ -42,14 +39,6 @@ impl BuildRecord {
     #[must_use]
     pub fn target(&self) -> String {
         target_name(&self.system, &self.printer)
-    }
-
-    /// ", read from format 0": how a document the program migrated in
-    /// memory says so; nothing for one built as written.
-    #[must_use]
-    pub fn origin(&self) -> String {
-        self.read_from
-            .map_or_else(String::new, |f| format!(", read from format {f}"))
     }
 
     /// The 80-byte STL header: never starts with `solid` (that marks ASCII

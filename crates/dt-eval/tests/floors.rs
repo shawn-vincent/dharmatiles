@@ -7,10 +7,12 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use dt_eval::{Built, Library, Memory, Options, build};
 
 fn mem(text: &str) -> Memory {
-    Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect())
+    common::modern(&[("t.dtile", text)])
 }
 
 fn tile(stack: &str) -> String {

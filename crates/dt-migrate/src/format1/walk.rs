@@ -8,13 +8,13 @@ use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
 use miette::SourceSpan;
 
 use super::adorn::{DESIGN, Flaw, Names, SQUARES, Want, adorn, flip_y, kind_of, show};
-use crate::decode::{arg_str, value_span};
-use crate::error::{DocError, Src};
-use crate::expr::{self, Expr};
-use crate::known::DefInfo;
-use crate::place::{self, BUILTIN_LINES, BUILTIN_POINTS, BUILTIN_REGION, Corner, Edge, Point};
-use crate::schema::{self, Axis, Control, Element};
-use crate::units::Kind;
+use crate::old::{arg_str, value_span};
+use dt_doc::error::{DocError, Src};
+use dt_doc::expr::{self, Expr};
+use dt_doc::known::DefInfo;
+use dt_doc::place::{self, BUILTIN_LINES, BUILTIN_POINTS, BUILTIN_REGION, Corner, Edge, Point};
+use dt_doc::schema::{self, Axis, Control, Element};
+use dt_doc::units::Kind;
 
 /// One change to the text.
 pub(super) struct Edit {
@@ -492,7 +492,7 @@ impl Walk {
     }
 
     fn rename_for_reserved(&mut self, name: &str) -> String {
-        if !crate::words::is_reserved(name) {
+        if !dt_doc::words::is_reserved(name) {
             return name.to_owned();
         }
         if let Some(done) = self.renames.get(name) {
@@ -674,7 +674,7 @@ impl Walk {
                 && let Some(name) = arg_str(name_e)
             {
                 let default = n.entries().get(1).and_then(|e| self.parse_entry(e, false));
-                if crate::words::is_reserved(name) {
+                if dt_doc::words::is_reserved(name) {
                     self.problem(
                         "dt::migrate-by-hand",
                         value_span(name_e),

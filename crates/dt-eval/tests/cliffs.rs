@@ -5,11 +5,13 @@
 
 #![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
 
+mod common;
+
 use dt_eval::{Built, Library, Memory, Options, build, check};
 use dt_kit::Material;
 
 fn mem(text: &str) -> Memory {
-    Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect())
+    common::modern(&[("t.dtile", text)])
 }
 
 /// The library's dirt edge height, mm: the ground round a pile.
@@ -383,15 +385,19 @@ fn every_old_cliff_form_migrates_to_a_tile_that_checks_clean() {
         let old = format!(
             "tile size=\"{size}\" seed=1 {{\n    stack {{\n        base\n        dirt top=dirtEdgeHeight {{\n            bank against=cliff height=\"1.5..3.5\" reach=\"3..6.5\"\n        }}\n        cliff form={form}{along} {{\n            rock mixed\n            top dirt\n        }}\n    }}\n}}\n"
         );
-        let new = dt_doc::migrate::heights(&old).unwrap().unwrap();
+        let new = dt_migrate::heights::heights(&old).unwrap().unwrap();
         assert!(!new.contains("form="), "{form}\n{new}");
         // migrating again is a no-op
         assert!(
-            dt_doc::migrate::heights(&new).unwrap().is_none(),
+            dt_migrate::heights::heights(&new).unwrap().is_none(),
             "{form}\n{new}"
         );
-        let c = check(&mem(&new), "t.dtile", &Options::default())
-            .unwrap_or_else(|e| panic!("{form}\n{new}\n{e:#?}"));
+        let c = check(
+            &common::modern(&[("t.dtile", new.as_str())]),
+            "t.dtile",
+            &Options::default(),
+        )
+        .unwrap_or_else(|e| panic!("{form}\n{new}\n{e:#?}"));
         assert!(
             c.notes().iter().all(|n| n.code != "dt::edge"),
             "{form}: {:?}\n{new}",
@@ -407,8 +413,12 @@ fn every_old_cliff_form_migrates_to_a_tile_that_checks_clean() {
             draft: true,
             ..Options::default()
         };
-        let b = build(&mem(&new), "t.dtile", &draft)
-            .unwrap_or_else(|e| panic!("{form} does not build\n{new}\n{e:#?}"));
+        let b = build(
+            &common::modern(&[("t.dtile", new.as_str())]),
+            "t.dtile",
+            &draft,
+        )
+        .unwrap_or_else(|e| panic!("{form} does not build\n{new}\n{e:#?}"));
         assert!(note(&b, "cliff_stones") > 0.0, "{form}: no stones\n{new}");
         assert!(
             top_of(&b, Material::Rock, None) > EDGE_MM + 3.0,

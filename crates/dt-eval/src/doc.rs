@@ -344,8 +344,6 @@ pub struct RegionRead<'a> {
 /// What the evaluator needs from a tile document.
 #[derive(Clone, Debug)]
 pub struct Tile {
-    /// The document's format (0 is only read to be migrated).
-    pub format: u32,
     /// Squares across.
     pub cols: u32,
     /// Squares up.
@@ -444,31 +442,29 @@ impl Tile {
     }
 
     /// The formulas the stack's entries call, in the order of the stack, for
-    /// the region checks of format 1 (none in format 0): a body's `top=` and
-    /// each pin's, a tree's or rock's `top=`, a scatter's things'.
+    /// the region checks: a body's `top=` and each pin's, a tree's or rock's
+    /// `top=`, a scatter's things'.
     #[must_use]
     pub fn region_reads(&self) -> Vec<RegionRead<'_>> {
         let mut out = Vec::new();
         for (entry, e) in self.stack.iter().enumerate() {
-            if e.table.is_dollar() {
-                let formulas = e
-                    .top
-                    .iter()
-                    .map(|t| (&t.expr, t.span, &t.src))
-                    .chain(e.pins.iter().map(|p| (&p.top, p.top_span, &p.from.src)));
-                for (expr, span, src) in formulas {
-                    out.push(RegionRead {
-                        expr,
-                        span,
-                        src,
-                        table: &e.table,
-                        entry,
-                        child: None,
-                    });
-                }
+            let formulas = e
+                .top
+                .iter()
+                .map(|t| (&t.expr, t.span, &t.src))
+                .chain(e.pins.iter().map(|p| (&p.top, p.top_span, &p.from.src)));
+            for (expr, span, src) in formulas {
+                out.push(RegionRead {
+                    expr,
+                    span,
+                    src,
+                    table: &e.table,
+                    entry,
+                    child: None,
+                });
             }
             for (k, c) in e.children.iter().enumerate() {
-                if let Some(t) = c.top.as_ref().filter(|_| c.table.is_dollar()) {
+                if let Some(t) = c.top.as_ref() {
                     out.push(RegionRead {
                         expr: &t.expr,
                         span: t.span,
@@ -886,12 +882,6 @@ impl Reader<'_> {
             }
         };
         let mut known = Known::new().with_units(self.units);
-        // this file's format, to hold the files it uses to it (a header
-        // that is wrong is reported when the file is decoded)
-        let format = dt_doc::header::check_text(path, &text)
-            .ok()
-            .flatten()
-            .map_or(0, |h| h.format);
         if path != HEIGHTS {
             // every file sees the library's heights
             let heights = self.load(HEIGHTS, None)?;
@@ -901,23 +891,6 @@ impl Reader<'_> {
         self.loading.push(path.to_owned());
         for u in &uses {
             match self.load(&use_path(path, u), Some((&src, u.path.span))) {
-                Some(f) if f.doc.format() != format => {
-                    ok = false;
-                    self.errors.push(
-                        Diag::at(
-                            &src,
-                            u.path.span,
-                            "dt::format-mixed",
-                            format!(
-                                "`{}` is format {}, and this document is format {format}",
-                                u.key(),
-                                f.doc.format()
-                            ),
-                            "a part of another format",
-                        )
-                        .help("a tile and the parts it uses share a format; bring the part to this document's format (`dharmatiles migrate` does it)"),
-                    );
-                }
                 Some(f) => known.add(u.key(), &f.doc),
                 None => ok = false,
             }
@@ -952,9 +925,9 @@ impl Reader<'_> {
     }
 
     /// The scope a block makes: `scope` with the block's `let`s and
-    /// `override`s (format 1; nothing else has any).
+    /// `override`s.
     fn scoped(&mut self, scope: &Scope, consts: &[model::Const]) -> Scope {
-        let Some(table) = scope.lets.table.as_ref().filter(|t| t.is_dollar()) else {
+        let Some(table) = scope.lets.table.as_ref() else {
             return scope.clone();
         };
         if consts.is_empty() {
@@ -969,7 +942,7 @@ impl Reader<'_> {
     }
 
     /// Whether `expr`, written at `span` in `src`, can be read in the
-    /// context `table` (format 1): every `$` name is installed, and a
+    /// context `table`: every `$` name is installed, and a
     /// position or height under is only read where a height is worked out
     /// at each point.  A mistake is reported at its text.
     fn readable(
@@ -980,9 +953,6 @@ impl Reader<'_> {
         src: &Src,
         reads: Reads<'_>,
     ) -> bool {
-        if !table.is_dollar() {
-            return true;
-        }
         let checked = match reads {
             Reads::Once => table.check_reads(expr, false),
             Reads::At(element) => table.check_reads_for(expr, element),
@@ -1008,16 +978,10 @@ impl Reader<'_> {
             .filter(|c| c.kind == dt_doc::model::ConstKind::Let)
             .cloned()
             .collect();
-        let format1 = file.doc.format() >= 1;
-        let consts = if format1 {
-            // format 1: the library's heights are `$` names at the root, and
-            // the tile's `let`s and `override`s are its first scope
-            let (t, errors) = ConstTable::root(&library_consts).enter(&def.consts);
-            self.scope_errors(src, errors);
-            t
-        } else {
-            ConstTable::build(&library_consts, &def.consts)
-        };
+        // the library's heights are `$` names at the root, and the tile's
+        // `let`s and `override`s are its first scope
+        let (consts, errors) = ConstTable::root(&library_consts).enter(&def.consts);
+        self.scope_errors(src, errors);
         let lets = Arc::new(Lets::from_consts(&consts));
         let seed = match header.seed {
             None => 1,
@@ -1033,7 +997,6 @@ impl Reader<'_> {
             }),
         };
         let mut t = Tile {
-            format: file.doc.format(),
             cols: header.cols,
             rows: header.rows,
             seed,
@@ -1248,12 +1211,7 @@ impl Reader<'_> {
         t.stack = stack;
         t.pending.extend(pending);
         t.notes = std::mem::take(&mut self.notes);
-        let root = stack_scope
-            .lets
-            .table
-            .clone()
-            .unwrap_or_else(|| Arc::new(consts.clone()));
-        t.heights = self.heights(def, consts, &root);
+        t.heights = self.heights(def, consts);
         t.ids = t
             .stack
             .iter()
@@ -1265,40 +1223,19 @@ impl Reader<'_> {
 
     /// What the heights language wrote in the tile besides its entries: its
     /// constants, points and the library's defaults.
-    fn heights(&mut self, def: &Definition, consts: ConstTable, root: &Arc<ConstTable>) -> Heights {
+    fn heights(&mut self, def: &Definition, consts: ConstTable) -> Heights {
         let mut defaults = Vec::new();
-        // the library's defaults are written in format 0: in a format 1 tile
-        // their names are the context's `$` names
-        let dollar = root.is_dollar();
-        let rename = |e: &Expr| {
-            if dollar {
-                e.map_names(&mut |n| Some(Expr::Name(dt_doc::consts::dollar_of(n))))
-            } else {
-                e.clone()
-            }
-        };
         if let Some(f) = self.load(EDGES, None) {
             let dfrom = Provenance {
                 path: f.path.clone(),
                 src: Arc::clone(&f.src),
                 default: true,
             };
-            // written in format 1 they have their `$` names already
-            let old = dollar && f.doc.format() == 0;
             for d in &f.doc.defaults {
                 defaults.push(DefaultBody {
                     element: d.what.value.clone(),
-                    top: d.top.as_ref().map(|t| {
-                        (
-                            if old {
-                                rename(&t.value)
-                            } else {
-                                t.value.clone()
-                            },
-                            t.span,
-                        )
-                    }),
-                    pins: d.pins.iter().map(|p| pin_decl(p, &dfrom, old)).collect(),
+                    top: d.top.as_ref().map(|t| (t.value.clone(), t.span)),
+                    pins: d.pins.iter().map(|p| pin_decl(p, &dfrom)).collect(),
                     from: dfrom.clone(),
                 });
             }
@@ -1682,7 +1619,7 @@ impl Reader<'_> {
                                 src,
                                 Reads::At(&e.what.value),
                             );
-                            pins.push(pin_decl(p, &from, false));
+                            pins.push(pin_decl(p, &from));
                         }
                     } else if !dt_doc::words::takes_cloud_top(element.name)
                         && let Some(t) = &e.top
@@ -2335,18 +2272,11 @@ fn property_span(src: &Src, value: SourceSpan, name: &str) -> SourceSpan {
     }
 }
 
-/// A pin as the evaluator keeps it; `dollar` reads a format 0 library
-/// default's names as the `$` names of the context.
-fn pin_decl(p: &model::Pin, from: &Provenance, dollar: bool) -> PinDecl {
+/// A pin as the evaluator keeps it.
+fn pin_decl(p: &model::Pin, from: &Provenance) -> PinDecl {
     PinDecl {
         name: p.name.as_ref().map(|n| n.value.clone()),
-        top: if dollar {
-            p.top
-                .value
-                .map_names(&mut |n| Some(Expr::Name(dt_doc::consts::dollar_of(n))))
-        } else {
-            p.top.value.clone()
-        },
+        top: p.top.value.clone(),
         top_span: p.top.span,
         at: p.at.value.clone(),
         at_span: p.at.span,

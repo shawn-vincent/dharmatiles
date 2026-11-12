@@ -19,6 +19,7 @@ publish = false
 dt-geom = { path = "crates/dt-geom", default-features = false }
 dt-lang = { path = "crates/dt-lang" }
 dt-doc = { path = "crates/dt-doc" }
+dt-migrate = { path = "crates/dt-migrate" }
 dt-kit = { path = "crates/dt-kit", default-features = false }
 dt-elements = { path = "crates/dt-elements", default-features = false }
 dt-eval = { path = "crates/dt-eval", default-features = false }

@@ -6,8 +6,9 @@
 
 mod common;
 
-use dt_doc::migrate::format1::{Outcome, migrate, stamp};
+use dt_doc::header::stamp;
 use dt_doc::{DocError, Known, decode};
+use dt_migrate::format1::{Outcome, migrate};
 
 const VERSION: &str = "0.9.0+5.gabc1234";
 
@@ -308,7 +309,7 @@ fn a_printer_takes_printed_units() {
     assert!(out.contains(r#"gap      "0.2mm""#), "{out}");
     assert!(out.contains(r#"line     "0.45mm""#), "{out}");
     // the same numbers
-    let old = decode("old", &lib("printers/default.dtile"), &known()).unwrap();
+    let old = dt_migrate::old::decode("old", &lib("printers/default.dtile"), &known()).unwrap();
     let new = decode("new", &out, &known()).unwrap();
     let (a, b) = (old.printer.unwrap(), new.printer.unwrap());
     assert_eq!(

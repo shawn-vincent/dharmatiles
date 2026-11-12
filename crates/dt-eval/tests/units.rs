@@ -5,6 +5,8 @@
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 
+mod common;
+
 use dt_eval::coords::Coords;
 use dt_eval::regions::{Kind, RegionTree};
 use dt_eval::{Built, Checked, Diag, Memory, Options, build, check};
@@ -112,7 +114,13 @@ fn built(text: &str, opts: &Options) -> Built {
 /// 1 (`y` flipped, every size in `dmm`) must build the same mesh: the frame
 /// and `dmm` are exact.
 fn same_mesh(zero: &str, one: &str) {
-    let a = built(zero, &Options::default());
+    // the format 0 text, carried over as `dharmatiles migrate` carries it
+    let a = build(
+        &common::modern(&[("t.dtile", zero)]),
+        "t.dtile",
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{zero}\n{e:#?}"));
     let b = built(one, &preview());
     assert!(!a.stages.is_empty());
     assert_eq!(hashes(&a), hashes(&b), "{zero}\n{one}");

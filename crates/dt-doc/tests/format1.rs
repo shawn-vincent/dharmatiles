@@ -1,5 +1,5 @@
-//! Format 1 as dt-doc decodes it: read only when the reader is told to
-//! preview it (an explicit option, never the environment).
+//! Format 1 as dt-doc decodes it: `let` in any block and in a define,
+//! reserved words, `$` names.
 
 #![allow(clippy::unwrap_used)]
 
@@ -44,17 +44,6 @@ fn lets_work_in_any_block_and_in_a_define() {
 }
 
 #[test]
-fn a_part_has_no_let_in_format_zero() {
-    let e = decode(
-        "t.dtile",
-        "define lawn { let a 3\n stack { base } }\n",
-        &known(),
-    )
-    .unwrap_err();
-    assert_eq!(e[0].code, "dt::unknown-node");
-}
-
-#[test]
 fn words_and_names() {
     assert_eq!(codes(&tile("let high 3\n stack { base }")), ["dt::name"]);
     assert_eq!(
@@ -79,15 +68,4 @@ fn words_and_names() {
         codes(&tile("stack { base\n dirt top=\"$d\" }")),
         ["dt::type"]
     );
-}
-
-#[test]
-fn a_dollar_name_is_format_one() {
-    let e = decode(
-        "t.dtile",
-        "tile size=\"1x1\" { stack { base\n dirt top=\"$groundHeight\" } }\n",
-        &known(),
-    )
-    .unwrap_err();
-    assert_eq!(e[0].code, "dt::name");
 }

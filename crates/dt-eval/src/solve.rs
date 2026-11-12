@@ -1311,11 +1311,7 @@ pub fn solve(
     let calm_mm = match bodies.iter().find(|b| b.role == Role::Fluid) {
         None => None,
         Some(fluid) => {
-            let calm = if h.consts.is_dollar() {
-                "$waterSurfaceHeight"
-            } else {
-                "waterSurfaceHeight"
-            };
+            let calm = "$waterSurfaceHeight";
             match h
                 .consts
                 .scalar(&Expr::Name(calm.to_owned()), 0.5, &|_| None)

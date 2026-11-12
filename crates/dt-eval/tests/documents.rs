@@ -4,24 +4,18 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use dt_eval::{Diag, Library, Memory, Options, build, check};
 
-/// These tests write format 0 documents: built as written, not migrated as
-/// they load (that is `migrate.rs`'s business).
+/// These tests write their documents in the old form, carried to format 1
+/// by [`common::modern`] as `dharmatiles migrate` carries them.
 fn legacy() -> Options {
-    Options {
-        current_format: 0,
-        ..Options::default()
-    }
+    Options::default()
 }
 
 fn mem(files: &[(&str, &str)]) -> Memory {
-    Memory(
-        files
-            .iter()
-            .map(|(p, t)| ((*p).to_owned(), (*t).to_owned()))
-            .collect(),
-    )
+    common::modern(files)
 }
 
 fn errors(text: &str) -> Vec<Diag> {
@@ -41,14 +35,16 @@ fn rendered(d: &Diag) -> String {
 
 #[test]
 fn a_misspelt_look_points_at_its_line_with_a_hint() {
-    let e = errors("tile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n");
+    let e = errors(
+        "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n",
+    );
     assert_eq!(e.len(), 1);
-    assert_eq!(e[0].location(), Some(("t.dtile".into(), 3, 9)));
+    assert_eq!(e[0].location(), Some(("t.dtile".into(), 4, 9)));
     assert_eq!(e[0].help.as_deref(), Some("did you mean `dirt`?"));
     let r = rendered(&e[0]);
     assert!(
         r.contains("no element or definition is called `dirtt`")
-            && r.contains("3 │")
+            && r.contains("4 │")
             && r.contains("did you mean"),
         "{r}"
     );
@@ -58,21 +54,31 @@ fn a_misspelt_look_points_at_its_line_with_a_hint() {
 fn an_unknown_height_lists_the_heights() {
     let wobble = |v: &str| {
         format!(
-            "tile {{\n  line s wobble={v} {{ through \"0,0.5\" \"1,0.5\" }}\n  stack {{\n    dirt\n  }}\n}}\n"
+            "dharmatiles version=1\ntile size=\"1x1\" {{\n  line s wobble=\"{v}\" {{ through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }}\n  stack {{\n    dirt\n  }}\n}}\n"
         )
     };
-    let e = errors(&wobble("grundHeight"));
-    assert_eq!(e[0].location().unwrap().1, 2);
-    assert_eq!(e[0].help.as_deref(), Some("did you mean `groundHeight`?"));
-    let e = errors(&wobble("lava"));
-    assert!(e[0].help.as_deref().unwrap().contains("wallHeight"));
+    let e = errors(&wobble("$grundHeight"));
+    assert_eq!(e[0].location().unwrap().1, 3);
+    assert!(
+        e[0].help
+            .as_deref()
+            .unwrap()
+            .starts_with("did you mean `$groundHeight`?"),
+        "{:?}",
+        e[0].help
+    );
+    let e = errors(&wobble("$lava"));
+    assert_eq!(e[0].code, "dt::unknown-name");
+    assert!(e[0].help.as_deref().unwrap().contains("heights"), "{e:?}");
 }
 
 #[test]
 fn an_unknown_control_names_the_ones_there_are() {
-    let e = errors("tile {\n  stack {\n    dirt bump-siz=3\n  }\n}\n");
+    let e = errors(
+        "dharmatiles version=1\ntile size=\"1x1\" {\n  stack {\n    dirt bump-siz=3\n  }\n}\n",
+    );
     assert_eq!(e[0].code, "dt::unknown-control");
-    assert_eq!(e[0].location().unwrap().1, 3);
+    assert_eq!(e[0].location().unwrap().1, 4);
     assert!(
         e[0].help.as_deref().unwrap().contains("bumpSize"),
         "{:?}",
@@ -82,7 +88,7 @@ fn an_unknown_control_names_the_ones_there_are() {
 
 #[test]
 fn a_control_not_built_yet_is_checked_but_not_built() {
-    let text = "tile {\n  stack {\n    rock wear=worn\n  }\n}\n";
+    let text = "tile size=\"1x1\" {\n  stack {\n    rock wear=worn\n  }\n}\n";
     let src = mem(&[("t.dtile", text)]);
     let c = check(&src, "t.dtile", &legacy()).unwrap();
     assert_eq!(c.pending().len(), 1); // `wear`
@@ -142,25 +148,25 @@ fn a_parts_file_checks_but_does_not_build() {
 
 #[test]
 fn use_paths_name_the_library_or_the_project() {
-    let raised = "define raised { stack { rock size=10 at=\"0.5,0.5\" } }\n";
+    let raised = "dharmatiles version=1\ndefine raised { stack { rock size=\"10dmm\" at=\"(0.5sq, 0.5sq)\" } }\n";
     let src = mem(&[
         ("lib:parts/raised.dtile", raised),
         ("proj/parts/raised.dtile", raised),
         (
             "proj/tiles/a.dtile",
-            "use \"parts/raised\" raised\ntile { stack { raised } }\n",
+            "dharmatiles version=1\nuse \"parts/raised\" raised\ntile size=\"1x1\" { stack { raised } }\n",
         ),
         (
             "proj/tiles/b.dtile",
-            "use \"lib:parts/raised\" raised\ntile { stack { raised } }\n",
+            "dharmatiles version=1\nuse \"lib:parts/raised\" raised\ntile size=\"1x1\" { stack { raised } }\n",
         ),
         (
             "proj/tiles/c.dtile",
-            "use \"../parts/raised\" raised\ntile { stack { raised } }\n",
+            "dharmatiles version=1\nuse \"../parts/raised\" raised\ntile size=\"1x1\" { stack { raised } }\n",
         ),
         (
             "proj/tiles/d.dtile",
-            "use \"./raised\" raised\ntile { stack { raised } }\n",
+            "dharmatiles version=1\nuse \"./raised\" raised\ntile size=\"1x1\" { stack { raised } }\n",
         ),
     ]);
     for (path, from) in [
@@ -172,7 +178,7 @@ fn use_paths_name_the_library_or_the_project() {
         assert_eq!(t.stack[0].src.name(), from, "{path}");
     }
     let e = check(&src, "proj/tiles/d.dtile", &legacy()).err().unwrap();
-    assert_eq!(e[0].location().unwrap().1, 1);
+    assert_eq!(e[0].location().unwrap().1, 2);
     assert!(
         e[0].message.contains("proj/tiles/raised.dtile"),
         "{}",
@@ -184,7 +190,7 @@ fn use_paths_name_the_library_or_the_project() {
 fn definition_parameters_take_arguments_and_defaults() {
     let src = mem(&[(
         "t.dtile",
-        "define sized {\n  param by 8\n  stack { rock size=by }\n}\ntile {\n  stack { dirt; sized by=6 }\n}\n",
+        "define sized {\n  param by 8\n  stack { rock size=by }\n}\ntile size=\"1x1\" {\n  stack { dirt; sized by=6 }\n}\n",
     )]);
     let t = check(&src, "t.dtile", &legacy()).unwrap().tile.unwrap();
     assert_eq!(
@@ -195,14 +201,14 @@ fn definition_parameters_take_arguments_and_defaults() {
 
 #[test]
 fn kdl_syntax_errors_carry_their_place() {
-    let e = errors("tile {\n  stack {\n    dirt top=5mm\n  }\n}\n");
+    let e = errors("tile size=\"1x1\" {\n  stack {\n    dirt top=5mm\n  }\n}\n");
     assert_eq!(e[0].location().unwrap().1, 3);
     assert!(e[0].help.is_some());
 }
 
 #[test]
 fn a_bad_import_points_at_the_use_line() {
-    let e = errors("use \"lib:parts/nothing\" lawn\ntile { stack { dirt } }\n");
+    let e = errors("use \"lib:parts/nothing\" lawn\ntile size=\"1x1\" { stack { dirt } }\n");
     assert_eq!(e[0].location().unwrap().1, 1);
     assert!(e[0].message.contains("nothing.dtile"));
 }
@@ -212,11 +218,11 @@ fn imports_inline_definitions_and_lets_resolve() {
     let src = mem(&[
         (
             "parts/flats.dtile",
-            "define raised { stack { rock size=10 at=\"0.5,0.5\" } }\n",
+            "dharmatiles version=1\ndefine raised { stack { rock size=\"10dmm\" at=\"(0.5sq, 0.5sq)\" } }\n",
         ),
         (
             "tiles/t.dtile",
-            "use \"../parts/flats\" raised\ntile { let foot 4; stack { dirt; raised } }\n",
+            "dharmatiles version=1\nuse \"../parts/flats\" raised\ntile size=\"1x1\" { let foot \"4dmm\"; stack { dirt; raised } }\n",
         ),
     ]);
     let c = check(&src, "tiles/t.dtile", &legacy()).unwrap();
@@ -287,10 +293,10 @@ fn a_line_and_two_regions_make_a_step() {
 #[test]
 fn an_unknown_region_is_refused() {
     let e = errors(
-        "tile {\n  line across { through west east }\n  region a { boundedBy across; fill \"0.5,0.25\" }\n  stack {\n    dirt at=b\n  }\n}\n",
+        "dharmatiles version=1\ntile size=\"1x1\" {\n  line across { through west east }\n  region a { boundedBy across; fill \"(0.5sq, 0.75sq)\" }\n  stack {\n    dirt at=b\n  }\n}\n",
     );
     assert_eq!(e[0].code, "dt::place");
-    assert_eq!(e[0].location().unwrap().1, 5);
+    assert_eq!(e[0].location().unwrap().1, 6);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `a`?"));
 }
 
@@ -346,9 +352,16 @@ fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
     let ok = on_a_line("scatter at=road count=3 { tree top=\"bottom + 24\" }");
     let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &legacy()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
-    let e = errors(&on_a_line("tree at=road"));
-    assert_eq!(e[0].code, "dt::type");
-    assert!(e[0].help.as_deref().unwrap().contains("scatter at=<line>"));
+    let text = on_a_line("tree at=road").replace(
+        "\"0.1,0.5\" \"1.9,0.5\"",
+        "\"(0.1sq, 0.5sq)\" \"(1.9sq, 0.5sq)\"",
+    );
+    let e = errors(&format!("dharmatiles version=1; {text}"));
+    assert_eq!(e[0].code, "dt::type", "{e:?}");
+    assert!(
+        e[0].help.as_deref().unwrap().contains("scatter at=<line>"),
+        "{e:?}"
+    );
 }
 
 #[test]
@@ -540,10 +553,13 @@ fn a_surface_along_a_tile_edge_points_to_a_region() {
 
 #[test]
 fn a_width_is_a_length_above_zero() {
-    for w in ["0", "-3", "90"] {
-        let e = errors(&tile_with(&format!(
-            "line trail width={w} {{ through southCenter northCenter }}\n stack {{\n dirt\n }}"
-        )));
+    for w in ["0dmm", "-3dmm", "90dmm"] {
+        let e = errors(&format!(
+            "dharmatiles version=1; {}",
+            tile_with(&format!(
+                "line trail width=\"{w}\" {{ through southCenter northCenter }}\n stack {{\n dirt\n }}"
+            ))
+        ));
         assert!(
             ["dt::value", "dt::range"].contains(&e[0].code),
             "{w}: {}",
@@ -596,8 +612,9 @@ fn a_scatter_holds_a_definition_of_one_thing() {
 
 #[test]
 fn a_scattered_thing_takes_no_place_word_of_its_own() {
-    let e = errors(&tile_with(
-        "stack {\n base\n dirt\n scatter count=3 { rock at=center }\n }",
+    let e = errors(&format!(
+        "dharmatiles version=1; {}",
+        tile_with("stack {\n base\n dirt\n scatter count=3 { rock at=center }\n }")
     ));
     assert!(e.iter().any(|d| d.code == "dt::place"), "{e:?}");
 }

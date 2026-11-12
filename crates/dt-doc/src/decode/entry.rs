@@ -75,17 +75,15 @@ impl Decoder<'_> {
         // format 1: the block's own `let`s and `override`s, for what is in it
         let mut block_ctx: Option<Ctx> = None;
         self.stack_consts.clear();
-        if self.format1 {
-            for n in kids.nodes().iter().filter(|n| is_const_node(n)) {
-                let c = block_ctx.get_or_insert_with(|| ctx.clone());
-                if let Some(k) = self.const_node(n, c, &[]) {
-                    self.stack_consts.push(k);
-                }
+        for n in kids.nodes().iter().filter(|n| is_const_node(n)) {
+            let c = block_ctx.get_or_insert_with(|| ctx.clone());
+            if let Some(k) = self.const_node(n, c, &[]) {
+                self.stack_consts.push(k);
             }
         }
         let ctx = block_ctx.as_ref().unwrap_or(ctx);
         for (n, step) in kids.nodes().iter().zip(steps) {
-            if self.format1 && is_const_node(n) {
+            if is_const_node(n) {
                 continue;
             }
             if n.name().value() == "base" {
@@ -233,17 +231,15 @@ impl Decoder<'_> {
         let steps = step_names(kids);
         // format 1: the block's own `let`s and `override`s, for what is in it
         let mut block_ctx: Option<Ctx> = None;
-        if self.format1 {
-            for c in kids.iter().filter(|c| is_const_node(c)) {
-                let b = block_ctx.get_or_insert_with(|| ctx.clone());
-                if let Some(k) = self.const_node(c, b, &[]) {
-                    entry.consts.push(k);
-                }
+        for c in kids.iter().filter(|c| is_const_node(c)) {
+            let b = block_ctx.get_or_insert_with(|| ctx.clone());
+            if let Some(k) = self.const_node(c, b, &[]) {
+                entry.consts.push(k);
             }
         }
         let ctx = block_ctx.as_ref().unwrap_or(ctx);
         for (c, step) in kids.iter().zip(steps) {
-            if self.format1 && is_const_node(c) {
+            if is_const_node(c) {
                 continue;
             }
             if self.heights_child(&mut entry, c, ctx) {
@@ -278,12 +274,8 @@ impl Decoder<'_> {
                         "a second value",
                     )
                     .help = Some(
-                        if self.format1 {
-                            "ranges are quoted: \"1dmm .. 6dmm\"; points too: \"(1sq, 1sq)\""
-                        } else {
-                            "ranges are quoted: \"1..6\"; points too: \"1,1\""
-                        }
-                        .to_owned(),
+                        "ranges are quoted: \"1dmm .. 6dmm\"; points too: \"(1sq, 1sq)\""
+                            .to_owned(),
                     );
                 }
                 let props: Vec<KdlEntry> = props.into_iter().cloned().collect();
@@ -342,7 +334,7 @@ impl Decoder<'_> {
             }
         }
 
-        self.check_entry(&mut entry, ctx, parent);
+        self.check_entry(&mut entry, ctx);
         Some(entry)
     }
 
@@ -847,7 +839,7 @@ impl Decoder<'_> {
 
     /// Checks across one entry's place words, controls and children.
     #[allow(clippy::too_many_lines)]
-    fn check_entry(&mut self, entry: &mut Entry, ctx: &Ctx, parent: Parent) {
+    fn check_entry(&mut self, entry: &mut Entry, ctx: &Ctx) {
         let owner = entry.what.value.clone();
         let span = entry.what.span;
         let element = entry.element();
@@ -927,7 +919,6 @@ impl Decoder<'_> {
         if element.is_some_and(|l| l.role == Role::Scatter) {
             self.check_scatter(entry);
         }
-        let _ = (ctx, parent);
         entry.kind = match (&entry.callee, element) {
             (_, Some(l)) if l.role == Role::Scatter => {
                 Kind::of(entry.children.iter().map(|c| c.kind))

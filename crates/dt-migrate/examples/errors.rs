@@ -1,5 +1,5 @@
 //! Print the deliberate-mistake reports, as an author would see them.
-//! `cargo run -p dt-doc --example errors`
+//! `cargo run -p dt-migrate --example errors`
 
 #[path = "../tests/common/mod.rs"]
 mod common;

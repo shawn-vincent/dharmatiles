@@ -215,7 +215,7 @@ fn control_json(takes: Taken, path: &str, c: &Control) -> Value {
         "takes": c.takes(),
         "default": (!c.default.is_empty()).then_some(c.default),
         // as a format 1 document writes it (a length with its unit)
-        "default1": (!c.default.is_empty()).then(|| c.default_in(true)),
+        "default1": (!c.default.is_empty()).then(|| c.default_written()),
         "required": c.required,
         "expert": c.expert,
         "taken": taken,
@@ -322,7 +322,7 @@ fn rows(
     out.push(Row {
         name: format!("{indent}{}{eq}", c.name),
         kind,
-        default: c.default_in(true),
+        default: c.default_written(),
         about,
         words: c.words,
     });

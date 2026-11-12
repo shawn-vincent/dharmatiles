@@ -32,10 +32,10 @@ use kdl::{KdlDocument, KdlNode};
 use miette::{NamedSource, SourceSpan};
 
 use self::walk::Walk;
-use crate::decode::{decode, syntax, uses, value_span};
-use crate::error::{DocError, Src};
-use crate::known::{DefInfo, Known};
-use crate::model::DefKind;
+use crate::old::{decode, syntax, uses, value_span};
+use dt_doc::error::{DocError, Src};
+use dt_doc::known::{DefInfo, Known};
+use dt_doc::model::DefKind;
 
 /// The format this migration produces.
 pub const TARGET: u32 = 1;
@@ -59,25 +59,6 @@ pub struct Migration {
     pub from: u32,
     /// True when the document had no header.
     pub unstamped: bool,
-}
-
-/// The version a migrated document is stamped with: the program's own
-/// when its major is the format, else the format's first release with the
-/// program's build details (a program before 1.0.0 writes format 1 with its own
-/// build details).
-#[must_use]
-pub fn stamp(app_version: &str) -> String {
-    let major: Option<u32> = app_version
-        .split(['.', '+'])
-        .next()
-        .and_then(|m| m.parse().ok());
-    if major == Some(TARGET) {
-        return app_version.to_owned();
-    }
-    match app_version.split_once('+') {
-        Some((_, build)) => format!("{TARGET}.0.0+{build}"),
-        None => format!("{TARGET}.0.0"),
-    }
 }
 
 fn err(
@@ -144,7 +125,7 @@ fn defs_of(
     name: &str,
     text: &str,
     known: &Known,
-    doc: &crate::model::Document,
+    doc: &dt_doc::model::Document,
 ) -> HashMap<String, DefInfo> {
     let mut defs = HashMap::new();
     if let Ok(us) = uses(name, text) {
@@ -188,11 +169,11 @@ fn header_edit(
     src: &Src,
     app_version: &str,
 ) -> Result<walk::Edit, Vec<DocError>> {
-    let version = stamp(app_version);
+    let version = dt_doc::header::stamp(app_version);
     match kdl
         .nodes()
         .iter()
-        .find(|n| n.name().value() == crate::header::NODE)
+        .find(|n| n.name().value() == dt_doc::header::NODE)
     {
         Some(h) => {
             let Some(e) = h.entry("version") else {
@@ -253,7 +234,7 @@ pub fn migrate(
         Ok(d) => d,
         Err(e) => return Err(syntax::syntax_errors(&src, text, &e)),
     };
-    let (header, header_errors) = crate::header::read(&src, &kdl);
+    let (header, header_errors) = dt_doc::header::read(&src, &kdl);
     if !header_errors.is_empty() {
         return Err(header_errors);
     }

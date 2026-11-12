@@ -5,7 +5,6 @@
 //   api.elements()                  the element schema
 //   api.defs()                      the document's own definitions
 //   api.sq()                        mm per square; api.size() [cols, rows]
-//   api.format()                    the document's language format (points are written by it: points.js)
 //   api.map()                       the map (lines, regions) of the text now
 //   api.writable()                  may the file be changed? (else api.offerMine())
 //   api.insert(place, node)         write `node` into the stack or the tile's body
@@ -43,8 +42,8 @@ export function snap(q, [cols, rows]) {
   if (near(y, 0, EDGE)) y = 0; else if (near(y, rows, EDGE)) y = rows;
   return { q: [Math.min(cols, Math.max(0, x)), Math.min(rows, Math.max(0, y))], word: null };
 }
-/** A snapped point as written: its word, else a pair in the document's format. */
-const written = (s, rows, format) => s.word || pointText(s.q, rows, format);
+/** A snapped point as written: its word, else a pair. */
+const written = (s, rows) => s.word || pointText(s.q, rows);
 
 /** The nearest tile edge's word to `q`. */
 function edgeOf([x, y], [cols, rows]) {
@@ -267,7 +266,7 @@ export class Tools {
     const node = (more) => [t.name, t.extra, more].filter(Boolean).join(' ');
     const size = this.api.size();
     if (t.kind === 'place') {
-      const at = placeText(p.q, size[1], this.api.format?.() ?? 0);
+      const at = placeText(p.q, size[1]);
       await this.api.insert('stack', node(at));
       this.paint();
     } else if (t.kind === 'scatter') {
@@ -293,7 +292,7 @@ export class Tools {
       if (!lines.length) { this.api.note('Draw a line first: a region is an area the lines enclose'); return; }
       const name = fresh('area-1', (this.api.map()?.regions || []).map((r) => r.name));
       this.stop();
-      const fill = pointText(p.q, size[1], this.api.format?.() ?? 0);
+      const fill = pointText(p.q, size[1]);
       await this.api.insert('tile', `region ${name} { boundedBy ${lines.join(' ')}; fill ${fill} }`, { select: { kind: 'region', id: name } });
     }
   }
@@ -301,8 +300,8 @@ export class Tools {
   async endLine() {
     const t = this.tool;
     // a double-click's two clicks put the last point down twice
-    const [f, rows] = [this.api.format?.() ?? 0, this.api.size()[1]];
-    const w = (p) => written(p, rows, f);
+    const rows = this.api.size()[1];
+    const w = (p) => written(p, rows);
     const pts = t.points.filter((p, i) => i === 0 || w(p) !== w(t.points[i - 1]));
     if (pts.length < 2) { this.api.note('A line needs two points at least'); return; }
     const name = fresh(t.extra && !t.extra.includes('=') ? t.extra.split(/\s+/)[0] : 'line-1', (this.api.map()?.lines || []).map((l) => l.name));
@@ -326,8 +325,8 @@ export class Tools {
     const p = this.at(x, y, d.z);
     if (!p) return;
     const s = d.h.snap ? snap(p.q, this.api.size()) : { q: p.q, word: null };
-    const [f, rows] = [this.api.format?.() ?? 0, this.api.size()[1]];
-    const text = d.h.snap ? written(s, rows, f) : pointText(s.q, rows, f);
+    const rows = this.api.size()[1];
+    const text = d.h.snap ? written(s, rows) : pointText(s.q, rows);
     if (text === d.text) return;
     d.text = text;
     d.moved = true;
@@ -354,7 +353,7 @@ export class Tools {
       const size = this.api.size();
       if (t.kind === 'place') {
         s.ring = { q: h.q, r: this.footprint() };
-        s.label = { q: h.q, text: pointLabel(h.q, size[1], this.api.format?.() ?? 0) };
+        s.label = { q: h.q, text: pointLabel(h.q, size[1]) };
       } else if (t.kind === 'scatter') {
         s.selRegion = this.overlay.regionAt(this.press?.q || h.q);
         if (this.press?.moved) s.box = [this.press.q, h.q];
@@ -368,7 +367,7 @@ export class Tools {
         const now = snap(h.q, size);
         s.path = [...t.points.map((p) => p.q), now.q];
         s.handles = [...s.handles, ...t.points.map((p) => ({ q: p.q })), { q: now.q, hot: true }];
-        s.label = { q: now.q, text: now.word || pointLabel(now.q, size[1], this.api.format?.() ?? 0) };
+        s.label = { q: now.q, text: now.word || pointLabel(now.q, size[1]) };
       } else if (t.kind === 'region') {
         s.ring = { q: h.q, r: 2 };
         s.label = { q: h.q, text: 'fill here' };

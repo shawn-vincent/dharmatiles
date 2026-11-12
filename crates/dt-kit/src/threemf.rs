@@ -215,13 +215,12 @@ pub fn threemf(
     x.push_str("<model unit=\"millimeter\" xml:lang=\"en-US\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\" xmlns:slic3rpe=\"http://schemas.slic3r.org/3mf/2017/06\">\n");
     let _ = writeln!(
         x,
-        " <metadata name=\"Application\">dharmatiles {}</metadata>\n <metadata name=\"Title\">{}</metadata>\n <metadata name=\"Description\">system {}, seed {}, document {:016x}{}</metadata>",
+        " <metadata name=\"Application\">dharmatiles {}</metadata>\n <metadata name=\"Title\">{}</metadata>\n <metadata name=\"Description\">system {}, seed {}, document {:016x}</metadata>",
         escape(&record.engine),
         escape(&record.document),
         escape(&record.target()),
         record.seed,
-        record.document_hash,
-        escape(&record.origin())
+        record.document_hash
     );
     let list: Vec<String> = filaments
         .iter()
@@ -468,7 +467,6 @@ mod tests {
             seed: 2,
             system: "db".into(),
             printer: "default".into(),
-            read_from: None,
         };
         let z = threemf(&mesh, &mats, &rec, &Palette::default());
         assert_eq!(&z[..4], b"PK\x03\x04");

@@ -90,7 +90,7 @@ function clearDocument() {
   texts.clear();
   loadKey = null;
   run.history = []; run.at = -1; run.lastKind = null;
-  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, names: null, format: 0, migrated: null, conflict: null, note: null });
+  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null });
   renderHistory();
 }
 function record(text, kind, label = null) {
@@ -153,18 +153,6 @@ export const askDraft = () => drafter.ask();
 /** A full build of the text now is on the page: a draft still on its way is dropped. */
 export function supersedeDrafts() { if (!dirty()) drafter.supersede(); }
 
-/** "Update this file": the text carried to the newest format (by the program's own migration), as an edit that saves like any other. */
-async function updateFile() {
-  const t = tile(), d = doc.get();
-  if (!t || d.text == null || !d.writable) return;
-  try {
-    const r = await host.migrate(t.id, { text: d.text, file: d.file === t.path ? undefined : d.file });
-    if (failed(`Could not update ${stem(t)}`, r)) return;
-    if (r.body?.ok && typeof r.body.text === 'string') edited(r.body.text, 'update');
-    else doc.set({ note: r.body?.errors?.[0]?.message || 'could not update this file: it needs a hand fix', ok: false, errors: r.body?.errors || [] });
-  } catch (e) { showError(`Could not update ${stem(t)}`, e); }
-}
-
 /** Replace bytes [start, start+len) of the text; `end` (the scrub is over) makes it a step of history and a save. */
 export function replaceBytes(start, len, text, end) {
   const t = doc.get().text;
@@ -225,8 +213,6 @@ async function check() {
   const patch = { note: null, checked: text, checkedFile: d.file, checkedTile: d.tileId, ok: !!r.body.ok, errors: r.body.errors || [] };
   if (r.body.ok && r.body.stack) patch.stack = r.body.stack; // the last good stack stays while there are mistakes
   if (r.body.ok && r.body.map) patch.map = r.body.map;
-  if (typeof r.body.format === 'number') patch.format = r.body.format; // known even while there are mistakes
-  if (r.body.ok) patch.migrated = (r.body.migrated || []).find((m) => m.path === d.file)?.from ?? null;
   doc.set(patch);
   return true;
 }
@@ -326,7 +312,7 @@ export async function loadText(file) {
         tileId: t.id, file: v.file, text: v.text, base: v.text, writable: v.writable,
         conflict: null, note: null,
         checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
-        ...(fresh ? { map: null, names: null, format: 0 } : {}),
+        ...(fresh ? { map: null, names: null } : {}),
       });
       if (fresh && carried && carried.history[carried.at]?.text === v.text) {
         run.history = carried.history; run.at = carried.at; renderHistory(); // a rename keeps its undo
@@ -374,10 +360,7 @@ function renderTextBar() {
     st.append(button('take the disk’s', () => { const disk = d.conflict; doc.set({ conflict: null, base: disk }); edited(disk, 'disk'); }), ' or ',
       button('keep mine', () => { doc.set({ base: d.conflict, conflict: null }); changed(); }));
   } else if (d.note) st.textContent = d.note;
-  else if (d.migrated != null && d.writable && !dirty()) {
-    // an older format read as the newest in memory: the file is as it was until this
-    st.append(`format ${d.migrated}, read as the newest · `, button('Update this file', () => updateFile()));
-  } else if (f) st.textContent = d.saving ? 'saving…' : !dirty() ? 'saved' : !live ? 'not saved yet: waiting for dharmatiles preview' : d.checked === d.text && !d.ok ? 'not saved: a mistake' : 'editing…';
+  else if (f) st.textContent = d.saving ? 'saving…' : !dirty() ? 'saved' : !live ? 'not saved yet: waiting for dharmatiles preview' : d.checked === d.text && !d.ok ? 'not saved: a mistake' : 'editing…';
   // the first mistake, in words, under the text
   const hint = $('codehint');
   const e = d.checked === d.text && !d.ok ? d.errors.find((x) => !x.file || x.file === f) || d.errors[0] : null;
@@ -398,7 +381,7 @@ const comp = { s: null, i: 0 };
 function openComp(force) {
   const elements = server.get().elements;
   if (!doc.get().writable || !elements.length) return closeComp();
-  const s = suggest(texts.caret(), elements, force, doc.get().format >= 1 ? doc.get().map?.language : null, doc.get().names ?? undefined);
+  const s = suggest(texts.caret(), elements, force, doc.get().map?.language, doc.get().names ?? undefined);
   if (!s) return closeComp();
   comp.s = s; comp.i = 0;
   renderComp();

@@ -1,0 +1,21 @@
+[package]
+name = "dt-migrate"
+description = "dharmatiles migrate: documents from format 0 to format 1, text to text (the only code that reads format 0)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# No geometry crate: the migration reads and writes text.
+[dependencies]
+dt-doc.workspace = true
+kdl.workspace = true
+miette.workspace = true
+
+[dev-dependencies]
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
+
+[lints]
+workspace = true

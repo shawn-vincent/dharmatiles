@@ -364,6 +364,7 @@ dependencies = [
  "dt-eval",
  "dt-kit",
  "dt-lang",
+ "dt-migrate",
  "kdl",
  "libm",
  "miette",
@@ -414,6 +415,7 @@ dependencies = [
  "dt-elements",
  "dt-geom",
  "dt-kit",
+ "dt-migrate",
  "insta",
  "kdl",
  "miette",
@@ -451,6 +453,15 @@ dependencies = [
 [[package]]
 name = "dt-lang"
 version = "1.0.0"
+
+[[package]]
+name = "dt-migrate"
+version = "1.0.0"
+dependencies = [
+ "dt-doc",
+ "kdl",
+ "miette",
+]
 
 [[package]]
 name = "either"

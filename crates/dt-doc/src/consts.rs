@@ -57,10 +57,6 @@ pub struct ConstTable {
     entries: Vec<Entry>,
     index: HashMap<String, usize>,
     overridden: Vec<Overridden>,
-    /// Format 1: the table is a context of `$` names (and the plain names
-    /// of the scopes written in it), made by [`ConstTable::root`] and
-    /// [`ConstTable::enter`].
-    dollar: bool,
 }
 
 /// What is wrong with a `let` or an `override` entering a scope.
@@ -134,109 +130,29 @@ fn depth0() -> usize {
     0
 }
 
-/// `name` as the context knows it: `groundHeight` is `$groundHeight`, and
-/// the format 0 positions `x`, `y` and `bottom` are `$x`, `$y`, `$bottom`.
-#[must_use]
-pub fn dollar_of(name: &str) -> String {
-    format!("${name}")
-}
-
 /// An expression as text, for notes.
 fn show(e: &Expr) -> String {
     e.to_string()
 }
 
 impl ConstTable {
-    /// The library's constants, then the tile's `let`s, then its `override`s
-    /// (replacing in place; an override reads the table as it stands).
-    #[must_use]
-    pub fn build(library: &[Const], tile: &[Const]) -> Self {
-        let mut t = Self::default();
-        for c in library {
-            t.push(c, Origin::Library, None);
-        }
-        for c in tile {
-            match c.kind {
-                ConstKind::Let => t.push(c, Origin::Tile, Some(c.span)),
-                ConstKind::Override => {
-                    if let Some(&i) = t.index.get(&c.name.value) {
-                        t.overridden.push(Overridden {
-                            name: c.name.value.clone(),
-                            from: show(&t.entries[i].expr),
-                            to: show(&c.value.value),
-                            span: c.span,
-                        });
-                        t.entries[i] = Entry {
-                            name: c.name.value.clone(),
-                            expr: c.value.value.clone(),
-                            dim: c.dim,
-                            origin: Origin::Override,
-                            text: show(&c.value.value),
-                            span: Some(c.span),
-                        };
-                    }
-                }
-            }
-        }
-        t
-    }
-
-    fn push(&mut self, c: &Const, origin: Origin, span: Option<SourceSpan>) {
-        self.index.insert(c.name.value.clone(), self.entries.len());
-        self.entries.push(Entry {
-            name: c.name.value.clone(),
-            expr: c.value.value.clone(),
-            dim: c.dim,
-            origin,
-            text: show(&c.value.value),
-            span,
-        });
-    }
-
-    /// Format 1: the context at the root, the library's heights as `$`
-    /// names (their formulas read `$x` and the like in place of format 0's
-    /// `x`, and each other as `$` names).
+    /// The context at the root: the library's heights as `$` names (each
+    /// written with its `$`, and reading `$x` and the like).
     #[must_use]
     pub fn root(library: &[Const]) -> Self {
-        let mut t = Self {
-            dollar: true,
-            ..Self::default()
-        };
+        let mut t = Self::default();
         for c in library {
-            // a library written in format 1 already has its `$` names, and
-            // its `$y` is format 1's; one written in format 0 gains them
-            let own = c.name.value.starts_with('$');
-            let name = if own {
-                c.name.value.clone()
-            } else {
-                dollar_of(&c.name.value)
-            };
-            t.index.insert(name.clone(), t.entries.len());
-            // a format 0 library's heights are written in the geometry's own
-            // frame (`y` running north), so its `y` is not format 1's `$y`
-            let expr = if own {
-                c.value.value.clone()
-            } else {
-                c.value
-                    .value
-                    .map_names(&mut |n| (n != "y").then(|| Expr::Name(dollar_of(n))))
-            };
+            t.index.insert(c.name.value.clone(), t.entries.len());
             t.entries.push(Entry {
-                text: show(&expr),
-                name,
-                expr,
+                text: show(&c.value.value),
+                name: c.name.value.clone(),
+                expr: c.value.value.clone(),
                 dim: c.dim,
                 origin: Origin::Library,
                 span: None,
             });
         }
         t
-    }
-
-    /// True for a format 1 context.
-    #[must_use]
-    pub fn is_dollar(&self) -> bool {
-        self.dollar
     }
 
     /// The scope a block makes: this context with the block's `let`s and
@@ -591,7 +507,7 @@ mod tests {
     use super::*;
     use crate::{Known, decode};
 
-    const HEIGHTS: &str = include_str!("../tests/fixtures/library0/parts/heights.dtile");
+    const HEIGHTS: &str = include_str!("../../../library/parts/heights.dtile");
 
     fn standard() -> Known {
         let mut k = Known::new();
@@ -606,25 +522,17 @@ mod tests {
     }
 
     #[test]
-    fn override_moves_what_reads_it() {
+    fn an_override_in_a_scope_replaces_the_library_height_and_is_recorded() {
         let k = standard();
-        let mine =
-            tile_consts("tile { let a 2\n override waterSurfaceHeight 3.2\n stack { dirt } }");
-        let t = ConstTable::build(k.consts(), &mine);
-        let vars = |n: &str| match n {
-            "x" | "y" => Some(0.0),
-            _ => None,
-        };
-        let e = &t.get("waterEdgeHeight").unwrap().expr;
-        // 3.2 + 0.6 * cos(0)
-        assert!((t.scalar(e, 0.0, &vars).unwrap() - 3.8).abs() < 1e-12);
-        assert_eq!(t.overridden().len(), 1);
-        assert_eq!(t.overridden()[0].from, "2.6");
-        assert_eq!(t.get("a").unwrap().origin, Origin::Tile);
-        assert_eq!(t.get("groundHeight").unwrap().origin, Origin::Library);
-        assert_eq!(
-            t.get("waterSurfaceHeight").unwrap().origin,
-            Origin::Override
+        let root = ConstTable::root(k.consts());
+        let mine = tile_consts(
+            "dharmatiles version=1\ntile size=\"1x1\" { let pad \"2dmm\"\n override $groundHeight \"3dmm\"\n stack { dirt } }",
         );
+        let (t, errors) = root.enter(&mine);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(t.overridden().len(), 1);
+        assert_eq!(t.get("pad").unwrap().origin, Origin::Tile);
+        assert_eq!(t.get("$groundHeight").unwrap().origin, Origin::Override);
+        assert_eq!(root.get("$groundHeight").unwrap().origin, Origin::Library);
     }
 }

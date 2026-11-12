@@ -25,7 +25,7 @@ pub struct DocError {
 }
 
 impl DocError {
-    pub(crate) fn new(
+    pub fn new(
         src: &Src,
         code: &'static str,
         span: SourceSpan,
@@ -48,7 +48,7 @@ impl DocError {
         &self.src
     }
 
-    pub(crate) fn maybe_help(mut self, help: Option<String>) -> Self {
+    pub fn maybe_help(mut self, help: Option<String>) -> Self {
         self.help = help;
         self
     }

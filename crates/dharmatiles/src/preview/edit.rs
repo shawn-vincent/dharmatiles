@@ -21,10 +21,6 @@
 //!   `text` in place of its document (or of `file`, one it uses): the
 //!   errors, the stack and the map (see `map`), under a second, for the
 //!   text pane and the overlay as you type.
-//! - `/api/tiles/ID/migrate` `{text, file?}`: the text carried to the
-//!   format this program writes, for the page's "Update this file" (a
-//!   file the program migrated in memory as it read it); `{ok, text}`, or
-//!   `{ok: false, errors}` where a hand fix is needed.  Nothing is written.
 //! - `/api/tiles/ID/save` `{text, base, file?}`: write the document (or a
 //!   file it uses) when what is on disk is still `base`; else `409` with
 //!   what is there.  Library files are never written.  The worker sees the
@@ -129,7 +125,6 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     };
     match what {
         "check" => check(shared, &tile, &file, &v).into(),
-        "migrate" => migrate(shared, &file, &v).into(),
         "save" => save(&file, &v).into(),
         "mine" => mine(shared, &tile, &files).into(),
         "rename" => rename(shared, &tile, &v).into(),
@@ -389,7 +384,7 @@ fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
         Err(e) => return e,
     };
     // a new document is written in the current format, with its header
-    let version = dt_doc::migrate::format1::stamp(env!("DT_ENGINE_VERSION"));
+    let version = dt_doc::header::stamp(env!("DT_ENGINE_VERSION"));
     let text = format!(
         "dharmatiles version=\"{version}\"\n\ntile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        base\n        dirt\n    }}\n}}\n"
     );
@@ -443,18 +438,16 @@ fn check_value(shared: &Shared, v: &Value) -> (&'static str, Value) {
     };
     // a control the schema does not know (the tile's own, a line's) has
     // nothing to check against here
-    // `format` is the format of the document the value is typed into; a
-    // format 1 value is read with units, as the reader reads one
+    // a value is read with units, as the reader reads one
     let opts = shared.options();
-    let format1 = v["format"].as_u64().is_some_and(|f| f >= 1);
     let flaw = dt_doc::schema::element(element)
         .and_then(|e| e.control(control))
-        .and_then(|c| dt_doc::decode::check_text_in(c, element, typed, format1, opts.units()));
+        .and_then(|c| dt_doc::decode::check_text_in(c, element, typed, opts.units()));
     // the reader's check first; then the weighting's numbers against their
     // limits, which the reader only meets when the value is lowered
     let body = match flaw {
         Some(r) => json!({ "message": r.message, "label": r.label, "help": r.help }),
-        None => match dt_eval::weighting_flaw_in(typed, format1, opts.units()) {
+        None => match dt_eval::weighting_flaw_in(typed, opts.units()) {
             Some(w) => json!({ "message": w.message, "label": "here", "help": w.help }),
             None => json!({ "message": null }),
         },
@@ -567,12 +560,6 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
     };
     let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
     let opts = shared.options();
-    // the language format the text is written in, known even while it has
-    // mistakes, so the page writes what it adds in the same one
-    let format = dt_doc::header::check_text(file, text)
-        .ok()
-        .flatten()
-        .map_or(0, |h| h.format);
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
             let stack = match c.tile.as_ref().map(|t| stack::items(t, &opts.system)) {
@@ -598,37 +585,12 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
                 "200 OK",
                 json!({
                     "ok": true,
-                    "format": format,
                     "errors": [],
-                    // files read as an older format and migrated in memory: the
-                    // page offers to update the file it is showing
-                    "migrated": c.migrated.iter().map(|u| json!({ "path": u.path, "from": u.from })).collect::<Vec<_>>(),
                     "stack": stack,
                     "map": map::json(&c, &own, opts.units()),
                 }),
             )
         }
-        Err(errs) => (
-            "200 OK",
-            json!({ "ok": false, "format": format, "errors": errors_json(&errs) }),
-        ),
-    }
-}
-
-/// `/api/tiles/ID/migrate` `{text, file?}`: the text of `file` carried to the
-/// format this program writes ("Update this file"); nothing is written, the
-/// page puts it in the editor and saves it as any edit.
-fn migrate(shared: &Shared, file: &str, v: &Value) -> (&'static str, Value) {
-    let Some(text) = v["text"].as_str() else {
-        return bad("give the text");
-    };
-    let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
-    let version = shared.options().engine;
-    match dt_eval::upgrade::migrate_files(&src, &[file.to_owned()], &version) {
-        Ok(moved) => (
-            "200 OK",
-            json!({ "ok": true, "text": moved.into_iter().next().map_or_else(|| text.to_owned(), |m| m.text) }),
-        ),
         Err(errs) => (
             "200 OK",
             json!({ "ok": false, "errors": errors_json(&errs) }),

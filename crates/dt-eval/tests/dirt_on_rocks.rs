@@ -3,11 +3,13 @@
 
 #![allow(clippy::unwrap_used)]
 
-use dt_eval::{Built, Memory, Options, build};
+mod common;
+
+use dt_eval::{Built, Options, build};
 use dt_kit::Material;
 
 fn built(text: &str) -> Built {
-    let mem = Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect());
+    let mem = common::modern(&[("t.dtile", text)]);
     build(&mem, "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"))
 }
 

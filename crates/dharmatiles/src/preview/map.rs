@@ -9,24 +9,18 @@ use serde_json::{Value, json};
 /// on DungeonBlocks, 0.5 on OpenLOCK) and meets its lines.
 const CELLS: u32 = dt_eval::DRAFT_CELLS;
 
-/// How the map reads a written point: format 0 as `x,y` squares from the
-/// south-west corner, format 1 as the document's own `"(0.5sq, 25%)"`
+/// How the map reads a written point: as the document's own `"(0.5sq, 25%)"`
 /// forms, which only the program's reader ([`dt_doc::decode::point_text`])
 /// knows how to read.
 #[derive(Clone, Copy)]
 struct Reading {
-    format1: bool,
     units: dt_doc::units::Units,
 }
 
 impl Reading {
     /// The point a text writes, if it writes one.
     fn point(self, t: &dt_eval::Tile, text: &str) -> Option<dt_doc::place::Point> {
-        if self.format1 {
-            dt_doc::decode::point_text(text.trim(), (t.cols, t.rows), self.units).ok()
-        } else {
-            dt_doc::place::parse_point(text).ok()
-        }
+        dt_doc::decode::point_text(text.trim(), (t.cols, t.rows), self.units).ok()
     }
 }
 
@@ -375,10 +369,7 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str, units: dt_doc::units::Units
     let Some(t) = &c.tile else {
         return Value::Null;
     };
-    let rd = Reading {
-        format1: t.format >= 1,
-        units,
-    };
+    let rd = Reading { units };
     let doc = kdl::KdlDocument::parse(text).ok();
     let node = doc
         .as_ref()
@@ -469,16 +460,13 @@ pub(super) fn json(c: &dt_eval::Checked, text: &str, units: dt_doc::units::Units
         });
         json!({ "at": at, "controls": controls, "about": about, "heights": heights(&t.heights.consts) })
     });
-    json!({ "format": t.format, "language": language(t), "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "points": named, "places": places(t), "tile": own })
+    json!({ "language": language(t), "cols": t.cols, "rows": t.rows, "cells": CELLS, "lines": lines, "regions": regions, "points": named, "places": places(t), "tile": own })
 }
 
-/// The words a format 1 value is written from, for completion: the `$`
-/// names (what an element sets, the regions, the tile's heights), the units
-/// and the functions.  Nothing for format 0.
+/// The words a value is written from, for completion: the `$` names (what
+/// an element sets, the regions, the tile's heights), the units and the
+/// functions.
 fn language(t: &dt_eval::Tile) -> Value {
-    if t.format < 1 {
-        return Value::Null;
-    }
     let mut names: Vec<String> = dt_lang::POINT_NAMES
         .iter()
         .chain(dt_lang::REGION_NAMES)

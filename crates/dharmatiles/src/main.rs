@@ -192,11 +192,7 @@ fn main() -> ExitCode {
                 json,
             )
         }
-        Command::Migrate {
-            paths,
-            check,
-            no_guard,
-        } => migrate::run(&paths, check, !no_guard),
+        Command::Migrate { paths, check } => migrate::run(&paths, check),
         Command::Elements { name, json } => elements::run(name.as_deref(), json),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
         Command::Audit {

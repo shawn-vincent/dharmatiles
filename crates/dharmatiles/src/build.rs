@@ -192,12 +192,6 @@ pub(crate) fn build_one(
         if !b.left_out.is_empty() {
             tell!("  left out: {}", left_out_text(&b.left_out));
         }
-        for w in &b.warnings {
-            tell!("  warning [{}] {}", w.code, w.message);
-            if let Some(h) = &w.help {
-                tell!("    help: {h}");
-            }
-        }
         if b.reused > 0 {
             tell!("  {} steps kept from the last build", b.reused);
         }
@@ -293,7 +287,6 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
             "seed": b.record.seed,
             "system": b.record.system,
             "printer": b.record.printer,
-            "read_from_format": b.record.read_from,
             "target": b.record.target(),
         },
         "audit": {

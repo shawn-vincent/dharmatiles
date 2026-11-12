@@ -16,11 +16,6 @@ fn as_f64(v: &KdlValue) -> Option<f64> {
     }
 }
 
-fn fmt_num(v: f64) -> String {
-    let s = format!("{v:.4}");
-    s.trim_end_matches('0').trim_end_matches('.').to_owned()
-}
-
 impl Decoder<'_> {
     /// A control's value: a word, a parameter, or a value of its axis.
     pub(crate) fn value(
@@ -180,9 +175,7 @@ impl Decoder<'_> {
         } else {
             axis.describe()
         };
-        if self.format1
-            && let Some(t) = e.ty()
-        {
+        if let Some(t) = e.ty() {
             self.err(
                 "dt::unit",
                 t.span(),
@@ -248,11 +241,7 @@ impl Decoder<'_> {
             }
             KdlValue::String(s) => {
                 let at = self.inner_at(e, s);
-                let parsed = if self.format1 {
-                    expr::parse_units(s)
-                } else {
-                    expr::parse(s)
-                };
+                let parsed = expr::parse_units(s);
                 match parsed {
                     Ok(x) => (x, sub_span(span, at, at + s.len())),
                     Err(err) => {
@@ -271,7 +260,7 @@ impl Decoder<'_> {
                 }
             }
         };
-        if let Some((code, r)) = percent_flaw(&x, axis, k, (owner, name), kind, self.format1) {
+        if let Some((code, r)) = percent_flaw(&x, axis, k, (owner, name), kind) {
             self.err(code, span, r.message, r.label).help = r.help;
             return None;
         }
@@ -298,16 +287,7 @@ impl Decoder<'_> {
                         miette::SourceSpan::new((inner.offset() + i).into(), n.len())
                     })
                 };
-                if !self.format1 {
-                    self.err(
-                        "dt::name",
-                        at,
-                        format!("`{n}` is a format 1 name; this document is format 0"),
-                        "a context name",
-                    )
-                    .help = Some(super::heights::NOT_FORMAT_1.to_owned());
-                    return None;
-                }
+
                 if crate::words::REGION_NAMES.contains(&n) {
                     self.err(
                         "dt::type",
@@ -389,12 +369,10 @@ impl Decoder<'_> {
             .help = Some(help);
             return None;
         }
-        let x = if self.format1 {
+        let x = {
             let what = format!("`{owner} {name}`");
             self.check_lower(&x, super::units::want_of(axis), ctx, span, &what)?
                 .0
-        } else {
-            x
         };
         if x.names().is_empty()
             && let Some(r) = range_flaw(&x, unit, axis, k, (owner, name))
@@ -422,20 +400,16 @@ impl Decoder<'_> {
             KdlValue::String(s) => {
                 // format 1: a value with a unit is read in the references
                 // (a length in design millimetres, an angle in degrees)
-                let parsed = if self.format1 {
-                    expr::parse_units(s).and_then(|x| {
-                        crate::units::lower(&x, crate::units::Base::Dmm, self.known.units(), None)
-                            .map_err(|ke| expr::ExprError {
-                                message: ke.message,
-                                code: None,
-                                help: ke.help,
-                                start: 0,
-                                end: 0,
-                            })
-                    })
-                } else {
-                    expr::parse(s)
-                };
+                let parsed = expr::parse_units(s).and_then(|x| {
+                    crate::units::lower(&x, crate::units::Base::Dmm, self.known.units(), None)
+                        .map_err(|ke| expr::ExprError {
+                            message: ke.message,
+                            code: None,
+                            help: ke.help,
+                            start: 0,
+                            end: 0,
+                        })
+                });
                 match parsed {
                     Ok(x) if x.names().is_empty() => Value::Num(Num { expr: x, unit }),
                     _ => Value::Text(s.clone()),
@@ -458,28 +432,8 @@ fn percent_flaw(
     k: Option<&'static Control>,
     (owner, name): (&str, &str),
     kind: &str,
-    format1: bool,
 ) -> Option<(&'static str, Refusal)> {
-    // Percent: required for a share (format 0; in format 1 a share is a
-    // percent or a plain fraction), refused elsewhere.
-    if axis == Axis::Share && !format1 && !x.all_percent() && x.names().is_empty() {
-        let help = match x.bounds(&|_| None) {
-            // 0.3 is a fraction (30%); 135 already means 135%.
-            Ok((lo, hi)) if (lo - hi).abs() < 1e-12 => {
-                let pct = if lo.abs() <= 1.0 { lo * 100.0 } else { lo };
-                format!("write `{name}=\"{}%\"`", fmt_num(pct))
-            }
-            _ => "write each end with %: \"20%..50%\"".to_owned(),
-        };
-        return Some((
-            "dt::percent",
-            Refusal {
-                message: format!("`{owner} {name}` is a share, written as a percent"),
-                label: "no %",
-                help: Some(help),
-            },
-        ));
-    }
+    // a share is a percent or a plain fraction; a percent is refused elsewhere
     if axis != Axis::Share && x.has_percent() {
         return Some((
             "dt::percent",
@@ -520,67 +474,17 @@ fn range_flaw(
 /// What a person typed for a control, checked as the reader checks a
 /// written one: what is wrong with it, or `None` (also for anything the
 /// reader resolves later, such as an expression with names, and for what is
-/// not a number or a range, such as a word).  `typed` is the text of the
-/// value, an optional `(mm)` or `(h)` annotation first.  A syntax error and
-/// an annotation that is not a unit are refused, not passed.
-#[must_use]
-pub fn check_text(k: &'static Control, owner: &str, typed: &str) -> Option<Refusal> {
-    let axis = k.value?;
-    let t = typed.trim();
-    if t.is_empty() {
-        return None;
-    }
-    let (unit, body) = match t.strip_prefix('(').and_then(|r| r.split_once(')')) {
-        Some((u, rest)) => {
-            let Some(unit) = Unit::parse(u) else {
-                return Some(Refusal {
-                    message: format!("`({u})` is not an annotation"),
-                    label: "not (mm) or (h)",
-                    help: Some(UNIT_HELP.to_owned()),
-                });
-            };
-            ((axis == Axis::Mm).then_some(unit), rest)
-        }
-        None => (None, t),
-    };
-    let x = match expr::parse(body.trim()) {
-        Ok(x) => x,
-        // a word or a switch is the reader's to place; a number or an
-        // expression that does not parse is refused here
-        Err(_) if !axis.is_numeric() => return None,
-        Err(e) => {
-            return Some(Refusal {
-                message: format!("`{t}` does not read as a number: {}", e.message),
-                label: "not a number",
-                help: Some(describe(k)),
-            });
-        }
-    };
-    if let Some((_, r)) = percent_flaw(&x, axis, Some(k), (owner, k.name), axis.describe(), false) {
-        return Some(r);
-    }
-    if !x.names().is_empty() || !axis.is_numeric() {
-        return None;
-    }
-    range_flaw(&x, unit, axis, Some(k), (owner, k.name))
-}
-
-/// [`check_text`] for a document in format 1 (`format1`), where a length
-/// carries its unit (`8dmm`, `0.5sq`), an angle is `deg` or `rad`, and a
-/// bare number is refused as the reader refuses it.  `units` says what `mm`,
-/// `in` and `layer` are worth on the build target.  Format 0 is read as
-/// before.
+/// not a number or a range, such as a word).  A length carries its unit
+/// (`8dmm`, `0.5sq`), an angle is `deg` or `rad`, and a bare number is
+/// refused as the reader refuses it.  `units` says what `mm`, `in` and
+/// `layer` are worth on the build target.
 #[must_use]
 pub fn check_text_in(
     k: &'static Control,
     owner: &str,
     typed: &str,
-    format1: bool,
     units: crate::units::Units,
 ) -> Option<Refusal> {
-    if !format1 {
-        return check_text(k, owner, typed);
-    }
     let axis = k.value?;
     let t = typed.trim();
     if t.is_empty() {
@@ -597,7 +501,7 @@ pub fn check_text_in(
             });
         }
     };
-    if let Some((_, r)) = percent_flaw(&x, axis, Some(k), (owner, k.name), axis.describe(), true) {
+    if let Some((_, r)) = percent_flaw(&x, axis, Some(k), (owner, k.name), axis.describe()) {
         return Some(r);
     }
     if !axis.is_numeric() {

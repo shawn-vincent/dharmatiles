@@ -166,14 +166,13 @@ impl Control {
         self.words.iter().find(|w| w.word == word)
     }
 
-    /// The default as an author writes it in a document of the format: in
-    /// format 1 a length carries `dmm` and an angle `deg` (`6..10` is
+    /// The default as an author writes it in a document: a length carries `dmm` and an angle `deg` (`6..10` is
     /// `6dmm..10dmm`); a word, a count and a share are written as ever.
     #[must_use]
-    pub fn default_in(&self, format1: bool) -> String {
+    pub fn default_written(&self) -> String {
         let unit = match self.value {
-            Some(Axis::Mm) if format1 => "dmm",
-            Some(Axis::Deg) if format1 => "deg",
+            Some(Axis::Mm) => "dmm",
+            Some(Axis::Deg) => "deg",
             _ => return self.default.to_owned(),
         };
         if self.words.iter().any(|w| w.word == self.default) {
@@ -702,12 +701,6 @@ impl Element {
         self.body.is_some()
     }
 
-    /// Whether it is a body of separate pieces that step between its pins.
-    #[must_use]
-    pub fn is_pieces(&self) -> bool {
-        matches!(self.body, Some(Body::Pieces))
-    }
-
     /// Whether it takes a `top=`: a band over a region (a body) or a cloud
     /// where it stands.
     #[must_use]
@@ -852,13 +845,12 @@ mod tests {
     }
 
     #[test]
-    fn a_default_in_format_1_carries_its_unit_at_both_ends() {
+    fn a_default_written_carries_its_unit_at_both_ends() {
         let rock = element("rock").unwrap();
         let size = rock.control("size").unwrap();
-        assert_eq!(size.default_in(false), size.default);
-        assert_eq!(size.default_in(true), "6dmm..15dmm");
+        assert_eq!(size.default_written(), "6dmm..15dmm");
         let crown = element("tree").unwrap().control("crown").unwrap();
-        assert_eq!(crown.sub("shape").unwrap().default_in(true), "round");
+        assert_eq!(crown.sub("shape").unwrap().default_written(), "round");
     }
 
     #[test]

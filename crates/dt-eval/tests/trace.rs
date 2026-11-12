@@ -4,9 +4,11 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use std::collections::BTreeMap;
 
-use dt_eval::{Memory, NO_ENTRY, Options, build};
+use dt_eval::{NO_ENTRY, Options, build};
 
 const TILE: &str = r#"tile size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
@@ -26,9 +28,12 @@ const TILE: &str = r#"tile size="1x1" seed=97 {
 
 #[test]
 fn every_triangle_has_its_entry() {
-    let mut m = BTreeMap::new();
-    m.insert("probe.dtile".to_owned(), TILE.to_owned());
-    let b = build(&Memory(m), "probe.dtile", &Options::default()).unwrap();
+    let b = build(
+        &common::modern(&[("probe.dtile", TILE)]),
+        "probe.dtile",
+        &Options::default(),
+    )
+    .unwrap();
     let n = b.materials.len();
     assert_eq!(b.entries.len(), n);
     assert_eq!(b.pieces.len(), n);

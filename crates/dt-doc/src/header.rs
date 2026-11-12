@@ -2,7 +2,9 @@
 //! of any kind (a tile, a part, a printer, a palette).
 //!
 //! Only the major part of the version is the document's format.  A document
-//! with no header is format 0.  The header is not an element or a
+//! with no header is format 0, which this program no longer reads (the
+//! decoder refuses it, `dt::format-0`; `dharmatiles migrate` carries it to
+//! format 1).  The header is not an element or a
 //! definition: nothing but this module reads it, and edits leave it as
 //! written.
 
@@ -17,18 +19,35 @@ use crate::error::{DocError, Src};
 /// The node's name.
 pub const NODE: &str = "dharmatiles";
 
-/// The highest document format this program reads.  Format 0 is a document
-/// with no header.
+/// The document format this program reads: the only one.  A document of an
+/// older format (no header, or `version=0`) is refused with help to run
+/// `dharmatiles migrate`; a newer one is refused too.
 pub const FORMAT: u32 = 1;
 
-/// The formats this program reads, for `--version` and the About box, each
-/// as its major versions: `0.x`, then `0.x, 1.x` once there are two.
+/// The format this program reads, for `--version` and the About box:
+/// its major version, `1.x`.
 #[must_use]
 pub fn formats() -> String {
-    (0..=FORMAT)
-        .map(|f| format!("{f}.x"))
-        .collect::<Vec<_>>()
-        .join(", ")
+    format!("{FORMAT}.x")
+}
+
+/// The version a document the program writes is stamped with: the program's own
+/// when its major is the format, else the format's first release with the
+/// program's build details (a program before 1.0.0 writes format 1 with its own
+/// build details).
+#[must_use]
+pub fn stamp(app_version: &str) -> String {
+    let major: Option<u32> = app_version
+        .split(['.', '+'])
+        .next()
+        .and_then(|m| m.parse().ok());
+    if major == Some(FORMAT) {
+        return app_version.to_owned();
+    }
+    match app_version.split_once('+') {
+        Some((_, build)) => format!("{FORMAT}.0.0+{build}"),
+        None => format!("{FORMAT}.0.0"),
+    }
 }
 
 /// A document's header, as written.
@@ -208,9 +227,39 @@ fn read_node(
     })
 }
 
+/// The refusal of a document older than [`FORMAT`] (no header, or a
+/// version whose major part is 0): at its version, or at its first node.
+#[must_use]
+pub fn format_old(src: &Src, kdl: &KdlDocument, header: Option<&Header>) -> DocError {
+    let span = kdl
+        .nodes()
+        .iter()
+        .find(|n| n.name().value() == NODE)
+        .and_then(|n| n.entries().first())
+        .map(value_span)
+        .or_else(|| kdl.nodes().first().map(|n| n.name().span()))
+        .unwrap_or_else(|| SourceSpan::new(0.into(), 0));
+    let was = header.map_or(0, |h| h.format);
+    err(
+        src,
+        "dt::format-0",
+        span,
+        &format!(
+            "this {} is format {was}, and this dharmatiles reads format {FORMAT}",
+            noun(kdl)
+        ),
+        if header.is_some() {
+            "an older format"
+        } else {
+            "no header: format 0"
+        },
+        "run `dharmatiles migrate FILE` to carry it to format 1 (it rewrites the file in place; `--check` shows what would change)",
+    )
+}
+
 /// The header of a parsed document, with every problem with it: not
 /// first, repeated, malformed, or of a format newer than [`FORMAT`].
-pub(crate) fn read(src: &Src, kdl: &KdlDocument) -> (Option<Header>, Vec<DocError>) {
+pub fn read(src: &Src, kdl: &KdlDocument) -> (Option<Header>, Vec<DocError>) {
     let mut errors = Vec::new();
     let mut header = None;
     let mut seen = false;

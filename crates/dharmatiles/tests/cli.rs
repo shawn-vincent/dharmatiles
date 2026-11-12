@@ -71,12 +71,12 @@ fn a_missing_document_is_a_source_error() {
 }
 
 #[test]
-fn the_version_is_drawn_from_git_and_lists_the_tile_formats() {
+fn the_version_is_drawn_from_git_and_names_the_tile_format() {
     let o = Command::new(EXE).arg("--version").output().unwrap();
     let text = String::from_utf8(o.stdout).unwrap();
     let v = text.trim().strip_prefix("dharmatiles ").unwrap();
-    let (v, formats) = v.split_once(" (tile formats ").unwrap();
-    assert_eq!(formats, "0.x, 1.x)", "{text}");
+    let (v, formats) = v.split_once(" (tile format ").unwrap();
+    assert_eq!(formats, "1.x)", "{text}");
     let rest = v.strip_prefix(env!("CARGO_PKG_VERSION")).unwrap();
     // plain at the tag, else `+[branch.]N.gHASH[.dirty]` (or `+dirty`)
     if let Some(meta) = rest.strip_prefix('+') {
@@ -279,10 +279,14 @@ fn watch_rebuilds_when_a_used_file_changes() {
     let d = scratch("watch");
     let parts = d.join("p.dtile");
     let tile = d.join("t.dtile");
-    std::fs::write(&parts, "define raised { stack { rock size=6 } }\n").unwrap();
+    std::fs::write(
+        &parts,
+        "dharmatiles version=1\ndefine raised { stack { rock size=\"6dmm\" } }\n",
+    )
+    .unwrap();
     std::fs::write(
         &tile,
-        "use \"./p\" raised\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n        raised\n    }\n}\n",
+        "dharmatiles version=1\nuse \"./p\" raised\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n        raised\n    }\n}\n",
     )
     .unwrap();
     let mut child = Command::new(EXE)
@@ -326,7 +330,11 @@ fn watch_rebuilds_when_a_used_file_changes() {
     wait_for("watching ", &mut seen);
     // a coarse file clock (1 s) still sees the edit
     std::thread::sleep(std::time::Duration::from_millis(1100));
-    std::fs::write(&parts, "define raised { stack { rock size=7 } }\n").unwrap();
+    std::fs::write(
+        &parts,
+        "dharmatiles version=1\ndefine raised { stack { rock size=\"7dmm\" } }\n",
+    )
+    .unwrap();
     wait_for("changed:", &mut seen);
     wait_for("built ", &mut seen);
     let status = child.wait().unwrap();
@@ -388,7 +396,7 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
     std::fs::create_dir_all(home.join("printers")).unwrap();
     std::fs::write(
         home.join("printers/mine.dtile"),
-        "printer mine {\n line 0.5\n layer 0.2\n overhang 55\n steepest 65\n gap 0.2\n}\n",
+        "dharmatiles version=1\nprinter mine {\n line \"0.5mm\"\n layer \"0.2mm\"\n overhang \"55deg\"\n steepest \"65deg\"\n gap \"0.2mm\"\n}\n",
     )
     .unwrap();
     let build = |args: &[&str]| {

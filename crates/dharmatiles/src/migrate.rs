@@ -1,28 +1,28 @@
-//! `dharmatiles migrate`: carry documents to the format this program writes,
+//! `dharmatiles migrate`: carry documents to the format this program reads,
 //! in place.
 //!
 //! Two steps, in order.  The older language changes (`ground`, `level=`,
-//! `bumps=`: [`dt_doc::migrate::heights`]) first; then the move to format 1
-//! ([`dt_doc::migrate::format1`]), which writes the header line, the `$`
-//! names, the units and the north-west points.
+//! `bumps=`: [`dt_migrate::heights`]) first; then the move to format 1
+//! ([`dt_migrate::format1`]), which writes the header line, the `$` names,
+//! the units and the north-west points.
 //!
-//! The move to format 1 is proved, not assumed: each tile is built as it
-//! was and as it is migrated (with the parts it uses, and the library's
-//! heights, migrated with it), and the meshes' hashes compared.  A mesh that
-//! moved names its file, and nothing of that tile is written.  `--no-guard`
-//! skips the builds.
+//! A document is migrated against the library as it was written in format 0
+//! ([`dt_migrate::files::Legacy`]), with the parts it uses.  Each migrated
+//! tile is then checked as the program reads it now, against the library as
+//! it is: a tile that does not read as format 1 is not written, and neither
+//! is anything it carried along.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use dt_eval::Source;
-use dt_eval::upgrade::{self, Moved, Overlay};
+use dt_eval::{Diag, Options, Source};
+use dt_migrate::files::{self, Legacy, Moved, Problem, Reader};
 
 use crate::{ERROR, OK, library, report};
 
 /// Reads each file once, as it was at the start of the run: a part one tile
-/// writes is still the old part for the next tile's "before" build.
+/// writes is still the old part for the next tile.
 struct Frozen {
     cache: Mutex<BTreeMap<String, String>>,
     /// Files the older step already changed.
@@ -34,7 +34,7 @@ struct Frozen {
     start: BTreeMap<PathBuf, String>,
 }
 
-impl Source for Frozen {
+impl Reader for Frozen {
     fn read(&self, path: &str) -> Result<String, String> {
         let mut cache = self
             .cache
@@ -90,12 +90,19 @@ fn expand(paths: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(out.into_iter().collect())
 }
 
-fn say_diags(diags: &[dt_eval::Diag]) {
-    report(diags);
+/// What migrating found, as diagnostics to show.
+fn diags(problems: &[Problem]) -> Vec<Diag> {
+    problems
+        .iter()
+        .map(|p| match p {
+            Problem::Doc(e) => Diag::from(e),
+            Problem::Plain { code, message } => Diag::plain(code, message.clone()),
+        })
+        .collect()
 }
 
-/// `dharmatiles migrate PATHS [--check] [--no-guard]`.
-pub(crate) fn run(paths: &[PathBuf], check: bool, guard: bool) -> u8 {
+/// `dharmatiles migrate PATHS [--check]`.
+pub(crate) fn run(paths: &[PathBuf], check: bool) -> u8 {
     let files = match expand(paths) {
         Ok(f) if f.is_empty() => {
             tell!("error: no .dtile documents under the paths given");
@@ -123,10 +130,10 @@ pub(crate) fn run(paths: &[PathBuf], check: bool, guard: bool) -> u8 {
             }
         };
         // a document of format 1 has none of the old forms
-        if upgrade::format_of(&key, &text).is_ok_and(|f| f >= 1) {
+        if files::format_of(&key, &text).is_ok_and(|f| f >= 1) {
             continue;
         }
-        match dt_doc::migrate::heights(&text) {
+        match dt_migrate::heights::heights(&text) {
             Ok(Some(new)) => {
                 if check {
                     tell!("would migrate {key} (the heights language)");
@@ -200,9 +207,9 @@ pub(crate) fn run(paths: &[PathBuf], check: bool, guard: bool) -> u8 {
                 continue;
             }
         };
-        match upgrade::format_of(&key, &text) {
+        match files::format_of(&key, &text) {
             Err(es) => {
-                say_diags(&es);
+                report(&diags(&es));
                 code = ERROR;
                 continue;
             }
@@ -212,9 +219,9 @@ pub(crate) fn run(paths: &[PathBuf], check: bool, guard: bool) -> u8 {
             }
             Ok(_) => {}
         }
-        match one(&frozen, &key, version, guard, &opts) {
+        match one(&frozen, &key, version, &opts) {
             Err(es) => {
-                say_diags(&es);
+                report(&es);
                 tell!("error: {key} not migrated: nothing of it was written");
                 code = ERROR;
             }
@@ -248,41 +255,60 @@ pub(crate) fn run(paths: &[PathBuf], check: bool, guard: bool) -> u8 {
     code
 }
 
-/// One document, with the parts it uses: migrated in memory, and for a
-/// tile proved by building it before and after.
+/// A [`Source`] reading the migrated texts in place of the old, and the rest
+/// as the program reads it.
+struct Moved1<'a>(&'a [Moved]);
+
+impl Source for Moved1<'_> {
+    fn read(&self, path: &str) -> Result<String, String> {
+        match self.0.iter().find(|m| m.path == path) {
+            Some(m) => Ok(m.text.clone()),
+            None => dt_eval::Files.read(path),
+        }
+    }
+}
+
+/// One document, with the parts it uses: migrated in memory, and for a tile
+/// checked as the program now reads it (the library's own files are the
+/// library's: only what is in the project is read from the migration).
 ///
 /// # Errors
-/// What stops the migration, or a mesh that moved (named).
+/// What stops the migration, or a migrated tile that does not read as
+/// format 1.
 fn one(
     frozen: &Frozen,
     path: &str,
     version: &str,
-    guard: bool,
-    opts: &dt_eval::Options,
-) -> Result<Vec<Moved>, Vec<dt_eval::Diag>> {
+    opts: &Options,
+) -> Result<Vec<Moved>, Vec<Diag>> {
     // the document was written against the library as it was in format 0:
-    // that is what it is migrated, and built "before", against
-    let old = upgrade::Legacy(frozen);
-    let mut group = upgrade::dependencies(&old, path)?;
+    // that is what it is migrated against
+    let old = Legacy(frozen);
+    let mut group = files::dependencies(&old, path).map_err(|e| diags(&e))?;
     group.push(path.to_owned());
-    let moved = upgrade::migrate_files(&old, &group, version)?;
+    let moved = files::migrate_files(&old, &group, version).map_err(|e| diags(&e))?;
     let text = old
         .read(path)
-        .map_err(|e| vec![dt_eval::Diag::plain("dt::source", e)])?;
-    if guard && upgrade::has_tile(&text) {
-        let after = Overlay::new(&old, &moved);
-        if let Some(d) = upgrade::guard(&old, &after, path, opts)? {
-            return Err(vec![
-                dt_eval::Diag::plain(
-                    "dt::migrate-moved",
-                    format!(
-                        "{path}: the mesh moved in migrating ({:016x} before, {:016x} after)",
-                        d.before, d.after
-                    ),
+        .map_err(|e| vec![Diag::plain("dt::source", e)])?;
+    if files::has_tile(&text) {
+        // the library's copies are read as they are, so the migrated parts
+        // under `lib:` are left out of what the check reads
+        let own: Vec<Moved> = moved
+            .iter()
+            .filter(|m| !m.path.starts_with(dt_eval::LIB))
+            .cloned()
+            .collect();
+        dt_eval::check(&Moved1(&own), path, opts).map_err(|es| {
+            let mut out = vec![
+                Diag::plain(
+                    "dt::migrate-unread",
+                    format!("{path}: the migrated tile does not read as format 1"),
                 )
-                .help("migrating must not change what a tile builds: nothing was written; report this tile"),
-            ]);
-        }
+                .help("migrating must give a tile this program reads: nothing was written; report this tile"),
+            ];
+            out.extend(es);
+            out
+        })?;
     }
     Ok(moved)
 }

@@ -2,7 +2,7 @@
 //! miette report with the line and a hint.  Each report is compared with
 //! its snapshot in tests/snapshots/; run with `UPDATE_SNAPSHOTS=1` to
 //! rewrite them after a deliberate change, and review the diff.
-//! `cargo run -p dt-doc --example errors` prints the same reports.
+//! `cargo run -p dt-migrate --example errors` prints the same reports.
 #![allow(clippy::unwrap_used)] // test helpers outside #[test] fns
 
 mod common;

@@ -10,7 +10,7 @@ pub(crate) fn version_line() -> &'static str {
     static LINE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     LINE.get_or_init(|| {
         format!(
-            "{} (tile formats {})",
+            "{} (tile format {})",
             env!("DT_ENGINE_VERSION"),
             dt_doc::header::formats()
         )
@@ -100,12 +100,12 @@ pub(crate) enum Command {
         #[arg(long)]
         explain: bool,
     },
-    /// Carry documents to the format this program writes, in place: the older
-    /// language changes first (`ground`, `level=`, `bumps=`), then format 0 to
-    /// format 1 (the header line, `$` names, units, points from the
-    /// north-west corner).  Each tile is built before and after, and a mesh
-    /// that moves stops it.  A document already at the format is left alone,
-    /// whatever its minor or build part.
+    /// Carry documents from format 0 to format 1, the one this program reads,
+    /// in place: the older language changes first (`ground`, `level=`,
+    /// `bumps=`), then the header line, `$` names, units and points from the
+    /// north-west corner.  Each migrated tile is checked as the program reads
+    /// it now, and one that does not read stops it.  A document already at
+    /// format 1 is left alone, whatever its minor or build part.
     Migrate {
         /// Documents, or folders of them.
         #[arg(required = true)]
@@ -113,9 +113,6 @@ pub(crate) enum Command {
         /// Say what would change and write nothing; exits 1 when something would.
         #[arg(long)]
         check: bool,
-        /// Skip the hash guard: build no tile before and after.
-        #[arg(long)]
-        no_guard: bool,
     },
     /// List the elements a stack can hold, or one element's controls.
     Elements {

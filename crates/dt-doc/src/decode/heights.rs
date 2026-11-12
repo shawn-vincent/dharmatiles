@@ -7,15 +7,11 @@ use kdl::{KdlEntry, KdlNode, KdlValue};
 
 use super::entry::Parent;
 use super::{Ctx, Decoder, arg_str, sub_span, value_span};
-use crate::dim::{Dim, dim_of};
+use crate::dim::Dim;
 use crate::expr::{self, Expr, FUNCTIONS};
 use crate::model::{Base, Callee, Const, ConstKind, Entry, Pin, PlaceRef, PointDecl, Spanned};
 use crate::place::{self, BUILTIN_LINES, BUILTIN_POINTS, BUILTIN_REGION, Edge};
 use crate::schema::{self, Role, did_you_mean};
-
-/// Help for a format 1 word in a format 0 document.
-pub(crate) const NOT_FORMAT_1: &str =
-    "this is a format 1 form: start the file with `dharmatiles version=1` to use it";
 
 /// What a place name stands for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,7 +107,7 @@ impl Decoder<'_> {
     /// The library's constants as a context's starting list.
     pub(crate) fn library_consts(&self) -> Vec<(String, Dim)> {
         // in format 1 the library's heights are `$` names, installed at the root
-        let dollar = if self.format1 { "$" } else { "" };
+        let dollar = "$";
         self.known
             .consts()
             .iter()
@@ -124,7 +120,7 @@ impl Decoder<'_> {
                 } else {
                     format!("{dollar}{}", c.name.value)
                 };
-                (name, if self.format1 { Dim::Mm } else { c.dim })
+                (name, Dim::Mm)
             })
             .collect()
     }
@@ -154,34 +150,19 @@ impl Decoder<'_> {
     ) -> Option<(Spanned<Expr>, Dim)> {
         let span = value_span(e);
         if let Some(t) = e.ty() {
-            if self.format1 {
-                self.err(
-                    "dt::unit",
-                    t.span(),
-                    format!("`({})` is not written in format 1", t.value()),
-                    "an annotation",
-                )
-                .help =
-                    Some("write the unit after the number, in a string: `\"4.5dmm\"`".to_owned());
-                return None;
-            }
             self.err(
                 "dt::unit",
                 t.span(),
-                format!("`({})` is not written: {what} is in mm", t.value()),
-                "not written",
+                format!("`({})` is not written in format 1", t.value()),
+                "an annotation",
             )
-            .help = Some("units are not written; every height is mm above zero".to_owned());
+            .help = Some("write the unit after the number, in a string: `\"4.5dmm\"`".to_owned());
             return None;
         }
         let expr = match e.value() {
             KdlValue::Integer(i) => Expr::num(i.to_string().parse().unwrap_or(f64::NAN)),
             KdlValue::Float(f) => Expr::num(*f),
-            KdlValue::String(s) => match if self.format1 {
-                expr::parse_v2_units(s)
-            } else {
-                expr::parse_v2(s)
-            } {
+            KdlValue::String(s) => match expr::parse_v2_units(s) {
                 Ok(x) => x,
                 Err(err) => {
                     let at = self.inner_at(e, s);
@@ -242,7 +223,7 @@ impl Decoder<'_> {
             }
             // a `$` name is read from the context of whoever calls: `check`
             // finds out where it is installed, call site by call site
-            if self.format1 && n.starts_with('$') {
+            if n.starts_with('$') {
                 continue;
             }
             if !special && Self::name_dim(ctx, n).is_none() {
@@ -264,44 +245,7 @@ impl Decoder<'_> {
                 return None;
             }
         }
-        if self.format1 {
-            return self.height_v1(expr, ctx, what, mode, span);
-        }
-        let dollar_dim = |n: &str| {
-            Self::name_dim(ctx, n)
-                .or_else(|| (self.format1 && n.starts_with('$')).then_some(Dim::Scalar))
-        };
-        match dim_of(&expr, &dollar_dim) {
-            Err(de) => {
-                self.err("dt::type", span, format!("{what}: {}", de.message), "here")
-                    .help = de.help;
-                None
-            }
-            Ok(Dim::Squares) if mode != Mode::Const => {
-                self.err(
-                    "dt::type",
-                    span,
-                    format!("{what} is a height in mm, this is squares (x or y)"),
-                    "squares",
-                )
-                .help = Some(
-                    "scale x or y inside sin or cos, as in waterSurfaceHeight + 0.6 * cos(720 * x)"
-                        .to_owned(),
-                );
-                None
-            }
-            Ok(Dim::Region) if mode != Mode::Const => {
-                self.err(
-                    "dt::type",
-                    span,
-                    format!("{what} is a number, and this is a region"),
-                    "a region",
-                )
-                .help = Some("a region goes to `parent(…)`; nothing else reads one yet".to_owned());
-                None
-            }
-            Ok(d) => Some((Spanned { value: expr, span }, d)),
-        }
+        self.height_v1(expr, ctx, what, mode, span)
     }
 
     /// A height or length of format 1: its kind checked (a top is a length,
@@ -381,31 +325,17 @@ impl Decoder<'_> {
             } else {
                 span
             };
-            if self.format1 {
-                match n {
-                    "x" | "y" | "bottom" => {
-                        ok = false;
-                        self.err(
-                            "dt::name",
-                            at,
-                            format!("`{n}` is written `${n}` in format 1"),
-                            "a position or height the element sets",
-                        )
-                        .help = Some(format!(
-                            "`${n}` is read from the context: the element working out the height at each point sets it"
-                        ));
-                    }
-                    _ => {}
-                }
-            } else if n.starts_with('$') {
+            if matches!(n, "x" | "y" | "bottom") {
                 ok = false;
                 self.err(
                     "dt::name",
                     at,
-                    format!("`{n}` is a format 1 name; this document is format 0"),
-                    "a context name",
+                    format!("`{n}` is written `${n}` in format 1"),
+                    "a position or height the element sets",
                 )
-                .help = Some(NOT_FORMAT_1.to_owned());
+                .help = Some(format!(
+                    "`${n}` is read from the context: the element working out the height at each point sets it"
+                ));
             }
         }
         ok
@@ -430,11 +360,10 @@ impl Decoder<'_> {
             return None;
         };
         let t = s.trim();
-        let format1_point = self.format1
-            && (t.starts_with('(') || t.starts_with("point(") || t.starts_with("polar("));
+        let format1_point =
+            t.starts_with('(') || t.starts_with("point(") || t.starts_with("polar(");
         // format 1: a bare pair is a mistake worth its own help
-        if self.format1
-            && !format1_point
+        if !format1_point
             && t.chars()
                 .next()
                 .is_some_and(|c| c.is_ascii_digit() || c == '.' || c == '-')
@@ -443,28 +372,10 @@ impl Decoder<'_> {
             self.point1(s, span, at, ctx)?;
             return None;
         }
-        if t.starts_with('(') || format1_point {
-            let p = if self.format1 {
+        if format1_point {
+            let p = {
                 let at = self.inner_at(e, s);
                 self.point1(s, span, at, ctx)?
-            } else {
-                match place::parse_point(t) {
-                    Ok(p) => p,
-                    Err(err) => {
-                        let at = self.inner_at(e, s);
-                        self.err(
-                            "dt::place",
-                            sub_span(span, at + err.start, at + err.end),
-                            format!("can't read `{what}`: {}", err.message),
-                            "here",
-                        )
-                        .help = Some(
-                            "write a point as \"(x, y)\" in squares from the south-west corner"
-                                .to_owned(),
-                        );
-                        return None;
-                    }
-                }
             };
             if let place::Point::Framed(f) = p {
                 if what == "point" || what == "of" {
@@ -511,19 +422,12 @@ impl Decoder<'_> {
             if let Some((c, r)) = ctx.size
                 && (x < 0.0 || y < 0.0 || x > f64::from(c) || y > f64::from(r))
             {
-                let (shown, help) = if self.format1 {
-                    (
-                        t.to_owned(),
-                        format!(
-                            "this tile is {c}x{r} squares: across runs 0 to {c}, down from the north 0 to {r}"
-                        ),
-                    )
-                } else {
-                    (
-                        format!("({x}, {y})"),
-                        format!("this tile is {c}x{r}: x runs 0 to {c}, y 0 to {r}"),
-                    )
-                };
+                let (shown, help) = (
+                    t.to_owned(),
+                    format!(
+                        "this tile is {c}x{r} squares: across runs 0 to {c}, down from the north 0 to {r}"
+                    ),
+                );
                 self.err(
                     "dt::point",
                     span,
@@ -730,76 +634,24 @@ impl Decoder<'_> {
             value: s.to_owned(),
             span: value_span(name_e),
         };
-        if self.format1 {
-            if !self.declared_name_v1(&name, kind) {
-                return None;
-            }
-            // a `$` name is the context's: whether it is there depends on
-            // who calls, so `check` settles it where the scope is entered
-            if !name.value.starts_with('$') && Self::name_dim(ctx, &name.value).is_some()
-                || (!name.value.starts_with('$') && taken.contains(&name.value))
-            {
-                self.err(
-                    "dt::name",
-                    name.span,
-                    format!("`{}` is already declared", name.value),
-                    "a second time",
-                )
-                .help = Some(
-                    "a plain name is declared once and never shadowed: choose another name"
-                        .to_owned(),
-                );
-                return None;
-            }
-        } else if !self.declared_name(&name) {
+        if !self.declared_name_v1(&name, kind) {
             return None;
         }
-        let exists = Self::name_dim(ctx, &name.value).is_some();
-        match kind {
-            _ if self.format1 => {}
-            ConstKind::Let if exists || taken.contains(&name.value) => {
-                let is_const = exists;
-                self.err(
-                    "dt::name",
-                    name.span,
-                    format!("`{}` is already declared", name.value),
-                    "a second time",
-                )
-                .help = Some(if is_const {
-                    format!(
-                        "`override {} …` replaces it for this tile; or choose another name",
-                        name.value
-                    )
-                } else {
-                    "every name is declared once, of any kind: choose another name".to_owned()
-                });
-                return None;
-            }
-            ConstKind::Override if !exists => {
-                let names: Vec<&str> = ctx.consts.iter().map(|(k, _)| k.as_str()).collect();
-                let help = match did_you_mean(&name.value, names.iter().copied()) {
-                    Some(m) => format!(
-                        "did you mean `override {m} …`? or `let {} …` declares a new one",
-                        name.value
-                    ),
-                    None if taken.contains(&name.value) => {
-                        "only a constant can be overridden, not a point, line or region".to_owned()
-                    }
-                    None => format!(
-                        "`let {} …` declares a new constant; `override` only replaces an existing one",
-                        name.value
-                    ),
-                };
-                self.err(
-                    "dt::name",
-                    name.span,
-                    format!("there is nothing called `{}` to override", name.value),
-                    "no such constant",
-                )
-                .help = Some(help);
-                return None;
-            }
-            _ => {}
+        // a `$` name is the context's: whether it is there depends on
+        // who calls, so `check` settles it where the scope is entered
+        if !name.value.starts_with('$') && Self::name_dim(ctx, &name.value).is_some()
+            || (!name.value.starts_with('$') && taken.contains(&name.value))
+        {
+            self.err(
+                "dt::name",
+                name.span,
+                format!("`{}` is already declared", name.value),
+                "a second time",
+            )
+            .help = Some(
+                "a plain name is declared once and never shadowed: choose another name".to_owned(),
+            );
+            return None;
         }
         let (value, dim) =
             self.height_expr(value_e, ctx, &format!("`{}`", name.value), Mode::Const)?;
@@ -807,8 +659,7 @@ impl Decoder<'_> {
             Some(slot) => slot.1 = dim,
             None => ctx.consts.push((name.value.clone(), dim)),
         }
-        if self.format1
-            && !name.value.starts_with('$')
+        if !name.value.starts_with('$')
             && let Some(raw) = self.last_raw.take()
         {
             ctx.raw.retain(|(k, _)| *k != name.value);
@@ -835,12 +686,8 @@ impl Decoder<'_> {
                     "here",
                 )
                 .help = Some(
-                    if self.format1 {
-                        "write `point knoll \"(0.28sq, 0.28sq)\"`, counted from the north-west corner"
-                    } else {
-                        "write `point knoll \"(0.28, 0.72)\"`, in squares"
-                    }
-                    .to_owned(),
+                    "write `point knoll \"(0.28sq, 0.28sq)\"`, counted from the north-west corner"
+                        .to_owned(),
                 );
                 return None;
             }
@@ -868,14 +715,7 @@ impl Decoder<'_> {
                     "a point is written \"(x, y)\"",
                     "not a pair",
                 )
-                .help = Some(
-                    if self.format1 {
-                        "write `point knoll \"(0.28sq, 0.28sq)\"`"
-                    } else {
-                        "write `point knoll \"(0.28, 0.72)\"`"
-                    }
-                    .to_owned(),
-                );
+                .help = Some("write `point knoll \"(0.28sq, 0.28sq)\"`".to_owned());
                 None
             }
         }
@@ -902,8 +742,6 @@ impl Decoder<'_> {
                 Some("another place already has this name")
             } else if reserved(&name) && kind != PlaceKind::Point {
                 Some("a built-in place has this name")
-            } else if !self.format1 && self.known.consts().iter().any(|c| c.name.value == name) {
-                Some("a library constant has this name")
             } else {
                 None
             };
@@ -1300,15 +1138,7 @@ impl Decoder<'_> {
 
     fn slope_value(&mut self, entry: &mut Entry, e: &KdlEntry) {
         let span = value_span(e);
-        let v = if self.format1 {
-            self.angle_v1(e)
-        } else {
-            match e.value() {
-                KdlValue::Integer(i) => i.to_string().parse::<f64>().ok(),
-                KdlValue::Float(f) => Some(*f),
-                _ => None,
-            }
-        };
+        let v = self.angle_v1(e);
         match v {
             Some(d) if d > 0.0 && d < 90.0 => {
                 if entry.slope.is_some() {
@@ -1317,7 +1147,7 @@ impl Decoder<'_> {
                     entry.slope = Some(Spanned { value: d, span });
                 }
             }
-            None if self.format1 => {}
+            None => {}
             _ => {
                 self.err(
                     "dt::value",
@@ -1325,14 +1155,7 @@ impl Decoder<'_> {
                     "a slope is an angle in degrees, above 0 and below 90",
                     "not an angle",
                 )
-                .help = Some(
-                    if self.format1 {
-                        "write `slope \"30deg\"`"
-                    } else {
-                        "write `slope 30`"
-                    }
-                    .to_owned(),
-                );
+                .help = Some("write `slope \"30deg\"`".to_owned());
             }
         }
     }

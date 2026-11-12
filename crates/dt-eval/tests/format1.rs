@@ -3,24 +3,17 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use dt_eval::{Checked, Diag, Memory, Options, check};
 
-/// The tests here read format 0 documents too (to refuse their mixing with
-/// format 1 and their `$` names): built as written, not migrated as loaded.
+/// The default build target.
 fn preview() -> Options {
-    Options {
-        current_format: 0,
-        ..Options::default()
-    }
+    Options::default()
 }
 
 fn mem(files: &[(&str, &str)]) -> Memory {
-    Memory(
-        files
-            .iter()
-            .map(|(p, t)| ((*p).to_owned(), (*t).to_owned()))
-            .collect(),
-    )
+    common::modern(files)
 }
 
 fn tile1(body: &str) -> String {
@@ -280,25 +273,40 @@ fn a_param_hides_nothing_of_the_context() {
 }
 
 #[test]
-fn a_tile_and_its_parts_share_a_format() {
+fn a_part_of_format_0_is_refused_where_it_is_used_with_help_to_migrate() {
+    // not through `mem`: the part is read as written
     let parts = "define lawn { stack { base } }\n";
     let tile = tile1("stack { base }").replace("tile size", "use \"./parts\" lawn\ntile size");
-    let e = check(
-        &mem(&[("t.dtile", &tile), ("parts.dtile", parts)]),
-        "t.dtile",
-        &preview(),
-    )
-    .err()
-    .unwrap();
-    assert_eq!(codes(&e), ["dt::format-mixed"]);
+    let src = Memory(
+        [("t.dtile", tile.as_str()), ("parts.dtile", parts)]
+            .into_iter()
+            .map(|(p, t)| (p.to_owned(), t.to_owned()))
+            .collect(),
+    );
+    let e = check(&src, "t.dtile", &preview()).err().unwrap();
+    assert_eq!(codes(&e), ["dt::format-0"]);
+    assert!(
+        e[0].help
+            .as_deref()
+            .unwrap()
+            .contains("dharmatiles migrate")
+    );
 }
 
 #[test]
-fn format_zero_does_not_read_dollar_names() {
+fn a_document_of_format_0_is_refused_with_help_to_migrate() {
     let text = "tile size=\"1x1\" seed=3 {\n stack { base\n dirt top=\"$groundHeight\" }\n}\n";
-    let e = check(&mem(&[("t.dtile", text)]), "t.dtile", &preview())
-        .err()
-        .unwrap();
-    assert_eq!(codes(&e), ["dt::name"]);
-    assert!(e[0].help.as_deref().unwrap().contains("version=1"));
+    let src = Memory(
+        [("t.dtile".to_owned(), text.to_owned())]
+            .into_iter()
+            .collect(),
+    );
+    let e = check(&src, "t.dtile", &preview()).err().unwrap();
+    assert_eq!(codes(&e), ["dt::format-0"]);
+    assert!(
+        e[0].help
+            .as_deref()
+            .unwrap()
+            .contains("dharmatiles migrate")
+    );
 }

@@ -38,7 +38,7 @@ fn changed_lines(old: &str, new: &str) -> Vec<(usize, String, String)> {
 }
 
 fn redecode(name: &str, text: &str) -> dt_doc::model::Document {
-    dt_doc::decode(name, text, &known()).unwrap_or_else(|e| panic!("{}", render(&e)))
+    dt_migrate::old::decode(name, text, &known()).unwrap_or_else(|e| panic!("{}", render(&e)))
 }
 
 #[test]

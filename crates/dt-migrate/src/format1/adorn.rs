@@ -10,8 +10,8 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
-use crate::expr::{BinOp, Expr, UnitWord};
-use crate::units::Kind;
+use dt_doc::expr::{BinOp, Expr, UnitWord};
+use dt_doc::units::Kind;
 
 /// What a place wants of a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -371,7 +371,7 @@ pub(super) fn flipped(rows: f64, y: f64) -> Option<f64> {
     };
     let c: f64 = text.parse().ok()?;
     #[allow(clippy::float_cmp)]
-    (crate::framed::flip(rows, c) == y).then_some(c)
+    (dt_doc::framed::flip(rows, c) == y).then_some(c)
 }
 
 /// A point's y written for format 1, in squares: a number, or a range with
@@ -580,7 +580,7 @@ pub(super) fn show(e: &Expr, v2: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expr::{parse, parse_units, parse_v2, parse_v2_units};
+    use dt_doc::expr::{parse, parse_units, parse_v2, parse_v2_units};
 
     fn names() -> Names {
         let mut n = Names::default();
@@ -667,7 +667,7 @@ mod tests {
             let f = flipped(rows, y).unwrap();
             #[allow(clippy::float_cmp)]
             {
-                assert_eq!(crate::framed::flip(rows, f), y, "{rows} {y} {f}");
+                assert_eq!(dt_doc::framed::flip(rows, f), y, "{rows} {y} {f}");
             }
         }
     }

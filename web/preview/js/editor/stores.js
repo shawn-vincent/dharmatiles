@@ -76,8 +76,6 @@ export const doc = createStore({
   checked: null, checkedFile: null, checkedTile: null, // the text last checked, and the file and tile it was checked for
   ok: true, errors: [], stack: null, map: null,
   names: null,         // the definitions, regions, lines and points the text makes now, by the program's parser (kept while the text does not parse)
-  format: 0,           // the language format of the text checked last (0, or 1 where the program reads it)
-  migrated: null,      // the format this file was written in, when the program reads it migrated in memory (null: as written)
   note: null, conflict: null, saving: false,
   selectAt: null,      // the byte of a node a gesture just wrote: select it once it is checked
 });

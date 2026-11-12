@@ -4,27 +4,71 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use dt_eval::{Diag, Memory, Options, build, check};
 
-/// These tests write format 0 documents: built as written, not migrated as
-/// they load (that is `migrate.rs`'s business).
+/// These tests write their documents in the old form, carried to format 1
+/// by [`common::modern`] as `dharmatiles migrate` carries them.
 fn legacy() -> Options {
-    Options {
-        current_format: 0,
-        ..Options::default()
-    }
+    Options::default()
 }
 
 fn mem(text: &str) -> Memory {
-    Memory(
-        [("t.dtile".to_owned(), text.to_owned())]
-            .into_iter()
-            .collect(),
-    )
+    common::modern(&[("t.dtile", text)])
 }
 
 fn tile(lets: &str, stack: &str) -> String {
     format!("tile size=\"1x1\" seed=7 {{\n{lets}\n    stack {{\n{stack}\n    }}\n}}\n")
+}
+
+/// A range's ends and a list's values written with their unit (`6..10` is
+/// `6dmm..10dmm`, `[6:2, 8]` is `[6dmm:2, 8dmm]`): the weighting tests below
+/// write their mistakes in format 1, which `migrate` cannot carry over.
+fn units(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::new();
+    let mut depth = 0_i32;
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        match c {
+            '[' => depth += 1,
+            ']' => depth -= 1,
+            _ => {}
+        }
+        let starts_number = c.is_ascii_digit()
+            && (i == 0
+                || !(chars[i - 1].is_alphanumeric() || chars[i - 1] == '.')
+                || i >= 2 && chars[i - 2] == '.');
+        if starts_number {
+            let start = i;
+            while i < chars.len()
+                && (chars[i].is_ascii_digit()
+                    || chars[i] == '.' && chars.get(i + 1).is_some_and(char::is_ascii_digit))
+            {
+                i += 1;
+            }
+            out += &chars[start..i].iter().collect::<String>();
+            let rest: String = chars[i..].iter().collect();
+            let before: String = chars[..start].iter().collect();
+            let (rest, before) = (rest.trim_start(), before.trim_end());
+            let range_end = rest.starts_with("..") || before.ends_with("..");
+            let list_item = depth > 0 && !before.ends_with(':') && !before.ends_with(":-");
+            if range_end || list_item {
+                out += "dmm";
+            }
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+/// A tile in format 1 (its first line shares the header's).
+fn tile1(lets: &str, stack: &str) -> String {
+    format!("dharmatiles version=1; {}", tile(lets, stack))
 }
 
 fn errors(text: &str) -> Vec<Diag> {
@@ -152,7 +196,10 @@ fn a_weighting_wraps_a_plain_range() {
         "bell(1..6, 0.2, 0.5, 9)",
     ] {
         refused(
-            &tile("", &format!("        dirt\n        rock size=\"{size}\"")),
+            &tile1(
+                "",
+                &format!("        dirt\n        rock size=\"{}\"", units(size)),
+            ),
             "dt::weighting",
             "",
         );
@@ -162,7 +209,7 @@ fn a_weighting_wraps_a_plain_range() {
 #[test]
 fn an_unknown_function_lists_the_functions() {
     refused(
-        &tile("", "        dirt\n        rock size=\"bel(1..6)\""),
+        &tile1("", "        dirt\n        rock size=\"bel(1dmm..6dmm)\""),
         "dt::value",
         "flat, low, high, bell, peak, ends, steps or mix, or a list like [1:4, 2:5]",
     );
@@ -195,8 +242,8 @@ fn a_band_takes_a_weighting_as_a_cloud() {
     ));
     // a distance is a band the solver reads, not a draw: still refused
     let d = refused(
-        &tile(
-            "    line l { through \"0,0.5\" \"1,0.5\" }\n    region r { within \"low([2 .. 6])\" of=l }",
+        &tile1(
+            "    line l { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n    region r { within \"low([2dmm .. 6dmm])\" of=l }",
             "        dirt at=r",
         ),
         "dt::weighting",
@@ -316,7 +363,12 @@ fn a_list_listing_a_value_twice_is_dt_weighting() {
 
 #[test]
 fn the_new_functions_check_their_limits() {
-    let rock = |size: &str| tile("", &format!("        dirt\n        rock size=\"{size}\""));
+    let rock = |size: &str| {
+        tile1(
+            "",
+            &format!("        dirt\n        rock size=\"{}\"", units(size)),
+        )
+    };
     let many = |n: usize| vec!["1"; n].join(", ");
     for (size, message, help) in [
         (
@@ -421,7 +473,7 @@ fn the_new_functions_check_their_limits() {
     for (size, what) in [
         (
             "mix(bell(6..10), 1, flat(6..9), 1)",
-            "write 6..10 in every part",
+            "in every part, so the parts blend over the same values",
         ),
         (
             "mix(bell(6..10), 1, mix(low(6..10), 1, flat(6..10), 1), 1)",
@@ -472,36 +524,6 @@ fn how_deep_a_rock_is_buried_takes_a_weighting() {
         "20%..50%",
         "low(20%..50%, 1)",
         "low(20%..50%, 8)",
-    );
-}
-
-#[test]
-fn a_points_range_takes_a_weighting() {
-    takes_a_weighting(
-        |v| format!("        dirt\n        rock size=6 at=\"{v}\""),
-        "0.3..0.7,0.5",
-        "low(0.3..0.7, 1),0.5",
-        "low(0.3..0.7, 9),0.5",
-    );
-    // the commas inside a call or a list are not the pair's
-    for at in [
-        "mix(bell(0.3..0.7), 1, flat(0.3..0.7), 1), 0.5",
-        "[0.3, 0.6:3], high(0.4..0.6, 3)",
-        "steps(0.3..0.7, 1, 3), ends(0.4..0.6)",
-        "0.5, [0.4, 0.5:2, 0.6]",
-    ] {
-        hash(&tile(
-            "",
-            &format!("        dirt\n        rock size=6 at=\"{at}\""),
-        ));
-    }
-    refused(
-        &tile(
-            "",
-            "        dirt\n        rock size=6 at=\"low(0.3..0.7, -1),0.5\"",
-        ),
-        "dt::range",
-        "1 is flat",
     );
 }
 

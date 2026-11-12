@@ -27,9 +27,7 @@
 
 use kdl::{KdlDocument, KdlNode, KdlValue};
 
-pub mod format1;
-
-use crate::edit::EditError;
+use dt_doc::edit::EditError;
 
 /// How wide the strip round a line is, mm at the reference square: the
 /// width the old bank rule gave a bank.
@@ -312,7 +310,7 @@ pub fn mostly(text: &str) -> Result<Option<String>, EditError> {
                 }
             }
             None => {
-                let Some(default) = crate::schema::element(n.name().value())
+                let Some(default) = dt_doc::schema::element(n.name().value())
                     .and_then(|l| l.controls.iter().find(|c| c.name == "size"))
                     .map(|c| c.default)
                 else {
@@ -710,7 +708,7 @@ pub fn control_names(text: &str) -> Result<Option<String>, EditError> {
     fn walk(nodes: &[KdlNode], edits: &mut Vec<Edit>) {
         for n in nodes {
             let name = n.name();
-            if let Some(new) = crate::elements::camel_of(name.value()) {
+            if let Some(new) = dt_doc::elements::camel_of(name.value()) {
                 edits.push(Edit {
                     start: name.span().offset(),
                     end: name.span().offset() + name.span().len(),
@@ -719,7 +717,7 @@ pub fn control_names(text: &str) -> Result<Option<String>, EditError> {
             }
             for e in n.entries() {
                 if let Some(k) = e.name()
-                    && let Some(new) = crate::elements::camel_of(k.value())
+                    && let Some(new) = dt_doc::elements::camel_of(k.value())
                 {
                     edits.push(Edit {
                         start: k.span().offset(),

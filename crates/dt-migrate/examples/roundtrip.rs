@@ -1,5 +1,5 @@
 //! Change, insert and remove one control in library files and print the
-//! line diff.  `cargo run -p dt-doc --example roundtrip`
+//! line diff.  `cargo run -p dt-migrate --example roundtrip`
 
 #[path = "../tests/common/mod.rs"]
 mod common;

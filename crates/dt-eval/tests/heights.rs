@@ -5,21 +5,20 @@
 
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use std::fmt::Write as _;
 
 use dt_eval::{Checked, Diag, Library, Memory, Options, build, check};
 
-/// These tests write format 0 documents: built as written, not migrated as
-/// they load (that is `migrate.rs`'s business).
+/// These tests write their documents in the old form, carried to format 1
+/// by [`common::modern`] as `dharmatiles migrate` carries them.
 fn legacy() -> Options {
-    Options {
-        current_format: 0,
-        ..Options::default()
-    }
+    Options::default()
 }
 
 fn mem(text: &str) -> Memory {
-    Memory(std::iter::once(("t.dtile".to_owned(), text.to_owned())).collect())
+    common::modern(&[("t.dtile", text)])
 }
 
 fn tile(body: &str) -> String {
@@ -182,7 +181,7 @@ fn override_moves_the_tide_with_the_surface() {
     // cos(720 * 0.5) = 1: the crest
     assert!(close(at(&base).lo, 3.2), "{:?}", at(&base));
     assert!(close(at(&over).lo, 3.6), "{:?}", at(&over));
-    assert_eq!(over.explain()[0], "override waterSurfaceHeight 2.6 → 3");
+    assert_eq!(over.explain()[0], "override $waterSurfaceHeight 2.6 → 3");
 }
 
 #[test]
@@ -249,8 +248,11 @@ fn a_trees_top_is_its_height_a_flowers_waits_and_a_line_is_refused() {
     ));
     assert_eq!(c.pending().len(), 1, "{:?}", c.pending());
     // a line has no one place on it: refused, not pending
-    let e = refused(&tile(
-        "line trail { through southCenter northCenter }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=trail }",
+    let e = refused(&format!(
+        "dharmatiles version=1; {}",
+        tile(
+            "line trail { through southCenter northCenter }\n stack { base\n dirt\n tree top=\"$bottom + [40dmm .. 45dmm]\" at=trail }"
+        )
     ));
     assert_eq!(e[0].code, "dt::type", "{e:?}");
 }
