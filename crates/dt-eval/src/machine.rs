@@ -139,6 +139,7 @@ fn load(name: &str, home: Option<&Path>, depth: u8) -> Result<Loaded, Vec<Diag>>
         slots: m.slots.as_ref().map(|n| n.value),
         template: text(&m.template),
         verify: text(&m.verify),
+        from_slicer: text(&m.from_slicer),
     };
     if let Some(from) = &m.from {
         let parent = from
@@ -221,6 +222,9 @@ pub struct Machine {
     pub template: Option<String>,
     /// Why the numbers are not yet checked against the maker.
     pub verify: Option<String>,
+    /// The slicer profile it was imported from (`from-slicer`); not
+    /// inherited.
+    pub from_slicer: Option<String>,
 }
 
 impl Machine {

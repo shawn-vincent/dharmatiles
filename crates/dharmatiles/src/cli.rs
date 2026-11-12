@@ -53,6 +53,36 @@ pub(crate) enum CacheAction {
     },
 }
 
+/// What `dharmatiles printers` does.
+#[derive(Subcommand)]
+pub(crate) enum PrintersAction {
+    /// Make profiles from a slicer's machine profiles: the bed, height, nozzle,
+    /// excluded zones and filament count, with the slicer's `inherits` followed.
+    /// With no slicer, says which are installed.  Nothing is written to a
+    /// slicer's folders or to the library.
+    Import {
+        /// `bambu`, `orca`, `prusa` or `cura`.
+        slicer: Option<String>,
+        /// Models to import: a part of the name is enough (`x1 carbon`).
+        models: Vec<String>,
+        /// Import every model.
+        #[arg(long)]
+        all: bool,
+        /// Read this slicer's profiles folder instead of the installed one.
+        #[arg(long)]
+        path: Option<PathBuf>,
+        /// Only list what the slicer has.
+        #[arg(long)]
+        list: bool,
+        /// Replace a profile of yours that is already there.
+        #[arg(long)]
+        force: bool,
+        /// One JSON object on stdout.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 /// What `dharmatiles inventory` does.
 #[derive(Subcommand)]
 pub(crate) enum InventoryAction {
@@ -261,6 +291,13 @@ pub(crate) enum Command {
         /// the count, less what you have; see `dharmatiles inventory`).
         #[arg(long)]
         all: bool,
+    },
+    /// Printer profiles: `import` reads the machine profiles of the slicers
+    /// installed here (Bambu Studio, OrcaSlicer, PrusaSlicer, Cura) and writes
+    /// profiles of your own into `printers/` beside your tiles.
+    Printers {
+        #[command(subcommand)]
+        action: PrintersAction,
     },
     /// What you have printed: `list` (the default), `have <tile>`, `gone
     /// <tile>`, `relink <old> <new>`.  One log, `inventory.dinv` in

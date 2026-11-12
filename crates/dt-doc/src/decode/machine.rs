@@ -10,8 +10,18 @@ use super::{Decoder, arg_str, value_span};
 use crate::model::{Machine, Spanned};
 
 /// The words a machine adds to a printer.
-pub(crate) const KEYS: [&str; 10] = [
-    "brand", "model", "bed", "height", "excluded", "nozzle", "slots", "template", "verify", "from",
+pub(crate) const KEYS: [&str; 11] = [
+    "brand",
+    "model",
+    "bed",
+    "height",
+    "excluded",
+    "nozzle",
+    "slots",
+    "template",
+    "verify",
+    "from",
+    "from-slicer",
 ];
 
 /// A length in millimetres: `180mm`, `0.4 mm`; `Err` says what is wrong.
@@ -108,6 +118,7 @@ impl Decoder<'_> {
             "model" => m.model = self.machine_read(c, |s| Ok(s.to_owned())),
             "template" => m.template = self.machine_read(c, |s| Ok(s.to_owned())),
             "verify" => m.verify = self.machine_read(c, |s| Ok(s.to_owned())),
+            "from-slicer" => m.from_slicer = self.machine_read(c, |s| Ok(s.to_owned())),
             "from" => m.from = self.machine_read(c, |s| Ok(s.to_owned())),
             "bed" => {
                 if let Some(b) = self.machine_read(c, size)

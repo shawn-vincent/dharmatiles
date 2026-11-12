@@ -613,6 +613,9 @@ pub struct Machine {
     pub verify: Option<Spanned<String>>,
     /// The profile this one starts from (`lib:printers/voron/2-4-300`).
     pub from: Option<Spanned<String>>,
+    /// The slicer profile this one was imported from (`from-slicer`), as
+    /// `Bambu Studio 2.9.1: Bambu Lab X1 Carbon 0.4 nozzle`.
+    pub from_slicer: Option<Spanned<String>>,
 }
 
 /// The default profile's floors, in the order `line`, `layer`, `overhang`,
