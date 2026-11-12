@@ -143,7 +143,7 @@ export async function moveEntry(from, slot) {
   watchOrder(r.body.text);
 }
 
-/** One place up (`dir` -1) or down (+1) in the stack: ⌥↑ and ⌥↓ on a row, and the row menu's Move up and Move down. */
+/** One place earlier (`dir` -1) or later (+1) in the written stack, which is down or up the tile as drawn: ⌥↓ and ⌥↑ on a row, and the row menu's Move down and Move up. */
 export function stepEntry(from, dir) {
   const rows = list();
   const slot = stepSlot(rows, from, dir, doc.get().file);
@@ -184,7 +184,7 @@ export async function openAdd(anchor, slot = null, { phrase = null, align = 'lef
   } finally { anchor.removeAttribute('aria-busy'); }
   if (failed('Could not ask what can be added', r)) return;
   if (r.status !== 200) { refused('Could not ask what can be added', r); return; }
-  const where = phrase || (place.place === 'stack' ? 'at the end' : at === 0 ? 'at the top' : `as ${ordinal(place.index + 1)}`);
+  const where = phrase || (place.place === 'stack' ? 'on top' : at === 0 ? 'at the bottom' : `as ${ordinal(place.index + 1)}`);
   if (!r.body.ok) {
     openMenu(anchor, [
       { head: 'Add to the stack' },
@@ -341,11 +341,12 @@ export function openRowMenu(kind, id, anchor) {
     { label: 'Hide', sub: 'comment it out, keep it', disabled: !mine, why, run: () => muteAt(ownNode(it, file), labelOf(it)) },
     { label: 'Delete', hint: '⌫', danger: true, disabled: !mine, why, run: () => removeAt(ownNode(it, file), labelOf(it)) },
     { sep: true },
-    { label: 'Move up', hint: '⌥↑', disabled: !mine || !step(-1), why: !mine ? why : 'already first', run: () => stepEntry(i, -1) },
-    { label: 'Move down', hint: '⌥↓', disabled: !mine || !step(1), why: !mine ? why : 'already last', run: () => stepEntry(i, 1) },
+    // the rows are drawn top of the tile first: up the list is later in the written stack
+    { label: 'Move up', hint: '⌥↑', disabled: !mine || !step(1), why: !mine ? why : 'already at the top', run: () => stepEntry(i, 1) },
+    { label: 'Move down', hint: '⌥↓', disabled: !mine || !step(-1), why: !mine ? why : 'already at the bottom', run: () => stepEntry(i, -1) },
     { sep: true },
-    { label: 'Add above…', run: () => openAdd(anchor, i, { phrase: `above ${labelOf(it)}`, align: 'right' }), keepFocus: true },
-    { label: 'Add below…', run: () => openAdd(anchor, i + 1, { phrase: `below ${labelOf(it)}`, align: 'right' }), keepFocus: true },
+    { label: 'Add above…', run: () => openAdd(anchor, i + 1, { phrase: `above ${labelOf(it)}`, align: 'right' }), keepFocus: true },
+    { label: 'Add below…', run: () => openAdd(anchor, i, { phrase: `below ${labelOf(it)}`, align: 'right' }), keepFocus: true },
   ], { label: `${labelOf(it)}` });
 }
 

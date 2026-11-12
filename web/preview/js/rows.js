@@ -225,9 +225,9 @@ export function landing(items, from, slot, file) {
   return (slot < g0 ? slot : slot - (g1 - g0 + 1)) + (from - g0);
 }
 
-/** What a finished move says: where the entry went (above which, or to the top or the end), and that two same-named entries with no id swapped their looks. */
+/** What a finished move says: where the entry went as the stack is drawn, top of the tile first (below which, or to the bottom or the top), and that two same-named entries with no id swapped their looks. */
 export function movedNote(items, from, slot, label) {
-  const where = slot <= 0 ? 'to the top' : slot >= items.length ? 'to the end' : `above ${nameOf(items[slot])}`;
+  const where = slot <= 0 ? 'to the bottom' : slot >= items.length ? 'to the top' : `below ${nameOf(items[slot])}`;
   const swap = seedSwap(items, from, slot);
   const base = `Moved ${label} ${where}`;
   return swap ? `${base}. Entries with no id= are seeded by their count, so the two ${swap}s swapped looks: name them to keep each.` : base;

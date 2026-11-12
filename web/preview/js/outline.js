@@ -1,8 +1,11 @@
-// What the tile level holds, as rows: the stack in the order it builds and the lines
-// and regions that shape the tile.  Each row is one button that opens its thing's level;
+// What the tile level holds, as rows: the stack drawn as the tile stands, the top of the
+// tile first and the base last (the reverse of the order it is written and built in; each
+// row's number is its place in that order), and the lines and regions that shape the tile.  Each row is one button that opens its thing's level;
 // beside it a ⋯ button opens the row's menu (rename, hide, delete, move, add), the stack
-// ends in an Add row and the Shape ends in Add line and Add region.  A row of the stack
-// can be dragged by the mouse to a new place, and ⌥↑ / ⌥↓ move the row the keyboard is on.
+// starts with an Add row (what stands on top) and the Shape ends in Add line and Add region.
+// A row of the stack can be dragged by the mouse to a new place, and ⌥↑ / ⌥↓ move the row
+// the keyboard is on up or down the tile.  A row's `data-index` is its place in the written
+// order, which is what the caller's move, step and add take.
 // A region wears a picture of its mask, a line a glyph of its points.  A page here (it makes
 // elements), but it reads no store: the caller gives it the data, and what a row does is
 // the caller's.  The rules of the rows are in rows.js.
@@ -151,10 +154,12 @@ export function buildOutline(data, on) {
     root.append(w);
   };
 
-  section('Stack', 'builds top to bottom');
+  section('Stack', 'top of the tile first');
   const items = data.stack || [];
+  if (data.editable) addRow('entry', 'Add to the stack', 'what stands on top');
   if (!items.length) root.append(el('p', 'oempty', 'Nothing in the stack yet.'));
-  items.forEach((it, i) => {
+  // drawn top first: the last written (built last, standing on the rest) at the top
+  [...items.entries()].reverse().forEach(([i, it]) => {
     const b = row('entry', it.key, `fam-${it.family || 'thing'}`);
     b.dataset.index = String(i);
     const badge = badgeOf(data.badges?.get?.(it.key));
@@ -171,7 +176,6 @@ export function buildOutline(data, on) {
     b.append(el('span', 'chev', '›'));
     wrap(b, id ?? it.label);
   });
-  if (data.editable) addRow('entry', 'Add to the stack', 'what can stand at the end');
   const shaped = [...(data.lines || []).map((m) => ['line', m]), ...(data.regions || []).map((m) => ['region', m])];
   if (shaped.length || data.editable) {
     section('Shape', 'lines and regions');
@@ -206,7 +210,7 @@ function wireKeys(root, on) {
     if (!more) return;
     if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && kind === 'entry') {
       e.preventDefault(); e.stopPropagation();
-      on.step?.(Number(b.dataset.index), e.key === 'ArrowUp' ? -1 : 1);
+      on.step?.(Number(b.dataset.index), e.key === 'ArrowUp' ? 1 : -1); // up the tile is later in the stack
     } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
       e.preventDefault(); e.stopPropagation();
       on.menu?.(kind, id, more);
@@ -224,7 +228,11 @@ function wireKeys(root, on) {
 
 const DRAG_PX = 5;
 
-/** Press a stack row and pull it up or down: a line shows where it will stand, and letting go moves it there. */
+/**
+ * Press a stack row and pull it up or down: a line shows where it will stand, and letting go moves it there.
+ * The rows are drawn top of the tile first, so a place on screen (`pos`, counted from the top) is written
+ * place `n - 1 - pos`, and the gap above screen row `s` is the written slot `n - s`.
+ */
 function wireDrag(root, on) {
   let g = null; // the gesture under way
   const wraps = () => [...root.querySelectorAll('.orwrap')].filter((w) => w.firstElementChild.dataset.kind === 'entry');
@@ -246,7 +254,8 @@ function wireDrag(root, on) {
       const stop = (e) => { e.stopPropagation(); e.preventDefault(); };
       addEventListener('click', stop, { capture: true, once: true });
       setTimeout(() => removeEventListener('click', stop, true), 0);
-      if (move) on.move?.(from, slot);
+      const n = wraps().length;
+      if (move) on.move?.(n - 1 - from, n - slot);
     }
   };
   const onUp = () => end(true);
@@ -299,7 +308,8 @@ function wireDrag(root, on) {
     const b = e.target.closest?.('.orow');
     if (!b || b.dataset.kind !== 'entry' || g) return;
     const sc = scroller();
-    g = { wrap: b.parentElement, from: Number(b.dataset.index), slot: Number(b.dataset.index), startY: e.clientY, y: e.clientY, started: false, scroll0: sc ? sc.scrollTop : 0, line: null, auto: 0 };
+    const pos = wraps().indexOf(b.parentElement);
+    g = { wrap: b.parentElement, from: pos, slot: pos, startY: e.clientY, y: e.clientY, started: false, scroll0: sc ? sc.scrollTop : 0, line: null, auto: 0 };
     addEventListener('pointermove', onMove, true);
     addEventListener('pointerup', onUp, true);
     addEventListener('pointercancel', onCancel, true);

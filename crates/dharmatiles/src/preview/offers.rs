@@ -101,15 +101,15 @@ fn why(r: &Refusal, k: usize, names: &[String]) -> String {
         Refusal::Early { entry, kind, .. } => {
             let (what, fix) = match kind {
                 Some(dt_elements::Kind::Terrain) => (
-                    "stands on the ground, and the ground is painted below it here".to_owned(),
-                    "list a `dirt` above it".to_owned(),
+                    "stands on the ground, and the ground is painted after it here".to_owned(),
+                    "list a `dirt` before it".to_owned(),
                 ),
                 Some(read) => (
-                    format!("reads every {read}, and the first one is listed below it here"),
+                    format!("reads every {read}, and the first one is listed after it here"),
                     "list it after what it reads".to_owned(),
                 ),
                 None => (
-                    "lies on the ground, and a surface would be painted below it".to_owned(),
+                    "lies on the ground, and a surface would be painted after it".to_owned(),
                     "list it after every `dirt` it lies on".to_owned(),
                 ),
             };

@@ -118,21 +118,21 @@ test('a move across a same-named entry with no id swaps the two looks, and says 
   const named = items.map((x) => (x.key === 'tile/dirt/1' ? { ...x, key: 'tile/dirt/bank' } : x));
   assert.equal(seedSwap(named, 3, 1), null);
   assert.equal(seedSwap(named, 1, 4), null, 'the other dirt has an id: its count is not the one that moves');
-  assert.match(movedNote(items, 1, 4, 'dirt'), /^Moved dirt above grass\. .*swapped looks/);
-  assert.equal(movedNote(items, 4, 0, 'grass'), 'Moved grass to the top');
-  assert.equal(movedNote(items, 2, 5, 'rock'), 'Moved rock to the end');
-  assert.equal(movedNote(items, 1, 3, 'dirt'), 'Moved dirt above dirt');
+  assert.match(movedNote(items, 1, 4, 'dirt'), /^Moved dirt below grass\. .*swapped looks/);
+  assert.equal(movedNote(items, 4, 0, 'grass'), 'Moved grass to the bottom');
+  assert.equal(movedNote(items, 2, 5, 'rock'), 'Moved rock to the top');
+  assert.equal(movedNote(items, 1, 3, 'dirt'), 'Moved dirt below dirt');
 });
 
 test('the plan\'s refusal of an order is found among the errors and said in its own words', () => {
-  const early = { code: 'dt::order', message: 'this stands on the ground, and the ground is painted below it in the stack', help: 'list a `ground` or `dirt` above it; `dirt` (line 6) comes after it.' };
+  const early = { code: 'dt::order', message: 'this stands on the ground, and the ground is painted after it in the stack', help: 'list a `ground` or `dirt` before it; `dirt` (line 6) comes after it.' };
   assert.equal(orderRefusal([{ code: 'dt::look', message: 'x' }, early]), early);
   assert.equal(orderRefusal([{ code: 'dt::plan', message: 'reads every rock' }]).message, 'reads every rock');
   assert.equal(orderRefusal([{ code: 'dt::look' }]), null);
   assert.equal(orderRefusal(null), null);
   assert.equal(
     refusalLine(early),
-    'This stands on the ground, and the ground is painted below it in the stack. List a `ground` or `dirt` above it; `dirt` (line 6) comes after it',
+    'This stands on the ground, and the ground is painted after it in the stack. List a `ground` or `dirt` before it; `dirt` (line 6) comes after it',
   );
 });
 

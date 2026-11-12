@@ -278,16 +278,16 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             } => {
                 let (what, fix) = match kind {
                     Some(dt_elements::Kind::Terrain) => (
-                        "stands on the ground, and the ground is painted below it in the stack"
+                        "stands on the ground, and the ground is painted after it in the stack"
                             .to_owned(),
-                        "the stack is built in the order it is listed: list a `ground` or `dirt` above it".to_owned(),
+                        "the stack is built in the order it is listed: list a `ground` or `dirt` before it".to_owned(),
                     ),
                     Some(k) => (
-                        format!("reads every {k}, and the first one is listed below it in the stack"),
+                        format!("reads every {k}, and the first one is listed after it in the stack"),
                         "the stack is built in the order it is listed: list it after what it reads".to_owned(),
                     ),
                     None => (
-                        "lies on the ground, and a surface is painted below it in the stack"
+                        "lies on the ground, and a surface is painted after it in the stack"
                             .to_owned(),
                         "the stack is built in the order it is listed: list it after every `ground` or `dirt` it lies on".to_owned(),
                     ),
