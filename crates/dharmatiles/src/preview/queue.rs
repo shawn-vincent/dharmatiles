@@ -33,6 +33,8 @@ pub(super) struct Draft {
     /// The file the text is of (the tile's own, or one it uses).
     pub file: String,
     pub text: String,
+    /// The page has the debug layer on: collect its marks.
+    pub marks: bool,
     pub cancel: Arc<AtomicBool>,
     pub reply: mpsc::Sender<Outcome>,
 }
@@ -82,6 +84,7 @@ impl Shared {
         path: &str,
         file: &str,
         text: &str,
+        marks: bool,
     ) -> Receiver<Outcome> {
         let (reply, rx) = mpsc::channel();
         let mut q = lock(&self.queue);
@@ -103,6 +106,7 @@ impl Shared {
             path: path.to_owned(),
             file: file.to_owned(),
             text: text.to_owned(),
+            marks,
             cancel: Arc::new(AtomicBool::new(false)),
             reply,
         });

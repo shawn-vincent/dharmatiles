@@ -109,8 +109,14 @@ pub struct Options {
     /// flagged by its angle alone, see [`dt_kit::draft`]).  Never written.
     pub draft: bool,
     /// Collect the editor's debug layer ([`dt_kit::debug`]): grass starts
-    /// and spines, band sheets.  Changes nothing that is built.
+    /// and spines.  Changes nothing that is built, and is not part of what
+    /// the [`Cache`] keys a scene on (a scene kept without it is not given to
+    /// a build that asks for it, one kept with it is given to any).
     pub debug: bool,
+    /// Collect the clouds the editor draws for a selected `top=` or pin: each
+    /// body's band as low and high sheets, and the span at each tree tip or
+    /// stone.  As for [`Options::debug`].
+    pub clouds: bool,
     /// The format this program builds ([`dt_doc::header::FORMAT`]): a
     /// document of an older format is migrated in memory as it is read,
     /// with a `dt::migrated` warning, and the file is left as it is.  Only
@@ -272,6 +278,7 @@ impl Options {
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
             draft: false,
             debug: false,
+            clouds: false,
             current_format: dt_doc::header::FORMAT,
         })
     }
@@ -338,7 +345,9 @@ pub struct Built {
     /// connector last when the tile has a base.  An entry number in
     /// [`Built::entries`] is a place in this list.
     pub stack: Vec<doc::Named>,
-    /// The debug layer's marks, when [`Options::debug`] asked for them.
+    /// The clouds ([`Options::clouds`]): sheets and columns only.
+    pub clouds: Option<dt_kit::debug::Debug>,
+    /// The debug layer's marks ([`Options::debug`]): dots and trails only.
     pub debug: Option<dt_kit::debug::Debug>,
     /// What to say beside the result: a document read as an older format
     /// (`dt::migrated`).
@@ -1163,7 +1172,7 @@ impl<'a> Plan<'a> {
         let body = &self.solved.bodies[b];
         let area = &self.masks[self.jobs[i].mask];
         let owner = &self.jobs[i].id;
-        let Some(d) = scene.debug() else {
+        let Some(d) = scene.clouds() else {
             return;
         };
         // on the region's lattice, the frame's
@@ -1228,9 +1237,11 @@ impl<'a> Plan<'a> {
         let (c, tile) = (self.c, self.tile);
         let mut scene = Scene::new(c.frame, Seed::new(c.seed));
         scene.set_progress(progress.clone());
-        if self.opts.debug {
-            scene.collect_debug();
-        }
+        let want = dt_kit::debug::Collect {
+            clouds: self.opts.clouds,
+            marks: self.opts.debug,
+        };
+        scene.collect(want);
         let mut stage_secs = Vec::new();
         let mut painted = false;
         // sketches start with the lifted ground, which carries what the
@@ -1247,8 +1258,9 @@ impl<'a> Plan<'a> {
         );
         let keys = cache::step_keys(base, tile, &c.steps, &self.jobs);
         let mut first = 0;
-        if let Some((n, k)) = cache.and_then(|c| c.longest(&keys)) {
+        if let Some((n, k)) = cache.and_then(|c| c.longest(&keys, want)) {
             scene = k.scene;
+            scene.collect(want);
             scene.set_progress(progress.clone());
             painted = k.painted;
             first = n + 1;
@@ -1317,6 +1329,7 @@ impl<'a> Plan<'a> {
                         key: keys[n],
                         scene,
                         painted,
+                        collected: want,
                     },
                 );
             }
@@ -1449,7 +1462,8 @@ impl<'a> Plan<'a> {
             entries,
             pieces,
             stack: tile.names(&opts.system),
-            debug: scene.debug_marks().cloned(),
+            clouds: opts.clouds.then(|| cloud_part(scene.collected())).flatten(),
+            debug: opts.debug.then(|| mark_part(scene.collected())).flatten(),
             warnings: Vec::new(),
         })
     }
@@ -1527,6 +1541,24 @@ fn trace_entries(scene: &Scene, mesh: &dt_kit::TriMesh, plan: &Plan<'_>) -> (Vec
             None => (NO_ENTRY, 0),
         })
         .unzip()
+}
+
+/// What a scene collected, as the clouds alone (sheets and columns).
+fn cloud_part(d: Option<&dt_kit::debug::Debug>) -> Option<dt_kit::debug::Debug> {
+    d.map(|d| dt_kit::debug::Debug {
+        sheets: d.sheets.clone(),
+        columns: d.columns.clone(),
+        ..Default::default()
+    })
+}
+
+/// What a scene collected, as the debug layer's marks alone (dots and trails).
+fn mark_part(d: Option<&dt_kit::debug::Debug>) -> Option<dt_kit::debug::Debug> {
+    d.map(|d| dt_kit::debug::Debug {
+        dots: d.dots.clone(),
+        trails: d.trails.clone(),
+        ..Default::default()
+    })
 }
 
 /// The connector's id: the entry the stack's `base` line makes, after the

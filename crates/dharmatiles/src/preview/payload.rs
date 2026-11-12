@@ -176,6 +176,7 @@ pub fn from_built(
         "overhang_deg": overhang_deg,
         "footprint": b.footprint,
         "stack": stack_json(b),
+        "clouds": clouds_json(b),
         "debug": debug_json(b),
     });
     encode_traced(
@@ -222,14 +223,17 @@ fn mm(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
 }
 
+/// Every k-th of `n`, so the ones kept spread over the whole tile and number
+/// no more than `budget`.
+fn every(n: usize, budget: usize) -> usize {
+    n.div_ceil(budget.max(1)).max(1)
+}
+
 /// The debug layer's marks as the page draws them, thinned to
-/// [`DEBUG_DOTS`], [`DEBUG_TRAIL_POINTS`] and [`DEBUG_SHEET_NODES`]:
+/// [`DEBUG_DOTS`] and [`DEBUG_TRAIL_POINTS`]:
 /// `{"dots": {class: [x, y, z, …]}, "trails": {class: [[x, y, z, …], …]},
-/// "sheets": [{owner, class, nx, ny, step, z: [h or null, …],
-/// shade: [0 to 1, …]}], "columns": [{owner, class, v: [x, y, low, high,
-/// rolled, shade low, shade high, shade rolled, …]}], "thinned": bool}`,
-/// each `owner` an entry's key (`tile/dirt/0`);
-/// `null` when the build collected none.
+/// "thinned": bool}`; `null` when the build collected none (the page did not
+/// ask for the layer).  The clouds are not here: see [`clouds_json`].
 #[must_use]
 pub fn debug_json(b: &Built) -> Value {
     use std::collections::BTreeMap;
@@ -237,8 +241,6 @@ pub fn debug_json(b: &Built) -> Value {
         return Value::Null;
     };
     let mut thinned = false;
-    // every k-th, so the kept ones spread over the whole tile
-    let every = |n: usize, budget: usize| n.div_ceil(budget.max(1)).max(1);
     let k_dot = every(d.dots.len(), DEBUG_DOTS);
     thinned |= k_dot > 1;
     let mut dots: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
@@ -247,20 +249,6 @@ pub fn debug_json(b: &Built) -> Value {
         let n = seen.entry(p.class).or_default();
         if n.is_multiple_of(k_dot) {
             dots.entry(p.class).or_default().extend(p.at.map(mm));
-        }
-        *n += 1;
-    }
-    let k_col = every(d.columns.len(), DEBUG_COLUMNS);
-    thinned |= k_col > 1;
-    // grouped by entry and class: the page draws one entry's clouds
-    let mut columns: BTreeMap<(&str, &str), Vec<f64>> = BTreeMap::new();
-    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
-    for c in &d.columns {
-        let n = seen.entry(c.class).or_default();
-        if n.is_multiple_of(k_col) {
-            let v = columns.entry((c.owner.as_str(), c.class)).or_default();
-            v.extend([c.at[0], c.at[1], c.span[0], c.span[1], c.rolled].map(mm));
-            v.extend(c.shade.map(|s| (f64::from(s) * 100.0).round() / 100.0));
         }
         *n += 1;
     }
@@ -276,6 +264,38 @@ pub fn debug_json(b: &Built) -> Value {
                 .entry(t.class)
                 .or_default()
                 .push(t.points.iter().flat_map(|p| p.map(mm)).collect());
+        }
+        *n += 1;
+    }
+    json!({"dots": dots, "trails": trails, "thinned": thinned})
+}
+
+/// The clouds a selected `top=` or pin is drawn from, thinned to
+/// [`DEBUG_SHEET_NODES`] and [`DEBUG_COLUMNS`]:
+/// `{"sheets": [{owner, class, nx, ny, step, z: [h or null, …],
+/// shade: [0 to 1, …]}], "columns": [{owner, class, v: [x, y, low, high,
+/// rolled, shade low, shade high, shade rolled, …]}], "thinned": bool}`, each
+/// `owner` an entry's key (`tile/dirt/0`); `null` when the build collected
+/// none.  Its own section of the header, apart from the debug layer's marks:
+/// the page draws a cloud as part of the selection, whether or not the layer
+/// is on.
+#[must_use]
+pub fn clouds_json(b: &Built) -> Value {
+    use std::collections::BTreeMap;
+    let Some(d) = &b.clouds else {
+        return Value::Null;
+    };
+    let k_col = every(d.columns.len(), DEBUG_COLUMNS);
+    let thinned = k_col > 1;
+    // grouped by entry and class: the page draws one entry's clouds
+    let mut columns: BTreeMap<(&str, &str), Vec<f64>> = BTreeMap::new();
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    for c in &d.columns {
+        let n = seen.entry(c.class).or_default();
+        if n.is_multiple_of(k_col) {
+            let v = columns.entry((c.owner.as_str(), c.class)).or_default();
+            v.extend([c.at[0], c.at[1], c.span[0], c.span[1], c.rolled].map(mm));
+            v.extend(c.shade.map(|s| (f64::from(s) * 100.0).round() / 100.0));
         }
         *n += 1;
     }
@@ -311,7 +331,7 @@ pub fn debug_json(b: &Built) -> Value {
         .into_iter()
         .map(|((owner, class), v)| json!({"owner": owner, "class": class, "v": v}))
         .collect();
-    json!({"dots": dots, "trails": trails, "sheets": sheets, "columns": columns, "thinned": thinned})
+    json!({"sheets": sheets, "columns": columns, "thinned": thinned})
 }
 
 /// The most triangles a draft or a sketch is sent with; more are thinned
@@ -423,6 +443,7 @@ pub fn from_draft(
         "footprint": b.footprint,
         "thinned": kept.len() < b.export.mesh.triangles.len(),
         "stack": stack_json(b),
+        "clouds": clouds_json(b),
         "debug": debug_json(b),
     });
     encode_traced(
@@ -603,15 +624,17 @@ mod tests {
     }
 
     #[test]
-    fn debug_json_sends_each_cloud_with_its_shade() {
+    fn clouds_json_sends_each_cloud_with_its_shade() {
         let text = "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=21 {\n stack {\n  base\n  dirt top=\"$groundHeight + low(0dmm .. 3dmm)\"\n  scatter count=3 { rock size=\"9dmm .. 12dmm\" top=\"$bottom + high(3dmm .. 9dmm)\" }\n }\n}\n";
         let m = dt_eval::Memory([("t.dtile".to_owned(), text.to_owned())].into());
         let opts = dt_eval::Options {
-            debug: true,
+            clouds: true,
             ..dt_eval::Options::default()
         };
         let b = dt_eval::build(&m, "t.dtile", &opts).unwrap();
-        let d = debug_json(&b);
+        // the clouds travel apart from the debug layer's marks, which were not asked for
+        assert!(debug_json(&b).is_null());
+        let d = clouds_json(&b);
         let sheets = d["sheets"].as_array().unwrap();
         assert!(sheets.iter().any(|s| s["class"] == "band-hi"));
         for s in sheets {
@@ -631,6 +654,6 @@ mod tests {
         );
         // off: nothing at all
         let off = dt_eval::build(&m, "t.dtile", &dt_eval::Options::default()).unwrap();
-        assert!(debug_json(&off).is_null());
+        assert!(clouds_json(&off).is_null() && debug_json(&off).is_null());
     }
 }

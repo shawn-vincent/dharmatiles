@@ -36,6 +36,11 @@ pub(crate) struct Kept {
     pub key: u64,
     pub scene: Scene,
     pub painted: bool,
+    /// What the scene collected for the editor beside its geometry (clouds,
+    /// the debug layer's marks): not part of the key, since it changes
+    /// nothing built, but a build that wants more than a scene has cannot
+    /// use it.
+    pub collected: dt_kit::debug::Collect,
 }
 
 impl Cache {
@@ -67,13 +72,18 @@ impl Cache {
     }
 
     /// The last kept step whose key, and every key before it, matches
-    /// `keys`: its index and a copy of what it kept.
-    pub(crate) fn longest(&self, keys: &[u64]) -> Option<(usize, Kept)> {
+    /// `keys` and that collected at least what `want` asks for: its index
+    /// and a copy of what it kept.
+    pub(crate) fn longest(
+        &self,
+        keys: &[u64],
+        want: dt_kit::debug::Collect,
+    ) -> Option<(usize, Kept)> {
         let kept = self.lock();
         let n = kept
             .iter()
             .zip(keys)
-            .take_while(|(k, key)| k.key == **key)
+            .take_while(|(k, key)| k.key == **key && k.collected.covers(want))
             .count();
         n.checked_sub(1).map(|last| (last, kept[last].clone()))
     }
@@ -108,8 +118,8 @@ pub(crate) fn base_key(
     foots: &[Foot],
 ) -> u64 {
     let text = format!(
-        "{frame:?}|{seed}|{}|{:?}|{}|{}|{edges:?}|{fills}",
-        opts.system, opts.printer, opts.draft, opts.debug
+        "{frame:?}|{seed}|{}|{:?}|{}|{edges:?}|{fills}",
+        opts.system, opts.printer, opts.draft
     );
     foots
         .iter()

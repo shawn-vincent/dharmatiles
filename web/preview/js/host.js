@@ -6,7 +6,7 @@
 //   connect({onSnapshot, onTile, onProgress, onState})  start listening; onState('live' | 'offline')
 //   fetchMesh(id) -> ArrayBuffer            the tile's binary mesh
 //   fetchSketch(id, sketch) -> ArrayBuffer  one stage's sketch while it builds (null once the build has moved on)
-//   build(id)                               build a tile not built yet
+//   build(id, {debug?})                     build a tile not built yet; `debug` says whether the debug layer is on for it (its marks are collected only then)
 //   text(id, file?) -> {file, text, writable}
 //   elements() -> [element]                 the element schema
 //
@@ -14,7 +14,7 @@
 //   weightings(query)                       the weighting functions over a range, or one value, with the program's curves (a read; no token)
 //   check(id, {text, file?})                what the text would build
 //   checkValue(element, control, typed, format)  what the reader refuses in a typed value (read as the document's format): {message, label, help} (message null when it takes it)
-//   draft(id, {text, file?})                a quick build of the text: {status, buffer} (the mesh), 409 when a newer draft took its place
+//   draft(id, {text, file?, debug?})        a quick build of the text (with the debug layer's marks when `debug`): {status, buffer} (the mesh), 409 when a newer draft took its place
 //   save(id, {text, base, file?})           write the text to its file
 //   rename(id, name)                        rename a tile's file: the new tile's {path, id}
 //   mine(id)                                copy a library tile to My tiles: {path, id}
@@ -151,9 +151,10 @@ export function browserHost() {
       if (!r.ok) throw await replyError(r, 'sketch');
       return r.arrayBuffer();
     },
-    async build(id) {
+    async build(id, { debug } = {}) {
       let r;
-      try { r = await netFetch(tile(id, 'build'), { method: 'POST' }); } catch (e) {
+      const q = typeof debug === 'boolean' ? `?debug=${debug ? 1 : 0}` : '';
+      try { r = await netFetch(tile(id, `build${q}`), { method: 'POST' }); } catch (e) {
         if (offline(e)) return; // offline: asked again on reconnect
         throw e;
       }

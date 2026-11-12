@@ -140,6 +140,10 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             }
         },
         ("POST", _, Some((id, "build"))) => {
+            // `?debug=1` or `?debug=0`: the page has the debug layer on or off for this tile
+            if let Some(on) = req.param("debug") {
+                shared.set_marks(id, on == "1");
+            }
             let known = shared.want(id);
             let status = if known {
                 "202 Accepted"

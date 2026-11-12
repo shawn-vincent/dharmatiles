@@ -326,7 +326,7 @@ impl Element for Grass {
         // 4 fronds
         let len = self.length.scaled(s);
         let hgt = self.height.scaled(s);
-        let mut starts = scene.debug().is_some().then(Vec::new);
+        let mut starts = scene.collecting().marks.then(Vec::new);
         let (frs, strands) = fronds::plan(
             &mut draws("fronds"),
             &surf,
@@ -339,7 +339,7 @@ impl Element for Grass {
             &mut draws("edge-fronds"),
             starts.as_mut(),
         );
-        if let (Some(starts), Some(d)) = (&starts, scene.debug()) {
+        if let (Some(starts), Some(d)) = (&starts, scene.marks()) {
             let in_area = |x: f64, y: f64| {
                 let (i, j) = raw_node(&frame, x, y);
                 !surf.outside[j * nx + i]

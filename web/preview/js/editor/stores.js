@@ -58,6 +58,7 @@ export const view = createStore({
   cloudSheet: null,    // the key of the entry whose top field has focus in the sheet
   cloudHov: null,      // the key of the entry whose cloud is under the pointer in the source
   cloudSheetHov: null, // the key of the entry whose top row is under the pointer in the sheet
+  debug: false,        // the debug layer is on (the program collects its marks only then)
   mode: 'painted',     // the view's preset
   pick: null,          // {name, animate}: a preset asked for (a fresh object each time, so asking again counts)
   activeView: null,    // the preset the camera is still on, if any

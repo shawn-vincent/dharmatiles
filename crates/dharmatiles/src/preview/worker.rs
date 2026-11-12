@@ -435,15 +435,27 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
         let Some(job) = shared.next_job(eager) else {
             continue;
         };
-        // the target the page chose now, for this job; the editor's debug
-        // layer is always collected, so turning it on needs no build
+        // the target the page chose now, for this job; the clouds are always
+        // collected (a selected top= or pin is drawn from them), the debug
+        // layer's marks only when the page has the layer on for the tile
         let opts = Options {
-            debug: true,
+            clouds: true,
             ..shared.options()
         };
         match &job {
-            queue::Job::Draft(d) => draft(shared, d, &opts),
+            queue::Job::Draft(d) => draft(
+                shared,
+                d,
+                &Options {
+                    debug: d.marks,
+                    ..opts
+                },
+            ),
             queue::Job::Full(id, cancel) => {
+                let opts = Options {
+                    debug: shared.marks_of(id),
+                    ..opts
+                };
                 // `rebuild` catches a panic in the build itself; this catches
                 // one anywhere else in it (encoding, bookkeeping), so the lane
                 // goes on and the page is told

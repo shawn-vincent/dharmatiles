@@ -35,11 +35,12 @@ fn the_debug_layer_changes_nothing_built() {
         "probe.dtile",
         &Options {
             debug: true,
+            clouds: true,
             ..Options::default()
         },
     )
     .unwrap();
-    assert!(off.debug.is_none());
+    assert!(off.debug.is_none() && off.clouds.is_none());
     assert_eq!(
         off.export.mesh.content_hash(),
         on.export.mesh.content_hash()
@@ -69,14 +70,18 @@ fn the_debug_layer_changes_nothing_built() {
     assert_eq!(spines, grown, "a spine for each grown start");
     assert!(d.trails.iter().any(|t| t.class == "flow"));
     // the dirt's pinned band
+    let sheets = &on.clouds.as_ref().unwrap().sheets;
     assert!(
-        d.sheets
+        sheets
             .iter()
             .any(|s| s.class == "band-hi" && s.owner.contains("dirt")),
         "{:?}",
-        d.sheets
+        sheets
             .iter()
             .map(|s| (&s.owner, s.class))
             .collect::<Vec<_>>()
     );
+    // the layer's marks are only marks, the clouds only clouds
+    assert!(d.sheets.is_empty() && d.columns.is_empty());
+    assert!(on.clouds.as_ref().unwrap().dots.is_empty());
 }

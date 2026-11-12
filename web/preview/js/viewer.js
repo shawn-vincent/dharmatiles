@@ -266,7 +266,8 @@ export class Viewer {
     this.showPaint = true;
     this.showGrid = true;
     this.plan = null;
-    this.debug = null; // the payload's debug marks, drawn while showDebug
+    this.debug = null; // the payload's debug marks (the grass's), drawn while showDebug
+    this.clouds = null; // the payload's clouds: what a selected top= or pin is drawn from
     this.debugGroup = null;
     this.showDebug = false;
     this.cloudSel = null; // the stack entry whose cloud is selected (setCloud), and the one hovered
@@ -585,6 +586,7 @@ export class Viewer {
     this.maskScene.add(this.maskMesh);
     this.payload = payload;
     this.debug = payload.meta?.debug ?? null;
+    this.clouds = payload.meta?.clouds ?? null;
     this.buildDebug();
     this.buildCloud();
     this.buildGrid();
@@ -594,7 +596,7 @@ export class Viewer {
   /** How the debug layer's colours are read: `fn(token)` gives a CSS colour (the theme's `--dbg-…`). */
   setDebugColours(fn) { this.debugColour = fn; this.buildDebug(); this.buildCloud(); this.draw(); }
 
-  /** Show or hide the debug layer (the payload's `debug`: grass starts and spines; the clouds are drawn as part of the selection, setCloud). */
+  /** Show or hide the debug layer (the payload's `debug`: grass starts and spines; the clouds, the payload's `clouds`, are drawn as part of the selection, setCloud). */
   setDebugShown(on) { this.showDebug = on; this.buildDebug(); this.draw(); }
 
   /** The debug layer's objects, made again from `this.debug` while it is shown. */
@@ -656,7 +658,7 @@ export class Viewer {
       this.cloudGroup.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
       this.cloudGroup = null;
     }
-    const d = this.debug;
+    const d = this.clouds;
     const wanted = [[this.cloudSel, 1], [this.cloudHov !== this.cloudSel ? this.cloudHov : null, CLOUD_HOVER]].filter(([e]) => e != null);
     if (!d || !wanted.length) return;
     const group = new THREE.Group();

@@ -58,6 +58,7 @@ function setPaint(on) {
 // the debug layer: off at every load; ⌃⌥D or the ⋯ menu
 function setDebug(on) {
   $('t-debug').checked = on;
+  view.set({ debug: on }); // the program collects the layer's marks for a tile only while it is on (build.js tells it)
   viewer.setDebugShown(on);
 }
 const cssToken = (t) => getComputedStyle(document.documentElement).getPropertyValue(t).trim();
@@ -84,7 +85,7 @@ function renderDebugLegend(d) {
   });
   if (!rows.length) {
     const li = document.createElement('li');
-    li.textContent = 'Nothing in this tile shows here yet: grass does. A cloud shows when the caret is in its top= or a pin.';
+    li.textContent = 'Nothing in this tile shows here yet: grass does.';
     rows.push(li);
   }
   $('debug-rows').replaceChildren(...rows);

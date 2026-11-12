@@ -142,7 +142,7 @@ const drafter = createDrafter({
   },
   request: async (text) => {
     const t = tile(), d = doc.get();
-    return { t, r: await host.draft(t.id, { text, file: d.file === t.path ? undefined : d.file }) };
+    return { t, r: await host.draft(t.id, { text, file: d.file === t.path ? undefined : d.file, debug: view.get().debug }) };
   },
   accept: ({ t, r }) => {
     if (!failed(`Could not draft ${stem(t)}`, r) && r.buffer && t.id === view.get().tileId) view.set({ draft: { tileId: t.id, payload: parsePayload(r.buffer) } });

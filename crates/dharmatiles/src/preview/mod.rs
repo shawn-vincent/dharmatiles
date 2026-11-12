@@ -10,8 +10,8 @@
 //! | `GET /api/tiles/ID/mesh` | the tile's mesh as one binary buffer ([`payload`]) |
 //! | `GET /api/tiles/ID/sketch?id=K` | one stage's sketch of a running build |
 //! | `GET /api/tiles/ID/text` | the tile's document (or `?file=` one it read) for the text pane |
-//! | `POST /api/tiles/ID/build` | build a tile that has not been built yet |
-//! | `POST /api/tiles/ID/draft` | build the posted text quickly; the reply is its mesh |
+//! | `POST /api/tiles/ID/build[?debug=1\|0]` | build a tile that has not been built yet; `debug` says whether the page has the debug layer on for it (its marks are collected only then; turned on for a built tile, it is built again) |
+//! | `POST /api/tiles/ID/draft` `{text, file?, debug?}` | build the posted text quickly; the reply is its mesh |
 //! | `GET /api/events?epoch=E&since=N` | server-sent events: a snapshot (or, resuming, what changed since revision N), then one event per change |
 //! | `GET /api/session` | this run's token, which every other `POST` must carry |
 //! | `GET /api/about` | the application version and the tile formats it reads, for the About box |
@@ -145,6 +145,9 @@ pub struct Slot {
     files: BTreeMap<String, Option<SystemTime>>,
     /// Built for a target that is not the chosen one any more.
     stale: bool,
+    /// The page has the debug layer on for this tile: its builds collect the
+    /// layer's marks (grass starts, spines) too.  Set by `POST …/build?debug=1`.
+    marks: bool,
     /// While it builds: what each stage has made so far, for the page to
     /// show as it goes (see [`worker`]).  Gone when the build ends.
     sketches: Vec<Sketch>,
@@ -188,6 +191,7 @@ impl Slot {
             progress: None,
             files: BTreeMap::new(),
             stale: false,
+            marks: false,
             sketches: Vec::new(),
         }
     }
@@ -373,6 +377,31 @@ impl Shared {
     fn with_home(mut self, home: std::path::PathBuf) -> Self {
         self.home = Some(home);
         self
+    }
+
+    /// Whether the page has the debug layer on for tile `id`: its builds
+    /// collect the layer's marks.
+    fn marks_of(&self, id: &str) -> bool {
+        lock(&self.tiles).iter().any(|t| t.id == id && t.marks)
+    }
+
+    /// The page turned the debug layer on or off for tile `id`.  Turned on
+    /// for a tile already built, the tile is built again (the scenes its last
+    /// build kept hold no marks); turned off, nothing is rebuilt: the page
+    /// hides the layer and the builds after this one leave the marks out.
+    /// False when there is no such tile.
+    fn set_marks(&self, id: &str, on: bool) -> bool {
+        let mut tiles = lock(&self.tiles);
+        let Some(t) = tiles.iter_mut().find(|t| t.id == id) else {
+            return false;
+        };
+        let was = std::mem::replace(&mut t.marks, on);
+        if on && !was && t.status != State::Idle {
+            t.stale = true;
+        }
+        drop(tiles);
+        self.queue_cv.notify_all();
+        true
     }
 
     /// The options every build is made with: the chosen target.

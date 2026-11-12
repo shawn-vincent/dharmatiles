@@ -150,13 +150,13 @@ fn target(shared: &Shared, v: &Value) -> (&'static str, Value) {
 }
 
 /// A draft: queued ahead of the full builds and waited for, so the reply is
-/// the mesh itself.
+/// the mesh itself.  `debug: true` asks for the debug layer's marks too.
 fn draft(shared: &Shared, id: &str, tile: &str, file: &str, v: &Value) -> Reply {
     let Some(text) = v["text"].as_str() else {
         return bad("give the text").into();
     };
     match shared
-        .submit_draft(id, tile, file, text)
+        .submit_draft(id, tile, file, text, v["debug"].as_bool() == Some(true))
         .recv_timeout(Duration::from_secs(120))
     {
         Ok(Outcome::Mesh(mesh)) => Reply::Bytes(mesh),

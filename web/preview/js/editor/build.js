@@ -25,6 +25,26 @@ const shownVersion = (t) => {
   return s && s.id === t.id && s.epoch === server.get().epoch ? s.version : null;
 };
 
+let marksTold = null; // `tile|run|on`: what the program was last told of the debug layer
+
+/**
+ * Tell the program whether the debug layer is on for the tile shown: its
+ * marks are collected only while it is.  Turned on, the tile is built
+ * again with them; turned off, the program is told so and nothing is
+ * rebuilt.
+ */
+function syncMarks() {
+  const t = tile(), { live, epoch } = server.get(), on = view.get().debug;
+  if (!live) marksTold = null;
+  if (!t || !live) return;
+  const key = `${t.id}|${epoch}|${on}`;
+  if (marksTold === key) return;
+  // a program that was never told it is on has nothing to switch off
+  const was = marksTold?.startsWith(`${t.id}|${epoch}|`) && marksTold.endsWith('|true');
+  marksTold = key;
+  if (on || was) host.build(t.id, { debug: on }).catch((e) => showError('Could not tell the program about the debug layer', e));
+}
+
 function showBuild() {
   const t = tile(), { live, epoch } = server.get();
   if (!live) asked = null;
@@ -104,6 +124,8 @@ export function init() {
   view.subscribe(['shown'], () => { sketchCache.clear(); viewer.setSketches([]); });
   view.subscribe(['tileId', 'shown', 'draft'], showBuild);
   server.subscribe(['tiles', 'live', 'epoch'], showBuild);
+  view.subscribe(['debug', 'tileId'], syncMarks);
+  server.subscribe(['live', 'epoch'], syncMarks);
   const user = viewer.onUserViewChange;
   viewer.onUserViewChange = () => { following = null; user?.(); };
 }

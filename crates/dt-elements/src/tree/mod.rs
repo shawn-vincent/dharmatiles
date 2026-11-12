@@ -422,7 +422,7 @@ impl Tree {
         let pts = crown::bulge(&pts, &labels, &env, BULGE_MM * s);
         // each tip rolls smoothly inside the cloud over it and the crown is
         // stretched or squeezed to meet it
-        let mut clouds = scene.debug().is_some().then(Vec::new);
+        let mut clouds = scene.collecting().clouds.then(Vec::new);
         let pts = under_the_cloud(&pts, &env, cap, seed, radius, s, &cloud_at, clouds.as_mut())?;
         let step = SEGMENT_MM * s;
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -701,7 +701,7 @@ fn plant(scene: &mut Scene, path: &dt_kit::EntryId, b: Built) {
     // later things stand on, and nothing stands on a tree (a second
     // tree there would be planted in this one's crown)
     scene.stamp(&mask, b.at[2]);
-    if let Some(d) = scene.debug() {
+    if let Some(d) = scene.clouds() {
         for mut c in b.clouds {
             c.owner = path.clone();
             d.column(c);

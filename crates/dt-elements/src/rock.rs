@@ -678,7 +678,7 @@ pub(crate) fn add_items(
     }
     // a `top=` stands each stone's peak at its cloud's roll
     let frame = *scene.frame();
-    let mut marks = scene.debug_marks().is_some().then(Vec::new);
+    let mut marks = scene.collecting().clouds.then(Vec::new);
     let peaks = peaks_under_clouds(
         &feet
             .iter()
@@ -729,7 +729,7 @@ pub(crate) fn add_items(
         let tops = crate::cliff::tops::stone_tops(scene.frame(), &meshes, 0.0);
         scene.lay_tops(&tops);
     }
-    if let (Some(m), Some(d)) = (marks, scene.debug()) {
+    if let (Some(m), Some(d)) = (marks, scene.clouds()) {
         for c in m {
             d.column(c);
         }

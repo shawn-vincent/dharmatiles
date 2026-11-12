@@ -1067,6 +1067,7 @@ pub struct Scene {
     stages: Vec<Stage>,
     progress: crate::Progress,
     debug: Option<Box<crate::debug::Debug>>,
+    collect: crate::debug::Collect,
 }
 
 impl Scene {
@@ -1084,6 +1085,7 @@ impl Scene {
             stages: Vec::new(),
             progress: crate::Progress::none(),
             debug: None,
+            collect: crate::debug::Collect::default(),
         }
     }
 
@@ -1319,22 +1321,47 @@ impl Scene {
         self.progress.clone()
     }
 
-    /// Collect the debug layer's marks from here on (the evaluator does when
-    /// its options ask).  Never read by geometry.
-    pub fn collect_debug(&mut self) {
-        self.debug.get_or_insert_with(Box::default);
+    /// Collect `what` from here on (the evaluator does as its options ask).
+    /// Never read by geometry.
+    pub fn collect(&mut self, what: crate::debug::Collect) {
+        self.collect = what;
+        if what.any() {
+            self.debug.get_or_insert_with(Box::default);
+        }
     }
 
-    /// The debug layer to add marks to, or `None` when it is off: an element
-    /// makes its marks only inside `if let Some(d) = scene.debug()`, and never
-    /// draws from a random stream for them.
-    pub fn debug(&mut self) -> Option<&mut crate::debug::Debug> {
-        self.debug.as_deref_mut()
-    }
-
-    /// The marks collected, if the layer is on.
+    /// What is being collected.
     #[must_use]
-    pub fn debug_marks(&self) -> Option<&crate::debug::Debug> {
+    pub fn collecting(&self) -> crate::debug::Collect {
+        self.collect
+    }
+
+    /// Where to add clouds (height sheets, the span at a point), or `None`
+    /// when they are not collected: an element makes them only inside
+    /// `if let Some(d) = scene.clouds()`, and never draws from a random
+    /// stream for them.
+    pub fn clouds(&mut self) -> Option<&mut crate::debug::Debug> {
+        if self.collect.clouds {
+            self.debug.as_deref_mut()
+        } else {
+            None
+        }
+    }
+
+    /// Where to add the debug layer's marks (points and polylines), or
+    /// `None` when they are not collected: as for [`Scene::clouds`].
+    pub fn marks(&mut self) -> Option<&mut crate::debug::Debug> {
+        if self.collect.marks {
+            self.debug.as_deref_mut()
+        } else {
+            None
+        }
+    }
+
+    /// Everything collected so far (a scene a cache kept may hold more than
+    /// this build asked for).
+    #[must_use]
+    pub fn collected(&self) -> Option<&crate::debug::Debug> {
         self.debug.as_deref()
     }
 

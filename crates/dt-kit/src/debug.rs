@@ -1,15 +1,45 @@
-//! What a build shows of its own working, only when asked: the editor's
-//! debug layer.  Elements add typed marks (classed points, classed
-//! polylines, translucent height sheets) through [`Scene::debug`]; with the
-//! layer off it is `None` and nothing is made.  A mark is never geometry and
-//! never draws from a random stream, so a build is the same with or without
-//! it: same solids, same hashes.
+//! What a build shows of its own working, only when asked, in two kinds.
+//! The editor's *clouds* (a body's low and high height sheets, the span at
+//! each tree tip or stone) are what a selected `top=` or pin is drawn from:
+//! collected whenever the build is for the editor.  The debug layer's
+//! *marks* (classed points and polylines: grass starts, spines) only when
+//! the page asks for the layer.  Elements add them through
+//! [`Scene::clouds`] and [`Scene::marks`]; with a kind off the accessor is
+//! `None` and nothing is made.  A mark is never geometry and never draws
+//! from a random stream, so a build is the same with or without them: same
+//! solids, same hashes.
 //!
-//! [`Scene::debug`]: crate::Scene::debug
+//! [`Scene::clouds`]: crate::Scene::clouds
+//! [`Scene::marks`]: crate::Scene::marks
 
 use dt_geom::Weighting;
 
 use crate::{EntryId, Field, Mask};
+
+/// Which marks a build collects.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Collect {
+    /// Clouds: height sheets and the span at a point ([`Debug::sheets`],
+    /// [`Debug::columns`]).
+    pub clouds: bool,
+    /// The debug layer's marks: classed points and polylines
+    /// ([`Debug::dots`], [`Debug::trails`]).
+    pub marks: bool,
+}
+
+impl Collect {
+    /// Whether everything `want` asks for is collected here.
+    #[must_use]
+    pub fn covers(self, want: Collect) -> bool {
+        (self.clouds || !want.clouds) && (self.marks || !want.marks)
+    }
+
+    /// Whether anything is collected.
+    #[must_use]
+    pub fn any(self) -> bool {
+        self.clouds || self.marks
+    }
+}
 
 /// The marks of one build, in tile mm (z is world mm).
 #[derive(Clone, Debug, Default)]

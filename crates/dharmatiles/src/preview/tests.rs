@@ -762,8 +762,8 @@ fn a_draft_is_a_request_answered_with_its_mesh() {
 fn a_newer_draft_of_a_tile_supersedes_the_older() {
     let shared = Shared::new(&[FLAT.to_owned()]);
     let id = tile_id(FLAT);
-    let first = shared.submit_draft(&id, FLAT, FLAT, "tile {}");
-    let second = shared.submit_draft(&id, FLAT, FLAT, "tile { }");
+    let first = shared.submit_draft(&id, FLAT, FLAT, "tile {}", false);
+    let second = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false);
     assert!(matches!(first.recv().unwrap(), queue::Outcome::Superseded));
     // the other is still waiting, and is the next job
     assert!(second.try_recv().is_err());
@@ -772,7 +772,7 @@ fn a_newer_draft_of_a_tile_supersedes_the_older() {
     };
     assert_eq!(d.text, "tile { }");
     // a newer one stops it while it runs
-    let _third = shared.submit_draft(&id, FLAT, FLAT, "tile { }");
+    let _third = shared.submit_draft(&id, FLAT, FLAT, "tile { }", false);
     assert!(d.cancel.load(Ordering::Relaxed));
     // and a draft goes ahead of a tile asked for
     assert!(shared.want(&id));
@@ -780,6 +780,41 @@ fn a_newer_draft_of_a_tile_supersedes_the_older() {
     assert!(matches!(shared.next_job(false), Some(queue::Job::Full(..))));
     // one full build at a time
     assert!(shared.next_job(true).is_none());
+}
+
+#[test]
+fn the_debug_layer_is_collected_only_for_a_tile_the_page_has_it_on_for() {
+    use route::{Reply, route};
+    let shared = Shared::new(&[FLAT.to_owned()]);
+    let id = tile_id(FLAT);
+    assert!(!shared.marks_of(&id));
+    let post = |on: u8| {
+        route(
+            &shared,
+            &http::Request::build(
+                "POST",
+                &format!("/api/tiles/{id}/build?debug={on}"),
+                None,
+                b"",
+            ),
+        )
+    };
+    // not built yet: switching it on only records it (the build asked for has the marks)
+    assert!(matches!(post(1), Reply::Json("202 Accepted", _)));
+    assert!(shared.marks_of(&id));
+    assert!(!lock(&shared.tiles).iter().any(|t| t.stale));
+    // built; the layer off again, then on: only turning it on builds the tile again
+    lock(&shared.tiles)[0].status = State::Ready;
+    assert!(matches!(post(0), Reply::Json(..)));
+    assert!(!shared.marks_of(&id));
+    assert!(!lock(&shared.tiles)[0].stale, "off rebuilds nothing");
+    assert!(matches!(post(1), Reply::Json(..)));
+    assert!(
+        lock(&shared.tiles)[0].stale,
+        "on builds it again, with the marks"
+    );
+    // a tile there is not
+    assert!(!shared.set_marks("nope", true));
 }
 
 #[test]

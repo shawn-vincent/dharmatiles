@@ -182,3 +182,47 @@ fn editing_a_region_a_rocks_top_reads_rebuilds_the_rock() {
         "the cache served rocks built for the old region"
     );
 }
+
+/// What a build collects for the editor (clouds, the debug layer's marks) is
+/// not part of what a scene is keyed on: asking for the layer after a build
+/// without it gets it (rebuilt, once), and a build without it after one with
+/// it keeps every step.
+#[test]
+fn the_debug_layer_is_not_in_the_key_but_a_scene_without_it_is_not_given_to_a_build_that_asks() {
+    let path = "mem/tile.dtile";
+    let text = Library.read("lib:tests/plants/2x2-grass.dtile").unwrap();
+    let src = Memory(BTreeMap::from([(path.to_owned(), text)]));
+    let plain = Options {
+        draft: true,
+        ..Options::default()
+    };
+    let layer = Options {
+        debug: true,
+        clouds: true,
+        ..plain.clone()
+    };
+    let cache = Cache::new();
+    let none = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
+    assert!(none.debug.is_none() && none.clouds.is_none());
+    let steps = cache.len();
+    // the same build again: every step kept
+    let again = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
+    assert_eq!(again.reused, steps);
+    // asking for the layer: the scenes kept have none, so none is given, and the marks are there
+    let with = build_cached(&src, path, &layer, &Progress::none(), Some(&cache)).unwrap();
+    assert_eq!(with.reused, 0, "a scene without the marks cannot give them");
+    assert!(with.debug.as_ref().is_some_and(|d| !d.dots.is_empty()));
+    assert_eq!(
+        fingerprint(&with),
+        fingerprint(&none),
+        "nothing built differs"
+    );
+    // the layer off again: the scenes that have it serve every step
+    let off = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
+    assert_eq!(off.reused, steps, "toggling the layer off rebuilds nothing");
+    assert!(off.debug.is_none() && off.clouds.is_none());
+    // and on again, from the same scenes
+    let on = build_cached(&src, path, &layer, &Progress::none(), Some(&cache)).unwrap();
+    assert_eq!(on.reused, steps, "the scenes still have the marks");
+    assert!(on.debug.as_ref().is_some_and(|d| !d.dots.is_empty()));
+}
