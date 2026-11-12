@@ -7,7 +7,9 @@ import assert from 'node:assert/strict';
 
 import { suggest } from '../js/complete.js';
 import { placeText, pointLabel, pointText } from '../js/points.js';
-import { asNumber, asRange, formOf, written } from '../js/value.js';
+import { asNumber, asRange, formOf, setUnits, written } from '../js/value.js';
+
+setUnits(['sq', 'mm', 'in', 'dmm', 'layer', 'deg', 'rad', 'pi']); // what the program's language table says
 
 test('a point is written as the document counts it', () => {
   // format 0: "x,y", y up from the south-west corner
@@ -46,14 +48,14 @@ function caret(text, marker = '|') {
 
 test('completion in a format 1 value offers the $ names, functions and units', () => {
   let c = caret('tile { stack { dirt top="$bo|" } }');
-  assert.deepEqual(suggest(c.caret, c.text, elements, false, language).items.map((x) => x.label), ['$bottom']);
+  assert.deepEqual(suggest(c.caret, elements, false, language).items.map((x) => x.label), ['$bottom']);
   c = caret('tile { stack { dirt top="si|" } }');
-  assert.deepEqual(suggest(c.caret, c.text, elements, false, language).items.map((x) => x.label), ['sin']);
+  assert.deepEqual(suggest(c.caret, elements, false, language).items.map((x) => x.label), ['sin']);
   c = caret('tile { stack { dirt top="8d|" } }');
-  assert.deepEqual(suggest(c.caret, c.text, elements, false, language).items.map((x) => x.label), ['deg', 'dmm']);
+  assert.deepEqual(suggest(c.caret, elements, false, language).items.map((x) => x.label), ['deg', 'dmm']);
   // other strings are the author's, and format 0 offers nothing in a string
   c = caret('tile { about "$bo|" }');
-  assert.equal(suggest(c.caret, c.text, elements, false, language), null);
+  assert.equal(suggest(c.caret, elements, false, language), null);
   c = caret('tile { stack { dirt top="$bo|" } }');
-  assert.equal(suggest(c.caret, c.text, elements, false, null), null);
+  assert.equal(suggest(c.caret, elements, false, null), null);
 });

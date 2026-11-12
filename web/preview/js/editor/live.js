@@ -4,6 +4,7 @@
 
 import { setEnvironment, showError } from '../problems.js';
 import { ServerError } from '../server-error.js';
+import { setUnits } from '../value.js';
 import { host } from './app.js';
 import { doc, server, tile } from './stores.js';
 
@@ -33,6 +34,7 @@ export function init() {
     return { version, system: s.system, printer: s.printer, tile: t?.path ?? null, file: doc.get().file ?? t?.path ?? null };
   });
   host.elements().then((elements) => server.set({ elements })).catch((e) => showError('Could not load the elements', e));
+  host.language().then((language) => { setUnits(language.units); server.set({ language }); }).catch((e) => showError('Could not load the language', e));
   host.connect({
     onState: (s) => {
       const live = s === 'live';

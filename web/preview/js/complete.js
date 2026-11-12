@@ -19,29 +19,22 @@ const PLACE = [
 ];
 const EDGES = ['north', 'south', 'east', 'west'];
 
-/** The names the document makes: definitions, regions, lines and points. */
-function names(text) {
-  const grab = (re) => [...text.matchAll(re)].map((m) => m[1]);
-  return {
-    defs: [...grab(/^\s*define\s+([\w+\-.]+)/gm), ...[...text.matchAll(/^\s*use\s+"[^"]*"\s+([^\n/]*)/gm)].flatMap((m) => m[1].trim().split(/\s+/).filter(Boolean))],
-    regions: grab(/\bregion\s+([\w+\-.]+)/g),
-    lines: grab(/\bline\s+([\w+\-.]+)/g),
-    points: grab(/\bpoint\s+([\w+\-.]+)/g),
-  };
-}
+const NO_NAMES = { defs: [], regions: [], lines: [], points: [] };
 
 /**
  * What can go at the caret: {from, to, items: [{label, insert, about, kind}]},
- * or null.  `caret` is TextPane.caret(); `force` lists even with nothing typed.
+ * or null.  `caret` is TextPane.caret(); `force` lists even with nothing typed;
+ * `names` are the definitions, regions, lines and points the program's parser
+ * found in the text now (`/api/names`).
  */
-export function suggest(caret, text, elements, force = false, language = null) {
+export function suggest(caret, elements, force = false, language = null, names = NO_NAMES) {
   const before = caret.before;
   // the node the caret is in on this line: after the last `{` or `;`
   const seg = before.slice(Math.max(before.lastIndexOf('{'), before.lastIndexOf(';')) + 1);
   const line = before.slice(before.lastIndexOf('\n') + 1);
   if (/\/\//.test(line)) return null; // in a comment
   if (before.split('"').length % 2 === 0) return language ? inValue(caret, before, line, language, force) : null; // in a string
-  const n = names(text);
+  const n = { ...NO_NAMES, ...names };
   const el = (name) => elements.find((e) => e.name === name);
   const rank = (items, word) => items
     .filter((i) => i.label.startsWith(word) && i.label !== word)
@@ -73,8 +66,8 @@ export function suggest(caret, text, elements, force = false, language = null) {
   if (!lead.trim() || /^\s*\/-\s*$/.test(lead)) {
     // a node's name
     items = [
-      ...elements.map((e) => ({ label: e.name, insert: e.name, about: e.about, kind: e.role })),
-      ...n.defs.map((d) => ({ label: d, insert: d, about: 'a definition', kind: 'definition' })),
+      ...elements.map((e) => ({ label: e.name, insert: e.name, about: e.about, kind: e.role, family: e.family })),
+      ...n.defs.map((d) => ({ label: d, insert: d, about: 'a definition', kind: 'definition', family: 'plant' })),
       ...WORDS.map(([w, a]) => ({ label: w, insert: w, about: a, kind: 'language' })),
     ];
   } else {

@@ -9,6 +9,8 @@
 //   build(id, {debug?})                     build a tile not built yet; `debug` says whether the debug layer is on for it (its marks are collected only then)
 //   text(id, file?) -> {file, text, writable}
 //   elements() -> [element]                 the element schema
+//   language() -> {docs, nodes, units, functions, names}   the tile's nodes with their controls, and the language's words
+//   names(text) -> {ok, defs, regions, lines, points}      the names the text makes, by the program's parser
 //
 // The editor's calls, each -> {status, body} (status 0 when disconnected):
 //   weightings(query)                       the weighting functions over a range, or one value, with the program's curves (a read; no token)
@@ -177,6 +179,12 @@ export function browserHost() {
       if (!r.ok) throw await replyError(r, 'elements');
       return r.json();
     },
+    async language() {
+      const r = await netFetch('/api/language', { cache: 'force-cache' });
+      if (!r.ok) throw await replyError(r, 'language');
+      return r.json();
+    },
+    names: (text) => call('/api/names', { text }),
     check: (id, body) => call(tile(id, 'check'), body),
     migrate: (id, body) => call(tile(id, 'migrate'), body),
     weightings: (query) => read('/api/weightings', query),

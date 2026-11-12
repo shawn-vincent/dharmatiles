@@ -42,7 +42,7 @@ export function createStore(initial, report = showError) {
 }
 
 export const server = createStore({
-  tiles: [], roots: [], elements: [], system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
+  tiles: [], roots: [], elements: [], language: null, system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
   live: false,    // the event stream is open and in step
   ever: false,    // it has been, once: so a loss reads 'reconnecting…', not 'connecting…'
   ready: false,   // the first list of tiles is in
@@ -75,6 +75,7 @@ export const doc = createStore({
   tileId: null, file: null, base: null, text: null, writable: false,
   checked: null, checkedFile: null, checkedTile: null, // the text last checked, and the file and tile it was checked for
   ok: true, errors: [], stack: null, map: null,
+  names: null,         // the definitions, regions, lines and points the text makes now, by the program's parser (kept while the text does not parse)
   format: 0,           // the language format of the text checked last (0, or 1 where the program reads it)
   migrated: null,      // the format this file was written in, when the program reads it migrated in memory (null: as written)
   note: null, conflict: null, saving: false,
@@ -99,6 +100,10 @@ export const renameable = (t) => !!t && !t.path.startsWith('lib:') && /\.dtile$/
 export const tile = () => tileById(view.get().tileId);
 export const progressOf = (id) => server.get().progress[id] || null;
 export const elementNamed = (n) => server.get().elements.find((e) => e.name === n);
+/** A node of the tile's own language (`tile`, `line`, `region`, `within`, `except`) with its controls, as the program describes it. */
+export const nodeNamed = (n) => server.get().language?.nodes.find((x) => x.name === n);
+/** One control of a node, by name: the program's row for it. */
+export const nodeControl = (node, name) => nodeNamed(node)?.controls.find((c) => c.name === name);
 /** Is there text with changes not yet saved? */
 export const dirty = () => { const d = doc.get(); return d.text != null && d.base != null && d.text !== d.base; };
 

@@ -53,21 +53,24 @@ export function placeChoices(places, self, current) {
 /**
  * The groups of a region's sheet that its clauses make: for each `within`, its distance and its place; for each
  * `except`, the regions.  Each {clause, heading, controls (the lens's schema), written (settings as `name=text`
- * with spans)}; `as` turns a {name, text, span} into the setting the lens reads.
+ * with spans); `as` turns a {name, text, span} into the setting the lens reads; `row(node, name)` is the
+ * program's row for a control of a clause node (`within`'s distance, `except`'s regions): what it measures,
+ * its help, whether it is required.  The words it may be are the tile's own, so they are added here.
  */
-export function clauseGroups(m, sh, map, as) {
+export function clauseGroups(m, sh, map, as, row) {
   const regions = (map?.regions || []).filter((r) => r.name !== m.name).map((r) => ({ word: r.name, about: `the region ${r.name}` }));
   const groups = [];
   for (const c of sh.clauses || []) {
     const written = [];
     let controls;
     if (c.kind === 'except') {
-      controls = [{ name: 'except', unit: 'several', words: regions, required: true, about: 'the regions taken out of this one' }];
+      controls = [{ ...row('except', 'except'), words: regions }];
       if (c.regions?.span) written.push(as({ name: 'except', text: c.regions.text, span: c.regions.span }));
     } else {
+      // written through the server's edit route, not by replacing the text under the pointer: `viaSet`
       controls = [
-        { name: 'distance', unit: 'mm', viaSet: true, required: true, about: 'how far from the place it reaches, in mm at the 35 mm square; a range, "[8 .. 14]", draws the depth along the place between the two' },
-        { name: 'of', unit: 'word', viaSet: true, required: true, words: placeChoices(map?.places, m.name, c.of?.text), about: 'the place it reaches round: a point (a disc), a line or tile edge (a strip beside it), a region (a ring round it)' },
+        { ...row('within', 'distance'), viaSet: true },
+        { ...row('within', 'of'), viaSet: true, words: placeChoices(map?.places, m.name, c.of?.text) },
       ];
       if (c.distance?.span) written.push(as({ name: 'distance', text: c.distance.text, span: c.distance.span }));
       if (c.of?.span) written.push(as({ name: 'of', text: c.of.written, span: c.of.span }));

@@ -9,21 +9,20 @@ import { token } from '../tokens.js';
 import { $, host, offerMine, viewer } from './app.js';
 import { askDraft, edited, openFile, replaceBytes, spansUsable, texts } from './document.js';
 import { meshStack } from '../payload.js';
-import { doc, isEntry, itemOf, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
+import { doc, elementNamed, isEntry, itemOf, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
 
 export let tools = null; // the bar's tools (below)
 
 // ---- the map, the bar and its tools ----------------------------------------
 
 const overlay = new Overlay($('over'), viewer);
-const SURFACES = new Set(['dirt', 'flagstones', 'planks', 'cliff', 'water']);
 const COLOUR = { water: '--water', dirt: '--earth', flagstones: '--stone', cliff: '--stone', planks: '--earth', grass: '--moss', reeds: '--moss', flower: '--bloom' };
 const cssVar = token; // cached: read once per theme, not once per entry per frame
 
 /** The ground's heights, from the surfaces the build made (what each is, from the mesh's own stack). */
 function surfaceHeights(p) {
   const stack = meshStack(p);
-  overlay.setHeights(p, (e) => SURFACES.has(stack[e]?.element), tile()?.plan?.size_mm || p.meta.footprint);
+  overlay.setHeights(p, (e) => elementNamed(stack[e]?.element)?.body === true, tile()?.plan?.size_mm || p.meta.footprint);
 }
 
 /** Each region's tint: the colour of the last thing laid in it. */
@@ -113,7 +112,7 @@ async function insertNode(place, node, { select: sel } = {}) {
 export function init() {
   tools = new Tools($('canvas'), viewer, overlay, { bar: $('place'), input: $('place-in'), list: $('place-list'), chip: $('tool') }, {
     elements: () => server.get().elements,
-    defs: () => [...(doc.get().text || '').matchAll(/^\s*define\s+([\w+\-.]+)/gm)].map((m) => m[1]),
+    defs: () => doc.get().names?.defs ?? [],
     sq: () => tile()?.plan?.square_mm || 35,
     size: () => [tile()?.plan?.cols || 1, tile()?.plan?.rows || 1],
     format: () => doc.get().format,

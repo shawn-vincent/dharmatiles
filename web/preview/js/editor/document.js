@@ -11,7 +11,7 @@ import { isOffline } from '../host.js';
 import { createDrafter } from '../drafts.js';
 import { STALE_NOTE, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
-import { $, FAMILY, host, offerMine, toast } from './app.js';
+import { $, host, offerMine, toast } from './app.js';
 import { dirty, doc, server, stem, tile, view } from './stores.js';
 
 // ---- the document: the text, one history, checking and saving -----------------
@@ -21,7 +21,7 @@ import { dirty, doc, server, stem, tile, view } from './stores.js';
 // cleanly; the worker sees the saved file and rebuilds.  A text with a
 // mistake stays here, unsaved, until it is fixed.
 
-const run = { history: [], at: -1, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, scrubText: null, checkSeq: 0, saving: false };
+const run = { history: [], at: -1, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, checkSeq: 0, namesSeq: 0, saving: false };
 
 export const texts = new TextPane($('code'), {
   onEdit: (text, kind) => {
@@ -90,7 +90,7 @@ function clearDocument() {
   texts.clear();
   loadKey = null;
   run.history = []; run.at = -1; run.lastKind = null;
-  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, format: 0, migrated: null, conflict: null, note: null });
+  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, names: null, format: 0, migrated: null, conflict: null, note: null });
   renderHistory();
 }
 function record(text, kind, label = null) {
@@ -188,7 +188,26 @@ export function spansUsable() {
   return false;
 }
 
+/**
+ * The names the text makes (definitions, regions, lines, points), asked of the
+ * program's parser a moment after the last change: completion reads them, so a
+ * name typed seconds ago is offered before the check of it is back.  A text
+ * that does not parse keeps the names it had; the check shows its mistakes.
+ */
+async function askNames() {
+  const text = doc.get().text, seq = ++run.namesSeq;
+  if (text == null) return;
+  const r = await host.names(text);
+  if (r.status === 0) return; // the server is away: the names it had stay
+  if (failed('Could not read the names in the text', r)) return;
+  if (seq !== run.namesSeq || !r.body?.ok) return;
+  const { defs, regions, lines, points } = r.body;
+  doc.set({ names: { defs, regions, lines, points } });
+}
+
 function changed(dragging = false) {
+  clearTimeout(run.namesTimer);
+  run.namesTimer = setTimeout(askNames, 60);
   clearTimeout(run.checkTimer);
   run.checkTimer = setTimeout(check, 120);
   clearTimeout(run.saveTimer);
@@ -307,7 +326,7 @@ export async function loadText(file) {
         tileId: t.id, file: v.file, text: v.text, base: v.text, writable: v.writable,
         conflict: null, note: null,
         checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
-        ...(fresh ? { map: null, format: 0 } : {}),
+        ...(fresh ? { map: null, names: null, format: 0 } : {}),
       });
       if (fresh && carried && carried.history[carried.at]?.text === v.text) {
         run.history = carried.history; run.at = carried.at; renderHistory(); // a rename keeps its undo
@@ -315,6 +334,7 @@ export async function loadText(file) {
       else if (run.history[run.at]?.text !== v.text) record(v.text, 'disk'); // changed on disk: one more step
       renderHistory();
       if (fresh) carried = null;
+      askNames(); // the names it makes, for completion
       check(); // its stack and map, for the sheet and the overlay: spans of exactly this text
       return true;
     } catch (e) {
@@ -378,7 +398,7 @@ const comp = { s: null, i: 0 };
 function openComp(force) {
   const elements = server.get().elements;
   if (!doc.get().writable || !elements.length) return closeComp();
-  const s = suggest(texts.caret(), texts.text, elements, force, doc.get().format >= 1 ? doc.get().map?.language : null);
+  const s = suggest(texts.caret(), elements, force, doc.get().format >= 1 ? doc.get().map?.language : null, doc.get().names ?? undefined);
   if (!s) return closeComp();
   comp.s = s; comp.i = 0;
   renderComp();
@@ -388,7 +408,7 @@ function renderComp() {
   box.replaceChildren();
   comp.s.items.forEach((it, i) => {
     const d = document.createElement('div');
-    d.className = `it fam-${FAMILY[it.label] || (it.kind === 'definition' ? 'plant' : 'doc')}${i === comp.i ? ' on' : ''}`;
+    d.className = `it fam-${it.family || 'doc'}${i === comp.i ? ' on' : ''}`;
     d.setAttribute('role', 'option');
     d.setAttribute('aria-selected', i === comp.i);
     d.innerHTML = '<i class="sw"></i><span class="nm"></span><span class="ds"></span>';

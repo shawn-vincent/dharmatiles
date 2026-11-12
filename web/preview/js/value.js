@@ -3,9 +3,8 @@
 // the lens draws it (lens.js).  Nothing here checks a value: the program's
 // check (dt_doc's `check_text`, by `/api/check-value`) is the only one.
 
-/** The units whose values are numbers or expressions. */
-const NUMERIC = new Set(['mm', 'degrees', 'percent', 'count', 'per square', 'number']);
-export const isNumeric = (c) => NUMERIC.has(c.unit);
+/** Whether a control's value is a number or an expression: the program says so (`numeric`) for every control it describes. */
+export const isNumeric = (c) => c.numeric === true;
 
 /** `text` as a KDL v2 string. */
 export function kdlString(text) {
@@ -25,10 +24,14 @@ export function unquote(written) {
 // what KDL takes without quotes: a number (with a unit, `(h)1.2`), a word,
 // a switch; a word that KDL reads as something else is quoted
 const NUMBER = /^(\(\w+\))?-?\d+(\.\d+)?$/;
-// format 1 writes a unit after a number (`8dmm`, `0.5sq`, `40deg`, `25%`); the program says which unit a control takes
-const UNIT = '(?:dmm|mm|sq|in|layer|deg|rad|%)?';
-const UNITED = new RegExp(`^-?\\d+(\\.\\d+)?${UNIT}$`);
-const UNITED_RANGE = new RegExp(`^-?\\d+(\\.\\d+)?${UNIT}\\s*\\.\\.\\s*-?\\d+(\\.\\d+)?${UNIT}$`);
+// format 1 writes a unit after a number (`8dmm`, `0.5sq`, `40deg`, `25%`); the unit words are the program's (`setUnits`, from its language table)
+let UNITED = /^$/, UNITED_RANGE = /^$/;
+/** Take the unit words the program's language has (`dmm`, `sq`, …); `%` is always a unit after a number. */
+export function setUnits(units) {
+  const unit = `(?:${[...units, '%'].map((u) => u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})?`;
+  UNITED = new RegExp(`^-?\\d+(\\.\\d+)?${unit}$`);
+  UNITED_RANGE = new RegExp(`^-?\\d+(\\.\\d+)?${unit}\\s*\\.\\.\\s*-?\\d+(\\.\\d+)?${unit}$`);
+}
 const WORD = /^[A-Za-z_][\w-]*$/;
 const KEYWORD = new Set(['true', 'false', 'null', 'inf', 'nan']);
 

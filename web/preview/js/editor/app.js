@@ -26,11 +26,3 @@ export const pickView = (name, animate = true) => view.set({ pick: { name, anima
 
 /** Ask whether to make the library tile shown your own (tiles.js shows the question). */
 export const offerMine = () => view.set({ mineOpen: true });
-
-// each element's family, for its colour (the docs site uses the same)
-export const FAMILY = {
-  dirt: 'surface', flagstones: 'surface', planks: 'surface', cliff: 'surface', water: 'water',
-  rock: 'thing', stone: 'thing', boulder: 'thing', pebble: 'thing', scatter: 'thing', wall: 'thing',
-  grass: 'plant', reeds: 'plant', flower: 'plant', tree: 'plant',
-  dungeonblocks: 'base', openlock: 'base', connector: 'base', stl: 'base',
-};

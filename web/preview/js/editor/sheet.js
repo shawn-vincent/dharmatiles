@@ -6,7 +6,7 @@ import { byteToIndex } from '../text.js';
 import { failed, showError } from '../problems.js';
 import { $, host, offerMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, spansUsable, undo } from './document.js';
-import { doc, elementNamed, isEntry, isMark, itemOf, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
+import { doc, elementNamed, isEntry, isMark, itemOf, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 
@@ -45,15 +45,9 @@ export const lens = new Lens($('lens'), {
     return r.status === 0 ? null : r.body;
   },
 });
-/** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
-// the tile node's own controls: shown when nothing is selected, so the sheet is never empty
-const TILE_SCHEMA = {
-  name: 'tile',
-  controls: [
-    { name: 'size', about: 'squares across, then up: "2x1"; click to type or pick it from a grid, or drag a number', default: '"1x1"', picker: 'size' },
-    { name: 'seed', unit: 'number', about: 'the layout: another seed, another arrangement of the same tile', default: '1' },
-  ],
-};
+// the tile node's own controls: shown when nothing is selected, so the sheet is never empty.
+// What each is (its unit, help, default) is the program's; this only picks the rows
+const tileRows = (names) => ({ controls: names.map((n) => nodeControl('tile', n)).filter(Boolean) });
 // a written property as the lens reads it: `name=value` and its span
 const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] });
 /** A whole-node change to the tile's text (insert or remove), as one step of history. */
@@ -68,13 +62,15 @@ async function tileEdit(body, label) {
 function renderTileLens() {
   const t = tile(), own = doc.get().map?.tile;
   if (!t || !own || doc.get().file !== t.path) { lens.hide(); return; }
-  const groups = [{ at: own.at, schema: TILE_SCHEMA, written: own.controls.map(asWritten) }];
+  const node = nodeNamed('tile');
+  if (!node) { lens.hide(); return; } // the program's description of the tile is not here yet
+  const groups = [{ at: own.at, schema: tileRows(['size', 'seed']), written: own.controls.map(asWritten) }];
   // the description: `about "…"` in the tile's body
   const about = own.about, av = about?.value;
   groups.push({
     heading: 'Description',
     at: own.at,
-    schema: { controls: [{ name: 'about', unit: 'text', about: 'a sentence on what the tile is; shown in the library' }] },
+    schema: tileRows(['about']),
     written: av ? [asWritten({ name: 'about', text: av.text, span: av.span })] : [],
     set: (_, value) => (value == null
       ? about && tileEdit({ op: 'remove', at: about.at }, 'Took out the description')
@@ -84,7 +80,7 @@ function renderTileLens() {
     { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
   ] : [];
   const note = 'The tile. Select something on it to change that instead.';
-  lens.show({ title: stem(t), kind: 'tile', href: 'https://shawn-vincent.github.io/dharmatiles/language.html', note, groups, actions });
+  lens.show({ title: stem(t), kind: 'tile', href: node.href, note, groups, actions });
 }
 /** A run of written text (a line's points, a region's lines) as a lens setting. */
 const runWritten = (name, run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
@@ -117,16 +113,14 @@ async function setClause(clause, name, value) {
 function renderMarkLens(kind, m) {
   const t = tile(), sh = m?.sheet;
   if (!t || !sh || doc.get().file !== t.path) { lens.hide(); return; }
-  const nameRow = { name: 'name', unit: 'word', required: true, viaSet: true, about: `what the tile calls this ${kind}; renaming it renames every ${kind === 'line' ? '`boundedBy` and `at=`' : '`at=`'} that names it` };
+  const node = nodeNamed(kind);
+  if (!node) { lens.hide(); return; }
+  // renaming goes through the server's edit route (`viaSet`), which renames every use of the name
+  const nameRow = { ...nodeControl(kind, 'name'), viaSet: true };
   const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0] }];
   let controls, set;
   if (kind === 'line') {
-    controls = [
-      nameRow,
-      { name: 'wobble', unit: 'mm', default: '0', default1: '0dmm', about: 'how far the line may wander off its points' },
-      { name: 'width', unit: 'mm', about: 'makes the line a strip; an element at= it covers the strip' },
-      { name: 'through', unit: 'raw', required: true, about: 'the points it runs through: "x,y" in squares from the south-west corner (format 1: "(x, y)" with units, from the north-west), corners, or edge middles (south, east, north, west); drag a number or click to type' },
-    ];
+    controls = node.controls.map((c) => (c.name === 'name' ? nameRow : c));
     written.push(...sh.controls.map(asWritten));
     const th = runWritten('through', sh.through);
     if (th) written.push(th);
@@ -137,10 +131,7 @@ function renderMarkLens(kind, m) {
     const lines = (doc.get().map?.lines || []).map((l) => ({ word: l.name, about: `bounded by the line ${l.name}` }));
     controls = [nameRow];
     if (rk !== 'places') {
-      controls.push(
-        { name: 'boundedBy', unit: 'several', words: lines, required: true, about: 'the lines that divide the tile into this region and the rest' },
-        { name: 'fill', unit: 'raw', required: true, about: 'a point inside the region, "x,y" in squares: the region is the area around it that the lines enclose' },
-      );
+      controls.push(...node.controls.filter((c) => c.name !== 'name').map((c) => (c.name === 'boundedBy' ? { ...c, words: lines } : c)));
       for (const [n, run] of [['boundedBy', sh.bounded_by], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
     }
     set = (name, value) => {
@@ -154,7 +145,7 @@ function renderMarkLens(kind, m) {
       return null;
     };
     // each clause is a group with a × that takes it out of the source
-    const clauses = clauseGroups(m, sh, doc.get().map, asWritten).map((g) => ({
+    const clauses = clauseGroups(m, sh, doc.get().map, asWritten, nodeControl).map((g) => ({
       at: g.clause.at, heading: g.heading, schema: { controls: g.controls }, written: g.written,
       set: (name, value) => setClause(g.clause, name, value),
       remove: { title: `Take out this ${g.clause.kind} clause`, run: () => tileEdit({ op: 'remove', at: g.clause.at }, `Took out a ${g.clause.kind} clause of ${m.name}`) },
@@ -178,14 +169,14 @@ function renderMarkLens(kind, m) {
     const note = combineNote(sh);
     const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
     lens.show({
-      title: m.name, kind, href: 'https://shawn-vincent.github.io/dharmatiles/language.html#regions', note,
+      title: m.name, kind, href: node.href, note,
       groups: [...main, ...clauses], add, actions,
     });
     return;
   }
   const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
   lens.show({
-    title: m.name, kind, href: `https://shawn-vincent.github.io/dharmatiles/language.html#${kind === 'line' ? 'lines' : 'regions'}`,
+    title: m.name, kind, href: node.href,
     groups: [{ at: sh.at, schema: { controls }, written, set }], actions,
   });
 }
@@ -238,7 +229,7 @@ async function removeAt(byte, label = 'Entry') {
 export function init() {
   view.subscribe(['sel', 'tileId'], renderLens);
   doc.subscribe(['stack', 'map', 'file', 'writable', 'tileId'], renderLens);
-  server.subscribe(['elements'], renderLens);
+  server.subscribe(['elements', 'language'], renderLens);
   // before the text is checked the sheet reads the build's plan: not redrawn for builds that change nothing it shows
   let plan = null;
   server.subscribe(['tiles'], () => {

@@ -289,7 +289,7 @@ export class Lens {
         d.onclick = () => this.put(g, c.name, 1 + Math.floor(Math.random() * 9999));
         cell.append(d);
       }
-      if (c.unit && !['number', 'word', 'tag', 'count', 'text', 'raw'].includes(c.unit)) cell.append(el('span', 'unit', c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit));
+      if (c.unit && !['number', 'word', 'tag', 'count', 'text', 'raw', 'size', 'height', 'several'].includes(c.unit)) cell.append(el('span', 'unit', c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit));
     }
     if (s && !ro && !c.required) {
       const x = el('button', 'x', '×');
@@ -407,7 +407,7 @@ export class Lens {
       if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
     };
     input.onblur = () => finish(true);
-    if (c.picker === 'size') close = sizeGrid(input, () => finish(true));
+    if (c.unit === 'size') close = sizeGrid(input, () => finish(true));
     else if (num) { pop = this.valuePop(input, c, g.schema?.name, write); close = pop.close; }
   }
 
