@@ -96,13 +96,7 @@ pub(crate) fn options_in(
     if !matches!(system, "db" | "ol") {
         return Err(format!("`{system}` is not a system: use `db` or `ol`"));
     }
-    let mut o = Options {
-        system: system.to_owned(),
-        seed,
-        engine: env!("DT_ENGINE_VERSION").to_owned(),
-        ..Options::default()
-    };
-    o.use_printer(printer, home).map_err(|e| {
+    let say = |e: Vec<dt_eval::Diag>| {
         e.iter()
             .map(|d| match &d.help {
                 Some(h) => format!("{}: {h}", d.message),
@@ -110,7 +104,14 @@ pub(crate) fn options_in(
             })
             .collect::<Vec<_>>()
             .join("; ")
-    })?;
+    };
+    let mut o = Options {
+        system: system.to_owned(),
+        seed,
+        engine: env!("DT_ENGINE_VERSION").to_owned(),
+        ..Options::new().map_err(say)?
+    };
+    o.use_printer(printer, home).map_err(say)?;
     Ok(o)
 }
 

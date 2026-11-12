@@ -57,6 +57,7 @@
   <li><strong>A region that cannot be made is an error:</strong> regions that name each other round a loop (or name a place that does not exist) are now a <code>dt::region</code> error at the region, whether or not an element uses it, instead of an empty region.</li>
   <li><strong>Fallbacks are counted:</strong> when the kernel refuses a finishing step on a cliff stone (a chip cut, relief, a top crack, grain, or an outline for the stone's prism) the stone goes on without it as before, and the build now says so: <code>cliff finishing steps skipped</code> in the summary's left-out line, and <code>tree.leaves_lying_undraped</code> in a tree's stats. Nothing built changes, and no hash moves.</li>
   <li><strong><code>check</code> takes the build target:</strong> <code>dharmatiles check</code> accepts <code>--system</code>, <code>--printer</code> and <code>--seed</code> as <code>build</code> does, so a tile that fails only on OpenLOCK (its units and sizes follow the system) is caught without building.</li>
+  <li><strong>A broken library printer is an error, not a panic:</strong> the command line (<code>build</code>, <code>check</code>, <code>audit</code>) reads the default printer with <code>Options::new()</code>, which reports why it cannot (a broken <code>$DT_LIBRARY</code>) instead of panicking.</li>
 </ul>
 
 <h2 id="v1.0.0">1.0.0 <small>11 November 2026</small></h2>

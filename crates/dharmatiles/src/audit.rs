@@ -1,7 +1,6 @@
 //! `dharmatiles audit`: the printability gate on a binary STL, and the STL
 //! readers the preview shares.
 
-use dt_eval::Options;
 use serde_json::json;
 
 use crate::{AUDIT_FAILED, ERROR, OK};
@@ -20,7 +19,13 @@ pub(crate) fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, jso
         return ERROR;
     };
     let footprint = stl_footprint(&mesh, width, height);
-    let printer = Options::default().printer;
+    let printer = match dt_eval::printer_profile("default", None) {
+        Ok(p) => p,
+        Err(errs) => {
+            crate::report(&errs);
+            return ERROR;
+        }
+    };
     let round = stl_corner_round(footprint);
     let (_, a) = dt_kit::audit_rounded(
         &mesh,

@@ -250,16 +250,17 @@ pub fn printer_profile(name: &str, home: Option<&Path>) -> Result<Printer, Vec<D
 /// element asks).
 pub const DRAFT_CELLS: u32 = 48;
 
-impl Default for Options {
+impl Options {
     /// DungeonBlocks, the tile's seed, and the library's default printer
-    /// (library/printers/default.dtile).
+    /// (library/printers/default.dtile), read from the library on disk (see
+    /// [`source::library_dir`]). The program's own paths use this one.
     ///
-    /// # Panics
-    /// If the bundled printer profile doesn't decode (a test guards this).
-    fn default() -> Self {
-        let printer = doc::printer(&Library, doc::PRINTER)
-            .unwrap_or_else(|e| panic!("the bundled printer must decode: {e:?}"));
-        Self {
+    /// # Errors
+    /// The library's default printer cannot be read or does not decode (a
+    /// broken `$DT_LIBRARY`, say), as the diagnostics from the document.
+    pub fn new() -> Result<Self, Vec<Diag>> {
+        let printer = doc::printer(&Library, doc::PRINTER)?;
+        Ok(Self {
             system: "db".to_owned(),
             seed: None,
             printer: Profile {
@@ -270,7 +271,19 @@ impl Default for Options {
             draft: false,
             debug: false,
             current_format: dt_doc::header::FORMAT,
-        }
+        })
+    }
+}
+
+impl Default for Options {
+    /// [`Options::new`], for tests and examples, where the bundled library
+    /// is known good. This can fail when the library on disk is broken, so
+    /// the program's own paths use [`Options::new`] and report the error.
+    ///
+    /// # Panics
+    /// If the library's default printer does not decode.
+    fn default() -> Self {
+        Self::new().unwrap_or_else(|e| panic!("the bundled printer must decode: {e:?}"))
     }
 }
 
