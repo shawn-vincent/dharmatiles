@@ -5,7 +5,7 @@ import { Lens, kdlString } from '../lens.js';
 import { byteToIndex } from '../text.js';
 import { failed, showError } from '../problems.js';
 import { $, host, offerMine, toast } from './app.js';
-import { askDraft, edited, replaceBytes, undo } from './document.js';
+import { askDraft, edited, replaceBytes, spansUsable, undo } from './document.js';
 import { doc, elementNamed, isEntry, isMark, mapNode, markSel, server, stackItems, stem, tile, view } from './stores.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
@@ -15,6 +15,7 @@ import { startRename } from './tiles.js';
 /** A control written on the node at byte `at`, or taken out (`value` null). */
 async function setControl(at, name, value) {
   if (!doc.get().writable) return offerMine();
+  if (!spansUsable()) return;
   const r = await host.edit({ text: doc.get().text, at, name, value });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed(`Could not change ${name}`, r); return; }
   edited(r.body.text, 'lens', `Changed ${name}`);
@@ -58,6 +59,7 @@ const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.
 /** A whole-node change to the tile's text (insert or remove), as one step of history. */
 async function tileEdit(body, label) {
   if (!doc.get().writable) return offerMine();
+  if (!spansUsable()) return;
   const r = await host.edit({ text: doc.get().text, ...body });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed(`Could not make the change: ${label}`, r); return; }
   edited(r.body.text, 'lens', label);
@@ -97,6 +99,7 @@ async function renameMark(kind, old, name) {
 /** Change one clause of a region (a `within`'s distance or place, an `except`'s regions), through the server's edit route like the other controls. */
 async function setClause(clause, name, value) {
   if (!doc.get().writable) return offerMine();
+  if (!spansUsable()) return;
   if (name === 'except') {
     const run = clause.regions;
     if (!value.length) { doc.set({ note: 'an except names at least one region; take the clause out instead' }); return null; }
@@ -212,6 +215,7 @@ function renderLens() {
 /** Comment a stack entry out (`/-`), with a way back. */
 function muteAt(byte, label = 'Entry') {
   if (!doc.get().writable) return offerMine();
+  if (!spansUsable()) return;
   const t = doc.get().text, i = byteToIndex(t, byte);
   if (isEntry(view.get().sel)) view.set({ sel: null });
   edited(`${t.slice(0, i)}/- ${t.slice(i)}`, 'view', `Hid ${label}`);
@@ -221,6 +225,7 @@ function muteAt(byte, label = 'Entry') {
 /** Take a stack entry out of the text, with a way back. */
 async function removeAt(byte, label = 'Entry') {
   if (!doc.get().writable) return offerMine();
+  if (!spansUsable()) return;
   const r = await host.edit({ op: 'remove', text: doc.get().text, at: byte });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be taken out' }); failed(`Could not delete ${label}`, r); return; }
   view.set({ sel: null });

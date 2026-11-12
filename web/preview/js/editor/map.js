@@ -6,7 +6,7 @@ import { Tools } from '../place.js';
 import { byteToIndex } from '../text.js';
 import { failed } from '../problems.js';
 import { $, host, offerMine, viewer } from './app.js';
-import { askDraft, edited, openFile, replaceBytes, texts } from './document.js';
+import { askDraft, edited, openFile, replaceBytes, spansUsable, texts } from './document.js';
 import { doc, isEntry, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
 
 export let tools = null; // the bar's tools (below)
@@ -97,6 +97,7 @@ async function insertNode(place, node, { select: sel } = {}) {
     await openFile(null);
     if (doc.get().file !== t.path) return;
   }
+  if (!spansUsable()) return;
   const r = await host.edit({ op: 'insert', text: doc.get().text, place, node });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be written' }); failed('Could not add to the tile', r); return; }
   if (sel) view.set({ sel, textFile: null }); else doc.set({ selectAt: r.body.at });

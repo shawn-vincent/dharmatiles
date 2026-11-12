@@ -8,8 +8,9 @@ import { describeChange } from '../history.js';
 import { parsePayload } from '../payload.js';
 import { TextPane, byteToIndex } from '../text.js';
 import { isOffline } from '../host.js';
+import { STALE_NOTE, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
-import { $, FAMILY, host, offerMine } from './app.js';
+import { $, FAMILY, host, offerMine, toast } from './app.js';
 import { dirty, doc, server, stem, tile, view } from './stores.js';
 
 // ---- the document: the text, one history, checking and saving -----------------
@@ -19,7 +20,7 @@ import { dirty, doc, server, stem, tile, view } from './stores.js';
 // cleanly; the worker sees the saved file and rebuilds.  A text with a
 // mistake stays here, unsaved, until it is fixed.
 
-const run = { history: [], at: -1, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, checkSeq: 0, saving: false };
+const run = { history: [], at: -1, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, scrubText: null, checkSeq: 0, saving: false };
 
 export const texts = new TextPane($('code'), {
   onEdit: (text, kind) => {
@@ -161,8 +162,24 @@ async function updateFile() {
 /** Replace bytes [start, start+len) of the text; `end` (the scrub is over) makes it a step of history and a save. */
 export function replaceBytes(start, len, text, end) {
   const t = doc.get().text;
+  // a scrub's later steps follow the text its own steps made (the caller tracks the span); the first needs a clean check of this text
+  if (t !== run.scrubText && !spansUsable()) return false;
   const i = byteToIndex(t, start), j = byteToIndex(t, start + len);
-  edited(t.slice(0, i) + text + t.slice(j), end ? 'lens' : 'drag');
+  const next = t.slice(0, i) + text + t.slice(j);
+  run.scrubText = end ? null : next;
+  edited(next, end ? 'lens' : 'drag');
+  return true;
+}
+
+/**
+ * May an edit that writes at a span (a stack entry's, the map's) go ahead?
+ * Only when the text shown is the text last checked, cleanly: otherwise the
+ * span is from older text.  Says why when it may not.
+ */
+export function spansUsable() {
+  if (spansFresh(doc.get(), view.get().tileId)) return true;
+  toast(STALE_NOTE);
+  return false;
 }
 
 function changed(dragging = false) {
@@ -180,7 +197,7 @@ async function check() {
   if (r.status === 0) return false; // the server is away: not checked yet, and checked again when it is back
   if (failed(`Could not check ${stem(t)}`, r)) return false;
   if (seq !== run.checkSeq || text !== doc.get().text || !r.body || t.id !== view.get().tileId) return false;
-  const patch = { note: null, checked: text, ok: !!r.body.ok, errors: r.body.errors || [] };
+  const patch = { note: null, checked: text, checkedFile: d.file, checkedTile: d.tileId, ok: !!r.body.ok, errors: r.body.errors || [] };
   if (r.body.ok && r.body.stack) patch.stack = r.body.stack; // the last good stack stays while there are mistakes
   if (r.body.ok && r.body.map) patch.map = r.body.map;
   if (typeof r.body.format === 'number') patch.format = r.body.format; // known even while there are mistakes
@@ -238,7 +255,8 @@ function confirmDiscard() {
       if (discard && base != null) {
         texts.setText(base);
         resetHistory(base);
-        doc.set({ text: base, checked: base, ok: true, errors: [], conflict: null, note: null });
+        doc.set({ text: base, checked: null, ok: true, errors: [], conflict: null, note: null });
+        changed(); // checked afresh: the stack and map held are of the text just discarded
       }
       leaving = null;
       resolve(discard);
@@ -282,7 +300,7 @@ export async function loadText(file) {
       doc.set({
         tileId: t.id, file: v.file, text: v.text, base: v.text, writable: v.writable,
         conflict: null, note: null,
-        checked: v.text, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's
+        checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
         ...(fresh ? { map: null, format: 0 } : {}),
       });
       if (fresh && carried && carried.history[carried.at]?.text === v.text) {
@@ -291,7 +309,7 @@ export async function loadText(file) {
       else if (run.history[run.at]?.text !== v.text) record(v.text, 'disk'); // changed on disk: one more step
       renderHistory();
       if (fresh) carried = null;
-      if (v.file === t.path && !doc.get().map) check(); // its map, for the overlay
+      check(); // its stack and map, for the sheet and the overlay: spans of exactly this text
       return true;
     } catch (e) {
       loadKey = null;
