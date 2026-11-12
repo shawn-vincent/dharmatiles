@@ -95,7 +95,7 @@ function renderDebugLegend(d) {
 
 // popovers: one open at a time (`view.popover`); Esc or a click outside closes it
 const popovers = [
-  ['dispbtn', 'display'], ['layoutbtn', 'layout-menu'], ['export', 'export-card'], ['target', 'target-card'],
+  ['dispbtn', 'display'], ['export', 'export-card'], ['target', 'target-card'],
   ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
 ];
 const openPopover = (id) => view.set({ popover: view.get().popover === id ? null : id });
@@ -157,10 +157,10 @@ function setProjection(ortho, animated = true) {
   $('b-proj').firstChild.textContent = ortho ? 'Orthographic ' : 'Perspective ';
   try { localStorage.setItem('dt-preview-ortho', ortho ? '1' : '0'); } catch { /* private mode */ }
 }
-// the panel: beside the view (one level at a time, or the source), or hidden (Look: the view alone)
+// the panel: beside the view (one level at a time, or the source), or hidden; the title bar's one panel button (or \\) shows or hides it
 const layout = new Layout($('app'), (st) => {
-  $('reopen').hidden = !st.hidePanel;
-  for (const b of $('layout-seg').children) b.classList.toggle('on', b.dataset.preset === (st.hidePanel ? 'look' : 'edit'));
+  $('panelbtn').setAttribute('aria-pressed', String(!st.hidePanel));
+  $('panelbtn').classList.toggle('on', !st.hidePanel);
   $('t-right').checked = st.side === 'right';
 });
 /** The About box: the application version and the tile formats it reads, asked of the program. */
@@ -251,8 +251,7 @@ export function init() {
   applyTheme();
   $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
   try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* private mode: the default stands */ }
-  $('show-panel').onclick = () => layout.toggle();
-  for (const b of $('layout-seg').children) b.onclick = () => layout.preset(b.dataset.preset);
+  $('panelbtn').onclick = () => layout.toggle();
   $('t-right').onchange = (e) => layout.set({ side: e.target.checked ? 'right' : 'left' });
   $('b-keys').onclick = showKeys;
   $('b-about').onclick = showAbout;

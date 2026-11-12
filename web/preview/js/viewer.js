@@ -119,6 +119,7 @@ export class Viewer {
     this.persp.aspect = w / h;
     this.persp.updateProjectionMatrix();
     this.fitOrtho();
+    this.reframe?.();
     this.draw();
   }
 

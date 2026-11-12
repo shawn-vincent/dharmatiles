@@ -266,6 +266,8 @@ function msgSash() {
       if (h == null) localStorage.removeItem('dt-msgh'); else localStorage.setItem('dt-msgh', String(parseInt(p.style.height, 10)));
     } catch { /* private mode: the height is not kept */ }
   };
+  // the messages take their room from the 3D view (not over it): the view's canvas ends above them
+  new ResizeObserver(() => $('view').style.setProperty('--msgh', `${p.hidden ? 0 : p.offsetHeight}px`)).observe(p);
   let kept = null;
   try { kept = Number(localStorage.getItem('dt-msgh')) || null; } catch { /* private mode, or nothing kept */ }
   if (kept) setH(kept, false);

@@ -14,6 +14,7 @@
 <body>
 <div id="app">
   <header id="title">
+    <button id="panelbtn" class="btn icon" type="button" aria-pressed="true" title="Show or hide the panel (\)" aria-label="Panel"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.4"/></svg></button>
     <span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i><span class="txt">dharmatiles</span></span>
     <div class="seg" id="modes" role="group" aria-label="What you are making"><button type="button" data-mode="tile" aria-pressed="true" title="A tile: its source and what it is made of">Tile</button><button type="button" data-mode="plates" aria-pressed="false" title="Plates: a print list laid on a printer's bed">Plates</button></div>
     <span id="tileplan" class="muted"></span>
@@ -88,17 +89,7 @@
     <canvas id="canvas" tabindex="0" aria-label="3D tile view"></canvas>
     <canvas id="over" aria-hidden="true"></canvas>
     <div id="viewbar">
-      <div id="reopen" hidden><button class="btn" id="show-panel" type="button" title="Show the panel (\)">Panel</button></div>
       <div class="seg" id="views" role="group" aria-label="Views"></div>
-      <button id="layoutbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Layout: which panes show, and where" aria-label="Layout"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.4"/></svg></button>
-      <div id="layout-menu" class="menu" hidden>
-        <div class="cap">Layout</div>
-        <div class="seg" id="layout-seg" role="group" aria-label="Layout">
-          <button type="button" data-preset="edit" title="The panel beside the view">Panel</button>
-          <button type="button" data-preset="look" title="Only the view (\)">Look</button>
-        </div>
-        <label class="switch"><input type="checkbox" id="t-right"> The panel on the right</label>
-      </div>
       <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display" aria-label="Display">⋯</button>
       <div id="display" class="menu" hidden>
         <div class="cap">Display</div>
@@ -108,6 +99,7 @@
         <label class="switch"><input type="checkbox" id="t-grid" checked> Grid <kbd>g</kbd></label>
         <label class="switch"><input type="checkbox" id="t-fade" checked> Fade the rest <kbd>x</kbd></label>
         <label class="switch"><input type="checkbox" id="t-debug"> Debug layer <kbd>⌃⌥D</kbd></label>
+        <label class="switch"><input type="checkbox" id="t-right"> Panel on the right</label>
         <button id="b-proj" class="btn" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
         <div id="allviews"></div>
         <button id="b-keys" class="btn" type="button">Keys <kbd>?</kbd></button>

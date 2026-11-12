@@ -39,7 +39,7 @@ export const cameraMethods = {
       this.draw();
     });
     // the user took hold (drag, wheel, touch): the tween ends and the controls own the camera
-    this.controls.addEventListener('start', () => { userMoving = true; this.cancelTween(true); });
+    this.controls.addEventListener('start', () => { userMoving = true; this.framed = null; this.cancelTween(true); });
     this.controls.addEventListener('end', () => { userMoving = false; });
     this.controls.update();
   },
@@ -167,6 +167,7 @@ export const cameraMethods = {
    * or Under.  A new call starts from wherever the last one had got to.
    */
   flyTo(to) {
+    this.framed = null;
     const from = this.pose();
     const q = new THREE.Quaternion().setFromUnitVectors(from.dir, to.dir);
     if (Math.abs(q.w) < 1e-6) { // opposite ends: turn about the vertical, not any axis
@@ -281,14 +282,22 @@ export const cameraMethods = {
       diag = Math.hypot(20, 20, Math.max(8, b.hi[2] - 0.5));
       centre.z = (0.5 + b.hi[2]) / 2;
     }
-    const dist = (diag / (2 * Math.tan(rad(FOV / 2)))) * 1.1;
+    // fit the visible area: the narrower of its height and its width
+    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight) || 1;
+    const dist = (diag / (2 * Math.tan(rad(FOV / 2)) * Math.min(1, aspect))) * 1.1;
     const to = { target: centre, dir: dirv(elev, azim).normalize(), dist };
-    if (animate) { this.flyTo(to); return; }
+    if (animate) { this.flyTo(to); this.framed = { name, b }; return; }
     this.cancelTween(true);
     this.placeEquivalent(to.target, to.dir, to.dist);
     this.controls.target.copy(to.target);
     this.controls.update();
     this.draw();
+    this.framed = { name, b };
+  },
+
+  /** The view was resized (the window, the panel, the messages): a camera still on a named view frames it again. */
+  reframe() {
+    if (this.framed && !this.tween) this.setView(this.framed.name, false, this.framed.b);
   },
 
   /** The view as a perspective camera would have it (works in either mode). */
@@ -300,6 +309,7 @@ export const cameraMethods = {
   },
 
   setCamera(c) {
+    this.framed = null;
     this.cancelTween(false);
     const t = new THREE.Vector3().fromArray(c.t);
     const p = new THREE.Vector3().fromArray(c.p);
