@@ -56,6 +56,7 @@ mod library;
 mod mcp;
 mod message;
 mod migrate;
+mod plates;
 mod preview;
 mod progress;
 mod watch;
@@ -220,6 +221,69 @@ fn main() -> ExitCode {
                     store: store.as_ref(),
                     tier,
                 },
+                json,
+            )
+        }
+        Command::Plates {
+            list,
+            printer,
+            system,
+            mode,
+            group,
+            gap,
+            margin,
+            turn,
+            format,
+            out,
+            bambu_template,
+            palette,
+            check,
+            json,
+            no_cache,
+        } => {
+            let ov = match plates::overrides(
+                printer,
+                system,
+                mode.as_deref(),
+                group.as_deref(),
+                gap,
+                margin,
+                turn.as_deref(),
+            ) {
+                Ok(o) => o,
+                Err(e) => {
+                    tell!("error: {e}");
+                    return ExitCode::from(ERROR);
+                }
+            };
+            let palette = match palette.as_deref().map(library::read_palette) {
+                None => dt_kit::Palette::default(),
+                Some(Ok(p)) => p,
+                Some(Err(e)) => {
+                    tell!("error: {e}");
+                    return ExitCode::from(ERROR);
+                }
+            };
+            let store = if no_cache || check {
+                None
+            } else {
+                match cache::open() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tell!("error: {e} (or run with --no-cache)");
+                        return ExitCode::from(ERROR);
+                    }
+                }
+            };
+            plates::run(
+                &list,
+                &ov,
+                format.as_deref(),
+                &out_dir(out),
+                bambu_template.as_deref(),
+                &palette,
+                store.as_ref(),
+                check,
                 json,
             )
         }

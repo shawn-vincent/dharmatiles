@@ -29,6 +29,7 @@ pub mod expr;
 pub mod framed;
 pub mod header;
 pub mod known;
+pub mod map;
 pub mod model;
 pub mod place;
 pub mod schema;

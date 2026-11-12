@@ -110,6 +110,66 @@ pub(crate) enum Command {
         #[arg(long, default_value = "full")]
         tier: String,
     },
+    /// Lay a print list (`.dmap`) out on a printer's plates and write them:
+    /// one Bambu Studio project holding every plate, or one STL (or plain
+    /// 3MF) per plate.  Every distinct piece is built in full (through the
+    /// cache), packed large to small by its real footprint, and written to
+    /// `out/plates/<list>/`.
+    Plates {
+        /// The print list.
+        list: PathBuf,
+        /// Printer profile, in place of the list's (default `bambu/x1c-ams`):
+        /// `bambu/x1c`, `sovol/sv06`, or one of yours.
+        #[arg(long)]
+        printer: Option<String>,
+        /// Base system, in place of the list's: `db` or `ol`.
+        #[arg(long)]
+        system: Option<String>,
+        /// `single` (one filament, no paint) or `multicolour`, in place of
+        /// the list's (default: multicolour when the printer holds more than
+        /// one filament).
+        #[arg(long)]
+        mode: Option<String>,
+        /// `filament` (pieces sharing filaments together, then large to
+        /// small) or `size` (large to small alone).
+        #[arg(long)]
+        group: Option<String>,
+        /// Between two pieces, mm (default 3).
+        #[arg(long)]
+        gap: Option<f64>,
+        /// Between a piece and the bed's edge, mm (default 5).
+        #[arg(long)]
+        margin: Option<f64>,
+        /// `allowed` or `off`: may a piece turn a quarter to fit.
+        #[arg(long)]
+        turn: Option<String>,
+        /// `bambu` (one project, every plate; the default for a Bambu
+        /// printer), `stl` (one per plate; the default for any other) or
+        /// `3mf` (one plain 3MF per plate).
+        #[arg(long)]
+        format: Option<String>,
+        /// Output folder (default: `out/` beside `dharmatiles.dtile`, else here).
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// A project saved in Bambu Studio for the printer, whose settings
+        /// the Bambu project takes (default: the profile's `template`, else
+        /// `bambu.3mf` in `$DT_HOME`, else `~/dharmatiles`).
+        #[arg(long)]
+        bambu_template: Option<PathBuf>,
+        /// A palette document to paint with.
+        #[arg(long)]
+        palette: Option<PathBuf>,
+        /// Read and plan only: the printer, the pieces and whether the
+        /// printer has the filaments.  Builds nothing, writes nothing.
+        #[arg(long)]
+        check: bool,
+        /// One JSON report on stdout.
+        #[arg(long)]
+        json: bool,
+        /// Do not read or keep the cache of builds.
+        #[arg(long)]
+        no_cache: bool,
+    },
     /// Read and plan tiles without building geometry.
     Check {
         /// Tile documents.

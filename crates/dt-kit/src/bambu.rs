@@ -189,7 +189,7 @@ pub fn project_settings(threemf: &[u8]) -> Result<String, String> {
 }
 
 /// One entry of a zip, inflated; `None` when the zip has no such entry.
-fn unzip(z: &[u8], want: &str) -> Result<Option<Vec<u8>>, String> {
+pub(crate) fn unzip(z: &[u8], want: &str) -> Result<Option<Vec<u8>>, String> {
     let u16_at = |i: usize| {
         z.get(i..i + 2)
             .map(|b| usize::from(u16::from_le_bytes([b[0], b[1]])))
@@ -239,7 +239,7 @@ fn unzip(z: &[u8], want: &str) -> Result<Option<Vec<u8>>, String> {
 }
 
 /// The template's settings, cut to one filament per colour of `slots`.
-fn settings(template: &str, slots: &[String]) -> Result<String, String> {
+pub(crate) fn settings(template: &str, slots: &[String]) -> Result<String, String> {
     let mut d: Map<String, Value> = serde_json::from_str(template)
         .map_err(|e| format!("the template's project settings: {e}"))?;
     let n = d
@@ -307,11 +307,12 @@ fn settings(template: &str, slots: &[String]) -> Result<String, String> {
     serde_json::to_string_pretty(&Value::Object(d)).map_err(|e| e.to_string())
 }
 
-/// The middle of the template's bed, mm.
+/// The corners of the template's bed: the printable area's least and
+/// greatest x and y, mm.
 ///
 /// # Errors
 /// When the template has no printable area to find the bed from.
-pub fn bed_centre(template: &str) -> Result<[f64; 2], String> {
+pub fn bed_corners(template: &str) -> Result<([f64; 2], [f64; 2]), String> {
     // `settings` has already parsed this same text (and refused it when it is
     // not JSON), so the parse cannot fail here; a Null just finds no bed.
     let v: Value = serde_json::from_str(template).unwrap_or(Value::Null);
@@ -330,14 +331,22 @@ pub fn bed_centre(template: &str) -> Result<[f64; 2], String> {
     if pts.is_empty() {
         return Err("the Bambu template has no printable_area (a list of \"XxY\" corners), so the middle of its bed is unknown; save the template from Bambu Studio with a printer selected".to_owned());
     }
-    let (lo, hi) = pts
+    Ok(pts
         .iter()
         .fold(([f64::MAX; 2], [f64::MIN; 2]), |(lo, hi), p| {
             (
                 [lo[0].min(p[0]), lo[1].min(p[1])],
                 [hi[0].max(p[0]), hi[1].max(p[1])],
             )
-        });
+        }))
+}
+
+/// The middle of the template's bed, mm.
+///
+/// # Errors
+/// When the template has no printable area to find the bed from.
+pub fn bed_centre(template: &str) -> Result<[f64; 2], String> {
+    let (lo, hi) = bed_corners(template)?;
     Ok([(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0])
 }
 
@@ -461,7 +470,7 @@ pub fn bambu_project(
     ]))
 }
 
-fn esc(s: &str) -> String {
+pub(crate) fn esc(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('"', "&quot;")

@@ -1,0 +1,564 @@
+//! Plates: a print list laid on a printer's bed.
+//!
+//! [`plan`] reads a print list ([`dt_doc::map`]) and the tiles it names (no
+//! geometry): which printer, which settings, which pieces, and whether the
+//! printer has the filaments.  [`layout`] puts the pieces on plates once their
+//! real footprints are known (from a build: [`Boxes`]).  [`pack`] holds the
+//! packer, `export` the files.  Nothing here builds a tile: a front end builds
+//! each distinct piece (the CLI for an export, the editor for its view) at the
+//! tier it needs, then asks for the layout.
+
+pub mod export;
+pub mod pack;
+
+use std::path::{Path, PathBuf};
+
+use dt_doc::map::{DEFAULT_PRINTER, Group, Mode, PrintList};
+use dt_kit::Material;
+
+use crate::diag::Diag;
+use crate::machine::{Machine, printer_machine};
+use crate::options::Options;
+use crate::source::{LIB, Source};
+use pack::{Item, Packing, Placed, Spec};
+
+/// What a caller says beyond the list itself (the command line's words).
+#[derive(Clone, Debug, Default)]
+pub struct Overrides {
+    /// A printer profile in place of the list's.
+    pub printer: Option<String>,
+    /// A base system in place of the list's.
+    pub system: Option<String>,
+    /// A print mode in place of the list's.
+    pub mode: Option<Mode>,
+    /// A grouping in place of the list's.
+    pub group: Option<Group>,
+    /// Spacing and margin, mm.
+    pub gap: Option<f64>,
+    /// See [`Overrides::gap`].
+    pub margin: Option<f64>,
+    /// A turn setting in place of the list's.
+    pub turn: Option<bool>,
+}
+
+/// Where the list lives and what it can see.
+#[derive(Clone, Copy)]
+pub struct Context<'a> {
+    /// Reads the tiles.
+    pub sources: &'a dyn Source,
+    /// The folder the list is in: a tile path with no `lib:` or `home:` is
+    /// read from here.
+    pub list_dir: Option<&'a Path>,
+    /// `home:` and your own printers: `$DT_HOME`, else `~/dharmatiles`.
+    pub home: Option<&'a Path>,
+    /// Build options to start from: the engine label, and the cells.
+    pub base: &'a Options,
+}
+
+/// The settings a layout is made with.
+#[derive(Clone, Debug)]
+pub struct Settings {
+    /// The printer.
+    pub machine: Machine,
+    /// The base system pieces are built for, where a piece names none.
+    pub system: String,
+    /// Single colour or multicolour.
+    pub mode: Mode,
+    /// How multicolour pieces are grouped.
+    pub group: Group,
+    /// Between two pieces, mm.
+    pub gap: f64,
+    /// Between a piece and the bed's edge, mm.
+    pub margin: f64,
+    /// May a piece turn a quarter.
+    pub turn: bool,
+}
+
+/// The gap between pieces, mm, where none is written.
+pub const GAP_MM: f64 = 3.0;
+/// The margin to the bed's edge, mm, where none is written.
+pub const MARGIN_MM: f64 = 5.0;
+
+/// One distinct piece: a tile, at a seed, for a system.  Copies share it.
+#[derive(Clone, Debug)]
+pub struct Kind {
+    /// The tile as the list wrote it.
+    pub tile: String,
+    /// The path the tile is read from.
+    pub path: String,
+    /// The seed it is built with, if the list gives one.
+    pub seed: Option<u64>,
+    /// The base system it is built for.
+    pub system: String,
+    /// How many copies.
+    pub count: u32,
+    /// Its short name (`1x1-grass`).
+    pub name: String,
+    /// Its footprint if it were exactly its squares, mm: the layout's
+    /// stand-in until a build says what it really covers.
+    pub nominal: [f64; 2],
+    /// The filaments the tile's stack says it needs, at most (see
+    /// [`estimate`]); a build gives the real ones.
+    pub estimate: Vec<Material>,
+}
+
+/// A print list read and checked, not yet laid out.
+#[derive(Clone, Debug)]
+pub struct Plan {
+    /// What it is laid out with.
+    pub settings: Settings,
+    /// The distinct pieces, in the order the list first names them.
+    pub kinds: Vec<Kind>,
+    /// Pieces the list leaves off (`print=skip`), by tile.
+    pub skipped: Vec<String>,
+    /// The list's own name (its file's stem).
+    pub title: String,
+}
+
+impl Plan {
+    /// The options piece `k` is built with: the list's system and the
+    /// piece's seed, for the printer's floors.
+    ///
+    /// # Errors
+    /// The printer profile cannot be read.
+    pub fn options(&self, k: usize, base: &Options, home: Option<&Path>) -> Result<Options, Vec<Diag>> {
+        let kind = &self.kinds[k];
+        let mut o = Options {
+            system: kind.system.clone(),
+            seed: kind.seed.or(base.seed),
+            ..base.clone()
+        };
+        o.use_printer(&self.settings.machine.name, home)?;
+        Ok(o)
+    }
+
+    /// How many pieces in all.
+    #[must_use]
+    pub fn pieces(&self) -> usize {
+        self.kinds.iter().map(|k| k.count as usize).sum()
+    }
+}
+
+/// The materials a tile's stack can make, by what its elements write.  An
+/// upper bound that never leaves one out (a tree with no leaves still counts
+/// its foliage): the printer's slots are checked against it before anything
+/// builds, and a build gives the real filaments.  Earth is always there: the
+/// connector prints in it.
+#[must_use]
+pub fn estimate(tile: &crate::Tile) -> Vec<Material> {
+    fn of(what: &str, out: &mut Vec<Material>) {
+        match what {
+            "ground" | "dirt" => out.push(Material::Earth),
+            "rock" | "stone" | "boulder" | "pebble" | "cliff" => out.push(Material::Rock),
+            "flower" => out.push(Material::Flower),
+            "water" => out.push(Material::Water),
+            "grass" | "reeds" => out.push(Material::Grass),
+            "wall" | "floor" => out.push(Material::Masonry),
+            "tree" => out.extend([Material::Wood, Material::Leaf]),
+            _ => {}
+        }
+    }
+    let mut out = vec![Material::Earth];
+    for e in &tile.stack {
+        of(&e.what.value, &mut out);
+        for c in &e.children {
+            of(&c.what.value, &mut out);
+        }
+    }
+    dt_kit::filaments_of(&out)
+}
+
+/// The path a piece's tile is read from: `lib:tiles/ground/1x1-grass` is the
+/// library's, `home:meadows/glade` is under `home`, anything else is beside
+/// the list (or absolute).  A missing `.dtile` is added.
+///
+/// # Errors
+/// `home:` with no home, or a relative path with no folder to be relative to.
+pub fn tile_path(tile: &str, list_dir: Option<&Path>, home: Option<&Path>) -> Result<String, String> {
+    let with_ext = |p: String| {
+        if p.to_ascii_lowercase().ends_with(".dtile") {
+            p
+        } else {
+            format!("{p}.dtile")
+        }
+    };
+    if tile.starts_with(LIB) {
+        return Ok(with_ext(tile.to_owned()));
+    }
+    if let Some(rest) = tile.strip_prefix("home:") {
+        let h = home.ok_or("`home:` needs your tiles folder, and there is none ($DT_HOME, else ~/dharmatiles)")?;
+        return Ok(with_ext(h.join(rest.trim_start_matches('/')).to_string_lossy().into_owned()));
+    }
+    let p = PathBuf::from(tile);
+    if p.is_absolute() {
+        return Ok(with_ext(tile.to_owned()));
+    }
+    let d = list_dir.ok_or_else(|| {
+        format!("`{tile}` is relative to the list's folder, and this list has none: write `lib:`, `home:` or an absolute path")
+    })?;
+    Ok(with_ext(d.join(p).to_string_lossy().into_owned()))
+}
+
+/// Read a print list's tiles and settings.
+///
+/// # Errors
+/// Every problem found, each at the text that caused it: an unknown printer or
+/// one with no bed, a tile that is missing or does not check, a printer with
+/// fewer filaments than a piece needs in multicolour.
+pub fn plan(
+    list: &PrintList,
+    title: &str,
+    ctx: &Context,
+    ov: &Overrides,
+) -> Result<Plan, Vec<Diag>> {
+    let mut errors: Vec<Diag> = Vec::new();
+    let pl = &list.plates;
+    let printer = ov
+        .printer
+        .clone()
+        .or_else(|| pl.printer.as_ref().map(|p| p.value.clone()))
+        .unwrap_or_else(|| DEFAULT_PRINTER.to_owned());
+    let machine = match printer_machine(&printer, ctx.home) {
+        Ok(m) => Some(m),
+        Err(mut e) => {
+            // a mistake in the list's own `printer=` points there
+            if ov.printer.is_none()
+                && let Some(p) = &pl.printer
+            {
+                e = e
+                    .into_iter()
+                    .map(|d| {
+                        Diag::at(&list.src, p.span, "dt::printer", d.message, "this printer")
+                            .maybe_help(d.help)
+                    })
+                    .collect();
+            }
+            errors.extend(e);
+            None
+        }
+    };
+    if let Some(m) = &machine
+        && let Err(d) = m.bed_or_say()
+    {
+        let d = match (&pl.printer, ov.printer.is_none()) {
+            (Some(p), true) => Diag::at(&list.src, p.span, d.code, d.message, "no bed").maybe_help(d.help),
+            _ => d,
+        };
+        errors.push(d);
+    }
+    let system = ov
+        .system
+        .clone()
+        .or_else(|| pl.system.as_ref().map(|s| s.value.clone()))
+        .unwrap_or_else(|| ctx.base.system.clone());
+    let slots = machine.as_ref().map_or(1, Machine::slot_count);
+    let mode = ov
+        .mode
+        .or_else(|| pl.mode.as_ref().map(|m| m.value))
+        .unwrap_or(if slots > 1 { Mode::Multicolour } else { Mode::Single });
+    let group = ov
+        .group
+        .or_else(|| pl.group.as_ref().map(|g| g.value))
+        .unwrap_or(Group::Filament);
+    let gap = ov.gap.or_else(|| pl.gap.as_ref().map(|g| g.value)).unwrap_or(GAP_MM);
+    let margin = ov
+        .margin
+        .or_else(|| pl.margin.as_ref().map(|g| g.value))
+        .unwrap_or(MARGIN_MM);
+    let turn = ov.turn.or_else(|| pl.turn.as_ref().map(|g| g.value)).unwrap_or(true);
+
+    let mut kinds: Vec<Kind> = Vec::new();
+    let mut skipped = Vec::new();
+    for p in &list.pieces {
+        if p.skip {
+            skipped.push(p.tile.value.clone());
+            continue;
+        }
+        let path = match tile_path(&p.tile.value, ctx.list_dir, ctx.home) {
+            Ok(x) => x,
+            Err(e) => {
+                errors.push(Diag::at(&list.src, p.tile.span, "dt::map", e, "this tile"));
+                continue;
+            }
+        };
+        let sys = p.system.as_ref().map_or_else(|| system.clone(), |s| s.value.clone());
+        let seed = p.seed.as_ref().map(|s| s.value);
+        if let Some(k) = kinds
+            .iter_mut()
+            .find(|k| k.path == path && k.seed == seed && k.system == sys)
+        {
+            k.count += p.count.value;
+            continue;
+        }
+        let opts = Options {
+            system: sys.clone(),
+            seed,
+            ..ctx.base.clone()
+        };
+        let checked = match crate::check(ctx.sources, &path, &opts) {
+            Ok(c) => c,
+            Err(e) => {
+                // the tile's own mistakes, where the tile writes them; and where the
+                // list names it
+                errors.push(
+                    Diag::at(&list.src, p.tile.span, "dt::map", format!("`{}` does not check", p.tile.value), "this tile")
+                        .help(e.first().map_or_else(String::new, |d| d.message.clone())),
+                );
+                errors.extend(e);
+                continue;
+            }
+        };
+        let Some(tile) = checked.tile.as_ref() else {
+            errors.push(Diag::at(
+                &list.src,
+                p.tile.span,
+                "dt::map",
+                format!("`{}` is not a tile", p.tile.value),
+                "no tile in it",
+            ));
+            continue;
+        };
+        let frame = dt_kit::Frame::for_system(&sys, tile.cols, tile.rows);
+        kinds.push(Kind {
+            tile: p.tile.value.clone(),
+            name: path
+                .rsplit(['/', ':'])
+                .next()
+                .unwrap_or(&path)
+                .trim_end_matches(".dtile")
+                .to_owned(),
+            path,
+            seed,
+            system: sys,
+            count: p.count.value,
+            nominal: frame.size_mm(),
+            estimate: estimate(tile),
+        });
+    }
+    if kinds.is_empty() && errors.is_empty() {
+        errors.push(
+            Diag::at(
+                &list.src,
+                list.span,
+                "dt::map",
+                "there is nothing to print",
+                "no pieces",
+            )
+            .help("every piece is `print=skip`, or the list has none: add `piece \"lib:tiles/ground/1x1-grass\" count=4`"),
+        );
+    }
+    // the printer's filaments, before anything builds
+    if mode == Mode::Multicolour {
+        for k in &kinds {
+            if k.estimate.len() > slots as usize {
+                let names: Vec<&str> = k.estimate.iter().map(|m| m.name()).collect();
+                let span = list
+                    .pieces
+                    .iter()
+                    .find(|p| p.tile.value == k.tile)
+                    .map(|p| p.tile.span);
+                let d = format!(
+                    "{} needs {} filaments ({}), this printer has {}",
+                    k.name,
+                    k.estimate.len(),
+                    names.join(", "),
+                    slots
+                );
+                let help = if slots == 1 {
+                    "print in single colour (`mode=\"single\"`), or choose a printer with an AMS such as bambu/x1c-ams".to_owned()
+                } else {
+                    "print in single colour (`mode=\"single\"`), or choose a printer with more slots".to_owned()
+                };
+                errors.push(match span {
+                    Some(s) => Diag::at(&list.src, s, "dt::slots", d, "needs too many filaments").help(help),
+                    None => Diag::plain("dt::slots", d).help(help),
+                });
+            }
+        }
+    }
+    let Some(machine) = machine.filter(|_| errors.is_empty()) else {
+        return Err(errors);
+    };
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+    Ok(Plan {
+        settings: Settings {
+            machine,
+            system,
+            mode,
+            group,
+            gap,
+            margin,
+            turn,
+        },
+        kinds,
+        skipped,
+        title: title.to_owned(),
+    })
+}
+
+/// What a piece really covers, from a build of it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Boxes {
+    /// Its footprint, the top-down box of the whole piece (a crown over the
+    /// edge included): width by depth, mm.
+    pub size: [f64; 2],
+    /// Its height from its lowest point, mm.
+    pub height: f64,
+    /// The filaments it prints in, in order.
+    pub filaments: Vec<Material>,
+}
+
+impl Boxes {
+    /// From a mesh and the material of each of its triangles.
+    #[must_use]
+    pub fn of(mesh: &dt_kit::TriMesh, materials: &[Material]) -> Self {
+        let (lo, hi) = dt_kit::box_of(mesh);
+        Self {
+            size: [hi[0] - lo[0], hi[1] - lo[1]],
+            height: hi[2] - lo[2],
+            filaments: dt_kit::filaments_of(materials),
+        }
+    }
+}
+
+/// One piece on a plate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Instance {
+    /// Which distinct piece ([`Plan::kinds`]).
+    pub kind: usize,
+    /// Which copy of it, from 0.
+    pub copy: usize,
+    /// Where it stands.
+    pub at: Placed,
+}
+
+/// The plates.
+#[derive(Clone, Debug)]
+pub struct Layout {
+    /// The pieces on each plate, in the order they were put down.
+    pub plates: Vec<Vec<Instance>>,
+    /// The filaments each plate needs (empty in single colour).
+    pub filaments: Vec<Vec<Material>>,
+    /// More plates grouping by filament took than size-only packing would
+    /// have.
+    pub grouping_cost: Option<usize>,
+}
+
+impl Layout {
+    /// How many pieces in all.
+    #[must_use]
+    pub fn pieces(&self) -> usize {
+        self.plates.iter().map(Vec::len).sum()
+    }
+}
+
+/// The packer's spec for a plan.
+///
+/// # Errors
+/// A printer with no bed.
+pub fn spec_of(settings: &Settings) -> Result<Spec, Diag> {
+    Ok(Spec {
+        bed: settings.machine.bed_or_say()?,
+        excluded: settings.machine.excluded.clone(),
+        gap: settings.gap,
+        margin: settings.margin,
+        turn: settings.turn,
+        slots: settings.machine.slot_count(),
+        mode: settings.mode,
+        group: settings.group,
+    })
+}
+
+/// Put every piece on a plate.  `boxes[k]` is what piece `k` really covers.
+///
+/// # Errors
+/// A piece bigger than the bed or the printer's height, or needing more
+/// filaments than the printer has: each named, by tile.
+pub fn layout(plan: &Plan, boxes: &[Boxes]) -> Result<Layout, Vec<Diag>> {
+    let spec = spec_of(&plan.settings).map_err(|d| vec![d])?;
+    let mut items: Vec<Item> = Vec::new();
+    let mut who: Vec<(usize, usize)> = Vec::new();
+    for (k, kind) in plan.kinds.iter().enumerate() {
+        for copy in 0..kind.count as usize {
+            items.push(Item {
+                id: items.len(),
+                size: boxes[k].size,
+                filaments: boxes[k].filaments.clone(),
+            });
+            who.push((k, copy));
+        }
+    }
+    let mut errors = Vec::new();
+    if let Some(h) = plan.settings.machine.height {
+        for (k, kind) in plan.kinds.iter().enumerate() {
+            if boxes[k].height > h + 1e-6 {
+                errors.push(
+                    Diag::plain(
+                        "dt::plates",
+                        format!(
+                            "{} stands {:.1} mm tall and the {} prints up to {h} mm",
+                            kind.name,
+                            boxes[k].height,
+                            plan.settings.machine.label()
+                        ),
+                    )
+                    .help("choose a taller printer, or a shorter tile"),
+                );
+            }
+        }
+    }
+    let packing: Packing = pack::pack(&items, &spec);
+    for &id in &packing.too_big {
+        let (k, _) = who[id];
+        let s = boxes[k].size;
+        errors.push(
+            Diag::plain(
+                "dt::plates",
+                format!(
+                    "{} covers {:.1} x {:.1} mm and does not fit the {} x {} mm bed ({} mm margin, zones left out)",
+                    plan.kinds[k].name, s[0], s[1], spec.bed[0], spec.bed[1], spec.margin
+                ),
+            )
+            .help("choose a bigger bed, or a smaller margin"),
+        );
+    }
+    for &id in &packing.too_colourful {
+        let (k, _) = who[id];
+        errors.push(
+            Diag::plain(
+                "dt::slots",
+                format!(
+                    "{} needs {} filaments, this printer has {}",
+                    plan.kinds[k].name,
+                    boxes[k].filaments.len(),
+                    spec.slots
+                ),
+            )
+            .help("print in single colour, or choose a printer with more slots"),
+        );
+    }
+    if !errors.is_empty() {
+        errors.dedup_by(|a, b| a.message == b.message);
+        return Err(errors);
+    }
+    let plates = packing
+        .plates
+        .iter()
+        .map(|p| {
+            p.placed
+                .iter()
+                .map(|at| {
+                    let (kind, copy) = who[at.id];
+                    Instance { kind, copy, at: *at }
+                })
+                .collect()
+        })
+        .collect();
+    Ok(Layout {
+        plates,
+        filaments: packing.plates.iter().map(|p| p.filaments.clone()).collect(),
+        grouping_cost: packing.grouping_cost,
+    })
+}

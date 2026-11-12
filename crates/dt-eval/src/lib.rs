@@ -23,6 +23,7 @@ mod lower;
 pub mod machine;
 mod options;
 pub mod places;
+pub mod plates;
 pub mod plan;
 pub mod progress;
 pub mod regions;
