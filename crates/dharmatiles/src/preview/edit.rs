@@ -10,6 +10,9 @@
 //!   region), and `op: remove-children` `{at, names}` takes out that node's
 //!   children called one of `names` (a region's `boundedBy` and `fill`).  Nothing is written to
 //!   disk: the page saves the result.
+//! - `/api/names` `{text}`: the definitions, regions, lines and points the
+//!   text makes, read by the parser (`{ok, defs, regions, lines, points}`),
+//!   for completion between checks.
 //! - `/api/check-value` `{element, control, typed}`: what the reader would
 //!   refuse in `typed` for that control (`{message, label, help}`, or
 //!   `{message: null}`), by the same check as a written value, so the sheet
@@ -90,6 +93,9 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     };
     if path == "/api/edit" {
         return edit(&v).into();
+    }
+    if path == "/api/names" {
+        return names(&v).into();
     }
     if path == "/api/check-value" {
         return check_value(shared, &v).into();
@@ -404,6 +410,26 @@ fn kdl_value(v: &Value) -> Option<kdl::KdlValue> {
         Value::String(s) => kdl::KdlValue::String(s.clone()),
         _ => return None,
     })
+}
+
+/// `/api/names` `{text}`: the names the text makes (definitions, regions,
+/// lines, points), by the parser, for completion between checks.  A text
+/// that does not parse says so (`{ok: false, message}`): its mistakes are
+/// the check's to show, and the page keeps the names it had.
+fn names(v: &Value) -> (&'static str, Value) {
+    let Some(text) = v["text"].as_str() else {
+        return bad("give the text");
+    };
+    match dt_doc::edit::names_in(text) {
+        Ok(n) => (
+            "200 OK",
+            json!({
+                "ok": true,
+                "defs": n.defs, "regions": n.regions, "lines": n.lines, "points": n.points,
+            }),
+        ),
+        Err(e) => ("200 OK", json!({ "ok": false, "message": e.to_string() })),
+    }
 }
 
 /// `/api/check-value`: the reader's check of one typed value.

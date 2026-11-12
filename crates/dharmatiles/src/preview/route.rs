@@ -116,6 +116,7 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             json!({ "version": env!("DT_ENGINE_VERSION"), "formats": dt_doc::header::formats() }),
         ),
         ("GET", "/api/elements", _) => Reply::Json(OK, crate::elements::all_json()),
+        ("GET", "/api/language", _) => Reply::Json(OK, crate::elements::language_json()),
         ("GET", "/api/weightings", _) => {
             let (status, body) = crate::weightings::answer(&|k| req.param(k).map(str::to_owned));
             Reply::Json(status, body)

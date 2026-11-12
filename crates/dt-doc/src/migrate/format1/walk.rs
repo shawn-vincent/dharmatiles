@@ -266,7 +266,14 @@ impl Walk {
                     }
                 }
             }
-            Axis::Word | Axis::Bool | Axis::Tag => {
+            Axis::Word
+            | Axis::Bool
+            | Axis::Tag
+            | Axis::Height
+            | Axis::Size
+            | Axis::Text
+            | Axis::Raw
+            | Axis::Names => {
                 if let Some(s) = e.value().as_string() {
                     self.names.note(s, Kind::Any);
                 }

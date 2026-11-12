@@ -15,6 +15,7 @@ manifold-parallel = ["dt-kit/manifold-parallel"]
 # Only the kit: a element cannot reach into the kernels or another element.
 [dependencies]
 dt-kit.workspace = true
+dt-lang.workspace = true
 libm.workspace = true
 rayon.workspace = true
 

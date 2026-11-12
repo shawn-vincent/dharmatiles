@@ -1,54 +1,26 @@
 //! The language's own words, which a plain name (a `let`, a `param`) may not
-//! take in format 1, and the `$` names an element sets while it builds.
+//! take in format 1, and the `$` names an element sets while it builds.  The
+//! tables are [`dt_lang`]'s; this holds the questions the reader asks of
+//! them and of the element schema.
 
-/// Coordinates: where a point is, how far from the middle, the angle, the
-/// region above.
-pub const COORDINATES: &[&str] = &["x", "y", "d", "a", "parent"];
-
-/// Functions.
-pub const FUNCTIONS: &[&str] = &[
-    "sin", "cos", "abs", "min", "max", "clamp", "smooth", "point", "polar",
-];
-
-/// Weightings.
-pub const WEIGHTINGS: &[&str] = &[
-    "flat", "low", "high", "bell", "peak", "ends", "steps", "mix",
-];
-
-/// Units.
-pub const UNITS: &[&str] = &["sq", "mm", "in", "layer", "deg", "rad", "pi", "dmm"];
-
-/// The `$` names an element sets at each point it works a height out:
-/// where it is in the tile (`$x`, `$y`, squares from the north-west corner,
-/// plain numbers), how far in from the edge of its own region (`$d`) and how
-/// far round it (`$a`), both fractions, and what it stands on (`$bottom`).
-/// `check` knows these; no `let` or `override` may take one.
-pub const POINT_NAMES: &[&str] = &["$x", "$y", "$d", "$a", "$bottom"];
-
-/// `$` names reserved and not yet set by any element: none now.
-pub const RESERVED_POINT_NAMES: &[&str] = &[];
-
-/// The `$` names that are regions: `$tile`, the root, and `$region`, the
-/// region of the thing being built (at a declaration, the enclosing one).
-/// A region is its own kind: it goes to `parent()` and, in later steps, to
-/// the coordinate functions, never to arithmetic.
-pub const REGION_NAMES: &[&str] = &["$tile", "$region"];
-
-/// What a body (dirt, water, floors, a cliff) sets at each node of its
-/// region as it works its top and pins out ([`sets`]).
-pub const BODY_SETS: &[&str] = &["$x", "$y", "$d", "$a", "$bottom", "$region"];
-
-/// What a tree sets at each branch tip, and a rock at its middle, as it works
-/// its top out: the place, its place in the thing's own disc, the ground at
-/// its foot and the disc ([`sets`]).
-pub const TREE_SETS: &[&str] = &["$x", "$y", "$d", "$a", "$bottom", "$region"];
+pub use dt_lang::{
+    BODY_SETS, COORDINATES, POINT_NAMES, REGION_NAMES, RESERVED_POINT_NAMES, TREE_SETS, UNITS,
+};
 
 /// The things whose `top=` is a cloud worked out where the thing stands: a
 /// tree (at each branch tip) and a rock, stone, boulder or pebble (at its
 /// middle).
 #[must_use]
 pub fn takes_cloud_top(element: &str) -> bool {
-    matches!(element, "tree" | "rock" | "stone" | "boulder" | "pebble")
+    crate::schema::element(element).is_some_and(|e| e.cloud_top)
+}
+
+/// True when `element` is a body of the stack (dirt, water, a floor, a
+/// cliff): it paints the surface things stand on and takes a `top=` and
+/// pins of its own.
+#[must_use]
+pub fn is_body(element: &str) -> bool {
+    crate::schema::element(element).is_some_and(|e| e.is_body())
 }
 
 /// The `$` names `element` sets when it calls a formula it was given (its
@@ -56,33 +28,25 @@ pub fn takes_cloud_top(element: &str) -> bool {
 /// installed.  An element with no formula of its own still has a region.
 #[must_use]
 pub fn sets(element: &str) -> &'static [&'static str] {
-    match element {
-        "dirt" | "water" | "flagstones" | "planks" | "cliff" => BODY_SETS,
-        e if takes_cloud_top(e) => TREE_SETS,
-        _ => &["$region"],
+    if is_body(element) {
+        BODY_SETS
+    } else if takes_cloud_top(element) {
+        TREE_SETS
+    } else {
+        dt_lang::REGION_SETS
     }
 }
 
 /// True when `name` is a word of the language (a plain name may not be it).
 #[must_use]
 pub fn is_reserved(name: &str) -> bool {
-    [COORDINATES, FUNCTIONS, WEIGHTINGS, UNITS]
-        .iter()
-        .any(|l| l.contains(&name))
+    dt_lang::kind_of(name).is_some()
 }
 
 /// What kind of word it is, for a message.
 #[must_use]
 pub fn kind(name: &str) -> &'static str {
-    if COORDINATES.contains(&name) {
-        "a coordinate"
-    } else if FUNCTIONS.contains(&name) {
-        "a function"
-    } else if WEIGHTINGS.contains(&name) {
-        "a weighting"
-    } else {
-        "a unit"
-    }
+    dt_lang::kind_of(name).unwrap_or("a unit")
 }
 
 /// True when an element sets `name` itself while it builds (so a document

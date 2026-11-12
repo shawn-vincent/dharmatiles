@@ -16,6 +16,7 @@
 //! | `GET /api/session` | this run's token, which every other `POST` must carry |
 //! | `GET /api/about` | the application version and the tile formats it reads, for the About box |
 //! | `GET /api/elements` | the elements and their controls |
+//! | `GET /api/language` | the tile's nodes with their controls, and the language's units, functions and `$` names |
 //! | `GET /api/weightings?range=` / `?text=` | the weighting functions, each with its curve ([`crate::weightings`]) |
 //! | `POST /api/…` | the editor's calls: check, draft, save, rename, new, export… ([`edit`]) |
 //!

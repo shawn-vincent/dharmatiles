@@ -267,16 +267,6 @@ pub struct Heights {
     pub defaults: Vec<DefaultBody>,
 }
 
-/// The words of the elements that are bodies of the stack: they paint the
-/// surface the things stand on, and take a `top=` and pins of their own.
-#[must_use]
-pub fn is_body(element: &str) -> bool {
-    matches!(
-        element,
-        "dirt" | "water" | "flagstones" | "planks" | "cliff"
-    )
-}
-
 /// A stack entry as the page names it: who it is, what it is and the words
 /// that stand for it (the preview's stack line, the mesh header's stack).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -325,10 +315,10 @@ impl Entry {
         Arc::ptr_eq(&self.src, &outer.src) && a > b && a + self.span.len() <= b + outer.span.len()
     }
 
-    /// Whether it is a body (see [`is_body`]).
+    /// Whether it is a body of the stack (the element schema says which).
     #[must_use]
     pub fn is_body(&self) -> bool {
-        is_body(&self.what.value)
+        dt_doc::words::is_body(&self.what.value)
     }
 }
 
@@ -1645,7 +1635,7 @@ impl Reader<'_> {
                     };
                     let mut pins = Vec::new();
                     let table = scope.lets.table.clone().unwrap_or_default();
-                    if is_body(element.name) {
+                    if element.is_body() {
                         // a body's band: its `top=` and pins, which must be
                         // readable where it is written (format 1)
                         if let Some(t) = &e.top {
@@ -1656,13 +1646,28 @@ impl Reader<'_> {
                                 src,
                                 Reads::At(&e.what.value),
                             );
+                            let prop = property_span(src, t.span, "top");
                             top = Some(Top {
                                 expr: t.value.clone(),
                                 span: t.span,
-                                prop: property_span(src, t.span, "top"),
+                                prop,
                                 src: Arc::clone(src),
                                 crown: None,
                             });
+                            // written, it is a control like the rest: a row of the
+                            // sheet the schema describes (the solver reads `top`)
+                            if let Some(cs) = controls.as_mut() {
+                                cs.push(Setting {
+                                    name: "top".to_owned(),
+                                    value: dt_elements::Value::Formula(dt_elements::Formula {
+                                        owner: entry_id.clone(),
+                                        child: None,
+                                        key: t.value.to_string(),
+                                    }),
+                                    span: prop,
+                                    src: Arc::clone(src),
+                                });
+                            }
                         }
                         let from = Provenance {
                             path: scope.file.path.clone(),

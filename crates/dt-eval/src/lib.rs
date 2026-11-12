@@ -720,7 +720,7 @@ fn check_in(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked,
     // the Solve phase: bands and pins, no meshes, on the lattice the build
     // makes its bodies on: `check` and `build` share this one solve
     let writes: Vec<dt_elements::Write> = plans.iter().map(|p| p.writes).collect();
-    let mut solved = solve::solve(&tile, &frame, opts, &writes, region_tree.as_ref())?;
+    let mut solved = solve::solve(&tile, &frame, opts, region_tree.as_ref())?;
     solved.notes.extend(tile.notes.iter().cloned());
     if let Some(tree) = &region_tree {
         solved.explain.extend(tree.explain(&tile));
@@ -1361,7 +1361,7 @@ impl<'a> Plan<'a> {
         let masonry: Vec<bool> = tile
             .stack
             .iter()
-            .filter(|e| matches!(e.what.value.as_str(), "wall" | "flagstones"))
+            .filter(|e| dt_doc::schema::element(&e.what.value).is_some_and(|l| l.masonry))
             .map(|e| {
                 e.controls.iter().any(|c| {
                     c.name == "style"

@@ -1268,6 +1268,35 @@ impl Draw {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
+    #[test]
+    fn the_function_lists_agree_with_the_language_table() {
+        // dt-lang names the functions and their arity (the reader needs
+        // them without geometry); this table holds the odds behind each
+        let lang: Vec<&str> = dt_lang::WEIGHTINGS.iter().map(|w| w.0).collect();
+        let geom: Vec<&str> = WEIGHTINGS
+            .iter()
+            .map(|w| w.name)
+            .filter(|n| *n != "list")
+            .collect();
+        assert_eq!(lang, geom);
+        for (name, most) in dt_lang::WEIGHTINGS {
+            match name {
+                // any number of weights, up to the cap, and parts with weights
+                "steps" => {
+                    assert!(Weighting::from_call(name, &[1.0; 3]).is_ok());
+                    assert!(Weighting::from_call(name, &[1.0; 33]).is_err());
+                }
+                "mix" => {}
+                _ => {
+                    let args = vec![0.5; most];
+                    assert!(Weighting::from_call(name, &args).is_ok(), "{name}");
+                    let args = vec![0.5; most + 1];
+                    assert!(Weighting::from_call(name, &args).is_err(), "{name}");
+                }
+            }
+        }
+    }
+
     use super::*;
 
     fn all() -> Vec<Weighting> {

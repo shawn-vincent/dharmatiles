@@ -55,17 +55,12 @@ pub fn stage_keys(tile: &Tile, steps: &[Step]) -> Vec<(String, String)> {
 /// the fallback for a tile never built here; real timings replace it.
 #[must_use]
 pub fn default_secs(element: &str, squares: f64) -> f64 {
-    match element {
-        "tree" => 6.5,
-        "grass" => 0.35 * squares,
-        "wall" => 0.7,
-        "flagstones" | "planks" => 0.4,
-        "cliff" => 0.2,
-        "water" => 0.1 * squares,
-        "dirt" => 0.06 * squares,
-        "scatter" | "rock" | "stone" | "boulder" | "pebble" | "flower" | "reeds" => 0.05,
-        "terrain" | "connector" | "lift" => 0.01,
-        _ => 0.1,
+    match dt_doc::schema::element(element) {
+        Some(e) => e.cost.secs(squares),
+        None => match element {
+            "terrain" | "connector" | "lift" => 0.01,
+            _ => 0.1,
+        },
     }
 }
 

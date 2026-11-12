@@ -4,7 +4,9 @@
 //! marked *provisional* have numbers chosen for this table that the element
 //! may still tune; the words themselves are settled.
 
-use crate::schema::{Axis, Control, Element, Limits, PlaceWord, Role, Word};
+use crate::schema::{
+    Axis, Body, Control, Cost, Element, Family, Footprint, Limits, Node, PlaceWord, Role, Word,
+};
 
 const fn c(name: &'static str, value: Axis, about: &'static str) -> Control {
     Control {
@@ -58,6 +60,10 @@ impl Control {
         self.subs = subs;
         self
     }
+    const fn required(mut self) -> Self {
+        self.required = true;
+        self
+    }
     const fn expert(mut self) -> Self {
         self.expert = true;
         self
@@ -97,6 +103,127 @@ impl Control {
         self
     }
 }
+
+// ---- the top of a body or a cloud ----------------------------------------
+
+/// A body's `top=`: the band it fills over its region.  The library's edge
+/// defaults (`library/parts/edges.dtile`) say what each body's is when none is
+/// written.
+const BODY_TOP: Control = c(
+    "top",
+    Axis::Height,
+    "the band the body fills over its region, as a height: `$dirtEdgeHeight + 35dmm`; the library's edge top when not written",
+);
+
+/// A thing's `top=`: how high its top stands, worked out where it stands.
+const THING_TOP: Control = c(
+    "top",
+    Axis::Height,
+    "how high the top stands, as a height worked out where it stands: `$bottom + [4dmm .. 9dmm]`",
+);
+
+// ---- the tile's own nodes -----------------------------------------------
+
+const NAME: Control = c("name", Axis::Word, "what the tile calls it").required();
+
+/// The tile's own nodes, which the editor's sheet draws from the same shape
+/// as an element's controls.
+pub static NODES: &[Node] = &[
+    Node {
+        name: "tile",
+        about: "the tile: its size and seed, and the description the library shows",
+        doc: "language.html",
+        controls: &[
+            c(
+                "size",
+                Axis::Size,
+                "squares across, then up: \"2x1\"; click to type or pick it from a grid, or drag a number",
+            )
+            .default("\"1x1\""),
+            c(
+                "seed",
+                Axis::Number,
+                "the layout: another seed, another arrangement of the same tile",
+            )
+            .default("1"),
+            c(
+                "about",
+                Axis::Text,
+                "a sentence on what the tile is; shown in the library",
+            ),
+        ],
+    },
+    Node {
+        name: "line",
+        about: "a line drawn through points: it bounds regions and places things along it",
+        doc: "language.html#lines",
+        controls: &[
+            NAME,
+            c("wobble", Axis::Mm, "how far the line may wander off its points").default("0"),
+            c(
+                "width",
+                Axis::Mm,
+                "makes the line a strip; an element at= it covers the strip",
+            ),
+            c(
+                "through",
+                Axis::Raw,
+                "the points it runs through: \"x,y\" in squares from the south-west corner (format 1: \"(x, y)\" with units, from the north-west), corners, or edge middles (south, east, north, west); drag a number or click to type",
+            )
+            .required(),
+        ],
+    },
+    Node {
+        name: "region",
+        about: "an area of the tile: what lines enclose around a fill point, what lies within a distance of a place, less what it excepts",
+        doc: "language.html#regions",
+        controls: &[
+            NAME,
+            c(
+                "boundedBy",
+                Axis::Names,
+                "the lines that divide the tile into this region and the rest",
+            )
+            .required(),
+            c(
+                "fill",
+                Axis::Raw,
+                "a point inside the region, \"x,y\" in squares: the region is the area around it that the lines enclose",
+            )
+            .required(),
+        ],
+    },
+    Node {
+        name: "within",
+        about: "a clause of a region: all that lies within a distance of a place",
+        doc: "language.html#regions",
+        controls: &[
+            c(
+                "distance",
+                Axis::Mm,
+                "how far from the place it reaches, in mm at the 35 mm square; a range, \"[8 .. 14]\", draws the depth along the place between the two",
+            )
+            .required(),
+            c(
+                "of",
+                Axis::Word,
+                "the place it reaches round: a point (a disc), a line or tile edge (a strip beside it), a region (a ring round it)",
+            )
+            .required(),
+        ],
+    },
+    Node {
+        name: "except",
+        about: "a clause of a region: regions taken out of it",
+        doc: "language.html#regions",
+        controls: &[c(
+            "except",
+            Axis::Names,
+            "the regions taken out of this one",
+        )
+        .required()],
+    },
+];
 
 // ---- shared words -------------------------------------------------------
 
@@ -163,7 +290,7 @@ static WEAR: &[Word] = &[
     w("worn", "chipped and rounded edges", &[]),
 ];
 
-const fn rock_controls(size: &'static str) -> [Control; 4] {
+const fn rock_controls(size: &'static str) -> [Control; 5] {
     [
         c("size", Axis::Mm, "rock width")
             .over(0.0, 200.0)
@@ -180,14 +307,15 @@ const fn rock_controls(size: &'static str) -> [Control; 4] {
         )
         .limits(0.0, 1.0)
         .weighted(),
+        THING_TOP,
     ]
 }
 
 // default rock widths: 6 to 15 mm
-static ROCK: [Control; 4] = rock_controls("6..15");
-static STONE: [Control; 4] = rock_controls("1..6");
-static BOULDER: [Control; 4] = rock_controls("4.5..8");
-static PEBBLE: [Control; 4] = rock_controls("1..2.2");
+static ROCK: [Control; 5] = rock_controls("6..15");
+static STONE: [Control; 5] = rock_controls("1..6");
+static BOULDER: [Control; 5] = rock_controls("4.5..8");
+static PEBBLE: [Control; 5] = rock_controls("1..2.2");
 
 // ---- flower -------------------------------------------------------------
 
@@ -399,6 +527,7 @@ static TREE: &[Control] = &[
         "the generator's six branching knobs (expert: parts files only)",
     )
     .expert(),
+    THING_TOP,
 ];
 
 // ---- wall ---------------------------------------------------------------
@@ -505,6 +634,7 @@ static WALL: &[Control] = &[
 // ---- floors -------------------------------------------------------------
 
 static FLAGSTONES: &[Control] = &[
+    BODY_TOP,
     c("style", Axis::Word, "cut slabs, or drystone flagstones")
         .words(&[
             w("cut-stone", "dressed slabs on the square grid", &[]),
@@ -524,6 +654,7 @@ static FLAGSTONES: &[Control] = &[
 ];
 
 static PLANKS: &[Control] = &[
+    BODY_TOP,
     c("style", Axis::Word, "how the boards are cut")
         .words(&[
             w("random", "boards of mixed lengths, joints staggered", &[]),
@@ -610,6 +741,7 @@ static STONE_SIZE: &[Word] = &[
 ];
 
 static CLIFF: &[Control] = &[
+    BODY_TOP,
     c(
         "rock",
         Axis::Word,
@@ -705,8 +837,25 @@ const fn thing(
         place: THING_PLACE,
         honours: &[PlaceWord::At],
         scattered,
+        family: Family::Thing,
+        cost: Cost {
+            fixed: 0.05,
+            per_square: 0.0,
+        },
         controls,
         ..Element::BASE
+    }
+}
+
+/// A rock: a thing sized by `size`, with a cloud for a `top=`.
+const fn rock(name: &'static str, about: &'static str, controls: &'static [Control]) -> Element {
+    Element {
+        cloud_top: true,
+        footprint: Some(Footprint {
+            control: "size",
+            disc: true,
+        }),
+        ..thing(name, about, controls, true)
     }
 }
 
@@ -715,10 +864,19 @@ pub static ELEMENTS: &[Element] = &[
     Element {
         name: "dirt",
         about: "a textured earth surface: clods, grit and pebbles over gentle rises",
+        family: Family::Surface,
         role: Role::Surface,
         place: SURFACE_PLACE,
         holds_scatter: true,
+        body: Some(Body::Land {
+            slope_deg: dt_lang::LAND_SLOPE_DEG,
+        }),
+        cost: Cost {
+            fixed: 0.0,
+            per_square: 0.06,
+        },
         controls: &[
+            BODY_TOP,
             BUMP_SIZE,
             c("clods", Axis::Word, "lumps of earth on the surface")
                 .words(CLODS)
@@ -736,9 +894,14 @@ pub static ELEMENTS: &[Element] = &[
     Element {
         name: "grass",
         about: "separate sculpted blades in tufts",
+        family: Family::Plant,
         role: Role::Surface,
         place: SURFACE_PLACE,
         holds_scatter: true,
+        cost: Cost {
+            fixed: 0.0,
+            per_square: 0.35,
+        },
         controls: &[
             c("length", Axis::Mm, "blade length along the ground")
                 .over(0.0, f64::INFINITY)
@@ -774,8 +937,13 @@ pub static ELEMENTS: &[Element] = &[
     Element {
         name: "reeds",
         about: "clumps of tapered reeds at the waterline, leaning toward the water",
+        family: Family::Plant,
         role: Role::Surface,
         place: &[PlaceWord::In],
+        cost: Cost {
+            fixed: 0.05,
+            per_square: 0.0,
+        },
         controls: &[
             c("clumps", Axis::Count, "how many clumps along the shore")
                 .limits(0.0, 30.0)
@@ -795,31 +963,62 @@ pub static ELEMENTS: &[Element] = &[
     Element {
         name: "water",
         about: "still water with swells round its shores and rocks: fills its area up to its level",
+        family: Family::Water,
         role: Role::Surface,
         place: &[PlaceWord::In],
-        controls: &[],
+        body: Some(Body::Fluid {
+            settle_mm: dt_lang::WATER_SETTLE_MM,
+        }),
+        cost: Cost {
+            fixed: 0.0,
+            per_square: 0.1,
+        },
+        controls: &[BODY_TOP],
         ..Element::BASE
     },
-    thing("rock", "one rock", &ROCK, true),
-    thing("stone", "a rock with stone sizes, about 1–6dmm", &STONE, true),
-    thing(
+    rock("rock", "one rock", &ROCK),
+    rock("stone", "a rock with stone sizes, about 1–6dmm", &STONE),
+    rock(
         "boulder",
         "a rock with boulder sizes, about 4.5–8dmm",
-        &BOULDER, true),
-    thing(
+        &BOULDER,
+    ),
+    rock(
         "pebble",
         "a rock with pebble sizes, about 1–2.2dmm",
-        &PEBBLE, true),
-    thing(
-        "flower",
-        "a wildflower: a thin dome on a column, ringed by petal domes on cones",
-        &FLOWER,
-        true,
+        &PEBBLE,
     ),
-    thing(
-        "tree",
-        "a space-colonisation tree with foliage clumps and leaves",
-        TREE, true),
+    Element {
+        family: Family::Plant,
+        footprint: Some(Footprint {
+            control: "size",
+            disc: true,
+        }),
+        ..thing(
+            "flower",
+            "a wildflower: a thin dome on a column, ringed by petal domes on cones",
+            &FLOWER,
+            true,
+        )
+    },
+    Element {
+        family: Family::Plant,
+        cloud_top: true,
+        footprint: Some(Footprint {
+            control: "crown/width",
+            disc: true,
+        }),
+        cost: Cost {
+            fixed: 6.5,
+            per_square: 0.0,
+        },
+        ..thing(
+            "tree",
+            "a space-colonisation tree with foliage clumps and leaves",
+            TREE,
+            true,
+        )
+    },
     Element {
         name: "wall",
         about: "a masonry wall; on a tile edge it stands inside the tile",
@@ -827,33 +1026,58 @@ pub static ELEMENTS: &[Element] = &[
         place: RUN_PLACE,
         needs: &[PlaceWord::Along],
         honours: &[PlaceWord::Along],
+        footprint: Some(Footprint {
+            control: "thickness",
+            disc: false,
+        }),
+        masonry: true,
+        cost: Cost {
+            fixed: 0.7,
+            per_square: 0.0,
+        },
         controls: WALL,
         ..Element::BASE
     },
     Element {
         name: "flagstones",
         about: "a floor of stone slabs, a wall laid on its side; each slab's height and tilt is drawn inside its band",
+        family: Family::Surface,
         role: Role::Surface,
         place: &[PlaceWord::In],
-        pieces: true,
+        body: Some(Body::Pieces),
+        masonry: true,
+        cost: Cost {
+            fixed: 0.4,
+            per_square: 0.0,
+        },
         controls: FLAGSTONES,
         ..Element::BASE
     },
     Element {
         name: "planks",
         about: "a floor of wooden boards; each board's height and tilt is drawn inside its band",
+        family: Family::Surface,
         role: Role::Surface,
         place: &[PlaceWord::In],
-        pieces: true,
+        body: Some(Body::Pieces),
+        cost: Cost {
+            fixed: 0.4,
+            per_square: 0.0,
+        },
         controls: PLANKS,
         ..Element::BASE
     },
     Element {
         name: "cliff",
         about: "a cliff of stacked rock: stones stacked so their tops span the band, in its region",
+        family: Family::Surface,
         role: Role::Surface,
         place: SURFACE_PLACE,
-        pieces: true,
+        body: Some(Body::Pieces),
+        cost: Cost {
+            fixed: 0.2,
+            per_square: 0.0,
+        },
         controls: CLIFF,
         ..Element::BASE
     },
@@ -863,6 +1087,10 @@ pub static ELEMENTS: &[Element] = &[
         role: Role::Scatter,
         place: &[PlaceWord::In, PlaceWord::Along, PlaceWord::Against],
         honours: &[PlaceWord::Along, PlaceWord::Against],
+        cost: Cost {
+            fixed: 0.05,
+            per_square: 0.0,
+        },
         controls: SCATTER,
         ..Element::BASE
     },

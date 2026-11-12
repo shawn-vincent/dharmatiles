@@ -39,9 +39,6 @@ const SLOPE_EDGE_NODES: usize = 6;
 /// A node lower than the nearest lip or steep node by more than this is
 /// below it, at the foot of a rise, and keeps no standoff from it.
 const RISE_EPS_MM: f64 = 0.1;
-/// How steeply dirt lies when nothing holds it, degrees: the easing the
-/// solver gives it, and the reach of its hills from a pin.
-pub const SLOPE_DEG: f64 = 24.0;
 /// The most a hill spans, mm at the reference square: a band wider than
 /// this (a bank drawn between two places) is mostly the smooth surface.
 const HILL_MM: f64 = 4.0;
@@ -236,7 +233,7 @@ pub fn hills(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, band: &Band) -> dt_
         Scale::Layout,
     );
     let n = broad.zip(&mid, |a, b| a + MID_WEIGHT * b);
-    dt_kit::span::hills(&n, band, HILL_MM * s, SLOPE_DEG, s)
+    dt_kit::span::hills(&n, band, HILL_MM * s, dt_lang::LAND_SLOPE_DEG, s)
 }
 
 /// What a dirt is made on: its solved band, and where water lies over it.

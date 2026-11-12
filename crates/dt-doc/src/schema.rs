@@ -45,6 +45,21 @@ pub enum Axis {
     Word,
     /// A kind of thing solids carry: `cliff`, `wall`, `rock`, `tree`.
     Tag,
+    /// A height: an expression of levels, constants and the `$` names the
+    /// element sets (`$dirtEdgeHeight + 35dmm`).  Every range in it is
+    /// its own roll.  Written as a `top=`; the control's help says what
+    /// the element does with it.
+    Height,
+    /// A tile's size in squares, `2x1`.
+    Size,
+    /// Free text: a sentence, written as a string.
+    Text,
+    /// Written as it is, read by the node itself (a line's points, a fill
+    /// point): the control holds the text.
+    Raw,
+    /// Names of other things in the tile, written one after another (the
+    /// lines a region is bounded by, the regions an `except` takes out).
+    Names,
 }
 
 impl Axis {
@@ -53,7 +68,13 @@ impl Axis {
     pub fn is_numeric(self) -> bool {
         matches!(
             self,
-            Axis::Mm | Axis::Deg | Axis::Share | Axis::Count | Axis::PerSquare | Axis::Number
+            Axis::Mm
+                | Axis::Deg
+                | Axis::Share
+                | Axis::Count
+                | Axis::PerSquare
+                | Axis::Number
+                | Axis::Height
         )
     }
 
@@ -70,6 +91,11 @@ impl Axis {
             Axis::Bool => "#true or #false",
             Axis::Word => "one of a fixed set of words",
             Axis::Tag => "a kind of thing: cliff, wall, rock or tree",
+            Axis::Height => "a height, such as `$dirtEdgeHeight + 35dmm`",
+            Axis::Size => "a size in squares, such as `2x1`",
+            Axis::Text => "text",
+            Axis::Raw => "points written as they are",
+            Axis::Names => "names of things in the tile",
         }
     }
 }
@@ -484,6 +510,28 @@ impl Kind {
     }
 }
 
+/// A node of the tile's own language that is not an element: the `tile`
+/// itself, a `line`, a `region` and a region's `within` and `except` clauses.
+/// Its controls are the same [`Control`]s an element has, so the editor's
+/// sheet is drawn from one shape.
+#[derive(Debug)]
+pub struct Node {
+    /// The node's name as written.
+    pub name: &'static str,
+    /// One line of help.
+    pub about: &'static str,
+    /// The anchor in `language.html` that documents it.
+    pub doc: &'static str,
+    /// Its controls, in the order the sheet shows them.
+    pub controls: &'static [Control],
+}
+
+/// A node of the tile's language by name.
+#[must_use]
+pub fn node(name: &str) -> Option<&'static Node> {
+    crate::elements::NODES.iter().find(|n| n.name == name)
+}
+
 /// A built-in element.
 #[derive(Debug)]
 pub struct Element {
@@ -506,17 +554,108 @@ pub struct Element {
     pub honours: &'static [PlaceWord],
     /// True when a `scatter` may scatter it (built so far).
     pub scattered: bool,
-    /// True for a body of separate pieces made to fit its band (stones,
-    /// slabs, boards): it steps between its pins, and takes its own defaults
-    /// wherever it is laid.
-    pub pieces: bool,
+    /// The family it is drawn in.
+    pub family: Family,
+    /// What it is as a body of the stack, if it is one: it paints the
+    /// surface things stand on, and takes a `top=` and pins of its own.
+    pub body: Option<Body>,
+    /// True when its `top=` is a cloud worked out where the thing stands (a
+    /// tree's at each branch tip, a rock's at its middle), not a band over a
+    /// region.
+    pub cloud_top: bool,
+    /// How much room one of it takes up, if it takes room others keep clear
+    /// of.
+    pub footprint: Option<Footprint>,
+    /// True when its `style` may be brick, which makes the tile's masonry
+    /// brick when every such element is.
+    pub masonry: bool,
+    /// What a build of it costs, for the progress bar before it has been
+    /// timed here.
+    pub cost: Cost,
     /// Its controls.
     pub controls: &'static [Control],
 }
 
+/// The family an element is drawn in, for its colour in the editor and the
+/// docs: what it reads as on a tile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Family {
+    /// Ground a body lays down: dirt, floors, a cliff.
+    Surface,
+    /// Water.
+    Water,
+    /// A solid thing: rocks and walls.
+    Thing,
+    /// Something that grows: grass, reeds, flowers, trees.
+    Plant,
+}
+
+impl Family {
+    /// The family as the editor and the docs name it.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Family::Surface => "surface",
+            Family::Water => "water",
+            Family::Thing => "thing",
+            Family::Plant => "plant",
+        }
+    }
+}
+
+/// What a body does with its band.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Body {
+    /// Land that eases between its pins at `slope_deg` unless the entry says
+    /// `slope=` (dirt).
+    Land {
+        /// The steepest ease, degrees.
+        slope_deg: f64,
+    },
+    /// Fluid that fills its region up to its band and settles `settle_mm` (at
+    /// the reference square) over what is under it (water).
+    Fluid {
+        /// How far it settles, mm at the reference square.
+        settle_mm: f64,
+    },
+    /// Separate pieces made to fit the band (stones, slabs, boards): they
+    /// step between the pins, and take their own defaults wherever they are
+    /// laid.
+    Pieces,
+}
+
+/// The room one of a thing takes, so others keep clear: a width read from one
+/// of its controls (the middle of a range), round or along a line.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Footprint {
+    /// The control that says it, a `control` or `control/sub` path.
+    pub control: &'static str,
+    /// True for a disc (the width is its diameter), false for a strip along a
+    /// line (the width is its thickness).
+    pub disc: bool,
+}
+
+/// A rough cost of one build, in seconds on a tile of `s` squares:
+/// `fixed + per_square * s`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Cost {
+    /// Whatever the tile.
+    pub fixed: f64,
+    /// For each square of the tile.
+    pub per_square: f64,
+}
+
+impl Cost {
+    /// Seconds for a tile of `squares` squares.
+    #[must_use]
+    pub fn secs(self, squares: f64) -> f64 {
+        self.fixed + self.per_square * squares
+    }
+}
+
 impl Element {
     /// What a table entry starts from: no required place words, nothing held,
-    /// scattered or honoured, not a pieces body. An entry writes what differs
+    /// scattered or honoured, not a body. An entry writes what differs
     /// and takes `..Element::BASE`.
     pub const BASE: Self = Self {
         name: "",
@@ -527,9 +666,54 @@ impl Element {
         holds_scatter: false,
         honours: &[],
         scattered: false,
-        pieces: false,
+        family: Family::Thing,
+        body: None,
+        cloud_top: false,
+        footprint: None,
+        masonry: false,
+        cost: Cost {
+            fixed: 0.1,
+            per_square: 0.0,
+        },
         controls: &[],
     };
+
+    /// The width its footprint takes when its control is not written: the
+    /// middle of the control's default, mm at the reference square.
+    #[must_use]
+    pub fn footprint_default_mm(&'static self) -> Option<f64> {
+        let f = self.footprint?;
+        let mut parts = f.control.splitn(2, '/');
+        let control = self.control(parts.next()?)?;
+        let control = match parts.next() {
+            Some(sub) => control.sub(sub)?,
+            None => control,
+        };
+        let (lo, hi) = crate::expr::parse(control.default)
+            .ok()?
+            .bounds(&|_| None)
+            .ok()?;
+        Some(0.5 * (lo + hi))
+    }
+
+    /// Whether it is a body of the stack (dirt, water, a floor, a cliff).
+    #[must_use]
+    pub fn is_body(&self) -> bool {
+        self.body.is_some()
+    }
+
+    /// Whether it is a body of separate pieces that step between its pins.
+    #[must_use]
+    pub fn is_pieces(&self) -> bool {
+        matches!(self.body, Some(Body::Pieces))
+    }
+
+    /// Whether it takes a `top=`: a band over a region (a body) or a cloud
+    /// where it stands.
+    #[must_use]
+    pub fn has_top(&self) -> bool {
+        self.body.is_some() || self.cloud_top
+    }
 
     /// A control by name.
     #[must_use]
@@ -675,6 +859,41 @@ mod tests {
         assert_eq!(size.default_in(true), "6dmm..15dmm");
         let crown = element("tree").unwrap().control("crown").unwrap();
         assert_eq!(crown.sub("shape").unwrap().default_in(true), "round");
+    }
+
+    #[test]
+    fn an_element_takes_a_top_control_exactly_when_the_schema_says_it_has_a_top() {
+        use crate::elements::ELEMENTS;
+        for e in ELEMENTS {
+            let top = e.control("top").filter(|c| c.value == Some(Axis::Height));
+            assert_eq!(top.is_some(), e.has_top(), "{}", e.name);
+        }
+        let bodies: Vec<&str> = ELEMENTS
+            .iter()
+            .filter(|e| e.is_body())
+            .map(|e| e.name)
+            .collect();
+        assert_eq!(bodies, ["dirt", "water", "flagstones", "planks", "cliff"]);
+        let clouds: Vec<&str> = ELEMENTS
+            .iter()
+            .filter(|e| e.cloud_top)
+            .map(|e| e.name)
+            .collect();
+        assert_eq!(clouds, ["rock", "stone", "boulder", "pebble", "tree"]);
+    }
+
+    #[test]
+    fn a_footprint_names_a_control_with_a_default_to_fall_back_on() {
+        use crate::elements::ELEMENTS;
+        for e in ELEMENTS.iter().filter(|e| e.footprint.is_some()) {
+            assert!(
+                e.footprint_default_mm().is_some_and(|w| w > 0.0),
+                "{}",
+                e.name
+            );
+        }
+        assert_eq!(element("wall").unwrap().footprint_default_mm(), Some(7.0));
+        assert_eq!(element("tree").unwrap().footprint_default_mm(), Some(30.0));
     }
 
     #[test]

@@ -14,7 +14,7 @@
 use dt_doc::consts::ConstTable;
 use dt_doc::expr::{BinOp, Expr, UnitWord, sin_deg, smooth};
 use dt_doc::model::PlaceRef;
-use dt_elements::Write;
+use dt_doc::schema::Body;
 use dt_geom::{Dist, Weighting};
 use dt_kit::{
     Band, Ease, Field, Frame, Iv, Lint, Mask, OddsBuilder, Pin, Refusal, lints, solve_traced,
@@ -735,30 +735,18 @@ fn mm(v: f64) -> String {
     format!("{v:.2} mm")
 }
 
-/// **solve**: the Solve phase, on `frame`'s own lattice, the one the
-/// bodies are made on, so a band a build fills is the band `check` solved.
-/// `writes[i]` is what stack entry `i`'s element writes: a fluid fills
-/// (water), anything else a body is land.
+/// **solve**: the Solve phase, on `f`'s own lattice, the one the bodies are
+/// made on, so a band a build fills is the band `check` solved.  What each
+/// body is (land, fluid or pieces) is the element schema's word.
 ///
 /// # Errors
 /// What cannot be solved: an unknown place, a height that cannot be worked
 /// out, a pin with no ground, a layer that can never be thick enough.
-pub fn solve(
-    tile: &Tile,
-    frame: &Frame,
-    opts: &Options,
-    writes: &[Write],
-    regions: Option<&RegionTree>,
-) -> Result<SolveReport, Vec<Diag>> {
-    solve_on(tile, frame, opts, writes, regions)
-}
-
 #[allow(clippy::too_many_lines)]
-fn solve_on(
+pub fn solve(
     tile: &Tile,
     f: &Frame,
     opts: &Options,
-    writes: &[Write],
     regions: Option<&RegionTree>,
 ) -> Result<SolveReport, Vec<Diag>> {
     let h = &tile.heights;
@@ -805,11 +793,22 @@ fn solve_on(
 
     for (entry, b) in tile.stack.iter().enumerate().filter(|(_, e)| e.is_body()) {
         let element = b.what.value.as_str();
-        let land = writes.get(entry) != Some(&Write::Fill);
+        // what the schema says the body is: land, fluid or pieces
+        let Some(kind) = dt_doc::schema::element(element).and_then(|e| e.body) else {
+            errors.push(Diag::at(
+                &b.src,
+                b.what.span,
+                "dt::internal",
+                format!("`{element}` is a body of the stack but the schema gives it no body"),
+                "here",
+            ));
+            continue;
+        };
+        let land = !matches!(kind, Body::Fluid { .. });
         // a floor or a cliff is a pieces body: it takes its own defaults
         // wherever it is laid (a floor's edge pin is its edge contract), and
         // never uses up the first land layer's, which are the dirt's
-        let pieces = dt_doc::schema::element(element).is_some_and(|e| e.pieces);
+        let pieces = kind == Body::Pieces;
         let default: Option<&DefaultBody> = h
             .defaults
             .iter()
@@ -918,15 +917,13 @@ fn solve_on(
         if !ok {
             continue;
         }
-        let ease = if land && pieces {
+        let ease = match kind {
             // a floor's slabs and a cliff's stones step: a pin holds its
             // place, nothing eases, unless the body is told how steeply its
             // pieces stand
-            b.slope.map_or(Ease::Step, Ease::Slope)
-        } else if land {
-            Ease::Slope(b.slope.unwrap_or(dt_elements::dirt::SLOPE_DEG))
-        } else {
-            Ease::Settle(dt_elements::water::SETTLE_MM * g.scale)
+            Body::Pieces => b.slope.map_or(Ease::Step, Ease::Slope),
+            Body::Fluid { settle_mm } => Ease::Settle(settle_mm * g.scale),
+            Body::Land { slope_deg } => Ease::Slope(b.slope.unwrap_or(slope_deg)),
         };
         let solved = match solve_traced(&own, &pins, ease) {
             Ok(s) => s,
@@ -1235,7 +1232,8 @@ fn solve_on(
             }
         }
     };
-    let mut by_entry = vec![None; writes.len()];
+    // one for each entry, and the connector last when the tile has one
+    let mut by_entry = vec![None; tile.stack.len() + usize::from(tile.has_base)];
     for (i, b) in bodies.iter().enumerate() {
         if let Some(slot) = by_entry.get_mut(b.entry) {
             *slot = Some(i);

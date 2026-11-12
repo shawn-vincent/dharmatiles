@@ -17,6 +17,7 @@ publish = false
 # Internal crates. dt-geom's backend is chosen by the crate at the top
 # (dt-eval's features), so it is pulled in without default features.
 dt-geom = { path = "crates/dt-geom", default-features = false }
+dt-lang = { path = "crates/dt-lang" }
 dt-doc = { path = "crates/dt-doc" }
 dt-kit = { path = "crates/dt-kit", default-features = false }
 dt-elements = { path = "crates/dt-elements", default-features = false }

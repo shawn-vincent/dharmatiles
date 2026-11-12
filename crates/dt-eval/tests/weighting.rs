@@ -254,37 +254,6 @@ fn two_ranges_in_one_control_roll_apart() {
     );
 }
 
-#[test]
-fn the_function_lists_agree() {
-    // dt-doc parses the names and the arity, dt-geom holds the odds
-    let doc: Vec<&str> = dt_doc::expr::WEIGHTINGS.iter().map(|w| w.0).collect();
-    let geom: Vec<&str> = dt_geom::WEIGHTINGS
-        .iter()
-        .map(|w| w.name)
-        .filter(|n| *n != "list")
-        .collect();
-    assert_eq!(doc, geom);
-    for (name, most) in dt_doc::expr::WEIGHTINGS {
-        match name {
-            // any number of weights, up to the cap, and parts with weights
-            "steps" => {
-                assert!(dt_geom::Weighting::from_call(name, &[1.0; 3]).is_ok());
-                assert!(dt_geom::Weighting::from_call(name, &[1.0; 33]).is_err());
-            }
-            "mix" => {}
-            _ => {
-                let args = vec![0.5; most];
-                assert!(dt_geom::Weighting::from_call(name, &args).is_ok(), "{name}");
-                let args = vec![0.5; most + 1];
-                assert!(
-                    dt_geom::Weighting::from_call(name, &args).is_err(),
-                    "{name}"
-                );
-            }
-        }
-    }
-}
-
 const WHOLE_SET: [&str; 4] = [
     "ends(6..10, 2, 0.25)",
     "steps(6..10, 1, 4, 2)",

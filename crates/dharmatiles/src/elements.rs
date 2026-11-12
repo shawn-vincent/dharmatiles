@@ -5,11 +5,14 @@
 use std::fmt::Write as _;
 
 use dt_doc::elements::ELEMENTS;
-use dt_doc::schema::{self, Axis, Control, Element, PlaceWord, Role, Word};
+use dt_doc::schema::{self, Axis, Control, Element, Node, PlaceWord, Role, Word};
 use dt_eval::Diag;
 use serde_json::{Map, Value, json};
 
 use crate::{ERROR, OK, errors_json, report};
+
+/// The documentation site (GitHub Pages, served from `docs/` on `main`).
+pub const DOCS: &str = "https://shawn-vincent.github.io/dharmatiles/";
 
 /// List every element, or one element's controls.
 pub fn run(name: Option<&str>, json: bool) -> u8 {
@@ -72,6 +75,11 @@ fn unit(a: Axis) -> &'static str {
         Axis::Bool => "switch",
         Axis::Word => "word",
         Axis::Tag => "tag",
+        Axis::Height => "height",
+        Axis::Size => "size",
+        Axis::Text => "text",
+        Axis::Raw => "raw",
+        Axis::Names => "several",
     }
 }
 
@@ -107,6 +115,8 @@ fn summary_json(l: &'static Element) -> Value {
         "name": l.name,
         "role": role(l.role),
         "about": l.about,
+        "href": format!("{DOCS}elements/{}.html", l.name),
+        "family": l.family.as_str(),
         "built": built(l).is_some(),
     })
 }
@@ -124,10 +134,11 @@ fn element_json(l: &'static Element) -> Value {
     v["takes"] = json!(l.place_kinds());
     v["needs"] = json!(l.needs.iter().map(|p| p.as_str()).collect::<Vec<_>>());
     v["holds_scatter"] = json!(l.holds_scatter);
+    v["body"] = json!(l.is_body());
     v["controls"] = json!(
         l.controls
             .iter()
-            .map(|c| control_json(takes, c.name, c))
+            .map(|c| control_json(Taken::By(takes), c.name, c))
             .collect::<Vec<_>>()
     );
     v["weightings"] = weightings_json(l);
@@ -174,10 +185,27 @@ fn takes_weighting(controls: &[Control]) -> bool {
         .any(|c| c.weighted || takes_weighting(c.subs))
 }
 
-fn control_json(takes: Option<&'static Element>, path: &str, c: &Control) -> Value {
+/// Whether a control is built: by an element, or always (a node's).
+#[derive(Clone, Copy)]
+enum Taken {
+    By(Option<&'static Element>),
+    Always,
+}
+
+/// One control on the wire, the same shape for every element and node:
+/// `name`, `unit` (what it measures), `numeric`, `limits`/`above`, `ranges`,
+/// `weighted`, `takes`, `default` and `default1`, `required`, `expert`,
+/// `taken`, `about` (its help), its `words` and its `subs`.  The element or
+/// node it belongs to carries the `href` of its page.
+fn control_json(takes: Taken, path: &str, c: &Control) -> Value {
+    let taken = match takes {
+        Taken::Always => true,
+        Taken::By(t) => taken(t, path, c),
+    };
     json!({
         "name": c.name,
         "unit": c.value.map(unit),
+        "numeric": c.value.is_some_and(Axis::is_numeric),
         // [min, max], max null for no high end; `above` refuses min itself;
         // `takes` says it all in words
         "limits": c.limits.map(|l| [Some(l.min), l.max.is_finite().then_some(l.max)]),
@@ -190,11 +218,39 @@ fn control_json(takes: Option<&'static Element>, path: &str, c: &Control) -> Val
         "default1": (!c.default.is_empty()).then(|| c.default_in(true)),
         "required": c.required,
         "expert": c.expert,
-        "taken": taken(takes, path, c),
+        "taken": taken,
         "about": c.about,
         "words": c.words.iter().map(word_json).collect::<Vec<_>>(),
         "subs": c.subs.iter().map(|s| control_json(takes, &format!("{path}/{}", s.name), s)).collect::<Vec<_>>(),
     })
+}
+
+fn node_json(n: &'static Node) -> Value {
+    json!({
+        "name": n.name,
+        "about": n.about,
+        "href": format!("{DOCS}{}", n.doc),
+        "controls": n.controls.iter().map(|c| control_json(Taken::Always, c.name, c)).collect::<Vec<_>>(),
+    })
+}
+
+/// The language's own tables for the editor: the tile's nodes with their
+/// controls, the units, the function words and the `$` names, so the page
+/// keeps no copy of any.
+pub(crate) fn language_json() -> Value {
+    let names: Vec<&str> = [dt_lang::POINT_NAMES, dt_lang::REGION_NAMES].concat();
+    json!({
+        "docs": DOCS,
+        "nodes": schema_nodes().iter().map(node_json).collect::<Vec<_>>(),
+        "units": dt_lang::UNITS,
+        "functions": dt_lang::function_words(),
+        "weightings": dt_lang::WEIGHTINGS.iter().map(|w| w.0).collect::<Vec<_>>(),
+        "names": names,
+    })
+}
+
+fn schema_nodes() -> &'static [Node] {
+    dt_doc::elements::NODES
 }
 
 fn word_json(w: &Word) -> Value {

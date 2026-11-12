@@ -728,6 +728,97 @@ fn serves_every_element_for_the_lens() {
 }
 
 #[test]
+fn every_control_of_every_element_and_node_has_one_shape_on_the_wire() {
+    let r = start(&[], false);
+    let els: Value = serde_json::from_slice(&get(&r, "/api/elements").1).unwrap();
+    let lang: Value = serde_json::from_slice(&get(&r, "/api/language").1).unwrap();
+    let nodes = lang["nodes"].as_array().unwrap();
+    assert_eq!(
+        nodes
+            .iter()
+            .map(|n| n["name"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["tile", "line", "region", "within", "except"]
+    );
+    let mut controls: Vec<&Value> = Vec::new();
+    for e in els.as_array().unwrap() {
+        assert!(e["href"].as_str().unwrap().contains("elements/"), "{e}");
+        controls.extend(e["controls"].as_array().unwrap());
+    }
+    for n in nodes {
+        assert!(
+            n["href"]
+                .as_str()
+                .unwrap()
+                .starts_with(lang["docs"].as_str().unwrap())
+        );
+        controls.extend(n["controls"].as_array().unwrap());
+    }
+    for c in controls {
+        for key in [
+            "name", "unit", "numeric", "default", "default1", "required", "taken", "about",
+            "words", "subs",
+        ] {
+            assert!(c.get(key).is_some(), "{} lacks {key}", c["name"]);
+        }
+    }
+    // a body's `top` is a row of the sheet like any control, from the schema
+    let dirt = els
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["name"] == "dirt")
+        .unwrap();
+    assert_eq!(dirt["body"], true);
+    let top = dirt["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "top")
+        .unwrap();
+    assert_eq!(
+        (top["unit"].as_str(), top["numeric"].as_bool()),
+        (Some("height"), Some(true))
+    );
+    // the language's words
+    assert!(lang["units"].as_array().unwrap().iter().any(|u| u == "dmm"));
+    assert!(
+        lang["functions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|u| u == "parent")
+    );
+}
+
+#[test]
+fn the_names_a_text_makes_come_from_the_parser() {
+    let r = start(&[], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let t = token["token"].as_str().unwrap().to_owned();
+    let text = "// define fake\ndefine meadow { stack { dirt } }\ntile size=\"1x1\" {\n    region pool { fill \"1,1\" }\n    stack { meadow }\n}\n";
+    let (h, v) = post(
+        &r,
+        "/api/names",
+        Some(&t),
+        None,
+        &serde_json::json!({ "text": text }).to_string(),
+    );
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    assert_eq!(v["defs"], serde_json::json!(["meadow"]));
+    assert_eq!(v["regions"], serde_json::json!(["pool"]));
+    // a text mid-word is no names, said so, not an error
+    let (_, v) = post(
+        &r,
+        "/api/names",
+        Some(&t),
+        None,
+        &serde_json::json!({ "text": "define {" }).to_string(),
+    );
+    assert_eq!(v["ok"], false);
+}
+
+#[test]
 fn a_draft_is_a_request_answered_with_its_mesh() {
     let r = start(&[FLAT], false);
     let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();

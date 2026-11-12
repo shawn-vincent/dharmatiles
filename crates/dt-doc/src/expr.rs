@@ -84,14 +84,14 @@ pub enum UnitWord {
 impl UnitWord {
     /// Every unit written as a word, in the order help lists them.
     pub const WORDS: [(&'static str, UnitWord); 8] = [
-        ("sq", UnitWord::Sq),
-        ("mm", UnitWord::Mm),
-        ("in", UnitWord::In),
-        ("dmm", UnitWord::Dmm),
-        ("layer", UnitWord::Layer),
-        ("deg", UnitWord::Deg),
-        ("rad", UnitWord::Rad),
-        ("pi", UnitWord::Pi),
+        (dt_lang::UNITS[0], UnitWord::Sq),
+        (dt_lang::UNITS[1], UnitWord::Mm),
+        (dt_lang::UNITS[2], UnitWord::In),
+        (dt_lang::UNITS[3], UnitWord::Dmm),
+        (dt_lang::UNITS[4], UnitWord::Layer),
+        (dt_lang::UNITS[5], UnitWord::Deg),
+        (dt_lang::UNITS[6], UnitWord::Rad),
+        (dt_lang::UNITS[7], UnitWord::Pi),
     ];
 
     /// The unit a word names.
@@ -113,17 +113,7 @@ impl UnitWord {
     }
 }
 
-/// The coordinate and point functions of format 1, with how many values each
-/// takes: `x(region, unit)`, `y`, `d`, `a`, `point(frame, x, y)` and
-/// `polar(frame, d, a)`.
-pub const COORD_CALLS: [(&str, usize); 6] = [
-    ("x", 2),
-    ("y", 2),
-    ("d", 2),
-    ("a", 2),
-    ("point", 3),
-    ("polar", 3),
-];
+pub use dt_lang::{COORD_CALLS, FUNCTIONS, WEIGHTINGS};
 
 /// Arithmetic operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1098,32 +1088,6 @@ fn parse_full(src: &str, v2: bool, units: bool) -> Result<Expr, ExprError> {
     }
     Ok(e)
 }
-
-/// The functions of the heights language: name and argument count.
-pub const FUNCTIONS: [(&str, usize); 7] = [
-    ("sin", 1),
-    ("cos", 1),
-    ("abs", 1),
-    ("min", 2),
-    ("max", 2),
-    ("clamp", 3),
-    ("smooth", 1),
-];
-
-/// The weighting functions written as calls, and how many numbers follow the
-/// range (`steps` takes any number up to its cap, `mix` writes parts and
-/// weights instead).  The odds themselves are `dt_geom::Weighting`'s (dt-doc
-/// holds no geometry); a test in dt-eval keeps the two lists the same.
-pub const WEIGHTINGS: [(&str, usize); 8] = [
-    ("flat", 0),
-    ("low", 1),
-    ("high", 1),
-    ("bell", 2),
-    ("peak", 2),
-    ("ends", 2),
-    ("steps", usize::MAX),
-    ("mix", 0),
-];
 
 /// The sine of an angle in degrees, from `+ - * /` only (a Taylor series
 /// on the quarter wave), so a build gives the same bits on every platform.

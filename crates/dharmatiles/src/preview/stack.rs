@@ -6,8 +6,7 @@
 use dt_eval::doc::{Entry, Named, Tile};
 use serde_json::{Value, json};
 
-/// The documentation site (GitHub Pages, served from `docs/` on `main`).
-pub const DOCS: &str = "https://shawn-vincent.github.io/dharmatiles/";
+pub use crate::elements::DOCS;
 
 /// The page (under [`DOCS`]) that documents an element: every built-in
 /// element has its own page under `elements/`.
@@ -80,18 +79,7 @@ fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
     };
     v["span"] = json!([start, len]);
     v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
-    let mut controls = settings(&e.controls, &e.what.span, e.src.name())?;
-    // a body's band is its `top`: a row of the sheet like any control (a tree's
-    // or rock's is already one), written as `top=…`
-    if let Some(t) = e.top.as_ref().filter(|t| t.crown.is_none()) {
-        controls.push(json!({
-            "name": "top",
-            "text": written(&t.src, t.prop)?,
-            "span": [t.prop.offset(), t.prop.len()],
-            "file": (t.src.name() != e.src.name()).then(|| t.src.name()),
-        }));
-    }
-    v["controls"] = json!(controls);
+    v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name())?);
     v["clouds"] = json!(clouds(e)?);
     // where it is put (at=), as written, for the map's handles
     const PLACE: [&str; 1] = ["at"];

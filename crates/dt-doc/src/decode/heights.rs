@@ -938,13 +938,10 @@ impl Decoder<'_> {
 
     pub(crate) fn class_of(&self, entry: &Entry) -> Class {
         match &entry.callee {
-            Callee::Element(l) => match l.name {
-                "dirt" | "water" | "cliff" | "flagstones" | "planks" => Class::Body,
-                "ground" | "grass" | "scatter" => Class::Area,
-                _ => match l.role {
-                    Role::Thing | Role::Run => Class::Thing,
-                    Role::Surface | Role::Scatter => Class::Area,
-                },
+            Callee::Element(l) if l.is_body() => Class::Body,
+            Callee::Element(l) => match l.role {
+                Role::Thing | Role::Run => Class::Thing,
+                Role::Surface | Role::Scatter => Class::Area,
             },
             Callee::Definition(d) => {
                 if self.def_info(d).is_some_and(|i| i.thing) {

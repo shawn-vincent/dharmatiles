@@ -363,6 +363,7 @@ dependencies = [
  "dt-elements",
  "dt-eval",
  "dt-kit",
+ "dt-lang",
  "kdl",
  "libm",
  "miette",
@@ -390,6 +391,7 @@ checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 name = "dt-doc"
 version = "1.0.0"
 dependencies = [
+ "dt-lang",
  "kdl",
  "miette",
 ]
@@ -399,6 +401,7 @@ name = "dt-elements"
 version = "1.0.0"
 dependencies = [
  "dt-kit",
+ "dt-lang",
  "libm",
  "rayon",
 ]
@@ -422,6 +425,7 @@ name = "dt-geom"
 version = "1.0.0"
 dependencies = [
  "bytemuck",
+ "dt-lang",
  "glam 0.34.2",
  "libm",
  "manifold-csg",
@@ -443,6 +447,10 @@ dependencies = [
  "rayon",
  "serde_json",
 ]
+
+[[package]]
+name = "dt-lang"
+version = "1.0.0"
 
 [[package]]
 name = "either"

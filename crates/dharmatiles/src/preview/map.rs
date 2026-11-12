@@ -479,10 +479,9 @@ fn language(t: &dt_eval::Tile) -> Value {
     if t.format < 1 {
         return Value::Null;
     }
-    use dt_doc::words::{COORDINATES, FUNCTIONS, POINT_NAMES, REGION_NAMES, UNITS};
-    let mut names: Vec<String> = POINT_NAMES
+    let mut names: Vec<String> = dt_lang::POINT_NAMES
         .iter()
-        .chain(REGION_NAMES)
+        .chain(dt_lang::REGION_NAMES)
         .map(|n| (*n).to_owned())
         .collect();
     names.extend(
@@ -493,8 +492,7 @@ fn language(t: &dt_eval::Tile) -> Value {
             .filter(|e| e.name.starts_with('$'))
             .map(|e| e.name.clone()),
     );
-    let functions: Vec<&str> = [FUNCTIONS, COORDINATES].concat();
-    json!({ "names": names, "units": UNITS, "functions": functions })
+    json!({ "names": names, "units": dt_lang::UNITS, "functions": dt_lang::function_words() })
 }
 
 /// The heights a value may name in this tile: its constants (the library's

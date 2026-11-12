@@ -1,0 +1,16 @@
+[package]
+name = "dt-lang"
+description = "dharmatiles' language tables: the words, units and constants every other crate reads from one place (no dependencies)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Nothing: the tables are plain data, so the document reader, the geometry
+# kernels, the elements and the editor's server can all depend on them.
+[dependencies]
+
+[lints]
+workspace = true

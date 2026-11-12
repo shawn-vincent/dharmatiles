@@ -350,6 +350,19 @@ pub fn remove_control_at(text: &str, offset: usize, name: &str) -> Result<String
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn names_come_from_nodes_not_from_text() {
+        let text = "// define fake\ndefine meadow { stack { dirt } }\nuse \"lib:parts/trees\" oak elm\n\
+            tile size=\"1x1\" {\n about \"a line Foo\"\n line shore { through \"0,0\" }\n\
+            /- region ghost { fill \"1,1\" }\n region pool { fill \"1,1\" }\n point p \"1,1\"\n}\n";
+        let n = super::names_in(text).unwrap();
+        assert_eq!(n.defs, ["meadow", "oak", "elm"]);
+        assert_eq!(n.lines, ["shore"]);
+        assert_eq!(n.regions, ["pool"]);
+        assert_eq!(n.points, ["p"]);
+        assert!(super::names_in("define {").is_err());
+    }
+
     use super::*;
 
     #[test]
@@ -573,6 +586,61 @@ pub fn insert_node(text: &str, place: Place, node: &str) -> Result<(String, usiz
         }
         (Place::Tile, s) => add_child(text, tile, s, node),
     })
+}
+
+/// The names a document makes, for completion and the map: the definitions
+/// (written, or taken in with `use "file" name…`), the regions, the lines and
+/// the points, wherever a node is written.  A comment, a hidden (`/-`) node
+/// and a string hold none: these are the parser's nodes.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Names {
+    /// `define NAME`, and the names a `use` brings in.
+    pub defs: Vec<String>,
+    /// `region NAME`.
+    pub regions: Vec<String>,
+    /// `line NAME`.
+    pub lines: Vec<String>,
+    /// `point NAME`.
+    pub points: Vec<String>,
+}
+
+/// The names `text` makes (see [`Names`]).
+///
+/// # Errors
+/// If the text doesn't parse (a document being typed, mid-word).
+pub fn names_in(text: &str) -> Result<Names, EditError> {
+    fn walk(nodes: &[KdlNode], out: &mut Names) {
+        for n in nodes {
+            let arg = |i: usize| {
+                n.entries()
+                    .iter()
+                    .filter(|e| e.name().is_none())
+                    .nth(i)
+                    .and_then(|e| e.value().as_string())
+            };
+            match n.name().value() {
+                "define" => out.defs.extend(arg(0).map(str::to_owned)),
+                "use" => out.defs.extend(
+                    n.entries()
+                        .iter()
+                        .filter(|e| e.name().is_none())
+                        .skip(1)
+                        .filter_map(|e| e.value().as_string().map(str::to_owned)),
+                ),
+                "region" => out.regions.extend(arg(0).map(str::to_owned)),
+                "line" => out.lines.extend(arg(0).map(str::to_owned)),
+                "point" => out.points.extend(arg(0).map(str::to_owned)),
+                _ => {}
+            }
+            if let Some(c) = n.children() {
+                walk(c.nodes(), out);
+            }
+        }
+    }
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let mut out = Names::default();
+    walk(doc.nodes(), &mut out);
+    Ok(out)
 }
 
 /// The innermost node whose text holds byte `offset`.

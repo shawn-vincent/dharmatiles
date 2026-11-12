@@ -160,32 +160,18 @@ fn setting<'a>(controls: &'a [Setting], name: &str) -> Option<&'a Setting> {
     controls.iter().find(|s| s.name == name)
 }
 
-/// A tree's crown diameter, mm at the reference square: its `crown/width`,
-/// which the tree element draws its crown radius from (half of it), else the
-/// element's own default.
-const CROWN_WIDTH_MM: f64 = dt_elements::tree::DEFAULT_CROWN_WIDTH_MM;
-
-/// A wall's thickness when none is written (the schema's default).
-const WALL_THICKNESS_MM: f64 = 7.0;
-
 /// The width of a thing's footprint in mm at the reference square, and
-/// whether it is a disc (else a strip along a line), by what it is: a
-/// tree's crown diameter, a rock's or flower's size, a wall's thickness.
+/// whether it is a disc (else a strip along a line): what the element schema
+/// says its footprint is (a tree's crown diameter, a rock's or flower's
+/// size, a wall's thickness), read from the control as written, else the
+/// control's default.
 fn footprint(what: &str, controls: &[Setting]) -> Option<(f64, bool)> {
-    let width = |name: &str, default: f64| {
-        setting(controls, name)
-            .and_then(|s| middle(&s.value))
-            .unwrap_or(default)
-    };
-    match what {
-        "tree" => Some((width("crown/width", CROWN_WIDTH_MM), true)),
-        "rock" | "stone" | "boulder" | "pebble" => setting(controls, "size")
-            .and_then(|s| middle(&s.value))
-            .map(|w| (w, true)),
-        "flower" => Some((width("size", 5.0), true)),
-        "wall" => Some((width("thickness", WALL_THICKNESS_MM), false)),
-        _ => None,
-    }
+    let element = dt_doc::schema::element(what)?;
+    let f = element.footprint?;
+    let width = setting(controls, f.control)
+        .and_then(|s| middle(&s.value))
+        .or_else(|| element.footprint_default_mm())?;
+    Some((width, f.disc))
 }
 
 /// Mm at the reference square, in squares.

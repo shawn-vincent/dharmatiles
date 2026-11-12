@@ -40,8 +40,6 @@ use dt_kit::{
 
 use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
 
-/// Water settles over this distance round a pin, mm at the reference square.
-pub const SETTLE_MM: f64 = 9.0;
 const CELL_MM: f64 = 0.2;
 const BANK_GRID_WEIGHT: f64 = 1.25;
 /// Deviation from thresholding the raw ground: the land
