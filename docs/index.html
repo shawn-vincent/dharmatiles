@@ -41,7 +41,7 @@
 </style>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="plates.html">Plates</a><a href="printers.html">Printers</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
 
 <div class="wrap">
 <header class="hero home-hero">
@@ -88,6 +88,7 @@ tile size="1x1" seed=97 {
     <tr><td>Check it without building</td><td><code>dharmatiles check my-pond.dtile</code> (add <code>--system ol</code> or <code>--printer fine</code> to check for that target, as <code>build</code> takes them; sizes depend on the system, so a tile can pass for one and fail for the other)</td></tr>
     <tr><td>Build every library tile</td><td><code>dharmatiles build --all</code> (add <code>--system ol</code> for OpenLOCK). A build that is already kept is read, not made: the second run takes seconds; <code>--no-cache</code> builds from nothing</td></tr>
     <tr><td>See, list or empty the cache of builds</td><td><code>dharmatiles cache</code>, <code>dharmatiles cache list</code>, <code>dharmatiles cache clear</code>; <code>dharmatiles cache previews</code> builds the library's super-low previews into it (see <a href="preview.html#cache">the cache of builds</a>)</td></tr>
+    <tr><td>Lay a print list out on a printer's plates</td><td><code>dharmatiles plates my-list.dmap</code>: one Bambu Studio project with every plate, or one STL per plate (see <a href="plates.html">Plates</a> and <a href="printers.html">Printers</a>); <code>--check</code> plans without building</td></tr>
     <tr><td>List the elements and their controls</td><td><code>dharmatiles elements</code>, <code>dharmatiles elements cliff</code></td></tr>
   </tbody>
 </table></div>
@@ -118,6 +119,8 @@ cargo build --release                 # a few minutes, once
   <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; the DungeonBlocks and OpenLOCK bases; file names; edges.</span></li>
   <li><a href="standards/printing.html">Printing</a><span class="sum">The printer profile, the overhang limit, red overhangs in renders, and the audit every build passes.</span></li>
   <li><a href="preview.html">Preview</a><span class="sum">The live painted view in your browser: running it, what it shows, the keys, and live rebuilds.</span></li>
+  <li><a href="plates.html">Plates</a><span class="sum">A print list laid on a printer's bed: the document, single colour or multicolour, how the plates are packed, and the Bambu project or STLs written.</span></li>
+  <li><a href="printers.html">Printers</a><span class="sum">Printer profiles by brand and model: the bed, excluded zones, nozzle and filament slots, the library's 41 and your own.</span></li>
   <li><a href="standards/rules.html">Rules</a><span class="sum">What every tile and every build keeps: the printability gate, the edge level, determinism, and where each element's own rules are.</span></li>
   <li><a href="standards/errors.html">Errors</a><span class="sum">Nothing swallowed, nothing hidden: what you can fix shown where you wrote it, what the program broke shown loudly.</span></li>
   <li><a href="standards/visual-system.html">Visual system</a><span class="sum">The colours, type, plate and controls the site and the preview share, and the rules for adding to them.</span></li>
