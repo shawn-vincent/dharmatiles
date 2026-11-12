@@ -7,7 +7,7 @@ import { isOffline } from '../host.js';
 import { showError } from '../problems.js';
 import { host, pickView, viewer } from './app.js';
 import { beginFollow, endFollow, followBuild } from './build.js';
-import { canLeave } from './document.js';
+import { canLeave, supersedeDrafts } from './document.js';
 import { inRoot, isEntry, server, stackItems, stem, tile, tileById, view } from './stores.js';
 
 // ---- choosing a tile ---------------------------------------------------
@@ -99,6 +99,7 @@ async function loadMesh(t) {
     const first = !viewer.payload;
     const p = parsePayload(buf);
     viewer.setMesh(p); // the new mesh swaps in place: the camera is kept
+    supersedeDrafts();
     view.set({ pieces: countPieces(p), shown: { id: t.id, epoch, version }, draft: null });
     if (first) {
       const saved = cameras.get(t.path);

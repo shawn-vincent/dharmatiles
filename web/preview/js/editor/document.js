@@ -8,6 +8,7 @@ import { describeChange } from '../history.js';
 import { parsePayload } from '../payload.js';
 import { TextPane, byteToIndex } from '../text.js';
 import { isOffline } from '../host.js';
+import { createDrafter } from '../drafts.js';
 import { STALE_NOTE, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
 import { $, FAMILY, host, offerMine, toast } from './app.js';
@@ -125,27 +126,32 @@ export function edited(text, kind, label = null, caret = null) {
   if (text !== texts.text) texts.setText(text, caret);
   doc.set({ text });
   if (kind !== 'drag') record(text, kind, label);
-  else askDraft();
+  if (kind === 'drag' || kind === 'lens') askDraft(); // the last step of a scrub asks too: a draft for an earlier value must not stay
   changed(kind === 'drag');
 }
 
 // drafts: while a value is dragged the view shows quick builds of the text
 // as it is (marked draft), one in flight at a time, always the latest text;
 // the full build follows when the hand lets go and the file is saved.  A
-// draft is a plain request, answered with its mesh.
-let drafting = false, again = false;
-export async function askDraft() {
-  if (drafting) { again = true; return; }
-  const t = tile(), d = doc.get();
-  if (!t || !d.file || d.text == null || d.tileId !== t.id) return;
-  drafting = true; again = false;
-  try {
-    const r = await host.draft(t.id, { text: d.text, file: d.file === t.path ? undefined : d.file });
+// draft is a plain request, answered with its mesh, and shown only if the
+// text is still the text it was built from (drafts.js).
+const drafter = createDrafter({
+  text: () => {
+    const t = tile(), d = doc.get();
+    return !t || !d.file || d.text == null || d.tileId !== t.id ? null : d.text;
+  },
+  request: async (text) => {
+    const t = tile(), d = doc.get();
+    return { t, r: await host.draft(t.id, { text, file: d.file === t.path ? undefined : d.file }) };
+  },
+  accept: ({ t, r }) => {
     if (!failed(`Could not draft ${stem(t)}`, r) && r.buffer && t.id === view.get().tileId) view.set({ draft: { tileId: t.id, payload: parsePayload(r.buffer) } });
-  } catch (e) { showError(`Could not draft ${stem(t)}`, e); }
-  drafting = false;
-  if (again) askDraft();
-}
+  },
+  fail: (e) => showError('Could not draft', e),
+});
+export const askDraft = () => drafter.ask();
+/** A full build of the text now is on the page: a draft still on its way is dropped. */
+export function supersedeDrafts() { if (!dirty()) drafter.supersede(); }
 
 /** "Update this file": the text carried to the newest format (by the program's own migration), as an edit that saves like any other. */
 async function updateFile() {
