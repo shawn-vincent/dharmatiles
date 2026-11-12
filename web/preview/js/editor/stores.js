@@ -14,7 +14,10 @@
 // A part of the page renders by subscribing to the keys it draws from;
 // none of them calls another to say that something changed.
 
-export function createStore(initial) {
+import { showError } from '../problems.js';
+
+// `report(what, err)` takes what a subscriber threw: the error panel by default.
+export function createStore(initial, report = showError) {
   const state = { ...initial };
   const subs = new Set();
   return {
@@ -23,7 +26,11 @@ export function createStore(initial) {
       const changed = Object.keys(patch).filter((k) => !Object.is(state[k], patch[k]));
       if (!changed.length) return;
       for (const k of changed) state[k] = patch[k];
-      for (const s of [...subs]) if (!s.keys || changed.some((k) => s.keys.includes(k))) s.fn(state, changed);
+      // every subscriber runs, and one that throws is reported, never allowed to stop the rest
+      for (const s of [...subs]) {
+        if (s.keys && !changed.some((k) => s.keys.includes(k))) continue;
+        try { s.fn(state, changed); } catch (e) { report(`A part of the page failed to follow a change (${changed.join(', ')})`, e); }
+      }
     },
     /** `fn(state, changedKeys)` after a change to any of `keys` (all of them when `keys` is null); returns the way to stop. */
     subscribe(keys, fn) {

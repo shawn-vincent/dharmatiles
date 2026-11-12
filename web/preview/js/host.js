@@ -31,9 +31,26 @@
 
 // fetch rejects with a TypeError when it cannot reach the program (down, or
 // the connection dropped): that is a lost connection, shown by the chip, and
-// the page repeats what it needs on reconnect.  Any other failure is not.
-export const isOffline = (e) => e instanceof TypeError;
+// the page repeats what it needs on reconnect.  Only that rejection, from
+// fetch itself, is made an `Offline`; any other error, a TypeError from the
+// page's own code included, is a failure and goes to the error panel.
+export class Offline extends Error {
+  constructor(cause) {
+    super('the editor is disconnected', { cause });
+    this.name = 'Offline';
+  }
+}
+export const isOffline = (e) => e instanceof Offline;
 const offline = isOffline;
+/** `fetch`, whose network failure is an `Offline` and nothing else is. */
+async function netFetch(...args) {
+  try {
+    return await fetch(...args);
+  } catch (e) {
+    if (e instanceof TypeError) throw new Offline(e);
+    throw e;
+  }
+}
 
 // What an error reply says: the program's `{error}`, or its plain words.
 const reasonOf = async (r) => {
@@ -45,7 +62,7 @@ export function browserHost() {
   let token = null;
   const session = async () => {
     if (!token) {
-      const r = await fetch('/api/session', { cache: 'no-store' });
+      const r = await netFetch('/api/session', { cache: 'no-store' });
       if (!r.ok) throw new Error(`session: ${await reasonOf(r)}`);
       token = (await r.json()).token;
     }
@@ -56,7 +73,7 @@ export function browserHost() {
   // as the body's error.  Only a lost connection is status 0.
   const call = async (path, body, bytes = false) => {
     try {
-      const r = await fetch(path, {
+      const r = await netFetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-DT-Token': await session() },
         body: JSON.stringify(body),
@@ -75,7 +92,7 @@ export function browserHost() {
   // One read of the program with a query: {status, body}, as a call is.
   const read = async (path, query) => {
     try {
-      const r = await fetch(`${path}?${new URLSearchParams(query)}`, { cache: 'no-store' });
+      const r = await netFetch(`${path}?${new URLSearchParams(query)}`, { cache: 'no-store' });
       const raw = await r.text();
       try { return { status: r.status, body: JSON.parse(raw) }; } catch (e) {
         if (r.ok) throw new Error(`${path}: the program answered ${r.status} with something that is not JSON`, { cause: e });
@@ -110,19 +127,19 @@ export function browserHost() {
       open();
     },
     async fetchMesh(id) {
-      const r = await fetch(tile(id, 'mesh'), { cache: 'no-store' });
+      const r = await netFetch(tile(id, 'mesh'), { cache: 'no-store' });
       if (!r.ok) throw new Error(`mesh: ${await reasonOf(r)}`);
       return r.arrayBuffer();
     },
     async fetchSketch(id, sketch) {
-      const r = await fetch(tile(id, `sketch?id=${sketch}`), { cache: 'no-store' });
+      const r = await netFetch(tile(id, `sketch?id=${sketch}`), { cache: 'no-store' });
       if (r.status === 404) return null; // the build moved on: its sketches are gone
       if (!r.ok) throw new Error(`sketch: ${await reasonOf(r)}`);
       return r.arrayBuffer();
     },
     async build(id) {
       let r;
-      try { r = await fetch(tile(id, 'build'), { method: 'POST' }); } catch (e) {
+      try { r = await netFetch(tile(id, 'build'), { method: 'POST' }); } catch (e) {
         if (offline(e)) return; // offline: asked again on reconnect
         throw e;
       }
@@ -130,18 +147,18 @@ export function browserHost() {
     },
     async text(id, file) {
       const q = file ? `?file=${encodeURIComponent(file)}` : '';
-      const r = await fetch(tile(id, `text${q}`), { cache: 'no-store' });
+      const r = await netFetch(tile(id, `text${q}`), { cache: 'no-store' });
       if (r.status === 404) return null; // no such tile or file (any more)
       if (!r.ok) throw new Error(`text: ${await reasonOf(r)}`);
       return r.json();
     },
     async about() {
-      const r = await fetch('/api/about', { cache: 'no-store' });
+      const r = await netFetch('/api/about', { cache: 'no-store' });
       if (!r.ok) throw new Error(`about: ${await reasonOf(r)}`);
       return r.json();
     },
     async elements() {
-      const r = await fetch('/api/elements', { cache: 'force-cache' });
+      const r = await netFetch('/api/elements', { cache: 'force-cache' });
       if (!r.ok) throw new Error(`elements: ${await reasonOf(r)}`);
       return r.json();
     },
