@@ -16,7 +16,7 @@ dharmatiles build lib:tiles/ground/1x1-grass.dtile          # one library tile  
 dharmatiles build my-tile.dtile --system ol --png            # a file, for OpenLOCK, with four preview PNGs (overhang red); --printer NAME picks a profile from library/printers/ or $DT_HOME/printers/
 dharmatiles build my-tile.dtile --3mf                        # also a 3MF painted by material; a Bambu Studio project when ~/dharmatiles/bambu.3mf (or --bambu-template) exists
 dharmatiles build --all [--system ol] [--printer fine]       # every library tile for one target -> out/<system>[-<printer>]/<group>/ (one build is one target; there is no `both`)
-dharmatiles check my-tile.dtile                              # read and plan only
+dharmatiles check my-tile.dtile [--system ol] [--printer NAME] [--seed N]   # read and plan only, for one build target
 dharmatiles elements [name]                                # the elements and their controls
 dharmatiles watch my-tile.dtile                              # rebuild on every save
 dharmatiles preview my-tile.dtile --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl
@@ -66,7 +66,7 @@ Also: `xtask/` (`docs`, `pictures`, `release`, `sheet`), `library/` (`.dtile` do
 
 ### How a build runs
 
-`document -> dt-doc (decode, check against the element schema) -> dt-eval::check (plan: surfaces first, then lift, then solids, in the order each element's reads and writes allow) -> build each element into the Scene -> union -> audit -> STL`. An element says what it reads and writes in `Element::plan`; the scheduler orders the stack and refuses reads nothing can satisfy (a grass line listed before the rocks it must grow round is fine: the plan runs the rocks first).
+`document -> dt-doc (decode, check against the element schema) -> dt-eval::check (plan) -> build each element into the Scene, in the order the stack is written -> union -> audit -> STL`. Stack order is build order: grass sees the rocks listed before it, water fills over what is under it. An element says what it writes in `Element::plan` (a surface, a fill, a laid layer or a solid); the plan refuses a stack whose entries need something nothing earlier made.
 
 Every leaf solid takes a slot reserved in sequence, so its source id (and so the material of every output triangle, and every hash) is fixed by index whatever thread builds it. Builds are identical whatever the threads; the golden tests check it by building each golden tile again on two threads (`crates/dt-eval/tests/golden.rs`, insta snapshots in `crates/dt-eval/tests/snapshots/`).
 
