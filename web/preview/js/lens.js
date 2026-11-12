@@ -78,11 +78,14 @@ export class Lens {
     this.api = api;
     this.more = false;
     this.drag = null;
+    this.field = null; // the field being typed in, if any: the sheet is held, not redrawn under it
     this.hide();
   }
 
   hide() {
     this.model = null;
+    this.field = null;
+    this.pending = null;
     this.root.hidden = false;
     this.root.replaceChildren();
     const empty = el('div', 'empty');
@@ -102,7 +105,7 @@ export class Lens {
    * a setting being {name, text, span: [byte offset, length], file}.
    */
   show(model) {
-    if (this.drag) { this.pending = model; return; } // not under a drag
+    if (this.drag || this.field) { this.pending = model; return; } // not under a drag or a field being typed in: shown when it ends
     this.model = model;
     const r = this.root;
     r.replaceChildren();
@@ -360,6 +363,7 @@ export class Lens {
     input.spellcheck = false;
     val.replaceWith(input);
     this.api.onField?.(c.name, true);
+    const field = this.field = {};
     input.focus();
     input.select();
     let done = false, close = null;
@@ -377,6 +381,8 @@ export class Lens {
     const finish = (keep) => {
       if (done) return;
       done = true;
+      const current = this.field === field; // else the sheet was cleared under the field
+      if (current) this.field = null;
       close?.();
       this.api.onField?.(c.name, false);
       if (live.wrote) {
@@ -389,6 +395,7 @@ export class Lens {
         else if (s && !c.viaSet) this.api.replace(s.span[0] + bytes(s.text.slice(0, v.at)), bytes(v.text), text ? kdlString(typed) : num ? written(input.value) : input.value.trim(), true);
         else this.put(g, c.name, text ? typed : parseValue(input.value));
       }
+      if (!current) return;
       const held = this.pending;
       this.pending = null;
       this.show(held ?? this.model);
