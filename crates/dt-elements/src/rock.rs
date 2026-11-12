@@ -692,6 +692,7 @@ pub(crate) fn add_items(
         marks.as_mut(),
     )?;
     let mut built = Vec::with_capacity(n);
+    let spots: Vec<([f64; 2], f64)> = feet.iter().map(|f| (f.p, f.stone.radius())).collect();
     for (f, peak) in feet.into_iter().zip(peaks) {
         let st = match peak {
             Some(h) => {
@@ -733,6 +734,10 @@ pub(crate) fn add_items(
         for c in m {
             d.column(c);
         }
+    }
+    // where each stood, before any detail: the same in every tier
+    for (at, r) in spots {
+        scene.place(Kind::Rock, at, r);
     }
     for sol in built {
         scene.add(

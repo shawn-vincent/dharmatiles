@@ -234,6 +234,9 @@ impl Element for Grass {
             let aprons = apron_shapes(&mut draws("aprons"), &flow0, &things);
             lenses = fill_bare_earth(&lenses, &aprons, &blocker, &outside, &frame, self.bare);
         }
+        for (c, w) in lenses.centre.iter().zip(&lenses.half_w) {
+            scene.place(Kind::Grass, *c, *w);
+        }
         let wrap = obstacle_circles(&things, &blocker, &frame, &flow0, self.length.lo() * s);
         let flow = flow::finish_flow(
             seed.key("rim"),

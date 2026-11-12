@@ -72,6 +72,13 @@ pub struct Built {
     pub clouds: Option<dt_kit::debug::Debug>,
     /// The debug layer's marks ([`Options::debug`]): dots and trails only.
     pub debug: Option<dt_kit::debug::Debug>,
+    /// Where everything was placed (rocks, trees, flowers), before any
+    /// detail was drawn: the same in every tier of a build.
+    pub placed: Vec<dt_kit::Placement>,
+    /// Whether the gate checked this build.  Only a full build is: a low
+    /// ([`Options::low`]) or draft build has each face flagged by its angle
+    /// alone and its verdict is **not yet checked**.
+    pub checked: bool,
     /// Whether the disk cache ([`Store`]) was used for this build, and what
     /// went wrong with it, if anything ([`build_stored`]).
     pub cache: CacheUse,
@@ -733,7 +740,7 @@ impl<'a> Plan<'a> {
             })
             .collect();
         let brick = !masonry.is_empty() && masonry.iter().all(|&b| b);
-        let (mesh, mats) = if opts.draft {
+        let (mesh, mats) = if opts.draft || opts.low {
             scene.soup_since(0)
         } else {
             scene.union()
@@ -750,7 +757,7 @@ impl<'a> Plan<'a> {
             max_deg: opts.printer.steepest_deg,
             ..dt_kit::HangBand::DEFAULT
         };
-        let (export, audit) = if opts.draft {
+        let (export, audit) = if opts.draft || opts.low {
             // the base is the same in every draft: its sockets are not flagged
             let base = u16::try_from(tile.stack.len()).unwrap_or(NO_ENTRY);
             let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
@@ -826,6 +833,8 @@ impl<'a> Plan<'a> {
             stack: tile.names(&opts.system),
             clouds: opts.clouds.then(|| cloud_part(scene.collected())).flatten(),
             debug: opts.debug.then(|| mark_part(scene.collected())).flatten(),
+            placed: scene.placed().to_vec(),
+            checked: !(opts.draft || opts.low),
             cache: CacheUse::default(),
         })
     }

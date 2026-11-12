@@ -12,7 +12,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use dt_kit::debug::{Column, Debug, Dot, Sheet, Trail};
-use dt_kit::{Audit, BuildRecord, Dropped, EntryId, Export, Grid, Mask, Material, Stage, TriMesh};
+use dt_kit::{
+    Audit, BuildRecord, Dropped, EntryId, Export, Grid, Kind, Mask, Material, Stage, TriMesh,
+};
 
 use crate::build::Built;
 use crate::doc::Named;
@@ -36,6 +38,9 @@ pub(super) struct Wr(pub(super) Vec<u8>);
 impl Wr {
     pub(super) fn bool(&mut self, v: bool) {
         self.0.push(u8::from(v));
+    }
+    pub(super) fn u8(&mut self, v: u8) {
+        self.0.push(v);
     }
     pub(super) fn u32(&mut self, v: u32) {
         self.0.extend_from_slice(&v.to_le_bytes());
@@ -512,6 +517,18 @@ pub(super) fn built_out(b: &Built) -> Vec<u8> {
     if let Some(d) = &b.debug {
         debug_out(&mut w, d);
     }
+    w.usize(b.placed.len());
+    for p in &b.placed {
+        w.u8(Kind::ALL
+            .iter()
+            .position(|k| *k == p.kind)
+            .and_then(|i| u8::try_from(i).ok())
+            .unwrap_or(u8::MAX));
+        w.f64(p.at[0]);
+        w.f64(p.at[1]);
+        w.f64(p.r);
+    }
+    w.bool(b.checked);
     w.0
 }
 
@@ -601,6 +618,20 @@ pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
     } else {
         None
     };
+    let placed = (0..r.len(25)?)
+        .map(|_| {
+            let k = r.u8()?;
+            Ok(dt_kit::Placement {
+                kind: Kind::ALL
+                    .get(usize::from(k))
+                    .copied()
+                    .ok_or_else(|| format!("no kind numbered {k}"))?,
+                at: [r.f64()?, r.f64()?],
+                r: r.f64()?,
+            })
+        })
+        .collect::<R<Vec<_>>>()?;
+    let checked = r.bool()?;
     r.done()?;
     let tris = mesh.triangles.len();
     if source.len() != tris
@@ -635,6 +666,8 @@ pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
         stack,
         clouds,
         debug,
+        placed,
+        checked,
         cache: CacheUse::default(),
     })
 }

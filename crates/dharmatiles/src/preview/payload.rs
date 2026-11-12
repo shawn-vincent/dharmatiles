@@ -348,90 +348,15 @@ pub fn clouds_json(b: &Built) -> Value {
 /// ([`thinned`]).  A finished build is always sent whole.
 pub const VIEW_BUDGET: usize = 400_000;
 
-/// `mesh` with its vertices snapped together on a grid coarse enough to
-/// leave at most `budget` triangles, and the index in `mesh` of each
-/// triangle kept.  A cheap stand-in for a view of a draft or a sketch: it
-/// keeps each kept triangle's own colour and owner, and is never printed.
-#[must_use]
-pub fn thinned(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>) {
-    let n = mesh.triangles.len();
-    if n <= budget {
-        return (mesh.clone(), (0..n).collect());
-    }
-    // a first cell from the surface area: about two triangles per cell face
-    let area: f64 = mesh
-        .triangles
-        .iter()
-        .map(|t| {
-            let [a, b, c] = t.map(|i| mesh.positions[i as usize]);
-            let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-            let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-            let x = [
-                u[1] * v[2] - u[2] * v[1],
-                u[2] * v[0] - u[0] * v[2],
-                u[0] * v[1] - u[1] * v[0],
-            ];
-            0.5 * (x[0] * x[0] + x[1] * x[1] + x[2] * x[2]).sqrt()
-        })
-        .sum();
-    #[allow(clippy::cast_precision_loss)]
-    let mut cell = (2.0 * area / budget as f64).sqrt().max(1e-3);
-    loop {
-        let mut of = std::collections::HashMap::with_capacity(mesh.positions.len() / 2);
-        let mut positions = Vec::new();
-        let snap: Vec<u32> = mesh
-            .positions
-            .iter()
-            .map(|p| {
-                let k = p.map(|c| libm::floor(c / cell) as i64);
-                *of.entry(k).or_insert_with(|| {
-                    positions.push(*p);
-                    u32::try_from(positions.len() - 1).unwrap_or(u32::MAX)
-                })
-            })
-            .collect();
-        let mut triangles = Vec::new();
-        let mut kept = Vec::new();
-        for (f, t) in mesh.triangles.iter().enumerate() {
-            let [a, b, c] = t.map(|i| snap[i as usize]);
-            if a != b && b != c && a != c {
-                triangles.push([a, b, c]);
-                kept.push(f);
-            }
-        }
-        if triangles.len() <= budget {
-            let out = TriMesh {
-                positions,
-                triangles,
-                ..TriMesh::default()
-            };
-            return (out, kept);
-        }
-        cell *= 1.4;
-    }
-}
+pub use dt_eval::tiers::thinned;
 
 /// `b` with its mesh thinned to [`VIEW_BUDGET`] ([`thinned`]) and every
 /// per-triangle list kept to match: what a stored preview holds.  A draft's
 /// soup of parts is as heavy as a finished tile, and the view shows no more
 /// than the budget; [`from_draft`] of the result is the same view as of `b`.
 #[must_use]
-pub fn thinned_built(mut b: Built) -> Built {
-    let (mesh, kept) = thinned(&b.export.mesh, VIEW_BUDGET);
-    if kept.len() == b.export.mesh.triangles.len() {
-        return b;
-    }
-    fn pick<T: Copy>(v: &[T], kept: &[usize]) -> Vec<T> {
-        kept.iter().map(|&f| v[f]).collect()
-    }
-    b.export.source = pick(&b.export.source, &kept);
-    b.export.mesh = mesh;
-    b.materials = pick(&b.materials, &kept);
-    b.audit.overhang = pick(&b.audit.overhang, &kept);
-    b.audit.band = pick(&b.audit.band, &kept);
-    b.entries = pick(&b.entries, &kept);
-    b.pieces = pick(&b.pieces, &kept);
-    b
+pub fn thinned_built(b: Built) -> Built {
+    dt_eval::tiers::thin_built(b, VIEW_BUDGET)
 }
 
 /// [`from_built`] thinned to [`VIEW_BUDGET`]: a draft's soup of parts can

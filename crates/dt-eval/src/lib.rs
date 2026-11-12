@@ -28,6 +28,7 @@ pub mod regions;
 pub mod solve;
 pub mod source;
 pub mod store;
+pub mod tiers;
 
 use std::path::{Path, PathBuf};
 

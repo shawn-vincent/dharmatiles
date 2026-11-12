@@ -706,6 +706,7 @@ fn plant(scene: &mut Scene, path: &dt_kit::EntryId, b: Built) {
     // later things stand on, and nothing stands on a tree (a second
     // tree there would be planted in this one's crown)
     scene.stamp(&mask, b.at[2]);
+    scene.place(Kind::Tree, [b.at[0], b.at[1]], b.stamp_r_mm);
     if let Some(d) = scene.clouds() {
         for mut c in b.clouds {
             c.owner = path.clone();

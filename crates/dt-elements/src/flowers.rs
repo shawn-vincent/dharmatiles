@@ -269,6 +269,7 @@ pub(crate) fn stand(
     let ground = Field::from(&surface);
     let mut parts: Vec<TriMesh> = Vec::new();
     for p in placed {
+        scene.place(Kind::Flowers, p.at, p.r);
         let (plant, outer) = flowers[p.index];
         let reach = outer * s;
         let low = (0..9)

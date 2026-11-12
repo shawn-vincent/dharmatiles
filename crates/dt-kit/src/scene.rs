@@ -483,6 +483,11 @@ const SIDE_LUMP_MM: f64 = 1.8;
 pub const CORNER_ROUND_MM: f64 = 0.5;
 /// The widest leaf of the adaptive lift, in cells.
 const LIFT_MAX_CELLS: usize = 32;
+/// A low build's lift error bound, mm: the ground is meshed within a
+/// third of a millimetre of its surface, what the eye on a map can tell.
+pub const LOW_LIFT_TOL_MM: f64 = 0.3;
+/// The widest leaf of a low build's adaptive lift, in cells.
+const LOW_LIFT_MAX_CELLS: usize = 128;
 /// Slots per build.
 const SLOTS: u32 = 1 << 16;
 
@@ -1095,6 +1100,21 @@ pub struct Scene {
     progress: crate::Progress,
     debug: Option<Box<crate::debug::Debug>>,
     collect: crate::debug::Collect,
+    placed: Vec<Placement>,
+    low: bool,
+}
+
+/// Where an element decided to put something: the place alone, as the seed
+/// and the tile's regions decide it, before any detail is drawn.  What the
+/// tiers must agree on (see [`Scene::place`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placement {
+    /// What is put there.
+    pub kind: Kind,
+    /// Its place, mm.
+    pub at: [f64; 2],
+    /// How far it reaches across, mm.
+    pub r: f64,
 }
 
 impl Scene {
@@ -1113,7 +1133,35 @@ impl Scene {
             progress: crate::Progress::none(),
             debug: None,
             collect: crate::debug::Collect::default(),
+            placed: Vec::new(),
+            low: false,
         }
+    }
+
+    /// A low build: elements draw what they place with less detail (a rock
+    /// as its hull, grass as a carpet, a tree as blobs), and the ground is
+    /// meshed within a coarser tolerance.  What is placed, and where, is the
+    /// same.  Never printed.
+    pub fn set_low(&mut self, low: bool) {
+        self.low = low;
+    }
+
+    /// Whether this is a low build ([`Scene::set_low`]).
+    #[must_use]
+    pub const fn low(&self) -> bool {
+        self.low
+    }
+
+    /// Record where something was placed, before it is drawn: the same in
+    /// every tier of a build.
+    pub fn place(&mut self, kind: Kind, at: [f64; 2], r: f64) {
+        self.placed.push(Placement { kind, at, r });
+    }
+
+    /// Everything placed so far, in build order.
+    #[must_use]
+    pub fn placed(&self) -> &[Placement] {
+        &self.placed
     }
 
     /// The terrain.
@@ -1453,7 +1501,7 @@ impl Scene {
         }
         self.record("surface", self.terrain.shown.content_hash());
         let t = &self.terrain;
-        let mesh = lift_layers(&t.layers, &t.land, self.frame, printer)?;
+        let mesh = lift_layers(&t.layers, &t.land, self.frame, printer, self.low)?;
         let solid = Solid(dt_geom::Solid::from_tri_mesh(&mesh).map_err(KitError::Mesh)?);
         self.add(
             Tag {
@@ -1502,6 +1550,7 @@ fn lift_layers(
     land: &Grid,
     frame: Frame,
     printer: &crate::Printer,
+    low: bool,
 ) -> Result<TriMesh, KitError> {
     let ordered: Vec<&Laid> = laid
         .iter()
@@ -1576,8 +1625,12 @@ fn lift_layers(
             nx: land.nx,
             ny: land.ny,
             step: land.step,
-            tol: LIFT_TOL_MM,
-            max_cells: LIFT_MAX_CELLS,
+            tol: if low { LOW_LIFT_TOL_MM } else { LIFT_TOL_MM },
+            max_cells: if low {
+                LOW_LIFT_MAX_CELLS
+            } else {
+                LIFT_MAX_CELLS
+            },
             round: dt_geom::Round::F32,
         },
         &layers,

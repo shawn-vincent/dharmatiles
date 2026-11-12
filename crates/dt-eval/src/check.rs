@@ -178,7 +178,12 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         );
     }
     // the tile is built at the finest cell any entry needs; a draft coarser
-    let frame = if opts.draft {
+    let frame = if let Some(cells) = opts.cells {
+        Frame {
+            cells_per_square: cells,
+            ..frame
+        }
+    } else if opts.draft {
         Frame {
             cells_per_square: DRAFT_CELLS,
             ..frame

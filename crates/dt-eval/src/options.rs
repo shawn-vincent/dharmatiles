@@ -25,6 +25,18 @@ pub struct Options {
     /// without the union, and the gate's verdict left out (each face is
     /// flagged by its angle alone, see [`dt_kit::draft`]).  Never written.
     pub draft: bool,
+    /// A low build, the tier for browsing and the map: the same places,
+    /// drawn with less detail (a rock as its hull, grass as a carpet, a
+    /// tree as blobs, the ground meshed within a third of a millimetre),
+    /// the parts shown as they are without the union, and the gate's
+    /// verdict left out (each face is flagged by its angle alone).  A low
+    /// build is **not yet checked**: it is never printed or exported.
+    pub low: bool,
+    /// Cells per square for the whole build, instead of the finest cell any
+    /// entry asks for (128 where none does).  What is placed does not
+    /// depend on it (see `dt_eval::places`); the surfaces and what is drawn
+    /// on them do.  A full build leaves it `None`.
+    pub cells: Option<u32>,
     /// Collect the editor's debug layer ([`dt_kit::debug`]): grass starts
     /// and spines.  Changes nothing that is built, and is not part of what
     /// the [`Cache`] keys a scene on (a scene kept without it is not given to
@@ -189,6 +201,8 @@ impl Options {
             },
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
             draft: false,
+            low: false,
+            cells: None,
             debug: false,
             clouds: false,
         })

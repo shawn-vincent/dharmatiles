@@ -61,22 +61,37 @@ pub const DEFAULT_LIMIT: u64 = 4 << 30;
 const MAGIC: &[u8; 4] = b"DTBC";
 
 /// How finely a build was made.  Part of the key, so each tier has its own
-/// entries: a full build is never answered with a preview.  (Coarser tiers
-/// are added here by name; the format does not change.)
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// entries: a full build is never answered with a preview, and the three
+/// tiers of one tile are three entries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tier {
     /// A finished build: the union and the gate.
     Full,
-    /// The draft ([`Options::draft`]): coarser cells, no union, no gate
-    /// verdict.  What the library's previews are.
+    /// The editor's draft ([`Options::draft`]): coarser cells, no union, no
+    /// gate verdict.  Shown while a value is dragged; not kept by the
+    /// program, but a key may be asked for.
     Draft,
+    /// The low build ([`Options::low`]): the same places drawn with less
+    /// detail, no union, no gate verdict: **not yet checked**.  For
+    /// browsing and the map when near.
+    Low,
+    /// A low build cut down to a few thousand triangles
+    /// ([`dt_eval::super_low`]): the library's previews, the map when far.
+    SuperLow,
 }
 
 impl Tier {
-    /// The tier a build with `opts` makes.
+    /// The tier a build with `opts` makes (a super-low is made from a low
+    /// build, so no options ask for it).
     #[must_use]
     pub fn of(opts: &Options) -> Self {
-        if opts.draft { Self::Draft } else { Self::Full }
+        if opts.low {
+            Self::Low
+        } else if opts.draft {
+            Self::Draft
+        } else {
+            Self::Full
+        }
     }
 
     /// Its name, as the key and `dharmatiles cache` say it.
@@ -85,7 +100,15 @@ impl Tier {
         match self {
             Self::Full => "full",
             Self::Draft => "draft",
+            Self::Low => "low",
+            Self::SuperLow => "super-low",
         }
+    }
+
+    /// Whether the gate has checked a build of this tier: only a full one.
+    #[must_use]
+    pub const fn checked(self) -> bool {
+        matches!(self, Self::Full)
     }
 }
 
@@ -392,7 +415,10 @@ impl Store {
     /// read (see [`Tracked`]).
     #[must_use]
     pub fn key(&self, reads: &Reads, path: &str, opts: &Options) -> Key {
-        let tier = Tier::of(opts);
+        self.key_for(reads, path, opts, Tier::of(opts))
+    }
+
+    fn key_for(&self, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
         let target = opts.target();
         let mut h = sha256::Sha256::new();
         let mut field = |name: &str, v: &str| {
@@ -407,6 +433,7 @@ impl Store {
         field("printer", &opts.printer.name);
         field("printer-values", &format!("{:?}", opts.printer));
         field("seed", &format!("{:?}", opts.seed));
+        field("cells", &format!("{:?}", opts.cells));
         field("path", path);
         for (p, t) in &reads.0 {
             field("file", p);
@@ -433,7 +460,8 @@ impl Store {
     pub fn key_at(&self, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
         let mut o = opts.clone();
         o.draft = tier == Tier::Draft;
-        self.key(reads, path, &o)
+        o.low = matches!(tier, Tier::Low | Tier::SuperLow);
+        self.key_for(reads, path, &o, tier)
     }
 
     /// Whether an entry is kept under `key`.
