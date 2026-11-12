@@ -693,16 +693,128 @@ fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
 
 /// A `piece` line for a print list.
 #[must_use]
-pub fn piece_line(tile: &str, count: u32, seed: Option<u64>, system: &str, always: bool) -> String {
+pub fn piece_line(
+    tile: &str,
+    count: u32,
+    seed: Option<u64>,
+    system: Option<&str>,
+    always: bool,
+) -> String {
     let mut l = format!("piece {} count={count}", crate::inventory::quote(tile));
     if let Some(s) = seed {
         l.push_str(&format!(" seed={s}"));
     }
-    l.push_str(&format!(" system={system}"));
+    if let Some(s) = system {
+        l.push_str(&format!(" system={s}"));
+    }
     if always {
         l.push_str(" print=always");
     }
     l
+}
+
+/// A piece to put in a list: the same tile, seed, system and `print` word
+/// make the same piece.
+#[derive(Debug, Clone, Copy)]
+pub struct Want<'a> {
+    /// The tile's path, as a piece writes it.
+    pub tile: &'a str,
+    /// A seed, if it is not the tile's own.
+    pub seed: Option<u64>,
+    /// A system, if it is not the list's.
+    pub system: Option<&'a str>,
+    /// `print=always`.
+    pub always: bool,
+}
+
+fn same_tile(a: &str, b: &str) -> bool {
+    a.strip_suffix(".dtile").unwrap_or(a) == b.strip_suffix(".dtile").unwrap_or(b)
+}
+
+/// Put one more copy of a piece in a list: a piece already there (same tile,
+/// seed, system and `print`) has its `count` raised, else a new `piece` line
+/// is added.  Everything else in the file is kept.  Returns the new text and
+/// the piece's count now.
+///
+/// # Errors
+/// The text does not read as a print list: its mistakes.
+pub fn add_or_bump(text: &str, want: &Want) -> Result<(String, u32), Vec<DocError>> {
+    let list = decode("list", text)?;
+    let found = list.pieces.iter().position(|p| {
+        same_tile(&p.tile.value, want.tile)
+            && p.seed.as_ref().map(|s| s.value) == want.seed
+            && p.system.as_ref().map(|s| s.value.as_str()) == want.system
+            && (p.print == PrintMode::Always) == want.always
+    });
+    if let Some(i) = found {
+        let n = list.pieces[i].count.value + 1;
+        let out = set_count(text, i, n).map_err(|e| {
+            vec![DocError::new(
+                &list.src,
+                "dt::map",
+                list.span,
+                e,
+                "this list",
+            )]
+        })?;
+        return Ok((out, n));
+    }
+    let line = piece_line(want.tile, 1, want.seed, want.system, want.always);
+    Ok((
+        crate::inventory::insert_in_block(text, list.span, &[line]),
+        1,
+    ))
+}
+
+/// The nodes of a list's map, in order.
+fn map_nodes(doc: &mut KdlDocument) -> Result<&mut Vec<KdlNode>, String> {
+    let map = doc
+        .nodes_mut()
+        .iter_mut()
+        .find(|n| n.name().value() == "map")
+        .ok_or("the list has no map")?;
+    Ok(map
+        .children_mut()
+        .as_mut()
+        .ok_or("the map has no pieces")?
+        .nodes_mut())
+}
+
+/// Set piece number `index` (from 0, in the order written) to `count` copies,
+/// keeping every other byte.
+///
+/// # Errors
+/// There is no such piece, the count is not 1 to 10 000, or the text is not KDL.
+pub fn set_count(text: &str, index: usize, count: u32) -> Result<String, String> {
+    if !(1..=10_000).contains(&count) {
+        return Err("a count is from 1 to 10 000: take the piece out to have none".to_owned());
+    }
+    let mut doc: KdlDocument = text.parse().map_err(|e: kdl::KdlError| e.to_string())?;
+    let node = map_nodes(&mut doc)?
+        .iter_mut()
+        .filter(|n| n.name().value() == "piece")
+        .nth(index)
+        .ok_or("the list has no such piece")?;
+    node.insert("count", KdlValue::Integer(i128::from(count)));
+    Ok(doc.to_string())
+}
+
+/// Take piece number `index` out of a list, keeping every other byte.
+///
+/// # Errors
+/// There is no such piece, or the text is not KDL.
+pub fn remove_piece(text: &str, index: usize) -> Result<String, String> {
+    let mut doc: KdlDocument = text.parse().map_err(|e: kdl::KdlError| e.to_string())?;
+    let nodes = map_nodes(&mut doc)?;
+    let at = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.name().value() == "piece")
+        .nth(index)
+        .map(|(i, _)| i)
+        .ok_or("the list has no such piece")?;
+    nodes.remove(at);
+    Ok(doc.to_string())
 }
 
 /// `text` (a print list that reads) with `lines` added as the last pieces of
@@ -716,9 +828,17 @@ pub fn add_pieces(text: &str, lines: &[String]) -> Result<String, Vec<DocError>>
     Ok(crate::inventory::insert_in_block(text, list.span, lines))
 }
 
-/// A new print list's text: the pieces, laid out for `system` in `mode`.
+/// A new print list's text: the pieces, laid out on `printer` (the default
+/// where none) for `system`, in `mode` where one is given.
 #[must_use]
-pub fn new_list(version: &str, about: &str, lines: &[String], system: &str, mode: Mode) -> String {
+pub fn new_list(
+    version: &str,
+    about: &str,
+    lines: &[String],
+    printer: Option<&str>,
+    system: &str,
+    mode: Option<Mode>,
+) -> String {
     let mut t = format!(
         "dharmatiles version={}\n\nmap {{\n    about {}\n",
         crate::inventory::quote(version),
@@ -729,9 +849,14 @@ pub fn new_list(version: &str, about: &str, lines: &[String], system: &str, mode
         t.push_str(l);
         t.push('\n');
     }
-    t.push_str(&format!(
-        "}}\n\nplates system={system} mode={}\n",
-        mode.word()
-    ));
+    t.push_str("}\n\nplates");
+    if let Some(p) = printer {
+        t.push_str(&format!(" printer={}", crate::inventory::quote(p)));
+    }
+    t.push_str(&format!(" system={system}"));
+    if let Some(m) = mode {
+        t.push_str(&format!(" mode={}", m.word()));
+    }
+    t.push('\n');
     t
 }

@@ -70,6 +70,7 @@ impl State {
 mod edit;
 pub(crate) mod fail;
 mod inventory;
+mod lists;
 mod map;
 mod messages;
 mod offers;
@@ -913,7 +914,7 @@ impl Shared {
                 Some(_) => return Ok(None),
             }
         };
-        if !path.ends_with(".dtile") {
+        if !path.ends_with(".dtile") && !path.ends_with(".dmap") {
             return Ok(None);
         }
         let text = dt_eval::Source::read(&dt_eval::Files, &path)?;

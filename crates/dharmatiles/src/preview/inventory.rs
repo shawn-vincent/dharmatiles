@@ -16,7 +16,7 @@
 //! `plates.js`, `folder-list.js` and `levels.js`.  Docs: docs/inventory.html.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use dt_doc::inventory::{self as doc, Colour, Identity};
@@ -658,117 +658,41 @@ pub(super) fn reprint(shared: &Shared, v: &Value) -> (&'static str, Value) {
         Ok(None) => 0,
         Err(e) => return ("200 OK", json!({"ok": false, "errors": errors_json(&e)})),
     };
-    let line = dt_doc::map::piece_line(tile, 1, Some(seed), system, have > 0);
     let mode = match colour {
         Colour::Single => dt_doc::map::Mode::Single,
         Colour::Multi => dt_doc::map::Mode::Multicolour,
     };
-    let (dest, made, warning): (PathBuf, bool, Option<String>) = if let Some(id) =
-        v["list"].as_str()
-    {
-        let Some(path) = slot_path(shared, id).filter(|p| super::plates::is_plates(p)) else {
-            return fail::refused("404 Not Found", "no such print list");
-        };
-        let text = match std::fs::read_to_string(&path) {
-            Ok(t) => t,
-            Err(e) => {
-                return fail::failure(
-                    "500 Internal Server Error",
-                    format!("cannot read {path}: {e}"),
-                );
-            }
-        };
-        let (new, warn) = match (
-            dt_doc::map::add_pieces(&text, &[line]),
-            dt_doc::map::decode(&path, &text),
-        ) {
-            (Ok(n), Ok(l)) => {
-                let w = l.plates.mode.as_ref().filter(|m| m.value != mode).map(|m| {
-                    format!(
-                        "this list prints in {}, and the piece you have is {}: the inventory counts the colour mode, so it will not see it as the one you have",
-                        m.value.word(),
-                        if colour == Colour::Multi { "multicolour" } else { "single colour" }
-                    )
-                });
-                (n, w)
-            }
-            (Err(e), _) | (_, Err(e)) => {
-                return (
-                    "200 OK",
-                    json!({"ok": false, "errors": errors_json(&e.iter().map(Diag::from).collect::<Vec<_>>())}),
-                );
-            }
-        };
-        if let Err(e) = std::fs::write(&path, new) {
-            return fail::failure(
-                "500 Internal Server Error",
-                format!("cannot write {path}: {e}"),
-            );
-        }
-        (PathBuf::from(path), false, warn)
-    } else {
-        let text = dt_doc::map::new_list(
-            &dt_doc::header::stamp(env!("CARGO_PKG_VERSION")),
-            "Pieces to print again",
-            &[line],
-            system,
-            mode,
-        );
-        match write_new_list(home, "reprint", text.as_bytes()) {
-            Ok(p) => (p, true, None),
-            Err(e) => return e,
-        }
+    // a list laid out in another colour mode is warned about, not refused
+    let list = v["list"].as_str();
+    let warning = list
+        .and_then(|id| slot_path(shared, id))
+        .and_then(|path| std::fs::read_to_string(&path).ok().map(|t| (path, t)))
+        .and_then(|(path, t)| dt_doc::map::decode(&path, &t).ok())
+        .and_then(|l| l.plates.mode.as_ref().filter(|m| m.value != mode).map(|m| {
+            format!(
+                "this list prints in {}, and the piece you have is {}: the inventory counts the colour mode, so it will not see it as the one you have",
+                m.value.word(),
+                if colour == Colour::Multi { "multicolour" } else { "single colour" }
+            )
+        }));
+    let want = dt_doc::map::Want {
+        tile,
+        seed: Some(seed),
+        system: Some(system),
+        always: have > 0,
+    };
+    let put = match super::lists::put(shared, &want, list, Some(mode)) {
+        Ok(p) => p,
+        Err(e) => return e,
     };
     shared.rescan();
     super::places::announce(shared);
-    let id = super::tile_id(&dest.to_string_lossy());
-    if made {
+    let id = super::tile_id(&put.path.to_string_lossy());
+    if put.made {
         shared.want(&id);
     }
     (
         "200 OK",
-        json!({"ok": true, "list": dest.display().to_string(), "id": id, "made": made, "warning": warning, "always": have > 0}),
+        json!({"ok": true, "list": put.path.display().to_string(), "id": id, "made": put.made, "warning": warning, "always": have > 0, "before": put.before}),
     )
-}
-
-/// A new `.dmap` in `dir`, never over a file.
-fn write_new_list(dir: &Path, stem: &str, text: &[u8]) -> Result<PathBuf, (&'static str, Value)> {
-    use std::io::Write;
-    std::fs::create_dir_all(dir).map_err(|e| {
-        fail::failure(
-            "500 Internal Server Error",
-            format!("cannot make {}: {e}", dir.display()),
-        )
-    })?;
-    for n in 1..1000 {
-        let dest = dir.join(if n == 1 {
-            format!("{stem}.dmap")
-        } else {
-            format!("{stem} {n}.dmap")
-        });
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&dest)
-        {
-            Ok(mut f) => {
-                return f.write_all(text).map(|()| dest.clone()).map_err(|e| {
-                    // best-effort cleanup of the half-made file; the write error is what is reported
-                    let _ = std::fs::remove_file(&dest);
-                    fail::failure(
-                        "500 Internal Server Error",
-                        format!("cannot write {}: {e}", dest.display()),
-                    )
-                });
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => {
-                return Err(fail::failure(
-                    "500 Internal Server Error",
-                    format!("cannot write {}: {e}", dest.display()),
-                ));
-            }
-        }
-    }
-    Err(fail::failure("500 Internal Server Error", "no free name"))
 }

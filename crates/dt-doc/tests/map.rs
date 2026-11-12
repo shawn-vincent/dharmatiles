@@ -126,3 +126,55 @@ fn the_header_is_checked_as_in_every_document() {
         .unwrap();
     assert_eq!(e[0].code, "dt::syntax");
 }
+
+#[test]
+fn a_piece_is_added_counted_and_taken_out_keeping_every_other_byte() {
+    use dt_doc::map::{Want, add_or_bump, remove_piece, set_count};
+    let text = "dharmatiles version=1\n// kept\nmap {\n    piece \"lib:tiles/ground/1x1-grass\" count=2 // two\n    piece \"home:glade\" seed=7\n}\nplates printer=\"sovol/sv06\"\n";
+    let want = |tile, seed| Want {
+        tile,
+        seed,
+        system: None,
+        always: false,
+    };
+    // the same tile, seed and system: the count is raised
+    let (t, n) = add_or_bump(text, &want("lib:tiles/ground/1x1-grass", None)).unwrap();
+    assert_eq!(n, 3);
+    assert!(
+        t.contains("count=3") && t.contains("// two") && t.contains("// kept"),
+        "{t}"
+    );
+    // another seed is another piece, added at the end of the map
+    let (t, n) = add_or_bump(text, &want("lib:tiles/ground/1x1-grass", Some(9))).unwrap();
+    assert_eq!(n, 1);
+    assert!(
+        t.contains("piece \"lib:tiles/ground/1x1-grass\" count=1 seed=9\n}"),
+        "{t}"
+    );
+    assert_eq!(decode("l", &t).unwrap().pieces.len(), 3);
+    // a tile with its .dtile still found; a seed already there counts up
+    let (_, n) = add_or_bump(text, &want("home:glade.dtile", Some(7))).unwrap();
+    assert_eq!(n, 2);
+    // an empty map takes a first piece
+    let empty = "dharmatiles version=1\nmap {\n}\n";
+    let (t, _) = add_or_bump(empty, &want("home:a", None)).unwrap();
+    assert_eq!(decode("l", &t).unwrap().pieces.len(), 1);
+    // count and removal
+    let t = set_count(text, 1, 4).unwrap();
+    assert!(t.contains("seed=7") && t.contains("count=4"), "{t}");
+    assert!(set_count(text, 0, 0).is_err() && set_count(text, 5, 2).is_err());
+    let t = remove_piece(text, 0).unwrap();
+    assert!(
+        !t.contains("1x1-grass") && t.contains("home:glade") && t.contains("plates printer"),
+        "{t}"
+    );
+    assert!(remove_piece(text, 2).is_err());
+    // a list with a mistake is never edited
+    assert!(
+        add_or_bump(
+            "dharmatiles version=1\nmap {\n piece\n}\n",
+            &want("home:a", None)
+        )
+        .is_err()
+    );
+}

@@ -17,6 +17,7 @@ import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 import { haveBlock, isTileDoc } from './inventory.js';
+import { listBlock } from './lists.js';
 
 
 // ---- the lens ---------------------------------------------------------------
@@ -103,7 +104,7 @@ function tileModel() {
   ] : [];
   // under the tile's own controls: what the inventory says of it and "I have this", then what it holds
   const tail = document.createElement('div');
-  if (isTileDoc(t)) tail.append(haveBlock(t));
+  if (isTileDoc(t)) tail.append(haveBlock(t), listBlock(t));
   tail.append(tileContents());
   return { title: stem(t), kind: 'tile', href: node.href, groups, actions, tail, slim: true };
 }
@@ -274,12 +275,14 @@ function renderProperty(model) {
   if (held) { page.input.focus({ preventScroll: true }); page.input.setSelectionRange(page.input.value.length, page.input.value.length); }
 }
 
+let lastLists = null; // the print lists there are: the tile level's list chooser follows them
 /** Wire this part of the page (once, at load). */
 export function init() {
   view.subscribe(['sel', 'tileId', 'control'], renderLens);
   log.subscribe(renderTile);
   doc.subscribe(['stack', 'map', 'file', 'writable', 'tileId'], renderLens);
   server.subscribe(['elements', 'language', 'inventory', 'system'], renderLens);
+  server.subscribe(['tiles'], () => { const n = server.get().tiles.filter((t) => /\.dmap$/i.test(t.path)).map((t) => t.id).join(); if (n !== lastLists) { lastLists = n; renderLens(); } });
   // before the text is checked the sheet reads the build's plan: not redrawn for builds that change nothing it shows
   let plan = null;
   server.subscribe(['tiles'], () => {

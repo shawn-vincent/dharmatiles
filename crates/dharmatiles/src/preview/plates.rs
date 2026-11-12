@@ -149,8 +149,28 @@ fn loose_json(list: &dt_doc::map::PrintList, ov: &Overrides, home: Option<&Path>
         "margin": pl.margin.as_ref().map(|m| m.value),
         "printers": printers_json(home),
         "check_inventory": pl.inventory.as_ref().is_none_or(|i| i.value),
+        "pieces": pieces_json(list),
         "planned": false,
     })
+}
+
+/// The list's own pieces, in the order written, for the panel to edit: the
+/// count, and taking one out, are edits of the list's text.
+pub(super) fn pieces_json(list: &dt_doc::map::PrintList) -> Value {
+    Value::Array(
+        list.pieces
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                json!({
+                    "index": i, "tile": p.tile.value, "count": p.count.value,
+                    "seed": p.seed.as_ref().map(|s| s.value),
+                    "system": p.system.as_ref().map(|s| s.value.clone()),
+                    "print": p.print.word(),
+                })
+            })
+            .collect(),
+    )
 }
 
 /// Every profile that holds a bed, for the chooser: brand, then model.
@@ -356,7 +376,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
                 note: Option<&str>| {
         let (mesh, painted, clean) = plate_mesh(&plan, layout, parts, view, &palette);
         let exact: Vec<bool> = parts.iter().map(|p| p.full).collect();
-        let sp = shared_plan(
+        let mut sp = shared_plan(
             &plan,
             layout,
             boxes,
@@ -365,6 +385,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             writable,
             shared.home.as_deref(),
         );
+        sp["plates"]["pieces"] = pieces_json(&list);
         let meta = json!({
             "overhang_deg": shared.options().printer.overhang_deg,
             "footprint": s.machine.bed,
@@ -588,7 +609,7 @@ pub(super) fn show(shared: &Shared, v: &Value) -> (&'static str, Value) {
 }
 
 /// Build the list again: its plate in view or its file changed.
-fn again(shared: &Shared, id: &str) {
+pub(super) fn again(shared: &Shared, id: &str) {
     shared.update(id, |t| t.stale = true);
     shared.queue_cv.notify_all();
 }

@@ -428,7 +428,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
             && !made.contains("always"),
         "{made}"
     );
-    assert!(made.contains("plates system=db mode=multicolour"), "{made}");
+    assert!(made.contains("system=db mode=multicolour"), "{made}");
     assert!(
         dt_doc::map::decode("reprint.dmap", &made).is_ok(),
         "it reads as a print list"
@@ -440,4 +440,155 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
             || v["warning"].as_str().unwrap().contains("multicolour"),
         "{v}"
     );
+}
+
+#[test]
+fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
+    let h = start_home("lists", &[("glade.dtile", GLADE)]);
+    // a new list in My tiles: an empty map for the printer last chosen, never over a file
+    let (head, v) = h.call("/api/lists/new", serde_json::json!({"name": "Crossing"}));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    let text = std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap();
+    assert!(
+        text.contains("map {") && text.contains("plates printer=\"bambu/x1c-ams\" system=db"),
+        "{text}"
+    );
+    assert!(dt_doc::map::decode("c", &text).is_ok());
+    let (_, v2) = h.call("/api/lists/new", serde_json::json!({"name": "Crossing"}));
+    assert!(
+        v2["path"].as_str().unwrap().ends_with("Crossing 2.dmap"),
+        "{v2}"
+    );
+    // a name that climbs out of the folder is a name, not a path
+    h.call(
+        "/api/lists/new",
+        serde_json::json!({"name": "../../escape"}),
+    );
+    assert!(!h.dir.join("../../escape.dmap").exists());
+    let list = h.id("Crossing.dmap");
+    // add a tile: a piece; again: its count; the program says what it replaced, for Undo
+    let b = h.ok(
+        "/api/lists/add",
+        serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
+    );
+    assert_eq!(
+        (b["count"].as_u64(), b["made"].clone()),
+        (Some(1), serde_json::json!(false))
+    );
+    let b = h.ok(
+        "/api/lists/add",
+        serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
+    );
+    assert_eq!(b["count"], 2);
+    let before = b["before"].as_str().unwrap().to_owned();
+    let now = std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap();
+    assert!(now.contains("piece \"home:glade\" count=2"), "{now}");
+    assert!(before.contains("count=1"));
+    // the plates are laid out again with the two
+    h.wait("Crossing.dmap", "two pieces planned", |t| {
+        t["status"] == "ready" && t["plan"]["plates"]["pieces"][0]["count"] == 2
+    });
+    // count and remove through the panel's calls, Undo by restore
+    h.ok(
+        "/api/lists/count",
+        serde_json::json!({"list": list, "index": 0, "count": 5}),
+    );
+    assert!(
+        std::fs::read_to_string(h.dir.join("Crossing.dmap"))
+            .unwrap()
+            .contains("count=5")
+    );
+    assert!(
+        h.call(
+            "/api/lists/count",
+            serde_json::json!({"list": list, "index": 0, "count": 0})
+        )
+        .0
+        .starts_with("HTTP/1.1 400")
+    );
+    let r = h.ok(
+        "/api/lists/remove",
+        serde_json::json!({"list": list, "index": 0}),
+    );
+    assert!(
+        !std::fs::read_to_string(h.dir.join("Crossing.dmap"))
+            .unwrap()
+            .contains("piece")
+    );
+    h.ok(
+        "/api/lists/restore",
+        serde_json::json!({"list": list, "text": r["before"]}),
+    );
+    assert!(
+        std::fs::read_to_string(h.dir.join("Crossing.dmap"))
+            .unwrap()
+            .contains("count=5")
+    );
+    // a tile with no list named starts a new one holding it
+    let b = h.ok(
+        "/api/lists/add",
+        serde_json::json!({"tile": h.id("glade.dtile")}),
+    );
+    assert_eq!(b["made"], true);
+    assert!(
+        std::fs::read_to_string(b["path"].as_str().unwrap())
+            .unwrap()
+            .contains("piece \"home:glade\"")
+    );
+    // a list that does not read is shown as data and never written
+    std::fs::write(
+        h.dir.join("Crossing.dmap"),
+        "dharmatiles version=1\nmap {\n piece\n}\n",
+    )
+    .unwrap();
+    let (head, v) = h.call(
+        "/api/lists/add",
+        serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
+    );
+    assert!(head.starts_with("HTTP/1.1 200") && v["ok"] == false, "{v}");
+    assert_eq!(
+        std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap(),
+        "dharmatiles version=1\nmap {\n piece\n}\n"
+    );
+    // the source of a list is served, saved with the token, and checked by its decoder
+    let (head, body) = get(&h.r, &format!("/api/tiles/{list}/text"));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    let served: Value = serde_json::from_slice(&body).unwrap();
+    assert!(
+        served["text"].as_str().unwrap().contains("map {"),
+        "{served}"
+    );
+    let edited = "dharmatiles version=1\nmap {\n piece \"home:glade\" count=7\n}\n";
+    let (head, v) = h.call(
+        &format!("/api/tiles/{list}/save"),
+        serde_json::json!({"text": edited, "base": served["text"]}),
+    );
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    assert_eq!(
+        std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap(),
+        edited
+    );
+    h.wait(
+        "Crossing.dmap",
+        "the plates planned again from the saved source",
+        |t| t["status"] == "ready" && t["plan"]["plates"]["pieces"][0]["count"] == 7,
+    );
+    // the source of a list is checked by its decoder, mistakes at their text
+    let (_, c) = h.call(
+        &format!("/api/tiles/{list}/check"),
+        serde_json::json!({"text": "dharmatiles version=1\nmap {\n piece \"x\" count=0\n}\n"}),
+    );
+    assert_eq!(c["ok"], false, "{c}");
+    assert!(
+        c["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("count"),
+        "{c}"
+    );
+    let (_, c) = h.call(
+        &format!("/api/tiles/{list}/check"),
+        serde_json::json!({"text": "dharmatiles version=1\nmap {\n piece \"x\"\n}\n"}),
+    );
+    assert_eq!(c["ok"], true, "{c}");
 }

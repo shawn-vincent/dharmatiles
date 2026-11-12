@@ -38,6 +38,10 @@
 //   platesShow(id, plate)                   the plate of a print list the view shows (from 0)
 //   platesSet(id, key, value)               set a word of the list's `plates` line (printer, mode, group, gap, margin, turn); value null removes it
 //   platesExport(id)                        build every piece in full and write the plates: {ok, files, format, plates, failures}
+//   listsNew({name, root?, dir?})           a new print list (.dmap) in My tiles or a folder of a place: {path, id, tile}
+//   listsAdd({tile, list?, seed?, system?}) one more copy of a tile in a list (a new list when none is named): {ok, list, path, count, made, before}
+//   listsCount({list, index, count})        a piece's copies; listsRemove({list, index}) takes the piece out; both answer with `before`
+//   listsRestore({list, text})              Undo: the text a change replaced, written back
 //   inventoryHave(body)                     one good print of a tile: {tile, colour, system?, seed?, count?, on?}; {ok, lines} (docs/inventory.html)
 //   inventoryRecord(body)                   the sheet after a print: {list, plate, failed: [n…], on?}
 //   inventoryGone(body)                     one of a piece lost: {tile, seed, system, colour, note?, on?}
@@ -236,6 +240,11 @@ export function browserHost() {
     platesShow: (id, plate) => call('/api/plates/show', { tile: id, plate }),
     platesSet: (id, key, value) => call('/api/plates/set', { tile: id, key, value }),
     platesExport: (id) => call('/api/plates/export', { tile: id }),
+    listsNew: (body) => call('/api/lists/new', body),
+    listsAdd: (body) => call('/api/lists/add', body),
+    listsCount: (body) => call('/api/lists/count', body),
+    listsRemove: (body) => call('/api/lists/remove', body),
+    listsRestore: (body) => call('/api/lists/restore', body),
     inventoryHave: (body) => call('/api/inventory/have', body),
     inventoryRecord: (body) => call('/api/inventory/record', body),
     inventoryGone: (body) => call('/api/inventory/gone', body),

@@ -10,6 +10,7 @@ import { $, host, toast } from './app.js';
 import { seg } from './controls.js';
 import { exists, plateTotals, systemName, wantLine } from '../inventory.js';
 import { say, today } from './inventory.js';
+import { removePiece, setCount } from './lists.js';
 import { isInventory, isPlates, server, stem, tile, view } from './stores.js';
 
 const el = (tag, cls, text) => {
@@ -173,6 +174,33 @@ function platesSection(p) {
   sec.append(el('p', `note${low ? ' warn' : ' ok'}`, low
     ? `${plural(low, 'tile')} shown as low meshes, not yet checked: full builds start for the plate in view; the rest build when you export. The plates are laid out again by what the full builds cover.`
     : 'Every piece is a full build, checked by the printability gate.'));
+  return sec;
+}
+
+/** The list's own pieces: a count to raise or lower, and a piece to take out; each is an edit of the list's text, with Undo. */
+function piecesSection(p, ro) {
+  const sec = el('section', 'pl-sec pl-pieces');
+  sec.append(el('h3', null, 'Pieces'));
+  const t = tile();
+  const ps = p.pieces ?? [];
+  if (!ps.length) {
+    sec.append(el('p', 'note', 'No pieces yet. Open a tile and press Add to print list, or use a tile row’s menu; or write piece lines in Source.'));
+    return sec;
+  }
+  for (const q of ps) {
+    const name = q.tile.replace(/^(lib|home):/, '').split('/').pop().replace(/\.dtile$/i, '');
+    const row = el('div', `pl-pc${q.print === 'skip' ? ' skip' : ''}`);
+    const nm = el('b', null, name);
+    nm.title = q.tile + (q.seed != null ? `, seed ${q.seed}` : '') + (q.system ? `, ${systemName(q.system)}` : '') + (q.print !== 'missing' ? `, print=${q.print}` : '');
+    const sub = [q.seed != null ? `seed ${q.seed}` : '', q.system ? systemName(q.system) : '', q.print !== 'missing' ? q.print : ''].filter(Boolean).join(' · ');
+    const lab = el('span', 'pl-pn');
+    lab.append(nm);
+    if (sub) lab.append(el('span', 'pl-ps', sub));
+    const mk = (text, title, run, off) => { const b = el('button', 'pl-step', text); b.type = 'button'; b.title = title; b.disabled = ro || off; b.onclick = run; return b; };
+    const n = el('span', 'pl-cnt', String(q.count));
+    row.append(lab, mk('−', 'One fewer', () => setCount(t.id, q.index, q.count - 1), q.count <= 1), n, mk('+', 'One more', () => setCount(t.id, q.index, q.count + 1), false), mk('✕', `Take ${name} out of the list`, () => removePiece(t.id, q.index, name), false));
+    sec.append(row);
+  }
   return sec;
 }
 
@@ -352,7 +380,7 @@ function render() {
     if (ro) body.append(el('p', 'note', 'This file cannot be changed here.'));
     // the plates first: the core of it is to open a list, see its plates and export; the settings that decide them follow
     if (p.planned) body.append(platesSection(p), exportSection(p, ro), afterSection(p));
-    body.append(inventorySection(p, ro), printerSection(p, ro), modeSection(p, ro));
+    body.append(piecesSection(p, ro), inventorySection(p, ro), printerSection(p, ro), modeSection(p, ro));
     if (p.planned) body.append(spacingSection(p, ro));
   }
   box.append(body);

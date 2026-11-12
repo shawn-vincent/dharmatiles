@@ -112,6 +112,8 @@ dharmatiles plates my-list.dmap --format 3mf --out ~/prints --json</code></pre>
 
 <h2 id="editor">In the editor</h2>
 <p>Open a <code>.dmap</code> from a folder and the view shows the printer's bed as a translucent slab the pieces stand on (any excluded zones shaded on it) with the plate in view, and the panel changes to the plates' panel. The <em>Tile</em> and <em>Plates</em> switch in the title bar names what you are working on.</p>
+<p><strong>Starting a list.</strong> In a folder you own, <em>New print list</em> (beside <em>New tile</em>) asks a name and writes <code>&lt;name&gt;.dmap</code>: an empty map and a <code>plates</code> line for the printer last chosen in the title bar, never over a file. It opens on its plates. <strong>Filling it:</strong> on a tile's level, <em>Add to print list</em> picks a list (or a new one) and adds one more copy; a tile row's menu has <em>Add to print list…</em> too. A piece already in the list at the same seed and system has its <code>count</code> raised instead of being repeated. In the plates' panel, <em>Pieces</em> lists the list's pieces with <kbd>−</kbd> and <kbd>+</kbd> for the count and <kbd>✕</kbd> to take one out. Each of these is an edit of the list's text and leaves the rest of the file as it was; the toast has <em>Undo</em>, which writes the earlier text back, and the plates are laid out again.</p>
+<p><strong>Source.</strong> A print list has the same <em>Tile</em> and <em>Source</em> switch as a tile: <em>Source</em> shows the KDL in the editor and saves it, and a save lays the plates out again. A mistake is shown at its text by the print-list reader, as the command shows it.</p>
 <ul>
 <li><strong>Plates.</strong> One row for each plate, with its pieces and filaments; press one to put it on the bed. A note says when grouping by filament costs a plate, with a button for packing by size only.</li>
 <li><strong>Export.</strong> Builds every piece in full and writes the project or the STLs. The status line and the messages (<kbd>⌃J</kbd>) say what it is doing.</li>
@@ -123,7 +125,7 @@ dharmatiles plates my-list.dmap --format 3mf --out ~/prints --json</code></pre>
 <h2 id="rules">Rules</h2>
 <ul>
 <li>A plate is laid out from the real footprint of the full build: a layout from low builds is the view's estimate, redone when the full builds land.</li>
-<li>The printer's filament slots are checked before any build, and again from the builds.</li>
+<li>The printer's filament slots are checked before any build, and again from the builds. The check before a build is an upper bound read from the stack and the elements' own words: a tree with <code>leaves bare</code> is wood only, with no leaf filament.</li>
 <li>Only a full, gate-checked build is written; a failing piece is named, never hidden.</li>
 <li>Single colour carries no per-triangle paint.</li>
 <li>Every piece rests on the bed (its lowest point at zero), so DungeonBlocks and OpenLOCK pieces may share a plate.</li>

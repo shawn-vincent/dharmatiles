@@ -166,7 +166,7 @@ function folderLevel(data, on, { rowOf, wrap, text, label, note }) {
       const b = rowOf('tile', t.id);
       const sub = [sizeLine(t), searching && where ? where : ''].filter(Boolean).join(' · ');
       const isInventory = /\.dinv$/i.test(t.path);
-      b.append(isInventory ? glyph('library') : sizeThumb(t), text(stemOf(t.path), isInventory ? 'what you have printed' : sub));
+      b.append(isInventory ? glyph('library') : sizeThumb(t), text(stemOf(t.path), isInventory ? 'what you have printed' : /\.dmap$/i.test(t.path) ? 'print list' : sub));
       // have and need: what the inventory says of this tile for the target system (data.pill, from js/inventory.js)
       const pill = /\.dtile$/i.test(t.path) ? data.pill?.(t) : null;
       if (pill) { const pe = el('span', `ipill ${pill.kind}`, pill.text); pe.title = pill.title; b.append(pe); }

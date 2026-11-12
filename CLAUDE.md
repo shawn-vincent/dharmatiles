@@ -17,6 +17,7 @@ dharmatiles build my-tile.dtile --system ol --png            # a file, for OpenL
 dharmatiles build my-tile.dtile --3mf                        # also a 3MF painted by material; a Bambu Studio project when ~/dharmatiles/bambu.3mf (or --bambu-template) exists
 dharmatiles build --all [--system ol] [--printer fine]       # every library tile for one target -> out/<system>[-<printer>]/<group>/ (one build is one target; there is no `both`)
 dharmatiles check my-tile.dtile [--system ol] [--printer NAME] [--seed N]   # read and plan only, for one build target
+dharmatiles inventory [list|have <tile>|gone <tile>|relink <old> <new>]   # what you have printed: inventory.dinv in My tiles, a log; plates print only what it lacks (plates --all ignores it)
 dharmatiles elements [name]                                # the elements and their controls
 dharmatiles watch my-tile.dtile                              # rebuild on every save
 dharmatiles preview my-tile.dtile --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl

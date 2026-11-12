@@ -201,7 +201,11 @@ impl Plan {
 /// connector prints in it.
 #[must_use]
 pub fn estimate(tile: &crate::Tile) -> Vec<Material> {
-    fn of(what: &str, out: &mut Vec<Material>) {
+    fn of(what: &str, controls: &[crate::doc::Setting], out: &mut Vec<Material>) {
+        // a winter tree (`leaves=bare`) has no clumps and no leaves: no leaf material
+        let bare = controls.iter().any(|c| {
+            c.name == "leaves" && matches!(&c.value, dt_elements::Value::Word(w) if w == "bare")
+        });
         match what {
             "ground" | "dirt" => out.push(Material::Earth),
             "rock" | "stone" | "boulder" | "pebble" | "cliff" => out.push(Material::Rock),
@@ -209,15 +213,16 @@ pub fn estimate(tile: &crate::Tile) -> Vec<Material> {
             "water" => out.push(Material::Water),
             "grass" | "reeds" => out.push(Material::Grass),
             "wall" | "floor" => out.push(Material::Masonry),
+            "tree" if bare => out.push(Material::Wood),
             "tree" => out.extend([Material::Wood, Material::Leaf]),
             _ => {}
         }
     }
     let mut out = vec![Material::Earth];
     for e in &tile.stack {
-        of(&e.what.value, &mut out);
+        of(&e.what.value, &e.controls, &mut out);
         for c in &e.children {
-            of(&c.what.value, &mut out);
+            of(&c.what.value, &c.controls, &mut out);
         }
     }
     dt_kit::filaments_of(&out)

@@ -28,6 +28,7 @@ import { levelSnapshot, restoreLevel } from './levels.js';
 import { select } from './open.js';
 import { nameField } from './rows.js';
 import { openNewTile, renameTile } from './tiles.js';
+import { listMenu, newList } from './lists.js';
 import { server, tile, tileById, view, whenListedWhere } from './stores.js';
 
 const SLIDE_MS = 200;
@@ -161,6 +162,7 @@ function renderActions(d) {
   else if (d.writable) {
     buttons.push(mk('New tile', 'A new tile in this folder', () => openNewTile({ root: d.level.root, dir: d.level.dir, name: placeName(d) })));
     buttons.push(mk('New folder', 'A new folder in this folder', (b) => newFolder(b)));
+    buttons.push(mk('New print list', 'A new print list (.dmap) in this folder: the tiles to print, laid out for a printer', (b) => newList(d.level.root, d.level.dir, b, placeName(d))));
   }
   box.replaceChildren(...buttons);
 }
@@ -492,12 +494,16 @@ function openRowMenu(kind, id, anchor) {
   const t = tileById(id);
   if (!t) return;
   if (!writable(roots[t.root])) {
-    openMenu(anchor, [{ label: 'Copy to My tiles', sub: 'the library is read only; the copy is yours', disabled: !/\.dtile$/i.test(t.path), why: 'only a tile document is copied', run: () => copyToMine(t) }], { label: stemOf(t.path) });
+    openMenu(anchor, [
+      { label: 'Add to print list…', disabled: !kindActions(t), why: 'only a tile goes in a print list', run: () => listMenu(t, anchor), keepFocus: true },
+      { label: 'Copy to My tiles', sub: 'the library is read only; the copy is yours', disabled: !/\.dtile$/i.test(t.path), why: 'only a tile document is copied', run: () => copyToMine(t) },
+    ], { label: stemOf(t.path) });
     return;
   }
   const can = kindActions(t);
   openMenu(anchor, [
     { label: 'Rename…', hint: 'F2', disabled: !can, why: 'only a tile document is renamed here', run: () => nameTileRow(t, anchor), keepFocus: true },
+    { label: 'Add to print list…', disabled: !can, why: 'only a tile goes in a print list', run: () => listMenu(t, anchor), keepFocus: true },
     { label: 'Duplicate', disabled: !can, why: 'only a tile document is copied here', run: () => duplicate(t) },
     { label: 'Move to…', disabled: !can, why: 'only a tile document is moved here', run: () => moveMenu(t, anchor), keepFocus: true },
     { sep: true },

@@ -109,7 +109,7 @@ export function setFace(face, { focus = false } = {}) {
   if (face === 'source') {
     // the caret goes to the first line of what the level is (the control's own when one is open)
     const { sel } = view.get();
-    const at = sourceLine(sel, null);
+    const at = isPlates(tile()) ? null : sourceLine(sel, null);
     // once the source is on screen (it was not drawn a moment ago)
     requestAnimationFrame(() => { if (from !== 'source' && at) texts.placeCaret(at); if (focus) texts.focus(); });
   } else if (focus) focusLevel();
@@ -282,8 +282,9 @@ function render() {
   // a print list's panel is the plates' (plates.js), not the tile's levels or source
   const plates = isPlates(tile());
   const inventory = isInventory(tile());
-  $('stage').dataset.face = plates ? 'plates' : inventory ? 'inventory' : face;
-  $('face').hidden = plates || inventory;
+  // a print list's panel is the plates', or its source (the same switch as a tile's); the inventory's own view has its own switch
+  $('stage').dataset.face = plates ? (face === 'source' ? 'source' : 'plates') : inventory ? 'inventory' : face;
+  $('face').hidden = inventory;
   renderCrumbs();
   renderContext();
   syncAddress();

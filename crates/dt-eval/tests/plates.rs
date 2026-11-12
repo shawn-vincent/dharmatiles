@@ -369,3 +369,46 @@ fn nothing_to_print_because_it_is_all_on_the_shelf_is_said_and_skip_still_skips(
     assert_eq!(p.held, [("1x1-flat".to_owned(), 3)]);
     assert_eq!(p.skipped, ["lib:tests/ground/1x1-no-base"]);
 }
+
+#[test]
+fn a_winter_tree_has_no_leaf_material_so_it_fits_a_printer_with_fewer_filaments() {
+    let lib =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library/tests/plants/1x1-tree.dtile");
+    let text = std::fs::read_to_string(lib).unwrap();
+    assert!(text.contains("leaves on"));
+    let dir = std::env::temp_dir().join(format!("dt-winter-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let write = |name: &str, t: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, t).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let bare = write("bare.dtile", &text.replace("leaves on", "leaves bare"));
+    let clumps = write(
+        "clumps.dtile",
+        &text.replace("leaves on", "leaves clumps-only"),
+    );
+    let names = |p: &str| -> Vec<&'static str> {
+        let plan = plan_of(
+            &format!("map {{\n piece \"{p}\"\n}}"),
+            &Overrides {
+                mode: Some(Mode::Single),
+                ..Overrides::default()
+            },
+        )
+        .unwrap();
+        plan.kinds[0].estimate.iter().map(|m| m.name()).collect()
+    };
+    let b = names(&bare);
+    assert!(b.contains(&"wood") && !b.contains(&"leaf"), "{b:?}");
+    assert!(names(&clumps).contains(&"leaf"), "clumps are leaf material");
+    // earth and wood fit a printer of three filaments where a leafy tree (earth, wood, leaf, rock?) may not
+    let on = plan_of(
+        &format!(
+            "map {{\n piece \"{bare}\"\n}}\nplates printer=\"prusa/mk4-mmu3\" mode=\"multicolour\""
+        ),
+        &Overrides::default(),
+    );
+    assert!(on.is_ok(), "{on:?}");
+    let _ = std::fs::remove_dir_all(dir);
+}

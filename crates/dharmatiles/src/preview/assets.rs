@@ -112,6 +112,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/editor/controls.js"),
     ),
     (
+        "/js/editor/lists.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/lists.js"),
+    ),
+    (
         "/js/inventory.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/inventory.js"),

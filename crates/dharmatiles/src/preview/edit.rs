@@ -127,6 +127,11 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "/api/inventory/gone" => return super::inventory::gone(shared, &v).into(),
         "/api/inventory/relink" => return super::inventory::relink(shared, &v).into(),
         "/api/inventory/reprint" => return super::inventory::reprint(shared, &v).into(),
+        "/api/lists/new" => return super::lists::new_list(shared, &v).into(),
+        "/api/lists/add" => return super::lists::add(shared, &v).into(),
+        "/api/lists/count" => return super::lists::set_count(shared, &v).into(),
+        "/api/lists/remove" => return super::lists::remove(shared, &v).into(),
+        "/api/lists/restore" => return super::lists::restore(shared, &v).into(),
         _ => {}
     }
     if path == "/api/reveal" {
@@ -260,7 +265,7 @@ fn file_stem(name: &str) -> String {
 }
 
 /// A tile name from the page: one line of at most 80 characters.
-fn tile_name(v: &Value) -> Result<String, (&'static str, Value)> {
+pub(super) fn tile_name(v: &Value) -> Result<String, (&'static str, Value)> {
     let name = v["name"].as_str().unwrap_or("").trim();
     if name.chars().count() > 80 || name.contains(['\n', '\r']) {
         return Err(bad("a tile name is one line of at most 80 characters"));
@@ -280,12 +285,22 @@ pub(super) fn write_new_bytes(
     stem: &str,
     text: &[u8],
 ) -> Result<PathBuf, (&'static str, Value)> {
+    write_new_ext(dir, stem, "dtile", text)
+}
+
+/// [`write_new_bytes`] for any document extension (a print list is `dmap`).
+pub(super) fn write_new_ext(
+    dir: &Path,
+    stem: &str,
+    ext: &str,
+    text: &[u8],
+) -> Result<PathBuf, (&'static str, Value)> {
     use std::io::Write;
     for n in 1..1000 {
         let dest = dir.join(if n == 1 {
-            format!("{stem}.dtile")
+            format!("{stem}.{ext}")
         } else {
-            format!("{stem} {n}.dtile")
+            format!("{stem} {n}.{ext}")
         });
         match std::fs::OpenOptions::new()
             .write(true)
@@ -333,7 +348,7 @@ pub(super) fn listed(shared: &Shared, dest: &Path) -> (&'static str, Value) {
     )
 }
 
-fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
+pub(super) fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
     let home = shared
         .roots()
         .iter()
@@ -656,6 +671,10 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
     let Some(text) = v["text"].as_str() else {
         return bad("give the text");
     };
+    // a print list or the inventory is read by its own decoder: its mistakes, at their text
+    if file == tile && (super::plates::is_plates(tile) || super::inventory::is_inventory(tile)) {
+        return super::lists::check_text(shared, tile, text);
+    }
     let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
     let opts = shared.options();
     let id = tile_id(tile);

@@ -639,6 +639,16 @@ body.plates #place { display: none; }
 .inv-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .inv-ask .pl-field { grid-template-columns: auto auto; margin: 0; }
 .inv-ask .btn { margin-left: auto; }
+/* the list's pieces in the plates' panel */
+.pl-pc { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; align-items: center; gap: 4px; padding: 2px 0; font-size: 12.5px; }
+.pl-pc.skip { opacity: .55; }
+.pl-pn { min-width: 0; display: grid; }
+.pl-pn b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-ps { color: var(--muted); font-size: 11.5px; }
+.pl-cnt { min-width: 2.2em; text-align: center; font-variant-numeric: tabular-nums; font-weight: 650; }
+.pl-step { width: 24px; height: 24px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font-size: 14px; line-height: 1; }
+.pl-step:hover:not(:disabled) { border-color: var(--accent); }
+.pl-step:disabled { opacity: .4; cursor: default; }
 /* the plates panel: the summary line, the pieces against the shelf, the sheet after a print */
 .inv-sum { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
 .inv-sum b { color: var(--ink); font-weight: 650; }
