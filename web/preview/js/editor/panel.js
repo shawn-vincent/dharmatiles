@@ -12,6 +12,7 @@ import { copyButton } from '../copy.js';
 import { FILTERS, detailsFor, filterRows, statusOf } from '../messages.js';
 import { $, host, viewer } from './app.js';
 import { openFile, saveWords, texts } from './document.js';
+import { showSourceLine } from './levels.js';
 import { showWorst } from './selection.js';
 import { doc, entrySel, log, progressOf, server, tile, view } from './stores.js';
 import { fmt, secs } from './title.js';
@@ -27,6 +28,13 @@ const el = (tag, cls, text) => {
 };
 const tileId = () => tile()?.id ?? view.get().tileId ?? '';
 const viewOf = () => log.view(tileId());
+
+/** Show line `line` of `file` (null: the tile's own) in the source: the panel turns to it. */
+async function showLine(file, line) {
+  view.set({ page: 'edit' });
+  await openFile(file, null);
+  showSourceLine(line);
+}
 
 // ---- the status line ----------------------------------------------------
 
@@ -140,7 +148,7 @@ function messageRow({ m, dim }, t) {
   if (m.span?.line) {
     const go = el('button', 'btn', 'Go to line');
     go.type = 'button'; go.title = 'Show the line in the source';
-    go.onclick = () => openFile(m.span.file === t?.path ? null : m.span.file, m.span.line);
+    go.onclick = () => showLine(m.span.file === t?.path ? null : m.span.file, m.span.line);
     acts.append(go);
   }
   if (m.node && t) {

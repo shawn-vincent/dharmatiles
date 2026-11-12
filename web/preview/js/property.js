@@ -87,6 +87,7 @@ export function showProperty(root, model, api) {
   let last = input.value;
   const commit = (text) => {
     const next = text.trim();
+    delete input.dataset.dirty;
     if (next === last.trim()) return;
     last = next;
     if (!next) { if (s) api.set(model.at, c.name, null); return; }
@@ -102,10 +103,10 @@ export function showProperty(root, model, api) {
       check.hidden = !why;
     });
   }, CHECK_PAUSE_MS);
-  input.oninput = () => { askLater(input.value); paint(); };
+  input.oninput = () => { input.dataset.dirty = '1'; askLater(input.value); paint(); };
   input.onkeydown = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); commit(input.value); }
-    if (e.key === 'Escape') { e.stopPropagation(); input.value = last; paint(); input.blur(); }
+    if (e.key === 'Escape') { e.stopPropagation(); input.value = last; delete input.dataset.dirty; paint(); input.blur(); }
   };
   input.onblur = () => commit(input.value);
 

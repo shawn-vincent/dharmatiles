@@ -118,6 +118,12 @@ export function showSourceAt(sel, at = null) {
   requestAnimationFrame(() => { if (n) texts.placeCaret(n); texts.focus(); });
 }
 
+/** Turn the panel to the source with the caret at the start of line `n`. */
+export function showSourceLine(n) {
+  view.set({ face: 'source' });
+  requestAnimationFrame(() => { texts.placeCaret(n); texts.focus(); });
+}
+
 // ---- drawing ---------------------------------------------------------------------
 
 const el = (tag, cls, text) => {
@@ -188,7 +194,9 @@ function renderContext() {
       value = w ? w.text.replace(/^"|"$/g, '') : '';
     }
   } else if (isMark(sel)) {
-    entry = { note: `${sel.kind} ${sel.id}` };
+    const list = (sel.kind === 'line' ? map?.lines : map?.regions) || [];
+    const i = list.findIndex((m) => m.name === sel.id);
+    entry = { note: i < 0 ? sel.kind : `${sel.kind} ${i + 1} of ${list.length}` };
   }
   const lines = contextFor({ depth, tile: tileInfo, entry, thing: depth === 2 ? thingName() : '', control: control?.name, value });
   $('ctx-lines').replaceChildren(...lines.map((l) => el('div', 'ln', l)));

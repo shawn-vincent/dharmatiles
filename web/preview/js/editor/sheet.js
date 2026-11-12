@@ -9,7 +9,7 @@ import { byteToIndex } from '../text.js';
 import { failed, showError } from '../problems.js';
 import { $, host, makeMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, spansUsable, undo } from './document.js';
-import { doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, tileSel, view } from './stores.js';
+import { doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
 import { closeControl, openControl, showSourceAt } from './levels.js';
 import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
@@ -252,21 +252,30 @@ const HEIGHT_NAMES = /bottom|height/i;
 function renderProperty(model) {
   const { sel, control } = view.get();
   const root = $('lens-prop');
-  if (!control || !isEntry(sel)) { root.replaceChildren(); return; }
+  if (!control || !isEntry(sel)) { root.replaceChildren(); delete root.dataset.key; return; }
   if (!model) return; // the sheet is not drawn yet (the text is being checked): keep the page as it is
   const g = model.groups[control.group];
   const c = g?.schema?.controls?.find((x) => x.name === control.name);
   if (!c) { closeControl(); return; }
-  // a value is being typed: the page is not redrawn under it (it is drawn again when the edit lands)
-  if (root.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+  // a value is being typed: the page is not redrawn under it (it is drawn again once the edit is written)
+  const field = document.activeElement;
+  if (root.contains(field) && field.tagName === 'INPUT' && field.dataset.dirty) return;
+  const held = root.contains(field) && field.tagName === 'INPUT'; // the field kept the keyboard through its own edit
   const element = g.schema?.name;
-  showProperty(root, {
+  // the same page drawn again (a value written) stays where it was scrolled to
+  const key = `${view.get().tileId}|${sel.id}|${control.group}|${control.name}`;
+  const kept = root.dataset.key === key ? root.querySelector('.body')?.scrollTop ?? 0 : 0;
+  root.dataset.key = key;
+  const page = showProperty(root, {
     element, label: `${model.title}${g.heading ? ` · ${g.heading}` : ''}`, c,
     s: g.written.find((w) => w.name === c.name), at: g.at,
     weightings: elementNamed(element)?.weightings,
     // the names the program reads in this tile (its own heights too), else the language's plain ones
     names: { heights: (doc.get().map?.language?.names || server.get().language?.names || []).filter((n) => HEIGHT_NAMES.test(n)) },
   }, { ...sheetApi, showSource: () => showSourceAt(view.get().sel, g.written.find((w) => w.name === c.name)?.span?.[0] ?? null) });
+  const body = root.querySelector('.body');
+  if (body) body.scrollTop = kept;
+  if (held) { page.input.focus({ preventScroll: true }); page.input.setSelectionRange(page.input.value.length, page.input.value.length); }
 }
 
 /** Comment a stack entry out (`/-`), with a way back. */
