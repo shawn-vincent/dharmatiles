@@ -1224,11 +1224,12 @@ impl<'a> Plan<'a> {
                 progress.end(key);
             }
             lifted |= c.steps[..first].contains(&Step::Lift);
-            if lifted
-                && progress.sketching()
-                && !scene.parts().is_empty()
-                && let Ok((mesh, mats)) = scene.soup_since(0)
-            {
+            // a sketch failing (a triangle of unknown material) is a bug in
+            // the scene that the final build would meet too: it travels up
+            if lifted && progress.sketching() && !scene.parts().is_empty() {
+                let (mesh, mats) = scene
+                    .soup_since(0)
+                    .map_err(|e| build_error(format!("sketching the build: {e}")))?;
                 progress.sketch(&mesh, &mats, false);
                 sketched = scene.parts().len();
             }
@@ -1263,11 +1264,10 @@ impl<'a> Plan<'a> {
             }
             // a front end showing the build as it goes gets what this stage made
             lifted |= *step == Step::Lift;
-            if lifted
-                && progress.sketching()
-                && scene.parts().len() > sketched
-                && let Ok((mesh, mats)) = scene.soup_since(sketched)
-            {
+            if lifted && progress.sketching() && scene.parts().len() > sketched {
+                let (mesh, mats) = scene
+                    .soup_since(sketched)
+                    .map_err(|e| build_error(format!("sketching the build: {e}")))?;
                 progress.sketch(&mesh, &mats, false);
                 sketched = scene.parts().len();
             }
