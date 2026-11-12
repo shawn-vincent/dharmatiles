@@ -520,7 +520,7 @@ fn the_kinds_a_folder_lists_are_one_table() {
     use super::super::roots::{KINDS, kind_of};
     assert_eq!(
         KINDS.iter().map(|k| k.ext).collect::<Vec<_>>(),
-        ["dtile", "dmap", "stl"]
+        ["dtile", "dmap", "dinv", "stl"]
     );
     assert!(kind_of("a.DTILE").is_some_and(|k| k.actions));
     assert!(
