@@ -12,7 +12,8 @@
 //! | `GET /api/tiles/ID/text` | the tile's document (or `?file=` one it read) for the text pane |
 //! | `POST /api/tiles/ID/build[?debug=1\|0]` | build a tile that has not been built yet; `debug` says whether the page has the debug layer on for it (its marks are collected only then; turned on for a built tile, it is built again) |
 //! | `POST /api/tiles/ID/draft` `{text, file?, debug?}` | build the posted text quickly; the reply is its mesh |
-//! | `GET /api/events?epoch=E&since=N` | server-sent events: a snapshot (or, resuming, what changed since revision N), then one event per change |
+//! | `GET /api/events?epoch=E&since=N` | server-sent events: a snapshot (or, resuming, what changed since revision N), then one event per change; every kept [message](crate::message) follows it, then each as it is said (`message` events) |
+//! | `GET /api/messages?tile=&since=&format=text\|json` | the stream's messages, as the page and an assistant read them: a tile's (id, path or name), after sequence number `since`; also `state=open\|cleared`, `kind=`, `severity=` |
 //! | `GET /api/session` | this run's token, which every other `POST` must carry |
 //! | `GET /api/about` | the application version and the tile formats it reads, for the About box |
 //! | `GET /api/elements` | the elements and their controls |
@@ -69,6 +70,7 @@ impl State {
 mod edit;
 pub(crate) mod fail;
 mod map;
+mod messages;
 pub mod payload;
 pub(crate) mod roots;
 mod server;
@@ -235,6 +237,8 @@ struct Events {
     rev: u64,
     log: VecDeque<(u64, Change)>,
     clients: Vec<Sender<String>>,
+    /// What happened to each tile ([`crate::message`]): kept here so it is sent in step with the changes.
+    messages: crate::message::Log,
 }
 
 impl Events {
@@ -285,6 +289,20 @@ pub struct Shared {
     /// The build caches of the tiles built last, newest first, by path
     /// and whether they are drafts' (see [`dt_eval::Cache`]).
     build_caches: Mutex<VecDeque<(String, bool, Arc<dt_eval::Cache>)>>,
+}
+
+/// Held while a tile builds: dropping it ends the build's progress message.
+struct BuildingGuard {
+    shared: Arc<Shared>,
+    id: TileId,
+}
+
+impl Drop for BuildingGuard {
+    fn drop(&mut self) {
+        let mut ev = lock(&self.shared.events);
+        let gone = ev.messages.end_progress(&self.id);
+        Shared::send_messages(&mut ev, &gone);
+    }
 }
 
 /// How many build caches are kept: a cliff's solids are large, so only
@@ -349,6 +367,7 @@ impl Shared {
                 rev: 1,
                 log: VecDeque::new(),
                 clients: Vec::new(),
+                messages: crate::message::Log::default(),
             }),
             epoch: edit::token()[..12].to_owned(),
             queue: Mutex::new(queue::Queue::default()),
@@ -474,12 +493,17 @@ impl Shared {
     /// What is wrong with the palette, as the page's unexpected problem
     /// (empty when nothing is): the tile is shown in the default paint.
     fn palette_problem(&self) -> Vec<Value> {
+        errors_json(&self.palette_diags())
+    }
+
+    /// [`Shared::palette_problem`] as diagnostics.
+    fn palette_diags(&self) -> Vec<Diag> {
         match self.palette_checked() {
             Ok(_) => Vec::new(),
-            Err(e) => errors_json(&[Diag::plain(
+            Err(e) => vec![Diag::plain(
                 "dt::palette",
                 format!("{e}; the tile is shown in the default paint"),
-            )]),
+            )],
         }
     }
 
@@ -512,6 +536,68 @@ impl Shared {
             let rev = ev.rev;
             ev.send(&json!({"type": "progress", "rev": rev, "id": id, "progress": body}));
         }
+    }
+
+    /// A tile's name (for a message), or none when it is not listed.
+    fn name_of(&self, id: &str) -> Option<String> {
+        lock(&self.tiles)
+            .iter()
+            .find(|t| t.id == id)
+            .map(|t| t.name.clone())
+    }
+
+    /// Tell every listener of `changed` messages.
+    fn send_messages(ev: &mut Events, changed: &[crate::message::Message]) {
+        let rev = ev.rev;
+        for m in changed {
+            ev.send(&json!({"type": "message", "rev": rev, "message": m.json()}));
+        }
+    }
+
+    /// What tile `id` reports for `scope` now (`make` is given its name): what
+    /// it no longer reports is cleared, what it says again stays, the rest is
+    /// new; every listener is told what changed.  A tile that is not listed
+    /// reports nothing.
+    fn report(
+        &self,
+        id: &str,
+        scope: crate::message::Scope,
+        make: impl FnOnce(&str) -> Vec<crate::message::Message>,
+    ) {
+        let Some(name) = self.name_of(id) else { return };
+        let found = make(&name);
+        let mut ev = lock(&self.events);
+        let changed = ev.messages.report(fail::now_ms(), id, scope, found);
+        Self::send_messages(&mut ev, &changed);
+    }
+
+    /// One message with nothing to clear (a failure of the server's or the page's), said now.
+    fn say(&self, m: crate::message::Message) {
+        let mut ev = lock(&self.events);
+        let m = ev.messages.say(fail::now_ms(), m);
+        Self::send_messages(&mut ev, &[m]);
+    }
+
+    /// A build of tile `id` begins: a message says so until the guard drops
+    /// (whatever way the build ends); it is never kept.
+    fn building(self: &Arc<Self>, id: &str) -> Option<BuildingGuard> {
+        use crate::message::{Kind, Message, Scope, Severity};
+        let name = self.name_of(id)?;
+        let mut ev = lock(&self.events);
+        let m = Message::new(
+            Kind::Progress,
+            Severity::Info,
+            Scope::Build,
+            id,
+            &name,
+            format!("Building {name}"),
+        );
+        let m = ev.messages.begin_progress(fail::now_ms(), m);
+        Self::send_messages(&mut ev, &[m]);
+        Some(BuildingGuard {
+            shared: Arc::clone(self),
+            id: id.to_owned(),
+        })
     }
 
     /// Every tile's state: the `/api/tiles` body and the first event.
@@ -596,6 +682,7 @@ impl Shared {
         };
         for id in &removed {
             self.forget(id);
+            lock(&self.events).messages.forget(id);
         }
         changed
     }
@@ -667,6 +754,11 @@ impl Shared {
         if !resumed {
             let rev = ev.rev;
             let _ = tx.send(self.snapshot_of(&tiles, rev).to_string());
+        }
+        // every kept message follows, so a page that came (or came back) has the whole record
+        for m in ev.messages.all() {
+            let _ =
+                tx.send(json!({"type": "message", "rev": ev.rev, "message": m.json()}).to_string());
         }
         ev.clients.push(tx);
         rx

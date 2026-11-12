@@ -55,6 +55,7 @@ fn one(mut conn: TcpStream, shared: &Shared) {
         ),
         Reply::Bytes(b) => respond(&mut conn, "200 OK", "application/octet-stream", &b),
         Reply::Text(status, body) => respond(&mut conn, status, "text/plain", body.as_bytes()),
+        Reply::Body(status, ctype, body) => respond(&mut conn, status, ctype, body.as_bytes()),
         Reply::Asset(ctype, body) => respond(&mut conn, "200 OK", ctype, &body),
         Reply::Events(from) => events(conn, shared, &from),
     }
@@ -78,6 +79,14 @@ pub(super) fn answer(shared: &Shared, req: &Request) -> Reply {
     });
     match &reply {
         Reply::Json(status, body) if status.starts_with('5') => {
+            // the one error path: a failure of the program's own is a message in the stream too
+            let id = tile_route(&req.path).map(|(id, _)| id.to_owned());
+            let name = id.as_deref().and_then(|i| shared.name_of(i));
+            shared.say(super::messages::of_server_error(
+                &body["error"],
+                (id.as_deref().unwrap_or(""), name.as_deref().unwrap_or("")),
+                "server",
+            ));
             tell!(
                 "error: preview: {} {}: {status}: {}",
                 req.method,

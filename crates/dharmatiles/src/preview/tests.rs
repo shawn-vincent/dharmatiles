@@ -1971,3 +1971,164 @@ fn an_older_tile_is_refused_where_it_is_checked_with_help_to_migrate_it() {
     assert_eq!(std::fs::read_to_string(&file).unwrap(), old);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ---- the stream of messages ------------------------------------------------
+
+const STEEP: &str = "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=3 {\n    line ridge { through \"(0.3sq, 0.5sq)\" \"(0.7sq, 0.5sq)\" }\n    region hill { within \"2dmm\" of=ridge }\n    stack {\n        base\n        dirt {\n            pin top=\"12dmm\" at=hill\n        }\n    }\n}\n";
+
+/// A temp tile with `text`, served and not built; its path and the editor's token.
+fn editable(name: &str, text: &str) -> (Running, String, String) {
+    let dir = std::env::temp_dir().join(format!("dt-msg-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    std::fs::write(&file, text).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    (r, path, token)
+}
+
+fn check_text(r: &Running, token: &str, text: &str) -> Value {
+    let (h, v) = post(
+        r,
+        &format!("/api/tiles/{}/check", id0(r)),
+        Some(token),
+        Some(&format!("http://{}", r.addr)),
+        &serde_json::json!({ "text": text }).to_string(),
+    );
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    v
+}
+
+fn messages(r: &Running, query: &str) -> Vec<Value> {
+    let (head, body) = get(r, &format!("/api/messages?{query}"));
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    v["messages"].as_array().unwrap().clone()
+}
+
+#[test]
+fn a_note_from_the_checker_reaches_the_stream_and_the_messages_route() {
+    let (r, _, token) = editable("note", STEEP);
+    let v = check_text(&r, &token, STEEP);
+    assert_eq!(v["ok"], true, "{v}");
+    let id = id0(&r);
+    let found = messages(&r, &format!("tile={id}&kind=note"));
+    assert_eq!(found.len(), 1, "{found:?}");
+    let n = &found[0];
+    assert_eq!(n["code"], "dt::steep");
+    assert_eq!(n["severity"], "note");
+    assert_eq!(n["scope"], "check");
+    assert_eq!(n["state"], "open");
+    assert!(n["text"].as_str().unwrap().contains("steeper than its"));
+    assert!(n["span"]["line"].as_u64().is_some());
+    // the text form is the same message, one function
+    let (head, body) = get(
+        &r,
+        &format!("/api/messages?tile={id}&kind=note&format=text"),
+    );
+    assert!(head.contains("text/plain"), "{head}");
+    let text = String::from_utf8(body).unwrap();
+    assert!(text.contains(" note dt::steep t "), "{text}");
+    assert!(text.contains("\n  help: "), "{text}");
+    // and it is on the event stream, to a page that connects after
+    let mut c = TcpStream::connect(r.addr).unwrap();
+    write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
+    let mut seen = None;
+    for l in BufReader::new(c).lines() {
+        let l = l.unwrap();
+        let Some(data) = l.strip_prefix("data: ") else {
+            continue;
+        };
+        let v: Value = serde_json::from_str(data).unwrap();
+        if v["type"] == "message" && v["message"]["code"] == "dt::steep" {
+            seen = Some(v["message"].clone());
+            break;
+        }
+    }
+    assert_eq!(seen.as_ref().map(|m| &m["seq"]), Some(&n["seq"]));
+    // `since` reads only what came after
+    let after = n["seq"].as_u64().unwrap();
+    assert!(messages(&r, &format!("tile={id}&since={after}")).is_empty());
+    // a format that is not one is refused in words
+    let (head, _) = get(&r, "/api/messages?format=xml");
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
+}
+
+#[test]
+fn a_new_check_clears_what_it_no_longer_reports() {
+    let (r, _, token) = editable("clear", STEEP);
+    let broken = STEEP.replace("        dirt {", "        durt {");
+    let v = check_text(&r, &token, &broken);
+    assert_eq!(v["ok"], false, "{v}");
+    let id = id0(&r);
+    let open = messages(&r, &format!("tile={id}&state=open&severity=error"));
+    assert_eq!(open.len(), 1, "{open:?}");
+    assert_eq!(open[0]["kind"], "error");
+    assert!(open[0]["span"]["line"].as_u64().is_some());
+    // the same mistake again is the same message: it keeps its place in the stream
+    check_text(&r, &token, &broken);
+    let again = messages(&r, &format!("tile={id}&state=open&severity=error"));
+    assert_eq!(again[0]["seq"], open[0]["seq"]);
+    // fixed: the mistake is cleared (kept, as cleared), and the notes are there
+    check_text(&r, &token, STEEP);
+    assert!(messages(&r, &format!("tile={id}&state=open&severity=error")).is_empty());
+    let cleared = messages(&r, &format!("tile={id}&state=cleared"));
+    assert!(
+        cleared.iter().any(|m| m["seq"] == open[0]["seq"]),
+        "{cleared:?}"
+    );
+    let notes = messages(&r, &format!("tile={id}&state=open&kind=note"));
+    assert_eq!(notes.len(), 1, "{notes:?}");
+}
+
+#[test]
+fn a_build_says_its_timing_and_the_gates_numbers_and_progress_is_not_kept() {
+    let r = start(&[FLAT], true);
+    let t = wait_for(&r, "the build", |t| t["status"] == "ready");
+    let id = t["id"].as_str().unwrap().to_owned();
+    let found = messages(&r, &format!("tile={id}&state=open"));
+    let kinds: Vec<&str> = found.iter().map(|m| m["kind"].as_str().unwrap()).collect();
+    assert!(
+        kinds.contains(&"build") && kinds.contains(&"gate"),
+        "{kinds:?}"
+    );
+    assert!(!kinds.contains(&"progress"), "{kinds:?}");
+    let build = found.iter().find(|m| m["kind"] == "build").unwrap();
+    assert!(build["text"].as_str().unwrap().starts_with("Built in "));
+    assert!(build["data"]["build_s"].as_f64().unwrap() > 0.0);
+    let gate = found.iter().find(|m| m["kind"] == "gate").unwrap();
+    assert_eq!(gate["code"], "gate");
+    assert_eq!(gate["severity"], "info");
+    assert!(gate["data"]["triangles"].as_u64().unwrap() > 0);
+    assert!(gate["data"]["failures"].as_array().unwrap().is_empty());
+    // no progress message is left in the log, cleared or not
+    assert!(messages(&r, &format!("tile={id}&kind=progress")).is_empty());
+}
+
+#[test]
+fn a_failure_of_the_server_and_one_the_page_reports_are_messages_too() {
+    let r = start(&[], false);
+    let (head, _) = get(&r, "/api/test-failure");
+    assert!(head.starts_with("HTTP/1.1 500"), "{head}");
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let (h, _) = post(
+        &r,
+        "/api/messages",
+        Some(&token),
+        Some(&format!("http://{}", r.addr)),
+        &serde_json::json!({ "what": "The page hit a script error", "text": "x is not a function", "backtrace": "at a.js:1" }).to_string(),
+    );
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    let found = messages(&r, "kind=server");
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert_eq!(found[0]["data"]["origin"], "server");
+    assert_eq!(found[0]["severity"], "error");
+    assert!(found[0]["data"]["backtrace"].is_string());
+    assert_eq!(found[1]["data"]["origin"], "page");
+    assert_eq!(found[1]["text"], "x is not a function");
+    assert_eq!(found[1]["data"]["route"], "The page hit a script error");
+}

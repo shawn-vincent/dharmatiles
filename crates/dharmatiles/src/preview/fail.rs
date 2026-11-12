@@ -178,7 +178,7 @@ fn take_panic() -> Option<Panic> {
     })
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     // a clock before 1970 is not a case; 0 then, in a field only the page's dedupe reads
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

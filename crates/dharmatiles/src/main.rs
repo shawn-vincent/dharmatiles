@@ -53,6 +53,7 @@ mod cli;
 mod elements;
 mod library;
 mod mcp;
+mod message;
 mod migrate;
 mod preview;
 mod progress;

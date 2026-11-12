@@ -1,6 +1,7 @@
 //! The worker: builds the tiles one at a time and rebuilds on change.
 
 use super::*;
+use crate::message::{Kind, Scope, Severity};
 
 /// A progress reporter that also notices when any source read by the plan
 /// pass changes. Progress events are safe interruption boundaries in the
@@ -88,6 +89,8 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     else {
         return;
     };
+    // the stream says a build is under way until this function ends, however it does
+    let _building = shared.building(id);
     shared.update(id, |t| {
         t.status = State::Building;
         t.stale = false;
@@ -101,19 +104,30 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     }
     let rec = Recording::watching(&path);
     let t0 = Instant::now();
-    let finish_with = |rec: Recording, errs: &[Diag], failure: Option<fail::ServerError>| {
-        let errors = errors_json(errs);
-        let failure = failure.map(|f| f.json());
-        shared.update(id, |t| {
-            t.status = State::Failed;
-            t.progress = None;
-            t.sketches.clear();
-            t.errors = errors;
-            t.failure = failure;
-            t.files = rec.files();
-        });
-    };
-    let finish_err = |rec: Recording, errs: &[Diag]| finish_with(rec, errs, None);
+    let finish_with =
+        |rec: Recording, errs: &[Diag], failure: Option<fail::ServerError>, scope: Scope| {
+            let errors = errors_json(errs);
+            let failure = failure.map(|f| f.json());
+            // said before the tile is: the page sees what this report cleared while the build still shows as running
+            shared.report(id, scope, |name| {
+                let mut found = messages::of_errors(errs, scope, id, name, &[]);
+                if let Some(f) = &failure {
+                    for m in found.iter_mut().filter(|m| m.kind == Kind::Server) {
+                        m.data = messages::of_server_error(f, (id, name), "server").data;
+                    }
+                }
+                found
+            });
+            shared.update(id, |t| {
+                t.status = State::Failed;
+                t.progress = None;
+                t.sketches.clear();
+                t.errors = errors;
+                t.failure = failure;
+                t.files = rec.files();
+            });
+        };
+    let finish_err = |rec: Recording, errs: &[Diag]| finish_with(rec, errs, None, Scope::Check);
     // plan pass: no geometry, so under a second
     let checked = match dt_eval::check(&rec, &path, opts) {
         Ok(c) => c,
@@ -136,6 +150,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 rec,
                 &[Diag::plain("dt::stack", message.clone())],
                 Some(build_failure(&path, message)),
+                Scope::Check,
             );
         }
         Some(Ok(p)) => Some(p),
@@ -144,6 +159,14 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     if let Some(p) = &plan {
         shared.update(id, |t| t.plan = Some(p.clone()));
     }
+    // what the plan pass found: the notes (dt::steep, dt::edge) that never reached the page before
+    let stack: Vec<Value> = plan
+        .as_ref()
+        .and_then(|p| p["stack"].as_array().cloned())
+        .unwrap_or_default();
+    shared.report(id, Scope::Check, |name| {
+        messages::of_check(&checked, id, name, &stack)
+    });
     // the progress bar: stages weighted by what the last build of this
     // tile measured, else by the elements' defaults
     let mut timings = shared
@@ -206,7 +229,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         return;
     }
     match built {
-        Err(errs) => finish_with(rec, &errs, bug),
+        Err(errs) => finish_with(rec, &errs, bug, Scope::Build),
         Ok(b) => {
             let built_s = t0.elapsed().as_secs_f64();
             let failures = b.audit.failures(&opts.printer);
@@ -231,6 +254,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                         rec,
                         &[Diag::plain("dt::payload", message.clone())],
                         Some(build_failure(&path, message)),
+                        Scope::Build,
                     );
                 }
             };
@@ -264,6 +288,18 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 b.audit.triangles,
                 b.audit.overhang_mm2
             );
+            // said before the tile is: what this build no longer reports clears while it still shows as running
+            let palette = shared.palette_diags();
+            shared.report(id, Scope::Build, |name| {
+                let mut found = messages::of_build(&record, b.reused, id, name);
+                for m in messages::of_errors(&palette, Scope::Build, id, name, &[]) {
+                    found.push(crate::message::Message {
+                        severity: Severity::Warning,
+                        ..m
+                    });
+                }
+                found
+            });
             shared.update(id, |t| {
                 t.status = State::Ready;
                 // what to say beside a good build: the palette
@@ -297,6 +333,15 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     let t0 = Instant::now();
     let files = BTreeMap::from([(path.to_owned(), mtime(path))]);
     let fail = |msg: String| {
+        shared.report(id, Scope::Build, |name| {
+            messages::of_errors(
+                &[Diag::plain("dt::source", msg.clone())],
+                Scope::Build,
+                id,
+                name,
+                &[],
+            )
+        });
         shared.update(id, |t| {
             t.status = State::Failed;
             t.errors = errors_json(&[Diag::plain("dt::source", msg)]);
@@ -348,6 +393,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         },
         "build_s": t0.elapsed().as_secs_f64(),
     });
+    shared.report(id, Scope::Build, |name| messages::of_stl(&record, id, name));
     shared.update(id, |t| {
         t.status = State::Ready;
         t.plan = Some(plan);
@@ -465,6 +511,21 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
                         .find(|t| t.id == *id)
                         .map_or_else(|| id.clone(), |t| t.path.clone());
                     let (d, failure) = panicked(&what, panic.as_ref());
+                    shared.report(id, Scope::Build, |name| {
+                        let mut found = messages::of_errors(
+                            std::slice::from_ref(&d),
+                            Scope::Build,
+                            id,
+                            name,
+                            &[],
+                        );
+                        for m in &mut found {
+                            m.data =
+                                messages::of_server_error(&failure.json(), (id, name), "server")
+                                    .data;
+                        }
+                        found
+                    });
                     shared.update(id, |t| {
                         t.status = State::Failed;
                         t.progress = None;

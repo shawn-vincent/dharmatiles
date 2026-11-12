@@ -107,6 +107,9 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     if path == "/api/target" {
         return target(shared, &v).into();
     }
+    if path == "/api/messages" {
+        return page_message(shared, &v).into();
+    }
     let Some((id, what)) = tile_route(path) else {
         return fail::refused("404 Not Found", "no such call").into();
     };
@@ -135,6 +138,24 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "draft" => draft(shared, id, &tile, &file, &v),
         _ => fail::refused("404 Not Found", "no such call").into(),
     }
+}
+
+/// `/api/messages` `{tile?, what, text, help?, causes?, backtrace?}`: the page
+/// reports a failure of its own, so it joins the stream (kind `server`, origin
+/// `page`) beside the program's, where an assistant reads it too.
+fn page_message(shared: &Shared, v: &Value) -> (&'static str, Value) {
+    let Some(text) = v["text"].as_str() else {
+        return bad("give the text");
+    };
+    let tile = v["tile"].as_str().unwrap_or("");
+    let name = shared.name_of(tile).unwrap_or_default();
+    let error = json!({
+        "kind": "bug", "message": text, "help": v["help"], "causes": v["causes"],
+        "backtrace": v["backtrace"],
+        "context": {"route": v["what"], "version": env!("DT_ENGINE_VERSION")},
+    });
+    shared.say(messages::of_server_error(&error, (tile, &name), "page"));
+    ("200 OK", json!({ "ok": true }))
 }
 
 /// Choose the build target: `system` (`db` or `ol`) and/or `printer` (a
@@ -592,6 +613,13 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
     };
     let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
     let opts = shared.options();
+    let id = tile_id(tile);
+    // what this check found is said in the stream too: its mistakes, and the notes that were never shown
+    let said = |scope, errs: &[dt_eval::Diag]| {
+        shared.report(&id, scope, |name| {
+            messages::of_errors(errs, scope, &id, name, &[])
+        });
+    };
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
             let stack = match c.tile.as_ref().map(|t| stack::items(t, &opts.system)) {
@@ -616,21 +644,28 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
             let map = match map::json(&c, &own, opts.units()) {
                 Ok(m) => m,
                 Err(errs) => {
+                    said(messages::Scope::Check, &errs);
                     return (
                         "200 OK",
                         json!({ "ok": false, "errors": errors_json(&errs) }),
                     );
                 }
             };
+            shared.report(&id, messages::Scope::Check, |name| {
+                messages::of_check(&c, &id, name, stack.as_deref().unwrap_or(&[]))
+            });
             (
                 "200 OK",
                 json!({ "ok": true, "errors": [], "stack": stack, "map": map }),
             )
         }
-        Err(errs) => (
-            "200 OK",
-            json!({ "ok": false, "errors": errors_json(&errs) }),
-        ),
+        Err(errs) => {
+            said(messages::Scope::Check, &errs);
+            (
+                "200 OK",
+                json!({ "ok": false, "errors": errors_json(&errs) }),
+            )
+        }
     }
 }
 
@@ -791,6 +826,10 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
     {
         Ok(b) => b,
         Err(errs) => {
+            let id = tile_id(tile);
+            shared.report(&id, messages::Scope::Export, |name| {
+                messages::of_errors(&errs, messages::Scope::Export, &id, name, &[])
+            });
             return (
                 "200 OK",
                 json!({ "path": tile, "ok": false, "errors": crate::build::errors_json(&errs) }),
@@ -811,12 +850,12 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
         Ok(files) => {
             let mut r = crate::build::tile_json(&b, &failures, built_s);
             r["failures"] = json!(failures);
-            r["files"] = json!(
-                files
-                    .iter()
-                    .map(|f| f.display().to_string())
-                    .collect::<Vec<_>>()
-            );
+            let written: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+            r["files"] = json!(written);
+            let id = tile_id(tile);
+            shared.report(&id, messages::Scope::Export, |name| {
+                vec![messages::of_export(&r, &written, &id, name)]
+            });
             ("200 OK", r)
         }
         Err(e) => fail::failure("500 Internal Server Error", e),

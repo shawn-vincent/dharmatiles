@@ -24,6 +24,8 @@ pub(super) enum Reply {
     /// A mesh buffer (a tile's, a sketch's or a draft's), 200.
     Bytes(Arc<Vec<u8>>),
     Text(&'static str, &'static str),
+    /// A body made now, with its content type (the messages as text).
+    Body(&'static str, &'static str, String),
     Asset(&'static str, Cow<'static, [u8]>),
     /// The event stream, resuming from where the page left off.
     Events(Resume),
@@ -109,6 +111,9 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
                 &e,
             );
             Reply::Json(status, body)
+        }
+        ("GET", "/api/messages", _) => {
+            super::messages::read(shared, &|k| req.param(k).map(str::to_owned))
         }
         ("GET", "/api/session", _) => Reply::Json(OK, json!({ "token": shared.token })),
         ("GET", "/api/about", _) => Reply::Json(

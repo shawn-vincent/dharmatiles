@@ -328,7 +328,7 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
 /// Is `code` a refusal of the document (a mistake the reader can fix) rather
 /// than a failure of the program (a panic, an unreadable or unwritable file,
 /// a kernel that failed)?  The page shows the second kind as a bug.
-fn is_document_error(code: &str) -> bool {
+pub(crate) fn is_document_error(code: &str) -> bool {
     !matches!(code, "dt::panic" | "dt::source" | "dt::write" | "dt::build")
 }
 
