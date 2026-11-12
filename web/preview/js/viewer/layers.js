@@ -8,6 +8,8 @@ import * as THREE from 'three';
 import { classInfo, segments } from '../debug-layer.js';
 import { cloudOf, columnGeometry, shadeAlpha, SHADE_COLUMN, SHADE_SHEET, sheetGeometry } from '../cloud.js';
 import { FAT_FRAG, FAT_VERT, fatGeometry } from '../fatline.js';
+
+const BED_MM = 4; // how thick the printer's bed is drawn
 import { CLOUD_CONTOUR_PX, CLOUD_HOVER, CLOUD_SPAN_PX, CONTOUR_ALPHA, DOT_FRAG, DOT_VERT, GRID_BELOW_MM, GRID_FRAG } from './consts.js';
 
 export const layersMethods = {
@@ -233,9 +235,10 @@ export const layersMethods = {
   },
 
   /**
-   * A printer's bed, when the mesh shown is a plate (`meta.bed`, mm): its edge as a line on the plate, and
-   * each excluded zone (`meta.excluded`, [x0, y0, x1, y1] from the front-left corner) as a faint filled box
-   * with its edge.  Ink is the grid's, so it follows the theme.
+   * A printer's bed, when the mesh shown is a plate (`meta.bed`, mm): a translucent slab the pieces stand on
+   * (BED_MM thick, its top at the pieces' zero, the top face lighter than the sides so it reads as a solid
+   * without lights), its top edge drawn as a line, and each excluded zone (`meta.excluded`, [x0, y0, x1, y1]
+   * from the front-left corner) as a faint filled box with its edge.  Ink is the grid's, so it follows the theme.
    */
   buildBed() {
     if (this.bedGroup) {
@@ -260,11 +263,24 @@ export const layersMethods = {
       const edge = this.fatLines(pos, rgba, px);
       edge.renderOrder = 2; edge.frustumCulled = false;
       group.add(edge);
+      if (!fill) return;
       const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), new THREE.MeshBasicMaterial({ color: ink, transparent: true, opacity: fill, depthWrite: false, side: THREE.DoubleSide }));
       m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z); m.renderOrder = 0; m.frustumCulled = false;
       group.add(m);
     };
-    rect(0, 0, bed[0], bed[1], 0.07, 2.5, 0.85);
+    // the slab: under the grid's own plane, so the ruling still reads on it
+    const top = z - GRID_BELOW_MM;
+    const slab = new THREE.BoxGeometry(bed[0], bed[1], BED_MM);
+    const shade = [0.62, 0.62, 0.5, 0.74, 1, 0.35]; // +x, -x, +y, -y (the front), top, underside
+    const tint = new THREE.Color(0x9fb3cc);
+    const col = new Float32Array(24 * 3);
+    for (let f = 0; f < 6; f++) for (let v = 0; v < 4; v++) col.set([tint.r * shade[f], tint.g * shade[f], tint.b * shade[f]], (f * 4 + v) * 3);
+    slab.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const sm = new THREE.Mesh(slab, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.4, depthWrite: false }));
+    sm.position.set(bed[0] / 2, bed[1] / 2, top - BED_MM / 2);
+    sm.renderOrder = 0; sm.frustumCulled = false;
+    group.add(sm);
+    rect(0, 0, bed[0], bed[1], 0, 2.5, 0.85);
     for (const [x0, y0, x1, y1] of this.payload.meta.excluded ?? []) rect(x0, y0, x1, y1, 0.3, 1.5, 0.7);
     this.bedGroup = group;
     this.scene.add(group);
