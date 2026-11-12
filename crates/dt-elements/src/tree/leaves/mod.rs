@@ -237,6 +237,10 @@ pub struct LeafStats {
     /// Builds that failed: a flattened blade could not find the crown under
     /// part of it.
     pub failed_drape: usize,
+    /// Leaves whose lying normal could not be walked on the crown (the walk
+    /// left it): each is treated as lying on an underside, the flush look,
+    /// which is a valid leaf, and counted here.
+    pub lying_undraped: usize,
     /// Leaves dropped for skewering an exposed branch.
     pub branch_culled: usize,
     /// Coverage test points (placeable ones).
@@ -359,6 +363,7 @@ fn place_inner(
         crown: &crown,
         phase,
         len,
+        undraped: std::sync::atomic::AtomicUsize::new(0),
     };
     let ok_cand = reach.placeable(&cand);
     let mut grid = PoissonGrid::new(spacing);
@@ -430,6 +435,7 @@ fn place_inner(
         })
         .collect();
 
+    stats.lying_undraped = reach.undraped.load(std::sync::atomic::Ordering::Relaxed);
     let mut solids = Vec::new();
     for (i, (st, o)) in outcomes.into_iter().enumerate() {
         match o {
@@ -622,6 +628,8 @@ struct Reach<'a> {
     crown: &'a Crown,
     phase: [f64; 3],
     len: f64,
+    /// Leaves [`Reach::lying_nz`] could not walk (counted across threads).
+    undraped: std::sync::atomic::AtomicUsize,
 }
 
 impl Reach<'_> {
@@ -652,7 +660,13 @@ impl Reach<'_> {
             .walk(root, n, dir, self.len / leaf::N_LONG as f64, TIP_STEPS)
         {
             Ok(frames) => frames.iter().fold(n[2], |m, f| m.min(f.n[2])),
-            Err(_) => -1.0,
+            // the walk left the crown: the leaf is built as for an
+            // underside (flush), a valid leaf, and the failure is counted
+            Err(_) => {
+                self.undraped
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                -1.0
+            }
         }
     }
 }

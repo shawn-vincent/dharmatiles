@@ -329,6 +329,9 @@ pub fn tri_normal(p: &[[f64; 3]], t: [u32; 3]) -> [f64; 3] {
     unit(cross(sub(b, a), sub(c, a)))
 }
 
+/// An empty solid. The mesh is empty either way: should the kernel refuse an
+/// empty mesh, the empty hull is the same nothing, so the fallback changes no
+/// geometry and there is nothing to count.
 fn empty() -> dt_geom::Solid {
     dt_geom::Solid::from_tri_mesh(&TriMesh::default()).unwrap_or_else(|_| dt_geom::Solid::hull(&[]))
 }

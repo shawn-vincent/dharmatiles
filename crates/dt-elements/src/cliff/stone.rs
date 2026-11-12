@@ -697,6 +697,10 @@ pub struct ColState {
     pub tops: usize,
     /// Pieces left out because their hull came out degenerate.
     pub left_out: usize,
+    /// Steps a stone went without because the kernel refused them (a cut
+    /// that left no closed solid): the stone keeps what it had, which is
+    /// valid, and the step is counted here so the build record shows it.
+    pub skipped: usize,
 }
 
 /// Build stone `ri` of column `c`. `support` is what a cut must not undercut.
@@ -730,18 +734,23 @@ pub fn rock_piece(
     .fold(f64::NEG_INFINITY, f64::max)
         + 1.0;
     // the outline offset a hair can self-cross on a tiny feature: then the
-    // outline itself, then its convex hull
+    // outline itself, then its convex hull. A later outline gives a valid
+    // prism of nearly the same stone, so it is safe to use, and counted; if
+    // none does, the stone is left out, and counted
     let hull = super::util::hull2(&rpoly);
     let mut tried = [poly.clone(), rpoly.clone(), hull].into_iter();
+    let mut refused = 0;
     let rock = loop {
         let Some(p) = tried.next() else {
+            st.left_out += 1;
             return Ok(None);
         };
         match prism(slot, &p, r.z0, zhi - r.z0, r.top, form) {
             Ok(rock) => break rock,
-            Err(_) => continue,
+            Err(_) => refused += 1,
         }
     };
+    st.skipped += refused;
     if rock.is_empty() {
         return Ok(None);
     }
@@ -937,31 +946,53 @@ pub fn rock_piece(
     let chips = chip_edges(crng, &rock, CHIP_MM, &keep, &mut st.left_out);
     // each finishing step may fail on a degenerate cut (the kernel refuses a
     // mesh that is not a closed manifold): that step is then skipped, and
-    // the stone keeps what it had
+    // the stone keeps what it had, which is the stone before the step and
+    // so still a valid solid. Each skip is counted (`st.skipped`) and shown
+    // in the build record as left out.
     let rock = if chips.is_empty() {
         rock
     } else {
         match rock.minus(&chips) {
             Ok(o) if !o.is_empty() => o,
-            _ => rock,
+            _ => {
+                st.skipped += 1;
+                rock
+            }
         }
     };
-    let rock = relief(rock.clone(), &c.faces, None, None, env.coarse())
-        .and_then(|p| largest(&p))
-        .unwrap_or(rock);
+    let rock =
+        match relief(rock.clone(), &c.faces, None, None, env.coarse()).and_then(|p| largest(&p)) {
+            Ok(p) => p,
+            Err(_) => {
+                st.skipped += 1;
+                rock
+            }
+        };
     let rock = match top_cracks(rng, &rock, r, &c.faces, env) {
         Ok((p, k)) => match largest(&p) {
             Ok(p) => {
                 st.tops += k;
                 p
             }
-            Err(_) => rock,
+            Err(_) => {
+                st.skipped += 1;
+                rock
+            }
         },
-        Err(_) => rock,
+        Err(_) => {
+            st.skipped += 1;
+            rock
+        }
     };
     let rock = fit_tile(rock, form, &setback);
     // a cut at the tile can leave a sliver on its own: only the stone stays
-    let rock = largest(&rock).unwrap_or(rock);
+    let rock = match largest(&rock) {
+        Ok(p) => p,
+        Err(_) => {
+            st.skipped += 1;
+            rock
+        }
+    };
     // the cuts can leave a scrap: that is no stone, and would stand loose
     if rock.volume() < SCRAP_MM3 {
         return Ok(None);
@@ -969,9 +1000,14 @@ pub fn rock_piece(
     if env.draft {
         return Ok(Some(rock));
     }
-    let grained =
-        grain(&rock, env.seed, zbase, Some((env.high, env.foot))).and_then(|p| largest(&p));
-    Ok(Some(grained.unwrap_or(rock)))
+    // an ungrained stone is the stone before the grain: valid, and counted
+    match grain(&rock, env.seed, zbase, Some((env.high, env.foot))).and_then(|p| largest(&p)) {
+        Ok(grained) => Ok(Some(grained)),
+        Err(_) => {
+            st.skipped += 1;
+            Ok(Some(rock))
+        }
+    }
 }
 
 #[cfg(test)]

@@ -303,6 +303,9 @@ pub struct Grown {
     /// Leaves the placer could not build (a degenerate frame): a warning,
     /// noted in the build record, never swallowed.
     pub leaves_failed_error: usize,
+    /// Leaves whose lying normal could not be walked on the crown: built
+    /// flush instead, noted in the build record.
+    pub leaves_lying_undraped: usize,
     pub leaves: usize,
 }
 
@@ -584,6 +587,7 @@ impl Tree {
                     (LEAVES_FROM, LEAVES_TO),
                 )?;
                 grown.leaves_failed_error = lstats.failed_error;
+                grown.leaves_lying_undraped = lstats.lying_undraped;
                 let n = u32::try_from(placed.len()).map_err(LookError::build)?;
                 if n > 0 {
                     let lslots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
@@ -669,6 +673,10 @@ fn note_built(scene: &mut Scene, b: &Built) {
         ("tree.leaves_placed", gr.leaves_placed as f64),
         ("tree.leaves", gr.leaves as f64),
         ("tree.leaves_failed_error", gr.leaves_failed_error as f64),
+        (
+            "tree.leaves_lying_undraped",
+            gr.leaves_lying_undraped as f64,
+        ),
         ("tree.x_mm", b.at[0]),
         ("tree.y_mm", b.at[1]),
         ("tree.height_mm", b.top_mm - b.at[2]),
@@ -719,6 +727,10 @@ impl Tree {
         let s = scene.frame().scale();
         // the crown radius as `grow` draws it (the same stream)
         let mut rng = Rng::new(seed.key("sizes"));
+        // The `let _ =` draws are not swallowed errors (a draw cannot fail):
+        // each value is thrown away on purpose and the draw is made only to
+        // advance the stream, in `grow`'s order, so the widths drawn here
+        // are the ones `grow` will draw.
         if self.p.crown.is_none() {
             let _ = draw_dist(&self.p.height, &mut rng);
         }

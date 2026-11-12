@@ -17,6 +17,7 @@ struct Column {
     stones: Vec<(usize, dt_kit::Piece)>,
     cracks: usize,
     left_out: usize,
+    skipped: usize,
 }
 
 type ColResult = Result<Column, dt_kit::KitError>;
@@ -79,6 +80,8 @@ pub(super) struct Dressed {
     pub tops: usize,
     /// Pieces left out because their hull came out degenerate.
     pub left_out: usize,
+    /// Finishing steps the kernel refused, which a stone went without.
+    pub skipped: usize,
     /// The core behind the stones, a field in the pile's grid.
     pub core_field: Field,
 }
@@ -236,6 +239,7 @@ pub(super) fn dress(
                 stones: out,
                 cracks: cs.tops,
                 left_out: cs.left_out,
+                skipped: cs.skipped,
             })
         })
         .collect();
@@ -243,11 +247,13 @@ pub(super) fn dress(
     let mut pieces: Vec<(usize, dt_kit::Piece)> = Vec::new();
     let mut tops = 0;
     let mut left_out = cones_left_out;
+    let mut skipped = 0;
     for r in results {
         let col = r.map_err(LookError::build)?;
         pieces.extend(col.stones);
         tops += col.cracks;
         left_out += col.left_out;
+        skipped += col.skipped;
     }
     pieces.sort_by_key(|p| p.0);
     // a stone the band holds down at its site adds no height there, so the
@@ -291,6 +297,7 @@ pub(super) fn dress(
         repeated,
         tops,
         left_out,
+        skipped,
         core_field,
     })
 }

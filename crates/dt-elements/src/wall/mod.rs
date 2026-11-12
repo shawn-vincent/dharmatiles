@@ -48,13 +48,17 @@ const MIN_CORE_MM: f64 = 2.0 * CORE_ROUND_MM + 0.45;
 /// needs no pointing), mm.
 const GAP_MM: f64 = 0.2;
 
+/// The `dressed` texture (chip, rounding, relief): a constant, for the
+/// elements that always use it, so it cannot be missing.
+pub(crate) const DRESSED: (f64, f64, f64) = (0.15, 0.12, 0.03);
+
 /// The texture presets: chip, rounding, relief.
 pub(crate) fn texture(word: &str) -> Option<(f64, f64, f64)> {
     match word {
         "chipped" => Some((0.55, 0.22, 0.07)),
         "worn" => Some((0.30, 0.60, 0.10)),
         "hewn" => Some((0.80, 0.15, 0.16)),
-        "dressed" => Some((0.15, 0.12, 0.03)),
+        "dressed" => Some(DRESSED),
         _ => None,
     }
 }
@@ -175,7 +179,7 @@ impl Mason {
                 ..base
             },
             Family::RegularBrick => {
-                let (chip, r, rel) = texture("dressed").unwrap_or_default();
+                let (chip, r, rel) = DRESSED;
                 Self {
                     course: Draw::flat(3.2, 3.2),
                     bay: Draw::flat(8.5, 8.5),

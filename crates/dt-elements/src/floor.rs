@@ -110,7 +110,7 @@ impl Flagstones {
             Mason::new(Family::Fieldstone)
         } else {
             let mut m = Mason::new(Family::Slab);
-            m.texture(wall::texture("dressed").unwrap_or_default());
+            m.texture(wall::DRESSED);
             m.joint = 0.125;
             m.reveal = 1.3;
             m.face_recess = 0.0;
@@ -147,12 +147,16 @@ impl Flagstones {
     }
 }
 
+/// The `worn` plank texture (see [`plank_texture`]): a constant, for the
+/// planks' base look, so it cannot be missing.
+const WORN_PLANKS: ((f64, f64, f64), f64, f64) = ((0.25, 0.40, 0.0), 0.05, 0.30);
+
 /// The plank textures: chip, rounding, relief, grain depth, share with a
 /// check.
 fn plank_texture(word: &str) -> Option<((f64, f64, f64), f64, f64)> {
     match word {
         "smooth" => Some(((0.10, 0.14, 0.0), 0.03, 0.15)),
-        "worn" => Some(((0.25, 0.40, 0.0), 0.05, 0.30)),
+        "worn" => Some(WORN_PLANKS),
         "rough" => Some(((0.35, 0.25, 0.04), 0.09, 0.50)),
         _ => None,
     }
@@ -174,7 +178,7 @@ impl Planks {
         m.missing = 0.0;
         m.spall = 0.0;
         m.edge_pad = PLANK_PAD_MM;
-        let (tex, grain, checks) = plank_texture("worn").unwrap_or_default();
+        let (tex, grain, checks) = WORN_PLANKS;
         m.texture(tex);
         m.grain = grain;
         m.checks = checks;
