@@ -514,3 +514,22 @@ fn the_folder_calls_are_routed_and_need_the_token() {
         super::super::route::Reply::Text("403 Forbidden", _)
     ));
 }
+
+#[test]
+fn the_kinds_a_folder_lists_are_one_table() {
+    use super::super::roots::{KINDS, kind_of};
+    assert_eq!(
+        KINDS.iter().map(|k| k.ext).collect::<Vec<_>>(),
+        ["dtile", "stl"]
+    );
+    assert!(kind_of("a.DTILE").is_some_and(|k| k.actions));
+    assert!(
+        kind_of("a.stl").is_some_and(|k| !k.actions),
+        "an .stl is listed, not managed"
+    );
+    assert!(kind_of("notes.txt").is_none());
+    assert!(
+        kind_of("dtile").is_none(),
+        "an extension needs a name before it"
+    );
+}

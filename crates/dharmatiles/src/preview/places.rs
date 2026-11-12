@@ -188,6 +188,9 @@ impl Picker {
 fn native_choose() -> Result<Option<PathBuf>, String> {
     let out = std::process::Command::new("osascript")
         .args([
+            // the chooser belongs to osascript, which is not in front of the browser: bring it forward
+            "-e",
+            "tell me to activate",
             "-e",
             "POSIX path of (choose folder with prompt \"Choose a folder of tiles to add to dharmatiles\")",
         ])
