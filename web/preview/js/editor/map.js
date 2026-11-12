@@ -5,6 +5,7 @@ import { Overlay } from '../overlay.js';
 import { Tools } from '../place.js';
 import { byteToIndex } from '../text.js';
 import { failed } from '../problems.js';
+import { token } from '../tokens.js';
 import { $, host, offerMine, viewer } from './app.js';
 import { askDraft, edited, openFile, replaceBytes, spansUsable, texts } from './document.js';
 import { doc, isEntry, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
@@ -16,7 +17,7 @@ export let tools = null; // the bar's tools (below)
 const overlay = new Overlay($('over'), viewer);
 const SURFACES = new Set(['dirt', 'flagstones', 'planks', 'cliff', 'water']);
 const COLOUR = { water: '--water', dirt: '--earth', flagstones: '--stone', cliff: '--stone', planks: '--earth', grass: '--moss', reeds: '--moss', flower: '--bloom' };
-const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const cssVar = token; // cached: read once per theme, not once per entry per frame
 
 /** The ground's heights, from the surfaces the build made. */
 function surfaceHeights(p) {

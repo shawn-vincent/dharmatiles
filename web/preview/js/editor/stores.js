@@ -112,9 +112,14 @@ export const regionOf = (it) => {
 export const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.(dtile|stl)$/i, '') + (/\.stl$/i.test(t.path) ? '.stl' : '');
 
 /** The stack of the text now: the last clean check of it while editing, else the last build's. */
+// The list is made once for each stack it comes from (the check's, or the build's plan) and handed out again: callers read it, never change it.
+const NONE = [];
+let stackMemo = { from: null, items: NONE };
 export function stackItems() {
   const d = doc.get(), t = tile();
-  return ((d.stack && d.tileId === view.get().tileId ? d.stack : t?.plan?.stack) || []).map((s) => (typeof s === 'string' ? { label: s } : s));
+  const from = (d.stack && d.tileId === view.get().tileId ? d.stack : t?.plan?.stack) || NONE;
+  if (stackMemo.from !== from) stackMemo = { from, items: from.map((s) => (typeof s === 'string' ? { label: s } : s)) };
+  return stackMemo.items;
 }
 /** The map's region or line a selection names. */
 export function mapNode(w) {

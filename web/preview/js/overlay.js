@@ -6,6 +6,8 @@
 // selection.  Points are in squares; lines and tools lie on the ground (heights from
 // the surfaces the build made); regions lie at level zero.
 
+import { token } from './tokens.js';
+
 /**
  * A region's lattice cells as flat triangles (x, y in mm, z 0: the caller sets the height): one quad per run of set nodes in a row, clipped to the tile.
  * Returns a Float32Array of 9 numbers per triangle; `sq` is mm per square.
@@ -153,7 +155,7 @@ export function refItems(map, region, sq, color) {
   return items.filter((i) => i.positions.length);
 }
 
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
+const css = (name) => token(name) || '#888'; // cached per theme (tokens.js)
 
 export class Overlay {
   constructor(canvas, viewer) {
