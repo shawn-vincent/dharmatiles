@@ -51,8 +51,9 @@ pub struct Piece {
     pub seed: Option<Spanned<u64>>,
     /// A base system for this piece (`db` or `ol`), in place of the list's.
     pub system: Option<Spanned<String>>,
-    /// `print=skip`: leave it off the plates.
-    pub skip: bool,
+    /// `print=`: `missing` (the default: print what the inventory lacks),
+    /// `always` (print it whatever you have) or `skip` (leave it off).
+    pub print: PrintMode,
     /// Where the map places it, as written (`"(2sq, 1sq)"`); the map's, not plates'.
     pub at: Option<Spanned<String>>,
     /// Its turn on the map, as written.
@@ -61,6 +62,29 @@ pub struct Piece {
     pub height: Option<Spanned<String>>,
     /// The whole node.
     pub span: SourceSpan,
+}
+
+/// What a piece does at print time (`print=`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrintMode {
+    /// Print what the inventory lacks of it: the count, less what you have.
+    Missing,
+    /// Print the whole count, whatever you have.
+    Always,
+    /// Leave it off the plates.
+    Skip,
+}
+
+impl PrintMode {
+    /// As written.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Missing => "missing",
+            Self::Always => "always",
+            Self::Skip => "skip",
+        }
+    }
 }
 
 /// Single colour or multicolour.
@@ -120,6 +144,9 @@ pub struct Plates {
     pub margin: Option<Spanned<f64>>,
     /// May a piece be turned a quarter to fit.
     pub turn: Option<Spanned<bool>>,
+    /// Look in the inventory (`check`, the default: pieces print only what
+    /// you lack) or leave it alone (`ignore`: every count prints).
+    pub inventory: Option<Spanned<bool>>,
     /// The whole node.
     pub span: SourceSpan,
 }
@@ -134,6 +161,7 @@ impl Default for Plates {
             gap: None,
             margin: None,
             turn: None,
+            inventory: None,
             span: SourceSpan::new(0.into(), 0),
         }
     }
@@ -160,8 +188,15 @@ struct Reader {
 }
 
 const MAP_KEYS: [&str; 2] = ["about", "piece"];
-const PLATES_KEYS: [&str; 7] = [
-    "system", "printer", "mode", "group", "gap", "margin", "turn",
+const PLATES_KEYS: [&str; 8] = [
+    "system",
+    "printer",
+    "mode",
+    "group",
+    "gap",
+    "margin",
+    "turn",
+    "inventory",
 ];
 const PIECE_KEYS: [&str; 8] = [
     "count", "seed", "system", "print", "at", "rot", "height", "id",
@@ -301,7 +336,7 @@ impl Reader {
             },
             seed: None,
             system: None,
-            skip: false,
+            print: PrintMode::Missing,
             at: None,
             rot: None,
             height: None,
@@ -341,9 +376,13 @@ impl Reader {
                     if let Some(s) = self.word(
                         "print",
                         e,
-                        &[("missing", false), ("always", false), ("skip", true)],
+                        &[
+                            ("missing", PrintMode::Missing),
+                            ("always", PrintMode::Always),
+                            ("skip", PrintMode::Skip),
+                        ],
                     ) {
-                        p.skip = s.value;
+                        p.print = s.value;
                     }
                 }
                 "at" => p.at = self.string("at", e),
@@ -468,6 +507,10 @@ impl Reader {
                 "margin" => into.margin = self.mm("margin", e),
                 "turn" => {
                     into.turn = self.word("turn", e, &[("allowed", true), ("off", false)]);
+                }
+                "inventory" => {
+                    into.inventory =
+                        self.word("inventory", e, &[("check", true), ("ignore", false)]);
                 }
                 other => {
                     self.err(
@@ -646,4 +689,49 @@ fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
             }
         }
     }
+}
+
+/// A `piece` line for a print list.
+#[must_use]
+pub fn piece_line(tile: &str, count: u32, seed: Option<u64>, system: &str, always: bool) -> String {
+    let mut l = format!("piece {} count={count}", crate::inventory::quote(tile));
+    if let Some(s) = seed {
+        l.push_str(&format!(" seed={s}"));
+    }
+    l.push_str(&format!(" system={system}"));
+    if always {
+        l.push_str(" print=always");
+    }
+    l
+}
+
+/// `text` (a print list that reads) with `lines` added as the last pieces of
+/// its map, every other byte as it was.
+///
+/// # Errors
+/// The text does not read as a print list: its mistakes, so a piece is never
+/// added to a file that is not understood.
+pub fn add_pieces(text: &str, lines: &[String]) -> Result<String, Vec<DocError>> {
+    let list = decode("list", text)?;
+    Ok(crate::inventory::insert_in_block(text, list.span, lines))
+}
+
+/// A new print list's text: the pieces, laid out for `system` in `mode`.
+#[must_use]
+pub fn new_list(version: &str, about: &str, lines: &[String], system: &str, mode: Mode) -> String {
+    let mut t = format!(
+        "dharmatiles version={}\n\nmap {{\n    about {}\n",
+        crate::inventory::quote(version),
+        crate::inventory::quote(about)
+    );
+    for l in lines {
+        t.push_str("    ");
+        t.push_str(l);
+        t.push('\n');
+    }
+    t.push_str(&format!(
+        "}}\n\nplates system={system} mode={}\n",
+        mode.word()
+    ));
+    t
 }

@@ -3,6 +3,7 @@
 
 #![allow(clippy::unwrap_used)]
 
+use dt_doc::inventory::{Colour, Shelf, decode as decode_inventory};
 use dt_doc::map::{Group, Mode, decode};
 use dt_eval::plates::{self, Boxes, Context, Overrides};
 use dt_eval::{Files, Options};
@@ -10,6 +11,14 @@ use dt_kit::Material;
 use std::path::Path;
 
 fn plan_of(text: &str, ov: &Overrides) -> Result<plates::Plan, Vec<dt_eval::Diag>> {
+    plan_with(text, ov, None)
+}
+
+fn plan_with(
+    text: &str,
+    ov: &Overrides,
+    shelf: Option<&Shelf>,
+) -> Result<plates::Plan, Vec<dt_eval::Diag>> {
     let list = decode("kit.dmap", &format!("dharmatiles version=1\n{text}")).unwrap();
     let base = Options::default();
     let ctx = Context {
@@ -17,8 +26,24 @@ fn plan_of(text: &str, ov: &Overrides) -> Result<plates::Plan, Vec<dt_eval::Diag
         list_dir: Some(Path::new("/nowhere")),
         home: None,
         base: &base,
+        shelf,
     };
     plates::plan(&list, "kit", &ctx, ov)
+}
+
+/// A shelf holding `have` good prints of each piece named.
+fn shelf_of(pieces: &[(&str, u64, &str, Colour, u32)]) -> Shelf {
+    let mut text = String::from("dharmatiles version=1\ninventory {\n");
+    for (tile, seed, system, colour, n) in pieces {
+        for _ in 0..*n {
+            text.push_str(&format!(
+                " print \"{tile}\" seed={seed} system={system} colour={} result=ok on=\"2026-11-09\"\n",
+                colour.word()
+            ));
+        }
+    }
+    text.push_str("}\n");
+    Shelf::of(&decode_inventory("inventory.dinv", &text).unwrap())
 }
 
 #[test]
@@ -186,4 +211,161 @@ fn tile_paths_are_the_librarys_yours_or_beside_the_list() {
             .contains("tiles folder")
     );
     assert!(t("glade", None, None).unwrap_err().contains("relative"));
+}
+
+const FLAT: &str = "lib:tests/ground/1x1-flat";
+
+#[test]
+fn a_piece_prints_only_what_the_inventory_lacks_of_that_exact_piece() {
+    // the tile's own seed is what the plan records
+    let seed = plan_of(
+        &format!("map {{\n piece \"{FLAT}\" count=5\n}}"),
+        &Overrides::default(),
+    )
+    .unwrap()
+    .kinds[0]
+        .seed_used;
+    let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Multi, 2)]);
+    let list = format!("map {{\n piece \"{FLAT}\" count=5\n}}");
+    let p = plan_with(&list, &Overrides::default(), Some(&shelf)).unwrap();
+    assert_eq!(
+        (p.kinds[0].want, p.kinds[0].have, p.kinds[0].count),
+        (5, 2, 3),
+        "five wanted, two on the shelf, three to print"
+    );
+    assert_eq!(p.pieces(), 3);
+    assert_eq!(p.kinds[0].canon, FLAT);
+    // `--all` (inventory ignored) prints the whole count
+    let all = plan_with(
+        &list,
+        &Overrides {
+            inventory: Some(false),
+            ..Overrides::default()
+        },
+        Some(&shelf),
+    )
+    .unwrap();
+    assert_eq!((all.kinds[0].have, all.kinds[0].count), (0, 5));
+    // so does the list's own word
+    let ignore = plan_with(
+        &format!("{list}\nplates inventory=ignore"),
+        &Overrides::default(),
+        Some(&shelf),
+    )
+    .unwrap();
+    assert_eq!(ignore.kinds[0].count, 5);
+    // `print=always` asks for the whole count whatever you have; the plain piece beside it does not
+    let both = plan_with(
+        &format!("map {{\n piece \"{FLAT}\" count=2 print=always\n piece \"{FLAT}\" count=3\n}}"),
+        &Overrides::default(),
+        Some(&shelf),
+    )
+    .unwrap();
+    assert_eq!(
+        (both.kinds[0].want, both.kinds[0].have, both.kinds[0].count),
+        (5, 2, 3),
+        "the two always-pieces print; the three others are covered by the two you have, one short"
+    );
+}
+
+#[test]
+fn the_same_piece_means_tile_seed_system_and_colour_mode() {
+    let seed = plan_of(
+        &format!("map {{\n piece \"{FLAT}\"\n}}"),
+        &Overrides::default(),
+    )
+    .unwrap()
+    .kinds[0]
+        .seed_used;
+    let list = format!("map {{\n piece \"{FLAT}\" count=2\n}}");
+    // another seed, another system, another colour mode: none of them is this piece
+    for (s, sys, c) in [
+        (seed + 1, "db", Colour::Multi),
+        (seed, "ol", Colour::Multi),
+        (seed, "db", Colour::Single),
+    ] {
+        let shelf = shelf_of(&[(FLAT, s, sys, c, 2)]);
+        let p = plan_with(&list, &Overrides::default(), Some(&shelf)).unwrap();
+        assert_eq!(p.kinds[0].count, 2, "{s} {sys} {}", c.word());
+    }
+    // a seed on the piece names the piece you own
+    let shelf = shelf_of(&[(FLAT, 9, "db", Colour::Multi, 1)]);
+    let p = plan_with(
+        &format!("map {{\n piece \"{FLAT}\" seed=9 count=2\n}}"),
+        &Overrides::default(),
+        Some(&shelf),
+    )
+    .unwrap();
+    assert_eq!(
+        (p.kinds[0].seed_used, p.kinds[0].have, p.kinds[0].count),
+        (9, 1, 1)
+    );
+    // the single-colour mode of the list counts single-colour prints
+    let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Single, 2)]);
+    let single = plan_with(
+        &format!("{list}\nplates mode=single"),
+        &Overrides::default(),
+        Some(&shelf),
+    );
+    assert!(
+        single.is_err(),
+        "everything is on the shelf: the plan says so rather than lay out nothing: {single:?}"
+    );
+    assert_eq!(single.unwrap_err()[0].code, "dt::inventory");
+}
+
+#[test]
+fn a_multicolour_piece_wanted_where_only_single_colour_is_owned_still_prints_and_says_so() {
+    let seed = plan_of(
+        &format!("map {{\n piece \"{FLAT}\"\n}}"),
+        &Overrides::default(),
+    )
+    .unwrap()
+    .kinds[0]
+        .seed_used;
+    let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Single, 1)]);
+    let p = plan_with(
+        &format!("map {{\n piece \"{FLAT}\" count=2\n}}"),
+        &Overrides::default(),
+        Some(&shelf),
+    )
+    .unwrap();
+    assert_eq!(p.settings.mode, Mode::Multicolour);
+    let k = &p.kinds[0];
+    assert_eq!(
+        (k.have, k.count, k.other_colour),
+        (0, 2, 1),
+        "the decision is left to you"
+    );
+}
+
+#[test]
+fn nothing_to_print_because_it_is_all_on_the_shelf_is_said_and_skip_still_skips() {
+    let seed = plan_of(
+        &format!("map {{\n piece \"{FLAT}\"\n}}"),
+        &Overrides::default(),
+    )
+    .unwrap()
+    .kinds[0]
+        .seed_used;
+    let shelf = shelf_of(&[(FLAT, seed, "db", Colour::Multi, 3)]);
+    let e = plan_with(
+        &format!("map {{\n piece \"{FLAT}\" count=3\n}}"),
+        &Overrides::default(),
+        Some(&shelf),
+    )
+    .unwrap_err();
+    assert_eq!(e[0].code, "dt::inventory");
+    assert!(e[0].message.contains("already in your inventory"), "{e:?}");
+    assert!(e[0].help.as_deref().unwrap().contains("--all"));
+    // one left over from the shelf, one still to print: the list plans, with the held piece named
+    let p = plan_with(
+        &format!("map {{\n piece \"{FLAT}\" count=3\n piece \"lib:tests/ground/1x1-soil\"\n piece \"lib:tests/ground/1x1-no-base\" print=skip\n}}"),
+        &Overrides::default(),
+        Some(&shelf),
+    )
+    .unwrap();
+    assert_eq!(p.kinds.len(), 1);
+    assert_eq!(p.held, [("1x1-flat".to_owned(), 3)]);
+    assert_eq!(p.skipped, ["lib:tests/ground/1x1-no-base"]);
 }

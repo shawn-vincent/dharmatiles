@@ -13,7 +13,8 @@ pub mod pack;
 
 use std::path::{Path, PathBuf};
 
-use dt_doc::map::{DEFAULT_PRINTER, Group, Mode, PrintList};
+use dt_doc::inventory::{Colour, Identity, Shelf};
+use dt_doc::map::{DEFAULT_PRINTER, Group, Mode, PrintList, PrintMode};
 use dt_kit::Material;
 
 use crate::diag::Diag;
@@ -39,6 +40,9 @@ pub struct Overrides {
     pub margin: Option<f64>,
     /// A turn setting in place of the list's.
     pub turn: Option<bool>,
+    /// Look in the inventory (`true`) or print every count (`false`: the
+    /// command line's `--all`), in place of the list's.
+    pub inventory: Option<bool>,
 }
 
 /// Where the list lives and what it can see.
@@ -53,6 +57,9 @@ pub struct Context<'a> {
     pub home: Option<&'a Path>,
     /// Build options to start from: the engine label, and the cells.
     pub base: &'a Options,
+    /// What you have printed (the inventory in `home`, read), or `None` where
+    /// there is no inventory yet: a list then prints everything it names.
+    pub shelf: Option<&'a Shelf>,
 }
 
 /// The settings a layout is made with.
@@ -72,6 +79,9 @@ pub struct Settings {
     pub margin: f64,
     /// May a piece turn a quarter.
     pub turn: bool,
+    /// Pieces print only what the inventory lacks (`plates inventory=check`,
+    /// the default).
+    pub check_inventory: bool,
 }
 
 /// The gap between pieces, mm, where none is written.
@@ -90,8 +100,24 @@ pub struct Kind {
     pub seed: Option<u64>,
     /// The base system it is built for.
     pub system: String,
-    /// How many copies.
+    /// How many copies print.
     pub count: u32,
+    /// How many copies the list asks for (`print=missing` ones, and the
+    /// `print=always` ones).
+    pub want: u32,
+    /// How many of those the inventory already holds, and so are left off.
+    pub have: u32,
+    /// How many of this tile and seed you have in the other colour mode (a
+    /// piece wanted in multicolour and owned in single colour is `have, single
+    /// colour`, and still prints unless you decide otherwise).
+    pub other_colour: u32,
+    /// The tile as the inventory names it (`lib:tiles/ground/1x1-grass`).
+    pub canon: String,
+    /// The seed it is built with: the list's, else the tile's own.
+    pub seed_used: u64,
+    /// The first eight hex digits of the tile document's hash, as the log
+    /// writes it.
+    pub hash: String,
     /// Its short name (`1x1-grass`).
     pub name: String,
     /// Its footprint if it were exactly its squares, mm: the layout's
@@ -111,8 +137,32 @@ pub struct Plan {
     pub kinds: Vec<Kind>,
     /// Pieces the list leaves off (`print=skip`), by tile.
     pub skipped: Vec<String>,
+    /// Pieces the inventory already holds, left off: (name, how many).
+    pub held: Vec<(String, u32)>,
     /// The list's own name (its file's stem).
     pub title: String,
+}
+
+impl Kind {
+    /// What the inventory calls the piece, for `colour`.
+    #[must_use]
+    pub fn identity(&self, colour: Colour) -> Identity {
+        Identity {
+            tile: self.canon.clone(),
+            seed: self.seed_used,
+            system: self.system.clone(),
+            colour,
+        }
+    }
+}
+
+/// The colour mode a print mode makes.
+#[must_use]
+pub const fn colour_of(mode: Mode) -> Colour {
+    match mode {
+        Mode::Single => Colour::Single,
+        Mode::Multicolour => Colour::Multi,
+    }
 }
 
 impl Plan {
@@ -293,11 +343,19 @@ pub fn plan(
         .turn
         .or_else(|| pl.turn.as_ref().map(|g| g.value))
         .unwrap_or(true);
+    let check_inventory = ov
+        .inventory
+        .or_else(|| pl.inventory.as_ref().map(|g| g.value))
+        .unwrap_or(true);
+    let colour = colour_of(mode);
 
     let mut kinds: Vec<Kind> = Vec::new();
     let mut skipped = Vec::new();
+    // pieces that ask for the whole count whatever you have, apart from those
+    // that print what is missing: one kind may be both
+    let mut always: Vec<u32> = Vec::new();
     for p in &list.pieces {
-        if p.skip {
+        if p.print == PrintMode::Skip {
             skipped.push(p.tile.value.clone());
             continue;
         }
@@ -313,11 +371,14 @@ pub fn plan(
             .as_ref()
             .map_or_else(|| system.clone(), |s| s.value.clone());
         let seed = p.seed.as_ref().map(|s| s.value);
-        if let Some(k) = kinds
-            .iter_mut()
-            .find(|k| k.path == path && k.seed == seed && k.system == sys)
+        if let Some(i) = kinds
+            .iter()
+            .position(|k| k.path == path && k.seed == seed && k.system == sys)
         {
-            k.count += p.count.value;
+            kinds[i].want += p.count.value;
+            if p.print == PrintMode::Always {
+                always[i] += p.count.value;
+            }
             continue;
         }
         let opts = Options {
@@ -355,7 +416,28 @@ pub fn plan(
             continue;
         };
         let frame = dt_kit::Frame::for_system(&sys, tile.cols, tile.rows);
+        let hash =
+            crate::inventory::tile_hash(&crate::inventory::canonical(&path, ctx.home), ctx.home)
+                .or_else(|| {
+                    // a tile that is not under `lib:` or home is read by its path
+                    ctx.sources
+                        .read(&path)
+                        .ok()
+                        .map(|t| crate::inventory::short_hash(crate::doc::text_hash(&t)))
+                })
+                .unwrap_or_default();
+        always.push(if p.print == PrintMode::Always {
+            p.count.value
+        } else {
+            0
+        });
         kinds.push(Kind {
+            want: p.count.value,
+            have: 0,
+            other_colour: 0,
+            canon: crate::inventory::canonical(&path, ctx.home),
+            seed_used: checked.seed,
+            hash,
             tile: p.tile.value.clone(),
             name: path
                 .rsplit(['/', ':'])
@@ -371,8 +453,31 @@ pub fn plan(
             estimate: estimate(tile),
         });
     }
+    // what you already have is left off: the count, less what the inventory holds
+    let mut held: Vec<(String, u32)> = Vec::new();
+    if let Some(shelf) = ctx.shelf {
+        for (i, k) in kinds.iter_mut().enumerate() {
+            let id = k.identity(colour);
+            k.other_colour = shelf.other_colour(&id);
+            let owned = shelf.have(&id);
+            if check_inventory {
+                let asked = k.want - always[i];
+                k.have = owned.min(asked);
+            } else {
+                k.have = 0;
+            }
+            k.count = k.want - k.have;
+        }
+        let (keep, left): (Vec<Kind>, Vec<Kind>) = kinds.into_iter().partition(|k| k.count > 0);
+        held.extend(left.iter().map(|k| (k.name.clone(), k.have)));
+        kinds = keep;
+    } else {
+        for k in &mut kinds {
+            k.count = k.want;
+        }
+    }
     if kinds.is_empty() && errors.is_empty() {
-        errors.push(
+        errors.push(if held.is_empty() {
             Diag::at(
                 &list.src,
                 list.span,
@@ -380,8 +485,17 @@ pub fn plan(
                 "there is nothing to print",
                 "no pieces",
             )
-            .help("every piece is `print=skip`, or the list has none: add `piece \"lib:tiles/ground/1x1-grass\" count=4`"),
-        );
+            .help("every piece is `print=skip`, or the list has none: add `piece \"lib:tiles/ground/1x1-grass\" count=4`")
+        } else {
+            Diag::at(
+                &list.src,
+                list.span,
+                "dt::inventory",
+                "everything in this list is already in your inventory",
+                "all of it is on your shelf",
+            )
+            .help("print it anyway with `--all` (in the editor, turn off \"only what I don't have\"), or mark a piece `print=always`")
+        });
     }
     // the printer's filaments, before anything builds
     if mode == Mode::Multicolour {
@@ -428,9 +542,11 @@ pub fn plan(
             gap,
             margin,
             turn,
+            check_inventory,
         },
         kinds,
         skipped,
+        held,
         title: title.to_owned(),
     })
 }

@@ -31,6 +31,29 @@ pub(crate) fn read_list(path: &Path) -> Result<PrintList, Vec<Diag>> {
         .map_err(|e| e.iter().map(Diag::from).collect())
 }
 
+/// What you have printed, for a list that looks in the inventory (the
+/// default; `--all` and `plates inventory=ignore` do not): the shelf of
+/// `inventory.dinv` in My tiles, or `None` where there is no inventory yet or
+/// the list leaves it alone.
+///
+/// # Errors
+/// An inventory that is there and has mistakes (each at its text): a list is
+/// never laid out against a log that is not understood.
+pub(crate) fn shelf_for(
+    list: &PrintList,
+    ov: &Overrides,
+    home: Option<&Path>,
+) -> Result<Option<dt_doc::inventory::Shelf>, Vec<Diag>> {
+    let looks = ov
+        .inventory
+        .or_else(|| list.plates.inventory.as_ref().map(|i| i.value))
+        .unwrap_or(true);
+    let Some(home) = home.filter(|_| looks) else {
+        return Ok(None);
+    };
+    Ok(dt_eval::inventory::load(home)?.map(|l| dt_doc::inventory::Shelf::of(&l.inventory)))
+}
+
 /// A list's name: its file's stem.
 pub(crate) fn title_of(path: &Path) -> String {
     path.file_stem()
@@ -123,6 +146,7 @@ pub(crate) fn layout_of(plan: &Plan, builds: &Builds) -> Result<Layout, Vec<Diag
 }
 
 /// The settings words a caller may give, as the command line's.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn overrides(
     printer: Option<String>,
     system: Option<String>,
@@ -131,6 +155,7 @@ pub(crate) fn overrides(
     gap: Option<f64>,
     margin: Option<f64>,
     turn: Option<&str>,
+    all: bool,
 ) -> Result<Overrides, String> {
     let mode = match mode {
         None => None,
@@ -171,6 +196,7 @@ pub(crate) fn overrides(
         gap,
         margin,
         turn,
+        inventory: all.then_some(false),
     })
 }
 
@@ -221,11 +247,23 @@ pub(crate) fn run(
         }
     };
     let dir = list_path.parent().filter(|p| !p.as_os_str().is_empty());
+    let shelf = match shelf_for(&list, ov, home.as_deref()) {
+        Ok(s) => s,
+        Err(mut e) => {
+            e.push(Diag::plain(
+                "dt::inventory",
+                "this list prints only what your inventory lacks, and the inventory does not read",
+            )
+            .help("mend inventory.dinv, or lay the list out without it: --all"));
+            return fail(&e, json);
+        }
+    };
     let ctx = Context {
         sources: &Files,
         list_dir: dir.or(Some(Path::new("."))),
         home: home.as_deref(),
         base: &base,
+        shelf: shelf.as_ref(),
     };
     let title = title_of(list_path);
     let plan = match plates::plan(&list, &title, &ctx, ov) {
@@ -256,6 +294,15 @@ pub(crate) fn run(
         );
         if let Some(v) = &s.machine.verify {
             tell!("note: this printer's numbers are not yet checked against the maker ({v})");
+        }
+        let held: u32 = plan.held.iter().map(|h| h.1).sum::<u32>()
+            + plan.kinds.iter().map(|k| k.have).sum::<u32>();
+        if held > 0 {
+            tell!(
+                "note: {held} piece{} already in your inventory left off ({} to print): --all prints them too",
+                if held == 1 { " is" } else { "s are" },
+                plan.pieces()
+            );
         }
     }
     if check_only {
@@ -435,10 +482,14 @@ pub(crate) fn plan_json(plan: &Plan) -> Value {
         "turn": s.turn,
         "kinds": plan.kinds.iter().map(|k| json!({
             "tile": k.tile, "name": k.name, "path": k.path, "seed": k.seed,
-            "system": k.system, "count": k.count, "nominal": k.nominal,
+            "system": k.system, "count": k.count, "want": k.want, "have": k.have,
+            "other_colour": k.other_colour, "canon": k.canon, "seed_used": k.seed_used,
+            "hash": k.hash, "nominal": k.nominal,
             "estimate": k.estimate.iter().map(|m| m.name()).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "skipped": plan.skipped,
+        "held": plan.held.iter().map(|(n, c)| json!({"name": n, "have": c})).collect::<Vec<_>>(),
+        "check_inventory": s.check_inventory,
     })
 }
 

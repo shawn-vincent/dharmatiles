@@ -53,6 +53,93 @@ pub(crate) enum CacheAction {
     },
 }
 
+/// What `dharmatiles inventory` does.
+#[derive(Subcommand)]
+pub(crate) enum InventoryAction {
+    /// What you have, by tile, system and colour mode, with the seeds held
+    /// (the default).  Shows one system: DungeonBlocks unless you say
+    /// `--system ol` or `--system all`.
+    List {
+        /// `db`, `ol` or `all` (default `db`).
+        #[arg(long)]
+        system: Option<String>,
+        /// Only `single` or `multi` colour prints.
+        #[arg(long)]
+        colour: Option<String>,
+        /// Only tiles whose path has this text in it.
+        #[arg(long)]
+        tile: Option<String>,
+        /// Only pieces that have a failed print.
+        #[arg(long)]
+        failed: bool,
+    },
+    /// Add a print of each tile named: a good one, or with `--failed` one
+    /// that failed (kept in the log, not counted).  The seed is the tile's
+    /// own unless you give one; the colour mode is the last you used.
+    Have {
+        /// Tiles: `lib:tiles/ground/1x1-grass`, `home:meadows/glade` or a path.
+        #[arg(required = true)]
+        tiles: Vec<String>,
+        /// The seed it was printed with (default: the tile's own).
+        #[arg(long)]
+        seed: Option<u64>,
+        /// `db` or `ol` (default `db`).
+        #[arg(long)]
+        system: Option<String>,
+        /// `single` or `multi` (default: the last colour mode you wrote).
+        #[arg(long)]
+        colour: Option<String>,
+        /// It failed: keep the line, do not count it.
+        #[arg(long)]
+        failed: bool,
+        /// How many copies came off the printer (default 1).
+        #[arg(long, default_value_t = 1)]
+        count: u32,
+        /// The date, `2026-11-09` (default: today, UTC).
+        #[arg(long)]
+        on: Option<String>,
+        /// A note.
+        #[arg(long)]
+        note: Option<String>,
+        /// Where it came from, `kit/plate-1`.
+        #[arg(long)]
+        from: Option<String>,
+    },
+    /// Mark one print of each tile named lost or broken.  The log keeps the
+    /// line it came from; a `gone` line takes one away from the count.
+    Gone {
+        /// Tiles, as for `have`.
+        #[arg(required = true)]
+        tiles: Vec<String>,
+        /// The seed (default: the tile's own).
+        #[arg(long)]
+        seed: Option<u64>,
+        /// `db` or `ol` (default `db`).
+        #[arg(long)]
+        system: Option<String>,
+        /// `single` or `multi` (default: the last colour mode you wrote).
+        #[arg(long)]
+        colour: Option<String>,
+        /// The date (default: today, UTC).
+        #[arg(long)]
+        on: Option<String>,
+        /// A note, `dropped on the floor`.
+        #[arg(long)]
+        note: Option<String>,
+    },
+    /// A tile has another path now: its prints follow it (a `renamed` line).
+    /// The editor writes one itself when it renames or moves a tile.
+    Relink {
+        /// The old path as the inventory names it (`home:meadow`).
+        old: String,
+        /// The tile now.
+        new: String,
+        /// The date (default: today, UTC).
+        #[arg(long)]
+        on: Option<String>,
+    },
+}
+
 #[derive(Subcommand)]
 pub(crate) enum Command {
     /// Build tiles to STL, through the printability gate.
@@ -169,6 +256,21 @@ pub(crate) enum Command {
         /// Do not read or keep the cache of builds.
         #[arg(long)]
         no_cache: bool,
+        /// Print every piece the list names, whatever your inventory holds
+        /// (by default a piece prints only what the inventory lacks of it:
+        /// the count, less what you have; see `dharmatiles inventory`).
+        #[arg(long)]
+        all: bool,
+    },
+    /// What you have printed: `list` (the default), `have <tile>`, `gone
+    /// <tile>`, `relink <old> <new>`.  One log, `inventory.dinv` in
+    /// `$DT_HOME` (else `~/dharmatiles`), made at the first line written.
+    Inventory {
+        #[command(subcommand)]
+        action: Option<InventoryAction>,
+        /// One JSON object on stdout.
+        #[arg(long)]
+        json: bool,
     },
     /// Read and plan tiles without building geometry.
     Check {

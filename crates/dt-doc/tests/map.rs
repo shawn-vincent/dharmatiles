@@ -41,12 +41,12 @@ fn a_print_list_reads_pieces_and_plates() {
         (p.tile.value.as_str(), p.count.value),
         ("lib:tiles/ground/1x1-grass", 8)
     );
-    assert!(p.seed.is_none() && p.system.is_none() && !p.skip);
+    assert!(p.seed.is_none() && p.system.is_none() && p.print == dt_doc::map::PrintMode::Missing);
     let q = &l.pieces[1];
     assert_eq!(q.id.as_ref().unwrap().value, "p2");
     assert_eq!(q.seed.as_ref().unwrap().value, 12);
     assert_eq!(q.system.as_ref().unwrap().value, "ol");
-    assert!(l.pieces[2].skip);
+    assert!(l.pieces[2].print == dt_doc::map::PrintMode::Skip);
     assert_eq!(l.pieces[3].rot.as_ref().unwrap().value, 90);
     assert_eq!(l.pieces[3].at.as_ref().unwrap().value, "(4sq, 1sq)");
     let pl = &l.plates;

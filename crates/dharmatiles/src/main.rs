@@ -52,6 +52,7 @@ mod cache;
 mod check;
 mod cli;
 mod elements;
+mod inventory;
 mod library;
 mod mcp;
 mod message;
@@ -240,6 +241,7 @@ fn main() -> ExitCode {
             check,
             json,
             no_cache,
+            all,
         } => {
             let ov = match plates::overrides(
                 printer,
@@ -249,6 +251,7 @@ fn main() -> ExitCode {
                 gap,
                 margin,
                 turn.as_deref(),
+                all,
             ) {
                 Ok(o) => o,
                 Err(e) => {
@@ -288,6 +291,7 @@ fn main() -> ExitCode {
             )
         }
         Command::Cache { action, json } => cache::run(action, json),
+        Command::Inventory { action, json } => inventory::run(action, json),
         Command::Migrate { paths, check } => migrate::run(&paths, check),
         Command::Elements { name, json } => elements::run(name.as_deref(), json),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),

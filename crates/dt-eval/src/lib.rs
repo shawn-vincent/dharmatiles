@@ -19,6 +19,7 @@ mod crowns;
 pub mod diag;
 pub mod doc;
 mod hash;
+pub mod inventory;
 mod lower;
 pub mod machine;
 mod options;
