@@ -112,20 +112,18 @@ fn plate_mesh(
         .enumerate()
     {
         let part = &parts[i.kind].built;
-        let (lo, hi) = dt_kit::box_of(&part.export.mesh);
-        let mid = [0, 1, 2].map(|a| (lo[a] + hi[a]) / 2.0);
-        let at = [
-            i.at.x + i.at.w / 2.0,
-            i.at.y + i.at.d / 2.0,
-            (hi[2] - lo[2]) / 2.0,
-        ];
+        // placed by the box the packer measured (the full mesh's), not the box of the thinned
+        // mesh drawn here, which is smaller and would stand the piece off its footprint
+        let bx = &parts[i.kind].boxes;
         let base = u32::try_from(mesh.positions.len()).unwrap_or(u32::MAX);
-        for p in &part.export.mesh.positions {
-            let c = [p[0] - mid[0], p[1] - mid[1], p[2] - mid[2]];
-            let c = if i.at.turned { [-c[1], c[0], c[2]] } else { c };
-            mesh.positions
-                .push([at[0] + c[0], at[1] + c[1], at[2] + c[2]]);
-        }
+        mesh.positions.extend(dt_kit::stand_positions(
+            &part.export.mesh.positions,
+            bx.lo,
+            bx.hi(),
+            i.at.x,
+            i.at.y,
+            i.at.turned,
+        ));
         mesh.triangles.extend(
             part.export
                 .mesh

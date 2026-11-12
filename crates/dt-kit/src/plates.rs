@@ -105,21 +105,59 @@ const fn rotation(turned: bool) -> &'static str {
     }
 }
 
+/// A part's positions as they stand on the bed: the part's box (`lo`, `hi`, the
+/// box of the mesh the packer measured) is centred on the footprint at (`x`,
+/// `y`), turned a quarter when `turned`, resting on the bed.
+///
+/// The box is the packer's, not the box of `positions`: a thinned mesh of the
+/// same part has a smaller box, and centring that one would stand it off its
+/// footprint.
+#[must_use]
+pub fn stand_positions(
+    positions: &[[f64; 3]],
+    lo: [f64; 3],
+    hi: [f64; 3],
+    x: f64,
+    y: f64,
+    turned: bool,
+) -> Vec<[f64; 3]> {
+    let mid = [0, 1, 2].map(|i| (lo[i] + hi[i]) / 2.0);
+    let at = middle(
+        lo,
+        hi,
+        &PlateStand {
+            part: 0,
+            plate: 0,
+            x,
+            y,
+            turned,
+        },
+    );
+    positions
+        .iter()
+        .map(|p| {
+            let c = [p[0] - mid[0], p[1] - mid[1], p[2] - mid[2]];
+            let c = if turned { [-c[1], c[0], c[2]] } else { c };
+            [at[0] + c[0], at[1] + c[1], at[2] + c[2]]
+        })
+        .collect()
+}
+
 /// Every plate's pieces merged into one mesh at their places on the bed.
 fn baked(set: &PlateSet, plate: usize) -> TriMesh {
     let mut out = TriMesh::default();
     for s in set.stands.iter().filter(|s| s.plate == plate) {
         let part = &set.parts[s.part];
         let (lo, hi) = bounds(part.mesh);
-        let mid = [0, 1, 2].map(|i| (lo[i] + hi[i]) / 2.0);
-        let at = middle(lo, hi, s);
         let base = u32::try_from(out.positions.len()).unwrap_or(u32::MAX);
-        for p in &part.mesh.positions {
-            let c = [p[0] - mid[0], p[1] - mid[1], p[2] - mid[2]];
-            let c = if s.turned { [-c[1], c[0], c[2]] } else { c };
-            out.positions
-                .push([at[0] + c[0], at[1] + c[1], at[2] + c[2]]);
-        }
+        out.positions.extend(stand_positions(
+            &part.mesh.positions,
+            lo,
+            hi,
+            s.x,
+            s.y,
+            s.turned,
+        ));
         out.triangles
             .extend(part.mesh.triangles.iter().map(|t| t.map(|i| i + base)));
     }

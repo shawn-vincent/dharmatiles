@@ -629,6 +629,10 @@ pub fn plan(
 /// What a piece really covers, from a build of it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Boxes {
+    /// Its lowest corner in the piece's own coordinates, mm: the box the
+    /// footprint was measured on, kept so a thinned mesh of the piece stands
+    /// where the full one would.
+    pub lo: [f64; 3],
     /// Its footprint, the top-down box of the whole piece (a crown over the
     /// edge included): width by depth, mm.
     pub size: [f64; 2],
@@ -639,11 +643,22 @@ pub struct Boxes {
 }
 
 impl Boxes {
+    /// Its highest corner, mm.
+    #[must_use]
+    pub fn hi(&self) -> [f64; 3] {
+        [
+            self.lo[0] + self.size[0],
+            self.lo[1] + self.size[1],
+            self.lo[2] + self.height,
+        ]
+    }
+
     /// From a mesh and the material of each of its triangles.
     #[must_use]
     pub fn of(mesh: &dt_kit::TriMesh, materials: &[Material]) -> Self {
         let (lo, hi) = dt_kit::box_of(mesh);
         Self {
+            lo,
             size: [hi[0] - lo[0], hi[1] - lo[1]],
             height: hi[2] - lo[2],
             filaments: dt_kit::filaments_of(materials),

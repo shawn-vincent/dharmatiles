@@ -227,3 +227,48 @@ fn a_plain_3mf_per_plate_has_its_objects_and_items() {
     let m = text(&one, "3D/3dmodel.model");
     assert!(!m.contains("paint_color") && !m.contains("basematerials"));
 }
+
+/// The box of some positions.
+fn box_at(p: &[[f64; 3]]) -> ([f64; 3], [f64; 3]) {
+    p.iter().fold(([f64::MAX; 3], [f64::MIN; 3]), |(lo, hi), p| {
+        (
+            [0, 1, 2].map(|i| lo[i].min(p[i])),
+            [0, 1, 2].map(|i| hi[i].max(p[i])),
+        )
+    })
+}
+
+#[test]
+fn every_piece_lies_within_its_footprint_in_the_export_and_in_the_view() {
+    // an off-centre part (its box does not start at the origin), and a thinned
+    // stand-in that lost its outermost vertices, as the view's mesh does
+    let full = cuboid([-7.0, 3.0, 2.0], 30.0, 12.0, 9.0);
+    let thin = cuboid([-7.0, 3.0, 2.0], 22.0, 9.0, 9.0);
+    let (lo, hi) = box_of(&full);
+    let am = vec![Material::Earth; 12];
+    let r = record();
+    let set = two_plates(&full, &am, &full, &am, &r, false);
+    for plate in 0..2 {
+        // the export: the plate's STL is the baked mesh; read each piece's box back
+        let baked = baked(&set, plate);
+        let here: Vec<&PlateStand> = set.stands.iter().filter(|s| s.plate == plate).collect();
+        for (n, s) in here.iter().enumerate() {
+            let piece = &baked.positions[n * 8..(n + 1) * 8];
+            let (a, b) = box_at(piece);
+            let (w, d) = if s.turned { (12.0, 30.0) } else { (30.0, 12.0) };
+            for (got, want) in [(a[0], s.x), (a[1], s.y), (b[0], s.x + w), (b[1], s.y + d), (a[2], 0.0)] {
+                assert!((got - want).abs() < 1e-9, "export: {got} is not {want}");
+            }
+        }
+    }
+    // the view: the thinned mesh placed by the packer's box stays inside the footprint (centred
+    // by its own, smaller box it stood off the footprint: the bug this guards)
+    for turned in [false, true] {
+        let (x, y) = (5.0, 45.0);
+        let (w, d) = if turned { (12.0, 30.0) } else { (30.0, 12.0) };
+        let p = stand_positions(&thin.positions, lo, hi, x, y, turned);
+        let (a, b) = box_at(&p);
+        assert!(a[0] >= x - 1e-9 && a[1] >= y - 1e-9, "view: {a:?} is past the front-left of ({x},{y})");
+        assert!(b[0] <= x + w + 1e-9 && b[1] <= y + d + 1e-9, "view: {b:?} is past the far edge");
+    }
+}

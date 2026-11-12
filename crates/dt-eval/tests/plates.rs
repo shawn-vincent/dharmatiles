@@ -123,6 +123,7 @@ fn the_filament_estimate_never_leaves_a_material_out() {
 
 fn boxes(size: [f64; 2], f: &[Material]) -> Boxes {
     Boxes {
+        lo: [0.0; 3],
         size,
         height: 20.0,
         filaments: f.to_vec(),
@@ -158,6 +159,7 @@ fn what_cannot_be_laid_out_is_said_by_tile() {
         "{e:?}"
     );
     let tall = Boxes {
+        lo: [0.0; 3],
         height: 300.0,
         ..boxes([35.0, 35.0], &[])
     };
