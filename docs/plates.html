@@ -8,7 +8,7 @@
 <script src="assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="plates.html" aria-current="page">Plates</a><a href="printers.html">Printers</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="plates.html" aria-current="page">Plates</a><a href="printers.html">Printers</a><a href="inventory.html">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow">Reference · from a list of tiles to the bed</div>
@@ -27,6 +27,7 @@
   <li><a href="#pack">How the plates are packed</a></li>
   <li><a href="#export">What is written</a></li>
   <li><a href="#command">The command</a></li>
+  <li><a href="#have">What you already have</a></li>
   <li><a href="#editor">In the editor</a></li>
   <li><a href="#rules">Rules</a></li>
 </ol></nav>
@@ -52,6 +53,8 @@ plates printer="bambu/x1c-ams" mode="multicolour" group="filament" gap="3mm" mar
 <tr><td><code>count=8</code></td><td>How many copies (1 where none is written). Copies share one mesh in a 3MF.</td></tr>
 <tr><td><code>seed=12</code></td><td>Build it with this seed instead of the tile's own: a different variant of the same tile.</td></tr>
 <tr><td><code>system="ol"</code></td><td>Build it for DungeonBlocks (<code>"db"</code>) or OpenLOCK (<code>"ol"</code>) instead of the list's. A DungeonBlocks piece and an OpenLOCK piece may share a plate: each rests on the bed with its lowest point at zero, whatever its base.</td></tr>
+<tr><td><code>print="missing"</code></td><td>The default: print what your <a href="inventory.html">inventory</a> lacks of this exact piece (the count, less what you have; tile, seed, system and colour mode must all match).</td></tr>
+<tr><td><code>print="always"</code></td><td>Print the whole count, whatever you have.</td></tr>
 <tr><td><code>print="skip"</code></td><td>Leave it off the plates.</td></tr>
 <tr><td><code>p1</code> before the path</td><td>A name for the piece.</td></tr>
 <tr><td><code>at</code>, <code>rot</code>, <code>height</code></td><td>A place on a map. Read and kept; plates ignore them.</td></tr>
@@ -66,6 +69,7 @@ plates printer="bambu/x1c-ams" mode="multicolour" group="filament" gap="3mm" mar
 <tr><td><code>gap="3mm"</code></td><td>Between two pieces. 3 mm by default.</td></tr>
 <tr><td><code>margin="5mm"</code></td><td>Between a piece and the edge of the bed: room for a skirt, a brim and the purge line. 5 mm by default.</td></tr>
 <tr><td><code>turn="allowed"</code> or <code>"off"</code></td><td>May a piece turn a quarter to fit. Allowed by default.</td></tr>
+<tr><td><code>inventory="check"</code> or <code>"ignore"</code></td><td>Look in the <a href="inventory.html">inventory</a> (<code>check</code>, the default: pieces print only what you lack) or print every count (<code>ignore</code>).</td></tr>
 </tbody></table></div>
 <p>A mistake is shown at its text, as in a tile: a setting that is not one (<code>did you mean printer?</code>), a number with no unit, a piece with no tile.</p>
 
@@ -103,11 +107,15 @@ dharmatiles plates my-list.dmap --mode single --group size --gap 2 --margin 4 --
 dharmatiles plates my-list.dmap --format 3mf --out ~/prints --json</code></pre>
 <p>A word on the command line replaces the list's. <code>--check</code> says the printer, the pieces and whether the printer has the filaments.</p>
 
+<h2 id="have">What you already have</h2>
+<p>By default a piece prints only what your <a href="inventory.html">inventory</a> lacks: five copies of a grass tile of which you have two print three. The plan says how many pieces it left off (<em>2 pieces are already in your inventory left off (3 to print)</em>), and a list whose every piece is already on your shelf says so rather than lay out nothing. <code>--all</code> (or <code>inventory="ignore"</code> on the <code>plates</code> line, or <code>print="always"</code> on a piece) prints every count. The colour mode is the list's <code>mode</code>: a multicolour piece wanted where you own it only in single colour is a different piece, and still prints. After you print, <a href="inventory.html#editor">the sheet after the print</a> adds the plate to the inventory and the next list shrinks.</p>
+
 <h2 id="editor">In the editor</h2>
 <p>Open a <code>.dmap</code> from a folder and the view shows the printer's bed as a translucent slab the pieces stand on (any excluded zones shaded on it) with the plate in view, and the panel changes to the plates' panel. The <em>Tile</em> and <em>Plates</em> switch in the title bar names what you are working on.</p>
 <ul>
 <li><strong>Plates.</strong> One row for each plate, with its pieces and filaments; press one to put it on the bed. A note says when grouping by filament costs a plate, with a button for packing by size only.</li>
 <li><strong>Export.</strong> Builds every piece in full and writes the project or the STLs. The status line and the messages (<kbd>⌃J</kbd>) say what it is doing.</li>
+<li><strong>Inventory.</strong> <em>N in inventory · M to print</em>, a switch for <em>Only what I don't have</em> or <em>Everything</em> (it writes the <code>inventory</code> word of the <code>plates</code> line), and each piece against the shelf, with <em>have, single colour</em> in caution yellow where you own the other colour mode. <strong>After the print</strong> lists a plate's pieces, all ticked good: untick the failures and one press adds them to the inventory.</li>
 <li><strong>Printer, print mode, spacing.</strong> Brand, then model, with a switch for the AMS on a Bambu printer; single or multicolour and the grouping, with the filament check; the gap, the margin and turns. Each change rewrites the <code>plates</code> line in the file and nothing else, and the plates are laid out again.</li>
 </ul>
 <p><strong>Low first, then full.</strong> A tile with no full build kept shows its <em>low</em> build, marked <em>not yet checked</em> in the status line and the messages. Opening a list starts the full builds of the pieces on the plate in view, the others build when you export. When they land, the plates are laid out again by what the full builds really cover (a note says when that moved a piece) and the view swaps to them. A plate drawn from low meshes is never exported.</p>

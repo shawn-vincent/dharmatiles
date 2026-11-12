@@ -8,7 +8,7 @@
 <script src="assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html" aria-current="page">Preview</a><a href="plates.html">Plates</a><a href="printers.html">Printers</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html" aria-current="page">Preview</a><a href="plates.html">Plates</a><a href="printers.html">Printers</a><a href="inventory.html">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow">dharmatiles preview</div>
@@ -25,6 +25,7 @@
   <li><a href="#keys">Moving round a tile</a></li>
   <li><a href="#export">Export</a></li>
   <li><a href="#plates">Plates</a></li>
+  <li><a href="#inventory">Inventory</a></li>
   <li><a href="#live">Live updates</a></li>
   <li><a href="#cache">The cache of builds</a></li>
   <li><a href="#errors">When something goes wrong</a></li>
@@ -182,6 +183,9 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <li><strong>Printer</strong> is brand, then model, with a switch for the AMS on a Bambu printer; <strong>Print mode</strong> is single or multicolour and the grouping, with the check that the printer has the filaments; <strong>Spacing</strong> is the gap, the margin and turns. Each change rewrites the list's <code>plates</code> line and nothing else.</li>
 <li>A tile with no full build kept shows its low build, marked <em>low · not yet checked</em> in the status line, while the full builds of the pieces on the plate in view run; when they land the plates are laid out again by what the full builds cover. The other plates' pieces build when you export. A plate drawn from low meshes is never exported.</li>
 </ul>
+
+<h2 id="inventory">Inventory</h2>
+<p>The <a href="inventory.html">inventory</a> is a file, <code>inventory.dinv</code>, listed in My tiles once it exists. In the page it is four things: <strong>have and need pills</strong> on a tile's row in a folder (for the system the title bar's chip names), <em>3 printed · seeds 7, 12, 97</em> with <strong>I have this</strong> on a tile's level (it adds one good print of the tile's seed, in the colour mode you pick, without exporting), <em>N in inventory · M to print</em> and <strong>After the print</strong> in the plates' panel, and the document's own view, opened like any document: the pieces grouped by tile with filters for system, colour and have, <em>Gone</em> and <em>Reprint</em> on each piece, a one-click <em>Re-link</em> for a tile that moved, and <em>Source</em> for the file's KDL. Renaming or moving a tile in My tiles adds a <code>renamed</code> line, so the counts follow it.</p>
 
 <h2 id="live">Live updates</h2>
 <p>Save the document, or any file it <code>use</code>s, and the tile rebuilds. Your camera stays; the old tile fades at once, so it never passes for the new one. As the build goes, each stage's parts take its place, faded too: the ground within a moment, then each element as it finishes. A cliff shows its rough blocks within a second or so, long before its stones are cut. What stands for work still going breathes, its transparency rising and falling: the rough blocks, and the old tile until the first new part arrives (not with reduced motion). Opening a tile mid-build shows what it has made so far. The finished tile replaces them all, solid, with its verdict. What shows while a tile builds is never judged by the gate, and a large stage is sent thinned. A rebuild starts from the first step your edit changes: the program keeps the tile as it stood after each step of the last build (in the order the plan runs them, surfaces and ground first), so changing the boulders by a cliff rebuilds the boulders and joins and checks the tile again, in about two seconds, without carving the cliff again. Changing a surface, such as the dirt's level, rebuilds everything after it. The last few tiles you worked on keep theirs; drafts keep their own. A mistake shows over the view as <code>file:line:column</code> with a hint, in front of the last good build; the next good save clears it. One tile builds at a time: tiles named on the command line are built at the start, and a tile picked from a folder is built when you pick it.</p>

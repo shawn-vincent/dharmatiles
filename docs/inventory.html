@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inventory</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="plates.html">Plates</a><a href="printers.html">Printers</a><a href="inventory.html" aria-current="page">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Reference · what is on your shelf</div>
+  <h1>Inventory</h1>
+  <p class="lede">The inventory remembers what you have printed, so a <a href="plates.html">print list</a> prints only what you lack. It is one file beside your tiles, a log with a line for each print, and every count you see is worked out from that log.</p>
+  <div class="facts">
+    <div><div class="k">Document</div><div class="v"><code>inventory.dinv</code> in My tiles</div></div>
+    <div><div class="k">Command</div><div class="v"><code>dharmatiles inventory</code></div></div>
+    <div><div class="k">Truth</div><div class="v">a log; counts are never stored</div></div>
+    <div><div class="k">A piece is</div><div class="v">tile, seed, system, colour mode</div></div>
+  </div>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#file">The file</a></li>
+  <li><a href="#piece">What counts as the same piece</a></li>
+  <li><a href="#lists">Print lists and the inventory</a></li>
+  <li><a href="#editor">In the editor</a></li>
+  <li><a href="#command">The command</a></li>
+  <li><a href="#rules">Rules</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="file">The file</h2>
+<p>The inventory is a KDL v2 document called <code>inventory.dinv</code>, in your tiles folder (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>) beside the tiles. It has its own extension because it is not a tile. Nothing is made until the first line is written: with no file there is no inventory yet, and every piece prints.</p>
+<pre><code>dharmatiles version="1.0.0"
+
+inventory {
+    print "lib:tiles/ground/1x1-grass"     seed=97 system=db colour=multi  result=ok     on="2026-11-09" hash="3c1f9a4e" from="crossing/plate-1"
+    print "lib:tiles/ground/1x1-grass"     seed=12 system=db colour=multi  result=ok     on="2026-11-09" hash="3c1f9a4e" from="crossing/plate-1"
+    print "lib:tiles/walls/1x1-wall-stone" seed=14 system=db colour=single result=ok     on="2026-11-09" hash="a07d22b1"
+    print "lib:tiles/cliffs/2x1-cliff"     seed=4  system=db colour=multi  result=failed on="2026-11-09" hash="55e0c3d9" note="top layer stringing"
+    print "lib:tiles/cliffs/2x1-cliff"     seed=4  system=db colour=multi  result=ok     on="2026-11-10" hash="55e0c3d9"
+    gone  "lib:tiles/ground/1x1-grass"     seed=12 system=db colour=multi  on="2026-11-11" note="dropped on the floor"
+    renamed "home:meadow" to="home:meadows/glade" on="2026-11-12"
+}</code></pre>
+<p>It is a <strong>log</strong>: a line is added for each print, each loss and each rename, and none is edited away. It stays hand-editable, and a mistake in it is shown at its text as in any document (<code>seed</code> missing, a system that is not <code>db</code> or <code>ol</code>, a date that is not a date), with a hint.</p>
+<div class="tbl"><table>
+<thead><tr><th>Line</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>print "&lt;tile&gt;" seed= system= colour= result= on=</code></td><td>A piece came off the printer. <code>result</code> is <code>ok</code> or <code>failed</code>. <code>hash</code> is the first eight hex digits of the tile document's hash when it was printed, <code>from</code> the print list and plate it came from, <code>note</code> anything you like. <code>hash</code>, <code>from</code> and <code>note</code> are optional.</td></tr>
+<tr><td><code>gone "&lt;tile&gt;" seed= system= colour= on=</code></td><td>One of that piece is lost or broken. It takes one away from what you have; the print line it came from stays.</td></tr>
+<tr><td><code>renamed "&lt;old&gt;" to="&lt;new&gt;"</code></td><td>A tile has another path now: its prints follow it. The editor writes one when it renames or moves a tile in My tiles, or a folder with tiles in it.</td></tr>
+</tbody></table></div>
+<p>A tile is named <code>lib:tiles/ground/1x1-grass</code> for the library's, <code>home:meadows/glade</code> for one in your tiles folder, else by its path; the <code>.dtile</code> is left off. <code>colour</code> is <code>single</code> or <code>multi</code>.</p>
+
+<h2 id="piece">What counts as the same piece</h2>
+<p>A piece is the same piece when its <strong>tile, seed, system and colour mode</strong> are the same.</p>
+<ul>
+<li><strong>Seed.</strong> Two seeds of one tile are two different pieces: that is what makes a piece yours.</li>
+<li><strong>System.</strong> DungeonBlocks and OpenLOCK never count for each other. Wherever the inventory is shown, system is a filter, and it starts as the target system of where you are: the chip in the title bar for the folder pills, the list's own system for the plates.</li>
+<li><strong>Colour mode.</strong> A multicolour piece is not the single-colour one. A multicolour piece wanted where you only own it in single colour reads <em>have, single colour</em> (a yellow stripe, the colour notes use; orange and red stay for overhang), and is left for you to decide: it still prints unless you leave it off.</li>
+<li><strong>Counts.</strong> Two prints of one piece are two. A <code>failed</code> line is kept, because it says what your printer does badly, and does not count. A <code>gone</code> line takes one away.</li>
+<li><strong>Edited since printing.</strong> If the tile's document hash is not the one recorded, the piece shows <em>edited since printing</em>. This is information only: it still counts as had.</li>
+</ul>
+
+<h2 id="lists">Print lists and the inventory</h2>
+<p>A <a href="plates.html">print list</a> prints only what the inventory lacks. For each piece, the plates take the count in the list, less what you have of that exact piece (tile, seed, system and colour mode of the list), and print the rest. The colour mode is the list's <code>mode</code>.</p>
+<div class="tbl"><table>
+<thead><tr><th>Where</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>piece … print="missing"</code></td><td>The default: print what the inventory lacks.</td></tr>
+<tr><td><code>piece … print="always"</code></td><td>Print the whole count whatever you have.</td></tr>
+<tr><td><code>piece … print="skip"</code></td><td>Leave it off.</td></tr>
+<tr><td><code>plates inventory="ignore"</code></td><td>Do not look in the inventory for this list: every count prints. <code>"check"</code> is the default. The editor's switch writes this word.</td></tr>
+<tr><td><code>dharmatiles plates … --all</code></td><td>The same, for one run.</td></tr>
+</tbody></table></div>
+<p>A list whose every piece is already on your shelf says so, with the way out, rather than lay out nothing. An inventory that has a mistake is never counted from: the list stops and shows the mistake (use <code>--all</code> to lay the list out without it).</p>
+
+<h2 id="editor">In the editor</h2>
+<p>The inventory is listed in My tiles like a tile, and opens as a view. Four everyday things:</p>
+<ul>
+<li><strong>I have this.</strong> On a tile's level: <em>3 printed · seeds 7, 12, 97</em> for the target system, a Single colour or Multicolour switch (the last one you used is kept), and a button that adds one good print of the tile's current seed. It works without exporting anything, for the models you printed from an STL.</li>
+<li><strong>Have and need pills.</strong> A tile's row in a folder (My tiles or the library) carries <em>have 2</em> or <em>need</em> for the target system. The strip under the crumbs says which system.</li>
+<li><strong>Plates.</strong> The plates' panel says <em>N in inventory · M to print</em>, with a switch, <em>Only what I don't have</em> or <em>Everything</em>, and lists each piece against the shelf.</li>
+<li><strong>After the print.</strong> After Export (and from any plate later, with <em>Record a plate</em>) a sheet lists the plate's pieces, all ticked good. Untick what failed, and one press adds the rest as good prints and the failures as <code>failed</code>, with today's date, each tile's hash and <code>from="&lt;list&gt;/plate-N"</code>. The status line, the pills and the plates update at once, and the list is laid out again against the new shelf.</li>
+</ul>
+<p>Open <code>inventory.dinv</code> for the whole view: the pieces <strong>grouped by tile</strong>, each with its seed, colour mode, how many you have, failures and losses, and <em>edited since printing</em>. Filters for <strong>system</strong>, <strong>colour</strong> and <strong>have</strong> (all, on the shelf, not on the shelf). For each piece:</p>
+<ul>
+<li><strong>Gone</strong> adds a <code>gone</code> line.</li>
+<li><strong>Reprint</strong> adds that exact piece, with its recorded seed and system, to a print list you choose, or makes a new one. A piece you still have is added with <code>print="always"</code>; one you do not is a plain piece, which prints because the inventory lacks it. A list laid out in another colour mode is warned about: the inventory counts the colour mode.</li>
+</ul>
+<p>A tile that is no longer at its path (moved by hand, outside the editor) shows <em>Not at this path any more</em> with a one-click <strong>Re-link</strong>, which adds a <code>renamed</code> line. <em>Source</em> shows the file's own KDL, line numbered; edit it in any editor and the view follows.</p>
+
+<h2 id="command">The command</h2>
+<pre><code>dharmatiles inventory                                  # what you have (DungeonBlocks); --system ol or all
+dharmatiles inventory list --tile grass --colour multi --failed
+dharmatiles inventory have lib:tiles/ground/1x1-grass --colour multi --count 2
+dharmatiles inventory have home:meadows/glade --seed 12 --system ol --failed --note "stringing"
+dharmatiles inventory gone lib:tiles/ground/1x1-grass --colour multi --note "dropped"
+dharmatiles inventory relink home:meadow home:meadows/glade
+dharmatiles plates my-list.dmap          # prints only what the inventory lacks
+dharmatiles plates my-list.dmap --all    # every count</code></pre>
+<p><code>have</code> takes the tile's own seed unless you give <code>--seed</code>, the date is today in UTC unless you give <code>--on</code>, and the colour mode is the last one you wrote unless you give <code>--colour</code>. <code>gone</code> refuses a piece you have none of. <code>--json</code> (before the action) gives the pieces as JSON.</p>
+
+<h2 id="rules">Rules</h2>
+<ul>
+<li>The inventory is a log: lines are added, never edited away, and counts are worked out from it, never stored.</li>
+<li>A piece is tile, seed, system and colour mode. DungeonBlocks and OpenLOCK never count for each other.</li>
+<li>A failed print is kept and does not count. Two prints of one piece are two.</li>
+<li><em>Edited since printing</em> is information only: the piece still counts.</li>
+<li>No file is made until the first line is written; a file that is not understood is never added to, and its mistakes are shown at their text.</li>
+<li>Personal state stays out of print lists: the list says what to print, the inventory says what you own, the plates say how it lays out today.</li>
+<li>Not tracked: where a piece sits in your storage, what colour of filament it is, which printer made it.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>
