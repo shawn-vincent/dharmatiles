@@ -950,15 +950,21 @@ pub(crate) fn grow_all(
     placed: &[dt_kit::Placed],
 ) -> Result<(), LookError> {
     let mut leaves = 0.0;
+    let (mut failed, mut undraped) = (0.0, 0.0);
     for p in placed {
         let (tree, seed) = items[p.index];
         let at = [p.at[0], p.at[1], ground_at(scene, p.at[0], p.at[1])];
         let b = tree.grow(scene, seed, at, &ctx.printer, ctx.crowns)?;
         leaves += b.grown.leaves as f64;
+        failed += b.grown.leaves_failed_error as f64;
+        undraped += b.grown.leaves_lying_undraped as f64;
         plant(scene, ctx.path, b);
     }
     scene.note("trees", placed.len() as f64);
     scene.note("trees.leaves", leaves);
+    // what a lone tree notes of itself, summed over these trees
+    scene.note("trees.leaves_failed_error", failed);
+    scene.note("trees.leaves_lying_undraped", undraped);
     Ok(())
 }
 
