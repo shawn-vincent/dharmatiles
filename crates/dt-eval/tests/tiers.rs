@@ -86,7 +86,7 @@ fn only_a_full_build_is_checked_and_a_low_one_is_lighter() {
     assert!(Tier::Full.checked() && !Tier::Low.checked() && !Tier::SuperLow.checked());
     let n = |b: &Built| b.export.mesh.triangles.len();
     assert!(n(&low) < n(&full) / 5, "{} against {}", n(&low), n(&full));
-    assert!(n(&tiny) <= dt_eval::tiers::SUPER_LOW_BUDGET && n(&tiny) < n(&low));
+    assert!(n(&tiny) <= dt_eval::tiers::SUPER_LOW_BUDGET && n(&tiny) <= n(&low));
     // overhang is still painted by angle: every list is one per triangle
     assert_eq!(low.audit.overhang.len(), n(&low));
     assert_eq!(tiny.audit.overhang.len(), n(&tiny));

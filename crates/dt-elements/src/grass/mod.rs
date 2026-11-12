@@ -205,7 +205,9 @@ impl Grass {
             // f32 is what the mesher takes
             #[allow(clippy::cast_possible_truncation)]
             {
-                base[k] = (ground - 0.6 * s).max(0.1) as f32;
+                // the plate lies on the tile's bed, deep inside the ground (and
+                // under any water), where no thinning can bring it to the surface
+                base[k] = 0.1;
                 top[k] = (ground + thick.max(0.05)) as f32;
             }
             present[k] = grown > CARPET_EDGE;

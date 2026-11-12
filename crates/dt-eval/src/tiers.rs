@@ -28,9 +28,16 @@ pub const SUPER_LOW_BUDGET: usize = 12_000;
 /// never printed.
 #[must_use]
 pub fn thinned(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>) {
+    let (m, kept, _) = thinned_snap(mesh, budget);
+    (m, kept)
+}
+
+/// [`thinned`], and the vertex each original vertex was snapped to.
+fn thinned_snap(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>, Vec<u32>) {
     let n = mesh.triangles.len();
     if n <= budget {
-        return (mesh.clone(), (0..n).collect());
+        let identity = (0..u32::try_from(mesh.positions.len()).unwrap_or(u32::MAX)).collect();
+        return (mesh.clone(), (0..n).collect(), identity);
     }
     // a first cell from the surface area: about two triangles per cell face
     let area: f64 = mesh
@@ -79,7 +86,7 @@ pub fn thinned(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>) {
                 triangles,
                 ..TriMesh::default()
             };
-            return (out, kept);
+            return (out, kept, snap);
         }
         cell *= 1.4;
     }
@@ -89,20 +96,103 @@ pub fn thinned(mesh: &TriMesh, budget: usize) -> (TriMesh, Vec<usize>) {
 /// per-triangle list kept to match.
 #[must_use]
 pub fn thin_built(mut b: Built, budget: usize) -> Built {
-    let (mesh, kept) = thinned(&b.export.mesh, budget);
+    let (mesh, kept, snap) = thinned_snap(&b.export.mesh, budget);
     if kept.len() == b.export.mesh.triangles.len() {
         return b;
     }
-    fn pick<T: Copy>(v: &[T], kept: &[usize]) -> Vec<T> {
-        kept.iter().map(|&f| v[f]).collect()
+    let old = &b.export.mesh;
+    // Every original triangle votes, by its area, for the kept triangle that
+    // stands where it was (a kept triangle at its first vertex's cluster, the
+    // one it faces most alike).  A kept triangle takes the material, owner
+    // and overhang flag most of the area under it had, so a sliver of
+    // geometry never makes a face of its own: nothing is flagged or coloured
+    // that the low build did not have there.
+    let at = |m: &TriMesh, t: &[u32; 3]| {
+        let [p, q, r] = t.map(|i| m.positions[i as usize]);
+        let (u, v) = (
+            [q[0] - p[0], q[1] - p[1], q[2] - p[2]],
+            [r[0] - p[0], r[1] - p[1], r[2] - p[2]],
+        );
+        [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ]
+    };
+    let mut touching: std::collections::HashMap<u32, Vec<usize>> = std::collections::HashMap::new();
+    for (k, t) in mesh.triangles.iter().enumerate() {
+        for v in t {
+            touching.entry(*v).or_default().push(k);
+        }
     }
-    b.export.source = pick(&b.export.source, &kept);
+    let nk = kept.len();
+    let mut over = vec![0.0f64; nk];
+    let mut band = vec![0.0f64; nk];
+    let mut total = vec![0.0f64; nk];
+    // area by (material, entry, piece) per kept triangle
+    type Key = (dt_kit::Material, u16, u16);
+    let mut owners: Vec<Vec<(Key, f64)>> = vec![Vec::new(); nk];
+    for (f, t) in old.triangles.iter().enumerate() {
+        let cross = at(old, t);
+        let area = 0.5 * (cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]).sqrt();
+        let Some(cands) = touching.get(&snap[t[0] as usize]) else {
+            continue;
+        };
+        let best = cands
+            .iter()
+            .copied()
+            .max_by(|&x, &y| {
+                let align = |k: usize| {
+                    let c = at(&mesh, &mesh.triangles[k]);
+                    c[0] * cross[0] + c[1] * cross[1] + c[2] * cross[2]
+                };
+                align(x).total_cmp(&align(y))
+            })
+            .unwrap_or(cands[0]);
+        total[best] += area;
+        if b.audit.overhang[f] {
+            over[best] += area;
+        } else if b.audit.band[f] {
+            band[best] += area;
+        }
+        let key = (b.materials[f], b.entries[f], b.pieces[f]);
+        match owners[best].iter_mut().find(|(k, _)| *k == key) {
+            Some((_, a)) => *a += area,
+            None => owners[best].push((key, area)),
+        }
+    }
+    let mut materials = Vec::with_capacity(nk);
+    let mut entries = Vec::with_capacity(nk);
+    let mut pieces = Vec::with_capacity(nk);
+    for (k, &f) in kept.iter().enumerate() {
+        // a kept triangle nothing voted for keeps its own
+        let own = (b.materials[f], b.entries[f], b.pieces[f]);
+        let (m, e, p) = owners[k]
+            .iter()
+            .max_by(|x, y| x.1.total_cmp(&y.1))
+            .map_or(own, |o| o.0);
+        materials.push(m);
+        entries.push(e);
+        pieces.push(p);
+    }
+    let flagged = |w: &[f64]| -> Vec<bool> {
+        (0..nk)
+            .map(|k| total[k] > 0.0 && w[k] > 0.5 * total[k])
+            .collect()
+    };
+    let overhang = flagged(&over);
+    let band: Vec<bool> = flagged(&band)
+        .into_iter()
+        .zip(&overhang)
+        .map(|(b, o)| b && !o)
+        .collect();
+    b.export.source = kept.iter().map(|&f| b.export.source[f]).collect();
     b.export.mesh = mesh;
-    b.materials = pick(&b.materials, &kept);
-    b.audit.overhang = pick(&b.audit.overhang, &kept);
-    b.audit.band = pick(&b.audit.band, &kept);
-    b.entries = pick(&b.entries, &kept);
-    b.pieces = pick(&b.pieces, &kept);
+    b.materials = materials;
+    b.audit.overhang = overhang;
+    b.audit.band = band;
+    b.entries = entries;
+    b.pieces = pieces;
     b.audit.triangles = b.export.mesh.triangles.len();
     b.audit.vertices = b.export.mesh.positions.len();
     b

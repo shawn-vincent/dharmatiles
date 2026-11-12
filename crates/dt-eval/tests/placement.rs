@@ -40,10 +40,28 @@ fn a_low_build_places_everything_where_the_full_build_does() {
     for path in PLACING {
         let full = made(path, |_| {});
         let low = made(path, |o| o.low = true);
+        let of = |b: &Built, grass: bool| -> Vec<dt_kit::Placement> {
+            b.placed
+                .iter()
+                .copied()
+                .filter(|p| (p.kind == dt_kit::Kind::Grass) == grass)
+                .collect()
+        };
+        // rocks, trees, flowers: to the last bit
         assert_eq!(
-            full.placed, low.placed,
+            of(&full, false),
+            of(&low, false),
             "{path}: the low build moved something"
         );
+        // a grass clearing is placed round the footprints of the rocks and
+        // trunks as drawn, and a low rock is its hull: the same clearings, a
+        // little apart
+        let (a, b) = (of(&full, true), of(&low, true));
+        assert_eq!(a.len(), b.len(), "{path}: clearings");
+        for (p, q) in a.iter().zip(&b) {
+            let d = (p.at[0] - q.at[0]).hypot(p.at[1] - q.at[1]);
+            assert!(d < 3.0, "{path}: a clearing moved {d:.2} mm");
+        }
         anything += full.placed.len();
     }
     assert!(anything > 20, "only {anything} placements in the sweep");
