@@ -53,6 +53,8 @@
   --ref: #5B4BB5; --on-ref: #FFFFFF;
   /* the control points a selected line or region refers to, marked and labelled in the editor (never overhang's colours) */
   --point: #9A2F73; --on-point: #FFFFFF;
+  /* a selected cloud (a top= or a pin) drawn on the model: its own colour, so a rock's cloud is not the teal of the rock's selection outline (never overhang's colours) */
+  --cloud: #3A56E0;
   --moss: #4F844F; --water: #337F8A; --stone: #64706A; --earth: #987563; --bloom: #895E82;
   --ok: #397A55; --err: #B83B2E;
   --code-bg: #E6EAE1;
@@ -68,6 +70,7 @@
   --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
   --ref: #A99BFF; --on-ref: #0B0820;
   --point: #F2A1D8; --on-point: #2A0A1F;
+  --cloud: #93A8FF;
   --moss: #72B07C; --water: #83A8FF; --stone: #B9C9CD; --earth: #C08A73; --bloom: #C895E5;
   --ok: #50B780; --err: #F06A5C; --over: #EE5444;
   --sky-top: #06182E; --sky-mid: #0E3A59; --sky-horizon: #2A6374;
@@ -84,6 +87,7 @@
   --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
   --ref: #A99BFF; --on-ref: #0B0820;
   --point: #F2A1D8; --on-point: #2A0A1F;
+  --cloud: #93A8FF;
   --moss: #72B07C; --water: #83A8FF; --stone: #B9C9CD; --earth: #C08A73; --bloom: #C895E5;
   --ok: #50B780; --err: #F06A5C; --over: #EE5444;
   --sky-top: #06182E; --sky-mid: #0E3A59; --sky-horizon: #2A6374;

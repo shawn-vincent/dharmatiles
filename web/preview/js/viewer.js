@@ -8,6 +8,7 @@ import { OrbitControls } from '/vendor/OrbitControls.js';
 import { ownerVertices, worstFlagged } from './payload.js';
 import { classInfo, segments } from './debug-layer.js';
 import { cloudOf, columnGeometry, shadeAlpha, SHADE_COLUMN, SHADE_SHEET, sheetGeometry } from './cloud.js';
+import { FAT_FRAG, FAT_VERT, fatGeometry } from './fatline.js';
 
 THREE.ColorManagement.enabled = false; // colours are already display values
 
@@ -181,6 +182,9 @@ void main() { float r = length(gl_PointCoord - 0.5); if (r > 0.5) discard; gl_Fr
 const CONTOUR_ALPHA = 0.95;
 // a hovered cloud is drawn at this share of a selected one's strength
 const CLOUD_HOVER = 0.4;
+// how wide a cloud's span (low to high at a point) and a sheet's contour are
+// drawn, CSS pixels: thick enough to read beside the selection's outline
+const CLOUD_SPAN_PX = 3.5, CLOUD_CONTOUR_PX = 2;
 // a cloud at a point: a marker at the height the roll gave, a fixed size on screen
 
 // The hover: with nothing selected the rest dims a little round what is
@@ -273,6 +277,9 @@ export class Viewer {
     this.cloudSel = null; // the stack entry whose cloud is selected (setCloud), and the one hovered
     this.cloudHov = null;
     this.cloudGroup = null;
+    this.fatRes = { value: new THREE.Vector2(1, 1) }; // the canvas in device pixels, for lines drawn a width on screen
+    this.fatDpr = 1;
+    this.fatMaterials = new Set();
     this.debugColour = () => '#808080'; // the page gives the theme's tokens (setDebugColours)
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
@@ -288,6 +295,9 @@ export class Viewer {
     this.maskTarget.setSize(bw, bh);
     this.outlineUniforms.uPx.value.set(1 / bw, 1 / bh);
     this.outlineUniforms.uWidth.value = OUTLINE_PX * dpr;
+    this.fatRes.value.set(bw, bh);
+    this.fatDpr = dpr;
+    for (const m of this.fatMaterials) m.uniforms.uWidth.value = m.userData.px * dpr;
     this.persp.aspect = w / h;
     this.persp.updateProjectionMatrix();
     this.fitOrtho();
@@ -652,17 +662,41 @@ export class Viewer {
     this.draw();
   }
 
+  /** Segments drawn `px` CSS pixels wide (see fatline.js): `pos` six numbers a segment, `rgba` four a vertex (two a segment). */
+  fatLines(pos, rgba, px) {
+    const f = fatGeometry(pos, rgba);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(f.position, 3));
+    g.setAttribute('other', new THREE.BufferAttribute(f.other, 3));
+    g.setAttribute('side', new THREE.BufferAttribute(f.side, 1));
+    g.setAttribute('color', new THREE.BufferAttribute(f.color, 4));
+    g.setIndex(new THREE.BufferAttribute(f.index, 1));
+    const m = new THREE.ShaderMaterial({
+      uniforms: { uRes: this.fatRes, uWidth: { value: px * this.fatDpr } },
+      vertexShader: FAT_VERT, fragmentShader: FAT_FRAG,
+      transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+    });
+    m.userData.px = px;
+    this.fatMaterials.add(m);
+    return new THREE.Mesh(g, m);
+  }
+
   buildCloud() {
     if (this.cloudGroup) {
       this.scene.remove(this.cloudGroup);
-      this.cloudGroup.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+      this.cloudGroup.traverse((o) => {
+        o.geometry?.dispose();
+        o.material?.dispose();
+        this.fatMaterials.delete(o.material);
+      });
       this.cloudGroup = null;
     }
     const d = this.clouds;
     const wanted = [[this.cloudSel, 1], [this.cloudHov !== this.cloudSel ? this.cloudHov : null, CLOUD_HOVER]].filter(([e]) => e != null);
     if (!d || !wanted.length) return;
     const group = new THREE.Group();
-    const c = new THREE.Color().setStyle(this.debugColour('--accent')); // a bad token is a bug: let it throw
+    // the cloud's own colour, not the selection's accent: a rock's cloud sits on the rock's outline
+    const c = new THREE.Color().setStyle(this.debugColour('--cloud')); // a bad token is a bug: let it throw
     const plate = new THREE.Color(this.debugColour('--plate'));
     const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
     // drawn over the solids, as a selected place is: the low sheet is
@@ -679,18 +713,15 @@ export class Viewer {
         shade.forEach((v, n) => rgba.set([c.r, c.g, c.b, strength * shadeAlpha(v, SHADE_SHEET)], 4 * n));
         fill.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
         over(new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, ...flat })), 30);
-        const edge = new THREE.BufferGeometry();
-        edge.setAttribute('position', new THREE.BufferAttribute(contour, 3));
-        over(new THREE.LineSegments(edge, new THREE.LineBasicMaterial({ color: c, opacity: strength * CONTOUR_ALPHA, ...flat })), 31);
+        const rgbaEdge = new Float32Array((contour.length / 3) * 4);
+        for (let n = 0; n < rgbaEdge.length; n += 4) rgbaEdge.set([c.r, c.g, c.b, strength * CONTOUR_ALPHA], n);
+        over(this.fatLines(contour, rgbaEdge, CLOUD_CONTOUR_PX), 31);
       }
       for (const col of columns) {
         const g = columnGeometry(col.v);
-        const line = new THREE.BufferGeometry();
-        line.setAttribute('position', new THREE.BufferAttribute(g.lines, 3));
         const rgba = new Float32Array(g.lineShade.length * 4);
         g.lineShade.forEach((v, n) => rgba.set([c.r, c.g, c.b, strength * shadeAlpha(v, SHADE_COLUMN)], 4 * n));
-        line.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
-        over(new THREE.LineSegments(line, new THREE.LineBasicMaterial({ vertexColors: true, ...flat })), 32);
+        over(this.fatLines(g.lines, rgba, CLOUD_SPAN_PX), 32);
         for (let n = 0; n < g.n; n++) {
           mpos.push(g.marks[3 * n], g.marks[3 * n + 1], g.marks[3 * n + 2]);
           // the marker toward the plate where its height is rare, and when only hovered
