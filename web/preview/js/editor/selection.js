@@ -161,8 +161,9 @@ function paintCloud() {
 function selectWritten() {
   const d = doc.get();
   if (d.selectAt == null || !d.ok) return;
+  const at = d.selectAt; // the store hands out its own state: read it before it is cleared
   doc.set({ selectAt: null });
-  const it = stackItems().find((x) => x.key && x.span && x.span[0] === d.selectAt && x.file === d.file);
+  const it = stackItems().find((x) => x.key && x.span && x.span[0] === at && x.file === d.file);
   if (it) setSel(entrySel(it.key), { from: 'view' });
 }
 

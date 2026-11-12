@@ -377,10 +377,10 @@ function onKey(e) {
 /** The row under the keyboard lights its thing in the view (hover), as the pointer does. */
 function rowFocus(e) {
   const row = e.target.closest?.('.orow');
-  if (!row) return;
+  if (!row || row.dataset.kind === 'add') return;
   view.set({ hov: row.dataset.kind === 'entry' ? entrySel(row.dataset.id) : markSel(row.dataset.kind, row.dataset.id) });
 }
-function rowBlur(e) { if (e.target.closest?.('.orow') && !e.relatedTarget?.closest?.('.orow')) view.set({ hov: null }); }
+function rowBlur(e) { if (e.target.closest?.('.orow') && e.target.closest('.orow').dataset.kind !== 'add' && !e.relatedTarget?.closest?.('.orow')) view.set({ hov: null }); }
 
 // ---- wiring --------------------------------------------------------------------------
 

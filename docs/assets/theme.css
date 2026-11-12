@@ -132,6 +132,9 @@
 }
 .btn:hover { border-color: var(--line-2); background: color-mix(in srgb, var(--raised) 80%, var(--ink) 4%); }
 .btn[aria-pressed="true"], .btn.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+.btn:disabled { opacity: .5; cursor: default; }
 .btn.icon { padding: 6px; width: 30px; height: 30px; justify-content: center; font-size: 15px; }
 /* copy: one control for copying a value, anywhere.  A copy icon that turns into a check mark once copied
    (web/preview/js/copy.js); with a label it is a normal button whose words read "Copied". */

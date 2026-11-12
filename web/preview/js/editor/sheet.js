@@ -3,31 +3,22 @@
 
 import { Lens, kdlString } from '../lens.js';
 import { buildOutline } from '../outline.js';
+import {
+  addFrom, canMine, editable, moveEntry, muteAt, stepEntry, openRowMenu, removeAt, renameMark, rowAction, setControl, takeFocusIndex, tileEdit,
+} from './rows.js';
 import { orderStack } from '../nav.js';
 import { showProperty } from '../property.js';
-import { byteToIndex } from '../text.js';
 import { failed, showError } from '../problems.js';
-import { $, host, makeMine, toast } from './app.js';
-import { askDraft, edited, replaceBytes, spansUsable, undo } from './document.js';
+import { $, host, makeMine } from './app.js';
+import { edited, replaceBytes, spansUsable } from './document.js';
 import { doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
 import { closeControl, openControl, showSourceAt } from './levels.js';
 import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 
-/** A library tile's own text is shown: its first change copies it into My tiles (tiles.js). */
-const canMine = () => { const t = tile(), d = doc.get(); return !d.writable && !!t?.path.startsWith('lib:') && d.file === t.path; };
 
 // ---- the lens ---------------------------------------------------------------
-
-/** A control written on the node at byte `at`, or taken out (`value` null). */
-async function setControl(at, name, value) {
-  if (!doc.get().writable) return makeMine({ run: () => setControl(at, name, value) });
-  if (!spansUsable()) return;
-  const r = await host.edit({ text: doc.get().text, at, name, value });
-  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed(`Could not change ${name}`, r); return; }
-  edited(r.body.text, 'lens', `Changed ${name}`);
-}
 
 const sheetApi = {
   writable: () => doc.get().writable,
@@ -66,25 +57,26 @@ tileLens.emptyTitle = 'No tile'; tileLens.emptyText = 'Choose a tile to see what
 const tileRows = (names) => ({ controls: names.map((n) => nodeControl('tile', n)).filter(Boolean) });
 // a written property as the lens reads it: `name=value` and its span
 const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] });
-/** A whole-node change to the tile's text (insert or remove), as one step of history. */
-async function tileEdit(body, label) {
-  if (!doc.get().writable) return makeMine({ run: () => tileEdit(body, label) });
-  if (!spansUsable()) return;
-  const r = await host.edit({ text: doc.get().text, ...body });
-  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed(`Could not make the change: ${label}`, r); return; }
-  edited(r.body.text, 'lens', label);
-  return true;
-}
 /** The tile level's rows: what the tile holds (lines, regions, the stack in build order) and the messages each stack row wears. */
 function tileContents() {
   const t = tile(), map = doc.get().map;
   const stack = orderStack(stackItems()).map((it) => ({ ...it, family: elementNamed(it.what)?.family }));
   const hover = (w) => view.set({ hov: w && w.kind === 'entry' ? entrySel(w.id) : null });
   return buildOutline(
-    { lines: map?.lines, regions: map?.regions, stack, badges: t ? log.byNode(t.id) : new Map() },
+    {
+      lines: map?.lines, regions: map?.regions, stack, badges: t ? log.byNode(t.id) : new Map(),
+      cols: map?.cols ?? t?.plan?.cols ?? 1, rows: map?.rows ?? t?.plan?.rows ?? 1,
+      // rows can be changed when the document is the tile's own and has been checked (an unchecked one has no spans to address)
+      editable: editable() && !!map && doc.get().tileId === view.get().tileId,
+    },
     {
       open: (kind, id) => setSel(kind === 'entry' ? entrySel(id) : markSel(kind, id), { from: 'view' }),
       hover,
+      menu: openRowMenu,
+      act: rowAction,
+      add: addFrom,
+      move: moveEntry,
+      step: stepEntry,
     },
   );
 }
@@ -112,14 +104,6 @@ function tileModel() {
 }
 /** A run of written text (a line's points, a region's lines) as a lens setting. */
 const runWritten = (name, run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
-/** Rename the selected line or region, and keep it selected under its new name. */
-async function renameMark(kind, old, name) {
-  const next = String(name ?? '').trim();
-  if (!next || next === old) return;
-  if (await tileEdit({ op: 'rename', mark: kind, old, new: next }, `Renamed ${kind} ${old} to ${next}`)) {
-    view.set({ sel: markSel(kind, next) });
-  }
-}
 /** Change one clause of a region (a `within`'s distance or place, an `except`'s regions), through the server's edit route like the other controls. */
 async function setClause(clause, name, value) {
   if (!doc.get().writable) return makeMine({ run: () => setClause(clause, name, value) });
@@ -231,11 +215,18 @@ function entryModel(s) {
 /** The tile level: its controls, and under them what it holds. */
 function renderTile() {
   const t = tileModel();
-  // a row the arrow keys are on keeps the focus when the rows are drawn again (a message came, a value changed)
+  // a row the arrow keys are on keeps the focus when the rows are drawn again (a message came, a value changed);
+  // after a move the keyboard follows the row to where it went (its key may have changed with its place)
   const was = document.activeElement?.closest?.('#lens-tile .orow');
   const wasAt = was ? { kind: was.dataset.kind, id: was.dataset.id } : null;
+  const moved = takeFocusIndex();
   if (t) tileLens.show(t); else tileLens.hide();
-  if (wasAt) [...$('lens-tile').querySelectorAll('.orow')].find((r) => r.dataset.kind === wasAt.kind && r.dataset.id === wasAt.id)?.focus({ preventScroll: true });
+  const rowsNow = [...$('lens-tile').querySelectorAll('.orow')];
+  if (moved != null) {
+    const r = rowsNow.find((x) => x.dataset.kind === 'entry' && Number(x.dataset.index) === moved);
+    if (r) { r.focus({ preventScroll: false }); return; }
+  }
+  if (wasAt) rowsNow.find((r) => r.dataset.kind === wasAt.kind && r.dataset.id === wasAt.id)?.focus({ preventScroll: true });
 }
 
 /** Draw the three levels: the tile's (always), the selected thing's, and the open control's. */
@@ -276,28 +267,6 @@ function renderProperty(model) {
   const body = root.querySelector('.body');
   if (body) body.scrollTop = kept;
   if (held) { page.input.focus({ preventScroll: true }); page.input.setSelectionRange(page.input.value.length, page.input.value.length); }
-}
-
-/** Comment a stack entry out (`/-`), with a way back. */
-function muteAt(byte, label = 'Entry') {
-  if (!doc.get().writable) return makeMine({ run: () => muteAt(byte, label) });
-  if (!spansUsable()) return;
-  const t = doc.get().text, i = byteToIndex(t, byte);
-  if (isEntry(view.get().sel)) view.set({ sel: null });
-  edited(`${t.slice(0, i)}/- ${t.slice(i)}`, 'view', `Hid ${label}`);
-  askDraft();
-  toast(`${label} hidden`, () => undo(-1));
-}
-/** Take a stack entry out of the text, with a way back. */
-async function removeAt(byte, label = 'Entry') {
-  if (!doc.get().writable) return makeMine({ run: () => removeAt(byte, label) });
-  if (!spansUsable()) return;
-  const r = await host.edit({ op: 'remove', text: doc.get().text, at: byte });
-  if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be taken out' }); failed(`Could not delete ${label}`, r); return; }
-  view.set({ sel: null });
-  edited(r.body.text, 'view', `Deleted ${label}`);
-  askDraft();
-  toast(`${label} removed`, () => undo(-1));
 }
 
 /** Wire this part of the page (once, at load). */

@@ -477,14 +477,31 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 #view.msgs-open #toast { bottom: calc(min(340px, 56%) + 90px); }
 
 /* ---- the tile level: what the tile holds, as rows ---- */
-.outline { margin: 6px -12px 0; }
+.outline { margin: 6px -12px 0; position: relative; }
 .outline .olab { display: flex; justify-content: space-between; align-items: baseline; margin: 12px 12px 4px; font: 600 10.5px/1 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .outline .olab small { font: 400 11px var(--f-body); letter-spacing: 0; text-transform: none; }
 .outline .oempty { margin: 6px 12px; color: var(--muted); font-size: 12.5px; }
+.orwrap { position: relative; background: var(--panel); }
 .orow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 4px 10px 4px 12px; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; color: var(--ink); cursor: pointer; font: inherit; position: relative; }
-.orow:last-child { border-bottom: 1px solid var(--line); }
+.orwrap:last-child > .orow, .orwrap:has(+ .olab) > .orow { border-bottom: 1px solid var(--line); }
 .orow:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .orow:focus-visible { outline: none; background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+/* a row's ⋯ sits left of its chevron, over the row (a button cannot hold a button) */
+.orwrap:has(.omore) > .orow .chev { margin-left: 24px; }
+.omore { position: absolute; right: 30px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; display: grid; place-items: center; padding: 0 0 3px; border: 0; border-radius: 6px; background: none; color: var(--muted); font: 700 17px/1 var(--f-body); letter-spacing: -.04em; cursor: pointer; opacity: .55; }
+.orwrap:hover .omore, .omore:focus-visible, .omore[aria-expanded="true"], .orwrap:focus-within .omore { opacity: 1; }
+.omore:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink); }
+.omore:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.orow.oadd { color: var(--accent); min-height: 40px; }
+.orow.oadd .nm { color: var(--accent); }
+.orow.oadd .plus { flex: none; width: 14px; text-align: center; font: 500 19px/1 var(--f-body); }
+.orow.oadd[aria-busy="true"] { opacity: .6; cursor: progress; }
+/* a stack row is lifted by the pointer and a line shows where it will stand */
+.outline.dragging, .outline.dragging .orow { cursor: grabbing; user-select: none; }
+.orwrap.lift { z-index: 3; background: var(--raised); box-shadow: var(--shadow); border-radius: 6px; pointer-events: none; }
+.orwrap.lift > .orow { border-color: transparent; }
+.odrop { position: absolute; left: 10px; right: 10px; height: 3px; margin-top: -1.5px; background: var(--accent); border-radius: 2px; pointer-events: none; z-index: 4; }
+.odrop::before { content: ""; position: absolute; left: -3px; top: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .orow .tx { min-width: 0; flex: 1; display: grid; gap: 1px; }
 .orow .nm { font-size: 13.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orow .sub { color: var(--muted); font: 400 11px var(--f-code); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -499,6 +516,40 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 .orow .badge { flex: none; min-width: 9px; height: 9px; border-radius: 99px; background: var(--caution); box-shadow: 0 0 0 2px var(--panel); color: #1A1714; font: 700 10px/9px var(--f-body); text-align: center; }
 .orow .badge.error { background: var(--err); color: #fff; }
 .orow .badge:not(:empty) { min-width: 16px; height: 16px; line-height: 16px; padding: 0 4px; }
+
+/* the Shape rows' pictures: a region's mask as the build paints it, a line's points, on the plate */
+.thumb { position: relative; flex: none; display: block; border: 1px solid color-mix(in srgb, var(--plate-ink) 30%, var(--plate)); border-radius: 4px; background: var(--plate); overflow: hidden; }
+.thumb.region i { position: absolute; inset: 0; background: color-mix(in srgb, var(--moss) 62%, var(--plate-ink)); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+.thumb.region.empty { border-style: dashed; }
+.thumb.line svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.thumb.line polyline { fill: none; stroke: color-mix(in srgb, var(--water) 55%, var(--plate-ink)); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* the row menu, the Add list and the name field: popups over the page */
+.rmenu { position: fixed; z-index: 60; min-width: 220px; max-width: min(340px, calc(100vw - 16px)); overflow-y: auto; background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 6px; }
+.rmenu.addmenu { width: 340px; }
+.rmenu .rhead { padding: 8px 8px 4px; font: 600 10.5px/1 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.rmenu .rsep { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+.ritem { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ritem:hover, .ritem:focus-visible { background: color-mix(in srgb, var(--accent) 13%, transparent); outline: none; }
+.ritem:focus-visible { box-shadow: inset 3px 0 0 var(--accent); }
+.ritem .gl { flex: none; width: 13px; height: 13px; border-radius: 3.5px; background: var(--fam, var(--line-2)); }
+.ritem .tx { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.ritem .nm { font-size: 13.5px; font-weight: 550; }
+.ritem .sub { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.ritem kbd { flex: none; margin-left: auto; color: var(--muted); font: 500 11px var(--f-code); }
+.ritem.danger .nm { color: var(--err); }
+.ritem.off { cursor: default; }
+.ritem.off .nm, .ritem.off .gl { opacity: .55; }
+.ritem.off:hover { background: none; }
+.ritem.off:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.ritem .sub.why { font-style: italic; }
+.addmenu .ritem .sub:not(.why) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.addmenu .ritem .sub.why { white-space: normal; }
+.rpop { width: 290px; padding: 12px; }
+.rlab { display: block; margin-bottom: 6px; font: 600 12.5px/1.2 var(--f-body); }
+.rerr { min-height: 18px; margin-top: 4px; color: var(--err); font-size: 12.5px; }
+.rnote { margin: 2px 0 10px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.rbtns { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---- the control level ---- */
 #lens-prop .body { display: grid; gap: 8px; align-content: start; }
