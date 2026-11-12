@@ -175,7 +175,13 @@ function renderCrumbs() {
   $('crumbs-deep').replaceChildren(...nodes);
   // where you are is the end of the path: it stays in view when the path is longer than the bar
   pinEnd($('crumb-scroll'));
+  // the first half of the switch is named for what the document is: a tile's levels, a map's plates and scene
+  const what = isPlates(t) ? 'Map' : 'Tile';
   for (const b of $('face').children) {
+    if (b.dataset.face === 'tile') {
+      b.textContent = what;
+      b.title = isPlates(t) ? 'The map, with its plates and scene (⌘3)' : 'The tile, level by level (⌘3)';
+    } else b.title = isPlates(t) ? 'The source of the map (⌘1)' : isInventory(t) ? 'The source of the inventory (⌘1)' : 'The source of the tile (⌘1)';
     const on = b.dataset.face === face;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', on);
