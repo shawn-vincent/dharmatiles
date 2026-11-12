@@ -56,6 +56,7 @@ export const sceneMethods = {
     if (this.mesh) this.mesh.visible = !this.sceneOn && !this.stale;
     if (!this.sceneOn) this.applyFade();
     this.buildGrid();
+    this.placeGround();
     this.draw();
   },
 
@@ -105,6 +106,73 @@ export const sceneMethods = {
   /** Paint or overhang was switched: every geometry follows. */
   refreshScenePaint() {
     for (const e of this.sceneGeoms.values()) e.geometry.setAttribute('paint', this.scenePaint(e));
+  },
+
+  /**
+   * Choose the backdrop (`wilderness`, `cavern`, `table`, `plain`): it is the place the tiles stand in, for the map
+   * and for a tile alike; the plates keep the printer's bed (the page asks for `plain` there).
+   */
+  setBackdropKind(kind) {
+    this.backdrop.setKind(kind);
+    this.backdrop.setGrid(this.showGrid);
+    if (this.grid) this.grid.visible = this.showGrid && !this.backdrop.on();
+    this.placeGround();
+    this.draw();
+  },
+
+  /** Daylight or dusk: the dark theme's backdrop is evening. */
+  setBackdropNight(n) { this.backdrop.setNight(n); this.draw(); },
+
+  /**
+   * The ground under what is shown: at the lowest underside (a tile's base hangs below zero), with a soft shadow
+   * round each footprint.  The map's pieces, or the tile (or the plate's bed, where there is no backdrop).
+   */
+  placeGround() {
+    if (!this.backdrop.on()) return;
+    let z = 0, box = null, sq = 35;
+    const rects = [];
+    if (this.sceneOn) {
+      z = Infinity;
+      for (const [i, p] of this.scenePieces) {
+        const e = p.gid ? this.sceneGeoms.get(p.gid) : null;
+        const lo = e?.meta?.tile_lo?.[2] ?? -7;
+        const m = p.render.matrix.elements;
+        z = Math.min(z, m[14] + (p.gid?.startsWith('box') ? 0 : lo));
+        void i;
+      }
+      if (!Number.isFinite(z)) z = -7;
+      box = this.sceneBox;
+      sq = this.sceneGridSpec?.sq ?? 35;
+      for (const p of this.scenePieces.values()) {
+        if (!p.render.visible) continue;
+        const g = p.render.geometry;
+        if (!g.boundingBox) g.computeBoundingBox();
+        const b = g.boundingBox;
+        const mat = p.render.matrix;
+        // the footprint of the tile's box as the matrix puts it: its four floor corners
+        const xs = [], ys = [];
+        for (const [x, y] of [[b.min.x, b.min.y], [b.max.x, b.min.y], [b.max.x, b.max.y], [b.min.x, b.max.y]]) {
+          const e = mat.elements;
+          xs.push(e[0] * x + e[4] * y + e[12]); ys.push(e[1] * x + e[5] * y + e[13]);
+        }
+        rects.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+      }
+    } else if (this.payload) {
+      const { lo, hi } = this.payload.meta;
+      z = lo[2];
+      box = { lo, hi };
+      sq = this.plan?.square_mm ?? 35;
+      const [w, h] = this.plan?.size_mm ?? [hi[0] - lo[0], hi[1] - lo[1]];
+      rects.push([0, 0, w, h]);
+    } else if (this.plan?.size_mm) {
+      const [w, h] = this.plan.size_mm;
+      box = { lo: [0, 0, 0], hi: [w, h, 1] };
+      sq = this.plan.square_mm ?? 35;
+      z = -7;
+    }
+    if (!box) return;
+    this.backdrop.setGround(box, sq, z - 0.05);
+    this.backdrop.setRects(rects);
   },
 
   /** The geometry ids kept, with their triangles. */

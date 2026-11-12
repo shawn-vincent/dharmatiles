@@ -231,7 +231,7 @@ export const layersMethods = {
     this.grid.position.set(sg ? sg.cx : w / 2, sg ? sg.cy : h / 2, z);
     this.grid.renderOrder = 1;
     this.grid.frustumCulled = false;
-    this.grid.visible = this.showGrid;
+    this.grid.visible = this.showGrid && !this.backdrop?.on();
     this.scene.add(this.grid);
     this.buildBed();
   },

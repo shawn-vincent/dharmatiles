@@ -8,6 +8,7 @@ import { cameraMethods } from './viewer/camera.js';
 import { fadeMethods } from './viewer/fade.js';
 import { layersMethods } from './viewer/layers.js';
 import { sceneMethods } from './viewer/scene.js';
+import { Backdrop } from './viewer/backdrop.js';
 
 export { VIEWS } from './viewer/consts.js';
 
@@ -101,6 +102,7 @@ export class Viewer {
     this.fatMaterials = new Set();
     this.debugColour = () => '#808080'; // the page gives the theme's tokens (setDebugColours)
     this.initScene();
+    this.backdrop = new Backdrop();
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
   }
@@ -160,6 +162,7 @@ export class Viewer {
     this.buildDebug();
     this.buildCloud();
     this.buildGrid();
+    this.placeGround();
     this.draw();
   }
 
@@ -197,7 +200,7 @@ export class Viewer {
 
   setWireframe(on) { this.material.wireframe = on; this.draw(); }
 
-  setGrid(on) { this.showGrid = on; if (this.grid) this.grid.visible = on; this.draw(); }
+  setGrid(on) { this.showGrid = on; if (this.grid) this.grid.visible = on && !this.backdrop.on(); this.backdrop.setGrid(on); this.draw(); }
 
   /**
    * What is under canvas point (x, y) in CSS pixels: {entry, piece}, or

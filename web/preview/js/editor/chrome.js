@@ -5,11 +5,12 @@
 import { Layout } from '../layout.js';
 import { rememberView, shortcutViews } from '../view-presets.js';
 import { VIEWS } from '../viewer.js';
+import { KINDS as BACKDROPS } from '../viewer/backdrop.js';
 import { legendRows } from '../debug-layer.js';
 import { $, host, pickView, viewer } from './app.js';
 import { copyButton, versionParts } from '../copy.js';
 import { goUp, setFace } from './levels.js';
-import { server, tile, view } from './stores.js';
+import { isInventory, isPlatesView, server, tile, view } from './stores.js';
 
 // ---- the view's controls: views and the display menu -------------------
 
@@ -143,6 +144,26 @@ function applyTheme() {
   viewer.setAccent(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
   viewer.setGridColor(getComputedStyle(document.documentElement).getPropertyValue('--grid-ink').trim());
   viewer.setGridDim(Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--grid')) || 1);
+  viewer.setBackdropNight(isDark ? 1 : 0); // the dark theme's backdrop is evening
+}
+
+// the backdrop: the place the tiles stand in.  A per-user choice, remembered in the browser (never in a document: it
+// cannot change what prints), used for the map and for the tile editor alike; the plates keep the printer's bed.
+let backdrop = 'wilderness';
+function applyBackdrop() {
+  const kind = isPlatesView() || isInventory(tile()) ? 'plain' : backdrop;
+  viewer.setBackdropKind(kind);
+  for (const b of $('backdrops').children) {
+    const on = b.dataset.kind === backdrop;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+  }
+  $('backdrops').title = isPlatesView() ? 'The plates are always drawn on the printer’s bed' : '';
+}
+function chooseBackdrop(kind) {
+  backdrop = kind;
+  try { localStorage.setItem('dt-backdrop', kind); } catch { /* private mode: the choice lasts until the page is closed */ }
+  applyBackdrop();
 }
 function toggleTheme() {
   const isDark = document.documentElement.dataset.theme
@@ -205,6 +226,17 @@ export function init() {
     }
   } catch { /* private mode or an older malformed value */ }
   VIEWS.forEach(([name]) => $('allviews').append(viewButton(name)));
+  try {
+    const saved = localStorage.getItem('dt-backdrop');
+    if (BACKDROPS.some(([k]) => k === saved)) backdrop = saved;
+  } catch { /* private mode: the default stands */ }
+  for (const [kind, label, title] of BACKDROPS) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.kind = kind; b.textContent = label; b.title = title;
+    b.onclick = () => chooseBackdrop(kind);
+    $('backdrops').append(b);
+  }
+  view.subscribe(['dmode', 'tileId'], applyBackdrop);
   renderViewShortcuts();
   viewer.onUserViewChange = () => view.set({ activeView: null });
   view.subscribe(['pick'], ({ pick }) => applyPick(pick));
@@ -249,6 +281,7 @@ export function init() {
   $('theme').onclick = toggleTheme;
   dark.addEventListener('change', applyTheme);
   applyTheme();
+  applyBackdrop();
   $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
   try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* private mode: the default stands */ }
   $('panelbtn').onclick = () => layout.toggle();

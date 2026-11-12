@@ -140,7 +140,6 @@ function sync() {
   viewer.setSceneBox(box);
   const sq = ps.find((p) => p.sq)?.sq ?? 35;
   viewer.setSceneGrid({ sq, w: Math.max(box.hi[0] - box.lo[0], sq), h: Math.max(box.hi[1] - box.lo[1], sq), cx: (box.lo[0] + box.hi[0]) / 2, cy: (box.lo[1] + box.hi[1]) / 2, z: -7 });
-  viewer.backdrop?.setGround?.(box, sq);
   request(ps);
   evaluate(true);
 }
@@ -305,6 +304,7 @@ export function evaluate(now = false) {
     if (want[i] === 'low' && !have[i].has('low') && ps[i].gkey) ensure(ps[i], 'low');
   }
   viewer.setSceneHighlight(sel, hovered);
+  viewer.placeGround();
 }
 
 /** The camera moved: look again once it rests. */
