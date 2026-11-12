@@ -125,7 +125,12 @@ function entryAtLine(line, hover = false) {
 function markText() {
   const t = tile(), d = doc.get(), { sel, hov, tileId } = view.get();
   const live = d.checked === d.text && d.tileId === tileId;
-  const errs = (live ? d.errors : t?.errors || []).filter((e) => (!e.file || e.file === texts.file) && e.line)
+  // the mistakes the check of this text found, and (while the text is the one built) the build's own
+  // (dt::look and dt::build are found only by building, so the check never says them)
+  const found = [...(live ? d.errors : []), ...(!dirty() ? t?.errors || [] : [])];
+  const seen = new Set();
+  const errs = found.filter((e) => (!e.file || e.file === texts.file) && e.line)
+    .filter((e) => { const k = `${e.code}:${e.line}:${e.message}`; return !seen.has(k) && seen.add(k); })
     .map((e) => ({ line: e.line, message: `${e.message}${e.help ? `. ${e.help}` : ''}` }));
   texts.mark(sel?.kind === 'tile' ? null : linesOf(sel), linesOf(hov), errs);
 }
@@ -218,7 +223,7 @@ export function init() {
   view.subscribe(['sel', 'hov', 'shown', 'draft', 'tileId'], paintHighlight);
   view.subscribe(['sel', 'tileId'], () => $('tilebtn').classList.toggle('sel', view.get().sel?.kind === 'tile'));
   view.subscribe(['sel', 'hov', 'tileId'], markText);
-  doc.subscribe(['checked', 'errors', 'file', 'map', 'stack', 'tileId'], markText);
+  doc.subscribe(['checked', 'errors', 'file', 'map', 'stack', 'tileId', 'base'], markText);
   server.subscribe(['tiles'], markText);
   doc.subscribe(['stack', 'checked'], selectWritten);
   // a file just shown: scroll it to the selection's lines

@@ -66,7 +66,6 @@ export const view = createStore({
   shown: null,         // {id, epoch, version}: the build's mesh the view holds
   draft: null,         // {tileId, payload}: a draft shown in its place
   textFile: null,      // the file the text pane should show (null: the tile's own)
-  mineOpen: false,     // the make-it-mine question is up
   page: 'browse',      // the sidebar's page: the tile browser, or the editor ('edit')
   popover: null,       // the id of the open popover, if any
 });

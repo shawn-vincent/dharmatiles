@@ -20,6 +20,7 @@
 //   save(id, {text, base, file?})           write the text to its file
 //   rename(id, name)                        rename a tile's file: the new tile's {path, id}
 //   mine(id)                                copy a library tile to My tiles: {path, id}
+//   deleteTile(id)                          delete a tile's file from a folder the preview lists (Undo of that copy)
 //   newTile(name, size)                     a new tile in My tiles: {path, id}
 //   edit(body)                              a text edit (a control set, a node inserted or removed)
 //   setTarget({system?, printer?})          choose the build target (base system, printer profile) for every build
@@ -192,6 +193,7 @@ export function browserHost() {
     save: (id, body) => call(tile(id, 'save'), body),
     rename: (id, name) => call(tile(id, 'rename'), { name }),
     mine: (id) => call(tile(id, 'mine'), {}),
+    deleteTile: (id) => call(tile(id, 'delete'), {}),
     newTile: (name, size) => call('/api/new', { name, size }),
     edit: (body) => call('/api/edit', body),
     setTarget: (body) => call('/api/target', body),

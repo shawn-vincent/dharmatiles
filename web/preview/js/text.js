@@ -148,8 +148,8 @@ export class TextPane {
   /**
    * `code` is the element the editor fills.  Callbacks: onCaretLine(n) when
    * the caret moves to a line by a click or a key, onHoverLine(n|null),
-   * onCaret() after any move of the caret or edit of the text, onEdit(text, kind) after the user changes the text, onReadOnly() when
-   * they try to type into a file they cannot write, onKey(e) first, for
+   * onCaret() after any move of the caret or edit of the text, onEdit(text, kind) after the user changes the text, onReadOnly({from, to, insert}) when
+   * they try to type or paste into a file they cannot write (the change they meant: `insert` over the selection), onKey(e) first, for
    * completion (return true when it took the key), and onHistory(step).
    */
   constructor(code, cb) {
@@ -165,10 +165,10 @@ export class TextPane {
     const keyFirst = Prec.highest(EditorView.domEventHandlers({
       keydown(e) {
         if (cb.onKey?.(e)) { e.preventDefault(); e.stopPropagation(); return true; }
-        if (!pane.writable && e.key.length === 1 && !e.metaKey && !e.ctrlKey) { cb.onReadOnly?.(); return true; }
+        if (!pane.writable && e.key.length === 1 && !e.metaKey && !e.ctrlKey) { cb.onReadOnly?.(pane.typed(e.key)); return true; }
         return false;
       },
-      paste() { if (!pane.writable) { cb.onReadOnly?.(); return true; } return false; },
+      paste(e) { if (!pane.writable) { cb.onReadOnly?.(pane.typed(e.clipboardData?.getData('text/plain') ?? '')); return true; } return false; },
       mousemove(e, view) {
         const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }, false);
         const n = pos == null ? null : view.state.doc.lineAt(pos).number;
@@ -255,6 +255,12 @@ export class TextPane {
   }
 
   clear() { this.file = null; this.replace(''); }
+
+  /** The change typing (or pasting) `insert` would make over the selection: {from, to, insert}. */
+  typed(insert) {
+    const { from, to } = this.view.state.selection.main;
+    return { from, to, insert };
+  }
 
   /** Where the caret is, as an index into the text. */
   get selectionStart() { return this.view.state.selection.main.from; }

@@ -94,7 +94,7 @@ function renderDebugLegend(d) {
 
 // popovers: one open at a time (`view.popover`); Esc or a click outside closes it
 const popovers = [
-  ['dispbtn', 'display'], ['gate', 'record-card'], ['export', 'export-card'], ['target', 'target-card'],
+  ['dispbtn', 'display'], ['layoutbtn', 'layout-menu'], ['gate', 'record-card'], ['export', 'export-card'], ['target', 'target-card'],
   ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
 ];
 const openPopover = (id) => view.set({ popover: view.get().popover === id ? null : id });
@@ -276,7 +276,6 @@ export function init() {
     }
     if (e.defaultPrevented) return; // a tool (map.js) or the undo (document.js) took it
     if (e.key === 'Escape') {
-      if (view.get().mineOpen) { view.set({ mineOpen: false }); return; }
       if (closePopovers()) return;
       if (browsing() && tile() && !$('side').hidden) { view.set({ page: 'edit' }); return; }
       view.set({ sel: null }); // selection.js reflects it

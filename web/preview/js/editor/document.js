@@ -7,11 +7,12 @@ import { suggest } from '../complete.js';
 import { describeChange } from '../history.js';
 import { parsePayload } from '../payload.js';
 import { TextPane, byteToIndex } from '../text.js';
+import { patchOnCopy } from '../mine.js';
 import { isOffline } from '../host.js';
 import { createDrafter } from '../drafts.js';
 import { STALE_NOTE, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
-import { $, host, offerMine, toast } from './app.js';
+import { $, host, makeMine, toast } from './app.js';
 import { dirty, doc, server, stem, tile, view } from './stores.js';
 
 // ---- the document: the text, one history, checking and saving -----------------
@@ -30,7 +31,7 @@ export const texts = new TextPane($('code'), {
     if (/[\w=+\-.]/.test(last)) openComp(false); else closeComp();
   },
   onCaretLine: () => closeComp(),
-  onReadOnly: offerMine,
+  onReadOnly: (patch) => makeMine({ patch }), // the keystroke (or paste) is kept: the copy gets it
   onKey: (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { save(true); return true; }
     return compKey(e);
@@ -155,6 +156,8 @@ export function supersedeDrafts() { if (!dirty()) drafter.supersede(); }
 
 /** Replace bytes [start, start+len) of the text; `end` (the scrub is over) makes it a step of history and a save. */
 export function replaceBytes(start, len, text, end) {
+  // a library tile: the first step of the change copies it, and the copy gets that step
+  if (!doc.get().writable) { makeMine({ run: () => replaceBytes(start, len, text, true) }); return false; }
   const t = doc.get().text;
   // a scrub's later steps follow the text its own steps made (the caller tracks the span); the first needs a clean check of this text
   if (t !== run.scrubText && !spansUsable()) return false;
@@ -339,40 +342,75 @@ export async function openFile(file, line) {
   if (await loadText(view.get().textFile) && line) texts.reveal(line);
 }
 
+/**
+ * What the title bar says of the text: saved, saving, why it is not, or (for a
+ * part of the tile, which has a bar of its own) which file this is.  The tile
+ * itself is named in the crumb above; a library tile has its chip there.
+ */
 function renderTextBar() {
   const t = tile(), d = doc.get(), f = d.file, live = server.get().live;
-  // the tile's own file is named in the crumb above; another file (a part) by its path
-  $('sourcepath').textContent = !f || f === t?.path ? '' : `‎${f}`;
+  const part = !!f && f !== t?.path;
+  $('partbar').hidden = !part;
+  $('sourcepath').textContent = part ? `\u200e${f}` : '';
   $('sourcepath').title = f || '';
-  const st = $('sourcestate');
+  $('rochip').hidden = !t?.path.startsWith('lib:');
+  const st = $('savestate');
   st.replaceChildren();
-  const button = (label, fn, cls = 'back') => {
+  st.classList.remove('bad');
+  const button = (label, fn) => {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = cls; b.textContent = label; b.onclick = fn;
+    b.type = 'button'; b.textContent = label; b.onclick = fn;
     return b;
   };
-  if (f && f !== t?.path) st.append(button('Back to the tile', () => openFile(null)));
-  else if (f && !d.writable) {
-    st.append(f.startsWith('lib:') ? 'library · ' : 'read only · ');
-    if (f.startsWith('lib:')) st.append(button('Make it mine', () => offerMine()));
+  if (!f) return;
+  if (!d.writable) {
+    // a library tile says so by its chip; any other file that cannot be written says it here
+    if (!f.startsWith('lib:')) st.textContent = 'read only';
   } else if (d.conflict != null) {
+    st.classList.add('bad');
     st.append('changed on disk: ');
     st.append(button('take the disk’s', () => { const disk = d.conflict; doc.set({ conflict: null, base: disk }); edited(disk, 'disk'); }), ' or ',
       button('keep mine', () => { doc.set({ base: d.conflict, conflict: null }); changed(); }));
-  } else if (d.note) st.textContent = d.note;
-  else if (f) st.textContent = d.saving ? 'saving…' : !dirty() ? 'saved' : !live ? 'not saved yet: waiting for dharmatiles preview' : d.checked === d.text && !d.ok ? 'not saved: a mistake' : 'editing…';
-  // the first mistake, in words, under the text
-  const hint = $('codehint');
-  const e = d.checked === d.text && !d.ok ? d.errors.find((x) => !x.file || x.file === f) || d.errors[0] : null;
-  hint.classList.toggle('bad', !!e);
-  // the hint shows until the first edit; a mistake always shows, on one line (all of it on hover)
-  if (dirty()) { try { localStorage.setItem('dt-hint-seen', '1'); } catch { /* private mode: the default stands */ } }
-  let seen = false;
-  try { seen = localStorage.getItem('dt-hint-seen') === '1'; } catch { /* private mode: the default stands */ }
-  hint.textContent = e ? `${e.line ? `Line ${e.line}: ` : ''}${e.message}.${e.help ? ` ${e.help[0].toUpperCase()}${e.help.slice(1)}` : ''}`
-    : d.writable ? 'Type to change the tile; it saves as you go. ⌃Space: what can go here; ? for keys.' : 'Click a line to select it in the view.';
-  hint.title = hint.textContent;
-  hint.hidden = !e && d.writable && seen;
+  } else if (d.note) { st.classList.add('bad'); st.textContent = d.note; }
+  else if (d.saving) st.textContent = 'saving…';
+  else if (!dirty()) st.textContent = 'saved';
+  else if (!live) st.textContent = 'not saved yet: waiting for dharmatiles preview';
+  else if (d.checked === d.text && !d.ok) { st.classList.add('bad'); st.textContent = 'not saved: a mistake'; }
+  else st.textContent = 'editing…';
+}
+
+/**
+ * Resolves true once the text pane holds tile `id`'s own document and it has been
+ * checked (the spans an edit writes at are of exactly this text); false after a few seconds.
+ */
+export function whenChecked(id) {
+  const ready = () => { const d = doc.get(); return d.tileId === id && d.text != null && d.checked === d.text && d.file === tile()?.path; };
+  if (ready()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const stop = (ok) => { off(); offView(); clearTimeout(timer); resolve(ok); };
+    const off = doc.subscribe(['checked', 'tileId', 'text'], () => { if (ready()) stop(true); });
+    const offView = view.subscribe(['tileId'], () => { if (view.get().tileId !== id) stop(false); });
+    const timer = setTimeout(() => stop(false), 6000);
+  });
+}
+
+/**
+ * Make `patch` ({from, to, insert}, over `lib`, the text of the tile the change was meant for)
+ * on the text now shown, which is that tile's copy: typed, as one step of history.  False when
+ * the copy changed the very text the patch touches.
+ */
+export function applyPatchOnCopy(patch, lib) {
+  const r = patchOnCopy(patch, lib, doc.get().text);
+  if (!r) return false;
+  edited(r.text, 'type', null, r.caret);
+  return true;
+}
+
+/** Drop the unsaved changes and any save or check still waiting (the file is about to be deleted). */
+export function abandonChanges() {
+  clearTimeout(run.checkTimer); clearTimeout(run.saveTimer);
+  const base = doc.get().base;
+  if (base != null && doc.get().text !== base) { texts.setText(base); doc.set({ text: base }); }
 }
 
 // ---- completion -------------------------------------------------------------
@@ -443,6 +481,7 @@ export function init() {
     if (live && !wasLive && tile() && dirty()) { changed(); askDraft(); }
     wasLive = live;
   });
+  $('part-back').onclick = () => openFile(null);
   $('undo').onclick = () => undo(-1);
   $('redo').onclick = () => undo(1);
   view.subscribe(['popover'], ({ popover }) => { if (popover === 'undo-history' || popover === 'redo-history') renderHistory(true); });

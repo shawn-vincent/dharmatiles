@@ -27,6 +27,8 @@
 //!   new file and rebuilds.
 //! - `/api/tiles/ID/mine`: copy a library tile into My tiles, its `use`s
 //!   pointing back at the library, and return the copy's id and state.
+//! - `/api/tiles/ID/delete`: delete a tile's file from a folder the preview
+//!   lists (never the library): the editor's Undo of the copy it just made.
 //! - `/api/tiles/ID/rename` `{name}`: rename the tile's file in its folder
 //!   (a tile's file name is its name), never over another file, and
 //!   return the new path, id and state (a new path is a new id).  Library
@@ -127,6 +129,7 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "check" => check(shared, &tile, &file, &v).into(),
         "save" => save(&file, &v).into(),
         "mine" => mine(shared, &tile, &files).into(),
+        "delete" => delete(shared, &tile).into(),
         "rename" => rename(shared, &tile, &v).into(),
         "export" => export(shared, &tile, &v).into(),
         "draft" => draft(shared, id, &tile, &file, &v),
@@ -363,6 +366,35 @@ fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
         }
     }
     listed(shared, &to)
+}
+
+/// Delete a tile's file from a folder the preview lists: what the editor's
+/// Undo does to the copy it made of a library tile.  Never the library, never
+/// a file outside the folders, never anything but a tile document.
+fn delete(shared: &Shared, tile: &str) -> (&'static str, Value) {
+    if tile.starts_with(dt_eval::LIB) {
+        return bad("a library tile is never deleted");
+    }
+    let path = PathBuf::from(tile);
+    if path.extension().and_then(|e| e.to_str()) != Some("dtile") {
+        return bad("only a tile document is deleted");
+    }
+    let in_folder = shared.roots.iter().any(|r| match &r.kind {
+        RootKind::Dir(d) => path.starts_with(d),
+        _ => false,
+    });
+    if !in_folder {
+        return bad("only a tile in a folder the preview lists is deleted here");
+    }
+    if let Err(e) = std::fs::remove_file(&path) {
+        return fail::failure_from(
+            "500 Internal Server Error",
+            format!("cannot delete {}: {e}", path.display()),
+            &e,
+        );
+    }
+    shared.rescan();
+    ("200 OK", json!({ "ok": true, "path": tile }))
 }
 
 /// Make a small, valid tile in My tiles and return its slot. Starting from a
@@ -615,7 +647,7 @@ fn save(file: &str, v: &Value) -> (&'static str, Value) {
     if !writable(file) {
         return fail::refused(
             "403 Forbidden",
-            "this file is not yours to write: make it yours first",
+            "this file is read only: a library tile is copied into My tiles when it is first changed",
         );
     }
     let now = match std::fs::read_to_string(file) {
@@ -897,6 +929,33 @@ mod tests {
         assert!(text.contains("base\n        dirt\n"));
         dt_eval::check(&dt_eval::Files, path, &Options::default()).unwrap();
         assert!(made["id"].is_string());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_delete_takes_out_a_tile_of_a_listed_folder_and_nothing_else() {
+        let dir = std::env::temp_dir().join(format!("dt-delete-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
+        let shared = Shared::with_roots(roots, &[], &dt_eval::Options::default());
+        let pond = new_tile(&shared, &json!({ "name": "Pond" })).1;
+        let pond = pond["path"].as_str().unwrap().to_owned();
+        let (status, _) = delete(&shared, "lib:tests/ground/1x1-flat.dtile");
+        assert_eq!(status, "400 Bad Request");
+        let outside = std::env::temp_dir().join(format!("dt-outside-{}.dtile", std::process::id()));
+        std::fs::write(&outside, "x").unwrap();
+        let (status, _) = delete(&shared, &outside.to_string_lossy());
+        assert_eq!(status, "400 Bad Request");
+        assert!(outside.exists());
+        let _ = std::fs::remove_file(&outside);
+        let (status, _) = delete(&shared, &pond);
+        assert_eq!(status, "200 OK");
+        assert!(!Path::new(&pond).exists());
+        assert!(
+            shared.summary(&tile_id(&pond)).is_none(),
+            "the list drops it at once"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

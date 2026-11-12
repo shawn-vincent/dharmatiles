@@ -9,7 +9,7 @@
 //                                       the document; `end` when a drag ends
 //   api.set(at, name, value)            write a control on the node at byte
 //                                       `at` (value null: take it out)
-//   api.makeMine()                      offer a copy of a library tile
+//   api.canMine()                       a library tile: its controls work, and the first change copies it (the api's `set` and `replace` do that)
 //   api.checkValue(element, control, typed) -> Promise<string|null>
 //                                       the program's check of a typed value
 //   api.weighting(query) -> Promise<reply|null>
@@ -22,6 +22,9 @@ import { weightGallery } from './gallery.js';
 const GALLERY_WRITES_UNITS = false;
 import { sizeGrid } from './size-grid.js';
 import { asNumber, asRange, debounce, formOf, isNumeric, kdlString, unquote, valueItems, written } from './value.js';
+
+/** Does a written value carry its own unit (`3.5dmm`, `20%`, `45deg`)? */
+export const carriesUnit = (shown) => /\d\s*[a-zA-Z%°]/.test(String(shown ?? ''));
 
 // how long typing pauses before the program is asked about the value
 const CHECK_PAUSE_MS = 200;
@@ -121,21 +124,13 @@ export class Lens {
     }
     const body = el('div', 'body');
     r.append(head, body);
-    if (!this.api.writable()) {
-      const n = el('div', 'note');
-      n.append('A library tile: ');
-      const b = el('button', 'linkish', 'make it yours');
-      b.onclick = () => this.api.makeMine();
-      n.append(b, ' to change it.');
-      body.append(n);
-    }
     if (model.note) body.append(el('div', 'note', model.note));
     let hidden = 0;
     for (const g of model.groups) {
       if (g.heading) {
         const h = el('div', 'grp');
         h.append(el('span', '', g.heading));
-        if (g.remove && this.api.writable()) {
+        if (g.remove && this.editable()) {
           const x = el('button', 'x', '×');
           x.type = 'button'; x.title = g.remove.title; x.setAttribute('aria-label', g.remove.title);
           x.onclick = g.remove.run;
@@ -153,7 +148,7 @@ export class Lens {
       // written controls the schema does not know (a definition's arguments)
       if (g.schema) for (const s of g.written) if (!g.schema.controls.some((c) => c.name === s.name)) body.append(this.row(g, { name: s.name }, s));
     }
-    if (model.add && this.api.writable()) body.append(this.addMenu(model.add));
+    if (model.add && this.editable()) body.append(this.addMenu(model.add));
     if (hidden || this.more) {
       const b = el('button', 'linkish more', this.more ? 'fewer controls' : `${hidden} more control${hidden === 1 ? '' : 's'}`);
       b.onclick = () => { this.more = !this.more; this.show(this.model); };
@@ -190,11 +185,14 @@ export class Lens {
     return select;
   }
 
+  /** May a control be used? On a library tile it may: the first change copies the tile. */
+  editable() { return this.api.writable() || !!this.api.canMine?.(); }
+
   /** Write control `name` of group `g`: through the group's own writer when it has one. */
   put(g, name, value) { return g.set ? g.set(name, value) : this.api.set(g.at, name, value); }
 
   row(g, c, s) {
-    const ro = !this.api.writable() || (s && s.file);
+    const ro = !this.editable() || (s && s.file);
     const row = el('div', `row${s ? '' : ' faint'}`);
     row.addEventListener('mouseenter', () => this.api.onFieldHover?.(c.name, true));
     row.addEventListener('mouseleave', () => this.api.onFieldHover?.(c.name, false));
@@ -288,7 +286,8 @@ export class Lens {
         d.onclick = () => this.put(g, c.name, 1 + Math.floor(Math.random() * 9999));
         cell.append(d);
       }
-      if (c.unit && !['number', 'word', 'tag', 'count', 'text', 'raw', 'size', 'height', 'several'].includes(c.unit)) cell.append(el('span', 'unit', c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit));
+      // a value written with its unit (3.5dmm..6.5dmm) is not given the unit again
+      if (c.unit && !carriesUnit(shown) && !['number', 'word', 'tag', 'count', 'text', 'raw', 'size', 'height', 'several'].includes(c.unit)) cell.append(el('span', 'unit', c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit));
     }
     if (s && !ro && !c.required) {
       const x = el('button', 'x', '×');

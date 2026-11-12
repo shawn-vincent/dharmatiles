@@ -4,17 +4,20 @@
 import { Lens, kdlString } from '../lens.js';
 import { byteToIndex } from '../text.js';
 import { failed, showError } from '../problems.js';
-import { $, host, offerMine, toast } from './app.js';
+import { $, host, makeMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, spansUsable, undo } from './document.js';
 import { doc, elementNamed, isEntry, isMark, itemOf, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 
+/** A library tile's own text is shown: its first change copies it into My tiles (tiles.js). */
+const canMine = () => { const t = tile(), d = doc.get(); return !d.writable && !!t?.path.startsWith('lib:') && d.file === t.path; };
+
 // ---- the lens ---------------------------------------------------------------
 
 /** A control written on the node at byte `at`, or taken out (`value` null). */
 async function setControl(at, name, value) {
-  if (!doc.get().writable) return offerMine();
+  if (!doc.get().writable) return makeMine({ run: () => setControl(at, name, value) });
   if (!spansUsable()) return;
   const r = await host.edit({ text: doc.get().text, at, name, value });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed(`Could not change ${name}`, r); return; }
@@ -25,7 +28,7 @@ export const lens = new Lens($('lens'), {
   writable: () => doc.get().writable,
   replace: replaceBytes,
   set: setControl,
-  makeMine: () => offerMine(),
+  canMine: () => canMine(),
   // the top field in focus (typed in or scrubbed) selects the entry's cloud; hovered, it shows quietly
   onField: (name, on) => { if (name === 'top') view.set({ cloudSheet: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
   onFieldHover: (name, on) => { if (name === 'top') view.set({ cloudSheetHov: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
@@ -51,7 +54,7 @@ const tileRows = (names) => ({ controls: names.map((n) => nodeControl('tile', n)
 const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] });
 /** A whole-node change to the tile's text (insert or remove), as one step of history. */
 async function tileEdit(body, label) {
-  if (!doc.get().writable) return offerMine();
+  if (!doc.get().writable) return makeMine({ run: () => tileEdit(body, label) });
   if (!spansUsable()) return;
   const r = await host.edit({ text: doc.get().text, ...body });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that change could not be made' }); failed(`Could not make the change: ${label}`, r); return; }
@@ -93,7 +96,7 @@ async function renameMark(kind, old, name) {
 }
 /** Change one clause of a region (a `within`'s distance or place, an `except`'s regions), through the server's edit route like the other controls. */
 async function setClause(clause, name, value) {
-  if (!doc.get().writable) return offerMine();
+  if (!doc.get().writable) return makeMine({ run: () => setClause(clause, name, value) });
   if (!spansUsable()) return;
   if (name === 'except') {
     const run = clause.regions;
@@ -154,7 +157,7 @@ function renderMarkLens(kind, m) {
     const main = [{ at: sh.at, schema: { controls: controls.filter((c) => c.name === 'name') }, written: written.filter((w) => w.name === 'name'), set }];
     if (bucket.length) {
       main.push({
-        heading: 'boundedBy', at: sh.at, schema: { controls: bucket }, written: written.filter((w) => w.name !== 'name'), set,
+        heading: 'paint bucket', at: sh.at, schema: { controls: bucket }, written: written.filter((w) => w.name !== 'name'), set,
         remove: { title: 'Take out the boundedBy and its fill points', run: () => tileEdit({ op: 'remove-children', at: sh.at, names: ['boundedBy', 'fill'] }, `Took out the boundedBy of ${m.name}`) },
       });
     }
@@ -166,14 +169,14 @@ function renderMarkLens(kind, m) {
       })),
     };
     const note = combineNote(sh);
-    const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
+    const actions = doc.get().writable || canMine() ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
     lens.show({
       title: m.name, kind, href: node.href, note,
       groups: [...main, ...clauses], add, actions,
     });
     return;
   }
-  const actions = doc.get().writable ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
+  const actions = doc.get().writable || canMine() ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
   lens.show({
     title: m.name, kind, href: node.href,
     groups: [{ at: sh.at, schema: { controls }, written, set }], actions,
@@ -192,7 +195,7 @@ function renderLens() {
   const groups = base ? [] : [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
   for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
   const actions = [];
-  if (it.file === file && writable) {
+  if (it.file === file && (writable || canMine())) {
     actions.push(
       { label: 'Hide', title: `Hide ${it.label} without deleting it`, run: () => muteAt(it.span[0], it.label) },
       { label: 'Delete', title: `Delete ${it.label} from the document`, run: () => removeAt(it.span[0], it.label) },
@@ -204,7 +207,7 @@ function renderLens() {
 
 /** Comment a stack entry out (`/-`), with a way back. */
 function muteAt(byte, label = 'Entry') {
-  if (!doc.get().writable) return offerMine();
+  if (!doc.get().writable) return makeMine({ run: () => muteAt(byte, label) });
   if (!spansUsable()) return;
   const t = doc.get().text, i = byteToIndex(t, byte);
   if (isEntry(view.get().sel)) view.set({ sel: null });
@@ -214,7 +217,7 @@ function muteAt(byte, label = 'Entry') {
 }
 /** Take a stack entry out of the text, with a way back. */
 async function removeAt(byte, label = 'Entry') {
-  if (!doc.get().writable) return offerMine();
+  if (!doc.get().writable) return makeMine({ run: () => removeAt(byte, label) });
   if (!spansUsable()) return;
   const r = await host.edit({ op: 'remove', text: doc.get().text, at: byte });
   if (r.status !== 200) { doc.set({ note: r.body?.error || 'that could not be taken out' }); failed(`Could not delete ${label}`, r); return; }

@@ -2,8 +2,9 @@
 // and making a library tile your own.
 
 import { failed, showError } from '../problems.js';
-import { $, host } from './app.js';
-import { canLeave, carryHistory } from './document.js';
+import { $, host, onMakeMine, toast } from './app.js';
+import { abandonChanges, applyPatchOnCopy, canLeave, carryHistory, whenChecked } from './document.js';
+import { copiedNote } from '../mine.js';
 import { attachSizeGrid } from '../size-grid.js';
 import { select } from './open.js';
 import { doc, inRoot, renameable, rootOf, server, stem, tile, view, whenListed } from './stores.js';
@@ -136,21 +137,67 @@ export function startRename() {
   input.onblur = () => finish(true);
 }
 
-// ---- make it mine -----------------------------------------------------------
+// ---- the first change to a library tile --------------------------------------
+// A library tile is read only until it is first changed.  That change copies it
+// into My tiles and is made there; one line over the view says so, with an Undo
+// that goes back to the library tile and deletes the copy.
 
-/** The make-it-mine question follows `view.mineOpen`; only a library tile has one. */
-function showMine() {
-  const open = view.get().mineOpen, t = tile();
-  if (open && !t?.path.startsWith('lib:')) { view.set({ mineOpen: false }); return; }
-  $('mine').hidden = !open;
-  if (open) $('mine-ok').focus();
+let minting = false;
+
+/** The copy is deleted and the library tile is shown again (the toast's Undo). */
+async function undoMine(copy, lib) {
+  abandonChanges();
+  await select(lib.id, true);
+  if (!(await whenChecked(lib.id))) { showError('Could not go back to the library tile', new Error(`${lib.name} did not open again`)); return; }
+  const r = await host.deleteTile(copy.id);
+  if (r.status !== 200 && r.status !== 0) {
+    // a refusal too: the copy was made by this page a moment ago, so the program must take it away
+    showError(`Could not delete the copy ${copy.name}`, new Error(`Could not delete the copy ${copy.name}`, { cause: r.error }));
+  }
+}
+
+/**
+ * Copy the library tile shown into My tiles, open the copy, make the change `replay` describes there
+ * ({patch}: a typed change over the library tile's text; {run}: a function that writes at the
+ * positions of the library tile's text, called only when the copy's text is the same) and say so.
+ * False when this tile is not one that is copied (it says why instead).
+ */
+async function mineIt(replay) {
+  const t = tile(), d = doc.get();
+  if (!t) return false;
+  if (!t.path.startsWith('lib:') || d.file !== t.path) {
+    doc.set({ note: d.file !== t.path ? 'this part is read only: change the tile’s own text' : 'this file is read only' });
+    return false;
+  }
+  if (minting) return false;
+  minting = true;
+  const lib = { id: t.id, name: stem(t), text: d.text };
+  try {
+    const r = await host.mine(t.id);
+    if (r.status !== 200 || r.body?.id == null) {
+      doc.set({ note: r.body?.error || 'could not make a copy' });
+      failed(`Could not copy ${lib.name} into My tiles`, r);
+      return false;
+    }
+    const copy = { id: r.body.id, name: stem({ path: r.body.path }) };
+    if (!(await whenListed(copy.id))) { showError('The copy did not appear', new Error(`${copy.name} was made but is not in the list`)); return false; }
+    await select(copy.id, true);
+    if (!(await whenChecked(copy.id))) { showError('The copy did not open', new Error(`${copy.name} was made but did not open`)); return false; }
+    let applied = false;
+    if (replay?.patch) applied = applyPatchOnCopy(replay.patch, lib.text);
+    else if (replay?.run && doc.get().text === lib.text) { await replay.run(); applied = true; }
+    toast(copiedNote(copy.name, replay ? applied : null), () => undoMine(copy, lib), { ms: 10000 });
+    return true;
+  } finally {
+    minting = false;
+  }
 }
 
 /** Wire this part of the page (once, at load). */
 export function init() {
   server.subscribe(['tiles', 'roots'], () => { if (view.get().page === 'browse') renderList(); });
   view.subscribe(['tileId', 'root', 'page'], () => { if (view.get().page === 'browse') renderList(); });
-  view.subscribe(['mineOpen'], showMine);
+  onMakeMine(mineIt);
   $('filter').oninput = renderList;
   $('filter').onkeydown = (e) => {
     if (e.key === 'Escape' && tile()) { e.preventDefault(); e.stopPropagation(); view.set({ page: 'edit' }); return; }
@@ -191,19 +238,4 @@ export function init() {
     const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
     if (e.key === 'F2' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); startRename(); }
   });
-  $('mine-cancel').onclick = () => view.set({ mineOpen: false });
-  $('mine-ok').onclick = async () => {
-    const t = tile();
-    $('mine-ok').disabled = true;
-    const r = await host.mine(t.id);
-    $('mine-ok').disabled = false;
-    view.set({ mineOpen: false });
-    if (r.status !== 200 || r.body?.id == null) {
-      doc.set({ note: r.body?.error || 'could not make a copy' });
-      failed(`Could not make ${stem(t)} yours`, r);
-      return;
-    }
-    // the copy joins the list with the next event
-    if (await whenListed(r.body.id)) select(r.body.id);
-  };
 }

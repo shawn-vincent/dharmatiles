@@ -6,7 +6,7 @@ import { Tools } from '../place.js';
 import { byteToIndex } from '../text.js';
 import { failed } from '../problems.js';
 import { token } from '../tokens.js';
-import { $, host, offerMine, viewer } from './app.js';
+import { $, host, makeMine, viewer } from './app.js';
 import { askDraft, edited, openFile, replaceBytes, spansUsable, texts } from './document.js';
 import { meshStack } from '../payload.js';
 import { doc, elementNamed, isEntry, itemOf, mapNode, regionOf, same, server, stackItems, tile, view } from './stores.js';
@@ -87,7 +87,7 @@ function drawOverlay() {
 async function insertNode(place, node, { select: sel } = {}) {
   const t = tile();
   if (!t) return;
-  if (!doc.get().writable) return offerMine();
+  if (!doc.get().writable) return makeMine({ run: () => insertNode(place, node, { select: sel }) });
   if (doc.get().file !== t.path) {
     await openFile(null);
     if (doc.get().file !== t.path) return;
@@ -111,7 +111,7 @@ export function init() {
     size: () => [tile()?.plan?.cols || 1, tile()?.plan?.rows || 1],
     map: () => doc.get().map,
     writable: () => doc.get().writable,
-    offerMine: () => offerMine(),
+    makeMine: (replay) => makeMine(replay),
     insert: (place, node, opts) => insertNode(place, node, opts),
     replace: replaceBytes,
     handles,

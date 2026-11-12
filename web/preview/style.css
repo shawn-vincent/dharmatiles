@@ -77,6 +77,11 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #tilebtn .where { font-weight: 400; color: var(--muted); font-size: 12.5px; }
 #rename { font: 600 14px var(--f-body); color: var(--ink); background: var(--raised); border: 1px solid var(--accent); border-radius: var(--r); padding: 4px 7px; flex: 1; min-width: 0; outline: 3px solid color-mix(in srgb, var(--accent) 20%, transparent); }
 #rename.bad { border-color: var(--err); outline-color: color-mix(in srgb, var(--err) 20%, transparent); }
+#savestate { flex: none; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+#savestate button { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
+#savestate button:hover { text-decoration: underline; }
+#savestate.bad { color: var(--ink); }
+#rochip { flex: none; margin-left: 6px; padding: 1px 8px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--muted); font-size: 11.5px; line-height: 1.5; cursor: help; }
 #tileplan { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #history-controls { display: flex; align-items: center; gap: 5px; flex: none; }
 .history-split { position: relative; display: inline-flex; }
@@ -163,12 +168,13 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .dot.ready.over { box-shadow: 0 0 0 2px var(--raised), 0 0 0 3.5px var(--band); }
 
 /* ---- the source ---- */
-#source { grid-area: source; background: var(--panel); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-#sourcebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
-#sourcepath { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
-#sourcestate { white-space: nowrap; }
-#sourcestate .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; }
-#sourcestate .back:hover { text-decoration: underline; }
+#source { grid-area: source; position: relative; background: var(--panel); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+#source > .pane-x { position: absolute; top: 5px; right: 8px; z-index: 2; }
+/* a part the tile uses is shown instead of the tile's own text: the only time the source has a bar */
+#partbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 36px 6px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+#partbar #sourcepath { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+#partbar .back { white-space: nowrap; font-size: 12px; }
+#partbar .back:hover { text-decoration: underline; }
 #code { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* the editor: CodeMirror (js/text.js), in the theme's colours */
 #code .cm-editor { flex: 1; min-height: 0; height: 100%; font: 12.5px/1.75 var(--f-code); color: var(--ink); background: transparent; }
@@ -211,8 +217,6 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .tk-s { color: var(--moss); }
 .tk-v { color: var(--bloom); }
 .tk-c { color: var(--muted); }
-#codehint { padding: 7px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#codehint.bad { color: var(--ink); box-shadow: inset 3px 0 0 var(--over); background: color-mix(in srgb, var(--over) 8%, transparent); }
 
 /* completion */
 #comp { position: fixed; z-index: 30; width: 340px; max-height: 260px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 4px; }
@@ -233,6 +237,8 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #lens .body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 16px; }
 #lens .empty { margin: auto; max-width: 22ch; padding: 28px 18px; color: var(--muted); text-align: center; line-height: 1.55; }
 #lens .empty b { display: block; margin-bottom: 5px; color: var(--ink); font: 700 20px/1.1 var(--f-display); }
+/* a sheet that goes on below the pane says so, as the tile list does with its shadow */
+#lens .body.sh-b::after { content: "more below ↓"; position: sticky; bottom: -12px; display: block; width: max-content; margin: 6px auto -4px; padding: 1px 10px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); color: var(--muted); font-size: 11px; pointer-events: none; }
 #lens .grp { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line); }
 #lens .grp .x { padding: 0 2px; font-size: 16px; }
 #lens .add { margin-top: 10px; }
@@ -258,7 +264,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #lens .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px 0 0; font-size: 15px; line-height: 1; }
 #lens .x:hover { color: var(--ink); }
 #lens .note { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
-#lens .linkish, #sourcestate .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
+#lens .linkish, #partbar .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
 #lens .linkish:hover { text-decoration: underline; }
 #lens .more { font-size: 12px; margin-top: 6px; }
 /* a tile's size, picked from a grid under the field (lens.js sizeGrid) */
@@ -277,8 +283,6 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #lens input.edit { width: 100%; font: 13px var(--f-code); background: var(--bg); color: var(--ink); border: 1px solid var(--accent); border-radius: var(--r); padding: 1px 5px; }
 #lens .entry-actions { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--bg); }
 #lens .entry-actions button { justify-content: center; }
-#mine { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(380px, calc(100% - 32px)); }
-#mine p { margin: 0 0 12px; }
 .row-btns { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ---- the view: the plate ---- */
@@ -291,8 +295,10 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 #viewbar { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; align-items: center; z-index: 3; }
 #viewbar .seg > button { padding: 5px 9px; }
-#display { top: 40px; right: 0; width: 230px; display: flex; flex-direction: column; gap: 9px; padding: 12px; }
-#display .switch { justify-content: space-between; }
+#display, #layout-menu { top: 40px; right: 0; width: 230px; display: flex; flex-direction: column; gap: 9px; padding: 12px; }
+.menu > .cap { color: var(--muted); font: 600 10.5px/1 var(--f-body); letter-spacing: .09em; text-transform: uppercase; }
+#display[hidden], #layout-menu[hidden] { display: none; }
+#display .switch, #layout-menu .switch { justify-content: space-between; }
 #allviews { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border-top: 1px solid var(--line); padding-top: 9px; }
 #allviews button { background: none; border: 1px solid var(--line); border-radius: var(--r); padding: 3px 4px; cursor: pointer; font-size: 12px; }
 #allviews button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }

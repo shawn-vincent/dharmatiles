@@ -16,6 +16,7 @@
   <header id="title">
     <span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i><span class="txt">dharmatiles</span></span>
     <span id="tileplan" class="muted"></span>
+    <span id="savestate" role="status"></span>
     <div id="history-controls" aria-label="Document history">
       <div class="history-split">
         <button id="undo" type="button" title="Undo (⌘Z)" disabled><i class="history-icon undo" aria-hidden="true"></i><span class="history-label">Undo</span></button>
@@ -55,12 +56,13 @@
           <button id="back" type="button" title="All the tiles"><span aria-hidden="true">‹</span> <span id="tilewhere">Tiles</span></button>
           <span class="sep" aria-hidden="true">›</span>
           <button id="tilebtn" type="button" title="The tile's own properties"><span id="tilename"></span></button>
+          <span id="rochip" hidden title="A library tile. Your first change copies it into My tiles and makes the change there.">library</span>
         </div>
         <div id="editor">
           <section id="source" aria-label="The source">
-            <div id="sourcebar"><span id="sourcepath"></span><span id="sourcestate"></span><button class="pane-x" id="hide-source" type="button" title="Hide the source ([)" aria-label="Hide the source">×</button></div>
+            <div id="partbar" hidden><span id="sourcepath"></span><button class="back" id="part-back" type="button">Back to the tile</button></div>
+            <button class="pane-x" id="hide-source" type="button" title="Hide the source ([)" aria-label="Hide the source">×</button>
             <div id="code" role="list"></div>
-            <div id="codehint">Click a line to select it in the view.</div>
           </section>
           <aside id="properties-pane" aria-label="Properties">
             <button class="pane-x" id="hide-props" type="button" title="Hide the properties (])" aria-label="Hide the properties">×</button>
@@ -77,8 +79,19 @@
     <div id="viewbar">
       <div id="reopen" hidden><button class="btn" id="show-source" type="button" title="Show the source ([)">Source</button><button class="btn" id="show-props" type="button" title="Show the properties (])">Properties</button></div>
       <div class="seg" id="views" role="group" aria-label="Views"></div>
-      <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display">⋯</button>
+      <button id="layoutbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Layout: which panes show, and where" aria-label="Layout"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.4"/></svg></button>
+      <div id="layout-menu" class="menu" hidden>
+        <div class="cap">Layout</div>
+        <div class="seg" id="layout-seg" role="group" aria-label="Layout">
+          <button type="button" data-preset="edit" title="Source over properties in one sidebar">Edit</button>
+          <button type="button" data-preset="inspect" title="Source, view and properties side by side">Inspect</button>
+          <button type="button" data-preset="look" title="Only the view (\)">Look</button>
+        </div>
+        <label class="switch"><input type="checkbox" id="t-right"> Panes on the right</label>
+      </div>
+      <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display" aria-label="Display">⋯</button>
       <div id="display" class="menu" hidden>
+        <div class="cap">Display</div>
         <label class="switch"><input type="checkbox" id="t-paint" checked> Paint <kbd>c</kbd></label>
         <label class="switch"><input type="checkbox" id="t-overhang" checked> Overhang <kbd>o</kbd></label>
         <label class="switch"><input type="checkbox" id="t-wire"> Wireframe <kbd>w</kbd></label>
@@ -87,12 +100,6 @@
         <label class="switch"><input type="checkbox" id="t-debug"> Debug layer <kbd>⌃⌥D</kbd></label>
         <button id="b-proj" class="btn" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
         <div id="allviews"></div>
-        <div class="seg" id="layout-seg" role="group" aria-label="Layout">
-          <button type="button" data-preset="edit" title="Source over properties in one sidebar">Edit</button>
-          <button type="button" data-preset="inspect" title="Source, view and properties side by side">Inspect</button>
-          <button type="button" data-preset="look" title="Only the view (\)">Look</button>
-        </div>
-        <label class="switch"><input type="checkbox" id="t-right"> Panes on the right</label>
         <button id="b-keys" class="btn" type="button">Keys <kbd>?</kbd></button>
         <button id="b-about" class="btn" type="button">About dharmatiles</button>
       </div>
@@ -143,10 +150,6 @@
         <p>Start with a printable square, or make a library tile your own.</p>
         <div class="row-btns"><button id="empty-new" class="btn on" type="button">New tile</button><button id="choose" class="btn" type="button">Choose from the library</button></div>
       </div>
-    </div>
-    <div class="card" id="mine" role="dialog" aria-label="Make it mine" hidden>
-      <p><b>This is a library tile.</b> Make a copy in My tiles to change it? The library stays as it is.</p>
-      <div class="row-btns"><button class="btn" id="mine-cancel" type="button">Cancel</button><button class="btn on" id="mine-ok" type="button">Make it mine</button></div>
     </div>
   </main>
 

@@ -6,7 +6,7 @@
 //   api.defs()                      the document's own definitions
 //   api.sq()                        mm per square; api.size() [cols, rows]
 //   api.map()                       the map (lines, regions) of the text now
-//   api.writable()                  may the file be changed? (else api.offerMine())
+//   api.writable()                  may the file be changed? (else api.makeMine(replay))
 //   api.insert(place, node)         write `node` into the stack or the tile's body
 //   api.replace(start, len, text, end)  rewrite bytes of the text (a handle)
 //   api.handles()                   the selection's handles: [{q, span, snap}]
@@ -113,7 +113,7 @@ export class Tools {
     const pick = this.list.items[this.list.i];
     const name = this.choices(word).some(([n]) => n === word) ? word : pick?.[0];
     if (!name) { this.api.note(`Nothing is called ${word}`); return; }
-    if (!this.api.writable()) { this.api.offerMine(); return; }
+    if (!this.api.writable()) { this.api.makeMine({ run: () => this.take() }); return; }
     const el = this.api.elements().find((e) => e.name === name);
     const extra = rest.join(' ');
     let kind;
