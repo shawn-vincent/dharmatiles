@@ -40,6 +40,7 @@ function show(box, anchor, { align = 'right', onClose } = {}) {
   closePopup();
   document.body.append(box);
   place(box, anchor, align);
+  anchor.setAttribute('aria-expanded', 'true');
   let done = false;
   const close = ({ restore = true } = {}) => {
     if (done) return;
@@ -49,6 +50,7 @@ function show(box, anchor, { align = 'right', onClose } = {}) {
     document.removeEventListener('keydown', key, true);
     removeEventListener('resize', close);
     box.remove();
+    anchor.removeAttribute('aria-expanded');
     if (restore && document.contains(anchor)) anchor.focus({ preventScroll: true });
     onClose?.();
   };
