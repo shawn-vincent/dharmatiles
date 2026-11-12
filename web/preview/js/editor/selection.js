@@ -16,7 +16,7 @@ import { cloudAtCaret, cloudOnLine, cloudsIn } from '../cloud.js';
 import { $, pickView, toast, viewer } from './app.js';
 import { texts, canLeave } from './document.js';
 import {
-  controlText, dirty, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, stackItems, stem,
+  controlText, dirty, log, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, stackItems, stem,
   tile, tileSel, view,
 } from './stores.js';
 
@@ -127,11 +127,16 @@ function markText() {
   const live = d.checked === d.text && d.tileId === tileId;
   // the mistakes the check of this text found, and (while the text is the one built) the build's own
   // (dt::look and dt::build are found only by building, so the check never says them)
+  // The marks are the stream's messages with a span in this file (an error is a red mark, a note a yellow one;
+  // each points to its message), plus a mistake the check just found whose message has not arrived yet.
+  const words = (m) => `${m.text}${m.help ? `. ${m.help[0].toUpperCase()}${m.help.slice(1)}` : ''}`;
+  const errs = (tileId && texts.file ? log.inFile(tileId, texts.file) : []).filter((m) => m.span.line)
+    .map((m) => ({ line: m.span.line, message: words(m), severity: m.severity === 'error' ? 'error' : 'warning', id: m.seq }));
   const found = [...(live ? d.errors : []), ...(!dirty() ? t?.errors || [] : [])];
-  const seen = new Set();
-  const errs = found.filter((e) => (!e.file || e.file === texts.file) && e.line)
-    .filter((e) => { const k = `${e.code}:${e.line}:${e.message}`; return !seen.has(k) && seen.add(k); })
-    .map((e) => ({ line: e.line, message: `${e.message}${e.help ? `. ${e.help}` : ''}` }));
+  for (const e of found) {
+    if ((e.file && e.file !== texts.file) || !e.line || errs.some((k) => k.line === e.line && k.severity === 'error')) continue;
+    errs.push({ line: e.line, message: `${e.message}${e.help ? `. ${e.help}` : ''}`, severity: 'error' });
+  }
   texts.mark(sel?.kind === 'tile' ? null : linesOf(sel), linesOf(hov), errs);
 }
 
@@ -187,7 +192,7 @@ export function frameSel() {
 }
 
 /** Explain the gate's paint by taking the camera to its most important face. */
-function showWorst() {
+export function showWorst() {
   const f = viewer.worstFlagged();
   if (!f) return;
   if (f.key != null) setSel(entrySel(f.key, f.piece), { from: 'view' });
@@ -225,10 +230,10 @@ export function init() {
   view.subscribe(['sel', 'hov', 'tileId'], markText);
   doc.subscribe(['checked', 'errors', 'file', 'map', 'stack', 'tileId', 'base'], markText);
   server.subscribe(['tiles'], markText);
+  log.subscribe(markText);
   doc.subscribe(['stack', 'checked'], selectWritten);
   // a file just shown: scroll it to the selection's lines
   doc.subscribe(['file'], revealSel);
-  $('show-worst').onclick = showWorst;
   $('tilebtn').onclick = () => setSel(tileSel());
   addEventListener('keydown', (e) => {
     const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;

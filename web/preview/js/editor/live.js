@@ -6,7 +6,7 @@ import { setEnvironment, showError } from '../problems.js';
 import { ServerError } from '../server-error.js';
 import { setUnits } from '../value.js';
 import { host } from './app.js';
-import { doc, server, tile } from './stores.js';
+import { doc, log, server, tile } from './stores.js';
 
 const withoutProgress = (t) => { const { progress, ...rest } = t; return rest; };
 const progressOf = (tiles) => Object.fromEntries(tiles.filter((t) => t.progress).map((t) => [t.id, t.progress]));
@@ -22,6 +22,14 @@ function reportFailure(t) {
   if (reported.has(key)) return;
   reported.add(key);
   showError(`The build of ${t.name} failed`, new Error(`The build of ${t.name} failed`, { cause: new ServerError(f) }));
+}
+
+/** The messages store is told when a tile's build begins and ends: what it shows of the last build follows. */
+const building = new Set();
+function followBuild(t) {
+  const now = t.status === 'building';
+  if (now && !building.has(t.id)) { building.add(t.id); log.beginBuild(t.id); }
+  else if (!now && building.delete(t.id)) log.endBuild(t.id);
 }
 
 /** Wire this part of the page (once, at load). */
@@ -42,6 +50,10 @@ export function init() {
     },
     onSnapshot: (m) => {
       m.tiles.forEach(reportFailure);
+      const ids = new Set(m.tiles.map((t) => t.id));
+      for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }
+      for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
+      m.tiles.forEach(followBuild);
       server.set({
         tiles: m.tiles.map(withoutProgress), progress: progressOf(m.tiles), roots: m.roots || [],
         system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhang_deg, steepestDeg: m.steepest_deg ?? m.overhang_deg + 10,
@@ -49,8 +61,10 @@ export function init() {
       });
     },
     onProgress: (id, p) => server.set({ progress: { ...server.get().progress, [id]: p } }),
+    onMessage: (m) => log.apply(m),
     onTile: (t) => {
       reportFailure(t);
+      followBuild(t);
       const { tiles, progress } = server.get();
       const i = tiles.findIndex((x) => x.id === t.id);
       const next = tiles.slice();

@@ -21,7 +21,7 @@ function viewButton(name) {
   const [, label] = entry.view;
   const b = document.createElement('button');
   b.type = 'button'; b.className = 'view'; b.dataset.view = name;
-  b.textContent = name === 'top' ? 'Map' : label;
+  b.textContent = label;
   b.title = `${label} (${entry.i + 1})`;
   b.onclick = () => pickView(name);
   return b;
@@ -94,7 +94,7 @@ function renderDebugLegend(d) {
 
 // popovers: one open at a time (`view.popover`); Esc or a click outside closes it
 const popovers = [
-  ['dispbtn', 'display'], ['layoutbtn', 'layout-menu'], ['gate', 'record-card'], ['export', 'export-card'], ['target', 'target-card'],
+  ['dispbtn', 'display'], ['layoutbtn', 'layout-menu'], ['export', 'export-card'], ['target', 'target-card'],
   ['undo-drop', 'undo-history'], ['redo-drop', 'redo-history'],
 ];
 const openPopover = (id) => view.set({ popover: view.get().popover === id ? null : id });

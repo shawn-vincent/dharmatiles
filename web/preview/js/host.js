@@ -3,7 +3,9 @@
 // file knows the server's routes.  A tile is named by its id (the server's,
 // never a position in a list).
 //
-//   connect({onSnapshot, onTile, onProgress, onState})  start listening; onState('live' | 'offline')
+//   connect({onSnapshot, onTile, onProgress, onMessage, onState})  start listening; onState('live' | 'offline'); onMessage(m) for each message of the stream
+//   messagesText(id) -> string              the tile's open messages as text, the program's one renderer (Copy all)
+//   reportMessage(body)                     a failure of the page's own, to join the stream: {tile?, what, text, help?, causes?, backtrace?}
 //   fetchMesh(id) -> ArrayBuffer            the tile's binary mesh
 //   fetchSketch(id, sketch) -> ArrayBuffer  one stage's sketch while it builds (null once the build has moved on)
 //   build(id, {debug?})                     build a tile not built yet; `debug` says whether the debug layer is on for it (its marks are collected only then)
@@ -126,18 +128,19 @@ export function browserHost() {
     // drops or is refused, it is closed and opened again a second later, for
     // as long as the page is open.  The server back may be a new one, with a
     // new token: it is fetched afresh.
-    connect({ onSnapshot, onTile, onProgress, onState }) {
+    connect({ onSnapshot, onTile, onProgress, onMessage, onState }) {
       let epoch = null, rev = null;
       const open = () => {
         const q = epoch != null && rev != null ? `?epoch=${epoch}&since=${rev}` : '';
         const es = new EventSource(`/api/events${q}`);
         es.onmessage = (e) => {
           const m = JSON.parse(e.data);
-          if (m.type !== 'progress' && m.rev != null) rev = m.rev;
+          if (m.type !== 'progress' && m.type !== 'message' && m.rev != null) rev = m.rev;
           if (m.type === 'snapshot') { epoch = m.epoch; onState('live'); onSnapshot(m); }
           else if (m.type === 'resumed') onState('live');
           else if (m.type === 'tile') onTile(m.tile);
           else if (m.type === 'progress') onProgress(m.id, m.progress);
+          else if (m.type === 'message') onMessage(m.message);
         };
         es.onerror = () => { es.close(); token = null; onState('offline'); setTimeout(open, 1000); };
       };
@@ -194,6 +197,12 @@ export function browserHost() {
     rename: (id, name) => call(tile(id, 'rename'), { name }),
     mine: (id) => call(tile(id, 'mine'), {}),
     deleteTile: (id) => call(tile(id, 'delete'), {}),
+    reportMessage: (body) => call('/api/messages', body),
+    async messagesText(id) {
+      const r = await netFetch(`/api/messages?${new URLSearchParams({ tile: id, state: 'open', format: 'text' })}`, { cache: 'no-store' });
+      if (!r.ok) throw await replyError(r, 'messages');
+      return r.text();
+    },
     newTile: (name, size) => call('/api/new', { name, size }),
     edit: (body) => call('/api/edit', body),
     setTarget: (body) => call('/api/target', body),

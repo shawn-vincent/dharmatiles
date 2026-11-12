@@ -26,7 +26,7 @@ const elements = [
   { name: 'grass', role: 'plant', about: 'blades of grass', controls: [] },
 ];
 
-test('view shortcuts keep ISO and Map plus two recent alternatives', () => {
+test('view shortcuts keep ISO and Top plus two recent alternatives', () => {
   let recent = ['low', 'close'];
   assert.deepEqual(shortcutViews(recent), ['painted', 'top', 'low', 'close']);
   recent = rememberView(recent, 'front');

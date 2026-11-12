@@ -6,7 +6,7 @@ export function rememberView(recent, name) {
   return [name, ...recent.filter((view) => view !== name)].slice(0, 2);
 }
 
-/** ISO and Map are permanent; two recent alternatives follow them. */
+/** ISO and Top are permanent; two recent alternatives follow them. */
 export function shortcutViews(recent) {
   return [...FIXED_VIEWS, ...recent.filter((view) => !FIXED_VIEWS.includes(view)).slice(0, 2)];
 }

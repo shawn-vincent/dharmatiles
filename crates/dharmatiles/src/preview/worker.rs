@@ -104,13 +104,15 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     }
     let rec = Recording::watching(&path);
     let t0 = Instant::now();
+    // the plan's stack, once it is known: a mistake in the build finds the entry it is in by it
+    let plan_stack: std::cell::RefCell<Vec<Value>> = std::cell::RefCell::new(Vec::new());
     let finish_with =
         |rec: Recording, errs: &[Diag], failure: Option<fail::ServerError>, scope: Scope| {
             let errors = errors_json(errs);
             let failure = failure.map(|f| f.json());
             // said before the tile is: the page sees what this report cleared while the build still shows as running
             shared.report(id, scope, |name| {
-                let mut found = messages::of_errors(errs, scope, id, name, &[]);
+                let mut found = messages::of_errors(errs, scope, id, name, &plan_stack.borrow());
                 if let Some(f) = &failure {
                     for m in found.iter_mut().filter(|m| m.kind == Kind::Server) {
                         m.data = messages::of_server_error(f, (id, name), "server").data;
@@ -164,6 +166,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         .as_ref()
         .and_then(|p| p["stack"].as_array().cloned())
         .unwrap_or_default();
+    plan_stack.replace(stack.clone());
     shared.report(id, Scope::Check, |name| {
         messages::of_check(&checked, id, name, &stack)
     });

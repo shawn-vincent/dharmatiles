@@ -363,20 +363,35 @@ function renderTextBar() {
     return b;
   };
   if (!f) return;
-  if (!d.writable) {
-    // a library tile says so by its chip; any other file that cannot be written says it here
-    if (!f.startsWith('lib:')) st.textContent = 'read only';
-  } else if (d.conflict != null) {
+  if (d.writable && d.conflict != null) {
     st.classList.add('bad');
     st.append('changed on disk: ');
     st.append(button('take the disk’s', () => { const disk = d.conflict; doc.set({ conflict: null, base: disk }); edited(disk, 'disk'); }), ' or ',
       button('keep mine', () => { doc.set({ base: d.conflict, conflict: null }); changed(); }));
-  } else if (d.note) { st.classList.add('bad'); st.textContent = d.note; }
-  else if (d.saving) st.textContent = 'saving…';
-  else if (!dirty()) st.textContent = 'saved';
-  else if (!live) st.textContent = 'not saved yet: waiting for dharmatiles preview';
-  else if (d.checked === d.text && !d.ok) { st.classList.add('bad'); st.textContent = 'not saved: a mistake'; }
-  else st.textContent = 'editing…';
+    return;
+  }
+  const w = saveWords();
+  if (!w) return;
+  st.textContent = w.text;
+  if (w.bad) st.classList.add('bad');
+}
+
+/**
+ * Where the text stands, in words: {text, bad} (bad: it needs the user), or null when there
+ * is nothing to say (no file, or a library tile, which says so by its chip).  The title bar
+ * says it; the status line repeats it only when it is not just "saved".
+ */
+export function saveWords() {
+  const d = doc.get(), f = d.file, live = server.get().live;
+  if (!f) return null;
+  if (!d.writable) return f.startsWith('lib:') ? null : { text: 'read only', bad: false };
+  if (d.conflict != null) return { text: 'changed on disk', bad: true };
+  if (d.note) return { text: d.note, bad: true };
+  if (d.saving) return { text: 'saving…', bad: false };
+  if (!dirty()) return { text: 'saved', bad: false };
+  if (!live) return { text: 'not saved yet: waiting for dharmatiles preview', bad: false };
+  if (d.checked === d.text && !d.ok) return { text: 'not saved: a mistake', bad: true };
+  return { text: 'editing…', bad: false };
 }
 
 /**

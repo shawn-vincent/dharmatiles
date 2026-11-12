@@ -2132,3 +2132,41 @@ fn a_failure_of_the_server_and_one_the_page_reports_are_messages_too() {
     assert_eq!(found[1]["text"], "x is not a function");
     assert_eq!(found[1]["data"]["route"], "The page hit a script error");
 }
+
+#[test]
+fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_it() {
+    let tree = |trunk: &str| {
+        format!(
+            "dharmatiles version=\"1.0.0\"\n\ntile size=\"1x1\" seed=4 {{\n    stack {{\n        base\n        dirt\n        tree at=center top=\"$bottom + 22dmm\" {{\n            trunk height=\"{trunk}\"\n        }}\n    }}\n}}\n"
+        )
+    };
+    let (r, path, _) = editable("look", &tree("40dmm"));
+    let r = {
+        // a build that is asked for: the editable() server does not build on its own
+        drop(r);
+        start(&[&path], true)
+    };
+    let id = id0(&r);
+    wait_for(&r, "the failed build", |t| t["status"] == "failed");
+    let errs = messages(&r, &format!("tile={id}&state=open&kind=error"));
+    assert_eq!(errs.len(), 1, "{errs:?}");
+    assert_eq!(errs[0]["code"], "dt::look");
+    assert_eq!(errs[0]["scope"], "build");
+    assert!(
+        errs[0]["node"].as_str().is_some_and(|n| n.contains("tree")),
+        "the entry it is in: {:?}",
+        errs[0]["node"]
+    );
+    // no build record while it fails; the plan pass's own message is there
+    assert!(messages(&r, &format!("tile={id}&state=open&kind=build")).is_empty());
+    // fixed on disk: the worker rebuilds, the error is cleared and the record appears
+    std::fs::write(&path, tree("10dmm")).unwrap();
+    wait_for(&r, "the good build", |t| t["status"] == "ready");
+    assert!(messages(&r, &format!("tile={id}&state=open&kind=error")).is_empty());
+    let cleared = messages(&r, &format!("tile={id}&state=cleared&kind=error"));
+    assert_eq!(cleared[0]["seq"], errs[0]["seq"]);
+    assert_eq!(
+        messages(&r, &format!("tile={id}&state=open&kind=gate")).len(),
+        1
+    );
+}

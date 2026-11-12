@@ -15,6 +15,7 @@
 // none of them calls another to say that something changed.
 
 import { showError } from '../problems.js';
+import { createLog } from '../messages.js';
 
 // `report(what, err)` takes what a subscriber threw: the error panel by default.
 export function createStore(initial, report = showError) {
@@ -50,6 +51,9 @@ export const server = createStore({
   progress: {},   // tile id -> the build's progress while it builds
 });
 
+/** What happened, one stream (js/messages.js): live.js writes it from the event stream; every surface draws from it. */
+export const log = createLog();
+
 export const view = createStore({
   tileId: null, root: -1,
   sel: null,           // {kind, id, piece?}: kind entry (id: the entry's key), region or line (id: the name), tile; or null
@@ -67,6 +71,7 @@ export const view = createStore({
   draft: null,         // {tileId, payload}: a draft shown in its place
   textFile: null,      // the file the text pane should show (null: the tile's own)
   page: 'browse',      // the sidebar's page: the tile browser, or the editor ('edit')
+  panel: false,        // the messages panel is open
   popover: null,       // the id of the open popover, if any
 });
 

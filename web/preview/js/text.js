@@ -117,12 +117,12 @@ const marks = StateField.define({
     deco = deco.map(tr.changes);
     for (const e of tr.effects) {
       if (!e.is(setMarks)) continue;
-      const { sel, hov, errs } = e.value;
+      const { sel, hov, errs, notes = [] } = e.value;
       const doc = tr.state.doc, b = new RangeSetBuilder();
       const inside = (r, n) => r && n >= r[0] && n <= r[1];
-      const err = new Set(errs);
+      const err = new Set(errs), note = new Set(notes);
       for (let n = 1; n <= doc.lines; n++) {
-        const cls = [inside(sel, n) && 'ln-sel', !inside(sel, n) && inside(hov, n) && 'ln-hov', err.has(n) && 'ln-err'].filter(Boolean);
+        const cls = [inside(sel, n) && 'ln-sel', !inside(sel, n) && inside(hov, n) && 'ln-hov', err.has(n) && 'ln-err', !err.has(n) && note.has(n) && 'ln-note'].filter(Boolean);
         if (cls.length) { const l = doc.line(n); b.add(l.from, l.from, Decoration.line({ class: cls.join(' ') })); }
       }
       deco = b.finish();
@@ -198,6 +198,16 @@ export class TextPane {
           EditorView.updateListener.of((u) => this.updated(u)),
         ],
       }),
+    });
+    this.watchMarks();
+  }
+
+  /** A press on a mark in the gutter: `onMarkClick(line)`, which opens the message it points to. */
+  watchMarks() {
+    this.code.addEventListener('click', (e) => {
+      if (!e.target.closest?.('.cm-lint-marker')) return;
+      const at = this.view.posAtCoords({ x: e.clientX, y: e.clientY }, false);
+      if (at != null) this.cb.onMarkClick?.(this.view.state.doc.lineAt(at).number);
     });
   }
 
@@ -280,7 +290,7 @@ export class TextPane {
 
   focus() { this.view.focus(); }
 
-  /** Mark lines: `sel` and `hov` are [first, last] (1-based) or null; `errs` line numbers or {line, message}. */
+  /** Mark lines: `sel` and `hov` are [first, last] (1-based) or null; `errs` line numbers or {line, message, severity ('error', the default, or 'warning' for a note), id (the message it points to)}. */
   mark(sel, hov, errs = []) {
     this.marks = { sel, hov, errs };
     this.applyMarks();
@@ -290,8 +300,9 @@ export class TextPane {
     const { sel = null, hov = null, errs = [] } = this.marks;
     const doc = this.view.state.doc;
     const list = (errs || []).map((e) => (typeof e === 'number' ? { line: e } : e)).filter((e) => e.line >= 1 && e.line <= doc.lines);
-    const diags = list.map((e) => { const l = doc.line(e.line); return { from: l.from, to: l.to, severity: 'error', message: e.message || 'A mistake on this line' }; });
-    this.view.dispatch(setDiagnostics(this.view.state, diags), { effects: setMarks.of({ sel, hov, errs: list.map((e) => e.line) }), userEvent: QUIET });
+    const diags = list.map((e) => { const l = doc.line(e.line); return { from: l.from, to: l.to, severity: e.severity === 'warning' ? 'warning' : 'error', message: e.message || 'A mistake on this line', id: e.id }; });
+    const lines = (sev) => list.filter((e) => (e.severity === 'warning') === (sev === 'warning')).map((e) => e.line);
+    this.view.dispatch(setDiagnostics(this.view.state, diags), { effects: setMarks.of({ sel, hov, errs: lines('error'), notes: lines('warning') }), userEvent: QUIET });
   }
 
   /** Scroll so line `n` is in view, unless it already is. */

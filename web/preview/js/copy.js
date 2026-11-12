@@ -5,7 +5,7 @@
 
 const DONE_MS = 1600;
 
-/** A copy button for `text()` (a string, or a function giving one when pressed). */
+/** A copy button for `text()` (a string, or a function giving one, or a promise of one, when pressed). */
 export function copyButton(text, { label = '', title = 'Copy', note = null } = {}) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -20,8 +20,8 @@ export function copyButton(text, { label = '', title = 'Copy', note = null } = {
   if (label) { words.textContent = label; b.append(words); }
   let timer = 0;
   b.addEventListener('click', async () => {
-    const value = typeof text === 'function' ? text() : text;
     try {
+      const value = await (typeof text === 'function' ? text() : text);
       await navigator.clipboard.writeText(value);
     } catch (e) {
       // Expected when the browser refuses the clipboard: say so on the button, where it was pressed.

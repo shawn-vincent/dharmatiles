@@ -31,11 +31,8 @@
     </div>
     <span class="grow"></span>
     <button id="target" type="button" aria-expanded="false" aria-haspopup="true" title="The build target: the base system and the printer every build is for"><span id="target-sys">DungeonBlocks</span><i class="dot" aria-hidden="true"></i><span id="target-printer">default</span></button>
-    <button id="gate" type="button" hidden aria-expanded="false" title="The printability gate: click for the build record"><i></i><span class="lbl" id="gatetext"></span></button>
     <button id="export" class="btn" type="button" hidden aria-expanded="false" title="Write the STL (or a 3MF) to out/">Export</button>
     <button id="theme" class="btn icon" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button>
-    <div id="progress"></div>
-
   </header>
 
   <div id="side" class="editing">
@@ -109,17 +106,6 @@
       <ul id="debug-rows"></ul>
       <p id="debug-thinned" class="note" hidden>Thinned: every few marks are shown.</p>
     </div>
-    <div id="record-card" class="card" hidden>
-      <div id="verdict" hidden></div>
-      <button id="show-worst" class="btn inspect" type="button" hidden>Show worst face</button>
-      <div id="failures"></div>
-      <dl id="record"></dl>
-      <ul id="legend">
-        <li><i class="sw" style="background:var(--over)"></i><span id="lg-red">Past the steepest: small patches allowed, more fails</span></li>
-        <li><i class="sw" style="background:var(--band)"></i><span id="lg-orange">55–65°: allowed within budget</span></li>
-        <li><i class="sw" style="background:#2a2a2e"></i><span>Tile side wall</span></li>
-      </ul>
-    </div>
     <div id="target-card" class="card" hidden>
       <div class="cap">Base system</div>
       <div class="seg" id="target-system" role="group" aria-label="Base system"><button type="button" data-sys="db">DungeonBlocks</button><button type="button" data-sys="ol">OpenLOCK</button></div>
@@ -134,10 +120,30 @@
       <p id="export-why"></p>
       <div class="row-btns"><button class="btn" id="export-reveal" type="button" hidden>Reveal in Finder</button><button class="btn on" id="export-go" type="button">Export</button></div>
     </div>
-    <div id="status" hidden><div id="bar"><i id="bar-fill"></i></div><span id="status-text"></span></div>
     <div id="hint" role="status"></div>
     <div id="toast" role="status" hidden><span></span><button type="button">Undo</button></div>
-    <div id="errors" hidden></div>
+    <div id="msgpanel" hidden role="region" aria-label="Messages">
+      <div id="msg-head">
+        <b>Messages</b>
+        <div class="seg" id="msg-filters" role="group" aria-label="Show"></div>
+        <span class="grow"></span>
+        <span id="msg-copy"></span>
+        <button class="pane-x" id="msg-close" type="button" title="Close (⌃J)" aria-label="Close the messages">×</button>
+      </div>
+      <div id="msg-body"></div>
+      <ul id="legend">
+        <li><i class="sw" style="background:var(--over)"></i><span id="lg-red">Past the steepest: small patches allowed, more fails</span></li>
+        <li><i class="sw" style="background:var(--band)"></i><span id="lg-orange">55–65°: allowed within budget</span></li>
+        <li><i class="sw" style="background:#2a2a2e"></i><span>Tile side wall</span></li>
+      </ul>
+    </div>
+    <div id="statusbar" role="status">
+      <i id="sb-bar" aria-hidden="true"></i>
+      <button id="sb-main" type="button" aria-expanded="false" aria-controls="msgpanel" title="Messages (⌃J)"><i id="sb-dot" aria-hidden="true"></i><span id="sb-verdict"></span><span id="sb-counts"></span></button>
+      <span class="grow"></span>
+      <span id="sb-saved"></span>
+      <span id="sb-target" title="The build target: change it from the chip in the title bar"></span>
+    </div>
     <div id="place">
       <div id="tool" hidden><b></b><span></span><button type="button" title="Put it down (Esc)" aria-label="Put the tool down">×</button></div>
       <div id="place-list" role="listbox" aria-label="What can be placed or drawn" hidden></div>
@@ -182,6 +188,7 @@
         <dt><kbd>⌘F</kbd></dt><dd>Find in source</dd>
         <dt><kbd>⌘Z</kbd> <kbd>⌘⇧Z</kbd></dt><dd>Undo, redo</dd>
         <dt><kbd>F2</kbd></dt><dd>Rename the tile</dd>
+        <dt><kbd>⌃J</kbd></dt><dd>Messages</dd>
       </dl>
       <dl>
         <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Views</dd>

@@ -5,11 +5,11 @@
 // that throw, replies that failed, builds that panicked.  Each is kept with
 // what was being done, how to say it to the user, the whole chain of errors
 // under it (the page's, then the server's with its causes and backtrace) and
-// a plain-text report to copy into a bug report.  The error panel
-// (editor/export.js) draws them.  The console gets each too, but is never the
+// a plain-text report to copy into a bug report.  The messages panel
+// (editor/panel.js) draws them, from the program's stream of messages.  The console gets each too, but is never the
 // only place.
 //
-//   showError(what, err)    one failure: "Could not save 1x1-cliff", the error
+//   showError(what, err)    one failure: "Could not save 1x1-cliff", the error; also reported to the stream of messages (setReporter)
 //   failed(what, result)    true (and shown) for a reply that is an internal failure
 //   installGlobalHandlers() script errors and unhandled rejections land here too
 //   detailsOf(what, err)    the report: what, the chain with every stack, the environment
@@ -196,7 +196,15 @@ export function onProblems(fn) {
 
 const changed = () => { for (const fn of listeners) fn(entries); };
 
-/** Put one failure in the error panel: `what` was being done, `err` is what went wrong. */
+let reporter = null;
+/**
+ * The editor says where a failure of the page's own goes besides here: `fn(what, err, entry)`
+ * (editor/panel.js puts it in the program's stream of messages, where the messages panel
+ * shows it and an assistant reads it).  Called once for each new failure.
+ */
+export function setReporter(fn) { reporter = fn; }
+
+/** Put one failure in the list of problems (and the stream): `what` was being done, `err` is what went wrong. */
 export function showError(what, err) {
   console.error(what, err);
   const d = describe(err);
@@ -205,7 +213,9 @@ export function showError(what, err) {
   if (same) same.count += 1;
   else {
     const env = collectEnvironment(globalThis, known());
-    entries.push({ what, message, ...d, chain: chainOf(err), details: detailsOf(what, err, env), count: 1, open: false });
+    const entry = { what, message, ...d, chain: chainOf(err), details: detailsOf(what, err, env), count: 1, open: false };
+    entries.push(entry);
+    reporter?.(what, err, entry);
   }
   changed();
 }
