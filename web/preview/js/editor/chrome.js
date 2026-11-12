@@ -8,6 +8,7 @@ import { VIEWS } from '../viewer.js';
 import { legendRows } from '../debug-layer.js';
 import { $, host, pickView, viewer } from './app.js';
 import { copyButton, versionParts } from '../copy.js';
+import { goUp, setFace } from './levels.js';
 import { server, tile, view } from './stores.js';
 
 // ---- the view's controls: views and the display menu -------------------
@@ -162,13 +163,10 @@ function setProjection(ortho, animated = true) {
   $('b-proj').firstChild.textContent = ortho ? 'Orthographic ' : 'Perspective ';
   try { localStorage.setItem('dt-preview-ortho', ortho ? '1' : '0'); } catch { /* private mode */ }
 }
-// the panes: Edit (source over properties), Inspect (side by side), Look (the view alone)
+// the panel: beside the view (one level at a time, or the source), or hidden (Look: the view alone)
 const layout = new Layout($('app'), (st) => {
-  $('reopen').hidden = !st.hideSource && !st.hideProps;
-  $('show-source').hidden = !st.hideSource;
-  $('show-props').hidden = !st.hideProps;
-  const preset = st.hideSource && st.hideProps ? 'look' : st.hideSource || st.hideProps ? null : st.mode;
-  for (const b of $('layout-seg').children) b.classList.toggle('on', b.dataset.preset === preset);
+  $('reopen').hidden = !st.hidePanel;
+  for (const b of $('layout-seg').children) b.classList.toggle('on', b.dataset.preset === (st.hidePanel ? 'look' : 'edit'));
   $('t-right').checked = st.side === 'right';
 });
 /** The About box: the application version and the tile formats it reads, asked of the program. */
@@ -195,17 +193,12 @@ async function showAbout() {
   }
 }
 const showKeys = () => { closePopovers(); $('keys').showModal(); };
-/** ⌘1/⌘2/⌘3: put the keyboard in the source, the view or the properties (showing the pane first). */
+/** ⌘1/⌘2/⌘3: put the keyboard in the source, the view or the tile's levels (showing the panel first). */
 function focusPane(n) {
-  const st = layout.state;
-  if (n === 1) { if (st.hideSource) layout.toggle('source'); $('code').querySelector('.cm-content')?.focus(); }
-  if (n === 2) $('canvas').focus();
-  if (n === 3) {
-    if (st.hideProps) layout.toggle('props');
-    const f = $('lens').querySelector('button, input, select, [tabindex], .val');
-    if (f) { if (!f.hasAttribute('tabindex') && f.classList.contains('val')) f.tabIndex = -1; f.focus(); }
-    else { $('lens').tabIndex = -1; $('lens').focus(); }
-  }
+  if (n === 2) { $('canvas').focus(); return; }
+  layout.showSide();
+  view.set({ page: 'edit' });
+  setFace(n === 1 ? 'source' : 'tile', { focus: true });
 }
 
 /** Wire this part of the page (once, at load). */
@@ -260,8 +253,7 @@ export function init() {
   applyTheme();
   $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
   try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* private mode: the default stands */ }
-  $('hide-source').onclick = $('show-source').onclick = () => layout.toggle('source');
-  $('hide-props').onclick = $('show-props').onclick = () => layout.toggle('props');
+  $('show-panel').onclick = () => layout.toggle();
   for (const b of $('layout-seg').children) b.onclick = () => layout.preset(b.dataset.preset);
   $('t-right').onchange = (e) => layout.set({ side: e.target.checked ? 'right' : 'left' });
   $('b-keys').onclick = showKeys;
@@ -278,7 +270,7 @@ export function init() {
     if (e.key === 'Escape') {
       if (closePopovers()) return;
       if (browsing() && tile() && !$('side').hidden) { view.set({ page: 'edit' }); return; }
-      view.set({ sel: null }); // selection.js reflects it
+      goUp(); // up a level of the panel (levels.js); at the tile there is nowhere to go
       return;
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
@@ -294,9 +286,7 @@ export function init() {
     if (e.key === 't') toggleTheme();
     if (e.key === 'p') setProjection(!viewer.isOrtho);
     if (e.key === 'a' || e.key === '/') { e.preventDefault(); $('place-in').focus(); }
-    if (e.key === '[') layout.toggle('source');
-    if (e.key === ']') layout.toggle('props');
-    if (e.key === '\\') layout.toggle('both');
+    if (e.key === '\\') layout.toggle();
     if (e.key === '?') { e.preventDefault(); showKeys(); }
   });
 }

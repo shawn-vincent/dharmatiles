@@ -89,12 +89,13 @@ export class Lens {
 
   hide() {
     this.model = null;
+    this.identity = null;
     this.field = null;
     this.pending = null;
     this.root.hidden = false;
     this.root.replaceChildren();
     const empty = el('div', 'empty');
-    empty.append(el('b', '', 'Nothing selected'), 'Click something on the tile or put the cursor in its line to inspect and change it.');
+    empty.append(el('b', '', this.emptyTitle ?? 'Nothing selected'), this.emptyText ?? 'Click something on the tile or put the cursor in its line to inspect and change it.');
     this.root.append(empty);
   }
   get dragging() { return !!this.drag; }
@@ -108,13 +109,18 @@ export class Lens {
    */
   show(model) {
     if (this.drag || this.field) { this.pending = model; return; } // not under a drag or a field being typed in: shown when it ends
+    // the same thing drawn again (a value changed) keeps where it was scrolled to
+    const identity = `${model.kind}|${model.title}`;
+    const kept = identity === this.identity ? this.root.querySelector('.body')?.scrollTop ?? 0 : 0;
+    this.identity = identity;
     this.model = model;
     const r = this.root;
     r.replaceChildren();
     r.hidden = false;
-    const head = el('div', 'lt');
+    const head = el('div', model.slim ? 'lt slim' : 'lt');
     const heading = el('div', 'heading');
-    heading.append(el('span', 'cap', model.kind || 'Properties'), el('b', '', model.title));
+    heading.append(el('span', 'cap', model.kind || 'Properties'));
+    if (!model.slim) heading.append(el('b', '', model.title));
     head.append(heading);
     if (model.href) {
       const a = el('a', '', 'Help ↗');
@@ -149,6 +155,7 @@ export class Lens {
       if (g.schema) for (const s of g.written) if (!g.schema.controls.some((c) => c.name === s.name)) body.append(this.row(g, { name: s.name }, s));
     }
     if (model.add && this.editable()) body.append(this.addMenu(model.add));
+    if (model.tail) body.append(model.tail);
     if (hidden || this.more) {
       const b = el('button', 'linkish more', this.more ? 'fewer controls' : `${hidden} more control${hidden === 1 ? '' : 's'}`);
       b.onclick = () => { this.more = !this.more; this.show(this.model); };
@@ -163,6 +170,7 @@ export class Lens {
       }
       r.append(actions);
     }
+    body.scrollTop = kept;
   }
 
   /** A menu that adds something: `add` is {label, items: [{label, title, disabled, run}]}; choosing an item runs it, then the menu is ready again. */
@@ -294,6 +302,13 @@ export class Lens {
       x.title = `Take ${c.name} out (back to its default)`;
       x.onclick = () => this.put(g, c.name, null);
       row.append(x);
+    }
+    // a control with more to show opens its own level
+    if (this.api.detail?.(c)) {
+      const d = el('button', 'chev', '›');
+      d.type = 'button'; d.title = `More about ${c.name}`; d.setAttribute('aria-label', `More about ${c.name}`);
+      d.onclick = () => this.api.openControl?.(Math.max(0, this.model?.groups.indexOf(g) ?? 0), c.name);
+      row.append(d);
     }
     return row;
   }

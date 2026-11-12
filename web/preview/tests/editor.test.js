@@ -197,34 +197,24 @@ test('history names an indent at the start of a line as spacing, not a removal',
 
 test('a stored layout falls back to the defaults field by field', () => {
   assert.deepEqual(normalise(null), { ...DEFAULTS });
-  assert.deepEqual(normalise({ mode: 'sideways', side: 'right', sidew: -5, texth: 3, hideSource: 'yes' }),
+  assert.deepEqual(normalise({ mode: 'sideways', side: 'right', sidew: -5, texth: 3, hidePanel: 'yes' }),
     { ...DEFAULTS, side: 'right' });
-  assert.equal(normalise({ mode: 'inspect', sourcew: 410 }).sourcew, 410);
+  assert.equal(normalise({ sidew: 410 }).sidew, 410);
+  // layouts from before the one panel: both panes hidden was Look; the sidebar's width is kept
+  assert.equal(normalise({ hideSource: true, hideProps: true }).hidePanel, true);
+  assert.equal(normalise({ mode: 'inspect', hideSource: true }).hidePanel, false);
 });
 
-test('panes give way so the view keeps its minimum', () => {
+test('the panel gives way so the view keeps its minimum', () => {
   const w = 1280;
-  const e = fit({ ...DEFAULTS, sidew: 5000 }, w);
-  assert.equal(e.sidew, w - MIN.view - SASH);
-  const i = fit({ ...DEFAULTS, mode: 'inspect', sourcew: 900, propw: 300 }, w);
-  assert.ok(i.sourcew + i.propw + 2 * SASH + MIN.view <= w);
-  assert.ok(i.sourcew >= MIN.source && i.propw >= MIN.props);
-  assert.equal(fit({ ...DEFAULTS, sidew: 10 }, w).sidew, MIN.source);
+  assert.equal(fit({ ...DEFAULTS, sidew: 5000 }, w).sidew, w - MIN.view - SASH);
+  assert.equal(fit({ ...DEFAULTS, sidew: 10 }, w).sidew, MIN.panel);
 });
 
-test('the grid puts every shown pane and sash in place', () => {
-  const edit = grid({ ...DEFAULTS });
-  assert.match(edit.areas, /"side sash-side view"/);
-  assert.equal(edit.editor.areas, '"source" "sash-split" "properties"');
-  assert.equal(edit.props, 'editor');
+test('the grid puts the panel and its sash in place, or the view alone', () => {
+  assert.match(grid({ ...DEFAULTS }).areas, /"side sash-side view"/);
   assert.match(grid({ ...DEFAULTS, side: 'right' }).areas, /"view sash-side side"/);
-  assert.equal(grid({ ...DEFAULTS, hideProps: true }).editor.areas, '"source"');
-  assert.equal(grid({ ...DEFAULTS, hideSource: true }).editor.areas, '"properties"');
-  const ins = grid({ ...DEFAULTS, mode: 'inspect' });
-  assert.match(ins.areas, /"side sash-side view sash-props properties"/);
-  assert.equal(ins.props, 'app');
-  assert.match(grid({ ...DEFAULTS, mode: 'inspect', side: 'right', hideSource: true }).areas, /"properties sash-side view"/);
-  assert.equal(grid({ ...DEFAULTS, hideSource: true, hideProps: true }).areas, '"title" "view"');
+  assert.equal(grid({ ...DEFAULTS, hidePanel: true }).areas, '"title" "view"');
 });
 
 test('a new line is indented by the line above, one more after {, one less before }', () => {

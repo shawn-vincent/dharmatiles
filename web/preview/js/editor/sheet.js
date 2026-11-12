@@ -2,11 +2,16 @@
 // made there.
 
 import { Lens, kdlString } from '../lens.js';
+import { buildOutline } from '../outline.js';
+import { orderStack } from '../nav.js';
+import { showProperty } from '../property.js';
 import { byteToIndex } from '../text.js';
 import { failed, showError } from '../problems.js';
 import { $, host, makeMine, toast } from './app.js';
 import { askDraft, edited, replaceBytes, spansUsable, undo } from './document.js';
-import { doc, elementNamed, isEntry, isMark, itemOf, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
+import { doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, tileSel, view } from './stores.js';
+import { closeControl, openControl, showSourceAt } from './levels.js';
+import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 
@@ -24,7 +29,7 @@ async function setControl(at, name, value) {
   edited(r.body.text, 'lens', `Changed ${name}`);
 }
 
-export const lens = new Lens($('lens'), {
+const sheetApi = {
   writable: () => doc.get().writable,
   replace: replaceBytes,
   set: setControl,
@@ -46,7 +51,16 @@ export const lens = new Lens($('lens'), {
     if (r.status >= 400) { showError('Could not read the weighting curves', new Error('Could not read the weighting curves', { cause: r.error })); return null; }
     return r.status === 0 ? null : r.body;
   },
+};
+// the three levels draw with the same api: the thing's sheet, the tile's (with what it holds under it) and one control's page
+const lens = new Lens($('lens'), {
+  ...sheetApi,
+  // a control with more to show opens its own level (a stack entry's: ranges and heights)
+  detail: (c) => isEntry(view.get().sel) && (c.ranges || c.unit === 'height'),
+  openControl: (group, name) => openControl(group, name),
 });
+const tileLens = new Lens($('lens-tile'), sheetApi);
+tileLens.emptyTitle = 'No tile'; tileLens.emptyText = 'Choose a tile to see what it holds.';
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty.
 // What each is (its unit, help, default) is the program's; this only picks the rows
 const tileRows = (names) => ({ controls: names.map((n) => nodeControl('tile', n)).filter(Boolean) });
@@ -61,11 +75,24 @@ async function tileEdit(body, label) {
   edited(r.body.text, 'lens', label);
   return true;
 }
-function renderTileLens() {
+/** The tile level's rows: what the tile holds (lines, regions, the stack in build order) and the messages each stack row wears. */
+function tileContents() {
+  const t = tile(), map = doc.get().map;
+  const stack = orderStack(stackItems()).map((it) => ({ ...it, family: elementNamed(it.what)?.family }));
+  const hover = (w) => view.set({ hov: w && w.kind === 'entry' ? entrySel(w.id) : null });
+  return buildOutline(
+    { lines: map?.lines, regions: map?.regions, stack, badges: t ? log.byNode(t.id) : new Map() },
+    {
+      open: (kind, id) => setSel(kind === 'entry' ? entrySel(id) : markSel(kind, id), { from: 'view' }),
+      hover,
+    },
+  );
+}
+function tileModel() {
   const t = tile(), own = doc.get().map?.tile;
-  if (!t || !own || doc.get().file !== t.path) { lens.hide(); return; }
+  if (!t || !own || doc.get().file !== t.path) return null;
   const node = nodeNamed('tile');
-  if (!node) { lens.hide(); return; } // the program's description of the tile is not here yet
+  if (!node) return null; // the program's description of the tile is not here yet
   const groups = [{ at: own.at, schema: tileRows(['size', 'seed']), written: own.controls.map(asWritten) }];
   // the description: `about "…"` in the tile's body
   const about = own.about, av = about?.value;
@@ -81,8 +108,7 @@ function renderTileLens() {
   const actions = doc.get().writable ? [
     { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
   ] : [];
-  const note = 'The tile. Select something on it to change that instead.';
-  lens.show({ title: stem(t), kind: 'tile', href: node.href, note, groups, actions });
+  return { title: stem(t), kind: 'tile', href: node.href, groups, actions, tail: tileContents(), slim: true };
 }
 /** A run of written text (a line's points, a region's lines) as a lens setting. */
 const runWritten = (name, run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
@@ -112,11 +138,11 @@ async function setClause(clause, name, value) {
   }
 }
 /** The sheet of a drawn line or a region: its name, its controls, its points. */
-function renderMarkLens(kind, m) {
+function markModel(kind, m) {
   const t = tile(), sh = m?.sheet;
-  if (!t || !sh || doc.get().file !== t.path) { lens.hide(); return; }
+  if (!t || !sh || doc.get().file !== t.path) return null;
   const node = nodeNamed(kind);
-  if (!node) { lens.hide(); return; }
+  if (!node) return null;
   // renaming goes through the server's edit route (`viaSet`), which renames every use of the name
   const nameRow = { ...nodeControl(kind, 'name'), viaSet: true };
   const written = [{ name: 'name', text: `name=${m.name}`, span: [sh.at, 0] }];
@@ -170,26 +196,23 @@ function renderMarkLens(kind, m) {
     };
     const note = combineNote(sh);
     const actions = doc.get().writable || canMine() ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
-    lens.show({
+    return {
       title: m.name, kind, href: node.href, note,
       groups: [...main, ...clauses], add, actions,
-    });
-    return;
+    };
   }
   const actions = doc.get().writable || canMine() ? [{ label: 'Delete', title: `Delete this ${kind} from the source`, danger: true, run: () => tileEdit({ op: 'remove', at: sh.at }, `Deleted ${kind} ${m.name}`).then((ok) => ok && view.set({ sel: null })) }] : [];
-  lens.show({
+  return {
     title: m.name, kind, href: node.href,
     groups: [{ at: sh.at, schema: { controls }, written, set }], actions,
-  });
+  };
 }
-function renderLens() {
-  const s = view.get().sel;
-  if (isMark(s)) { renderMarkLens(s.kind, mapNode(s)); return; }
-  const it = isEntry(s) ? itemOf(s) : null;
+/** The sheet model of the entry `s` selects, or null while the text, the check or the program's description is not there. */
+function entryModel(s) {
+  const it = itemOf(s);
   const elements = server.get().elements;
-  if (!s || s.kind === 'tile') { renderTileLens(); return; }
   const { file, writable } = doc.get();
-  if (!it || !it.span || it.file !== file || !elements.length) { lens.hide(); return; }
+  if (!it || !it.span || it.file !== file || !elements.length) return null;
   // the base line: no settings of its own; the build target (the system chip) picks the connector
   const base = it.element === 'connector';
   const groups = base ? [] : [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
@@ -202,7 +225,48 @@ function renderLens() {
     );
   }
   const note = base ? 'The connector under zero. It has no settings: the build target (the system chip at the top) chooses DungeonBlocks or OpenLOCK. Delete the line for a tile with no base.' : undefined;
-  lens.show({ title: it.label, kind: it.what || it.element, href: it.href, note, groups, actions });
+  return { title: it.label, kind: it.what || it.element, href: it.href, note, groups, actions };
+}
+
+/** The tile level: its controls, and under them what it holds. */
+function renderTile() {
+  const t = tileModel();
+  // a row the arrow keys are on keeps the focus when the rows are drawn again (a message came, a value changed)
+  const was = document.activeElement?.closest?.('#lens-tile .orow');
+  const wasAt = was ? { kind: was.dataset.kind, id: was.dataset.id } : null;
+  if (t) tileLens.show(t); else tileLens.hide();
+  if (wasAt) [...$('lens-tile').querySelectorAll('.orow')].find((r) => r.dataset.kind === wasAt.kind && r.dataset.id === wasAt.id)?.focus({ preventScroll: true });
+}
+
+/** Draw the three levels: the tile's (always), the selected thing's, and the open control's. */
+function renderLens() {
+  const s = view.get().sel;
+  renderTile();
+  const model = isMark(s) ? markModel(s.kind, mapNode(s)) : isEntry(s) ? entryModel(s) : null;
+  if (model) lens.show(model); else lens.hide();
+  renderProperty(model);
+}
+
+const HEIGHT_NAMES = /bottom|height/i;
+/** The control page: the open control of the selected entry, if the sheet still has it (else the page closes). */
+function renderProperty(model) {
+  const { sel, control } = view.get();
+  const root = $('lens-prop');
+  if (!control || !isEntry(sel)) { root.replaceChildren(); return; }
+  if (!model) return; // the sheet is not drawn yet (the text is being checked): keep the page as it is
+  const g = model.groups[control.group];
+  const c = g?.schema?.controls?.find((x) => x.name === control.name);
+  if (!c) { closeControl(); return; }
+  // a value is being typed: the page is not redrawn under it (it is drawn again when the edit lands)
+  if (root.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+  const element = g.schema?.name;
+  showProperty(root, {
+    element, label: `${model.title}${g.heading ? ` · ${g.heading}` : ''}`, c,
+    s: g.written.find((w) => w.name === c.name), at: g.at,
+    weightings: elementNamed(element)?.weightings,
+    // the names the program reads in this tile (its own heights too), else the language's plain ones
+    names: { heights: (doc.get().map?.language?.names || server.get().language?.names || []).filter((n) => HEIGHT_NAMES.test(n)) },
+  }, { ...sheetApi, showSource: () => showSourceAt(view.get().sel, g.written.find((w) => w.name === c.name)?.span?.[0] ?? null) });
 }
 
 /** Comment a stack entry out (`/-`), with a way back. */
@@ -229,7 +293,8 @@ async function removeAt(byte, label = 'Entry') {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  view.subscribe(['sel', 'tileId'], renderLens);
+  view.subscribe(['sel', 'tileId', 'control'], renderLens);
+  log.subscribe(renderTile);
   doc.subscribe(['stack', 'map', 'file', 'writable', 'tileId'], renderLens);
   server.subscribe(['elements', 'language'], renderLens);
   // before the text is checked the sheet reads the build's plan: not redrawn for builds that change nothing it shows

@@ -7,7 +7,7 @@
 
 export const SCROLLERS = [
   '#browser #tiles', '.history-menu', '#export-card', '#target-card',
-  '#comp', '#lens .body', '.value-pop .vp-list', '#msg-body', '#place-list',
+  '#comp', '.lvlbox .body', '.value-pop .vp-list', '#msg-body', '#place-list',
   '#code .cm-scroller',
 ];
 

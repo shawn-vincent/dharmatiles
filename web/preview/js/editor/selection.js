@@ -58,6 +58,9 @@ export function setSel(w, { from, guarded = false } = {}) {
     return;
   }
   const patch = { sel: w };
+  // a control open on a thing stays open while the thing stays selected (a piece of it, say); a new thing starts at its own level
+  const cur = view.get().sel;
+  if (!(w && cur && w.kind === cur.kind && w.id === cur.id)) patch.control = null;
   if (isEntry(w)) {
     // the text follows: the selection's own file (unless it was the text that asked)
     if (targetFile && from !== 'text') patch.textFile = targetFile === tile()?.path ? null : targetFile;
@@ -226,7 +229,6 @@ export function init() {
   doc.subscribe(['stack', 'file', 'tileId'], caretCloud);
 
   view.subscribe(['sel', 'hov', 'shown', 'draft', 'tileId'], paintHighlight);
-  view.subscribe(['sel', 'tileId'], () => $('tilebtn').classList.toggle('sel', view.get().sel?.kind === 'tile'));
   view.subscribe(['sel', 'hov', 'tileId'], markText);
   doc.subscribe(['checked', 'errors', 'file', 'map', 'stack', 'tileId', 'base'], markText);
   server.subscribe(['tiles'], markText);
@@ -234,7 +236,6 @@ export function init() {
   doc.subscribe(['stack', 'checked'], selectWritten);
   // a file just shown: scroll it to the selection's lines
   doc.subscribe(['file'], revealSel);
-  $('tilebtn').onclick = () => setSel(tileSel());
   addEventListener('keydown', (e) => {
     const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
     if (e.key === 'f' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && view.get().sel) frameSel();

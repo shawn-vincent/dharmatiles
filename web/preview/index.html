@@ -50,21 +50,28 @@
       </section>
       <div id="editpage">
         <div id="crumb">
-          <button id="back" type="button" title="All the tiles"><span aria-hidden="true">‹</span> <span id="tilewhere">Tiles</span></button>
+          <button id="back" type="button" title="All the tiles (⌘[ from the tile)"><span aria-hidden="true">‹</span> <span id="tilewhere">Tiles</span></button>
           <span class="sep" aria-hidden="true">›</span>
-          <button id="tilebtn" type="button" title="The tile's own properties"><span id="tilename"></span></button>
+          <button id="tilebtn" type="button" title="The tile"><span id="tilename"></span></button>
           <span id="rochip" hidden title="A library tile. Your first change copies it into My tiles and makes the change there.">library</span>
+          <nav id="crumbs-deep" aria-label="Where you are in the tile"></nav>
+          <span class="grow"></span>
+          <div class="seg" id="face" role="group" aria-label="What the panel shows">
+            <button type="button" data-face="tile" title="The tile, level by level (⌘3)">Tile</button>
+            <button type="button" data-face="source" title="The source of the tile (⌘1)">Source</button>
+          </div>
         </div>
-        <div id="editor">
+        <div id="ctx" role="note"></div>
+        <div id="stage" data-face="tile">
+          <div id="levels">
+            <section class="lvl" id="lvl-tile" data-depth="0" tabindex="-1" aria-label="The tile"><div id="lens-tile" class="lvlbox"></div></section>
+            <section class="lvl" id="lvl-element" data-depth="1" tabindex="-1" aria-label="One thing of the tile" hidden><div id="lens" class="lvlbox" role="region" aria-label="Properties of the selection"></div></section>
+            <section class="lvl" id="lvl-prop" data-depth="2" tabindex="-1" aria-label="One control" hidden><div id="lens-prop" class="lvlbox"></div></section>
+          </div>
           <section id="source" aria-label="The source">
             <div id="partbar" hidden><span id="sourcepath"></span><button class="back" id="part-back" type="button">Back to the tile</button></div>
-            <button class="pane-x" id="hide-source" type="button" title="Hide the source ([)" aria-label="Hide the source">×</button>
             <div id="code" role="list"></div>
           </section>
-          <aside id="properties-pane" aria-label="Properties">
-            <button class="pane-x" id="hide-props" type="button" title="Hide the properties (])" aria-label="Hide the properties">×</button>
-            <div id="lens" role="region" aria-label="Properties of the selection"></div>
-          </aside>
         </div>
       </div>
     </div>
@@ -74,17 +81,16 @@
     <canvas id="canvas" tabindex="0" aria-label="3D tile view"></canvas>
     <canvas id="over" aria-hidden="true"></canvas>
     <div id="viewbar">
-      <div id="reopen" hidden><button class="btn" id="show-source" type="button" title="Show the source ([)">Source</button><button class="btn" id="show-props" type="button" title="Show the properties (])">Properties</button></div>
+      <div id="reopen" hidden><button class="btn" id="show-panel" type="button" title="Show the panel (\)">Panel</button></div>
       <div class="seg" id="views" role="group" aria-label="Views"></div>
       <button id="layoutbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Layout: which panes show, and where" aria-label="Layout"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.4"/></svg></button>
       <div id="layout-menu" class="menu" hidden>
         <div class="cap">Layout</div>
         <div class="seg" id="layout-seg" role="group" aria-label="Layout">
-          <button type="button" data-preset="edit" title="Source over properties in one sidebar">Edit</button>
-          <button type="button" data-preset="inspect" title="Source, view and properties side by side">Inspect</button>
+          <button type="button" data-preset="edit" title="The panel beside the view">Panel</button>
           <button type="button" data-preset="look" title="Only the view (\)">Look</button>
         </div>
-        <label class="switch"><input type="checkbox" id="t-right"> Panes on the right</label>
+        <label class="switch"><input type="checkbox" id="t-right"> The panel on the right</label>
       </div>
       <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display" aria-label="Display">⋯</button>
       <div id="display" class="menu" hidden>
@@ -181,10 +187,11 @@
       <dl>
         <dt><kbd>⌘1</kbd></dt><dd>The source</dd>
         <dt><kbd>⌘2</kbd></dt><dd>The view</dd>
-        <dt><kbd>⌘3</kbd></dt><dd>The properties</dd>
-        <dt><kbd>[</kbd></dt><dd>Hide or show the source</dd>
-        <dt><kbd>]</kbd></dt><dd>Hide or show the properties</dd>
-        <dt><kbd>\</kbd></dt><dd>Only the view</dd>
+        <dt><kbd>⌘3</kbd></dt><dd>The tile, level by level</dd>
+        <dt><kbd>Esc</kbd> <kbd>⌘[</kbd></dt><dd>Up a level</dd>
+        <dt><kbd>⌘]</kbd></dt><dd>Back down the level you left</dd>
+        <dt><kbd>↑</kbd> <kbd>↓</kbd> <kbd>⏎</kbd></dt><dd>Move between rows; open one</dd>
+        <dt><kbd>\</kbd></dt><dd>Hide or show the panel</dd>
         <dt><kbd>⌘F</kbd></dt><dd>Find in source</dd>
         <dt><kbd>⌘Z</kbd> <kbd>⌘⇧Z</kbd></dt><dd>Undo, redo</dd>
         <dt><kbd>F2</kbd></dt><dd>Rename the tile</dd>

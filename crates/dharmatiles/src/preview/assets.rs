@@ -107,6 +107,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/editor/selection.js"),
     ),
     (
+        "/js/editor/levels.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/levels.js"),
+    ),
+    (
         "/js/editor/region-sheet.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/editor/region-sheet.js"),
@@ -130,6 +135,21 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/js/editor/title.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/editor/title.js"),
+    ),
+    (
+        "/js/nav.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/nav.js"),
+    ),
+    (
+        "/js/outline.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/outline.js"),
+    ),
+    (
+        "/js/property.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/property.js"),
     ),
     (
         "/js/problems.js",

@@ -2,7 +2,7 @@
 
 import { failed, showError } from '../problems.js';
 import { $, host } from './app.js';
-import { dirty, doc, renameable, rootOf, server, stem, tile, view } from './stores.js';
+import { dirty, doc, renameable, server, stem, tile, view } from './stores.js';
 import { targetLabel } from './target.js';
 
 // ---- export: the same build as `dharmatiles build`, written to out/ ----------
@@ -57,10 +57,9 @@ function renderTitle() {
     return;
   }
   $('tilename').textContent = stem(t);
-  $('tilewhere').textContent = rootOf(t.root).label || 'Tiles';
-  $('back').title = `All of ${rootOf(t.root).label || 'the tiles'}`;
+  // the folder crumb (its name and tooltip) is the panel's: editor/levels.js
   $('forward').hidden = false; $('forward-name').textContent = stem(t);
-  $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile's properties; double-click or F2 to rename` : `${t.path}\nClick for the tile's properties`;
+  $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile; double-click or F2 to rename` : `${t.path}\nClick for the tile`;
   document.title = `${stem(t)} · dharmatiles`;
   const p = t.plan;
   $('tileplan').textContent = p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares` : '';

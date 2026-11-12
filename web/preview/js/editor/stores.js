@@ -57,6 +57,8 @@ export const log = createLog();
 export const view = createStore({
   tileId: null, root: -1,
   sel: null,           // {kind, id, piece?}: kind entry (id: the entry's key), region or line (id: the name), tile; or null
+  control: null,       // {name, group}: the control open as a level on the selected thing (js/nav.js)
+  face: 'tile',        // what the panel shows: 'tile' (the levels) or 'source'
   hov: null,           // the same, under the pointer (view or text)
   cloudText: null,     // the key of the entry whose cloud (a top= or pin) the source's caret is in
   cloudSheet: null,    // the key of the entry whose top field has focus in the sheet

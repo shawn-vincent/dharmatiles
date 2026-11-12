@@ -22,6 +22,7 @@ import { init as initOpen } from './editor/open.js';
 import { init as initDocument } from './editor/document.js';
 import { init as initSelection } from './editor/selection.js';
 import { init as initSheet } from './editor/sheet.js';
+import { init as initLevels } from './editor/levels.js';
 import { init as initMap, tools } from './editor/map.js';
 import { init as initExport } from './editor/export.js';
 import { init as initTarget } from './editor/target.js';
@@ -29,11 +30,12 @@ import { init as initPanel } from './editor/panel.js';
 import { init as initLive } from './editor/live.js';
 import { init as initScrollShadows } from './scroll-shadows.js';
 import { viewer } from './editor/app.js';
+import { texts } from './editor/document.js';
 import { doc, log, server, view } from './editor/stores.js';
 
 installGlobalHandlers(); // a script error or an unhandled rejection lands in the error panel
 
-window.dtPreview = { server, view, doc, viewer, log, get tools() { return tools; } }; // for tests and the console
+window.dtPreview = { server, view, doc, viewer, log, texts, get tools() { return tools; } }; // for tests and the console
 
 // each part wires itself in the order the page was written in: the frame, the
 // build's camera, the tile menu, the view's tile, the text, the selection, the
@@ -46,6 +48,7 @@ initOpen();
 initDocument();
 initSelection();
 initSheet();
+initLevels();
 initMap();
 initExport();
 initTarget();

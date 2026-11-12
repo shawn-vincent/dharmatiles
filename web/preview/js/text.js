@@ -290,6 +290,15 @@ export class TextPane {
 
   focus() { this.view.focus(); }
 
+  /** Put the caret at the start of line `n` (from 1) and bring it into view: a move the page made, which tells no one. */
+  placeCaret(n) {
+    const doc = this.view.state.doc;
+    if (n < 1 || n > doc.lines) return;
+    const pos = doc.line(n).from;
+    this.view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }), userEvent: QUIET });
+    this.cb.onCaret?.();
+  }
+
   /** Mark lines: `sel` and `hov` are [first, last] (1-based) or null; `errs` line numbers or {line, message, severity ('error', the default, or 'warning' for a note), id (the message it points to)}. */
   mark(sel, hov, errs = []) {
     this.marks = { sel, hov, errs };

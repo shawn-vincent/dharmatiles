@@ -25,7 +25,7 @@ export async function select(id, guarded = false) {
     cameras.set(tile().path, { camera: viewer.getCamera(), activeView: view.get().activeView });
   }
   const to = t ? t.id : null;
-  view.set(to === cur.tileId ? {} : { tileId: to, sel: null, hov: null, activeView: null, textFile: null });
+  view.set(to === cur.tileId ? {} : { tileId: to, sel: null, control: null, hov: null, activeView: null, textFile: null });
   return true;
 }
 
@@ -67,7 +67,8 @@ function pickFirst() {
 function follow() {
   const { ready, epoch } = server.get(), { tileId } = view.get();
   if (!ready) return;
-  if (!started) { started = true; pickFirst(); return; }
+  // the first tile shows the editor page (the page the sidebar starts on): `view.page` says so, so the keys that read it agree with what is on screen
+  if (!started) { started = true; pickFirst().then(() => { if (view.get().tileId != null) view.set({ page: 'edit' }); }); return; }
   const t = tile();
   const first = inRoot(view.get().root)[0];
   // the tile shown was deleted, or none was and one has come: the first one left in its root
