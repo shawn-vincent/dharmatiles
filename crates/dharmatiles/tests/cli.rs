@@ -8,6 +8,17 @@ use std::process::{Command, Stdio};
 
 const EXE: &str = env!("CARGO_BIN_EXE_dharmatiles");
 
+/// The program, with a build cache of this run's own: a test never reads or
+/// writes the user's cache folder.
+fn exe() -> Command {
+    let mut c = Command::new(EXE);
+    c.env(
+        "DT_CACHE",
+        std::env::temp_dir().join(format!("dt-cli-cache-{}", std::process::id())),
+    );
+    c
+}
+
 fn scratch(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("dt-cli-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -23,7 +34,7 @@ fn a_closed_pipe_ends_quietly_with_0() {
     // ~1 MB of errors: far more than a pipe buffers, so the write fails
     let bad = "tile { stack {\n".to_owned() + &"  gruond\n".repeat(4000) + "} }\n";
     std::fs::write(&doc, bad).unwrap();
-    let mut child = Command::new(EXE)
+    let mut child = exe()
         .arg("check")
         .arg(&doc)
         .stdout(Stdio::null())
@@ -40,7 +51,7 @@ fn a_write_error_in_json_has_every_error_key() {
     let d = scratch("write");
     let blocked = d.join("out");
     std::fs::write(&blocked, "a file where the out folder should be").unwrap();
-    let o = Command::new(EXE)
+    let o = exe()
         .args([
             "build",
             "lib:tests/ground/1x1-flat.dtile",
@@ -61,7 +72,7 @@ fn a_write_error_in_json_has_every_error_key() {
 
 #[test]
 fn a_missing_document_is_a_source_error() {
-    let o = Command::new(EXE)
+    let o = exe()
         .args(["check", "--json", "no/such/file.dtile"])
         .output()
         .unwrap();
@@ -72,7 +83,7 @@ fn a_missing_document_is_a_source_error() {
 
 #[test]
 fn the_version_is_drawn_from_git_and_names_the_tile_format() {
-    let o = Command::new(EXE).arg("--version").output().unwrap();
+    let o = exe().arg("--version").output().unwrap();
     let text = String::from_utf8(o.stdout).unwrap();
     let v = text.trim().strip_prefix("dharmatiles ").unwrap();
     let (v, formats) = v.split_once(" (tile format ").unwrap();
@@ -94,7 +105,7 @@ fn the_version_is_drawn_from_git_and_names_the_tile_format() {
 
 #[test]
 fn elements_lists_every_element() {
-    let o = Command::new(EXE).arg("elements").output().unwrap();
+    let o = exe().arg("elements").output().unwrap();
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8(o.stdout).unwrap();
     for name in ["dirt", "grass", "tree", "wall", "cliff", "scatter"] {
@@ -112,10 +123,7 @@ fn elements_lists_every_element() {
 
 #[test]
 fn elements_json_lists_every_function_with_its_numbers() {
-    let o = Command::new(EXE)
-        .args(["elements", "rock", "--json"])
-        .output()
-        .unwrap();
+    let o = exe().args(["elements", "rock", "--json"]).output().unwrap();
     assert_eq!(o.status.code(), Some(0));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     let names: Vec<&str> = v["weightings"]
@@ -150,10 +158,7 @@ fn elements_json_lists_every_function_with_its_numbers() {
 
 #[test]
 fn elements_rock_lists_the_weightings() {
-    let o = Command::new(EXE)
-        .args(["elements", "rock"])
-        .output()
-        .unwrap();
+    let o = exe().args(["elements", "rock"]).output().unwrap();
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8(o.stdout).unwrap();
     let size = text
@@ -176,19 +181,13 @@ fn elements_rock_lists_the_weightings() {
     }
     assert!(!text.contains("skews"), "{text}");
     // an element with no weighted control lists none
-    let o = Command::new(EXE)
-        .args(["elements", "water"])
-        .output()
-        .unwrap();
+    let o = exe().args(["elements", "water"]).output().unwrap();
     assert!(!String::from_utf8(o.stdout).unwrap().contains("low(range"));
 }
 
 #[test]
 fn elements_dirt_lists_its_controls() {
-    let o = Command::new(EXE)
-        .args(["elements", "dirt"])
-        .output()
-        .unwrap();
+    let o = exe().args(["elements", "dirt"]).output().unwrap();
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8(o.stdout).unwrap();
     assert!(text.starts_with("dirt: "), "{text}");
@@ -204,18 +203,12 @@ fn elements_dirt_lists_its_controls() {
 
 #[test]
 fn an_unknown_look_is_an_error_with_a_hint() {
-    let o = Command::new(EXE)
-        .args(["elements", "dirtt"])
-        .output()
-        .unwrap();
+    let o = exe().args(["elements", "dirtt"]).output().unwrap();
     assert_eq!(o.status.code(), Some(1));
     let err = String::from_utf8(o.stderr).unwrap();
     assert!(err.contains("did you mean `dirt`?"), "{err}");
 
-    let o = Command::new(EXE)
-        .args(["elements", "nope", "--json"])
-        .output()
-        .unwrap();
+    let o = exe().args(["elements", "nope", "--json"]).output().unwrap();
     assert_eq!(o.status.code(), Some(1));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["ok"], false);
@@ -224,10 +217,7 @@ fn an_unknown_look_is_an_error_with_a_hint() {
 
 #[test]
 fn elements_dirt_json_has_units_limits_defaults_and_subs() {
-    let o = Command::new(EXE)
-        .args(["elements", "dirt", "--json"])
-        .output()
-        .unwrap();
+    let o = exe().args(["elements", "dirt", "--json"]).output().unwrap();
     assert_eq!(o.status.code(), Some(0));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["name"], "dirt");
@@ -254,7 +244,7 @@ fn elements_dirt_json_has_units_limits_defaults_and_subs() {
         .unwrap();
     assert!(some["sets"]["density"].is_number());
     // a group's subs: the cliff's shattered patches
-    let o = Command::new(EXE)
+    let o = exe()
         .args(["elements", "cliff", "--json"])
         .output()
         .unwrap();
@@ -289,7 +279,7 @@ fn watch_rebuilds_when_a_used_file_changes() {
         "dharmatiles version=1\nuse \"./p\" raised\ntile size=\"1x1\" seed=1 {\n    stack {\n        dirt\n        raised\n    }\n}\n",
     )
     .unwrap();
-    let mut child = Command::new(EXE)
+    let mut child = exe()
         .arg("watch")
         .arg(&tile)
         .arg("--out")
@@ -353,7 +343,7 @@ fn watch_of_a_library_tile_watches_its_file_on_disk() {
     // `lib:` tile is watched like any other file
     use std::io::BufRead;
     let d = scratch("watch-lib");
-    let mut child = Command::new(EXE)
+    let mut child = exe()
         .args(["watch", "lib:tests/ground/1x1-flat.dtile", "--out"])
         .arg(&d)
         .stdout(Stdio::null())
@@ -400,7 +390,7 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
     )
     .unwrap();
     let build = |args: &[&str]| {
-        Command::new(EXE)
+        exe()
             .args([
                 "build",
                 "lib:tests/ground/1x1-flat.dtile",
@@ -461,7 +451,7 @@ fn a_build_is_for_one_target_named_in_its_paths_and_record() {
 #[test]
 fn a_sweep_reports_every_failing_tile_by_name_and_exits_1() {
     let d = scratch("sweep");
-    let o = Command::new(EXE)
+    let o = exe()
         .args([
             "build",
             "no/such/first.dtile",
@@ -489,7 +479,7 @@ fn a_sweep_reports_every_failing_tile_by_name_and_exits_1() {
 fn build_all_with_no_library_to_sweep_is_an_error_not_a_success() {
     let d = scratch("empty-library");
     for lib in [d.clone(), d.join("not-there")] {
-        let o = Command::new(EXE)
+        let o = exe()
             .args(["build", "--all", "--out"])
             .arg(d.join("out"))
             .env("DT_LIBRARY", &lib)
@@ -503,7 +493,7 @@ fn build_all_with_no_library_to_sweep_is_an_error_not_a_success() {
 
 #[test]
 fn a_panic_reaching_main_exits_101_naming_a_bug() {
-    let o = Command::new(EXE)
+    let o = exe()
         .args(["elements"])
         .env("DT_TEST_PANIC", "main")
         .output()
@@ -517,7 +507,7 @@ fn a_panic_reaching_main_exits_101_naming_a_bug() {
 #[test]
 fn a_panic_in_one_tile_of_a_sweep_exits_101_and_the_rest_build() {
     let d = scratch("sweep-panic");
-    let o = Command::new(EXE)
+    let o = exe()
         .args([
             "build",
             "lib:tests/ground/1x1-flat.dtile",
@@ -546,7 +536,7 @@ fn the_worst_outcome_of_a_sweep_wins() {
     let bad = d.join("bad.dtile");
     std::fs::write(&bad, "tile { stack { gruond } }\n").unwrap();
     let run = |panic: Option<&str>| {
-        let mut c = Command::new(EXE);
+        let mut c = exe();
         c.args(["build"])
             .arg(&bad)
             .arg("lib:tests/ground/1x1-flat.dtile")
@@ -576,11 +566,7 @@ tile size="1x1" seed=3 {
 "#;
 
 fn migrate(args: &[&str]) -> std::process::Output {
-    Command::new(EXE)
-        .arg("migrate")
-        .args(args)
-        .output()
-        .unwrap()
+    exe().arg("migrate").args(args).output().unwrap()
 }
 
 #[test]

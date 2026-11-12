@@ -2379,3 +2379,225 @@ fn an_entry_a_definition_call_makes_says_which_call_so_it_can_be_moved() {
         "{moved}"
     );
 }
+
+/// The cache of builds in the preview: a tile whose build is kept opens from
+/// it with the same mesh and the same gate messages, and an older build (or
+/// the library's stored preview) shows, said so, while a changed tile builds.
+mod stored {
+    use super::*;
+
+    fn temp(name: &str) -> std::path::PathBuf {
+        let d =
+            std::env::temp_dir().join(format!("dt-preview-store-{}-{name}", std::process::id()));
+        if d.exists() {
+            std::fs::remove_dir_all(&d).unwrap();
+        }
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn shared_for(path: &str, store: &std::path::Path) -> Arc<Shared> {
+        Arc::new(
+            Shared::new(&[path.to_owned()]).with_store(Some(dt_eval::Store::new(store, "test"))),
+        )
+    }
+
+    fn rebuild(shared: &Arc<Shared>, path: &str) {
+        let opts = Options {
+            clouds: true,
+            ..Options::default()
+        };
+        worker::rebuild(
+            shared,
+            &tile_id(path),
+            Arc::new(AtomicBool::new(false)),
+            &opts,
+        );
+    }
+
+    fn texts(shared: &Shared, path: &str) -> Vec<String> {
+        lock(&shared.events)
+            .messages
+            .query(Some(&tile_id(path)), 0, |_| true)
+            .iter()
+            .filter(|m| m.open)
+            .map(|m| m.text.clone())
+            .collect()
+    }
+
+    fn slot<T>(shared: &Shared, path: &str, f: impl Fn(&Slot) -> T) -> T {
+        f(lock(&shared.tiles)
+            .iter()
+            .find(|t| t.id == tile_id(path))
+            .unwrap())
+    }
+
+    #[test]
+    fn a_kept_build_opens_without_building_and_says_the_same_things() {
+        let dir = temp("hit");
+        let first = shared_for(FLAT, &dir);
+        rebuild(&first, FLAT);
+        assert_eq!(slot(&first, FLAT, |t| t.status), State::Ready);
+        assert_eq!(
+            slot(&first, FLAT, |t| t.record.clone().unwrap()["cache"].clone()),
+            "miss"
+        );
+        let mesh = slot(&first, FLAT, |t| t.mesh.clone().unwrap());
+        let said = texts(&first, FLAT);
+        assert!(said.iter().any(|t| t.starts_with("Built in")), "{said:?}");
+        assert!(
+            said.iter().any(|t| t == "Passes the printability gate"),
+            "{said:?}"
+        );
+
+        // a new run (nothing in memory) with the same cache folder
+        let again = shared_for(FLAT, &dir);
+        rebuild(&again, FLAT);
+        assert_eq!(slot(&again, FLAT, |t| t.status), State::Ready);
+        assert_eq!(
+            slot(&again, FLAT, |t| t.record.clone().unwrap()["cache"].clone()),
+            "hit"
+        );
+        assert_eq!(
+            slot(&again, FLAT, |t| t.mesh.clone().unwrap()),
+            mesh,
+            "the view is the same bytes"
+        );
+        let said = texts(&again, FLAT);
+        assert!(
+            said.iter().any(|t| t.starts_with("From the cache")),
+            "{said:?}"
+        );
+        assert!(
+            said.iter().any(|t| t == "Passes the printability gate"),
+            "the gate's verdict flows the same: {said:?}"
+        );
+        assert!(!said.iter().any(|t| t.starts_with("Built in")), "{said:?}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_earlier_build_shows_while_a_changed_tile_builds_and_is_replaced() {
+        let dir = temp("earlier");
+        let tile = dir.join("t.dtile");
+        let text = std::fs::read_to_string(dt_eval::source::library_file(FLAT).unwrap()).unwrap();
+        std::fs::write(&tile, &text).unwrap();
+        let path = tile.to_str().unwrap().to_owned();
+        let cache = dir.join("cache");
+        let first = shared_for(&path, &cache);
+        rebuild(&first, &path);
+        let old_mesh = slot(&first, &path, |t| t.mesh.clone().unwrap());
+
+        // the tile changes; a fresh run has nothing in memory
+        std::fs::write(&tile, text.replace("seed=1", "seed=2")).unwrap();
+        let next = shared_for(&path, &cache);
+        let rec = crate::watch::Recording::watching(&path);
+        let tracked = dt_eval::Tracked::new(&rec);
+        let opts = Options::default();
+        dt_eval::check(&tracked, &path, &opts).unwrap();
+        worker::show_stored(
+            &next,
+            &tile_id(&path),
+            next.store.as_deref().unwrap(),
+            &tracked.reads(),
+            &path,
+            &opts,
+        );
+        assert_eq!(
+            slot(&next, &path, |t| t.shown.clone().unwrap()["kind"].clone()),
+            "earlier"
+        );
+        assert_eq!(slot(&next, &path, |t| t.mesh.clone().unwrap()), old_mesh);
+        let said = texts(&next, &path);
+        assert!(
+            said.iter()
+                .any(|t| t.starts_with("Showing the build made by test")),
+            "{said:?}"
+        );
+
+        // the build lands: the view is the new tile's, and the note is gone
+        rebuild(&next, &path);
+        assert!(slot(&next, &path, |t| t.shown.is_none()));
+        assert_eq!(slot(&next, &path, |t| t.status), State::Ready);
+        assert_ne!(slot(&next, &path, |t| t.mesh.clone().unwrap()), old_mesh);
+        let said = texts(&next, &path);
+        assert!(!said.iter().any(|t| t.starts_with("Showing")), "{said:?}");
+        assert!(said.iter().any(|t| t.starts_with("Built in")), "{said:?}");
+
+        // a tile that then does not read leaves no stale view behind
+        lock(&next.tiles)[0].shown = Some(json!({"kind": "earlier", "note": "x"}));
+        std::fs::write(&tile, "tile {").unwrap();
+        rebuild(&next, &path);
+        assert_eq!(slot(&next, &path, |t| t.status), State::Failed);
+        assert!(slot(&next, &path, |t| t.shown.is_none() && t.mesh.is_none()));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_stored_preview_shows_until_the_full_build_lands() {
+        let dir = temp("preview");
+        let store = dt_eval::Store::new(&dir, "test");
+        let draft = Options {
+            draft: true,
+            ..Options::default()
+        };
+        dt_eval::build_stored(
+            &dt_eval::Files,
+            FLAT,
+            &draft,
+            &dt_eval::Progress::none(),
+            None,
+            Some(&store),
+        )
+        .unwrap();
+        let shared = shared_for(FLAT, &dir);
+        let tracked = dt_eval::Tracked::new(&dt_eval::Files);
+        let opts = Options::default();
+        dt_eval::check(&tracked, FLAT, &opts).unwrap();
+        worker::show_stored(
+            &shared,
+            &tile_id(FLAT),
+            shared.store.as_deref().unwrap(),
+            &tracked.reads(),
+            FLAT,
+            &opts,
+        );
+        assert_eq!(
+            slot(&shared, FLAT, |t| t.shown.clone().unwrap()["kind"].clone()),
+            "preview"
+        );
+        assert!(
+            texts(&shared, FLAT)
+                .iter()
+                .any(|t| t.starts_with("Showing the stored preview"))
+        );
+        rebuild(&shared, FLAT);
+        assert!(slot(&shared, FLAT, |t| t.shown.is_none()));
+        assert_eq!(slot(&shared, FLAT, |t| t.status), State::Ready);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_damaged_entry_is_a_warning_in_the_messages_and_the_build_is_real() {
+        let dir = temp("damaged");
+        let first = shared_for(FLAT, &dir);
+        rebuild(&first, FLAT);
+        let store = dt_eval::Store::new(&dir, "test");
+        let entry = store.list().unwrap().remove(0).file;
+        let mut bytes = std::fs::read(&entry).unwrap();
+        let at = bytes.len() / 2;
+        bytes[at] ^= 0xff;
+        std::fs::write(&entry, bytes).unwrap();
+        let again = shared_for(FLAT, &dir);
+        rebuild(&again, FLAT);
+        assert_eq!(slot(&again, FLAT, |t| t.status), State::Ready);
+        let said = texts(&again, FLAT);
+        assert!(
+            said.iter()
+                .any(|t| t.starts_with("The build cache:") && t.contains("damaged")),
+            "{said:?}"
+        );
+        assert!(said.iter().any(|t| t.starts_with("Built in")), "{said:?}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

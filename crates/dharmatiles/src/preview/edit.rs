@@ -853,12 +853,19 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
         template: template.as_deref(),
         palette: &palette,
         cache: None,
+        store: shared.store.as_deref(),
     };
     let opts = shared.options();
     let target = opts.target();
     let t0 = std::time::Instant::now();
-    let mut b = match dt_eval::build_with(&dt_eval::Files, tile, &opts, &dt_eval::Progress::none())
-    {
+    let mut b = match dt_eval::build_stored(
+        &dt_eval::Files,
+        tile,
+        &opts,
+        &dt_eval::Progress::none(),
+        None,
+        shared.store.as_deref(),
+    ) {
         Ok(b) => b,
         Err(errs) => {
             let id = tile_id(tile);

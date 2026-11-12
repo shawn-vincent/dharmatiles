@@ -148,6 +148,19 @@ test('the status line says the worst thing first, with the counts, and the build
   assert.equal(statusOf(log.view('a'), { t: ready, live: false }).verdict, 'reconnecting…');
 });
 
+test('a build the cache kept is said so: "rebuilding" while it is on show, "cached" when it came from there', () => {
+  const log = createLog();
+  log.beginBuild('a');
+  const shown = { status: 'building', shown: { kind: 'earlier', note: 'the build made by 1.0.0 3 h ago' } };
+  const s = statusOf(log.view('a'), { t: shown, p: { fraction: 0.2, label: 'grass' } });
+  assert.deepEqual([s.verdict, s.tone], ['rebuilding 20% · grass', 'busy']);
+  const own = statusOf(log.view('a'), { t: { status: 'building', shown: null }, p: { fraction: 0.2, label: 'grass' } });
+  assert.equal(own.verdict, 'building 20% · grass', 'a tile with nothing kept on show is only building');
+  const hit = createLog();
+  hit.apply(build({ data: { build_s: 0.05, cache: 'hit', triangles: 10 }, text: 'From the cache (2.1 s when it was built)' }));
+  assert.equal(statusOf(hit.view('a'), { t: { status: 'ready' } }).verdict, 'passes · cached');
+});
+
 test('the copy text of a tile\'s mistake is its code, where, words, help and the source line', () => {
   const env = { version: '1.0.0', system: 'db', printer: 'default', tile: 't', file: 'f', userAgent: 'x', platform: 'p', screen: 's', time: 'now', url: 'u' };
   const source = 'tile {\n    stack {\n        dirt\n        tree\n    }\n}\n';

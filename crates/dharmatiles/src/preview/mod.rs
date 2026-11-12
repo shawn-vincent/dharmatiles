@@ -154,6 +154,10 @@ pub struct Slot {
     files: BTreeMap<String, Option<SystemTime>>,
     /// Built for a target that is not the chosen one any more.
     stale: bool,
+    /// While the first build runs: the mesh on show is not this tile's
+    /// build but one the cache kept (`{"kind": "earlier" | "preview",
+    /// "note": …}`), so the page says "rebuilding".  Gone when the build ends.
+    shown: Option<Value>,
     /// The page has the debug layer on for this tile: its builds collect the
     /// layer's marks (grass starts, spines) too.  Set by `POST …/build?debug=1`.
     marks: bool,
@@ -201,6 +205,7 @@ impl Slot {
             progress: None,
             files: BTreeMap::new(),
             stale: false,
+            shown: None,
             marks: false,
             sketches: Vec::new(),
         }
@@ -223,6 +228,7 @@ impl Slot {
             "mesh_version": self.mesh.as_ref().map(|_| self.mesh_version),
             "mesh_bytes": self.mesh.as_ref().map(|m| m.len()),
             "sketches": self.sketches.iter().map(|k| json!({"id": k.id, "rough": k.rough})).collect::<Vec<_>>(),
+            "shown": self.shown,
         })
     }
 
@@ -313,6 +319,10 @@ pub struct Shared {
     /// The build caches of the tiles built last, newest first, by path
     /// and whether they are drafts' (see [`dt_eval::Cache`]).
     build_caches: Mutex<VecDeque<(String, bool, Arc<dt_eval::Cache>)>>,
+    /// The disk cache of builds ([`dt_eval::Store`]): a tile whose inputs are
+    /// unchanged opens from it, and an earlier build of one that changed
+    /// shows while the new one runs.  None: no disk cache (the tests').
+    store: Option<Arc<dt_eval::Store>>,
 }
 
 /// Held while a tile builds: dropping it ends the build's progress message.
@@ -409,6 +419,7 @@ impl Shared {
             token: edit::token(),
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
             build_caches: Mutex::new(VecDeque::new()),
+            store: None,
         };
         me.rescan();
         me
@@ -433,6 +444,13 @@ impl Shared {
     #[must_use]
     pub fn with_settings(mut self, dir: std::path::PathBuf) -> Self {
         self.settings = Some(dir);
+        self
+    }
+
+    /// Keep builds in the disk cache `store`, and open from it.
+    #[must_use]
+    pub fn with_store(mut self, store: Option<dt_eval::Store>) -> Self {
+        self.store = store.map(Arc::new);
         self
     }
 
@@ -984,6 +1002,13 @@ pub fn run(
         }
     };
     let cache = crate::library::project().out;
+    let store = match crate::cache::open() {
+        Ok(s) => s,
+        Err(e) => {
+            tell!("error: {e}");
+            return crate::ERROR;
+        }
+    };
     let settings = match places::settings_dir() {
         Ok(d) => d,
         Err(e) => {
@@ -1011,6 +1036,7 @@ pub fn run(
             .with_trash_opt(places::trash_dir())
             .with_picker(Picker::from_env())
             .with_cache(Timings::file_in(&cache))
+            .with_store(store)
             .with_palette_opt(palette),
     );
     let url = format!("http://{addr}/");
@@ -1027,6 +1053,13 @@ pub fn run(
             RootKind::Files => tell!("{}: {n} file(s)", r.label),
             RootKind::Library(_) => tell!("{}: {n} tile(s)", r.label),
         }
+    }
+    match shared.store.as_deref() {
+        Some(s) => tell!(
+            "build cache: {} (builds are kept there; `dharmatiles cache` says how much)",
+            s.dir().display()
+        ),
+        None => tell!("build cache: off (DT_CACHE=off): every open builds"),
     }
     match dt_eval::source::library_dir() {
         Some(d) => tell!(

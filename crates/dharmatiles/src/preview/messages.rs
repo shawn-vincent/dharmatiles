@@ -68,8 +68,18 @@ fn number(v: &Value) -> f64 {
 
 /// A finished build: its timing, and the gate's verdict with its numbers.
 /// `record` is the build's record ([`crate::tile_json`]).  `reused` is how
-/// many steps were kept from the last build.
-pub(super) fn of_build(record: &Value, reused: usize, id: &str, name: &str) -> Vec<Message> {
+/// many steps were kept from the last build; `cache` is what the disk cache
+/// did: on a hit the build says it came from there (and how long it took when
+/// it was made), the gate's verdict is the same either way, and each problem
+/// the cache met (a damaged entry removed and built again, an entry that could
+/// not be written) is a warning of its own.
+pub(super) fn of_build(
+    record: &Value,
+    reused: usize,
+    cache: &dt_eval::CacheUse,
+    id: &str,
+    name: &str,
+) -> Vec<Message> {
     let a = &record["audit"];
     let secs = number(&record["build_s"]);
     let target = record["record"]["target"].as_str().unwrap_or("");
@@ -78,19 +88,79 @@ pub(super) fn of_build(record: &Value, reused: usize, id: &str, name: &str) -> V
     } else {
         String::new()
     };
-    let build = Message::new(
+    let hit = cache.state == dt_eval::CacheState::Hit;
+    let made: f64 = record["stage_secs"]
+        .as_object()
+        .map_or(0.0, |m| m.values().map(number).sum());
+    let text = if hit {
+        format!(
+            "From the cache ({made:.1} s when it was built{})",
+            cache
+                .made_by
+                .as_deref()
+                .map_or_else(String::new, |e| format!(", by {e}"))
+        )
+    } else {
+        format!("Built in {secs:.1} s{kept}")
+    };
+    let build =
+        Message::new(Kind::Build, Severity::Info, Scope::Build, id, name, text).data(json!({
+            "build_s": record["build_s"], "triangles": a["triangles"], "target": target,
+            "stage_secs": record["stage_secs"], "reused": reused,
+            "cache": if hit { "hit" } else { "miss" },
+            "made_s": if hit { json!(made) } else { Value::Null },
+        }));
+    let mut out = out_of_gate(build, a, id, name);
+    for problem in &cache.problems {
+        out.push(
+            Message::new(
+                Kind::Build,
+                Severity::Warning,
+                Scope::Build,
+                id,
+                name,
+                format!("The build cache: {problem}"),
+            )
+            .code("cache")
+            .help(Some(
+                "the build itself is real; `dharmatiles cache clear` empties the cache",
+            )),
+        );
+    }
+    out
+}
+
+/// A tile that is being built shows a build the cache kept meanwhile: an
+/// earlier build of it (it has changed since) or the library's stored
+/// preview.  Said so, never a silent swap; the build's own report replaces it.
+pub(super) fn of_shown(note: &str, kind: &str, id: &str, name: &str) -> Message {
+    Message::new(
         Kind::Build,
         Severity::Info,
         Scope::Build,
         id,
         name,
-        format!("Built in {secs:.1} s{kept}"),
+        format!("Showing {note} while the tile builds"),
     )
-    .data(json!({
-        "build_s": record["build_s"], "triangles": a["triangles"], "target": target,
-        "stage_secs": record["stage_secs"], "reused": reused,
-    }));
-    out_of_gate(build, a, id, name)
+    .code("cache")
+    .data(json!({"shown": kind}))
+}
+
+/// A problem the cache met before the build began (a damaged entry it
+/// removed while looking for one to show).
+pub(super) fn of_cache_problem(problem: &str, id: &str, name: &str) -> Message {
+    Message::new(
+        Kind::Build,
+        Severity::Warning,
+        Scope::Build,
+        id,
+        name,
+        format!("The build cache: {problem}"),
+    )
+    .code("cache")
+    .help(Some(
+        "the build itself is real; `dharmatiles cache clear` empties the cache",
+    ))
 }
 
 fn out_of_gate(build: Message, a: &Value, id: &str, name: &str) -> Vec<Message> {

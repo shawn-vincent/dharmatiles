@@ -24,6 +24,9 @@ pub(crate) struct Extras<'a> {
     pub(crate) palette: &'a dt_kit::Palette,
     /// The scenes the tile's last build kept (`watch`), to start from.
     pub(crate) cache: Option<&'a dt_eval::Cache>,
+    /// The disk cache of builds: a build whose inputs are all unchanged is
+    /// read from it, not made (`--no-cache`: none).
+    pub(crate) store: Option<&'a dt_eval::Store>,
 }
 
 pub(crate) fn build(
@@ -132,7 +135,7 @@ pub(crate) fn build_one(
     let reporter = tracker
         .as_ref()
         .map_or_else(dt_eval::Progress::none, |(_, pr)| pr.clone());
-    let b = match dt_eval::build_cached(sources, p, opts, &reporter, extras.cache) {
+    let b = match dt_eval::build_stored(sources, p, opts, &reporter, extras.cache, extras.store) {
         Ok(b) => b,
         Err(errs) => {
             if tracker.is_some() {
@@ -195,11 +198,29 @@ pub(crate) fn build_one(
         if b.reused > 0 {
             tell!("  {} steps kept from the last build", b.reused);
         }
+        if b.cache.state == dt_eval::CacheState::Hit {
+            let made: f64 = b.stage_secs.iter().map(|s| s.1).sum();
+            tell!(
+                "  from the cache (made in {made:.2} s by {})",
+                b.cache.made_by.as_deref().unwrap_or("an earlier run")
+            );
+        }
         for f in &failures {
             tell!("  audit failed: {f}");
         }
     }
+    for problem in &b.cache.problems {
+        tell!("warning: {p}: {problem}");
+    }
     let mut r = tile_json(&b, &failures, built_s);
+    r["cache"] = json!({
+        "state": match b.cache.state {
+            dt_eval::CacheState::Off => "off",
+            dt_eval::CacheState::Miss => "miss",
+            dt_eval::CacheState::Hit => "hit",
+        },
+        "problems": b.cache.problems,
+    });
     r["files"] = json!(
         files
             .iter()

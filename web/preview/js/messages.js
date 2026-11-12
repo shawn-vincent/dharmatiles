@@ -149,9 +149,10 @@ export function filterRows(rows, filter) {
 
 /**
  * The status line: {verdict, tone, counts, progress}.  `verdict` is the one word that matters most,
- * worst first: building (with its percent and stage), offline, an error, fails the gate, no build,
- * passes (with the build's time).  `t` is the tile's state from the program (status, record);
- * `p` its progress, if building.
+ * worst first: building (with its percent and stage; "rebuilding" while the view is a build the
+ * cache kept, `t.shown`), offline, an error, fails the gate, no build, passes (with the build's
+ * time, or "cached" when the cache gave it).  `t` is the tile's state from the program (status,
+ * record, shown); `p` its progress, if building.
  */
 export function statusOf(view, { t = null, live = true, p = null } = {}) {
   const counts = countsText(view.counts);
@@ -160,15 +161,18 @@ export function statusOf(view, { t = null, live = true, p = null } = {}) {
   if (t.status === 'building' || view.running) {
     const pct = p ? Math.floor(p.fraction * 100) : 0;
     const stage = p ? `${pct}% · ${p.label}` : 'starting';
-    return { verdict: `building ${stage}`, tone: 'busy', counts, progress: p ? p.fraction : 0 };
+    const what = t.shown ? 'rebuilding' : 'building';
+    return { verdict: `${what} ${stage}`, tone: 'busy', counts, progress: p ? p.fraction : 0 };
   }
   if (t.status === 'idle') return { verdict: 'not built yet', tone: 'idle', counts, progress: null };
   const fails = view.record?.gate?.severity === 'error';
   if (t.status === 'failed') return { verdict: view.counts.errors ? 'no build' : 'build failed', tone: 'bad', counts, progress: null };
   if (fails) return { verdict: 'fails the gate', tone: 'bad', counts, progress: null };
-  const secs = view.record?.build?.data?.build_s;
+  const data = view.record?.build?.data;
+  const secs = data?.build_s;
   const warn = view.counts.errors > 0;
-  return { verdict: `passes${secs != null ? ` · ${secs.toFixed(2)} s` : ''}`, tone: warn ? 'bad' : view.counts.notes ? 'note' : 'ok', counts, progress: null };
+  const took = data?.cache === 'hit' ? ' · cached' : secs != null ? ` · ${secs.toFixed(2)} s` : '';
+  return { verdict: `passes${took}`, tone: warn ? 'bad' : view.counts.notes ? 'note' : 'ok', counts, progress: null };
 }
 
 /** The error shape `tileErrorDetails` takes, from a message about the tile. */

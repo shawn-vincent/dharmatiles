@@ -29,6 +29,30 @@ pub(crate) struct Cli {
     pub(crate) command: Option<Command>,
 }
 
+/// What `dharmatiles cache` does.
+#[derive(Subcommand)]
+pub(crate) enum CacheAction {
+    /// Every entry: what it is a build of, its size and when it was last used.
+    List,
+    /// Remove everything the cache holds.
+    Clear,
+    /// Build a preview (the draft: coarse cells, no union) of every library
+    /// tile into the cache, so the library opens at once the first time.  A
+    /// release or an install runs it; `--into` writes a folder instead, laid
+    /// out as the cache is, for an install to copy into the cache folder.
+    Previews {
+        /// Base system: `db` or `ol` (run it for each).
+        #[arg(long, default_value = "db")]
+        system: String,
+        /// Printer profile, as for `build`.
+        #[arg(long, default_value = "default")]
+        printer: String,
+        /// Write into this folder instead of the cache.
+        #[arg(long)]
+        into: Option<PathBuf>,
+    },
+}
+
 #[derive(Subcommand)]
 pub(crate) enum Command {
     /// Build tiles to STL, through the printability gate.
@@ -74,6 +98,10 @@ pub(crate) enum Command {
         /// One JSON report on stdout.
         #[arg(long)]
         json: bool,
+        /// Build every tile from nothing: do not read the cache of builds
+        /// (see `dharmatiles cache`), and do not keep this build in it.
+        #[arg(long)]
+        no_cache: bool,
     },
     /// Read and plan tiles without building geometry.
     Check {
@@ -140,6 +168,18 @@ pub(crate) enum Command {
         #[arg(long)]
         height: Option<f64>,
         /// One JSON report on stdout.
+        #[arg(long)]
+        json: bool,
+    },
+    /// The cache of builds: where it is and how much it holds (no action),
+    /// `list` its entries, `clear` it, or build the library's `previews` into
+    /// it.  The folder is `$DT_CACHE`, else `~/Library/Caches/dharmatiles`
+    /// (macOS) or `$XDG_CACHE_HOME/dharmatiles`; `$DT_CACHE_LIMIT` bounds its
+    /// size (default 4GB); `DT_CACHE=off` switches it off.
+    Cache {
+        #[command(subcommand)]
+        action: Option<CacheAction>,
+        /// One JSON object on stdout.
         #[arg(long)]
         json: bool,
     },

@@ -103,6 +103,8 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         return rebuild_stl(shared, id, opts, &path);
     }
     let rec = Recording::watching(&path);
+    // every file the build reads, with its text: what the disk cache's key covers
+    let tracked = dt_eval::Tracked::new(&rec);
     let t0 = Instant::now();
     // the plan's stack, once it is known: a mistake in the build finds the entry it is in by it
     let plan_stack: std::cell::RefCell<Vec<Value>> = std::cell::RefCell::new(Vec::new());
@@ -127,11 +129,15 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 t.errors = errors;
                 t.failure = failure;
                 t.files = rec.files();
+                // a build the cache kept was only on show until this one landed
+                if t.shown.take().is_some() {
+                    t.mesh = None;
+                }
             });
         };
     let finish_err = |rec: Recording, errs: &[Diag]| finish_with(rec, errs, None, Scope::Check);
     // plan pass: no geometry, so under a second
-    let checked = match dt_eval::check(&rec, &path, opts) {
+    let checked = match dt_eval::check(&tracked, &path, opts) {
         Ok(c) => c,
         Err(errs) => return finish_err(rec, &errs),
     };
@@ -170,6 +176,9 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     shared.report(id, Scope::Check, |name| {
         messages::of_check(&checked, id, name, &stack)
     });
+    if let Some(store) = shared.store.as_deref() {
+        show_stored(shared, id, store, &tracked.reads(), &path, opts);
+    }
     // the progress bar: stages weighted by what the last build of this
     // tile measured, else by the elements' defaults
     let mut timings = shared
@@ -206,7 +215,14 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             !path.contains("dt-test-panic-in-build"),
             "a test panic in the build"
         );
-        dt_eval::build_cached(&rec, &path, opts, &reporter, Some(&cache))
+        dt_eval::build_stored(
+            &tracked,
+            &path,
+            opts,
+            &reporter,
+            Some(&cache),
+            shared.store.as_deref(),
+        )
     })) {
         Ok(built) => built,
         Err(panic) if panic.is::<Superseded>() => {
@@ -236,7 +252,15 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         Ok(b) => {
             let built_s = t0.elapsed().as_secs_f64();
             let failures = b.audit.failures(&opts.printer);
-            let record = tile_json(&b, &failures, built_s);
+            let mut record = tile_json(&b, &failures, built_s);
+            record["cache"] = json!(match b.cache.state {
+                dt_eval::CacheState::Off => "off",
+                dt_eval::CacheState::Miss => "miss",
+                dt_eval::CacheState::Hit => "hit",
+            });
+            for problem in &b.cache.problems {
+                tell!("warning: {path}: the build cache: {problem}");
+            }
             // Cancellation panics are caught only around build_with. Encoding
             // uses the ordinary tracker and explicit changed checks instead.
             let encode_progress = tracker.as_ref().map_or_else(dt_eval::Progress::none, |t| {
@@ -280,6 +304,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 timings.save();
             }
             let reused = match b.reused {
+                _ if b.cache.state == dt_eval::CacheState::Hit => " (from the cache)".to_owned(),
                 0 => String::new(),
                 n => format!(
                     " ({n} of {} steps kept from the last build)",
@@ -294,7 +319,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             // said before the tile is: what this build no longer reports clears while it still shows as running
             let palette = shared.palette_diags();
             shared.report(id, Scope::Build, |name| {
-                let mut found = messages::of_build(&record, b.reused, id, name);
+                let mut found = messages::of_build(&record, b.reused, &b.cache, id, name);
                 for m in messages::of_errors(&palette, Scope::Build, id, name, &[]) {
                     found.push(crate::message::Message {
                         severity: Severity::Warning,
@@ -312,10 +337,94 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 t.record = Some(record);
                 t.mesh = Some(mesh);
                 t.mesh_version += 1;
+                t.shown = None;
                 t.files = watched(&rec, shared);
             });
         }
     }
+}
+
+/// A tile about to be built whose build is not in the disk cache but has
+/// something there to look at: an earlier build of it (it has changed since)
+/// or the library's stored preview.  Shown at once, with the tile still
+/// building and `shown` saying what it is, so the page marks it "rebuilding";
+/// said in the messages too, and replaced by the build's own report.  Only
+/// when nothing is on show yet (a tile already showing its last build keeps
+/// it).  A damaged entry met on the way is reported, never skipped.
+pub(super) fn show_stored(
+    shared: &Arc<Shared>,
+    id: &str,
+    store: &dt_eval::Store,
+    reads: &dt_eval::store::Reads,
+    path: &str,
+    opts: &Options,
+) {
+    use dt_eval::store::Tier;
+    let key = store.key(reads, path, opts);
+    if store.contains(&key)
+        || lock(&shared.tiles)
+            .iter()
+            .any(|t| t.id == id && t.mesh.is_some())
+    {
+        return;
+    }
+    let want = dt_kit::debug::Collect {
+        clouds: true,
+        marks: opts.debug,
+    };
+    let problem = |e: String| {
+        tell!("warning: {path}: the build cache: {e}");
+        shared.report(id, Scope::Build, |name| {
+            vec![messages::of_cache_problem(&e, id, name)]
+        });
+    };
+    let found = match store.previous(&key, want) {
+        Ok(Some(p)) => {
+            let note = format!(
+                "the build made by {} {}",
+                p.made_by,
+                crate::cache::age_text(p.made_at)
+            );
+            Some((p.built, note, "earlier", false))
+        }
+        Ok(None) => match store.get(&store.key_at(reads, path, opts, Tier::Draft), want) {
+            Ok(Some(b)) => Some((b, "the stored preview".to_owned(), "preview", true)),
+            Ok(None) => None,
+            Err(e) => {
+                problem(e);
+                None
+            }
+        },
+        Err(e) => {
+            problem(e);
+            None
+        }
+    };
+    let Some((built, note, kind, draft)) = found else {
+        return;
+    };
+    let palette = shared.palette();
+    let bytes = if draft {
+        payload::from_draft(&built, opts.printer.overhang_deg, &palette)
+    } else {
+        payload::from_built(&built, opts.printer.overhang_deg, &palette)
+    };
+    // a view that cannot be made is not an error of the tile's: the build
+    // that follows shows its own, so say it and show nothing
+    let bytes = match bytes {
+        Ok(b) => b,
+        Err(e) => return problem(format!("cannot prepare the kept build for the view: {e}")),
+    };
+    shared.report(id, Scope::Build, |name| {
+        vec![messages::of_shown(&note, kind, id, name)]
+    });
+    shared.update(id, |t| {
+        if t.mesh.is_none() {
+            t.mesh = Some(Arc::new(bytes));
+            t.mesh_version += 1;
+            t.shown = Some(json!({"kind": kind, "note": note}));
+        }
+    });
 }
 
 /// What a tile's build depends on: the files it read, and the palette.

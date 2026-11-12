@@ -48,6 +48,7 @@ fn emit(w: &mut dyn Write, args: std::fmt::Arguments) {
 mod audit;
 mod bambu;
 mod build;
+mod cache;
 mod check;
 mod cli;
 mod elements;
@@ -141,6 +142,7 @@ fn main() -> ExitCode {
             bambu_template,
             palette,
             json,
+            no_cache,
         } => {
             let template = match threemf.then(|| bambu::template(bambu_template.as_deref())) {
                 Some(Err(e)) => {
@@ -177,6 +179,17 @@ fn main() -> ExitCode {
                     return ExitCode::from(ERROR);
                 }
             };
+            let store = if no_cache {
+                None
+            } else {
+                match cache::open() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tell!("error: {e} (or build with --no-cache)");
+                        return ExitCode::from(ERROR);
+                    }
+                }
+            };
             build::build(
                 &paths,
                 &opts,
@@ -189,10 +202,12 @@ fn main() -> ExitCode {
                     template: template.as_deref(),
                     palette: &palette,
                     cache: None,
+                    store: store.as_ref(),
                 },
                 json,
             )
         }
+        Command::Cache { action, json } => cache::run(action, json),
         Command::Migrate { paths, check } => migrate::run(&paths, check),
         Command::Elements { name, json } => elements::run(name.as_deref(), json),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),

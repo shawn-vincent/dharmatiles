@@ -121,6 +121,7 @@ fn build<'a>(
             template: None,
             palette: &dt_kit::Palette::default(),
             cache: Some(&cache),
+            store: None,
         },
         false,
     );
