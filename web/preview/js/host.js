@@ -29,6 +29,8 @@
 // run of the program) and the last revision seen: the program answers with
 // what changed since, or a fresh snapshot.
 
+import { serverErrorOf } from './server-error.js';
+
 // fetch rejects with a TypeError when it cannot reach the program (down, or
 // the connection dropped): that is a lost connection, shown by the chip, and
 // the page repeats what it needs on reconnect.  Only that rejection, from
@@ -52,10 +54,30 @@ async function netFetch(...args) {
   }
 }
 
-// What an error reply says: the program's `{error}`, or its plain words.
-const reasonOf = async (r) => {
+// What a failed reply says, as the page's own error for what it was doing
+// (`what`), holding the program's ServerError as its cause: one error with
+// both stacks.  A reply that is not the program's JSON has its words only.
+const replyError = async (r, what) => {
   const raw = await r.text();
-  try { return JSON.parse(raw).error || raw; } catch { return raw || `the program answered ${r.status}`; }
+  let body = null;
+  try { body = JSON.parse(raw); } catch { /* not JSON: serverErrorOf makes the error from the words */ }
+  const se = serverErrorOf(r.status, body, raw);
+  return new Error(`${what}: ${se.message}`, { cause: se });
+};
+
+// One reply to an editor call: {status, body}, and for a failure the
+// program's ServerError as `error` (with body.error its words, for the
+// places that say them beside what was asked).  Only a success may be
+// something other than JSON.
+const reply = async (r, path) => {
+  const raw = await r.text();
+  let body = null;
+  try { body = JSON.parse(raw); } catch (e) {
+    if (r.ok) throw new Error(`${path}: the program answered ${r.status} with something that is not JSON`, { cause: e });
+  }
+  const error = serverErrorOf(r.status, body, raw);
+  if (!error) return { status: r.status, body };
+  return { status: r.status, body: { ...(body && typeof body === 'object' ? body : {}), error: error.message }, error };
 };
 
 export function browserHost() {
@@ -63,7 +85,7 @@ export function browserHost() {
   const session = async () => {
     if (!token) {
       const r = await netFetch('/api/session', { cache: 'no-store' });
-      if (!r.ok) throw new Error(`session: ${await reasonOf(r)}`);
+      if (!r.ok) throw await replyError(r, 'session');
       token = (await r.json()).token;
     }
     return token;
@@ -79,11 +101,7 @@ export function browserHost() {
         body: JSON.stringify(body),
       });
       if (bytes && r.ok) return { status: r.status, buffer: await r.arrayBuffer() };
-      const raw = await r.text();
-      try { return { status: r.status, body: JSON.parse(raw) }; } catch (e) {
-        if (r.ok) throw new Error(`${path}: the program answered ${r.status} with something that is not JSON`, { cause: e });
-        return { status: r.status, body: { error: raw || `the program answered ${r.status}` } };
-      }
+      return await reply(r, path);
     } catch (e) {
       if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
       throw e;
@@ -93,11 +111,7 @@ export function browserHost() {
   const read = async (path, query) => {
     try {
       const r = await netFetch(`${path}?${new URLSearchParams(query)}`, { cache: 'no-store' });
-      const raw = await r.text();
-      try { return { status: r.status, body: JSON.parse(raw) }; } catch (e) {
-        if (r.ok) throw new Error(`${path}: the program answered ${r.status} with something that is not JSON`, { cause: e });
-        return { status: r.status, body: { error: raw || `the program answered ${r.status}` } };
-      }
+      return await reply(r, path);
     } catch (e) {
       if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
       throw e;
@@ -128,13 +142,13 @@ export function browserHost() {
     },
     async fetchMesh(id) {
       const r = await netFetch(tile(id, 'mesh'), { cache: 'no-store' });
-      if (!r.ok) throw new Error(`mesh: ${await reasonOf(r)}`);
+      if (!r.ok) throw await replyError(r, 'mesh');
       return r.arrayBuffer();
     },
     async fetchSketch(id, sketch) {
       const r = await netFetch(tile(id, `sketch?id=${sketch}`), { cache: 'no-store' });
       if (r.status === 404) return null; // the build moved on: its sketches are gone
-      if (!r.ok) throw new Error(`sketch: ${await reasonOf(r)}`);
+      if (!r.ok) throw await replyError(r, 'sketch');
       return r.arrayBuffer();
     },
     async build(id) {
@@ -143,23 +157,23 @@ export function browserHost() {
         if (offline(e)) return; // offline: asked again on reconnect
         throw e;
       }
-      if (r.status >= 500) throw new Error(`build: ${await reasonOf(r)}`);
+      if (r.status >= 500) throw await replyError(r, 'build');
     },
     async text(id, file) {
       const q = file ? `?file=${encodeURIComponent(file)}` : '';
       const r = await netFetch(tile(id, `text${q}`), { cache: 'no-store' });
       if (r.status === 404) return null; // no such tile or file (any more)
-      if (!r.ok) throw new Error(`text: ${await reasonOf(r)}`);
+      if (!r.ok) throw await replyError(r, 'text');
       return r.json();
     },
     async about() {
       const r = await netFetch('/api/about', { cache: 'no-store' });
-      if (!r.ok) throw new Error(`about: ${await reasonOf(r)}`);
+      if (!r.ok) throw await replyError(r, 'about');
       return r.json();
     },
     async elements() {
       const r = await netFetch('/api/elements', { cache: 'force-cache' });
-      if (!r.ok) throw new Error(`elements: ${await reasonOf(r)}`);
+      if (!r.ok) throw await replyError(r, 'elements');
       return r.json();
     },
     check: (id, body) => call(tile(id, 'check'), body),

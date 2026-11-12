@@ -6,7 +6,7 @@
 const DONE_MS = 1600;
 
 /** A copy button for `text()` (a string, or a function giving one when pressed). */
-export function copyButton(text, { label = '', title = 'Copy' } = {}) {
+export function copyButton(text, { label = '', title = 'Copy', note = null } = {}) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = label ? 'btn copy labelled' : 'btn icon copy';
@@ -26,10 +26,14 @@ export function copyButton(text, { label = '', title = 'Copy' } = {}) {
     } catch (e) {
       // Expected when the browser refuses the clipboard: say so on the button, where it was pressed.
       b.classList.remove('done');
+      b.classList.add('failed');
       b.title = `Could not copy (${e.message}); select it and copy it yourself`;
+      if (note) note.textContent = `Could not copy (${e.message}). Open the details, select them and copy them yourself.`;
       if (label) words.textContent = 'Could not copy';
       return;
     }
+    b.classList.remove('failed');
+    if (note) note.textContent = '';
     b.classList.add('done');
     b.title = 'Copied';
     if (label) words.textContent = 'Copied';

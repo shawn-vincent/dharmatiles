@@ -419,7 +419,8 @@ test('a reply that is not JSON has its words as the error', async () => {
     : new Response('not this page', { status: 403 }));
   try {
     const r = await browserHost().edit({});
-    assert.deepEqual(r, { status: 403, body: { error: 'not this page' } });
+    assert.deepEqual({ status: r.status, body: r.body }, { status: 403, body: { error: 'not this page' } });
+    assert.equal(r.error.kind, 'refused');
   } finally {
     globalThis.fetch = original;
   }
@@ -435,7 +436,7 @@ test('unexpected failures are kept with what was being done, once each, and show
     showError('Could not save a', new Error('disk full'));
     assert.equal(problems().length, 1);
     assert.equal(problems()[0].count, 2);
-    assert.match(problems()[0].details, /caused by:[\s\S]*no space/);
+    assert.match(problems()[0].details, /\[2\][^\n]*\n\s+no space/);
     assert.equal(failed('x', { status: 0, body: { error: 'disconnected' } }), false, 'a lost connection is the chip\'s');
     assert.equal(failed('x', { status: 422, body: { error: 'a mistake' } }), false, 'a refusal with its reason is shown where asked');
     assert.equal(failed('Could not y', { status: 500, body: { error: 'boom' } }), true);
@@ -518,7 +519,9 @@ test('the host reads the program\'s weighting curves with a query and gives an a
     await assert.rejects(browserHost().weightings({ range: '1..6' }), /not JSON/);
     // a refusal with its reason is the body's, for the caller to show
     globalThis.fetch = async () => ({ ok: false, status: 400, text: async () => '{"error":"give a range"}' });
-    assert.deepEqual(await browserHost().weightings({}), { status: 400, body: { error: 'give a range' } });
+    const refusal = await browserHost().weightings({});
+    assert.deepEqual({ status: refusal.status, body: refusal.body }, { status: 400, body: { error: 'give a range' } });
+    assert.equal(refusal.error.kind, 'refused');
     // lost connection: status 0, the chip's business
     globalThis.fetch = async () => { throw new TypeError('failed to fetch'); };
     assert.equal((await browserHost().weightings({ range: '1..6' })).status, 0);

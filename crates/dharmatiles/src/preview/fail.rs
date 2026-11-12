@@ -100,7 +100,7 @@ pub fn record(info: &PanicHookInfo<'_>) {
     let p = Panic {
         message,
         location,
-        backtrace: Backtrace::force_capture().to_string(),
+        backtrace: panic_trace(),
     };
     *LAST_PANIC.lock().unwrap_or_else(PoisonError::into_inner) = Some(p.clone());
     PANIC.with(|c| *c.borrow_mut() = Some(p));
@@ -118,6 +118,55 @@ pub fn install_recorder() {
             previous(info);
         }));
     });
+}
+
+/// A backtrace's frames: a line "  N: name" and the "at file:line" lines under it.
+fn frames(trace: &str) -> Vec<Vec<&str>> {
+    let mut out: Vec<Vec<&str>> = Vec::new();
+    for line in trace.lines() {
+        let starts = line
+            .trim_start()
+            .split_once(':')
+            .is_some_and(|(n, _)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+        match out.last_mut() {
+            Some(f) if !starts => f.push(line),
+            _ => out.push(vec![line]),
+        }
+    }
+    out
+}
+
+fn from_frame(frames: &[Vec<&str>], skip: usize) -> String {
+    frames[skip..]
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The stack of a panic, from the hook, without the hook's own frames and the
+/// panic machinery above the panic: the first frame is where it was raised.
+fn panic_trace() -> String {
+    let trace = Backtrace::force_capture().to_string();
+    let f = frames(&trace);
+    let skip = f
+        .iter()
+        .rposition(|f| f[0].contains("core::panicking::"))
+        .map_or(0, |i| i + 1);
+    from_frame(&f, skip)
+}
+
+/// The stack of here, without the frames that are only this module taking it:
+/// the first frame is the caller that made the error.
+fn capture_trace() -> String {
+    let trace = Backtrace::force_capture().to_string();
+    let f = frames(&trace);
+    let skip = f
+        .iter()
+        .take_while(|f| f[0].contains("std::backtrace::") || f[0].contains("preview::fail::"))
+        .count();
+    from_frame(&f, skip)
 }
 
 fn take_panic() -> Option<Panic> {
@@ -161,7 +210,7 @@ impl ServerError {
             message: message.into(),
             help: None,
             causes: Vec::new(),
-            backtrace: Backtrace::force_capture().to_string(),
+            backtrace: capture_trace(),
             doing: DOING.with(|d| d.borrow().clone()),
             at_ms: now_ms(),
         }

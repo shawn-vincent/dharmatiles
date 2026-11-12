@@ -63,7 +63,10 @@ function drawErrors(t) {
   errs.hidden = !own.length && !bugs.length;
   errs.replaceChildren();
   const line = (cls, text) => { const x = document.createElement('div'); if (cls) x.className = cls; x.textContent = text; return x; };
+  // a build's failure (a panic) is in the list below with its stacks: its
+  // one-line "bug" here would say it twice
   for (const e of own) {
+    if (e.unexpected && t.failure) continue;
     const d = document.createElement('div'); d.className = e.unexpected ? 'e bug' : 'e';
     d.append(line('where', e.file ? `${e.file}:${e.line}:${e.column}  ${e.code}` : e.code));
     d.append(line('', e.unexpected ? `A bug, not a mistake in your tile: ${e.message}` : e.message));
@@ -71,22 +74,56 @@ function drawErrors(t) {
     if (e.file && e.line) d.onclick = () => openFile(e.file === t.path ? null : e.file, e.line);
     errs.append(d);
   }
-  for (const p of bugs) {
-    const d = document.createElement('div'); d.className = 'e bug';
-    d.append(line('where', p.count > 1 ? `${p.what} (${p.count} times)` : p.what));
-    d.append(line('', p.message));
-    const more = document.createElement('details');
-    const sum = document.createElement('summary'); sum.textContent = 'Details';
-    const pre = document.createElement('pre'); pre.textContent = p.details;
-    more.append(sum, pre);
-    const acts = document.createElement('div'); acts.className = 'acts';
-    const copy = copyButton(p.details, { label: 'Copy details', title: 'Copy the details' });
-    const close = document.createElement('button'); close.type = 'button'; close.className = 'btn'; close.textContent = 'Dismiss';
-    close.onclick = () => dismiss(p);
-    acts.append(copy, close);
-    d.append(more, acts);
-    errs.append(d);
-  }
+  for (const p of bugs) errs.append(problemEntry(p, line));
+}
+
+/**
+ * One failure in the panel (problems.js says it): what was being done, the
+ * headline (the program's own words for a failure or a refusal; "something
+ * went wrong inside dharmatiles" for a bug), and a disclosure into the whole
+ * chain: the page's error and its stack, then the server's with its causes and
+ * backtrace, each level indented, long traces scrolling.  "Copy details"
+ * copies the report (what, the chain with both stacks, the environment).
+ */
+function problemEntry(p, line) {
+  const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+  const d = el('div', `e problem ${p.kind}`);
+  d.append(line('where', p.count > 1 ? `${p.what} (${p.count} times)` : p.what));
+  d.append(el('div', 'headline', p.headline));
+  if (p.detail) d.append(el('div', 'detail', p.detail));
+  if (p.help) d.append(el('div', 'help', p.help));
+  const more = el('details', 'chain');
+  more.open = p.open;
+  more.addEventListener('toggle', () => { p.open = more.open; });
+  more.append(el('summary', null, 'Details'));
+  p.chain.forEach((l, i) => {
+    const lvl = el('div', `lvl ${l.side}`);
+    lvl.style.setProperty('--depth', i);
+    lvl.append(el('div', 'lvl-title', l.title), el('div', 'lvl-msg', l.message));
+    if (l.help) lvl.append(el('div', 'lvl-line', `help: ${l.help}`));
+    if (l.context) lvl.append(el('div', 'lvl-line', `while: ${l.context}`));
+    if (l.causes.length) {
+      lvl.append(el('div', 'lvl-line', 'caused by:'));
+      const ul = el('ul', 'lvl-causes');
+      for (const c of l.causes) ul.append(el('li', null, c));
+      lvl.append(ul);
+    }
+    if (l.trace.length) {
+      const pre = el('pre', 'trace', l.trace.join('\n'));
+      pre.tabIndex = 0; // a long trace scrolls: the keyboard can reach it
+      pre.setAttribute('aria-label', l.side === 'server' ? 'Server backtrace' : 'Page stack');
+      lvl.append(pre);
+    }
+    more.append(lvl);
+  });
+  const acts = el('div', 'acts');
+  const close = el('button', 'btn', 'Dismiss'); close.type = 'button';
+  close.onclick = () => dismiss(p);
+  const note = el('span', 'copy-note'); note.setAttribute('role', 'status');
+  acts.append(copyButton(p.details, { label: 'Copy details', title: 'Copy details: the error, both stacks and this environment, to paste into a bug report', note }), close, note);
+  // the buttons above the chain: with the chain open they stay in reach
+  d.append(acts, more);
+  return d;
 }
 
 function renderTitle() {
