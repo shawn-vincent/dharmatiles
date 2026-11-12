@@ -160,7 +160,9 @@ struct Reader {
 }
 
 const MAP_KEYS: [&str; 2] = ["about", "piece"];
-const PLATES_KEYS: [&str; 7] = ["system", "printer", "mode", "group", "gap", "margin", "turn"];
+const PLATES_KEYS: [&str; 7] = [
+    "system", "printer", "mode", "group", "gap", "margin", "turn",
+];
 const PIECE_KEYS: [&str; 8] = [
     "count", "seed", "system", "print", "at", "rot", "height", "id",
 ];
@@ -221,10 +223,10 @@ impl Reader {
             });
         }
         let names: Vec<&str> = words.iter().map(|(w, _)| *w).collect();
-        let help = did_you_mean(s, names.iter().copied())
-            .map_or_else(|| format!("`{key}` is {}", names.join(" or ")), |d| {
-                format!("did you mean `{d}`?")
-            });
+        let help = did_you_mean(s, names.iter().copied()).map_or_else(
+            || format!("`{key}` is {}", names.join(" or ")),
+            |d| format!("did you mean `{d}`?"),
+        );
         self.err(
             "dt::map",
             value_span(e),
@@ -248,7 +250,10 @@ impl Reader {
             .help = Some(format!("write `{key}=\"3mm\"`"));
             return None;
         };
-        let n = s.trim().strip_suffix("mm").and_then(|n| n.trim().parse::<f64>().ok());
+        let n = s
+            .trim()
+            .strip_suffix("mm")
+            .and_then(|n| n.trim().parse::<f64>().ok());
         match n {
             Some(v) if v.is_finite() && (0.0..=100.0).contains(&v) => {
                 Some(Spanned { value: v, span })
@@ -362,13 +367,10 @@ impl Reader {
                         format!("a piece has no `{other}`"),
                         "unknown",
                     )
-                    .help = Some(
-                        did_you_mean(other, PIECE_KEYS)
-                            .map_or_else(
-                                || format!("a piece takes: {}", PIECE_KEYS.join(", ")),
-                                |d| format!("did you mean `{d}`?"),
-                            ),
-                    );
+                    .help = Some(did_you_mean(other, PIECE_KEYS).map_or_else(
+                        || format!("a piece takes: {}", PIECE_KEYS.join(", ")),
+                        |d| format!("did you mean `{d}`?"),
+                    ));
                 }
             }
         }
@@ -388,7 +390,8 @@ impl Reader {
                     "a piece names its tile",
                     "needs `piece \"lib:tiles/ground/1x1-grass\"`",
                 )
-                .help = Some("write the tile's path in quotes after `piece`, then `count=`".to_owned());
+                .help =
+                    Some("write the tile's path in quotes after `piece`, then `count=`".to_owned());
                 return None;
             }
         }
@@ -406,7 +409,12 @@ impl Reader {
     fn tile_path(&mut self, e: &KdlEntry) -> Option<Spanned<String>> {
         let span = value_span(e);
         let Some(s) = arg_str(e) else {
-            self.err("dt::map", span, "a tile is named by its path in quotes", "not a path");
+            self.err(
+                "dt::map",
+                span,
+                "a tile is named by its path in quotes",
+                "not a path",
+            );
             return None;
         };
         if s.trim().is_empty() {
@@ -468,12 +476,10 @@ impl Reader {
                         format!("the plates line has no `{other}`"),
                         "unknown",
                     )
-                    .help = Some(
-                        did_you_mean(other, PLATES_KEYS).map_or_else(
-                            || format!("the settings are: {}", PLATES_KEYS.join(", ")),
-                            |d| format!("did you mean `{d}`?"),
-                        ),
-                    );
+                    .help = Some(did_you_mean(other, PLATES_KEYS).map_or_else(
+                        || format!("the settings are: {}", PLATES_KEYS.join(", ")),
+                        |d| format!("did you mean `{d}`?"),
+                    ));
                 }
             }
         }
@@ -534,8 +540,13 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
             "map" => {
                 maps += 1;
                 if maps > 1 {
-                    r.err("dt::map", n.name().span(), "a file holds one map", "a second one")
-                        .help = Some("put each list in its own file".to_owned());
+                    r.err(
+                        "dt::map",
+                        n.name().span(),
+                        "a file holds one map",
+                        "a second one",
+                    )
+                    .help = Some("put each list in its own file".to_owned());
                     continue;
                 }
                 list.span = n.span();
@@ -562,19 +573,25 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
                     format!("unknown top-level node `{other}`"),
                     "not map or plates",
                 )
-                .help = Some(
-                    did_you_mean(other, ["map", "plates"]).map_or_else(
-                        || "a print list is `map { piece … }` and an optional `plates …` line".to_owned(),
-                        |d| format!("did you mean `{d}`?"),
-                    ),
-                );
+                .help = Some(did_you_mean(other, ["map", "plates"]).map_or_else(
+                    || {
+                        "a print list is `map { piece … }` and an optional `plates …` line"
+                            .to_owned()
+                    },
+                    |d| format!("did you mean `{d}`?"),
+                ));
             }
         }
     }
     if maps == 0 && r.errors.is_empty() {
-        let span = kdl.nodes().first().map_or_else(|| SourceSpan::new(0.into(), 0), KdlNode::span);
+        let span = kdl
+            .nodes()
+            .first()
+            .map_or_else(|| SourceSpan::new(0.into(), 0), KdlNode::span);
         r.err("dt::map", span, "this document has no `map`", "no map here")
-            .help = Some("a print list holds `map { piece \"lib:tiles/ground/1x1-grass\" count=4 }`".to_owned());
+            .help = Some(
+            "a print list holds `map { piece \"lib:tiles/ground/1x1-grass\" count=4 }`".to_owned(),
+        );
     }
     if r.errors.is_empty() {
         Ok(list)
@@ -601,7 +618,12 @@ fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
                 {
                     list.about = Some(s.to_owned());
                 } else {
-                    r.err("dt::map", c.span(), "`about` takes one quoted sentence", "here");
+                    r.err(
+                        "dt::map",
+                        c.span(),
+                        "`about` takes one quoted sentence",
+                        "here",
+                    );
                 }
             }
             "piece" => {

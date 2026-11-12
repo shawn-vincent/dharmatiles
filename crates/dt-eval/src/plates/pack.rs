@@ -174,7 +174,11 @@ fn by_size(items: &mut [&Item]) {
         let area = |i: &Item| i.size[0] * i.size[1];
         area(b)
             .total_cmp(&area(a))
-            .then(b.size[0].max(b.size[1]).total_cmp(&a.size[0].max(a.size[1])))
+            .then(
+                b.size[0]
+                    .max(b.size[1])
+                    .total_cmp(&a.size[0].max(a.size[1])),
+            )
             .then(a.id.cmp(&b.id))
     });
 }
@@ -311,8 +315,16 @@ mod tests {
                     assert!(!overlaps([a.x, a.y, a.x + a.w, a.y + a.d], *z));
                 }
                 for b in &plate.placed[i + 1..] {
-                    let grown = [a.x - s.gap, a.y - s.gap, a.x + a.w + s.gap, a.y + a.d + s.gap];
-                    assert!(!overlaps(grown, [b.x, b.y, b.x + b.w, b.y + b.d]), "{a:?} {b:?}");
+                    let grown = [
+                        a.x - s.gap,
+                        a.y - s.gap,
+                        a.x + a.w + s.gap,
+                        a.y + a.d + s.gap,
+                    ];
+                    assert!(
+                        !overlaps(grown, [b.x, b.y, b.x + b.w, b.y + b.d]),
+                        "{a:?} {b:?}"
+                    );
                 }
             }
         }
@@ -368,18 +380,41 @@ mod tests {
     #[test]
     fn large_to_small_and_the_same_every_time() {
         let items = vec![
-            Item { id: 0, size: [35.0, 35.0], filaments: vec![Material::Earth] },
-            Item { id: 1, size: [70.0, 70.0], filaments: vec![Material::Earth] },
-            Item { id: 2, size: [70.0, 35.0], filaments: vec![Material::Earth] },
-            Item { id: 3, size: [35.0, 35.0], filaments: vec![Material::Earth] },
+            Item {
+                id: 0,
+                size: [35.0, 35.0],
+                filaments: vec![Material::Earth],
+            },
+            Item {
+                id: 1,
+                size: [70.0, 70.0],
+                filaments: vec![Material::Earth],
+            },
+            Item {
+                id: 2,
+                size: [70.0, 35.0],
+                filaments: vec![Material::Earth],
+            },
+            Item {
+                id: 3,
+                size: [35.0, 35.0],
+                filaments: vec![Material::Earth],
+            },
         ];
         let s = spec(256.0);
         let a = pack(&items, &s);
         let order: Vec<usize> = a.plates[0].placed.iter().map(|p| p.id).collect();
-        assert_eq!(order, [1, 2, 0, 3], "70x70, 70x35, then the two squares in id order");
+        assert_eq!(
+            order,
+            [1, 2, 0, 3],
+            "70x70, 70x35, then the two squares in id order"
+        );
         assert_eq!(a, pack(&items, &s));
         // the biggest stands at the front-left corner, against the margin
-        assert_eq!((a.plates[0].placed[0].x, a.plates[0].placed[0].y), (5.0, 5.0));
+        assert_eq!(
+            (a.plates[0].placed[0].x, a.plates[0].placed[0].y),
+            (5.0, 5.0)
+        );
     }
 
     #[test]
@@ -389,11 +424,18 @@ mod tests {
             bed: [50.0, 100.0],
             ..spec(100.0)
         };
-        let items = [Item { id: 0, size: [90.0, 40.0], filaments: vec![Material::Earth] }];
+        let items = [Item {
+            id: 0,
+            size: [90.0, 40.0],
+            filaments: vec![Material::Earth],
+        }];
         let p = pack(&items, &s);
         assert_eq!(per_plate(&p), [1]);
         assert!(p.plates[0].placed[0].turned);
-        assert_eq!((p.plates[0].placed[0].w, p.plates[0].placed[0].d), (40.0, 90.0));
+        assert_eq!(
+            (p.plates[0].placed[0].w, p.plates[0].placed[0].d),
+            (40.0, 90.0)
+        );
         let off = Spec { turn: false, ..s };
         let p = pack(&items, &off);
         assert_eq!(p.too_big, [0], "without turns it is bigger than the bed");

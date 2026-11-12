@@ -37,7 +37,10 @@ fn a_print_list_reads_pieces_and_plates() {
     assert_eq!(l.about.as_deref(), Some("A stream crossing."));
     assert_eq!(l.pieces.len(), 4);
     let p = &l.pieces[0];
-    assert_eq!((p.tile.value.as_str(), p.count.value), ("lib:tiles/ground/1x1-grass", 8));
+    assert_eq!(
+        (p.tile.value.as_str(), p.count.value),
+        ("lib:tiles/ground/1x1-grass", 8)
+    );
     assert!(p.seed.is_none() && p.system.is_none() && !p.skip);
     let q = &l.pieces[1];
     assert_eq!(q.id.as_ref().unwrap().value, "p2");
@@ -118,6 +121,8 @@ fn the_header_is_checked_as_in_every_document() {
         .err()
         .unwrap();
     assert_eq!(e[0].code, "dt::format-newer");
-    let e = decode("t.dmap", "dharmatiles version=1\nmap {{\n").err().unwrap();
+    let e = decode("t.dmap", "dharmatiles version=1\nmap {{\n")
+        .err()
+        .unwrap();
     assert_eq!(e[0].code, "dt::syntax");
 }

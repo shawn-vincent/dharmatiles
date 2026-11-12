@@ -121,7 +121,12 @@ impl Plan {
     ///
     /// # Errors
     /// The printer profile cannot be read.
-    pub fn options(&self, k: usize, base: &Options, home: Option<&Path>) -> Result<Options, Vec<Diag>> {
+    pub fn options(
+        &self,
+        k: usize,
+        base: &Options,
+        home: Option<&Path>,
+    ) -> Result<Options, Vec<Diag>> {
         let kind = &self.kinds[k];
         let mut o = Options {
             system: kind.system.clone(),
@@ -174,7 +179,11 @@ pub fn estimate(tile: &crate::Tile) -> Vec<Material> {
 ///
 /// # Errors
 /// `home:` with no home, or a relative path with no folder to be relative to.
-pub fn tile_path(tile: &str, list_dir: Option<&Path>, home: Option<&Path>) -> Result<String, String> {
+pub fn tile_path(
+    tile: &str,
+    list_dir: Option<&Path>,
+    home: Option<&Path>,
+) -> Result<String, String> {
     let with_ext = |p: String| {
         if p.to_ascii_lowercase().ends_with(".dtile") {
             p
@@ -186,8 +195,14 @@ pub fn tile_path(tile: &str, list_dir: Option<&Path>, home: Option<&Path>) -> Re
         return Ok(with_ext(tile.to_owned()));
     }
     if let Some(rest) = tile.strip_prefix("home:") {
-        let h = home.ok_or("`home:` needs your tiles folder, and there is none ($DT_HOME, else ~/dharmatiles)")?;
-        return Ok(with_ext(h.join(rest.trim_start_matches('/')).to_string_lossy().into_owned()));
+        let h = home.ok_or(
+            "`home:` needs your tiles folder, and there is none ($DT_HOME, else ~/dharmatiles)",
+        )?;
+        return Ok(with_ext(
+            h.join(rest.trim_start_matches('/'))
+                .to_string_lossy()
+                .into_owned(),
+        ));
     }
     let p = PathBuf::from(tile);
     if p.is_absolute() {
@@ -241,7 +256,9 @@ pub fn plan(
         && let Err(d) = m.bed_or_say()
     {
         let d = match (&pl.printer, ov.printer.is_none()) {
-            (Some(p), true) => Diag::at(&list.src, p.span, d.code, d.message, "no bed").maybe_help(d.help),
+            (Some(p), true) => {
+                Diag::at(&list.src, p.span, d.code, d.message, "no bed").maybe_help(d.help)
+            }
             _ => d,
         };
         errors.push(d);
@@ -255,17 +272,27 @@ pub fn plan(
     let mode = ov
         .mode
         .or_else(|| pl.mode.as_ref().map(|m| m.value))
-        .unwrap_or(if slots > 1 { Mode::Multicolour } else { Mode::Single });
+        .unwrap_or(if slots > 1 {
+            Mode::Multicolour
+        } else {
+            Mode::Single
+        });
     let group = ov
         .group
         .or_else(|| pl.group.as_ref().map(|g| g.value))
         .unwrap_or(Group::Filament);
-    let gap = ov.gap.or_else(|| pl.gap.as_ref().map(|g| g.value)).unwrap_or(GAP_MM);
+    let gap = ov
+        .gap
+        .or_else(|| pl.gap.as_ref().map(|g| g.value))
+        .unwrap_or(GAP_MM);
     let margin = ov
         .margin
         .or_else(|| pl.margin.as_ref().map(|g| g.value))
         .unwrap_or(MARGIN_MM);
-    let turn = ov.turn.or_else(|| pl.turn.as_ref().map(|g| g.value)).unwrap_or(true);
+    let turn = ov
+        .turn
+        .or_else(|| pl.turn.as_ref().map(|g| g.value))
+        .unwrap_or(true);
 
     let mut kinds: Vec<Kind> = Vec::new();
     let mut skipped = Vec::new();
@@ -281,7 +308,10 @@ pub fn plan(
                 continue;
             }
         };
-        let sys = p.system.as_ref().map_or_else(|| system.clone(), |s| s.value.clone());
+        let sys = p
+            .system
+            .as_ref()
+            .map_or_else(|| system.clone(), |s| s.value.clone());
         let seed = p.seed.as_ref().map(|s| s.value);
         if let Some(k) = kinds
             .iter_mut()
@@ -301,8 +331,14 @@ pub fn plan(
                 // the tile's own mistakes, where the tile writes them; and where the
                 // list names it
                 errors.push(
-                    Diag::at(&list.src, p.tile.span, "dt::map", format!("`{}` does not check", p.tile.value), "this tile")
-                        .help(e.first().map_or_else(String::new, |d| d.message.clone())),
+                    Diag::at(
+                        &list.src,
+                        p.tile.span,
+                        "dt::map",
+                        format!("`{}` does not check", p.tile.value),
+                        "this tile",
+                    )
+                    .help(e.first().map_or_else(String::new, |d| d.message.clone())),
                 );
                 errors.extend(e);
                 continue;
@@ -370,7 +406,8 @@ pub fn plan(
                     "print in single colour (`mode=\"single\"`), or choose a printer with more slots".to_owned()
                 };
                 errors.push(match span {
-                    Some(s) => Diag::at(&list.src, s, "dt::slots", d, "needs too many filaments").help(help),
+                    Some(s) => Diag::at(&list.src, s, "dt::slots", d, "needs too many filaments")
+                        .help(help),
                     None => Diag::plain("dt::slots", d).help(help),
                 });
             }
@@ -551,7 +588,11 @@ pub fn layout(plan: &Plan, boxes: &[Boxes]) -> Result<Layout, Vec<Diag>> {
                 .iter()
                 .map(|at| {
                     let (kind, copy) = who[at.id];
-                    Instance { kind, copy, at: *at }
+                    Instance {
+                        kind,
+                        copy,
+                        at: *at,
+                    }
                 })
                 .collect()
         })

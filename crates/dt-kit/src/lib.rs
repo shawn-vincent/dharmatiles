@@ -54,8 +54,8 @@ mod land;
 mod outline;
 mod paint;
 mod piece;
-mod plates;
 pub mod pieces;
+mod plates;
 pub mod progress;
 pub mod rays;
 mod render;
@@ -72,10 +72,6 @@ pub use audit::{
     fit, hang,
 };
 pub use bambu::{bambu_project, bed_centre, bed_corners, project_settings};
-pub use plates::{
-    PlatePart, PlateSet, PlateStand, bambu_columns, bambu_plate_origin, bambu_plates, box_of,
-    filaments_of, plate_3mf, plate_stl, project_filaments, summary as plates_summary,
-};
 pub use band::{
     Band, Banded, Ease, Lint, Odds, OddsBuilder, Pin, Refusal, Shadowed, Solved, Steep, drop_mm,
     lints, solve, solve_traced,
@@ -94,6 +90,10 @@ pub use land::{Disc, Land, STEEPEST_GROUND_DEG, Seat, SeatRule, THINGS, seat_on}
 pub use outline::Outline;
 pub use paint::paint_mesh;
 pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
+pub use plates::{
+    PlatePart, PlateSet, PlateStand, bambu_columns, bambu_plate_origin, bambu_plates, box_of,
+    filaments_of, plate_3mf, plate_stl,
+};
 pub use progress::{Counter, Event, Progress, Reporter};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{

@@ -12,7 +12,6 @@
 use std::fmt::Write as _;
 
 use dt_geom::TriMesh;
-use serde_json::Value;
 
 use crate::bambu::{bed_corners, esc, settings};
 use crate::threemf::{byte, filament_of, filaments, paint_code, zip};
@@ -118,7 +117,8 @@ fn baked(set: &PlateSet, plate: usize) -> TriMesh {
         for p in &part.mesh.positions {
             let c = [p[0] - mid[0], p[1] - mid[1], p[2] - mid[2]];
             let c = if s.turned { [-c[1], c[0], c[2]] } else { c };
-            out.positions.push([at[0] + c[0], at[1] + c[1], at[2] + c[2]]);
+            out.positions
+                .push([at[0] + c[0], at[1] + c[1], at[2] + c[2]]);
         }
         out.triangles
             .extend(part.mesh.triangles.iter().map(|t| t.map(|i| i + base)));
@@ -184,7 +184,11 @@ pub fn plate_3mf(set: &PlateSet, plate: usize, palette: &Palette) -> Vec<u8> {
         esc(&set.record.engine),
         esc(set.title),
         plate + 1,
-        if set.multicolour { "multicolour" } else { "single colour" },
+        if set.multicolour {
+            "multicolour"
+        } else {
+            "single colour"
+        },
         plate + 1,
         set.plates,
         esc(&set.record.target())
@@ -220,7 +224,10 @@ pub fn plate_3mf(set: &PlateSet, plate: usize, palette: &Palette) -> Vec<u8> {
                 let _ = writeln!(
                     x,
                     "     <triangle v1=\"{}\" v2=\"{}\" v3=\"{}\" pid=\"1\" p1=\"{u}\" paint_color=\"{c}\" slic3rpe:mmu_segmentation=\"{c}\"/>",
-                    t[0], t[1], t[2], c = paint[u]
+                    t[0],
+                    t[1],
+                    t[2],
+                    c = paint[u]
                 );
             } else {
                 let _ = writeln!(
@@ -269,7 +276,11 @@ pub fn plate_3mf(set: &PlateSet, plate: usize, palette: &Palette) -> Vec<u8> {
 /// plates (its `compute_colum_count`).
 #[must_use]
 pub fn bambu_columns(n: usize) -> usize {
-    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     let v = (n as f64).sqrt();
     let r = v.round();
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -285,10 +296,7 @@ pub fn bambu_plate_origin(i: usize, n: usize, bed: [f64; 2]) -> [f64; 2] {
     let cols = bambu_columns(n);
     let (row, col) = (i / cols, i % cols);
     #[allow(clippy::cast_precision_loss)]
-    [
-        col as f64 * bed[0] * 1.2,
-        -(row as f64) * bed[1] * 1.2,
-    ]
+    [col as f64 * bed[0] * 1.2, -(row as f64) * bed[1] * 1.2]
 }
 
 fn uuid(kind: u32, n: usize) -> String {
@@ -373,7 +381,9 @@ pub fn bambu_plates(
                 );
             }
         }
-        o.push_str("    </triangles>\n   </mesh>\n  </object>\n </resources>\n <build/>\n</model>\n");
+        o.push_str(
+            "    </triangles>\n   </mesh>\n  </object>\n </resources>\n <build/>\n</model>\n",
+        );
         files.push((format!("3D/Objects/object_{}.model", k + 1), o.into_bytes()));
         let _ = write!(
             top_objects,
@@ -477,34 +487,14 @@ pub fn bambu_plates(
     for (n, b) in &files {
         all.push((n.as_str(), b.clone()));
     }
-    all.push(("Metadata/model_settings.config", model_settings.into_bytes()));
+    all.push((
+        "Metadata/model_settings.config",
+        model_settings.into_bytes(),
+    ));
     all.push(("Metadata/project_settings.config", config.into_bytes()));
     Ok(zip(&all))
 }
 
-/// The plate of every filament slot a project needs, as the project lists
-/// them: the filaments of `used` in slot order.
-#[must_use]
-pub fn project_filaments(parts: &[PlatePart], multicolour: bool) -> Vec<Material> {
-    if !multicolour {
-        return vec![Material::Earth];
-    }
-    let mut used: Vec<Material> = parts
-        .iter()
-        .flat_map(|p| p.materials.iter().copied())
-        .collect();
-    used.sort();
-    used.dedup();
-    filaments(&used)
-}
-
-/// A JSON summary of the set for the build record next to the files.
-#[must_use]
-pub fn summary(set: &PlateSet) -> Value {
-    serde_json::json!({
-        "plates": set.plates,
-        "parts": set.parts.iter().map(|p| p.name).collect::<Vec<_>>(),
-        "pieces": set.stands.len(),
-        "multicolour": set.multicolour,
-    })
-}
+#[cfg(test)]
+#[path = "plates_tests.rs"]
+mod tests;

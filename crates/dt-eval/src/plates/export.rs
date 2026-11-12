@@ -36,7 +36,11 @@ impl Format {
     /// else one STL per plate.
     #[must_use]
     pub fn for_printer(machine: &crate::Machine) -> Self {
-        if machine.is_bambu() { Self::Bambu } else { Self::Stl }
+        if machine.is_bambu() {
+            Self::Bambu
+        } else {
+            Self::Stl
+        }
     }
 }
 
@@ -103,7 +107,10 @@ pub fn write_set(
         if !b.checked {
             return Err(Diag::plain(
                 "dt::plates",
-                format!("{} was not built in full and is not checked: plates are never made from a low build", k.name),
+                format!(
+                    "{} was not built in full and is not checked: plates are never made from a low build",
+                    k.name
+                ),
             ));
         }
     }
@@ -111,10 +118,20 @@ pub fn write_set(
     let stem = &plan.title;
     match format {
         Format::Stl => Ok((0..set.plates)
-            .map(|p| (format!("{stem}-plate-{:02}.stl", p + 1), dt_kit::plate_stl(&set, p)))
+            .map(|p| {
+                (
+                    format!("{stem}-plate-{:02}.stl", p + 1),
+                    dt_kit::plate_stl(&set, p),
+                )
+            })
             .collect()),
         Format::ThreeMf => Ok((0..set.plates)
-            .map(|p| (format!("{stem}-plate-{:02}.3mf", p + 1), dt_kit::plate_3mf(&set, p, palette)))
+            .map(|p| {
+                (
+                    format!("{stem}-plate-{:02}.3mf", p + 1),
+                    dt_kit::plate_3mf(&set, p, palette),
+                )
+            })
             .collect()),
         Format::Bambu => {
             let t = template.ok_or_else(|| {
@@ -124,10 +141,7 @@ pub fn write_set(
                 )
                 .help("save any project from Bambu Studio for this printer as bambu.3mf in your tiles folder (or name it with --bambu-template), or write one STL per plate with --format stl")
             })?;
-            let bed = plan
-                .settings
-                .machine
-                .bed_or_say()?;
+            let bed = plan.settings.machine.bed_or_say()?;
             let bytes = dt_kit::bambu_plates(&set, palette, t, bed)
                 .map_err(|e| Diag::plain("dt::plates", e))?;
             Ok(vec![(format!("{stem}.3mf"), bytes)])

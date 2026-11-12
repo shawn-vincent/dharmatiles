@@ -136,7 +136,11 @@ pub(crate) fn overrides(
         None => None,
         Some("single") => Some(Mode::Single),
         Some("multicolour") => Some(Mode::Multicolour),
-        Some(m) => return Err(format!("`{m}` is not a mode: use `single` or `multicolour`")),
+        Some(m) => {
+            return Err(format!(
+                "`{m}` is not a mode: use `single` or `multicolour`"
+            ));
+        }
     };
     let group = match group {
         None => None,
@@ -148,7 +152,11 @@ pub(crate) fn overrides(
         None => None,
         Some("allowed") => Some(true),
         Some("off") => Some(false),
-        Some(m) => return Err(format!("`{m}` is not a turn setting: use `allowed` or `off`")),
+        Some(m) => {
+            return Err(format!(
+                "`{m}` is not a turn setting: use `allowed` or `off`"
+            ));
+        }
     };
     if let Some(s) = &system
         && !matches!(s.as_str(), "db" | "ol")
@@ -173,7 +181,9 @@ pub(crate) fn format_of(word: Option<&str>, machine: &dt_eval::Machine) -> Resul
         Some("bambu") => Ok(Format::Bambu),
         Some("stl") => Ok(Format::Stl),
         Some("3mf") => Ok(Format::ThreeMf),
-        Some(w) => Err(format!("`{w}` is not a format: use `bambu`, `stl` or `3mf`")),
+        Some(w) => Err(format!(
+            "`{w}` is not a format: use `bambu`, `stl` or `3mf`"
+        )),
     }
 }
 
@@ -245,17 +255,12 @@ pub(crate) fn run(
             }
         );
         if let Some(v) = &s.machine.verify {
-            tell!(
-                "note: this printer's numbers are not yet checked against the maker ({v})"
-            );
+            tell!("note: this printer's numbers are not yet checked against the maker ({v})");
         }
     }
     if check_only {
         if json {
-            say!(
-                "{}",
-                json!({"ok": true, "plan": plan_json(&plan)})
-            );
+            say!("{}", json!({"ok": true, "plan": plan_json(&plan)}));
         }
         return OK;
     }
@@ -284,7 +289,10 @@ pub(crate) fn run(
     let mut last = Instant::now();
     let builds = build_all(&plan, &base, home.as_deref(), store, &mut |n, of, name| {
         if !json {
-            tell!("[{n}/{of}] building {name} ({:.1} s)", last.elapsed().as_secs_f64());
+            tell!(
+                "[{n}/{of}] building {name} ({:.1} s)",
+                last.elapsed().as_secs_f64()
+            );
         }
         last = Instant::now();
     });
@@ -314,11 +322,11 @@ pub(crate) fn run(
         printer: s.machine.name.clone(),
     };
     let refs: Vec<&Built> = builds.built.iter().collect();
-    let files = match export::write_set(&plan, &layout, &refs, fmt, palette, tpl.as_deref(), &record)
-    {
-        Ok(f) => f,
-        Err(e) => return fail(&[e], json),
-    };
+    let files =
+        match export::write_set(&plan, &layout, &refs, fmt, palette, tpl.as_deref(), &record) {
+            Ok(f) => f,
+            Err(e) => return fail(&[e], json),
+        };
     let dest = out.join("plates").join(&title);
     if let Err(e) = std::fs::create_dir_all(&dest) {
         tell!("error: cannot create {}: {e}", dest.display());
@@ -346,8 +354,9 @@ pub(crate) fn run(
     let rec = dest.join(format!("{title}.plates.json"));
     match serde_json::to_string_pretty(&report_json)
         .map_err(|e| e.to_string())
-        .and_then(|t| std::fs::write(&rec, t).map_err(|e| format!("cannot write {}: {e}", rec.display())))
-    {
+        .and_then(|t| {
+            std::fs::write(&rec, t).map_err(|e| format!("cannot write {}: {e}", rec.display()))
+        }) {
         Ok(()) => {}
         Err(e) => {
             tell!("error: {e}");
@@ -386,7 +395,11 @@ pub(crate) fn run(
         for f in &written {
             tell!("wrote {}", f.display());
         }
-        tell!("{} plate(s) in {:.1} s", layout.plates.len(), t0.elapsed().as_secs_f64());
+        tell!(
+            "{} plate(s) in {:.1} s",
+            layout.plates.len(),
+            t0.elapsed().as_secs_f64()
+        );
     }
     code
 }
