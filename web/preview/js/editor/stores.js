@@ -47,6 +47,10 @@ export const view = createStore({
   tileId: null, root: -1,
   sel: null,           // {kind, id, piece?}: kind entry (id: the stack index), region or line (id: the name), tile; or null
   hov: null,           // the same, under the pointer (view or text)
+  cloudText: null,     // the stack entry whose cloud (a top= or pin) the source's caret is in
+  cloudSheet: null,    // the stack entry whose top field has focus in the sheet
+  cloudHov: null,      // the entry whose cloud is under the pointer in the source
+  cloudSheetHov: null, // the entry whose top row is under the pointer in the sheet
   mode: 'painted',     // the view's preset
   pick: null,          // {name, animate}: a preset asked for (a fresh object each time, so asking again counts)
   activeView: null,    // the preset the camera is still on, if any

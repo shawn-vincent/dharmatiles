@@ -6,7 +6,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from '/vendor/OrbitControls.js';
 import { ownerVertices, worstFlagged } from './payload.js';
-import { classInfo, columnGeometry, segments, shadeAlpha, SHADE_COLUMN, SHADE_SHEET, sheetGeometry, sheetTokens } from './debug-layer.js';
+import { classInfo, segments } from './debug-layer.js';
+import { cloudOf, columnGeometry, shadeAlpha, SHADE_COLUMN, SHADE_SHEET, sheetGeometry } from './cloud.js';
 
 THREE.ColorManagement.enabled = false; // colours are already display values
 
@@ -178,6 +179,8 @@ void main() { float r = length(gl_PointCoord - 0.5); if (r > 0.5) discard; gl_Fr
 // cloud sheets: a fill whose opacity is each node's shade (how often that
 // height comes up), a brighter contour
 const CONTOUR_ALPHA = 0.95;
+// a hovered cloud is drawn at this share of a selected one's strength
+const CLOUD_HOVER = 0.4;
 // a cloud at a point: a marker at the height the roll gave, a fixed size on screen
 
 // The hover: with nothing selected the rest dims a little round what is
@@ -266,6 +269,9 @@ export class Viewer {
     this.debug = null; // the payload's debug marks, drawn while showDebug
     this.debugGroup = null;
     this.showDebug = false;
+    this.cloudSel = null; // the stack entry whose cloud is selected (setCloud), and the one hovered
+    this.cloudHov = null;
+    this.cloudGroup = null;
     this.debugColour = () => '#808080'; // the page gives the theme's tokens (setDebugColours)
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
@@ -580,14 +586,15 @@ export class Viewer {
     this.payload = payload;
     this.debug = payload.meta?.debug ?? null;
     this.buildDebug();
+    this.buildCloud();
     this.buildGrid();
     this.draw();
   }
 
   /** How the debug layer's colours are read: `fn(token)` gives a CSS colour (the theme's `--dbg-…`). */
-  setDebugColours(fn) { this.debugColour = fn; this.buildDebug(); this.draw(); }
+  setDebugColours(fn) { this.debugColour = fn; this.buildDebug(); this.buildCloud(); this.draw(); }
 
-  /** Show or hide the debug layer (the payload's `debug`: grass starts and spines, band sheets). */
+  /** Show or hide the debug layer (the payload's `debug`: grass starts and spines; the clouds are drawn as part of the selection, setCloud). */
   setDebugShown(on) { this.showDebug = on; this.buildDebug(); this.draw(); }
 
   /** The debug layer's objects, made again from `this.debug` while it is shown. */
@@ -603,49 +610,6 @@ export class Viewer {
     const group = new THREE.Group();
     const colour = (token) => new THREE.Color().setStyle(this.debugColour(token)); // a bad token is a bug: let it throw
     const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
-    // the sheets first, depth-tested so the terrain hides what is under it
-    const tokens = sheetTokens(d);
-    (d.sheets ?? []).forEach((s, k) => {
-      const { positions, contour, shade } = sheetGeometry(s);
-      const c = colour(tokens[k]);
-      const fill = new THREE.BufferGeometry();
-      fill.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      const rgba = new Float32Array(shade.length * 4);
-      shade.forEach((v, n) => rgba.set([c.r, c.g, c.b, shadeAlpha(v, SHADE_SHEET)], 4 * n));
-      fill.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
-      over(new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, side: THREE.DoubleSide, depthWrite: false })), 10);
-      const edge = new THREE.BufferGeometry();
-      edge.setAttribute('position', new THREE.BufferAttribute(contour, 3));
-      over(new THREE.LineSegments(edge, new THREE.LineBasicMaterial({ color: c.clone().lerp(new THREE.Color(1, 1, 1), 0.35), transparent: true, opacity: CONTOUR_ALPHA })), 11);
-    });
-    // the clouds at a point: a line from low to high shaded at each end, the
-    // rolled height marked on it; in front of the solids so a crown's tips show
-    const cloudMarks = { depthTest: false, depthWrite: false, transparent: true };
-    const mpos = [], mcol = [];
-    for (const [cls, flat] of Object.entries(d.columns ?? {})) {
-      const g = columnGeometry(flat);
-      const c = colour('--dbg-cloud');
-      const line = new THREE.BufferGeometry();
-      line.setAttribute('position', new THREE.BufferAttribute(g.lines, 3));
-      const rgba = new Float32Array(g.lineShade.length * 4);
-      g.lineShade.forEach((v, n) => rgba.set([c.r, c.g, c.b, shadeAlpha(v, SHADE_COLUMN)], 4 * n));
-      line.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
-      over(new THREE.LineSegments(line, new THREE.LineBasicMaterial({ vertexColors: true, ...cloudMarks })), 19);
-      for (let n = 0; n < g.n; n++) {
-        mpos.push(g.marks[3 * n], g.marks[3 * n + 1], g.marks[3 * n + 2]);
-        // the marker's shade: its colour toward the plate where the height is rare
-        const t = shadeAlpha(g.markShade[n], SHADE_COLUMN);
-        const m = c.clone().lerp(new THREE.Color(this.debugColour('--plate')), 1 - t);
-        mcol.push(m.r, m.g, m.b);
-      }
-    }
-    if (mpos.length) {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(mpos), 3));
-      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(mcol), 3));
-      const size = 6 * Math.min(2, this.renderer.getPixelRatio());
-      over(new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: { uSize: { value: size } }, vertexShader: DOT_VERT, fragmentShader: DOT_FRAG, ...cloudMarks })), 20);
-    }
     // then the marks, over everything: they lie on the ground under the blades
     const marks = { depthTest: false, depthWrite: false, transparent: true };
     for (const [cls, trails] of Object.entries(d.trails ?? {})) {
@@ -666,6 +630,82 @@ export class Viewer {
       over(new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: { uSize: { value: size } }, vertexShader: DOT_VERT, fragmentShader: DOT_FRAG, ...marks })), 22);
     }
     this.debugGroup = group;
+    this.scene.add(group);
+  }
+
+  /**
+   * The selected cloud: `sel` and `hov` are stack entries (or null), the
+   * one whose `top=` or pin the caret is in or the sheet's top field has
+   * focus, and the one under the pointer.  Drawn from the payload's clouds
+   * in the accent, as a selected place is: its low and high sheets shaded by
+   * how often each height comes up, and a line from low to high at each
+   * branch tip or stone with the rolled height marked.  The hovered one is
+   * quieter.
+   */
+  setCloud(sel, hov) {
+    if (this.cloudSel === sel && this.cloudHov === hov) return;
+    this.cloudSel = sel;
+    this.cloudHov = hov;
+    this.buildCloud();
+    this.draw();
+  }
+
+  buildCloud() {
+    if (this.cloudGroup) {
+      this.scene.remove(this.cloudGroup);
+      this.cloudGroup.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+      this.cloudGroup = null;
+    }
+    const d = this.debug;
+    const wanted = [[this.cloudSel, 1], [this.cloudHov !== this.cloudSel ? this.cloudHov : null, CLOUD_HOVER]].filter(([e]) => e != null);
+    if (!d || !wanted.length) return;
+    const group = new THREE.Group();
+    const c = new THREE.Color().setStyle(this.debugColour('--accent')); // a bad token is a bug: let it throw
+    const plate = new THREE.Color(this.debugColour('--plate'));
+    const over = (o, order) => { o.frustumCulled = false; o.renderOrder = order; group.add(o); };
+    // drawn over the solids, as a selected place is: the low sheet is
+    // under the ground it bounds
+    const flat = { depthTest: false, depthWrite: false, transparent: true };
+    const mpos = [], mcol = [];
+    for (const [entry, strength] of wanted) {
+      const { sheets, columns } = cloudOf(d, entry);
+      for (const s of sheets) {
+        const { positions, contour, shade } = sheetGeometry(s);
+        const fill = new THREE.BufferGeometry();
+        fill.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const rgba = new Float32Array(shade.length * 4);
+        shade.forEach((v, n) => rgba.set([c.r, c.g, c.b, strength * shadeAlpha(v, SHADE_SHEET)], 4 * n));
+        fill.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
+        over(new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, ...flat })), 30);
+        const edge = new THREE.BufferGeometry();
+        edge.setAttribute('position', new THREE.BufferAttribute(contour, 3));
+        over(new THREE.LineSegments(edge, new THREE.LineBasicMaterial({ color: c, opacity: strength * CONTOUR_ALPHA, ...flat })), 31);
+      }
+      for (const col of columns) {
+        const g = columnGeometry(col.v);
+        const line = new THREE.BufferGeometry();
+        line.setAttribute('position', new THREE.BufferAttribute(g.lines, 3));
+        const rgba = new Float32Array(g.lineShade.length * 4);
+        g.lineShade.forEach((v, n) => rgba.set([c.r, c.g, c.b, strength * shadeAlpha(v, SHADE_COLUMN)], 4 * n));
+        line.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
+        over(new THREE.LineSegments(line, new THREE.LineBasicMaterial({ vertexColors: true, ...flat })), 32);
+        for (let n = 0; n < g.n; n++) {
+          mpos.push(g.marks[3 * n], g.marks[3 * n + 1], g.marks[3 * n + 2]);
+          // the marker toward the plate where its height is rare, and when only hovered
+          const t = strength * shadeAlpha(g.markShade[n], SHADE_COLUMN);
+          const m = c.clone().lerp(plate, 1 - t);
+          mcol.push(m.r, m.g, m.b);
+        }
+      }
+    }
+    if (mpos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(mpos), 3));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(mcol), 3));
+      const size = 6 * Math.min(2, this.renderer.getPixelRatio());
+      over(new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: { uSize: { value: size } }, vertexShader: DOT_VERT, fragmentShader: DOT_FRAG, ...flat })), 33);
+    }
+    this.cloudGroup = group;
     this.scene.add(group);
   }
 

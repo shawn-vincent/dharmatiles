@@ -840,6 +840,7 @@ fn peaks_under_clouds(
             let shade = |u| dt_kit::debug::shade_of(c.odds.as_ref(), u);
             m.push(dt_kit::debug::Column {
                 owner: owner.to_owned(),
+                entry: None,
                 class: "stone-cloud",
                 at: p,
                 span: [c.lo * s, c.hi * s],

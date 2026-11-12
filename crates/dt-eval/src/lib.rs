@@ -1361,7 +1361,13 @@ impl<'a> Plan<'a> {
             brick,
             entries,
             pieces,
-            debug: scene.debug_marks().cloned(),
+            debug: scene.debug_marks().cloned().map(|mut d| {
+                // each cloud at a point names its stack entry, as a sheet does
+                for c in &mut d.columns {
+                    c.entry = self.jobs.iter().position(|j| j.path == c.owner);
+                }
+                d
+            }),
             warnings: Vec::new(),
         })
     }

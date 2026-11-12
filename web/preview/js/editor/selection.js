@@ -5,6 +5,7 @@
 // the same keys themselves.
 
 import { byteToIndex } from '../text.js';
+import { cloudAtCaret, cloudOnLine, cloudsIn } from '../cloud.js';
 import { $, pickView, toast, viewer } from './app.js';
 import { texts, canLeave } from './document.js';
 import {
@@ -105,6 +106,20 @@ function markText() {
   texts.mark(sel?.kind === 'tile' ? null : linesOf(sel), linesOf(hov), errs);
 }
 
+// ---- the selected cloud ----------------------------------------------------
+
+/** The clouds written in the file shown. */
+const shownClouds = () => cloudsIn(texts.text, stackItems(), texts.file);
+/** The cloud the caret is in, as its stack entry. */
+function caretCloud() {
+  const c = texts.text ? cloudAtCaret(shownClouds(), texts.caret().index) : null;
+  view.set({ cloudText: c ? c.entry : null });
+}
+function paintCloud() {
+  const v = view.get();
+  viewer.setCloud(v.cloudSheet ?? v.cloudText, v.cloudSheetHov ?? v.cloudHov);
+}
+
 /** A node a gesture just wrote, once it is in a clean check, becomes the selection. */
 function selectWritten() {
   const d = doc.get();
@@ -163,8 +178,15 @@ let down = null, hoverRaf = 0, lastMove = null;
 export function init() {
   // the pane tells which line the caret or the pointer is on
   const caret = texts.cb.onCaretLine;
-  texts.cb.onCaretLine = (n) => { caret?.(n); setSel(entryAtLine(n), { from: 'text' }); };
-  texts.cb.onHoverLine = (n) => setHov(n == null ? null : entryAtLine(n, true));
+  texts.cb.onCaretLine = (n) => { caret?.(n); setSel(entryAtLine(n), { from: 'text' }); caretCloud(); };
+  texts.cb.onHoverLine = (n) => {
+    setHov(n == null ? null : entryAtLine(n, true));
+    view.set({ cloudHov: n == null ? null : cloudOnLine(texts.text, shownClouds(), n)?.entry ?? null });
+  };
+  view.subscribe(['cloudText', 'cloudSheet', 'cloudHov', 'cloudSheetHov'], paintCloud);
+  // another tile, or a stack checked again (its entries may have moved): ask the caret again
+  view.subscribe(['tileId'], () => view.set({ cloudSheet: null, cloudHov: null, cloudSheetHov: null }));
+  doc.subscribe(['stack', 'file', 'tileId'], caretCloud);
 
   view.subscribe(['sel', 'hov', 'shown', 'draft', 'tileId'], paintHighlight);
   view.subscribe(['sel', 'tileId'], () => $('tilebtn').classList.toggle('sel', view.get().sel?.kind === 'tile'));

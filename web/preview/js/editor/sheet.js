@@ -26,6 +26,9 @@ export const lens = new Lens($('lens'), {
   set: setControl,
   makeMine: () => offerMine(),
   format: () => doc.get().format,
+  // the top field in focus (typed in or scrubbed) selects the entry's cloud; hovered, it shows quietly
+  onField: (name, on) => { if (name === 'top') view.set({ cloudSheet: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
+  onFieldHover: (name, on) => { if (name === 'top') view.set({ cloudSheetHov: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
   checkValue: async (element, control, typed) => {
     const r = await host.checkValue(element, control, typed, doc.get().format);
     if (failed(`Could not check what was typed for ${control}`, r)) return null;

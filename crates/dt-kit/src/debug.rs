@@ -72,6 +72,9 @@ pub struct Sheet {
 pub struct Column {
     /// The stack entry that made it.
     pub owner: String,
+    /// Its place in the stack, filled in by the build once it is collected
+    /// (an element leaves it `None`).
+    pub entry: Option<usize>,
     /// Its class (`tip-cloud`, `stone-cloud`).
     pub class: &'static str,
     /// Where, mm from the tile's south-west corner.

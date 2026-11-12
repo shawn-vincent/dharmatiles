@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CLASSES, COLUMN_CLASSES, columnGeometry, legendRows, segments, shadeAlpha, SHADE_SHEET, sheetGeometry, sheetTokens } from '../js/debug-layer.js';
+import { CLASSES, legendRows, segments } from '../js/debug-layer.js';
+import { sheetGeometry } from '../js/cloud.js';
 
 test('polylines become segment pairs', () => {
   const s = segments([[0, 0, 0, 1, 0, 0, 1, 1, 0], [5, 5, 5]]);
@@ -15,7 +16,7 @@ test('a sheet draws only cells with four corners, outlined where it ends', () =>
   assert.ok([...g.positions].every((v) => v === 0 || v === 2 || v === 1));
 });
 
-test('the legend lists the classes sent, in order, and a row per banded entry', () => {
+test('the legend lists the classes sent, in order; clouds are not on it (they are drawn with the selection)', () => {
   const d = {
     dots: { crowded: [0, 0, 0], grew: [0, 0, 0, 1, 1, 1] },
     trails: { spine: [[0, 0, 0, 1, 1, 1]] },
@@ -25,10 +26,8 @@ test('the legend lists the classes sent, in order, and a row per banded entry', 
     ],
   };
   const rows = legendRows(d);
-  assert.deepEqual(rows.map((r) => r.label), ['Blade spine', 'Start: grew', 'Start: crowded', 'dirt: cloud, low and high sheets', rows.at(-1).label]);
-  assert.equal(rows.at(-1).kind, 'ramp');
-  assert.deepEqual(rows.map((r) => r.n), [1, 2, 1, 1, 0]);
-  assert.deepEqual(sheetTokens(d), ['--dbg-band-1', '--dbg-band-1']);
+  assert.deepEqual(rows.map((r) => r.label), ['Blade spine', 'Start: grew', 'Start: crowded']);
+  assert.deepEqual(rows.map((r) => r.n), [1, 2, 1]);
   assert.deepEqual(legendRows(null), []);
 });
 
@@ -40,35 +39,4 @@ test('every class the grass sends has a theme token', async () => {
   const sent = [...rust.matchAll(/Self::\w+ => "([a-z-]+)"/g)].map((m) => m[1]);
   assert.ok(sent.length >= 10);
   for (const c of sent) assert.ok(CLASSES.some((k) => k[0] === c), c);
-});
-
-test('a sheet carries each node shade to its triangles', () => {
-  const g = sheetGeometry({ nx: 2, ny: 2, step: 1, z: [0, 0, 0, 0], shade: [0, 0.25, 0.5, 1] });
-  assert.equal(g.shade.length, 6, 'one shade per triangle vertex');
-  assert.deepEqual([...g.shade].slice(0, 3), [0, 0.25, 1]);
-  const flat = sheetGeometry({ nx: 2, ny: 2, step: 1, z: [0, 0, 0, 0] });
-  assert.ok([...flat.shade].every((v) => v === 0.5), 'no shade sent: flat odds');
-});
-
-test('a shade is an opacity, clear when a height never comes up', () => {
-  assert.equal(shadeAlpha(0, SHADE_SHEET), SHADE_SHEET[0]);
-  assert.equal(shadeAlpha(1, SHADE_SHEET), SHADE_SHEET[1]);
-  assert.equal(shadeAlpha(7, SHADE_SHEET), SHADE_SHEET[1]);
-});
-
-test('clouds at a point are a line from low to high and a marker at the roll', () => {
-  const g = columnGeometry([1, 2, 10, 20, 15, 0.1, 0.9, 0.5, 3, 4, 11, 21, 12, 0.5, 0.5, 0.5]);
-  assert.equal(g.n, 2);
-  assert.deepEqual([...g.lines].slice(0, 6), [1, 2, 10, 1, 2, 20]);
-  assert.deepEqual([...g.marks].slice(0, 3), [1, 2, 15]);
-  assert.equal(g.lineShade.length, 4);
-  const rows = legendRows({ columns: { 'stone-cloud': [0, 0, 1, 2, 1.5, 0.5, 0.5, 0.5] } });
-  assert.deepEqual(rows.map((r) => [r.kind, r.n]), [['column', 1], ['ramp', 0]]);
-});
-
-test('every cloud class has a theme token', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const theme = await readFile(new URL('../../../docs/assets/theme.css', import.meta.url), 'utf8');
-  for (const [, token] of COLUMN_CLASSES) assert.ok(theme.includes(`${token}:`), token);
-  assert.ok(theme.includes('--dbg-cloud:'));
 });

@@ -170,9 +170,9 @@ fn mm(v: f64) -> f64 {
 /// [`DEBUG_DOTS`], [`DEBUG_TRAIL_POINTS`] and [`DEBUG_SHEET_NODES`]:
 /// `{"dots": {class: [x, y, z, …]}, "trails": {class: [[x, y, z, …], …]},
 /// "sheets": [{entry, owner, class, nx, ny, step, z: [h or null, …],
-/// shade: [0 to 1, …]}], "columns": {class: [x, y, low, high, rolled,
-/// shade low, shade high, shade rolled, …]}, "thinned": bool}`; `null` when
-/// the build collected none.
+/// shade: [0 to 1, …]}], "columns": [{entry, class, v: [x, y, low, high,
+/// rolled, shade low, shade high, shade rolled, …]}], "thinned": bool}`;
+/// `null` when the build collected none.
 #[must_use]
 pub fn debug_json(b: &Built) -> Value {
     use std::collections::BTreeMap;
@@ -195,12 +195,13 @@ pub fn debug_json(b: &Built) -> Value {
     }
     let k_col = every(d.columns.len(), DEBUG_COLUMNS);
     thinned |= k_col > 1;
-    let mut columns: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
+    // grouped by entry and class: the page draws one entry's clouds
+    let mut columns: BTreeMap<(Option<usize>, &str), Vec<f64>> = BTreeMap::new();
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
     for c in &d.columns {
         let n = seen.entry(c.class).or_default();
         if n.is_multiple_of(k_col) {
-            let v = columns.entry(c.class).or_default();
+            let v = columns.entry((c.entry, c.class)).or_default();
             v.extend([c.at[0], c.at[1], c.span[0], c.span[1], c.rolled].map(mm));
             v.extend(c.shade.map(|s| (f64::from(s) * 100.0).round() / 100.0));
         }
@@ -248,6 +249,10 @@ pub fn debug_json(b: &Built) -> Value {
                 "shade": shade,
             })
         })
+        .collect();
+    let columns: Vec<Value> = columns
+        .into_iter()
+        .map(|((entry, class), v)| json!({"entry": entry, "class": class, "v": v}))
         .collect();
     json!({"dots": dots, "trails": trails, "sheets": sheets, "columns": columns, "thinned": thinned})
 }
@@ -480,7 +485,11 @@ mod tests {
             assert_eq!(s["shade"].as_array().unwrap().len() as u64, n);
             assert_eq!(s["z"].as_array().unwrap().len() as u64, n);
         }
-        let stones = d["columns"]["stone-cloud"].as_array().unwrap();
+        let cols = d["columns"].as_array().unwrap();
+        let rock = cols.iter().find(|c| c["class"] == "stone-cloud").unwrap();
+        // the scatter is the stack's second entry (the base is not one)
+        assert_eq!(rock["entry"], 1, "{rock}");
+        let stones = rock["v"].as_array().unwrap();
         assert!(
             stones.len() >= 3 * 8 && stones.len().is_multiple_of(8),
             "{}",

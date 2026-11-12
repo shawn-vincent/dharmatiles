@@ -70,12 +70,11 @@ function renderDebugLegend(d) {
     const li = document.createElement('li');
     const sw = document.createElement('i');
     sw.className = `sw ${r.kind}`;
-    // a ramp is the shading itself: clear to full strength
-    sw.style.background = r.kind === 'ramp' ? `linear-gradient(90deg, transparent, ${cssToken(r.token)})` : cssToken(r.token);
+    sw.style.background = cssToken(r.token);
     const label = document.createElement('span');
     label.textContent = r.label;
     li.append(sw, label);
-    if (r.kind === 'dot' || r.kind === 'line' || r.kind === 'column') {
+    if (r.kind === 'dot' || r.kind === 'line') {
       const n = document.createElement('span');
       n.className = 'n';
       n.textContent = r.n;
@@ -85,7 +84,7 @@ function renderDebugLegend(d) {
   });
   if (!rows.length) {
     const li = document.createElement('li');
-    li.textContent = 'Nothing in this tile shows here yet: grass, clouds (a top with a range) and the trees and rocks under them do.';
+    li.textContent = 'Nothing in this tile shows here yet: grass does. A cloud shows when the caret is in its top= or a pin.';
     rows.push(li);
   }
   $('debug-rows').replaceChildren(...rows);

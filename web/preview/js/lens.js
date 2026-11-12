@@ -194,6 +194,8 @@ export class Lens {
   row(g, c, s) {
     const ro = !this.api.writable() || (s && s.file);
     const row = el('div', `row${s ? '' : ' faint'}`);
+    row.addEventListener('mouseenter', () => this.api.onFieldHover?.(c.name, true));
+    row.addEventListener('mouseleave', () => this.api.onFieldHover?.(c.name, false));
     const nm = el('span', 'nm', c.name);
     nm.title = [c.about, c.unit && `in ${c.unit}`, c.takes].filter(Boolean).join(' · ');
     row.append(nm);
@@ -303,6 +305,7 @@ export class Lens {
       this.moved = false;
       if (!s) { this.moved = true; this.put(g, c.name, parseValue(this.dflt(c) ?? '0')); return; } // write the default; drag again
       n.setPointerCapture(e.pointerId);
+      this.api.onField?.(c.name, true);
       const start = Number(n.textContent);
       const step = STEP[c.unit] ?? 0.1;
       const dec = Math.max(decimals(n.textContent), decimals(String(step)));
@@ -326,6 +329,7 @@ export class Lens {
         n.removeEventListener('pointerup', up);
         n.removeEventListener('pointercancel', up);
         n.classList.remove('active');
+        this.api.onField?.(c.name, false);
         const len = this.drag.len;
         this.drag = null; // ended before the last write, so it is saved
         if (this.moved) this.api.replace(valueStart, len, n.parentElement.textContent.replace(/not set$/, ''), true);
@@ -355,6 +359,7 @@ export class Lens {
     const was = input.value;
     input.spellcheck = false;
     val.replaceWith(input);
+    this.api.onField?.(c.name, true);
     input.focus();
     input.select();
     let done = false, close = null;
@@ -373,6 +378,7 @@ export class Lens {
       if (done) return;
       done = true;
       close?.();
+      this.api.onField?.(c.name, false);
       if (live.wrote) {
         // the source holds what was last written; it ends as one step of history, or is put back
         this.drag = null;

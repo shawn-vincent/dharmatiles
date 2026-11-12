@@ -1030,6 +1030,7 @@ fn under_the_cloud(
         if let Some(m) = marks.as_deref_mut() {
             m.push(dt_kit::debug::Column {
                 owner: String::new(),
+                entry: None,
                 class: "tip-cloud",
                 at: [p[0], p[1]],
                 span: [c.lo * s, c.hi * s],
