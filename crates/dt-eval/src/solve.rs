@@ -1194,21 +1194,41 @@ fn solve_on(
             per: g.per,
         });
     }
-    let calm_mm = bodies
-        .iter()
-        .any(|b| b.role == Role::Fluid)
-        .then(|| {
+    // the calm level exists only where the tile has water. Having water and
+    // failing to read the level is a mistake the document must hear of, not
+    // water that quietly behaves as if uncalmed
+    let calm_mm = match bodies.iter().find(|b| b.role == Role::Fluid) {
+        None => None,
+        Some(fluid) => {
             let calm = if h.consts.is_dollar() {
                 "$waterSurfaceHeight"
             } else {
                 "waterSurfaceHeight"
             };
-            h.consts
+            match h
+                .consts
                 .scalar(&Expr::Name(calm.to_owned()), 0.5, &|_| None)
-                .ok()
-                .map(|v| v * g.scale)
-        })
-        .flatten();
+            {
+                Ok(v) => Some(v * g.scale),
+                Err(msg) => {
+                    let span = h
+                        .bodies
+                        .iter()
+                        .find(|d| d.entry == fluid.entry)
+                        .map(|d| d.span);
+                    let message = format!("the calm water level `{calm}` cannot be read: {msg}");
+                    let help = "water is calmed to this constant; the library's heights part defines it, and a tile may `override` it with a plain number or length";
+                    errors.push(match span {
+                        Some(span) => {
+                            Diag::at(&tile.src, span, "dt::calm", message, "this water").help(help)
+                        }
+                        None => Diag::plain("dt::calm", message).help(help),
+                    });
+                    None
+                }
+            }
+        }
+    };
     let mut by_entry = vec![None; writes.len()];
     for (i, b) in bodies.iter().enumerate() {
         if let Some(slot) = by_entry.get_mut(b.entry) {
