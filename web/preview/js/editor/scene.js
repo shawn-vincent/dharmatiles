@@ -34,6 +34,9 @@ let local = null;             // {rev, at}: the scene a call answered with, unti
 let lastSig = '';
 let evalTimer = 0;
 const lanes = { fast: 0, full: 0 };
+const shown = new Map();      // piece index -> {gid, tile_id}: what it was last drawn with, kept until its new mesh comes
+/** Pieces being dragged: index -> [x, y] mm, shown there until the change is written. */
+export const live = new Map();
 const queue = [];
 
 /** Is the map of the document in view (the title bar's Map)? */
@@ -283,12 +286,13 @@ export function evaluate(now = false) {
   const list = ps.map((p, i) => {
     const t = tiers[i];
     let gid = null;
-    if (p.gkey && t) gid = gidOf(p.gkey, t);
+    if (p.gkey && t) { gid = gidOf(p.gkey, t); shown.set(p.index, { gid, tile_id: p.tile_id }); }
+    else if (shown.get(p.index)?.tile_id === p.tile_id && viewer.sceneGeoms.has(shown.get(p.index).gid)) gid = shown.get(p.index).gid; // a new variant: the old one stays until it swaps in
     else {
       gid = `box|${p.size[0]}|${p.size[1]}`;
       if (!viewer.sceneGeoms.has(gid)) viewer.setSceneGeometry(gid, boxPayload(p.size[0], p.size[1], 8));
     }
-    return { index: p.index, gid, matrix: M.matrixOf(p) };
+    return { index: p.index, gid, matrix: M.matrixOf(live.has(p.index) ? { ...p, at: live.get(p.index) } : p) };
   });
   viewer.setScenePieces(list);
   // what is drawn that is not the checked build, and what a close piece still wants in full

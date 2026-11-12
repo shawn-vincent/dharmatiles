@@ -317,7 +317,8 @@ pub(super) fn restore(shared: &Shared, v: &Value) -> (&'static str, Value) {
         Ok(()) => done(
             Path::new(&path).to_str().unwrap_or(&path),
             Some(now),
-            json!({}),
+            // a map shows the text it has again at once
+            json!({"scene": super::maps::scene_of(shared, &path, text)}),
         ),
         Err(e) => e,
     }

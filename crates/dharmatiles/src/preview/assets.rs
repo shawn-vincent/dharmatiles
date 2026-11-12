@@ -252,6 +252,21 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/viewer/scene.js"),
     ),
     (
+        "/js/editor/scene-drag.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/scene-drag.js"),
+    ),
+    (
+        "/js/editor/scene-drawer.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/scene-drawer.js"),
+    ),
+    (
+        "/js/editor/scene-thumbs.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/scene-thumbs.js"),
+    ),
+    (
         "/js/viewer/camera.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/viewer/camera.js"),

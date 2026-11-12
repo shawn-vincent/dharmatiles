@@ -125,10 +125,10 @@ test('copies of one piece share what you own, and each state is said', () => {
 });
 
 test('a piece is drawn at the tier its size wants, held under the budget by lowering the smallest first', () => {
-  assert.equal(wantedTier(40), 'super-low');
-  assert.equal(wantedTier(200), 'low');
-  assert.equal(wantedTier(500), 'full');
-  assert.equal(wantedTier(40, true), 'low');
+  assert.equal(wantedTier(30), 'super-low');
+  assert.equal(wantedTier(120), 'low');
+  assert.equal(wantedTier(400), 'full');
+  assert.equal(wantedTier(30, true), 'low');
   const tris = (n) => (t) => ({ 'super-low': 10_000, low: 50_000, full: n }[t]);
   const all = new Set(['super-low', 'low', 'full']);
   // two full pieces of 400k fit, a third does not: the smallest drops to low

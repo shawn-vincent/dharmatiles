@@ -27,8 +27,9 @@ const el = (tag, cls, text) => {
 export const lists = () => server.get().tiles.filter((t) => /\.dmap$/i.test(t.path));
 
 /** Open a document by its id, on the editor page. */
-async function openId(id) {
+async function openId(id, mode = null) {
   const { select } = await import('./open.js');
+  if (mode) { const t = server.get().tiles.find((x) => x.id === id); if (t) (await import('./scene.js')).setChosen(t.path, mode); }
   if ((await select(id)) !== false) view.set({ page: 'edit' });
 }
 
@@ -89,16 +90,18 @@ export function listBlock(t) {
 }
 
 /** New print list in folder `dir` of place `root`: asks a name, writes it, opens it. */
-export function newList(root, dir, anchor, where) {
+export function newList(root, dir, anchor, where, map = false) {
   nameField(anchor, {
-    title: 'New print list',
-    value: 'Print list',
-    hint: `A .dmap in ${where}: the tiles to print, laid out for the printer last chosen. Add tiles to it from their level.`,
+    title: map ? 'New map' : 'New print list',
+    value: map ? 'Map' : 'Print list',
+    hint: map
+      ? `A .dmap in ${where}: an empty map on a grid of squares. Open the catalog to put tiles on it.`
+      : `A .dmap in ${where}: the tiles to print, laid out for the printer last chosen. Add tiles to it from their level.`,
     flaw: (v) => (v.trim().length > 80 ? 'At most 80 characters' : null),
     save: async (v) => {
-      const r = await host.listsNew({ name: v, root, dir });
-      if (r.status !== 200) { failed('Could not make the print list', r); return; }
-      if (r.body.id) { await openId(r.body.id); toast(`Made ${r.body.path.split(/[\\/]/).pop()}`); }
+      const r = await host.listsNew({ name: v, root, dir, map });
+      if (r.status !== 200) { failed(map ? 'Could not make the map' : 'Could not make the print list', r); return; }
+      if (r.body.id) { await openId(r.body.id, map ? 'map' : null); toast(`Made ${r.body.path.split(/[\\/]/).pop()}`); }
     },
   });
 }

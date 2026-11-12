@@ -29,7 +29,11 @@ import { init as initExport } from './editor/export.js';
 import { init as initPlates } from './editor/plates.js';
 import { init as initScene } from './editor/scene.js';
 import { init as initScenePanel } from './editor/scene-panel.js';
+import { init as initSceneDrag } from './editor/scene-drag.js';
+import { init as initSceneDrawer } from './editor/scene-drawer.js';
+import * as mapEdit from './editor/scene-edit.js';
 import { onKey as sceneKey } from './editor/scene-edit.js';
+import * as mapScene from './editor/scene.js';
 import { init as initInventory } from './editor/inventory.js';
 import { init as initTarget } from './editor/target.js';
 import { init as initPanel } from './editor/panel.js';
@@ -41,7 +45,7 @@ import { doc, log, server, view } from './editor/stores.js';
 
 installGlobalHandlers(); // a script error or an unhandled rejection lands in the error panel
 
-window.dtPreview = { server, view, doc, viewer, log, texts, get tools() { return tools; } }; // for tests and the console
+window.dtPreview = { server, view, doc, viewer, log, texts, mapEdit, mapScene, get tools() { return tools; } }; // for tests and the console
 
 // each part wires itself in the order the page was written in: the frame, the
 // build's camera, the tile menu, the view's tile, the text, the selection, the
@@ -61,6 +65,8 @@ initExport();
 initPlates();
 initScene();
 initScenePanel();
+initSceneDrag();
+initSceneDrawer();
 addEventListener('keydown', sceneKey, true);
 initInventory();
 initTarget();

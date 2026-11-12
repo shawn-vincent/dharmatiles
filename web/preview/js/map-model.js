@@ -179,8 +179,8 @@ export function totalsText(pieces, inv) {
 export const TIERS = ['super-low', 'low', 'full'];
 /** The triangles the map draws, in all (the plates' budget, about). */
 export const BUDGET = 900_000;
-/** A piece smaller than this on screen (its longer side, CSS px) is drawn super-low; under HIGH, low; else full. */
-export const LOW_PX = 110, FULL_PX = 420;
+/** A piece smaller than LOW_PX on screen (its longer side, CSS px) is drawn super-low; under FULL_PX, low; else full. */
+export const LOW_PX = 48, FULL_PX = 260;
 /** What a tier costs before it is known, triangles (the program's budgets: super-low 12 000, low about 60 000). */
 export const GUESS = { 'super-low': 12_000, low: 60_000, full: 350_000 };
 

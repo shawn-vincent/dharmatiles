@@ -5,6 +5,8 @@
 // lists' edits do (editor/lists.js).
 
 import { failed, showError } from '../problems.js';
+import { canonOf } from '../inventory.js';
+import { sizeSquares } from '../folders.js';
 import * as M from '../map-model.js';
 import { toast, host } from './app.js';
 import { say } from './inventory.js';
@@ -176,12 +178,44 @@ export function variants(scope) {
   return setWords('Could not make the variants', note, edits);
 }
 
+/**
+ * A tile from the catalog goes on the map: at `want` (squares of its own system, from a drop) or the nearest free
+ * place to the map's corner.  It gets a seed you do not own, unless you own none of it and the map does not
+ * use it: then the tile's own seed is already new (and is not written).
+ */
+export async function addTile(t, want = null) {
+  const sc = sceneNow();
+  if (!sc || !isMapView()) return null;
+  const system = sc.system;
+  const sq = system === 'ol' ? 25.4 : 35;
+  const [cols, rows] = sizeSquares(t) ?? [1, 1];
+  const inv = server.get().inventory;
+  const canon = canonOf(t.path, inv?.home);
+  const probe = { canon, system, colour: sc.colour, size: [cols * sq, rows * sq], sq, at: null, rot: 0, height_mm: 0, seed_used: -1 };
+  const placed = pieces().filter((q) => q.at);
+  const free = M.nearestFree(placed, probe, want ?? { x: 0, y: 0 });
+  if (free.moved < 0) { toast('There is no free place for that tile on the map'); return null; }
+  const owned = M.ownedSeeds(inv, probe);
+  const onMap = placed.find((q) => q.canon === canon && q.system === system);
+  let seed = null;
+  if (owned.length || onMap) {
+    const used = new Set(placed.filter((q) => q.canon === canon && q.system === system).map((q) => q.seed_used));
+    seed = M.freshSeed(new Set(owned.map((o) => o.seed)), used, onMap?.seed_used ?? -1);
+  }
+  return change('Could not add the tile', `Put ${t.name} on the map${seed != null ? ` (seed ${seed}, one you do not have)` : ''}`, [
+    () => host.mapsAdd({ list: listId(), tile: t.id, at: M.atWord(free.x, free.y), rot: 0, ...(seed != null ? { seed } : {}) }),
+  ]);
+}
+
 /** Take the selected pieces' tile into Tile mode, with the map as the place Back returns to. */
 export async function openTile(p) {
   if (!p.tile_id) return;
   const { select: open } = await import('./open.js');
   if ((await open(p.tile_id)) !== false) view.set({ page: 'edit' });
 }
+
+/** May the map be changed here (a file of yours, not the library's)? */
+export const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && (t.plan?.writable ?? true); };
 
 /** The keys: R turns, D duplicates, Backspace or Delete takes out, ⌘Z undoes the map's last change. */
 export function onKey(e) {

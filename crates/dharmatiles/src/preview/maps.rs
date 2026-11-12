@@ -28,7 +28,7 @@ use super::{Shared, fail, lock, scene};
 type Edited = Result<(String, Value), String>;
 
 /// The scene of `text` as the page reads it (no builds).
-fn scene_of(shared: &Shared, path: &str, text: &str) -> Value {
+pub(super) fn scene_of(shared: &Shared, path: &str, text: &str) -> Value {
     match decode(path, text) {
         Ok(list) => {
             let mut s = scene::read(shared, path, &list, dt_eval::doc::text_hash(text));
