@@ -53,7 +53,7 @@ export function placeChoices(places, self, current) {
 /**
  * The groups of a region's sheet that its clauses make: for each `within`, its distance and its place; for each
  * `except`, the regions.  Each {clause, heading, controls (the lens's schema), written (settings as `name=text`
- * with spans); `as` turns a {name, text, span} into the setting the lens reads; `row(node, name)` is the
+ * with spans)}; `as` turns a {name, text, span} into the setting the lens reads; `row(node, name)` is the
  * program's row for a control of a clause node (`within`'s distance, `except`'s regions): what it measures,
  * its help, whether it is required.  The words it may be are the tile's own, so they are added here.
  */

@@ -155,11 +155,10 @@ fn what_a_rock_does_not_set_is_refused() {
 
 #[test]
 fn a_clouds_arithmetic_rules_hold_on_a_rock() {
-    // two clouds added are refused, as on any top
-    let text =
-        tile("rock at=\"(0.5sq, 0.5sq)\" top=\"$bottom + high(1dmm .. 5dmm) + low(1dmm .. 3dmm)\"");
+    // dividing by a cloud is refused, as on any top
+    let text = tile("rock at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 4dmm / high(1 .. 5)\"");
     let e = build(&mem(&text), "t.dtile", &Options::default())
         .err()
-        .expect("two clouds");
+        .expect("a cloud divided into");
     assert!(e.iter().any(|d| d.code == "dt::cloud"), "{e:?}");
 }

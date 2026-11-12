@@ -1131,24 +1131,233 @@ pub fn smooth(t: f64) -> f64 {
     t * t * (3.0 - 2.0 * t)
 }
 
-fn call_f64(name: &str, a: &[f64]) -> Result<f64, String> {
-    let want = FUNCTIONS
-        .iter()
-        .find(|(n, _)| *n == name)
-        .ok_or_else(|| format!("unknown function `{name}`"))?
-        .1;
-    if a.len() != want {
-        return Err(format!("`{name}` takes {want} value(s), not {}", a.len()));
+/// A function of the heights language, once its name and the number of values
+/// it is given have been checked against the one table ([`FUNCTIONS`]).  Every
+/// evaluation of an expression (a number, an interval, a rolled value) picks
+/// the function here and does it in its own arithmetic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Func {
+    /// `sin(degrees)`.
+    Sin,
+    /// `cos(degrees)`.
+    Cos,
+    /// `abs(x)`.
+    Abs,
+    /// `min(a, b)`.
+    Min,
+    /// `max(a, b)`.
+    Max,
+    /// `clamp(x, lo, hi)`.
+    Clamp,
+    /// `smooth(t)`.
+    Smooth,
+}
+
+impl Func {
+    /// The function called `name` given `given` values.
+    ///
+    /// # Errors
+    /// An unknown name, or the wrong number of values.
+    pub fn of(name: &str, given: usize) -> Result<Self, String> {
+        let want = FUNCTIONS
+            .iter()
+            .find(|(n, _)| *n == name)
+            .ok_or_else(|| format!("unknown function `{name}`"))?
+            .1;
+        if given != want {
+            return Err(format!("`{name}` takes {want} value(s), not {given}"));
+        }
+        Ok(match name {
+            "sin" => Self::Sin,
+            "cos" => Self::Cos,
+            "abs" => Self::Abs,
+            "min" => Self::Min,
+            "max" => Self::Max,
+            "clamp" => Self::Clamp,
+            _ => Self::Smooth,
+        })
     }
-    Ok(match name {
-        "sin" => sin_deg(a[0]),
-        "cos" => cos_deg(a[0]),
-        "abs" => a[0].abs(),
-        "min" => a[0].min(a[1]),
-        "max" => a[0].max(a[1]),
-        "clamp" => a[0].max(a[1]).min(a[2]),
-        _ => smooth(a[0]),
-    })
+
+    /// The function of plain numbers.
+    #[must_use]
+    pub fn of_numbers(self, a: &[f64]) -> f64 {
+        match self {
+            Self::Sin => sin_deg(a[0]),
+            Self::Cos => cos_deg(a[0]),
+            Self::Abs => a[0].abs(),
+            Self::Min => a[0].min(a[1]),
+            Self::Max => a[0].max(a[1]),
+            Self::Clamp => a[0].max(a[1]).min(a[2]),
+            Self::Smooth => smooth(a[0]),
+        }
+    }
+}
+
+/// The odds written round a range: `low(1..6, 4)` is the function `low` with
+/// the numbers `[4]` after the range; a `mix` also lists its `parts`.
+#[derive(Debug, Clone, Copy)]
+pub struct Odds<'a> {
+    /// The function: one of [`WEIGHTINGS`].
+    pub name: &'a str,
+    /// The numbers after the range (a mix's weights).
+    pub args: &'a [f64],
+    /// A mix's parts, each a function and its numbers.
+    pub parts: &'a [(String, Vec<f64>)],
+}
+
+/// What evaluating an expression means: the one walk over an [`Expr`]
+/// ([`Expr::eval`]) asks the algebra for each node, in the order a draw
+/// finishes (a range's ends first, then the range).  Every range is its own
+/// roll wherever it stands: two ranges are two rolls, whatever the value is
+/// for (a control, a top, a pin, a tree's crown).  The algebras are a plain
+/// number (a draw, a sample), a rolled value (a control's), and an interval
+/// with the odds along it (a height's).
+pub trait Algebra {
+    /// What a node evaluates to.
+    type Val;
+    /// Why it cannot be.
+    type Err;
+
+    /// A whole expression this algebra answers without walking it, if it can
+    /// (a value with no range in it is one number).
+    fn shortcut(&mut self, _e: &Expr) -> Option<Result<Self::Val, Self::Err>> {
+        None
+    }
+    /// A call this algebra evaluates from its raw arguments (the coordinates
+    /// take a region and a unit, not values), if it is one.
+    fn raw_call(
+        &mut self,
+        _e: &Expr,
+        _name: &str,
+        _args: &[Expr],
+    ) -> Option<Result<Self::Val, Self::Err>> {
+        None
+    }
+    /// A literal (a percent is already divided by 100).
+    ///
+    /// # Errors
+    /// As the algebra says.
+    fn number(&mut self, value: f64) -> Result<Self::Val, Self::Err>;
+    /// A name.
+    ///
+    /// # Errors
+    /// An unknown name, or constants that refer to each other in a loop.
+    fn name(&mut self, name: &str) -> Result<Self::Val, Self::Err>;
+    /// A unit word where a number is wanted.
+    ///
+    /// # Errors
+    /// Always, in an algebra of numbers.
+    fn unit(&mut self, unit: UnitWord) -> Result<Self::Val, Self::Err>;
+    /// Unary minus.
+    ///
+    /// # Errors
+    /// As the algebra says.
+    fn neg(&mut self, a: Self::Val) -> Result<Self::Val, Self::Err>;
+    /// `a op b`; `e` is the expression, for a message.
+    ///
+    /// # Errors
+    /// As the algebra says.
+    fn binary(
+        &mut self,
+        e: &Expr,
+        op: BinOp,
+        a: Self::Val,
+        b: Self::Val,
+    ) -> Result<Self::Val, Self::Err>;
+    /// A range from `lo` to `hi`, with the odds written round it.  `outer`
+    /// is the weighting call round it, or the range itself when there is
+    /// none.
+    ///
+    /// # Errors
+    /// As the algebra says.
+    fn range(
+        &mut self,
+        outer: &Expr,
+        lo: Self::Val,
+        hi: Self::Val,
+        odds: Option<Odds<'_>>,
+    ) -> Result<Self::Val, Self::Err>;
+    /// A list of values with weights, one of them drawn.
+    ///
+    /// # Errors
+    /// As the algebra says.
+    fn list(
+        &mut self,
+        e: &Expr,
+        items: Vec<(Self::Val, Option<f64>)>,
+    ) -> Result<Self::Val, Self::Err>;
+    /// A function of values.
+    ///
+    /// # Errors
+    /// As the algebra says.
+    fn call(&mut self, e: &Expr, name: &str, args: Vec<Self::Val>) -> Result<Self::Val, Self::Err>;
+}
+
+/// The plain numbers: [`Expr::sample`] and [`Expr::draw`].
+struct Numbers<'e, 'f> {
+    env: &'e dyn Fn(&str) -> Option<f64>,
+    at: &'f mut dyn FnMut(&Draw<'_>) -> f64,
+    next: usize,
+}
+
+impl Algebra for Numbers<'_, '_> {
+    type Val = f64;
+    type Err = String;
+
+    fn number(&mut self, value: f64) -> Result<f64, String> {
+        Ok(value)
+    }
+    fn name(&mut self, name: &str) -> Result<f64, String> {
+        (self.env)(name).ok_or_else(|| format!("unknown name `{name}`"))
+    }
+    fn unit(&mut self, unit: UnitWord) -> Result<f64, String> {
+        Err(format!("`{}` is a unit, not a number here", unit.word()))
+    }
+    fn neg(&mut self, a: f64) -> Result<f64, String> {
+        Ok(-a)
+    }
+    fn binary(&mut self, _e: &Expr, op: BinOp, a: f64, b: f64) -> Result<f64, String> {
+        Ok(match op {
+            BinOp::Add => a + b,
+            BinOp::Sub => a - b,
+            BinOp::Mul => a * b,
+            BinOp::Div => a / b,
+        })
+    }
+    fn range(
+        &mut self,
+        _outer: &Expr,
+        a: f64,
+        b: f64,
+        odds: Option<Odds<'_>>,
+    ) -> Result<f64, String> {
+        let ordinal = self.next;
+        self.next += 1;
+        let t = (self.at)(&Draw {
+            ordinal,
+            lo: a,
+            hi: b,
+            weighting: odds.map(|o| (o.name, o.args)),
+        });
+        Ok(a + (b - a) * t)
+    }
+    fn list(&mut self, _e: &Expr, items: Vec<(f64, Option<f64>)>) -> Result<f64, String> {
+        // a list is its values' least to greatest, drawn at one position
+        let a = items.iter().map(|i| i.0).fold(f64::INFINITY, f64::min);
+        let b = items.iter().map(|i| i.0).fold(f64::NEG_INFINITY, f64::max);
+        let ordinal = self.next;
+        self.next += 1;
+        let t = (self.at)(&Draw {
+            ordinal,
+            lo: a,
+            hi: b,
+            weighting: Some(("list", &[])),
+        });
+        Ok(a + (b - a) * t)
+    }
+    fn call(&mut self, _e: &Expr, name: &str, args: Vec<f64>) -> Result<f64, String> {
+        Ok(Func::of(name, args.len())?.of_numbers(&args))
+    }
 }
 
 impl Expr {
@@ -1170,6 +1379,34 @@ impl Expr {
                 out.push(n.as_str());
             }
         });
+        out
+    }
+
+    /// Every name the expression reads as a height: its names less those inside
+    /// a coordinate call (`x(region, unit)`), which are the region's.
+    #[must_use]
+    pub fn height_names(&self) -> Vec<&str> {
+        fn go<'a>(e: &'a Expr, out: &mut Vec<&'a str>) {
+            match e {
+                Expr::Name(n) => out.push(n),
+                Expr::Num { .. } | Expr::Unit(_) => {}
+                Expr::Neg(a) => go(a, out),
+                Expr::Range { lo, hi } => {
+                    go(lo, out);
+                    go(hi, out);
+                }
+                Expr::Weighted { range, .. } => go(range, out),
+                Expr::List { items } => items.iter().for_each(|(v, _)| go(v, out)),
+                Expr::Bin { lhs, rhs, .. } => {
+                    go(lhs, out);
+                    go(rhs, out);
+                }
+                Expr::Call { name, .. } if matches!(name.as_str(), "x" | "y" | "d" | "a") => {}
+                Expr::Call { args, .. } => args.iter().for_each(|a| go(a, out)),
+            }
+        }
+        let mut out = Vec::new();
+        go(self, &mut out);
         out
     }
 
@@ -1291,81 +1528,79 @@ impl Expr {
         env: &dyn Fn(&str) -> Option<f64>,
         at: &mut dyn FnMut(&Draw<'_>) -> f64,
     ) -> Result<f64, String> {
-        self.draw_at(env, at, &mut 0, None)
+        self.eval(&mut Numbers { env, at, next: 0 })
     }
 
-    fn draw_at<'a>(
+    /// The one evaluation of an expression: walk it, asking `alg` for each
+    /// node (see [`Algebra`]).  A range's ends are evaluated first, then the
+    /// range; a weighting call round a range gives that range its odds.
+    ///
+    /// # Errors
+    /// Whatever `alg` refuses.
+    pub fn eval<A: Algebra>(&self, alg: &mut A) -> Result<A::Val, A::Err> {
+        self.eval_in(alg, None)
+    }
+
+    fn eval_in<'a, A: Algebra>(
         &'a self,
-        env: &dyn Fn(&str) -> Option<f64>,
-        at: &mut dyn FnMut(&Draw<'_>) -> f64,
-        next: &mut usize,
-        weighting: Option<(&'a str, &'a [f64])>,
-    ) -> Result<f64, String> {
-        Ok(match self {
+        alg: &mut A,
+        odds: Option<(&'a Expr, Odds<'a>)>,
+    ) -> Result<A::Val, A::Err> {
+        if let Some(r) = alg.shortcut(self) {
+            return r;
+        }
+        match self {
             Expr::Num { value, percent } => {
-                if *percent {
-                    value / 100.0
-                } else {
-                    *value
-                }
+                alg.number(if *percent { value / 100.0 } else { *value })
             }
-            Expr::Name(n) => env(n).ok_or_else(|| format!("unknown name `{n}`"))?,
-            Expr::Unit(u) => {
-                return Err(format!("`{}` is a unit, not a number here", u.word()));
+            Expr::Name(n) => alg.name(n),
+            Expr::Unit(u) => alg.unit(*u),
+            Expr::Neg(e) => {
+                let a = e.eval_in(alg, None)?;
+                alg.neg(a)
             }
-            Expr::Neg(e) => -e.draw_at(env, at, next, None)?,
             Expr::Bin { op, lhs, rhs } => {
-                let a = lhs.draw_at(env, at, next, None)?;
-                let b = rhs.draw_at(env, at, next, None)?;
-                match op {
-                    BinOp::Add => a + b,
-                    BinOp::Sub => a - b,
-                    BinOp::Mul => a * b,
-                    BinOp::Div => a / b,
-                }
+                let a = lhs.eval_in(alg, None)?;
+                let b = rhs.eval_in(alg, None)?;
+                alg.binary(self, *op, a, b)
             }
             Expr::Range { lo, hi } => {
-                let a = lo.draw_at(env, at, next, None)?;
-                let b = hi.draw_at(env, at, next, None)?;
-                let ordinal = *next;
-                *next += 1;
-                let t = at(&Draw {
-                    ordinal,
-                    lo: a,
-                    hi: b,
-                    weighting,
-                });
-                a + (b - a) * t
+                let a = lo.eval_in(alg, None)?;
+                let b = hi.eval_in(alg, None)?;
+                match odds {
+                    Some((outer, o)) => alg.range(outer, a, b, Some(o)),
+                    None => alg.range(self, a, b, None),
+                }
             }
             Expr::Weighted {
-                name, args, range, ..
-            } => range.draw_at(env, at, next, Some((name, args)))?,
+                name,
+                args,
+                range,
+                parts,
+            } => range.eval_in(alg, Some((self, Odds { name, args, parts }))),
             Expr::List { items } => {
-                // a list is its values' least to greatest, drawn at one position
-                let vals = items
-                    .iter()
-                    .map(|(v, _)| v.draw_at(env, at, next, None))
-                    .collect::<Result<Vec<_>, _>>()?;
-                let a = vals.iter().copied().fold(f64::INFINITY, f64::min);
-                let b = vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-                let ordinal = *next;
-                *next += 1;
-                let t = at(&Draw {
-                    ordinal,
-                    lo: a,
-                    hi: b,
-                    weighting: Some(("list", &[])),
-                });
-                a + (b - a) * t
+                let mut vals = Vec::with_capacity(items.len());
+                for (v, w) in items {
+                    vals.push((v.eval_in(alg, None)?, *w));
+                }
+                alg.list(self, vals)
             }
             Expr::Call { name, args } => {
-                let vals = args
-                    .iter()
-                    .map(|a| a.draw_at(env, at, next, None))
-                    .collect::<Result<Vec<_>, _>>()?;
-                call_f64(name, &vals)?
+                if let Some(r) = alg.raw_call(self, name, args) {
+                    return r;
+                }
+                let mut vals = Vec::with_capacity(args.len());
+                for a in args {
+                    vals.push(a.eval_in(alg, None)?);
+                }
+                alg.call(self, name, vals)
             }
-        })
+        }
+    }
+
+    /// Every part of the expression, each once, outermost first.
+    pub fn walk<'a>(&'a self, f: &mut impl FnMut(&'a Expr)) {
+        self.visit(f);
     }
 
     /// The value written in the heights language with every weighting

@@ -12,7 +12,7 @@
 //! pin are the node itself, which for a pin's place is its nearest point.
 
 use dt_doc::consts::ConstTable;
-use dt_doc::expr::{BinOp, Expr, UnitWord, sin_deg, smooth};
+use dt_doc::expr::{Algebra, BinOp, Expr, Func, Odds, UnitWord, sin_deg, smooth};
 use dt_doc::model::PlaceRef;
 use dt_doc::schema::Body;
 use dt_geom::{Dist, Weighting};
@@ -197,12 +197,11 @@ impl Eval<'_> {
             return Err("constants refer to each other in a loop".to_owned());
         }
         let mut n = Needs::default();
-        let mut names = Vec::new();
-        collect(e, &mut names);
+        let names = e.height_names();
         // the coordinates are worked out at a node too
         e.visit_calls(&mut |f| n.xy |= matches!(f, "x" | "y" | "d" | "a"));
         for name in names {
-            match name.as_str() {
+            match name {
                 "x" | "y" | "$x" | "$y" | "$d" | "$a" | "$_y" => n.xy = true,
                 "bottom" | "$bottom" => n.bottom = true,
                 "$region" | "$tile" => {}
@@ -221,158 +220,189 @@ impl Eval<'_> {
     }
 
     /// The formula at one node: its heights, and the odds along them when it
-    /// is a cloud.
-    #[allow(clippy::too_many_lines)]
+    /// is a cloud.  The one evaluation of an expression, in the algebra of
+    /// intervals with odds ([`Cloud`]).
     pub(crate) fn iv(&self, e: &Expr, v: &Vars, depth: usize) -> Result<Val, Flaw> {
-        if depth > DEPTH {
-            return Err("constants refer to each other in a loop".to_owned().into());
+        e.eval(&mut Cloud {
+            eval: self,
+            v,
+            depth,
+        })
+    }
+}
+
+/// Evaluating a formula at one node: the algebra of intervals with the odds
+/// along them.  A range is the interval it spans and its odds; two ranges
+/// are two independent rolls, so their sum has the odds of the sum of two
+/// rolls (a triangle for two plain ranges), not those of either.
+struct Cloud<'a, 'b, 'c> {
+    eval: &'a Eval<'b>,
+    v: &'c Vars,
+    depth: usize,
+}
+
+impl Algebra for Cloud<'_, '_, '_> {
+    type Val = Val;
+    type Err = Flaw;
+
+    fn shortcut(&mut self, _e: &Expr) -> Option<Result<Val, Flaw>> {
+        (self.depth > DEPTH)
+            .then(|| Err("constants refer to each other in a loop".to_owned().into()))
+    }
+
+    fn raw_call(&mut self, _e: &Expr, name: &str, args: &[Expr]) -> Option<Result<Val, Flaw>> {
+        if !matches!(name, "x" | "y" | "d" | "a") {
+            return None;
         }
-        Ok(match e {
-            Expr::Num { value, percent } => {
-                Val::num(Iv::point(if *percent { value / 100.0 } else { *value }))
+        let (eval, v) = (self.eval, self.v);
+        Some((|| {
+            let Some((c, own)) = eval.coords else {
+                return Err(format!("`{name}(…)` is read only in format 1").into());
+            };
+            let (Some(region), Some(Expr::Unit(unit))) = (args.first(), args.get(1)) else {
+                return Err(format!("`{name}` takes a region and a unit").into());
+            };
+            let id = c.region(region, own, eval.table)?;
+            if let (Some(disc), true) = (eval.disc, id == own) {
+                return Ok(Val::num(Iv::point(eval.on_disc(c, disc, name, *unit, v))));
             }
-            Expr::Unit(u) => {
-                return Err(format!("`{}` is a unit, not a number here", u.word()).into());
-            }
-            Expr::Name(n) => match n.as_str() {
-                "x" | "$x" => Val::num(v.x),
-                // format 1's `$y` counts south from the north-west corner:
-                // `y($tile, sq)`; the library's own `y` (format 0 names) is
-                // the geometry's, running north
-                "$y" => Val::num(match self.coords {
-                    Some((c, _)) => Iv::point(c.y(RegionTree::TILE, v.k, UnitWord::Sq)),
-                    None => v.y,
-                }),
-                "y" | "$_y" => Val::num(v.y),
-                "$d" | "$a" => {
-                    let Some((c, own)) = self.coords else {
-                        return Err(format!("`{n}` is read only in format 1").into());
-                    };
-                    if let Some(disc) = self.disc {
-                        let name = if n == "$d" { "d" } else { "a" };
-                        Val::num(Iv::point(self.on_disc(c, disc, name, UnitWord::Pct, v)))
-                    } else {
-                        Val::num(Iv::point(if n == "$d" {
-                            c.d(own, v.k, UnitWord::Pct)
-                        } else {
-                            c.a(own, v.k, UnitWord::Pct)
-                        }))
-                    }
-                }
-                "bottom" | "$bottom" => Val::num(v.bottom),
-                c => {
-                    let entry = self
-                        .table
-                        .get(c)
-                        .ok_or_else(|| format!("no height called `{c}`"))?;
-                    self.iv(&entry.expr, v, depth + 1)?
-                }
-            },
-            Expr::Neg(a) => self.iv(a, v, depth)?.negated(),
-            Expr::Range { lo, hi } => {
-                let (l, h) = (self.iv(lo, v, depth)?, self.iv(hi, v, depth)?);
-                if l.odds.is_some() || h.odds.is_some() {
-                    return Err(Flaw::cloud(
-                        format!("`{e}` has a cloud at the end of a range"),
-                        "the ends of a range are numbers: write the cloud around the whole range",
-                    ));
-                }
-                Val {
-                    iv: l.iv.hull(h.iv),
-                    odds: None,
-                    ranged: true,
-                }
-            }
-            // the plain range is a band: `flat(…)`, and `low` or `high` of
-            // ratio 1, are what a range alone is
-            Expr::Weighted { range, .. } if e.weighted().is_none() => {
-                let mut r = self.iv(range, v, depth)?;
-                r.ranged = true;
-                r
-            }
-            Expr::Weighted {
-                name,
-                args,
-                range,
-                parts,
-            } => {
-                let r = self.iv(range, v, depth)?;
-                if r.odds.is_some() {
-                    return Err(Flaw::cloud(
-                        format!("`{e}` weights a range that has odds already"),
-                        "a cloud has one weighting: write one call over a plain range",
-                    ));
-                }
-                let w = if name == "mix" {
-                    let mut made = Vec::with_capacity(parts.len());
-                    for ((n, a), weight) in parts.iter().zip(args) {
-                        made.push((
-                            *weight,
-                            Weighting::from_call(n, a).map_err(Flaw::weighting)?,
-                        ));
-                    }
-                    Weighting::mix(made)
+            Ok(Val::num(Iv::point(match name {
+                "x" => c.x(id, v.k, *unit),
+                "y" => c.y(id, v.k, *unit),
+                "d" => c.d(id, v.k, *unit),
+                _ => c.a(id, v.k, *unit),
+            })))
+        })())
+    }
+
+    fn number(&mut self, value: f64) -> Result<Val, Flaw> {
+        Ok(Val::num(Iv::point(value)))
+    }
+
+    fn name(&mut self, n: &str) -> Result<Val, Flaw> {
+        let (eval, v) = (self.eval, self.v);
+        Ok(match n {
+            "x" | "$x" => Val::num(v.x),
+            // format 1's `$y` counts south from the north-west corner:
+            // `y($tile, sq)`; the library's own `y` (format 0 names) is
+            // the geometry's, running north
+            "$y" => Val::num(match eval.coords {
+                Some((c, _)) => Iv::point(c.y(RegionTree::TILE, v.k, UnitWord::Sq)),
+                None => v.y,
+            }),
+            "y" | "$_y" => Val::num(v.y),
+            "$d" | "$a" => {
+                let Some((c, own)) = eval.coords else {
+                    return Err(format!("`{n}` is read only in format 1").into());
+                };
+                if let Some(disc) = eval.disc {
+                    let name = if n == "$d" { "d" } else { "a" };
+                    Val::num(Iv::point(eval.on_disc(c, disc, name, UnitWord::Pct, v)))
                 } else {
-                    Weighting::from_call(name, args)
-                }
-                .map_err(Flaw::weighting)?;
-                Val {
-                    iv: r.iv,
-                    odds: (!w.is_flat()).then_some(w),
-                    ranged: true,
+                    Val::num(Iv::point(if n == "$d" {
+                        c.d(own, v.k, UnitWord::Pct)
+                    } else {
+                        c.a(own, v.k, UnitWord::Pct)
+                    }))
                 }
             }
-            Expr::List { items } => {
-                let mut values = Vec::with_capacity(items.len());
-                for (item, weight) in items {
-                    let x = self.iv(item, v, depth)?;
-                    if x.ranged || x.iv.width() > 0.0 {
-                        return Err(Flaw::cloud(
-                            format!(
-                                "`{item}` is a range inside a list: the values of a list are numbers"
-                            ),
-                            "write numbers: [1dmm:4, 2dmm:5, 3dmm:1]",
-                        ));
-                    }
-                    values.push((x.iv.lo, *weight));
-                }
-                let d = Dist::list(&values).map_err(Flaw::weighting)?;
-                Val {
-                    iv: Iv::new(d.lo, d.hi),
-                    odds: Some(d.weighting),
-                    ranged: true,
-                }
-            }
-            Expr::Bin { op, lhs, rhs } => {
-                let (a, b) = (self.iv(lhs, v, depth)?, self.iv(rhs, v, depth)?);
-                arith(e, *op, a, b)?
-            }
-            Expr::Call { name, args } if matches!(name.as_str(), "x" | "y" | "d" | "a") => {
-                let Some((c, own)) = self.coords else {
-                    return Err(format!("`{name}(…)` is read only in format 1").into());
-                };
-                let (Some(region), Some(Expr::Unit(unit))) = (args.first(), args.get(1)) else {
-                    return Err(format!("`{name}` takes a region and a unit").into());
-                };
-                let id = c.region(region, own, self.table)?;
-                if let (Some(disc), true) = (self.disc, id == own) {
-                    return Ok(Val::num(Iv::point(self.on_disc(c, disc, name, *unit, v))));
-                }
-                Val::num(Iv::point(match name.as_str() {
-                    "x" => c.x(id, v.k, *unit),
-                    "y" => c.y(id, v.k, *unit),
-                    "d" => c.d(id, v.k, *unit),
-                    _ => c.a(id, v.k, *unit),
-                }))
-            }
-            Expr::Call { name, args } => {
-                let vals = args
-                    .iter()
-                    .map(|x| self.iv(x, v, depth))
-                    .collect::<Result<Vec<_>, _>>()?;
-                function(e, name, vals)?
+            "bottom" | "$bottom" => Val::num(v.bottom),
+            c => {
+                let entry = eval
+                    .table
+                    .get(c)
+                    .ok_or_else(|| format!("no height called `{c}`"))?;
+                self.depth += 1;
+                let r = entry.expr.eval(self);
+                self.depth -= 1;
+                return r;
             }
         })
+    }
+
+    fn unit(&mut self, unit: UnitWord) -> Result<Val, Flaw> {
+        Err(format!("`{}` is a unit, not a number here", unit.word()).into())
+    }
+
+    fn neg(&mut self, a: Val) -> Result<Val, Flaw> {
+        Ok(a.negated())
+    }
+
+    fn binary(&mut self, e: &Expr, op: BinOp, a: Val, b: Val) -> Result<Val, Flaw> {
+        arith(e, op, a, b)
+    }
+
+    fn range(&mut self, outer: &Expr, l: Val, h: Val, odds: Option<Odds<'_>>) -> Result<Val, Flaw> {
+        let range = match outer {
+            Expr::Weighted { range, .. } => range.as_ref(),
+            other => other,
+        };
+        if l.odds.is_some() || h.odds.is_some() {
+            return Err(Flaw::cloud(
+                format!("`{range}` has a cloud at the end of a range"),
+                "the ends of a range are numbers: write the cloud around the whole range",
+            ));
+        }
+        let hull = Val {
+            iv: l.iv.hull(h.iv),
+            odds: None,
+            ranged: true,
+        };
+        let Some(o) = odds else {
+            return Ok(hull);
+        };
+        // the plain range is a band: `flat(…)`, and `low` or `high` of
+        // ratio 1, are what a range alone is
+        if outer.weighted().is_none() {
+            return Ok(hull);
+        }
+        let w = if o.name == "mix" {
+            let mut made = Vec::with_capacity(o.parts.len());
+            for ((n, a), weight) in o.parts.iter().zip(o.args) {
+                made.push((
+                    *weight,
+                    Weighting::from_call(n, a).map_err(Flaw::weighting)?,
+                ));
+            }
+            Weighting::mix(made)
+        } else {
+            Weighting::from_call(o.name, o.args)
+        }
+        .map_err(Flaw::weighting)?;
+        Ok(Val {
+            iv: hull.iv,
+            odds: (!w.is_flat()).then_some(w),
+            ranged: true,
+        })
+    }
+
+    fn list(&mut self, e: &Expr, items: Vec<(Val, Option<f64>)>) -> Result<Val, Flaw> {
+        let mut values = Vec::with_capacity(items.len());
+        for (k, (x, weight)) in items.into_iter().enumerate() {
+            if x.ranged || x.iv.width() > 0.0 {
+                let item = match e {
+                    Expr::List { items } => {
+                        items.get(k).map_or_else(String::new, |i| i.0.to_string())
+                    }
+                    _ => String::new(),
+                };
+                return Err(Flaw::cloud(
+                    format!("`{item}` is a range inside a list: the values of a list are numbers"),
+                    "write numbers: [1dmm:4, 2dmm:5, 3dmm:1]",
+                ));
+            }
+            values.push((x.iv.lo, weight));
+        }
+        let d = Dist::list(&values).map_err(Flaw::weighting)?;
+        Ok(Val {
+            iv: Iv::new(d.lo, d.hi),
+            odds: Some(d.weighting),
+            ranged: true,
+        })
+    }
+
+    fn call(&mut self, e: &Expr, name: &str, args: Vec<Val>) -> Result<Val, Flaw> {
+        function(e, name, args)
     }
 }
 
@@ -449,22 +479,45 @@ impl Flaw {
 /// What a cloud may be written with (the help of every refusal).
 const CLOUD_RULE: &str = "a cloud may be shifted and scaled by numbers (`+ - * /`) and held by `min`, `max`, `clamp` and `smooth` of numbers; write the result as one range with its odds, such as `high($bottom .. $bottom + 20dmm)`";
 
-/// `a op b` where either may be a cloud (rule B): a number added or
-/// multiplied moves or stretches both surfaces and keeps the weighting; a
-/// negative factor swaps them, with the odds turned round. Two ranges of
-/// which one has odds are two rolls, and an element supplies one.
+/// `a op b` where either may be a cloud: a number added or multiplied moves
+/// or stretches both surfaces and keeps the weighting; a negative factor swaps
+/// them, with the odds turned round.  Two ranges are two independent rolls: a
+/// sum or product of them has the odds of the combination, worked out on a
+/// grid of each range's quantiles ([`independent`]).
 fn arith(e: &Expr, op: BinOp, a: Val, b: Val) -> Result<Val, Flaw> {
     let cloud = a.is_cloud() || b.is_cloud();
-    if cloud && a.ranged && b.ranged {
+    let ranged = a.ranged || b.ranged;
+    // two ranges with width: each its own roll
+    let both = a.ranged && b.ranged && a.iv.width() > 0.0 && b.iv.width() > 0.0;
+    if both && op == BinOp::Div {
         return Err(Flaw::cloud(
-            format!(
-                "`{e}` combines two ranges and one has odds: an element rolls one value at each point, so two clouds have no weighting"
-            ),
-            CLOUD_RULE,
+            format!("`{e}` divides by a range: the odds of its result are not a weighting"),
+            "divide a range by a number, not by a range",
         ));
     }
-    let ranged = a.ranged || b.ranged;
+    if both && op == BinOp::Mul && cloud {
+        return Err(Flaw::cloud(
+            format!("`{e}` multiplies a cloud by something that is a range at the point"),
+            "multiply a cloud by a number; the factor must be one value at each point",
+        ));
+    }
     Ok(match op {
+        BinOp::Add | BinOp::Sub | BinOp::Mul if both => {
+            let iv = match op {
+                BinOp::Add => a.iv + b.iv,
+                BinOp::Sub => a.iv - b.iv,
+                _ => a.iv * b.iv,
+            };
+            Val {
+                iv,
+                odds: independent(&[&a, &b], iv, |x| match op {
+                    BinOp::Add => x[0] + x[1],
+                    BinOp::Sub => x[0] - x[1],
+                    _ => x[0] * x[1],
+                }),
+                ranged,
+            }
+        }
         BinOp::Add => Val {
             iv: a.iv + b.iv,
             odds: a.odds.or(b.odds),
@@ -528,6 +581,59 @@ fn arith(e: &Expr, op: BinOp, a: Val, b: Val) -> Result<Val, Flaw> {
     })
 }
 
+/// Quantile points taken along each range, and bins the combined odds are
+/// cut into (a `steps` weighting takes 32 at most).
+const GRID: usize = 32;
+const BINS: usize = 32;
+
+/// The odds along `iv` of `f` of independent rolls, one in each of `vals`
+/// (each rolled as its own range and odds say): the rolls are met on a grid
+/// of `GRID` quantiles each, midpoints so no end is ever claimed, and counted
+/// into `BINS` equal bins across `iv`.  The same values give the same odds
+/// whatever the machine: only `+ - * /` and the weightings' own curves.
+fn independent(vals: &[&Val], iv: Iv, f: impl Fn(&[f64]) -> f64) -> Option<Weighting> {
+    let width = iv.hi - iv.lo;
+    if width.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
+        return None;
+    }
+    let quantile = |v: &Val, i: usize| {
+        #[allow(clippy::cast_precision_loss)]
+        let u = (i as f64 + 0.5) / GRID as f64;
+        let t = v.odds.as_ref().map_or(u, |w| w.unit(u));
+        v.iv.lo + v.iv.width() * t
+    };
+    let mut counts = vec![0.0_f64; BINS];
+    let mut at = vec![0_usize; vals.len()];
+    let mut x = vec![0.0_f64; vals.len()];
+    loop {
+        for (k, v) in vals.iter().enumerate() {
+            x[k] = quantile(v, at[k]);
+        }
+        let r = f(&x);
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            clippy::cast_precision_loss
+        )]
+        let bin = (((r - iv.lo) / width * BINS as f64).floor().max(0.0) as usize).min(BINS - 1);
+        counts[bin] += 1.0;
+        // the next point of the grid
+        let mut k = 0;
+        while k < at.len() {
+            at[k] += 1;
+            if at[k] < GRID {
+                break;
+            }
+            at[k] = 0;
+            k += 1;
+        }
+        if k == at.len() {
+            break;
+        }
+    }
+    Weighting::steps(&counts).ok()
+}
+
 /// A function of values, any of which may be a cloud: `min`, `max`, `clamp`
 /// and `smooth` act on its two surfaces and keep the weighting; `sin`, `cos`
 /// and `abs` can fold the surfaces over each other, so a cloud is refused
@@ -542,41 +648,41 @@ fn function(e: &Expr, name: &str, vals: Vec<Val>) -> Result<Val, Flaw> {
             "write the function inside the range, over its ends, and the cloud round the result: high(sin(…) .. sin(…))",
         ));
     }
-    if clouds > 0 && vals.iter().filter(|x| x.ranged).count() > 1 {
-        return Err(Flaw::cloud(
-            format!(
-                "`{e}` combines two ranges and one has odds: an element rolls one value at each point, so two clouds have no weighting"
-            ),
-            CLOUD_RULE,
-        ));
-    }
+    let func = Func::of(name, vals.len())?;
     let ivs: Vec<Iv> = vals.iter().map(|x| x.iv).collect();
+    let iv = call(func, &ivs);
+    let wide: Vec<&Val> = vals
+        .iter()
+        .filter(|x| x.ranged && x.iv.width() > 0.0)
+        .collect();
+    // two ranges are two rolls: the function of them has the odds of both
+    let odds = if wide.len() > 1 {
+        let args: Vec<(&Val, bool)> = vals
+            .iter()
+            .map(|x| (x, x.ranged && x.iv.width() > 0.0))
+            .collect();
+        independent(&wide, iv, |roll| {
+            let mut next = roll.iter();
+            let numbers: Vec<f64> = args
+                .iter()
+                .map(|(v, rolled)| {
+                    if *rolled {
+                        next.next().copied().unwrap_or(f64::NAN)
+                    } else {
+                        0.5 * (v.iv.lo + v.iv.hi)
+                    }
+                })
+                .collect();
+            func.of_numbers(&numbers)
+        })
+    } else {
+        vals.iter().find_map(|x| x.odds.clone())
+    };
     Ok(Val {
-        iv: call(name, &ivs)?,
-        odds: vals.iter().find_map(|x| x.odds.clone()),
+        iv,
+        odds,
         ranged: vals.iter().any(|x| x.ranged),
     })
-}
-
-fn collect(e: &Expr, out: &mut Vec<String>) {
-    match e {
-        Expr::Name(n) => out.push(n.clone()),
-        Expr::Num { .. } | Expr::Unit(_) => {}
-        Expr::Neg(a) => collect(a, out),
-        Expr::Range { lo, hi } => {
-            collect(lo, out);
-            collect(hi, out);
-        }
-        Expr::Weighted { range, .. } => collect(range, out),
-        Expr::List { items } => items.iter().for_each(|(v, _)| collect(v, out)),
-        Expr::Bin { lhs, rhs, .. } => {
-            collect(lhs, out);
-            collect(rhs, out);
-        }
-        // a coordinate's region is not a height: its names are the region's
-        Expr::Call { name, .. } if matches!(name.as_str(), "x" | "y" | "d" | "a") => {}
-        Expr::Call { args, .. } => args.iter().for_each(|a| collect(a, out)),
-    }
 }
 
 /// Whether the angles `[a, b]` (degrees) pass `center` plus a whole turn.
@@ -600,28 +706,30 @@ fn sin_iv(a: Iv) -> Iv {
     r
 }
 
-fn call(name: &str, a: &[Iv]) -> Result<Iv, String> {
-    Ok(match (name, a) {
-        ("sin", [t]) => sin_iv(*t),
-        ("cos", [t]) => sin_iv(*t + Iv::point(90.0)),
-        ("abs", [t]) => {
+/// A function over intervals: the surfaces it can make.
+fn call(func: Func, a: &[Iv]) -> Iv {
+    match func {
+        Func::Sin => sin_iv(a[0]),
+        Func::Cos => sin_iv(a[0] + Iv::point(90.0)),
+        Func::Abs => {
+            let t = a[0];
             if t.lo >= 0.0 {
-                *t
+                t
             } else if t.hi <= 0.0 {
-                -*t
+                -t
             } else {
                 Iv::new(0.0, (-t.lo).max(t.hi))
             }
         }
-        ("min", [p, q]) => Iv::new(p.lo.min(q.lo), p.hi.min(q.hi)),
-        ("max", [p, q]) => Iv::new(p.lo.max(q.lo), p.hi.max(q.hi)),
-        ("clamp", [t, lo, hi]) => {
+        Func::Min => Iv::new(a[0].lo.min(a[1].lo), a[0].hi.min(a[1].hi)),
+        Func::Max => Iv::new(a[0].lo.max(a[1].lo), a[0].hi.max(a[1].hi)),
+        Func::Clamp => {
+            let (t, lo, hi) = (a[0], a[1], a[2]);
             let up = Iv::new(t.lo.max(lo.lo), t.hi.max(lo.hi));
             Iv::new(up.lo.min(hi.lo), up.hi.min(hi.hi))
         }
-        ("smooth", [t]) => Iv::new(smooth(t.lo), smooth(t.hi)),
-        _ => return Err(format!("`{name}` is not called with these values")),
-    })
+        Func::Smooth => Iv::new(smooth(a[0].lo), smooth(a[0].hi)),
+    }
 }
 
 /// The lattice and the stack so far, shared by every body.
@@ -981,11 +1089,7 @@ pub fn solve(
         }
         // lints (a body that follows what is under it, a film on stone, is
         // as steep as that is)
-        let follows = {
-            let mut names = Vec::new();
-            collect(top, &mut names);
-            names.iter().any(|n| n == "bottom")
-        };
+        let follows = top.height_names().contains(&"bottom");
         let slope = match ease {
             Ease::Slope(d) => Some(d),
             _ => None,

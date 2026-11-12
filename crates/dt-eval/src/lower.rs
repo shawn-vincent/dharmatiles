@@ -9,7 +9,7 @@
 //! element's; this only turns what is written into a value.
 
 use dt_doc::consts::ConstTable;
-use dt_doc::expr::Expr;
+use dt_doc::expr::{Algebra, BinOp, Expr, Odds, UnitWord};
 use dt_doc::model::{Num, Value};
 use dt_doc::schema;
 use dt_geom::{Dist, Draw, Op, Weighting};
@@ -263,7 +263,7 @@ fn number(n: &Num, lets: &Lets) -> Result<Lowered, Refused> {
     let named_draw = n.expr.names().iter().any(|x| lets.draw(x).is_some());
     let weighted = {
         let mut any = false;
-        visit(&n.expr, &mut |e| {
+        n.expr.walk(&mut |e| {
             any |= matches!(e, Expr::Weighted { .. } | Expr::List { .. });
         });
         any
@@ -308,21 +308,6 @@ fn number(n: &Num, lets: &Lets) -> Result<Lowered, Refused> {
     }
 }
 
-fn visit<'a>(e: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
-    f(e);
-    match e {
-        Expr::Num { .. } | Expr::Name(_) | Expr::Unit(_) => {}
-        Expr::Neg(a) => visit(a, f),
-        Expr::Bin { lhs, rhs, .. } | Expr::Range { lo: lhs, hi: rhs } => {
-            visit(lhs, f);
-            visit(rhs, f);
-        }
-        Expr::Weighted { range, .. } => visit(range, f),
-        Expr::List { items } => items.iter().for_each(|(v, _)| visit(v, f)),
-        Expr::Call { args, .. } => args.iter().for_each(|a| visit(a, f)),
-    }
-}
-
 /// One coordinate of an `at=` point, in squares: a number, or a range with
 /// its odds, drawn once from the entry's seed.  A number is a range of no
 /// width, as a control's number is, so it takes its draw as before.
@@ -338,106 +323,184 @@ pub(crate) fn coordinate(e: &Expr) -> Result<Draw, Refused> {
 const DEPTH: usize = 32;
 
 fn lower(e: &Expr, lets: &Lets, depth: usize) -> Result<Part, Refused> {
-    if depth > DEPTH {
-        return Err(Refused::mistake("`let`s refer to each other in a loop"));
+    e.eval(&mut Lowerer { lets, depth })
+}
+
+/// The rolled values a control takes: a number, one range with its odds, or
+/// several rolled and combined ([`Part`]).  A value with no range in it is
+/// one number; every range in a value that has some is its own roll.
+struct Lowerer<'a> {
+    lets: &'a Lets,
+    /// How many names deep: a `let` that names itself never ends.
+    depth: usize,
+}
+
+impl Lowerer<'_> {
+    fn env(&self) -> impl Fn(&str) -> Option<f64> + '_ {
+        |name: &str| self.lets.num(name)
     }
-    let env = |name: &str| lets.num(name);
-    if !lets.draws_in(e) {
-        return Ok(Part::Num(e.sample(&env, 0.0)?));
+}
+
+/// The two ends of a range expression (the range itself, or the weighting
+/// call round it).
+fn ends_of(outer: &Expr) -> Option<(&Expr, &Expr)> {
+    match outer {
+        Expr::Range { lo, hi } => Some((lo, hi)),
+        Expr::Weighted { range, .. } => ends_of(range),
+        _ => None,
     }
-    Ok(match e {
-        Expr::Name(n) => match lets.draw(n) {
-            Some(x) => lower(x, lets, depth + 1)?,
-            None => Part::Num(e.sample(&env, 0.0)?),
-        },
-        Expr::Neg(a) => scale(lower(a, lets, depth)?, -1.0),
-        Expr::Bin { op, lhs, rhs } => {
-            use dt_doc::expr::BinOp::{Add, Div, Mul, Sub};
-            let (a, b) = (lower(lhs, lets, depth)?, lower(rhs, lets, depth)?);
-            match (op, a, b) {
-                (Add, Part::Num(x), Part::Num(y)) => Part::Num(x + y),
-                (Sub, Part::Num(x), Part::Num(y)) => Part::Num(x - y),
-                (Mul, Part::Num(x), Part::Num(y)) => Part::Num(x * y),
-                (Div, Part::Num(x), Part::Num(y)) => Part::Num(x / y),
-                (Add, Part::Dist(d), Part::Num(x)) | (Add, Part::Num(x), Part::Dist(d)) => {
-                    Part::Dist(Dist::new(d.lo + x, d.hi + x, d.weighting))
+}
+
+impl Algebra for Lowerer<'_> {
+    type Val = Part;
+    type Err = Refused;
+
+    fn shortcut(&mut self, e: &Expr) -> Option<Result<Part, Refused>> {
+        if self.lets.draws_in(e) {
+            return None;
+        }
+        Some(
+            e.sample(&self.env(), 0.0)
+                .map(Part::Num)
+                .map_err(Refused::from),
+        )
+    }
+
+    fn number(&mut self, value: f64) -> Result<Part, Refused> {
+        Ok(Part::Num(value))
+    }
+
+    fn name(&mut self, n: &str) -> Result<Part, Refused> {
+        match self.lets.draw(n) {
+            Some(x) => {
+                if self.depth + 1 > DEPTH {
+                    return Err(Refused::mistake("`let`s refer to each other in a loop"));
                 }
-                (Sub, Part::Dist(d), Part::Num(x)) => {
-                    Part::Dist(Dist::new(d.lo - x, d.hi - x, d.weighting))
-                }
-                // x - (lo + (hi - lo) t) runs from x - lo to x - hi
-                (Sub, Part::Num(x), Part::Dist(d)) => ordered(x - d.lo, x - d.hi, d.weighting),
-                (Mul, Part::Dist(d), Part::Num(x)) | (Mul, Part::Num(x), Part::Dist(d)) => {
-                    scale(Part::Dist(d), x)
-                }
-                (Div, Part::Dist(d), Part::Num(x)) => ordered(d.lo / x, d.hi / x, d.weighting),
-                (Div, _, Part::Dist(_) | Part::Draw(_)) => {
-                    return Err(Refused::mistake(format!(
-                        "`{e}` divides by a range: the odds of its result are not a weighting"
-                    ))
-                    .with_help("divide a range by a number, not by a range"));
-                }
-                // anything else holds two ranges or more: each rolls on its
-                // own, then the arithmetic runs on the numbers
-                (op, a, b) => {
-                    let op = match op {
-                        Add => Op::Add,
-                        Sub => Op::Sub,
-                        Mul => Op::Mul,
-                        Div => Op::Div,
-                    };
-                    Part::Draw(Draw::Bin(
-                        op,
-                        Box::new(a.into_draw()),
-                        Box::new(b.into_draw()),
-                    ))
-                }
+                self.depth += 1;
+                let r = x.eval(self);
+                self.depth -= 1;
+                r
             }
+            None => self
+                .lets
+                .num(n)
+                .map(Part::Num)
+                .ok_or_else(|| Refused::from(format!("unknown name `{n}`"))),
         }
-        Expr::Range { .. } => {
-            let (lo, hi) = ends(e, lets)?;
-            Part::Dist(Dist::flat(lo, hi))
-        }
-        Expr::Weighted {
-            name,
-            args,
-            range,
-            parts,
-        } => {
-            let (lo, hi) = ends(range, lets)?;
-            let w = if name == "mix" {
-                let mut made = Vec::with_capacity(parts.len());
-                for ((n, a), weight) in parts.iter().zip(args) {
-                    made.push((*weight, Weighting::from_call(n, a).map_err(refused)?));
-                }
-                Weighting::mix(made)
-            } else {
-                Weighting::from_call(name, args)
+    }
+
+    fn unit(&mut self, unit: UnitWord) -> Result<Part, Refused> {
+        Err(Refused::from(format!(
+            "`{}` is a unit, not a number here",
+            unit.word()
+        )))
+    }
+
+    fn neg(&mut self, a: Part) -> Result<Part, Refused> {
+        Ok(scale(a, -1.0))
+    }
+
+    fn binary(&mut self, e: &Expr, op: BinOp, a: Part, b: Part) -> Result<Part, Refused> {
+        use dt_doc::expr::BinOp::{Add, Div, Mul, Sub};
+        Ok(match (op, a, b) {
+            (Add, Part::Num(x), Part::Num(y)) => Part::Num(x + y),
+            (Sub, Part::Num(x), Part::Num(y)) => Part::Num(x - y),
+            (Mul, Part::Num(x), Part::Num(y)) => Part::Num(x * y),
+            (Div, Part::Num(x), Part::Num(y)) => Part::Num(x / y),
+            (Add, Part::Dist(d), Part::Num(x)) | (Add, Part::Num(x), Part::Dist(d)) => {
+                Part::Dist(Dist::new(d.lo + x, d.hi + x, d.weighting))
             }
-            .map_err(refused)?;
-            Part::Dist(Dist::new(lo, hi, w))
-        }
-        Expr::List { items } => {
-            let env = |name: &str| lets.num(name);
-            let mut values = Vec::with_capacity(items.len());
-            for (v, w) in items {
-                if lets.draws_in(v) {
-                    return Err(Refused::mistake(format!(
-                        "`{v}` is a range inside a list: the values of a list are numbers"
-                    ))
-                    .with_help("write numbers: [1:4, 2:5, 3:1]"));
-                }
-                values.push((v.sample(&env, 0.0)?, *w));
+            (Sub, Part::Dist(d), Part::Num(x)) => {
+                Part::Dist(Dist::new(d.lo - x, d.hi - x, d.weighting))
             }
-            Part::Dist(Dist::list(&values).map_err(refused)?)
-        }
-        Expr::Call { name, .. } => {
+            // x - (lo + (hi - lo) t) runs from x - lo to x - hi
+            (Sub, Part::Num(x), Part::Dist(d)) => ordered(x - d.lo, x - d.hi, d.weighting),
+            (Mul, Part::Dist(d), Part::Num(x)) | (Mul, Part::Num(x), Part::Dist(d)) => {
+                scale(Part::Dist(d), x)
+            }
+            (Div, Part::Dist(d), Part::Num(x)) => ordered(d.lo / x, d.hi / x, d.weighting),
+            (Div, _, Part::Dist(_) | Part::Draw(_)) => {
+                return Err(Refused::mistake(format!(
+                    "`{e}` divides by a range: the odds of its result are not a weighting"
+                ))
+                .with_help("divide a range by a number, not by a range"));
+            }
+            // anything else holds two ranges or more: each rolls on its
+            // own, then the arithmetic runs on the numbers
+            (op, a, b) => {
+                let op = match op {
+                    Add => Op::Add,
+                    Sub => Op::Sub,
+                    Mul => Op::Mul,
+                    Div => Op::Div,
+                };
+                Part::Draw(Draw::Bin(
+                    op,
+                    Box::new(a.into_draw()),
+                    Box::new(b.into_draw()),
+                ))
+            }
+        })
+    }
+
+    fn range(
+        &mut self,
+        outer: &Expr,
+        lo: Part,
+        hi: Part,
+        odds: Option<Odds<'_>>,
+    ) -> Result<Part, Refused> {
+        // a range's two ends, as a plain range's always were (the range at 0
+        // and at 1); a range inside an end is refused
+        let (Part::Num(a), Part::Num(b)) = (lo, hi) else {
+            let end = ends_of(outer).map(|(l, h)| if self.lets.draws_in(l) { l } else { h });
             return Err(Refused::mistake(format!(
-                "`{name}` is given a range: a function takes numbers"
+                "`{}` is a range inside the end of another range: the ends of a range are numbers",
+                end.map_or_else(String::new, ToString::to_string)
             )));
+        };
+        let (lo, hi) = (a + (b - a) * 0.0, a + (b - a) * 1.0);
+        let Some(o) = odds else {
+            return Ok(Part::Dist(Dist::flat(lo, hi)));
+        };
+        let w = if o.name == "mix" {
+            let mut made = Vec::with_capacity(o.parts.len());
+            for ((n, a), weight) in o.parts.iter().zip(o.args) {
+                made.push((*weight, Weighting::from_call(n, a).map_err(refused)?));
+            }
+            Weighting::mix(made)
+        } else {
+            Weighting::from_call(o.name, o.args)
         }
-        Expr::Num { .. } | Expr::Unit(_) => Part::Num(e.sample(&env, 0.0)?),
-    })
+        .map_err(refused)?;
+        Ok(Part::Dist(Dist::new(lo, hi, w)))
+    }
+
+    fn list(&mut self, e: &Expr, items: Vec<(Part, Option<f64>)>) -> Result<Part, Refused> {
+        let mut values = Vec::with_capacity(items.len());
+        for (k, (v, w)) in items.into_iter().enumerate() {
+            let Part::Num(x) = v else {
+                let item = match e {
+                    Expr::List { items } => {
+                        items.get(k).map_or_else(String::new, |i| i.0.to_string())
+                    }
+                    _ => String::new(),
+                };
+                return Err(Refused::mistake(format!(
+                    "`{item}` is a range inside a list: the values of a list are numbers"
+                ))
+                .with_help("write numbers: [1:4, 2:5, 3:1]"));
+            };
+            values.push((x, w));
+        }
+        Ok(Part::Dist(Dist::list(&values).map_err(refused)?))
+    }
+
+    fn call(&mut self, _e: &Expr, name: &str, _args: Vec<Part>) -> Result<Part, Refused> {
+        Err(Refused::mistake(format!(
+            "`{name}` is given a range: a function takes numbers"
+        )))
+    }
 }
 
 /// A weighting that cannot be made, as the diagnostic it is.
@@ -448,23 +511,6 @@ fn refused(w: dt_geom::WeightingError) -> Refused {
         help: Some(w.help),
         hard: true,
     }
-}
-
-/// A range's two ends, evaluated as a plain range's always were (the
-/// expression at 0 and at 1); a range inside an end is refused.
-fn ends(range: &Expr, lets: &Lets) -> Result<(f64, f64), Refused> {
-    let Expr::Range { lo, hi } = range else {
-        return Err(Refused::mistake("a weighting wraps a range"));
-    };
-    for end in [lo, hi] {
-        if lets.draws_in(end) {
-            return Err(Refused::mistake(format!(
-                "`{end}` is a range inside the end of another range: the ends of a range are numbers"
-            )));
-        }
-    }
-    let env = |name: &str| lets.num(name);
-    Ok(range.bounds(&env)?)
 }
 
 /// A range from `lo` to `hi` with odds that run from `lo`: swapped, with the

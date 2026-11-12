@@ -270,20 +270,25 @@ fn a_list_is_a_cloud_of_the_values_written() {
 }
 
 #[test]
-fn two_clouds_have_no_weighting() {
+fn two_ranges_are_two_rolls_with_or_without_odds() {
+    // the sum spans the interval of the sum, and its odds are those of two
+    // independent rolls: a cloud and a plain range, or two clouds
     for top in [
         "$groundHeight + low(0dmm .. 2dmm) + low(0dmm .. 2dmm)",
         "$groundHeight + low(0dmm .. 2dmm) + [0dmm .. 2dmm]",
-        "$groundHeight + low(0dmm .. 2dmm) * [1 .. 2]",
         "min($groundHeight + low(0dmm .. 4dmm), $groundHeight + high(0dmm .. 4dmm))",
     ] {
-        let d = refused(&dirt(top), "dt::cloud", "high($bottom .. $bottom + 20dmm)");
-        assert!(
-            d.message.contains("two ranges") || d.message.contains("two clouds"),
-            "{}",
-            d.message
-        );
+        let (iv, w) = middle(&dirt(top));
+        assert!(iv.width() > 0.0, "{top}: {iv:?}");
+        assert!(matches!(w, Some(Weighting::Steps(_))), "{top}: {w:?}");
     }
+    // a cloud scaled by a range has no weighting: one roll is the factor
+    let d = refused(
+        &dirt("$groundHeight + low(0dmm .. 2dmm) * [1 .. 2]"),
+        "dt::cloud",
+        "multiply a cloud by a number",
+    );
+    assert!(d.message.contains("multiplies a cloud"), "{}", d.message);
 }
 
 #[test]
@@ -310,11 +315,36 @@ fn a_cloud_is_not_divided_into_or_folded() {
 }
 
 #[test]
-fn a_plain_range_still_does_interval_arithmetic() {
-    // no odds, so nothing changes: [0..2] + [0..2] is [0..4], as before
+fn two_plain_ranges_span_their_sum_and_come_up_like_two_dice() {
+    // [0..2] + [0..2] spans [0..4]; the middle comes up more than the ends
     let (iv, w) = middle(&dirt("$groundHeight + [0dmm .. 2dmm] + [0dmm .. 2dmm]"));
     assert!(close(iv.lo, 5.0) && close(iv.hi, 9.0), "{iv:?}");
+    let Some(Weighting::Steps(bins)) = w else {
+        panic!("two dice have odds: {w:?}");
+    };
+    let (ends, mid) = (bins[0] + bins[bins.len() - 1], bins[bins.len() / 2] * 2.0);
+    assert!(mid > 4.0 * ends, "a triangle: {bins:?}");
+    // one range alone has no odds, as always
+    let (_, w) = middle(&dirt("$groundHeight + [0dmm .. 2dmm] + 1dmm"));
     assert_eq!(w, None);
+    let (iv, _) = middle(&dirt("$groundHeight + abs([-2dmm .. 2dmm])"));
+    assert!(close(iv.lo, 5.0) && close(iv.hi, 7.0), "{iv:?}");
+    // [1..2] - [1..2] is two dice: a band from -1 to 1, a triangle
+    let (iv, w) = middle(&dirt(
+        "$groundHeight + 10dmm + [1dmm .. 2dmm] - [1dmm .. 2dmm]",
+    ));
+    assert!(
+        iv.width() > 0.0 && matches!(w, Some(Weighting::Steps(_))),
+        "{iv:?} {w:?}"
+    );
+    assert_eq!(
+        middle(&dirt(
+            "$groundHeight + 10dmm + [1dmm .. 2dmm] - [1dmm .. 2dmm]"
+        ))
+        .1,
+        w,
+        "the same value gives the same odds"
+    );
     let (iv, _) = middle(&dirt("$groundHeight + abs([-2dmm .. 2dmm])"));
     assert!(close(iv.lo, 5.0) && close(iv.hi, 7.0), "{iv:?}");
 }
