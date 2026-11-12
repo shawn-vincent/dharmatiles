@@ -341,6 +341,11 @@ export function up() {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
+  // Esc is one level up: a property to its piece, a piece to the map (before the page's own Esc, which leaves the tile)
+  addEventListener('keydown', (e) => {
+    const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable || e.target.tagName === 'SELECT';
+    if (e.key === 'Escape' && !typing && mapMode() && up()) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
   sceneStore.subscribe(['pieces', 'scene'], render);
   view.subscribe(['msel', 'mprop', 'dmode', 'tileId'], () => { drawn = ''; render(); });
   server.subscribe(['tiles', 'inventory'], render);

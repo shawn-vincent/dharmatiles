@@ -8,7 +8,7 @@
 <script src="assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html" aria-current="page">Preview</a><a href="plates.html">Plates</a><a href="printers.html">Printers</a><a href="inventory.html">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html" aria-current="page">Preview</a><a href="plates.html">Plates</a><a href="maps.html">Maps</a><a href="printers.html">Printers</a><a href="inventory.html">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow">dharmatiles preview</div>
@@ -25,6 +25,7 @@
   <li><a href="#keys">Moving round a tile</a></li>
   <li><a href="#export">Export</a></li>
   <li><a href="#plates">Plates</a></li>
+  <li><a href="#maps">Maps</a></li>
   <li><a href="#inventory">Inventory</a></li>
   <li><a href="#live">Live updates</a></li>
   <li><a href="#cache">The cache of builds</a></li>
@@ -183,6 +184,15 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <li><strong>Export</strong> builds every piece in full and writes one Bambu Studio project, or one STL per plate for any other printer, to <code>out/plates/</code>. The status line and the messages say what it is doing and the files it wrote.</li>
 <li><strong>Printer</strong> is brand, then model, with a switch for the AMS on a Bambu printer; <strong>Print mode</strong> is single or multicolour and the grouping, with the check that the printer has the filaments; <strong>Spacing</strong> is the gap, the margin and turns. Each change rewrites the list's <code>plates</code> line and nothing else.</li>
 <li>A tile with no full build kept shows its low build, marked <em>low · not yet checked</em> in the status line, while the full builds of the pieces on the plate in view run; when they land the plates are laid out again by what the full builds cover. The other plates' pieces build when you export. A plate drawn from low meshes is never exported.</li>
+</ul>
+
+<h2 id="maps">Maps</h2>
+<p>A <a href="maps.html">map</a> is a <code>.dmap</code> with placed pieces, and the title bar's <strong>Map</strong> is its view: every piece's tile at its place, turned and raised, in the same 3D view, on the ground of the <strong>backdrop</strong> you chose (Wilderness, Cavern, Table or Plain, in the <kbd>⋯</kbd> menu; the choice is kept in this browser and used for the tile editor too, and the plates keep the printer's bed).</p>
+<ul>
+<li><strong>The panel</strong> goes from the map (its pieces by tile with <em>have</em> and <em>to print</em> pills, <em>Add tiles</em>, <em>Print what's missing</em>, the variants) to one piece (place, turn, level, seed, print setting, <em>Open tile</em>, <em>Duplicate</em>, <em>Remove</em>) to a property (the level's names, the seeds you own as chips).</li>
+<li><strong>The catalog drawer</strong> along the bottom is the folder level with each tile's picture: press a card to put the tile down, or drag it to where it should stand. <em>New map</em> in a folder you own starts an empty one.</li>
+<li><strong>Moving</strong> works in a view looking down (Top): drag a piece, or the selection, and it snaps to the squares of its own system. <kbd>R</kbd> turns, <kbd>D</kbd> duplicates, <kbd>⌫</kbd> removes, <kbd>⌘Z</kbd> undoes the last change; every change is an edit of the text, with the toast's <em>Undo</em>.</li>
+<li><strong>Detail by distance.</strong> Each piece is drawn super-low, low or full by its size on screen, under about 900 000 triangles in all; full is asked for only when close, never blocks, and what is not full is marked <em>low · not yet checked</em> in the status line.</li>
 </ul>
 
 <h2 id="inventory">Inventory</h2>

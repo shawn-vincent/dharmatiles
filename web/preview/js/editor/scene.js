@@ -20,7 +20,7 @@ import { showError } from '../problems.js';
 import { FOV } from '../viewer/consts.js';
 import * as M from '../map-model.js';
 import { $, host, pickView, viewer } from './app.js';
-import { createStore, isPlates, server, tile, view } from './stores.js';
+import { createStore, isPlates, log, server, tile, view } from './stores.js';
 
 /** What the map is now: the pieces (the program's scene, plus the page's), the tiers drawn, and the budget. */
 export const sceneStore = createStore({ pieces: [], scene: null, counts: M.tierCounts([]), triangles: 0, busy: 0 });
@@ -329,7 +329,8 @@ export function statusLines() {
   const parts = [];
   if (notFull) parts.push('low · not yet checked');
   const tiers = [counts.full && `${counts.full} full`, counts.low && `${counts.low} low`, counts['super-low'] && `${counts['super-low']} distant`, counts.none && `${counts.none} loading`].filter(Boolean).join(' · ');
-  return { verdict, counts: [...parts, tiers].filter(Boolean).join(' · '), notChecked: notFull > 0 };
+  const notes = (log.view(tile()?.id ?? '').counts?.notes ?? 0);
+  return { verdict, counts: [...parts, tiers].filter(Boolean).join(' · '), notChecked: notFull > 0, notes };
 }
 
 /** The title bar's chip: `3 in inventory · 11 to print`. */

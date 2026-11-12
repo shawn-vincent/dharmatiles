@@ -231,7 +231,6 @@ export function onKey(e) {
   if (e.key === 'r' || e.key === 'R') { e.preventDefault(); turn(ps, e.shiftKey ? -1 : 1); }
   else if (e.key === 'd' || e.key === 'D') { e.preventDefault(); duplicate(ps); }
   else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); remove(ps); }
-  else if (e.key === 'Escape') select([]);
 }
 
 export { pieceAt, sceneNow };

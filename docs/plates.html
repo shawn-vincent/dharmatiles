@@ -8,7 +8,7 @@
 <script src="assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="plates.html" aria-current="page">Plates</a><a href="printers.html">Printers</a><a href="inventory.html">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="plates.html" aria-current="page">Plates</a><a href="maps.html">Maps</a><a href="printers.html">Printers</a><a href="inventory.html">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow">Reference · from a list of tiles to the bed</div>
@@ -111,7 +111,7 @@ dharmatiles plates my-list.dmap --format 3mf --out ~/prints --json</code></pre>
 <p>By default a piece prints only what your <a href="inventory.html">inventory</a> lacks: five copies of a grass tile of which you have two print three. The plan says how many pieces it left off (<em>2 pieces are already in your inventory left off (3 to print)</em>), and a list whose every piece is already on your shelf says so rather than lay out nothing. <code>--all</code> (or <code>inventory="ignore"</code> on the <code>plates</code> line, or <code>print="always"</code> on a piece) prints every count. The colour mode is the list's <code>mode</code>: a multicolour piece wanted where you own it only in single colour is a different piece, and still prints. After you print, <a href="inventory.html#editor">the sheet after the print</a> adds the plate to the inventory and the next list shrinks.</p>
 
 <h2 id="editor">In the editor</h2>
-<p>Open a <code>.dmap</code> from a folder and the view shows the printer's bed as a translucent slab the pieces stand on (any excluded zones shaded on it) with the plate in view, and the panel changes to the plates' panel. The <em>Tile</em> and <em>Plates</em> switch in the title bar names what you are working on.</p>
+<p>Open a <code>.dmap</code> from a folder and the view shows the printer's bed as a translucent slab the pieces stand on (any excluded zones shaded on it) with the plate in view, and the panel changes to the plates' panel. The <em>Tile</em>, <em>Map</em> and <em>Plates</em> switch in the title bar names what you are working on: a document with placed pieces also opens as a <a href="maps.html">map</a>, and <em>Print what&rsquo;s missing</em> there comes to the same plates. Looking down on the bed (Top), drag a piece to <a href="maps.html#pins">pin</a> it where you drop it.</p>
 <p><strong>Starting a list.</strong> In a folder you own, <em>New print list</em> (beside <em>New tile</em>) asks a name and writes <code>&lt;name&gt;.dmap</code>: an empty map and a <code>plates</code> line for the printer last chosen in the title bar, never over a file. It opens on its plates. <strong>Filling it:</strong> on a tile's level, <em>Add to print list</em> picks a list (or a new one) and adds one more copy; a tile row's menu has <em>Add to print list…</em> too. A piece already in the list at the same seed and system has its <code>count</code> raised instead of being repeated. In the plates' panel, <em>Pieces</em> lists the list's pieces with <kbd>−</kbd> and <kbd>+</kbd> for the count and <kbd>✕</kbd> to take one out. Each of these is an edit of the list's text and leaves the rest of the file as it was; the toast has <em>Undo</em>, which writes the earlier text back, and the plates are laid out again.</p>
 <p><strong>Source.</strong> A print list has the same <em>Tile</em> and <em>Source</em> switch as a tile: <em>Source</em> shows the KDL in the editor and saves it, and a save lays the plates out again. A mistake is shown at its text by the print-list reader, as the command shows it.</p>
 <ul>
@@ -130,6 +130,7 @@ dharmatiles plates my-list.dmap --format 3mf --out ~/prints --json</code></pre>
 <li>Single colour carries no per-triangle paint.</li>
 <li>Every piece rests on the bed (its lowest point at zero), so DungeonBlocks and OpenLOCK pieces may share a plate.</li>
 <li>The same list gives the same plates: nothing in the packer is random.</li>
+<li>A piece pinned on a plate (<a href="maps.html#pins">a <code>pin</code> line of the <code>plates</code> block</a>, made by dragging it in the plates view) stays where it was dropped: the packer puts pinned pieces down first and packs the rest around them, and a plate that holds a pin is not centred.</li>
 </ul>
 
 </article>

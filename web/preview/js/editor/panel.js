@@ -49,8 +49,10 @@ function renderBar() {
   const calm = map && (s.tone === 'ok' || s.tone === 'note' || (s.tone === 'bad' && platesOnly));
   $('sb-verdict').textContent = calm ? map.verdict : s.verdict;
   $('sb-counts').textContent = map ? [s.counts, map.counts].filter(Boolean).join(' · ') : s.counts;
-  $('sb-dot').className = s.tone;
-  $('statusbar').dataset.tone = s.tone;
+  // a map whose plates cannot be laid out is not a map in error: its dot is the notes' yellow, or green
+  const tone = calm && s.tone === 'bad' ? (map.notes ? 'note' : 'ok') : s.tone;
+  $('sb-dot').className = tone;
+  $('statusbar').dataset.tone = tone;
   $('sb-bar').style.width = s.progress == null ? '0' : `${Math.round(s.progress * 100)}%`;
   $('sb-bar').hidden = s.progress == null;
   const sv = server.get();
