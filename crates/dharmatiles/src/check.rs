@@ -5,12 +5,11 @@ use serde_json::json;
 
 use crate::{ERROR, OK, errors_json, report};
 
-pub(crate) fn check(paths: &[String], json: bool, explain: bool) -> u8 {
+pub(crate) fn check(paths: &[String], opts: &Options, json: bool, explain: bool) -> u8 {
     let mut code = OK;
     let mut reports = Vec::new();
     for p in paths {
-        let opts = Options::default();
-        match dt_eval::check(&Files, p, &opts) {
+        match dt_eval::check(&Files, p, opts) {
             Ok(c) => {
                 let pending = c.pending();
                 if !json {

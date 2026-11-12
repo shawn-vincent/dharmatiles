@@ -110,9 +110,21 @@ fn main() -> ExitCode {
     let code = match command {
         Command::Check {
             paths,
+            system,
+            printer,
+            seed,
             json,
             explain,
-        } => check::check(&paths, json, explain),
+        } => {
+            let opts = match options(&system, &printer, seed) {
+                Ok(o) => o,
+                Err(e) => {
+                    tell!("error: {e}");
+                    return ExitCode::from(ERROR);
+                }
+            };
+            check::check(&paths, &opts, json, explain)
+        }
         Command::Build {
             paths,
             all,

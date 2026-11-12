@@ -80,6 +80,18 @@ pub(crate) enum Command {
         /// Tile documents.
         #[arg(required = true)]
         paths: Vec<String>,
+        /// Base system, as for `build`: `db` (DungeonBlocks) or `ol`
+        /// (OpenLOCK). Units and sizes depend on it, so a tile can pass
+        /// for one and fail for the other.
+        #[arg(long, default_value = "db")]
+        system: String,
+        /// Printer profile, as for `build`: a name from `library/printers/`
+        /// or from `printers/` beside your tiles.
+        #[arg(long, default_value = "default")]
+        printer: String,
+        /// Replace each tile's seed, as for `build`.
+        #[arg(long)]
+        seed: Option<u64>,
         /// One JSON report on stdout.
         #[arg(long)]
         json: bool,

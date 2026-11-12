@@ -512,7 +512,7 @@ define oak {
 <p>A call's <code>top=</code> is the tree's. A tile places one oak as <code>oak at="(1sq, 1sq)" top="$bottom + 60dmm"</code>, or several as <code>scatter count=2 { oak }</code>.</p>
 
 <h2 id="errors">10. Errors</h2>
-<p>Every mistake gets a message with a stable code (such as <code>dt::unit</code>), the line it is on with the spot underlined, and a hint that says what to write instead. The program reads on past a mistake, so all of a file's mistakes come together. <code>dharmatiles check my-tile.dtile</code> reports them without building; the <a href="preview.html">preview</a> shows them beside the tile. Two examples, from one file:</p>
+<p>Every mistake gets a message with a stable code (such as <code>dt::unit</code>), the line it is on with the spot underlined, and a hint that says what to write instead. The program reads on past a mistake, so all of a file's mistakes come together. <code>dharmatiles check my-tile.dtile</code> reports them without building (it takes <code>--system</code>, <code>--printer</code> and <code>--seed</code> like <code>build</code>, so a mistake that only shows on OpenLOCK is caught too); the <a href="preview.html">preview</a> shows them beside the tile. Two examples, from one file:</p>
 <pre data-check="skip"><code>dt::unit
 
   × `pebble size`: `1.2` has no unit, and a length is written with one
