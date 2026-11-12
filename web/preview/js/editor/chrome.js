@@ -113,7 +113,7 @@ const closePopovers = () => {
   return any;
 };
 
-// ---- the sidebar's two pages: the tile browser, and the editor beside it ----
+// ---- the sidebar's two pages: the folder levels (places.js), and the editor beside them ----
 
 const browsing = () => view.get().page === 'browse';
 function renderPage() {
@@ -125,12 +125,6 @@ function renderPage() {
   layout.showSide();
   $('side').classList.remove('editing');
   $('browser').inert = false; $('editpage').inert = true;
-  const t = tile(), { roots } = server.get();
-  if (t && t.root !== view.get().root && roots[t.root] && !$('filter').value) view.set({ root: t.root });
-  // scroll the list only: scrollIntoView would scroll the sliding sidebar too
-  const ul = $('tiles'), li = ul.querySelector('li.sel');
-  if (li) ul.scrollTop = li.offsetTop - ul.offsetTop - (ul.clientHeight - li.offsetHeight) / 2;
-  $('filter').focus({ preventScroll: true });
 }
 
 // light or dark: the system's setting until the button is used; then the choice is remembered
@@ -217,6 +211,9 @@ export function init() {
   view.subscribe(['activeView'], ({ activeView }) => showActiveView(activeView));
   view.subscribe(['popover'], renderPopovers);
   view.subscribe(['page'], renderPage);
+  // the page the sidebar starts on: the tile's when the address names one (so it does not slide in at load), else the folder level
+  view.set({ page: /(^|[#&])tile=/.test(location.hash) ? 'edit' : 'browse' });
+  renderPage();
   // no tile shown: the browser is the page
   view.subscribe(['tileId'], () => { if (view.get().tileId == null) view.set({ page: 'browse' }); });
   // the gate's legend names the angles the program checks against
@@ -236,14 +233,15 @@ export function init() {
   toggle('t-fade', (on) => { viewer.setFade(on); try { localStorage.setItem('dt-fade', on ? '1' : '0'); } catch { /* private mode: the default stands */ } });
   try { if (localStorage.getItem('dt-fade') === '0') { $('t-fade').checked = false; viewer.setFade(false); } } catch { /* private mode: the default stands */ }
   for (const [btn, pop] of popovers) $(btn).onclick = (e) => { e.stopPropagation(); openPopover(pop); };
+  // Choose from the library: the library's folder level
   $('choose').onclick = () => {
-    const lib = server.get().roots.findIndex((r) => r.kind === 'library');
-    if (lib >= 0) view.set({ root: lib });
-    view.set({ page: 'browse' });
+    const lib = server.get().roots.findIndex((r) => r.role === 'library');
+    $('filter').value = '';
+    view.set({ place: lib >= 0 ? { root: lib, dir: '' } : { root: null, dir: '' }, page: 'browse' });
     renderPage();
   };
+  // Up from the tile: the folder it is in (its level was set when it opened)
   $('back').onclick = () => { view.set({ page: 'browse' }); renderPage(); };
-  $('forward').onclick = () => { if (tile()) view.set({ page: 'edit' }); };
   addEventListener('pointerdown', (e) => {
     if (popovers.some(([b, p]) => $(p).contains(e.target) || $(b).contains(e.target))) return;
     closePopovers();
@@ -270,6 +268,7 @@ export function init() {
     if (e.key === 'Escape') {
       if (closePopovers()) return;
       if (browsing() && tile() && !$('side').hidden) { view.set({ page: 'edit' }); return; }
+      if (browsing()) { $('bback').click(); return; }
       goUp(); // up a level of the panel (levels.js); at the tile there is nowhere to go
       return;
     }

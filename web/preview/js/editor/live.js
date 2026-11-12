@@ -32,6 +32,28 @@ function followBuild(t) {
   else if (!now && building.delete(t.id)) log.endBuild(t.id);
 }
 
+let lastRev = -1; // the newest revision the stream has told
+
+/**
+ * The program's list, taken: the stream's snapshot, or the one a call's answer carries (a folder made,
+ * a tile moved), which is the list as it is when the call ends.  A call's answer older than what the
+ * stream has already told is not taken: it would put the list back.
+ */
+export function applySnapshot(m, fromStream = false) {
+  if (!fromStream && (m.epoch !== server.get().epoch || m.rev < lastRev)) return;
+  lastRev = fromStream ? (m.rev ?? -1) : Math.max(lastRev, m.rev ?? -1);
+  m.tiles.forEach(reportFailure);
+  const ids = new Set(m.tiles.map((t) => t.id));
+  for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }
+  for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
+  m.tiles.forEach(followBuild);
+  server.set({
+    tiles: m.tiles.map(withoutProgress), progress: progressOf(m.tiles), roots: m.roots || [], folders: m.folders || [], home: m.home ?? null,
+    system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhang_deg, steepestDeg: m.steepest_deg ?? m.overhang_deg + 10,
+    epoch: m.epoch, ready: true,
+  });
+}
+
 /** Wire this part of the page (once, at load). */
 export function init() {
   // what a bug report should say about this run: the version is asked of the program once
@@ -48,18 +70,7 @@ export function init() {
       const live = s === 'live';
       server.set({ live, ever: server.get().ever || live });
     },
-    onSnapshot: (m) => {
-      m.tiles.forEach(reportFailure);
-      const ids = new Set(m.tiles.map((t) => t.id));
-      for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }
-      for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
-      m.tiles.forEach(followBuild);
-      server.set({
-        tiles: m.tiles.map(withoutProgress), progress: progressOf(m.tiles), roots: m.roots || [],
-        system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhang_deg, steepestDeg: m.steepest_deg ?? m.overhang_deg + 10,
-        epoch: m.epoch, ready: true,
-      });
-    },
+    onSnapshot: (m) => applySnapshot(m, true),
     onProgress: (id, p) => server.set({ progress: { ...server.get().progress, [id]: p } }),
     onMessage: (m) => log.apply(m),
     onTile: (t) => {

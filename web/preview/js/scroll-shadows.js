@@ -6,7 +6,7 @@
 // selector in SCROLLERS, whenever it appears in the page.
 
 export const SCROLLERS = [
-  '#browser #tiles', '.history-menu', '#export-card', '#target-card',
+  '#folder-vp .flvl', '.history-menu', '#export-card', '#target-card',
   '#comp', '.lvlbox .body', '.value-pop .vp-list', '#msg-body', '#place-list',
   '#code .cm-scroller',
 ];

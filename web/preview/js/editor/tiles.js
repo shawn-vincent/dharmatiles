@@ -1,5 +1,6 @@
-// The tile menu: listing and filtering the tiles, a new tile, renaming one,
-// and making a library tile your own.
+// What is done to a tile from the page: a new tile (the size picker), renaming one, and
+// making a library tile your own.  The list of tiles, and the folders they are in, are the
+// panel's folder levels (places.js).
 
 import { failed, showError } from '../problems.js';
 import { $, host, onMakeMine, toast } from './app.js';
@@ -8,85 +9,16 @@ import { copiedNote } from '../mine.js';
 import { attachSizeGrid } from '../size-grid.js';
 import { levelSnapshot, restoreLevel } from './levels.js';
 import { select } from './open.js';
-import { doc, inRoot, renameable, rootOf, server, stem, tile, view, whenListed } from './stores.js';
+import { doc, renameable, server, stem, tile, view, whenListed } from './stores.js';
 
-// ---- the tile menu -----------------------------------------------------
-
-function dotClass(t) {
-  const over = t.record && (t.record.audit.overhang_mm2 > 0 || t.record.audit.band_mm2 > 0);
-  return `dot ${t.status}${over && t.status === 'ready' ? ' over' : ''}`;
-}
-
-// the switcher: one button per root (the personal home, the library, the test tiles, each folder named)
-function renderRoots() {
-  const nav = $('roots'), { roots } = server.get(), current = view.get().root;
-  nav.replaceChildren();
-  nav.hidden = roots.length < 2;
-  roots.forEach((r, i) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'root' + (i === current ? ' on' : '');
-    b.setAttribute('aria-pressed', i === current);
-    b.title = r.path || r.label;
-    b.innerHTML = '<span></span> <span class="n"></span>';
-    b.firstChild.textContent = r.label;
-    b.lastChild.textContent = inRoot(i).length;
-    b.onclick = () => view.set({ root: i });
-    nav.append(b);
-  });
-}
-
-function renderList() {
-  renderRoots();
-  const { tileId, root: current } = view.get();
-  const q = $('filter').value.trim().toLowerCase();
-  const ul = $('tiles');
-  ul.replaceChildren();
-  const matches = (t) => !q || stem(t).toLowerCase().includes(q) || t.path.toLowerCase().includes(q);
-  const row = (t) => {
-    const li = document.createElement('li');
-    li.className = t.id === tileId ? 'sel' : '';
-    li.tabIndex = 0; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', t.id === tileId);
-    li.title = t.path;
-    li.innerHTML = '<span></span><span class="name"></span>';
-    li.firstChild.className = dotClass(t);
-    li.querySelector('.name').textContent = stem(t);
-    li.onclick = async () => {
-      if (t.id === view.get().tileId) { view.set({ page: 'edit' }); return; }
-      if ((await select(t.id)) !== false) view.set({ page: 'edit' });
-    };
-    li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
-    return li;
-  };
-  const header = (text) => {
-    const g = document.createElement('li'); g.className = 'group';
-    g.textContent = text;
-    ul.append(g);
-  };
-  const root = rootOf(current);
-  const all = inRoot(current);
-  if (!all.length) {
-    const li = document.createElement('li'); li.className = 'note';
-    li.textContent = root.kind === 'dir'
-      ? `No tiles here yet. Save a .dtile in ${root.path} and it shows up.`
-      : 'No tiles.';
-    ul.append(li);
-    return;
-  }
-  const shown = all.filter(matches)
-    .sort((x, y) => (x.group || '').localeCompare(y.group || '') || x.path.localeCompare(y.path));
-  let last = null;
-  for (const t of shown) {
-    const g = t.group;
-    if (g && g !== last) { header(g); last = g; }
-    ul.append(row(t));
-  }
-}
-
-// A first tile: valid, printable ground in My tiles, ready for the same
-// text/lens/direct edits as every other tile.
-function openNewTile() {
+// A first tile: valid, printable ground in My tiles (or in the folder the browser is at, `into`:
+// {root, dir, name}), ready for the same text/lens/direct edits as every other tile.
+let makingIn = null;
+export function openNewTile(into = null) {
   view.set({ popover: null });
+  makingIn = into && into.root != null ? { root: into.root, dir: into.dir || '' } : null;
   const dlg = $('new-dialog');
+  $('new-where').textContent = into?.name || 'My tiles';
   $('new-note').textContent = 'Starts as printable flat ground. Everything about it is in its source, which you can change.';
   dlg.showModal();
   $('new-size').value = '1x1';
@@ -95,6 +27,25 @@ function openNewTile() {
 }
 
 // ---- renaming: a tile's file name is its name ---------------------------
+
+/**
+ * Rename tile `t`'s file (the open one is saved or kept first, keeps its history and its level, and is
+ * opened again under its new name): {ok: true, id}, or {ok: false} with `r` the reply that refused it
+ * (`kept` when unsaved changes were kept instead).
+ */
+export async function renameTile(t, name) {
+  const open = t.id === view.get().tileId;
+  if (open && !(await canLeave())) return { ok: false, kept: true };
+  const editing = view.get().page === 'edit';
+  const r = await host.rename(t.id, name);
+  if (r.status !== 200 || r.body?.id == null) return { ok: false, r };
+  if (!open) return { ok: true, id: r.body.id };
+  carryHistory();
+  const id = r.body.id, here = levelSnapshot();
+  // the old name leaves the list as the new one joins: for a moment no tile is shown, and the panel went to its folder
+  if (await whenListed(id)) { await select(id, true); restoreLevel(here); if (editing) view.set({ page: 'edit' }); }
+  return { ok: true, id };
+}
 
 export function startRename() {
   const t = tile();
@@ -113,10 +64,11 @@ export function startRename() {
     if (!commit || !name || name === stem(t)) { done = true; input.remove(); $('tilebtn').hidden = false; doc.set({ note: null }); return; }
     done = true;
     input.disabled = true;
-    if (!(await canLeave())) { input.remove(); $('tilebtn').hidden = false; return; }
-    const r = await host.rename(t.id, name);
-    if (r.status !== 200 || r.body?.id == null) {
+    const out = await renameTile(t, name);
+    if (out.kept) { input.remove(); $('tilebtn').hidden = false; return; }
+    if (!out.ok) {
       // stay in the field with the reason, so the name can be fixed
+      const r = out.r;
       done = false; input.disabled = false; input.classList.add('bad');
       input.title = r.body?.error || 'The tile could not be renamed.';
       doc.set({ note: input.title }); input.focus();
@@ -125,9 +77,6 @@ export function startRename() {
     }
     input.remove(); $('tilebtn').hidden = false;
     doc.set({ note: null });
-    carryHistory();
-    const id = r.body.id, here = levelSnapshot();
-    if (await whenListed(id)) { await select(id, true); restoreLevel(here); }
   };
   input.onkeydown = (e) => {
     e.stopPropagation();
@@ -198,18 +147,12 @@ async function mineIt(replay) {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  server.subscribe(['tiles', 'roots'], () => { if (view.get().page === 'browse') renderList(); });
-  view.subscribe(['tileId', 'root', 'page'], () => { if (view.get().page === 'browse') renderList(); });
   onMakeMine(mineIt);
-  $('filter').oninput = renderList;
-  $('filter').onkeydown = (e) => {
-    if (e.key === 'Escape' && tile()) { e.preventDefault(); e.stopPropagation(); view.set({ page: 'edit' }); return; }
-    if (e.key !== 'Enter') return;
-    const first = $('tiles').querySelector('li:not(.group):not(.note)');
-    first?.click();
+  // the empty page's New tile: into the folder the browser is at, when it is one of yours
+  $('empty-new').onclick = () => {
+    const l = view.get().place, r = server.get().roots[l.root];
+    openNewTile(r?.writable ? { root: l.root, dir: l.dir, name: [r.label, ...(l.dir ? l.dir.split('/') : [])].join(' › ') } : null);
   };
-  $('new').onclick = openNewTile;
-  $('empty-new').onclick = openNewTile;
   attachSizeGrid($('new-size'), { parent: $('new-dialog') });
   $('new-cancel').onclick = () => $('new-dialog').close();
   $('new-form').onsubmit = async (e) => {
@@ -220,7 +163,7 @@ export function init() {
     $('new-note').textContent = 'Making the tile…';
     let r;
     try {
-      r = await host.newTile($('new-name').value, $('new-size').value);
+      r = await host.newTile($('new-name').value, $('new-size').value, makingIn);
     } catch (e) {
       ok.disabled = false;
       $('new-note').textContent = 'The tile could not be made.';
@@ -234,7 +177,7 @@ export function init() {
       return;
     }
     $('new-dialog').close();
-    if (await whenListed(r.body.id)) select(r.body.id, true);
+    if (await whenListed(r.body.id) && (await select(r.body.id, true)) !== false) view.set({ page: 'edit' });
   };
   $('tilebtn').ondblclick = (e) => { e.preventDefault(); startRename(); };
   addEventListener('keydown', (e) => {

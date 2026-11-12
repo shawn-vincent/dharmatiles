@@ -35,26 +35,29 @@
     <button id="theme" class="btn icon" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button>
   </header>
 
-  <div id="side" class="editing">
+  <div id="side">
     <div id="track">
-      <section id="browser" aria-label="Tiles" inert>
-        <div id="browsebar">
-          <nav id="roots" class="seg" aria-label="Where the tiles come from" hidden></nav>
+      <section id="browser" aria-label="Places and folders">
+        <div id="bcrumb" class="crumbbar">
+          <button id="bback" class="up" type="button" title="Up a level (⌘[)" aria-label="Up a level"><span aria-hidden="true">‹</span></button>
+          <div class="cr" id="bcrumb-scroll"><nav id="bcrumbs" class="crumbs" aria-label="Where you are"></nav></div>
           <button id="forward" class="btn" type="button" hidden title="Back to the tile (Esc)"><span id="forward-name"></span> ›</button>
         </div>
-        <div class="menu-find">
+        <div id="bctx" class="ctxbar" role="note"><div id="bctx-lines"></div></div>
+        <div id="browsebar">
           <input id="filter" type="search" placeholder="Filter tiles" aria-label="Filter tiles">
-          <button id="new" class="btn" type="button">New tile</button>
+          <div id="folder-actions" role="group" aria-label="What can be added here"></div>
         </div>
-        <ul id="tiles" role="listbox" aria-label="Tiles"></ul>
+        <div id="folder-vp"><div id="folder" class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1"></div></div>
       </section>
-      <div id="editpage">
-        <div id="crumb">
-          <button id="back" type="button" title="All the tiles (⌘[ from the tile)"><span aria-hidden="true">‹</span> <span id="tilewhere">Tiles</span></button>
-          <span class="sep" aria-hidden="true">›</span>
-          <button id="tilebtn" type="button" title="The tile"><span id="tilename"></span></button>
-          <nav id="crumbs-deep" aria-label="Where you are in the tile"></nav>
-          <span class="grow"></span>
+      <div id="editpage" inert>
+        <div id="crumb" class="crumbbar">
+          <button id="back" class="up" type="button" title="Up to the folder (⌘[ from the tile)" aria-label="Up to the folder"><span aria-hidden="true">‹</span></button>
+          <div class="cr" id="crumb-scroll">
+            <nav id="crumbs-path" class="crumbs" aria-label="The folders the tile is in"></nav>
+            <button id="tilebtn" type="button" title="The tile"><span id="tilename"></span></button>
+            <nav id="crumbs-deep" class="crumbs" aria-label="Where you are in the tile"></nav>
+          </div>
           <span id="rochip" hidden title="A library tile. Your first change copies it into My tiles and makes the change there.">library</span>
         </div>
         <div id="ctx" role="note">
@@ -172,7 +175,7 @@
 
 <dialog id="new-dialog" aria-labelledby="new-title">
   <form method="dialog" id="new-form">
-    <div class="eyebrow">My tiles</div>
+    <div class="eyebrow" id="new-where">My tiles</div>
     <h2 id="new-title">New tile</h2>
     <label class="field">Name<input id="new-name" name="name" type="text" value="Untitled tile" maxlength="80" required autocomplete="off"></label>
     <label class="field">Size<input id="new-size" name="size" type="text" value="1x1" autocomplete="off" spellcheck="false" inputmode="text" pattern="\s*\d+\s*x\s*\d+\s*" title="squares across, then up: 2x1" required></label>
@@ -193,10 +196,12 @@
         <dt><kbd>Esc</kbd> <kbd>⌘[</kbd></dt><dd>Up a level</dd>
         <dt><kbd>⌘]</kbd></dt><dd>Back down the level you left</dd>
         <dt><kbd>↑</kbd> <kbd>↓</kbd> <kbd>⏎</kbd></dt><dd>Move between rows; open one</dd>
+        <dt><kbd>→</kbd> <kbd>←</kbd></dt><dd>In the folders: open a folder, go up one</dd>
         <dt><kbd>\</kbd></dt><dd>Hide or show the panel</dd>
         <dt><kbd>⌘F</kbd></dt><dd>Find in source</dd>
         <dt><kbd>⌘Z</kbd> <kbd>⌘⇧Z</kbd></dt><dd>Undo, redo</dd>
-        <dt><kbd>F2</kbd></dt><dd>Rename the tile</dd>
+        <dt><kbd>F2</kbd></dt><dd>Rename the tile, folder or row the keyboard is on</dd>
+        <dt><kbd>⌫</kbd></dt><dd>On a folder row: move it to the Trash</dd>
         <dt><kbd>⌃J</kbd></dt><dd>Messages</dd>
       </dl>
       <dl>

@@ -84,13 +84,26 @@ test('the arrow keys move between rows without wrapping', () => {
   assert.equal(moveRow(1, 'ArrowDown', 0), -1);
 });
 
-test('the crumbs start at the folder and end at the level, which is the current one', () => {
-  const at = (sel, control) => crumbsFor({ where: 'My tiles', tileName: 'combo', sel, what: 'grass in bank', control });
-  assert.deepEqual(at(tileSel).map((c) => [c.label, c.current]), [['My tiles', false], ['combo', true]]);
-  assert.deepEqual(at(entry('tile/grass/0')).map((c) => [c.label, c.current]), [['My tiles', false], ['combo', false], ['grass in bank', true]]);
-  assert.deepEqual(at(entry('tile/grass/0'), { name: 'length', group: 0 }).map((c) => [c.id, c.label, c.current]),
-    [['folder', 'My tiles', false], ['tile', 'combo', false], ['thing', 'grass in bank', false], ['control', 'length', true]]);
-  assert.deepEqual(at(entry('tile/grass/0')).map((c) => c.depth), [-1, 0, 1]);
+test('the crumbs run from Places through the folders to the level, which is the current one', () => {
+  const place = { root: 0, label: 'My tiles', dir: 'dungeon/combo' };
+  const at = (sel, control) => crumbsFor({ place, tileName: 'tree', sel, what: 'trunk', control });
+  const names = (l) => l.map((c) => [c.label, c.current]);
+  assert.deepEqual(names(at(tileSel)), [['Places', false], ['My tiles', false], ['dungeon', false], ['combo', false], ['tree', true]]);
+  assert.deepEqual(names(at(entry('tile/grove/0'))).slice(-2), [['tree', false], ['trunk', true]]);
+  assert.deepEqual(at(entry('tile/grove/0'), { name: 'height', group: 0 }).map((c) => c.label), ['Places', 'My tiles', 'dungeon', 'combo', 'tree', 'trunk', 'height']);
+  assert.deepEqual(at(entry('tile/grove/0')).map((c) => c.depth), [-1, -1, -1, -1, 0, 1]);
+  // a folder crumb says where it goes: Places goes to no place, a folder to its own path
+  const l = at(tileSel);
+  assert.equal(l[0].place, null);
+  assert.deepEqual(l[1].place, { root: 0, dir: '' });
+  assert.deepEqual(l[2].place, { root: 0, dir: 'dungeon' });
+  assert.deepEqual(l[3].place, { root: 0, dir: 'dungeon/combo' });
+});
+
+test('on a folder level the last folder is the current crumb, and Places alone is the top', () => {
+  assert.deepEqual(crumbsFor({ place: { root: 0, label: 'My tiles', dir: 'dungeon' } }).map((c) => [c.label, c.current]), [['Places', false], ['My tiles', false], ['dungeon', true]]);
+  assert.deepEqual(crumbsFor({ place: { root: 2, label: 'Library', dir: '' } }).map((c) => [c.label, c.current]), [['Places', false], ['Library', true]]);
+  assert.deepEqual(crumbsFor({ place: null }).map((c) => [c.label, c.current]), [['Places', true]]);
 });
 
 test('the strip says what a level sits in, never the parent\'s own panel', () => {
@@ -122,9 +135,9 @@ test('a level is an address: at, piece, control, group, face', () => {
 });
 
 test('the hash keeps its order, its slashes and what else is in it', () => {
-  const h = buildHash({ theme: 'dark', tile: '/a b/c.dtile', at: 'tile/rock/2', control: 'size', root: '1' });
-  assert.equal(h, '#tile=%2Fa%20b%2Fc.dtile&root=1&at=tile/rock/2&control=size&theme=dark');
-  assert.deepEqual(parseHash(h), { tile: '/a b/c.dtile', root: '1', at: 'tile/rock/2', control: 'size', theme: 'dark' });
+  const h = buildHash({ theme: 'dark', tile: '/a b/c.dtile', at: 'tile/rock/2', control: 'size', place: '/x/y', dir: 'a/b' });
+  assert.equal(h, '#tile=%2Fa%20b%2Fc.dtile&place=/x/y&dir=a/b&at=tile/rock/2&control=size&theme=dark');
+  assert.deepEqual(parseHash(h), { tile: '/a b/c.dtile', place: '/x/y', dir: 'a/b', at: 'tile/rock/2', control: 'size', theme: 'dark' });
   assert.equal(buildHash({ tile: 'x', at: null }), '#tile=x');
   assert.deepEqual(parseHash('#'), {});
   assert.deepEqual(parseHash('#tile=%E0%A4%A'), { tile: '%E0%A4%A' }); // a broken escape is kept as it is, not thrown

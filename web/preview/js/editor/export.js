@@ -51,7 +51,7 @@ function renderTitle() {
   $('empty').hidden = !!t;
   renderExport();
   if (!t) {
-    $('tilename').textContent = ''; $('tilewhere').textContent = 'Tiles'; $('tileplan').textContent = '';
+    $('tilename').textContent = ''; $('tileplan').textContent = '';
     $('forward').hidden = true;
     document.title = 'dharmatiles';
     return;

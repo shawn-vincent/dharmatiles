@@ -12,18 +12,21 @@
 // same column into the source, keeping the selection both ways.  The address is in the
 // URL hash (#tile=…&at=tile/rock/0&control=size) so a reload, or the browser's back and
 // forward, lands on the same level.  The model (what a level is, the crumbs, the hash)
-// is js/nav.js; this part draws it and listens.
+// is js/nav.js; this part draws it and listens.  Above the tile are the folder levels
+// (places.js): the crumbs here begin with the same path (Places › My tiles › dungeon › the tile).
 
 import {
   buildHash, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, levelParams, moveRow, orderStack, parseHash, placeOf, sameLevel, sizeWords,
   standing, systemName, up as levelUp,
 } from '../nav.js';
+import { fillCrumbs, pinEnd } from '../crumbs.js';
+import { levelOfParams, whereIs } from '../folders.js';
 import { byteToIndex } from '../text.js';
 import { $, toast } from './app.js';
 import { texts } from './document.js';
 import { linesOf, setSel } from './selection.js';
 import {
-  doc, entrySel, isMark, itemOf, mapNode, markSel, rootOf, server, stackItems, stackIndex, tile, tileSel, view,
+  doc, entrySel, isMark, itemOf, mapNode, markSel, server, stackItems, stackIndex, tile, tileSel, view,
 } from './stores.js';
 
 const PANES = ['lvl-tile', 'lvl-element', 'lvl-prop'];
@@ -143,12 +146,14 @@ function thingName() {
 function renderCrumbs() {
   const t = tile(), { sel, control, face } = view.get();
   const depth = depthOf(sel, control);
-  // a folder is named by its last word (the path stays in its tooltip)
-  const full = t ? rootOf(t.root).label : 'Tiles';
-  const where = full.split(/[\\/]/).filter(Boolean).pop() || full;
-  $('tilewhere').textContent = where;
-  $('back').title = `${full}: all the tiles (⌘[ from the tile)`;
-  const list = crumbsFor({ where, tileName: $('tilename').textContent, sel, what: thingName(), control });
+  // the folders the tile is in, as crumbs: Places › My tiles › dungeon › combo; each one goes to its level and takes a tile dropped on it
+  const { roots } = server.get();
+  const at = t && whereIs(roots, t);
+  const place = at && roots[at.root] ? { root: at.root, label: roots[at.root].label, dir: at.dir } : null;
+  const list = crumbsFor({ place, tileName: $('tilename').textContent, sel, what: thingName(), control });
+  const up = at ? `${[roots[at.root]?.label, ...(at.dir ? at.dir.split('/') : [])].join(' › ')}: the folder (⌘[ from the tile)` : 'Places (⌘[ from the tile)';
+  $('back').title = up;
+  fillCrumbs($('crumbs-path'), list.filter((c) => c.depth === -1), (c) => { $('filter').value = ''; view.set({ place: c.place ? { root: c.place.root, dir: c.place.dir } : { root: null, dir: '' }, page: 'browse' }); }, { trailing: true });
   $('tilebtn').classList.toggle('cur', depth === 0 && face === 'tile');
   $('tilebtn').setAttribute('aria-current', depth === 0 ? 'location' : 'false');
   const deep = list.filter((c) => c.depth >= 1);
@@ -165,6 +170,8 @@ function renderCrumbs() {
     nodes.push(sep, b);
   }
   $('crumbs-deep').replaceChildren(...nodes);
+  // where you are is the end of the path: it stays in view when the path is longer than the bar
+  pinEnd($('crumb-scroll'));
   for (const b of $('face').children) {
     const on = b.dataset.face === face;
     b.classList.toggle('on', on);
@@ -286,13 +293,14 @@ function syncAddress() {
   if (!started || pending || applying || !t || tileId == null) return;
   const cur = parseHash(location.hash);
   const next = { ...cur };
-  for (const k of ['at', 'piece', 'control', 'group', 'face']) delete next[k];
+  for (const k of ['at', 'piece', 'control', 'group', 'face', 'place', 'dir']) delete next[k];
   Object.assign(next, { tile: t.path }, levelParams({ sel, control, face }));
   const h = buildHash(next);
   const key = `${tileId}|${levelKey(sel, control)}`;
   if (h === location.hash) { lastKey = key; return; }
-  // a step in the source is not a step of navigation, and neither is a different piece of the same entry
-  const push = lastKey != null && key !== lastKey && face === 'tile' && tileId === lastKey.split('|')[0];
+  // a step in the source is not a step of navigation, and neither is a different piece of the same entry;
+  // coming in from a folder level (whose address has no tile) is a step: Back goes to the folder
+  const push = (lastKey != null && key !== lastKey && face === 'tile' && tileId === lastKey.split('|')[0]) || (cur.tile == null && cur.place != null);
   lastKey = key;
   if (push) history.pushState(null, '', h); else history.replaceState(null, '', h);
 }
@@ -336,6 +344,8 @@ function tryPending() {
 /** The browser's back or forward, or an address pasted over the page. */
 function fromAddress() {
   const h = parseHash(location.hash);
+  // a folder level's address is the folder level's (places.js)
+  if (levelOfParams(server.get().roots, h)) return;
   const t = h.tile ? server.get().tiles.find((x) => x.path === h.tile) : null;
   const want = levelOfHash(location.hash);
   if (t && t.id !== view.get().tileId) {
@@ -354,7 +364,11 @@ const typing = (e) => e.target.tagName === 'INPUT' || e.target.tagName === 'TEXT
 function onKey(e) {
   const mod = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;
   if (mod && (e.key === '[' || e.key === ']') && view.get().face === 'tile') {
-    if (!editing()) { if (e.key === ']' && tile()) { e.preventDefault(); view.set({ page: 'edit' }); } return; }
+    if (!editing()) {
+      e.preventDefault();
+      if (e.key === ']') { if (tile()) view.set({ page: 'edit' }); } else $('bback').click(); // up a folder level
+      return;
+    }
     e.preventDefault();
     if (e.key === '[') { if (!goUp()) $('back').click(); } else goForward();
     return;

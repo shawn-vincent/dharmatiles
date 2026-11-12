@@ -12,8 +12,9 @@
 // {kind: 'entry'|'region'|'line'|'tile', id, piece?}, an entry by its key), and
 // `control` names the control at depth 2 ({name, group}: group is the index of
 // the sheet's group, 0 for the entry's own controls, 1.. for a scatter's things).
-// Folders are the level above the tile (phase 4); the crumbs already start at
-// the folder's name so they only need one more step.
+// Folders are the levels above the tile (js/folders.js): Places, a place, a folder
+// of it, then the tile.  The crumbs run through all of them, and the address of a
+// folder level is `#place=<place>&dir=<folder>` (no `tile=`).
 
 const entryLike = (s) => s?.kind === 'entry' || s?.kind === 'region' || s?.kind === 'line';
 
@@ -102,12 +103,22 @@ export function moveRow(i, key, count) {
 // ---- the crumbs and the strip --------------------------------------------------
 
 /**
- * The crumbs over the panel, each `{id, label, depth, current}` (depth -1 is the folder, which is
- * the tile browser until folders are levels): the folder, the tile, then the thing and the control
- * the level is at.  `what` names the thing (an entry's label, a line's or region's name).
+ * The crumbs over the panel, each `{id, label, depth, current}`: `Places`, the place (`root`), a crumb
+ * for each folder below it (`dir`), then, when a tile is open (`tileName`), the tile, the thing and the
+ * control the level is at (`what` names the thing: an entry's label, a line's or region's name).  A crumb
+ * above the tile has `depth` -1, and says where it goes: `{root, dir}` (none for Places).  On a folder
+ * level (`tileName` null) the last folder crumb is the current one.
+ * `place` is `{root, label, dir}` (`dir` as `a/b`), or null at the top.
  */
-export function crumbsFor({ where, tileName, sel, what, control }) {
-  const out = [{ id: 'folder', label: where || 'Tiles', depth: -1 }, { id: 'tile', label: tileName || '', depth: 0 }];
+export function crumbsFor({ place = null, tileName = null, sel = null, what = '', control = null }) {
+  const out = [{ id: 'places', label: 'Places', depth: -1, place: null }];
+  if (place) {
+    out.push({ id: 'place', label: place.label, depth: -1, place: { root: place.root, dir: '' } });
+    const names = place.dir ? place.dir.split('/') : [];
+    names.forEach((n, i) => out.push({ id: `dir:${i}`, label: n, depth: -1, place: { root: place.root, dir: names.slice(0, i + 1).join('/') } }));
+  }
+  if (tileName == null) return out.map((c, i) => ({ ...c, current: i === out.length - 1 }));
+  out.push({ id: 'tile', label: tileName, depth: 0 });
   if (entryLike(sel)) out.push({ id: 'thing', label: what || sel.id, depth: 1 });
   if (entryLike(sel) && control) out.push({ id: 'control', label: control.name, depth: 2 });
   const d = depthOf(sel, control);
@@ -151,7 +162,7 @@ export function selOfAt(at) {
   return { kind: 'entry', id: at };
 }
 
-/** The address as the part of the page's URL hash it owns: `at`, `piece`, `control`, `group`, `face`. */
+/** The address as the part of the page's URL hash it owns: `at`, `piece`, `control`, `group`, `face`.  (A folder level's, `place` and `dir`, is js/folders.js.) */
 export function levelParams({ sel, control, face }) {
   const p = {};
   const at = atOf(sel);
@@ -178,7 +189,7 @@ export function parseHash(hash) {
 
 /** Pairs as a hash; `tile` first, then `at` and the rest in a fixed order, then anything else kept (theme, paint). */
 export function buildHash(pairs) {
-  const order = ['tile', 'root', 'at', 'piece', 'control', 'group', 'face'];
+  const order = ['tile', 'place', 'dir', 'at', 'piece', 'control', 'group', 'face'];
   const keys = [...order.filter((k) => pairs[k] != null), ...Object.keys(pairs).filter((k) => !order.includes(k) && pairs[k] != null)];
   return `#${keys.map((k) => (k === 'tile' ? `tile=${encodeURIComponent(pairs[k])}` : `${k}=${slashy(String(pairs[k]))}`)).join('&')}`;
 }

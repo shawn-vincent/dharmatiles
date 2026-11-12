@@ -24,7 +24,13 @@
 //   rename(id, name)                        rename a tile's file: the new tile's {path, id}
 //   mine(id)                                copy a library tile to My tiles: {path, id}
 //   deleteTile(id)                          delete a tile's file from a folder the preview lists (Undo of that copy)
-//   newTile(name, size)                     a new tile in My tiles: {path, id}
+//   newTile(name, size, into?)              a new tile in My tiles (or in the folder `into` {root, dir}): {path, id}
+//   addPlace()                              show the program's folder chooser; the folder chosen is a place from now on: {added, root, label, snapshot}, or {cancelled: true}
+//   removePlace(root)                       take an added place off the list (its folder is left alone)
+//   newFolder(root, dir, name) / renameFolder(root, dir, name) / trashFolder(root, dir)   a folder of place `root`, named by its path below it
+//   moveTile(id, {root, dir})               a tile into a folder   duplicateTile(id)   a copy beside it   trashTile(id)   to the Trash
+//   undoTrash(n)                            put back what a trash answered `undo: n` for
+//   (each of these answers with the new list, `snapshot`, to take at once)
 //   edit(body)                              a text edit (a control set, a node inserted or removed)
 //   setTarget({system?, printer?})          choose the build target (base system, printer profile) for every build
 //   exportTile(id, body)                    write STL / 3MF ({where: true} asks where it would go)
@@ -205,7 +211,16 @@ export function browserHost() {
       if (!r.ok) throw await replyError(r, 'messages');
       return r.text();
     },
-    newTile: (name, size) => call('/api/new', { name, size }),
+    newTile: (name, size, into) => call('/api/new', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
+    addPlace: () => call('/api/places/add', {}),
+    removePlace: (root) => call('/api/places/remove', { root }),
+    newFolder: (root, dir, name) => call('/api/folders/new', { root, dir, name }),
+    renameFolder: (root, dir, name) => call('/api/folders/rename', { root, dir, name }),
+    trashFolder: (root, dir) => call('/api/folders/trash', { root, dir }),
+    moveTile: (id, into) => call(tile(id, 'move'), { root: into.root, dir: into.dir }),
+    duplicateTile: (id) => call(tile(id, 'duplicate'), {}),
+    trashTile: (id) => call(tile(id, 'trash'), {}),
+    undoTrash: (undo) => call('/api/trash/undo', { undo }),
     edit: (body) => call('/api/edit', body),
     setTarget: (body) => call('/api/target', body),
     exportTile: (id, body) => call(tile(id, 'export'), body),

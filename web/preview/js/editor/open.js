@@ -8,7 +8,10 @@ import { showError } from '../problems.js';
 import { host, pickView, viewer } from './app.js';
 import { beginFollow, endFollow, followBuild } from './build.js';
 import { canLeave, supersedeDrafts } from './document.js';
-import { inRoot, isEntry, server, stackIndex, stem, tile, tileById, view } from './stores.js';
+import { levelOfParams } from '../folders.js';
+import { parseHash } from '../nav.js';
+import { toast } from './app.js';
+import { isEntry, server, stackIndex, stem, tile, tileById, view } from './stores.js';
 
 // ---- choosing a tile ---------------------------------------------------
 
@@ -38,11 +41,8 @@ function reset(t) {
   viewer.setPlan(null);
   view.set({ shown: null, draft: null });
   endFollow(null);
-  if (!t) {
-    history.replaceState(null, '', `#root=${view.get().root}`);
-    return;
-  }
-  view.set({ root: t.root });
+  // no tile: the folder level shows, and writes its own address (places.js)
+  if (!t) return;
   history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
   // no mesh to frame yet and no view of yours kept: follow the build
   if (t.mesh_version == null && !cameras.get(t.path)) beginFollow(t.id);
@@ -50,17 +50,24 @@ function reset(t) {
   followBuild();
 }
 
-/** The first list: the tile in the address, else the first root with tiles. */
+/**
+ * The first list: the tile in the address; else the folder level in the address; else the first of
+ * the files named on the command line; else no tile, and Places (the start with no argument).
+ */
 function pickFirst() {
   const { tiles, roots } = server.get();
   const want = decodeURIComponent((location.hash.match(/tile=([^&]+)/) || [])[1] || '');
-  const wantRoot = (location.hash.match(/root=(\d+)/) || [])[1];
   const wanted = want ? tiles.find((t) => t.path === want) : null;
   if (wanted) return select(wanted.id, true);
-  const all = roots.length ? roots.map((_, i) => i) : [0];
-  const root = wantRoot != null && roots[wantRoot] ? Number(wantRoot) : (all.find((r) => inRoot(r).length) ?? all[0]);
-  view.set({ root });
-  return select(inRoot(root)[0]?.id ?? null, true);
+  const level = levelOfParams(roots, parseHash(location.hash));
+  if (level?.missing) toast('That place is not on the list now');
+  else if (level) view.set({ place: level, page: 'browse' });
+  else {
+    const files = roots.findIndex((r) => r.kind === 'files');
+    const named = files >= 0 ? tiles.find((t) => t.root === files) : null;
+    if (named) return select(named.id, true);
+  }
+  return select(null, true);
 }
 
 /** The tile shown, kept in step with what the server says of it. */
@@ -68,11 +75,10 @@ function follow() {
   const { ready, epoch } = server.get(), { tileId } = view.get();
   if (!ready) return;
   // the first tile shows the editor page (the page the sidebar starts on): `view.page` says so, so the keys that read it agree with what is on screen
-  if (!started) { started = true; pickFirst().then(() => { if (view.get().tileId != null) view.set({ page: 'edit' }); }); return; }
+  if (!started) { started = true; pickFirst().then(() => { view.set({ page: view.get().tileId != null ? 'edit' : 'browse' }); }); return; }
   const t = tile();
-  const first = inRoot(view.get().root)[0];
-  // the tile shown was deleted, or none was and one has come: the first one left in its root
-  if ((tileId != null && !t) || (tileId == null && first)) { select(first?.id ?? null, true); return; }
+  // the tile shown is gone (trashed, moved away by another program): none is shown, and the panel is on its folder
+  if (tileId != null && !t) { select(null, true); return; }
   if (tileId !== at) { at = tileId; reset(t); }
   if (!t) return;
   // a rescan or a reconnect: keep the view, catch up on a newer plan or mesh

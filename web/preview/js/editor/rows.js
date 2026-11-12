@@ -243,7 +243,7 @@ const el = (tag, cls, text) => {
 };
 
 /** The popover with one field: `flaw(value)` says why a name will not do; `save(value)` writes it. */
-function nameField(anchor, { title, value, hint, flaw, save }) {
+export function nameField(anchor, { title, value, hint, flaw, save }) {
   openPopover(anchor, (box, close) => {
     box.append(el('label', 'rlab', title));
     const input = el('input', 'pin');

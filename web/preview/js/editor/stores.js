@@ -43,7 +43,7 @@ export function createStore(initial, report = showError) {
 }
 
 export const server = createStore({
-  tiles: [], roots: [], elements: [], language: null, system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
+  tiles: [], roots: [], folders: [], home: null, elements: [], language: null, system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
   live: false,    // the event stream is open and in step
   ever: false,    // it has been, once: so a loss reads 'reconnecting…', not 'connecting…'
   ready: false,   // the first list of tiles is in
@@ -55,7 +55,8 @@ export const server = createStore({
 export const log = createLog();
 
 export const view = createStore({
-  tileId: null, root: -1,
+  tileId: null,
+  place: { root: null, dir: '' }, // the folder level the browser page shows (js/folders.js): the place's number and the folder below it; root null is Places
   sel: null,           // {kind, id, piece?}: kind entry (id: the entry's key), region or line (id: the name), tile; or null
   control: null,       // {name, group}: the control open as a level on the selected thing (js/nav.js)
   face: 'tile',        // what the panel shows: 'tile' (the levels) or 'source'
@@ -95,11 +96,9 @@ export function tileById(id) {
   if (!m) { m = new Map(tiles.map((t) => [t.id, t])); byId.set(tiles, m); }
   return (id != null && m.get(id)) || null;
 }
-/** The tiles listed under root `r`. */
-export const inRoot = (r) => server.get().tiles.filter((t) => t.root === r);
 export const rootOf = (r) => server.get().roots[r] || { kind: 'files', label: 'Files', path: null };
 /** May the tile's file be renamed here? */
-export const renameable = (t) => !!t && !t.path.startsWith('lib:') && /\.dtile$/i.test(t.path) && rootOf(t.root).kind === 'dir';
+export const renameable = (t) => !!t && !t.path.startsWith('lib:') && /\.dtile$/i.test(t.path) && !!rootOf(t.root).writable;
 /** The tile shown. */
 export const tile = () => tileById(view.get().tileId);
 export const progressOf = (id) => server.get().progress[id] || null;
@@ -161,9 +160,16 @@ export const same = (a, b) => keyOf(a) === keyOf(b);
  */
 export function whenListed(id) {
   if (tileById(id)) return Promise.resolve(true);
+  return whenListedWhere((t) => t.id === id).then((t) => !!t);
+}
+
+/** Resolves with the first listed tile that `pred` accepts (null after a few seconds): a tile a call has just made or moved joins the list with the program's next word. */
+export function whenListedWhere(pred) {
+  const now = server.get().tiles.find(pred);
+  if (now) return Promise.resolve(now);
   return new Promise((resolve) => {
-    const stop = (ok) => { off(); clearTimeout(timer); resolve(ok); };
-    const off = server.subscribe(['tiles'], () => { if (tileById(id)) stop(true); });
-    const timer = setTimeout(() => stop(false), 5000);
+    const stop = (t) => { off(); clearTimeout(timer); resolve(t); };
+    const off = server.subscribe(['tiles'], () => { const t = server.get().tiles.find(pred); if (t) stop(t); });
+    const timer = setTimeout(() => stop(null), 5000);
   });
 }
