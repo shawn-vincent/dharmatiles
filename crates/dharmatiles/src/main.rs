@@ -87,6 +87,9 @@ fn install_panic_hook() {
             "(no message)".to_owned()
         };
         tell!("this is a bug in dharmatiles, not in your tile: {msg}{at}");
+        // the preview's server picks this up where it catches the panic, to
+        // send the page the message, the place and this stack
+        preview::fail::record(info);
         default(info);
     }));
 }

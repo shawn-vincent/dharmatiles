@@ -11,9 +11,9 @@ use std::time::Duration;
 
 use super::Shared;
 use super::http::{Request, respond};
-use serde_json::json;
 
-use super::route::{Reply, Resume, route};
+use super::fail;
+use super::route::{Reply, Resume, route, tile_route};
 
 /// Accept connections on `listener` in a background thread.
 pub fn spawn(listener: TcpListener, shared: Arc<Shared>) {
@@ -34,13 +34,15 @@ fn one(mut conn: TcpStream, shared: &Shared) {
         // not a request this server can read (malformed, too large, or the
         // browser sent nothing): say so to whoever is there, and log it
         tell!("error: preview: an unreadable request");
+        let (status, body) = fail::refused(
+            "400 Bad Request",
+            "the request could not be read: malformed, too large or cut short",
+        );
         respond(
             &mut conn,
-            "400 Bad Request",
+            status,
             "application/json",
-            json!({ "error": "the request could not be read: malformed, too large or cut short" })
-                .to_string()
-                .as_bytes(),
+            body.to_string().as_bytes(),
         );
         return;
     };
@@ -62,23 +64,25 @@ fn one(mut conn: TcpStream, shared: &Shared) {
 /// 500 that names what failed.  Every 5xx is logged to stderr, so no
 /// internal failure is only in the page.
 pub(super) fn answer(shared: &Shared, req: &Request) -> Reply {
-    let reply = match std::panic::catch_unwind(AssertUnwindSafe(|| route(shared, req))) {
-        Ok(r) => r,
-        Err(panic) => {
-            let msg = super::panic_message(panic.as_ref());
-            Reply::Json(
-                "500 Internal Server Error",
-                json!({ "error": format!("{} {} panicked: {msg}", req.method, req.path) }),
-            )
+    let route_name = format!("{} {}", req.method, req.path);
+    let tile = tile_route(&req.path).map(|(id, _)| id.to_owned());
+    let reply = fail::answering(route_name, tile, || {
+        match std::panic::catch_unwind(AssertUnwindSafe(|| route(shared, req))) {
+            Ok(r) => r,
+            Err(panic) => {
+                let e = fail::ServerError::bug(panic.as_ref(), None);
+                let (status, body) = e.reply();
+                Reply::Json(status, body)
+            }
         }
-    };
+    });
     match &reply {
         Reply::Json(status, body) if status.starts_with('5') => {
             tell!(
                 "error: preview: {} {}: {status}: {}",
                 req.method,
                 req.path,
-                body["error"].as_str().unwrap_or("no message")
+                body["error"]["message"].as_str().unwrap_or("no message")
             );
         }
         Reply::Text(status, body) if status.starts_with('5') => {

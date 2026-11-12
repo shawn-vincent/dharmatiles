@@ -80,7 +80,7 @@ impl Source for Overlay {
 }
 
 fn bad(msg: impl Into<String>) -> (&'static str, Value) {
-    ("400 Bad Request", json!({ "error": msg.into() }))
+    fail::refused("400 Bad Request", msg.into())
 }
 
 /// Route one editor call.
@@ -104,25 +104,21 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         return target(shared, &v).into();
     }
     let Some((id, what)) = tile_route(path) else {
-        return ("404 Not Found", json!({ "error": "no such call" })).into();
+        return fail::refused("404 Not Found", "no such call").into();
     };
     let Some((tile, files)) = lock(&shared.tiles)
         .iter()
         .find(|t| t.id == id)
         .map(|t| (t.path.clone(), t.files.clone()))
     else {
-        return ("404 Not Found", json!({ "error": "no such tile" })).into();
+        return fail::refused("404 Not Found", "no such tile").into();
     };
     // only the tile's document, or a file its last build read
     let file = match v["file"].as_str() {
         None => tile.clone(),
         Some(f) if f == tile || files.contains_key(f) => f.to_owned(),
         Some(_) => {
-            return (
-                "403 Forbidden",
-                json!({ "error": "not a file of this tile" }),
-            )
-                .into();
+            return fail::refused("403 Forbidden", "not a file of this tile").into();
         }
     };
     match what {
@@ -133,7 +129,7 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "rename" => rename(shared, &tile, &v).into(),
         "export" => export(shared, &tile, &v).into(),
         "draft" => draft(shared, id, &tile, &file, &v),
-        _ => ("404 Not Found", json!({ "error": "no such call" })).into(),
+        _ => fail::refused("404 Not Found", "no such call").into(),
     }
 }
 
@@ -164,26 +160,22 @@ fn draft(shared: &Shared, id: &str, tile: &str, file: &str, v: &Value) -> Reply 
         .recv_timeout(Duration::from_secs(120))
     {
         Ok(Outcome::Mesh(mesh)) => Reply::Bytes(mesh),
-        Ok(Outcome::Mistake) => (
-            "422 Unprocessable Entity",
-            json!({ "error": "the text has a mistake" }),
-        )
-            .into(),
-        Ok(Outcome::Superseded) => (
+        Ok(Outcome::Mistake) => {
+            fail::refused("422 Unprocessable Entity", "the text has a mistake").into()
+        }
+        Ok(Outcome::Superseded) => fail::refused_with(
             "409 Conflict",
-            json!({ "superseded": true, "error": "a newer draft took its place" }),
+            "a newer draft took its place",
+            json!({ "superseded": true }),
         )
-            .into(),
-        Ok(Outcome::Failed(why)) => (
+        .into(),
+        Ok(Outcome::Failed(e)) => e.reply().into(),
+        Err(e) => fail::failure_from(
             "500 Internal Server Error",
-            json!({ "error": format!("the draft could not be built: {why}") }),
+            format!("the draft was not answered ({e}): the build worker may have died"),
+            &e,
         )
-            .into(),
-        Err(e) => (
-            "500 Internal Server Error",
-            json!({ "error": format!("the draft was not answered ({e}): the build worker may have died") }),
-        )
-            .into(),
+        .into(),
     }
 }
 
@@ -241,25 +233,24 @@ fn write_new(dir: &Path, stem: &str, text: &str) -> Result<PathBuf, (&'static st
                     .map_err(|e| {
                         // best-effort cleanup of the half-made file; the write error is what is reported
                         let _ = std::fs::remove_file(&dest);
-                        (
+                        fail::failure_from(
                             "500 Internal Server Error",
-                            json!({ "error": format!("cannot write {}: {e}", dest.display()) }),
+                            format!("cannot write {}: {e}", dest.display()),
+                            &e,
                         )
                     });
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => {
-                return Err((
+                return Err(fail::failure_from(
                     "500 Internal Server Error",
-                    json!({ "error": format!("cannot write {}: {e}", dest.display()) }),
+                    format!("cannot write {}: {e}", dest.display()),
+                    &e,
                 ));
             }
         }
     }
-    Err((
-        "500 Internal Server Error",
-        json!({ "error": "no free name" }),
-    ))
+    Err(fail::failure("500 Internal Server Error", "no free name"))
 }
 
 /// After a file appears or moves: list it, start its build, say where and
@@ -288,13 +279,14 @@ fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
             _ => None,
         })
         .map_or_else(
-            || personal_home().map_err(|e| ("500 Internal Server Error", json!({ "error": e }))),
+            || personal_home().map_err(|e| fail::failure("500 Internal Server Error", e)),
             Ok,
         )?;
     std::fs::create_dir_all(&home).map_err(|e| {
-        (
+        fail::failure_from(
             "500 Internal Server Error",
-            json!({ "error": format!("cannot make {}: {e}", home.display()) }),
+            format!("cannot make {}: {e}", home.display()),
+            &e,
         )
     })?;
     Ok(home)
@@ -335,9 +327,10 @@ fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
             if let Err(e) = std::fs::remove_file(&from) {
                 // best-effort cleanup of the new link; the failure to remove the old name is what is reported
                 let _ = std::fs::remove_file(&to);
-                return (
+                return fail::failure_from(
                     "500 Internal Server Error",
-                    json!({ "error": format!("cannot rename {}: {e}", from.display()) }),
+                    format!("cannot rename {}: {e}", from.display()),
+                    &e,
                 );
             }
         }
@@ -347,22 +340,24 @@ fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
                 (Ok(a), Ok(b)) if a == b
             );
             if !same {
-                return (
+                return fail::refused(
                     "409 Conflict",
-                    json!({ "error": format!("a tile called “{stem}” is already in this folder") }),
+                    format!("a tile called “{stem}” is already in this folder"),
                 );
             }
             if let Err(e) = std::fs::rename(&from, &to) {
-                return (
+                return fail::failure_from(
                     "500 Internal Server Error",
-                    json!({ "error": format!("cannot rename {}: {e}", from.display()) }),
+                    format!("cannot rename {}: {e}", from.display()),
+                    &e,
                 );
             }
         }
         Err(e) => {
-            return (
+            return fail::failure_from(
                 "500 Internal Server Error",
-                json!({ "error": format!("cannot rename {}: {e}", from.display()) }),
+                format!("cannot rename {}: {e}", from.display()),
+                &e,
             );
         }
     }
@@ -448,10 +443,7 @@ fn edit(v: &Value) -> (&'static str, Value) {
     let at = v["at"].as_u64().and_then(|a| usize::try_from(a).ok());
     let done = |r: Result<(String, usize), dt_doc::edit::EditError>| match r {
         Ok((t, at)) => ("200 OK", json!({ "text": t, "at": at })),
-        Err(e) => (
-            "422 Unprocessable Entity",
-            json!({ "error": e.to_string() }),
-        ),
+        Err(e) => fail::refused("422 Unprocessable Entity", e.to_string()),
     };
     match v["op"].as_str() {
         // a new node: {op: insert, place: stack|tile, node}
@@ -539,10 +531,7 @@ fn edit(v: &Value) -> (&'static str, Value) {
     };
     match out {
         Ok(t) => ("200 OK", json!({ "text": t })),
-        Err(e) => (
-            "422 Unprocessable Entity",
-            json!({ "error": e.to_string() }),
-        ),
+        Err(e) => fail::refused("422 Unprocessable Entity", e.to_string()),
     }
 }
 
@@ -562,9 +551,9 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
         Ok(c) => {
             let stack = match c.tile.as_ref().map(|t| stack::items(t, &opts.system)) {
                 Some(Err(e)) => {
-                    return (
+                    return fail::failure(
                         "500 Internal Server Error",
-                        json!({ "error": format!("cannot describe the stack of {tile}: {e}") }),
+                        format!("cannot describe the stack of {tile}: {e}"),
                     );
                 }
                 Some(Ok(items)) => Some(items),
@@ -573,9 +562,9 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
             let own = match src.read(tile) {
                 Ok(t) => t,
                 Err(e) => {
-                    return (
+                    return fail::failure(
                         "500 Internal Server Error",
-                        json!({ "error": format!("cannot read {tile}: {e}") }),
+                        format!("cannot read {tile}: {e}"),
                     );
                 }
             };
@@ -632,24 +621,25 @@ fn save(file: &str, v: &Value) -> (&'static str, Value) {
         return bad("give the text and the base it was edited from");
     };
     if !writable(file) {
-        return (
+        return fail::refused(
             "403 Forbidden",
-            json!({ "error": "this file is not yours to write: make it yours first" }),
+            "this file is not yours to write: make it yours first",
         );
     }
     let now = match std::fs::read_to_string(file) {
         Ok(t) => t,
         Err(e) => {
-            return (
+            return fail::failure(
                 "500 Internal Server Error",
-                json!({ "error": format!("cannot read {file} to compare it: {e}") }),
+                format!("cannot read {file} to compare it: {e}"),
             );
         }
     };
     if now != base {
-        return (
+        return fail::refused_with(
             "409 Conflict",
-            json!({ "error": "the file changed on disk", "text": now }),
+            "the file changed on disk",
+            json!({ "text": now }),
         );
     }
     if now == text {
@@ -662,9 +652,10 @@ fn save(file: &str, v: &Value) -> (&'static str, Value) {
         Err(e) => {
             // best-effort cleanup of the temporary file; the write error is what is reported
             let _ = std::fs::remove_file(&tmp);
-            (
+            fail::failure_from(
                 "500 Internal Server Error",
-                json!({ "error": format!("cannot write {file}: {e}") }),
+                format!("cannot write {file}: {e}"),
+                &e,
             )
         }
     }
@@ -709,10 +700,7 @@ fn mine(
         return bad("only a library tile is copied");
     }
     let Ok(text) = dt_eval::Files.read(tile) else {
-        return (
-            "404 Not Found",
-            json!({ "error": format!("cannot read {tile}") }),
-        );
+        return fail::refused("404 Not Found", format!("cannot read {tile}"));
     };
     let stem = tile
         .rsplit('/')
@@ -735,14 +723,14 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
     let template = if threemf {
         match crate::bambu::template(None) {
             Ok(t) => t,
-            Err(e) => return ("500 Internal Server Error", json!({ "error": e })),
+            Err(e) => return fail::failure("500 Internal Server Error", e),
         }
     } else {
         None
     };
     let out = match export_dir(tile) {
         Ok(o) => o,
-        Err(e) => return ("500 Internal Server Error", json!({ "error": e })),
+        Err(e) => return fail::failure("500 Internal Server Error", e),
     };
     if v["where"].as_bool() == Some(true) {
         // shown with ~ for the home folder
@@ -761,7 +749,7 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
     }
     let palette = match shared.palette_checked() {
         Ok(p) => p,
-        Err(e) => return ("500 Internal Server Error", json!({ "error": e })),
+        Err(e) => return fail::failure("500 Internal Server Error", e),
     };
     let extras = crate::build::Extras {
         progress: false,
@@ -807,7 +795,7 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
             );
             ("200 OK", r)
         }
-        Err(e) => ("500 Internal Server Error", json!({ "error": e })),
+        Err(e) => fail::failure("500 Internal Server Error", e),
     }
 }
 
@@ -877,10 +865,7 @@ fn reveal(v: &Value) -> (&'static str, Value) {
     };
     match r {
         Ok(_) => ("200 OK", json!({ "ok": true })),
-        Err(e) => (
-            "500 Internal Server Error",
-            json!({ "error": e.to_string() }),
-        ),
+        Err(e) => fail::failure("500 Internal Server Error", e.to_string()),
     }
 }
 

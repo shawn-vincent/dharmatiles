@@ -23,7 +23,7 @@ pub(super) enum Outcome {
     /// A newer draft of the tile (or the tile leaving) made this one moot.
     Superseded,
     /// The build panicked: a bug in an element, with the panic's words.
-    Failed(String),
+    Failed(Box<fail::ServerError>),
 }
 
 /// A draft the page asked for, waiting or running.

@@ -16,7 +16,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 
 use super::http::{Request, loopback};
-use super::{Shared, assets, edit};
+use super::{Shared, assets, edit, fail};
 
 /// What to send back.
 pub(super) enum Reply {
@@ -98,8 +98,18 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             epoch: req.param("epoch").map(str::to_owned),
             since: req.param("since").and_then(|s| s.parse().ok()),
         }),
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-routes"))]
         ("GET", "/api/test-panic", _) => panic!("a test panic in a route"),
+        #[cfg(any(test, feature = "test-routes"))]
+        ("GET", "/api/test-failure", _) => {
+            let e = fail::Layered::demo();
+            let (status, body) = fail::failure_from(
+                "500 Internal Server Error",
+                "cannot write the demo file",
+                &e,
+            );
+            Reply::Json(status, body)
+        }
         ("GET", "/api/session", _) => Reply::Json(OK, json!({ "token": shared.token })),
         ("GET", "/api/about", _) => Reply::Json(
             OK,
@@ -121,10 +131,13 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         ("GET", _, Some((id, "text"))) => match shared.text(id, req.param("file")) {
             Ok(Some(v)) => Reply::Json(OK, v),
             Ok(None) => Reply::Text("404 Not Found", "no such file"),
-            Err(e) => Reply::Json(
-                "500 Internal Server Error",
-                json!({ "error": format!("cannot read the file: {e}") }),
-            ),
+            Err(e) => {
+                let (status, body) = fail::failure(
+                    "500 Internal Server Error",
+                    format!("cannot read the file: {e}"),
+                );
+                Reply::Json(status, body)
+            }
         },
         ("POST", _, Some((id, "build"))) => {
             let known = shared.want(id);

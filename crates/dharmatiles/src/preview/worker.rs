@@ -60,12 +60,23 @@ impl dt_kit::Reporter for LatestBuild {
 /// The failure a caught panic becomes for the page: not a mistake in the
 /// document but a bug, with the panic's own words.  Logged here too (the
 /// panic hook has already written the message and where it happened).
-fn panicked(what: &str, panic: &(dyn std::any::Any + Send)) -> Diag {
+fn panicked(what: &str, panic: &(dyn std::any::Any + Send)) -> (Diag, fail::ServerError) {
     let msg = panic_message(panic);
     tell!("error: the build of {what} panicked: {msg}");
-    Diag::plain("dt::panic", format!("the build panicked: {msg}")).help(
+    let diag = Diag::plain("dt::panic", format!("the build panicked: {msg}")).help(
         "this is a bug in dharmatiles, not in your tile: the terminal has the location; the tile builds again when it changes",
-    )
+    );
+    let doing = fail::Doing {
+        route: Some("build worker".to_owned()),
+        tile: Some(what.to_owned()),
+    };
+    (diag, fail::ServerError::bug(panic, Some(doing)))
+}
+
+/// A build step that failed without a panic, as the page gets it.
+fn build_failure(what: &str, message: String) -> fail::ServerError {
+    fail::ServerError::failure("500 Internal Server Error", message)
+        .doing("build worker", Some(what))
 }
 
 /// Build tile `id`: plan pass, then geometry, pushing each result.
@@ -81,6 +92,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         t.status = State::Building;
         t.stale = false;
         t.errors.clear();
+        t.failure = None;
         t.progress = None;
         t.sketches.clear();
     });
@@ -89,16 +101,19 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     }
     let rec = Recording::watching(&path);
     let t0 = Instant::now();
-    let finish_err = |rec: Recording, errs: &[Diag]| {
+    let finish_with = |rec: Recording, errs: &[Diag], failure: Option<fail::ServerError>| {
         let errors = errors_json(errs);
+        let failure = failure.map(|f| f.json());
         shared.update(id, |t| {
             t.status = State::Failed;
             t.progress = None;
             t.sketches.clear();
             t.errors = errors;
+            t.failure = failure;
             t.files = rec.files();
         });
     };
+    let finish_err = |rec: Recording, errs: &[Diag]| finish_with(rec, errs, None);
     // plan pass: no geometry, so under a second
     let checked = match dt_eval::check(&rec, &path, opts) {
         Ok(c) => c,
@@ -116,12 +131,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         }))
     }) {
         Some(Err(e)) => {
-            return finish_err(
+            let message = format!("cannot describe the stack: {e}");
+            return finish_with(
                 rec,
-                &[Diag::plain(
-                    "dt::stack",
-                    format!("cannot describe the stack: {e}"),
-                )],
+                &[Diag::plain("dt::stack", message.clone())],
+                Some(build_failure(&path, message)),
             );
         }
         Some(Ok(p)) => Some(p),
@@ -159,6 +173,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     });
     let reporter = dt_eval::Progress::new(latest.clone());
     let cache = shared.build_cache(&path, false);
+    let mut bug = None;
     let built = match std::panic::catch_unwind(AssertUnwindSafe(|| {
         #[cfg(test)]
         assert!(
@@ -176,7 +191,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             });
             return;
         }
-        Err(panic) => Err(vec![panicked(&path, panic.as_ref())]),
+        Err(panic) => {
+            let (diag, failure) = panicked(&path, panic.as_ref());
+            bug = Some(failure);
+            Err(vec![diag])
+        }
     };
     if latest.changed() {
         tell!("discarded superseded build of {path}");
@@ -187,7 +206,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
         return;
     }
     match built {
-        Err(errs) => finish_err(rec, &errs),
+        Err(errs) => finish_with(rec, &errs, bug),
         Ok(b) => {
             let built_s = t0.elapsed().as_secs_f64();
             let failures = b.audit.failures(&opts.printer);
@@ -207,12 +226,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             let mesh = match payload::from_built(&b, opts.printer.overhang_deg, &shared.palette()) {
                 Ok(m) => Arc::new(m),
                 Err(e) => {
-                    return finish_err(
+                    let message = format!("cannot prepare the view: {e}");
+                    return finish_with(
                         rec,
-                        &[Diag::plain(
-                            "dt::payload",
-                            format!("cannot prepare the view: {e}"),
-                        )],
+                        &[Diag::plain("dt::payload", message.clone())],
+                        Some(build_failure(&path, message)),
                     );
                 }
             };
@@ -373,12 +391,25 @@ fn draft(shared: &Arc<Shared>, d: &queue::Draft, opts: &Options) {
         Err(panic) => {
             let msg = panic_message(panic.as_ref());
             tell!("error: the draft of {} panicked: {msg}", d.path);
-            Outcome::Failed(format!("the draft panicked: {msg}"))
+            let doing = fail::Doing {
+                route: Some("draft worker".to_owned()),
+                tile: Some(d.path.clone()),
+            };
+            Outcome::Failed(Box::new(fail::ServerError::bug(
+                panic.as_ref(),
+                Some(doing),
+            )))
         }
         // a mistake in the text: the check shows it, the last mesh stays
         Ok(Err(_)) => Outcome::Mistake,
         Ok(Ok(_)) if d.cancel.load(Ordering::Relaxed) => Outcome::Superseded,
-        Ok(Ok(Err(why))) => Outcome::Failed(format!("cannot prepare the draft's view: {why}")),
+        Ok(Ok(Err(why))) => Outcome::Failed(Box::new(
+            fail::ServerError::failure(
+                "500 Internal Server Error",
+                format!("cannot prepare the draft's view: {why}"),
+            )
+            .doing("draft worker", Some(&d.path)),
+        )),
         Ok(Ok(Ok(mesh))) => Outcome::Mesh(Arc::new(mesh)),
     };
     // Allowed: the requester gave up waiting (its request timed out or its
@@ -426,12 +457,13 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
                         .iter()
                         .find(|t| t.id == *id)
                         .map_or_else(|| id.clone(), |t| t.path.clone());
-                    let d = panicked(&what, panic.as_ref());
+                    let (d, failure) = panicked(&what, panic.as_ref());
                     shared.update(id, |t| {
                         t.status = State::Failed;
                         t.progress = None;
                         t.sketches.clear();
                         t.errors = errors_json(&[d]);
+                        t.failure = Some(failure.json());
                     });
                 }
             }

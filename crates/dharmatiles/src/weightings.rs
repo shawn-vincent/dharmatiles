@@ -99,7 +99,7 @@ fn default_text(f: &dt_kit::WeightingFn, range: &str, lo: f64, hi: f64) -> Strin
 
 /// The reply to one request, as (status, JSON).
 pub(crate) fn answer(param: &dyn Fn(&str) -> Option<String>) -> (&'static str, Value) {
-    let bad = |why: &str| ("400 Bad Request", json!({ "error": why }));
+    let bad = |why: &str| crate::preview::fail::refused("400 Bad Request", why);
     if let Some(text) = param("text") {
         return ("200 OK", shown(&text));
     }

@@ -1337,6 +1337,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
 #[test]
 fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
     use route::Reply;
+    fail::install_recorder();
     let dir = std::env::temp_dir().join(format!("dt-errors-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
@@ -1368,21 +1369,59 @@ fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
     let body = serde_json::json!({ "text": "x", "base": "y" }).to_string();
     let (s, v) = call("POST", &format!("/api/tiles/{id}/save"), body.as_bytes());
     assert_eq!(s, "500 Internal Server Error");
-    assert!(v["error"].as_str().unwrap().contains("cannot read"), "{v}");
+    assert!(
+        v["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("cannot read"),
+        "{v}"
+    );
     let (s, v) = call("GET", &format!("/api/tiles/{id}/text"), b"");
     assert_eq!(s, "500 Internal Server Error");
-    assert!(v["error"].as_str().unwrap().contains("cannot read"), "{v}");
+    assert!(
+        v["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("cannot read"),
+        "{v}"
+    );
     // a panic in a route: 500 naming it, and the next call is answered
     let (s, v) = call("GET", "/api/test-panic", b"");
     assert_eq!(s, "500 Internal Server Error");
     assert!(
-        v["error"]
+        v["error"]["message"]
             .as_str()
             .unwrap()
             .contains("a test panic in a route"),
         "{v}"
     );
+    let e = &v["error"];
+    assert_eq!(e["kind"], "bug", "{v}");
+    assert_eq!(e["context"]["route"], "GET /api/test-panic");
+    assert!(
+        e["causes"][0].as_str().unwrap().starts_with("panicked at "),
+        "{v}"
+    );
+    let trace = e["backtrace"].as_str().unwrap();
+    assert!(!trace.is_empty(), "a bug carries the panic's stack");
+    assert!(
+        trace.contains("route"),
+        "the stack is the panic's own: {trace}"
+    );
     assert_eq!(call("GET", "/api/tiles", b"").0, "200 OK");
+    // the same shape for a failure with a chain of causes, a refusal and a bug
+    let (s, v) = call("GET", "/api/test-failure", b"");
+    assert_eq!(s, "500 Internal Server Error");
+    let e = &v["error"];
+    assert_eq!(e["kind"], "failure", "{v}");
+    assert_eq!(e["causes"].as_array().unwrap().len(), 3, "{v}");
+    assert!(!e["backtrace"].as_str().unwrap().is_empty(), "{v}");
+    let (s, v) = call("POST", "/api/tiles/nope/check", b"{}");
+    assert_eq!(s, "404 Not Found");
+    assert_eq!(v["error"]["kind"], "refused", "{v}");
+    assert_eq!(v["error"]["context"]["route"], "POST /api/tiles/nope/check");
+    assert_eq!(v["error"]["context"]["tile"], "nope");
+    assert!(!v["error"]["backtrace"].as_str().unwrap().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1391,6 +1430,7 @@ fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
 /// builds, and the failed one builds again when its file changes.
 #[test]
 fn a_panic_in_a_build_is_reported_and_the_server_keeps_serving() {
+    fail::install_recorder();
     let dir = std::env::temp_dir().join(format!("dt-panics-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let text = dt_eval::Library.read(FLAT).unwrap();
@@ -1431,6 +1471,13 @@ fn a_panic_in_a_build_is_reported_and_the_server_keeps_serving() {
         assert_eq!(e["code"], "dt::panic");
         assert_eq!(e["unexpected"], true);
         assert!(e["message"].as_str().unwrap().contains(words), "{e}");
+        // the page also gets the structured failure, with the panic's stack
+        let f = &t["failure"];
+        assert_eq!(f["kind"], "bug", "{name}: {t}");
+        assert!(f["message"].as_str().unwrap().contains(words), "{f}");
+        assert_eq!(f["context"]["route"], "build worker");
+        assert!(f["context"]["tile"].as_str().unwrap().contains(name), "{f}");
+        assert!(!f["backtrace"].as_str().unwrap().is_empty(), "{f}");
     }
     // the worker went on, and the server still serves
     assert_eq!(tile("1x1-flat")["status"], "ready");
@@ -1601,7 +1648,7 @@ fn the_weightings_route_reads_a_value_and_refuses_with_the_programs_words() {
     // not understood: a 400 with the reason
     let (h, v) = curve_of(&r, "/api/weightings");
     assert!(h.starts_with("HTTP/1.1 400"), "{h}");
-    assert!(v["error"].is_string());
+    assert!(v["error"]["message"].is_string());
     let (h, _) = curve_of(&r, "/api/weightings?fn=wobble&range=1..6");
     assert!(h.starts_with("HTTP/1.1 400"), "{h}");
 }

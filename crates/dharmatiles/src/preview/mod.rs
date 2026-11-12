@@ -66,6 +66,7 @@ impl State {
     }
 }
 mod edit;
+pub(crate) mod fail;
 mod map;
 pub mod payload;
 pub(crate) mod roots;
@@ -133,6 +134,9 @@ pub struct Slot {
     plan: Option<Value>,
     record: Option<Value>,
     errors: Vec<Value>,
+    /// A build that panicked or could not be encoded, as the page gets it
+    /// ([`fail::ServerError`]); the page shows it in the error panel.
+    failure: Option<Value>,
     mesh: Option<Arc<Vec<u8>>>,
     mesh_version: u64,
     /// The build's progress (a `progress` event's body) while building.
@@ -178,6 +182,7 @@ impl Slot {
             plan: None,
             record: None,
             errors: Vec::new(),
+            failure: None,
             mesh: None,
             mesh_version: 0,
             progress: None,
@@ -198,6 +203,7 @@ impl Slot {
             "plan": self.plan,
             "record": self.record,
             "errors": self.errors,
+            "failure": self.failure,
             "progress": self.progress,
             "mesh_version": self.mesh.as_ref().map(|_| self.mesh_version),
             "mesh_bytes": self.mesh.as_ref().map(|m| m.len()),

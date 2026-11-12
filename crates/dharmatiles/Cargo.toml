@@ -12,6 +12,9 @@ build = "build.rs"
 [features]
 default = ["manifold-parallel"]
 manifold-parallel = ["dt-eval/manifold-parallel"]
+# Off in every shipped build: two routes that fail on purpose (`/api/test-panic`,
+# `/api/test-failure`), to see the error panel working.  The tests have them anyway.
+test-routes = []
 
 [dependencies]
 clap.workspace = true
