@@ -16,6 +16,7 @@ import { closeControl, openControl, showSourceAt } from './levels.js';
 import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
+import { haveBlock, isTileDoc } from './inventory.js';
 
 
 // ---- the lens ---------------------------------------------------------------
@@ -100,7 +101,11 @@ function tileModel() {
   const actions = doc.get().writable ? [
     { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
   ] : [];
-  return { title: stem(t), kind: 'tile', href: node.href, groups, actions, tail: tileContents(), slim: true };
+  // under the tile's own controls: what the inventory says of it and "I have this", then what it holds
+  const tail = document.createElement('div');
+  if (isTileDoc(t)) tail.append(haveBlock(t));
+  tail.append(tileContents());
+  return { title: stem(t), kind: 'tile', href: node.href, groups, actions, tail, slim: true };
 }
 /** A run of written text (a line's points, a region's lines) as a lens setting. */
 const runWritten = (name, run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
@@ -274,7 +279,7 @@ export function init() {
   view.subscribe(['sel', 'tileId', 'control'], renderLens);
   log.subscribe(renderTile);
   doc.subscribe(['stack', 'map', 'file', 'writable', 'tileId'], renderLens);
-  server.subscribe(['elements', 'language'], renderLens);
+  server.subscribe(['elements', 'language', 'inventory', 'system'], renderLens);
   // before the text is checked the sheet reads the build's plan: not redrawn for builds that change nothing it shows
   let plan = null;
   server.subscribe(['tiles'], () => {

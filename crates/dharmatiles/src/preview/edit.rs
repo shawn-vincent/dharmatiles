@@ -122,6 +122,11 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
         "/api/plates/show" => return super::plates::show(shared, &v).into(),
         "/api/plates/set" => return super::plates::set(shared, &v).into(),
         "/api/plates/export" => return super::plates::export(shared, &v).into(),
+        "/api/inventory/have" => return super::inventory::have(shared, &v).into(),
+        "/api/inventory/record" => return super::inventory::record(shared, &v).into(),
+        "/api/inventory/gone" => return super::inventory::gone(shared, &v).into(),
+        "/api/inventory/relink" => return super::inventory::relink(shared, &v).into(),
+        "/api/inventory/reprint" => return super::inventory::reprint(shared, &v).into(),
         _ => {}
     }
     if path == "/api/reveal" {
@@ -409,6 +414,8 @@ fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
             );
         }
     }
+    // its prints in the inventory follow it
+    super::inventory::note_rename(shared, &from, &to);
     listed(shared, &to)
 }
 

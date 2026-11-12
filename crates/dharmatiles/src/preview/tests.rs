@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use super::*;
 
+mod inventory;
 mod plates;
 
 struct Running {

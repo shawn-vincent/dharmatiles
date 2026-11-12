@@ -397,7 +397,7 @@ fn leaf_name(v: &Value, what: &str) -> Result<String, Reply> {
 // ---- the places -----------------------------------------------------------------------------
 
 /// Tell every listener the list changed, with its snapshot.
-fn announce(shared: &Shared) {
+pub(super) fn announce(shared: &Shared) {
     let tiles = lock(&shared.tiles);
     let mut ev = lock(&shared.events);
     let rev = ev.bump(Change::List);
@@ -619,6 +619,8 @@ pub(super) fn rename_folder(shared: &Shared, v: &Value) -> Reply {
     if let Err(e) = std::fs::rename(&from, &to) {
         return io_failure("rename", &from, &e);
     }
+    // the prints of the tiles in it follow them
+    super::inventory::note_folder_rename(shared, &from, &to);
     let dir = v["dir"].as_str().unwrap_or("");
     let rel = match dir.rsplit_once('/') {
         Some((up, _)) => join_rel(up, &name),
@@ -835,7 +837,11 @@ pub(super) fn move_tile(shared: &Shared, tile: &str, v: &Value) -> Reply {
             .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
     );
     match move_no_clobber(&from, &to, &clash) {
-        Ok(()) => listed_with_snapshot(shared, &to),
+        Ok(()) => {
+            // its prints in the inventory follow it
+            super::inventory::note_rename(shared, &from, &to);
+            listed_with_snapshot(shared, &to)
+        }
         Err(e) => e,
     }
 }

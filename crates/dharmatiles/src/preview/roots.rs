@@ -196,7 +196,7 @@ fn always(_: &std::path::Path) -> bool {
 }
 
 /// The document kinds, in the order the page lists them.
-pub(super) const KINDS: [DocKind; 3] = [
+pub(super) const KINDS: [DocKind; 4] = [
     DocKind {
         ext: "dtile",
         kind: "tile",
@@ -208,6 +208,14 @@ pub(super) const KINDS: [DocKind; 3] = [
     DocKind {
         ext: "dmap",
         kind: "map",
+        actions: false,
+        is_one: always,
+    },
+    // the inventory: one log in My tiles, opened as a view of what you have printed
+    // (docs/inventory.html); not renamed, moved or trashed from the page
+    DocKind {
+        ext: "dinv",
+        kind: "inventory",
         actions: false,
         is_one: always,
     },

@@ -50,7 +50,7 @@ export function applySnapshot(m, fromStream = false) {
   server.set({
     tiles: m.tiles.map(withoutProgress), progress: progressOf(m.tiles), roots: m.roots || [], folders: m.folders || [], home: m.home ?? null,
     system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhang_deg, steepestDeg: m.steepest_deg ?? m.overhang_deg + 10,
-    epoch: m.epoch, ready: true,
+    inventory: m.inventory ?? null, epoch: m.epoch, ready: true,
   });
 }
 

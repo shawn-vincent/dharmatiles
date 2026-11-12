@@ -26,9 +26,10 @@ import { $, toast } from './app.js';
 import { texts } from './document.js';
 import { linesOf, setSel } from './selection.js';
 import {
-  doc, entrySel, isMark, isPlates, itemOf, mapNode, markSel, server, stackItems, stackIndex, tile, tileSel, view,
+  doc, entrySel, isInventory, isMark, isPlates, itemOf, mapNode, markSel, server, stackItems, stackIndex, tile, tileSel, view,
 } from './stores.js';
 import { contextLines } from './plates.js';
+import { contextLines as inventoryLines } from './inventory.js';
 
 const PANES = ['lvl-tile', 'lvl-element', 'lvl-prop'];
 const SLIDE_MS = 200;
@@ -207,7 +208,7 @@ function renderContext() {
     entry = { note: i < 0 ? sel.kind : `${sel.kind} ${i + 1} of ${list.length}` };
   }
   const lines = contextFor({ depth, tile: tileInfo, entry, thing: depth === 2 ? thingName() : '', control: control?.name, value });
-  $('ctx-lines').replaceChildren(...(isPlates(t) ? contextLines() : lines).map((l) => el('div', 'ln', l)));
+  $('ctx-lines').replaceChildren(...(isPlates(t) ? contextLines() : isInventory(t) ? inventoryLines() : lines).map((l) => el('div', 'ln', l)));
 }
 
 function focusLevel() {
@@ -280,8 +281,9 @@ function render() {
   lastDepth = depth;
   // a print list's panel is the plates' (plates.js), not the tile's levels or source
   const plates = isPlates(tile());
-  $('stage').dataset.face = plates ? 'plates' : face;
-  $('face').hidden = plates;
+  const inventory = isInventory(tile());
+  $('stage').dataset.face = plates ? 'plates' : inventory ? 'inventory' : face;
+  $('face').hidden = plates || inventory;
   renderCrumbs();
   renderContext();
   syncAddress();

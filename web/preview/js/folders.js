@@ -20,6 +20,8 @@ export const KINDS = [
   { kind: 'tile', exts: ['.dtile'], noun: 'tile', plural: 'tiles', actions: true },
   // a print list: the tiles to print, laid on a printer's plates (docs/plates.html); opened on its plates, not as a tile
   { kind: 'map', exts: ['.dmap'], noun: 'print list', plural: 'print lists', actions: false },
+  // the inventory: the log of what you have printed (docs/inventory.html); opened as a view, not as a tile
+  { kind: 'inventory', exts: ['.dinv'], noun: 'inventory', plural: 'inventories', actions: false },
   { kind: 'stl', exts: ['.stl'], noun: 'model', plural: 'models', actions: false },
 ];
 

@@ -148,6 +148,7 @@ fn loose_json(list: &dt_doc::map::PrintList, ov: &Overrides, home: Option<&Path>
         "gap": pl.gap.as_ref().map(|m| m.value),
         "margin": pl.margin.as_ref().map(|m| m.value),
         "printers": printers_json(home),
+        "check_inventory": pl.inventory.as_ref().is_none_or(|i| i.value),
         "planned": false,
     })
 }
@@ -202,6 +203,8 @@ fn plates_json(
             .map(|(k, kind)| {
                 json!({
                     "tile": kind.tile, "name": kind.name, "count": kind.count,
+                    "want": kind.want, "have": kind.have, "other_colour": kind.other_colour,
+                    "canon": kind.canon, "seed_used": kind.seed_used,
                     "seed": kind.seed, "system": kind.system, "size": boxes[k].size,
                     "height": boxes[k].height, "exact": exact[k],
                     "filaments": names(if exact[k] { &boxes[k].filaments } else { &kind.estimate }),
@@ -235,11 +238,14 @@ fn plan_for(
     let list = cli::read_list(Path::new(path)).map_err(|e| Box::new((None, e)))?;
     let base = shared.options();
     let dir = Path::new(path).parent();
+    let shelf = cli::shelf_for(&list, ov, shared.home.as_deref())
+        .map_err(|e| Box::new((Some(list.clone()), e)))?;
     let ctx = Context {
         sources: &Files,
         list_dir: dir,
         home: shared.home.as_deref(),
         base: &base,
+        shelf: shelf.as_ref(),
     };
     match plates::plan(&list, &cli::title_of(Path::new(path)), &ctx, ov) {
         Ok(p) => Ok((list, p)),
@@ -254,7 +260,15 @@ fn say(shared: &Shared, id: &str, scope: Scope, make: impl FnOnce(&str) -> Vec<M
 /// Open or rebuild a print list for the page.
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     let t0 = Instant::now();
-    let files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
+    let mut files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
+    // the inventory decides what prints: the list is laid out again when it changes
+    if let Some(h) = shared.home.as_deref() {
+        let inv = dt_eval::inventory::path_in(h)
+            .to_string_lossy()
+            .into_owned();
+        let at = crate::watch::mtime(&inv);
+        files.insert(inv, at);
+    }
     let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
     let view = lock(&shared.tiles)
         .iter()
@@ -626,7 +640,14 @@ pub(super) fn set(shared: &Shared, v: &Value) -> (&'static str, Value) {
     };
     let key = v["key"].as_str().unwrap_or("");
     if ![
-        "printer", "mode", "group", "gap", "margin", "turn", "system",
+        "printer",
+        "mode",
+        "group",
+        "gap",
+        "margin",
+        "turn",
+        "system",
+        "inventory",
     ]
     .contains(&key)
     {

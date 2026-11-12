@@ -69,6 +69,7 @@ impl State {
 }
 mod edit;
 pub(crate) mod fail;
+mod inventory;
 mod map;
 mod messages;
 mod offers;
@@ -191,6 +192,7 @@ impl Slot {
             .unwrap_or(path)
             .trim_end_matches(".dtile")
             .trim_end_matches(".dmap")
+            .trim_end_matches(".dinv")
             .to_owned();
         Self {
             id: tile_id(path),
@@ -328,6 +330,9 @@ pub struct Shared {
     /// unchanged opens from it, and an earlier build of one that changed
     /// shows while the new one runs.  None: no disk cache (the tests').
     store: Option<Arc<dt_eval::Store>>,
+    /// The inventory as the last snapshot told it (text), so a change made
+    /// outside the program (the file edited by hand) is told too.
+    inventory_seen: Mutex<String>,
 }
 
 /// Held while a tile builds: dropping it ends the build's progress message.
@@ -425,6 +430,7 @@ impl Shared {
             sketch_seq: std::sync::atomic::AtomicU64::new(0),
             build_caches: Mutex::new(VecDeque::new()),
             store: None,
+            inventory_seen: Mutex::new(String::new()),
         };
         me.rescan();
         me
@@ -706,6 +712,7 @@ impl Shared {
                 .flat_map(|(r, v)| v.iter().map(move |p| json!({"root": r, "path": p})))
                 .collect::<Vec<_>>(),
             "home": std::env::var("HOME").ok(),
+            "inventory": inventory::snapshot(self.home.as_deref()),
             "tiles": tiles.iter().map(Slot::summary).collect::<Vec<_>>(),
         })
     }
@@ -762,6 +769,16 @@ impl Shared {
             differs
         };
         let mut removed = Vec::new();
+        // the inventory is the page's too: edited by hand, or by the command line, it is told
+        let inventory_changed = {
+            let now = inventory::snapshot(self.home.as_deref()).to_string();
+            let mut seen = lock(&self.inventory_seen);
+            let differs = *seen != now;
+            if differs {
+                *seen = now;
+            }
+            differs
+        };
         let changed = {
             let mut tiles = lock(&self.tiles);
             let before = tiles.len();
@@ -782,7 +799,10 @@ impl Shared {
                     }
                 }
             }
-            let changed = tiles.len() != before || !removed.is_empty() || folders_changed;
+            let changed = tiles.len() != before
+                || !removed.is_empty()
+                || folders_changed
+                || inventory_changed;
             if changed {
                 let mut ev = lock(&self.events);
                 let rev = ev.bump(Change::List);

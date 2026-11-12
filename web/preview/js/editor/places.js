@@ -19,6 +19,7 @@ import {
 import { openMenu } from '../menu.js';
 import { buildHash, crumbsFor, moveRow, parseHash } from '../nav.js';
 import { copiedNote } from '../mine.js';
+import { pill as invPill, systemName } from '../inventory.js';
 import { failed } from '../problems.js';
 import { $, host, toast } from './app.js';
 import { canLeave } from './document.js';
@@ -131,6 +132,9 @@ function dataNow() {
   const r = roots[level.root];
   return {
     roots, tiles, folders, level, query, places: placesOf(roots), openTile: view.get().tileId, home: server.get().home,
+    // have and need pills: what the inventory says of a tile for the target system (the chip in the title bar)
+    pill: (t) => invPill(server.get().inventory, t.path, server.get().system),
+    system: server.get().system, inventory: server.get().inventory,
     view: level.root == null ? null : levelOf({ roots, tiles, folders, root: level.root, dir: level.dir, query }),
     writable: !!r && writable(r) && !query.trim(),
   };
@@ -140,7 +144,7 @@ function signature(d) {
   const t = (x) => [x.id, x.path, x.size, x.plan?.cols, x.plan?.rows, x.status, !!x.record && (x.record.audit.overhang_mm2 > 0 || x.record.audit.band_mm2 > 0)];
   return JSON.stringify([
     d.level, d.query, d.openTile, d.writable, d.roots.map((r) => [r.label, r.exists, r.role, r.path]),
-    d.level.root == null ? d.places.map((r) => d.tiles.filter((x) => x.root === r.index).length) : [d.view && d.view.folders, d.view && d.view.items.map((i) => [...t(i.tile), i.where])],
+    d.level.root == null ? d.places.map((r) => d.tiles.filter((x) => x.root === r.index).length) : [d.view && d.view.folders, d.view && d.view.items.map((i) => [...t(i.tile), i.where, d.pill(i.tile)?.text, d.pill(i.tile)?.title])],
   ]);
 }
 
@@ -174,6 +178,8 @@ function renderCrumbs(d) {
 
 function renderContext(d) {
   const lines = contextForFolder({ roots: d.roots, level: d.level, view: d.view, home: d.home });
+  // the pills are for one system, the title bar's chip: said once, where they are
+  if (d.level.root != null && d.inventory?.exists && d.view?.items.length && lines.length) lines[0] = `${lines[0]} · have and need for ${systemName(d.system)}`;
   $('bctx-lines').replaceChildren(...lines.map((l) => el('div', 'ln', l)));
 }
 

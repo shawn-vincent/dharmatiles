@@ -38,6 +38,11 @@
 //   platesShow(id, plate)                   the plate of a print list the view shows (from 0)
 //   platesSet(id, key, value)               set a word of the list's `plates` line (printer, mode, group, gap, margin, turn); value null removes it
 //   platesExport(id)                        build every piece in full and write the plates: {ok, files, format, plates, failures}
+//   inventoryHave(body)                     one good print of a tile: {tile, colour, system?, seed?, count?, on?}; {ok, lines} (docs/inventory.html)
+//   inventoryRecord(body)                   the sheet after a print: {list, plate, failed: [n…], on?}
+//   inventoryGone(body)                     one of a piece lost: {tile, seed, system, colour, note?, on?}
+//   inventoryRelink(body)                   a tile has another path: {from, to (a tile's id), on?}
+//   inventoryReprint(body)                  a piece, with its recorded seed, into a print list: {tile, seed, system, colour, list?}
 //
 // The event stream: a snapshot, then one event per change, each with a
 // revision.  When the stream drops it is opened again with the epoch (which
@@ -231,5 +236,10 @@ export function browserHost() {
     platesShow: (id, plate) => call('/api/plates/show', { tile: id, plate }),
     platesSet: (id, key, value) => call('/api/plates/set', { tile: id, key, value }),
     platesExport: (id) => call('/api/plates/export', { tile: id }),
+    inventoryHave: (body) => call('/api/inventory/have', body),
+    inventoryRecord: (body) => call('/api/inventory/record', body),
+    inventoryGone: (body) => call('/api/inventory/gone', body),
+    inventoryRelink: (body) => call('/api/inventory/relink', body),
+    inventoryReprint: (body) => call('/api/inventory/reprint', body),
   };
 }

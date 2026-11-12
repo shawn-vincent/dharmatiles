@@ -43,7 +43,7 @@ export function createStore(initial, report = showError) {
 }
 
 export const server = createStore({
-  tiles: [], roots: [], folders: [], home: null, elements: [], language: null, system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
+  tiles: [], roots: [], folders: [], home: null, inventory: null, elements: [], language: null, system: 'db', printer: 'default', printers: [], overhangDeg: 55, steepestDeg: 65,
   live: false,    // the event stream is open and in step
   ever: false,    // it has been, once: so a loss reads 'reconnecting…', not 'connecting…'
   ready: false,   // the first list of tiles is in
@@ -121,6 +121,8 @@ export const regionOf = (it) => {
 export const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.dtile$/i, '');
 /** Is the document a print list (its panel and view are the plates', editor/plates.js)? */
 export const isPlates = (t) => !!t && /\.dmap$/i.test(t.path);
+/** Is the document the inventory (its view is editor/inventory.js)? */
+export const isInventory = (t) => !!t && /\.dinv$/i.test(t.path);
 
 /** The stack of the text now: the last clean check of it while editing, else the last build's. */
 // The list is made once for each stack it comes from (the check's, or the build's plan) and handed out again: callers read it, never change it.

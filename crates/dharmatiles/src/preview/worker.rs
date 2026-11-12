@@ -105,6 +105,9 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     if super::plates::is_plates(&path) {
         return super::plates::rebuild(shared, id, &path);
     }
+    if super::inventory::is_inventory(&path) {
+        return super::inventory::rebuild(shared, id, &path);
+    }
     let rec = Recording::watching(&path);
     // every file the build reads, with its text: what the disk cache's key covers
     let tracked = dt_eval::Tracked::new(&rec);
