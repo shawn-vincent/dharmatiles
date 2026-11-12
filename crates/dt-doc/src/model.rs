@@ -393,17 +393,6 @@ pub struct Entry {
 }
 
 impl Entry {
-    /// True when the entry uses the heights language: a top, pins, a slope,
-    /// a name, or `at=` by name.
-    #[must_use]
-    pub fn uses_heights(&self) -> bool {
-        self.top.is_some()
-            || !self.pins.is_empty()
-            || self.slope.is_some()
-            || self.at_place.is_some()
-            || self.label.is_some()
-    }
-
     /// The built-in element, if this calls one.
     #[must_use]
     pub fn element(&self) -> Option<&'static Element> {

@@ -231,10 +231,7 @@ mod tests {
         let plans = [
             p(Write::Surface, &[]),
             p(Write::Laid(Kind::Floor), &[]),
-            p(
-                Write::Solid(Kind::Wall),
-                &[Read::Solids(Kind::Terrain), Read::IfAny(Kind::Floor)],
-            ),
+            p(Write::Solid(Kind::Wall), &[Read::Solids(Kind::Terrain)]),
         ];
         assert_eq!(
             schedule(&plans),
@@ -314,13 +311,13 @@ mod tests {
         for plans in [
             [
                 p(Write::Surface, &[]),
-                p(Write::Solid(Kind::Wall), &[Read::IfAny(Kind::Floor)]),
+                p(Write::Solid(Kind::Wall), &[]),
                 p(Write::Laid(Kind::Floor), &[]),
             ],
             [
                 p(Write::Surface, &[]),
                 p(Write::Laid(Kind::Floor), &[]),
-                p(Write::Solid(Kind::Wall), &[Read::IfAny(Kind::Floor)]),
+                p(Write::Solid(Kind::Wall), &[]),
             ],
         ] {
             assert!(schedule(&plans).is_ok());
@@ -332,7 +329,7 @@ mod tests {
         let plans = [
             p(Write::Surface, &[]),
             p(Write::Solid(Kind::Rock), &[]),
-            p(Write::Fill, &[Read::IfAny(Kind::Rock)]),
+            p(Write::Fill, &[]),
             on_ground(Write::Solid(Kind::Tree)),
             p(Write::Solid(Kind::Connector), &[Read::AllSolids]),
         ];
@@ -349,7 +346,7 @@ mod tests {
         );
         // water alone: it fills, then the lift lifts it
         assert_eq!(
-            schedule(&[p(Write::Fill, &[Read::IfAny(Kind::Rock)])]),
+            schedule(&[p(Write::Fill, &[])]),
             Ok(vec![Step::Entry(0), Step::Lift])
         );
         // a surface listed after the water lies over it: the water is built

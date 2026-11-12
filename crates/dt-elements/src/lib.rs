@@ -284,10 +284,6 @@ pub enum Read {
     /// Every other solid in the tile, the lifted ground included: built
     /// last, whatever its place in the stack.
     AllSolids,
-    /// Every solid of this kind listed above it, if there is any (water's
-    /// rocks, what a thing may stand on such as a wall on a floor); a kind
-    /// listed below it is not read, and nothing is refused.
-    IfAny(Kind),
 }
 
 /// An element's plan.

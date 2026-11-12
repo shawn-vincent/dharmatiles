@@ -6,7 +6,7 @@ import { browserHost } from '../js/host.js';
 import { kdlString, parseValue, unquote, valueOf, wordControlNeedsSelect } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
-import { indentSelection, newlineAt, indentFor, braceEnd } from '../js/text.js';
+import { indentFor, braceEnd } from '../js/text.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { rememberView, shortcutViews } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
@@ -108,15 +108,6 @@ test('word controls become dropdowns before their buttons would wrap', () => {
   assert.equal(wordControlNeedsSelect(words('bare', 'dirt')), false);
   assert.equal(wordControlNeedsSelect(words('rubble', 'broken', 'massive')), true);
   assert.equal(wordControlNeedsSelect(words('one very long choice', 'another')), true);
-});
-
-test('the text editor indents selections and carries block indentation', () => {
-  let r = indentSelection('a\nb', 0, 3, false);
-  assert.deepEqual(r, { text: '    a\n    b', start: 4, end: 11 });
-  r = indentSelection(r.text, r.start, r.end, true);
-  assert.equal(r.text, 'a\nb');
-  assert.deepEqual(newlineAt('    stack {', 11, 11), { text: '    stack {\n        ', caret: 20 });
-  assert.deepEqual(newlineAt('    dirt', 8, 8), { text: '    dirt\n    ', caret: 13 });
 });
 
 function payload(traced = true) {
@@ -299,12 +290,8 @@ test('the sheet asks the program to check a typed value', async () => {
   };
   try {
     const r = await browserHost().checkValue('tree', 'size', '150');
-    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'size', typed: '150', format: 0 }]]);
+    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'size', typed: '150' }]]);
     assert.equal(r.body.message, 'takes 20 to 120');
-    // a format 1 document's values are read with their units: the page says which it is
-    sent.length = 0;
-    await browserHost().checkValue('tree', 'size', '150dmm', 1);
-    assert.deepEqual(sent, [['/api/check-value', { element: 'tree', control: 'size', typed: '150dmm', format: 1 }]]);
   } finally {
     globalThis.fetch = realFetch;
   }

@@ -242,12 +242,7 @@ impl Plant {
 fn plan() -> Plan {
     Plan {
         writes: Write::Solid(Kind::Flowers),
-        reads: vec![
-            Read::Solids(Kind::Terrain),
-            Read::IfAny(Kind::Rock),
-            Read::IfAny(Kind::Tree),
-            Read::IfAny(Kind::Wall),
-        ],
+        reads: vec![Read::Solids(Kind::Terrain)],
         cell_mm: None,
     }
 }

@@ -266,15 +266,6 @@ impl Grid<f64> {
         }
         (self.with_z(gx), self.with_z(gy))
     }
-
-    /// The steepest slope (rise per mm), from [`Grid::gradient`].
-    #[must_use]
-    pub fn max_slope(&self) -> f64 {
-        let (gx, gy) = self.gradient();
-        gx.z.iter()
-            .zip(&gy.z)
-            .fold(0.0, |m: f64, (x, y)| m.max(libm::sqrt(x * x + y * y)))
-    }
 }
 
 impl Grid<bool> {

@@ -30,39 +30,6 @@ export function byteToIndex(text, b) {
   return text.length;
 }
 
-/** A pure Tab/Shift-Tab edit: text and the selection after it. */
-export function indentSelection(text, a, b, out = false) {
-  const start = text.lastIndexOf('\n', a - 1) + 1;
-  let end = text.indexOf('\n', b);
-  if (end < 0) end = text.length;
-  const before = text.slice(start, end);
-  let removedFirst = 0;
-  const changed = before.split('\n').map((line, i) => {
-    if (!out) return `    ${line}`;
-    const n = Math.min(4, (line.match(/^ */) || [''])[0].length);
-    if (i === 0) removedFirst = n;
-    return line.slice(n);
-  }).join('\n');
-  let selStart, selEnd;
-  if (a === b && !out) selStart = selEnd = a + 4;
-  else if (a === b) selStart = selEnd = Math.max(start, a - removedFirst);
-  else {
-    const delta = out ? changed.length - before.length : 4 * before.split('\n').length;
-    selStart = out ? Math.max(start, a - removedFirst) : a + 4;
-    selEnd = b + delta;
-  }
-  return { text: text.slice(0, start) + changed + text.slice(end), start: selStart, end: selEnd };
-}
-
-/** A pure Enter edit: carry indentation and add one level after `{`. */
-export function newlineAt(text, a, b) {
-  const start = text.lastIndexOf('\n', a - 1) + 1;
-  const line = text.slice(start, a);
-  const base = (line.match(/^ */) || [''])[0];
-  const insert = `\n${base}${line.trimEnd().endsWith('{') ? '    ' : ''}`;
-  return { text: text.slice(0, a) + insert + text.slice(b), caret: a + insert.length };
-}
-
 /** The indentation for a new line at `pos`: the line above's, one level more after `{`, one less before `}`. */
 export function indentFor(text, pos) {
   const start = text.lastIndexOf('\n', pos - 1) + 1;

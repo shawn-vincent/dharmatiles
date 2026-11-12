@@ -38,7 +38,7 @@ use dt_kit::{
     Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smax, smooth01,
 };
 
-use crate::{Control, Ctx, Element, LookError, Plan, Read, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Write};
 
 const CELL_MM: f64 = 0.2;
 const BANK_GRID_WEIGHT: f64 = 1.25;
@@ -318,10 +318,7 @@ impl Element for Water {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Fill,
-            reads: vec![
-                Read::IfAny(dt_kit::Kind::Rock),
-                Read::IfAny(dt_kit::Kind::Reeds),
-            ],
+            reads: vec![],
             cell_mm: Some(crate::CellMm::mm(CELL_MM)),
         }
     }

@@ -318,7 +318,7 @@ impl Element for Wall {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Wall),
-            reads: vec![Read::Solids(Kind::Terrain), Read::IfAny(Kind::Floor)],
+            reads: vec![Read::Solids(Kind::Terrain)],
             cell_mm: None,
         }
     }

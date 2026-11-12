@@ -142,13 +142,7 @@ impl Element for Grass {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Grass),
-            reads: vec![
-                Read::Solids(Kind::Terrain),
-                Read::IfAny(Kind::Rock),
-                Read::IfAny(Kind::Tree),
-                Read::IfAny(Kind::Wall),
-                Read::IfAny(Kind::Flowers),
-            ],
+            reads: vec![Read::Solids(Kind::Terrain)],
             cell_mm: None,
         }
     }

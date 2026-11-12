@@ -768,11 +768,7 @@ impl Element for Tree {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Tree),
-            reads: vec![
-                Read::Solids(Kind::Terrain),
-                Read::IfAny(Kind::Wall),
-                Read::IfAny(Kind::Floor),
-            ],
+            reads: vec![Read::Solids(Kind::Terrain)],
             cell_mm: None,
         }
     }
@@ -845,11 +841,7 @@ impl Element for Scatter {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Tree),
-            reads: vec![
-                Read::Solids(Kind::Terrain),
-                Read::IfAny(Kind::Wall),
-                Read::IfAny(Kind::Floor),
-            ],
+            reads: vec![Read::Solids(Kind::Terrain)],
             cell_mm: None,
         }
     }
