@@ -120,6 +120,9 @@ pub struct Kind {
     pub hash: String,
     /// Its short name (`1x1-grass`).
     pub name: String,
+    /// The list's piece each printed copy is (an index into the list's
+    /// pieces), so a pin finds its copy.
+    pub copies: Vec<usize>,
     /// Its footprint if it were exactly its squares, mm: the layout's
     /// stand-in until a build says what it really covers.
     pub nominal: [f64; 2],
@@ -141,6 +144,29 @@ pub struct Plan {
     pub held: Vec<(String, u32)>,
     /// The list's own name (its file's stem).
     pub title: String,
+    /// The pins that name a piece that prints.
+    pub pins: Vec<PinSpec>,
+    /// Pins whose piece does not print (left off or on your shelf): the id
+    /// and why, to be said.
+    pub loose_pins: Vec<(String, String)>,
+}
+
+/// A pin of the list, resolved to the copy it holds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PinSpec {
+    /// The piece's id.
+    pub id: String,
+    /// Which distinct piece ([`Plan::kinds`]).
+    pub kind: usize,
+    /// Which copy of it.
+    pub copy: usize,
+    /// The plate, from 0.
+    pub plate: usize,
+    /// Where its footprint's north-west corner stands, across and down from
+    /// the bed's north-west corner, mm.
+    pub at: [f64; 2],
+    /// Turned a quarter.
+    pub turn: bool,
 }
 
 impl Kind {
@@ -359,7 +385,7 @@ pub fn plan(
     // pieces that ask for the whole count whatever you have, apart from those
     // that print what is missing: one kind may be both
     let mut always: Vec<u32> = Vec::new();
-    for p in &list.pieces {
+    for (pi, p) in list.pieces.iter().enumerate() {
         if p.print == PrintMode::Skip {
             skipped.push(p.tile.value.clone());
             continue;
@@ -381,6 +407,9 @@ pub fn plan(
             .position(|k| k.path == path && k.seed == seed && k.system == sys)
         {
             kinds[i].want += p.count.value;
+            kinds[i]
+                .copies
+                .extend(std::iter::repeat_n(pi, p.count.value as usize));
             if p.print == PrintMode::Always {
                 always[i] += p.count.value;
             }
@@ -450,6 +479,7 @@ pub fn plan(
                 .unwrap_or(&path)
                 .trim_end_matches(".dtile")
                 .to_owned(),
+            copies: vec![pi; p.count.value as usize],
             path,
             seed,
             system: sys,
@@ -472,6 +502,7 @@ pub fn plan(
                 k.have = 0;
             }
             k.count = k.want - k.have;
+            k.copies.truncate(k.count as usize);
         }
         let (keep, left): (Vec<Kind>, Vec<Kind>) = kinds.into_iter().partition(|k| k.count > 0);
         held.extend(left.iter().map(|k| (k.name.clone(), k.have)));
@@ -538,6 +569,43 @@ pub fn plan(
     if !errors.is_empty() {
         return Err(errors);
     }
+    // pins: each to the copy of the piece it names, if that piece prints
+    let mut pins = Vec::new();
+    let mut loose_pins = Vec::new();
+    for pin in &list.plates.pins {
+        let Some(pi) = list
+            .pieces
+            .iter()
+            .position(|p| p.id.as_ref().is_some_and(|i| i.value == pin.id.value))
+        else {
+            continue;
+        };
+        let found = kinds.iter().enumerate().find_map(|(k, kind)| {
+            kind.copies
+                .iter()
+                .position(|c| *c == pi)
+                .map(|copy| (k, copy))
+        });
+        let Some((kind, copy)) = found else {
+            let why = if list.pieces[pi].print == PrintMode::Skip {
+                "it is `print=skip`"
+            } else {
+                "your inventory already holds it"
+            };
+            loose_pins.push((pin.id.value.clone(), why.to_owned()));
+            continue;
+        };
+        let Some((at, _)) = pin.at else { continue };
+        let sq = dt_kit::Frame::for_system(&kinds[kind].system, 1, 1).square_mm;
+        pins.push(PinSpec {
+            id: pin.id.value.clone(),
+            kind,
+            copy,
+            plate: (pin.plate.value as usize).saturating_sub(1),
+            at: [at.x.mm(sq), at.y.mm(sq)],
+            turn: pin.turn,
+        });
+    }
     Ok(Plan {
         settings: Settings {
             machine,
@@ -553,6 +621,8 @@ pub fn plan(
         skipped,
         held,
         title: title.to_owned(),
+        pins,
+        loose_pins,
     })
 }
 
@@ -602,6 +672,10 @@ pub struct Layout {
     /// More plates grouping by filament took than size-only packing would
     /// have.
     pub grouping_cost: Option<usize>,
+    /// Pins that could not stand where they said: the piece's id and why.
+    pub bad_pins: Vec<(String, String)>,
+    /// The pinned pieces, as (kind, copy).
+    pub pinned: Vec<(usize, usize)>,
 }
 
 impl Layout {
@@ -667,7 +741,34 @@ pub fn layout(plan: &Plan, boxes: &[Boxes]) -> Result<Layout, Vec<Diag>> {
             }
         }
     }
-    let packing: Packing = pack::pack(&items, &spec);
+    // pins: the footprint where it was dropped, from the bed's north-west corner
+    let mut starts = Vec::new();
+    let mut base = 0;
+    for kind in &plan.kinds {
+        starts.push(base);
+        base += kind.count as usize;
+    }
+    let mut pins = Vec::new();
+    for p in &plan.pins {
+        if p.copy >= plan.kinds[p.kind].count as usize {
+            continue;
+        }
+        let [w, d] = boxes[p.kind].size;
+        let (pw, pd) = if p.turn { (d, w) } else { (w, d) };
+        pins.push(pack::Pin {
+            id: starts[p.kind] + p.copy,
+            plate: p.plate,
+            at: Placed {
+                id: starts[p.kind] + p.copy,
+                x: p.at[0],
+                y: spec.bed[1] - p.at[1] - pd,
+                turned: p.turn,
+                w: pw,
+                d: pd,
+            },
+        });
+    }
+    let packing: Packing = pack::pack_with(&items, &pins, &spec);
     for &id in &packing.too_big {
         let (k, _) = who[id];
         let s = boxes[k].size;
@@ -718,9 +819,27 @@ pub fn layout(plan: &Plan, boxes: &[Boxes]) -> Result<Layout, Vec<Diag>> {
                 .collect()
         })
         .collect();
+    let id_of = |item: usize| {
+        let (k, c) = who[item];
+        plan.pins
+            .iter()
+            .find(|p| p.kind == k && p.copy == c)
+            .map_or_else(String::new, |p| p.id.clone())
+    };
+    let pinned_items: Vec<usize> = pins
+        .iter()
+        .map(|p| p.id)
+        .filter(|id| !packing.bad_pins.iter().any(|(b, _)| b == id))
+        .collect();
     Ok(Layout {
         plates,
         filaments: packing.plates.iter().map(|p| p.filaments.clone()).collect(),
         grouping_cost: packing.grouping_cost,
+        bad_pins: packing
+            .bad_pins
+            .iter()
+            .map(|(i, why)| (id_of(*i), (*why).to_owned()))
+            .collect(),
+        pinned: pinned_items.iter().map(|i| who[*i]).collect(),
     })
 }

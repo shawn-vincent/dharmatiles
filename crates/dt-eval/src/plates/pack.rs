@@ -17,6 +17,14 @@
 //! printer changes the least.  Grouping can cost a plate; [`pack`] says so
 //! ([`Packing::grouping_cost`]) so the user can choose size-only packing.
 //!
+//! A piece may be **pinned** ([`Pin`]): kept on its plate where it was
+//! dropped.  Pinned pieces go down first, as they are; the rest are packed
+//! around them; a plate that holds a pin is not centred (it would move the
+//! pin).  A pin that cannot stand where it says (outside the margin, on a
+//! zone, on another pin, or needing more filaments than the printer has) is
+//! left out and said so ([`Packing::bad_pins`]); its piece is packed like the
+//! rest.
+//!
 //! Nothing here is random and nothing reads the clock: the same pieces give
 //! the same plates.
 
@@ -74,6 +82,17 @@ pub struct Placed {
     pub d: f64,
 }
 
+/// A piece kept where it was dropped.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pin {
+    /// The item's [`Item::id`].
+    pub id: usize,
+    /// Its plate, from 0.
+    pub plate: usize,
+    /// Where it stands.
+    pub at: Placed,
+}
+
 /// One bed's worth.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Plate {
@@ -95,6 +114,10 @@ pub struct Packing {
     /// How many more plates grouping by filament took than packing by size
     /// would have, when it took more.
     pub grouping_cost: Option<usize>,
+    /// Pins that could not stand where they said (by item id), and why.
+    pub bad_pins: Vec<(usize, &'static str)>,
+    /// The plates that hold a pin: not moved when the rest are centred.
+    pub pinned_plates: Vec<usize>,
 }
 
 const EPS: f64 = 1e-6;
@@ -186,10 +209,68 @@ fn by_size(items: &mut [&Item]) {
     });
 }
 
-/// First fit over every plate, for the order given.
-fn first_fit(items: &[&Item], spec: &Spec, only_last: bool) -> Packing {
+/// The pins put down: each on its plate as it was dropped, or left out.
+fn put_pins(items: &[Item], pins: &[Pin], spec: &Spec) -> Packing {
     let single = spec.mode == Mode::Single;
+    let [bw, bd] = spec.bed;
+    let m = spec.margin;
     let mut out = Packing::default();
+    for pin in pins {
+        let Some(it) = items.iter().find(|i| i.id == pin.id) else {
+            continue;
+        };
+        let a = pin.at;
+        let r = [a.x, a.y, a.x + a.w, a.y + a.d];
+        if r[0] < m - EPS || r[1] < m - EPS || r[2] > bw - m + EPS || r[3] > bd - m + EPS {
+            out.bad_pins.push((pin.id, "it stands outside the margin"));
+            continue;
+        }
+        if spec.excluded.iter().any(|z| overlaps(r, *z)) {
+            out.bad_pins
+                .push((pin.id, "it stands on a zone kept clear"));
+            continue;
+        }
+        while out.plates.len() <= pin.plate {
+            out.plates.push(Plate::default());
+        }
+        let plate = &mut out.plates[pin.plate];
+        let grown = |p: &Placed| {
+            [
+                p.x - spec.gap,
+                p.y - spec.gap,
+                p.x + p.w + spec.gap,
+                p.y + p.d + spec.gap,
+            ]
+        };
+        if plate.placed.iter().any(|p| overlaps(r, grown(p))) {
+            out.bad_pins
+                .push((pin.id, "it touches another pinned piece"));
+            continue;
+        }
+        let need = union(&plate.filaments, &it.filaments);
+        if !single && need.len() > spec.slots as usize {
+            out.bad_pins.push((
+                pin.id,
+                "its plate would need more filaments than the printer has",
+            ));
+            continue;
+        }
+        plate.placed.push(Placed { id: pin.id, ..a });
+        if !single {
+            plate.filaments = need;
+        }
+        if !out.pinned_plates.contains(&pin.plate) {
+            out.pinned_plates.push(pin.plate);
+        }
+    }
+    out
+}
+
+/// First fit over every plate, for the order given, from `start` (the plates
+/// the pins made).
+fn first_fit(items: &[&Item], spec: &Spec, only_last: bool, start: &Packing) -> Packing {
+    let single = spec.mode == Mode::Single;
+    let mut out = start.clone();
     for it in items {
         if !single && it.filaments.len() > spec.slots as usize {
             out.too_colourful.push(it.id);
@@ -244,9 +325,28 @@ fn first_fit(items: &[&Item], spec: &Spec, only_last: bool) -> Packing {
 /// plates than packing by size.
 #[must_use]
 pub fn pack(items: &[Item], spec: &Spec) -> Packing {
+    pack_with(items, &[], spec)
+}
+
+/// [`pack`] with `pins`: those pieces stay where they were dropped and the
+/// rest are packed around them.
+#[must_use]
+pub fn pack_with(items: &[Item], pins: &[Pin], spec: &Spec) -> Packing {
+    let start = put_pins(items, pins, spec);
+    let pinned: Vec<usize> = start
+        .plates
+        .iter()
+        .flat_map(|p| p.placed.iter().map(|q| q.id))
+        .collect();
+    let free: Vec<Item> = items
+        .iter()
+        .filter(|i| !pinned.contains(&i.id))
+        .cloned()
+        .collect();
+    let items = &free[..];
     let mut sized: Vec<&Item> = items.iter().collect();
     by_size(&mut sized);
-    let mut by_area = first_fit(&sized, spec, false);
+    let mut by_area = first_fit(&sized, spec, false, &start);
     if spec.mode == Mode::Single || spec.group == Group::Size {
         centre(&mut by_area, spec);
         return by_area;
@@ -265,7 +365,7 @@ pub fn pack(items: &[Item], spec: &Spec) -> Packing {
     for (set, _) in &sets {
         ordered.extend(sized.iter().copied().filter(|i| i.filaments == *set));
     }
-    let mut grouped = first_fit(&ordered, spec, true);
+    let mut grouped = first_fit(&ordered, spec, true, &start);
     if grouped.plates.len() > by_area.plates.len() {
         grouped.grouping_cost = Some(grouped.plates.len() - by_area.plates.len());
     }
@@ -279,7 +379,11 @@ pub fn pack(items: &[Item], spec: &Spec) -> Packing {
 /// quarter of it, then none), so no piece ever stands on one.
 fn centre(packing: &mut Packing, spec: &Spec) {
     let [bw, bd] = spec.bed;
-    for plate in &mut packing.plates {
+    let pinned = packing.pinned_plates.clone();
+    for (n, plate) in packing.plates.iter_mut().enumerate() {
+        if pinned.contains(&n) {
+            continue;
+        }
         let Some(first) = plate.placed.first() else {
             continue;
         };

@@ -412,3 +412,61 @@ fn a_winter_tree_has_no_leaf_material_so_it_fits_a_printer_with_fewer_filaments(
     assert!(on.is_ok(), "{on:?}");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn a_pinned_piece_stays_where_it_was_dropped_and_the_rest_pack_around_it() {
+    let list = format!(
+        "map {{\n piece p1 \"{FLAT}\" at=\"(0sq, 0sq)\"\n piece p2 \"{FLAT}\" at=\"(1sq, 0sq)\"\n piece p3 \"{FLAT}\" at=\"(2sq, 0sq)\"\n piece p4 \"lib:tests/ground/1x1-soil\" at=\"(3sq, 0sq)\"\n}}\nplates printer=\"sovol/sv06\" mode=\"single\" {{\n pin p3 plate=1 at=\"(100mm, 20mm)\"\n pin p4 plate=2 at=\"(5mm, 5mm)\" turn=90\n}}"
+    );
+    let p = plan_of(&list, &Overrides::default()).unwrap();
+    // p1, p2 and p3 are copies of one tile: pieces, each its own copy
+    assert_eq!(p.pins.len(), 2);
+    assert_eq!(
+        (p.pins[0].id.as_str(), p.pins[0].kind, p.pins[0].copy),
+        ("p3", 0, 2)
+    );
+    let bx = [boxes([35.0, 35.0], &[]), boxes([40.0, 30.0], &[])];
+    let l = plates::layout(&p, &bx).unwrap();
+    assert!(l.bad_pins.is_empty(), "{:?}", l.bad_pins);
+    // the pin is where it was put: across from the west edge, down from the north edge
+    let bed = p.settings.machine.bed.unwrap();
+    let pinned = l.plates[0]
+        .iter()
+        .find(|i| (i.kind, i.copy) == (0, 2))
+        .unwrap();
+    assert!((pinned.at.x - 100.0).abs() < 1e-9);
+    assert!((pinned.at.y - (bed[1] - 20.0 - 35.0)).abs() < 1e-9);
+    // the second pin made a second plate that holds the turned soil piece
+    assert_eq!(l.plates.len(), 2);
+    let soil = l.plates[1].iter().find(|i| i.kind == 1).unwrap();
+    assert!(soil.at.turned && (soil.at.w - 30.0).abs() < 1e-9 && (soil.at.d - 40.0).abs() < 1e-9);
+    assert_eq!(l.pinned.len(), 2);
+    // the other two did not land on it
+    for i in &l.plates[0] {
+        if (i.kind, i.copy) == (0, 2) {
+            continue;
+        }
+        let (a, b) = (i.at, pinned.at);
+        let apart = a.x + a.w + 3.0 <= b.x + 1e-6
+            || b.x + b.w + 3.0 <= a.x + 1e-6
+            || a.y + a.d + 3.0 <= b.y + 1e-6
+            || b.y + b.d + 3.0 <= a.y + 1e-6;
+        assert!(apart, "{a:?} {b:?}");
+    }
+}
+
+#[test]
+fn a_pin_that_cannot_stand_where_it_says_is_left_out_and_said() {
+    let list = format!(
+        "map {{\n piece p1 \"{FLAT}\" at=\"(0sq, 0sq)\"\n piece p2 \"{FLAT}\" at=\"(1sq, 0sq)\"\n piece p3 \"{FLAT}\" print=skip\n}}\nplates printer=\"sovol/sv06\" mode=\"single\" {{\n pin p1 plate=1 at=\"(50mm, 50mm)\"\n pin p2 plate=1 at=\"(60mm, 55mm)\"\n pin p3 plate=1 at=\"(1mm, 1mm)\"\n}}"
+    );
+    let p = plan_of(&list, &Overrides::default()).unwrap();
+    assert_eq!(p.loose_pins.len(), 1);
+    assert_eq!(p.loose_pins[0].0, "p3");
+    let l = plates::layout(&p, &[boxes([35.0, 35.0], &[])]).unwrap();
+    // p2 touches p1: it is packed like any piece, and the note says why
+    assert_eq!(l.bad_pins.len(), 1);
+    assert_eq!(l.bad_pins[0].0, "p2");
+    assert!(l.bad_pins[0].1.contains("another pinned"));
+    assert_eq!(l.plates[0].len(), 2);
+}

@@ -85,8 +85,16 @@ fn mistakes_are_shown_at_their_text_with_a_hint() {
     assert!(m.contains("rot"));
     let (m, _) = one("map {\n pieces \"a\"\n}");
     assert!(m.contains("`piece` lines"));
-    let (_, h) = one("map {\n grid cols=8 rows=5\n}");
-    assert!(h.contains("map view"));
+    let (m, _) = one("map {\n grid cols=8\n}");
+    assert!(m.contains("both"), "{m}");
+    let (m, _) = one("map {\n piece \"a\" at=\"(2, 1)\"\n}");
+    assert!(m.contains("unit"), "{m}");
+    let (m, _) = one("map {\n piece \"a\" at=\"(2sq, 1sq)\" count=2\n}");
+    assert!(m.contains("one piece"), "{m}");
+    let (m, _) = one("map {\n piece \"a\" height=\"20\"\n}");
+    assert!(m.contains("unit"), "{m}");
+    let (m, _) = one("map {\n let plinth \"20dmm\"\n}");
+    assert!(m.contains("not a name"), "{m}");
     let (m, h) = one("map {\n piece \"a\"\n}\nplates printr=\"x\"");
     assert!(m.contains("no `printr`") && h.contains("printer"));
     let (m, _) = one("map {\n piece \"a\"\n}\nplates gap=3");
@@ -95,8 +103,11 @@ fn mistakes_are_shown_at_their_text_with_a_hint() {
     assert!(m.contains("length"));
     let (m, _) = one("map {\n piece \"a\"\n}\nplates mode=\"colourful\"");
     assert!(m.contains("not a mode"));
-    let (m, h) = one("map {\n piece \"a\"\n}\nplates {\n pin p1 plate=1\n}");
-    assert!(m.contains("settings only") && h.contains("pins"));
+    let (m, h) = one("map {\n piece \"a\"\n}\nplates {\n pin p1 plate=1 at=\"(0mm, 0mm)\"\n}");
+    assert!(
+        m.contains("no piece is called") && h.contains("id"),
+        "{m} {h}"
+    );
     let (m, _) = one("map {\n piece \"a\"\n}\nplates\nplates");
     assert!(m.contains("one plates line"));
     let (m, _) = one("tile size=\"1x1\" {\n}");
@@ -177,4 +188,166 @@ fn a_piece_is_added_counted_and_taken_out_keeping_every_other_byte() {
         )
         .is_err()
     );
+}
+
+const MAP: &str = r#"dharmatiles version="1.0.0"
+
+// A map, as the editor writes it.
+map {
+    about "A stream crossing."
+    grid cols=8 rows=5
+    let $plinth "20dmm"
+
+    piece p1 "lib:tiles/ground/2x2-glade" at="(0sq, 0sq)" rot=0
+    piece p2 "lib:tiles/water/1x1-water-corridor+grass" at="(2sq, 1sq)" rot=90 seed=3
+    piece p3 "lib:tiles/cliffs/2x1-cliff" at="(4sq, 0sq)" rot=0 height="$wallHeight"
+    piece p4 "lib:tiles/walls/1x1-wall-stone" at="(5sq, 1sq)" rot=0 height="$plinth + 2mm" // raised
+    piece "lib:tiles/ground/1x1-grass" count=2
+}
+plates printer="bambu/x1c-ams" {
+    pin p2 plate=1 at="(70mm, 5.5mm)" turn=90
+}
+"#;
+
+#[test]
+fn a_map_reads_its_grid_names_places_heights_and_pins() {
+    use dt_doc::map::{HeightTerm, Len, parse_height};
+    let l = decode("t.dmap", MAP).unwrap();
+    let g = l.grid.unwrap();
+    assert_eq!((g.cols, g.rows), (8, 5));
+    assert_eq!(l.lets[0].name.value, "plinth");
+    assert_eq!(l.lets[0].expr.value, "20dmm");
+    let at = l.pieces[1].place.unwrap();
+    assert_eq!((at.x, at.y), (Len::Sq(2.0), Len::Sq(1.0)));
+    assert_eq!(l.pieces[1].rot.as_ref().unwrap().value, 90);
+    assert!(l.pieces[4].place.is_none());
+    let pin = &l.plates.pins[0];
+    assert_eq!(
+        (pin.id.value.as_str(), pin.plate.value, pin.turn),
+        ("p2", 1, true)
+    );
+    let a = pin.at.unwrap().0;
+    assert_eq!((a.x, a.y), (Len::Mm(70.0), Len::Mm(5.5)));
+    // heights are sums of names and lengths
+    let h = parse_height("$plinth + 2mm").unwrap();
+    assert_eq!(h.terms.len(), 2);
+    assert_eq!(h.terms[0].1, HeightTerm::Name("plinth".to_owned()));
+    let named = |n: &str| match n {
+        "plinth" => Ok(20.0),
+        _ => Err(format!("no `${n}`")),
+    };
+    assert!((h.mm(35.0, &named).unwrap() - 22.0).abs() < 1e-9);
+    // dmm scales with the system, mm does not
+    let d = parse_height("33.1dmm").unwrap();
+    assert!((d.mm(25.4, &named).unwrap() - 33.1 * 25.4 / 35.0).abs() < 1e-9);
+    assert!(
+        (parse_height("$plinth - 5mm")
+            .unwrap()
+            .mm(35.0, &named)
+            .unwrap()
+            - 15.0)
+            .abs()
+            < 1e-9
+    );
+    assert!(parse_height("$wall height").is_err());
+}
+
+#[test]
+fn a_map_editor_writes_places_and_keeps_every_other_byte() {
+    use dt_doc::map::{
+        At, Len, Prop, clear_pin, clear_pins, duplicate_piece, ensure_id, next_id, placed_line,
+        set_piece, set_pin,
+    };
+    let at = |x, y| At {
+        x: Len::Sq(x),
+        y: Len::Sq(y),
+    };
+    let mm = |x, y| At {
+        x: Len::Mm(x),
+        y: Len::Mm(y),
+    };
+    // move and turn one piece; a seed only when it is not the default
+    let t = set_piece(
+        MAP,
+        1,
+        &[
+            ("at", Some(Prop::Str(at(3.0, 2.0).text()))),
+            ("rot", Some(Prop::Int(180))),
+            ("seed", None),
+        ],
+    )
+    .unwrap();
+    assert!(t.contains(r#"at="(3sq, 2sq)" rot=180"#), "{t}");
+    assert!(!t.contains("seed=3"), "{t}");
+    assert!(t.contains("// raised") && t.contains("// A map, as the editor writes it."));
+    let l = decode("t.dmap", &t).unwrap();
+    assert_eq!(l.pieces[1].rot.as_ref().unwrap().value, 180);
+    // a new piece is added with its own id, and the next id is free
+    let l0 = decode("t.dmap", MAP).unwrap();
+    assert_eq!(next_id(&l0), "p5");
+    let line = placed_line(
+        "p5",
+        "lib:tiles/ground/1x1-grass",
+        at(1.0, 3.5),
+        0,
+        Some(12),
+        Some("ol"),
+    );
+    assert_eq!(
+        line,
+        r#"piece p5 "lib:tiles/ground/1x1-grass" at="(1sq, 3.5sq)" rot=0 seed=12 system=ol"#
+    );
+    let t = dt_doc::map::add_pieces(MAP, &[line]).unwrap();
+    let l = decode("t.dmap", &t).unwrap();
+    assert_eq!(l.pieces.len(), 6);
+    assert_eq!(l.pieces[5].place.unwrap().y, Len::Sq(3.5));
+    // a duplicate has its own id and its own place; the original stays
+    let t = duplicate_piece(MAP, 2, "p9", at(6.0, 3.0)).unwrap();
+    let l = decode("t.dmap", &t).unwrap();
+    assert_eq!(l.pieces.len(), 6);
+    assert_eq!(l.pieces[3].id.as_ref().unwrap().value, "p9");
+    assert_eq!(l.pieces[3].height.as_ref().unwrap().value, "$wallHeight");
+    assert_eq!(l.pieces[2].place.unwrap().x, Len::Sq(4.0));
+    // a piece with no id is given one
+    let (t, id) = ensure_id(MAP, 4).unwrap();
+    assert_eq!(id, "p5");
+    assert!(decode("t.dmap", &t).unwrap().pieces[4].id.is_some());
+    let (same, id) = ensure_id(MAP, 0).unwrap();
+    assert_eq!((same.as_str(), id.as_str()), (MAP, "p1"));
+    // pins: replaced, added inside the plates line, and taken away
+    let t = set_pin(MAP, "p2", 2, mm(10.0, 20.0), false).unwrap();
+    let l = decode("t.dmap", &t).unwrap();
+    assert_eq!(l.plates.pins.len(), 1);
+    assert_eq!(
+        (l.plates.pins[0].plate.value, l.plates.pins[0].turn),
+        (2, false)
+    );
+    let t = set_pin(&t, "p3", 1, mm(0.0, 0.0), true).unwrap();
+    assert_eq!(decode("t.dmap", &t).unwrap().plates.pins.len(), 2);
+    let t = clear_pin(&t, "p2").unwrap();
+    let l = decode("t.dmap", &t).unwrap();
+    assert_eq!(l.plates.pins.len(), 1);
+    assert_eq!(l.plates.pins[0].id.value, "p3");
+    assert_eq!(
+        decode("t.dmap", &clear_pins(&t).unwrap())
+            .unwrap()
+            .plates
+            .pins
+            .len(),
+        0
+    );
+    // no plates line yet: one is made
+    let bare = "dharmatiles version=1\nmap {\n piece p1 \"a\" at=\"(0sq, 0sq)\"\n}\n";
+    let t = set_pin(bare, "p1", 1, mm(1.0, 2.0), false).unwrap();
+    assert_eq!(decode("t.dmap", &t).unwrap().plates.pins.len(), 1, "{t}");
+}
+
+#[test]
+fn ids_are_unique_and_a_pin_names_one() {
+    let (m, _) = one("map {\n piece p1 \"a\"\n piece p1 \"b\"\n}");
+    assert!(m.contains("two pieces"), "{m}");
+    let (m, _) = one(
+        "map {\n piece p1 \"a\"\n}\nplates {\n pin p1 plate=1 at=\"(0mm, 0mm)\"\n pin p1 plate=2 at=\"(0mm, 0mm)\"\n}",
+    );
+    assert!(m.contains("pinned twice"), "{m}");
 }
