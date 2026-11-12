@@ -440,7 +440,7 @@ static TREE: &[Control] = &[
             c("height", Axis::Mm, "bare trunk below the crown")
                 .limits(0.0, 200.0)
                 .weighted()
-                .default("30"),
+                .default("18"),
             c("width", Axis::Mm, "trunk thickness at the ground")
                 .limits(0.5, 40.0)
                 .weighted(),

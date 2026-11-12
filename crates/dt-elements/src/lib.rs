@@ -197,6 +197,11 @@ pub struct Control {
     pub value: Value,
 }
 
+/// The code of a build-time refusal the tile can fix (a control's value or the
+/// entry's place cannot be built), as opposed to `dt::build`, a failure inside
+/// the program.
+pub const LOOK: &str = "dt::look";
+
 /// An element refused its controls or failed to build.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LookError {
@@ -226,12 +231,14 @@ impl LookError {
         }
     }
 
+    /// A control's value the element cannot build (`dt::look`: the tile's to
+    /// change, shown as a mistake at the entry, not as a bug).
     fn control(name: &str, message: String, help: String) -> Self {
         Self {
             control: Some(name.to_owned()),
             message,
             help: Some(help),
-            code: None,
+            code: Some(LOOK),
         }
     }
 
@@ -241,7 +248,7 @@ impl LookError {
             control: None,
             message: message.into(),
             help: Some(help.into()),
-            code: None,
+            code: Some(LOOK),
         }
     }
 

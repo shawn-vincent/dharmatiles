@@ -136,13 +136,8 @@ export function detailsOf(what, err, env = collectEnvironment(globalThis, known(
   const d = describe(err), se = serverErrorIn(err);
   const out = ['dharmatiles error report', '', `What:     ${what}`, `Said:     ${d.headline}`];
   if (d.detail) out.push(`Details:  ${d.detail}`);
-  out.push(`Kind:     ${d.kind}`, '', 'Environment');
-  const version = env.version ?? se?.context?.version ?? null;
-  const rows = [
-    ['dharmatiles', version], ['target system', env.system], ['printer', env.printer], ['tile', env.tile], ['file', env.file],
-    ['browser', env.userAgent], ['platform', env.platform], ['screen', env.screen], ['time', env.time], ['page', env.url],
-  ];
-  for (const [k, v] of rows) out.push(`  ${k.padEnd(14)}${v ?? 'unknown'}`);
+  out.push(`Kind:     ${d.kind}`, '');
+  out.push(...environmentLines(env, env.version ?? se?.context?.version ?? null));
   out.push('', 'Chain of errors, outermost first');
   chainOf(err).forEach((l, i) => {
     out.push('', `[${i + 1}] ${l.title}`, `    ${l.message}`);
@@ -152,6 +147,41 @@ export function detailsOf(what, err, env = collectEnvironment(globalThis, known(
     if (l.trace.length) out.push(`    ${l.side === 'server' ? 'backtrace (Rust)' : 'stack (JavaScript)'}:`, ...indent(l.trace, '      '));
     else if (l.side === 'server') out.push('    (the server sent no backtrace: this is a refusal it made without one)');
   });
+  return out.join('\n');
+}
+
+/** The environment block of a report: version, target, tile, browser, screen, time, page. */
+function environmentLines(env, version) {
+  const rows = [
+    ['dharmatiles', version], ['target system', env.system], ['printer', env.printer], ['tile', env.tile], ['file', env.file],
+    ['browser', env.userAgent], ['platform', env.platform], ['screen', env.screen], ['time', env.time], ['page', env.url],
+  ];
+  return ['Environment', ...rows.map(([k, v]) => `  ${k.padEnd(14)}${v ?? 'unknown'}`)];
+}
+
+/**
+ * The report for one of the tile's own errors in the panel (a mistake in the
+ * tile, or a bug the build met while building it): its code, where, the
+ * words and help, the source line it points at when known, and the
+ * environment.  Plain text, for the clipboard.
+ */
+export function tileErrorDetails(e, { source = null, env = collectEnvironment(globalThis, known()) } = {}) {
+  const out = [e.unexpected ? 'dharmatiles bug report' : 'dharmatiles tile error', ''];
+  out.push(`Code:     ${e.code}`);
+  if (e.file) out.push(`Where:    ${e.file}:${e.line}:${e.column}`);
+  out.push(`Said:     ${e.message}`);
+  if (e.help) out.push(`Help:     ${e.help}`);
+  out.push(`Kind:     ${e.unexpected ? 'bug (not a mistake in the tile)' : 'a mistake in the tile'}`);
+  if (source != null && e.line) {
+    const lines = source.split('\n'), at = e.line - 1;
+    if (at >= 0 && at < lines.length) {
+      out.push('', 'Source');
+      for (let i = Math.max(0, at - 2); i <= Math.min(lines.length - 1, at + 2); i++) {
+        out.push(`${i === at ? '>' : ' '} ${String(i + 1).padStart(4)} | ${lines[i]}`);
+      }
+    }
+  }
+  out.push('', ...environmentLines(env, env.version ?? null));
   return out.join('\n');
 }
 

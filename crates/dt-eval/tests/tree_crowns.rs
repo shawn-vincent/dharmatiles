@@ -109,3 +109,27 @@ fn a_top_that_leaves_no_room_for_the_crown_is_refused_where_it_is_low() {
         .expect("no room for a crown");
     assert!(format!("{e:?}").contains("no room"), "{e:?}");
 }
+
+#[test]
+fn a_tree_with_nothing_written_builds() {
+    // no `top=`, no trunk, no crown: the defaults must leave the crown room
+    // (a 30dmm trunk under a 40dmm tree once left it 0.2 mm and refused)
+    let text = "dharmatiles version=1\ntile size=\"1x1\" seed=1 {\n    stack {\n        base\n        dirt clods=none\n        tree at=\"(0.5sq, 0.5sq)\" leaves=bare\n    }\n}\n";
+    let h = height(text);
+    // its top is 40dmm; the tips stand a clump's depth under it
+    assert!(
+        (25.0..=40.0).contains(&h),
+        "a default tree stands under 40dmm, not {h}"
+    );
+}
+
+#[test]
+fn a_top_the_crown_cannot_fit_is_the_tiles_to_fix() {
+    // a refusal with help, about a control: dt::look, shown as a mistake at
+    // the tree, not dt::build (a bug)
+    let text = tile("(1sq, 1sq)", "$bottom + 20dmm").replace("14dmm", "19dmm");
+    let opts = Options::default();
+    let errs = build(&mem(&text), "t.dtile", &opts).err().expect("refused");
+    assert!(errs.iter().any(|d| d.code == "dt::look"), "{errs:#?}");
+    check(&mem(&text), "t.dtile", &opts).unwrap();
+}

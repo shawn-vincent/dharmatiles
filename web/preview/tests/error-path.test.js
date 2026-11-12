@@ -136,3 +136,14 @@ test('failed() puts a 5xx reply in the panel with both errors, and leaves a refu
     console.error = log;
   }
 });
+
+test('a tile error copies its code, place, words, help, source line and the environment', async () => {
+  const { tileErrorDetails } = await import('../js/problems.js');
+  const e = { code: 'dt::look', file: '/t.dtile', line: 3, column: 9, message: 'the top leaves the crown 0.2 mm', help: 'raise the top', unexpected: false };
+  const env = { version: '1.0.0+9.gabc', system: 'db', printer: 'default', tile: 'mine', file: '/t.dtile', userAgent: 'UA', platform: 'macOS', screen: '1x1', time: 'T', url: 'U' };
+  const r = tileErrorDetails(e, { source: 'a\nb\n    tree at=x\nd', env });
+  for (const s of ['Code:     dt::look', 'Where:    /t.dtile:3:9', 'Said:     the top leaves', 'Help:     raise the top', 'a mistake in the tile', '>    3 |     tree at=x', 'dharmatiles   1.0.0+9.gabc', 'browser       UA']) {
+    assert.ok(r.includes(s), `${s}\n---\n${r}`);
+  }
+  assert.ok(tileErrorDetails({ ...e, unexpected: true }, { env }).startsWith('dharmatiles bug report'));
+});

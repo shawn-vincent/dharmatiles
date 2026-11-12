@@ -111,6 +111,11 @@ struct Params {
 /// disc, from the crown width a tree will have.
 pub const DEFAULT_CROWN_WIDTH_MM: f64 = 30.0;
 
+/// The bare trunk under the crown when the tile writes none, mm at the 35 mm
+/// square: a 40 mm tree (no `top=`) keeps a crown of about 12 mm over it,
+/// under its clumps' 9.8 mm cap (the library's oak has the same trunk).
+pub const DEFAULT_TRUNK_MM: f64 = 18.0;
+
 /// The heights a tree may stand over its foot, mm at the 35 mm square.
 const MIN_HEIGHT_MM: f64 = 20.0;
 const MAX_HEIGHT_MM: f64 = 120.0;
@@ -124,7 +129,7 @@ impl Default for Params {
         Self {
             height: Draw::flat(40.0, 40.0),
             crown: None,
-            trunk: Draw::flat(30.0, 30.0),
+            trunk: Draw::flat(DEFAULT_TRUNK_MM, DEFAULT_TRUNK_MM),
             trunk_width: None,
             width: Draw::flat(DEFAULT_CROWN_WIDTH_MM, DEFAULT_CROWN_WIDTH_MM),
             shape: crown::ROUND,

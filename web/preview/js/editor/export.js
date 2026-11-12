@@ -1,6 +1,6 @@
 // Export: the same build as `dharmatiles build`, written to out/.
 
-import { dismiss, failed, onProblems, problems, showError } from '../problems.js';
+import { dismiss, failed, onProblems, problems, showError, tileErrorDetails } from '../problems.js';
 import { $, host, viewer } from './app.js';
 import { openFile } from './document.js';
 import { dirty, doc, progressOf, renameable, rootOf, server, stem, tile, view } from './stores.js';
@@ -72,6 +72,12 @@ function drawErrors(t) {
     d.append(line('', e.unexpected ? `A bug, not a mistake in your tile: ${e.message}` : e.message));
     if (e.help) d.append(line('help', e.help));
     if (e.file && e.line) d.onclick = () => openFile(e.file === t.path ? null : e.file, e.line);
+    // every entry copies its full details; a click on the button is not a click on the line
+    const source = !e.file || e.file === t.path ? doc.get().text ?? null : null;
+    const copy = copyButton(() => tileErrorDetails(e, { source }), { title: 'Copy details: the error, where it is, its source line and this environment' });
+    copy.classList.add('e-copy');
+    copy.addEventListener('click', (ev) => ev.stopPropagation());
+    d.prepend(copy);
     errs.append(d);
   }
   for (const p of bugs) errs.append(problemEntry(p, line));
