@@ -43,6 +43,7 @@
 <h2 id="unreleased">Unreleased</h2>
 
 <ul>
+  <li><strong>One error panel, from the server to the screen:</strong> every failure in the editor, whether it began in the page or in the program's Rust, now shows the same way: a headline (the program's own words, or <em>Something went wrong inside dharmatiles</em> for a bug), a <em>Details</em> disclosure into the page's error and the server's causes and backtrace, and a <em>Copy details</em> button that copies a report with the version, build target, tile, browser and time. The server answers every failure with one error shape, and a panic carries its own stack.</li>
   <li><strong>Smoother orbiting with the map shown:</strong> the editor no longer re-reads its colours for every region on every frame; they are read once per theme.</li>
   <li><strong>A rebuild no longer wipes a field you are typing in:</strong> while a value in the property sheet is open for typing, the sheet is held as it is and redrawn when you close the field.</li>
   <li><strong>The drawn cloud follows the caret:</strong> typing inside a <code>top=</code> or moving the caret there by any means now moves the highlighted cloud at once, and a cloud no longer stays drawn from the previous tile after you open another.</li>

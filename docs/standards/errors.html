@@ -26,6 +26,7 @@
   <li><a href="#where">Where errors are handled</a></li>
   <li><a href="#exit">Exit codes</a></li>
   <li><a href="#rust">In the Rust code</a></li>
+  <li><a href="#shape">The error from the server to the screen</a></li>
   <li><a href="#preview">In the preview</a></li>
   <li><a href="#silence">The few allowed silences</a></li>
   <li><a href="#output">Output never changes silently</a></li>
@@ -63,10 +64,10 @@
 <thead><tr><th>Boundary</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td>The command line (<code>main</code>)</td><td>Prints diagnostics with <code>miette</code> (code, span, help) and other errors with their chain of causes, to stderr; exits 1</td></tr>
-<tr><td>The preview's HTTP routes</td><td>Answer a document error as data the page shows inline; answer anything else with an error status and a body naming what failed and why; log it to the server's stderr</td></tr>
-<tr><td>The preview's build worker</td><td>Catches a panic per build, reports it to the page as a failed build with its message, logs it, and keeps serving; the next edit builds again</td></tr>
+<tr><td>The preview's HTTP routes</td><td>Answer a document error as data the page shows inline; answer anything else with an error status and <a href="#shape">the one error shape</a>; log it to the server's stderr</td></tr>
+<tr><td>The preview's build worker</td><td>Catches a panic per build, reports it to the page as a failed build in the same error shape (a bug, with the panic's stack), logs it, and keeps serving; the next edit builds again</td></tr>
 <tr><td>Library sweeps (<code>build --all</code>)</td><td>Report every failing tile by name with its reason and carry on to the next; the run exits 1 if any failed</td></tr>
-<tr><td>The page's event handlers</td><td>Show an unexpected failure in the error panel or the connection chip; never only in the console</td></tr>
+<tr><td>The page's event handlers</td><td>Send an unexpected failure to the one error panel (<code>showError</code> in <code>web/preview/js/problems.js</code>) or the connection chip; never only in the console</td></tr>
 </tbody>
 </table></div>
 
@@ -91,13 +92,36 @@
   <li>No <code>let _ =</code>, <code>.ok()</code>, <code>unwrap_or_default()</code> or <code>unwrap_or(…)</code> on a result that can fail for real. Writing into a <code>String</code> cannot fail, so <code>let _ = write!(s, …)</code> there is fine.</li>
   <li><code>unwrap</code> and <code>expect</code> only for what cannot happen; an <code>expect</code> message says why it cannot. Anything a document or a file can cause is a <code>Result</code>.</li>
   <li>A panic is a bug. It is never part of the plan, and a caught panic is still reported, saying it is a bug in dharmatiles, with its message and where it happened.</li>
-  <li>No shipped program carries a crash switch. The exit-code tests make the program panic through <code>DT_TEST_PANIC</code>, which <code>dt_eval::crash_switch</code> reads only when its <code>test-panic</code> feature is on, and only the dharmatiles crate's dev-dependencies turn that on: a normal build reads no such variable.</li>
+  <li>No shipped program carries a crash switch. The exit-code tests make the program panic through <code>DT_TEST_PANIC</code>, which <code>dt_eval::crash_switch</code> reads only when its <code>test-panic</code> feature is on, and only the dharmatiles crate's dev-dependencies turn that on: a normal build reads no such variable. The preview's two routes that fail on purpose (<code>/api/test-panic</code>, <code>/api/test-failure</code>) exist only in the tests and in a build with the dharmatiles crate's <code>test-routes</code> feature, which nothing enables by default.</li>
 </ul>
+
+<h2 id="shape">The error from the server to the screen</h2>
+<p>One error path runs from a Rust failure to the pixel, and everything on it is the same shape, so a bug report always carries the whole story.</p>
+<p><b>On the server</b> (<code>crates/dharmatiles/src/preview/fail.rs</code>) every reply that is not a success is <code>{"error": {...}}</code> with the right HTTP status:</p>
+<div class="tbl"><table>
+<thead><tr><th>Field</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>kind</code></td><td><code>refused</code>: the request was wrong (no such tile, a name that cannot be a file); the page shows it where it asked. <code>failure</code>: the program tried and could not (a file it could not write); the message is the headline. <code>bug</code>: a panic.</td></tr>
+<tr><td><code>message</code>, <code>help</code></td><td>The words for the user, and what to do about it when the program knows.</td></tr>
+<tr><td><code>causes</code></td><td>The error chain, outermost first (<code>source()</code>); for a panic, where it happened.</td></tr>
+<tr><td><code>backtrace</code></td><td>Always captured, on every kind. A panic's is taken in the panic hook, where the stack still is, and picked up where the panic is caught; other errors take it where they are made. The frames of the capture itself are left out.</td></tr>
+<tr><td><code>context</code></td><td>What the server was doing (<code>route</code>, <code>tile</code>), the program's full version string, and when (<code>at_ms</code>).</td></tr>
+</tbody>
+</table></div>
+<p>A panic caught round a route, a build or a draft is a <code>bug</code> with the panic's message, its place and its stack. A build that panics or cannot be encoded also puts the same structure in the tile's <code>failure</code> in the event stream, and a draft puts it in its reply. A mistake in the tile's text and a gate verdict are not failures and keep their own shapes.</p>
+<p><b>In the page</b>, <code>host.js</code> turns a reply that is not a success into a <code>ServerError</code> (<code>web/preview/js/server-error.js</code>) holding those fields. The error for what the page was doing has it as its <code>cause</code>, so one error carries both stacks. A reply without the structure (a plain-text refusal) becomes one with its words and no backtrace. Everything then goes through <code>showError(what, err)</code>: script errors, unhandled rejections, a store subscriber that throws, a failed reply, a build that failed.</p>
+<p><b>On the screen</b>, one entry in the error panel says it plainly. A <code>failure</code> or a <code>refused</code> shows its own message (and help) as the headline. A <code>bug</code>, and anything the page threw itself (a <code>TypeError</code>, a reply it could not read), shows <em>Something went wrong inside dharmatiles</em> with what was being done, and the words under it. Only a bug takes the interface's danger red (<code>--err</code>); a failure or a refusal is a plain note. The entry opens into the chain, each level indented and in monospace: the page's error and its JavaScript stack, then the server's error with its causes and backtrace, long traces scrolling. <em>Copy details</em> copies a plain-text report:</p>
+<ul class="rules">
+  <li>what was being done, what the panel said, and the kind;</li>
+  <li>the environment: the dharmatiles version (the full build string), the build target system and printer, the tile and file, the browser, platform, screen and window size, the time (ISO) and the page address;</li>
+  <li>the whole chain, the page's stack first and the server's backtrace after it.</li>
+</ul>
+<p>The button reads <em>Copied</em> when the text is on the clipboard. When the browser refuses the clipboard, it says so beside the button, and the details stay open to select by hand.</p>
 
 <h2 id="preview">In the preview</h2>
 <ul class="rules">
   <li>Document errors appear beside their line and in the error panel, with the program's message and help. The page never re-checks a document itself; it asks the program (<code>/api/check-value</code>, the build) and draws the answer.</li>
-  <li>An unexpected failure (a server error, an unreadable reply, a failed fetch other than the connection dropping) goes to the error panel with what was being done ("Could not save 1x1-cliff-corner") and the error's words. Logging it to the console as well is fine; logging it only there is not.</li>
+  <li>An unexpected failure (a server error, an unreadable reply, a failed fetch other than the connection dropping) goes to the error panel with what was being done ("Could not save 1x1-cliff-corner") and the error's words. Logging it to the console as well is fine; logging it only there is not. The entry is the one panel described <a href="#shape">above</a>.</li>
   <li>A lost connection is shown by the connection chip, and the page tries again. That is expected, so it is not an error panel entry.</li>
   <li>Unhandled promise rejections and script errors are caught globally and shown the same way.</li>
 </ul>
@@ -131,7 +155,8 @@
 <h2 id="tests">Tests</h2>
 <ul class="rules">
   <li>Every <code>dt::</code> refusal has a test that a document triggers it, with its code.</li>
-  <li>The preview's server has tests that a document error comes back as data and an internal failure as an error status with its message.</li>
+  <li>The preview's server has tests that a document error comes back as data and an internal failure as an error status in the one error shape: its kind, causes and a backtrace, and for a caught panic the panic's own stack.</li>
+  <li>The page has tests that a failed reply becomes a nested <code>ServerError</code>, and that the copied report holds both stacks and the environment.</li>
   <li>A panic anywhere in a test run is a failure, never retried away. An intermittent crash is a bug to find (the Manifold level-set fix is the model: reproduce, find the cause, prove the fix).</li>
 </ul>
 
