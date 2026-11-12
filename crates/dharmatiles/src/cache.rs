@@ -245,7 +245,7 @@ fn stored_preview(
     let mut b = dt_eval::build_tier(
         &Files,
         path,
-        &opts,
+        opts,
         dt_eval::Tier::SuperLow,
         &Progress::none(),
         None,
