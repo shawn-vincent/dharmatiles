@@ -2537,14 +2537,11 @@ mod stored {
     fn a_stored_preview_shows_until_the_full_build_lands() {
         let dir = temp("preview");
         let store = dt_eval::Store::new(&dir, "test");
-        let draft = Options {
-            draft: true,
-            ..Options::default()
-        };
-        dt_eval::build_stored(
+        dt_eval::build_tier(
             &dt_eval::Files,
             FLAT,
-            &draft,
+            &Options::default(),
+            dt_eval::Tier::SuperLow,
             &dt_eval::Progress::none(),
             None,
             Some(&store),
@@ -2569,8 +2566,11 @@ mod stored {
         assert!(
             texts(&shared, FLAT)
                 .iter()
-                .any(|t| t.starts_with("Showing the stored preview"))
+                .any(|t| t.starts_with("Showing the stored super-low preview"))
         );
+        // a low build on show has not been through the gate: the status line says so
+        let shown = slot(&shared, FLAT, |t| t.shown.clone().unwrap());
+        assert_eq!(shown["checked"], false);
         rebuild(&shared, FLAT);
         assert!(slot(&shared, FLAT, |t| t.shown.is_none()));
         assert_eq!(slot(&shared, FLAT, |t| t.status), State::Ready);

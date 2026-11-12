@@ -180,7 +180,7 @@ pub fn from_built(
     palette: &dt_kit::Palette,
 ) -> Result<Vec<u8>, String> {
     let (painted, clean) = b.colours_pair(palette);
-    let meta = json!({
+    let mut meta = json!({
         "overhang_faces": b.audit.overhang.iter().filter(|&&o| o).count(),
         "band_faces": b.audit.band.iter().filter(|&&o| o).count(),
         "overhang_deg": overhang_deg,
@@ -188,7 +188,11 @@ pub fn from_built(
         "stack": stack_json(b),
         "clouds": clouds_json(b),
         "debug": debug_json(b),
-    });
+    }); // a low or super-low build has not been through the gate: the page says so
+    if !b.checked {
+        meta["checked"] = json!(false);
+    }
+
     encode_traced(
         &b.export.mesh,
         &painted,
@@ -349,15 +353,6 @@ pub fn clouds_json(b: &Built) -> Value {
 pub const VIEW_BUDGET: usize = 400_000;
 
 pub use dt_eval::tiers::thinned;
-
-/// `b` with its mesh thinned to [`VIEW_BUDGET`] ([`thinned`]) and every
-/// per-triangle list kept to match: what a stored preview holds.  A draft's
-/// soup of parts is as heavy as a finished tile, and the view shows no more
-/// than the budget; [`from_draft`] of the result is the same view as of `b`.
-#[must_use]
-pub fn thinned_built(b: Built) -> Built {
-    dt_eval::tiers::thin_built(b, VIEW_BUDGET)
-}
 
 /// [`from_built`] thinned to [`VIEW_BUDGET`]: a draft's soup of parts can
 /// be millions of triangles.
@@ -534,41 +529,6 @@ mod tests {
         assert_eq!(&b[b.len() - 8..b.len() - 4], &[0xff; 4]);
     }
 
-    #[test]
-    fn a_stored_preview_is_the_draft_thinned_to_what_the_view_shows() {
-        // a draft of a meadow is a soup of well over the budget
-        let opts = dt_eval::Options {
-            draft: true,
-            ..dt_eval::Options::default()
-        };
-        let b =
-            dt_eval::build(&dt_eval::Library, "lib:tests/plants/2x2-grass.dtile", &opts).unwrap();
-        let before = b.export.mesh.triangles.len();
-        assert!(before > VIEW_BUDGET, "{before}");
-        let seen = from_draft(&b, 55.0, &dt_kit::Palette::default()).unwrap();
-        let t = thinned_built(b);
-        let n = t.export.mesh.triangles.len();
-        assert!(n <= VIEW_BUDGET && n > 0, "{n}");
-        for len in [
-            t.export.source.len(),
-            t.materials.len(),
-            t.audit.overhang.len(),
-            t.audit.band.len(),
-            t.entries.len(),
-            t.pieces.len(),
-        ] {
-            assert_eq!(len, n, "every per-triangle list is kept to match");
-        }
-        // the view of it is the same size as the view of the whole draft
-        let kept = from_draft(&t, 55.0, &dt_kit::Palette::default()).unwrap();
-        let tri = |bytes: &[u8]| {
-            let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
-            let h: Value = serde_json::from_slice(&bytes[8..8 + jl]).unwrap();
-            h["triangles"].as_u64().unwrap()
-        };
-        assert_eq!(tri(&kept), tri(&seen));
-    }
-
     /// The encoder as it was written before the threads: one triangle after
     /// another into a growing buffer.
     fn encode_in_order(
@@ -619,11 +579,6 @@ mod tests {
         out
     }
 
-    /// The view's bytes are what they were: the colours from one painting
-    /// are the two paintings' colours (overhang red and orange laid over
-    /// the clean paint), and the threaded encoder writes the bytes the
-    /// one-by-one encoder wrote, on tiles with ground, water, grass, trees
-    /// and overhang.
     #[test]
     fn the_view_bytes_are_unchanged_by_painting_once_and_threading() {
         let pal = dt_kit::Palette::default();

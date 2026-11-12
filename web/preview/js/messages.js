@@ -162,7 +162,9 @@ export function statusOf(view, { t = null, live = true, p = null } = {}) {
     const pct = p ? Math.floor(p.fraction * 100) : 0;
     const stage = p ? `${pct}% · ${p.label}` : 'starting';
     const what = t.shown ? 'rebuilding' : 'building';
-    return { verdict: `${what} ${stage}`, tone: 'busy', counts, progress: p ? p.fraction : 0 };
+    // a low build on show (nothing earlier of the tile was kept) has not been through the gate
+    const low = t.shown?.checked === false ? ' · low · not yet checked' : '';
+    return { verdict: `${what} ${stage}${low}`, tone: 'busy', counts, progress: p ? p.fraction : 0 };
   }
   if (t.status === 'idle') return { verdict: 'not built yet', tone: 'idle', counts, progress: null };
   const fails = view.record?.gate?.severity === 'error';

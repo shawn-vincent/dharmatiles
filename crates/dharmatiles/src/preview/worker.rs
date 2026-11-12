@@ -387,14 +387,29 @@ pub(super) fn show_stored(
             );
             Some((p.built, note, "earlier", false))
         }
-        Ok(None) => match store.get(&store.key_at(reads, path, opts, Tier::Draft), want) {
-            Ok(Some(b)) => Some((b, "the stored preview".to_owned(), "preview", true)),
-            Ok(None) => None,
-            Err(e) => {
-                problem(e);
-                None
+        // no earlier full build: a super-low (or a low) one, not yet checked
+        Ok(None) => {
+            let mut found = None;
+            for tier in [Tier::SuperLow, Tier::Low] {
+                match store.get(
+                    &store.key_at(reads, path, opts, tier),
+                    dt_kit::debug::Collect::default(),
+                ) {
+                    Ok(Some(b)) => {
+                        found = Some((
+                            b,
+                            format!("the stored {} preview", tier.name()),
+                            "preview",
+                            true,
+                        ));
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(e) => problem(e),
+                }
             }
-        },
+            found
+        }
         Err(e) => {
             problem(e);
             None
@@ -404,11 +419,7 @@ pub(super) fn show_stored(
         return;
     };
     let palette = shared.palette();
-    let bytes = if draft {
-        payload::from_draft(&built, opts.printer.overhang_deg, &palette)
-    } else {
-        payload::from_built(&built, opts.printer.overhang_deg, &palette)
-    };
+    let bytes = payload::from_built(&built, opts.printer.overhang_deg, &palette);
     // a view that cannot be made is not an error of the tile's: the build
     // that follows shows its own, so say it and show nothing
     let bytes = match bytes {
@@ -422,7 +433,9 @@ pub(super) fn show_stored(
         if t.mesh.is_none() {
             t.mesh = Some(Arc::new(bytes));
             t.mesh_version += 1;
-            t.shown = Some(json!({"kind": kind, "note": note}));
+            // a low or super-low build is not yet checked: the status line says so
+            t.shown = Some(json!({"kind": kind, "note": note, "checked": !draft,
+                                  "tier": if draft { "low" } else { "full" }}));
         }
     });
 }

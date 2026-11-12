@@ -903,6 +903,58 @@ impl Shared {
         lock(&self.tiles).iter().find(|t| t.id == id)?.mesh.clone()
     }
 
+    /// The tile's mesh at a lower tier (`low` or `super-low`), the page's
+    /// payload: read from the cache or built there.  Not yet checked: the
+    /// header says so (`checked: false`, `tier`).
+    fn tier_mesh(&self, id: &str, tier: Option<&str>) -> route::Reply {
+        let tier = match tier {
+            Some("low") => dt_eval::Tier::Low,
+            Some("super-low") => dt_eval::Tier::SuperLow,
+            _ => {
+                return fail::refused(
+                    "400 Bad Request",
+                    "give ?tier=low or ?tier=super-low (the full build is /mesh)",
+                )
+                .into();
+            }
+        };
+        let Some(path) = lock(&self.tiles)
+            .iter()
+            .find(|t| t.id == id)
+            .map(|t| t.path.clone())
+        else {
+            return route::Reply::Text("404 Not Found", "no such tile");
+        };
+        let opts = self.options();
+        let built = dt_eval::build_tier(
+            &dt_eval::Files,
+            &path,
+            &opts,
+            tier,
+            &dt_eval::Progress::none(),
+            None,
+            self.store.as_deref(),
+        );
+        match built {
+            Err(errs) => fail::refused(
+                "422 Unprocessable Entity",
+                errs.iter()
+                    .map(|d| d.message.clone())
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            )
+            .into(),
+            Ok(b) => match payload::from_built(&b, opts.printer.overhang_deg, &self.palette()) {
+                Ok(bytes) => route::Reply::Bytes(Arc::new(bytes)),
+                Err(e) => fail::failure(
+                    "500 Internal Server Error",
+                    format!("cannot prepare the {} view: {e}", tier.name()),
+                )
+                .into(),
+            },
+        }
+    }
+
     fn sketch_mesh(&self, id: &str, sketch: u64) -> Option<Arc<Vec<u8>>> {
         lock(&self.tiles)
             .iter()

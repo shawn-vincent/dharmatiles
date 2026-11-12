@@ -263,7 +263,7 @@ pub fn build_stored(
 ///   ([`Built::checked`]).
 /// - [`Tier::SuperLow`]: a low build cut down to
 ///   [`crate::tiers::SUPER_LOW_BUDGET`] triangles.  It is made from the low
-///   build (found in the store, or made and kept), and kept as its own entry.
+///   build (made, not kept) and kept as its own entry.
 /// - [`Tier::Draft`]: the editor's draft (coarse cells), never kept.
 ///
 /// Each tier is its own entry in the store; the options' own `draft` and
@@ -298,16 +298,9 @@ pub fn build_tier(
     };
     let tracked = Tracked::new(sources);
     let o = at(Tier::Low);
-    let stored = Options {
-        clouds: true,
-        ..o.clone()
-    };
-    check(&tracked, path, &stored)?;
+    check(&tracked, path, &o)?;
     let key = store.key_at(&tracked.reads(), path, &o, Tier::SuperLow);
-    let want = dt_kit::debug::Collect {
-        clouds: opts.clouds,
-        marks: opts.debug,
-    };
+    let want = dt_kit::debug::Collect::default();
     let mut problems = Vec::new();
     match store.get(&key, want) {
         Ok(Some(mut b)) => {
@@ -318,7 +311,9 @@ pub fn build_tier(
         Ok(None) => {}
         Err(e) => problems.push(e),
     }
-    let low = build_stored(&tracked, path, &o, progress, cache, Some(store))?;
+    // the low build it is cut from is not kept: only the small one is
+    // no clouds: a preview is for looking at, and they are most of its size
+    let low = build_cached(&tracked, path, &o, progress, cache)?;
     let mut b = crate::tiers::super_low(low);
     if let Err(e) = store.put(&key, &b) {
         problems.push(e);

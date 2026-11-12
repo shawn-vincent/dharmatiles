@@ -36,8 +36,8 @@ pub(crate) enum CacheAction {
     List,
     /// Remove everything the cache holds.
     Clear,
-    /// Build a preview (the draft: coarse cells, no union) of every library
-    /// tile into the cache, so the library opens at once the first time.  A
+    /// Build a preview (the super-low tier: about 12 000 triangles, not yet
+    /// checked) of every library tile into the cache, so the library opens at once the first time.  A
     /// release or an install runs it; `--into` writes a folder instead, laid
     /// out as the cache is, for an install to copy into the cache folder.
     Previews {

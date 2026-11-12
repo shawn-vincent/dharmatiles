@@ -128,6 +128,9 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         }
         ("GET", "/api/tiles", _) => Reply::Json(OK, shared.snapshot()),
         ("GET", _, Some((id, "mesh"))) => bytes(shared.mesh(id), "no mesh yet"),
+        // `?tier=low` or `?tier=super-low`: the tile's mesh at that tier, from the
+        // cache or built, for a map that draws by distance.  Never checked.
+        ("GET", _, Some((id, "tier"))) => shared.tier_mesh(id, req.param("tier")),
         ("GET", _, Some((id, "sketch"))) => bytes(
             req.param("id")
                 .and_then(|k| k.parse().ok())

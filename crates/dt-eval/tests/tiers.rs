@@ -96,7 +96,7 @@ fn only_a_full_build_is_checked_and_a_low_one_is_lighter() {
 }
 
 #[test]
-fn the_three_tiers_are_three_entries_and_a_super_low_is_kept_from_the_low() {
+fn the_three_tiers_are_three_entries() {
     let dir = temp("keys");
     let store = dt_eval::Store::new(&dir, "test-engine");
     let go = |tier| {
@@ -113,7 +113,8 @@ fn the_three_tiers_are_three_entries_and_a_super_low_is_kept_from_the_low() {
     };
     use dt_eval::CacheState::{Hit, Miss};
     assert_eq!(go(Tier::SuperLow).cache.state, Miss);
-    // the super-low made the low on the way
+    // the low it was cut from was not kept: the low is its own entry
+    assert_eq!(go(Tier::Low).cache.state, Miss);
     assert_eq!(go(Tier::Low).cache.state, Hit);
     assert_eq!(go(Tier::Full).cache.state, Miss);
     assert_eq!(go(Tier::SuperLow).cache.state, Hit);
