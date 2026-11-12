@@ -51,14 +51,15 @@ CI is off. Run the tests locally on this Mac only; do not wait on or re-enable G
 
 ## Architecture
 
-Six crates under `crates/`:
+Seven crates under `crates/`:
 
 | Crate | Role |
 |---|---|
+| `dt-lang` | The language's word tables, no dependencies: functions and their arities, weightings, coordinates, unit words, `$` names, land slope and water settle. Read by the decoder, completion, the docs generator, the elements and the page (via `/api/language`). |
 | `dt-geom` | Kernels: mesh backend (Manifold via `manifold-csg`), rays (obvhs), the terrain's stack mesher (`stack`, built on the adaptive lift), keyed seeds and noise, grids, distance transform, adaptive lift, convex hulls. No element knowledge. |
 | `dt-kit` | The vocabulary elements are written in: `Scene` of tagged solids, `Field` and its morphology, `scatter`, `loft`, `extrude`, `carve`, `union`, forms (level sets, hulls, relief), graphs (trees), `stand`, rays, the audit gate (`audit`), the STL writer with its build record, the CPU preview renderer. |
 | `dt-elements` | The built-in elements, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `flower`, `scatter`), `water`, `grass`, `reeds`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
-| `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the element schema (`elements.rs`), edits. |
+| `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the element schema (`elements.rs`: controls, and each element's body, footprint, family and cost), one expression evaluator (`Expr::eval` over an algebra), edits. |
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each element reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
 | `dharmatiles` | The CLI. |
 
