@@ -52,13 +52,15 @@ pub enum Value {
     Formula(Formula),
 }
 
-/// A formula the build evaluates at the places an element asks: its number
-/// in the tile's table of them, and its text with every name expanded (what
-/// the caches and equality read).
+/// A formula the build evaluates at the places an element asks: the entry
+/// whose `top=` it is, and its text with every name expanded (what the
+/// caches and equality read).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Formula {
-    /// Its place in the tile's table of formulas.
-    pub id: usize,
+    /// The stack entry whose formula it is.
+    pub owner: dt_kit::EntryId,
+    /// The thing of that entry a scatter lists, when it is that thing's.
+    pub child: Option<usize>,
     /// The formula with the names it reads expanded.
     pub key: String,
 }
@@ -91,11 +93,11 @@ pub struct TopCloud {
 
 /// What works a tree's `top=` formula out at a tip.
 pub trait CrownTops {
-    /// The cloud formula `id` makes at `tip`.
+    /// The cloud `formula` makes at `tip`.
     ///
     /// # Errors
     /// [`LookError`] naming what the formula cannot do there.
-    fn cloud(&self, id: usize, tip: &Tip) -> Result<TopCloud, LookError>;
+    fn cloud(&self, formula: &Formula, tip: &Tip) -> Result<TopCloud, LookError>;
 }
 
 /// A number or a range `lo..hi` as an element reads it: one number is the
@@ -324,8 +326,8 @@ impl CellMm {
 pub struct Ctx<'a> {
     /// Its area (the whole tile unless `at=` names a region).
     pub area: &'a Mask,
-    /// Its stack path, the owner of what it makes.
-    pub path: &'a str,
+    /// Who it is, the owner of what it makes.
+    pub path: &'a dt_kit::EntryId,
     /// Its seed, keyed by its path.
     pub seed: Seed,
     /// `at=` a line: the path it follows, in squares from the south-west

@@ -31,7 +31,7 @@ use dt_geom::Mask;
 use dt_kit::Frame;
 
 use crate::diag::Diag;
-use crate::doc::{Entry, Owner, Region, Setting, Tile, strip_name};
+use crate::doc::{Entry, Region, RegionRead, Setting, Tile, strip_name};
 use crate::places::Places;
 
 /// What a region is made from.
@@ -598,12 +598,13 @@ impl RegionTree {
 }
 
 impl RegionTree {
-    /// The region `$region` is for a formula's owner.
+    /// The region `$region` is for a formula's caller: stack entry `entry`,
+    /// or the thing `child` of it (a scatter's).
     #[must_use]
-    pub fn owner(&self, o: Owner) -> usize {
-        match o.child {
-            Some(k) => self.of_child[o.entry][k],
-            None => self.of_entry[o.entry],
+    pub fn of(&self, entry: usize, child: Option<usize>) -> usize {
+        match child {
+            Some(k) => self.of_child[entry][k],
+            None => self.of_entry[entry],
         }
     }
 
@@ -624,12 +625,18 @@ impl RegionTree {
     /// tile's root; a thing at tile level has none).
     #[must_use]
     pub fn parent_flaws(&self, tile: &Tile) -> Vec<Diag> {
+        self.parent_flaws_of(&tile.region_reads())
+    }
+
+    /// [`RegionTree::parent_flaws`] for the formulas `reads`.
+    #[must_use]
+    pub fn parent_flaws_of(&self, reads: &[RegionRead<'_>]) -> Vec<Diag> {
         use dt_doc::consts::ParentFlaw;
         let mut out = Vec::new();
-        for r in &tile.region_reads {
-            let own = self.owner(r.owner);
+        for r in reads {
+            let own = self.of(r.entry, r.child);
             let parents = self.parents(own);
-            let Some(flaw) = r.table.parent_flaw(&r.expr, parents) else {
+            let Some(flaw) = r.table.parent_flaw(r.expr, parents) else {
                 continue;
             };
             let at = narrow(r, parents).unwrap_or(r.span);
@@ -658,7 +665,7 @@ impl RegionTree {
                     ),
                 ),
             };
-            out.push(Diag::at(&r.src, at, "dt::region", message, label).help(help));
+            out.push(Diag::at(r.src, at, "dt::region", message, label).help(help));
         }
         out
     }
@@ -677,8 +684,8 @@ impl RegionTree {
     pub fn resolve_pins(&self, tile: &mut Tile, units: dt_doc::units::Units) -> Vec<Diag> {
         let coords = crate::coords::Coords::new(self, units.square_mm, units.layer_mm);
         let mut out = Vec::new();
-        for b in &mut tile.heights.bodies {
-            let Some(&own) = self.of_entry.get(b.entry) else {
+        for (entry, b) in tile.stack.iter_mut().enumerate() {
+            let Some(&own) = self.of_entry.get(entry) else {
                 continue;
             };
             for p in &mut b.pins {
@@ -778,14 +785,14 @@ impl RegionTree {
     pub fn hole_flaws(&self, tile: &Tile) -> Vec<Diag> {
         let coords = crate::coords::Coords::new(self, 1.0, 1.0);
         let mut out = Vec::new();
-        for r in &tile.region_reads {
-            let own = self.owner(r.owner);
+        for r in &tile.region_reads() {
+            let own = self.of(r.entry, r.child);
             let mut targets = Vec::new();
-            angle_reads(&r.expr, &r.table, 0, &mut targets);
+            angle_reads(r.expr, r.table, 0, &mut targets);
             for target in targets {
                 let id = match &target {
                     None => own,
-                    Some(e) => match coords.region(e, own, &r.table) {
+                    Some(e) => match coords.region(e, own, r.table) {
                         Ok(id) => id,
                         // `parent_flaws` reports a region that is not there
                         Err(_) => continue,
@@ -801,7 +808,7 @@ impl RegionTree {
                 let at = find_word(r, text).unwrap_or(r.span);
                 out.push(
                     Diag::at(
-                        &r.src,
+                        r.src,
                         at,
                         "dt::region",
                         format!(
@@ -861,7 +868,7 @@ fn angle_reads(
 }
 
 /// Where `word` is written in a formula's own text, as a span.
-fn find_word(r: &crate::doc::RegionRead, word: &str) -> Option<miette::SourceSpan> {
+fn find_word(r: &RegionRead<'_>, word: &str) -> Option<miette::SourceSpan> {
     let text = r.src.inner();
     let (off, len) = (r.span.offset(), r.span.len());
     let whole = text.get(off..off + len)?;
@@ -893,7 +900,7 @@ fn find_word(r: &crate::doc::RegionRead, word: &str) -> Option<miette::SourceSpa
 /// The text of the first `parent(…)` in a formula that has no parent where
 /// it is called, as a span inside the formula's own, when it is written
 /// there (not reached through a name).
-fn narrow(r: &crate::doc::RegionRead, parents: usize) -> Option<miette::SourceSpan> {
+fn narrow(r: &RegionRead<'_>, parents: usize) -> Option<miette::SourceSpan> {
     let text = r.src.inner();
     let (off, len) = (r.span.offset(), r.span.len());
     let whole = text.get(off..off + len)?;

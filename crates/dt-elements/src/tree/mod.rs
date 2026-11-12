@@ -85,9 +85,9 @@ struct Params {
     /// Its height over its foot (`top="bottom + 40"`, and the default).
     height: Draw,
     /// Its `top=`: the formula (a cloud over its tips) the tile worked out,
-    /// by its number in the tile's table; `None` stands the tree
-    /// `height` over its foot.
-    crown: Option<usize>,
+    /// by the entry that owns it; `None` stands the tree `height` over its
+    /// foot.
+    crown: Option<crate::Formula>,
     trunk: Draw,
     trunk_width: Option<Draw>,
     width: Draw,
@@ -219,7 +219,7 @@ impl Tree {
         p.height = s.dist_or("height", p.height)?;
         if let Some(c) = s.control("top") {
             match &c.value {
-                crate::Value::Formula(f) => p.crown = Some(f.id),
+                crate::Value::Formula(f) => p.crown = Some(f.clone()),
                 _ => {
                     return Err(LookError::control(
                         "top",
@@ -355,8 +355,8 @@ impl Tree {
         let tip_at = |x: f64, y: f64| dt_kit_tip(&frame, at, [x, y], radius);
         // the crown's cloud at each tip, one formula for the tree
         let cloud_at = |x: f64, y: f64| -> Result<crate::TopCloud, LookError> {
-            match (p.crown, crowns, flat_top) {
-                (Some(id), Some(c), _) => c.cloud(id, &tip_at(x, y)),
+            match (&p.crown, crowns, flat_top) {
+                (Some(f), Some(c), _) => c.cloud(f, &tip_at(x, y)),
                 (Some(_), None, _) => Err(LookError::build(
                     "a tree's top is worked out by the tile it is built in",
                 )),
@@ -686,7 +686,7 @@ fn note_built(scene: &mut Scene, b: &Built) {
 }
 
 /// Stamp a built tree's trunk on the ground and add it to the scene.
-fn plant(scene: &mut Scene, path: &str, b: Built) {
+fn plant(scene: &mut Scene, path: &dt_kit::EntryId, b: Built) {
     // the trunk's footprint: grass keeps out, things stand clear
     let frame = *scene.frame();
     let (nx, ny) = frame.nodes();
@@ -703,14 +703,14 @@ fn plant(scene: &mut Scene, path: &str, b: Built) {
     scene.stamp(&mask, b.at[2]);
     if let Some(d) = scene.debug() {
         for mut c in b.clouds {
-            c.owner = path.to_owned();
+            c.owner = path.clone();
             d.column(c);
         }
     }
     scene.add(
         Tag {
             kind: Kind::Tree,
-            owner: path.to_owned(),
+            owner: path.clone(),
         },
         b.solid,
     );
@@ -1047,8 +1047,7 @@ fn under_the_cloud(
         }
         if let Some(m) = marks.as_deref_mut() {
             m.push(dt_kit::debug::Column {
-                owner: String::new(),
-                entry: None,
+                owner: dt_kit::EntryId::new(""),
                 class: "tip-cloud",
                 at: [p[0], p[1]],
                 span: [c.lo * s, c.hi * s],

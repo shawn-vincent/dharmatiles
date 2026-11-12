@@ -3,7 +3,7 @@
 //! written (`file`, byte `span`, 1-based `lines`) so the editor can light
 //! its text when its geometry is picked.
 
-use dt_eval::doc::{Entry, Tile};
+use dt_eval::doc::{Entry, Named, Tile};
 use serde_json::{Value, json};
 
 /// The documentation site (GitHub Pages, served from `docs/` on `main`).
@@ -20,42 +20,27 @@ pub fn page(element: &str) -> String {
     }
 }
 
-fn plural(word: &str) -> String {
-    if word.ends_with('s') {
-        word.to_owned()
-    } else {
-        format!("{word}s")
-    }
-}
-
-fn and_list(words: &[String]) -> String {
-    match words {
-        [] => String::new(),
-        [one] => one.clone(),
-        [init @ .., last] => format!("{} and {last}", init.join(", ")),
-    }
-}
-
 fn item(label: String, element: &str) -> Value {
     json!({ "label": label, "element": element, "href": format!("{DOCS}{}", page(element)) })
 }
 
-/// The tile's stack as `{label, element, href}` items, in written order,
-/// ending with the base when the stack has a `base` line.
+/// The tile's stack as `{key, label, element, href, …}` items, in written
+/// order, ending with the base when the stack has a `base` line.  `key` is
+/// the entry's id ([`dt_eval::doc::Entry::id`]): what the page keeps to
+/// find the entry again whatever the stack looks like later.
 ///
 /// # Errors
 /// If a span the plan holds does not lie in its own source (a bug: the
 /// page would be sent empty text in its place).
 pub fn items(tile: &Tile, system: &str) -> Result<Vec<Value>, String> {
-    let mut out = Vec::with_capacity(tile.stack.len() + 1);
-    for (i, e) in tile.stack.iter().enumerate() {
-        out.push(entry(
-            e,
-            tile.stack[..i].iter().rev().find(|p| inside(e, p)),
-        )?);
+    let names = tile.names(system);
+    let mut out = Vec::with_capacity(names.len());
+    for (e, named) in tile.stack.iter().zip(&names) {
+        out.push(entry(e, named)?);
     }
     if let Some(span) = tile.base_span {
         let mut v = base(system);
+        v["key"] = json!(names.last().map(|n| n.id.as_str()));
         v["what"] = json!("base");
         v["file"] = json!(tile.src.name());
         let text = tile.src.inner();
@@ -74,47 +59,17 @@ pub fn items(tile: &Tile, system: &str) -> Result<Vec<Value>, String> {
 /// The base line's connector for the build target: its label and page.
 #[must_use]
 pub fn base(system: &str) -> Value {
-    let (label, page) = if system == "ol" {
-        ("OpenLOCK base", "openlock")
-    } else {
-        ("DungeonBlocks base", "dungeonblocks")
-    };
+    let (label, page) = dt_eval::doc::base_label(system);
     json!({
         "label": label, "element": "connector",
         "href": format!("{DOCS}elements/{page}.html"),
     })
 }
 
-/// True when `e` is written inside `outer` (a scatter in a surface,
-/// lifted out into its own entry).
-fn inside(e: &Entry, outer: &Entry) -> bool {
-    let (a, b) = (e.span.offset(), outer.span.offset());
-    std::sync::Arc::ptr_eq(&e.src, &outer.src) && a > b && a + e.span.len() <= b + outer.span.len()
-}
-
-fn entry(e: &Entry, within: Option<&Entry>) -> Result<Value, String> {
+fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
     let what = e.what.value.as_str();
-    let (mut label, element) = if what == "scatter" && !e.children.is_empty() {
-        let mut names: Vec<String> = Vec::new();
-        for c in &e.children {
-            let n = plural(&c.what.value);
-            if !names.contains(&n) {
-                names.push(n);
-            }
-        }
-        // a mixed scatter links to its first thing's page
-        (and_list(&names), e.children[0].what.value.as_str())
-    } else {
-        (what.to_owned(), what)
-    };
-    if let Some(outer) = within {
-        label = format!("{label} in {}", outer.what.value);
-    } else if let Some(against) = &e.against {
-        label = format!("{label} at the {against}");
-    } else if let Some(area) = &e.area {
-        label = format!("{label} in {}", area.value);
-    }
-    let mut v = item(label, element);
+    let mut v = item(named.label.clone(), &named.element);
+    v["key"] = json!(named.id.as_str());
     v["what"] = json!(what);
     v["file"] = json!(e.src.name());
     let (start, len) = (e.span.offset(), e.span.len());

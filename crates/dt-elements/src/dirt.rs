@@ -270,7 +270,7 @@ pub struct Made {
 /// The dirt as a layer of earth on the land, before its edge-round and its
 /// sides: what the dirt lays ([`Scene::lay`]).
 fn earth<'a>(
-    owner: &'a str,
+    owner: &'a dt_kit::EntryId,
     area: &'a dt_kit::Mask,
     shape: &'a Banded,
     grain: &'a dt_kit::Relief<'a>,

@@ -233,7 +233,7 @@ impl Element for Reeds {
             scene.add(
                 Tag {
                     kind: Kind::Reeds,
-                    owner: ctx.path.to_owned(),
+                    owner: ctx.path.clone(),
                 },
                 solid,
             );

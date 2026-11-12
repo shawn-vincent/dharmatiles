@@ -9,7 +9,7 @@
 
 use dt_geom::Weighting;
 
-use crate::{Field, Mask};
+use crate::{EntryId, Field, Mask};
 
 /// The marks of one build, in tile mm (z is world mm).
 #[derive(Clone, Debug, Default)]
@@ -27,9 +27,8 @@ pub struct Debug {
 /// A point, classed by what it is (`grew`, `crowded`, …).
 #[derive(Clone, Debug)]
 pub struct Dot {
-    /// The stack entry that made it, by its path (`tile/grass/0`: the
-    /// element and its place among that element's entries, or its `id=`).
-    pub owner: String,
+    /// The stack entry that made it.
+    pub owner: EntryId,
     /// Its class: the legend's key.
     pub class: &'static str,
     /// Where, mm.
@@ -40,7 +39,7 @@ pub struct Dot {
 #[derive(Clone, Debug)]
 pub struct Trail {
     /// The stack entry that made it.
-    pub owner: String,
+    pub owner: EntryId,
     /// Its class: the legend's key.
     pub class: &'static str,
     /// Its points, mm.
@@ -51,9 +50,7 @@ pub struct Trail {
 #[derive(Clone, Debug)]
 pub struct Sheet {
     /// The stack entry it belongs to.
-    pub owner: String,
-    /// Its place in the stack, for its hue.
-    pub entry: usize,
+    pub owner: EntryId,
     /// Its class (`band-lo`, `band-hi`).
     pub class: &'static str,
     /// Heights, world mm.
@@ -72,10 +69,7 @@ pub struct Sheet {
 #[derive(Clone, Debug)]
 pub struct Column {
     /// The stack entry that made it.
-    pub owner: String,
-    /// Its place in the stack, filled in by the build once it is collected
-    /// (an element leaves it `None`).
-    pub entry: Option<usize>,
+    pub owner: EntryId,
     /// Its class (`tip-cloud`, `stone-cloud`).
     pub class: &'static str,
     /// Where, mm from the tile's south-west corner.
@@ -124,19 +118,19 @@ pub fn shade_of(w: Option<&Weighting>, u: f64) -> f32 {
 
 impl Debug {
     /// Add a point.
-    pub fn dot(&mut self, owner: &str, class: &'static str, at: [f64; 3]) {
+    pub fn dot(&mut self, owner: &EntryId, class: &'static str, at: [f64; 3]) {
         self.dots.push(Dot {
-            owner: owner.to_owned(),
+            owner: owner.clone(),
             class,
             at,
         });
     }
 
     /// Add a polyline; fewer than two points add nothing.
-    pub fn trail(&mut self, owner: &str, class: &'static str, points: Vec<[f64; 3]>) {
+    pub fn trail(&mut self, owner: &EntryId, class: &'static str, points: Vec<[f64; 3]>) {
         if points.len() >= 2 {
             self.trails.push(Trail {
-                owner: owner.to_owned(),
+                owner: owner.clone(),
                 class,
                 points,
             });
@@ -146,16 +140,14 @@ impl Debug {
     /// Add a height sheet over `region`.
     pub fn sheet(
         &mut self,
-        owner: &str,
-        entry: usize,
+        owner: &EntryId,
         class: &'static str,
         z: Field,
         region: Mask,
         shade: Vec<f32>,
     ) {
         self.sheets.push(Sheet {
-            owner: owner.to_owned(),
-            entry,
+            owner: owner.clone(),
             class,
             z,
             region,

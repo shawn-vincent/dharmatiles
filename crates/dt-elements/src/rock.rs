@@ -450,7 +450,7 @@ pub struct Item {
     pub bury: Draw,
     /// The tile's formula for its `top=` (a cloud over its place), when it
     /// has one: each stone's peak stands at the cloud's roll there.
-    pub top: Option<usize>,
+    pub top: Option<crate::Formula>,
 }
 
 /// One stone, or (a quarter of the time when `clusters`) a cluster of 2
@@ -510,8 +510,8 @@ pub struct Thing {
     pub weight: f64,
     /// How much of its width sinks under the ground, a share range.
     pub buried: Draw,
-    /// Its `top=`: the number of the tile's formula, when written.
-    pub top: Option<usize>,
+    /// Its `top=`: the tile's formula for it, when written.
+    pub top: Option<crate::Formula>,
 }
 
 /// The things a rock element builds, with their default size (dt-doc's
@@ -559,7 +559,7 @@ impl Thing {
         let s = Settings::new(controls);
         if let Some(c) = s.control("top") {
             match &c.value {
-                crate::Value::Formula(f) => t.top = Some(f.id),
+                crate::Value::Formula(f) => t.top = Some(f.clone()),
                 _ => {
                     return Err(LookError::control(
                         "top",
@@ -609,7 +609,7 @@ pub(crate) struct Tally {
 /// rock solids owned by `owner`.
 pub(crate) fn add_items(
     scene: &mut Scene,
-    owner: &str,
+    owner: &dt_kit::EntryId,
     seed: Seed,
     items: &[(&Item, [f64; 2], f64)],
     crowns: Option<&dyn crate::CrownTops>,
@@ -738,7 +738,7 @@ pub(crate) fn add_items(
         scene.add(
             Tag {
                 kind: Kind::Rock,
-                owner: owner.to_owned(),
+                owner: owner.clone(),
             },
             sol,
         );
@@ -768,13 +768,13 @@ fn peaks_under_clouds(
     seed: Seed,
     frame: &dt_kit::Frame,
     crowns: Option<&dyn crate::CrownTops>,
-    owner: &str,
+    owner: &dt_kit::EntryId,
     mut marks: Option<&mut Vec<dt_kit::debug::Column>>,
 ) -> Result<Vec<Option<f64>>, LookError> {
-    let topped: Vec<(usize, usize)> = stood
+    let topped: Vec<(usize, &crate::Formula)> = stood
         .iter()
         .enumerate()
-        .filter_map(|(i, f)| items[f.0].0.top.map(|id| (i, id)))
+        .filter_map(|(i, f)| items[f.0].0.top.as_ref().map(|t| (i, t)))
         .collect();
     let mut out = vec![None; stood.len()];
     if topped.is_empty() {
@@ -787,10 +787,10 @@ fn peaks_under_clouds(
     };
     let (s, sq) = (frame.scale(), frame.square_mm);
     let mut clouds = Vec::with_capacity(topped.len());
-    for &(i, id) in &topped {
+    for &(i, formula) in &topped {
         let (_, p, r, bottom, _, _) = stood[i];
         clouds.push(crowns.cloud(
-            id,
+            formula,
             &crate::Tip {
                 at: [p[0] / sq, p[1] / sq],
                 centre: [p[0] / sq, p[1] / sq],
@@ -839,8 +839,7 @@ fn peaks_under_clouds(
         if let Some(m) = marks.as_deref_mut() {
             let shade = |u| dt_kit::debug::shade_of(c.odds.as_ref(), u);
             m.push(dt_kit::debug::Column {
-                owner: owner.to_owned(),
-                entry: None,
+                owner: owner.clone(),
                 class: "stone-cloud",
                 at: p,
                 span: [c.lo * s, c.hi * s],
@@ -924,7 +923,7 @@ impl Element for Single {
         let mut rng = Rng::new(ctx.seed.key("rock"));
         let d = self.thing.draw(&mut rng);
         let mut item = make_item(&mut rng, d, self.thing.mix, false, false)?;
-        item.top = self.thing.top;
+        item.top.clone_from(&self.thing.top);
         let yaw = rng.uniform(0.0, 360.0);
         let s = scene.frame().scale();
         let sq = scene.frame().square_mm;
@@ -1236,7 +1235,7 @@ impl Element for Scatter {
                 None => make_item(&mut r, d, thing.mix, true, thing.buried.hi() > 0.0)?,
             };
             item.bury = thing.buried.clone();
-            item.top = thing.top;
+            item.top.clone_from(&thing.top);
             items.push(item);
             kinds.push(thing.kind.as_str());
         }

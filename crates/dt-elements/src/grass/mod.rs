@@ -372,7 +372,7 @@ impl Element for Grass {
         let slots = scene
             .slots(n_classes as u32, Material::Grass)
             .map_err(LookError::build)?;
-        let owner = ctx.path.to_owned();
+        let owner = ctx.path.clone();
         let mut made = 0usize;
         for c in 0..n_classes {
             #[allow(clippy::cast_precision_loss)]
@@ -434,7 +434,7 @@ const ARROW_MM: (f64, f64) = (3.5, 2.2);
 #[allow(clippy::too_many_arguments)]
 fn debug_marks(
     d: &mut dt_kit::debug::Debug,
-    owner: &str,
+    owner: &dt_kit::EntryId,
     starts: &[fronds::Start],
     frs: &[fronds::Frond],
     flow: &flow::Flow,

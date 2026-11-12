@@ -436,7 +436,7 @@ fn banks(pin_at: &str, body_at: &str) -> String {
 fn pin_place(text: &str) -> [f64; 2] {
     let c = ok(text);
     let tile = c.tile.as_ref().unwrap();
-    match &tile.heights.bodies[0].pins[0].at {
+    match &tile.stack.iter().find(|e| e.is_body()).unwrap().pins[0].at {
         dt_doc::model::PlaceRef::Point(x, y) => [*x, *y],
         other => panic!("a pin still holds `{other}`"),
     }

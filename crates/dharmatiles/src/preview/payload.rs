@@ -12,6 +12,13 @@
 //! u16 LE  piece      [n]      which of the entry's solids it came from
 //! ```
 //!
+//! An entry number is a place in the header's `stack`: the stack this mesh
+//! was built from, `[{index, key, label, element, what}]`, the connector
+//! last when the tile has a base.  The page decodes an entry against that
+//! list, never against the stack of the text it holds now, which may have
+//! moved on while this mesh was on screen; `key` is the entry's id
+//! (`tile/grass/0`), what the page keeps to find the entry again.
+//!
 //! Colours come from the same painter as `build --png`
 //! ([`dt_eval::Built::colours`]); the viewer never recomputes them.  The
 //! overhang flags are the gate's own (layer reach), not an angle guess.
@@ -168,6 +175,7 @@ pub fn from_built(
         "band_faces": b.audit.band.iter().filter(|&&o| o).count(),
         "overhang_deg": overhang_deg,
         "footprint": b.footprint,
+        "stack": stack_json(b),
         "debug": debug_json(b),
     });
     encode_traced(
@@ -177,6 +185,25 @@ pub fn from_built(
         &b.entries,
         &b.pieces,
         &meta,
+    )
+}
+
+/// The stack a build was made from, as the mesh header carries it: for each
+/// entry its place (the number the mesh's triangles carry), its key (its id,
+/// which survives edits to the text), its words and its element.
+#[must_use]
+pub fn stack_json(b: &Built) -> Value {
+    Value::Array(
+        b.stack
+            .iter()
+            .enumerate()
+            .map(|(index, n)| {
+                json!({
+                    "index": index, "key": n.id.as_str(), "label": n.label,
+                    "element": n.element, "what": n.what,
+                })
+            })
+            .collect(),
     )
 }
 
@@ -198,9 +225,10 @@ fn mm(v: f64) -> f64 {
 /// The debug layer's marks as the page draws them, thinned to
 /// [`DEBUG_DOTS`], [`DEBUG_TRAIL_POINTS`] and [`DEBUG_SHEET_NODES`]:
 /// `{"dots": {class: [x, y, z, …]}, "trails": {class: [[x, y, z, …], …]},
-/// "sheets": [{entry, owner, class, nx, ny, step, z: [h or null, …],
-/// shade: [0 to 1, …]}], "columns": [{entry, class, v: [x, y, low, high,
-/// rolled, shade low, shade high, shade rolled, …]}], "thinned": bool}`;
+/// "sheets": [{owner, class, nx, ny, step, z: [h or null, …],
+/// shade: [0 to 1, …]}], "columns": [{owner, class, v: [x, y, low, high,
+/// rolled, shade low, shade high, shade rolled, …]}], "thinned": bool}`,
+/// each `owner` an entry's key (`tile/dirt/0`);
 /// `null` when the build collected none.
 #[must_use]
 pub fn debug_json(b: &Built) -> Value {
@@ -225,12 +253,12 @@ pub fn debug_json(b: &Built) -> Value {
     let k_col = every(d.columns.len(), DEBUG_COLUMNS);
     thinned |= k_col > 1;
     // grouped by entry and class: the page draws one entry's clouds
-    let mut columns: BTreeMap<(Option<usize>, &str), Vec<f64>> = BTreeMap::new();
+    let mut columns: BTreeMap<(&str, &str), Vec<f64>> = BTreeMap::new();
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
     for c in &d.columns {
         let n = seen.entry(c.class).or_default();
         if n.is_multiple_of(k_col) {
-            let v = columns.entry((c.entry, c.class)).or_default();
+            let v = columns.entry((c.owner.as_str(), c.class)).or_default();
             v.extend([c.at[0], c.at[1], c.span[0], c.span[1], c.rolled].map(mm));
             v.extend(c.shade.map(|s| (f64::from(s) * 100.0).round() / 100.0));
         }
@@ -273,7 +301,7 @@ pub fn debug_json(b: &Built) -> Value {
                 .map(|(i, j)| (f64::from(s.shade[j * s.z.nx + i]) * 100.0).round() / 100.0)
                 .collect();
             json!({
-                "entry": s.entry, "owner": s.owner, "class": s.class,
+                "owner": s.owner.as_str(), "class": s.class,
                 "nx": nx, "ny": ny, "step": s.z.step * k as f64, "z": z,
                 "shade": shade,
             })
@@ -281,7 +309,7 @@ pub fn debug_json(b: &Built) -> Value {
         .collect();
     let columns: Vec<Value> = columns
         .into_iter()
-        .map(|((entry, class), v)| json!({"entry": entry, "class": class, "v": v}))
+        .map(|((owner, class), v)| json!({"owner": owner, "class": class, "v": v}))
         .collect();
     json!({"dots": dots, "trails": trails, "sheets": sheets, "columns": columns, "thinned": thinned})
 }
@@ -394,6 +422,7 @@ pub fn from_draft(
         "overhang_deg": overhang_deg,
         "footprint": b.footprint,
         "thinned": kept.len() < b.export.mesh.triangles.len(),
+        "stack": stack_json(b),
         "debug": debug_json(b),
     });
     encode_traced(
@@ -539,6 +568,34 @@ mod tests {
     }
 
     #[test]
+    fn the_header_carries_the_stack_the_mesh_was_built_from() {
+        let text = "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=21 {\n stack {\n  base\n  dirt top=\"$dirtEdgeHeight\"\n  scatter count=3 { rock size=\"9dmm .. 12dmm\" }\n }\n}\n";
+        let m = dt_eval::Memory([("t.dtile".to_owned(), text.to_owned())].into());
+        let opts = dt_eval::Options::default();
+        let b = dt_eval::build(&m, "t.dtile", &opts).unwrap();
+        let bytes = from_built(&b, 55.0, &dt_kit::Palette::default()).unwrap();
+        let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+        let h: Value = serde_json::from_slice(&bytes[8..8 + jl]).unwrap();
+        let stack = h["stack"].as_array().unwrap();
+        let keys: Vec<&str> = stack.iter().map(|e| e["key"].as_str().unwrap()).collect();
+        assert_eq!(keys, ["tile/dirt/0", "tile/scatter/0", "tile/connector"]);
+        for (i, e) in stack.iter().enumerate() {
+            assert_eq!(e["index"], i);
+        }
+        assert_eq!(stack[1]["label"], "rocks");
+        assert_eq!(stack[1]["what"], "scatter");
+        assert_eq!(stack[1]["element"], "rock");
+        // every triangle's entry is a place in that stack (or none)
+        let n = h["triangles"].as_u64().unwrap() as usize;
+        let at = 8 + jl + 72 * n + 18 * n;
+        let entries: Vec<u16> = (0..n)
+            .map(|t| u16::from_le_bytes(bytes[at + 2 * t..at + 2 * t + 2].try_into().unwrap()))
+            .collect();
+        assert!(entries.iter().all(|&e| e == NO_ENTRY || usize::from(e) < stack.len()));
+        assert!(entries.contains(&2), "the base is the last place in the stack");
+    }
+
+    #[test]
     fn debug_json_sends_each_cloud_with_its_shade() {
         let text = "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=21 {\n stack {\n  base\n  dirt top=\"$groundHeight + low(0dmm .. 3dmm)\"\n  scatter count=3 { rock size=\"9dmm .. 12dmm\" top=\"$bottom + high(3dmm .. 9dmm)\" }\n }\n}\n";
         let m = dt_eval::Memory([("t.dtile".to_owned(), text.to_owned())].into());
@@ -558,7 +615,7 @@ mod tests {
         let cols = d["columns"].as_array().unwrap();
         let rock = cols.iter().find(|c| c["class"] == "stone-cloud").unwrap();
         // the scatter is the stack's second entry (the base is not one)
-        assert_eq!(rock["entry"], 1, "{rock}");
+        assert_eq!(rock["owner"], "tile/scatter/0", "{rock}");
         let stones = rock["v"].as_array().unwrap();
         assert!(
             stones.len() >= 3 * 8 && stones.len().is_multiple_of(8),

@@ -32,7 +32,7 @@ use dt_doc::expr::Expr;
 use dt_doc::model::{self, Callee, Definition, Document, PlaceRef, Spanned, Use, Value};
 use dt_doc::place::{Along, Edge, Point, Side};
 use dt_doc::schema::{Control, Element, PlaceWord, Role};
-use dt_kit::{Draw, Seed};
+use dt_kit::{Draw, EntryId, Seed};
 use miette::{NamedSource, SourceSpan};
 
 use crate::diag::{Diag, Src};
@@ -87,19 +87,35 @@ pub struct Setting {
     pub src: Src,
 }
 
-/// One stack entry that calls a built element, definitions inlined.
+/// One stack entry that calls a built element, definitions inlined.  It
+/// carries everything the document says of it, the heights language's `top=`,
+/// pins and `slope` included: there is no table beside the stack that holds
+/// them.
 #[derive(Clone, Debug)]
 pub struct Entry {
+    /// Who it is: its seed path, `tile/<element>/<k or id>`, assigned once
+    /// when the document is read (see [`EntryId`]).
+    pub id: EntryId,
     /// The element named.
     pub what: Spanned<String>,
     /// `at=` a region: where it acts in (default the whole tile).
     pub area: Option<Spanned<String>>,
     /// `seed=`: pins its element.
     pub seed: Option<u64>,
-    /// `id=`: its name among same-named siblings in seed paths.
-    pub id: Option<String>,
+    /// Its name, if written (a body's, for the preview).
+    pub label: Option<String>,
     /// The controls the element takes: written, or their defaults.
     pub controls: Vec<Setting>,
+    /// Its `top=`, where its element reads one: a body's band, or the height
+    /// of a tree or rock (its formula).
+    pub top: Option<Top>,
+    /// A body's pins, in order.
+    pub pins: Vec<PinDecl>,
+    /// A body's `slope`, degrees.
+    pub slope: Option<f64>,
+    /// The context its `top=` and pins are read in: the constants of the
+    /// scope it is written in, after its own `let`s.
+    pub table: Arc<ConstTable>,
     /// `at=` a path of tile edges, as the path in squares walked with
     /// the tile inside on the left (see [`edge_path`]).
     pub along: Option<Vec<[f64; 2]>>,
@@ -121,6 +137,23 @@ pub struct Entry {
     pub span: SourceSpan,
 }
 
+/// A `top=` as the document wrote it, with the context it is read in.
+#[derive(Clone, Debug)]
+pub struct Top {
+    /// The formula as written.
+    pub expr: Expr,
+    /// Where it is written.
+    pub span: SourceSpan,
+    /// Its text.
+    pub src: Src,
+    /// For a tree or a rock, the formula its tips or peak are worked out
+    /// from, every name it reads expanded (what the control's [`Formula`]
+    /// stands for); `None` for a body's.
+    ///
+    /// [`Formula`]: dt_elements::Formula
+    pub crown: Option<Expr>,
+}
+
 /// A child of a scatter, as its element takes it.
 #[derive(Clone, Debug)]
 pub struct Child {
@@ -128,6 +161,10 @@ pub struct Child {
     pub what: Spanned<String>,
     /// Its controls, written or by default.
     pub controls: Vec<Setting>,
+    /// Its `top=` (a tree's or rock's), when written.
+    pub top: Option<Top>,
+    /// The context that `top=` is read in.
+    pub table: Arc<ConstTable>,
     /// `weight=` (default 1).
     pub weight: f64,
 }
@@ -202,30 +239,6 @@ pub struct PinDecl {
     pub from: Provenance,
 }
 
-/// A body of the stack (dirt, water, cliff, flagstones or planks) as written.
-#[derive(Clone, Debug)]
-pub struct BodyDecl {
-    /// Its place in the tile's stack ([`Tile::stack`]).
-    pub entry: usize,
-    /// The element.
-    pub element: String,
-    /// Its name, if written.
-    pub label: Option<String>,
-    /// Its top, if written.
-    pub top: Option<(Expr, SourceSpan)>,
-    /// The region it fills: `None` is the whole tile.
-    pub region: Option<String>,
-    /// Its `slope`, degrees.
-    pub slope: Option<f64>,
-    /// Its pins, in order.
-    pub pins: Vec<PinDecl>,
-    /// The context its top and pins are read in: the constants of the scope
-    /// the body is written in (the tile's, in format 0).
-    pub table: Arc<ConstTable>,
-    /// Its element's name in the text.
-    pub span: SourceSpan,
-}
-
 /// The tops and pins a library default gives every body of an element.
 #[derive(Clone, Debug)]
 pub struct DefaultBody {
@@ -248,82 +261,99 @@ pub struct Heights {
     pub points: BTreeMap<String, [f64; 2]>,
     /// Which lines are closed.
     pub closed: Vec<String>,
-    /// The tile's bodies, in stack order.
-    pub bodies: Vec<BodyDecl>,
     /// The library's defaults.
     pub defaults: Vec<DefaultBody>,
-    /// Where each stack entry that is not a body (things, coats) sits, for
-    /// order notes and `top=` on things.
-    pub things: Vec<ThingDecl>,
 }
 
-/// A thing or a coat in the stack, for the checks that read its top.
-#[derive(Clone, Debug)]
-pub struct ThingDecl {
-    /// The element or definition.
+/// The words of the elements that are bodies of the stack: they paint the
+/// surface the things stand on, and take a `top=` and pins of their own.
+#[must_use]
+pub fn is_body(element: &str) -> bool {
+    matches!(
+        element,
+        "dirt" | "water" | "flagstones" | "planks" | "cliff"
+    )
+}
+
+/// A stack entry as the page names it: who it is, what it is and the words
+/// that stand for it (the preview's stack line, the mesh header's stack).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Named {
+    /// Who it is.
+    pub id: EntryId,
+    /// The element as written (`scatter`).
+    pub what: String,
+    /// The element whose page documents it (a scatter's first thing's).
     pub element: String,
-    /// Its top (a height limit), if written.
-    pub top: Option<(Expr, SourceSpan)>,
-    /// Its `at=`, if written.
-    pub at: Option<PlaceRef>,
-    /// Where it is written.
-    pub span: SourceSpan,
+    /// What it places, in words: `boulders at the cliff`, `dirt in crag`.
+    pub label: String,
 }
 
-/// Who a formula is called for: a stack entry, or one of a scatter's
-/// children (each thing a scatter places has its own region).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Owner {
-    /// The stack entry ([`Tile::stack`]).
-    pub entry: usize,
-    /// The child of that entry (a scatter's), when it is one.
-    pub child: Option<usize>,
+/// The connector's label and the page that documents it, for the target.
+#[must_use]
+pub fn base_label(system: &str) -> (&'static str, &'static str) {
+    if system == "ol" {
+        ("OpenLOCK base", "openlock")
+    } else {
+        ("DungeonBlocks base", "dungeonblocks")
+    }
 }
 
-/// A formula the tile writes, read where a thing calls it: `check` settles
-/// what `parent(…)` in it can reach once the tile's regions are known
-/// (format 1).
-#[derive(Clone, Debug)]
-pub struct RegionRead {
+fn plural(word: &str) -> String {
+    if word.ends_with('s') {
+        word.to_owned()
+    } else {
+        format!("{word}s")
+    }
+}
+
+fn and_list(words: &[String]) -> String {
+    match words {
+        [] => String::new(),
+        [one] => one.clone(),
+        [init @ .., last] => format!("{} and {last}", init.join(", ")),
+    }
+}
+
+impl Entry {
+    /// True when `self` is written inside `outer` (a scatter in a surface,
+    /// lifted out into its own entry).
+    fn inside(&self, outer: &Entry) -> bool {
+        let (a, b) = (self.span.offset(), outer.span.offset());
+        Arc::ptr_eq(&self.src, &outer.src) && a > b && a + self.span.len() <= b + outer.span.len()
+    }
+
+    /// Whether it is a body (see [`is_body`]).
+    #[must_use]
+    pub fn is_body(&self) -> bool {
+        is_body(&self.what.value)
+    }
+}
+
+/// A formula the tile writes, as it is read where a thing calls it: `check`
+/// settles what `parent(…)` in it can reach once the tile's regions are known
+/// (format 1).  Made from the stack ([`Tile::region_reads`]), never stored.
+#[derive(Clone, Copy, Debug)]
+pub struct RegionRead<'a> {
     /// The formula.
-    pub expr: Expr,
+    pub expr: &'a Expr,
     /// Where it is written.
     pub span: SourceSpan,
     /// Its text.
-    pub src: Src,
+    pub src: &'a Src,
     /// The context it is read in.
-    pub table: Arc<ConstTable>,
-    /// Who calls it.
-    pub owner: Owner,
-}
-
-/// A tree's `top=`: the formula its tips are worked out from, with the
-/// context it is read in and who calls it.
-#[derive(Clone, Debug)]
-pub struct TreeTop {
-    /// The formula, every name it reads expanded.
-    pub expr: Expr,
-    /// Where it is written.
-    pub span: SourceSpan,
-    /// Its text.
-    pub src: Src,
-    /// The context it is read in (what `$region` is, which regions are
-    /// named).
-    pub table: Arc<ConstTable>,
-    /// Who calls it.
-    pub owner: Owner,
+    pub table: &'a Arc<ConstTable>,
+    /// The stack entry that calls it ([`Tile::stack`]).
+    pub entry: usize,
+    /// The thing of that entry (a scatter's) that calls it, when it is one.
+    pub child: Option<usize>,
 }
 
 /// What the evaluator needs from a tile document.
 #[derive(Clone, Debug)]
 pub struct Tile {
-    /// The `top=` of every tree, by the number its setting carries.
-    pub tree_tops: Vec<TreeTop>,
     /// The document's format (0 is only read to be migrated).
     pub format: u32,
-    /// Formulas read where a thing calls them, for the region checks of
-    /// format 1 (empty in format 0).
-    pub region_reads: Vec<RegionRead>,
     /// Squares across.
     pub cols: u32,
     /// Squares up.
@@ -352,6 +382,8 @@ pub struct Tile {
     pub base_span: Option<SourceSpan>,
     /// The entries that call built elements, definitions inlined.
     pub stack: Vec<Entry>,
+    /// Where each entry stands in [`Tile::stack`], by its id.
+    ids: BTreeMap<EntryId, usize>,
     /// What the document asks for that is not built yet: one error each,
     /// at its text.  `check` accepts these; `build` refuses them.
     pub pending: Vec<Diag>,
@@ -365,6 +397,100 @@ pub struct Tile {
 }
 
 impl Tile {
+    /// The stack entries as the page names them, in order, then the
+    /// connector's when the tile has a `base` line (for build target
+    /// `system`).
+    #[must_use]
+    pub fn names(&self, system: &str) -> Vec<Named> {
+        let mut out = Vec::with_capacity(self.stack.len() + 1);
+        for (i, e) in self.stack.iter().enumerate() {
+            let outer = self.stack[..i].iter().rev().find(|p| e.inside(p));
+            let what = e.what.value.as_str();
+            let (mut label, element) = if what == "scatter" && !e.children.is_empty() {
+                let mut names: Vec<String> = Vec::new();
+                for c in &e.children {
+                    let n = plural(&c.what.value);
+                    if !names.contains(&n) {
+                        names.push(n);
+                    }
+                }
+                // a mixed scatter links to its first thing's page
+                (and_list(&names), e.children[0].what.value.as_str())
+            } else {
+                (what.to_owned(), what)
+            };
+            if let Some(outer) = outer {
+                label = format!("{label} in {}", outer.what.value);
+            } else if let Some(against) = &e.against {
+                label = format!("{label} at the {against}");
+            } else if let Some(area) = &e.area {
+                label = format!("{label} in {}", area.value);
+            }
+            out.push(Named {
+                id: e.id.clone(),
+                what: what.to_owned(),
+                element: element.to_owned(),
+                label,
+            });
+        }
+        if self.has_base {
+            out.push(Named {
+                id: EntryId::new("tile/connector"),
+                what: "base".to_owned(),
+                element: "connector".to_owned(),
+                label: base_label(system).0.to_owned(),
+            });
+        }
+        out
+    }
+
+    /// Where the entry `id` stands in [`Tile::stack`]; `None` for an id the
+    /// stack does not hold (the connector's, a ground's).
+    #[must_use]
+    pub fn index_of(&self, id: &EntryId) -> Option<usize> {
+        self.ids.get(id).copied()
+    }
+
+    /// The formulas the stack's entries call, in the order of the stack, for
+    /// the region checks of format 1 (none in format 0): a body's `top=` and
+    /// each pin's, a tree's or rock's `top=`, a scatter's things'.
+    #[must_use]
+    pub fn region_reads(&self) -> Vec<RegionRead<'_>> {
+        let mut out = Vec::new();
+        for (entry, e) in self.stack.iter().enumerate() {
+            if e.table.is_dollar() {
+                let formulas = e
+                    .top
+                    .iter()
+                    .map(|t| (&t.expr, t.span, &t.src))
+                    .chain(e.pins.iter().map(|p| (&p.top, p.top_span, &p.from.src)));
+                for (expr, span, src) in formulas {
+                    out.push(RegionRead {
+                        expr,
+                        span,
+                        src,
+                        table: &e.table,
+                        entry,
+                        child: None,
+                    });
+                }
+            }
+            for (k, c) in e.children.iter().enumerate() {
+                if let Some(t) = c.top.as_ref().filter(|_| c.table.is_dollar()) {
+                    out.push(RegionRead {
+                        expr: &t.expr,
+                        span: t.span,
+                        src: &t.src,
+                        table: &c.table,
+                        entry,
+                        child: Some(k),
+                    });
+                }
+            }
+        }
+        out
+    }
+
     /// Replace the root seed, wobbling the wobbled lines again from it
     /// (a `--seed` reaches the lines as well as the elements).
     pub fn reseed(&mut self, seed: u64) {
@@ -540,11 +666,7 @@ pub fn read_with(
 ) -> Result<Read, Vec<Diag>> {
     let mut r = Reader {
         units,
-        entry_tables: BTreeMap::new(),
-        pending_reads: Vec::new(),
-        reads: Vec::new(),
-        pending_tops: Vec::new(),
-        tops: Vec::new(),
+        counts: BTreeMap::new(),
         sources,
         files: BTreeMap::new(),
         loading: Vec::new(),
@@ -714,17 +836,9 @@ struct Reader<'s> {
     widths: BTreeMap<String, f64>,
     /// What `mm`, `in` and `layer` are worth (format 1).
     units: dt_doc::units::Units,
-    /// The context each of the tile's own stack entries is read in, by the
-    /// offset of its text.
-    entry_tables: BTreeMap<usize, Arc<ConstTable>>,
-    /// Formulas read for the entry being expanded, until it is pushed.
-    pending_reads: Vec<RegionRead>,
-    /// Formulas read for the tile's entries, owners settled.
-    reads: Vec<RegionRead>,
-    /// Trees' tops for the entry being expanded, until it is pushed.
-    pending_tops: Vec<TreeTop>,
-    /// Trees' tops for the tile's entries, owners settled.
-    tops: Vec<TreeTop>,
+    /// How many entries of each element are in the stack so far: an entry
+    /// without an `id=` is named by its count.
+    counts: BTreeMap<String, usize>,
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A
@@ -928,8 +1042,6 @@ impl Reader<'_> {
         };
         let mut t = Tile {
             format: file.doc.format(),
-            tree_tops: Vec::new(),
-            region_reads: Vec::new(),
             cols: header.cols,
             rows: header.rows,
             seed,
@@ -942,6 +1054,7 @@ impl Reader<'_> {
             has_base: def.base.is_some(),
             base_span: def.base.as_ref().map(|b| b.span),
             stack: Vec::new(),
+            ids: BTreeMap::new(),
             pending: Vec::new(),
             notes: Vec::new(),
             src: Arc::clone(src),
@@ -1148,141 +1261,19 @@ impl Reader<'_> {
             .table
             .clone()
             .unwrap_or_else(|| Arc::new(consts.clone()));
-        t.heights = self.heights(file, def, consts, &root, &t.stack, &mut t.pending);
-        t.region_reads = std::mem::take(&mut self.reads);
-        t.tree_tops = std::mem::take(&mut self.tops);
+        t.heights = self.heights(def, consts, &root);
+        t.ids = t
+            .stack
+            .iter()
+            .enumerate()
+            .map(|(i, e)| (e.id.clone(), i))
+            .collect();
         Some(t)
     }
 
-    /// What the heights language wrote in the tile: its bodies, pins and
-    /// the library's defaults.  What `build` does not do yet goes to
-    /// `pending`.
-    fn heights(
-        &mut self,
-        file: &Arc<File>,
-        def: &Definition,
-        consts: ConstTable,
-        root: &Arc<ConstTable>,
-        stack: &[Entry],
-        pending: &mut Vec<Diag>,
-    ) -> Heights {
-        let src = &file.src;
-        let from = Provenance {
-            path: file.path.clone(),
-            src: Arc::clone(src),
-            default: false,
-        };
-        let pin = |p: &model::Pin, from: &Provenance, dollar: bool| PinDecl {
-            name: p.name.as_ref().map(|n| n.value.clone()),
-            top: if dollar {
-                p.top
-                    .value
-                    .map_names(&mut |n| Some(Expr::Name(dt_doc::consts::dollar_of(n))))
-            } else {
-                p.top.value.clone()
-            },
-            top_span: p.top.span,
-            at: p.at.value.clone(),
-            at_span: p.at.span,
-            span: p.span,
-            from: from.clone(),
-        };
-        let mut bodies = Vec::new();
-        let mut things = Vec::new();
-        for e in &def.stack {
-            let el = match &e.callee {
-                Callee::Element(el)
-                    if matches!(
-                        el.name,
-                        "dirt" | "water" | "flagstones" | "planks" | "cliff"
-                    ) =>
-                {
-                    el
-                }
-                _ => {
-                    // a thing, a coat or a part: its top is not built yet,
-                    // except a tree's (its height) and a definition call's
-                    // (for the tree inside it), which the stack reads
-                    let name = e.what.value.as_str();
-                    let read = match &e.callee {
-                        Callee::Element(el) => dt_doc::words::takes_cloud_top(el.name),
-                        Callee::Definition(_) => true,
-                    };
-                    if let Some(t) = e.top.as_ref().filter(|_| !read) {
-                        pending.push(not_yet(src, t.span, &format!("`top=` on `{name}` is")));
-                    }
-                    things.push(thing(e));
-                    continue;
-                }
-            };
-            // the entry this body is, found by where it is written
-            let Some(entry) = stack
-                .iter()
-                .position(|s| s.span == e.span && Arc::ptr_eq(&s.src, src))
-            else {
-                // not an entry of the stack: `expand` left it out after
-                // reporting why (an error, or something not built)
-                continue;
-            };
-            let table = self
-                .entry_tables
-                .get(&e.span.offset())
-                .cloned()
-                .unwrap_or_else(|| Arc::clone(root));
-            // format 1: what the body reads must be there, at each point
-            let mut readable = true;
-            if let Some(t) = &e.top {
-                readable &= self.readable(&table, &t.value, t.span, src, Reads::At(&e.what.value));
-            }
-            for p in &e.pins {
-                readable &= self.readable(
-                    &table,
-                    &p.top.value,
-                    p.top.span,
-                    src,
-                    Reads::At(&e.what.value),
-                );
-            }
-            if !readable {
-                continue;
-            }
-            if table.is_dollar() {
-                let owner = Owner { entry, child: None };
-                let formulas = e
-                    .top
-                    .iter()
-                    .map(|t| (&t.value, t.span))
-                    .chain(e.pins.iter().map(|p| (&p.top.value, p.top.span)));
-                for (expr, span) in formulas {
-                    self.reads.push(RegionRead {
-                        expr: expr.clone(),
-                        span,
-                        src: Arc::clone(src),
-                        table: Arc::clone(&table),
-                        owner,
-                    });
-                }
-            }
-            bodies.push(BodyDecl {
-                entry,
-                element: el.name.to_owned(),
-                label: e.label.as_ref().map(|l| l.value.clone()),
-                table,
-                top: e.top.as_ref().map(|t| (t.value.clone(), t.span)),
-                region: e
-                    .place
-                    .region
-                    .as_ref()
-                    .map(|r| r.value.clone())
-                    .or_else(|| match e.place.along.as_ref().map(|a| &a.value) {
-                        Some(Along::Line(n)) if self.widths.contains_key(n) => Some(strip_name(n)),
-                        _ => None,
-                    }),
-                slope: e.slope.as_ref().map(|s| s.value),
-                pins: e.pins.iter().map(|p| pin(p, &from, false)).collect(),
-                span: e.what.span,
-            });
-        }
+    /// What the heights language wrote in the tile besides its entries: its
+    /// constants, points and the library's defaults.
+    fn heights(&mut self, def: &Definition, consts: ConstTable, root: &Arc<ConstTable>) -> Heights {
         let mut defaults = Vec::new();
         // the library's defaults are written in format 0: in a format 1 tile
         // their names are the context's `$` names
@@ -1315,7 +1306,7 @@ impl Reader<'_> {
                             t.span,
                         )
                     }),
-                    pins: d.pins.iter().map(|p| pin(p, &dfrom, old)).collect(),
+                    pins: d.pins.iter().map(|p| pin_decl(p, &dfrom, old)).collect(),
                     from: dfrom.clone(),
                 });
             }
@@ -1329,9 +1320,7 @@ impl Reader<'_> {
                 .filter(|l| l.closed)
                 .map(|l| l.name.value.clone())
                 .collect(),
-            bodies,
             defaults,
-            things,
         }
     }
 
@@ -1406,9 +1395,6 @@ impl Reader<'_> {
             };
             if scope.depth == 0 {
                 self.top = Some((Arc::clone(src), e.span));
-                if let Some(t) = &scope.lets.table {
-                    self.entry_tables.insert(e.span.offset(), Arc::clone(t));
-                }
             }
             if self.entries >= MAX_ENTRIES {
                 if self.entries == MAX_ENTRIES {
@@ -1466,6 +1452,16 @@ impl Reader<'_> {
                 (Some(i), None) => Some(i.value.clone()),
                 (None, None) => None,
             };
+            // who this entry is, in seed paths: by its id, else by how many
+            // entries of its element come before it in the whole stack
+            let entry_id = EntryId::new(&match &id {
+                Some(i) => format!("tile/{}/{i}", e.what.value),
+                None => format!(
+                    "tile/{}/{}",
+                    e.what.value,
+                    self.counts.get(&e.what.value).copied().unwrap_or(0)
+                ),
+            });
             match &e.callee {
                 Callee::Element(element) => {
                     if !dt_elements::built().any(|n| n == element.name) {
@@ -1605,9 +1601,6 @@ impl Reader<'_> {
                         }
                     }
                     let mut children = Vec::new();
-                    // formulas read for this entry, until it is pushed
-                    let mark = self.pending_reads.len();
-                    let tmark = self.pending_tops.len();
                     // a scatter inside a surface scatters on that surface:
                     // its own entry, in the surface's area, listed right after it
                     let mut hoisted: Vec<model::Entry> = Vec::new();
@@ -1638,22 +1631,62 @@ impl Reader<'_> {
                             );
                             continue;
                         }
-                        let before = self.pending_reads.len();
-                        let tbefore = self.pending_tops.len();
-                        match self.scatter_child(c, scope, pending) {
-                            Some(child) => {
-                                for r in &mut self.pending_reads[before..] {
-                                    r.owner.child = Some(children.len());
-                                }
-                                for t in &mut self.pending_tops[tbefore..] {
-                                    t.owner.child = Some(children.len());
-                                }
-                                children.push(child);
-                            }
+                        match self.scatter_child(c, scope, pending, &entry_id, children.len()) {
+                            Some(child) => children.push(child),
                             None => ok = false,
                         }
                     }
-                    let mut controls = self.controls(e, element, scope, pending);
+                    let controls = self.controls(e, element, scope, pending, (&entry_id, None));
+                    let (mut controls, mut top) = match controls {
+                        Some((c, t)) => (Some(c), t),
+                        None => (None, None),
+                    };
+                    let mut pins = Vec::new();
+                    let table = scope.lets.table.clone().unwrap_or_default();
+                    if is_body(element.name) {
+                        // a body's band: its `top=` and pins, which must be
+                        // readable where it is written (format 1)
+                        if let Some(t) = &e.top {
+                            ok &= self.readable(
+                                &table,
+                                &t.value,
+                                t.span,
+                                src,
+                                Reads::At(&e.what.value),
+                            );
+                            top = Some(Top {
+                                expr: t.value.clone(),
+                                span: t.span,
+                                src: Arc::clone(src),
+                                crown: None,
+                            });
+                        }
+                        let from = Provenance {
+                            path: scope.file.path.clone(),
+                            src: Arc::clone(src),
+                            default: false,
+                        };
+                        for p in &e.pins {
+                            ok &= self.readable(
+                                &table,
+                                &p.top.value,
+                                p.top.span,
+                                src,
+                                Reads::At(&e.what.value),
+                            );
+                            pins.push(pin_decl(p, &from, false));
+                        }
+                    } else if !dt_doc::words::takes_cloud_top(element.name)
+                        && let Some(t) = &e.top
+                    {
+                        // a thing or a coat: its top is not built yet, except
+                        // a tree's or a rock's (its height)
+                        pending.push(not_yet(
+                            src,
+                            t.span,
+                            &format!("`top=` on `{}` is", e.what.value),
+                        ));
+                    }
                     // a scatter along a line with a width covers its strip: half
                     // the width either side, unless `reach=` says otherwise
                     if let (Some(cs), Some(name)) = (controls.as_mut(), &line)
@@ -1673,12 +1706,18 @@ impl Reader<'_> {
                             area: area.clone(),
                             ..scope.clone()
                         };
+                        *self.counts.entry(e.what.value.clone()).or_default() += 1;
                         out.push(Entry {
+                            id: entry_id,
                             what: e.what.clone(),
                             area,
                             seed,
-                            id,
+                            label: e.label.as_ref().map(|l| l.value.clone()),
                             controls,
+                            top,
+                            pins,
+                            slope: e.slope.as_ref().map(|s| s.value),
+                            table,
                             along: path,
                             at: point,
                             against,
@@ -1688,22 +1727,10 @@ impl Reader<'_> {
                             src: Arc::clone(src),
                             span: e.span,
                         });
-                        let entry = out.len() - 1;
-                        for mut r in self.pending_reads.drain(mark..) {
-                            r.owner.entry = entry;
-                            self.reads.push(r);
-                        }
-                        for mut t in self.pending_tops.drain(tmark..) {
-                            t.owner.entry = entry;
-                            self.tops.push(t);
-                        }
                         if !hoisted.is_empty() {
                             // listed right after the surface it is written in
                             self.expand(&hoisted, &inner, out, pending);
                         }
-                    } else {
-                        self.pending_reads.truncate(mark);
-                        self.pending_tops.truncate(tmark);
                     }
                 }
                 Callee::Definition(name) => {
@@ -1815,6 +1842,8 @@ impl Reader<'_> {
         c: &model::Entry,
         scope: &Scope,
         pending: &mut Vec<Diag>,
+        owner: &EntryId,
+        index: usize,
     ) -> Option<Child> {
         // a child's own block of `let`s and `override`s holds for it
         let child_scope;
@@ -1884,7 +1913,7 @@ impl Reader<'_> {
                 };
                 let inner = self.scoped(&inner, &def.consts);
                 let inner = self.scoped(&inner, &def.stack_consts);
-                let mut child = self.scatter_child(one, &inner, pending)?;
+                let mut child = self.scatter_child(one, &inner, pending, owner, index)?;
                 // the call's own name is where it is shown
                 child.what.span = c.what.span;
                 child.weight = c.place.weight.as_ref().map_or(1.0, |w| w.value);
@@ -1919,13 +1948,15 @@ impl Reader<'_> {
                 &format!("`top=` on `{}` is", cl.name),
             ));
         }
-        let controls = self.controls(&thing, cl, &inner, pending)?;
+        let (controls, top) = self.controls(&thing, cl, &inner, pending, (owner, Some(index)))?;
         ok.then(|| Child {
             what: Spanned {
                 value: cl.name.to_owned(),
                 span: c.what.span,
             },
             controls,
+            top,
+            table: inner.lets.table.clone().unwrap_or_default(),
             weight: c.place.weight.as_ref().map_or(1.0, |w| w.value),
         })
     }
@@ -1969,18 +2000,22 @@ impl Reader<'_> {
             })
     }
 
-    /// The controls a built element takes, as written or by default; `None`
-    /// when one cannot be given yet (it is in `pending`).
+    /// The controls a built element takes, as written or by default, and for
+    /// a tree or a rock the `top=` its formula stands for; `None` when one
+    /// cannot be given yet (it is in `pending`).  `owner` is the entry the
+    /// controls are for, and the thing of it when they are a scatter's.
     fn controls(
         &mut self,
         e: &model::Entry,
         element: &'static Element,
         scope: &Scope,
         pending: &mut Vec<Diag>,
-    ) -> Option<Vec<Setting>> {
+        owner: (&EntryId, Option<usize>),
+    ) -> Option<(Vec<Setting>, Option<Top>)> {
         let src = &scope.file.src;
         let mut out = Vec::new();
         let mut ok = true;
+        let mut cloud_top = None;
         // a tree's height is its `top`: the outermost call's, else its own
         if dt_doc::words::takes_cloud_top(element.name)
             && let Some((t, at)) = scope
@@ -1988,22 +2023,10 @@ impl Reader<'_> {
                 .clone()
                 .or_else(|| e.top.clone().map(|t| (t, Arc::clone(src))))
         {
-            if let Some(table) = scope.lets.table.clone() {
-                if !self.readable(&table, &t.value, t.span, &at, Reads::At(element.name)) {
-                    return None;
-                }
-                if table.is_dollar() {
-                    self.pending_reads.push(RegionRead {
-                        expr: t.value.clone(),
-                        span: t.span,
-                        src: Arc::clone(&at),
-                        table,
-                        owner: Owner {
-                            entry: usize::MAX,
-                            child: None,
-                        },
-                    });
-                }
+            if let Some(table) = scope.lets.table.clone()
+                && !self.readable(&table, &t.value, t.span, &at, Reads::At(element.name))
+            {
+                return None;
             }
             // a top that reads no place keeps the old checks of a tree's
             // height (20 to 120dmm over its foot, `bottom` added once)
@@ -2035,25 +2058,21 @@ impl Reader<'_> {
                 }
                 return None;
             }
-            let id = self.tops.len() + self.pending_tops.len();
             out.push(Setting {
                 name: "top".to_owned(),
                 value: dt_elements::Value::Formula(dt_elements::Formula {
-                    id,
+                    owner: owner.0.clone(),
+                    child: owner.1,
                     key: expr.to_string(),
                 }),
                 span: t.span,
                 src: Arc::clone(&at),
             });
-            self.pending_tops.push(TreeTop {
-                expr,
+            cloud_top = Some(Top {
+                expr: t.value.clone(),
                 span: t.span,
                 src: at,
-                table,
-                owner: Owner {
-                    entry: usize::MAX,
-                    child: None,
-                },
+                crown: Some(expr),
             });
         }
         for s in &e.controls {
@@ -2183,7 +2202,7 @@ impl Reader<'_> {
                 push_setting(&mut out, c.name, &raw, value, e.what.span, src);
             }
         }
-        ok.then_some(out)
+        ok.then_some((out, cloud_top))
     }
 }
 
@@ -2281,12 +2300,23 @@ fn default_value(c: &'static Control, lets: &Lets) -> Option<dt_elements::Value>
         .map(|l| l.value)
 }
 
-fn thing(e: &model::Entry) -> ThingDecl {
-    ThingDecl {
-        element: e.what.value.clone(),
-        top: e.top.as_ref().map(|t| (t.value.clone(), t.span)),
-        at: e.at_place.as_ref().map(|a| a.value.clone()),
-        span: e.what.span,
+/// A pin as the evaluator keeps it; `dollar` reads a format 0 library
+/// default's names as the `$` names of the context.
+fn pin_decl(p: &model::Pin, from: &Provenance, dollar: bool) -> PinDecl {
+    PinDecl {
+        name: p.name.as_ref().map(|n| n.value.clone()),
+        top: if dollar {
+            p.top
+                .value
+                .map_names(&mut |n| Some(Expr::Name(dt_doc::consts::dollar_of(n))))
+        } else {
+            p.top.value.clone()
+        },
+        top_span: p.top.span,
+        at: p.at.value.clone(),
+        at_span: p.at.span,
+        span: p.span,
+        from: from.clone(),
     }
 }
 

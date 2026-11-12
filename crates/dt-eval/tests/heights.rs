@@ -375,3 +375,43 @@ fn a_trees_top_over_its_foot_or_above_zero_is_its_height() {
     let e = refused(&tree("bottom * 2"));
     assert!(e[0].message.contains("added once"), "{e:?}");
 }
+
+#[test]
+fn a_body_inside_a_definition_checks_and_builds() {
+    // a dirt with a top and a pin, written in a `define`: `check` solved it
+    // for the tile's own entries only, and `build` then found it no top
+    let o = Options::default();
+    let path = "lib:tests/ground/1x1-define-body.dtile";
+    let c = check(&Library, path, &o).unwrap_or_else(|e| panic!("{e:#?}"));
+    let solved = c.solved.as_ref().unwrap();
+    assert_eq!(solved.bodies.len(), 1);
+    assert!(solved.bodies[0].written);
+    let built = build(&Library, path, &o).unwrap_or_else(|e| panic!("{e:#?}"));
+    assert!(
+        built.audit.failures(&o.printer).is_empty(),
+        "{:?}",
+        built.audit.failures(&o.printer)
+    );
+}
+
+#[test]
+fn two_calls_of_one_definition_are_two_bodies() {
+    // the calls share the text of the definition's dirt, so a body cannot be
+    // found by where it is written
+    let text = "dharmatiles version=\"1.0.0\"\n\
+        define patch { stack { dirt top=\"$dirtEdgeHeight + 2dmm\" clods=none } }\n\
+        tile size=\"2x1\" seed=3 {\n\
+        line mid { through \"(1sq, 0)\" \"(1sq, 1sq)\" }\n\
+        region west { boundedBy mid; fill \"(0.5sq, 0.5sq)\" }\n\
+        region east { boundedBy mid; fill \"(1.5sq, 0.5sq)\" }\n\
+        stack { base\n patch at=west\n patch at=east } }\n";
+    let c = check(&mem(text), "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"));
+    let solved = c.solved.as_ref().unwrap();
+    assert_eq!(solved.bodies.len(), 2);
+    let tile = c.tile.as_ref().unwrap();
+    assert_ne!(tile.stack[0].id, tile.stack[1].id);
+    assert_eq!(solved.by_entry[0], Some(0));
+    assert_eq!(solved.by_entry[1], Some(1));
+    assert_eq!(tile.stack[0].area.as_ref().unwrap().value, "west");
+    assert_eq!(tile.stack[1].area.as_ref().unwrap().value, "east");
+}

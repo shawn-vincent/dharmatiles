@@ -106,7 +106,7 @@ fn ten_thousand_entries_are_allowed() {
         "t.dtile",
         &format!(
             "define d {{ stack {{ {} }} }}\ntile {{ stack {{ {} }} }}\n",
-            vec!["dirt"; 100].join("; "),
+            vec!["rock"; 100].join("; "),
             vec!["d"; 99].join("; ")
         ),
     )]);
@@ -122,10 +122,15 @@ fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
         "define two { stack { rock; rock size=9 } }\ntile { stack { two id=x; two seed=5 } }\n",
     )]);
     let t = check(&src, "t.dtile", &legacy()).unwrap().tile.unwrap();
-    let ids: Vec<_> = t.stack.iter().map(|e| e.id.clone()).collect();
+    let ids: Vec<_> = t.stack.iter().map(|e| e.id.to_string()).collect();
     assert_eq!(
         ids,
-        [Some("x/rock/0".into()), Some("x/rock/1".into()), None, None]
+        [
+            "tile/rock/x/rock/0",
+            "tile/rock/x/rock/1",
+            "tile/rock/2",
+            "tile/rock/3"
+        ]
     );
     let seeds: Vec<_> = t.stack.iter().map(|e| e.seed).collect();
     assert_eq!(seeds[..2], [None, None]);

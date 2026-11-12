@@ -46,6 +46,7 @@ mod audit;
 mod bambu;
 mod band;
 pub mod debug;
+mod entry;
 mod field;
 pub mod form;
 pub mod graph;
@@ -79,6 +80,7 @@ pub use dt_geom::{
     Dist, Draw, Grid, Iv, Mask, Op, Rng, Seed, TriMesh, WEIGHTINGS, Weighting, WeightingFn, vec3,
 };
 pub use dt_geom::{Structuring, distance_nearest};
+pub use entry::EntryId;
 pub use field::{
     Field, Noise, OnFrame, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at,
     rim, scatter, smax, smooth01,

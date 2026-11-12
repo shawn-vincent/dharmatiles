@@ -223,7 +223,7 @@ impl Element for DungeonBlocks {
         scene.add(
             Tag {
                 kind: Kind::Connector,
-                owner: ctx.path.to_owned(),
+                owner: ctx.path.clone(),
             },
             base,
         );

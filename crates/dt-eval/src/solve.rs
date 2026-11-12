@@ -791,7 +791,7 @@ fn solve_on(
     }
     // overrides made inside blocks (format 1), once each
     let mut seen = h.consts.overridden().len();
-    for b in &h.bodies {
+    for b in tile.stack.iter().filter(|e| e.is_body()) {
         for o in b
             .table
             .overridden()
@@ -803,56 +803,60 @@ fn solve_on(
         seen = seen.max(b.table.overridden().len());
     }
 
-    for b in &h.bodies {
-        let land = writes.get(b.entry) != Some(&Write::Fill);
+    for (entry, b) in tile.stack.iter().enumerate().filter(|(_, e)| e.is_body()) {
+        let element = b.what.value.as_str();
+        let land = writes.get(entry) != Some(&Write::Fill);
         // a floor or a cliff is a pieces body: it takes its own defaults
         // wherever it is laid (a floor's edge pin is its edge contract), and
         // never uses up the first land layer's, which are the dirt's
-        let pieces = dt_doc::schema::element(&b.element).is_some_and(|e| e.pieces);
+        let pieces = dt_doc::schema::element(element).is_some_and(|e| e.pieces);
         let default: Option<&DefaultBody> = h
             .defaults
             .iter()
-            .find(|d| d.element == b.element)
+            .find(|d| d.element == element)
             .filter(|_| !land || pieces || first_land);
         if land && !pieces {
             first_land = false;
         }
-        let region = match &b.region {
+        let region = match b.area.as_ref().map(|a| &a.value) {
             None => Mask::new(nx, ny, true),
             Some(r) => match places.mask(&PlaceRef::Name(r.clone())) {
                 Ok(m) => m,
                 Err(msg) => {
-                    errors.push(Diag::at(&tile.src, b.span, "dt::place", msg, "here"));
+                    errors.push(Diag::at(&b.src, b.what.span, "dt::place", msg, "here"));
                     continue;
                 }
             },
         };
-        let top = b.top.as_ref().or(default.and_then(|d| d.top.as_ref()));
+        let top = b
+            .top
+            .as_ref()
+            .map(|t| (&t.expr, t.span))
+            .or_else(|| default.and_then(|d| d.top.as_ref()).map(|(e, sp)| (e, *sp)));
         let Some((top, top_span)) = top else {
             errors.push(
                 Diag::at(
                     &tile.src,
                     b.span,
                     "dt::missing-control",
-                    format!("`{}` needs a `top=`", b.element),
+                    format!("`{}` needs a `top=`", element),
                     "no top",
                 )
                 .help("write the band it fills, such as `top=\"$dirtEdgeHeight + 35dmm\"`"),
             );
             continue;
         };
-        let top_src = if b.top.is_some() {
-            &tile.src
-        } else {
-            &default.map_or_else(|| tile.src.clone(), |d| d.from.src.clone())
+        let top_src = match &b.top {
+            Some(t) => &t.src,
+            None => default.map_or(&b.src, |d| &d.from.src),
         };
-        let region_id = regions.map_or(0, |t| t.of_entry.get(b.entry).copied().unwrap_or(0));
+        let region_id = regions.map_or(0, |t| t.of_entry.get(entry).copied().unwrap_or(0));
         let own = match g.band(&b.table, top, &under, None, region_id) {
             Ok(x) => x,
             Err(f) => {
                 let mut d = Diag::at(
                     top_src,
-                    *top_span,
+                    top_span,
                     f.code,
                     format!("can't work out this top: {}", f.message),
                     "here",
@@ -865,9 +869,9 @@ fn solve_on(
         if let Some(d) = default.filter(|_| b.top.is_none()) {
             explain.push(format!(
                 "default {} top={} ({})",
-                b.element,
-                text_of(top_src, *top_span),
-                loc(&d.from.src, *top_span, &d.from.path)
+                element,
+                text_of(top_src, top_span),
+                loc(&d.from.src, top_span, &d.from.path)
             ));
         }
         // the pins: the library's, then the tile's
@@ -941,7 +945,13 @@ fn solve_on(
                 continue;
             }
             Err(r) => {
-                errors.push(Diag::at(&tile.src, b.span, r.code(), r.to_string(), "here"));
+                errors.push(Diag::at(
+                    &b.src,
+                    b.what.span,
+                    r.code(),
+                    r.to_string(),
+                    "here",
+                ));
                 continue;
             }
         };
@@ -961,7 +971,7 @@ fn solve_on(
                     "dt::thin",
                     format!(
                         "the {} is at most {} thick at ({:.2}, {:.2}) mm, under the {} the printer's skin needs",
-                        b.element,
+                        element,
                         mm(available),
                         at[0],
                         at[1],
@@ -987,7 +997,7 @@ fn solve_on(
             match lint {
                 Lint::Steep(s) if slope.is_some() && !follows => {
                     let lead = s.pins.iter().flatten().next().map(|&i| decls[i]);
-                    let (src, span) = lead.map_or((&tile.src, b.span), |p| (&p.from.src, p.span));
+                    let (src, span) = lead.map_or((&b.src, b.what.span), |p| (&p.from.src, p.span));
                     let mut named: Vec<String> = s
                         .pins
                         .iter()
@@ -1002,7 +1012,7 @@ fn solve_on(
                             "dt::steep",
                             format!(
                                 "the {} is forced to {:.1}°, steeper than its {:.0}° slope: {} up to {} over {}, between ({:.2}, {:.2}) and ({:.2}, {:.2}) mm ({} places)",
-                                b.element,
+                                element,
                                 s.deg,
                                 s.limit_deg,
                                 mm(s.from_mm),
@@ -1107,7 +1117,7 @@ fn solve_on(
                         stretches.push(format!("{name} edge {lo:.2} to {hi:.2}"));
                     }
                 }
-                let (src, span) = owner.map_or((&tile.src, b.span), |p| (&p.from.src, p.span));
+                let (src, span) = owner.map_or((&b.src, b.what.span), |p| (&p.from.src, p.span));
                 notes.push(
                     Diag::at(
                         src,
@@ -1115,7 +1125,7 @@ fn solve_on(
                         "dt::edge",
                         format!(
                             "the {} meets the tile's edge at a height of its own, not the library's, along the {} (squares): it no longer butts a standard tile there",
-                            b.element,
+                            element,
                             stretches.join(", ")
                         ),
                         "wins at the edge",
@@ -1134,12 +1144,12 @@ fn solve_on(
             if p.from.default {
                 explain.push(format!(
                     "default {} {text} ({at}): wins {wins} of {place_nodes} nodes",
-                    b.element
+                    element
                 ));
             } else {
                 explain.push(format!(
                     "{} {text}: wins {wins} of {place_nodes} nodes",
-                    b.element
+                    element
                 ));
             }
             reports.push(PinReport {
@@ -1178,9 +1188,9 @@ fn solve_on(
             }
         }
         bodies.push(SolvedBody {
-            entry: b.entry,
+            entry,
             role: if land { Role::Land } else { Role::Fluid },
-            element: b.element.clone(),
+            element: b.what.value.clone(),
             label: b.label.clone(),
             band: solved.band,
             region_nodes: region.bits.iter().filter(|&&x| x).count(),
@@ -1211,16 +1221,12 @@ fn solve_on(
             {
                 Ok(v) => Some(v * g.scale),
                 Err(msg) => {
-                    let span = h
-                        .bodies
-                        .iter()
-                        .find(|d| d.entry == fluid.entry)
-                        .map(|d| d.span);
+                    let at = tile.stack.get(fluid.entry).map(|e| (&e.src, e.what.span));
                     let message = format!("the calm water level `{calm}` cannot be read: {msg}");
                     let help = "water is calmed to this constant; the library's heights part defines it, and a tile may `override` it with a plain number or length";
-                    errors.push(match span {
-                        Some(span) => {
-                            Diag::at(&tile.src, span, "dt::calm", message, "this water").help(help)
+                    errors.push(match at {
+                        Some((src, span)) => {
+                            Diag::at(src, span, "dt::calm", message, "this water").help(help)
                         }
                         None => Diag::plain("dt::calm", message).help(help),
                     });

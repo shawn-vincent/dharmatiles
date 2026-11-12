@@ -31,7 +31,9 @@ use std::path::{Path, PathBuf};
 use dt_doc::place::Side;
 use dt_doc::schema::did_you_mean;
 use dt_elements::{Control, Ctx, Element};
-use dt_kit::{Audit, BuildRecord, Export, Frame, Mask, Material, Printer, Scene, Seed, Stage};
+use dt_kit::{
+    Audit, BuildRecord, EntryId, Export, Frame, Mask, Material, Printer, Scene, Seed, Stage,
+};
 
 pub use cache::Cache;
 pub use diag::Diag;
@@ -325,13 +327,17 @@ pub struct Built {
     /// The masonry is brick (a `brick` or `regular-brick` wall): painted
     /// in reds, not stone greys.
     pub brick: bool,
-    /// The stack entry each written triangle came from (an index into the
-    /// tile's stack; the stack's length is the base, if the tile has one; [`NO_ENTRY`] none).
+    /// The stack entry each written triangle came from (an index into
+    /// [`Built::stack`], which lists the connector last; [`NO_ENTRY`] none).
     /// The lifted ground goes to the surface entry that painted it.
     pub entries: Vec<u16>,
     /// Which of its entry's solids each written triangle came from (the
     /// third rock of a scatter is 2), in build order.
     pub pieces: Vec<u16>,
+    /// The stack this mesh was built from: each entry by who it is, the
+    /// connector last when the tile has a base.  An entry number in
+    /// [`Built::entries`] is a place in this list.
+    pub stack: Vec<doc::Named>,
     /// The debug layer's marks, when [`Options::debug`] asked for them.
     pub debug: Option<dt_kit::debug::Debug>,
     /// What to say beside the result: a document read as an older format
@@ -900,9 +906,9 @@ fn build_error(e: String) -> Vec<Diag> {
 
 /// One stack entry (or the connector after the stack), as a build sees it.
 pub(crate) struct Job {
-    /// Its stack path (`tile/grass/0`), the owner of what it makes.
-    pub path: String,
-    /// Its seed: `seed=` when pinned, else keyed by its path.
+    /// Who it is (`tile/grass/0`), the owner of what it makes.
+    pub id: EntryId,
+    /// Its seed: `seed=` when pinned, else keyed by its id.
     pub seed: Seed,
     /// Which of the build's masks is its area.
     pub mask: usize,
@@ -957,6 +963,15 @@ struct Ran {
 }
 
 impl<'a> Plan<'a> {
+    /// Where the entry `id` stands among the jobs: its place in the stack,
+    /// or the connector's, after it.  `None` for the terrain, which no
+    /// entry owns.
+    fn job_of(&self, id: &EntryId) -> Option<usize> {
+        self.tile.index_of(id).or_else(|| {
+            (self.tile.has_base && *id == connector_id()).then_some(self.tile.stack.len())
+        })
+    }
+
     fn new(c: &'a Checked, tile: &'a Tile, opts: &'a Options) -> Result<Self, Vec<Diag>> {
         let root = Seed::new(c.seed);
         let Some(solved) = c.solved.as_ref() else {
@@ -974,17 +989,22 @@ impl<'a> Plan<'a> {
             )
         });
         let plan_hash = mask_of.iter().fold(order, |h, &m| hash::step(h, hashes[m]));
-        let jobs = entry_paths(tile)
-            .into_iter()
+        // each entry's id, then the connector's
+        let ids = tile
+            .stack
+            .iter()
+            .map(|e| e.id.clone())
+            .chain(tile.has_base.then(connector_id));
+        let jobs = ids
             .zip(&mask_of)
             .enumerate()
-            .map(|(i, (path, &mask))| Job {
+            .map(|(i, (id, &mask))| Job {
                 seed: tile
                     .stack
                     .get(i)
                     .and_then(|e| e.seed)
-                    .map_or_else(|| root.path(&path), Seed::new),
-                path,
+                    .map_or_else(|| root.path(id.as_str()), Seed::new),
+                id,
                 mask,
                 area_hash: hashes[mask],
                 band_hash: solved.by_entry[i].map_or(0, |b| {
@@ -1050,7 +1070,7 @@ impl<'a> Plan<'a> {
             match element.foot(&c.frame, &ctx) {
                 Ok(Some(f)) => foots.push(f),
                 Ok(None) => {}
-                Err(e) => return Err(build_error(format!("{}: {}", plan.jobs[i].path, e.message))),
+                Err(e) => return Err(build_error(format!("{}: {}", plan.jobs[i].id, e.message))),
             }
         }
         plan.foots = foots;
@@ -1102,7 +1122,7 @@ impl<'a> Plan<'a> {
         let job = &self.jobs[i];
         Ctx {
             area: &self.masks[job.mask],
-            path: &job.path,
+            path: &job.id,
             seed: job.seed,
             along: entry.and_then(|e| {
                 e.along.as_deref().or_else(|| {
@@ -1142,7 +1162,7 @@ impl<'a> Plan<'a> {
         };
         let body = &self.solved.bodies[b];
         let area = &self.masks[self.jobs[i].mask];
-        let path = &self.jobs[i].path;
+        let owner = &self.jobs[i].id;
         let Some(d) = scene.debug() else {
             return;
         };
@@ -1198,8 +1218,8 @@ impl<'a> Plan<'a> {
                     })
                     .collect()
             };
-            d.sheet(path, i, "band-lo", lo, area.clone(), shades(0.0));
-            d.sheet(path, i, "band-hi", hi, area.clone(), shades(1.0));
+            d.sheet(owner, "band-lo", lo, area.clone(), shades(0.0));
+            d.sheet(owner, "band-hi", hi, area.clone(), shades(1.0));
         }
     }
 
@@ -1255,12 +1275,12 @@ impl<'a> Plan<'a> {
             progress.begin(key, label);
             match *step {
                 Step::Lift => scene
-                    .lift("tile/terrain", &self.opts.printer)
+                    .lift(&EntryId::new(TERRAIN), &self.opts.printer)
                     .map_err(|e| build_error(e.to_string()))?,
                 Step::Entry(i) => {
                     self.band_sheets(&mut scene, i);
                     c.elements[i].build(&mut scene, &self.ctx(i)).map_err(|e| {
-                        let msg = format!("{}: {}", self.jobs[i].path, e.message);
+                        let msg = format!("{}: {}", self.jobs[i].id, e.message);
                         match tile.stack.get(i) {
                             Some(en) => vec![
                                 Diag::at(
@@ -1428,13 +1448,8 @@ impl<'a> Plan<'a> {
             brick,
             entries,
             pieces,
-            debug: scene.debug_marks().cloned().map(|mut d| {
-                // each cloud at a point names its stack entry, as a sheet does
-                for c in &mut d.columns {
-                    c.entry = self.jobs.iter().position(|j| j.path == c.owner);
-                }
-                d
-            }),
+            stack: tile.names(&opts.system),
+            debug: scene.debug_marks().cloned(),
             warnings: Vec::new(),
         })
     }
@@ -1444,20 +1459,14 @@ fn trace_entries(scene: &Scene, mesh: &dt_kit::TriMesh, plan: &Plan<'_>) -> (Vec
     let (tile, c, masks) = (plan.tile, plan.c, &plan.masks);
     let writes = &c.writes;
     let to16 = |i: usize| u16::try_from(i).unwrap_or(NO_ENTRY);
-    let mut seen: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    let mut seen: std::collections::BTreeMap<&EntryId, usize> = std::collections::BTreeMap::new();
     let parts: Vec<(Option<u16>, u16)> = scene
         .parts()
         .iter()
         .map(|p| {
-            let k = seen.entry(p.tag.owner.as_str()).or_default();
+            let k = seen.entry(&p.tag.owner).or_default();
             *k += 1;
-            (
-                plan.jobs
-                    .iter()
-                    .position(|j| j.path == p.tag.owner)
-                    .map(to16),
-                to16(*k - 1),
-            )
+            (plan.job_of(&p.tag.owner).map(to16), to16(*k - 1))
         })
         .collect();
     // the surfaces, in the order they painted
@@ -1520,28 +1529,14 @@ fn trace_entries(scene: &Scene, mesh: &dt_kit::TriMesh, plan: &Plan<'_>) -> (Vec
         .unzip()
 }
 
-/// Seeds by path: `tile/<element>/<k>`, `k` counting same-named entries,
-/// so adding an entry of another element changes no other seed.  The
-/// tile's file name is not in it: renaming a tile never reshuffles it.
-fn entry_paths(tile: &Tile) -> Vec<String> {
-    let mut seen: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
-    let mut out: Vec<String> = tile
-        .stack
-        .iter()
-        .map(|e| {
-            let k = seen.entry(e.what.value.as_str()).or_default();
-            *k += 1;
-            match &e.id {
-                Some(id) => format!("tile/{}/{id}", e.what.value),
-                None => format!("tile/{}/{}", e.what.value, *k - 1),
-            }
-        })
-        .collect();
-    if tile.has_base {
-        out.push("tile/connector".to_owned());
-    }
-    out
+/// The connector's id: the entry the stack's `base` line makes, after the
+/// stack's own (its index is the stack's length).
+fn connector_id() -> EntryId {
+    EntryId::new("tile/connector")
 }
+
+/// The id of the ground the terrain lifts into, which no stack entry owns.
+const TERRAIN: &str = "tile/terrain";
 
 /// `lib:tests/ground/1x1-flat.dtile` → `db/tests/ground/1x1-flat-db.stl`; a relative
 /// disk path keeps its folders below `tiles/` (all of them if it has

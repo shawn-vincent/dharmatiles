@@ -236,7 +236,7 @@ pub(crate) fn finish_build(
     scene.add(
         Tag {
             kind,
-            owner: ctx.path.to_owned(),
+            owner: ctx.path.clone(),
         },
         solid,
     );

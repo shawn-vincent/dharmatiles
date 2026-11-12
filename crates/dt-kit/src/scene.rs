@@ -309,10 +309,8 @@ impl std::fmt::Display for Kind {
 pub struct Tag {
     /// What other elements read it as.
     pub kind: Kind,
-    /// The path of the stack entry that made it: `tile/<element>/<k>`, the
-    /// k-th entry of that element (from 0), or `tile/<element>/<id>` for an
-    /// entry with an `id=`, such as `tile/grass/0`.
-    pub owner: String,
+    /// The stack entry that made it (`tile/grass/0`, see [`crate::EntryId`]).
+    pub owner: crate::EntryId,
 }
 
 /// A solid inside the mesh kernel. It never leaves the kernel between
@@ -478,7 +476,7 @@ fn grain_cap(thick: f64, skin_mm: f64) -> f64 {
 #[derive(Clone, Copy)]
 pub struct LayerSpec<'a> {
     /// The stack entry that owns it.
-    pub owner: &'a str,
+    pub owner: &'a crate::EntryId,
     /// Its material; the layer's slot carries it.
     pub material: Material,
     /// A fluid fills the empty space under its top, over the land laid
@@ -1390,7 +1388,11 @@ impl Scene {
     ///
     /// # Errors
     /// [`KitError`] if the surface is not above 0 or the kernel refuses it.
-    pub fn lift(&mut self, owner: &str, printer: &crate::Printer) -> Result<(), KitError> {
+    pub fn lift(
+        &mut self,
+        owner: &crate::EntryId,
+        printer: &crate::Printer,
+    ) -> Result<(), KitError> {
         self.terrain.lifted = true;
         if self.terrain.layers.is_empty() {
             return Ok(());
@@ -1402,7 +1404,7 @@ impl Scene {
         self.add(
             Tag {
                 kind: Kind::Terrain,
-                owner: owner.to_owned(),
+                owner: owner.clone(),
             },
             solid,
         );
@@ -1553,7 +1555,7 @@ pub(crate) fn relabel(slot: Slot, s: &dt_geom::Solid) -> Result<Solid, KitError>
 mod tests {
     use super::Relief;
     use super::{Frame, LayerSpec, Material, Scene, SideSpec};
-    use crate::{Band, Field, OnFrame, Seed};
+    use crate::{Band, EntryId, Field, OnFrame, Seed};
 
     /// A flat layer at `top` over the whole tile, laid with a round of
     /// `round` mm, and the surface it makes.
@@ -1566,7 +1568,7 @@ mod tests {
         let mut scene = Scene::new(frame, Seed::new(1));
         scene
             .lay(&LayerSpec {
-                owner: "dirt",
+                owner: &EntryId::new("dirt"),
                 material: Material::Earth,
                 fluid: false,
                 mask: &mask,
@@ -1648,7 +1650,7 @@ mod tests {
             };
             scene
                 .lay(&LayerSpec {
-                    owner: "dirt",
+                    owner: &EntryId::new("dirt"),
                     material: Material::Earth,
                     fluid: false,
                     mask: &mask,
@@ -1734,7 +1736,7 @@ mod tests {
             floor: None,
         };
         let off = scene.grain_offset(&LayerSpec {
-            owner: "dirt",
+            owner: &EntryId::new("dirt"),
             material: Material::Earth,
             fluid: false,
             mask: &mask,

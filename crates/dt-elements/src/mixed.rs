@@ -171,7 +171,7 @@ impl Element for Scatter {
                     let mut it =
                         rock::make_item(&mut r, d, thing.mix, true, thing.buried.hi() > 0.0)?;
                     it.bury = thing.buried.clone();
-                    it.top = thing.top;
+                    it.top.clone_from(&thing.top);
                     rocks.push(it);
                 }
                 Part::Flower(plant) => flowers.push((plant, plant.reach(&mut r))),

@@ -365,7 +365,7 @@ impl Element for OpenLock {
         scene.add(
             Tag {
                 kind: Kind::Connector,
-                owner: ctx.path.to_owned(),
+                owner: ctx.path.clone(),
             },
             slab,
         );
@@ -437,7 +437,7 @@ mod tests {
         let area = scene.whole();
         let ctx = Ctx {
             area: &area,
-            path: "tile/t/connector",
+            path: &dt_kit::EntryId::new("tile/t/connector"),
             seed: dt_kit::Seed::new(1),
             along: None,
             line_side: None,

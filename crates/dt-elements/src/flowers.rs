@@ -301,7 +301,7 @@ pub(crate) fn stand(
         scene.add(
             Tag {
                 kind: Kind::Flowers,
-                owner: ctx.path.to_owned(),
+                owner: ctx.path.clone(),
             },
             solid,
         );

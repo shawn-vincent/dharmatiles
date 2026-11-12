@@ -23,6 +23,7 @@ lib:tests/ground/1x1-bands-path.dtile: [Entry(0), Lift, Entry(1), Entry(2), Entr
 lib:tests/ground/1x1-bands-soil.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/ground/1x1-cloud-dirt.dtile: [Entry(0), Lift, Entry(1)]
 lib:tests/ground/1x1-cloud-pinned.dtile: [Entry(0), Lift, Entry(1)]
+lib:tests/ground/1x1-define-body.dtile: [Entry(0), Lift, Entry(1)]
 lib:tests/ground/1x1-flat.dtile: [Entry(0), Lift, Entry(1)]
 lib:tests/ground/1x1-no-base.dtile: [Entry(0), Lift]
 lib:tests/ground/1x1-soil.dtile: [Entry(0), Lift, Entry(1)]

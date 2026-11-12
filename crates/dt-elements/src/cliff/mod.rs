@@ -306,7 +306,7 @@ impl Element for Cliff {
             scene.add(
                 Tag {
                     kind: Kind::Cliff,
-                    owner: ctx.path.to_owned(),
+                    owner: ctx.path.clone(),
                 },
                 solid,
             );
@@ -414,7 +414,7 @@ mod tests {
         let area = scene.whole();
         let ctx = Ctx {
             area: &area,
-            path: "tile/t/cliff",
+            path: &dt_kit::EntryId::new("tile/t/cliff"),
             seed: Seed::new(seed),
             along: None,
             line_side: None,

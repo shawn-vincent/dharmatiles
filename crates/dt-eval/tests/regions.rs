@@ -274,59 +274,52 @@ fn pointed(d: &Diag) -> String {
 /// reach check.  A document cannot write a region into a number yet, so the
 /// reach is tried on the plumbing directly: step 3's `d(parent($region))`
 /// is what makes a document do it.
-fn reach(c: &mut Checked, what: &str, child: Option<usize>, formula: &str) -> Vec<Diag> {
+fn reach(c: &Checked, what: &str, child: Option<usize>, formula: &str) -> Vec<Diag> {
     use std::sync::Arc;
     let text = format!("top=\"{formula}\"");
     let src: dt_eval::diag::Src = Arc::new(miette::NamedSource::new("r.dtile", text));
     let expr = dt_doc::expr::parse_v2(formula).unwrap();
-    let tile = c.tile.as_mut().unwrap();
+    let tile = c.tile.as_ref().unwrap();
     let entry = tile
         .stack
         .iter()
         .position(|e| e.what.value == what)
         .unwrap();
-    tile.region_reads.clear();
-    tile.region_reads.push(dt_eval::doc::RegionRead {
-        expr,
+    let table = Arc::new(dt_doc::consts::ConstTable::root(&[]));
+    let read = dt_eval::doc::RegionRead {
+        expr: &expr,
         span: miette::SourceSpan::new(5.into(), formula.len() + 1),
-        src,
-        table: Arc::new(dt_doc::consts::ConstTable::root(&[])),
-        owner: dt_eval::doc::Owner { entry, child },
-    });
-    c.regions
-        .as_ref()
-        .unwrap()
-        .parent_flaws(c.tile.as_ref().unwrap())
+        src: &src,
+        table: &table,
+        entry,
+        child,
+    };
+    c.regions.as_ref().unwrap().parent_flaws_of(&[read])
 }
 
 #[test]
 fn how_far_parent_reaches_depends_on_where_the_formula_is_called() {
-    let mut c = ok(&tile1(
+    let c = ok(&tile1(
         "1x1",
         &format!(
             "{POOL_AND_BANK}\n stack {{ base\n dirt\n tree at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 35dmm\"\n scatter at=bank count=2 {{ tree top=\"$bottom + 35dmm\" }} }}"
         ),
     ));
     // a body at tile level: `$region` is the tile
-    let e = reach(&mut c, "dirt", None, "parent($region)");
+    let e = reach(&c, "dirt", None, "parent($region)");
     assert_eq!(e.len(), 1);
     assert!(e[0].message.contains("tile has no parent"), "{e:#?}");
     assert_eq!(pointed(&e[0]), "parent($region)");
     // a tree at tile level: parent is the tile, the next reaches past it
-    assert!(reach(&mut c, "tree", None, "parent($region)").is_empty());
-    let e = reach(&mut c, "tree", None, "1 + parent(parent($region))");
+    assert!(reach(&c, "tree", None, "parent($region)").is_empty());
+    let e = reach(&c, "tree", None, "1 + parent(parent($region))");
     assert_eq!(e.len(), 1, "{e:#?}");
     assert_eq!(pointed(&e[0]), "parent(parent($region))");
     // a tree in a scatter in a region has three (the scatter, the region, the tile)
-    let e = reach(
-        &mut c,
-        "scatter",
-        Some(0),
-        "parent(parent(parent($region)))",
-    );
+    let e = reach(&c, "scatter", Some(0), "parent(parent(parent($region)))");
     assert!(e.is_empty(), "{e:#?}");
     let e = reach(
-        &mut c,
+        &c,
         "scatter",
         Some(0),
         "parent(parent(parent(parent($region))))",
@@ -335,7 +328,7 @@ fn how_far_parent_reaches_depends_on_where_the_formula_is_called() {
     assert!(e[0].message.contains("reaches past the tile"), "{e:#?}");
     assert!(e[0].message.contains("4 up, and there are 3"), "{e:#?}");
     // the tile has no parent, wherever it is asked
-    let e = reach(&mut c, "scatter", Some(0), "parent($tile)");
+    let e = reach(&c, "scatter", Some(0), "parent($tile)");
     assert!(
         e.iter().any(|d| d.message.contains("tile has no parent")),
         "{e:#?}"
@@ -351,10 +344,10 @@ fn the_reader_records_each_formula_with_the_thing_that_calls_it() {
         ),
     ));
     let tile = c.tile.as_ref().unwrap();
-    let owners: Vec<(&str, Option<usize>)> = tile
-        .region_reads
+    let reads = tile.region_reads();
+    let owners: Vec<(&str, Option<usize>)> = reads
         .iter()
-        .map(|r| (tile.stack[r.owner.entry].what.value.as_str(), r.owner.child))
+        .map(|r| (tile.stack[r.entry].what.value.as_str(), r.child))
         .collect();
     assert!(owners.contains(&("dirt", None)), "{owners:?}");
     assert!(owners.contains(&("tree", None)), "{owners:?}");
