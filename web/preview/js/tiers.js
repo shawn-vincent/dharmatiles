@@ -19,20 +19,22 @@
 /** Every set, to hand the stream's announcements to. */
 const sets = new Set();
 
-/** The stream said a tier is done. @param {import('./api').StreamEvent & { type: 'tier' }} m */
+/** @typedef {Pick<import('./api').StreamEvent & { type: 'tier' }, 'key' | 'docRev' | 'error'>} TierDone  the tier event's words (api.rs `StreamEvent`) */
+
+/** The stream said a tier is done. @param {TierDone} m */
 export function tierReady(m) { for (const s of sets) s.ready(m); }
 /** The stream is back after a gap: every set is posted again, so nothing wanted is lost with what was announced meanwhile. */
 export function tiersReconnected() { for (const s of sets) s.repost(); }
 
 /**
- * @param {{ host: { tiersWant: Function, tierResult: Function }, scope: string }} o
+ * @param {{ host: { tiersWant: Function, tierResult: Function }, scope: string, doc?: () => string | null }} o
  */
-export function createTiers({ host, scope }) {
+export function createTiers({ host, scope, doc = () => null }) {
   /** @type {Map<string, { spec: any, resolve: (v: { buf: ArrayBuffer, docRev: number } | null) => void, reject: (e: Error) => void }>} */
   const wants = new Map();
   /** @type {Map<string, string>} the program's key for each want, from the last post's answer */
   const byKey = new Map();
-  /** @type {Map<string, { key: string, docRev: number, error?: string | null }>} announcements that came while a post was out, before its answer named their key */
+  /** @type {Map<string, TierDone>} announcements that came while a post was out, before its answer named their key */
   const early = new Map();
   let scheduled = false, posting = false, again = false;
 
@@ -43,7 +45,7 @@ export function createTiers({ host, scope }) {
       do {
         again = false;
         const entries = [...wants.entries()];
-        const r = await host.tiersWant({ scope, wants: entries.map(([, w]) => w.spec) });
+        const r = await host.tiersWant({ scope, doc: doc(), wants: entries.map(([, w]) => w.spec) });
         if (r.status === 0) { early.clear(); break; } // disconnected: posted again on reconnect, which announces again
         if (r.status !== 200) {
           for (const [id, w] of entries) { wants.delete(id); w.reject(new Error(`the program refused the tiers wanted: ${r.body?.error ?? r.status}`)); }
@@ -78,7 +80,7 @@ export function createTiers({ host, scope }) {
       w.resolve(null);
       schedule();
     },
-    /** @param {import('./api').StreamEvent & { type: 'tier' }} m */
+    /** @param {TierDone} m */
     async ready(m) {
       const id = byKey.get(m.key);
       // not known yet, and a post is out: its answer may name it (the program announces the built while it answers)

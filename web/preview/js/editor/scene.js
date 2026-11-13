@@ -39,7 +39,7 @@ let mounted = false;          // the scene is in the view
 let mountedPath = null;
 let lastSig = '';
 let evalTimer = 0;
-const tierSet = createTiers({ host, scope: 'map' }); // what the map wants of the program: one set, posted whole
+const tierSet = createTiers({ host, scope: 'map', doc: () => tile()?.id ?? null }); // what the map wants of the program: one set, posted whole; the program says the work as the map's progress
 let inflight = 0;              // tier requests the program has not answered: it queues them (its tier lane), the page does not
 const wasWanted = new Map();  // piece id -> the tier it wanted at the last look: the margin of wantedTier is measured from it
 const shownTier = new Map();  // piece id -> the tier it is drawn at, for the budget's stickiness
@@ -264,7 +264,7 @@ export function statusLines() {
   const notFull = counts.low + counts['super-low'] + counts.none;
   const parts = [];
   if (notFull) parts.push('low · not yet checked');
-  const tiers = [counts.full && `${counts.full} full`, counts.low && `${counts.low} low`, counts['super-low'] && `${counts['super-low']} distant`, counts.none && `${counts.none} loading`].filter(Boolean).join(' · ');
+  const tiers = [counts.full && `${counts.full} full`, counts.low && `${counts.low} low`, counts['super-low'] && `${counts['super-low']} distant`].filter(Boolean).join(' · ');
   const notes = (log.view(tile()?.id ?? '').counts?.notes ?? 0);
   return { verdict, counts: [...parts, tiers].filter(Boolean).join(' · '), notChecked: notFull > 0, notes };
 }

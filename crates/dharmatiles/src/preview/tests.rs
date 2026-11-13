@@ -2921,9 +2921,11 @@ fn a_maps_pieces_loading_is_one_job_of_its_document_said_as_progress_and_in_the_
     let mut c = TcpStream::connect(r.addr).unwrap();
     write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
     c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
-    // six pieces wanted on behalf of the document: seeds of one tile
-    let wants: Vec<Value> = (1..=6)
-        .map(|s| serde_json::json!({"tile": id, "tier": "low", "seed": s}))
+    // four pieces wanted on behalf of the document, each at two tiers: seeds of one tile (eight meshes, four pieces)
+    let wants: Vec<Value> = (1..=4)
+        .flat_map(|s| {
+            ["super-low", "low"].map(|t| serde_json::json!({"tile": id, "tier": t, "seed": s}))
+        })
         .collect();
     let body = serde_json::json!({"scope": "map", "doc": id, "wants": wants}).to_string();
     let (head, v) = post(&r, "/api/tiers/want", Some(&token), None, &body);
@@ -2969,8 +2971,8 @@ fn a_maps_pieces_loading_is_one_job_of_its_document_said_as_progress_and_in_the_
     }
     assert!(began && cleared, "the job's running message came and went");
     assert!(
-        counts.iter().all(|(d, t)| d <= t && *t <= 6) && counts.last().map(|c| c.1) == Some(6),
-        "done of total, ending on the six asked for: {counts:?}"
+        counts.iter().all(|(d, t)| d <= t && *t <= 4) && counts.last().map(|c| c.1) == Some(4),
+        "done of total, ending on the four pieces asked for: {counts:?}"
     );
     assert!(
         counts.windows(2).all(|w| w[1].1 >= w[0].1),
@@ -2981,7 +2983,7 @@ fn a_maps_pieces_loading_is_one_job_of_its_document_said_as_progress_and_in_the_
         "pieces done never go back: {counts:?}"
     );
     assert!(
-        counts.last().is_some_and(|c| c.0 >= 4),
+        counts.last().is_some_and(|c| c.0 >= 3),
         "ends with all but the last done (the last one ends the job): {counts:?}"
     );
 }

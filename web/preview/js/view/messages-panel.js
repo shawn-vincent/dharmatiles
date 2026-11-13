@@ -5,7 +5,7 @@
 // editor/panel.js from the messages stream, the tile, the progress and the document) and of `act`, what the buttons do.
 // Which filter is on and which message a mark in the source pointed to are the model's.
 
-import { FILTERS, buildOf, filterRows, gateOf, gateRows, serverOf } from '../messages.js';
+import { FILTERS, buildOf, filterRows, gateOf, gateRows, jobWords, serverOf } from '../messages.js';
 import { CopyButton } from './copy-button.js';
 import { html, useEffect } from './html.js';
 
@@ -24,8 +24,9 @@ export function MessageFilters({ m, act }) {
 function Running({ m }) {
   const t = m.tile.value;
   const p = m.progress.value;
-  const stage = !p ? 'starting' : !p.count ? p.label : p.count[2] === 0 ? `${p.label}: ${p.count[0]}` : `${p.label}: ${p.count[0]} ${p.count[1]}/${p.count[2]}`;
-  return html`<div class="msg run" id="msg-run"><i class="dot busy"></i><div class="body"><div class="line">${`Building ${t?.name ?? ''}`}</div><div class="sub">${p ? `${stage} · ${secs(p.elapsedS)}${p.estimateS != null ? ` of ~${secs(p.estimateS)}` : ''}` : 'starting'}</div><div class="rbar"><i style=${`width: ${p ? Math.floor(p.fraction * 100) : 0}%`}></i></div></div></div>`;
+  const words = p ? jobWords(p, t?.name ?? '') : null;
+  const stage = words?.stage ?? 'starting';
+  return html`<div class="msg run" id="msg-run"><i class="dot busy"></i><div class="body"><div class="line">${words?.title ?? `Building ${t?.name ?? ''}`}</div><div class="sub">${p ? `${stage} · ${secs(p.elapsedS)}${p.estimateS != null ? ` of ~${secs(p.estimateS)}` : ''}` : 'starting'}</div><div class="rbar"><i style=${`width: ${p ? Math.floor(p.fraction * 100) : 0}%`}></i></div></div></div>`;
 }
 
 /** The gate's numbers as rows under the record. */
@@ -81,11 +82,13 @@ export function MessagesBody({ m, act }) {
   const v = m.view.value;
   const shown = filterRows(v.rows, m.filter.value);
   const fresh = shown.filter((r) => !r.dim), stale = shown.filter((r) => r.dim);
-  return html`${v.running ? html`<${Running} m=${m} />` : v.record ? html`<${Record} rec=${v.record} m=${m} act=${act} />` : null}
+  // work in flight for the document: a tile's build or a map's pieces loading, the one record the program sends
+  const working = v.running || !!m.progress.value;
+  return html`${working ? html`<${Running} m=${m} />` : null}${!v.running && v.record ? html`<${Record} rec=${v.record} m=${m} act=${act} />` : null}
     ${v.cleared.length ? html`<div class="cleared" title=${v.cleared.map((x) => `${x.code ?? x.kind}: ${x.text}`).join('\n')}>${`${v.cleared.length} cleared by this build`}</div>` : null}
     ${fresh.map((r) => html`<${Row} key=${r.m.seq} row=${r} m=${m} act=${act} />`)}
     ${stale.length || (v.running && v.record) ? html`<div class="from-last">From the last build · shown until the new one finishes</div>${v.running && v.record ? html`<${Record} rec=${v.record} m=${m} act=${act} />` : null}${stale.map((r) => html`<${Row} key=${r.m.seq} row=${r} m=${m} act=${act} />`)}` : null}
-    ${!shown.length && !v.record && !v.running ? html`<div class="empty-msg">${t ? 'Nothing has been said about this tile yet.' : 'Choose a tile.'}</div>` : null}`;
+    ${!shown.length && !v.record && !working ? html`<div class="empty-msg">${t ? 'Nothing has been said about this tile yet.' : 'Choose a tile.'}</div>` : null}`;
 }
 
 /** Copy all: the program's own text of the tile's open messages (one renderer), never the page's. */

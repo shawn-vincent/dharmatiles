@@ -71,9 +71,12 @@ pub(super) struct TierBook {
     jobs: BTreeMap<String, Job>,
 }
 
-/// A document's pieces loading: the keys not done, and how many were asked and finished.
+/// A document's pieces loading: the meshes not done (a piece has one per tier it wants), and how many pieces were
+/// asked and finished.
 struct Job {
     pending: BTreeSet<String>,
+    /// For each piece with a mesh not done, how many.
+    pieces: BTreeMap<String, usize>,
     total: usize,
     done: usize,
     /// The piece being built last started.
@@ -83,6 +86,16 @@ struct Job {
 
 /// How many results are kept (the oldest go first).
 const KEPT: usize = 300;
+
+/// The piece a mesh's key is of: the key without its tier.
+fn piece_of(key: &str) -> String {
+    key.split('|')
+        .enumerate()
+        .filter(|(i, _)| *i != 1)
+        .map(|(_, p)| p)
+        .collect::<Vec<_>>()
+        .join("|")
+}
 
 fn key_of(w: &TierWant) -> String {
     let dash = || "-".to_owned();
@@ -363,13 +376,18 @@ impl Shared {
             let began = !book.jobs.contains_key(doc);
             let job = book.jobs.entry(doc.to_owned()).or_insert_with(|| Job {
                 pending: BTreeSet::new(),
+                pieces: BTreeMap::new(),
                 total: 0,
                 done: 0,
                 current: None,
                 started: Instant::now(),
             });
             if job.pending.insert(key.to_owned()) {
-                job.total += 1;
+                let n = job.pieces.entry(piece_of(key)).or_insert(0);
+                if *n == 0 {
+                    job.total += 1;
+                }
+                *n += 1;
             }
             began
         };
@@ -386,7 +404,14 @@ impl Shared {
                 return;
             };
             if job.pending.remove(key) {
-                job.done += 1;
+                let piece = piece_of(key);
+                if let Some(n) = job.pieces.get_mut(&piece) {
+                    *n -= 1;
+                    if *n == 0 {
+                        job.pieces.remove(&piece);
+                        job.done += 1;
+                    }
+                }
             }
             if job.pending.is_empty() {
                 book.jobs.remove(doc);
@@ -488,13 +513,12 @@ impl Shared {
             let gone = ev.messages.end_job(doc);
             Self::send_messages(&mut ev, &gone);
         }
-        // a document that is itself building keeps its own progress
-        let building = lock(&self.tiles)
-            .iter()
-            .any(|t| t.id == doc && t.status == State::Building);
-        if !building {
-            self.update(doc, |s| s.progress = None);
-        }
+        // the job's words go; a document that is itself building keeps the progress of its own build
+        self.update(doc, |s| {
+            if s.progress.as_ref().is_some_and(|p| p.what == "loading") {
+                s.progress = None;
+            }
+        });
     }
 
     /// The kept result for `key`, if it is of revision `doc_rev` (any, when none is asked): `Ok(None)` when there is

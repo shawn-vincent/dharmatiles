@@ -72,7 +72,7 @@ export const server = createStore({
   ever: false,    // it has been, once: so a loss reads 'reconnecting…', not 'connecting…'
   ready: false,   // the first list of tiles is in
   epoch: null,    // which run of the program the numbers (mesh versions, sketches) are from
-  progress: {},   // tile id -> the build's progress while it builds
+  progress: {},   // document id -> the work in flight for it (a tile's build, a map's pieces loading): one record kind, `Progress`
 });
 
 /** What happened, one stream (js/messages.js): live.js writes it from the event stream; every surface draws from it. */

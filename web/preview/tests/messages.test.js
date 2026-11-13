@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FILTERS, MSG_MIN, countsText, createLog, detailsFor, filterRows, fitMsgHeight, statusOf } from '../js/messages.js';
+import { FILTERS, MSG_MIN, countsText, createLog, detailsFor, filterRows, fitMsgHeight, jobWords, statusOf } from '../js/messages.js';
 
 let n = 0;
 const msg = (over = {}) => ({
@@ -213,4 +213,27 @@ test('the gate\'s rows read the numbers under the names the program sends them (
   // past its budget is bad; a number the message does not carry is left out, not shown as NaN
   assert.equal(gateRows({ ...data, overhang_mm2: 5 }, { overhangDeg: 55, steepestDeg: 65 })[3][2], 'bad');
   assert.equal(gateRows({ triangles: 1, watertight: true }, { overhangDeg: 55, steepestDeg: 65 }).length, 2);
+});
+
+test('work in flight for a document is one record: a tile build and a map\'s pieces loading are said from it, and a tile build reads as it did', () => {
+  const log = createLog();
+  const tile = { id: 'a', name: 'first-plate', status: 'ready', shown: null };
+  const building = { what: 'building', fraction: 0.45, label: 'grass', key: 'grass', count: ['blades', 120, 800], elapsedS: 3, etaS: 4, estimateS: 7 };
+  const loading = { what: 'loading', fraction: 0.3, label: '1x1-grass', key: 'pieces', count: ['pieces', 3, 10], elapsedS: 3, etaS: 7, estimateS: 10 };
+  // a tile build: the words it always had
+  let s = statusOf(log.view('a'), { t: { ...tile, status: 'building' }, p: building });
+  assert.equal(s.verdict, 'building 45% · grass');
+  assert.equal(s.progress, 0.45);
+  // a map's pieces: the same record, the same line, the same bar; the document itself is ready
+  s = statusOf(log.view('a'), { t: tile, p: loading });
+  assert.equal(s.verdict, 'loading 30% · 3 of 10 pieces · 1x1-grass');
+  assert.equal(s.tone, 'busy');
+  assert.equal(s.progress, 0.3);
+  // the running row says it from the one function
+  assert.equal(jobWords(building, 'x').title, 'Building x');
+  assert.equal(jobWords(building, 'x').stage, 'grass: blades 120/800');
+  assert.equal(jobWords(loading, 'first-plate').title, 'Loading the pieces of first-plate');
+  assert.equal(jobWords(loading, 'first-plate').stage, '1x1-grass: pieces 3/10');
+  // no job, no building: the verdict is the document's own
+  assert.equal(statusOf(log.view('a'), { t: tile }).verdict, 'passes');
 });

@@ -689,11 +689,15 @@ impl Shared {
     }
 
     /// Work in flight for document `id`, said: remembered for a browser that connects later, and sent now.  A job (a
-    /// map's pieces loading) never takes the place of the document's own build (`job`).
+    /// map's pieces loading) does not take the place of the document's own build once that has a stage to say.
     fn tell_progress(&self, id: &str, body: api::Progress, job: bool) {
         let mut tiles = lock(&self.tiles);
         if let Some(slot) = tiles.iter_mut().find(|t| t.id == id) {
-            if job && slot.status == State::Building {
+            // the document's own build, once it has a stage to say, is the work in flight until it ends
+            if job
+                && slot.status == State::Building
+                && slot.progress.as_ref().is_some_and(|p| p.what == "building")
+            {
                 return;
             }
             slot.progress = Some(body.clone());

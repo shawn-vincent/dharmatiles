@@ -174,6 +174,23 @@ export function filterRows(rows, filter) {
 }
 
 /**
+ * Work in flight for a document, in words: one record kind (`Progress`, api.rs) for a tile's build and a map's pieces
+ * loading, so the status line and the running row say it from one place and nothing counts for itself.
+ * `title` is the running row's line, `stage` its second line's start, `short` what the status line adds to its word.
+ * @param {import('./api').Progress} p @param {string} name
+ */
+export function jobWords(p, name) {
+  const loading = p.what === 'loading';
+  const stage = !p.count ? p.label : p.count[2] === 0 ? `${p.label}: ${p.count[0]}` : `${p.label}: ${p.count[0]} ${p.count[1]}/${p.count[2]}`;
+  return {
+    verb: loading ? 'loading' : 'building',
+    title: loading ? `Loading the pieces of ${name}` : `Building ${name}`,
+    stage,
+    short: loading && p.count ? `${p.count[1]} of ${p.count[2]} pieces · ${p.label}` : p.label,
+  };
+}
+
+/**
  * The status line: {verdict, tone, counts, progress}.  `verdict` is the one word that matters most,
  * worst first: building (with its percent and stage; "rebuilding" while the view is a build the
  * cache kept, `t.shown`), offline, an error, fails the gate, no build, passes (with the build's
@@ -184,10 +201,11 @@ export function statusOf(view, { t = null, live = true, p = null } = {}) {
   const counts = countsText(view.counts);
   if (!live) return { verdict: 'reconnecting…', tone: 'busy', counts, progress: null };
   if (!t) return { verdict: 'no tile', tone: 'idle', counts, progress: null };
-  if (t.status === 'building' || view.running) {
+  if (t.status === 'building' || view.running || p) {
     const pct = p ? Math.floor(p.fraction * 100) : 0;
-    const stage = p ? `${pct}% · ${p.label}` : 'starting';
-    const what = t.shown ? 'rebuilding' : 'building';
+    const words = p ? jobWords(p, t.name) : null;
+    const stage = words ? `${pct}% · ${words.short}` : 'starting';
+    const what = words?.verb === 'loading' ? 'loading' : t.shown ? 'rebuilding' : 'building';
     // a low build on show (nothing earlier of the tile was kept) has not been through the gate
     const low = t.shown?.checked === false ? ' · low · not yet checked' : '';
     return { verdict: `${what} ${stage}${low}`, tone: 'busy', counts, progress: p ? p.fraction : 0 };
