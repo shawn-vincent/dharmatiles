@@ -1,10 +1,14 @@
-// The map's panel (docs/maps.html): the levels of a map, one at a time, as the tile's are: the map (its pieces
-// by tile, what the shelf says of them, the variants and the way to the plates), one piece (its place, turn,
-// level, seed and print setting, with Open tile), and a property of it (the level's names, the seeds you
-// own).  Where you are is the selection and the property open on it, so a click on a piece in the view brings the
-// panel to it and Back climbs.
+// The map's levels (docs/maps.html): the map (its pieces by tile, what the shelf says of them, the variants and the way
+// to the plates), one piece (its place, turn, level, seed and print setting, with Open tile), and a property of it (the
+// level's names, the seeds you own).  Where you are is the selection and the property open on it, so a click on a piece
+// in the view brings the panel to it and Back climbs.
 //
-// `MapPanel` is a function of the model (`m`, js/editor/model.js `mapPanel`: signals) and of the actions (`act`,
+// These are views, drawn each into its section of the levels shell (editor/levels.js; the page's `lvl-<id>`): the
+// shell decides which one is on screen and how it comes and goes, so a view here never shows, hides or slides itself and
+// never reads which level is on screen.  What a level showed is kept by `held` while it slides out (the piece just
+// left), not by the shell.
+//
+// Each level is a function of the model (`m`, js/editor/model.js `mapPanel`: signals) and of the actions (`act`,
 // what the buttons do: each one is a change of the document, editor/scene-edit.js, or of the view).  It draws
 // what the model says and keeps nothing: a new state of the map from the program is drawn over the panel as it
 // is, so a word being typed is not lost (field.js).
@@ -15,6 +19,13 @@ import { haveLine, systemName, tileHave } from '../inventory.js';
 import { Field } from './field.js';
 import { html, useEffect, useRef } from './html.js';
 import { Button, Section, Seg, plural } from './widgets.js';
+
+/** The last non-empty value of `v`: a level leaving the screen keeps what it showed while it slides out. */
+function held(v) {
+  const last = useRef(v);
+  if (v) last.current = v;
+  return last.current;
+}
 
 /** The have or to-print pill of a piece (caution yellow where only the other colour mode is on the shelf). */
 const TITLES = {
@@ -61,7 +72,7 @@ function PieceList({ m, act }) {
   const Row = (row) => {
     const on = row.ids.some((id) => picked.has(id));
     return html`<button type="button" class=${`mp-group${on ? ' on' : ''}`} key=${row.key} aria-pressed=${String(on)} title=${`Select the ${plural(row.pieces.length, 'piece')} of ${row.name}`}
-      onClick=${() => act.select(row.ids)} onPointerEnter=${() => act.hover(row.ids)} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover(row.ids)} onBlur=${() => act.hover([])}>
+      data-ids=${row.ids.join(',')} onClick=${() => act.select(row.ids)} onPointerEnter=${() => act.hover(row.ids)} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover(row.ids)} onBlur=${() => act.hover([])}>
       <b>${row.name}</b><span class="mp-n">${`× ${row.count}`}</span><${RowPills} row=${row} /></button>`;
   };
   const Head = ({ text, n, note }) => html`<h4 class="mp-h" title=${note}>${text}<span class="mp-n">${n}</span></h4>`;
@@ -85,7 +96,7 @@ function PieceList({ m, act }) {
   <//>`;
 }
 
-function MapLevel({ m, act }) {
+function MapView({ m, act }) {
   const ro = m.readOnly.value;
   const ps = m.pieces.value;
   const sc = m.scene.value;
@@ -108,9 +119,8 @@ function MapLevel({ m, act }) {
     <//>`;
 }
 
-function PieceLevel({ m, act }) {
+function PieceView({ m, act, sel }) {
   const ro = m.readOnly.value;
-  const sel = m.selected.value;
   const states = m.marks.value;
   const sc = m.scene.value;
   const p = sel[0];
@@ -155,11 +165,9 @@ function PieceLevel({ m, act }) {
     <//>`;
 }
 
-function PropLevel({ m, act }) {
+function PropView({ m, act, p, kind }) {
   const ro = m.readOnly.value;
-  const p = m.selected.value[0];
   const sc = m.scene.value;
-  const kind = m.mprop.value;
   const inv = m.inventory.value;
   if (kind === 'bottom') {
     const choose = (name, text, sub) => {
@@ -198,14 +206,28 @@ function PropLevel({ m, act }) {
   return html`<${Section} title="Print"><//>`;
 }
 
-export function MapPanel({ m, act }) {
-  if (!m.tile.value || !m.on.value) return null; // not the map's turn: the panel draws nothing
-  const scene = m.scene.value;
-  const level = m.level.value;
+/** What every level of the map draws inside its section: nothing when it is not the map's turn, the wait while the scene has not come, else the level. */
+function Body({ m, children }) {
+  if (!m.tile.value || !m.on.value) return null;
   return html`<div class="body">
-      ${!scene
+      ${!m.scene.value
         ? html`<div class="empty">${m.waiting.value}</div>`
-        : html`${m.readOnly.value ? html`<p class="note">This file cannot be changed here.</p>` : null}
-          ${level === 'map' ? html`<${MapLevel} m=${m} act=${act} />` : level === 'piece' ? html`<${PieceLevel} m=${m} act=${act} />` : html`<${PropLevel} m=${m} act=${act} />`}`}
+        : html`${m.readOnly.value ? html`<p class="note">This file cannot be changed here.</p>` : null}${children}`}
     </div>`;
+}
+
+/** The map level. */
+export const MapLevel = ({ m, act }) => html`<${Body} m=${m}><${MapView} m=${m} act=${act} /><//>`;
+
+/** The piece level: the selected piece, or the last one while the level slides out. */
+export function PieceLevel({ m, act }) {
+  const sel = held(m.selected.value.length ? m.selected.value : null);
+  return html`<${Body} m=${m}>${sel ? html`<${PieceView} m=${m} act=${act} sel=${sel} />` : null}<//>`;
+}
+
+/** The property level: the property open on the selected piece, or the last one while the level slides out. */
+export function PropLevel({ m, act }) {
+  const sel = held(m.selected.value.length ? m.selected.value : null);
+  const kind = held(m.mprop.value);
+  return html`<${Body} m=${m}>${sel && kind ? html`<${PropView} m=${m} act=${act} p=${sel[0]} kind=${kind} />` : null}<//>`;
 }

@@ -14,10 +14,16 @@
 // forward, lands on the same level.  The model (what a level is, the crumbs, the hash)
 // is js/nav.js; this part draws it and listens.  Above the tile are the folder levels
 // (places.js): the crumbs here begin with the same path (Places › My tiles › dungeon › the tile).
+//
+// This is the one shell of the levels, for every kind of document: a tile's levels (tile, entry, control) and a map's (map, piece,
+// property) are views drawn into its sections (`lvl-<id>`, one per row of nav.js `LEVELS`), and the shell alone decides which one is on
+// screen, which way it slides (nav.js `slideBetween`), what it keeps (each level's scroll), where the keyboard goes after a slide and how
+// reduced motion reads.  A view never shows or hides itself, never animates and never says which level is on screen (a test reads the
+// views for it); a level added later is a row of `LEVELS`, a section of the page and a view.
 
 import {
-  caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf, sameLevel, sizeWords,
-  standing, systemName, up as levelUp,
+  LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, mapLevelOf, moveRow, orderStack, parseHash, placeOf, sameLevel,
+  sizeWords, slideBetween, standing, systemName, tileLevelOf, up as levelUp,
 } from '../nav.js';
 import { effect } from '@preact/signals-core';
 import { fillCrumbs, pinEnd } from '../crumbs.js';
@@ -38,29 +44,40 @@ import { held } from './address.js';
 import { label as pieceLabel } from '../map-model.js';
 import { contextLines as inventoryLines } from './inventory.js';
 
-const PANES = ['lvl-tile', 'lvl-element', 'lvl-prop'];
 const SLIDE_MS = 200;
 const EASE = 'cubic-bezier(.2, .7, .2, 1)';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const scrolls = new Map(); // tile id + level key -> how far its list was scrolled
-let shown = 0;             // the depth on screen
+let shown = 'tile';        // the level on screen (a row of LEVELS)
 let pending = null;        // a level asked for by the address, until the tile has it
 let started = false;
 let applying = false;      // the address is being applied: it is not written back
 let leftFrom = null;       // the level the last Up left, for ⌘]
+let leftMap = null;        // the same for a map: the pieces and the property the last Up left
 /** Is the editor page of the sidebar the one showing (not the tile browser)?  `view.page` is only its change; the class is what is on screen. */
 const editing = () => $('side').classList.contains('editing');
-const paneEl = (d) => $(PANES[d]);
-const bodyOf = (d) => paneEl(d).querySelector('.body');
+const paneEl = (id) => $(`lvl-${id}`);
+const bodyOf = (id) => paneEl(id).querySelector('.body');
 
 /** Tell the address's writer (address.js) whether a level it was given is still being taken. */
 const hold = () => { held.value = !!pending || applying; };
 
 const entryLike = (s) => s?.kind === 'entry' || isMark(s);
 const levelNow = () => ({ sel: view.get().sel, control: view.get().control });
-const depthNow = () => depthOf(view.get().sel, view.get().control);
-const memoryKey = (l) => `${view.get().tileId}|${levelKey(l.sel, l.control)}`;
+/** The level the shell shows now, `{id, key}`: a row of LEVELS and the key its scroll is kept under; null while the document has no levels (plates, inventory). */
+function shellLevel() {
+  const t = tile();
+  if (isInventory(t)) return null;
+  if (isPlates(t)) {
+    if (!isMapView()) return null;
+    const id = mapLevelOf({ pieces: mapSelected.value.length, prop: mapLevel.value === 'prop' ? mapProp.value : null });
+    return { id, key: id === 'map' ? 'map' : `${id}:${mapSelected.value.map((p) => p.id).join(',')}${id === 'prop' ? `/${mapProp.value}` : ''}` };
+  }
+  const { sel, control } = view.get();
+  return { id: tileLevelOf(sel, control), key: levelKey(sel, control) };
+}
+const memoryKey = (l) => `${view.get().tileId}|${l.key}`;
 
 // ---- going places ---------------------------------------------------------------
 
@@ -69,8 +86,9 @@ export function goUp() {
   if (view.get().face !== 'tile') return false;
   if (isMapView()) {
     // a map's levels are the same path: a property to its pieces, the pieces to the map
-    if (view.get().mprop) { view.set({ mprop: null }); return true; }
-    if (view.get().msel.length) { view.set({ msel: [] }); return true; }
+    const { mprop, msel } = view.get();
+    if (mprop) { leftMap = { msel, mprop }; view.set({ mprop: null }); return true; }
+    if (msel.length) { leftMap = { msel, mprop: null }; view.set({ msel: [] }); return true; }
     return false;
   }
   const next = levelUp(levelNow(), tileSel());
@@ -83,6 +101,17 @@ export function goUp() {
 
 /** ⌘]: back down to the level the last Up left, if you are still where it left you. */
 export function goForward() {
+  if (isMapView()) {
+    const to = leftMap;
+    if (!to) return false;
+    const have = new Set(mapScene.value?.pieces.map((p) => p.id));
+    const ids = to.msel.filter((i) => have.has(i));
+    const here = mapLevel.value;
+    if (to.mprop && here === 'piece' && ids.length === 1 && mapSelected.value[0]?.id === ids[0]) view.set({ mprop: to.mprop });
+    else if (!to.mprop && here === 'map' && ids.length) view.set({ msel: ids });
+    else return false;
+    return true;
+  }
   const to = leftFrom;
   if (!to) return false;
   const here = levelNow();
@@ -131,7 +160,7 @@ export function setFace(face, { focus = false } = {}) {
     const at = isPlates(tile()) ? null : sourceLine(sel, null);
     // once the source is on screen (it was not drawn a moment ago)
     requestAnimationFrame(() => { if (from !== 'source' && at) texts.placeCaret(at); if (focus) texts.focus(); });
-  } else if (focus) focusLevel();
+  } else if (focus) focusLevel(shown);
 }
 const sourceLine = (sel, byte) => (byte != null ? lineOfByte(byte) : sel?.kind === 'tile' ? null : caretLineFor(linesOf(sel)));
 
@@ -167,7 +196,7 @@ function trailNow() {
   if (isMapView()) {
     const ps = mapSelected.value;
     const prop = mapLevel.value === 'prop' ? mapProp.value : null;
-    return { depth: prop ? 2 : ps.length ? 1 : 0, what: ps.length > 1 ? `${ps.length} pieces` : ps[0] ? pieceLabel(ps[0]) : '', control: PROPS[prop] ?? prop ?? '' };
+    return { depth: LEVELS[mapLevelOf({ pieces: ps.length, prop })].depth, what: ps.length > 1 ? `${ps.length} pieces` : ps[0] ? pieceLabel(ps[0]) : '', control: PROPS[prop] ?? prop ?? '' };
   }
   const { sel, control } = view.get();
   return { depth: depthOf(sel, control), what: thingName(), control: control?.name ?? '' };
@@ -232,25 +261,25 @@ function renderContext() {
   renderInto(html`<${ContextLines} lines=${isPlates(t) ? (isMapView() ? mapLines() : contextLines()) : isInventory(t) ? inventoryLines() : lines} />`, $('ctx-lines'));
 }
 
-function focusLevel() {
-  const d = depthNow();
-  const pane = paneEl(d);
-  const first = d === 0 ? pane.querySelector('.orow') : null;
+/** Put the keyboard in level `id`: its first row (the tile's rows, the map's), else the level itself. */
+function focusLevel(id) {
+  const pane = paneEl(id);
+  const first = pane.querySelector('.orow, .mp-group');
   (first || pane).focus({ preventScroll: true });
 }
 
-/** Put depth `d` on screen: slide from the old one (a deeper level comes in from the right), or swap at once. */
-function showDepth(d, animate) {
+/** Put level `id` on screen: slide from the old one (which way: nav.js `slideBetween`), or swap at once. */
+function showLevel(id, animate) {
   const from = shown;
-  if (from === d && !paneEl(d).hidden) return;
-  for (const a of document.getAnimations()) if (PANES.some((id) => $(id).contains(a.effect?.target))) a.finish();
-  const to = paneEl(d), out = paneEl(from);
-  PANES.forEach((id, i) => { if (i !== d && i !== from) $(id).hidden = true; });
+  if (from === id && !paneEl(id).hidden) return;
+  for (const a of document.getAnimations()) if (Object.keys(LEVELS).some((l) => paneEl(l).contains(a.effect?.target))) a.finish();
+  const to = paneEl(id), out = paneEl(from);
+  for (const l of Object.keys(LEVELS)) if (l !== id && l !== from) paneEl(l).hidden = true;
   to.hidden = false;
-  shown = d;
-  restore(d);
-  if (!animate || reduced() || from === d || out.hidden) { out.hidden = from === d ? false : true; return; }
-  const dir = d > from ? 1 : -1;
+  shown = id;
+  restore(id);
+  const dir = slideBetween(from, id);
+  if (!animate || reduced() || !dir || out.hidden) { out.hidden = from === id ? false : true; return; }
   const opts = { duration: SLIDE_MS, easing: EASE, fill: 'both' };
   to.animate([{ transform: `translateX(${dir * 100}%)` }, { transform: 'translateX(0)' }], opts);
   const gone = out.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-dir * 100}%)` }], opts);
@@ -261,51 +290,59 @@ function showDepth(d, animate) {
     over = true;
     for (const a of to.getAnimations()) a.cancel();
     gone.cancel();
-    if (shown === d) out.hidden = true;
+    if (shown === id) out.hidden = true;
   };
   gone.onfinish = done;
   setTimeout(done, SLIDE_MS + 100);
 }
 // the scroll of a level is kept by the level (the scroll listener in init), and given back when it is shown
-function restore(d) {
-  const key = memoryKey(levelNow());
-  const b = bodyOf(d);
-  if (b) requestAnimationFrame(() => { b.scrollTop = scrolls.get(key) ?? 0; });
+function restore(id) {
+  const l = shellLevel();
+  const b = bodyOf(id);
+  if (l && b) requestAnimationFrame(() => { b.scrollTop = scrolls.get(memoryKey(l)) ?? 0; });
 }
 
-let lastDepth = -1, lastTile = null, lastLevel = null;
+let lastLevelId = null, lastTile = null, lastKey = null;
 function render() {
   const { sel, control, tileId, face } = view.get();
   // a control only belongs to a thing of the tile
-  if (control && !entryLike(sel)) { view.set({ control: null }); return; }
-  const depth = depthOf(sel, control);
+  if (control && !entryLike(sel) && !isPlates(tile())) { view.set({ control: null }); return; }
+  const now = shellLevel();
   const settled = tileId === lastTile && editing() && face === 'tile' && started;
   lastTile = tileId;
-  // the sheets draw themselves (sheet.js); this brings the right one on screen
-  showDepth(depth, settled && depth !== lastDepth);
-  const key = memoryKey(levelNow());
-  if (key !== lastLevel && depth === lastDepth) restore(depth);
-  lastLevel = key;
-  // the keyboard follows only when it was already in the panel (a row or a crumb was pressed, or a key in it)
-  if (depth !== lastDepth && settled && $('side').contains(document.activeElement)) {
-    const goingUp = depth < lastDepth;
-    afterSlide(() => {
-      if (goingUp && depth === 0 && leftFrom?.sel) {
-        // back at the tile: the row it came from is where the keyboard is
-        const k = leftFrom.sel;
-        const row = [...paneEl(0).querySelectorAll('.orow')].find((r) => r.dataset.kind === k.kind && r.dataset.id === k.id);
+  if (now) {
+    // the views draw themselves (view/*.js, editor/sheet.js, scene-panel.js); this brings the right one on screen
+    showLevel(now.id, settled && now.id !== lastLevelId);
+    const key = memoryKey(now);
+    if (key !== lastKey && now.id === lastLevelId) restore(now.id);
+    lastKey = key;
+    // the keyboard follows only when it was already in the panel (a row or a crumb was pressed, or a key in it)
+    if (now.id !== lastLevelId && settled && $('side').contains(document.activeElement)) {
+      const dir = slideBetween(lastLevelId, now.id);
+      afterSlide(() => {
+        const row = dir < 0 && returnRow(now.id);
         if (row) { row.focus({ preventScroll: true }); return; }
-      }
-      focusLevel();
-    });
+        focusLevel(now.id);
+      });
+    }
+    lastLevelId = now.id;
   }
-  lastDepth = depth;
-  // a print list's panel is the plates' (plates.js), not the tile's levels or source
-  const plates = isPlates(tile());
+  // a print list's panel is the plates' (plates.js), not the levels or source
+  const plates = isPlates(tile()) && !isMapView();
   const inventory = isInventory(tile());
   // a print list's panel is the plates', or its source (the same switch as a tile's); the inventory's own view has its own switch
-  $('stage').dataset.face = plates ? (face === 'source' ? 'source' : isMapView() ? 'map' : 'plates') : inventory ? 'inventory' : face;
+  $('stage').dataset.face = plates ? (face === 'source' ? 'source' : 'plates') : inventory ? 'inventory' : face;
   $('face').hidden = inventory;
+}
+/** Back up at the top of a document: the row the keyboard came from (the entry's, the piece's), when the shell still has it. */
+function returnRow(id) {
+  const rows = [...paneEl(id).querySelectorAll('.orow, .mp-group')];
+  if (isMapView()) {
+    const first = leftMap?.msel[0];
+    return first ? rows.find((r) => r.dataset.ids?.split(',').includes(first)) : null;
+  }
+  const k = leftFrom?.sel;
+  return id === 'tile' && k ? rows.find((r) => r.dataset.kind === k.kind && r.dataset.id === k.id) : null;
 }
 const afterSlide = (fn) => setTimeout(fn, reduced() ? 0 : SLIDE_MS + 20);
 
@@ -404,18 +441,18 @@ function onKey(e) {
     if (e.key === '[') { if (!goUp()) $('back').click(); } else goForward();
     return;
   }
-  // the rows of the tile level
-  const row = e.target.closest?.('#lvl-tile .orow');
+  // the rows of a level: the tile's, the map's
+  const row = e.target.closest?.('.lvl .orow, .lvl .mp-group');
   if (row && !e.metaKey && !e.ctrlKey && !e.altKey && ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
-    const rows = [...$('lvl-tile').querySelectorAll('.orow')];
+    const rows = [...row.closest('.lvl').querySelectorAll('.orow, .mp-group')];
     const to = rows[moveRow(rows.indexOf(row), e.key, rows.length)];
     e.preventDefault();
     to?.focus();
     return;
   }
-  if (!typing(e) && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === 'ArrowDown' && e.target.id === 'lvl-tile') {
+  if (!typing(e) && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === 'ArrowDown' && e.target.classList?.contains('lvl')) {
     e.preventDefault();
-    $('lvl-tile').querySelector('.orow')?.focus();
+    e.target.querySelector('.orow, .mp-group')?.focus();
   }
 }
 
@@ -440,9 +477,11 @@ export function init() {
   // the tile browser is a level above the tile: its crumb is the back button already
   $('tilebtn').onclick = () => goDepth(0);
   for (const b of $('face').children) b.onclick = () => setFace(b.dataset.face);
-  for (const id of PANES) {
-    const p = $(id);
-    p.addEventListener('scroll', (e) => { if (e.target.classList?.contains('body')) scrolls.set(memoryKey(levelNow()), e.target.scrollTop); }, true);
+  for (const id of Object.keys(LEVELS)) {
+    paneEl(id).addEventListener('scroll', (e) => {
+      const l = shellLevel();
+      if (l && l.id === id && e.target.classList?.contains('body')) scrolls.set(memoryKey(l), e.target.scrollTop);
+    }, true);
   }
   $('lvl-tile').addEventListener('focusin', rowFocus);
   $('lvl-tile').addEventListener('focusout', rowBlur);

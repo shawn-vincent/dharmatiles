@@ -1,9 +1,9 @@
-// The map's panel on this page (docs/maps.html): `js/view/map-panel.js` drawn into the panel's box from the model
+// The map's levels on this page (docs/maps.html): `js/view/map-panel.js` drawn into the levels' sections from the model
 // (`editor/model.js`), with the buttons wired to the changes of the map (scene-edit.js) and of the view.  Nothing
 // is drawn here and nothing is kept: the panel is drawn again by itself when what it read changes.
 
 import { html, render } from '../view/html.js';
-import { MapPanel } from '../view/map-panel.js';
+import { MapLevel, PieceLevel, PropLevel } from '../view/map-panel.js';
 import { $ } from './app.js';
 import { keep, readKept } from './list-keep.js';
 import { mapPanel } from './model.js';
@@ -38,5 +38,8 @@ const act = {
 /** Wire this part of the page (once, at load). */
 export function init() {
   view.set({ mlist: readKept() });
-  render(html`<${MapPanel} m=${mapPanel} act=${act} />`, $('lens-map'));
+  // each level of the map is a view drawn into its section of the levels shell (levels.js shows it)
+  render(html`<${MapLevel} m=${mapPanel} act=${act} />`, $('lens-map'));
+  render(html`<${PieceLevel} m=${mapPanel} act=${act} />`, $('lens-piece'));
+  render(html`<${PropLevel} m=${mapPanel} act=${act} />`, $('lens-prop'));
 }

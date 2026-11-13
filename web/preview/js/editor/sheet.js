@@ -261,5 +261,5 @@ function PropertyLevel() {
 export function init() {
   render(html`<${TileLevel} />`, $('lens-tile'));
   render(html`<${ThingLevel} />`, $('lens'));
-  render(html`<${PropertyLevel} />`, $('lens-prop'));
+  render(html`<${PropertyLevel} />`, $('lens-control'));
 }

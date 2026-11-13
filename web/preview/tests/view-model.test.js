@@ -61,7 +61,10 @@ const { server, view } = await import('../js/editor/stores.js');
 const model = await import('../js/editor/model.js');
 const { steps } = await import('../js/steps.js');
 const { render, html } = await import('../js/view/html.js');
-const { MapPanel } = await import('../js/view/map-panel.js');
+const { MapLevel, PieceLevel, PropLevel } = await import('../js/view/map-panel.js');
+// the levels as the page has them: each in its own section of the shell (which shows one of them at a time; here all are drawn)
+const propBox = () => root.childNodes[2];
+const MapPanel = ({ m, act }) => html`<div id="lens-map"><${MapLevel} m=${m} act=${act} /></div><div id="lens-piece"><${PieceLevel} m=${m} act=${act} /></div><div id="lens-prop"><${PropLevel} m=${m} act=${act} /></div>`;
 
 server.set({ tiles: [{ id: 'm1', path: '/home/m.dmap', name: 'm', status: 'ok', errors: [], root: 0 }], ready: true });
 view.set({ tileId: 'm1' });
@@ -133,7 +136,7 @@ test('a half-typed field survives the program telling the panel a new state, and
   render(html`<${MapPanel} m=${model.mapPanel} act=${act} />`, root);
   view.set({ msel: ['p1'], mprop: 'seed' });
   await settle();
-  const input = root.querySelector('input');
+  const input = propBox().querySelector('input');
   assert.ok(input, 'the seed field');
   assert.equal(input.value, '11');
   type(input, '4'); // half of 42
@@ -141,7 +144,7 @@ test('a half-typed field survives the program telling the panel a new state, and
   program.answer('mapsSet', { docRev: program.rev, id: 'p2', set: { rot: 90 } });
   applyDocState(program.state());
   await settle();
-  assert.equal(root.querySelector('input'), input, 'the same field, not a new one');
+  assert.equal(propBox().querySelector('input'), input, 'the same field, not a new one');
   assert.equal(input.value, '4', 'what the user typed is still there');
   // the word the program holds for the field changes under the typing: still the user's until they commit or leave
   program.answer('mapsSet', { docRev: program.rev, id: 'p1', set: { seed: 99 } });
@@ -162,7 +165,7 @@ test('leaving the field without committing drops what was typed', async () => {
   render(html`<${MapPanel} m=${model.mapPanel} act=${act} />`, root);
   view.set({ msel: ['p1'], mprop: 'seed' });
   await settle();
-  const input = root.querySelector('input');
+  const input = propBox().querySelector('input');
   type(input, '7');
   input.dispatchEvent({ type: 'blur', target: input });
   await settle();

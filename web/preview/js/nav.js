@@ -24,6 +24,40 @@ export function depthOf(sel, control = null) {
   return control ? 2 : 1;
 }
 
+// ---- the shell's levels: one table, whatever the document ---------------------------------------
+//
+// The panel's levels shell (editor/levels.js) shows one level at a time and slides between them.  What it needs to know of a level is
+// here and nowhere else: its depth, and which kind of document it belongs to.  A tile's levels are the tile, an entry and a control; a
+// map's are the map, a piece (or the places to add tiles) and a property of it.  A level added later is a row of this table, a section of
+// the page (`lvl-<id>`) and a view drawn into it; nothing in a view says how it comes on screen.
+
+/** Every level the panel can show: its depth in the path, and the kind of document it is a level of. */
+export const LEVELS = {
+  tile: { depth: 0, doc: 'tile' },
+  entry: { depth: 1, doc: 'tile' },
+  control: { depth: 2, doc: 'tile' },
+  map: { depth: 0, doc: 'map' },
+  piece: { depth: 1, doc: 'map' },
+  prop: { depth: 2, doc: 'map' },
+};
+
+/** The level of a tile at selection `sel` with `control` open. */
+export const tileLevelOf = (sel, control = null) => ['tile', 'entry', 'control'][depthOf(sel, control)];
+
+/** The level of a map with `pieces` selected (a count) and a property open on them (`prop`). */
+export const mapLevelOf = ({ pieces = 0, prop = null }) => (prop && pieces === 1 ? 'prop' : pieces ? 'piece' : 'map');
+
+/**
+ * Which way the panel slides from level `from` to level `to`: 1 a deeper level comes in from the right, -1 a shallower one comes in
+ * from the left, 0 no slide (the same level, another level of the same depth, no level before, or a level of another kind of
+ * document).  A jump of several levels slides the same one step's distance; it is the depth that says the way.
+ */
+export function slideBetween(from, to) {
+  const a = LEVELS[from], b = LEVELS[to];
+  if (!a || !b || a.doc !== b.doc) return 0;
+  return Math.sign(b.depth - a.depth);
+}
+
 /** The key a level keeps its scroll position under. */
 export function levelKey(sel, control = null) {
   if (!entryLike(sel)) return 'tile';

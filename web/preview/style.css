@@ -88,9 +88,9 @@ button { font: inherit; color: inherit; }
 #levels { position: absolute; inset: 0; overflow: clip; }
 .lvl { position: absolute; inset: 0; background: var(--panel); outline: none; will-change: transform; }
 #stage[data-face="source"] #levels, #stage[data-face="tile"] #source { display: none; }
-#stage[data-face="plates"] #levels, #stage[data-face="plates"] #source, #stage[data-face="map"] #levels, #stage[data-face="map"] #source, #stage[data-face="inventory"] #levels, #stage[data-face="inventory"] #source { display: none; }
-#stage:not([data-face="plates"]) #platespanel, #stage:not([data-face="map"]) #mappanel, #stage:not([data-face="inventory"]) #inventorypanel { display: none; }
-#source, #platespanel, #mappanel, #inventorypanel { position: absolute; inset: 0; }
+#stage[data-face="plates"] #levels, #stage[data-face="plates"] #source, #stage[data-face="inventory"] #levels, #stage[data-face="inventory"] #source { display: none; }
+#stage:not([data-face="plates"]) #platespanel, #stage:not([data-face="inventory"]) #inventorypanel { display: none; }
+#source, #platespanel, #inventorypanel { position: absolute; inset: 0; }
 #modes { margin-left: 6px; }
 #modes > button { padding: 3px 11px; font-size: 12px; }
 
@@ -602,7 +602,7 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 .rbtns { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---- the control level ---- */
-#lens-prop .body { display: grid; gap: 8px; align-content: start; }
+#lens-control .body { display: grid; gap: 8px; align-content: start; }
 .pabout { margin: 0 0 4px; color: var(--ink); opacity: .85; font-size: 13px; line-height: 1.5; }
 .plab { margin: 10px 0 0; font: 600 10.5px/1 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .pfield { display: grid; gap: 5px; }

@@ -78,12 +78,14 @@
         </div>
         <div id="stage" data-face="tile">
           <div id="levels">
-            <section class="lvl" id="lvl-tile" data-depth="0" tabindex="-1" aria-label="The tile"><div id="lens-tile" class="lvlbox"></div></section>
-            <section class="lvl" id="lvl-element" data-depth="1" tabindex="-1" aria-label="One thing of the tile" hidden><div id="lens" class="lvlbox" role="region" aria-label="Properties of the selection"></div></section>
-            <section class="lvl" id="lvl-prop" data-depth="2" tabindex="-1" aria-label="One control" hidden><div id="lens-prop" class="lvlbox"></div></section>
+            <section class="lvl" id="lvl-tile" tabindex="-1" aria-label="The tile"><div id="lens-tile" class="lvlbox"></div></section>
+            <section class="lvl" id="lvl-entry" tabindex="-1" aria-label="One thing of the tile" hidden><div id="lens" class="lvlbox" role="region" aria-label="Properties of the selection"></div></section>
+            <section class="lvl" id="lvl-control" tabindex="-1" aria-label="One control" hidden><div id="lens-control" class="lvlbox"></div></section>
+            <section class="lvl" id="lvl-map" tabindex="-1" aria-label="The map" hidden><div id="lens-map" class="lvlbox"></div></section>
+            <section class="lvl" id="lvl-piece" tabindex="-1" aria-label="One piece of the map" hidden><div id="lens-piece" class="lvlbox"></div></section>
+            <section class="lvl" id="lvl-prop" tabindex="-1" aria-label="One property of a piece" hidden><div id="lens-prop" class="lvlbox"></div></section>
           </div>
           <section id="platespanel" aria-label="The plates of a print list"><div id="lens-plates" class="lvlbox"></div></section>
-          <section id="mappanel" aria-label="The map"><div id="lens-map" class="lvlbox"></div></section>
           <section id="inventorypanel" aria-label="The inventory"><div id="lens-inventory" class="lvlbox"></div></section>
           <section id="source" aria-label="The source">
             <div id="partbar" hidden><span id="sourcepath"></span><button class="back" id="part-back" type="button">Back to the tile</button></div>
