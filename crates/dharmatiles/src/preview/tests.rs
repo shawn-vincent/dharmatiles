@@ -14,6 +14,7 @@ use serde_json::Value;
 use super::*;
 
 mod inventory;
+mod messages_wire;
 mod plates;
 
 struct Running {

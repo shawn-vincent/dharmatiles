@@ -4,12 +4,11 @@
 // editor/panel.js from the messages stream, the tile, the progress and the document) and of `act`, what the buttons do.
 // Which filter is on and which message a mark in the source pointed to are the model's.
 
-import { FILTERS, filterRows } from '../messages.js';
+import { FILTERS, filterRows, gateRows } from '../messages.js';
 import { CopyButton } from './copy-button.js';
 import { html, useEffect } from './html.js';
 
 const secs = (s) => (s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
-const fmt = (x, d = 2) => Number(x).toFixed(d);
 
 export function MessageFilters({ m, act }) {
   const v = m.view.value;
@@ -32,17 +31,7 @@ function Running({ m }) {
 function Numbers({ gate, m, t }) {
   const a = gate?.data;
   if (!a) return html`<dl class="nums"></dl>`;
-  const { overhangDeg, steepestDeg } = m.angles.value;
-  const used = (area, budget) => (budget == null ? `${fmt(area)} mm²` : `${fmt(area)} / ${fmt(budget)} mm²`);
-  const rows = [
-    ['Triangles', Number(a.triangles).toLocaleString(), ''],
-    ['Watertight', a.watertight ? 'Yes' : 'No', a.watertight ? 'ok' : 'bad'],
-    [`Band ${overhangDeg}–${steepestDeg}°`, used(a.bandMm2, a.bandBudgetMm2), a.bandMm2 > (a.bandBudgetMm2 ?? 0) ? 'bad' : a.bandMm2 > 0 ? 'warn' : 'ok'],
-    [`Past ${steepestDeg}°`, used(a.overhangMm2, a.overhangBudgetMm2), a.overhangMm2 > (a.overhangBudgetMm2 ?? 0) ? 'bad' : a.overhangMm2 > 0 ? 'warn' : 'ok'],
-    ['Dropped bodies', a.dropped, a.dropped ? 'bad' : ''],
-    ['Voids filled', a.voidsFilled, ''],
-    ['Holes', a.holes, a.holes ? 'bad' : ''],
-  ];
+  const rows = gateRows(a, m.angles.value);
   if (t?.record?.record?.seed != null) rows.push(['Seed', t.record.record.seed, '']);
   return html`<dl class="nums">${rows.map(([k, v, cls]) => html`<div class="pair" key=${k}><dt>${k}</dt><dd class=${cls || undefined}>${v}</dd></div>`)}</dl>`;
 }

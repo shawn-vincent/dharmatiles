@@ -196,3 +196,21 @@ test('the messages panel drags between its minimum and leaving the view 80 px', 
   assert.equal(fitMsgHeight(900, 600), 520);
   assert.equal(fitMsgHeight(250.6, 600), 251);
 });
+
+test('the gate\'s rows read the numbers under the names the program sends them (one fixture, held to by a program test)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { gateRows } = await import('../js/messages.js');
+  const data = JSON.parse(readFileSync(new URL('./fixtures/gate-numbers.json', import.meta.url), 'utf8'));
+  const rows = gateRows(data, { overhangDeg: 55, steepestDeg: 65 });
+  const text = rows.map(([k, v]) => `${k}: ${v}`).join(' | ');
+  assert.doesNotMatch(text, /NaN|undefined/, text);
+  assert.deepEqual(rows.map((r) => r[0]), ['Triangles', 'Watertight', 'Band 55–65°', 'Past 65°', 'Dropped bodies', 'Voids filled', 'Holes']);
+  assert.equal(rows[2][1], '1.25 / 3.50 mm²');
+  assert.equal(rows[2][2], 'warn', 'some band area inside its budget is a warning');
+  assert.equal(rows[3][1], '0.00 / 3.50 mm²');
+  assert.equal(rows[3][2], 'ok');
+  assert.equal(rows[5][1], 2);
+  // past its budget is bad; a number the message does not carry is left out, not shown as NaN
+  assert.equal(gateRows({ ...data, overhang_mm2: 5 }, { overhangDeg: 55, steepestDeg: 65 })[3][2], 'bad');
+  assert.equal(gateRows({ triangles: 1, watertight: true }, { overhangDeg: 55, steepestDeg: 65 }).length, 2);
+});

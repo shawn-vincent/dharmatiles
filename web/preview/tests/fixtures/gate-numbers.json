@@ -1,0 +1,12 @@
+{
+  "triangles": 461038,
+  "watertight": true,
+  "band_mm2": 1.25,
+  "band_budget_mm2": 3.5,
+  "overhang_mm2": 0.0,
+  "overhang_budget_mm2": 3.5,
+  "dropped": 0,
+  "holes": 0,
+  "voids_filled": 2,
+  "failures": []
+}

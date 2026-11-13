@@ -212,3 +212,24 @@ export const MSG_MIN = 96;
 export function fitMsgHeight(h, room) {
   return Math.round(Math.max(MSG_MIN, Math.min(h, room - 80)));
 }
+
+/**
+ * The gate's numbers as rows for the messages panel: `[name, value, tone]`.  `data` is the gate message's data as the program
+ * sends it (`crate::message`: snake_case names, as every field of a message is; tests/fixtures/gate-numbers.json is that data,
+ * held to by a test in the program), `angles` the band's and the steepest angle.  A number the message does not carry is left
+ * out of the row, never shown as NaN.
+ */
+export function gateRows(data, { overhangDeg, steepestDeg }) {
+  const area = (mm2, budget) => (mm2 == null ? null : budget == null ? `${Number(mm2).toFixed(2)} mm²` : `${Number(mm2).toFixed(2)} / ${Number(budget).toFixed(2)} mm²`);
+  const tone = (mm2, budget) => (mm2 > (budget ?? 0) ? 'bad' : mm2 > 0 ? 'warn' : 'ok');
+  const rows = [
+    ['Triangles', Number(data.triangles).toLocaleString(), ''],
+    ['Watertight', data.watertight ? 'Yes' : 'No', data.watertight ? 'ok' : 'bad'],
+    [`Band ${overhangDeg}–${steepestDeg}°`, area(data.band_mm2, data.band_budget_mm2), tone(data.band_mm2, data.band_budget_mm2)],
+    [`Past ${steepestDeg}°`, area(data.overhang_mm2, data.overhang_budget_mm2), tone(data.overhang_mm2, data.overhang_budget_mm2)],
+    ['Dropped bodies', data.dropped, data.dropped ? 'bad' : ''],
+    ['Voids filled', data.voids_filled, ''],
+    ['Holes', data.holes, data.holes ? 'bad' : ''],
+  ];
+  return rows.filter(([, v]) => v != null);
+}
