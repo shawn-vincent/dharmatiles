@@ -15,9 +15,10 @@ import * as M from '../map-model.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
 import { pill as invPill, systemName } from '../inventory.js';
 import { levelOf, placesOf, writable } from '../folders.js';
+import { defaultFilters } from '../inventory.js';
 import { docs, planOf } from './docs.js';
 import './mode.js'; // `view.dmode` is derived there
-import { isPlates, server, stem, tile, view } from './stores.js';
+import { isInventory, isPlates, server, stem, tile, view } from './stores.js';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -117,4 +118,59 @@ export const browse = {
       writable: !!r && writable(r) && !query.trim(),
     };
   }),
+};
+
+// ---- the inventory --------------------------------------------------------------------------------------------------
+
+const freshInv = (id) => ({ id, filters: null, face: 'view', reprint: null });
+const invSignal = signal(freshInv(null));
+/** What the user is choosing in the inventory's view for the document shown: the filters, the face, the piece a reprint form is open under. */
+export const inventoryUi = {
+  value: computed(() => { const id = tileNow.value?.id ?? null; return invSignal.value.id === id ? invSignal.value : freshInv(id); }),
+  update(id, edit) {
+    const cur = invSignal.peek().id === id ? invSignal.peek() : freshInv(id);
+    invSignal.value = { ...cur, ...edit(cur), id };
+  },
+};
+
+/** The colour mode last used for "I have this": remembered in the browser, else the one the log last wrote, else single. */
+const storedColour = () => {
+  try {
+    const c = localStorage.getItem('dt-inventory-colour');
+    if (c === 'single' || c === 'multi') return c;
+  } catch { /* private mode, or nothing kept: the log's own last colour answers */ }
+  return null;
+};
+/** The colour mode picked at the tile level, until a print is added. */
+export const pickedColour = signal(/** @type {string | null} */ (null));
+/** Bumped when the remembered colour changes, so what reads it follows. */
+export const colourKept = signal(0);
+
+/** The piece's log, as the program adds it up: from the snapshot when this is the home inventory (it follows at once), else the document's. */
+const dataOf = (t) => {
+  const snap = server.get().inventory;
+  const own = t.plan?.inventory;
+  if (snap?.exists && snap.path === t.path && !snap.problems) return { ...snap, text: own?.text ?? '', home: snap.home };
+  return { pieces: own?.pieces ?? [], text: own?.text ?? '', problems: own?.problems, home: snap?.home ?? '' };
+};
+
+/** What the tile level's inventory block reads. */
+export const haveBlockModel = {
+  inventory,
+  system: computed(() => server.get().system),
+  colour: computed(() => { void colourKept.value; return pickedColour.value ?? storedColour() ?? server.get().inventory?.lastColour ?? 'single'; }),
+};
+
+/** What the inventory's own view reads. */
+export const inventoryPanel = {
+  on: computed(() => isInventory(tileNow.value)),
+  tile: tileNow,
+  ui: inventoryUi.value,
+  data: computed(() => dataOf(tileNow.value ?? { plan: null, path: '' })),
+  // the filters now: the target's system until you pick one, the colour and the shelf as you set them
+  filters: computed(() => { const f = inventoryUi.value.value.filters ?? { ...defaultFilters(null), system: null }; return { ...f, system: f.system ?? server.get().system }; }),
+  inventory,
+  system: haveBlockModel.system,
+  tiles: computed(() => server.get().tiles),
+  lists: computed(() => server.get().tiles.filter((x) => /\.dmap$/i.test(x.path))),
 };
