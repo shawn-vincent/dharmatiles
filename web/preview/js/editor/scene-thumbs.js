@@ -1,22 +1,18 @@
 // The catalog's pictures: each tile as the program's super-low mesh seen from above at an angle, on the plate
 // colour, rendered here once and kept for the session.  The picture is the real tile (its colours, its overhang
 // painted red and orange as everywhere), not a drawing of its size.  One small offscreen renderer draws them
-// one after another, so a folder of forty tiles does not make forty contexts or forty builds at once; the
-// program's cache makes the second visit instant.
+// one after another, so a folder of forty tiles does not make forty contexts; js/thumbs.js owns what is asked
+// (at most five builds at a time, a cache for the session) and this file is only its renderer.
 
 import * as THREE from 'three';
 import { parsePayload } from '../payload.js';
 import { FOV, FRAG, VERT, dirv } from '../viewer/consts.js';
 import { host } from './app.js';
 import { tileById } from './stores.js';
-import { createTiers } from '../tiers.js';
-
-const tierSet = createTiers({ host, scope: 'pictures' });
+import { createThumbs } from '../thumbs.js';
 
 const W = 176, H = 124;
-const pictures = new Map(); // key -> Promise<string | null>
 let gl = null;
-let chain = Promise.resolve();
 
 function setup() {
   const canvas = document.createElement('canvas');
@@ -34,9 +30,11 @@ function setup() {
   return { renderer, canvas, u, material, camera, scene: new THREE.Scene() };
 }
 
-function draw(buffer, plate) {
+function draw(buffer, plate, w = W, h = H) {
   gl ??= setup();
   const { renderer, canvas, u, material, camera, scene } = gl;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
   const p = parsePayload(buffer);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(p.positions, 3));
@@ -51,7 +49,7 @@ function draw(buffer, plate) {
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - Math.max(lo[2], -1));
   const [elev, azim] = [40, -120];
   const dir = dirv(elev, azim).normalize();
-  const dist = (diag / (2 * Math.tan((FOV * Math.PI) / 360) * Math.min(1, W / H))) * 1.0;
+  const dist = (diag / (2 * Math.tan((FOV * Math.PI) / 360) * Math.min(1, w / h))) * 1.0;
   camera.position.copy(centre).addScaledVector(dir, dist);
   camera.near = dist / 50; camera.far = dist * 6;
   camera.lookAt(centre);
@@ -69,21 +67,20 @@ function draw(buffer, plate) {
 }
 
 /**
+ * The page's one thumbnail service (js/thumbs.js) with this renderer: at most five pictures at a time, kept for the
+ * session.  `valid`: the program's mesh is of another revision than the tile's (or the want was withdrawn): no picture,
+ * asked again at the next look.
+ */
+export const thumbs = createThumbs({
+  host,
+  draw: (buf, spec) => draw(buf, spec.plate ?? '#D9E0EB', spec.w ?? W, spec.h ?? H),
+  valid: (spec, got) => { const known = tileById(spec.tile)?.docRev; return known == null || known === got.docRev; },
+});
+
+/**
  * A picture of tile `id` (a data URL), or null when it could not be made (the reason is shown where it is
- * asked for).  `key` names the tile and its look (its mesh version, the theme's plate) so a changed tile is drawn again.
+ * asked for).  `key` names the tile and its look (its mesh version) so a changed tile is drawn again; `plate` is the theme's.
  */
 export function pictureOf(id, key, plate) {
-  const k = `${id}|${key}|${plate}`;
-  if (!pictures.has(k)) {
-    const job = chain.then(async () => {
-      const got = await tierSet.want(k, { tile: id, tier: 'super-low' });
-      const known = tileById(id)?.docRev;
-      // the program's is of another revision than the tile's (or the want was withdrawn): no picture, asked again at the next look
-      return got && (known == null || known === got.docRev) ? draw(got.buf, plate) : null;
-    });
-    // one failure does not stop the pictures after it
-    chain = job.then(() => undefined, () => undefined);
-    pictures.set(k, job);
-  }
-  return pictures.get(k);
+  return thumbs.picture({ tile: id, tier: 'super-low', rev: key, plate, w: W, h: H });
 }

@@ -3072,3 +3072,60 @@ fn an_edit_is_answered_while_the_tier_lane_is_full_and_a_withdrawn_want_is_cance
         "what stayed wanted was built"
     );
 }
+
+const ROCKS_ONE: &str = "lib:tests/rocks/1x1-rock-tops.dtile";
+
+/// The thumbnail service of the page (js/thumbs.js) asks the tier lane for a small build of a tile at a seed it
+/// is given, without editing the file: two seeds are two pictures.
+#[test]
+fn a_library_tile_has_a_super_low_picture_at_each_seed_and_they_differ() {
+    let r = start(&[ROCKS_ONE], false);
+    let id = id0(&r);
+    let token = token_of(&r);
+    let keys = want_tiers(
+        &r,
+        &token,
+        "thumbs",
+        &[
+            serde_json::json!({"tile": id, "tier": "super-low", "seed": 11}),
+            serde_json::json!({"tile": id, "tier": "super-low", "seed": 12}),
+        ],
+    );
+    assert_ne!(keys[0], keys[1], "a seed is part of the key");
+    let (h0, a) = wait_tier(&r, &keys[0], None);
+    let (h1, b) = wait_tier(&r, &keys[1], None);
+    assert!(
+        h0.starts_with("HTTP/1.1 200") && h1.starts_with("HTTP/1.1 200"),
+        "{h0} {h1}"
+    );
+    assert!(!a.is_empty() && !b.is_empty());
+    assert_ne!(a, b, "two seeds drew the same picture");
+}
+
+/// A want the program cannot make is refused by name, never built and never answered with a shrug.
+#[test]
+fn the_tiers_route_refuses_a_bad_want_by_name() {
+    let r = start(&[ROCKS_ONE], false);
+    let id = id0(&r);
+    let token = token_of(&r);
+    let ask = |want: Value| {
+        let body = serde_json::json!({"scope": "thumbs", "wants": [want]}).to_string();
+        post(&r, "/api/tiers/want", Some(&token), None, &body)
+    };
+    let (head, v) = ask(serde_json::json!({"tile": id, "tier": "huge"}));
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
+    assert!(
+        v.to_string().contains("a tier is low, super-low or full"),
+        "{v}"
+    );
+    let (head, v) = ask(serde_json::json!({"tile": id, "tier": "low", "system": "zz"}));
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
+    assert!(v.to_string().contains("the system is db or ol"), "{v}");
+    let (head, v) = ask(serde_json::json!({"tile": "nope", "tier": "low"}));
+    assert!(head.starts_with("HTTP/1.1 404"), "{head}");
+    assert!(v.to_string().contains("no such tile"), "{v}");
+    // a field the contract does not have is refused, not ignored
+    let (head, v) = ask(serde_json::json!({"tile": id, "tier": "low", "size": 64}));
+    assert!(head.starts_with("HTTP/1.1 400"), "{head} {v}");
+    assert!(v.to_string().contains("size"), "{v}");
+}

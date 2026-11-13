@@ -21,6 +21,7 @@ import { asNumber, asRange, debounce, isNumeric, kdlString, unquote, valueItems,
 import { html, render, useEffect, useRef, useState } from './html.js';
 import { SizeGridBox, parseSize } from './size-grid.js';
 import { ValuePopBox } from './value-pop.js';
+import { Thumb } from '../thumbs.js';
 
 const STEP = { mm: 0.1, level: 0.1, degrees: 1, percent: 1, count: 1, 'per square': 0.05, number: 0.05 };
 const PX = { count: 10, degrees: 3, percent: 3 }; // pixels a step takes; 4 otherwise
@@ -130,7 +131,7 @@ function TypeIn({ g, c, s, v, api, put, onDone }) {
 // ---- a value shown --------------------------------------------------------------------------------------------
 
 /** A value: its numbers scrubbed by a drag, the whole of it typed after a click. */
-function ValueCell({ g, c, s, v, ro, api, put }) {
+function ValueCell({ g, c, s, v, ro, api, put, roll }) {
   const [typing, setTyping] = useState(false);
   const [live, setLive] = useState(/** @type {Record<number, string> | null} */ (null)); // the numbers as the drag has them now
   const drag = useRef(/** @type {any} */ (null));
@@ -203,13 +204,43 @@ function ValueCell({ g, c, s, v, ro, api, put }) {
       ${pre ? html`<span class="q">${pre}</span>` : null}${parts.map((p, i) => (p.num != null
         ? html`<span class=${`num${drag.current?.k === p.k ? ' active' : ''}`} key=${i} ...${ro ? {} : scrub(p)}>${live?.[p.k] ?? p.num}</span>`
         : p.text))}${post ? html`<span class="q">${post}</span>` : null}${!shownRaw ? html`<span class="unit">not set</span>` : null}</span>`}
-    ${dice ? html`<button type="button" class="dice" title="Roll a new seed: another arrangement" aria-label="Roll a new seed" onClick=${() => put(g, c.name, 1 + Math.floor(Math.random() * 9999))}>${DICE}</button>` : null}
+    ${dice ? html`<button type="button" class="dice" title=${roll ? 'Show five arrangements to choose from' : 'Roll a new seed: another arrangement'} aria-label=${roll ? 'Show five seeds' : 'Roll a new seed'} onClick=${roll ?? (() => put(g, c.name, newSeed()))}>${DICE}</button>` : null}
     ${unit ? html`<span class="unit">${unit}</span>` : null}`;
+}
+
+// ---- the seed strip -------------------------------------------------------------------------------------------
+
+const newSeed = () => 1 + Math.floor(Math.random() * 9999);
+
+/** Five seeds to look at: the one the tile has now first (`null`: its own default), then four new ones. @param {number | null} current */
+const candidates = (current) => {
+  const seeds = [current];
+  while (seeds.length < 5) { const x = newSeed(); if (!seeds.includes(x)) seeds.push(x); }
+  return seeds;
+};
+
+/**
+ * What the dice shows (docs/preview.html, "The seed"): five small pictures of the tile, each built low at its seed by the
+ * program on demand (js/thumbs.js), the current one first.  A square marks a seed you own.  Choosing one writes the
+ * seed, one step of history; choosing the current one writes nothing.  `s` is the model's `seedStrip`.
+ */
+export function SeedStrip({ s, seeds, ro, onPick, onMore, onClose }) {
+  return html`<div class="seed-strip" role="group" aria-label="Seeds to choose from">${seeds.map((seed) => {
+    const now = seed === s.current;
+    return html`<button type="button" key=${seed ?? 'own'} class=${`seed-card${now ? ' on' : ''}`} disabled=${ro && !now} aria-pressed=${String(now)}
+      title=${now ? 'The seed the tile has now' : `Use seed ${seed}`} onClick=${() => onPick(seed)}>
+      <${Thumb} svc=${s.svc} spec=${{ ...s.spec, seed: seed ?? undefined }} onError=${s.onError} />
+      <b>${seed ?? 'default'}</b>${now ? html`<span class="now">now</span>` : null}${seed != null && s.owned.has(seed) ? html`<i class="own" title="You have printed this one"></i>` : null}</button>`;
+  })}</div>
+  <div class="seed-strip-acts"><button type="button" class="btn" onClick=${onMore}>Roll again</button><button type="button" class="btn" onClick=${onClose}>Close</button></div>`;
 }
 
 // ---- a row ----------------------------------------------------------------------------------------------------
 
 function Row({ g, c, s, editable, api, put, model }) {
+  // the tile's own seed row: its dice shows a strip of candidates under the row (`model.seedStrip`)
+  const strip = c.name === 'seed' && model.seedStrip && model.groups[0] === g ? model.seedStrip : null;
+  const [seeds, setSeeds] = useState(/** @type {(number | null)[] | null} */ (null));
   const ro = !editable || (s && s.file);
   const v = s ? valueOf(s.text, c.name) : null;
   const shown = v ? v.text : (dflt(c) ?? '');
@@ -235,14 +266,16 @@ function Row({ g, c, s, editable, api, put, model }) {
     const on = /#?true/.test(shown);
     cell = html`<button type="button" class=${`flip${on ? ' on' : ''}`} disabled=${ro} onClick=${() => put(g, c.name, !on)}>${on ? 'on' : 'off'}</button>`;
   } else {
-    cell = html`<${ValueCell} g=${g} c=${c} s=${s} v=${v} ro=${ro} api=${api} put=${put} />`;
+    cell = html`<${ValueCell} g=${g} c=${c} s=${s} v=${v} ro=${ro} api=${api} put=${put} roll=${strip ? () => setSeeds(seeds ? null : candidates(strip.current)) : null} />`;
   }
   return html`<div class=${`row${s ? '' : ' faint'}`} onMouseEnter=${() => api.onFieldHover?.(c.name, true)} onMouseLeave=${() => api.onFieldHover?.(c.name, false)}>
     <span class="nm" title=${[c.about, c.unit && `in ${c.unit}`, c.takes].filter(Boolean).join(' · ')}>${c.name}</span>
     <span class="cell">${cell}</span>
     ${s && !ro && !c.required ? html`<button type="button" class="x" title=${`Take ${c.name} out (back to its default)`} onClick=${() => put(g, c.name, null)}>×</button>` : null}
     ${api.detail?.(c) ? html`<button type="button" class="chev" title=${`More about ${c.name}`} aria-label=${`More about ${c.name}`} onClick=${() => api.openControl?.(Math.max(0, model.groups.indexOf(g)), c.name)}>›</button>` : null}
-  </div>`;
+  </div>${strip && seeds ? html`<${SeedStrip} s=${strip} seeds=${seeds} ro=${ro}
+    onPick=${(/** @type {number | null} */ x) => { setSeeds(null); if (x !== strip.current && x != null) put(g, 'seed', x); }}
+    onMore=${() => setSeeds(candidates(strip.current))} onClose=${() => setSeeds(null)} />` : null}`;
 }
 
 /** A menu that adds something: `add` is {label, items: [{label, title, disabled, run}]}; choosing an item runs it, then the menu is ready again. */

@@ -213,3 +213,20 @@ dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 
 .acard { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; overflow: hidden; padding-bottom: 7px; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: 13px var(--f-body); }
 .acard:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .acard:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* A tile's small picture (js/thumbs.js): the plate's own tone, quiet, until the picture arrives; red when it could not be made. */
+.thumb-pic { display: block; aspect-ratio: 176 / 124; background: var(--plate, #D9E0EB); overflow: hidden; }
+.thumb-pic.ph { opacity: .55; }
+.thumb-pic.bad { box-shadow: inset 0 0 0 2px var(--err); }
+.thumb-pic img { width: 100%; height: 100%; display: block; }
+
+/* The seed strip: five candidate seeds of a tile, the current first; a square marks one you own. */
+.seed-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 6px 0 8px; }
+.seed-card { position: relative; box-sizing: border-box; display: grid; padding: 0 0 3px; overflow: hidden; border: 2px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: 12px var(--f-body); text-align: left; }
+.seed-card:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.seed-card.on { border-color: var(--accent); }
+.seed-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seed-card b { padding: 3px 6px 0; font-weight: 600; font-family: var(--f-code); }
+.seed-card .now { position: absolute; right: 5px; top: 5px; padding: 0 5px; border-radius: 2px; background: var(--accent); color: var(--on-accent); font: 600 11px var(--f-body); }
+.seed-card .own { position: absolute; left: 5px; top: 5px; width: 8px; height: 8px; border-radius: 2px; background: var(--ok); box-shadow: 0 0 0 1.5px var(--raised); }
+.seed-strip-acts { display: flex; gap: 8px; margin-bottom: 8px; }
