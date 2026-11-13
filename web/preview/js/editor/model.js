@@ -10,7 +10,7 @@
 // the document (through its actions), the resource (the program says it) or the view.  The panels (js/view/) read
 // this and call the actions; they keep no copy of a fact.
 
-import { computed } from '@preact/signals-core';
+import { computed, signal } from '@preact/signals-core';
 import * as M from '../map-model.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
 import { systemName } from '../inventory.js';
@@ -61,3 +61,39 @@ export const contextLines = () => {
 
 /** What the map's panel (js/view/map-panel.js) reads: one object of signals. */
 export const mapPanel = { on: mapOn, tile: tileNow, scene, pieces, selected, marks, mprop, level, inventory, readOnly, mapName, waiting };
+
+// ---- the plates' panel ---------------------------------------------------------------------------------------------
+
+/** The plates of the list shown, as the program last planned them (null while it has not). */
+export const plan = computed(() => (isPlates(tileNow.value) ? planOf(tileNow.value)?.plates ?? null : null));
+/** Is the plates' panel the one on show (a print list, not its map)? */
+export const platesOn = computed(() => isPlates(tileNow.value) && view.get().dmode !== 'map');
+
+const freshUi = (id) => ({ id, exporting: { busy: false, files: null, error: null, failures: [] }, after: { open: false, plate: 1, bad: [], busy: false } });
+const uiSignal = signal(freshUi(null));
+/**
+ * What the user is in the middle of in the plates' panel, for the list shown: the sheet after a print (which plate,
+ * which pieces failed) and the export under way.  It belongs to the list: another list reads its own, fresh.
+ */
+export const platesUi = {
+  value: computed(() => { const id = tileNow.value?.id ?? null; return uiSignal.value.id === id ? uiSignal.value : freshUi(id); }),
+  /** Change the state of list `id`: `edit(state)` answers the parts that change. */
+  update(id, edit) {
+    const cur = uiSignal.peek().id === id ? uiSignal.peek() : freshUi(id);
+    uiSignal.value = { ...cur, ...edit(cur), id };
+  },
+};
+
+/** What the plates' panel (js/view/plates-panel.js) reads. */
+export const platesPanel = {
+  on: platesOn,
+  tile: tileNow,
+  plan,
+  ui: platesUi.value,
+  inventory,
+  printers: computed(() => server.get().printers),
+  // the printer the document names now (its own word, from its scene), the plan's only until that is there
+  currentPrinter: computed(() => (tileNow.value && docs.scene(tileNow.value.id)?.printer) ?? plan.value?.printer),
+  readOnly: computed(() => !(plan.value?.writable ?? planOf(tileNow.value)?.writable)),
+  name: computed(() => (tileNow.value ? stem(tileNow.value).replace(/\.dmap$/i, '') : '')),
+};
