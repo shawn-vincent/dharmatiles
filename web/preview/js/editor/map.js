@@ -48,7 +48,7 @@ function handles() {
     const l = mapNode(s);
     return (l?.points || []).filter((p) => p.at).map((p, k) => ({
       q: p.at, span: p.span, snap: true,
-      move(q) { if (!l.wobble && l.pts.length === l.points.length) l.pts[k] = q; },
+      move(q) { if (!l.wobbleMm && l.pts.length === l.points.length) l.pts[k] = q; },
     }));
   }
   if (s.kind === 'region') return (mapNode(s)?.fills || []).filter((f) => f.at).map((f) => ({ q: f.at, span: f.span, snap: false, move(q) { f.at = q; } }));

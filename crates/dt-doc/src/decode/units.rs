@@ -18,7 +18,7 @@ use crate::units::{Base, Kind, KindError, Want, expect, lower};
 /// What a control's axis wants of a value.
 pub(crate) fn want_of(axis: Axis) -> Want {
     match axis {
-        Axis::Mm => Want::Length,
+        Axis::Dmm => Want::Length,
         Axis::Deg => Want::Angle,
         _ => Want::Plain,
     }

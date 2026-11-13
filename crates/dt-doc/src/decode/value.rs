@@ -191,7 +191,7 @@ impl Decoder<'_> {
         let unit = match e.ty() {
             None => None,
             Some(t) => match Unit::parse(t.value()) {
-                Some(u) if axis == Axis::Mm => Some(u),
+                Some(u) if axis == Axis::Dmm => Some(u),
                 Some(u) => {
                     self.err(
                         "dt::unit",

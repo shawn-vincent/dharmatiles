@@ -49,6 +49,8 @@ pub struct SceneJson {
     /// `single` or `multi`.
     pub colour: String,
     pub system: String,
+    /// The square of `system`, mm: where a tile dropped on the map lands.
+    pub square_mm: f64,
     pub printer: String,
 }
 
@@ -573,6 +575,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
     });
     let bounds = (placed > 0).then(|| [lo[0], lo[1], hi[0], hi[1]]);
     let (shelf_exists, have, to_print) = mark_shelf(&mut out, home);
+    let square_mm = dt_kit::Frame::for_system(&default_system, 1, 1).square_mm;
     let json = SceneJson {
         shelf_exists,
         have,
@@ -587,6 +590,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         heights: height_names(list),
         colour: colour.to_owned(),
         system: default_system,
+        square_mm,
         printer: printer.clone(),
     };
     Scene {

@@ -25,9 +25,9 @@ pub const MAX_SQUARES: u32 = 64;
 /// What a value measures, which fixes what may be written for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Axis {
-    /// A size in mm at the DungeonBlocks reference.  `(mm)` checks it and
-    /// `(h)` writes it in wall tops.  Scales with the system.
-    Mm,
+    /// A length in design millimetres (`dmm`, 1/35 of a square): the size an
+    /// author writes at the DungeonBlocks reference.  Scales with the system.
+    Dmm,
     /// An angle in degrees.  Never scales.
     Deg,
     /// A share, written as a percent (`"85%"`).  Never scales.
@@ -68,7 +68,7 @@ impl Axis {
     pub fn is_numeric(self) -> bool {
         matches!(
             self,
-            Axis::Mm
+            Axis::Dmm
                 | Axis::Deg
                 | Axis::Share
                 | Axis::Count
@@ -82,7 +82,7 @@ impl Axis {
     #[must_use]
     pub fn describe(self) -> &'static str {
         match self {
-            Axis::Mm => "a size in mm",
+            Axis::Dmm => "a length, such as `8dmm` or `2mm`",
             Axis::Deg => "an angle in degrees",
             Axis::Share => "a share, written as a percent such as \"30%\"",
             Axis::Count => "a count",
@@ -171,7 +171,7 @@ impl Control {
     #[must_use]
     pub fn default_written(&self) -> String {
         let unit = match self.value {
-            Some(Axis::Mm) => "dmm",
+            Some(Axis::Dmm) => "dmm",
             Some(Axis::Deg) => "deg",
             _ => return self.default.to_owned(),
         };
@@ -373,7 +373,7 @@ pub fn check(
                 Some(format!("write \"{}..{}\"", fmt(hi), fmt(lo))),
             );
         }
-        if matches!(axis, Axis::Mm | Axis::Count | Axis::PerSquare) && lo < 0.0 {
+        if matches!(axis, Axis::Dmm | Axis::Count | Axis::PerSquare) && lo < 0.0 {
             return refuse(
                 format!("`{owner} {name}` can't be negative"),
                 "below zero",
@@ -392,7 +392,7 @@ pub fn check(
         {
             let shown = |v: f64| match axis {
                 Axis::Share => format!("{}%", fmt(v * 100.0)),
-                Axis::Mm => format!("{}dmm", fmt(v)),
+                Axis::Dmm => format!("{}dmm", fmt(v)),
                 _ => fmt(v),
             };
             let limits = l.describe(shown);

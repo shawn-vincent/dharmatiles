@@ -14,6 +14,7 @@ calls! {
         "/api/edit" => edit::edit : edit::EditReq => edit::EditRes;
         "/api/names" => edit::names : edit::NamesReq => edit::NamesRes;
         "/api/check-value" => edit::check_value : edit::CheckValueReq => edit::CheckValueRes;
+        "/api/printed-set" => edit::printed_set : edit::PrintedSetReq => edit::PrintedSetRes;
         "/api/new" => edit::new_tile : edit::NewReq => places::Listed;
         "/api/messages" => edit::page_message : edit::PageMessageReq => edit::Done;
         "/api/target" => edit::target : edit::TargetReq => edit::TargetRes;
@@ -51,6 +52,7 @@ calls! {
     }
     tile {
         "check" => edit::check : edit::TextReq => edit::CheckRes;
+        "printed" => edit::printed : edit::PrintedReq => edit::PrintedRes;
         "save" => edit::save : edit::SaveReq => edit::SaveRes;
         "mine" => edit::mine : places::Nothing => places::Listed;
         "delete" => edit::delete : places::Nothing => edit::Deleted;

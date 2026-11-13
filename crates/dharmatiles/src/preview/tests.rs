@@ -863,6 +863,11 @@ fn every_control_of_every_element_and_node_has_one_shape_on_the_wire() {
     );
     // the language's words
     assert!(lang["units"].as_array().unwrap().iter().any(|u| u == "dmm"));
+    // what each unit means, in the program's own words
+    assert_eq!(
+        lang["unitAbout"]["dmm"],
+        "design millimetre: 1/35 of a square; 1 mm on DungeonBlocks, 0.73 mm on OpenLOCK"
+    );
     assert!(
         lang["functions"]
             .as_array()
@@ -1205,6 +1210,64 @@ fn the_map_carries_the_tiles_own_controls() {
     };
     assert!(has("foot", 4.0, "tile"), "{heights:?}");
     assert!(has("$dirtEdgeHeight", 3.4, "library"), "{heights:?}");
+}
+
+#[test]
+fn a_length_prints_what_the_program_says_on_the_target_and_a_printed_size_is_written_in_its_own_unit()
+ {
+    let dir = std::env::temp_dir().join(format!("dt-printed-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    let text = "dharmatiles version=1\ntile size=\"1x1\" {\n    override $groundHeight \"6dmm\"\n    stack {\n        dirt\n    }\n}\n";
+    std::fs::write(&file, text).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let call = |p: &str, body: Value| post(&r, p, Some(&token), None, &body.to_string());
+    let ask = |items: Value| {
+        let (h, v) = call(
+            &format!("/api/tiles/{}/printed", id0(&r)),
+            serde_json::json!({ "text": text, "items": items }),
+        );
+        assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
+        v["items"].clone()
+    };
+    let items = serde_json::json!([
+        { "element": "rock", "control": "size", "typed": "7dmm" },
+        { "element": "rock", "control": "size", "typed": "3.5dmm .. 6.5dmm" },
+        { "element": "dirt", "control": "top", "typed": "$groundHeight + 4dmm" },
+        { "element": "rock", "control": "size", "typed": "1sq" },
+        { "element": "rock", "control": "count", "typed": "3" },
+    ]);
+    // DungeonBlocks: dmm prints as itself, so only the formula (the tile's own
+    // height) and sq show
+    let v = ask(items.clone());
+    assert!(v[0].is_null() && v[1].is_null() && v[4].is_null(), "{v}");
+    assert_eq!(v[2]["ends"], serde_json::json!(["10"]), "{v}");
+    assert_eq!(v[2]["editable"], false);
+    assert_eq!(v[3]["ends"], serde_json::json!(["35"]));
+    // OpenLOCK: every dmm length shows
+    let (h, _) = call("/api/target", serde_json::json!({ "system": "ol" }));
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    let v = ask(items);
+    assert_eq!(v[0]["ends"], serde_json::json!(["5.08"]), "{v}");
+    assert_eq!(v[0]["editable"], true);
+    assert_eq!(v[1]["ends"], serde_json::json!(["2.54", "4.72"]), "{v}");
+    assert_eq!(v[2]["ends"], serde_json::json!(["7.26"]), "{v}");
+    assert_eq!(v[3]["ends"], serde_json::json!(["25.4"]));
+    // typing a printed size writes the value's own unit; a formula refuses
+    let (h, v) = call(
+        "/api/printed-set",
+        serde_json::json!({ "typed": "7dmm", "end": 0, "mm": 5.0 }),
+    );
+    assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
+    assert_eq!(v["typed"], "6.89dmm");
+    let (h, _) = call(
+        "/api/printed-set",
+        serde_json::json!({ "typed": "$groundHeight + 4dmm", "end": 0, "mm": 5.0 }),
+    );
+    assert!(h.starts_with("HTTP/1.1 422"), "{h}");
 }
 
 #[test]

@@ -313,6 +313,14 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .lvlbox .val.ro .num { border-bottom: 0; cursor: default; }
 .lvlbox .num.active { background: color-mix(in srgb, var(--accent) 25%, transparent); }
 .lvlbox .unit { color: var(--muted); font: var(--fs-s) var(--f-code); }
+/* a length as written: its unit, with the program's words in a tooltip; beside it, quieter, what it prints on the build target */
+.lvlbox .val .u { margin-left: .2em; text-decoration: underline dotted var(--muted); text-underline-offset: 2px; }
+.lvlbox .printed { color: var(--muted); font: var(--fs-s) var(--f-code); margin-left: 6px; white-space: nowrap; }
+.lvlbox .printed.stale { opacity: .45; }
+.lvlbox .printed .pnum { border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: text; border-bottom: 1px dashed var(--muted); }
+.lvlbox .printed .pnum:hover { color: var(--ink); border-bottom-color: var(--accent); }
+.lvlbox .printed input.pedit { width: auto; height: auto; padding: 0 2px; font: inherit; }
+.lvlbox .printed input.pedit.bad { border-color: var(--err); }
 .lvlbox .words, .value-pop .words { display: flex; flex-wrap: wrap; gap: 4px; }
 .lvlbox .words button, .lvlbox .flip, .value-pop .words button { border: 1px solid var(--line); background: none; border-radius: var(--r); padding: 0 6px; font-size: var(--fs-s); cursor: pointer; }
 .lvlbox .words button.on, .lvlbox .flip.on, .value-pop .words button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }

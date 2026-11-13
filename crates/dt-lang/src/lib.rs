@@ -60,6 +60,39 @@ pub const COORDINATES: &[&str] = &["x", "y", "d", "a", "parent"];
 /// Units written as words, in the order help lists them.
 pub const UNITS: [&str; 8] = ["sq", "mm", "in", "dmm", "layer", "deg", "rad", "pi"];
 
+/// A length in mm for a sentence: two decimals, trailing zeros dropped
+/// (`1`, `0.73`, `25.4`).
+fn mm_words(mm: f64) -> String {
+    let t = format!("{mm:.2}");
+    t.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+/// What a unit word means, in a sentence, for the editor's tooltip: the one
+/// place the words are written.  `db_square` and `ol_square` are the
+/// squares of the two systems, mm (the units that follow the grid say what
+/// they come to on each).  `None` for a word that is not a unit.
+#[must_use]
+pub fn unit_about(word: &str, db_square: f64, ol_square: f64) -> Option<String> {
+    let both = |per: f64| {
+        format!(
+            "{} mm on DungeonBlocks, {} mm on OpenLOCK",
+            mm_words(db_square * per),
+            mm_words(ol_square * per)
+        )
+    };
+    Some(match word {
+        "dmm" => format!("design millimetre: 1/35 of a square; {}", both(1.0 / 35.0)),
+        "mm" => "a printed millimetre: the same on every system".to_owned(),
+        "in" => "a printed inch, 25.4 mm: the same on every system".to_owned(),
+        "sq" => format!("a square of the grid; {}", both(1.0)),
+        "layer" => "one printed layer: the printer's layer height".to_owned(),
+        "deg" => "a degree".to_owned(),
+        "rad" => "a radian: 180/pi degrees".to_owned(),
+        "pi" => "the number pi: 2 pi rad is a turn".to_owned(),
+        _ => return None,
+    })
+}
+
 /// The `$` names an element sets at each point it works a height out:
 /// where it is in the tile (`$x`, `$y`, squares from the north-west corner,
 /// plain numbers), how far in from the edge of its own region (`$d`) and how
@@ -152,6 +185,18 @@ pub fn smooth(t: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_unit_has_its_words_and_dmm_says_what_it_prints() {
+        for u in UNITS {
+            assert!(unit_about(u, 35.0, 25.4).is_some(), "{u}");
+        }
+        assert_eq!(unit_about("furlong", 35.0, 25.4), None);
+        assert_eq!(
+            unit_about("dmm", 35.0, 25.4).unwrap(),
+            "design millimetre: 1/35 of a square; 1 mm on DungeonBlocks, 0.73 mm on OpenLOCK"
+        );
+    }
 
     #[test]
     fn smooth_is_the_smoothstep_held_to_the_unit_interval() {

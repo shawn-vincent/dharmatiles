@@ -33,6 +33,7 @@ pub mod known;
 pub mod map;
 pub mod model;
 pub mod place;
+pub mod printed;
 pub mod schema;
 pub mod units;
 pub mod words;

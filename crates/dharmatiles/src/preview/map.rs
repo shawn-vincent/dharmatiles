@@ -388,7 +388,9 @@ pub(super) fn json(
             json!({
                 "name": name,
                 "pts": pts,
-                "wobble": t.wobbles.get(name).map(|(_, w)| w),
+                // how far the line may wander, printed mm on this target (the
+                // page draws it as it is and does no unit arithmetic)
+                "wobbleMm": t.wobbles.get(name).map(|(_, w)| w * units.square_mm / dt_doc::schema::SQUARE_MM),
                 "span": w.as_ref().map(|w| w.0),
                 "markers": w.as_ref().map(|(_, w)| w.iter().map(|(x, sp)| marker(t, x, Some(*sp), rd)).collect::<Vec<_>>()).unwrap_or_default(),
                 "points": w.map(|(_, w)| points(&w, control)).unwrap_or_default(),

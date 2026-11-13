@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BUDGET, DOWN, GUESS, STICKY, UP, atWord, bounds, chooseTiers, footprint, bottomWords, matrixOf, overlaps, marks, snapSquares, staleKeys, planTiers, tierCounts, toWorld, totalsText, turned, wantedTier,
+  BUDGET, DOWN, GUESS, STICKY, UP, atWord, placeWords, bounds, chooseTiers, footprint, bottomWords, matrixOf, overlaps, marks, snapSquares, staleKeys, planTiers, tierCounts, toWorld, totalsText, turned, wantedTier,
 } from '../js/map-model.js';
 
 const piece = (over = {}) => ({
@@ -52,6 +52,9 @@ test('a place snaps to the whole squares of the piece’s own system', () => {
   assert.deepEqual(snapSquares(ol, 52, 17), { x: 2, y: 1 });
   assert.equal(atWord(2, 1), '(2sq, 1sq)');
   assert.equal(atWord(2.5, 0), '(2.5sq, 0sq)');
+  assert.equal(placeWords(piece({ at: [0, 0] })), 'column 1, row 1');
+  assert.equal(placeWords(piece({ at: [70, 35] })), 'column 3, row 2');
+  assert.equal(placeWords(piece({ at: null })), 'in the tray');
 });
 
 test('bounds covers the placed pieces only', () => {

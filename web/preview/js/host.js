@@ -117,6 +117,7 @@ const LATEST = {
   'POST /api/tiles/:id/offers': (_b, id) => `offers:${id}`,
   'POST /api/tiles/:id/draft': (_b, id) => `draft:${id}`,
   'POST /api/check-value': (b) => `check-value:${b.element}.${b.control}`,
+  'POST /api/tiles/:id/printed': (_b, id) => `printed:${id}`,
   'POST /api/plates/show': (b) => `plates-show:${b.list}`,
   'POST /api/target': () => 'target',
 };
@@ -321,6 +322,10 @@ export function browserHost(requests = createRequests()) {
     weightings: (query) => read('/api/weightings', query),
     /** What the reader refuses in a typed value. @param {string} element @param {string} control @param {string} typed */
     checkValue: (element, control, typed) => call('POST /api/check-value', { element, control, typed }),
+    /** What each written length prints on the build target. @param {string} id @param {Req<'POST /api/tiles/:id/printed'>} body */
+    printed: (id, body) => call('POST /api/tiles/:id/printed', body, id),
+    /** A length with one end set so that it prints `mm`, written in its own unit. @param {Req<'POST /api/printed-set'>} body */
+    printedSet: (body) => call('POST /api/printed-set', body),
     /**
      * A quick build of the text (with the debug layer's marks when `debug`): {status, buffer} (the mesh),
      * 409 when a newer draft took its place.

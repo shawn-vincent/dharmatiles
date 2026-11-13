@@ -59,6 +59,13 @@ export function snapSquares(p, xMm, yMm) {
   return { x: Math.round(xMm / p.sq), y: Math.round(yMm / p.sq) };
 }
 
+/** `column 1, row 1`: where a piece stands, counted from one (the document writes it from zero). A piece in the tray has no place. */
+export function placeWords(p) {
+  if (!p.at) return 'in the tray';
+  const s = snapSquares(p, p.at[0], p.at[1]);
+  return `column ${s.x + 1}, row ${s.y + 1}`;
+}
+
 /** Which of a piece's sides are against another piece: not used to refuse, only to read. */
 export const bounds = (pieces) => {
   const placed = pieces.filter((p) => p.at);

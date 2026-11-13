@@ -94,7 +94,8 @@ async function onDrop(e) {
   const t = server.get().tiles.find((x) => x.id === id);
   if (!t) return;
   const pt = mapPoint(e, 0);
-  const sc = sceneNow()?.system === 'ol' ? 25.4 : 35;
+  const sc = sceneNow()?.squareMm; // the map's own square, from the program
+  if (!sc) return;
   await addTile(t, pt ? { x: Math.round(pt[0] / sc - 0.5), y: Math.round(pt[1] / sc - 0.5) } : null);
 }
 

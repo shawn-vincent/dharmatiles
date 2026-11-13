@@ -19,7 +19,7 @@ const elements = [
   {
     name: 'rock', role: 'thing', about: 'one rock',
     controls: [
-      { name: 'size', about: 'its size', unit: 'mm' },
+      { name: 'size', about: 'its size', unit: 'dmm' },
       { name: 'shape', about: 'its shape', words: [{ word: 'round', about: 'rounded' }, { word: 'sharp', about: 'angular' }] },
     ],
   },
@@ -266,7 +266,7 @@ test('a value switches between one number and a range', () => {
 });
 
 test("a control's words are offered while only a word is typed", () => {
-  const height = { unit: 'mm', words: [{ word: 'full', about: 'up to the wall top' }, { word: 'low', about: 'half' }] };
+  const height = { unit: 'dmm', words: [{ word: 'full', about: 'up to the wall top' }, { word: 'low', about: 'half' }] };
   assert.deepEqual(valueItems('', 0, height).items.map((i) => i.label), ['full', 'low']);
   assert.deepEqual(valueItems('l', 1, height).items.map((i) => i.label), ['low']);
   // the whole word selected, the caret before it: every word

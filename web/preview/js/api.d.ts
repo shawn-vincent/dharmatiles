@@ -440,6 +440,18 @@ list: string,
  */
 plate: number, };
 
+type PrintedItem = { element: string, control: string, typed: string, };
+
+type PrintedReq = { text: string, items: Array<PrintedItem>, };
+
+type PrintedRes = { items: Array<PrintedSize | null>, };
+
+type PrintedSetReq = { typed: string, end: number, mm: number, };
+
+type PrintedSetRes = { typed: string, };
+
+type PrintedSize = { ends: Array<string>, editable: boolean, };
+
 type PrintersImportReq = { slicer: string, 
 /**
  * The profile names of the models to write.
@@ -535,7 +547,11 @@ have: number, toPrint: number,
 /**
  * `single` or `multi`.
  */
-colour: string, system: string, printer: string, };
+colour: string, system: string, 
+/**
+ * The square of `system`, mm: where a tile dropped on the map lands.
+ */
+squareMm: number, printer: string, };
 
 type ScenePiece = { 
 /**
@@ -687,6 +703,7 @@ export interface Calls {
   "POST /api/edit": { req: EditReq; res: EditRes };
   "POST /api/names": { req: NamesReq; res: NamesRes };
   "POST /api/check-value": { req: CheckValueReq; res: CheckValueRes };
+  "POST /api/printed-set": { req: PrintedSetReq; res: PrintedSetRes };
   "POST /api/new": { req: NewReq; res: Listed };
   "POST /api/messages": { req: PageMessageReq; res: Done };
   "POST /api/target": { req: TargetReq; res: TargetRes };
@@ -722,6 +739,7 @@ export interface Calls {
   "POST /api/maps/unpin": { req: MapsPieceReq; res: ListEdited };
   "POST /api/maps/unpin-all": { req: MapsListReq; res: ListEdited };
   "POST /api/tiles/:id/check": { req: TextReq; res: CheckRes };
+  "POST /api/tiles/:id/printed": { req: PrintedReq; res: PrintedRes };
   "POST /api/tiles/:id/save": { req: SaveReq; res: SaveRes };
   "POST /api/tiles/:id/mine": { req: Nothing; res: Listed };
   "POST /api/tiles/:id/delete": { req: Nothing; res: Deleted };

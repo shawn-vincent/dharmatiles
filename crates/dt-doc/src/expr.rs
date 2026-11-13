@@ -12,7 +12,7 @@
 //! ```
 //!
 //! Units are never written: every control knows its own unit, and
-//! sizes are millimetres at the DungeonBlocks reference.  `%` is the one
+//! sizes are design millimetres (dmm), at the DungeonBlocks reference.  `%` is the one
 //! suffix, because a share is a percent (`cover="85%"`).  An old
 //! `"4.5mm"` suffix and the `"1..6^2"` skew are gone; both give an error
 //! that says what to write instead (`4.5`, and `size="low(1..6, 4)"`).
@@ -304,7 +304,7 @@ fn lex(src: &str, v2: bool, units: bool) -> Result<Vec<(Tok, usize, usize)>, Exp
                 let unit = &src[unit_start..i];
                 return Err(ExprError {
                     message: format!(
-                        "units are not written: `{text}{unit}` is just `{text}`; every control knows its unit (sizes are mm)"
+                        "units are not written: `{text}{unit}` is just `{text}`; every control knows its unit (sizes are dmm, the design millimetre)"
                     ),
                     code: None,
                     help: None,

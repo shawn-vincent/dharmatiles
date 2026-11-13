@@ -144,7 +144,7 @@ function PieceView({ m, act, sel }) {
       ${!many && p.pinned ? html`<p class="note">Pinned on a plate: the packer keeps it where it was dropped.</p>` : null}
     <//>
     <${Section} title="Piece">
-      ${many ? null : html`<div class="pl-field"><span class="pl-lab">Place</span><span class="mp-val">${p.at ? M.atWord(p.at[0] / p.sq, p.at[1] / p.sq) : 'in the tray'}</span></div>`}
+      ${many ? null : html`<div class="pl-field"><span class="pl-lab">Place</span><span class="mp-val">${p.at ? M.placeWords(p) : 'in the tray'}</span></div>`}
       <div class="pl-field"><span class="pl-lab">Turn</span>
         <span class="mp-btns">
           <${Button} text=${html`<${Icon} name="rotate-ccw" size=${14} />`} run=${() => act.turn(ids, -1)} cls="pl-step" title="A quarter turn counter-clockwise (⇧R)" disabled=${ro} />

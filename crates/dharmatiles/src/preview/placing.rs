@@ -310,6 +310,7 @@ mod tests {
             to_print: 0,
             colour: "single".to_owned(),
             system: "db".to_owned(),
+            square_mm: 35.0,
             printer: "default".to_owned(),
         }
     }

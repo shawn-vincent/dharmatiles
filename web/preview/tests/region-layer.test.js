@@ -105,7 +105,7 @@ test('a region of places shows each clause and how they combine', () => {
   assert.match(combineNote({ clauses: [crag.clauses[1]] }), /^The whole tile, less the regions it excepts/);
   assert.match(combineNote({ boundedBy: { text: 'a' }, clauses: [] }), /enclose/);
   const asW = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: c.span });
-  const row = (node, name) => ({ name, unit: node === 'within' && name === 'distance' ? 'mm' : 'word', required: true });
+  const row = (node, name) => ({ name, unit: node === 'within' && name === 'distance' ? 'dmm' : 'word', required: true });
   const groups = clauseGroups({ name: 'crag' }, crag, { places, regions: [{ name: 'crag' }, { name: 'pool' }] }, asW, row);
   assert.equal(groups.length, 2);
   assert.deepEqual(groups[0].controls.map((c) => c.name), ['distance', 'of']);

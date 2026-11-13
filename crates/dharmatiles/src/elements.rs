@@ -66,7 +66,7 @@ fn role(r: Role) -> &'static str {
 /// The unit a value is written in, as a reader says it.
 fn unit(a: Axis) -> &'static str {
     match a {
-        Axis::Mm => "mm",
+        Axis::Dmm => "dmm",
         Axis::Deg => "degrees",
         Axis::Share => "percent",
         Axis::Count => "count",
@@ -87,7 +87,6 @@ fn unit(a: Axis) -> &'static str {
 /// (`6dmm`, `34deg`); the JSON keeps `unit`'s names for the editor.
 fn unit_text(a: Axis) -> &'static str {
     match a {
-        Axis::Mm => "dmm",
         Axis::Deg => "deg",
         other => unit(other),
     }
@@ -243,6 +242,11 @@ pub(crate) fn language_json() -> Value {
         "docs": DOCS,
         "nodes": schema_nodes().iter().map(node_json).collect::<Vec<_>>(),
         "units": dt_lang::UNITS,
+        // what each unit word means, for the tooltip on a written unit
+        "unitAbout": dt_lang::UNITS.iter().filter_map(|u| {
+            dt_lang::unit_about(u, dt_kit::Frame::for_system("db", 1, 1).square_mm, dt_kit::Frame::for_system("ol", 1, 1).square_mm)
+                .map(|a| ((*u).to_owned(), json!(a)))
+        }).collect::<Map<String, Value>>(),
         "functions": dt_lang::function_words(),
         "weightings": dt_lang::WEIGHTINGS.iter().map(|w| w.0).collect::<Vec<_>>(),
         "names": names,

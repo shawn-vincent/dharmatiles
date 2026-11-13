@@ -254,7 +254,7 @@ export class Overlay {
     // the selected line is a ribbon at zero, as a region is: its wobble's band under it, then the line
     if (line) {
       const half = lineHalf(m, this.sq);
-      if (line.wobble) items.push({ positions: ribbonTriangles(line.pts, this.sq, line.wobble * (this.sq / 35), false, false), color: css('--accent'), role: 'fill', dz: 0.02, alpha: 0.18 });
+      if (line.wobbleMm) items.push({ positions: ribbonTriangles(line.pts, this.sq, line.wobbleMm, false, false), color: css('--accent'), role: 'fill', dz: 0.02, alpha: 0.18 });
       items.push({ positions: ribbonTriangles(line.pts, this.sq, 1.5 * half), color: css('--accent'), alpha: 1, dz: 0.04 });
     }
     // the hovered place, as the selected one is drawn but quieter: it changes nothing else

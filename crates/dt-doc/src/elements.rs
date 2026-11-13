@@ -159,10 +159,10 @@ pub static NODES: &[Node] = &[
         doc: "language.html#lines",
         controls: &[
             NAME,
-            c("wobble", Axis::Mm, "how far the line may wander off its points").default("0"),
+            c("wobble", Axis::Dmm, "how far the line may wander off its points").default("0"),
             c(
                 "width",
-                Axis::Mm,
+                Axis::Dmm,
                 "makes the line a strip; an element at= it covers the strip",
             ),
             c(
@@ -200,7 +200,7 @@ pub static NODES: &[Node] = &[
         controls: &[
             c(
                 "distance",
-                Axis::Mm,
+                Axis::Dmm,
                 "how far from the place it reaches, in mm at the 35 mm square; a range, \"[8 .. 14]\", draws the depth along the place between the two",
             )
             .required(),
@@ -234,7 +234,7 @@ pub static TAGS: &[&str] = &["cliff", "wall", "rock", "tree"];
 
 const BUMP_SIZE: Control = c(
     "bumpSize",
-    Axis::Mm,
+    Axis::Dmm,
     "how wide the hills are in its band: broad and rolling, or choppy",
 )
 .limits(5.0, 70.0);
@@ -292,7 +292,7 @@ static WEAR: &[Word] = &[
 
 const fn rock_controls(size: &'static str) -> [Control; 5] {
     [
-        c("size", Axis::Mm, "rock width")
+        c("size", Axis::Dmm, "rock width")
             .over(0.0, 200.0)
             .weighted()
             .default(size),
@@ -320,23 +320,23 @@ static PEBBLE: [Control; 5] = rock_controls("1..2.2");
 // ---- flower -------------------------------------------------------------
 
 static FLOWER: [Control; 6] = [
-    c("size", Axis::Mm, "width across the petals' tips")
+    c("size", Axis::Dmm, "width across the petals' tips")
         .limits(1.0, 20.0)
         .weighted()
         .default("5"),
     c("petals", Axis::Count, "petals round the centre")
         .limits(0.0, 12.0)
         .default("5"),
-    c("centre", Axis::Mm, "radius of the centre dome")
+    c("centre", Axis::Dmm, "radius of the centre dome")
         .limits(0.3, 8.0)
         .default("1.5"),
-    c("stem", Axis::Mm, "height of the column under each dome")
+    c("stem", Axis::Dmm, "height of the column under each dome")
         .limits(0.3, 6.0)
         .default("1"),
-    c("dome", Axis::Mm, "height of the centre dome")
+    c("dome", Axis::Dmm, "height of the centre dome")
         .limits(0.2, 4.0)
         .default("1"),
-    c("petal", Axis::Mm, "height of each petal dome")
+    c("petal", Axis::Dmm, "height of each petal dome")
         .limits(0.2, 4.0)
         .default("0.5"),
 ];
@@ -437,11 +437,11 @@ static TREE: &[Control] = &[
     group(
         "trunk",
         &[
-            c("height", Axis::Mm, "bare trunk below the crown")
+            c("height", Axis::Dmm, "bare trunk below the crown")
                 .limits(0.0, 200.0)
                 .weighted()
                 .default("18"),
-            c("width", Axis::Mm, "trunk thickness at the ground")
+            c("width", Axis::Dmm, "trunk thickness at the ground")
                 .limits(0.5, 40.0)
                 .weighted(),
         ],
@@ -450,7 +450,7 @@ static TREE: &[Control] = &[
     group(
         "crown",
         &[
-            c("width", Axis::Mm, "crown width")
+            c("width", Axis::Dmm, "crown width")
                 .limits(2.0, 200.0)
                 .weighted()
                 .default("30"),
@@ -464,7 +464,7 @@ static TREE: &[Control] = &[
             )
             .limits(8.0, 200.0)
             .default("32"),
-            c("clumpSize", Axis::Mm, "size of each clump")
+            c("clumpSize", Axis::Dmm, "size of each clump")
                 .limits(1.0, 20.0)
                 .weighted()
                 .default("5.5"),
@@ -488,11 +488,11 @@ static TREE: &[Control] = &[
     group(
         "leaf",
         &[
-            c("length", Axis::Mm, "leaf length")
+            c("length", Axis::Dmm, "leaf length")
                 .limits(0.5, 20.0)
                 .weighted()
                 .default("4.5"),
-            c("width", Axis::Mm, "leaf width")
+            c("width", Axis::Dmm, "leaf width")
                 .limits(0.5, 20.0)
                 .weighted()
                 .default("3"),
@@ -522,7 +522,7 @@ static TREE: &[Control] = &[
             )
             .limits(0.0, 1.0),
             c("exponent", Axis::Number, "pipe-model exponent").limits(1.0, 8.0),
-            c("minRadius", Axis::Mm, "branch radius at a tip").limits(0.2, 5.0),
+            c("minRadius", Axis::Dmm, "branch radius at a tip").limits(0.2, 5.0),
         ],
         "the generator's six branching knobs (expert: parts files only)",
     )
@@ -581,20 +581,20 @@ static WALL: &[Control] = &[
     c("style", Axis::Word, "how stones are made and laid")
         .words(WALL_STYLE)
         .default("cut-stone"),
-    c("height", Axis::Mm, "height above what it stands on")
+    c("height", Axis::Dmm, "height above what it stands on")
         .limits(6.0, 200.0)
         .words(WALL_HEIGHT)
         .default("full"),
-    c("thickness", Axis::Mm, "wall thickness")
+    c("thickness", Axis::Dmm, "wall thickness")
         .limits(2.0, 40.0)
         .default("7"),
     group(
         "stones",
         &[
-            c("height", Axis::Mm, "course height")
+            c("height", Axis::Dmm, "course height")
                 .limits(1.0, 40.0)
                 .weighted(),
-            c("length", Axis::Mm, "stone length along the wall")
+            c("length", Axis::Dmm, "stone length along the wall")
                 .limits(2.0, 80.0)
                 .weighted(),
             c("texture", Axis::Word, "surface finish of each stone").words(TEXTURE),
@@ -604,14 +604,14 @@ static WALL: &[Control] = &[
     group(
         "joints",
         &[
-            c("width", Axis::Mm, "mortar gap").limits(0.0, 3.0),
-            c("depth", Axis::Mm, "how deep the gaps between stones look").limits(0.0, 5.0),
+            c("width", Axis::Dmm, "mortar gap").limits(0.0, 3.0),
+            c("depth", Axis::Dmm, "how deep the gaps between stones look").limits(0.0, 5.0),
         ],
         "the gaps between stones",
     ),
     group(
         "edges",
-        &[c("rounding", Axis::Mm, "how worn the stone corners are")
+        &[c("rounding", Axis::Dmm, "how worn the stone corners are")
             .limits(0.0, 5.0)
             .weighted()],
         "the stone corners",
@@ -779,7 +779,7 @@ static CLIFF: &[Control] = &[
         "shattered",
         &[
             c("patches", Axis::Count, "broken patches along the run"),
-            c("width", Axis::Mm, "how wide each patch is").weighted(),
+            c("width", Axis::Dmm, "how wide each patch is").weighted(),
         ],
         "broken patches with more cracks and scree",
     ),
@@ -799,13 +799,13 @@ static SCATTER: &[Control] = &[
     .weighted(),
     c(
         "spread",
-        Axis::Mm,
+        Axis::Dmm,
         "a cluster within this distance of a point",
     )
     .planned(),
     c(
         "reach",
-        Axis::Mm,
+        Axis::Dmm,
         "with at=foot(…): how far out from the foot; with at= a line: how far either side of it (default 5dmm)",
     ),
     c(
@@ -814,7 +814,7 @@ static SCATTER: &[Control] = &[
         "gathers them into clumps; default spread evenly",
     )
     .planned(),
-    c("gap", Axis::Mm, "least space between neighbours"),
+    c("gap", Axis::Dmm, "least space between neighbours"),
 ];
 
 // ---- the table ----------------------------------------------------------
@@ -903,11 +903,11 @@ pub static ELEMENTS: &[Element] = &[
             per_square: 0.35,
         },
         controls: &[
-            c("length", Axis::Mm, "blade length along the ground")
+            c("length", Axis::Dmm, "blade length along the ground")
                 .over(0.0, f64::INFINITY)
                 .weighted()
                 .default("3.5..6.5"),
-            c("height", Axis::Mm, "how tall a blade stands over the ground")
+            c("height", Axis::Dmm, "how tall a blade stands over the ground")
                 .over(0.0, f64::INFINITY)
                 .weighted()
                 .default("1.5..2"),
@@ -953,7 +953,7 @@ pub static ELEMENTS: &[Element] = &[
                 .limits(1.0, 30.0)
                 .weighted()
                 .default("5..9"),
-            c("height", Axis::Mm, "how tall a stem stands")
+            c("height", Axis::Dmm, "how tall a stem stands")
                 .over(0.0, f64::INFINITY)
                 .weighted()
                 .default("8..13"),

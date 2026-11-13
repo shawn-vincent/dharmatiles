@@ -294,7 +294,7 @@ fn takes(c: &Value) -> String {
     // the schema's axis names, as a format 1 document writes the value: a
     // length and an angle carry their unit (the limits are in that unit)
     let unit = match c["unit"].as_str() {
-        Some("mm") => "length (dmm)",
+        Some("dmm") => "length (dmm)",
         Some("degrees") => "angle (deg)",
         Some(u) => u,
         None => "group",

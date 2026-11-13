@@ -42,6 +42,25 @@ const sheetApi = {
     if (failed(`Could not check what was typed for ${control}`, r)) return null;
     return r.body?.message ?? null; // offline: nothing to say yet; the edit is checked again when it is sent
   },
+  // what a length prints on the build target, worked out by the program against this tile's heights (null: not now)
+  printed: async (/** @type {{element: string, control: string, typed: string}[]} */ items) => {
+    const t = tile(), d = doc.get();
+    if (!t || d.file !== t.path || d.text == null) return null;
+    const r = await host.printed(t.id, { text: d.text, items });
+    if (failed('Could not work out the printed sizes', r)) return null;
+    return r.body?.items ?? null; // offline or replaced by a newer ask: nothing to show now
+  },
+  // what the printed sizes depend on besides the values: the build target and the document's own heights
+  printedKey: () => `${server.get().system}|${server.get().printer}|${doc.get().text}`,
+  // a printed size typed in, as the value now written (the program does the conversion; null: refused, and shown)
+  setPrinted: async (/** @type {{typed: string, end: number, mm: number}} */ body) => {
+    const r = await host.printedSet(body);
+    if (r.status === 0) { showError('Could not set the printed size', new Error('the editor is disconnected')); return null; }
+    if (r.status !== 200) { showError('Could not set the printed size', new Error(r.body?.error || `the program answered ${r.status}`)); return null; }
+    return r.body?.typed ?? null;
+  },
+  // what each unit word means, the program's own sentences (`/api/language`)
+  unitAbout: () => server.get().language?.unitAbout ?? {},
 };
 // the thing's sheet: a control with more to show opens its own level (a stack entry's: ranges and heights)
 const thingApi = {

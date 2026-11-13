@@ -34,7 +34,7 @@ pub(crate) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<Doc
                 .maybe_help(Some(if text.lines().any(|l| l.trim_start().starts_with("dharmatiles version=1")) {
                     format!("a value with a unit is a quoted string: \"{word}\"")
                 } else {
-                    format!("units are not written: write {number} (every control knows its unit; sizes are mm), or (mm){number} as a check")
+                    format!("units are not written: write {number} (every control knows its unit; sizes are dmm, the design millimetre), or (mm){number} as a check")
                 }))
             }
             Some((at, word)) => DocError::new(

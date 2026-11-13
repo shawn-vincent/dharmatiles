@@ -282,6 +282,66 @@ pub struct CheckValueRes {
     pub help: Option<String>,
 }
 
+/// One written value to say the printed size of: the control it is for and
+/// the text as written.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct PrintedItem {
+    pub element: String,
+    pub control: String,
+    pub typed: String,
+}
+
+/// `/api/tiles/ID/printed`: the sizes `items` print on the current target,
+/// reading the `$` heights and `let`s of `text` (the tile's document).
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct PrintedReq {
+    pub text: String,
+    pub items: Vec<PrintedItem>,
+}
+
+/// What a value prints, mm to 0.01: one end for a number, two for a range;
+/// `editable` when the printed size can be typed in.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct PrintedSize {
+    pub ends: Vec<String>,
+    pub editable: bool,
+}
+
+/// One answer for each item, in order: `null` where no printed size is shown
+/// (not a length, printing as written, or naming what the document does not
+/// give).
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct PrintedRes {
+    pub items: Vec<Option<PrintedSize>>,
+}
+
+/// `/api/printed-set`: the value `typed` with its end `end` set so that it
+/// prints `mm`, in its own unit.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct PrintedSetReq {
+    pub typed: String,
+    pub end: u32,
+    pub mm: f64,
+}
+
+/// The value as it is now written; the page writes it like any typed value.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct PrintedSetRes {
+    pub typed: String,
+}
+
 #[derive(Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
@@ -776,6 +836,45 @@ pub(super) fn check_value(shared: &Shared, v: CheckValueReq) -> Out<CheckValueRe
             },
         },
     })
+}
+
+/// `/api/tiles/ID/printed`: what each written value prints on the current
+/// target (the system's square, the printer's layer), worked out by
+/// [`dt_doc::printed`] against the tile's own heights.
+pub(super) fn printed(shared: &Shared, t: &TileRef, v: PrintedReq) -> Out<PrintedRes> {
+    let opts = shared.options();
+    let units = opts.units();
+    let src = Overlay(BTreeMap::from([(t.path.clone(), v.text)]));
+    // A document with a mistake in it gives no heights: a value that reads a
+    // `$` name then has no printed size.  The mistake itself is the check's
+    // to show (`/api/tiles/ID/check`), as the text is typed.
+    let read = dt_eval::doc::read_with(&src, &t.path, units).ok();
+    let consts = read
+        .as_ref()
+        .and_then(|r| r.tile.as_ref())
+        .map(|tile| &tile.heights.consts);
+    let items = v
+        .items
+        .iter()
+        .map(|i| {
+            let axis = dt_doc::schema::element(&i.element)
+                .and_then(|e| e.control(&i.control))
+                .and_then(|c| c.value)?;
+            dt_doc::printed::printed_size(axis, &i.typed, units, consts).map(|p| PrintedSize {
+                ends: p.ends,
+                editable: p.editable,
+            })
+        })
+        .collect();
+    Ok(PrintedRes { items })
+}
+
+/// `/api/printed-set`: a printed size typed in, written in the value's own
+/// unit (see [`dt_doc::printed::set_printed`]).
+pub(super) fn printed_set(shared: &Shared, v: PrintedSetReq) -> Out<PrintedSetRes> {
+    dt_doc::printed::set_printed(&v.typed, v.end as usize, v.mm, shared.options().units())
+        .map(|typed| PrintedSetRes { typed })
+        .map_err(|e| fail::refused("422 Unprocessable Entity", e.0))
 }
 
 pub(super) fn edit(_: &Shared, v: EditReq) -> Out<EditRes> {
