@@ -7,7 +7,7 @@
 // The rules (where a node goes, what a name may be) are js/rows.js; the popups js/menu.js.
 
 import { orderStack, ordinal } from '../nav.js';
-import { openMenu, openPopover } from '../menu.js';
+import { openMenu, openNameField } from '../menu.js';
 import { failed } from '../problems.js';
 import {
   addPlace, canStep, idFlaw, idOf, landing, movedNote, nameOf, orderRefusal, ownNode, planMove, refusalLine, stepSlot, writtenIn,
@@ -237,41 +237,8 @@ async function deleteMark(kind, m) {
 
 // ---- rename ----------------------------------------------------------------------------------------------
 
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
-
 /** The popover with one field: `flaw(value)` says why a name will not do; `save(value)` writes it. */
-export function nameField(anchor, { title, value, hint, flaw, save }) {
-  openPopover(anchor, (box, close) => {
-    box.append(el('label', 'rlab', title));
-    const input = el('input', 'pin');
-    input.value = value;
-    input.spellcheck = false;
-    input.autocomplete = 'off';
-    const err = el('div', 'rerr');
-    err.setAttribute('role', 'alert');
-    const note = el('p', 'rnote', hint);
-    const go = el('button', 'btn primary', 'Save');
-    const cancel = el('button', 'btn', 'Cancel');
-    go.type = cancel.type = 'button';
-    const row = el('div', 'rbtns');
-    row.append(cancel, go);
-    box.append(input, err, note, row);
-    const check = () => { const f = flaw(input.value); err.textContent = f || ''; go.disabled = !!f; return f; };
-    const submit = () => { if (check()) return; close(); save(input.value.trim()); };
-    input.addEventListener('input', check);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
-    go.onclick = submit;
-    cancel.onclick = () => close();
-    check();
-    input.focus();
-    input.select();
-  }, { label: title, cls: 'namebox' });
-}
+export const nameField = openNameField;
 
 /** Name an entry: `id=` on its node.  A name is part of its seed path, so the look is drawn again once and then kept. */
 function renameEntry(it, anchor) {

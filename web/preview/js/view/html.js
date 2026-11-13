@@ -7,9 +7,9 @@
 // what the user is in the middle of (see field.js).  This module is the one place the three vendored files meet.
 
 import { h, render, Fragment } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import '@preact/signals'; // installs the hook that draws a component again when a signal it read changes
 
 export const html = htm.bind(h);
-export { h, render, Fragment, useEffect, useRef, useState };
+export { h, render, Fragment, useEffect, useLayoutEffect, useRef, useState };
