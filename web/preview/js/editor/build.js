@@ -103,6 +103,8 @@ export function endFollow(id) {
 export function followBuild() {
   const t = tile();
   if (!following || !t || following.id !== t.id) return;
+  // a map frames its own pieces (the scene's box), never the plan's size (a print list's plan is the printer's bed)
+  if (viewer.sceneOn) return;
   const [w, h] = t.plan?.size_mm || [35, 35];
   const b = { lo: [0, 0, 0], hi: [w, h, 8] };
   for (const k of viewer.sketchBounds?.() || []) {
