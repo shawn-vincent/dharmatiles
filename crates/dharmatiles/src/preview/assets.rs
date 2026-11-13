@@ -506,6 +506,46 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "text/plain; charset=utf-8",
         include_bytes!("../../../../web/preview/vendor/LICENSE-lucide"),
     ),
+    (
+        "/vendor/preact.mjs",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/preact.mjs"),
+    ),
+    (
+        "/vendor/preact-hooks.mjs",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/preact-hooks.mjs"),
+    ),
+    (
+        "/vendor/htm.mjs",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/htm.mjs"),
+    ),
+    (
+        "/vendor/preact-signals.mjs",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/preact-signals.mjs"),
+    ),
+    (
+        "/vendor/preact-signals-core.mjs",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/preact-signals-core.mjs"),
+    ),
+    (
+        "/vendor/LICENSE-preact",
+        "text/plain; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/LICENSE-preact"),
+    ),
+    (
+        "/vendor/LICENSE-htm",
+        "text/plain; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/LICENSE-htm"),
+    ),
+    (
+        "/vendor/LICENSE-preact-signals",
+        "text/plain; charset=utf-8",
+        include_bytes!("../../../../web/preview/vendor/LICENSE-preact-signals"),
+    ),
 ];
 
 /// The file served at `path`.

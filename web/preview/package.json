@@ -2,7 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "tsc -p tsconfig.json && node --test tests/*.test.js",
+    "test": "tsc -p tsconfig.json && node --import ./tests/register.mjs --experimental-test-module-mocks --test tests/*.test.js",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
