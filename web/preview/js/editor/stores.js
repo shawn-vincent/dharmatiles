@@ -89,8 +89,8 @@ export const view = createStore({
   cloudAt: { tile: null, text: null, sheet: null, hov: null, sheetHov: null }, // which entry's cloud (a top= or pin) is lit, for the tile `tile`: `text` the one the source's caret is in, `sheet` the one whose top field has focus in the sheet, `hov` and `sheetHov` the ones under the pointer in the source and in the sheet (the keys of entries); read with `cloudOf`
   debug: false,        // the debug layer is on (the program collects its marks only then)
   mode: 'painted',     // the view's preset
-  pick: null,          // {name, animate}: a preset asked for (a fresh object each time, so asking again counts)
-  activeView: null,    // the preset the camera is still on, if any
+  pick: null,          // {name, animate}: a preset asked for (a fresh object each time, so asking again counts); `mode` is the preset in force
+  // activeView (the preset the camera is still on, null once the user's own view holds) is derived, in editor/framing.js, from what the viewer says
   pieces: new Map(),   // entry key -> how many pieces its geometry has (from the mesh shown)
   shown: null,         // {id, epoch, version}: the build's mesh the view holds
   draft: null,         // {tileId, payload}: a draft shown in its place

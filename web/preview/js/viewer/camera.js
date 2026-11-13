@@ -39,7 +39,7 @@ export const cameraMethods = {
       this.draw();
     });
     // the user took hold (drag, wheel, touch): the tween ends and the controls own the camera
-    this.controls.addEventListener('start', () => { userMoving = true; this.framed = null; this.cancelTween(true); });
+    this.controls.addEventListener('start', () => { userMoving = true; this.hold(); this.cancelTween(true); });
     this.controls.addEventListener('end', () => { userMoving = false; });
     this.controls.update();
   },
@@ -167,7 +167,12 @@ export const cameraMethods = {
    * or Under.  A new call starts from wherever the last one had got to.
    */
   flyTo(to) {
-    this.framed = null;
+    this.hold(); // a flight somebody asked for is their view now
+    this.flyToPose(to);
+  },
+
+  /** The flight itself (what the camera does by itself is `place`; this one does not take the view from the framing). */
+  flyToPose(to) {
     const from = this.pose();
     const q = new THREE.Quaternion().setFromUnitVectors(from.dir, to.dir);
     if (Math.abs(q.w) < 1e-6) { // opposite ends: turn about the vertical, not any axis
@@ -271,10 +276,8 @@ export const cameraMethods = {
     c.updateProjectionMatrix();
   },
 
-  /** Put the camera on a named view, framing the tile (or bounds `b`) as render.rs does. */
-  setView(name, animate = true, given = null) {
-    // a box given is kept for re-framing; with none, what is shown is framed, and asked again each time
-    const b = given ?? this.frameFor?.(name) ?? this.bounds();
+  /** Put the camera on preset `name`, framing `b` (as render.rs does); the framing decides when (viewer/framing.js, `refit`). */
+  place(name, b, animate) {
     const v = VIEWS.find((x) => x[0] === name);
     if (!v || !b) return;
     const [, , elev, azim, close] = v;
@@ -291,24 +294,12 @@ export const cameraMethods = {
     const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight) || 1;
     const dist = (diag / (2 * Math.tan(rad(FOV / 2)) * Math.min(1, aspect))) * 1.1;
     const to = { target: centre, dir: dirv(elev, azim).normalize(), dist };
-    if (animate) { this.flyTo(to); this.framed = { name, b: given }; return; }
+    if (animate) { this.flyToPose(to); return; }
     this.cancelTween(true);
     this.placeEquivalent(to.target, to.dir, to.dist);
     this.controls.target.copy(to.target);
     this.controls.update();
     this.draw();
-    this.framed = { name, b: given };
-  },
-
-  /**
-   * The view was resized (the window, the panel, the messages) or what it shows changed size (a map's pieces
-   * arrived): a camera still on a named view frames it again, mid-flight too (the flight lands on the new frame).
-   */
-  reframe() {
-    if (!this.framed) return;
-    const { name, b } = this.framed;
-    if (this.tween) { this.setView(name, true, b); return; }
-    this.setView(name, false, b);
   },
 
   /** The view as a perspective camera would have it (works in either mode). */
@@ -319,8 +310,8 @@ export const cameraMethods = {
     return { p: p.toArray(), t: t.toArray() };
   },
 
-  setCamera(c) {
-    this.framed = null;
+  /** The camera put back as it was (the framing's restore of the user's saved view). */
+  restoreCamera(c) {
     this.cancelTween(false);
     const t = new THREE.Vector3().fromArray(c.t);
     const p = new THREE.Vector3().fromArray(c.p);

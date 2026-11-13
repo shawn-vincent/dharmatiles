@@ -6,8 +6,7 @@
 import { meshIndex, parsePayload, piecesByKey } from '../payload.js';
 import { isOffline } from '../host.js';
 import { showError } from '../problems.js';
-import { host, pickView, viewer } from './app.js';
-import { beginFollow, endFollow, followBuild } from './build.js';
+import { host, viewer } from './app.js';
 import { canLeave, supersedeDrafts } from './document.js';
 import { levelOfParams } from '../folders.js';
 import { parseHash } from '../nav.js';
@@ -17,7 +16,6 @@ import { isEntry, isMapView, placeAt, server, stackIndex, stem, tile, tileById, 
 
 // ---- choosing a tile ---------------------------------------------------
 
-const cameras = new Map(); // tile path -> its saved camera and active preset
 let at = null;             // the tile the view is set up for
 let started = false;       // the first list of tiles has been looked at
 
@@ -26,30 +24,17 @@ export async function select(id, guarded = false) {
   const cur = view.get();
   if (!guarded && id !== cur.tileId && !(await canLeave())) return false;
   const t = tileById(id);
-  if (cur.tileId != null && viewer.payload && tile()) {
-    cameras.set(tile().path, { camera: viewer.getCamera(), activeView: view.get().activeView });
-  }
   const to = t ? t.id : null;
-  view.set(to === cur.tileId ? {} : { tileId: to, sel: null, control: null, hov: null, activeView: null, source: null });
+  view.set(to === cur.tileId ? {} : { tileId: to, sel: null, control: null, hov: null, source: null });
   return true;
 }
 
-/** A plan that differs from the one the view has. */
-const planChanged = (p) => !!p && JSON.stringify(p) !== JSON.stringify(viewer.plan);
-
-/** The view starts afresh on tile `t` (or on none). */
+/** The view starts afresh on tile `t` (or on none): what the viewer held goes with the description (editor/framing.js). */
 function reset(t) {
-  viewer.clear();
-  viewer.setPlan(null);
   view.set({ shown: null, draft: null });
-  endFollow(null);
   // no tile: the folder level shows, and writes its own address (places.js)
   if (!t) return;
   history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
-  // no mesh to frame yet and no view of yours kept: follow the build
-  if (t.meshVersion == null && !cameras.get(t.path)) beginFollow(t.id);
-  if (planOf(t)) viewer.setPlan(planOf(t));
-  followBuild();
 }
 
 /**
@@ -83,8 +68,7 @@ function follow() {
   if (tileId != null && !t) { select(null, true); return; }
   if (tileId !== at) { at = tileId; reset(t); }
   if (!t) return;
-  // a rescan or a reconnect: keep the view, catch up on a newer plan or mesh
-  if (planChanged(planOf(t))) { viewer.setPlan(planOf(t)); followBuild(); }
+  // a rescan or a reconnect: keep the view, catch up on a newer mesh
   const shown = view.get().shown;
   // a map draws its pieces, not the plates' mesh: that comes when the plates are shown
   if (!isMapView() && t.meshVersion != null && !(shown && shown.id === t.id && shown.epoch === epoch && shown.version === t.meshVersion)) loadMesh(t);
@@ -97,19 +81,10 @@ async function loadMesh(t) {
     const buf = await host.fetchMesh(t.id, docRev);
     // the program's mesh is of another revision (null), the page moved on, or the tile did: not shown
     if (!buf || token !== loadToken || t.id !== view.get().tileId || (tile()?.docRev ?? 0) !== docRev) return;
-    const first = !viewer.payload;
     const p = parsePayload(buf);
-    viewer.setMesh(p); // the new mesh swaps in place: the camera is kept
+    viewer.setMesh(p); // the new mesh swaps in place: the viewer decides whether its camera moves
     supersedeDrafts();
     view.set({ pieces: piecesByKey(p), shown: { id: t.id, epoch, version }, draft: null });
-    if (first) {
-      const saved = cameras.get(t.path);
-      if (saved) {
-        viewer.setCamera(saved.camera);
-        view.set({ activeView: saved.activeView });
-      } else pickView(view.get().mode, endFollow(t.id));
-    }
-    endFollow(t.id);
     // a selection that neither the text nor the new build has goes
     const sel = view.get().sel;
     if (isEntry(sel) && stackIndex(sel.id) < 0 && meshIndex(p, sel.id) < 0) view.set({ sel: null });
@@ -130,6 +105,5 @@ function showDraft() {
 export function init() {
   view.subscribe(['tileId', 'dmode'], follow);
   server.subscribe(['tiles', 'ready', 'epoch'], follow);
-  docs.subscribe(follow); // the plan of a print list or a map is its document's
   view.subscribe(['draft'], showDraft);
 }

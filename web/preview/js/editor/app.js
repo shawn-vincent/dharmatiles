@@ -26,8 +26,8 @@ export function toast(message, action = null, { label = 'Undo', ms = 5000 } = {}
   toastTimer = setTimeout(() => { box.hidden = true; }, ms);
 }
 
-/** Take the camera to one of the view presets (chrome.js moves it). */
-export const pickView = (name, animate = true) => view.set({ pick: { name, animate } });
+/** Ask for one of the view presets: the view's preset and the ask are one write, and the viewer frames what it shows (editor/framing.js describes it). */
+export const pickView = (name, animate = true) => view.set({ pick: { name, animate }, mode: name });
 
 // A library tile is read only until the first change to it: that change copies
 // it into My tiles and is made there (tiles.js does the copy).  A part of the

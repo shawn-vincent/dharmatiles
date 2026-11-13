@@ -19,7 +19,8 @@ import { isOffline } from '../host.js';
 import { showError } from '../problems.js';
 import { FOV } from '../viewer/consts.js';
 import * as M from '../map-model.js';
-import { $, host, pickView, viewer } from './app.js';
+import { $, host, viewer } from './app.js';
+import { frameBox } from './framing.js';
 import { chipOf, verdictOf } from '../doc-views.js';
 import { createTiers } from '../tiers.js';
 import { createStore, log, server, tile, tileById, view } from './stores.js';
@@ -33,7 +34,6 @@ export { chooseMode, setChosen };
 export const sceneStore = createStore({ counts: M.tierCounts([]), triangles: 0, busy: 0 });
 
 const geoms = new Map();      // gkey -> {tiers: Map(tier -> {tris}), asked: Set(tier), failed: Set(tier)}
-const cameras = new Map();    // document path -> {camera, activeView}
 let mounted = false;          // the scene is in the view
 let mountedPath = null;
 let lastSig = '';
@@ -58,19 +58,6 @@ export const pieceAt = (id) => pieces().find((p) => p.id === id) ?? null;
 
 const gidOf = (gkey, tier) => `${gkey}#${tier}`;
 
-/** The world box the view frames: the pieces' footprints and the grid, the ground to a little over the tallest. */
-function frameBox(ps, scene) {
-  const b = M.bounds(ps);
-  let lo = b ? [...b.lo] : [0, 0], hi = b ? [...b.hi] : [0, 0];
-  if (scene.grid) {
-    const sq = ps.find((p) => p.sq)?.sq ?? 35;
-    lo = [Math.min(lo[0], 0), Math.min(lo[1], 0)]; hi = [Math.max(hi[0], scene.grid.cols * sq), Math.max(hi[1], scene.grid.rows * sq)];
-  }
-  if (!b && !scene.grid) { lo = [0, 0]; hi = [140, 140]; }
-  const top = Math.max(0, ...ps.filter((p) => p.at).map((p) => (p.bottomMm || 0))) + 14;
-  return { lo: [lo[0], -hi[1], -7], hi: [hi[0], -lo[1], top] };
-}
-
 /** Put the map in the view as the document's state says it is now (or take it out when the map is not the view). */
 function sync() {
   const t = tile();
@@ -84,7 +71,6 @@ function sync() {
   const ps = pieces();
   release(ps);
   const box = frameBox(ps, sc);
-  viewer.setSceneBox(box);
   const sq = ps.find((p) => p.sq)?.sq ?? 35;
   viewer.setSceneGrid({ sq, w: Math.max(box.hi[0] - box.lo[0], sq), h: Math.max(box.hi[1] - box.lo[1], sq), cx: (box.lo[0] + box.hi[0]) / 2, cy: (box.lo[1] + box.hi[1]) / 2, z: 0 });
   request(ps);
@@ -97,38 +83,20 @@ function mount(t, sc) {
   mountedPath = t.path;
   document.body.classList.add('map');
   viewer.setSceneOn(true);
-  viewer.frameFor = frameFor;
   viewer.maxDistance = 4000;
   viewer.controls.maxDistance = 4000;
-  viewer.setSceneBox(frameBox(pieces(), sc));
-  // the camera: the one this map had, else Iso over all of it
-  const saved = cameras.get(t.path);
-  if (saved) { viewer.setCamera(saved.camera); view.set({ activeView: saved.activeView }); } else pickView('painted', false);
   lastSig = '';
 }
 
 function unmount() {
-  const t = mountedPath;
-  if (t && viewer.controls) cameras.set(t, { camera: viewer.getCamera(), activeView: view.get().activeView });
   mounted = false;
   mountedPath = null;
   document.body.classList.remove('map');
   viewer.setScenePieces([]);
   viewer.setSceneOn(false);
-  viewer.frameFor = null;
   viewer.controls.maxDistance = 600;
   viewer.maxDistance = null;
   view.set({ msel: [], mprop: null });
-  // the plates (or the tile) frame themselves again
-  pickView(view.get().mode, false);
-}
-
-/** Close frames the selected piece, or the first; the other presets frame all of the map. */
-function frameFor(name) {
-  if (!mounted || name !== 'close') return null;
-  const p = selected()[0] ?? pieces().find((q) => q.at);
-  if (!p?.at) return null;
-  return { ...M.worldBox(p, 14, 7), fit: true };
 }
 
 // ---- the tiers ----------------------------------------------------------------------------------------

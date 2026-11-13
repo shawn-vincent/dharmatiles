@@ -107,6 +107,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/editor/export.js"),
     ),
     (
+        "/js/editor/framing.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/framing.js"),
+    ),
+    (
         "/js/editor/live.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/editor/live.js"),
@@ -305,6 +310,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/js/viewer/fade.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/viewer/fade.js"),
+    ),
+    (
+        "/js/viewer/framing.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/viewer/framing.js"),
     ),
     (
         "/js/viewer/layers.js",

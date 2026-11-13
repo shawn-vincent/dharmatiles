@@ -80,54 +80,15 @@ async function syncSketches(t) {
   if (gen !== sketchGen || t.id !== view.get().tileId) return; // a newer list came
   const keep = new Set(list.map(key));
   for (const k of sketchCache.keys()) if (!keep.has(k)) sketchCache.delete(k);
-  viewer.setSketches(got.filter((k) => k.payload));
-  followBuild();
-}
-
-// ---- the camera before a tile's mesh is in --------------------------------
-// The view starts on a 1×1 tile, and while a tile builds it follows what is
-// known of its size: the plan's footprint, then each sketch the build sends.
-// The finished mesh frames it; moving the view yourself stops the following.
-
-const ONE_SQUARE = { lo: [0, 0, 0], hi: [35, 35, 8] };
-let following = null; // {id, b}: the tile followed and the bounds last framed
-
-/** Follow tile `id`'s build (no mesh to frame yet and no view of yours kept for it). */
-export function beginFollow(id) { following = { id, b: null }; }
-/** Stop following; true if it was following tile `id`. */
-export function endFollow(id) {
-  const was = following?.id === id;
-  if (was || id == null) following = null;
-  return was;
-}
-
-export function followBuild() {
-  const t = tile();
-  if (!following || !t || following.id !== t.id) return;
-  // a map frames its own pieces (the scene's box), never the plan's size (a print list's plan is the printer's bed)
-  if (viewer.sceneOn) return;
-  const [w, h] = t.plan?.sizeMm || [35, 35];
-  const b = { lo: [0, 0, 0], hi: [w, h, 8] };
-  for (const k of viewer.sketchBounds?.() || []) {
-    for (let a = 0; a < 3; a++) { b.lo[a] = Math.min(b.lo[a], k.lo[a]); b.hi[a] = Math.max(b.hi[a], k.hi[a]); }
-  }
-  // a small change is not worth a camera move
-  const size = (x) => Math.hypot(...x.hi.map((v, a) => v - x.lo[a]));
-  const was = following.b;
-  if (was && Math.abs(size(b) - size(was)) < 0.08 * size(was)
-    && b.lo.every((v, a) => Math.abs(v - was.lo[a]) < 2) && b.hi.every((v, a) => Math.abs(v - was.hi[a]) < 2)) return;
-  following.b = b;
-  viewer.setView(view.get().mode, true, b);
+  viewer.setSketches(got.filter((k) => k.payload)); // the viewer widens its frame to take them in (viewer/framing.js)
 }
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  viewer.setView(view.get().mode, false, ONE_SQUARE);
   // a finished mesh landing ends the sketches
   view.subscribe(['shown'], () => { sketchCache.clear(); viewer.setSketches([]); });
   view.subscribe(['tileId', 'shown', 'draft'], showBuild);
   server.subscribe(['tiles', 'live', 'epoch'], showBuild);
   view.subscribe(['debug', 'tileId'], syncMarks);
   server.subscribe(['live', 'epoch'], syncMarks);
-  viewer.onUserViewChangeHook(() => { following = null; });
 }

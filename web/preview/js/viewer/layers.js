@@ -331,6 +331,7 @@ export const layersMethods = {
     }
     this.applyFade();
     this.pulse();
+    this.refit();
     this.draw();
   },
 

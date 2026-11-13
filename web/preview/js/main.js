@@ -17,6 +17,7 @@
 import { installGlobalHandlers } from './problems.js';
 import { init as initChrome } from './editor/chrome.js';
 import { init as initBuild } from './editor/build.js';
+import { init as initFraming } from './editor/framing.js';
 import { init as initTiles } from './editor/tiles.js';
 import { init as initOpen } from './editor/open.js';
 import { init as initPlaces } from './editor/places.js';
@@ -53,6 +54,7 @@ window.dtPreview = { server, view, doc, viewer, log, texts, docs, mapEdit, mapSc
 // build's camera, the tile menu, the view's tile, the text, the selection, the
 // sheet, the map, export, then the event stream, which starts everything moving
 initChrome();
+initFraming();
 initScrollShadows();
 initBuild();
 initTiles();

@@ -10,6 +10,8 @@ import { layersMethods } from './viewer/layers.js';
 import { sceneMethods } from './viewer/scene.js';
 import { Backdrop } from './viewer/backdrop.js';
 import { hookSet } from './hooks.js';
+import { signal } from '@preact/signals-core';
+import { createFraming } from './viewer/framing.js';
 
 export { VIEWS } from './viewer/consts.js';
 
@@ -18,6 +20,9 @@ export class Viewer {
     this.canvas = canvas;
     this.renderHooks = hookSet();
     this.userViewHooks = hookSet();
+    this.desc = null; // what the page says is shown (describe); the camera is decided from it and what is held
+    this.fr = createFraming();
+    this.framing = signal(this.fr.state()); // {view, held, key}: the preset the camera is on, or the user's own view
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setClearColor(0x000000, 0); // the plate is the page's backdrop behind the canvas
     this.scene = new THREE.Scene();
@@ -126,7 +131,7 @@ export class Viewer {
     this.persp.aspect = w / h;
     this.persp.updateProjectionMatrix();
     this.fitOrtho();
-    this.reframe?.();
+    this.refit(true);
     this.draw();
   }
 
@@ -166,6 +171,7 @@ export class Viewer {
     this.buildCloud();
     this.buildGrid();
     this.placeGround();
+    this.refit();
     this.draw();
   }
 
@@ -186,6 +192,55 @@ export class Viewer {
   /** The tile's squares, for the grid at the square size. */
   setPlan(plan) { this.plan = plan; this.buildGrid(); this.draw(); }
 
+  /**
+   * What the page shows, described: the camera is decided from this and from what the viewer holds, here and
+   * nowhere else (viewer/framing.js has the rules).  `{doc, key, kind, view, asked, fresh, plan, box, focus}`, or
+   * null for nothing shown.
+   *   doc    the document (a tile or a map); what the viewer holds of another one goes when it changes.
+   *   key    the document in its mode (tile, map or plates): the user's last view is kept under it.
+   *   kind   'tile' | 'map' | 'plates'.
+   *   view   the preset in force; `asked` is a fresh object each time one is asked for.
+   *   fresh  a tile with no finished build yet: it is followed while it builds.
+   *   plan   the tile's squares (the grid, and the frame before its mesh is in).
+   *   box    a map: the world box of its pieces and grid.
+   *   focus  a map: the box of the piece the Close view frames.
+   */
+  describe(d) {
+    const was = this.desc;
+    this.desc = null; // what is dropped and set below does not move the camera: the one refit at the end does
+    if (!d || d.doc !== was?.doc) this.clear();
+    const plan = d?.plan ?? null;
+    if (JSON.stringify(plan) !== JSON.stringify(this.plan)) this.setPlan(plan);
+    this.sceneBox = d?.kind === 'map' ? d.box : null;
+    this.desc = d;
+    this.refit();
+  }
+
+  /** The camera, after something it depends on changed: the framing says what to do. */
+  refit(resized = false) {
+    const d = this.desc;
+    const step = { desc: d, box: d ? this.frameBox() : null, finished: this.finished(), flying: !!this.tween, resized, camera: () => this.getCamera() };
+    const a = this.fr.step(step);
+    if (a.do === 'restore') this.restoreCamera(a.camera);
+    else if (a.do === 'frame') {
+      const focus = a.view === 'close' && d.kind === 'map' && d.focus ? { ...d.focus, fit: true } : null;
+      this.place(a.view, focus ?? a.box, a.animate);
+    }
+    this.publishFraming();
+  }
+
+  /** The user took hold of the view. */
+  hold() { if (this.fr.hold()) this.publishFraming(); }
+
+  publishFraming() {
+    const s = this.fr.state(), c = this.framing.peek();
+    if (s.view !== c.view || s.held !== c.held || s.key !== c.key) this.framing.value = s;
+  }
+
+  /** Is the document's own mesh in (a map has none: it is its pieces)? */
+  finished() { return this.desc?.kind === 'map' || !!this.payload; }
+
+  /** What is in view as data: a map's box, a plate's bed, the tile's mesh, else the plan. */
   bounds() {
     // a map: the pieces placed
     if (this.sceneOn && this.sceneBox) return this.sceneBox;
@@ -195,6 +250,18 @@ export class Viewer {
     if (this.payload) return { lo: this.payload.meta.lo, hi: this.payload.meta.hi };
     if (this.plan) return { lo: [0, 0, 0], hi: [...this.plan.sizeMm, 1] };
     return null;
+  }
+
+  /** What the camera frames: `bounds()`, except that a tile still building is followed: its footprint grown to take in each sketch. */
+  frameBox() {
+    if (this.desc.kind === 'map') return this.desc.box;
+    if (this.payload) return this.bounds();
+    const [w, h] = this.plan?.sizeMm || [35, 35];
+    const b = { lo: [0, 0, 0], hi: [w, h, 8] };
+    for (const k of this.sketchBounds()) {
+      for (let a = 0; a < 3; a++) { b.lo[a] = Math.min(b.lo[a], k.lo[a]); b.hi[a] = Math.max(b.hi[a], k.hi[a]); }
+    }
+    return b;
   }
 
   setOverhang(on) { this.showOverhang = on; this.refreshPaint(); }

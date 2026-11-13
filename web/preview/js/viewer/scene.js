@@ -33,7 +33,7 @@ export const sceneMethods = {
     this.sceneMaskGroup = new THREE.Group();
     this.sceneGeoms = new Map();    // gid -> {geometry, painted, clean, triangles, grey}
     this.scenePieces = new Map();   // piece index -> {gid, render, pick, mask}
-    this.sceneBox = null;           // {lo, hi}: what is framed
+    this.sceneBox = null;           // {lo, hi}: the map's box, from the description (describe)
     this.sceneGridSpec = null;      // {sq, w, h, cx, cy}
     this.sceneUniforms = {
       uCam: this.uniforms.uCam, uDir: this.uniforms.uDir, uOrtho: this.uniforms.uOrtho, uL1: this.uniforms.uL1, uL2: this.uniforms.uL2, uAccent: this.uniforms.uAccent,
@@ -74,9 +74,6 @@ export const sceneMethods = {
     this.placeGround();
     this.draw();
   },
-
-  /** What a view frames when the scene is on: `{lo, hi}` in the world, mm. */
-  setSceneBox(box) { this.sceneBox = box; this.reframe?.(); },
 
   /** The ground grid the scene draws: squares of `sq` mm over a `w` by `h` map centred at (cx, cy). */
   setSceneGrid(spec) { this.sceneGridSpec = spec; if (this.sceneOn) { this.buildGrid(); this.draw(); } },

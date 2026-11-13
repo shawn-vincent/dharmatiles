@@ -22,12 +22,10 @@ const viewEntries = new Map(VIEWS.map(([name, label], i) => [name, { label, n: i
 /** The two views beside the view besides Iso and Top: the ones used last (remembered in the browser). */
 const recentViews = signal(['low', 'close']);
 
-/** The camera goes to preset `name` (asked for with app.js's pickView). */
-function applyPick({ name, animate }) {
-  view.set({ mode: name, activeView: name });
+/** A preset was asked for (app.js's pickView; the viewer frames it, editor/framing.js): remembered among the recent ones. */
+function applyPick({ name }) {
   recentViews.value = rememberView(recentViews.value, name);
   try { localStorage.setItem('dt-preview-recent-views', JSON.stringify(recentViews.value)); } catch { /* private mode */ }
-  viewer.setView(name, animate);
 }
 const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 // paint on or off (grey plastic): remembered in the browser
@@ -201,7 +199,6 @@ export function init() {
     render(html`<${ViewButtons} names=${shortcutViews(recentViews.value)} entries=${viewEntries} active=${active} onPick=${pickView} />`, $('views'));
     render(html`<${ViewButtons} names=${VIEWS.map((v) => v[0])} entries=${viewEntries} active=${active} onPick=${pickView} />`, $('allviews'));
   });
-  viewer.onUserViewChangeHook(() => view.set({ activeView: null }));
   view.subscribe(['pick'], ({ pick }) => applyPick(pick));
   bindPopovers();
   // the page the sidebar starts on: the tile's when the address names one (so it does not slide in at load), else the folder level
