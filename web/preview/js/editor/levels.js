@@ -16,7 +16,7 @@
 // (places.js): the crumbs here begin with the same path (Places › My tiles › dungeon › the tile).
 
 import {
-  buildHash, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, levelParams, moveRow, orderStack, parseHash, placeOf, sameLevel, sizeWords,
+  caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf, sameLevel, sizeWords,
   standing, systemName, up as levelUp,
 } from '../nav.js';
 import { effect } from '@preact/signals-core';
@@ -33,7 +33,9 @@ import {
   doc, entrySel, isInventory, isMapView, isMark, isPlates, itemOf, mapNode, markSel, placeAt, server, stackItems, stackIndex, stem, tile, tileSel, view,
 } from './stores.js';
 import { contextLines } from './plates.js';
-import { contextLines as mapLines } from './model.js';
+import { contextLines as mapLines, level as mapLevel, mprop as mapProp, scene as mapScene, selected as mapSelected } from './model.js';
+import { held } from './address.js';
+import { label as pieceLabel } from '../map-model.js';
 import { contextLines as inventoryLines } from './inventory.js';
 
 const PANES = ['lvl-tile', 'lvl-element', 'lvl-prop'];
@@ -47,11 +49,13 @@ let pending = null;        // a level asked for by the address, until the tile h
 let started = false;
 let applying = false;      // the address is being applied: it is not written back
 let leftFrom = null;       // the level the last Up left, for ⌘]
-let lastKey = null;        // the level the address was last written for
 /** Is the editor page of the sidebar the one showing (not the tile browser)?  `view.page` is only its change; the class is what is on screen. */
 const editing = () => $('side').classList.contains('editing');
 const paneEl = (d) => $(PANES[d]);
 const bodyOf = (d) => paneEl(d).querySelector('.body');
+
+/** Tell the address's writer (address.js) whether a level it was given is still being taken. */
+const hold = () => { held.value = !!pending || applying; };
 
 const entryLike = (s) => s?.kind === 'entry' || isMark(s);
 const levelNow = () => ({ sel: view.get().sel, control: view.get().control });
@@ -63,6 +67,12 @@ const memoryKey = (l) => `${view.get().tileId}|${levelKey(l.sel, l.control)}`;
 /** One level up (a control to its thing, a thing to the tile); false at the tile. */
 export function goUp() {
   if (view.get().face !== 'tile') return false;
+  if (isMapView()) {
+    // a map's levels are the same path: a property to its pieces, the pieces to the map
+    if (view.get().mprop) { view.set({ mprop: null }); return true; }
+    if (view.get().msel.length) { view.set({ msel: [] }); return true; }
+    return false;
+  }
   const next = levelUp(levelNow(), tileSel());
   if (!next) return false;
   leftFrom = levelNow();
@@ -87,6 +97,10 @@ export function goForward() {
 /** Go to depth `d` of the path now: 0 the tile, 1 the thing (a crumb's click). */
 export function goDepth(d) {
   view.set({ face: 'tile' });
+  if (isMapView()) {
+    if (d === 0) view.set({ msel: [], mprop: null }); else if (d === 1) view.set({ mprop: null });
+    return;
+  }
   const { sel } = view.get();
   if (d === 0) { view.set({ control: null }); if (sel?.kind !== 'tile') setSel(tileSel(), { from: 'view' }); return; }
   if (d === 1) view.set({ control: null });
@@ -143,16 +157,32 @@ function thingName() {
   return sel?.id;
 }
 
+const PROPS = { bottom: 'Bottom', seed: 'Seed', print: 'Print' };
+
+/**
+ * The levels below the tile, for the crumbs: `{depth, what, control}`.  A tile's are its thing and control; a map's are
+ * its pieces (the piece's name, or how many) and the property open on one.  The same trail, the same crumbs.
+ */
+function trailNow() {
+  if (isMapView()) {
+    const ps = mapSelected.value;
+    const prop = mapLevel.value === 'prop' ? mapProp.value : null;
+    return { depth: prop ? 2 : ps.length ? 1 : 0, what: ps.length > 1 ? `${ps.length} pieces` : ps[0] ? pieceLabel(ps[0]) : '', control: PROPS[prop] ?? prop ?? '' };
+  }
+  const { sel, control } = view.get();
+  return { depth: depthOf(sel, control), what: thingName(), control: control?.name ?? '' };
+}
+
 function renderCrumbs() {
-  const t = tile(), { sel, control, face } = view.get();
-  const depth = depthOf(sel, control);
+  const t = tile(), { face } = view.get();
+  const { depth, what: thing, control: ctl } = trailNow();
   // the folders the tile is in, as crumbs: Places › My tiles › dungeon › combo; each one goes to its level and takes a tile dropped on it
   const { roots } = server.get();
   const at = t && whereIs(roots, t);
   const place = at && roots[at.root] ? { root: at.root, label: roots[at.root].label, dir: at.dir } : null;
-  const list = crumbsFor({ place, tileName: t ? stem(t) : '', sel, what: thingName(), control });
+  const list = crumbsFor({ place, tileName: t ? stem(t) : '', depth, what: thing, control: ctl });
   const up = at ? `${[roots[at.root]?.label, ...(at.dir ? at.dir.split('/') : [])].join(' › ')}: the folder (⌘[ from the tile)` : 'Places (⌘[ from the tile)';
-  $('back').title = up;
+  $('back').title = depth > 0 ? 'Up a level (Esc, ⌘[)' : up;
   fillCrumbs($('crumbs-path'), list.filter((c) => c.depth === -1), (c) => { view.set({ placeAt: placeAt(c.place ? { root: c.place.root, dir: c.place.dir } : { root: null, dir: '' }), query: '', pageAt: 'browse' }); }, { trailing: true });
   $('tilebtn').classList.toggle('cur', depth === 0 && face === 'tile');
   $('tilebtn').setAttribute('aria-current', depth === 0 ? 'location' : 'false');
@@ -276,31 +306,11 @@ function render() {
   // a print list's panel is the plates', or its source (the same switch as a tile's); the inventory's own view has its own switch
   $('stage').dataset.face = plates ? (face === 'source' ? 'source' : isMapView() ? 'map' : 'plates') : inventory ? 'inventory' : face;
   $('face').hidden = inventory;
-  syncAddress();
 }
 const afterSlide = (fn) => setTimeout(fn, reduced() ? 0 : SLIDE_MS + 20);
 
 // ---- the address -------------------------------------------------------------------
-
-/** Write the level into the URL: a new level of the tile is a step of the browser's history, the rest replaces. */
-function syncAddress() {
-  const { tileId, sel, control, face } = view.get();
-  const t = tile();
-  // while the browser page shows, the address is the folder level's (places.js): the two never write it in the same moment
-  if (!started || !view.get().addressRead || pending || applying || !t || tileId == null || view.get().page === 'browse') return;
-  const cur = parseHash(location.hash);
-  const next = { ...cur };
-  for (const k of ['at', 'piece', 'control', 'group', 'face', 'place', 'dir']) delete next[k];
-  Object.assign(next, { tile: t.path }, levelParams({ sel, control, face }));
-  const h = buildHash(next);
-  const key = `${tileId}|${levelKey(sel, control)}`;
-  if (h === location.hash) { lastKey = key; return; }
-  // a step in the source is not a step of navigation, and neither is a different piece of the same entry;
-  // coming in from a folder level (whose address has no tile) is a step: Back goes to the folder
-  const push = (lastKey != null && key !== lastKey && face === 'tile' && tileId === lastKey.split('|')[0]) || (cur.tile == null && cur.place != null);
-  lastKey = key;
-  if (push) history.pushState(null, '', h); else history.replaceState(null, '', h);
-}
+// (written by one effect for every level: address.js; this takes a level an address asks for)
 
 /** Where the panel is, to be taken again after the tile is swapped for its copy (a first change to a library tile, a rename). */
 export const levelSnapshot = () => ({ sel: view.get().sel && entryLike(view.get().sel) ? { ...view.get().sel } : { kind: 'tile' }, control: view.get().control, face: view.get().face });
@@ -310,11 +320,32 @@ export const restoreLevel = (l) => wantLevel(l);
 /** Take the level an address asks for, as soon as the tile has it (its text is checked). */
 function wantLevel(want) {
   pending = want;
+  hold();
   tryPending();
+}
+/** A map's pieces and property an address asks for, once the map's scene has come: the pieces that are there, as the selection. */
+function takePieces(want) {
+  const have = new Set(mapScene.value.pieces.map((p) => p.id));
+  const ids = want.pieces.filter((i) => have.has(i));
+  if (ids.length < want.pieces.length) toast(ids.length ? 'Some of those pieces are not on the map now' : 'The map has no such piece now');
+  view.set({ face: want.face, msel: ids, mprop: ids.length === 1 && want.prop ? want.prop : null });
 }
 function tryPending() {
   if (!pending) return;
   const { tileId } = view.get(), d = doc.get();
+  if (isPlates(tile())) {
+    // a map's levels: the map's scene says which pieces there are (a print list has no levels but its face)
+    if (view.get().dmode == null || (isMapView() && !mapScene.value)) return;
+    const want = pending;
+    pending = null;
+    applying = true;
+    try {
+      if (isMapView()) takePieces({ ...want, pieces: want.pieces ?? [] });
+      else view.set({ face: want.face });
+    } finally { applying = false; }
+    hold();
+    return;
+  }
   if (tileId == null || d.tileId !== tileId || d.checked !== d.text || d.text == null) return;
   const want = pending;
   pending = null;
@@ -335,6 +366,7 @@ function tryPending() {
       if (control) view.set({ control });
     }
   } finally { applying = false; }
+  hold();
   render();
 }
 
@@ -346,8 +378,10 @@ function fromAddress() {
   const t = h.tile ? server.get().tiles.find((x) => x.path === h.tile) : null;
   const want = levelOfHash(location.hash);
   if (t && t.id !== view.get().tileId) {
-    // another tile: choose it, and take the level once it is open
-    import('./open.js').then(({ select }) => select(t.id)).then((ok) => { if (ok !== false) wantLevel(want); });
+    // another tile: choose it, and take the level once it is open (the address is not written over meanwhile)
+    pending = want;
+    hold();
+    import('./open.js').then(({ select }) => select(t.id)).then((ok) => { if (ok !== false) wantLevel(want); else { pending = null; hold(); } });
     return;
   }
   view.set({ pageAt: 'edit' });
@@ -399,8 +433,9 @@ function rowBlur(e) { if (e.target.closest?.('.orow') && e.target.closest('.orow
 export function init() {
   pending = null;
   const first = levelOfHash(location.hash);
-  const hasLevel = first.sel.kind !== 'tile' || first.face === 'source';
+  const hasLevel = first.sel.kind !== 'tile' || first.face === 'source' || first.pieces;
   if (hasLevel) pending = first;
+  hold();
   started = true;
   // the tile browser is a level above the tile: its crumb is the back button already
   $('tilebtn').onclick = () => goDepth(0);
@@ -416,7 +451,7 @@ export function init() {
   effect(() => { void view.get().page; void view.get().dmode; render(); });
   effect(() => { renderCrumbs(); });
   effect(() => { renderContext(); });
-  effect(() => { const d = doc.get(); void d.tileId; void d.checked; void d.text; void view.get().tileId; tryPending(); });
+  effect(() => { const d = doc.get(); void d.tileId; void d.checked; void d.text; void view.get().tileId; void mapScene.value; void view.get().dmode; tryPending(); });
   addEventListener('keydown', onKey);
   addEventListener('popstate', fromAddress);
 }

@@ -86,7 +86,7 @@ test('the arrow keys move between rows without wrapping', () => {
 
 test('the crumbs run from Places through the folders to the level, which is the current one', () => {
   const place = { root: 0, label: 'My tiles', dir: 'dungeon/combo' };
-  const at = (sel, control) => crumbsFor({ place, tileName: 'tree', sel, what: 'trunk', control });
+  const at = (sel, control) => crumbsFor({ place, tileName: 'tree', depth: depthOf(sel, control), what: 'trunk', control: control?.name });
   const names = (l) => l.map((c) => [c.label, c.current]);
   assert.deepEqual(names(at(tileSel)), [['Places', false], ['My tiles', false], ['dungeon', false], ['combo', false], ['tree', true]]);
   assert.deepEqual(names(at(entry('tile/grove/0'))).slice(-2), [['tree', false], ['trunk', true]]);

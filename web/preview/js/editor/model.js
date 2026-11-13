@@ -48,8 +48,6 @@ export const readOnly = computed(() => {
   const t = tileNow.value;
   return !t || !(planOf(t)?.writable ?? true) || t.path.startsWith('lib:');
 });
-/** The map's name: its file's, without the suffix. */
-export const mapName = computed(() => (tileNow.value ? stem(tileNow.value).replace(/\.dmap$/i, '') : ''));
 /** Why there is no scene to draw, as the panel says it. */
 export const waiting = computed(() => (tileNow.value?.status === 'failed' ? 'This map does not read: mend it in Source.' : 'Reading the map…'));
 
@@ -66,7 +64,7 @@ export const contextLines = () => {
 };
 
 /** What the map's panel (js/view/map-panel.js) reads: one object of signals. */
-export const mapPanel = { on: mapOn, tile: tileNow, scene, pieces, selected, marks, list: mapList, mprop, level, inventory, readOnly, mapName, waiting };
+export const mapPanel = { on: mapOn, tile: tileNow, scene, pieces, selected, marks, list: mapList, mprop, level, inventory, readOnly, waiting };
 
 // ---- the plates' panel ---------------------------------------------------------------------------------------------
 

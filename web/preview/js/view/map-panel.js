@@ -29,19 +29,6 @@ export const Pill = ({ state }) => {
   return html`<span class=${`ipill ${state === 'have' ? 'have' : state === 'other' ? 'caution' : 'need'}`} title=${title}>${word}</span>`;
 };
 
-function Head({ m, act }) {
-  const level = m.level.value;
-  const sel = m.selected.value;
-  const crumbs = [{ label: m.mapName.value, go: () => { act.setProp(null); act.select([]); } }];
-  if (level !== 'map') {
-    const p = sel[0];
-    crumbs.push({ label: sel.length > 1 ? `${sel.length} pieces` : (p.id ? `${p.name} · ${p.id}` : p.name), go: () => act.setProp(null) });
-  }
-  if (level === 'prop') crumbs.push({ label: { bottom: 'Bottom', seed: 'Seed', print: 'Print' }[m.mprop.value] ?? 'Property' });
-  return html`<div class="lt"><div class="heading"><span class="cap">Map</span>
-    <nav class="mp-crumbs">${crumbs.map((c, i) => html`${i ? html`<span class="sep">›</span>` : null}<button type="button" class=${`crumb${i === crumbs.length - 1 ? ' cur' : ''}`} onClick=${c.go}>${c.label}</button>`)}</nav></div></div>`;
-}
-
 /** The have, to-print and caution pills of a row of the list: what the shelf says of its pieces (the states are apart: a piece is in one). */
 const RowPills = ({ row }) => html`<span class="mp-pills">
   ${row.skip ? html`<${Pill} state="skip" />` : null}
@@ -216,8 +203,7 @@ export function MapPanel({ m, act }) {
   if (!m.tile.value || !m.on.value) return null; // not the map's turn: the panel draws nothing
   const scene = m.scene.value;
   const level = m.level.value;
-  return html`<${Head} m=${m} act=${act} />
-    <div class="body">
+  return html`<div class="body">
       ${!scene
         ? html`<div class="empty">${m.waiting.value}</div>`
         : html`${m.readOnly.value ? html`<p class="note">This file cannot be changed here.</p>` : null}

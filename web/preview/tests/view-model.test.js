@@ -74,7 +74,6 @@ const at = () => model.pieces.value.map((p) => [p.id, p.at ? p.at[0] / 35 : null
 test('the model is derived: the pieces on the map are the document\'s, and the mode is the document\'s', () => {
   assert.equal(model.mapOn.value, true);
   assert.deepEqual(at(), [['p1', 0], ['p2', 1], ['t1', null], ['t2', null]]);
-  assert.equal(model.mapName.value, 'm');
   assert.equal(model.level.value, 'map');
 });
 
@@ -117,7 +116,7 @@ test('the panel draws the model and is drawn again when the model changes, with 
   view.set({ msel: ['p1'] });
   await settle();
   assert.match(root.textContent, /Turn/);
-  assert.equal(root.querySelector('.cur').textContent, 'p1 · p1');
+  assert.ok(root.querySelector('.mp-title'), 'the piece\'s own title (the trail above the panel is the page\'s: levels.js)');
   // the program tells a new state: the panel follows without anyone asking it to
   program.answer('mapsSet', { docRev: program.rev, id: 'p1', set: { rot: 270 } });
   applyDocState(program.state());

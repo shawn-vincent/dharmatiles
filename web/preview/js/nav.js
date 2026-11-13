@@ -108,9 +108,11 @@ export function moveRow(i, key, count) {
  * control the level is at (`what` names the thing: an entry's label, a line's or region's name).  A crumb
  * above the tile has `depth` -1, and says where it goes: `{root, dir}` (none for Places).  On a folder
  * level (`tileName` null) the last folder crumb is the current one.
- * `place` is `{root, label, dir}` (`dir` as `a/b`), or null at the top.
+ * `place` is `{root, label, dir}` (`dir` as `a/b`), or null at the top.  The levels below the tile are the same
+ * for a tile and for a map: `depth` 1 is the thing (`what`: a stack entry, a line or region, or the map's
+ * pieces) and 2 one control of it (`control`, a name: a tile's control, or a piece's property).
  */
-export function crumbsFor({ place = null, tileName = null, sel = null, what = '', control = null }) {
+export function crumbsFor({ place = null, tileName = null, depth = 0, what = '', control = '' }) {
   const out = [{ id: 'places', label: 'Places', depth: -1, place: null }];
   if (place) {
     out.push({ id: 'place', label: place.label, depth: -1, place: { root: place.root, dir: '' } });
@@ -119,10 +121,9 @@ export function crumbsFor({ place = null, tileName = null, sel = null, what = ''
   }
   if (tileName == null) return out.map((c, i) => ({ ...c, current: i === out.length - 1 }));
   out.push({ id: 'tile', label: tileName, depth: 0 });
-  if (entryLike(sel)) out.push({ id: 'thing', label: what || sel.id, depth: 1 });
-  if (entryLike(sel) && control) out.push({ id: 'control', label: control.name, depth: 2 });
-  const d = depthOf(sel, control);
-  return out.map((c) => ({ ...c, current: c.depth === d }));
+  if (depth >= 1) out.push({ id: 'thing', label: what, depth: 1 });
+  if (depth >= 2) out.push({ id: 'control', label: control, depth: 2 });
+  return out.map((c) => ({ ...c, current: c.depth === depth }));
 }
 
 /**
@@ -162,9 +163,16 @@ export function selOfAt(at) {
   return { kind: 'entry', id: at };
 }
 
-/** The address as the part of the page's URL hash it owns: `at`, `piece`, `control`, `group`, `face`.  (A folder level's, `place` and `dir`, is js/folders.js.) */
-export function levelParams({ sel, control, face }) {
+/**
+ * The address as the part of the page's URL hash it owns: `at`, `piece`, `control`, `group`, `face` for a tile, and
+ * `pieces` (the ids, comma by comma) and `prop` for a map's levels.  (A folder level's, `place` and `dir`, is js/folders.js.)
+ */
+export function levelParams({ sel, control, face, pieces = null, prop = null }) {
   const p = {};
+  if (pieces?.length) {
+    p.pieces = pieces.join(',');
+    if (prop) p.prop = prop;
+  }
   const at = atOf(sel);
   if (at) {
     p.at = at;
@@ -189,18 +197,48 @@ export function parseHash(hash) {
 
 /** Pairs as a hash; `tile` first, then `at` and the rest in a fixed order, then anything else kept (theme, paint). */
 export function buildHash(pairs) {
-  const order = ['tile', 'place', 'dir', 'at', 'piece', 'control', 'group', 'face'];
+  const order = ['tile', 'place', 'dir', 'at', 'piece', 'control', 'group', 'pieces', 'prop', 'face'];
   const keys = [...order.filter((k) => pairs[k] != null), ...Object.keys(pairs).filter((k) => !order.includes(k) && pairs[k] != null)];
   return `#${keys.map((k) => (k === 'tile' ? `tile=${encodeURIComponent(pairs[k])}` : `${k}=${slashy(String(pairs[k]))}`)).join('&')}`;
 }
 
-/** The level a hash asks for: {sel, control, face} (sel the tile when it names none). */
+/** The pairs of the hash that the address owns: what is written over, and nothing else (the theme and the like stay). */
+export const OWNED = ['tile', 'place', 'dir', 'at', 'piece', 'control', 'group', 'pieces', 'prop', 'face'];
+
+/** The key of the level an address (its pairs) is at: a new key is a new level, the same key another piece of the same thing. */
+export function addressLevel(p) {
+  if (p.pieces) return `pieces/${p.prop || ''}`;
+  return `${p.at || ''}|${p.control || ''}|${p.group || ''}`;
+}
+
+/**
+ * Does writing `next` over the address `cur` (both as pairs) take a step of the browser's history, or replace the
+ * one it is on?  A new level is a step: another folder level, a folder into a document (Back goes to the folder), a
+ * document's new level (an entry, a control, a map's pieces, a property of them).  Anything else replaces: the same
+ * level again, a step in the source, another piece of the same entry or another selection of the same level, a
+ * different document (it opened in place).
+ */
+export function stepsHistory(cur, next) {
+  const kind = (p) => (p.tile != null ? 'tile' : p.place != null ? 'folder' : 'none');
+  const from = kind(cur), to = kind(next);
+  if (to === 'folder') return from === 'tile' || (from === 'folder' && (cur.place !== next.place || (cur.dir || '') !== (next.dir || '')));
+  if (to === 'tile') return from === 'folder' || (from === 'tile' && cur.tile === next.tile && next.face !== 'source' && addressLevel(cur) !== addressLevel(next));
+  return false;
+}
+
+/** The level a hash asks for: {sel, control, face} (sel the tile when it names none), and for a map `pieces` (ids) and `prop`. */
 export function levelOfHash(hash) {
   const h = parseHash(hash);
   const sel = selOfAt(h.at);
   if (sel.kind === 'entry' && h.piece != null && /^\d+$/.test(h.piece)) sel.piece = Number(h.piece);
   const control = sel.kind !== 'tile' && h.control ? { name: h.control, group: /^\d+$/.test(h.group || '') ? Number(h.group) : 0 } : null;
-  return { sel, control, face: h.face === 'source' ? 'source' : 'tile' };
+  const out = { sel, control, face: h.face === 'source' ? 'source' : 'tile' };
+  const pieces = (h.pieces || '').split(',').filter(Boolean);
+  if (pieces.length) {
+    out.pieces = pieces;
+    if (['bottom', 'seed', 'print'].includes(h.prop)) out.prop = h.prop;
+  }
+  return out;
 }
 
 // ---- source and levels --------------------------------------------------------------

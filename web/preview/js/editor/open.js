@@ -29,12 +29,9 @@ export async function select(id, guarded = false) {
   return true;
 }
 
-/** The view starts afresh on tile `t` (or on none): what the viewer held goes with the description (editor/framing.js). */
-function reset(t) {
+/** The view starts afresh on the tile now shown (or on none; the address follows it: address.js): what the viewer held goes with the description (editor/framing.js). */
+function reset() {
   view.set({ shown: null, draft: null });
-  // no tile: the folder level shows, and writes its own address (places.js)
-  if (!t || !view.get().addressRead) return; // the first tile is the address's own: it is not written over before it is read
-  history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
 }
 
 /**
@@ -66,7 +63,7 @@ function follow() {
   const t = tile();
   // the tile shown is gone (trashed, moved away by another program): none is shown, and the panel is on its folder
   if (tileId != null && !t) { select(null, true); return; }
-  if (tileId !== at) { at = tileId; reset(t); }
+  if (tileId !== at) { at = tileId; reset(); }
   if (!t) return;
   // a rescan or a reconnect: keep the view, catch up on a newer mesh
   const shown = view.get().shown;

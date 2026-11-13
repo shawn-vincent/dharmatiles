@@ -8,7 +8,7 @@ import { $ } from './app.js';
 import { keep, readKept } from './list-keep.js';
 import { mapPanel } from './model.js';
 import * as E from './scene-edit.js';
-import { chooseMode, hoverPieces, mapMode, select } from './scene.js';
+import { chooseMode, hoverPieces, select } from './scene.js';
 import { view } from './stores.js';
 
 /** What the panel's buttons do. */
@@ -35,20 +35,8 @@ const act = {
   openTile: E.openTile,
 };
 
-/** Esc and Back: one level up. */
-export function up() {
-  if (view.get().mprop) { view.set({ mprop: null }); return true; }
-  if (view.get().msel.length) { select([]); return true; }
-  return false;
-}
-
 /** Wire this part of the page (once, at load). */
 export function init() {
   view.set({ mlist: readKept() });
   render(html`<${MapPanel} m=${mapPanel} act=${act} />`, $('lens-map'));
-  // Esc is one level up: a property to its piece, a piece to the map (before the page's own Esc, which leaves the tile)
-  addEventListener('keydown', (e) => {
-    const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable || e.target.tagName === 'SELECT';
-    if (e.key === 'Escape' && !typing && mapMode() && up()) { e.preventDefault(); e.stopImmediatePropagation(); }
-  }, true);
 }

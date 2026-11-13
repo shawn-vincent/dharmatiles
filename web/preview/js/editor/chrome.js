@@ -228,7 +228,8 @@ export function init() {
     view.set({ placeAt: placeAt(lib >= 0 ? { root: lib, dir: '' } : { root: null, dir: '' }), query: '', pageAt: 'browse' });
   };
   // Up from the tile: the folder it is in (its level was set when it opened)
-  $('back').onclick = () => { view.set({ pageAt: 'browse' }); };
+  // (up a level of the trail first, as Esc and ⌘[ do: the tile's levels and the map's, then the folder)
+  $('back').onclick = () => { if (!goUp()) view.set({ pageAt: 'browse' }); };
   addEventListener('pointerdown', (e) => {
     if (popovers.some(([b, p]) => $(p).contains(e.target) || $(b).contains(e.target))) return;
     closePopovers();
@@ -255,7 +256,9 @@ export function init() {
       if (closePopovers()) return;
       if (browsing() && tile() && !$('side').hidden) { view.set({ pageAt: 'edit' }); return; }
       if (browsing()) { $('bback').click(); return; }
-      goUp(); // up a level of the panel (levels.js); at the tile there is nowhere to go
+      // typing in the panel (a map's search) is not a step up the trail: Esc there leaves the field
+      if (e.target.tagName === 'INPUT' && e.target.closest('#side')) { e.target.blur(); return; }
+      goUp(); // up a level of the panel (levels.js: a tile's or a map's); at the tile there is nowhere to go
       return;
     }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;

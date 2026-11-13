@@ -17,10 +17,10 @@ import { fillCrumbs, keepEnd, pinEnd } from '../crumbs.js';
 import { html, render } from '../view/html.js';
 import { ContextLines, FolderActions, Levels } from '../view/places-panel.js';
 import {
-  canDrop, contextForFolder, levelOf, levelOfParams, moveTargets, parentLevel, placeParams, placesOf, renamedDir, stemOf, whereIs, writable,
+  canDrop, contextForFolder, levelOf, levelOfParams, moveTargets, parentLevel, placesOf, renamedDir, stemOf, whereIs, writable,
 } from '../folders.js';
 import { openMenu } from '../menu.js';
-import { buildHash, crumbsFor, moveRow, parseHash } from '../nav.js';
+import { crumbsFor, moveRow, parseHash } from '../nav.js';
 import { copiedNote } from '../mine.js';
 import { systemName } from '../inventory.js';
 import { failed, whyOf } from '../problems.js';
@@ -42,7 +42,6 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TOP = { root: null, dir: '' };
 const levelNow = () => view.get().place || TOP;
 const depthOfLevel = (l) => (l.root == null ? 0 : 1 + (l.dir ? l.dir.split('/').length : 0));
-const keyOf = (l) => `${l.root ?? 'places'}|${l.dir || ''}`;
 const browsing = () => view.get().page === 'browse';
 
 const scrolls = new Map(); // a level's key -> how far its list was scrolled
@@ -87,23 +86,7 @@ function focusRow(match = null) {
 }
 
 // ---- the address -------------------------------------------------------------------------------------
-
-let lastWritten = null;
-/** Write the folder level into the URL while the browser page shows: a new level is a step of the browser's history. */
-function syncAddress() {
-  if (!started || !view.get().addressRead || !browsing() || !server.get().ready) return;
-  const { roots } = server.get();
-  const cur = parseHash(location.hash);
-  const next = { ...cur };
-  for (const k of ['tile', 'at', 'piece', 'control', 'group', 'face', 'place', 'dir']) delete next[k];
-  Object.assign(next, placeParams(roots, levelNow()));
-  const h = buildHash(next);
-  if (h === location.hash) { lastWritten = keyOf(levelNow()); return; }
-  // a step when the level changed (or the tile's address was showing), else the same step again
-  const push = lastWritten == null ? cur.tile != null : lastWritten !== keyOf(levelNow()) || cur.tile != null;
-  lastWritten = keyOf(levelNow());
-  if (push) history.pushState(null, '', h); else history.replaceState(null, '', h);
-}
+// (written by one effect for every level: address.js; this reads it)
 
 /** The browser's back or forward onto a folder level's address. */
 function fromAddress() {
@@ -111,7 +94,6 @@ function fromAddress() {
   const lv = levelOfParams(server.get().roots, h);
   if (!lv) return;
   if (lv.missing) { toast('That place is not on the list now'); goTo(TOP); return; }
-  lastWritten = keyOf(lv);
   view.set({ placeAt: placeAt(lv), query: '', pageAt: 'browse' });
 }
 
@@ -168,7 +150,6 @@ function bind() {
     render(html`<${FolderActions} buttons=${actionButtons(d)} />`, $('folder-actions'));
   });
   // the address follows the level (a new level is a step of the browser's history)
-  effect(() => { if (browse.ready.value && view.get().page === 'browse') { void view.get().place; syncAddress(); } });
 }
 
 /** The level in the viewport: the component reads the model itself, so it is drawn again by itself. */
