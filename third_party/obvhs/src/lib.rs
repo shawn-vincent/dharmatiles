@@ -1,5 +1,7 @@
 // TODO re-enable needless_range_loop lint and evaluate performance / clarity
 #![allow(clippy::needless_range_loop)]
+// dharmatiles: upstream obvhs 0.4.0 code uses std::f32::{INFINITY, MAX}; kept as upstream wrote it (vendored only for src/instant.rs)
+#![allow(deprecated)]
 
 //! # BVH Construction and Traversal Library
 //!
