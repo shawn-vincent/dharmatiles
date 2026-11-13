@@ -791,9 +791,9 @@ impl Decoder<'_> {
                 "a {owner} is one {owner}; how many and how spread is a scatter's job: `scatter {name}=… {{ {owner} }}`"
             ))
         } else if owner == "tree" && (name == "size" || name == "height") {
-            Some("a tree's height is its `top`, mm above zero like every top, and `bottom` is the ground at its foot: `tree size=40` is `tree top=\"bottom + 40\"`; `dharmatiles migrate` rewrites old tiles".to_owned())
+            Some("a tree's height is its `top`, mm above zero like every top, and `bottom` is the ground at its foot: `tree size=40` is `tree top=\"bottom + 40\"`".to_owned())
         } else if owner == "flower" && name == "radius" {
-            Some("a flower's measure is its `size`, the width across the petals (twice the old radius): write `flower size=…`; `dharmatiles migrate` rewrites old tiles".to_owned())
+            Some("a flower's measure is its `size`, the width across the petals (twice the old radius): write `flower size=…`".to_owned())
         } else if name == "debug" {
             Some("debug switches are not tile controls; `dharmatiles build --show attractors` shows them".to_owned())
         } else if let Some(new) = crate::elements::camel_of(name) {

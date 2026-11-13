@@ -56,7 +56,6 @@ mod inventory;
 mod library;
 mod mcp;
 mod message;
-mod migrate;
 mod plates;
 mod preview;
 mod printers;
@@ -295,7 +294,6 @@ fn main() -> ExitCode {
         Command::Cache { action, json } => cache::run(action, json),
         Command::Printers { action } => printers::run(action),
         Command::Inventory { action, json } => inventory::run(action, json),
-        Command::Migrate { paths, check } => migrate::run(&paths, check),
         Command::Elements { name, json } => elements::run(name.as_deref(), json),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
         Command::Audit {

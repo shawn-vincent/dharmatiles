@@ -111,7 +111,7 @@ fn collect(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
 }
 
 /// A hash of the source that decides what a build makes: the crates a build
-/// runs through (not the command line, the migration crate, tests or
+/// runs through (not the command line, tests or
 /// examples: nothing they hold is read by a build, and the cache's own
 /// format is in dt-eval), the workspace manifests and lock, the toolchain,
 /// the vendored kernel, and the one library file compiled into the program
@@ -124,7 +124,7 @@ fn source_hash(root: &Path) -> String {
         crates.sort();
         for c in crates {
             let name = c.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if !matches!(name, "dharmatiles" | "dt-migrate") {
+            if name != "dharmatiles" {
                 collect(&c, &mut files);
             }
         }

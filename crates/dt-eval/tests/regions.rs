@@ -9,8 +9,7 @@ mod common;
 use dt_eval::regions::{Kind, RegionTree};
 use dt_eval::{Checked, Diag, Memory, Options, check};
 
-/// These tests write their documents in the old form, carried to format 1
-/// by [`common::modern`] as `dharmatiles migrate` carries them.
+/// These tests write their documents in format 1 and read them from memory.
 fn legacy() -> Options {
     Options::default()
 }
@@ -20,7 +19,7 @@ fn preview() -> Options {
 }
 
 fn mem(text: &str) -> Memory {
-    common::modern(&[("t.dtile", text)])
+    common::memory(&[("t.dtile", text)])
 }
 
 fn tile1(size: &str, body: &str) -> String {

@@ -1,7 +1,7 @@
 //! The `dharmatiles version=…` header line through the real decoder: accepted
 //! first in every kind of document, refused anywhere else it goes wrong, and
 //! never an element.  A document older than the format the decoder reads is
-//! refused with help to run `dharmatiles migrate`.
+//! refused, with help naming the release that carried it over.
 #![allow(clippy::unwrap_used)] // test helpers outside #[test] fns
 
 mod common;
@@ -70,7 +70,7 @@ fn a_newer_format_is_the_only_complaint() {
 }
 
 #[test]
-fn the_decoder_refuses_format_0_and_says_to_run_migrate() {
+fn the_decoder_refuses_format_0_and_names_the_release_that_migrates() {
     // no header is format 0; so is `version=0`, in any of its spellings
     for text in [
         TILE.to_owned(),
@@ -84,7 +84,7 @@ fn the_decoder_refuses_format_0_and_says_to_run_migrate() {
             .find(|e| e.code == "dt::format-0")
             .unwrap_or_else(|| panic!("no dt::format-0 for\n{text}\n{shown}"));
         let help = e.help.as_deref().unwrap();
-        assert!(help.contains("dharmatiles migrate"), "{help}");
+        assert!(help.contains("v1.0.0"), "{help}");
         assert!(flat(&shown).contains("format 0"), "{shown}");
         // only the format is complained of: the old forms are not read
         assert_eq!(errs.len(), 1, "{shown}");

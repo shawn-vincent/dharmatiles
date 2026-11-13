@@ -168,7 +168,7 @@ pub static NODES: &[Node] = &[
             c(
                 "through",
                 Axis::Raw,
-                "the points it runs through: \"x,y\" in squares from the south-west corner (format 1: \"(x, y)\" with units, from the north-west), corners, or edge middles (south, east, north, west); drag a number or click to type",
+                "the points it runs through: \"(x, y)\" with units, from the north-west corner, corners, or edge middles (south, east, north, west); drag a number or click to type",
             )
             .required(),
         ],
@@ -188,7 +188,7 @@ pub static NODES: &[Node] = &[
             c(
                 "fill",
                 Axis::Raw,
-                "a point inside the region, \"x,y\" in squares: the region is the area around it that the lines enclose",
+                "a point inside the region, \"(x, y)\" with units: the region is the area around it that the lines enclose",
             )
             .required(),
         ],
@@ -1127,11 +1127,11 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("mass", "stone size is `stoneSize rubble|broken|massive`"),
     (
         "form",
-        "a cliff's form is its region: `cliff top=\"$dirtEdgeHeight + 35dmm\" at=crag`; run `dharmatiles migrate`",
+        "a cliff's form is its region: `cliff top=\"$dirtEdgeHeight + 35dmm\" at=crag`",
     ),
     (
         "bank",
-        "a bank is drawn: a wide-band `pin top=\"[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]\" at=apron` on the dirt; run `dharmatiles migrate`",
+        "a bank is drawn: a wide-band `pin top=\"[$dirtEdgeHeight .. $dirtEdgeHeight + 3.5dmm]\" at=apron` on the dirt",
     ),
     (
         "dirt-on-tops",
@@ -1149,30 +1149,27 @@ pub static RENAMED: &[(&str, &str)] = &[
     ("organic", "a line's wobble is `line name width=… wobble=…`"),
     (
         "mostly",
-        "write the weighting on the size: `size=\"low(1dmm .. 6dmm, 11)\"` for mostly=small, `high(1dmm .. 6dmm)` for large, the plain range for even; `dharmatiles migrate` rewrites old tiles",
+        "write the weighting on the size: `size=\"low(1dmm .. 6dmm, 11)\"` for mostly=small, `high(1dmm .. 6dmm)` for large, the plain range for even",
     ),
     ("lines", "a region is `boundedBy` its lines"),
     (
         "flowers",
-        "a flower is a thing: one is `flower at=…`, many are `scatter perSquare=4 { flower }`; `dharmatiles migrate` rewrites old tiles",
+        "a flower is a thing: one is `flower at=…`, many are `scatter perSquare=4 { flower }`",
     ),
-    (
-        "in",
-        "one word names a place: write `at=` and the region; `dharmatiles migrate` rewrites old tiles",
-    ),
+    ("in", "one word names a place: write `at=` and the region"),
     (
         "along",
-        "one word names a place: write `at=` and the line or edge; `dharmatiles migrate` rewrites old tiles",
+        "one word names a place: write `at=` and the line or edge",
     ),
     (
         "against",
-        "write `at=\"foot(cliff)\"`, the band at that kind's foot; `dharmatiles migrate` rewrites old tiles",
+        "write `at=\"foot(cliff)\"`, the band at that kind's foot",
     ),
 ];
 
 /// The control names written with hyphens before names became camelCase,
-/// each with its new spelling. `dharmatiles migrate` rewrites them and an
-/// old one is an `unknown-control` error that names the new one.
+/// each with its new spelling. An old one is an `unknown-control` error
+/// that names the new one.
 pub static OLD_CONTROL_NAMES: &[(&str, &str)] = &[
     ("per-square", "perSquare"),
     ("bump-size", "bumpSize"),

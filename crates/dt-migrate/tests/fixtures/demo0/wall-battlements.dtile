@@ -1,9 +1,0 @@
-// The wall page's regular brick: running bond, topped with battlements.
-tile size="1x1" seed=2 {
-    about "A regular-brick wall with battlements."
-    stack {
-        base
-        dirt
-        wall at="north" style=regular-brick top=battlements seed=8
-    }
-}

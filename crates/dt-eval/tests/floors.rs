@@ -12,12 +12,12 @@ mod common;
 use dt_eval::{Built, Library, Memory, Options, build};
 
 fn mem(text: &str) -> Memory {
-    common::modern(&[("t.dtile", text)])
+    common::memory(&[("t.dtile", text)])
 }
 
 fn tile(stack: &str) -> String {
     format!(
-        "tile size=\"1x1\" seed=3 {{\n region mid {{ within 5 of=center }}\n stack {{\n{stack}\n}}\n}}\n"
+        "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed=3 {{\n region mid {{ within \"5dmm\" of=center }}\n stack {{\n{stack}\n}}\n}}\n"
     )
 }
 
@@ -66,8 +66,9 @@ fn a_single_height_is_a_flat_floor_flush_at_the_edge() {
 
 #[test]
 fn a_wide_band_is_a_heaved_floor_held_flush_at_the_edge() {
-    let b =
-        built("base\n dirt\n flagstones slabs=4 top=\"[floorHeight - 1.5 .. floorHeight + 1.5]\"");
+    let b = built(
+        "base\n dirt\n flagstones slabs=4 top=\"[$floorHeight - 1.5dmm .. $floorHeight + 1.5dmm]\"",
+    );
     assert!(b.audit.watertight);
     assert_eq!(b.audit.overhang_mm2, 0.0);
     // the slabs inside rise over the edge height, the band's top is never passed
@@ -80,7 +81,7 @@ fn a_wide_band_is_a_heaved_floor_held_flush_at_the_edge() {
 #[test]
 fn a_band_that_jumps_across_a_slab_is_refused_as_a_bug() {
     // one slab over the whole tile, a pin 9 mm high at its middle
-    let text = tile("base\n dirt\n flagstones { pin top=9 at=mid }");
+    let text = tile("base\n dirt\n flagstones { pin top=\"9dmm\" at=mid }");
     let e = build(&mem(&text), "t.dtile", &Options::default())
         .err()
         .unwrap();

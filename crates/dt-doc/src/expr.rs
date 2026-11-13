@@ -657,7 +657,7 @@ fn unknown_function(name: &str, (start, end): (usize, usize), v2: bool) -> ExprE
             .join(", ");
         format!("functions are {fns}; weightings are {weightings}")
     } else {
-        format!("weightings are {weightings}: size=\"low(1..6, 4)\" (format 0)")
+        format!("weightings are {weightings}: size=\"low(1dmm .. 6dmm, 4)\"")
     };
     ExprError::coded(
         "dt::value",

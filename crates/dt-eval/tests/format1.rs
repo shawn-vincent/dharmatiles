@@ -13,7 +13,7 @@ fn preview() -> Options {
 }
 
 fn mem(files: &[(&str, &str)]) -> Memory {
-    common::modern(files)
+    common::memory(files)
 }
 
 fn tile1(body: &str) -> String {
@@ -273,7 +273,7 @@ fn a_param_hides_nothing_of_the_context() {
 }
 
 #[test]
-fn a_part_of_format_0_is_refused_where_it_is_used_with_help_to_migrate() {
+fn a_part_of_format_0_is_refused_where_it_is_used_naming_the_release_that_migrates() {
     // not through `mem`: the part is read as written
     let parts = "define lawn { stack { base } }\n";
     let tile = tile1("stack { base }").replace("tile size", "use \"./parts\" lawn\ntile size");
@@ -285,16 +285,11 @@ fn a_part_of_format_0_is_refused_where_it_is_used_with_help_to_migrate() {
     );
     let e = check(&src, "t.dtile", &preview()).err().unwrap();
     assert_eq!(codes(&e), ["dt::format-0"]);
-    assert!(
-        e[0].help
-            .as_deref()
-            .unwrap()
-            .contains("dharmatiles migrate")
-    );
+    assert!(e[0].help.as_deref().unwrap().contains("v1.0.0"));
 }
 
 #[test]
-fn a_document_of_format_0_is_refused_with_help_to_migrate() {
+fn a_document_of_format_0_is_refused_naming_the_release_that_migrates() {
     let text = "tile size=\"1x1\" seed=3 {\n stack { base\n dirt top=\"$groundHeight\" }\n}\n";
     let src = Memory(
         [("t.dtile".to_owned(), text.to_owned())]
@@ -303,10 +298,5 @@ fn a_document_of_format_0_is_refused_with_help_to_migrate() {
     );
     let e = check(&src, "t.dtile", &preview()).err().unwrap();
     assert_eq!(codes(&e), ["dt::format-0"]);
-    assert!(
-        e[0].help
-            .as_deref()
-            .unwrap()
-            .contains("dharmatiles migrate")
-    );
+    assert!(e[0].help.as_deref().unwrap().contains("v1.0.0"));
 }

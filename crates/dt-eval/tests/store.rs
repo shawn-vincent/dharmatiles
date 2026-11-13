@@ -89,16 +89,16 @@ fn a_hit_is_the_same_bytes_as_a_fresh_build() {
 }
 
 /// The debug probe: clouds, marks (with their classes), a surface, water.
-const PROBE: &str = r#"tile size="1x1" seed=97 {
-    line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { boundedBy shore; fill "0.5,0.25" }
-    region bank { boundedBy shore; fill "0.5,0.75" }
-    region shoreBand { within 7 of=shore }
+const PROBE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
+    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand
-            pin top=waterBedHeight at=pool
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand
+            pin top="$waterBedHeight" at=pool
         }
         grass at=bank
         water
@@ -109,7 +109,7 @@ const PROBE: &str = r#"tile size="1x1" seed=97 {
 fn clouds_marks_surface_and_stack_come_back_exactly() {
     let dir = temp("probe");
     let store = Store::new(&dir, "test-engine");
-    let m = common::modern(&[("probe.dtile", PROBE)]);
+    let m = common::memory(&[("probe.dtile", PROBE)]);
     let opts = Options {
         debug: true,
         clouds: true,
@@ -134,7 +134,7 @@ fn clouds_marks_surface_and_stack_come_back_exactly() {
 fn an_entry_without_the_marks_does_not_serve_a_build_that_wants_them() {
     let dir = temp("marks");
     let store = Store::new(&dir, "test-engine");
-    let m = common::modern(&[("probe.dtile", PROBE)]);
+    let m = common::memory(&[("probe.dtile", PROBE)]);
     let plain = Options::default();
     let first = stored(&store, &m, "probe.dtile", &plain);
     assert_eq!(first.cache.state, CacheState::Miss);

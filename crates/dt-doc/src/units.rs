@@ -13,8 +13,8 @@
 //! reads: a length in design millimetres (1/35 of a square, the reference
 //! square the elements are written at) or in squares for a point, an angle
 //! in degrees.  `dmm` is the reference itself (a factor of exactly 1) and
-//! `sq` is `35`, so a format 0 size written as `dmm` lowers to the same
-//! number it always was, bit for bit; `mm`, `in` and `layer` are printed
+//! `sq` is `35`, so a size written as `dmm` lowers to the same number,
+//! bit for bit; `mm`, `in` and `layer` are printed
 //! lengths and scale back by the system's square, the way a size scales
 //! forward (`35 / square`).
 

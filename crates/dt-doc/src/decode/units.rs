@@ -1,9 +1,9 @@
 //! Format 1's numbers: kinds checked and units lowered where a value is
 //! read, and points in parentheses.
 //!
-//! Everything downstream reads the reference numbers format 0 always did
-//! (lengths in design millimetres, angles in degrees, points in squares from
-//! the south-west corner); the language's side of the boundary is here.
+//! Everything downstream reads reference numbers (lengths in design
+//! millimetres, angles in degrees, points in squares from the south-west
+//! corner); the language's side of the boundary is here.
 
 use miette::SourceSpan;
 

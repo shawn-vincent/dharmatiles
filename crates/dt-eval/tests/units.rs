@@ -110,13 +110,12 @@ fn built(text: &str, opts: &Options) -> Built {
     build(&mem(text), "t.dtile", opts).unwrap_or_else(|e| panic!("{text}\n{e:#?}"))
 }
 
-/// The same tile written in format 0 and, by hand, as its mirror in format
-/// 1 (`y` flipped, every size in `dmm`) must build the same mesh: the frame
-/// and `dmm` are exact.
+/// The same tile written two ways, the second its mirror (`y` flipped,
+/// every size in `dmm`), must build the same mesh: the frame and `dmm` are
+/// exact.
 fn same_mesh(zero: &str, one: &str) {
-    // the format 0 text, carried over as `dharmatiles migrate` carries it
     let a = build(
-        &common::modern(&[("t.dtile", zero)]),
+        &common::memory(&[("t.dtile", zero)]),
         "t.dtile",
         &Options::default(),
     )
@@ -130,18 +129,17 @@ fn same_mesh(zero: &str, one: &str) {
 fn a_pond_written_as_its_mirror_builds_the_same_mesh() {
     // dyadic coordinates, so `rows - y` is exact
     same_mesh(
-        r#"
-tile size="1x1" seed=50 {
-    line shore wobble=5 { through "(0, 0.375)" "(1, 0.5)" }
-    region pool { boundedBy shore; fill "(0.5, 0.25)" }
-    region shoreBand { within 5 of=shore }
+        r#"dharmatiles version="1.0.0"; tile size="1x1" seed=50 {
+    line shore wobble="5dmm" { through "(0sq, 0.625sq)" "(1sq, 0.5sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+    region shoreBand { within "5dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand
-            pin top=waterBedHeight at=pool
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand
+            pin top="$waterBedHeight" at=pool
         }
-        scatter count=2 at=pool { rock size="6..10" }
+        scatter count=2 at=pool { rock size="6dmm .. 10dmm" }
         water at=shoreBand
     }
 }
@@ -170,12 +168,11 @@ tile size="1x1" seed=50 {
 fn a_hill_in_dmm_and_mm_builds_the_same_mesh() {
     // a printed millimetre is a design millimetre on DungeonBlocks (35 mm)
     same_mesh(
-        r#"
-tile size="2x2" seed=11 {
+        r#"dharmatiles version="1.0.0"; tile size="2x2" seed=11 {
     stack {
         base
-        dirt bumpSize=40 top="[16 .. 16 + 2]" {
-            scatter perSquare=6 { pebble size="1..2.2" }
+        dirt bumpSize="40dmm" top="[16dmm .. 16dmm + 2dmm]" {
+            scatter perSquare=6 { pebble size="1dmm .. 2.2dmm" }
         }
     }
 }
@@ -197,15 +194,14 @@ tile size="2x2" seed=11 {
 #[test]
 fn points_pins_and_a_slope_written_as_their_mirror_build_the_same_mesh() {
     same_mesh(
-        r#"
-tile size="2x1" seed=9 {
-    point knoll "(0.5, 0.25)"
+        r#"dharmatiles version="1.0.0"; tile size="2x1" seed=9 {
+    point knoll "(0.5sq, 0.75sq)"
     stack {
         base
         dirt {
-            slope 30
-            pin top=8 at=knoll
-            pin top=9 at="(1.5, 0.75)"
+            slope "30deg"
+            pin top="8dmm" at=knoll
+            pin top="9dmm" at="(1.5sq, 0.25sq)"
         }
     }
 }

@@ -7,16 +7,16 @@ mod common;
 
 use dt_eval::{Options, build};
 
-const TILE: &str = r#"tile size="1x1" seed=97 {
-    line shore wobble=5 { through "0,0.38" "1,0.42" }
-    region pool { boundedBy shore; fill "0.5,0.25" }
-    region bank { boundedBy shore; fill "0.5,0.75" }
-    region shoreBand { within 7 of=shore }
+const TILE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
+    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
+    region shoreBand { within "7dmm" of=shore }
     stack {
         base
         dirt {
-            pin top="[waterBedHeight .. groundHeight + 1]" at=shoreBand
-            pin top=waterBedHeight at=pool
+            pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=shoreBand
+            pin top="$waterBedHeight" at=pool
         }
         grass at=bank
         water
@@ -25,7 +25,7 @@ const TILE: &str = r#"tile size="1x1" seed=97 {
 
 #[test]
 fn the_debug_layer_changes_nothing_built() {
-    let m = common::modern(&[("probe.dtile", TILE)]);
+    let m = common::memory(&[("probe.dtile", TILE)]);
     let off = build(&m, "probe.dtile", &Options::default()).unwrap();
     let on = build(
         &m,

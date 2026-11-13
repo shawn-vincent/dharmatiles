@@ -11,13 +11,15 @@ use dt_eval::{Built, Memory, Options, build, check};
 use dt_kit::Material;
 
 fn mem(text: &str) -> Memory {
-    common::modern(&[("t.dtile", text)])
+    common::memory(&[("t.dtile", text)])
 }
 
-const TREE: &str = "tree at=\"0.5,0.5\" top=\"bottom + 30\" { trunk height=10; crown width=12 clumps=12 shape=round branching=normal; leaf length=4.5 width=3 }";
+const TREE: &str = "tree at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 30dmm\" { trunk height=\"10dmm\"; crown width=\"12dmm\" clumps=12 shape=round branching=normal; leaf length=\"4.5dmm\" width=\"3dmm\" }";
 
 fn tile(stack: &str) -> String {
-    format!("tile size=\"1x1\" seed=3 {{\n    stack {{\n        base\n{stack}\n    }}\n}}\n")
+    format!(
+        "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed=3 {{\n    stack {{\n        base\n{stack}\n    }}\n}}\n"
+    )
 }
 
 /// The highest earth vertex within `r` mm of the tile's middle.
@@ -40,7 +42,7 @@ fn earth_top(b: &Built, r: f64) -> f64 {
 #[test]
 fn a_dirt_after_a_tree_is_built_after_it_and_banks_on_the_trunk() {
     let after = tile(&format!(
-        "        dirt clods=none\n        {TREE}\n        dirt top=\"bottom + [1.0 .. 1.2]\" clods=none"
+        "        dirt clods=none\n        {TREE}\n        dirt top=\"$bottom + [1dmm .. 1.2dmm]\" clods=none"
     ));
     let checked = check(&mem(&after), "t.dtile", &Options::default()).unwrap();
     // the base (the connector) is built last; the lift follows the last dirt, and the tree is between

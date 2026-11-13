@@ -106,19 +106,16 @@ pub(crate) fn builtin_places() -> Vec<(String, PlaceKind)> {
 impl Decoder<'_> {
     /// The library's constants as a context's starting list.
     pub(crate) fn library_consts(&self) -> Vec<(String, Dim)> {
-        // in format 1 the library's heights are `$` names, installed at the root
-        let dollar = "$";
+        // the library's heights are `$` names, installed at the root, and
+        // lengths
         self.known
             .consts()
             .iter()
-            // format 1's library heights are lengths, whatever format 0 let
-            // a plain number stand for
             .map(|c| {
-                // a library written in format 1 has its `$` already
                 let name = if c.name.value.starts_with('$') {
                     c.name.value.clone()
                 } else {
-                    format!("{dollar}{}", c.name.value)
+                    format!("${}", c.name.value)
                 };
                 (name, Dim::Mm)
             })
@@ -310,8 +307,8 @@ impl Decoder<'_> {
         span
     }
 
-    /// The forms a name takes in the document's format: `$` names are
-    /// format 1's, and a bare `x`, `y` or `bottom` is format 0's.
+    /// The forms a name takes: `$` names are read from the context, and a
+    /// bare `x`, `y` or `bottom` is refused with the `$` to write.
     pub(crate) fn check_name_forms(
         &mut self,
         expr: &Expr,
@@ -360,10 +357,9 @@ impl Decoder<'_> {
             return None;
         };
         let t = s.trim();
-        let format1_point =
-            t.starts_with('(') || t.starts_with("point(") || t.starts_with("polar(");
-        // format 1: a bare pair is a mistake worth its own help
-        if !format1_point
+        let is_point = t.starts_with('(') || t.starts_with("point(") || t.starts_with("polar(");
+        // a bare pair is a mistake worth its own help
+        if !is_point
             && t.chars()
                 .next()
                 .is_some_and(|c| c.is_ascii_digit() || c == '.' || c == '-')
@@ -372,7 +368,7 @@ impl Decoder<'_> {
             self.point1(s, span, at, ctx)?;
             return None;
         }
-        if format1_point {
+        if is_point {
             let p = {
                 let at = self.inner_at(e, s);
                 self.point1(s, span, at, ctx)?

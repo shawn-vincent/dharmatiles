@@ -281,9 +281,8 @@ impl Algebra for Cloud<'_, '_, '_> {
         let (eval, v) = (self.eval, self.v);
         Ok(match n {
             "x" | "$x" => Val::num(v.x),
-            // format 1's `$y` counts south from the north-west corner:
-            // `y($tile, sq)`; the library's own `y` (format 0 names) is
-            // the geometry's, running north
+            // `$y` counts south from the north-west corner: `y($tile, sq)`;
+            // `$_y` is the geometry's own, running north
             "$y" => Val::num(match eval.coords {
                 Some((c, _)) => Iv::point(c.y(RegionTree::TILE, v.k, UnitWord::Sq)),
                 None => v.y,

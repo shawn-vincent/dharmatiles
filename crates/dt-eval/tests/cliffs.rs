@@ -1,7 +1,6 @@
 //! The cliff as a pieces body: every stone top inside its band, dirt on its
 //! tops lying like dirt (on the stone, off the steep faces, as far as
-//! `maxSlope` lets it), the tile's outer sides carrying grain, and every old
-//! cliff form migrating to a tile that checks clean.
+//! `maxSlope` lets it), and the tile's outer sides carrying grain.
 
 #![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
 
@@ -11,7 +10,7 @@ use dt_eval::{Built, Library, Memory, Options, build, check};
 use dt_kit::Material;
 
 fn mem(text: &str) -> Memory {
-    common::modern(&[("t.dtile", text)])
+    common::memory(&[("t.dtile", text)])
 }
 
 /// The library's dirt edge height, mm: the ground round a pile.
@@ -29,20 +28,20 @@ const FLAT_MM: f64 = 0.1;
 /// A free-standing pile on the library's dirt, with dirt on it or without.
 fn mound(film: bool) -> String {
     format!(
-        r#"tile size="1x1" seed=1 {{
-    region crag {{ within 13.5 of=center; within 9 of="(0.42, 0.55)"; within 8 of="(0.6, 0.45)" }}
-    region lump2 {{ within 9 of="(0.47, 0.53)"; within 6.5 of="(0.58, 0.44)" }}
-    region lump3 {{ within 6.5 of="(0.5, 0.5)"; within 4.5 of="(0.4, 0.57)" }}
-    region lump4 {{ within 3.8 of="(0.52, 0.47)" }}
+        r#"dharmatiles version="1.0.0"; tile size="1x1" seed=1 {{
+    region crag {{ within "13.5dmm" of=center; within "9dmm" of="(0.42sq, 0.45sq)"; within "8dmm" of="(0.6sq, 0.55sq)" }}
+    region lump2 {{ within "9dmm" of="(0.47sq, 0.47sq)"; within "6.5dmm" of="(0.58sq, 0.56sq)" }}
+    region lump3 {{ within "6.5dmm" of="(0.5sq, 0.5sq)"; within "4.5dmm" of="(0.4sq, 0.43sq)" }}
+    region lump4 {{ within "3.8dmm" of="(0.52sq, 0.53sq)" }}
     stack {{
         base
-        dirt top=dirtEdgeHeight {{
-            pin top=dirtEdgeHeight at=edges
+        dirt top="$dirtEdgeHeight" {{
+            pin top="$dirtEdgeHeight" at=edges
         }}
-        cliff top="dirtEdgeHeight + [3 .. 9]" at=crag {{
-            pin top="dirtEdgeHeight + [10 .. 20]" at=lump2
-            pin top="dirtEdgeHeight + [19 .. 28]" at=lump3
-            pin top="dirtEdgeHeight + [29 .. 34]" at=lump4
+        cliff top="$dirtEdgeHeight + [3dmm .. 9dmm]" at=crag {{
+            pin top="$dirtEdgeHeight + [10dmm .. 20dmm]" at=lump2
+            pin top="$dirtEdgeHeight + [19dmm .. 28dmm]" at=lump3
+            pin top="$dirtEdgeHeight + [29dmm .. 34dmm]" at=lump4
             rock mixed
             stoneSize broken
         }}
@@ -50,7 +49,7 @@ fn mound(film: bool) -> String {
 }}
 "#,
         if film {
-            "        dirt top=\"bottom + [0.6 .. 1.2]\" at=crag\n"
+            "        dirt top=\"$bottom + [0.6dmm .. 1.2dmm]\" at=crag\n"
         } else {
             ""
         }
@@ -109,14 +108,14 @@ fn every_stone_top_stands_in_its_band_and_the_pile_reaches_it() {
 /// written with `extra` after its region.
 fn table(film: bool, seed: u32, extra: &str) -> String {
     format!(
-        r#"tile size="1x1" seed={seed} {{
-    region crag {{ within 13 of=center }}
+        r#"dharmatiles version="1.0.0"; tile size="1x1" seed={seed} {{
+    region crag {{ within "13dmm" of=center }}
     stack {{
         base
-        dirt top=dirtEdgeHeight {{
-            pin top=dirtEdgeHeight at=edges
+        dirt top="$dirtEdgeHeight" {{
+            pin top="$dirtEdgeHeight" at=edges
         }}
-        cliff top="dirtEdgeHeight + 14" at=crag {{
+        cliff top="$dirtEdgeHeight + 14dmm" at=crag {{
             rock blocks columns=0 slabs=0 odd=0 monoliths=0
             stoneSize massive
         }}
@@ -124,7 +123,7 @@ fn table(film: bool, seed: u32, extra: &str) -> String {
 }}
 "#,
         if film {
-            format!("        dirt top=\"bottom + [0.6 .. 1.2]\" at=crag {extra}\n")
+            format!("        dirt top=\"$bottom + [0.6dmm .. 1.2dmm]\" at=crag {extra}\n")
         } else {
             String::new()
         }
@@ -205,7 +204,7 @@ fn film_thickness(bare: &Built, filmed: &Built) -> Vec<f64> {
 
 /// The mound with its foot stones standing clear of the ground's pebbles.
 fn tall(film: bool) -> String {
-    mound(film).replace("[3 .. 9]", "[8 .. 12]")
+    mound(film).replace("[3dmm .. 9dmm]", "[8dmm .. 12dmm]")
 }
 
 /// The up-facing earth vertices higher than the ground round the pile.
@@ -264,7 +263,7 @@ fn dirt_is_absent_where_the_surface_under_it_is_steeper_than_max_slope() {
     let tile = |extra: &str| tall(true).replace("at=crag\n", &format!("at=crag {extra}\n"));
     let (default, steepest) = (
         dirt_vertices(&built(&tile(""))).len(),
-        dirt_vertices(&built(&tile("maxSlope=85"))).len(),
+        dirt_vertices(&built(&tile("maxSlope=\"85deg\""))).len(),
     );
     assert!(
         default * 4 < steepest * 3,
@@ -280,9 +279,9 @@ fn max_slope_changes_how_much_stone_holds_dirt() {
         dirt_vertices(&b).len()
     };
     let (low, default, high) = (
-        cover("maxSlope=45"),
-        cover("maxSlope=60"),
-        cover("maxSlope=85"),
+        cover("maxSlope=\"45deg\""),
+        cover("maxSlope=\"60deg\""),
+        cover("maxSlope=\"85deg\""),
     );
     assert!(
         low < default && default < high,
@@ -363,75 +362,10 @@ fn the_tiles_outer_sides_carry_grain_all_the_way_up() {
 }
 
 #[test]
-fn every_old_cliff_form_migrates_to_a_tile_that_checks_clean() {
-    for (form, size) in [
-        ("run", "2x1"),
-        ("plateau", "2x2"),
-        ("massif", "2x2"),
-        ("mound", "1x1"),
-        ("spire", "1x1"),
-        ("needles", "2x1"),
-        ("escarpment", "2x1"),
-        ("canyon", "2x2"),
-        ("corner", "2x2"),
-    ] {
-        let along = if matches!(form, "run" | "escarpment") {
-            " along=north"
-        } else if form == "corner" {
-            " along=\"north west\""
-        } else {
-            ""
-        };
-        let old = format!(
-            "tile size=\"{size}\" seed=1 {{\n    stack {{\n        base\n        dirt top=dirtEdgeHeight {{\n            bank against=cliff height=\"1.5..3.5\" reach=\"3..6.5\"\n        }}\n        cliff form={form}{along} {{\n            rock mixed\n            top dirt\n        }}\n    }}\n}}\n"
-        );
-        let new = dt_migrate::heights::heights(&old).unwrap().unwrap();
-        assert!(!new.contains("form="), "{form}\n{new}");
-        // migrating again is a no-op
-        assert!(
-            dt_migrate::heights::heights(&new).unwrap().is_none(),
-            "{form}\n{new}"
-        );
-        let c = check(
-            &common::modern(&[("t.dtile", new.as_str())]),
-            "t.dtile",
-            &Options::default(),
-        )
-        .unwrap_or_else(|e| panic!("{form}\n{new}\n{e:#?}"));
-        assert!(
-            c.notes().iter().all(|n| n.code != "dt::edge"),
-            "{form}: {:?}\n{new}",
-            c.notes()
-        );
-        // and it builds, on the quick setting (the gate is for full builds):
-        // there are stones, and they are rock; one form of each kind (a
-        // run along an edge, a free-standing mass, a corner) is enough
-        if !matches!(form, "run" | "spire" | "corner") {
-            continue;
-        }
-        let draft = Options {
-            draft: true,
-            ..Options::default()
-        };
-        let b = build(
-            &common::modern(&[("t.dtile", new.as_str())]),
-            "t.dtile",
-            &draft,
-        )
-        .unwrap_or_else(|e| panic!("{form} does not build\n{new}\n{e:#?}"));
-        assert!(note(&b, "cliff_stones") > 0.0, "{form}: no stones\n{new}");
-        assert!(
-            top_of(&b, Material::Rock, None) > EDGE_MM + 3.0,
-            "{form}: no pile\n{new}"
-        );
-    }
-}
-
-#[test]
 fn the_ledges_and_the_shattered_controls_still_parse() {
     let text = mound(false).replace(
         "stoneSize broken",
-        "stoneSize broken\n            ledges 2\n            shattered patches=2 width=\"5..10\"",
+        "stoneSize broken\n            ledges 2\n            shattered patches=2 width=\"5dmm .. 10dmm\"",
     );
     check(&mem(&text), "t.dtile", &Options::default()).unwrap();
 }

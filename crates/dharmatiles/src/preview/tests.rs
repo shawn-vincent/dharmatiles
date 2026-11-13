@@ -1977,10 +1977,7 @@ fn an_older_tile_is_refused_where_it_is_checked_with_help_to_migrate_it() {
         .iter()
         .find(|e| e["code"] == "dt::format-0")
         .unwrap_or_else(|| panic!("{v}"));
-    assert!(
-        e["help"].as_str().unwrap().contains("dharmatiles migrate"),
-        "{e}"
-    );
+    assert!(e["help"].as_str().unwrap().contains("v1.0.0"), "{e}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), old);
     let _ = std::fs::remove_dir_all(&dir);
 }

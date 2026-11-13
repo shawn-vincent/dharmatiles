@@ -48,8 +48,7 @@ pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<Doc
     if header_errors.iter().any(|e| e.code == "dt::format-newer") {
         return Err(header_errors);
     }
-    // this decoder reads format 1 only: `dharmatiles migrate` carries an
-    // older document over
+    // this decoder reads format 1 only
     if header
         .as_ref()
         .is_none_or(|h| h.format < crate::header::FORMAT)

@@ -334,20 +334,6 @@ pub(crate) enum Command {
         #[arg(long)]
         explain: bool,
     },
-    /// Carry documents from format 0 to format 1, the one this program reads,
-    /// in place: the older language changes first (`ground`, `level=`,
-    /// `bumps=`), then the header line, `$` names, units and points from the
-    /// north-west corner.  Each migrated tile is checked as the program reads
-    /// it now, and one that does not read stops it.  A document already at
-    /// format 1 is left alone, whatever its minor or build part.
-    Migrate {
-        /// Documents, or folders of them.
-        #[arg(required = true)]
-        paths: Vec<PathBuf>,
-        /// Say what would change and write nothing; exits 1 when something would.
-        #[arg(long)]
-        check: bool,
-    },
     /// List the elements a stack can hold, or one element's controls.
     Elements {
         /// An element's name: list its controls with units, ranges and defaults.

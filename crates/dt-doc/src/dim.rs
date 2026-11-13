@@ -68,8 +68,8 @@ pub fn dim_of(e: &Expr, name: &dyn Fn(&str) -> Option<Dim>) -> Result<Dim, DimEr
         ),
         Expr::Num { .. } => Ok(Dim::Scalar),
         Expr::Unit(u) => err(
-            format!("`{}` is a unit, and format 0 writes none", u.word()),
-            Some("units belong to format 1"),
+            format!("`{}` is a unit, and stands only after a number", u.word()),
+            Some("write the number before it: `8dmm`"),
         ),
         Expr::Name(n) => name(n).map_or_else(|| err(format!("unknown name `{n}`"), None), Ok),
         Expr::Neg(a) => not_region(dim_of(a, name)?, "a negation"),

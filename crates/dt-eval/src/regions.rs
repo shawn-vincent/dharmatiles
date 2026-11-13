@@ -21,9 +21,8 @@
 //!
 //! Geometry is a raster on the build's lattice (the check's [`Frame`]):
 //! each node with a footprint holds a [`Mask`], and its bounding box in
-//! squares.  Coordinates are squares from the south-west corner, as
-//! format 0 counts them (format 1's north-west move comes with the
-//! coordinate functions).
+//! squares.  Coordinates are squares from the south-west corner (the
+//! document's north-west counting is worked out in [`crate::coords`]).
 
 use dt_doc::consts::ConstTable;
 use dt_doc::model::PlaceRef;

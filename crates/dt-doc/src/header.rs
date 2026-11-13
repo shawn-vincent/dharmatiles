@@ -3,10 +3,9 @@
 //!
 //! Only the major part of the version is the document's format.  A document
 //! with no header is format 0, which this program no longer reads (the
-//! decoder refuses it, `dt::format-0`; `dharmatiles migrate` carries it to
-//! format 1).  The header is not an element or a
-//! definition: nothing but this module reads it, and edits leave it as
-//! written.
+//! decoder refuses it, `dt::format-0`, and names the release that can carry
+//! it over).  The header is not an element or a definition: nothing but
+//! this module reads it, and edits leave it as written.
 
 use std::sync::Arc;
 
@@ -253,7 +252,7 @@ pub fn format_old(src: &Src, kdl: &KdlDocument, header: Option<&Header>) -> DocE
         } else {
             "no header: format 0"
         },
-        "run `dharmatiles migrate FILE` to carry it to format 1 (it rewrites the file in place; `--check` shows what would change)",
+        "release 1.0.0 (tag `v1.0.0`) carries a document to format 1 with `dharmatiles migrate FILE`: run that release once on the file, then use this one",
     )
 }
 

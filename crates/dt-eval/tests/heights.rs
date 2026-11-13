@@ -1,5 +1,5 @@
 //! The heights language through `check`: tops, pins, defaults and the Solve
-//! phase, on the hand-migrated library tiles and on small documents.  No
+//! phase, on the library tiles and on small documents.  No
 //! meshes: this is the check level.  (`build` does not build tops and pins
 //! yet; the library tiles here stay in tests/ until it does.)
 
@@ -11,18 +11,17 @@ use std::fmt::Write as _;
 
 use dt_eval::{Checked, Diag, Library, Memory, Options, build, check};
 
-/// These tests write their documents in the old form, carried to format 1
-/// by [`common::modern`] as `dharmatiles migrate` carries them.
+/// These tests write their documents in format 1 and read them from memory.
 fn legacy() -> Options {
     Options::default()
 }
 
 fn mem(text: &str) -> Memory {
-    common::modern(&[("t.dtile", text)])
+    common::memory(&[("t.dtile", text)])
 }
 
 fn tile(body: &str) -> String {
-    format!("tile size=\"1x1\" seed=3 {{\n{body}\n}}\n")
+    format!("dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed=3 {{\n{body}\n}}\n")
 }
 
 fn solved(text: &str) -> Checked {
@@ -75,7 +74,7 @@ fn plain_dirt_takes_the_library_top_and_rim() {
 #[test]
 fn a_tiles_own_top_replaces_the_default_and_its_pins_win() {
     let c = solved(&tile(
-        "let hump \"groundHeight + [1 .. 2]\"\n point mound \"(0.5, 0.5)\"\n stack { base\n dirt top=\"[groundHeight .. groundHeight + 2.5]\" { pin top=hump at=mound } }",
+        "let hump \"$groundHeight + [1dmm .. 2dmm]\"\n point mound \"(0.5sq, 0.5sq)\"\n stack { base\n dirt top=\"[$groundHeight .. $groundHeight + 2.5dmm]\" { pin top=hump at=mound } }",
     ));
     let d = &c.solved.as_ref().unwrap().bodies[0];
     let m = d.at(0.5, 0.5);
@@ -91,7 +90,7 @@ fn a_tiles_own_top_replaces_the_default_and_its_pins_win() {
 fn bottom_is_the_surface_under_the_body() {
     // a film on the dirt: 0.6 to 1.2 mm over wherever the dirt is
     let c = solved(&tile(
-        "region crag { within 6 of=center }\n stack { base\n dirt top=\"groundHeight + [0 .. 1]\"\n dirt top=\"bottom + [0.6 .. 1.2]\" at=crag }",
+        "region crag { within \"6dmm\" of=center }\n stack { base\n dirt top=\"$groundHeight + [0dmm .. 1dmm]\"\n dirt top=\"$bottom + [0.6dmm .. 1.2dmm]\" at=crag }",
     ));
     let film = &c.solved.as_ref().unwrap().bodies[1];
     let at = film.at(0.5, 0.5);
@@ -107,14 +106,14 @@ fn bottom_is_the_surface_under_the_body() {
 #[test]
 fn a_steep_pin_is_noted_with_the_pins_that_cause_it() {
     let c = solved(&tile(
-        "point summit \"(0.5, 0.5)\"\n stack { base\n dirt { pin top=\"groundHeight + 9\" at=summit } }",
+        "point summit \"(0.5sq, 0.5sq)\"\n stack { base\n dirt { pin top=\"$groundHeight + 9dmm\" at=summit } }",
     ));
     assert!(codes(&c).contains(&"dt::steep"), "{:?}", c.notes());
     let n = c.notes().iter().find(|d| d.code == "dt::steep").unwrap();
     assert!(n.message.contains("steeper than its 24"), "{}", n.message);
     // the same summit, allowed by a steeper slope on the body, is quiet
     let c = solved(&tile(
-        "point summit \"(0.5, 0.5)\"\n stack { base\n dirt { slope 60\n pin top=\"groundHeight + 9\" at=summit } }",
+        "point summit \"(0.5sq, 0.5sq)\"\n stack { base\n dirt { slope \"60deg\"\n pin top=\"$groundHeight + 9dmm\" at=summit } }",
     ));
     assert!(!codes(&c).contains(&"dt::steep"), "{:?}", c.notes());
 }
@@ -122,7 +121,7 @@ fn a_steep_pin_is_noted_with_the_pins_that_cause_it() {
 #[test]
 fn a_pin_covered_by_a_later_one_is_shadowed() {
     let c = solved(&tile(
-        "point spot \"(0.5, 0.5)\"\n stack { base\n dirt {\n pin a top=7 at=spot\n pin b top=8 at=spot } }",
+        "point spot \"(0.5sq, 0.5sq)\"\n stack { base\n dirt {\n pin a top=\"7dmm\" at=spot\n pin b top=\"8dmm\" at=spot } }",
     ));
     let n = c
         .notes()
@@ -138,7 +137,7 @@ fn a_pin_that_covers_a_library_default_pin_says_nothing() {
     // the default edge pin is covered whole by the tile's own: that is how a
     // tile overrides it, so there is no `dt::shadowed` note; the tile's own
     // covered pin still gets one (the test above)
-    let c = solved(&tile("stack { base\n dirt { pin top=7 at=edges } }"));
+    let c = solved(&tile("stack { base\n dirt { pin top=\"7dmm\" at=edges } }"));
     assert!(!codes(&c).contains(&"dt::shadowed"), "{:?}", c.notes());
 }
 
@@ -146,7 +145,7 @@ fn a_pin_that_covers_a_library_default_pin_says_nothing() {
 fn a_pin_with_no_ground_is_refused() {
     // a region the tile's lines never enclose
     let e = refused(&tile(
-        "line wall { through \"(0, 0.5)\" \"(1, 0.5)\" }\n region nowhere { boundedBy wall; fill \"(0.5, 0.5)\" }\n stack { base\n dirt { pin top=7 at=nowhere } }",
+        "line wall { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n region nowhere { boundedBy wall; fill \"(0.5sq, 0.5sq)\" }\n stack { base\n dirt { pin top=\"7dmm\" at=nowhere } }",
     ));
     assert_eq!(e[0].code, "dt::empty");
     assert!(e[0].message.contains("covers nothing"), "{}", e[0].message);
@@ -155,7 +154,7 @@ fn a_pin_with_no_ground_is_refused() {
 #[test]
 fn a_layer_that_can_never_be_thick_enough_is_refused() {
     let e = refused(&tile(
-        "region r { within 5 of=center }\n stack { base\n dirt top=5\n dirt top=\"bottom + [0 .. 0.3]\" at=r }",
+        "region r { within \"5dmm\" of=center }\n stack { base\n dirt top=\"5dmm\"\n dirt top=\"$bottom + [0dmm .. 0.3dmm]\" at=r }",
     ));
     assert_eq!(e[0].code, "dt::thin");
     assert!(e[0].message.contains("skin"), "{}", e[0].message);
@@ -163,8 +162,7 @@ fn a_layer_that_can_never_be_thick_enough_is_refused() {
 
 #[test]
 fn a_cliff_written_at_a_tile_edge_is_refused_with_the_region_to_write() {
-    // `at=north` is the old form's word: an edge has no width, so the cliff
-    // has no region of its own (`dharmatiles migrate` writes it as a band)
+    // an edge has no width, so the cliff has no region of its own
     let e = refused(&tile("stack { base\n dirt\n cliff at=north }"));
     assert_eq!(e[0].code, "dt::type", "{e:?}");
     assert!(e[0].help.as_deref().unwrap().contains("within"), "{e:?}");
@@ -175,7 +173,7 @@ fn override_moves_the_tide_with_the_surface() {
     // waterEdgeHeight reads waterSurfaceHeight: overriding it moves the edge
     let base = solved(&tile("stack { base\n dirt\n water }"));
     let over = solved(&tile(
-        "override waterSurfaceHeight 3\n stack { base\n dirt\n water }",
+        "override $waterSurfaceHeight \"3dmm\"\n stack { base\n dirt\n water }",
     ));
     let at = |c: &Checked| c.solved.as_ref().unwrap().bodies[1].at(0.5, 0.0);
     // cos(720 * 0.5) = 1: the crest
@@ -211,7 +209,7 @@ fn a_tile_with_a_dirt_is_solved_without_writing_any_heights() {
 fn a_tile_that_only_names_its_base_builds_as_today() {
     // `base`, a name for a region and `at=`: all read, nothing pending
     let c = solved(&tile(
-        "region r { within 6 of=center }\n stack { base\n dirt\n grass at=r }",
+        "region r { within \"6dmm\" of=center }\n stack { base\n dirt\n grass at=r }",
     ));
     assert!(c.pending().is_empty(), "{:?}", c.pending());
     assert!(c.solved.is_some());
@@ -220,7 +218,7 @@ fn a_tile_that_only_names_its_base_builds_as_today() {
 #[test]
 fn a_cliffs_top_builds() {
     let text = tile(
-        "region r { within 12 of=northEdge }\n stack { base\n dirt\n cliff top=\"dirtEdgeHeight + 35\" at=r }",
+        "region r { within \"12dmm\" of=northEdge }\n stack { base\n dirt\n cliff top=\"$dirtEdgeHeight + 35dmm\" at=r }",
     );
     let c = solved(&text);
     assert!(c.pending().is_empty(), "{:?}", c.pending());
@@ -229,7 +227,7 @@ fn a_cliffs_top_builds() {
 
 #[test]
 fn a_dirts_top_and_pins_build() {
-    let text = tile("stack { base\n dirt top=6 { pin top=4 at=center } }");
+    let text = tile("stack { base\n dirt top=\"6dmm\" { pin top=\"4dmm\" at=center } }");
     let c = solved(&text);
     assert!(c.pending().is_empty(), "{:?}", c.pending());
     assert!(build(&mem(&text), "t.dtile", &legacy()).is_ok());
@@ -239,20 +237,17 @@ fn a_dirts_top_and_pins_build() {
 fn a_trees_top_is_its_height_a_flowers_waits_and_a_line_is_refused() {
     // a tree's top is its height: read, nothing pending
     let c = solved(&tile(
-        "region canopy { within 15 of=center }\n stack { base\n dirt\n tree top=\"bottom + [40 .. 45]\" at=canopy }",
+        "region canopy { within \"15dmm\" of=center }\n stack { base\n dirt\n tree top=\"$bottom + [40dmm .. 45dmm]\" at=canopy }",
     ));
     assert!(c.pending().is_empty(), "{:?}", c.pending());
     // a flower's top is not built yet (a rock's is a cloud, like a tree's)
     let c = solved(&tile(
-        "region canopy { within 15 of=center }\n stack { base\n dirt\n flower top=\"bottom + 8\" at=canopy }",
+        "region canopy { within \"15dmm\" of=center }\n stack { base\n dirt\n flower top=\"$bottom + 8dmm\" at=canopy }",
     ));
     assert_eq!(c.pending().len(), 1, "{:?}", c.pending());
     // a line has no one place on it: refused, not pending
-    let e = refused(&format!(
-        "dharmatiles version=1; {}",
-        tile(
-            "line trail { through southCenter northCenter }\n stack { base\n dirt\n tree top=\"$bottom + [40dmm .. 45dmm]\" at=trail }"
-        )
+    let e = refused(&tile(
+        "line trail { through southCenter northCenter }\n stack { base\n dirt\n tree top=\"$bottom + [40dmm .. 45dmm]\" at=trail }",
     ));
     assert_eq!(e[0].code, "dt::type", "{e:?}");
 }
@@ -260,7 +255,7 @@ fn a_trees_top_is_its_height_a_flowers_waits_and_a_line_is_refused() {
 #[test]
 fn regions_that_within_and_except() {
     let c = solved(&tile(
-        "line trail { through southCenter northCenter }\n region path { within 4.5 of=trail }\n region verge { except path }\n stack { base\n dirt { pin top=4 at=path } }",
+        "line trail { through southCenter northCenter }\n region path { within \"4.5dmm\" of=trail }\n region verge { except path }\n stack { base\n dirt { pin top=\"4dmm\" at=path } }",
     ));
     let d = &c.solved.as_ref().unwrap().bodies[0];
     // 4.5 mm either side of x = 0.5 on a 35 mm square: 9 mm of 35
@@ -271,7 +266,7 @@ fn regions_that_within_and_except() {
     assert!(close(d.at(0.5, 0.5).lo, 4.0));
 }
 
-// ---- the migrated tiles -------------------------------------------------
+// ---- the library tiles --------------------------------------------------
 
 /// A few bands of a solved tile, to pin its numbers.
 fn summary(c: &Checked) -> String {
@@ -310,7 +305,7 @@ fn summary(c: &Checked) -> String {
 }
 
 #[test]
-fn the_migrated_tiles_check_and_solve() {
+fn the_bands_tiles_check_and_solve() {
     for name in ["soil", "pond", "stream", "path"] {
         let c = library(&format!("1x1-bands-{name}"));
         assert!(c.solved.is_some(), "{name}");
@@ -356,16 +351,16 @@ fn a_trees_top_over_its_foot_or_above_zero_is_its_height() {
     // stand the same tree
     let tree = |top: &str| {
         tile(&format!(
-            "stack {{ base\n dirt top=groundHeight clods=none\n tree at=\"0.5,0.5\" top=\"{top}\" {{ trunk height=12; crown width=14 clumps=12 }} }}"
+            "stack {{ base\n dirt top=\"$groundHeight\" clods=none\n tree at=\"(0.5sq, 0.5sq)\" top=\"{top}\" {{ trunk height=\"12dmm\"; crown width=\"14dmm\" clumps=12 }} }}"
         ))
     };
-    let over = tree_height(&tree("bottom + 30"));
-    let above = tree_height(&tree("groundHeight + 30"));
-    let taller = tree_height(&tree("bottom + 45"));
+    let over = tree_height(&tree("$bottom + 30dmm"));
+    let above = tree_height(&tree("$groundHeight + 30dmm"));
+    let taller = tree_height(&tree("$bottom + 45dmm"));
     assert!((above - over).abs() < 0.3, "{above} vs {over}");
     assert!(taller > over + 10.0, "{taller} vs {over}");
     // a top that leaves the tree too short where it stands is refused there
-    let e = match build(&mem(&tree("groundHeight + 10")), "t.dtile", &legacy()) {
+    let e = match build(&mem(&tree("$groundHeight + 10dmm")), "t.dtile", &legacy()) {
         Ok(_) => panic!("a 10 mm tree built"),
         Err(e) => e,
     };
@@ -374,7 +369,7 @@ fn a_trees_top_over_its_foot_or_above_zero_is_its_height() {
         "{e:?}"
     );
     // `bottom` is added once
-    let e = refused(&tree("bottom * 2"));
+    let e = refused(&tree("$bottom * 2"));
     assert!(e[0].message.contains("added once"), "{e:?}");
 }
 

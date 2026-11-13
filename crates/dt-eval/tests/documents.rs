@@ -8,14 +8,13 @@ mod common;
 
 use dt_eval::{Diag, Library, Memory, Options, build, check};
 
-/// These tests write their documents in the old form, carried to format 1
-/// by [`common::modern`] as `dharmatiles migrate` carries them.
+/// These tests write their documents in format 1 and read them from memory.
 fn legacy() -> Options {
     Options::default()
 }
 
 fn mem(files: &[(&str, &str)]) -> Memory {
-    common::modern(files)
+    common::memory(files)
 }
 
 fn errors(text: &str) -> Vec<Diag> {
@@ -88,7 +87,7 @@ fn an_unknown_control_names_the_ones_there_are() {
 
 #[test]
 fn a_control_not_built_yet_is_checked_but_not_built() {
-    let text = "tile size=\"1x1\" {\n  stack {\n    rock wear=worn\n  }\n}\n";
+    let text = "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" {\n  stack {\n    rock wear=worn\n  }\n}\n";
     let src = mem(&[("t.dtile", text)]);
     let c = check(&src, "t.dtile", &legacy()).unwrap();
     assert_eq!(c.pending().len(), 1); // `wear`
@@ -190,7 +189,7 @@ fn use_paths_name_the_library_or_the_project() {
 fn definition_parameters_take_arguments_and_defaults() {
     let src = mem(&[(
         "t.dtile",
-        "define sized {\n  param by 8\n  stack { rock size=by }\n}\ntile size=\"1x1\" {\n  stack { dirt; sized by=6 }\n}\n",
+        "dharmatiles version=\"1.0.0\"; define sized {\n  param by \"8dmm\"\n  stack { rock size=by }\n}\ntile size=\"1x1\" {\n  stack { dirt; sized by=\"6dmm\" }\n}\n",
     )]);
     let t = check(&src, "t.dtile", &legacy()).unwrap().tile.unwrap();
     assert_eq!(
@@ -237,13 +236,13 @@ fn imports_inline_definitions_and_lets_resolve() {
 fn a_line_and_two_regions_make_a_step() {
     let src = mem(&[(
         "t.dtile",
-        r#"tile size="1x1" seed=3 {
+        r#"dharmatiles version="1.0.0"; tile size="1x1" seed=3 {
     line across { through west east }
-    region low { boundedBy across; fill "0.5,0.25" }
-    region high { boundedBy across; fill "0.5,0.75" }
+    region low { boundedBy across; fill "(0.5sq, 0.75sq)" }
+    region high { boundedBy across; fill "(0.5sq, 0.25sq)" }
     stack {
-        dirt top=8 {
-            pin top=5 at=low
+        dirt top="8dmm" {
+            pin top="5dmm" at=low
         }
     }
 }
@@ -304,10 +303,10 @@ fn an_unknown_region_is_refused() {
 fn a_rock_placed_past_the_edge_is_refused() {
     let src = mem(&[(
         "t.dtile",
-        r#"tile size="1x1" seed=1 {
+        r#"dharmatiles version="1.0.0"; tile size="1x1" seed=1 {
     stack {
         dirt
-        rock at="0.05,0.5" size=10
+        rock at="(0.05sq, 0.5sq)" size="10dmm"
     }
 }
 "#,
@@ -325,7 +324,7 @@ fn a_rock_placed_past_the_edge_is_refused() {
 /// A tile with a drawn line and `body` in its stack.
 fn on_a_line(body: &str) -> String {
     format!(
-        "tile size=\"2x1\" seed=3 {{\n  line road {{ through \"0.1,0.5\" \"1.9,0.5\" }}\n  stack {{\n    dirt\n    {body}\n  }}\n}}\n"
+        "dharmatiles version=\"1.0.0\"; tile size=\"2x1\" seed=3 {{\n  line road {{ through \"(0.1sq, 0.5sq)\" \"(1.9sq, 0.5sq)\" }}\n  stack {{\n    dirt\n    {body}\n  }}\n}}\n"
     )
 }
 
@@ -333,11 +332,11 @@ fn on_a_line(body: &str) -> String {
 fn a_scatter_at_a_line_builds_for_rocks_and_flowers() {
     for (body, material) in [
         (
-            "scatter at=road perSquare=4 reach=3 { rock }",
+            "scatter at=road perSquare=4 reach=\"3dmm\" { rock }",
             dt_kit::Material::Rock,
         ),
         (
-            "scatter at=road count=8 reach=3 { flower }",
+            "scatter at=road count=8 reach=\"3dmm\" { flower }",
             dt_kit::Material::Flower,
         ),
     ] {
@@ -349,14 +348,11 @@ fn a_scatter_at_a_line_builds_for_rocks_and_flowers() {
 
 #[test]
 fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
-    let ok = on_a_line("scatter at=road count=3 { tree top=\"bottom + 24\" }");
+    let ok = on_a_line("scatter at=road count=3 { tree top=\"$bottom + 24dmm\" }");
     let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &legacy()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
-    let text = on_a_line("tree at=road").replace(
-        "\"0.1,0.5\" \"1.9,0.5\"",
-        "\"(0.1sq, 0.5sq)\" \"(1.9sq, 0.5sq)\"",
-    );
-    let e = errors(&format!("dharmatiles version=1; {text}"));
+    let text = on_a_line("tree at=road");
+    let e = errors(&text);
     assert_eq!(e[0].code, "dt::type", "{e:?}");
     assert!(
         e[0].help.as_deref().unwrap().contains("scatter at=<line>"),
@@ -368,8 +364,8 @@ fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
 fn a_mixed_scatter_builds_and_is_deterministic() {
     // rocks and flowers, in a region and at a line
     for body in [
-        "scatter count=10 { rock size=\"4..6\"; flower }",
-        "scatter at=road count=8 reach=3 { rock size=\"4..6\" weight=2; flower }",
+        "scatter count=10 { rock size=\"4dmm .. 6dmm\"; flower }",
+        "scatter at=road count=8 reach=\"3dmm\" { rock size=\"4dmm .. 6dmm\" weight=2; flower }",
     ] {
         let src = mem(&[("t.dtile", &on_a_line(body))]);
         let a = build(&src, "t.dtile", &legacy()).unwrap();
@@ -387,8 +383,9 @@ fn a_mixed_scatter_builds_and_is_deterministic() {
 
 #[test]
 fn a_mix_with_trees_checks() {
-    let ok =
-        on_a_line("scatter at=road count=4 reach=3 { tree top=\"bottom + 24\"; rock; flower }");
+    let ok = on_a_line(
+        "scatter at=road count=4 reach=\"3dmm\" { tree top=\"$bottom + 24dmm\"; rock; flower }",
+    );
     let c = check(&mem(&[("t.dtile", &ok)]), "t.dtile", &legacy()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
 }
@@ -397,7 +394,7 @@ fn a_mix_with_trees_checks() {
 fn water_alone_builds_a_tile() {
     let src = mem(&[(
         "t.dtile",
-        r#"tile size="1x1" seed=1 {
+        r#"dharmatiles version="1.0.0"; tile size="1x1" seed=1 {
     stack { water }
 }
 "#,
@@ -408,13 +405,13 @@ fn water_alone_builds_a_tile() {
 
 #[test]
 fn a_seed_wobbles_the_lines_again() {
-    let text = r#"tile size="1x1" seed=3 {
-    line across wobble=4 { through west east }
-    region low { boundedBy across; fill "0.5,0.1" }
-    region high { boundedBy across; fill "0.5,0.9" }
+    let text = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=3 {
+    line across wobble="4dmm" { through west east }
+    region low { boundedBy across; fill "(0.5sq, 0.9sq)" }
+    region high { boundedBy across; fill "(0.5sq, 0.1sq)" }
     stack {
-        dirt top=8 {
-            pin top=5 at=low
+        dirt top="8dmm" {
+            pin top="5dmm" at=low
         }
     }
 }
@@ -448,7 +445,7 @@ fn the_floor_and_wall_tiles_build_with_grass() {
 
 #[test]
 fn a_wall_in_a_definition_needs_its_place_from_the_call() {
-    let def = "define ruin-corner {\n    stack {\n        wall style=cut-stone\n    }\n}\n";
+    let def = "dharmatiles version=\"1.0.0\"; define ruin-corner {\n    stack {\n        wall style=cut-stone\n    }\n}\n";
     let without = format!(
         "{def}tile size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner\n    }}\n}}\n"
     );
@@ -511,13 +508,13 @@ fn library_tile_file_names_follow_the_standard() {
 }
 
 fn tile_with(body: &str) -> String {
-    format!("tile size=\"1x1\" seed=3 {{\n{body}\n}}\n")
+    format!("dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed=3 {{\n{body}\n}}\n")
 }
 
 #[test]
 fn a_lines_width_makes_a_strip_that_a_surface_follows() {
     let text = tile_with(
-        "line trail width=12 { through southCenter northCenter }\n stack {\n base\n dirt\n grass at=trail\n }",
+        "line trail width=\"12dmm\" { through southCenter northCenter }\n stack {\n base\n dirt\n grass at=trail\n }",
     );
     let src = mem(&[("t.dtile", text.as_str())]);
     let c = check(&src, "t.dtile", &legacy()).unwrap();
@@ -525,7 +522,7 @@ fn a_lines_width_makes_a_strip_that_a_surface_follows() {
     let b = build(&src, "t.dtile", &legacy()).unwrap();
     assert!(b.materials.contains(&dt_kit::Material::Grass));
     // a wider strip is another tile
-    let wide = text.replace("width=12", "width=24");
+    let wide = text.replace("width=\"12dmm\"", "width=\"24dmm\"");
     let hash = |t: &str| {
         build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
             .unwrap()
@@ -554,12 +551,9 @@ fn a_surface_along_a_tile_edge_points_to_a_region() {
 #[test]
 fn a_width_is_a_length_above_zero() {
     for w in ["0dmm", "-3dmm", "90dmm"] {
-        let e = errors(&format!(
-            "dharmatiles version=1; {}",
-            tile_with(&format!(
-                "line trail width=\"{w}\" {{ through southCenter northCenter }}\n stack {{\n dirt\n }}"
-            ))
-        ));
+        let e = errors(&tile_with(&format!(
+            "line trail width=\"{w}\" {{ through southCenter northCenter }}\n stack {{\n dirt\n }}"
+        )));
         assert!(
             ["dt::value", "dt::range"].contains(&e[0].code),
             "{w}: {}",
@@ -572,7 +566,7 @@ fn a_width_is_a_length_above_zero() {
 fn a_scatter_along_a_line_reaches_half_its_width_unless_told() {
     let t = |extra: &str| {
         tile_with(&format!(
-            "line trail width=20 {{ through southCenter northCenter }}\n stack {{\n base\n dirt\n scatter at=trail count=6 {extra} {{ pebble }}\n }}"
+            "line trail width=\"20dmm\" {{ through southCenter northCenter }}\n stack {{\n base\n dirt\n scatter at=trail count=6 {extra} {{ pebble }}\n }}"
         ))
     };
     let hash = |t: &str| {
@@ -580,41 +574,41 @@ fn a_scatter_along_a_line_reaches_half_its_width_unless_told() {
             .unwrap()
             .stages
     };
-    // reach=10 is half the width: the same tile
-    assert_eq!(hash(&t("")), hash(&t("reach=10")));
-    assert_ne!(hash(&t("")), hash(&t("reach=3")));
+    // reach=\"10dmm\" is half the width: the same tile
+    assert_eq!(hash(&t("")), hash(&t("reach=\"10dmm\"")));
+    assert_ne!(hash(&t("")), hash(&t("reach=\"3dmm\"")));
 }
 
 #[test]
 fn a_scatter_holds_a_definition_of_one_thing() {
     let text = |size: &str| {
         format!(
-            "define boulder {{\n param size \"6..9\"\n stack {{ rock size=size }}\n}}\ndefine oak {{\n stack {{ boulder size=\"{size}\" }}\n}}\n{}",
+            "dharmatiles version=\"1.0.0\"; define boulder {{\n param size \"6dmm .. 9dmm\"\n stack {{ rock size=size }}\n}}\ndefine oak {{\n stack {{ boulder size=\"{size}\" }}\n}}\n{}",
             tile_with(
-                "stack {\n base\n dirt\n scatter count=3 { boulder size=\"7..10\" weight=2; flower }\n }"
+                "stack {\n base\n dirt\n scatter count=3 { boulder size=\"7dmm .. 10dmm\" weight=2; flower }\n }"
             )
+            .replacen("dharmatiles version=\"1.0.0\"; ", "", 1)
         )
     };
     let build_of = |t: &str| build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy());
     let c = check(
-        &mem(&[("t.dtile", text("5").as_str())]),
+        &mem(&[("t.dtile", text("5dmm").as_str())]),
         "t.dtile",
         &legacy(),
     )
     .unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
-    let a = build_of(&text("5")).unwrap();
+    let a = build_of(&text("5dmm")).unwrap();
     assert!(a.materials.contains(&dt_kit::Material::Rock) || a.materials.len() > 1);
     // the parameter reaches the rock: a different size is a different tile
-    let wide = text("5").replace("\"7..10\"", "\"12..14\"");
+    let wide = text("5dmm").replace("\"7dmm .. 10dmm\"", "\"12dmm .. 14dmm\"");
     assert_ne!(a.stages, build_of(&wide).unwrap().stages);
 }
 
 #[test]
 fn a_scattered_thing_takes_no_place_word_of_its_own() {
-    let e = errors(&format!(
-        "dharmatiles version=1; {}",
-        tile_with("stack {\n base\n dirt\n scatter count=3 { rock at=center }\n }")
+    let e = errors(&tile_with(
+        "stack {\n base\n dirt\n scatter count=3 { rock at=center }\n }",
     ));
     assert!(e.iter().any(|d| d.code == "dt::place"), "{e:?}");
 }
@@ -623,7 +617,7 @@ fn a_scattered_thing_takes_no_place_word_of_its_own() {
 fn a_point_drawn_from_a_range_is_drawn_once_from_the_tile_seed() {
     let text = |seed: u32| {
         format!(
-            "tile size=\"1x1\" seed={seed} {{\n line shore {{ through \"0,0.3..0.6\" \"bell(0.3..0.7), 0.4..0.6\" \"1,0.3..0.6\" }}\n region low {{ boundedBy shore; fill \"0.4..0.6,0.05..0.15\" }}\n stack {{\n dirt top=8 {{\n pin top=5 at=low\n }}\n }}\n}}\n"
+            "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed={seed} {{\n line shore {{ through \"(0sq, 0.4sq .. 0.7sq)\" \"(bell(0.3sq .. 0.7sq), 0.4sq .. 0.6sq)\" \"(1sq, 0.4sq .. 0.7sq)\" }}\n region low {{ boundedBy shore; fill \"(0.4sq .. 0.6sq, 0.85sq .. 0.95sq)\" }}\n stack {{\n dirt top=\"8dmm\" {{\n pin top=\"5dmm\" at=low\n }}\n }}\n}}\n"
         )
     };
     let check_of = |t: &str, seed: Option<u64>| {
@@ -664,7 +658,7 @@ fn a_point_drawn_from_a_range_is_drawn_once_from_the_tile_seed() {
 #[test]
 fn a_drawn_point_off_the_tile_is_refused_where_it_is_written() {
     let e = errors(&tile_with(
-        "line s { through \"0,0.5\" \"0.5..1.5,0.5\" }\n stack {\n dirt\n }",
+        "line s { through \"(0sq, 0.5sq)\" \"(0.5sq .. 1.5sq, 0.5sq)\" }\n stack {\n dirt\n }",
     ));
     assert!(e[0].location().is_some(), "{e:?}");
 }

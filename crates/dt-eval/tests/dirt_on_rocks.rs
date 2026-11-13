@@ -9,22 +9,22 @@ use dt_eval::{Built, Options, build};
 use dt_kit::Material;
 
 fn built(text: &str) -> Built {
-    let mem = common::modern(&[("t.dtile", text)]);
+    let mem = common::memory(&[("t.dtile", text)]);
     build(&mem, "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"))
 }
 
 /// A rock in the middle of the tile, a dirt over it listed `after` the rock
 /// or before it.
 fn tile(rock: &str, after: bool, extra: &str) -> String {
-    let rock = format!("rock at=\"0.5,0.5\" {rock}");
-    let over = format!("dirt top=\"bottom + [0.6 .. 1.2]\" {extra}");
+    let rock = format!("rock at=\"(0.5sq, 0.5sq)\" {rock}");
+    let over = format!("dirt top=\"$bottom + [0.6dmm .. 1.2dmm]\" {extra}");
     let (a, b) = if after {
         (&rock, &over)
     } else {
         (&over, &rock)
     };
     format!(
-        "tile size=\"1x1\" seed=3 {{\n    stack {{\n        base\n        dirt\n        {a}\n        {b}\n    }}\n}}\n"
+        "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed=3 {{\n    stack {{\n        base\n        dirt\n        {a}\n        {b}\n    }}\n}}\n"
     )
 }
 
@@ -57,7 +57,7 @@ const GROUND_MM: f64 = 6.5;
 
 #[test]
 fn dirt_lies_on_a_big_flat_topped_rock() {
-    let b = built(&tile("shape=flat size=20", true, ""));
+    let b = built(&tile("shape=flat size=\"20dmm\"", true, ""));
     let (earth, rock) = tops(&b, 5.0);
     assert!(rock > GROUND_MM, "the rock stands up: {rock}");
     assert!(
@@ -68,19 +68,26 @@ fn dirt_lies_on_a_big_flat_topped_rock() {
 
 #[test]
 fn dirt_skips_a_rock_steeper_than_max_slope() {
-    let b = built(&tile("shape=rounded size=14", true, ""));
+    let b = built(&tile("shape=rounded size=\"14dmm\"", true, ""));
     let (earth, rock) = tops(&b, 5.0);
     assert!(rock > GROUND_MM, "the rock stands up: {rock}");
     assert!(earth < GROUND_MM, "no dirt on a dome: earth {earth}");
     // a steeper limit lets it on
-    let b = built(&tile("shape=rounded size=14", true, "maxSlope=85"));
+    let b = built(&tile(
+        "shape=rounded size=\"14dmm\"",
+        true,
+        "maxSlope=\"85deg\"",
+    ));
     let (earth, _) = tops(&b, 5.0);
-    assert!(earth > GROUND_MM, "maxSlope=85 holds dirt on it: {earth}");
+    assert!(
+        earth > GROUND_MM,
+        "maxSlope=\"85deg\" holds dirt on it: {earth}"
+    );
 }
 
 #[test]
 fn dirt_listed_before_the_rock_is_as_it_was() {
-    let b = built(&tile("shape=flat size=20", false, ""));
+    let b = built(&tile("shape=flat size=\"20dmm\"", false, ""));
     let (earth, rock) = tops(&b, 5.0);
     assert!(rock > GROUND_MM, "the rock stands up: {rock}");
     assert!(
@@ -123,8 +130,8 @@ fn dirt_banks_up_to_the_foot_of_a_flat_rock() {
     // up to the stone's foot: a node or two (a node is 0.27 mm) off it, the
     // earth is higher than the same tile's bare ground there. A moat of
     // 1.5 mm round the stone would leave it level with the ground.
-    let with = built(&tile("shape=flat size=20", true, ""));
-    let without = built(&tile("shape=flat size=20", false, ""));
+    let with = built(&tile("shape=flat size=\"20dmm\"", true, ""));
+    let without = built(&tile("shape=flat size=\"20dmm\"", false, ""));
     let (z_with, n_with) = earth_beside_rock(&with, 0.2, 0.9);
     assert!(n_with > 50, "earth stands beside the stone: {n_with}");
     // the rock listed after the dirt is bedded in it, so compare with the

@@ -94,12 +94,6 @@ impl Known {
         Ok(())
     }
 
-    /// Replace the library's constants: a migration reads a format 1 library
-    /// by the plain names a format 0 document writes.
-    pub fn set_consts(&mut self, consts: Vec<Const>) {
-        self.consts = consts;
-    }
-
     /// Make a file's file-level `let` constants visible to every file.
     pub fn add_consts(&mut self, doc: &Document) {
         for c in &doc.consts {

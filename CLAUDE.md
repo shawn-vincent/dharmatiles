@@ -52,7 +52,7 @@ CI is off. Run the tests locally on this Mac only; do not wait on or re-enable G
 
 ## Architecture
 
-Eight crates under `crates/`:
+Seven crates under `crates/`:
 
 | Crate | Role |
 |---|---|
@@ -61,7 +61,6 @@ Eight crates under `crates/`:
 | `dt-kit` | The vocabulary elements are written in: `Scene` of tagged solids, `Field` and its morphology, `scatter`, `loft`, `extrude`, `carve`, `union`, forms (level sets, hulls, relief), graphs (trees), `stand`, rays, the audit gate (`audit`), the STL writer with its build record, the CPU preview renderer. |
 | `dt-elements` | The built-in elements, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `flower`, `scatter`), `water`, `grass`, `reeds`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
 | `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the element schema (`elements.rs`: controls, and each element's body, footprint, family and cost), one expression evaluator (`Expr::eval` over an algebra), edits. |
-| `dt-migrate` | `dharmatiles migrate`: format 0 to format 1, text to text. The frozen format 0 decoder (`old`), the older-language step (`heights`), the move to format 1 (`format1`) and the library as it was (`legacy/`). The only code that reads format 0; no geometry. |
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each element reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
 | `dharmatiles` | The CLI. |
 

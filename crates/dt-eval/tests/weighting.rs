@@ -8,23 +8,24 @@ mod common;
 
 use dt_eval::{Diag, Memory, Options, build, check};
 
-/// These tests write their documents in the old form, carried to format 1
-/// by [`common::modern`] as `dharmatiles migrate` carries them.
+/// These tests write their documents in format 1 and read them from memory.
 fn legacy() -> Options {
     Options::default()
 }
 
 fn mem(text: &str) -> Memory {
-    common::modern(&[("t.dtile", text)])
+    common::memory(&[("t.dtile", text)])
 }
 
 fn tile(lets: &str, stack: &str) -> String {
-    format!("tile size=\"1x1\" seed=7 {{\n{lets}\n    stack {{\n{stack}\n    }}\n}}\n")
+    format!(
+        "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed=7 {{\n{lets}\n    stack {{\n{stack}\n    }}\n}}\n"
+    )
 }
 
 /// A range's ends and a list's values written with their unit (`6..10` is
 /// `6dmm..10dmm`, `[6:2, 8]` is `[6dmm:2, 8dmm]`): the weighting tests below
-/// write their mistakes in format 1, which `migrate` cannot carry over.
+/// write their mistakes with plain numbers and give them units here.
 fn units(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::new();
@@ -66,11 +67,6 @@ fn units(s: &str) -> String {
     out
 }
 
-/// A tile in format 1 (its first line shares the header's).
-fn tile1(lets: &str, stack: &str) -> String {
-    format!("dharmatiles version=1; {}", tile(lets, stack))
-}
-
 fn errors(text: &str) -> Vec<Diag> {
     match check(&mem(text), "t.dtile", &legacy()) {
         Ok(c) => panic!("expected an error; notes {:?}", c.notes()),
@@ -104,23 +100,26 @@ fn refused(text: &str, code: &str, help: &str) -> Diag {
     d.clone()
 }
 
-const SCATTER: &str = "        dirt\n        scatter perSquare=4 { stone size=\"1..6\" }";
+const SCATTER: &str = "        dirt\n        scatter perSquare=4 { stone size=\"1dmm .. 6dmm\" }";
 
 #[test]
 fn a_flat_weighting_is_the_plain_range_to_the_last_bit() {
-    let plain = hash(&tile("", "        dirt\n        rock size=\"6..10\""));
+    let plain = hash(&tile(
+        "",
+        "        dirt\n        rock size=\"6dmm .. 10dmm\"",
+    ));
     for same in [
-        "flat(6..10)",
-        "flat([6 .. 10])",
-        "low(6..10, 1)",
-        "high(6..10, 1)",
+        "flat(6dmm .. 10dmm)",
+        "flat(6dmm .. 10dmm)",
+        "low(6dmm .. 10dmm, 1)",
+        "high(6dmm .. 10dmm, 1)",
     ] {
         let text = tile("", &format!("        dirt\n        rock size=\"{same}\""));
         assert_eq!(hash(&text), plain, "{same}");
     }
     // and a let holding the plain range draws the same
     let text = tile(
-        "    let fat \"[6 .. 10]\"",
+        "    let fat \"[6dmm .. 10dmm]\"",
         "        dirt\n        rock size=\"fat\"",
     );
     assert_eq!(hash(&text), plain);
@@ -131,14 +130,14 @@ fn a_weighting_moves_what_it_weights_and_only_that() {
     let plain = hash(&tile("", SCATTER));
     let low = hash(&tile(
         "",
-        "        dirt\n        scatter perSquare=4 { stone size=\"low(1..6, 11)\" }",
+        "        dirt\n        scatter perSquare=4 { stone size=\"low(1dmm .. 6dmm, 11)\" }",
     ));
     assert_ne!(low, plain);
     // the ground is the same: only the stones moved
     assert_eq!(low[0], plain[0]);
     // a let is a distribution: the same odds, so the same build
     let named = hash(&tile(
-        "    let small \"low(1..6, 11)\"",
+        "    let small \"low([1dmm .. 6dmm], 11)\"",
         "        dirt\n        scatter perSquare=4 { stone size=\"small\" }",
     ));
     assert_eq!(named, low);
@@ -149,7 +148,7 @@ fn every_use_of_a_let_is_its_own_draw() {
     // two stones of one scatter each draw from their own key, so they differ
     // though they name one let
     let text = tile(
-        "    let small \"low(1..6, 11)\"",
+        "    let small \"low([1dmm .. 6dmm], 11)\"",
         "        dirt\n        scatter count=2 { stone size=\"small\" }",
     );
     assert!(check(&mem(&text), "t.dtile", &legacy()).is_ok());
@@ -158,20 +157,26 @@ fn every_use_of_a_let_is_its_own_draw() {
 #[test]
 fn a_ratio_out_of_range_is_dt_range() {
     let d = refused(
-        &tile("", "        dirt\n        rock size=\"low(6..10, -2)\""),
+        &tile(
+            "",
+            "        dirt\n        rock size=\"low(6dmm .. 10dmm, -2)\"",
+        ),
         "dt::range",
         "0.25 leans high",
     );
     assert_eq!(d.message, "low's ratio must be above 0, not -2");
     refused(
-        &tile("", "        dirt\n        rock size=\"bell(6..10, 2)\""),
+        &tile(
+            "",
+            "        dirt\n        rock size=\"bell(6dmm .. 10dmm, 2)\"",
+        ),
         "dt::range",
         "share of the width",
     );
     refused(
         &tile(
             "",
-            "        dirt\n        rock size=\"peak(6..10, 0.5, 1.5)\"",
+            "        dirt\n        rock size=\"peak(6dmm .. 10dmm, 0.5, 1.5)\"",
         ),
         "dt::range",
         "low end",
@@ -179,7 +184,7 @@ fn a_ratio_out_of_range_is_dt_range() {
     // out of range through a let, where it is used
     refused(
         &tile(
-            "    let s \"low(6..10, 0)\"",
+            "    let s \"low([6dmm .. 10dmm], 0)\"",
             "        dirt\n        rock size=\"s\"",
         ),
         "dt::range",
@@ -196,7 +201,7 @@ fn a_weighting_wraps_a_plain_range() {
         "bell(1..6, 0.2, 0.5, 9)",
     ] {
         refused(
-            &tile1(
+            &tile(
                 "",
                 &format!("        dirt\n        rock size=\"{}\"", units(size)),
             ),
@@ -209,7 +214,7 @@ fn a_weighting_wraps_a_plain_range() {
 #[test]
 fn an_unknown_function_lists_the_functions() {
     refused(
-        &tile1("", "        dirt\n        rock size=\"bel(1dmm..6dmm)\""),
+        &tile("", "        dirt\n        rock size=\"bel(1dmm..6dmm)\""),
         "dt::value",
         "flat, low, high, bell, peak, ends, steps or mix, or a list like [1:4, 2:5]",
     );
@@ -222,27 +227,27 @@ fn a_band_takes_a_weighting_as_a_cloud() {
     };
     let top = |v: &str| tile("", &format!("        dirt top=\"{v}\""));
     for v in [
-        "low([groundHeight .. groundHeight + 2.5])",
-        "bell([groundHeight .. groundHeight + 2.5])",
-        "peak([2 .. 4])",
-        "high([2 .. 4], 3)",
-        "flat([groundHeight .. groundHeight + 2.5])",
+        "low([$groundHeight .. $groundHeight + 2.5dmm])",
+        "bell([$groundHeight .. $groundHeight + 2.5dmm])",
+        "peak([2dmm .. 4dmm])",
+        "high([2dmm .. 4dmm], 3)",
+        "flat([$groundHeight .. $groundHeight + 2.5dmm])",
     ] {
         ok(top(v));
     }
     // a pin's top is a cloud too
     ok(tile(
         "",
-        "        dirt { pin top=\"bell([2 .. 6])\" at=southCenter }",
+        "        dirt { pin top=\"bell([2dmm .. 6dmm])\" at=southCenter }",
     ));
     // through a name: the cloud is solved where the let is read
     ok(tile(
-        "    let hump \"low([4 .. 7])\"",
+        "    let hump \"low([4dmm .. 7dmm])\"",
         "        dirt top=\"hump\"",
     ));
     // a distance is a band the solver reads, not a draw: still refused
     let d = refused(
-        &tile1(
+        &tile(
             "    line l { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n    region r { within \"low([2dmm .. 6dmm])\" of=l }",
             "        dirt at=r",
         ),
@@ -255,7 +260,10 @@ fn a_band_takes_a_weighting_as_a_cloud() {
 #[test]
 fn a_weighted_range_of_no_width_is_a_note() {
     let c = check(
-        &mem(&tile("", "        dirt\n        rock size=\"low(5..5)\"")),
+        &mem(&tile(
+            "",
+            "        dirt\n        rock size=\"low(5dmm .. 5dmm)\"",
+        )),
         "t.dtile",
         &legacy(),
     )
@@ -268,16 +276,19 @@ fn a_weighted_range_of_no_width_is_a_note() {
 
 #[test]
 fn two_ranges_in_one_control_roll_apart() {
-    let one = hash(&tile("", "        dirt\n        rock size=\"6..10\""));
+    let one = hash(&tile(
+        "",
+        "        dirt\n        rock size=\"6dmm .. 10dmm\"",
+    ));
     // one range moved by a number is the same draw to the last bit
     let text = tile(
-        "    let s \"[6 .. 10]\"",
-        "        dirt\n        rock size=\"s + 0\"",
+        "    let s \"[6dmm .. 10dmm]\"",
+        "        dirt\n        rock size=\"s + 0dmm\"",
     );
     assert_eq!(hash(&text), one);
     // two ranges build (they were refused once), and are not one range
     let text = tile(
-        "    let s \"[3 .. 5]\"",
+        "    let s \"[3dmm .. 5dmm]\"",
         "        dirt\n        rock size=\"s + s\"",
     );
     let two = hash(&text);
@@ -286,31 +297,37 @@ fn two_ranges_in_one_control_roll_apart() {
     assert_eq!(two[0], one[0]);
     // a plain sum written out builds too, in every spelling
     for sum in [
-        "flat(3..5) + flat(3..5)",
-        "[3 .. 5] + [3 .. 5]",
-        "3..5 + 3..5",
-        "[3 .. 5] + 3..5",
+        "flat(3dmm .. 5dmm) + flat(3dmm .. 5dmm)",
+        "3dmm..5dmm + 3dmm..5dmm",
+        "3dmm..5dmm + 3dmm..5dmm",
+        "3dmm..5dmm + 3dmm..5dmm",
     ] {
         let text = tile("", &format!("        dirt\n        rock size=\"{sum}\""));
         assert_eq!(hash(&text), two, "{sum}");
     }
     // a bracket reads anywhere in a control value, as in a height
     assert_eq!(
-        hash(&tile("", "        dirt\n        rock size=\"[6 .. 10]\"")),
+        hash(&tile(
+            "",
+            "        dirt\n        rock size=\"6dmm .. 10dmm\""
+        )),
         one
     );
 }
 
 const WHOLE_SET: [&str; 4] = [
-    "ends(6..10, 2, 0.25)",
-    "steps(6..10, 1, 4, 2)",
-    "[6, 8:3, 10]",
-    "mix(bell(6..10), 3, flat(6..10), 1)",
+    "ends(6dmm .. 10dmm, 2, 0.25)",
+    "steps(6dmm .. 10dmm, 1, 4, 2)",
+    "[6dmm, 8dmm:3, 10dmm]",
+    "mix(bell(6dmm .. 10dmm), 3, flat(6dmm .. 10dmm), 1)",
 ];
 
 #[test]
 fn the_whole_set_builds_each_its_own_draw() {
-    let plain = hash(&tile("", "        dirt\n        rock size=\"6..10\""));
+    let plain = hash(&tile(
+        "",
+        "        dirt\n        rock size=\"6dmm .. 10dmm\"",
+    ));
     let mut seen = vec![plain.clone()];
     for size in WHOLE_SET {
         let h = hash(&tile(
@@ -324,15 +341,15 @@ fn the_whole_set_builds_each_its_own_draw() {
     }
     // a let holds a list or a mix like any distribution
     let named = hash(&tile(
-        "    let pick \"[6, 8:3, 10]\"",
+        "    let pick \"[6dmm, 8dmm:3, 10dmm]\"",
         "        dirt\n        rock size=\"pick\"",
     ));
     assert_eq!(named, seen[3]);
     // and they scale and shift with the range, and add as dice
     for size in [
-        "2 * [3, 4:3, 5]",
-        "[3, 4:3, 5] * 2",
-        "mix(bell(6..10), 3, flat(6..10), 1) + 0",
+        "2dmm * [3, 4:3, 5]",
+        "[3dmm, 4dmm:3, 5dmm] * 2",
+        "mix(bell(6dmm .. 10dmm), 3, flat(6dmm .. 10dmm), 1) + 0dmm",
     ] {
         hash(&tile(
             "",
@@ -343,7 +360,9 @@ fn the_whole_set_builds_each_its_own_draw() {
     let count = |v: &str| {
         hash(&tile(
             "",
-            &format!("        dirt\n        scatter count=\"{v}\" {{ stone size=\"2..4\" }}"),
+            &format!(
+                "        dirt\n        scatter count=\"{v}\" {{ stone size=\"2dmm .. 4dmm\" }}"
+            ),
         ))
     };
     assert_ne!(count("[1, 3:2, 5]"), count("1..5"));
@@ -354,7 +373,10 @@ fn the_whole_set_builds_each_its_own_draw() {
 #[test]
 fn a_list_listing_a_value_twice_is_dt_weighting() {
     let d = refused(
-        &tile("", "        dirt\n        rock size=\"[6:4, 8:5, 8:1]\""),
+        &tile(
+            "",
+            "        dirt\n        rock size=\"[6dmm:4, 8dmm:5, 8dmm:1]\"",
+        ),
         "dt::weighting",
         "give each value once, with its total weight: [6:4, 8:6]",
     );
@@ -364,7 +386,7 @@ fn a_list_listing_a_value_twice_is_dt_weighting() {
 #[test]
 fn the_new_functions_check_their_limits() {
     let rock = |size: &str| {
-        tile1(
+        tile(
             "",
             &format!("        dirt\n        rock size=\"{}\"", units(size)),
         )
@@ -494,11 +516,11 @@ fn the_new_functions_check_their_limits() {
 fn a_band_takes_a_list_a_steps_an_ends_and_a_mix() {
     let top = |v: &str| tile("", &format!("        dirt top=\"{v}\""));
     for v in [
-        "[2, 4]",
-        "[2:3, 4]",
-        "ends([2 .. 4])",
-        "steps([2 .. 4], 1, 2)",
-        "mix(low([2 .. 4]), 1, flat([2 .. 4]), 1)",
+        "[2dmm, 4dmm]",
+        "[2dmm:3, 4dmm]",
+        "ends([2dmm .. 4dmm])",
+        "steps([2dmm .. 4dmm], 1, 2)",
+        "mix(low([2dmm .. 4dmm]), 1, flat([2dmm .. 4dmm]), 1)",
     ] {
         let text = top(v);
         check(&mem(&text), "t.dtile", &legacy()).unwrap_or_else(|e| panic!("{text}\n{e:?}"));
@@ -518,7 +540,7 @@ fn how_deep_a_rock_is_buried_takes_a_weighting() {
     takes_a_weighting(
         |v| {
             format!(
-                "        dirt\n        scatter perSquare=20 {{ pebble size=\"1..2.2\" buried=\"{v}\" }}"
+                "        dirt\n        scatter perSquare=20 {{ pebble size=\"1dmm .. 2.2dmm\" buried=\"{v}\" }}"
             )
         },
         "20%..50%",
@@ -532,22 +554,22 @@ fn a_walls_courses_and_bays_take_a_weighting() {
     takes_a_weighting(
         |v| {
             format!(
-                "        dirt\n        wall at=\"north\" style=fieldstone {{\n            stones height=\"2.2..5.2\" length=\"{v}\"\n        }}"
+                "        dirt\n        wall at=\"north\" style=fieldstone {{\n            stones height=\"2.2dmm .. 5.2dmm\" length=\"{v}\"\n        }}"
             )
         },
-        "5..16",
-        "low(5..16, 1)",
-        "low(5..16, 8)",
+        "5dmm .. 16dmm",
+        "low(5dmm .. 16dmm, 1)",
+        "low(5dmm .. 16dmm, 8)",
     );
     takes_a_weighting(
         |v| {
             format!(
-                "        dirt\n        wall at=\"north\" style=fieldstone {{\n            stones height=\"{v}\" length=\"5..16\"\n        }}"
+                "        dirt\n        wall at=\"north\" style=fieldstone {{\n            stones height=\"{v}\" length=\"5dmm .. 16dmm\"\n        }}"
             )
         },
-        "2.2..5.2",
-        "high(2.2..5.2, 1)",
-        "high(2.2..5.2, 8)",
+        "2.2dmm .. 5.2dmm",
+        "high(2.2dmm .. 5.2dmm, 1)",
+        "high(2.2dmm .. 5.2dmm, 8)",
     );
 }
 
@@ -555,15 +577,15 @@ fn a_walls_courses_and_bays_take_a_weighting() {
 fn a_blades_length_and_height_take_a_weighting() {
     takes_a_weighting(
         |v| format!("        dirt\n        grass length=\"{v}\""),
-        "3.5..6.5",
-        "low(3.5..6.5, 1)",
-        "low(3.5..6.5, 8)",
+        "3.5dmm .. 6.5dmm",
+        "low(3.5dmm .. 6.5dmm, 1)",
+        "low(3.5dmm .. 6.5dmm, 8)",
     );
     takes_a_weighting(
         |v| format!("        dirt\n        grass height=\"{v}\""),
-        "1.5..2",
-        "high(1.5..2, 1)",
-        "high(1.5..2, 8)",
+        "1.5dmm .. 2dmm",
+        "high(1.5dmm .. 2dmm, 1)",
+        "high(1.5dmm .. 2dmm, 8)",
     );
 }
 
@@ -571,24 +593,24 @@ fn a_blades_length_and_height_take_a_weighting() {
 fn a_trees_heights_and_a_cliffs_patches_take_a_weighting() {
     let tree = |v: &str| format!("        dirt\n        tree {v}");
     takes_a_weighting(
-        |v| tree(&format!("top=\"bottom + {v}\"")),
-        "[46 .. 50]",
-        "low(46..50, 1)",
-        "low(46..50, 8)",
+        |v| tree(&format!("top=\"$bottom + {v}\"")),
+        "[46dmm .. 50dmm]",
+        "low([46dmm .. 50dmm], 1)",
+        "low([46dmm .. 50dmm], 8)",
     );
     // the rest read and build too
     hash(&tile(
         "",
         &tree(
-            "top=\"bottom + 48\" { trunk height=\"low(26..32)\"; crown width=24 clumpSize=\"[4, 5:3, 6]\"; leaf length=\"bell(4..5)\" width=3 }",
+            "top=\"$bottom + 48dmm\" { trunk height=\"low(26dmm .. 32dmm)\"; crown width=\"24dmm\" clumpSize=\"[4dmm, 5dmm:3, 6dmm]\"; leaf length=\"bell(4dmm .. 5dmm)\" width=\"3dmm\" }",
         ),
     ));
     let cliff = |v: &str| {
         format!(
-            "tile size=\"2x1\" seed=1 {{\n    region crag {{ within \"[10 .. 20]\" of=northEdge }}\n    stack {{\n        base\n        dirt top=4\n        cliff top=\"dirtEdgeHeight + 35\" at=crag {{\n            rock mixed\n            shattered patches=3 width=\"{v}\"\n        }}\n    }}\n}}\n"
+            "dharmatiles version=\"1.0.0\"; tile size=\"2x1\" seed=1 {{\n    region crag {{ within \"[10dmm .. 20dmm]\" of=northEdge }}\n    stack {{\n        base\n        dirt top=\"4dmm\"\n        cliff top=\"$dirtEdgeHeight + 35dmm\" at=crag {{\n            rock mixed\n            shattered patches=3 width=\"{v}\"\n        }}\n    }}\n}}\n"
         )
     };
-    let base = hash(&cliff("5..10"));
-    assert_eq!(hash(&cliff("low(5..10, 1)")), base);
-    assert_ne!(hash(&cliff("low(5..10, 8)")), base);
+    let base = hash(&cliff("5dmm .. 10dmm"));
+    assert_eq!(hash(&cliff("low(5dmm .. 10dmm, 1)")), base);
+    assert_ne!(hash(&cliff("low(5dmm .. 10dmm, 8)")), base);
 }

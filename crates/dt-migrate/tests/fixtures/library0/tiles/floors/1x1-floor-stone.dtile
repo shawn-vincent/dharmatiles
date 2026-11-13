@@ -1,9 +1,0 @@
-tile size="1x1" seed=71 {
-    stack {
-        base
-        dirt                                // under the slabs; the floor replaces it
-        flagstones texture=dressed seed=21 {
-            slabs 1                         // slabs across one square
-        }
-    }
-}

@@ -1,8 +1,0 @@
-tile size="1x1" seed=5 {
-    about "A plank floor of mixed-length boards, for golden tests."
-    stack {
-        base
-        dirt
-        planks
-    }
-}

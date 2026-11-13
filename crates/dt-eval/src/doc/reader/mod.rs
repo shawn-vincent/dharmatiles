@@ -55,8 +55,7 @@ pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
 }
 
 /// [`read`] for a build target: `units` says what `mm`, `in` and `layer`
-/// are worth in a format 1 document (the system's square, the printer's
-/// layer).  A format 0 document does not read them.
+/// are worth in a document (the system's square, the printer's layer).
 ///
 /// # Errors
 /// Every problem found, each at its text.

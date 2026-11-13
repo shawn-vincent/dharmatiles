@@ -23,7 +23,6 @@ kdl.workspace = true
 miette.workspace = true
 
 [dev-dependencies]
-dt-migrate.workspace = true
 insta.workspace = true
 rayon.workspace = true
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
