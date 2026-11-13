@@ -113,7 +113,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     let doc_rev = shared.rev_of(&path);
     let rec = Recording::watching(&path);
     // every file the build reads, with its text: what the disk cache's key covers
-    let tracked = dt_eval::Tracked::new(&rec);
+    let tracked = dt_store::Tracked::new(&rec);
     let t0 = Instant::now();
     // the plan's stack, once it is known: a mistake in the build finds the entry it is in by it
     let plan_stack: std::cell::RefCell<Vec<Value>> = std::cell::RefCell::new(Vec::new());
@@ -226,7 +226,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             !path.contains("dt-test-panic-in-build"),
             "a test panic in the build"
         );
-        dt_eval::build_stored(
+        dt_store::build_stored(
             &tracked,
             &path,
             opts,
@@ -366,12 +366,12 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
 pub(super) fn show_stored(
     shared: &Arc<Shared>,
     id: &str,
-    store: &dt_eval::Store,
-    reads: &dt_eval::store::Reads,
+    store: &dt_store::Store,
+    reads: &dt_store::Reads,
     path: &str,
     opts: &Options,
 ) {
-    use dt_eval::store::Tier;
+    use dt_store::Tier;
     let key = store.key(reads, path, opts);
     if store.contains(&key)
         || lock(&shared.tiles)

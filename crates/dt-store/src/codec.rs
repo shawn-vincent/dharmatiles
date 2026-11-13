@@ -16,9 +16,8 @@ use dt_kit::{
     Audit, BuildRecord, Dropped, EntryId, Export, Grid, Kind, Mask, Material, Stage, TriMesh,
 };
 
-use crate::build::Built;
-use crate::doc::Named;
-use crate::store::CacheUse;
+use dt_eval::doc::Named;
+use dt_eval::{Built, CacheUse};
 
 /// Every material, to read one back by its number.
 const MATERIALS: [Material; 9] = [

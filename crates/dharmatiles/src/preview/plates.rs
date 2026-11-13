@@ -18,8 +18,9 @@ use std::time::Instant;
 
 use dt_doc::map::Mode;
 use dt_eval::plates::{self, Boxes, Context, Layout, Overrides, Plan};
-use dt_eval::{Built, Diag, Files, Tier};
+use dt_eval::{Built, Diag, Files};
 use dt_kit::{Material, TriMesh};
+use dt_store::Tier;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -105,7 +106,7 @@ fn full_kept(shared: &Shared, path: &str, opts: &dt_eval::Options) -> bool {
     let Some(store) = shared.store.as_deref() else {
         return false;
     };
-    let tracked = dt_eval::Tracked::new(&Files);
+    let tracked = dt_store::Tracked::new(&Files);
     // a tile that does not check cannot be built; its error comes with the build
     if dt_eval::check(&tracked, path, opts).is_err() {
         return false;
@@ -117,7 +118,7 @@ fn shown(shared: &Shared, plan: &Plan, k: usize, want_full: bool) -> Result<Show
     let opts = plan.options(k, &shared.options(), shared.home.as_deref())?;
     let kind = &plan.kinds[k];
     let full = want_full || full_kept(shared, &kind.path, &opts);
-    let built = dt_eval::build_tier(
+    let built = dt_store::build_tier(
         &Files,
         &kind.path,
         &opts,

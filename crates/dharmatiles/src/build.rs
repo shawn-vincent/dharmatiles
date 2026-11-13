@@ -26,10 +26,10 @@ pub(crate) struct Extras<'a> {
     pub(crate) cache: Option<&'a dt_eval::Cache>,
     /// The disk cache of builds: a build whose inputs are all unchanged is
     /// read from it, not made (`--no-cache`: none).
-    pub(crate) store: Option<&'a dt_eval::Store>,
+    pub(crate) store: Option<&'a dt_store::Store>,
     /// How finely to build.  Only the full tier is checked and written as an
     /// STL; a low one writes the `png` views alone.
-    pub(crate) tier: dt_eval::Tier,
+    pub(crate) tier: dt_store::Tier,
 }
 
 pub(crate) fn build(
@@ -138,7 +138,7 @@ pub(crate) fn build_one(
     let reporter = tracker
         .as_ref()
         .map_or_else(dt_eval::Progress::none, |(_, pr)| pr.clone());
-    let b = match dt_eval::build_tier(
+    let b = match dt_store::build_tier(
         sources,
         p,
         opts,

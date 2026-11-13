@@ -1168,12 +1168,12 @@ fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
         palette: &palette,
         cache: None,
         store: shared.store.as_deref(),
-        tier: dt_eval::Tier::Full,
+        tier: dt_store::Tier::Full,
     };
     let opts = shared.options();
     let target = opts.target();
     let t0 = std::time::Instant::now();
-    let mut b = match dt_eval::build_stored(
+    let mut b = match dt_store::build_stored(
         &dt_eval::Files,
         tile,
         &opts,

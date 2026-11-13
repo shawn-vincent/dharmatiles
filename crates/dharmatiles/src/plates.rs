@@ -11,7 +11,8 @@ use std::time::Instant;
 use dt_doc::map::{Group, Mode, PrintList};
 use dt_eval::plates::export::{self, Format};
 use dt_eval::plates::{self, Boxes, Context, Layout, Overrides, Plan};
-use dt_eval::{Built, Diag, Files, Options, Store};
+use dt_eval::{Built, Diag, Files, Options};
+use dt_store::Store;
 use serde_json::{Value, json};
 
 use crate::{AUDIT_FAILED, ERROR, OK, report};
@@ -129,11 +130,11 @@ pub(crate) fn build_all(
     for (k, kind) in plan.kinds.iter().enumerate() {
         step(k + 1, plan.kinds.len(), &kind.name);
         let opts = plan.options(k, base, home)?;
-        let b = dt_eval::build_tier(
+        let b = dt_store::build_tier(
             &Files,
             &kind.path,
             &opts,
-            dt_eval::Tier::Full,
+            dt_store::Tier::Full,
             &dt_eval::Progress::none(),
             None,
             store,

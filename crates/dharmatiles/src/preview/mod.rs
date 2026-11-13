@@ -373,10 +373,10 @@ pub struct Shared {
     /// The build caches of the tiles built last, newest first, by path
     /// and whether they are drafts' (see [`dt_eval::Cache`]).
     build_caches: Mutex<VecDeque<(String, bool, Arc<dt_eval::Cache>)>>,
-    /// The disk cache of builds ([`dt_eval::Store`]): a tile whose inputs are
+    /// The disk cache of builds ([`dt_store::Store`]): a tile whose inputs are
     /// unchanged opens from it, and an earlier build of one that changed
     /// shows while the new one runs.  None: no disk cache (the tests').
-    store: Option<Arc<dt_eval::Store>>,
+    store: Option<Arc<dt_store::Store>>,
     /// The inventory as the last snapshot told it (text), so a change made
     /// outside the program (the file edited by hand) is told too.
     inventory_seen: Mutex<String>,
@@ -517,7 +517,7 @@ impl Shared {
 
     /// Keep builds in the disk cache `store`, and open from it.
     #[must_use]
-    pub fn with_store(mut self, store: Option<dt_eval::Store>) -> Self {
+    pub fn with_store(mut self, store: Option<dt_store::Store>) -> Self {
         self.store = store.map(Arc::new);
         self
     }

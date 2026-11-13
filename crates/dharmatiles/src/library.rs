@@ -90,11 +90,11 @@ pub(crate) fn options(system: &str, printer: &str, seed: Option<u64>) -> Result<
 ///
 /// # Errors
 /// A word that is none of them.
-pub(crate) fn tier(word: &str) -> Result<dt_eval::Tier, String> {
+pub(crate) fn tier(word: &str) -> Result<dt_store::Tier, String> {
     match word {
-        "full" => Ok(dt_eval::Tier::Full),
-        "low" => Ok(dt_eval::Tier::Low),
-        "super-low" => Ok(dt_eval::Tier::SuperLow),
+        "full" => Ok(dt_store::Tier::Full),
+        "low" => Ok(dt_store::Tier::Low),
+        "super-low" => Ok(dt_store::Tier::SuperLow),
         _ => Err(format!(
             "`{word}` is not a tier: use `full`, `low` or `super-low`"
         )),

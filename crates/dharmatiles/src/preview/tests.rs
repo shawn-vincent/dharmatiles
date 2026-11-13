@@ -2438,7 +2438,7 @@ mod stored {
 
     fn shared_for(path: &str, store: &std::path::Path) -> Arc<Shared> {
         Arc::new(
-            Shared::new(&[path.to_owned()]).with_store(Some(dt_eval::Store::new(store, "test"))),
+            Shared::new(&[path.to_owned()]).with_store(Some(dt_store::Store::new(store, "test"))),
         )
     }
 
@@ -2532,7 +2532,7 @@ mod stored {
         std::fs::write(&tile, text.replace("seed=1", "seed=2")).unwrap();
         let next = shared_for(&path, &cache);
         let rec = crate::watch::Recording::watching(&path);
-        let tracked = dt_eval::Tracked::new(&rec);
+        let tracked = dt_store::Tracked::new(&rec);
         let opts = Options::default();
         dt_eval::check(&tracked, &path, &opts).unwrap();
         worker::show_stored(
@@ -2576,19 +2576,19 @@ mod stored {
     #[test]
     fn a_stored_preview_shows_until_the_full_build_lands() {
         let dir = temp("preview");
-        let store = dt_eval::Store::new(&dir, "test");
-        dt_eval::build_tier(
+        let store = dt_store::Store::new(&dir, "test");
+        dt_store::build_tier(
             &dt_eval::Files,
             FLAT,
             &Options::default(),
-            dt_eval::Tier::SuperLow,
+            dt_store::Tier::SuperLow,
             &dt_eval::Progress::none(),
             None,
             Some(&store),
         )
         .unwrap();
         let shared = shared_for(FLAT, &dir);
-        let tracked = dt_eval::Tracked::new(&dt_eval::Files);
+        let tracked = dt_store::Tracked::new(&dt_eval::Files);
         let opts = Options::default();
         dt_eval::check(&tracked, FLAT, &opts).unwrap();
         worker::show_stored(
@@ -2622,7 +2622,7 @@ mod stored {
         let dir = temp("damaged");
         let first = shared_for(FLAT, &dir);
         rebuild(&first, FLAT);
-        let store = dt_eval::Store::new(&dir, "test");
+        let store = dt_store::Store::new(&dir, "test");
         let entry = store.list().unwrap().remove(0).file;
         let mut bytes = std::fs::read(&entry).unwrap();
         let at = bytes.len() / 2;

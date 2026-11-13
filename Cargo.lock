@@ -392,6 +392,7 @@ dependencies = [
  "dt-eval",
  "dt-kit",
  "dt-lang",
+ "dt-store",
  "kdl",
  "libm",
  "miette",
@@ -462,7 +463,6 @@ dependencies = [
  "kdl",
  "miette",
  "rayon",
- "sha2",
 ]
 
 [[package]]
@@ -505,6 +505,16 @@ name = "dt-par"
 version = "1.0.0"
 dependencies = [
  "rayon",
+]
+
+[[package]]
+name = "dt-store"
+version = "1.0.0"
+dependencies = [
+ "dt-elements",
+ "dt-eval",
+ "dt-kit",
+ "sha2",
 ]
 
 [[package]]

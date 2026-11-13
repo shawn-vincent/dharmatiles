@@ -1,11 +1,12 @@
-//! `dharmatiles cache`: the disk cache of builds ([`dt_eval::Store`]) where it
+//! `dharmatiles cache`: the disk cache of builds ([`dt_store::Store`]) where it
 //! is, what is in it, emptying it, and `cache previews`, which builds the
 //! library's previews into it (or into a folder an install copies in).
 
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
 
-use dt_eval::{Files, Options, Progress, Store};
+use dt_eval::{Files, Options, Progress};
+use dt_store::Store;
 use serde_json::json;
 
 use crate::cli::CacheAction;
@@ -184,7 +185,7 @@ fn clear(store: &Store, json: bool) -> u8 {
     }
 }
 
-/// `cache previews`: the super-low tier ([`dt_eval::Tier::SuperLow`]) of every
+/// `cache previews`: the super-low tier ([`dt_store::Tier::SuperLow`]) of every
 /// library tile, kept as the library's previews: the cache, or with `--into`
 /// a folder (laid out as the cache is, so an install copies it into the
 /// cache).  A low build cut down to about 12 000 triangles, a fraction of
@@ -242,11 +243,11 @@ fn stored_preview(
     path: &str,
     opts: &Options,
 ) -> Result<(dt_eval::Built, Vec<String>), Vec<dt_eval::Diag>> {
-    let mut b = dt_eval::build_tier(
+    let mut b = dt_store::build_tier(
         &Files,
         path,
         opts,
-        dt_eval::Tier::SuperLow,
+        dt_store::Tier::SuperLow,
         &Progress::none(),
         None,
         Some(store),

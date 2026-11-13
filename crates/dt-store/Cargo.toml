@@ -1,0 +1,20 @@
+[package]
+name = "dt-store"
+description = "dharmatiles disk cache: a finished build kept under a SHA-256 key of everything it read, and the stored build calls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+dt-eval.workspace = true
+dt-kit.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+dt-elements.workspace = true
+
+[lints]
+workspace = true

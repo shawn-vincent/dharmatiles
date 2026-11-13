@@ -1,4 +1,4 @@
-//! The disk cache (`dt_eval::store`): a build kept and read back is the same
+//! The disk cache (`dt_store`): a build kept and read back is the same
 //! bytes, any input change misses, a damaged entry is reported and made
 //! again, the folder stays under its limit and writers do not collide.
 
@@ -9,9 +9,11 @@ mod common;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use dt_eval::store::{CacheState, Tier};
-use dt_eval::{Built, Library, Memory, Options, Progress, Source, Store, build, build_stored};
+use dt_eval::CacheState;
+use dt_eval::{Built, Library, Memory, Options, Progress, Source, build};
 use dt_kit::debug::Collect;
+use dt_store::Tier;
+use dt_store::{Store, build_stored};
 
 fn temp(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("dt-store-{}-{name}", std::process::id()));
@@ -171,8 +173,8 @@ fn with_part(part: &str) -> Memory {
 
 const PART: &str = "dharmatiles version=\"1.0.0\"\ndefine mine {\n    stack {\n        dirt top=\"3.4dmm\" clods=none\n    }\n}\n";
 
-fn key_of(store: &Store, src: &dyn Source, path: &str, opts: &Options) -> dt_eval::store::Key {
-    let tracked = dt_eval::store::Tracked::new(src);
+fn key_of(store: &Store, src: &dyn Source, path: &str, opts: &Options) -> dt_store::Key {
+    let tracked = dt_store::Tracked::new(src);
     dt_eval::check(&tracked, path, opts).unwrap();
     store.key(&tracked.reads(), path, opts)
 }
@@ -185,7 +187,7 @@ fn any_input_change_misses() {
     let base = key_of(&store, &with_part(PART), "mem/t.dtile", &opts);
     // the same inputs, the same key
     assert_eq!(base, key_of(&store, &with_part(PART), "mem/t.dtile", &opts));
-    let differs = |k: dt_eval::store::Key, what: &str| {
+    let differs = |k: dt_store::Key, what: &str| {
         assert_ne!(base.id(), k.id(), "{what} must change the key");
     };
     // a used part's text
@@ -261,7 +263,7 @@ fn any_input_change_misses() {
     );
     // and the part really is read through the tracker
     let held = with_part(PART);
-    let tracked = dt_eval::store::Tracked::new(&held);
+    let tracked = dt_store::Tracked::new(&held);
     dt_eval::check(&tracked, "mem/t.dtile", &opts).unwrap();
     assert!(format!("{:?}", tracked.reads()).contains("mem/p.dtile"));
     assert_eq!(base.slot().len(), 16);
@@ -438,7 +440,7 @@ fn writers_in_a_crowd_leave_whole_entries() {
     assert_eq!(st.entries, 1, "one key, one entry");
     assert_eq!(st.strays, 0);
     // no temporary is left in the slot's folder
-    let slot = std::fs::read_dir(dir.join(format!("v{}", dt_eval::store::FORMAT)))
+    let slot = std::fs::read_dir(dir.join(format!("v{}", dt_store::FORMAT)))
         .unwrap()
         .next()
         .unwrap()

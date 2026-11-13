@@ -24,60 +24,60 @@ use crate::options::Profile;
 
 /// The bytes of a canonical form, as it is written.
 #[derive(Default)]
-pub(crate) struct Canon {
+pub struct Canon {
     bytes: Vec<u8>,
 }
 
 /// A value that can write itself canonically.
-pub(crate) trait Canonical {
+pub trait Canonical {
     /// Write this value.
     fn canon(&self, c: &mut Canon);
 }
 
 impl Canon {
     /// An empty form.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
     /// The bytes written so far.
-    pub(crate) fn bytes(&self) -> &[u8] {
+    pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 
     /// The form folded into 64 bits, for the in-memory cache.
-    pub(crate) fn fnv(&self) -> u64 {
+    pub fn fnv(&self) -> u64 {
         crate::hash::bytes(crate::hash::OFFSET, &self.bytes)
     }
 
     /// A tag: one byte saying what comes next.
-    pub(crate) fn tag(&mut self, t: u8) -> &mut Self {
+    pub fn tag(&mut self, t: u8) -> &mut Self {
         self.bytes.push(t);
         self
     }
 
     /// An unsigned number.
-    pub(crate) fn u64(&mut self, v: u64) -> &mut Self {
+    pub fn u64(&mut self, v: u64) -> &mut Self {
         self.bytes.push(b'u');
         self.bytes.extend_from_slice(&v.to_le_bytes());
         self
     }
 
     /// A float, by its bits.
-    pub(crate) fn f64(&mut self, v: f64) -> &mut Self {
+    pub fn f64(&mut self, v: f64) -> &mut Self {
         self.bytes.push(b'f');
         self.bytes.extend_from_slice(&v.to_bits().to_le_bytes());
         self
     }
 
     /// A flag.
-    pub(crate) fn bool(&mut self, v: bool) -> &mut Self {
+    pub fn bool(&mut self, v: bool) -> &mut Self {
         self.bytes.push(if v { b'T' } else { b'F' });
         self
     }
 
     /// Text, with its length.
-    pub(crate) fn str(&mut self, v: &str) -> &mut Self {
+    pub fn str(&mut self, v: &str) -> &mut Self {
         self.bytes.push(b's');
         self.bytes
             .extend_from_slice(&(v.len() as u64).to_le_bytes());
@@ -86,13 +86,13 @@ impl Canon {
     }
 
     /// Any canonical value.
-    pub(crate) fn put(&mut self, v: &(impl Canonical + ?Sized)) -> &mut Self {
+    pub fn put(&mut self, v: &(impl Canonical + ?Sized)) -> &mut Self {
         v.canon(self);
         self
     }
 
     /// A named field: the name, then the value.
-    pub(crate) fn field(&mut self, name: &str, v: &(impl Canonical + ?Sized)) -> &mut Self {
+    pub fn field(&mut self, name: &str, v: &(impl Canonical + ?Sized)) -> &mut Self {
         self.str(name);
         v.canon(self);
         self

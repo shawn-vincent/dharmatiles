@@ -13,7 +13,7 @@
 pub mod atomic;
 mod build;
 mod cache;
-mod canon;
+pub mod canon;
 mod check;
 pub mod clock;
 pub mod coords;
@@ -21,7 +21,7 @@ pub mod crash_switch;
 mod crowns;
 pub mod diag;
 pub mod doc;
-mod hash;
+pub mod hash;
 pub mod inventory;
 mod lower;
 pub mod machine;
@@ -33,13 +33,14 @@ pub mod progress;
 pub mod regions;
 pub mod solve;
 pub mod source;
-pub mod store;
 pub mod tiers;
 pub mod unwritten;
 
 use std::path::{Path, PathBuf};
 
-pub use build::{Built, NO_ENTRY, build, build_cached, build_stored, build_tier, build_with};
+pub use build::{
+    Built, CacheState, CacheUse, NO_ENTRY, build, build_cached, build_checked, build_with,
+};
 pub use cache::Cache;
 pub use check::{Checked, check};
 pub use diag::{Diag, Fix};
@@ -49,7 +50,6 @@ pub use dt_kit::Progress;
 pub use machine::{Machine, ProfileKind, printer_machine, printer_names, printer_profile};
 pub use options::{DRAFT_CELLS, Options, Profile};
 pub use source::{Files, LIB, Library, Memory, Source, library_file};
-pub use store::{CacheState, CacheUse, Store, Tier, Tracked};
 
 /// A project: the folder holding `dharmatiles.dtile` (or the start folder
 /// when there is none) and where builds go.

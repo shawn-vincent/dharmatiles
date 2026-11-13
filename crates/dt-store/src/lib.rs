@@ -44,11 +44,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use dt_kit::debug::Collect;
 use sha2::{Digest, Sha256};
 
-use crate::build::Built;
-use crate::canon::Canon;
-use crate::hash;
-use crate::options::Options;
-use crate::source::Source;
+use dt_eval::canon::Canon;
+use dt_eval::{
+    Built, Cache, CacheState, CacheUse, Diag, Options, Progress, Source, build_cached,
+    build_checked, check, hash, tiers,
+};
 
 /// The cache format.  Bump it by hand when the bytes an entry holds, how a
 /// key is made, or what a [`Built`] means changes without the engine's
@@ -118,31 +118,6 @@ impl Tier {
     pub const fn checked(self) -> bool {
         matches!(self, Self::Full)
     }
-}
-
-/// Whether a build used the cache, and how.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CacheState {
-    /// Not asked (no store).
-    #[default]
-    Off,
-    /// Asked, nothing usable was kept: it was built (and kept).
-    Miss,
-    /// Read from the cache: nothing was built.
-    Hit,
-}
-
-/// What the cache did for one build ([`Built::cache`]).
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct CacheUse {
-    /// Whether it was used.
-    pub state: CacheState,
-    /// On a hit, the engine that made the entry.
-    pub made_by: Option<String>,
-    /// What went wrong, in words, for the front end to show: a damaged entry
-    /// that was removed and built again, an entry that could not be written.
-    /// The build is real either way.
-    pub problems: Vec<String>,
 }
 
 /// What a build depends on, hashed: where its entry is.
@@ -946,6 +921,141 @@ fn split(bytes: &[u8]) -> Result<(Head, &[u8]), String> {
         return Err("its checksum does not hold".to_owned());
     }
     Ok((head, &bytes[body_at..end]))
+}
+
+/// [`build_cached`] and the disk cache: a build whose key (see [`Store::key`])
+/// is kept is read, not made, and a build that is made is kept.  The result
+/// is the same, byte for byte, as without the store; [`Built::cache`] says
+/// which it was and what went wrong with the cache, if anything (a damaged
+/// entry is removed and the build made again; an entry that cannot be
+/// written is told, and the build stands).
+///
+/// A stored build always carries the clouds (as the editor's builds do), so
+/// one made for the command line serves the editor.  What `opts` did not ask
+/// for (clouds, debug marks) is left off the result.
+///
+/// # Errors
+/// As [`build`].
+pub fn build_stored(
+    sources: &dyn Source,
+    path: &str,
+    opts: &Options,
+    progress: &Progress,
+    cache: Option<&Cache>,
+    store: Option<&Store>,
+) -> Result<Built, Vec<Diag>> {
+    let Some(store) = store else {
+        return build_cached(sources, path, opts, progress, cache);
+    };
+    let tracked = Tracked::new(sources);
+    let text = tracked
+        .read(path)
+        .map_err(|e| vec![Diag::plain("dt::source", e)])?;
+    let stored = Options {
+        clouds: true,
+        ..opts.clone()
+    };
+    let c = check(&tracked, path, &stored)?;
+    let key = store.key(&tracked.reads(), path, opts);
+    let mut problems = Vec::new();
+    let want = Collect {
+        clouds: opts.clouds,
+        marks: opts.debug,
+    };
+    match store.get(&key, want) {
+        Ok(Some(mut b)) => {
+            // the engine label is not part of the key: it is the one asked for
+            b.record.engine.clone_from(&opts.engine);
+            b.cache.state = CacheState::Hit;
+            return Ok(b);
+        }
+        Ok(None) => {}
+        Err(e) => problems.push(e),
+    }
+    let mut b = build_checked(&c, path, &text, &stored, progress, cache)?;
+    if let Err(e) = store.put(&key, &b) {
+        problems.push(e);
+    }
+    if !opts.clouds {
+        b.clouds = None;
+    }
+    b.cache = CacheUse {
+        state: CacheState::Miss,
+        made_by: None,
+        problems,
+    };
+    Ok(b)
+}
+
+/// [`build_stored`] at `tier`: what a map or a browser asks for by distance.
+///
+/// - [`Tier::Full`]: the finished build, through the union and the gate.
+/// - [`Tier::Low`]: the same places drawn with less detail, the parts as they
+///   are, each face flagged by its angle alone.  **Not yet checked**
+///   ([`Built::checked`]).
+/// - [`Tier::SuperLow`]: a low build cut down to
+///   [`crate::tiers::SUPER_LOW_BUDGET`] triangles.  It is made from the low
+///   build (made, not kept) and kept as its own entry.
+/// - [`Tier::Draft`]: the editor's draft (coarse cells), never kept.
+///
+/// Each tier is its own entry in the store; the options' own `draft` and
+/// `low` are overruled by the tier.  Only a full build may be written out:
+/// check [`Built::checked`] before an export.
+///
+/// # Errors
+/// As [`build`].
+pub fn build_tier(
+    sources: &dyn Source,
+    path: &str,
+    opts: &Options,
+    tier: Tier,
+    progress: &Progress,
+    cache: Option<&Cache>,
+    store: Option<&Store>,
+) -> Result<Built, Vec<Diag>> {
+    let at = |t: Tier| Options {
+        draft: t == Tier::Draft,
+        low: matches!(t, Tier::Low | Tier::SuperLow),
+        ..opts.clone()
+    };
+    if tier != Tier::SuperLow {
+        let o = at(tier);
+        // a draft is never kept: it is the view while a value is dragged
+        let store = if tier == Tier::Draft { None } else { store };
+        return build_stored(sources, path, &o, progress, cache, store);
+    }
+    let Some(store) = store else {
+        let low = build_cached(sources, path, &at(Tier::Low), progress, cache)?;
+        return Ok(tiers::super_low(low));
+    };
+    let tracked = Tracked::new(sources);
+    let o = at(Tier::Low);
+    check(&tracked, path, &o)?;
+    let key = store.key_at(&tracked.reads(), path, &o, Tier::SuperLow);
+    let want = Collect::default();
+    let mut problems = Vec::new();
+    match store.get(&key, want) {
+        Ok(Some(mut b)) => {
+            b.record.engine.clone_from(&opts.engine);
+            b.cache.state = CacheState::Hit;
+            return Ok(b);
+        }
+        Ok(None) => {}
+        Err(e) => problems.push(e),
+    }
+    // the low build it is cut from is not kept: only the small one is
+    // no clouds: a preview is for looking at, and they are most of its size
+    let low = build_cached(&tracked, path, &o, progress, cache)?;
+    let mut b = tiers::super_low(low);
+    if let Err(e) = store.put(&key, &b) {
+        problems.push(e);
+    }
+    b.cache = CacheUse {
+        state: CacheState::Miss,
+        made_by: None,
+        problems,
+    };
+    Ok(b)
 }
 
 #[cfg(test)]

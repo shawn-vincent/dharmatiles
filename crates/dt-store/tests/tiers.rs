@@ -2,7 +2,8 @@
 
 #![allow(clippy::unwrap_used, clippy::print_stderr)]
 
-use dt_eval::{Built, Library, Options, Tier, build_tier};
+use dt_eval::{Built, Library, Options};
+use dt_store::{Tier, build_tier};
 
 /// Six library tiles that between them hold every element a tier draws
 /// differently: grass, soil, a wall, water, a tree and a cliff.
@@ -98,7 +99,7 @@ fn only_a_full_build_is_checked_and_a_low_one_is_lighter() {
 #[test]
 fn the_three_tiers_are_three_entries() {
     let dir = temp("keys");
-    let store = dt_eval::Store::new(&dir, "test-engine");
+    let store = dt_store::Store::new(&dir, "test-engine");
     let go = |tier| {
         build_tier(
             &Library,

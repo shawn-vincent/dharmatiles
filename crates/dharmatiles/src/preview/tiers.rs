@@ -131,7 +131,7 @@ struct Ready {
     key: String,
     tile: String,
     path: String,
-    tier: dt_eval::Tier,
+    tier: dt_store::Tier,
     opts: Options,
     /// A text to build in place of a file's.
     overlay: Option<edit::Overlay>,
@@ -140,9 +140,9 @@ struct Ready {
 impl Shared {
     fn prepare(&self, w: &TierWant) -> Result<Ready, Reply> {
         let tier = match w.tier.as_str() {
-            "low" => dt_eval::Tier::Low,
-            "super-low" => dt_eval::Tier::SuperLow,
-            "full" => dt_eval::Tier::Full,
+            "low" => dt_store::Tier::Low,
+            "super-low" => dt_store::Tier::SuperLow,
+            "full" => dt_store::Tier::Full,
             _ => {
                 return Err(fail::refused(
                     "400 Bad Request",
@@ -286,7 +286,7 @@ impl Shared {
                 Some(o) => o,
                 None => &dt_eval::Files,
             };
-            dt_eval::build_tier(
+            dt_store::build_tier(
                 sources,
                 &r.path,
                 &r.opts,
@@ -296,7 +296,7 @@ impl Shared {
                 self.store.as_deref(),
             )
             .map(|b| {
-                if r.tier == dt_eval::Tier::Full {
+                if r.tier == dt_store::Tier::Full {
                     dt_eval::tiers::thin_built(b, MAP_FULL_TRIANGLES)
                 } else {
                     b

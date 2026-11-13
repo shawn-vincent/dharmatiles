@@ -52,7 +52,7 @@ CI is off. Run the tests locally on this Mac only; do not wait on or re-enable G
 
 ## Architecture
 
-Eight crates under `crates/`:
+Nine crates under `crates/`:
 
 | Crate | Role |
 |---|---|
@@ -63,6 +63,7 @@ Eight crates under `crates/`:
 | `dt-elements` | The built-in elements, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `flower`, `scatter`), `water`, `grass`, `reeds`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
 | `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the element schema (`elements.rs`: controls, and each element's body, footprint, family and cost), one expression evaluator (`Expr::eval` over an algebra), edits. |
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each element reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
+| `dt-store` | The disk cache of builds: a finished `Built` kept under a SHA-256 key (the `sha2` crate, over `dt-eval`'s canonical form of everything the build read), and the stored build calls (`build_stored`, `build_tier`) that read it. It sits above `dt-eval`, which knows nothing of it. |
 | `dharmatiles` | The CLI. |
 
 Also: `xtask/` (`docs`, `pictures`, `release`, `sheet`), `library/` (`.dtile` documents: `tiles/`, `parts/`, `printers/`, `palettes/`), `web/preview/` (the preview's page), `docs/` (the site, HTML), `extras/` (Python, not part of the program).

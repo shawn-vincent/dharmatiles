@@ -154,7 +154,7 @@ fn main() -> ExitCode {
                     return ExitCode::from(ERROR);
                 }
             };
-            if tier != dt_eval::Tier::Full && threemf {
+            if tier != dt_store::Tier::Full && threemf {
                 tell!(
                     "error: --tier {} is not yet checked and is never exported: --3mf needs the full tier",
                     tier.name()

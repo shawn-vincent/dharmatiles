@@ -23,7 +23,6 @@ dt-value.workspace = true
 dt-kit.workspace = true
 dt-elements.workspace = true
 kdl.workspace = true
-sha2.workspace = true
 miette.workspace = true
 
 [dev-dependencies]

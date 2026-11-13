@@ -19,7 +19,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use dt_doc::map::{PrintList, parse_height};
-use dt_eval::{Diag, Files, Options, Tier};
+use dt_eval::{Diag, Files, Options};
+use dt_store::Tier;
 use serde::Serialize;
 
 use super::{Shared, lock};
@@ -662,7 +663,7 @@ pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
             shared.rev_of(&path),
             "",
             move |shared, cancel| {
-                Ok(dt_eval::build_tier(
+                Ok(dt_store::build_tier(
                     &Files,
                     &path,
                     &opts,
