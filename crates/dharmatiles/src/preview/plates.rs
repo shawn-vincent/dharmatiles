@@ -143,7 +143,6 @@ type PlateMesh = (TriMesh, Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<u16>);
 /// The pieces on one plate, as one mesh with each triangle's colour: every
 /// piece baked at its place, resting on the bed.
 fn plate_mesh(
-    plan: &Plan,
     layout: &Layout,
     parts: &[Shown],
     plate: usize,
@@ -190,21 +189,19 @@ fn plate_mesh(
             part.export.mesh.triangles.len(),
         ));
     }
-    let _ = plan;
     (mesh, painted, clean, owner)
 }
 
 /// The settings as written, for a page that has no plan to show (the list
 /// does not plan): the panel still offers the printer and the mode, so the
 /// mistake can be mended there.
-fn loose_json(list: &dt_doc::map::PrintList, ov: &Overrides, home: Option<&Path>) -> Value {
+fn loose_json(list: &dt_doc::map::PrintList, home: Option<&Path>) -> Value {
     let pl = &list.plates;
     let printer = pl.printer.as_ref().map_or_else(
         || dt_doc::map::DEFAULT_PRINTER.to_owned(),
         |p| p.value.clone(),
     );
     let machine = dt_eval::printer_machine(&printer, home).ok();
-    let _ = ov;
     json!({
         "printer": printer,
         "label": machine.as_ref().map(dt_eval::Machine::label),
@@ -413,7 +410,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         // (as boxes, then their meshes) while its plates are still being laid out
         shared.update(id, |t| {
             let mut plan = t.plan.clone().unwrap_or_else(|| {
-                let mut loose = loose_json(&list, &Overrides::default(), shared.home.as_deref());
+                let mut loose = loose_json(&list, shared.home.as_deref());
                 loose["writable"] = json!(true);
                 json!({"kind": "plates", "size_mm": [0, 0], "writable": true, "plates": loose})
             });
@@ -482,7 +479,7 @@ fn rebuild_plates(
         });
         let mut loose = list.map_or_else(
             || json!({"planned": false, "printers": printers_json(shared.home.as_deref())}),
-            |l| loose_json(l, &Overrides::default(), shared.home.as_deref()),
+            |l| loose_json(l, shared.home.as_deref()),
         );
         loose["writable"] = json!(writable);
         shared.update(id, |t| {
@@ -579,7 +576,7 @@ fn rebuild_plates(
                 parts: &[Shown],
                 running: bool,
                 note: Option<&str>| {
-        let (mesh, painted, clean, owner) = plate_mesh(&plan, layout, parts, view, &palette);
+        let (mesh, painted, clean, owner) = plate_mesh(layout, parts, view, &palette);
         let exact: Vec<bool> = parts.iter().map(|p| p.full).collect();
         let mut sp = shared_plan(
             &plan,
