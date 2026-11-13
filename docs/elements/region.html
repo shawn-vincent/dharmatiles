@@ -14,13 +14,15 @@
   <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>region</h1>
   <p class="lede">An area of a divided tile. Name the lines that bound it, then drop one or more fill points, like a paint bucket: the region is everything a fill point reaches without crossing a line. Elements act inside a region with <code>at=</code>.</p>
-  <figure class="shot"><img src="img/el-region.jpg" alt="A tile divided by two lines into three regions: a stone floor at the back, a grassy bank in the middle, a pool in front." width="864" height="667"><figcaption>Two lines make three regions, each its own surface: <code>floor at=yard</code>, <code>grass at=bank</code> on the dirt, and water over the pool the dirt is pinned down in. From <code>docs/elements/demo/region.dtile</code>.</figcaption></figure>
 </header>
-<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+<div class="margin">
+<figure class="shot"><img src="img/el-region.jpg" alt="A tile divided by two lines into three regions: a stone floor at the back, a grassy bank in the middle, a pool in front." width="864" height="667"><figcaption>Two lines make three regions, each its own surface: <code>floor at=yard</code>, <code>grass at=bank</code> on the dirt, and water over the pool the dirt is pinned down in. From <code>docs/elements/demo/region.dtile</code>.</figcaption></figure>
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
   <li><a href="#use">Writing it</a></li>
   <li><a href="#reference">Reference</a></li>
   <li><a href="#notes">Notes</a></li>
-</ol></nav>
+</ol></details></nav>
+</div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
 <pre><code>line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }

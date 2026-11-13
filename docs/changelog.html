@@ -15,7 +15,8 @@
   <h1>Changelog</h1>
   <p class="lede">What changed in each version, newest first. Install the current one with <code>brew install shawn-vincent/dharmatiles/dharmatiles</code>.</p>
 </header>
-<nav class="toc" aria-label="Versions"><div class="eyebrow">Versions</div><ol>
+<div class="margin">
+<nav class="toc" aria-label="Versions"><details open><summary>Versions</summary><ol>
   <li><a href="#v1.0.0">1.0.0 · 11 Nov 2026</a></li>
   <li><a href="#v0.9.0">0.9.0 · 7 Nov 2026</a></li>
   <li><a href="#v0.8.0">0.8.0 · 7 Nov 2026</a></li>
@@ -35,7 +36,8 @@
   <li><a href="#v0.0.4">0.0.4 · 30 May – 4 Jun 2026</a></li>
   <li><a href="#v0.0.3">0.0.3 · 29 May 2026</a></li>
   <li><a href="#v0.0.1">0.0.1 · 26 May 2026</a></li>
-</ol></nav>
+</ol></details></nav>
+</div>
 <article class="doc">
 
 <p>Versions before 0.1.0 were never published; their numbers and dates are given after the fact, from the project's history, and are approximate.</p>
@@ -44,6 +46,7 @@
 
 <ul>
   <li><strong>The dice shows five seeds, and one thumbnail service draws every small picture of a tile:</strong> pressing the die on the tile level&rsquo;s <code>seed</code> row lays five small pictures of the tile under the row, the seed it has now first and four new ones, each built low at its seed by the program on demand (never on idle); a square marks a seed you have printed; choosing one writes the seed, one step of history. The pictures come from <code>js/thumbs.js</code>, which the Add tiles grid uses too: the program&rsquo;s <em>super-low</em> tier (with the seed override the map&rsquo;s variants use) drawn once on one small renderer, at most five at a time, kept for the session by tile, seed, revision, system, printer, size and plate. The map piece&rsquo;s Seed level and other elements&rsquo; seeds are not on it yet.</li>
+  <li><strong>The site&rsquo;s frame, one rule:</strong> the nav fits one row at laptop width (gap 16 px, theme toggle at the right; it scrolls as a second row below 1160 px); headings climb at every width (64, 36, 24 px; 40, 28, 22 on a phone); text has one measure of 33em (about 66 characters, <code>--measure</code>) where it was 83; the contents list sits beside the title in a margin column that also carries a page&rsquo;s picture, and folds above the content on a phone; inline code is a background, not a bordered box.</li>
   <li><strong>One slide for every step of the trail, folders and documents too:</strong> opening a map&rsquo;s piece slid, a folder&rsquo;s subfolder slid, and opening a tile or a map from its folder slid, but each by its own code (the shell&rsquo;s, the folder list&rsquo;s ghost, a CSS transition on the strip holding the two sidebar pages) with its own timing, so the step from a map to a piece of it did not look like the step from a folder to a tile. Now one function (<code>js/slide.js</code>) takes a level off and the next one on, and every step is a call to it: a tile&rsquo;s levels and a map&rsquo;s (the shell), the folder levels, the Add tiles pane&rsquo;s own folders (inside its box), and the step between a folder and a document, which is one level deeper in the trail (<code>trailDepth</code> in <code>nav.js</code>: the folder&rsquo;s depth, one for the document, then its own level), so opening a tile or a map slides in from the right and Up from it, or a crumb to a folder, slides back from the left. One rule gives the direction (<code>slideDir</code>), one place the timing (200 ms), the easing, the reduced-motion swap, the scroll kept per level and the wait before the keyboard follows (it follows a step only when it was in the panel, into the row it came from); the browser&rsquo;s ghost-slide and the pages&rsquo; transition are deleted, and a test fails on any other code that animates a level.</li>
   <li><strong>The catalog moves into the left panel:</strong> <em>Add tiles</em> is a level of the map&rsquo;s trail (<em>Places &rsaquo; My tiles &rsaquo; first-plate.dmap &rsaquo; Add tiles</em>, <code>&hellip;&amp;add=1</code> in the address), slid to by the one level shell. Below, the panel&rsquo;s own folder browser in an add mode (the folder rows are the browser&rsquo;s, the tiles are pictures in a two-column grid, the pictures loaded as the drawer&rsquo;s were); pressing a tile puts it on the nearest free square through the same intent (<code>addTile</code>, settled by the program under the file&rsquo;s lock), dragging drops it where it is let go. The folder it browses is in the pane&rsquo;s own header, not the trail, and is kept for the session. Above, the piece list, compact: the row of the tile just added lights up, a row leaves Add for that piece, and a panel under about 540 px high folds the list to one line. The bottom rail is deleted with its own folder walking (the drawer, its model and its style); the settling of a level that is gone is one pure function (<code>settledLevel</code>) for the browser and the pane, and what a folder level draws is one function of the model for both.</li>
   <li><strong>A single-colour Bambu project is grey:</strong> its one filament took the earth&rsquo;s brown; it is the palette&rsquo;s single-colour grey now (the connector&rsquo;s, which has no filament of its own), from one place.</li>

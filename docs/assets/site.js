@@ -88,3 +88,14 @@ addEventListener('DOMContentLoaded', () => {
     code.parentElement.classList.add('dtile');
   }
 });
+
+// The contents list is one disclosure: open in the margin column on a wide
+// screen (where it is not a control), folded above the content on a phone.
+addEventListener('DOMContentLoaded', () => {
+  const toc = document.querySelector('nav.toc > details');
+  if (!toc) return;
+  const wide = matchMedia('(min-width: 1000px)');
+  const sync = () => { toc.open = wide.matches; };
+  sync();
+  wide.addEventListener('change', sync);
+});

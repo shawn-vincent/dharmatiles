@@ -29,13 +29,15 @@
   <h1>Visual system</h1>
   <p class="lede">The docs site and <code>dharmatiles preview</code> share one stylesheet, <code>docs/assets/theme.css</code>, with one set of fonts and one logo. The preview serves the same files from inside the program. Anything new on either one uses these tokens and controls, never its own.</p>
 </header>
-<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
   <li><a href="#plate">The plate</a></li>
   <li><a href="#colour">Colour</a></li>
   <li><a href="#type">Type</a></li>
   <li><a href="#controls">Controls</a></li>
   <li><a href="#rules">Rules</a></li>
-</ol></nav>
+</ol></details></nav>
+</div>
 <article class="doc">
 
 <h2 id="plate">The plate</h2>
@@ -71,6 +73,7 @@
   <div><span class="k">JetBrains Mono<br>what you type</span><span class="sp-c">scatter at=pool count=2 { rock size="6dmm .. 10dmm" }</span></div>
 </div>
 <p>All three are self-hosted in <code>docs/assets/fonts/</code> (SIL Open Font License), so the preview works offline. Headings and labels are sentence case, with no all-caps labels. Monospace is only for text you would type into a <code>.dtile</code> or a terminal. Numbers in records use tabular figures.</p>
+<p>Headings climb at every width: the page title is always larger than its section titles (title 64 px, sections 36 px, subsections 24 px on a laptop; 40, 28 and 22 on a phone). Text has one reading measure, <code>--measure</code> (33em, about 66 characters). The column beside it holds the contents list, and, on a page that has a picture to put there (the element pages' renders), the picture. On a phone the contents list is folded above the content.</p>
 
 <h2 id="controls">Controls</h2>
 <p>One look and one behaviour each, on the site and in the preview:</p>
