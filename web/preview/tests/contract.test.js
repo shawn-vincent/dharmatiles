@@ -23,6 +23,8 @@ function checkWith(edit) {
     const file = join(dir, 'js', 'api.d.ts');
     writeFileSync(file, edit(readFileSync(file, 'utf8')));
     const r = spawnSync(tsc, ['-p', dir], { encoding: 'utf8' });
+    // tsc could not be run at all (not installed): say so, not an empty failure
+    if (r.error) throw new Error(`cannot run ${tsc}: ${r.error.message} (run npm install in web/preview)`);
     return { status: r.status, out: `${r.stdout}${r.stderr}` };
   } finally {
     rmSync(dir, { recursive: true, force: true });
