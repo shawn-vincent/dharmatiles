@@ -8,11 +8,12 @@
 // actions.  Neither owns a message: fix the cause and the row, the mark in
 // the source and the count go with it.
 
-import { computed, effect, signal } from '@preact/signals-core';
+import { computed, effect, signal, untracked } from '@preact/signals-core';
 import { setReporter, serverErrorIn } from '../problems.js';
 import { detailsFor, fitMsgHeight, statusOf } from '../messages.js';
 import { html, render } from '../view/html.js';
 import { CopyAll, MessageFilters, MessagesBody } from '../view/messages-panel.js';
+import { reveal } from '../slide.js';
 import { $, host, viewer } from './app.js';
 import { openFile, saveWords, texts } from './document.js';
 import { showSourceLine } from './levels.js';
@@ -64,7 +65,7 @@ function showBar() {
   $('sb-counts').textContent = [draft, s.counts, map?.counts].filter(Boolean).join(' · ');
   // a map whose plates cannot be laid out is not a map in error: its dot is the notes' yellow, or green
   const tone = calm && s.tone === 'bad' ? (map.notes ? 'note' : 'ok') : s.tone;
-  $('sb-dot').className = tone;
+  $('sb-dot').className = `dot ${tone}`;
   $('statusbar').dataset.tone = tone;
   $('sb-bar').style.width = s.progress == null ? '0' : `${Math.round(s.progress * 100)}%`;
   $('sb-bar').hidden = s.progress == null;
@@ -91,14 +92,32 @@ const act = {
 
 /** The panel: open or shut, with its filters, rows and Copy all drawn from the model. */
 function bindPanel() {
+  let first = true;
   effect(() => {
     const open = view.get().panel;
-    $('msgpanel').hidden = !open;
+    untracked(() => showMessages(open, !first));
+    first = false;
     $('view').classList.toggle('msgs-open', open);
+    $('msgbtn').setAttribute('aria-pressed', String(open));
+    $('msgbtn').classList.toggle('on', open);
   });
   render(html`<${MessageFilters} m=${model} act=${act} />`, $('msg-filters'));
   render(html`<${MessagesBody} m=${model} act=${act} />`, $('msg-body'));
   render(html`<${CopyAll} act=${act} />`, $('msg-copy'));
+}
+
+/**
+ * Show or hide the panel with slide.js's one reveal: its height grows from nothing (or back), and --msgh, which the view's canvas
+ * and the display menu take their room from, follows it frame by frame (the observer in `msgSash`).
+ */
+function showMessages(open, animate) {
+  const p = $('msgpanel');
+  if (open) {
+    p.hidden = false;
+    reveal({ target: p, property: 'height', from: '0px', to: `${p.offsetHeight}px`, animate });
+  } else if (!p.hidden) {
+    reveal({ target: p, property: 'height', from: `${p.offsetHeight}px`, to: '0px', animate, done: () => { p.hidden = true; } });
+  }
 }
 
 /** Open or close the panel. */
@@ -181,6 +200,7 @@ export function init() {
   setReporter((what, err, entry) => { report(what, err, entry).catch((e) => console.error('could not report a failure to the stream', e)); });
   $('sb-main').onclick = () => togglePanel();
   $('msg-close').onclick = () => togglePanel(false);
+  $('msgbtn').onclick = () => togglePanel();
   effect(showBar);
   bindPanel();
   // a mark in the source's gutter points to its message: open the panel on it

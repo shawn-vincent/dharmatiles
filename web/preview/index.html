@@ -21,25 +21,26 @@
 <body>
 <div id="app">
   <header id="title">
-    <button id="panelbtn" class="btn icon" type="button" aria-pressed="true" title="Show or hide the panel (\)" aria-label="Panel"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.4"/></svg></button>
     <span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i><span class="txt">dharmatiles</span></span>
     <div class="seg" id="modes" role="group" aria-label="What you are making"><button type="button" data-mode="tile" aria-pressed="true" title="A tile: its source and what it is made of">Tile</button><button type="button" data-mode="map" aria-pressed="false" title="Map: tiles placed on a table, to see the scene before anything prints">Map</button><button type="button" data-mode="plates" aria-pressed="false" title="Plates: a print list laid on a printer's bed">Plates</button></div>
     <span id="savestate" role="status"></span>
     <div id="history-controls" aria-label="Document history">
       <div class="history-split">
-        <button id="undo" type="button" title="Undo (⌘Z)" disabled><i class="history-icon undo" aria-hidden="true"></i><span class="history-label">Undo</span></button>
-        <button id="undo-drop" type="button" aria-label="Choose how far to undo" aria-haspopup="true" aria-expanded="false" disabled>▾</button>
+        <button id="undo" type="button" title="Undo (⌘Z)" disabled><i data-icon="undo-2" data-size="16"></i><span class="history-label">Undo</span></button>
+        <button id="undo-drop" type="button" aria-label="Choose how far to undo" aria-haspopup="true" aria-expanded="false" disabled><i data-icon="chevron-down" data-size="14"></i></button>
         <div id="undo-history" class="menu history-menu" hidden></div>
       </div>
       <div class="history-split">
-        <button id="redo" type="button" title="Redo (⌘⇧Z)" disabled><i class="history-icon redo" aria-hidden="true"></i><span class="history-label">Redo</span></button>
-        <button id="redo-drop" type="button" aria-label="Choose how far to redo" aria-haspopup="true" aria-expanded="false" disabled>▾</button>
+        <button id="redo" type="button" title="Redo (⌘⇧Z)" disabled><i data-icon="redo-2" data-size="16"></i><span class="history-label">Redo</span></button>
+        <button id="redo-drop" type="button" aria-label="Choose how far to redo" aria-haspopup="true" aria-expanded="false" disabled><i data-icon="chevron-down" data-size="14"></i></button>
         <div id="redo-history" class="menu history-menu" hidden></div>
       </div>
     </div>
     <span class="grow"></span>
-    <button id="target" type="button" aria-expanded="false" aria-haspopup="true" title="The build target: the base system and the printer every build is for"><span id="target-sys">DungeonBlocks</span><i class="dot" aria-hidden="true"></i><span id="target-printer">default</span></button>
+    <button id="target" type="button" aria-expanded="false" aria-haspopup="true" title="The build target: the base system and the printer every build is for"><span id="target-sys">DungeonBlocks</span><i class="bar" aria-hidden="true"></i><span id="target-printer">default</span></button>
     <button id="export" class="btn" type="button" hidden aria-expanded="false" title="Write the STL (or a 3MF) to out/">Export</button>
+    <button id="panelbtn" class="btn icon" type="button" aria-pressed="true" title="Show or hide the left panel (\)" aria-label="Left panel"><i data-icon="panel-left" data-size="16"></i></button>
+    <button id="msgbtn" class="btn icon" type="button" aria-pressed="false" aria-controls="msgpanel" title="Show or hide the messages (⌃J)" aria-label="Messages panel"><i data-icon="panel-bottom" data-size="16"></i></button>
     <button id="theme" class="btn icon" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button>
   </header>
 
@@ -47,9 +48,9 @@
     <div id="track">
       <section id="browser" aria-label="Places and folders">
         <div id="bcrumb" class="crumbbar">
-          <button id="bback" class="up" type="button" title="Up a level (⌘[)" aria-label="Up a level"><span aria-hidden="true">‹</span></button>
+          <button id="bback" class="up" type="button" title="Up a level (⌘[)" aria-label="Up a level"><i data-icon="chevron-left" data-size="20"></i></button>
           <div class="cr" id="bcrumb-scroll"><nav id="bcrumbs" class="crumbs" aria-label="Where you are"></nav></div>
-          <button id="forward" class="btn" type="button" hidden title="Back to the tile (Esc)"><span id="forward-name"></span> ›</button>
+          <button id="forward" class="btn" type="button" hidden title="Back to the tile (Esc)"><span id="forward-name"></span><i data-icon="chevron-right" data-size="14"></i></button>
         </div>
         <div id="bctx" class="ctxbar" role="note"><div id="bctx-lines"></div></div>
         <div id="browsebar">
@@ -60,7 +61,7 @@
       </section>
       <div id="editpage" inert>
         <div id="crumb" class="crumbbar">
-          <button id="back" class="up" type="button" title="Up to the folder (⌘[ from the tile)" aria-label="Up to the folder"><span aria-hidden="true">‹</span></button>
+          <button id="back" class="up" type="button" title="Up to the folder (⌘[ from the tile)" aria-label="Up to the folder"><i data-icon="chevron-left" data-size="20"></i></button>
           <div class="cr" id="crumb-scroll">
             <nav id="crumbs-path" class="crumbs" aria-label="The folders the tile is in"></nav>
             <button id="tilebtn" type="button" title="The tile"><span id="tilename"></span></button>
@@ -71,7 +72,7 @@
         <div id="ctx" role="note">
           <div id="ctx-lines"></div>
           <div class="seg" id="face" role="group" aria-label="What the panel shows">
-            <button type="button" data-face="tile" title="The tile, level by level (⌘3)">Tile</button>
+            <button type="button" data-face="tile" title="The tile, level by level (⌘3)">Outline</button>
             <button type="button" data-face="source" title="The source of the tile (⌘1)">Source</button>
           </div>
         </div>
@@ -104,7 +105,7 @@
     <div id="ppins" aria-hidden="true"></div>
     <div id="viewbar">
       <div class="seg" id="views" role="group" aria-label="Views"></div>
-      <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display" aria-label="Display">⋯</button>
+      <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display" aria-label="Display"><i data-icon="ellipsis" data-size="16"></i></button>
       <div id="display" class="menu" hidden>
         <div class="cap">Display</div>
         <label class="switch"><input type="checkbox" id="t-paint" checked> Paint <kbd>c</kbd></label>
@@ -116,11 +117,11 @@
         <label class="switch"><input type="checkbox" id="t-debug"> Debug layer <kbd>⌃⌥D</kbd></label>
         <label class="switch"><input type="checkbox" id="t-right"> Panel on the right</label>
         <div class="cap">Backdrop</div>
-        <div class="seg" id="backdrops" role="group" aria-label="Backdrop: the place the tiles stand in"></div>
+        <div id="backdrops" role="group" aria-label="Backdrop: the place the tiles stand in"></div>
         <button id="b-proj" class="btn" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
+        <div class="cap">Camera</div>
         <div id="allviews"></div>
-        <button id="b-keys" class="btn" type="button">Keys <kbd>?</kbd></button>
-        <button id="b-about" class="btn" type="button">About dharmatiles</button>
+        <div class="foot"><button id="b-keys" class="linkish" type="button">Keys <kbd>?</kbd></button><button id="b-about" class="linkish" type="button">About dharmatiles</button></div>
       </div>
     </div>
     <div id="debug-legend" class="card" hidden>
@@ -151,7 +152,7 @@
         <div class="seg" id="msg-filters" role="group" aria-label="Show"></div>
         <span class="grow"></span>
         <span id="msg-copy"></span>
-        <button class="pane-x" id="msg-close" type="button" title="Close (⌃J)" aria-label="Close the messages">×</button>
+        <button class="pane-x" id="msg-close" type="button" title="Close (⌃J)" aria-label="Close the messages"><i data-icon="x" data-size="16"></i></button>
       </div>
       <div id="msg-body"></div>
       <ul id="legend">
@@ -162,12 +163,12 @@
     </div>
     <div id="statusbar" role="status">
       <i id="sb-bar" aria-hidden="true"></i>
-      <button id="sb-main" type="button" aria-expanded="false" aria-controls="msgpanel" title="Messages (⌃J)"><i id="sb-dot" aria-hidden="true"></i><span id="sb-verdict"></span><span id="sb-counts"></span></button>
+      <button id="sb-main" type="button" aria-expanded="false" aria-controls="msgpanel" title="Messages (⌃J)"><i id="sb-dot" class="dot" aria-hidden="true"></i><span id="sb-verdict"></span><span id="sb-counts"></span></button>
       <span class="grow"></span>
       <span id="sb-saved"></span>
     </div>
     <div id="place">
-      <div id="tool" hidden><b></b><span></span><button type="button" title="Put it down (Esc)" aria-label="Put the tool down">×</button></div>
+      <div id="tool" hidden><b></b><span></span><button type="button" title="Put it down (Esc)" aria-label="Put the tool down"><i data-icon="x" data-size="14"></i></button></div>
       <div id="place-list" role="listbox" aria-label="What can be placed or drawn" hidden></div>
       <input id="place-in" type="text" placeholder="Place or draw: rock, tree, scatter, dirt, line, region…" aria-label="Place or draw" autocomplete="off" spellcheck="false">
     </div>

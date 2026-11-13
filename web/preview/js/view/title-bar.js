@@ -8,7 +8,7 @@ import { Fragment, html } from './html.js';
 export function HistoryMenu({ items, onPick }) {
   return html`${items.map(({ entry, target, distance, direction }) => html`<button type="button" key=${`${direction}${target}`} title=${`${direction} to ${entry.label}`} onClick=${() => onPick(direction, target)}>
     <span class="action">${entry.label}</span><span class="distance">${distance === 1 ? '1 step' : `${distance} steps`}</span>
-    ${entry.change?.removed || entry.change?.added ? html`<span class="change">${entry.change.removed ? html`<code class="removed">${`− ${entry.change.removed}`}</code>` : null}${entry.change.added ? html`<code class="added">${`+ ${entry.change.added}`}</code>` : null}</span>` : null}</button>`)}`;
+    ${entry.change?.removed || entry.change?.added ? html`<span class="change">${entry.change.removed ? html`<code class="removed">${`- ${entry.change.removed}`}</code>` : null}${entry.change.added ? html`<code class="added">${`+ ${entry.change.added}`}</code>` : null}</span>` : null}</button>`)}`;
 }
 
 /** Where the text stands in words; a file that changed on disk offers the two ways out. */

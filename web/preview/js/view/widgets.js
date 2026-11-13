@@ -7,7 +7,7 @@ export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many
 
 export const Button = ({ text, run, title, cls = 'btn', disabled = false, type = 'button' }) => html`<button type=${type} class=${cls} title=${title} disabled=${disabled} onClick=${run}>${text}</button>`;
 
-export const Section = ({ title, cls = '', children }) => html`<section class=${`pl-sec${cls ? ` ${cls}` : ''}`}>${title ? html`<h3>${title}</h3>` : null}${children}</section>`;
+export const Section = ({ title, cls = '', children }) => html`<section class=${`pl-sec${cls ? ` ${cls}` : ''}`}>${title ? html`<h3 class="cap">${title}</h3>` : null}${children}</section>`;
 
 /** A row of buttons, one pressed: `options` are [value, text, title]; pressing another one calls `on(value)`. */
 export const Seg = ({ label, options, current, on, disabled }) => html`<div class="pl-field"><span class="pl-lab">${label}</span>

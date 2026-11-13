@@ -7,7 +7,8 @@ import { Layout } from '../layout.js';
 import { CopyButton } from '../view/copy-button.js';
 import { html, render } from '../view/html.js';
 import { Backdrops, DebugRows, ViewButtons } from '../view/view-controls.js';
-import { rememberView, shortcutViews } from '../view-presets.js';
+import { PINNED_VIEWS } from '../view-presets.js';
+import { fillIcons, iconSvg } from '../view/icons.js';
 import { VIEWS } from '../viewer.js';
 import { KINDS as BACKDROPS } from '../viewer/backdrop.js';
 import { legendRows } from '../debug-layer.js';
@@ -19,14 +20,7 @@ import { isInventory, isPlatesView, placeAt, server, tile, view } from './stores
 // ---- the view's controls: views and the display menu -------------------
 
 const viewEntries = new Map(VIEWS.map(([name, label], i) => [name, { label, n: i + 1 }]));
-/** The two views beside the view besides Iso and Top: the ones used last (remembered in the browser). */
-const recentViews = signal(['low', 'close']);
 
-/** A preset was asked for (app.js's pickView; the viewer frames it, editor/framing.js): remembered among the recent ones. */
-function applyPick({ name }) {
-  recentViews.value = rememberView(recentViews.value, name);
-  try { localStorage.setItem('dt-preview-recent-views', JSON.stringify(recentViews.value)); } catch { /* private mode */ }
-}
 const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 // paint on or off (grey plastic): remembered in the browser
 function setPaint(on) {
@@ -100,7 +94,7 @@ function applyTheme() {
   if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
   else delete document.documentElement.dataset.theme;
   const isDark = stored ? stored === 'dark' : dark.matches;
-  $('theme').textContent = isDark ? '☀' : '☾';
+  $('theme').innerHTML = iconSvg(isDark ? 'sun' : 'moon');
   $('theme').setAttribute('aria-label', isDark ? 'Switch to Lichen & Linen' : 'Switch to Moonpool');
   $('theme').title = isDark ? 'Lichen & Linen light theme (t)' : 'Moonpool dark theme (t)';
   viewer.setAccent(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
@@ -179,25 +173,21 @@ function focusPane(n) {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('dt-preview-recent-views'));
-    if (Array.isArray(saved)) {
-      const valid = saved.filter((name) => viewEntries.has(name) && !['painted', 'top'].includes(name));
-      recentViews.value = [...new Set([...valid, 'low', 'close'])].slice(0, 2);
-    }
-  } catch { /* private mode or an older malformed value */ }
+  fillIcons(document); // index.html's own icon marks
   try {
     const saved = localStorage.getItem('dt-backdrop');
     if (BACKDROPS.some(([k]) => k === saved)) backdrop.value = saved;
   } catch { /* private mode: the default stands */ }
   bindBackdrop();
-  // the view buttons: the shortcuts (Iso, Top and the two used last) and the whole list in the display menu, the active one pressed
-  effect(() => {
+  // the view buttons: four cameras pinned in their places, and all nine in the display menu, the one the camera is at pressed
+  // (a subscription, not an effect: the key is derived in editor/framing.js, which starts after this, so an effect would read it before it exists and never follow it)
+  const drawViews = () => {
     const active = view.get().activeView;
-    render(html`<${ViewButtons} names=${shortcutViews(recentViews.value)} entries=${viewEntries} active=${active} onPick=${pickView} />`, $('views'));
-    render(html`<${ViewButtons} names=${VIEWS.map((v) => v[0])} entries=${viewEntries} active=${active} onPick=${pickView} />`, $('allviews'));
-  });
-  view.subscribe(['pick'], ({ pick }) => applyPick(pick));
+    render(html`<${ViewButtons} names=${PINNED_VIEWS} entries=${viewEntries} active=${active} onPick=${pickView} />`, $('views'));
+    render(html`<${ViewButtons} names=${VIEWS.map((v) => v[0])} entries=${viewEntries} active=${active} onPick=${pickView} words=${true} />`, $('allviews'));
+  };
+  drawViews();
+  view.subscribe(['activeView'], drawViews);
   bindPopovers();
   // the page the sidebar starts on: the tile's when the address names one (so it does not slide in at load), else the folder level
   view.set({ pageAt: /(^|[#&])tile=/.test(location.hash) ? 'edit' : 'browse' });

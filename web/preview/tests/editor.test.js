@@ -8,7 +8,7 @@ import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/paylo
 import { snap } from '../js/place.js';
 import { indentFor, braceEnd } from '../js/text.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
-import { rememberView, shortcutViews } from '../js/view-presets.js';
+import { PINNED_VIEWS, presetAt } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
 import { RATIO_SPAN, STEPS, curveShape, sliderOf, valueOfSlider } from '../js/gallery.js';
 import { asNumber, asRange, debounce, formOf, setUnits, valueItems, written } from '../js/value.js';
@@ -26,14 +26,18 @@ const elements = [
   { name: 'grass', role: 'plant', about: 'blades of grass', controls: [] },
 ];
 
-test('view shortcuts keep ISO and Top plus two recent alternatives', () => {
-  let recent = ['low', 'close'];
-  assert.deepEqual(shortcutViews(recent), ['painted', 'top', 'low', 'close']);
-  recent = rememberView(recent, 'front');
-  assert.deepEqual(shortcutViews(recent), ['painted', 'top', 'front', 'low']);
-  recent = rememberView(recent, 'right');
-  assert.deepEqual(shortcutViews(recent), ['painted', 'top', 'right', 'front']);
-  assert.deepEqual(rememberView(recent, 'top'), recent);
+test('the view bar pins four cameras and lights the preset the camera is at, within 2 degrees', () => {
+  assert.deepEqual(PINNED_VIEWS, ['painted', 'top', 'front', 'close']);
+  const views = [['painted', 'Iso', 40, -120, false], ['top', 'Top', 89, -90, false], ['front', 'Front', 0, -90, false], ['close', 'Close-up', 38, -125, true], ['under', 'Under', -60, -120, false]];
+  assert.equal(presetAt(views, 40, -120), 'painted');
+  assert.equal(presetAt(views, 41.5, -119), 'painted');
+  assert.equal(presetAt(views, 89, -90), 'top');
+  assert.equal(presetAt(views, 0, -90), 'front');
+  assert.equal(presetAt(views, 38, -125), 'close');
+  assert.equal(presetAt(views, 38, -125, 'close'), 'close');
+  assert.equal(presetAt(views, 30, -120), null, 'an orbit away from every preset lights none');
+  assert.equal(presetAt(views, 0, -85), null, '5 degrees from Front is not at Front');
+  assert.equal(presetAt(views, -60, -120), 'under');
 });
 
 test('history describes the text that was added, changed, or removed', () => {

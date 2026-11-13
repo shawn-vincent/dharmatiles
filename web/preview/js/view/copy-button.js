@@ -3,6 +3,7 @@
 // ("Copy details"), which reads "Copied" while checked.  What phase it is in (pressed, failed) is the button's own.
 
 import { html, useEffect, useRef, useState } from './html.js';
+import { Icon } from './icons.js';
 
 const DONE_MS = 1600;
 const FAILED_MS = 5000;
@@ -29,5 +30,5 @@ export function CopyButton({ text, label = '', title = 'Copy' }) {
   };
   const shownTitle = phase?.kind === 'done' ? 'Copied' : phase?.kind === 'failed' ? `Could not copy (${phase.why}); select it and copy it yourself` : title;
   const words = phase?.kind === 'done' ? 'Copied' : phase?.kind === 'failed' ? 'Could not copy' : label;
-  return html`<button type="button" class=${`${label ? 'btn copy labelled' : 'btn icon copy'}${phase ? ` ${phase.kind}` : ''}`} title=${shownTitle} aria-label=${title} onClick=${press}><i class="copy-glyph" aria-hidden="true"></i>${label ? html`<span>${words}</span>` : null}</button>`;
+  return html`<button type="button" class=${`${label ? 'btn copy labelled' : 'btn icon copy'}${phase ? ` ${phase.kind}` : ''}`} title=${shownTitle} aria-label=${title} onClick=${press}><${Icon} name=${phase?.kind === 'done' ? 'check' : 'copy'} size=${14} />${label ? html`<span>${words}</span>` : null}</button>`;
 }

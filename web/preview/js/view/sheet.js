@@ -19,6 +19,7 @@
 import { carriesUnit, parseValue, valueOf, wordControlNeedsSelect } from '../lens.js';
 import { asNumber, asRange, debounce, isNumeric, kdlString, unquote, valueItems, written } from '../value.js';
 import { html, render, useEffect, useRef, useState } from './html.js';
+import { Icon } from './icons.js';
 import { SizeGridBox, parseSize } from './size-grid.js';
 import { ValuePopBox } from './value-pop.js';
 import { Thumb } from '../thumbs.js';
@@ -33,7 +34,6 @@ const decimals = (s) => (s.includes('.') ? s.split('.')[1].length : 0);
 const dflt = (c) => c.default1 ?? c.default;
 
 // a die showing five
-const DICE = html`<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.4" />${[[5, 5], [11, 5], [8, 8], [5, 11], [11, 11]].map(([x, y]) => html`<circle cx=${x} cy=${y} r="1.25" fill="currentColor" />`)}</svg>`;
 
 // ---- a value typed in place ------------------------------------------------------------------------------------
 
@@ -204,7 +204,7 @@ function ValueCell({ g, c, s, v, ro, api, put, roll }) {
       ${pre ? html`<span class="q">${pre}</span>` : null}${parts.map((p, i) => (p.num != null
         ? html`<span class=${`num${drag.current?.k === p.k ? ' active' : ''}`} key=${i} ...${ro ? {} : scrub(p)}>${live?.[p.k] ?? p.num}</span>`
         : p.text))}${post ? html`<span class="q">${post}</span>` : null}${!shownRaw ? html`<span class="unit">not set</span>` : null}</span>`}
-    ${dice ? html`<button type="button" class="dice" title=${roll ? 'Show five arrangements to choose from' : 'Roll a new seed: another arrangement'} aria-label=${roll ? 'Show five seeds' : 'Roll a new seed'} onClick=${roll ?? (() => put(g, c.name, newSeed()))}>${DICE}</button>` : null}
+    ${dice ? html`<button type="button" class="dice" title=${roll ? 'Show five arrangements to choose from' : 'Roll a new seed: another arrangement'} aria-label=${roll ? 'Show five seeds' : 'Roll a new seed'} onClick=${roll ?? (() => put(g, c.name, newSeed()))}><${Icon} name="dice" size=${16} /></button>` : null}
     ${unit ? html`<span class="unit">${unit}</span>` : null}`;
 }
 
@@ -271,8 +271,8 @@ function Row({ g, c, s, editable, api, put, model }) {
   return html`<div class=${`row${s ? '' : ' faint'}`} onMouseEnter=${() => api.onFieldHover?.(c.name, true)} onMouseLeave=${() => api.onFieldHover?.(c.name, false)}>
     <span class="nm" title=${[c.about, c.unit && `in ${c.unit}`, c.takes].filter(Boolean).join(' · ')}>${c.name}</span>
     <span class="cell">${cell}</span>
-    ${s && !ro && !c.required ? html`<button type="button" class="x" title=${`Take ${c.name} out (back to its default)`} onClick=${() => put(g, c.name, null)}>×</button>` : null}
-    ${api.detail?.(c) ? html`<button type="button" class="chev" title=${`More about ${c.name}`} aria-label=${`More about ${c.name}`} onClick=${() => api.openControl?.(Math.max(0, model.groups.indexOf(g)), c.name)}>›</button>` : null}
+    ${s && !ro && !c.required ? html`<button type="button" class="x" title=${`Take ${c.name} out (back to its default)`} onClick=${() => put(g, c.name, null)}><${Icon} name="x" size=${14} /></button>` : null}
+    ${api.detail?.(c) ? html`<button type="button" class="chev" title=${`More about ${c.name}`} aria-label=${`More about ${c.name}`} onClick=${() => api.openControl?.(Math.max(0, model.groups.indexOf(g)), c.name)}><${Icon} name="chevron-right" size=${14} /></button>` : null}
   </div>${strip && seeds ? html`<${SeedStrip} s=${strip} seeds=${seeds} ro=${ro}
     onPick=${(/** @type {number | null} */ x) => { setSeeds(null); if (x !== strip.current && x != null) put(g, 'seed', x); }}
     onMore=${() => setSeeds(candidates(strip.current))} onClose=${() => setSeeds(null)} />` : null}`;
@@ -301,11 +301,9 @@ export function Sheet({ model, api, emptyTitle = 'Nothing selected', emptyText =
     }
     // written controls the schema does not know (a definition's arguments)
     if (g.schema) for (const x of g.written) if (!g.schema.controls.some((c) => c.name === x.name)) rows.push(html`<${Row} key=${`${gi}.${x.name}.w`} g=${g} c=${{ name: x.name }} s=${x} editable=${editable} api=${api} put=${put} model=${model} />`);
-    return html`${g.heading ? html`<div class="grp"><span>${g.heading}</span>${g.remove && editable ? html`<button type="button" class="x" title=${g.remove.title} aria-label=${g.remove.title} onClick=${g.remove.run}>×</button>` : null}</div>` : null}${rows}`;
+    return html`${g.heading ? html`<div class="grp"><span>${g.heading}</span>${g.remove && editable ? html`<button type="button" class="x" title=${g.remove.title} aria-label=${g.remove.title} onClick=${g.remove.run}><${Icon} name="x" size=${14} /></button>` : null}</div>` : null}${rows}`;
   });
-  return html`<div class=${model.slim ? 'lt slim' : 'lt'}><div class="heading"><span class="cap">${model.kind || 'Properties'}</span>${model.slim ? null : html`<b>${model.title}</b>`}</div>
-      ${model.href ? html`<a href=${model.href} target="_blank" rel="noopener" title=${`Help for ${model.title}`}>Help ↗</a>` : null}</div>
-    <div class="body">
+  return html`<div class="body">
       ${model.note ? html`<div class="note">${model.note}</div>` : null}
       ${groups}
       ${model.add && editable ? html`<${AddMenu} add=${model.add} />` : null}

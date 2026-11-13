@@ -9,6 +9,7 @@
 import { signal } from '@preact/signals-core';
 import { groupPrinters, selectionOf, sizeWords } from '../printers.js';
 import { html, useEffect, useRef, useState } from './html.js';
+import { Icon } from './icons.js';
 
 const searches = new Map(); // what was typed, by chooser, so a chooser drawn again keeps it
 const slicers = signal(/** @type {any[] | null} */ (null)); // the slicers installed here, asked once
@@ -44,7 +45,7 @@ function Pick({ printers, current, onPick, needBed, disabled, skey, scan, begin,
     <input type="search" placeholder="Search printers" aria-label="Search printers" value=${query} onInput=${(e) => { searches.set(skey, e.target.value); setQuery(e.target.value); }} />
     <div class="pc-list" role="listbox" ref=${list}>
       ${groups.length ? null : html`<p class="pc-none">No printer matches.</p>`}
-      ${groups.map((g) => html`<div class=${`pc-group ${g.kind}`} key=${`g${g.label}`}>${g.label}</div>${g.models.map((m) => html`
+      ${groups.map((g) => html`<div class=${`cap pc-group ${g.kind}`} key=${`g${g.label}`}>${g.label}</div>${g.models.map((m) => html`
         <button type="button" key=${m.name} class=${`pc-row${m.name === sel.model ? ' on' : ''}`} disabled=${disabled || !!m.p.broken} role="option" aria-selected=${String(m.name === sel.model)} data-printer=${m.name}
           onClick=${() => onPick(sel.ams && m.ams ? m.ams.name : m.name)}>
           <span class="pc-top"><span class="pc-name">${m.title}</span>
@@ -72,16 +73,16 @@ function ImportView({ im, setIm, back, importFrom, say, toast }) {
       back();
     } catch (e) { say('Could not import the printers', { status: 0, body: { error: own(e) } }); setIm({ ...im, busy: false }); }
   };
-  if (!im.models) return html`<div class="pc-importview"><div class="pc-ihead"><button type="button" class="btn" onClick=${back}>‹ Back</button><span class="pc-ititle">${`Import from ${im.label}`}</span></div><p class="pc-none">${`Reading ${im.title}'s profiles…`}</p></div>`;
+  if (!im.models) return html`<div class="pc-importview"><div class="pc-ihead"><button type="button" class="btn" onClick=${back}><${Icon} name="chevron-left" size=${14} />Back</button><span class="pc-ititle">${`Import from ${im.label}`}</span></div><p class="pc-none">${`Reading ${im.title}'s profiles…`}</p></div>`;
   let brand = null;
   return html`<div class="pc-importview">
-    <div class="pc-ihead"><button type="button" class="btn" onClick=${back}>‹ Back</button><span class="pc-ititle">${`Import from ${im.label}`}</span></div>
+    <div class="pc-ihead"><button type="button" class="btn" onClick=${back}><${Icon} name="chevron-left" size=${14} />Back</button><span class="pc-ititle">${`Import from ${im.label}`}</span></div>
     <p class="note">Your own copies of the bed, height, nozzle, zones and filaments, in your printers folder. The slicer is not changed.</p>
     <input type="search" placeholder=${`Search ${im.models.length} models`} value=${im.query} aria-label="Search the slicer's models" onInput=${(e) => setIm({ ...im, query: e.target.value })} />
     <div class="pc-list">
       ${shown.length ? null : html`<p class="pc-none">No model matches.</p>`}
       ${shown.map((m) => {
-        const head = m.brand !== brand ? html`<div class="pc-group brand" key=${`b${m.brand}`}>${m.brand}</div>` : null;
+        const head = m.brand !== brand ? html`<div class="cap pc-group brand" key=${`b${m.brand}`}>${m.brand}</div>` : null;
         brand = m.brand;
         const meta = `${m.bed[0]} × ${m.bed[1]} mm${m.height ? ` · ${m.height} mm tall` : ''} · ${m.slots === 1 ? '1 filament' : `${m.slots} filaments`}${m.zones ? ` · ${m.zones} zone${m.zones === 1 ? '' : 's'} kept clear` : ''}`;
         return html`${head}<label class=${`pc-irow${m.have ? ' have' : ''}`} key=${m.name}>

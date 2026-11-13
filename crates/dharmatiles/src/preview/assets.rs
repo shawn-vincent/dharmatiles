@@ -502,16 +502,6 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/vendor/LICENSE-three"),
     ),
     (
-        "/icons/undo-2.svg",
-        "image/svg+xml",
-        include_bytes!("../../../../web/preview/icons/undo-2.svg"),
-    ),
-    (
-        "/icons/redo-2.svg",
-        "image/svg+xml",
-        include_bytes!("../../../../web/preview/icons/redo-2.svg"),
-    ),
-    (
         "/vendor/LICENSE-lucide",
         "text/plain; charset=utf-8",
         include_bytes!("../../../../web/preview/vendor/LICENSE-lucide"),
@@ -655,6 +645,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/js/view/title-bar.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/view/title-bar.js"),
+    ),
+    (
+        "/js/view/icons.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/icons.js"),
     ),
     (
         "/js/view/copy-button.js",

@@ -20,6 +20,7 @@ import { slide } from '../slide.js';
 import { sizeLine, sizeSquares, stemOf, wherePath } from '../folders.js';
 import { thumbBox } from '../rows.js';
 import { html, useEffect, useLayoutEffect, useRef, useState } from './html.js';
+import { Icon } from './icons.js';
 import { plural } from './widgets.js';
 
 const keyOf = (l) => `${l.root ?? 'places'}|${l.dir || ''}`;
@@ -27,16 +28,7 @@ const keyOf = (l) => `${l.root ?? 'places'}|${l.dir || ''}`;
 // ---- the pictures ---------------------------------------------------------------------------
 
 /** A glyph for a kind of row, in the text colour: a folder, a house (My tiles), shelves (the library), a flask (the tests), a disk (a folder you added). */
-const GLYPHS = {
-  folder: 'M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2.5h8.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z',
-  home: 'M4 11 12 4l8 7M6.5 9.5V19h11V9.5M10 19v-5h4v5',
-  library: 'M5 5h3.5v14H5zM10.5 5H14v14h-3.5zM15.6 6.4l3.3-.9 2.6 12.6-3.3.9z',
-  tests: 'M9.5 4h5M10.5 4v5.5L5.5 18a1.4 1.4 0 0 0 1.2 2h10.6a1.4 1.4 0 0 0 1.2-2l-5-8.5V4M8 15h8',
-  added: 'M3.5 9.5 6 5h12l2.5 4.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5zM3.5 9.5h17M16.5 14.5h.01',
-  files: 'M7 3.5h7l4 4V20H7zM14 3.5V8h4',
-  stl: 'M12 3.5 20 8v8l-8 4.5L4 16V8zM4 8l8 4.5L20 8M12 12.5v8',
-};
-const Glyph = ({ name }) => html`<span class="fico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d=${GLYPHS[name] || GLYPHS.folder} /></svg></span>`;
+const Glyph = ({ name }) => html`<span class="fico" aria-hidden="true"><${Icon} name=${name} size=${20} /></span>`;
 
 /** A tile's picture: its footprint as squares on the plate, as many across and up as the tile is. */
 function SizeThumb({ t }) {
@@ -90,13 +82,13 @@ const dotClass = (t) => {
 // ---- the rows ---------------------------------------------------------------------------------
 
 const Text = ({ label, sub }) => html`<span class="tx"><span class="nm" title=${label}>${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}</span>`;
-const Label = ({ title, hint }) => html`<div class="flab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
+const Label = ({ title, hint }) => html`<div class="cap flab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
 
 /** A row: its button, and its ⋯ when `menuTitle` says it has a menu.  `drop` makes it a place a tile can be let go. */
 function Row({ kind, id, name, menuTitle, on, sel = false, drop = null, cls = '', onOpen, title, children }) {
   return html`<div class=${`orwrap${sel ? ' sel' : ''}`} data-drop-root=${drop ? String(drop.root) : undefined} data-drop-dir=${drop ? drop.dir : undefined}>
     <button type="button" class=${`orow ${cls}`} role="option" data-kind=${kind} data-id=${String(id)} title=${title} onClick=${onOpen}>${children}</button>
-    ${menuTitle ? html`<button type="button" class="omore" title=${`${name}: ${menuTitle}`} aria-label=${`Actions for ${name}`} aria-haspopup="menu" onClick=${(e) => { e.stopPropagation(); on.menu?.(kind, String(id), e.currentTarget); }}>⋯</button>` : null}
+    ${menuTitle ? html`<button type="button" class="omore" title=${`${name}: ${menuTitle}`} aria-label=${`Actions for ${name}`} aria-haspopup="menu" onClick=${(e) => { e.stopPropagation(); on.menu?.(kind, String(id), e.currentTarget); }}><${Icon} name="ellipsis" size=${16} /></button>` : null}
   </div>`;
 }
 
@@ -108,7 +100,7 @@ function Places({ d, on }) {
     const where = wherePath(r, '', d.home);
     return html`<${Row} key=${`p${r.index}`} kind="place" id=${r.index} name=${r.label} menuTitle=${r.role === 'added' ? 'take it off the list' : null} on=${on} title=${r.path || r.label} onOpen=${() => on.place(r.index)}>
       <${Glyph} name=${r.role === 'home' ? 'home' : r.role === 'library' ? 'library' : r.role === 'tests' ? 'tests' : r.role === 'files' ? 'files' : 'added'} />
-      <${Text} label=${r.label} sub=${[plural(n, 'tile'), where].filter(Boolean).join(' · ')} /><span class="chev">›</span><//>`;
+      <${Text} label=${r.label} sub=${[plural(n, 'tile'), where].filter(Boolean).join(' · ')} /><span class="chev"><${Icon} name="chevron-right" size=${14} /></span><//>`;
   };
   return html`${mine.length ? html`<${Label} title="Your places" hint="folders on this computer" />${mine.map(row)}` : null}${included.length ? html`<${Label} title="Included" hint="read only" />${included.map(row)}` : null}`;
 }
@@ -126,7 +118,7 @@ function FolderLevel({ d, on }) {
   }
   return html`
     ${v.folders.length ? html`<${Label} title="Folders" />${v.folders.map((f) => html`<${Row} key=${`f${f.dir}`} kind="folder" id=${f.dir} name=${f.name} menuTitle=${can ? 'rename, trash' : null} on=${on} drop=${{ root: d.level.root, dir: f.dir }} onOpen=${() => on.folder(f.dir)}>
-      <${Glyph} name="folder" /><${Text} label=${f.name} sub=${[plural(f.tiles, 'tile'), f.folders ? plural(f.folders, 'folder') : ''].filter(Boolean).join(' · ')} /><span class="chev">›</span><//>`)}` : null}
+      <${Glyph} name="folder" /><${Text} label=${f.name} sub=${[plural(f.tiles, 'tile'), f.folders ? plural(f.folders, 'folder') : ''].filter(Boolean).join(' · ')} /><span class="chev"><${Icon} name="chevron-right" size=${14} /></span><//>`)}` : null}
     ${v.items.length && d.add ? html`<${Label} title=${searching ? 'Tiles' : 'Tiles here'} hint=${searching ? `${v.items.length} found` : 'press one to put it on the map'} /><div class="agrid">${v.items.map(({ tile: t }) => html`<${AddCard} key=${`t${t.id}`} t=${t} d=${d} on=${on} />`)}</div>` : null}
     ${v.items.length && !d.add ? html`<${Label} title=${searching ? 'Tiles' : 'Tiles here'} hint=${searching ? `${v.items.length} found` : null} />${v.items.map(({ tile: t, where }) => {
       const sub = [sizeLine(t), searching && where ? where : ''].filter(Boolean).join(' · ');

@@ -124,7 +124,9 @@ export function init() {
     const t = tile();
     const doc = isPlates(t);
     if (doc) lastList = t.path; else if (t && !isInventory(t)) lastTile = t.path;
-    const now = doc ? (isMapView() ? 'map' : 'plates') : 'tile';
+    // lit for a document the switch names; the inventory and the folders are none of the three, so nothing is lit
+    const none = !t || isInventory(t) || view.get().page === 'browse';
+    const now = none ? null : doc ? (isMapView() ? 'map' : 'plates') : 'tile';
     for (const b of $('modes').children) b.setAttribute('aria-pressed', String(b.dataset.mode === now));
     document.body.classList.toggle('plates', doc); // the tile's Place or draw box is not for a print list or a map
   });

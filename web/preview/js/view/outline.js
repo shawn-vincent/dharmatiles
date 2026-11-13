@@ -19,6 +19,7 @@ import { badgeOf, placeOf } from '../nav.js';
 import { clauseTitle } from '../editor/region-sheet.js';
 import { coverage, idOf, linePoints, maskThumb, slotAt, thumbBox } from '../rows.js';
 import { html, useEffect, useRef } from './html.js';
+import { Icon } from './icons.js';
 import { plural } from './widgets.js';
 
 /** What a region says of itself in a few words: what bounds it, or its clauses. */
@@ -72,13 +73,13 @@ function LineThumb({ m, cols, rows }) {
 // ---- the rows ---------------------------------------------------------------------------
 
 const Text = ({ label, sub }) => html`<span class="tx"><span class="nm">${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}</span>`;
-const Section = ({ title, hint }) => html`<div class="olab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
+const Section = ({ title, hint }) => html`<div class="cap olab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
 
 /** A row and its ⋯ button, side by side (a button cannot hold a button). */
 function Wrap({ kind, id, name, editable, on, cls = '', index, children }) {
   return html`<div class="orwrap">
     <button type="button" class=${`orow ${cls}`} role="option" data-kind=${kind} data-id=${id} data-index=${index} onClick=${() => on.open(kind, id)} onMouseEnter=${() => on.hover?.({ kind, id })} onMouseLeave=${() => on.hover?.(null)}>${children}</button>
-    ${editable ? html`<button type="button" class="omore" title=${`${name}: rename, hide, delete, move, add`} aria-label=${`Actions for ${name}`} aria-haspopup="menu" onClick=${(e) => { e.stopPropagation(); on.menu?.(kind, id, e.currentTarget); }}>⋯</button>` : null}</div>`;
+    ${editable ? html`<button type="button" class="omore" title=${`${name}: rename, hide, delete, move, add`} aria-label=${`Actions for ${name}`} aria-haspopup="menu" onClick=${(e) => { e.stopPropagation(); on.menu?.(kind, id, e.currentTarget); }}><${Icon} name="ellipsis" size=${16} /></button>` : null}</div>`;
 }
 
 const AddRow = ({ kind, label, hint, on }) => html`<div class="orwrap"><button type="button" class="orow oadd" data-kind="add" data-id=${kind} aria-haspopup=${kind === 'entry' ? 'menu' : 'false'} onClick=${(e) => on.add?.(kind, e.currentTarget)}><span class="plus">+</span><${Text} label=${label} sub=${hint} /></button></div>`;
@@ -231,12 +232,12 @@ export function Outline({ data, on }) {
       const sub = [id ? it.what : it.what && it.what !== it.label ? it.what : '', placeOf(it)].filter(Boolean).join(' · ');
       return html`<${Wrap} key=${it.key} kind="entry" id=${it.key} name=${id ?? it.label} editable=${editable} on=${on} cls=${`fam-${it.family || 'thing'}`} index=${String(i)}>
         <span class="no">${String(i + 1)}</span><i class="gl"></i><${Text} label=${id ?? it.label} sub=${sub} />
-        ${badge ? html`<span class=${`badge ${badge.tone}`} title=${badge.title} role="img" aria-label=${badge.n === 1 ? (badge.tone === 'error' ? 'a mistake' : 'a note') : `${badge.n} messages`}>${badge.n > 1 ? String(badge.n) : ''}</span>` : null}<span class="chev">›</span><//>`;
+        ${badge ? html`<span class=${`badge ${badge.tone}`} title=${badge.title} role="img" aria-label=${badge.n === 1 ? (badge.tone === 'error' ? 'a mistake' : 'a note') : `${badge.n} messages`}>${badge.n > 1 ? String(badge.n) : ''}</span>` : null}<span class="chev"><${Icon} name="chevron-right" size=${14} /></span><//>`;
     })}
     ${shaped.length || editable ? html`<${Section} title="Shape" hint="lines and regions" />
       ${shaped.map(([kind, m]) => html`<${Wrap} key=${`${kind}:${m.name}`} kind=${kind} id=${m.name} name=${m.name} editable=${editable} on=${on}>
         ${kind === 'line' ? html`<${LineThumb} m=${m} cols=${data.cols} rows=${data.rows} />` : html`<${RegionThumb} r=${m} cols=${data.cols} rows=${data.rows} />`}
-        <${Text} label=${m.name} sub=${kind === 'line' ? lineSummary(m) : regionSummary(m)} /><span class="chev">›</span><//>`)}
+        <${Text} label=${m.name} sub=${kind === 'line' ? lineSummary(m) : regionSummary(m)} /><span class="chev"><${Icon} name="chevron-right" size=${14} /></span><//>`)}
       ${editable ? html`<${AddRow} kind="line" label="Add line" hint="draw one through points" on=${on} /><${AddRow} kind="region" label="Add region" hint="a place bounded by lines" on=${on} />` : null}` : null}
   </div>`;
   held.current = vnode;

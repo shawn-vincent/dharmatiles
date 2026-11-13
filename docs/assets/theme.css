@@ -23,7 +23,15 @@
   --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --f-code: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   /* Lichen & Linen is tactile and gently rounded. Moonpool tightens this below. */
-  --r: 5px; --r-lg: 10px;
+  --r: 5px; --r-lg: 10px; --r-mark: 2px;   /* the only corners: controls and panels, and the small marks and bars */
+  /* four type sizes, each with its line height; 12 px is the floor.  Every font-size of the page reads these. */
+  --fs-s: 12px;  --lh-s: 16px;   /* captions, counts, keys, the status line */
+  --fs-m: 14px;  --lh-m: 20px;   /* rows, values, buttons, messages */
+  --fs-l: 17px;  --lh-l: 24px;   /* the name at the top of a level */
+  --fs-xl: 24px; --lh-xl: 28px;  /* display: the thing itself (Big Shoulders) */
+  /* two control heights; a segmented control is --h-md outside and --h-sm inside */
+  --h-sm: 24px; --h-md: 30px;
+  --mark: 8px;           /* the status mark: one square with --r-mark corners */
   --sq: 24px;            /* the ruling of the plate pattern */
   --ease: cubic-bezier(.2, .7, .2, 1);
 
@@ -120,13 +128,13 @@
 /* the mark: the lotus, drawn in the current colour */
 .mark { display: inline-block; width: 1.35em; height: 1.35em; flex: none; vertical-align: -.28em; background: currentColor;
   -webkit-mask: var(--mark-url, url("logo.svg")) center / contain no-repeat; mask: var(--mark-url, url("logo.svg")) center / contain no-repeat; }
-.wordmark { font: 800 22px/1 var(--f-display); letter-spacing: .01em; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+.wordmark { font: 800 var(--fs-xl)/1 var(--f-display); letter-spacing: .01em; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
 .wordmark .mark { color: var(--accent); }
 
 /* buttons: one look everywhere */
 .btn, button.btn {
-  font: 500 13px/1 var(--f-body); color: var(--ink); background: var(--raised);
-  border: 1px solid var(--line); border-radius: var(--r); padding: 7px 11px; cursor: pointer;
+  font: 500 var(--fs-m)/var(--lh-m) var(--f-body); color: var(--ink); background: var(--raised);
+  border: 1px solid var(--line); border-radius: var(--r); height: var(--h-md); padding: 0 12px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   transition: border-color .15s var(--ease), background-color .15s var(--ease), color .15s var(--ease);
 }
@@ -135,45 +143,59 @@
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .btn.primary:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
 .btn:disabled { opacity: .5; cursor: default; }
-.btn.icon { padding: 6px; width: 30px; height: 30px; justify-content: center; font-size: 15px; }
-/* copy: one control for copying a value, anywhere.  A copy icon that turns into a check mark once copied
+.btn.icon { padding: 0; width: var(--h-md); justify-content: center; }
+.btn.sm { height: var(--h-sm); padding: 0 8px; font-size: var(--fs-s); line-height: var(--lh-s); }
+.btn.icon.sm { width: var(--h-sm); padding: 0; }
+/* copy: one control for copying a value, anywhere.  The copy icon turns into a check mark once copied
    (web/preview/js/copy.js); with a label it is a normal button whose words read "Copied". */
-.copy { --copy-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E"); }
-.copy.done { --copy-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); color: var(--accent); }
-.btn.icon.copy { width: 26px; height: 26px; padding: 5px; vertical-align: middle; }
-.copy-glyph { display: inline-block; width: 14px; height: 14px; flex: none; background: currentColor;
-  -webkit-mask: var(--copy-glyph) center / contain no-repeat; mask: var(--copy-glyph) center / contain no-repeat; }
+.copy.done { color: var(--accent); }
+.btn.icon.copy { width: var(--h-sm); height: var(--h-sm); vertical-align: middle; }
+/* the one icon set (web/preview/js/view/icons.js): inline svg, drawn in the current colour */
+.ico { display: inline-block; flex: none; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ico.cam { stroke-width: 1.3; }
+
+/* the status mark: one 8 px square, one colour for its state: a tile, a build, a message, a stack row, the status line */
+.dot { width: var(--mark); height: var(--mark); border-radius: var(--r-mark); flex: none; background: var(--line-2); }
+.dot.ready, .dot.ok, .dot.info { background: var(--ok); }
+.dot.failed, .dot.bad, .dot.error { background: var(--err); }
+.dot.note, .dot.warning { background: var(--caution); }
+.dot.building, .dot.busy { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+/* a label: sentence case, one size, one weight, in the ink; the only label style (no capitals, no tracking) */
+.cap { font: 600 var(--fs-s)/var(--lh-s) var(--f-body); color: var(--ink); }
 
 /* segmented control: a row of choices, one chosen */
-.seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: calc(var(--r) + 2px); flex-wrap: wrap; }
-.seg > button { font: 500 13px/1 var(--f-body); color: var(--muted); background: transparent; border: 0; border-radius: var(--r); padding: 6px 10px; flex: 1 1 auto; text-align: center; cursor: pointer; white-space: nowrap; transition: color .15s var(--ease), background-color .15s var(--ease); }
+.seg { display: inline-flex; box-sizing: border-box; height: var(--h-md); padding: 2px; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); flex-wrap: wrap; }
+.seg > button { font: 500 var(--fs-s)/var(--lh-s) var(--f-body); color: var(--muted); background: transparent; border: 0; border-radius: var(--r); height: var(--h-sm); padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 auto; text-align: center; cursor: pointer; white-space: nowrap; transition: color .15s var(--ease), background-color .15s var(--ease); }
 /* one rule: a track wider than its buttons (a stretched grid cell, width: 100%) shares the room out; a track that hugs them is unchanged */
 .seg > button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .seg > button[aria-pressed="true"], .seg > button.on { background: var(--accent); color: var(--on-accent); }
-.seg > button .n { opacity: .7; font-size: 11px; margin-left: 3px; font-variant-numeric: tabular-nums; }
+.seg > button .n { opacity: .7; font-size: var(--fs-s); margin-left: 3px; font-variant-numeric: tabular-nums; }
 
 /* switch: a checkbox drawn as a sliding square */
-.switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; font: 500 13px/1 var(--f-body); color: var(--ink); }
+.switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; font: 400 var(--fs-m)/var(--lh-m) var(--f-body); color: var(--ink); }
 .switch input { appearance: none; -webkit-appearance: none; margin: 0; width: 28px; height: 16px; border-radius: var(--r); background: var(--line); position: relative; cursor: pointer; flex: none; transition: background-color .15s var(--ease); }
-.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 2px; background: var(--raised); box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .18s var(--ease); }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: var(--r-mark); background: var(--raised); box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform .18s var(--ease); }
 .switch input:checked { background: var(--accent); }
 .switch input:checked::after { transform: translateX(12px); background: var(--on-accent); }
 .switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* a slider, driven by the pointer (js/gallery.js uses it where the field must keep the focus) */
-.slide { position: relative; height: 18px; cursor: ew-resize; touch-action: none; user-select: none; }
-.slide-rail { position: absolute; left: 0; right: 0; top: 8px; height: 3px; border-radius: 2px; background: var(--line-2); }
-.slide-thumb { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); border: 2px solid var(--raised); box-shadow: 0 0 0 1px var(--accent); transition: box-shadow .12s var(--ease); }
+.slide { position: relative; height: 18px; /* h: the slider's hit area */ cursor: ew-resize; touch-action: none; user-select: none; }
+.slide-rail { position: absolute; left: 0; right: 0; top: 8px; height: 3px; border-radius: var(--r-mark); background: var(--line-2); }
+.slide-thumb { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; /*round*/ background: var(--accent); border: 2px solid var(--raised); box-shadow: 0 0 0 1px var(--accent); transition: box-shadow .12s var(--ease); }
 .slide:hover .slide-thumb, .slide.on .slide-thumb { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 0 1px var(--accent); }
 
-kbd { font: 500 10.5px/1 var(--f-code); color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--r); padding: 2px 4px; background: var(--bg); }
+kbd { font: 500 var(--fs-s)/var(--lh-s) var(--f-code); color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--r); padding: 2px 4px; background: var(--bg); }
 
 /* every text-like input and every select takes the control style; a missing or new `type` cannot leave one to the browser.
    :where keeps the specificity at an element's, so a class (.pin, .edit, .word-select) still sets its own size. */
 input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"])), select:where(:not([multiple])), .field {
-  font: 400 13.5px/1.2 var(--f-body); color: var(--ink); background: var(--bg);
-  border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; width: 100%;
+  font: 400 var(--fs-m)/var(--lh-m) var(--f-body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--r); padding: 0 10px; width: 100%;
 }
+input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"])), select:where(:not([multiple])) { height: var(--h-md); }
 input[type="number"] { font-family: var(--f-code); }
 input::placeholder { color: var(--muted); }
 input:where(:not([type="checkbox"], [type="radio"], [type="range"])):focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
@@ -183,12 +205,12 @@ input[type="range"] { accent-color: var(--accent); }
 dialog { width: min(420px, calc(100% - 32px)); color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 0; }
 dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 dialog form { padding: 20px; }
-dialog .eyebrow { color: var(--muted); font: 700 11px/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; }
-dialog h2 { font: 700 27px/1.05 var(--f-display); margin: 6px 0 18px; }
-dialog .field { display: grid; gap: 6px; margin: 12px 0; color: var(--muted); font-size: 12px; font-weight: 600; }
-dialog input, dialog select { width: 100%; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; font: 14px var(--f-body); }
+dialog .eyebrow { color: var(--ink); font: 600 var(--fs-s)/var(--lh-s) var(--f-body); }
+dialog h2 { font: 700 var(--fs-xl)/var(--lh-xl) var(--f-display); margin: 6px 0 18px; }
+dialog .field { display: grid; gap: 6px; margin: 12px 0; color: var(--ink); font-size: var(--fs-s); font-weight: 600; }
+dialog input, dialog select { width: 100%; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 0 10px; height: var(--h-md); font: var(--fs-m)/var(--lh-m) var(--f-body); }
 dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent) 20%, transparent); }
-.dialog-note { color: var(--muted); font-size: 12.5px; margin: 14px 0 20px; }
+.dialog-note { color: var(--muted); font-size: var(--fs-s); margin: 14px 0 20px; }
 .btn.danger { color: var(--err); }
 .btn.danger:hover { border-color: var(--err); }
 
@@ -214,7 +236,7 @@ dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 
 
 /* A picture card: a tile (or any thing with a picture) to press or drag, a picture over its name and size.  The preview's
    Add tiles level lays them in a two-column grid (style.css). */
-.acard { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; overflow: hidden; padding-bottom: 7px; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: 13px var(--f-body); }
+.acard { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; overflow: hidden; padding-bottom: 7px; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: var(--fs-m)/var(--lh-m) var(--f-body); }
 .acard:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .acard:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
@@ -226,11 +248,11 @@ dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 
 
 /* The seed strip: five candidate seeds of a tile, the current first; a square marks one you own. */
 .seed-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 6px 0 8px; }
-.seed-card { position: relative; box-sizing: border-box; display: grid; padding: 0 0 3px; overflow: hidden; border: 2px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: 12px var(--f-body); text-align: left; }
+.seed-card { position: relative; box-sizing: border-box; display: grid; padding: 0 0 3px; overflow: hidden; border: 2px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: var(--fs-s)/var(--lh-s) var(--f-body); text-align: left; }
 .seed-card:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .seed-card.on { border-color: var(--accent); }
 .seed-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .seed-card b { padding: 3px 6px 0; font-weight: 600; font-family: var(--f-code); }
-.seed-card .now { position: absolute; right: 5px; top: 5px; padding: 0 5px; border-radius: 2px; background: var(--accent); color: var(--on-accent); font: 600 11px var(--f-body); }
-.seed-card .own { position: absolute; left: 5px; top: 5px; width: 8px; height: 8px; border-radius: 2px; background: var(--ok); box-shadow: 0 0 0 1.5px var(--raised); }
+.seed-card .now { position: absolute; right: 5px; top: 5px; padding: 0 5px; border-radius: var(--r-mark); background: var(--accent); color: var(--on-accent); font: 600 var(--fs-s)/var(--lh-s) var(--f-body); }
+.seed-card .own { position: absolute; left: 5px; top: 5px; width: var(--mark); height: var(--mark); border-radius: var(--r-mark); background: var(--ok); box-shadow: 0 0 0 1.5px var(--raised); }
 .seed-strip-acts { display: flex; gap: 8px; margin-bottom: 8px; }

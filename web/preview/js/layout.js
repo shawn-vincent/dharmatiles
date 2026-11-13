@@ -9,6 +9,8 @@
 // under the view and none of this applies.  (A wide-screen arrangement with two
 // levels side by side may come; this is the narrow one.)
 
+import { reveal } from './slide.js';
+
 export const SASH = 6;
 export const MIN = { panel: 300, view: 360 };
 export const DEFAULTS = Object.freeze({ mode: 'edit', side: 'left', hidePanel: false, sidew: 440 });
@@ -68,9 +70,33 @@ export class Layout {
 
   get state() { return { ...this.o }; }
 
-  set(patch) { this.o = normalise({ ...this.o, ...patch }); this.apply(); }
+  set(patch) {
+    const was = this.o.hidePanel;
+    this.o = normalise({ ...this.o, ...patch });
+    if (this.o.hidePanel === was || this.narrow.matches) { this.apply(); return; }
+    this.reveal(this.o.hidePanel);
+  }
   /** Hide or show the panel. */
   toggle() { this.set({ hidePanel: !this.o.hidePanel }); }
+
+  /**
+   * The panel comes in from its edge, or goes back to it, as the grid's column grows or shrinks (slide.js `reveal`); the view
+   * beside it resizes with the column.  Opening sets the final layout and reveals from the shut column; closing reveals to it and
+   * then sets the final layout (the panel hidden).  The choice is saved and the buttons follow at once.
+   */
+  reveal(hide) {
+    const o = fit({ ...this.o, hidePanel: false }, this.app.clientWidth || innerWidth);
+    const open = grid(o).columns;
+    const shut = o.side === 'left' ? '0px 0px minmax(0px, 1fr)' : 'minmax(0px, 1fr) 0px 0px';
+    try { localStorage.setItem('dt-layout', JSON.stringify(this.o)); } catch { /* private mode: the default stands */ }
+    this.onChange(this.o);
+    if (hide) {
+      reveal({ target: this.app, property: 'gridTemplateColumns', from: open, to: shut, done: () => this.apply(false) });
+    } else {
+      this.apply(false);
+      reveal({ target: this.app, property: 'gridTemplateColumns', from: shut, to: open });
+    }
+  }
   preset(name) { this.set({ hidePanel: name === 'look' }); }
   /** Whether the panel (the tile browser, the levels, the source) is showing. */
   get sideShown() { return this.narrow.matches || !this.o.hidePanel; }
@@ -85,6 +111,8 @@ export class Layout {
     const o = fit(this.o, this.app.clientWidth || innerWidth);
     this.app.dataset.layout = o.hidePanel ? 'look' : 'edit';
     this.app.classList.toggle('hide-panel', o.hidePanel);
+    this.app.dataset.side = o.side;
+    this.app.style.setProperty('--sidew', `${o.sidew}px`);
     const g = grid(o);
     if (narrow) {
       st.gridTemplateColumns = st.gridTemplateRows = st.gridTemplateAreas = '';

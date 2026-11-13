@@ -92,7 +92,7 @@ function Menu({ p }) {
   };
   return html`<div class=${`rmenu ${p.cls}`} role="menu" aria-label=${p.label} ref=${box} onKeyDown=${onKeyDown}>${p.items.map((it, i) => {
     if (it.sep) return html`<hr class="rsep" key=${i} />`;
-    if (it.head) return html`<div class="rhead" key=${i}>${it.head}</div>`;
+    if (it.head) return html`<div class="cap rhead" key=${i}>${it.head}</div>`;
     const sub = it.disabled && it.why ? it.why : it.sub;
     return html`<button type="button" key=${i} class=${`ritem${it.danger ? ' danger' : ''}${it.disabled ? ' off' : ''}`} role="menuitem" tabIndex="-1" aria-disabled=${it.disabled ? 'true' : undefined}
       onClick=${() => { if (it.disabled) return; closePopup({ restore: !it.keepFocus }); it.run?.(); }}>

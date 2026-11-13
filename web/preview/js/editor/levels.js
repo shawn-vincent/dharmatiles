@@ -31,6 +31,7 @@ import { fillCrumbs, pinEnd } from '../crumbs.js';
 import { DeepCrumbs } from '../view/crumbs.js';
 import { html, render as renderInto } from '../view/html.js';
 import { ContextLines } from '../view/places-panel.js';
+import { Icon } from '../view/icons.js';
 import { levelOfParams, parentLevel, whereIs } from '../folders.js';
 import { byteToIndex } from '../text.js';
 import { $, toast } from './app.js';
@@ -260,11 +261,9 @@ function renderCrumbs() {
   renderInto(html`<${DeepCrumbs} crumbs=${list.filter((c) => c.depth >= 1)} go=${goCrumb} />`, $('crumbs-deep'));
   // where you are is the end of the path: it stays in view when the path is longer than the bar
   pinEnd($('crumb-scroll'));
-  // the first half of the switch is named for what the document is: a tile's levels, a map's plates and scene
-  const what = isPlates(t) ? (isMapView() ? 'Map' : 'Plates') : 'Tile';
   for (const b of $('face').children) {
     if (b.dataset.face === 'tile') {
-      b.textContent = what;
+      b.textContent = 'Outline'; // what the panel shows, whatever the document is (the title bar's switch names the document)
       b.title = isPlates(t) ? (isMapView() ? 'The map: its pieces, inventory and settings (⌘3)' : 'The plates: printer, mode and each plate (⌘3)') : 'The tile, level by level (⌘3)';
     } else b.title = isPlates(t) ? 'The source of the map (⌘1)' : isInventory(t) ? 'The source of the inventory (⌘1)' : 'The source of the tile (⌘1)';
     const on = b.dataset.face === face;
@@ -297,8 +296,20 @@ function renderContext() {
     const i = list.findIndex((m) => m.name === sel.id);
     entry = { note: i < 0 ? sel.kind : `${sel.kind} ${i + 1} of ${list.length}` };
   }
-  const lines = contextFor({ depth, tile: tileInfo, entry, thing: depth === 2 ? thingName() : '', control: control?.name, value });
-  renderInto(html`<${ContextLines} lines=${isPlates(t) ? (isMapView() ? mapLines() : contextLines()) : isInventory(t) ? inventoryLines() : lines} />`, $('ctx-lines'));
+  let lines = contextFor({ depth, tile: tileInfo, entry, thing: depth === 2 ? thingName() : '', control: control?.name, value });
+  const other = isPlates(t) || isInventory(t);
+  // the one band of a level: the name of what the level is (24 px display), then one quiet line (what it is, where it stands, its help)
+  let name = '';
+  if (!other && depth > 0) {
+    const it = sel?.kind === 'entry' ? itemOf(sel) : null;
+    name = control ? control.name : depth === 2 ? thingName() : it?.label || thingName();
+    if (depth === 1) {
+      const kind = it ? it.what || it.element : sel?.kind;
+      lines = [html`${[kind, lines[0]].filter(Boolean).join(' · ')}${it?.href ? html` · <a class="help" href=${it.href} target="_blank" rel="noopener" title=${`Help for ${name}`}>Help <${Icon} name="external-link" size=${12} /></a>` : null}`];
+    }
+  }
+  renderInto(html`${name ? html`<div class="ctx-name" title=${name}>${name}</div>` : null}<${ContextLines} lines=${isPlates(t) ? (isMapView() ? mapLines() : contextLines()) : isInventory(t) ? inventoryLines() : lines} />`, $('ctx-lines'));
+  $('ctx').classList.toggle('named', !!name);
 }
 
 /** Put the keyboard in level `id`: its first row (the tile's rows, the map's; the Add step's folders and pictures before its list of pieces), else the level itself. */

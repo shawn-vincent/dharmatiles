@@ -19,6 +19,7 @@ import { FolderList } from './places-panel.js';
 import { haveLine, systemName, tileHave } from '../inventory.js';
 import { Field } from './field.js';
 import { html, useEffect, useRef } from './html.js';
+import { Icon } from './icons.js';
 import { Button, Section, Seg, plural } from './widgets.js';
 
 /** The last non-empty value of `v`: a level leaving the screen keeps what it showed while it slides out. */
@@ -82,8 +83,8 @@ function PieceList({ m, act, compact = false }) {
       data-ids=${row.ids.join(',')} onClick=${() => act.select(row.ids)} onPointerEnter=${() => act.hover(row.ids)} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover(row.ids)} onBlur=${() => act.hover([])}>
       <b>${row.name}</b><span class="mp-n">${`× ${row.count}`}</span><${RowPills} row=${row} /></button>`;
   };
-  const Head = ({ text, n, note }) => html`<h4 class="mp-h" title=${note}>${text}<span class="mp-n">${n}</span></h4>`;
-  const Wrap = compact ? ({ children }) => html`<div class="mp-compact"><h4 class="mp-h">${ps.length ? 'On the map' : 'Nothing on the map yet'}<span class="mp-n">${ps.length ? plural(ps.filter((p) => p.at).length, 'piece') : ''}</span></h4>${children}</div>`
+  const Head = ({ text, n, note }) => html`<h4 class="cap mp-h" title=${note}>${text}<span class="mp-n">${n}</span></h4>`;
+  const Wrap = compact ? ({ children }) => html`<div class="mp-compact"><h4 class="cap mp-h">${ps.length ? 'On the map' : 'Nothing on the map yet'}<span class="mp-n">${ps.length ? plural(ps.filter((p) => p.at).length, 'piece') : ''}</span></h4>${children}</div>`
     : ({ children }) => html`<${Section} title=${ps.length ? 'Pieces' : 'No pieces yet'}>${children}<//>`;
   return html`<${Wrap}>
     ${ps.length ? null : html`<p class="note">${compact ? 'Press a tile below to put it on the map.' : 'Press Add tiles and put tiles on the map.'} Each is a piece with a place, a turn and a seed; nothing prints until you ask for the plates.</p>`}
@@ -146,15 +147,15 @@ function PieceView({ m, act, sel }) {
       ${many ? null : html`<div class="pl-field"><span class="pl-lab">Place</span><span class="mp-val">${p.at ? M.atWord(p.at[0] / p.sq, p.at[1] / p.sq) : 'in the tray'}</span></div>`}
       <div class="pl-field"><span class="pl-lab">Turn</span>
         <span class="mp-btns">
-          <${Button} text="⟲" run=${() => act.turn(ids, -1)} cls="pl-step" title="A quarter turn counter-clockwise (⇧R)" disabled=${ro} />
-          <${Button} text="⟳" run=${() => act.turn(ids, 1)} cls="pl-step" title="A quarter turn clockwise (R)" disabled=${ro} />
+          <${Button} text=${html`<${Icon} name="rotate-ccw" size=${14} />`} run=${() => act.turn(ids, -1)} cls="pl-step" title="A quarter turn counter-clockwise (⇧R)" disabled=${ro} />
+          <${Button} text=${html`<${Icon} name="rotate-cw" size=${14} />`} run=${() => act.turn(ids, 1)} cls="pl-step" title="A quarter turn clockwise (R)" disabled=${ro} />
           ${many ? null : html`<span class="mp-val">${`${p.rot}°`}</span>`}
         </span></div>
       ${many ? null : html`
         <button type="button" class="mp-prop" title="How high the tile’s zero (its ground level) stands above the map’s ground: a name from the standard heights, or a length. The connector hangs below it." onClick=${() => act.setProp('bottom')}>
-          <span class="pl-lab">Bottom</span><span class="mp-val">${M.bottomWords(p, sc?.heights)}</span><span class="mp-go">›</span></button>
+          <span class="pl-lab">Bottom</span><span class="mp-val">${M.bottomWords(p, sc?.heights)}</span><span class="mp-go"><${Icon} name="chevron-right" size=${14} /></span></button>
         <button type="button" class="mp-prop" title="Which variant of the tile: a new one, or one you already have" onClick=${() => act.setProp('seed')}>
-          <span class="pl-lab">Seed</span><span class="mp-val">${String(p.seedUsed)}</span><span class="mp-go">›</span></button>
+          <span class="pl-lab">Seed</span><span class="mp-val">${String(p.seedUsed)}</span><span class="mp-go"><${Icon} name="chevron-right" size=${14} /></span></button>
         <${Seg} label="Print" options=${[['missing', 'If missing', 'Print it unless your inventory has it'], ['always', 'Always', 'Print it whatever you have'], ['skip', 'Skip', 'Leave it off the plates']]} current=${p.print}
           on=${(v) => act.setPiece(p.id, { print: v }, `${p.name}: print ${v === 'missing' ? 'if missing' : v}`)} disabled=${ro} />`}
     <//>

@@ -77,29 +77,29 @@ export function PropertyPage({ model, api }) {
   const form = formOf(r);
   const simple = simpleWeightings(weights);
   const takes = [['unit', c.unit], ['takes', c.takes], ['default', dflt || null], ['limits', c.limits ? `${c.limits[0]} to ${c.limits[1] ?? '…'}` : null]].filter(([, x]) => x);
-  return html`<div class="lt"><div class="heading"><span class="cap">${model.label}</span><b>${c.name}</b></div></div>
+  return html`
     <div class="body">
       ${c.about ? html`<p class="pabout">${c.about}</p>` : null}
-      <div class="plab">Value</div>
+      <div class="cap plab">Value</div>
       <div class="pfield"><input class="pin" ref=${input} type="text" spellcheck=${false} autocomplete="off" aria-label=${`${c.name}, as written`} value=${value} placeholder=${dflt ? `default ${dflt}` : 'not set'} disabled=${ro}
         onInput=${(e) => type(e.target.value)}
         onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(value); } if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); input.current?.blur(); } }}
         onBlur=${() => { if (draft !== null) commit(draft); }} />
         <div class="pcheck" hidden=${!check}>${check}</div></div>
       ${c.ranges ? html`<div class="seg pforms"><button type="button" class=${formOf(value) === 'number' ? 'on' : undefined} disabled=${ro} onClick=${() => commit(asNumber(innerRange(value, weightNames).range))}>One number</button><button type="button" class=${form === 'range' && !name ? 'on' : undefined} disabled=${ro} onClick=${() => commit(asRange(innerRange(value, weightNames).range))}>A range</button></div>` : null}
-      ${c.weighted && weights.length ? html`<div class="plab">How likely each value is</div>
+      ${c.weighted && weights.length ? html`<div class="cap plab">How likely each value is</div>
         <div class="words pweights">${simple.map((w) => html`<button type="button" key=${w.name} class=${name ? (w.name === name ? 'on' : undefined) : (w.name === 'flat' && form === 'range' ? 'on' : undefined)} title=${`${w.call}\n${w.about}`} disabled=${ro} data-weight=${w.name}
           onClick=${() => commit(weightedAs(formOf(innerRange(value, weightNames).range) === 'number' ? asRange(innerRange(value, weightNames).range) : innerRange(value, weightNames).range, w.name))}>${w.name}</button>`)}</div>
         <details class="pmore"><summary>Every form</summary><dl class="pforms-help">${weights.map((w) => html`<dt key=${`t${w.name}`}>${w.call}</dt><dd key=${`d${w.name}`}>${w.about}</dd>`)}</dl></details>` : null}
-      ${c.unit === 'height' && model.names?.heights?.length ? html`<div class="plab">Names you can use</div>
+      ${c.unit === 'height' && model.names?.heights?.length ? html`<div class="cap plab">Names you can use</div>
         <div class="words pnames">${model.names.heights.map((n) => html`<button type="button" key=${n} disabled=${ro} onClick=${() => {
           const el = input.current;
           const at = el?.selectionStart ?? value.length, to = el?.selectionEnd ?? at;
           type(value.slice(0, at) + n + value.slice(to));
           queueMicrotask(() => { el?.focus(); el?.setSelectionRange(at + n.length, at + n.length); });
         }}>${n}</button>`)}</div>` : null}
-      ${takes.length ? html`<div class="plab">What it takes</div><dl class="ptakes">${takes.map(([k, x]) => html`<dt key=${`t${k}`}>${k}</dt><dd key=${`d${k}`}>${x}</dd>`)}</dl>` : null}
-      <div class="plab">As written</div>
+      ${takes.length ? html`<div class="cap plab">What it takes</div><dl class="ptakes">${takes.map(([k, x]) => html`<dt key=${`t${k}`}>${k}</dt><dd key=${`d${k}`}>${x}</dd>`)}</dl>` : null}
+      <div class="cap plab">As written</div>
       <div class="pwritten"><code>${s ? s.text : `${c.name} is not written: the default stands`}</code></div>
     </div>
     <div class="entry-actions"><button type="button" class="btn" onClick=${() => api.showSource?.()}>Show in source</button>

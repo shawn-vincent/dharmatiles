@@ -10,6 +10,7 @@
 import { exists, plateTotals, systemName, wantLine } from '../inventory.js';
 import { Field } from './field.js';
 import { html } from './html.js';
+import { Icon } from './icons.js';
 import { Button, Note, Seg, Section, plural } from './widgets.js';
 
 const mm = (n) => `${Number(n).toFixed(1).replace(/\.0$/, '')}`;
@@ -85,7 +86,7 @@ const Pieces = ({ m, p, ro, act }) => {
       const sub = [q.seed != null ? `seed ${q.seed}` : '', q.system ? systemName(q.system) : '', q.print !== 'missing' ? q.print : ''].filter(Boolean).join(' · ');
       const step = (text, tip, run, off) => html`<button type="button" class="pl-step" title=${tip} disabled=${ro || off} onClick=${run}>${text}</button>`;
       return html`<div class=${`pl-pc${q.print === 'skip' ? ' skip' : ''}`} key=${q.id}><span class="pl-pn"><b title=${title}>${name}</b>${sub ? html`<span class="pl-ps">${sub}</span>` : null}</span>
-        ${step('−', 'One fewer', () => act.setCount(t.id, q.id, q.count - 1), q.count <= 1)}<span class="pl-cnt">${String(q.count)}</span>${step('+', 'One more', () => act.setCount(t.id, q.id, q.count + 1), false)}${step('✕', `Take ${name} out of the list`, () => act.removePiece(t.id, q.id, name), false)}</div>`;
+        ${step(html`<${Icon} name="minus" size=${14} />`, 'One fewer', () => act.setCount(t.id, q.id, q.count - 1), q.count <= 1)}<span class="pl-cnt">${String(q.count)}</span>${step(html`<${Icon} name="plus" size=${14} />`, 'One more', () => act.setCount(t.id, q.id, q.count + 1), false)}${step(html`<${Icon} name="x" size=${14} />`, `Take ${name} out of the list`, () => act.removePiece(t.id, q.id, name), false)}</div>`;
     })}
   <//>`;
 };
@@ -165,7 +166,7 @@ export function PlatesPanel({ m, act }) {
   const p = m.plan.value;
   const ro = m.readOnly.value;
   const errors = t.errors ?? [];
-  return html`<div class="lt"><div class="heading"><span class="cap">Print list</span><b>${m.name.value}</b></div></div>
+  return html`
     <div class="body">
       ${!p ? html`<div class="empty">${t.status === 'failed' ? 'This list does not plan.' : 'Laying out the plates…'}</div>` : html`
         ${!p.planned ? html`<p class="note bad">This list does not plan yet. You can still choose the printer and the mode here.</p>

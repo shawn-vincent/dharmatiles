@@ -23,6 +23,7 @@ export class Viewer {
     this.desc = null; // what the page says is shown (describe); the camera is decided from it and what is held
     this.fr = createFraming();
     this.framing = signal(this.fr.state()); // {view, held, key}: the preset the camera is on, or the user's own view
+    this.lookFrom = signal({ elev: 0, azim: 0 }); // where the camera looks from, degrees (set at every draw): the view bar lights the preset it is at
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setClearColor(0x000000, 0); // the plate is the page's backdrop behind the canvas
     this.scene = new THREE.Scene();
@@ -132,7 +133,10 @@ export class Viewer {
     this.persp.updateProjectionMatrix();
     this.fitOrtho();
     this.refit(true);
-    this.draw();
+    // drawn now, in the frame the size changed: setSize cleared the canvas, and a draw left for the next frame would show it blank
+    // (a panel that slides while the view resizes with it, or a sash being dragged, would flicker)
+    if (this.pending) { cancelAnimationFrame(this.pending); this.pending = 0; }
+    this.render();
   }
 
   /** Swap in a parsed payload in place: the camera stays where it is. */
@@ -370,6 +374,7 @@ export class Viewer {
     const off = p.clone().sub(t);
     const azim = (Math.atan2(off.y, off.x) * 180) / Math.PI;
     const elev = (Math.asin(off.z / (off.length() || 1)) * 180) / Math.PI;
+    this.publishPose(elev, azim);
     this.uniforms.uCam.value.copy(p);
     this.uniforms.uDir.value.copy(t).sub(p).normalize();
     this.uniforms.uL1.value.copy(dirv(18, azim - 20));
@@ -377,6 +382,12 @@ export class Viewer {
     this.renderScene();
     this.renderOutline();
     this.renderHooks.run();
+  }
+
+  /** The camera's direction, to a quarter of a degree: a signal that changes only when it does. */
+  publishPose(elev, azim) {
+    const e = Math.round(elev * 4) / 4, a = Math.round(azim * 4) / 4, c = this.lookFrom.peek();
+    if (c.elev !== e || c.azim !== a) this.lookFrom.value = { elev: e, azim: a };
   }
 
   /** `fn()` after every draw; the result removes it.  Every part that draws over the view adds its own. */
@@ -401,7 +412,10 @@ export class Viewer {
   /** One frame of the scene: the backdrop first (when there is one), then the pieces over it. */
   renderScene() {
     const r = this.renderer;
-    if (!this.backdrop || !this.backdrop.on()) { r.render(this.scene, this.camera); return; }
+    // Seen from below the ground (the Under camera) the backdrop gives way: the tile is drawn over the plain view, not hidden behind earth
+    const under = this.groundZ != null && this.camera.position.z < this.groundZ;
+    if (this.groundMask) this.groundMask.visible = !!this.groundOn && !under;
+    if (!this.backdrop || !this.backdrop.on() || under) { r.render(this.scene, this.camera); return; }
     const auto = r.autoClear;
     r.autoClear = false;
     r.clear();

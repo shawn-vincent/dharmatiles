@@ -9,6 +9,8 @@
 
 import { effect, untracked } from '@preact/signals-core';
 import * as M from '../map-model.js';
+import { VIEWS } from '../viewer.js';
+import { presetAt } from '../view-presets.js';
 import { viewer } from './app.js';
 import { planOf } from './docs.js';
 import * as model from './model.js';
@@ -47,7 +49,8 @@ export function describe() {
 /** Wire this part of the page (once, at load). */
 export function init() {
   // the preset the camera is on, if the user's own view does not hold: the viewer says it, nothing stores it
-  view.derive('activeView', () => { const f = viewer.framing.value; return f.held ? null : f.view; });
+  // and which preset the camera is at: the one it looks from within 2 degrees, whether it was asked for or reached by an orbit
+  view.derive('activeView', () => { const f = viewer.framing.value, p = viewer.lookFrom.value; return presetAt(VIEWS, p.elev, p.azim, f.held ? null : f.view); });
   effect(() => {
     const d = describe();
     untracked(() => viewer.describe(d));

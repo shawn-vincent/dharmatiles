@@ -202,8 +202,7 @@ fn serves_the_viewer_and_its_vendored_three() {
         "/style.css",
         "/logo.svg",
         "/favicon.svg",
-        "/icons/undo-2.svg",
-        "/icons/redo-2.svg",
+        "/js/view/icons.js",
     ] {
         assert!(get(&r, p).0.starts_with("HTTP/1.1 200"), "{p}");
     }
@@ -216,13 +215,13 @@ fn serves_the_viewer_and_its_vendored_three() {
 fn every_page_script_is_served() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/preview");
     // A file left out is a 404, and one failed import blanks the whole editor.
-    let mut dirs = vec![root.join("js"), root.join("icons")];
+    let mut dirs = vec![root.join("js")];
     while let Some(dir) = dirs.pop() {
         for e in std::fs::read_dir(&dir).unwrap().flatten() {
             let p = e.path();
             if p.is_dir() {
                 dirs.push(p);
-            } else if p.extension().is_some_and(|x| x == "js" || x == "svg") {
+            } else if p.extension().is_some_and(|x| x == "js") {
                 let url = format!(
                     "/{}",
                     p.strip_prefix(&root)

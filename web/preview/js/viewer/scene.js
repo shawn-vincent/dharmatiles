@@ -186,6 +186,7 @@ export const sceneMethods = {
    */
   placeGround() {
     this.groundMask.visible = false;
+    this.groundOn = false;
     if (!this.backdrop.on()) return;
     let z = 0, box = null, sq = 35;
     const rects = [];
@@ -224,6 +225,8 @@ export const sceneMethods = {
     const gz = this.sceneOn ? GROUND_MASK_Z : z - 0.05;
     this.groundMask.position.z = gz;
     this.groundMask.visible = true;
+    this.groundOn = true;
+    this.groundZ = gz;
     this.backdrop.setGround(box, sq, gz);
     this.backdrop.setRects(rects);
   },

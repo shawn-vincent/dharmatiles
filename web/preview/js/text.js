@@ -16,6 +16,7 @@ import {
   StreamLanguage, HighlightStyle, syntaxHighlighting, bracketMatching, foldGutter, foldKeymap, foldService,
   indentUnit, indentService, setDiagnostics, lintGutter, closeBrackets, closeBracketsKeymap, tags,
 } from '../vendor/codemirror.js';
+import { iconSvg } from './view/icons.js';
 
 /** UTF-8 byte offset `b` in `text` as a string index (the server counts bytes). */
 export function byteToIndex(text, b) {
@@ -186,7 +187,7 @@ export class TextPane {
       state: EditorState.create({
         doc: '',
         extensions: [
-          lineNumbers(), foldGutter({ openText: '▾', closedText: '▸' }), lintGutter(), highlightActiveLineGutter(),
+          lineNumbers(), foldGutter({ markerDOM: (open) => { const el = document.createElement('span'); el.innerHTML = iconSvg(open ? 'chevron-down' : 'chevron-right', 14); return el; } }), lintGutter(), highlightActiveLineGutter(),
           highlightSpecialChars(), drawSelection(), dropCursor(), EditorState.allowMultipleSelections.of(true),
           rectangularSelection(), crosshairCursor(), bracketMatching(), closeBrackets(), highlightSelectionMatches(),
           search({ top: true }), kdl, syntaxHighlighting(colours), folds,

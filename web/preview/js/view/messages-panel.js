@@ -8,6 +8,7 @@
 import { FILTERS, buildOf, filterRows, gateOf, gateRows, jobWords, serverOf } from '../messages.js';
 import { CopyButton } from './copy-button.js';
 import { html, useEffect } from './html.js';
+import { Icon } from './icons.js';
 
 const secs = (s) => (s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
 
@@ -72,7 +73,7 @@ function Row({ row, m, act }) {
       ${msg.span?.line ? html`<button type="button" class="btn" title="Show the line in the source" onClick=${() => act.showLine(msg.span.file === t?.path ? null : msg.span.file, msg.span.line)}>Go to line</button>` : null}
       ${msg.node && t ? html`<button type="button" class="btn" title="Select the stack entry this is about" onClick=${() => act.showNode(msg.node)}>Show on tile</button>` : null}
       <${CopyButton} text=${() => act.details(msg, source)} title="Copy details: the code, where it is, its source line and this environment" />
-      ${msg.kind === 'server' ? html`<button type="button" class="btn icon" title="Put this away" aria-label="Put this message away" onClick=${() => act.dismiss(msg.seq)}>×</button>` : null}
+      ${msg.kind === 'server' ? html`<button type="button" class="btn icon" title="Put this away" aria-label="Put this message away" onClick=${() => act.dismiss(msg.seq)}><${Icon} name="x" size=${14} /></button>` : null}
     </div></div>`;
 }
 
@@ -87,7 +88,7 @@ export function MessagesBody({ m, act }) {
   return html`${working ? html`<${Running} m=${m} />` : null}${!v.running && v.record ? html`<${Record} rec=${v.record} m=${m} act=${act} />` : null}
     ${v.cleared.length ? html`<div class="cleared" title=${v.cleared.map((x) => `${x.code ?? x.kind}: ${x.text}`).join('\n')}>${`${v.cleared.length} cleared by this build`}</div>` : null}
     ${fresh.map((r) => html`<${Row} key=${r.m.seq} row=${r} m=${m} act=${act} />`)}
-    ${stale.length || (v.running && v.record) ? html`<div class="from-last">From the last build · shown until the new one finishes</div>${v.running && v.record ? html`<${Record} rec=${v.record} m=${m} act=${act} />` : null}${stale.map((r) => html`<${Row} key=${r.m.seq} row=${r} m=${m} act=${act} />`)}` : null}
+    ${stale.length || (v.running && v.record) ? html`<div class="cap from-last">From the last build · shown until the new one finishes</div>${v.running && v.record ? html`<${Record} rec=${v.record} m=${m} act=${act} />` : null}${stale.map((r) => html`<${Row} key=${r.m.seq} row=${r} m=${m} act=${act} />`)}` : null}
     ${!shown.length && !v.record && !working ? html`<div class="empty-msg">${t ? 'Nothing has been said about this tile yet.' : 'Choose a tile.'}</div>` : null}`;
 }
 

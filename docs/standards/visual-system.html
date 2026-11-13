@@ -72,7 +72,17 @@
   <div><span class="k">IBM Plex Sans<br>reading and controls</span><span class="sp-b">Every tile passes a printability gate before it is written.</span></div>
   <div><span class="k">JetBrains Mono<br>what you type</span><span class="sp-c">scatter at=pool count=2 { rock size="6dmm .. 10dmm" }</span></div>
 </div>
-<p>All three are self-hosted in <code>docs/assets/fonts/</code> (SIL Open Font License), so the preview works offline. Headings and labels are sentence case, with no all-caps labels. Monospace is only for text you would type into a <code>.dtile</code> or a terminal. Numbers in records use tabular figures.</p>
+<p>All three are self-hosted in <code>docs/assets/fonts/</code> (SIL Open Font License), so the preview works offline. Monospace is only for text you would type into a <code>.dtile</code> or a terminal: element names, values with their units, seeds and the source. Sentences, words, family lists and word values (<code>wavy</code>, <code>ground level</code>) are Plex. Numbers in records use tabular figures.</p>
+<h3 id="scale">The scale</h3>
+<p>Four sizes, each with its line height, as tokens in <code>theme.css</code>. Every <code>font-size</code> and <code>font</code> of the preview and of the shared chrome reads one of them; 12 px is the floor, and a test fails on a raw size.</p>
+<dl class="defs">
+  <dt>--fs-s</dt><dd>12 px / 16 px. Captions, counts, keys, the status line, segmented controls.</dd>
+  <dt>--fs-m</dt><dd>14 px / 20 px. Rows, values, buttons, inputs, messages.</dd>
+  <dt>--fs-l</dt><dd>17 px / 24 px. The name of something, where it is not the thing itself.</dd>
+  <dt>--fs-xl</dt><dd>24 px / 28 px, Big Shoulders. The thing itself: the name at the top of a level, a dialog&rsquo;s title, the wordmark.</dd>
+</dl>
+<h3 id="case">Case</h3>
+<p>Headings and labels are sentence case, with no all-caps labels and no tracking. A label is <code>.cap</code>: 12 px, weight 600, in <code>--ink</code>. The quiet comes from its size and the hairline above its block, not from grey; one class does it for section captions, menu captions and dialog eyebrows, and a test fails on <code>text-transform: uppercase</code>.</p>
 <p>Headings climb at every width: the page title is always larger than its section titles (title 64 px, sections 36 px, subsections 24 px on a laptop; 40, 28 and 22 on a phone). Text has one reading measure, <code>--measure</code> (33em, about 66 characters). The column beside it holds the contents list, and, on a page that has a picture to put there (the element pages' renders), the picture. On a phone the contents list is folded above the content.</p>
 
 <h2 id="controls">Controls</h2>
@@ -83,24 +93,35 @@
   <span class="seg" role="group" aria-label="Example views"><button type="button" aria-pressed="true">Iso</button><button type="button">Top</button><button type="button">Front</button></span>
   <label class="switch"><input type="checkbox" checked> Paint <kbd>c</kbd></label>
   <label class="switch"><input type="checkbox"> Wireframe <kbd>w</kbd></label>
-  <button class="btn icon" type="button" aria-label="Theme">☾</button>
+  <button class="btn icon" type="button" aria-label="Theme"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
 </div>
 <dl class="defs">
-  <dt>.btn</dt><dd>An action. <code>aria-pressed="true"</code> fills it with the theme accent.</dd>
-  <dt>.seg</dt><dd>One choice from a row: the preview's views and its My tiles / Library / Tests switch. A track wider than its buttons shares the room out between them (one rule), so a segmented control never ends short of its track.</dd>
-  <dt>input, select</dt><dd>Every text-like input and every select takes the control style (a 1 px line, the theme radius, the body face), chosen by what the one rule leaves out, never by a <code>type</code> it names: an input with no <code>type</code>, or a new one, cannot fall back to the browser&rsquo;s own. A test fails on a bare one.</dd>
+  <dt>.btn</dt><dd>An action, 30 px tall (<code>--h-md</code>); <code>.btn.sm</code> is 24 px (<code>--h-sm</code>). <code>aria-pressed="true"</code> fills it with the theme accent.</dd>
+  <dt>.seg</dt><dd>One choice from a row, 30 px outside and 24 px inside: the preview's views and its My tiles / Library / Tests switch. A track wider than its buttons shares the room out between them (one rule), so a segmented control never ends short of its track.</dd>
+  <dt>input, select</dt><dd>30 px tall. Every text-like input and every select takes the control style (a 1 px line, the theme radius, the body face), chosen by what the one rule leaves out, never by a <code>type</code> it names: an input with no <code>type</code>, or a new one, cannot fall back to the browser&rsquo;s own. A test fails on a bare one.</dd>
   <dt>.switch</dt><dd>On or off, with its keyboard key beside it when it has one.</dd>
-  <dt>☀ / ☾</dt><dd>Light or dark. It follows the system until it is used, then remembers the choice (<code>dt-theme</code> in the browser).</dd>
+  <dt>Sun / moon</dt><dd>Light or dark. It follows the system until it is used, then remembers the choice (<code>dt-theme</code> in the browser).</dd>
   <dt>.scrolls</dt><dd>A scrolling panel in the preview's chrome (never the 3D view): a soft shadow, <code>--scroll-shadow</code>, at each edge that has more content beyond it, gone when scrolled to that edge. <code>js/scroll-shadows.js</code> sets the edge classes.</dd>
   <dt>.copy</dt><dd>Copying a value, anywhere: a small copy icon that turns into an accent check mark for a moment once the value is on the clipboard, or a labelled button whose words read “Copied”. Made by <code>copyButton()</code> in the preview's <code>js/copy.js</code>; never a hand-made copy button. If the browser refuses the clipboard, the button says so.</dd>
   <dt>Focus</dt><dd>A 2 px accent outline on every control.</dd>
   <dt>.dtile code</dt><dd>Coloured by <code>site.js</code>: node names (and the header line's <code>dharmatiles</code>) use the accent, properties water, strings moss, comments muted. Inside a string, a <code>$name</code> takes the node colour and a number with its unit (<code>8dmm</code>, <code>90deg</code>, <code>50%</code>) the number colour, earth.</dd>
 </dl>
 
+<h2 id="sizes">Sizes, corners and marks</h2>
+<dl class="defs">
+  <dt>--h-sm, --h-md</dt><dd>Two control heights, 24 px and 30 px, on a 4 px grid. Buttons, inputs, selects, icon buttons and the title bar&rsquo;s chips are 30; a segmented control is 30 around buttons of 24; the small buttons of a row, the steppers and the dice are 24. Rows are 30, or 48 with a second line. A test fails on a control height between 17 and 29 px that is neither.</dd>
+  <dt>--r, --r-lg, --r-mark</dt><dd>The only corners. <code>--r</code> is every control, chip and tag; <code>--r-lg</code> is a menu, a card or a dialog; <code>--r-mark</code> (2 px) is a mark, a bar or a swatch. There is no pill: where a count needs a chip it is a square-cornered one. A round thing (the slider&rsquo;s thumb, the debug layer&rsquo;s dot swatch) says so with a comment, and a test fails on a radius that is none of these.</dd>
+  <dt>.dot</dt><dd>The status mark: one 8 px square (<code>--mark</code>, <code>--r-mark</code>), in <code>--ok</code> when ready, <code>--err</code> when failed, <code>--caution</code> for a note, <code>--accent</code> and pulsing while it builds. A tile in a folder, a stack row, a message and the status line all draw it.</dd>
+</dl>
+
+<h2 id="icons">Icons</h2>
+<p>One set, drawn by <code>web/preview/js/view/icons.js</code> as inline SVG in the current colour, through one helper (<code>Icon</code> for a component, <code>iconSvg</code> for a string, <code>fillIcons</code> for the marks in <code>index.html</code>). The arrows, the check, the cross, the ellipsis, the sun and moon, the turn arrows and the panel toggles are <a href="https://lucide.dev">Lucide</a> (ISC licence, kept in <code>web/preview/vendor/LICENSE-lucide</code>), a 24 grid with a 2 px stroke, round caps and joins, shown at 16 px (14 inline, 20 for a folder or a camera). The folder glyphs and the dice are drawn in the same way. No icon is a text character: a test fails on <code>&rsaquo;</code>, <code>&times;</code>-only buttons, <code>&#8943;</code>, <code>&#9662;</code> and the like standing in for one.</p>
+<p>The nine cameras follow the standard views of CAD programs: the six sides are a see-through cube with the face you look straight at filled (Top, Front, Right, Back, Left, Under); the angled views are the cube drawn solid in three tones (Iso), on a dashed ground line with a thin top (Low), and cropped by a dashed frame (Close-up). Each is drawn in <code>currentColor</code> and the accent, so it works in both themes, and all nine differ.</p>
+
 <h2 id="rules">Rules</h2>
 <ul>
   <li>New colours, fonts or control styles go into <code>theme.css</code>, never into one page or into the preview alone.</li>
-  <li>Corners are gently rounded in tactile Lichen &amp; Linen (<code>--r</code> 5 px, <code>--r-lg</code> 10 px) and slightly tighter in instrument-like Moonpool (4 px and 8 px). Status marks remain small squares, not dots.</li>
+  <li>Corners are gently rounded in tactile Lichen &amp; Linen (<code>--r</code> 5 px, <code>--r-lg</code> 10 px) and slightly tighter in instrument-like Moonpool (4 px and 8 px). Status marks are small squares, not dots, and nothing is a pill.</li>
   <li>A render is shown whole (<code>object-fit: contain</code>) on the plate, never cropped.</li>
   <li>Motion answers an action (a switch sliding, a view easing). Nothing moves by itself except a building tile's mark. Reduced motion turns all of it off.</li>
   <li>An element's family has one colour everywhere: the element cards, the mark on its page and the preview's stack. So a <code>cliff</code> is stone-coloured in all three. The document's own elements are grey and the bases a darker grey.</li>

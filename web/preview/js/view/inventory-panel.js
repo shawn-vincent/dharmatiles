@@ -20,7 +20,7 @@ export function HaveBlock({ t, m, act }) {
   const system = m.system.value;
   const h = tileHave(inv, canonOf(t.path, inv?.home), system);
   const colour = m.colour.value;
-  return html`<section class="inv-block"><h3>${`Inventory · ${systemName(system)}`}</h3>
+  return html`<section class="inv-block"><h3 class="cap">${`Inventory · ${systemName(system)}`}</h3>
     <p class=${`inv-have${h.have ? '' : ' none'}`}>${exists(inv) ? haveLine(h) : 'No inventory yet. The first print you add makes the file.'}</p>
     ${h.edited ? html`<p class="inv-edited" title="The tile changed since the print you have was made. It still counts as had; this is only to tell you.">Edited since printing</p>` : null}
     <div class="inv-ask"><${Seg} label="Colour" options=${[['single', 'Single colour', 'One filament, no paint'], ['multi', 'Multicolour', 'Each material in its own filament']]} current=${colour} on=${(c) => act.pickColour(c)} />
@@ -87,7 +87,7 @@ export function InventoryPanel({ m, act }) {
   const gs = !failed && face !== 'source' ? groups({ pieces: d.pieces }, f) : [];
   const others = d.pieces.filter((p) => p.system !== f.system).length;
   return html`<div class="lt"><div class="heading"><span class="cap">Inventory</span><b>${t.path.split(/[\\/]/).pop()}</b></div>
-      <div class="seg inv-face" role="group" aria-label="What the panel shows">${[['view', 'Tile'], ['source', 'Source']].map(([v, label]) => html`<button type="button" key=${v} aria-pressed=${String(face === v)} title=${v === 'view' ? 'What you have, by tile' : 'The file itself: KDL, one line a print, a loss or a rename'} onClick=${() => act.setFace(v)}>${label}</button>`)}</div></div>
+      <div class="seg inv-face" role="group" aria-label="What the panel shows">${[['view', 'Outline'], ['source', 'Source']].map(([v, label]) => html`<button type="button" key=${v} aria-pressed=${String(face === v)} title=${v === 'view' ? 'What you have, by tile' : 'The file itself: KDL, one line a print, a loss or a rename'} onClick=${() => act.setFace(v)}>${label}</button>`)}</div></div>
     <div class="body">
       ${failed ? html`<p class="note bad">This inventory does not read, so nothing is counted from it.</p>${(d.problems ?? t.errors ?? []).slice(0, 4).map((e, i) => html`<p class="note bad" key=${i}>${e.message}${e.help ? html`<span class="pl-help">${` ${e.help}`}</span>` : null}</p>`)}` : null}
       ${face === 'source' ? html`<${Source} text=${d.text} />` : !failed ? html`
