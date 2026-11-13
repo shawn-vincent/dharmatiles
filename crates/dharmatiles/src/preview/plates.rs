@@ -738,6 +738,7 @@ fn rebuild_plates(
     for (n, &k) in todo.iter().enumerate() {
         shared.update(id, |t| {
             t.progress = Some(super::api::Progress {
+                what: "building".to_owned(),
                 fraction: n as f64 / todo.len() as f64,
                 label: format!("building {} in full", plan.kinds[k].name),
                 key: "plates".to_owned(),
@@ -1022,6 +1023,7 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
         &mut |n, of, name| {
             shared.update(&id, |t| {
                 t.progress = Some(super::api::Progress {
+                    what: "building".to_owned(),
                     fraction: (n - 1) as f64 / of as f64,
                     label: format!("building {name} in full for the export"),
                     key: "plates".to_owned(),

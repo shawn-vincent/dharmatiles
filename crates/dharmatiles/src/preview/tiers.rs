@@ -33,10 +33,15 @@ pub struct TierWant {
 
 #[derive(Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
 #[serde(deny_unknown_fields)]
 pub struct TiersWantReq {
     /// Whose wants these are (a map, the picture shelf): a post replaces the last of the same scope.
     pub scope: String,
+    /// The document the work is for (a map's tile id): its pieces loading is one job of it, said as the document's
+    /// progress and in the messages like a build.  None for the picture shelf.
+    #[serde(default)]
+    pub doc: Option<String>,
     pub wants: Vec<TierWant>,
 }
 
@@ -60,6 +65,20 @@ pub(super) struct TierBook {
     inflight: BTreeSet<String>,
     results: BTreeMap<String, Done>,
     order: VecDeque<String>,
+    /// The document each scope's wants are for.
+    docs: BTreeMap<String, String>,
+    /// The work in flight of each document: a job from its first piece wanted to its last one done.
+    jobs: BTreeMap<String, Job>,
+}
+
+/// A document's pieces loading: the keys not done, and how many were asked and finished.
+struct Job {
+    pending: BTreeSet<String>,
+    total: usize,
+    done: usize,
+    /// The piece being built last started.
+    current: Option<String>,
+    started: Instant,
 }
 
 /// How many results are kept (the oldest go first).
@@ -135,21 +154,33 @@ impl Shared {
     fn announce_tier(&self, key: &str, doc_rev: u64, error: Option<&str>) {
         let mut ev = lock(&self.events);
         let rev = ev.rev;
-        ev.send(
-            &json!({"type": "tier", "rev": rev, "key": key, "docRev": doc_rev, "error": error}),
-        );
+        ev.send(&super::api::StreamEvent::Tier {
+            rev,
+            key: key.to_owned(),
+            doc_rev,
+            error: error.map(str::to_owned),
+        });
     }
 
     /// Replace `scope`'s wanted tiers with `wants`: what is no longer wanted by anyone is cancelled, what is wanted and
     /// neither built nor building at the revision of its tile now is queued, and what is already built is announced.
-    pub(super) fn want_tiers(&self, scope: &str, wants: &[TierWant]) -> Out<Vec<String>> {
+    pub(super) fn want_tiers(
+        &self,
+        scope: &str,
+        doc: Option<String>,
+        wants: &[TierWant],
+    ) -> Out<Vec<String>> {
         let ready: Vec<Ready> = wants
             .iter()
             .map(|w| self.prepare(w))
             .collect::<Result<_, _>>()?;
         let keys: Vec<String> = ready.iter().map(|r| r.key.clone()).collect();
-        let dropped: Vec<String> = {
+        let (dropped, old_doc): (Vec<String>, Option<String>) = {
             let mut book = lock(&self.tier_book);
+            let old_doc = match &doc {
+                Some(d) => book.docs.insert(scope.to_owned(), d.clone()),
+                None => book.docs.remove(scope),
+            };
             let old = book.wanted.insert(scope.to_owned(), keys.clone());
             let still: BTreeSet<&String> = book.wanted.values().flatten().collect();
             let dropped: Vec<String> = old
@@ -160,10 +191,14 @@ impl Shared {
             for k in &dropped {
                 book.inflight.remove(k);
             }
-            dropped
+            (dropped, old_doc)
         };
         for k in &dropped {
             self.cancel_lane(Lane::Tier, k);
+            // withdrawn: its job row ends cleanly, the piece is no longer owed
+            if let Some(d) = &old_doc {
+                self.job_done(d, k);
+            }
         }
         for r in ready {
             let rev = self.rev_of(&r.path);
@@ -176,6 +211,9 @@ impl Shared {
                 continue; // being built; announced when done
             }
             let (key, tile) = (r.key.clone(), r.tile.clone());
+            if let Some(d) = &doc {
+                self.job_add(d, &key);
+            }
             self.submit_lane(
                 Lane::Tier,
                 key,
@@ -184,11 +222,16 @@ impl Shared {
                 Box::new(move |shared, cancel| shared.build_wanted_tier(&r, rev, cancel)),
             );
         }
+        if let Some(d) = &doc {
+            // said once the wants are all in: the total is what was asked, not the pieces counted one by one
+            self.job_tell(d);
+        }
         Ok(keys)
     }
 
     /// The job: build the tier, keep the result and say so; a build that was cancelled says nothing.
     fn build_wanted_tier(&self, r: &Ready, rev: u64, cancel: &Arc<AtomicBool>) {
+        self.job_current(&r.key, &r.tile);
         let progress = dt_eval::Progress::new(Arc::new(queue::Cancelled(Arc::clone(cancel))));
         let ran = std::panic::catch_unwind(AssertUnwindSafe(|| {
             dt_eval::build_tier(
@@ -212,6 +255,7 @@ impl Shared {
             Ok(b) => b,
             Err(p) if p.is::<Superseded>() => {
                 lock(&self.tier_book).inflight.remove(&r.key);
+                self.job_done_everywhere(&r.key);
                 return;
             }
             Err(p) => {
@@ -224,7 +268,9 @@ impl Shared {
                     e.message
                 );
                 lock(&self.tier_book).inflight.remove(&r.key);
+                self.tier_failed(r, &e.message);
                 self.announce_tier(&r.key, rev, Some(&e.message));
+                self.job_done_everywhere(&r.key);
                 return;
             }
         };
@@ -264,8 +310,190 @@ impl Shared {
             }
             Err(message) => {
                 drop(book);
+                self.tier_failed(r, &message);
                 self.announce_tier(&r.key, rev, Some(&message));
             }
+        }
+        self.job_done_everywhere(&r.key);
+    }
+
+    /// A piece could not be built: an error in the panel of every document that wants it, never only on the stream.
+    fn tier_failed(&self, r: &Ready, message: &str) {
+        use crate::message::{Kind, Message, Scope, Severity};
+        let docs = self.docs_wanting(&r.key);
+        let piece = self.name_of(&r.tile).unwrap_or_else(|| r.tile.clone());
+        for d in docs {
+            let Some(name) = self.name_of(&d) else {
+                continue;
+            };
+            self.say(
+                Message::new(
+                    Kind::Server,
+                    Severity::Error,
+                    Scope::Server,
+                    &d,
+                    &name,
+                    format!("The {} build of {piece} failed: {message}", r.tier.name()),
+                )
+                .code("tier"),
+            );
+        }
+    }
+
+    /// The documents whose scopes want `key`.
+    fn docs_wanting(&self, key: &str) -> Vec<String> {
+        let book = lock(&self.tier_book);
+        let mut docs: Vec<String> = book
+            .wanted
+            .iter()
+            .filter(|(_, keys)| keys.iter().any(|k| k == key))
+            .filter_map(|(scope, _)| book.docs.get(scope).cloned())
+            .collect();
+        docs.sort();
+        docs.dedup();
+        docs
+    }
+
+    // ---- the job: a map's pieces loading, said as the document's work in flight --------------------------
+
+    /// A piece was asked for on behalf of `doc`: the job begins with the first, and grows with each.
+    fn job_add(&self, doc: &str, key: &str) {
+        let began = {
+            let mut book = lock(&self.tier_book);
+            let began = !book.jobs.contains_key(doc);
+            let job = book.jobs.entry(doc.to_owned()).or_insert_with(|| Job {
+                pending: BTreeSet::new(),
+                total: 0,
+                done: 0,
+                current: None,
+                started: Instant::now(),
+            });
+            if job.pending.insert(key.to_owned()) {
+                job.total += 1;
+            }
+            began
+        };
+        if began {
+            self.job_begins(doc);
+        }
+    }
+
+    /// The piece `key` is no longer owed to `doc` (built, failed, withdrawn or superseded).
+    fn job_done(&self, doc: &str, key: &str) {
+        let ended = {
+            let mut book = lock(&self.tier_book);
+            let Some(job) = book.jobs.get_mut(doc) else {
+                return;
+            };
+            if job.pending.remove(key) {
+                job.done += 1;
+            }
+            if job.pending.is_empty() {
+                book.jobs.remove(doc);
+                true
+            } else {
+                false
+            }
+        };
+        if ended {
+            self.job_ends(doc);
+        } else {
+            self.job_tell(doc);
+        }
+    }
+
+    /// `key` is no longer owed to any document.
+    fn job_done_everywhere(&self, key: &str) {
+        let docs: Vec<String> = lock(&self.tier_book)
+            .jobs
+            .iter()
+            .filter(|(_, j)| j.pending.contains(key))
+            .map(|(d, _)| d.clone())
+            .collect();
+        for d in docs {
+            self.job_done(&d, key);
+        }
+    }
+
+    /// The piece `key` (of tile `tile`) is being built now: the job says which.
+    fn job_current(&self, key: &str, tile: &str) {
+        let name = self.name_of(tile).unwrap_or_else(|| tile.to_owned());
+        let docs: Vec<String> = {
+            let mut book = lock(&self.tier_book);
+            book.jobs
+                .iter_mut()
+                .filter(|(_, j)| j.pending.contains(key))
+                .map(|(d, j)| {
+                    j.current = Some(name.clone());
+                    d.clone()
+                })
+                .collect()
+        };
+        for d in docs {
+            self.job_tell(&d);
+        }
+    }
+
+    /// The job's progress, as the one record kind of work in flight: pieces done of pieces asked, the piece being
+    /// built, and an estimate once one piece is done.
+    fn job_tell(&self, doc: &str) {
+        // said with the book held, so two threads' words about one job never reach the stream out of order
+        let book = lock(&self.tier_book);
+        let body = {
+            let Some(j) = book.jobs.get(doc) else {
+                return;
+            };
+            let elapsed = j.started.elapsed().as_secs_f64();
+            #[allow(clippy::cast_precision_loss)]
+            let (done, total) = (j.done as f64, j.total.max(1) as f64);
+            let estimate = (j.done > 0).then(|| elapsed / done * total);
+            api::Progress {
+                what: "loading".to_owned(),
+                fraction: done / total,
+                label: j.current.clone().unwrap_or_else(|| "pieces".to_owned()),
+                key: "pieces".to_owned(),
+                count: Some(("pieces".to_owned(), j.done, j.total)),
+                elapsed_s: elapsed,
+                eta_s: estimate.map(|e| (e - elapsed).max(0.0)),
+                estimate_s: estimate,
+            }
+        };
+        self.tell_progress(doc, body, true);
+    }
+
+    /// The job's running message (dropped when it ends, never kept), like a build's.
+    fn job_begins(&self, doc: &str) {
+        use crate::message::{Kind, Message, Scope, Severity};
+        let Some(name) = self.name_of(doc) else {
+            return;
+        };
+        let mut ev = lock(&self.events);
+        let m = Message::new(
+            Kind::Progress,
+            Severity::Info,
+            Scope::Build,
+            doc,
+            &name,
+            format!("Loading the pieces of {name}"),
+        )
+        .code(crate::message::JOB);
+        let m = ev.messages.begin_progress(fail::now_ms(), m);
+        Self::send_messages(&mut ev, &[m]);
+    }
+
+    /// The job is done: its message goes, and the document says it has no work in flight.
+    fn job_ends(&self, doc: &str) {
+        {
+            let mut ev = lock(&self.events);
+            let gone = ev.messages.end_job(doc);
+            Self::send_messages(&mut ev, &gone);
+        }
+        // a document that is itself building keeps its own progress
+        let building = lock(&self.tiles)
+            .iter()
+            .any(|t| t.id == doc && t.status == State::Building);
+        if !building {
+            self.update(doc, |s| s.progress = None);
         }
     }
 
@@ -288,6 +516,6 @@ impl Shared {
 /// `POST /api/tiers/want`.
 pub(super) fn want(shared: &Shared, req: TiersWantReq) -> Out<TiersWantRes> {
     Ok(TiersWantRes {
-        keys: shared.want_tiers(&req.scope, &req.wants)?,
+        keys: shared.want_tiers(&req.scope, req.doc, &req.wants)?,
     })
 }

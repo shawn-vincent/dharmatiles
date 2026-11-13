@@ -19,7 +19,7 @@
 /** Every set, to hand the stream's announcements to. */
 const sets = new Set();
 
-/** The stream said a tier is done: `{key, docRev, error?}`. */
+/** The stream said a tier is done. @param {import('./api').StreamEvent & { type: 'tier' }} m */
 export function tierReady(m) { for (const s of sets) s.ready(m); }
 /** The stream is back after a gap: every set is posted again, so nothing wanted is lost with what was announced meanwhile. */
 export function tiersReconnected() { for (const s of sets) s.repost(); }
@@ -78,7 +78,7 @@ export function createTiers({ host, scope }) {
       w.resolve(null);
       schedule();
     },
-    /** @param {{ key: string, docRev: number, error?: string | null }} m */
+    /** @param {import('./api').StreamEvent & { type: 'tier' }} m */
     async ready(m) {
       const id = byKey.get(m.key);
       // not known yet, and a post is out: its answer may name it (the program announces the built while it answers)

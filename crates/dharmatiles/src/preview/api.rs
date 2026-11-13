@@ -12,7 +12,11 @@
 //!   the_page_contract_is_current` rewrites it.  The page's one request layer
 //!   (`js/host.js`) is checked against that file by `tsc` (`npm test`), so
 //!   renaming a field here fails on the page too, in the code that used it.
-//! - One field-name convention for every JSON the page reads: `camelCase`.
+//! - One field-name convention for every JSON the page reads: `camelCase`, with one stated exception: a
+//!   [message](crate::message) is its own document, shared with the command line and an assistant
+//!   (`GET /api/messages`), and keeps `snake_case` everywhere it appears, in the stream and out of it.  Every
+//!   field of it, and of the stream's events, is a type here, generated into `api.d.ts`, so the page cannot read a
+//!   name the program does not send: `tsc` fails on it.
 //! - One error shape ([`ErrorBody`]), with the honest status: 400 for a
 //!   request that is not a request, 403 for one refused, 404 for what is not
 //!   there, 409 for a file that moved on, 422 for a document that does not
@@ -200,6 +204,9 @@ pub fn mistakes(errs: &[dt_eval::Diag]) -> Vec<Mistake> {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Progress {
+    /// What the work is: `building` (a tile's stages) or `loading` (a map's pieces).  Work in flight for a document
+    /// is this one record, whatever the work: the bar, the running row and the status line read nothing else.
+    pub what: String,
     pub fraction: f64,
     pub label: String,
     pub key: String,
@@ -276,9 +283,6 @@ pub struct FolderJson {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
-    /// Always `snapshot`: the stream's event kind.
-    #[serde(rename = "type")]
-    pub kind: String,
     pub rev: u64,
     pub epoch: String,
     pub system: String,
@@ -448,8 +452,52 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     all.add::<super::edit::DraftReq>();
     all.add::<ErrorBody>();
     all.add::<super::resources::ResourceEvent>();
+    all.add::<StreamEvent>();
+    all.add::<crate::message::MessagesRes>();
+    all.add::<crate::message::GateData>();
+    all.add::<crate::message::BuildData>();
+    all.add::<crate::message::ServerData>();
+    all.add::<crate::message::DiagData>();
     routes.push_str(&format!(
         "  \"POST /api/tiles/:id/draft\": {{ req: {}; res: ArrayBuffer }};\n",
         super::edit::DraftReq::name(&all.cfg)
     ));
+}
+
+/// One event of the stream (`GET /api/events`), tagged by `type`: the page's stream reader is typed by this one
+/// type, so a field renamed here fails `tsc` in the page's reader.
+#[derive(Serialize, Clone)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum StreamEvent {
+    /// The whole state: the first event of a stream that cannot resume.
+    Snapshot(Box<Snapshot>),
+    /// A stream that resumed: what changed since is sent after this.
+    Resumed { rev: u64, epoch: String },
+    /// One tile's state changed.
+    Tile { rev: u64, tile: Box<TileSummary> },
+    /// A build's tick (not a revision: it changes nothing a page resumes from).
+    Progress {
+        rev: u64,
+        id: String,
+        progress: Progress,
+    },
+    /// A message was said (or its state changed).
+    Message {
+        rev: u64,
+        message: crate::message::MessageJson,
+    },
+    /// A map's tier is built at `doc_rev` (or why it could not be).
+    Tier {
+        rev: u64,
+        key: String,
+        doc_rev: u64,
+        error: Option<String>,
+    },
+    /// A resource changed.
+    Resource(super::resources::ResourceEvent),
 }

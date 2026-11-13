@@ -8,7 +8,9 @@ use dt_eval::Diag;
 use serde_json::{Value, json};
 
 pub(super) use crate::message::Scope;
-use crate::message::{Kind, Message, Severity, render};
+use crate::message::{
+    BuildData, GateData, Kind, Message, MessagesRes, ServerData, Severity, render,
+};
 
 use super::route::Reply;
 use super::{Shared, lock};
@@ -66,6 +68,22 @@ fn number(v: &Value) -> f64 {
     v.as_f64().unwrap_or(0.0)
 }
 
+/// The gate's numbers out of an audit record, as the type that names them on the wire.
+fn gate_data(a: &Value, failures: Vec<String>, dropped: u64) -> GateData {
+    GateData {
+        triangles: a["triangles"].as_u64(),
+        watertight: a["watertight"].as_bool(),
+        band_mm2: a["band_mm2"].as_f64(),
+        band_budget_mm2: a["band_budget_mm2"].as_f64(),
+        overhang_mm2: a["overhang_mm2"].as_f64(),
+        overhang_budget_mm2: a["overhang_budget_mm2"].as_f64(),
+        dropped,
+        holes: a["holes"].as_u64(),
+        voids_filled: a["voids_filled"].as_u64(),
+        failures,
+    }
+}
+
 /// A finished build: its timing, and the gate's verdict with its numbers.
 /// `record` is the build's record ([`crate::tile_json`]).  `reused` is how
 /// many steps were kept from the last build; `cache` is what the disk cache
@@ -104,12 +122,15 @@ pub(super) fn of_build(
         format!("Built in {secs:.1} s{kept}")
     };
     let build =
-        Message::new(Kind::Build, Severity::Info, Scope::Build, id, name, text).data(json!({
-            "build_s": record["build_s"], "triangles": a["triangles"], "target": target,
-            "stage_secs": record["stage_secs"], "reused": reused,
-            "cache": if hit { "hit" } else { "miss" },
-            "made_s": if hit { json!(made) } else { Value::Null },
-        }));
+        Message::new(Kind::Build, Severity::Info, Scope::Build, id, name, text).typed(&BuildData {
+            build_s: record["build_s"].as_f64(),
+            triangles: a["triangles"].as_u64(),
+            target: target.to_owned(),
+            stage_secs: record["stage_secs"].clone(),
+            reused,
+            cache: if hit { "hit" } else { "miss" }.to_owned(),
+            made_s: hit.then_some(made),
+        });
     let mut out = out_of_gate(build, a, id, name);
     for problem in &cache.problems {
         out.push(
@@ -174,14 +195,8 @@ fn out_of_gate(build: Message, a: &Value, id: &str, name: &str) -> Vec<Message> 
         .unwrap_or_default();
     let dropped = a["dropped"]
         .as_array()
-        .map_or_else(|| number(&a["dropped"]), |d| d.len() as f64);
-    let numbers = json!({
-        "triangles": a["triangles"], "watertight": a["watertight"],
-        "band_mm2": a["band_mm2"], "band_budget_mm2": a["band_budget_mm2"],
-        "overhang_mm2": a["overhang_mm2"], "overhang_budget_mm2": a["overhang_budget_mm2"],
-        "dropped": dropped, "holes": a["holes"], "voids_filled": a["voids_filled"],
-        "failures": failures,
-    });
+        .map_or_else(|| a["dropped"].as_u64().unwrap_or(0), |d| d.len() as u64);
+    let numbers = gate_data(a, failures.clone(), dropped);
     let gate = if failures.is_empty() {
         Message::new(
             Kind::Gate,
@@ -205,7 +220,7 @@ fn out_of_gate(build: Message, a: &Value, id: &str, name: &str) -> Vec<Message> 
         ))
     }
     .code("gate")
-    .data(numbers);
+    .typed(&numbers);
     vec![build, gate]
 }
 
@@ -256,13 +271,13 @@ pub(super) fn of_server_error(error: &Value, tile: (&str, &str), origin: &str) -
     )
     .code(if kind == "bug" { "bug" } else { "failure" })
     .help(error["help"].as_str());
-    m.data = json!({
-        "origin": origin,
-        "kind": kind,
-        "route": error["context"]["route"],
-        "causes": error["causes"],
-        "backtrace": error["backtrace"],
-        "version": error["context"]["version"],
+    m = m.typed(&ServerData {
+        origin: origin.to_owned(),
+        kind: kind.to_owned(),
+        route: error["context"]["route"].as_str().map(str::to_owned),
+        causes: error["causes"].clone(),
+        backtrace: error["backtrace"].clone(),
+        version: error["context"]["version"].as_str().map(str::to_owned),
     });
     m
 }
@@ -281,13 +296,17 @@ pub(super) fn read(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> R
     });
     match param("format").as_deref() {
         Some("text") => Reply::Body("200 OK", "text/plain; charset=utf-8", render(&found)),
-        Some("json") | None => Reply::Json(
-            "200 OK",
-            json!({
-                "epoch": shared.epoch,
-                "messages": found.iter().map(|m| m.json()).collect::<Vec<_>>(),
-            }),
-        ),
+        Some("json") | None => match serde_json::to_value(MessagesRes {
+            epoch: shared.epoch.clone(),
+            messages: found.iter().map(|m| m.wire()).collect(),
+        }) {
+            Ok(v) => Reply::Json("200 OK", v),
+            Err(e) => super::fail::failure(
+                "500 Internal Server Error",
+                format!("the messages could not be written: {e}"),
+            )
+            .into(),
+        },
         Some(other) => super::fail::refused(
             "400 Bad Request",
             format!("format is text or json, not {other}"),

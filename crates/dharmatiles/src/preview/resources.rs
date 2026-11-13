@@ -73,9 +73,6 @@ pub enum Resource {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceEvent {
-    /// Always `resource`: the stream's event kind.
-    #[serde(rename = "type")]
-    pub kind: String,
     /// The stream's revision (for resuming).
     pub rev: u64,
     /// The resource's own revision: it rises when this resource changes and not otherwise.
@@ -187,12 +184,11 @@ impl Shared {
                 *n
             };
             let rev = ev.bump(Change::Resource(name));
-            let event = ResourceEvent {
-                kind: "resource".to_owned(),
+            let event = api::StreamEvent::Resource(ResourceEvent {
                 rev,
                 res_rev,
                 resource: r,
-            };
+            });
             match serde_json::to_string(&event) {
                 Ok(s) => {
                     ev.told.events.insert(name, s);

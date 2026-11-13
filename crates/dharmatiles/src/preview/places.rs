@@ -2,7 +2,7 @@
 //!
 //! A place is a root ([`Root`]): My tiles, a folder named on the command line,
 //! a folder the user added with the Mac's folder chooser, the library, the
-//! tests.  The page names a place by its index in the snapshot and a folder
+//! tests.  The page names a place by its index in the list of places and a folder
 //! in it by a path below it (`dungeon/combo`), a tile by its id; it never
 //! sends a path of its own, and the chooser is shown by this program: the
 //! page cannot point the server at a folder.  Every call below checks, on the
@@ -29,7 +29,7 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::api::{Out, Reply, Snapshot, TileSummary};
+use super::api::{Out, Reply, TileSummary};
 use super::edit::bad;
 use super::roots::kind_of;
 use super::*;
@@ -68,14 +68,16 @@ pub struct PlaceAdded {
     pub root: usize,
     pub label: String,
     pub path: String,
-    pub snapshot: Snapshot,
+    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
+    pub rev: u64,
 }
 
 /// A change to the places or their folders: the list as it now is.
 #[derive(Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Changed {
-    pub snapshot: Snapshot,
+    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
+    pub rev: u64,
 }
 
 #[derive(Deserialize)]
@@ -102,7 +104,8 @@ pub struct FolderNamedReq {
 #[derive(Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct FolderDone {
-    pub snapshot: Snapshot,
+    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
+    pub rev: u64,
     pub dir: String,
 }
 
@@ -110,7 +113,8 @@ pub struct FolderDone {
 #[derive(Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 pub struct Trashed {
-    pub snapshot: Snapshot,
+    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
+    pub rev: u64,
     pub dir: Option<String>,
     pub path: Option<String>,
     pub undo: usize,
@@ -131,7 +135,8 @@ pub struct Restored {
     pub path: String,
     pub id: Option<String>,
     pub tile: Option<TileSummary>,
-    pub snapshot: Snapshot,
+    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
+    pub rev: u64,
 }
 
 /// A file that appeared or moved: where, and which tile it is.
@@ -150,7 +155,8 @@ pub struct ListedIn {
     pub path: String,
     pub id: Option<String>,
     pub tile: Option<TileSummary>,
-    pub snapshot: Snapshot,
+    /// The stream's revision once the change was told: the page has the change when its stream reaches it.
+    pub rev: u64,
 }
 
 /// A tile moved into a folder.
@@ -598,7 +604,7 @@ pub(super) fn add_place(shared: &Shared, _: Nothing) -> Out<PlacesAddRes> {
         root: index,
         label,
         path: real.to_string_lossy().into_owned(),
-        snapshot: shared.snapshot(),
+        rev: shared.told(),
     })))
 }
 
@@ -658,17 +664,15 @@ pub(super) fn remove_place(shared: &Shared, req: PlacesRemoveReq) -> Out<Changed
         lock(&shared.events).messages.forget(id);
     }
     announce(shared);
-    Ok(Changed {
-        snapshot: shared.snapshot(),
-    })
+    Ok(Changed { rev: shared.told() })
 }
 
 // ---- folders ------------------------------------------------------------------------------------
 
-/// A folder made, renamed or trashed is in the list at once: the answer says so.
-fn rescanned(shared: &Shared) -> Snapshot {
+/// A folder made, renamed or trashed is in the list: told, and the answer says the revision it was told at.
+fn rescanned(shared: &Shared) -> u64 {
     shared.rescan();
-    shared.snapshot()
+    shared.told()
 }
 
 /// `POST /api/folders/new` `{root, dir, name}`.
@@ -689,7 +693,7 @@ pub(super) fn new_folder(shared: &Shared, req: FolderNamedReq) -> Out<FolderDone
     }
     let dir = join_rel(&req.dir, &name);
     Ok(FolderDone {
-        snapshot: rescanned(shared),
+        rev: rescanned(shared),
         dir,
     })
 }
@@ -733,7 +737,7 @@ pub(super) fn rename_folder(shared: &Shared, req: FolderNamedReq) -> Out<FolderD
         None => name,
     };
     Ok(FolderDone {
-        snapshot: rescanned(shared),
+        rev: rescanned(shared),
         dir,
     })
 }
@@ -798,7 +802,7 @@ fn trashed(
         kept.len() - 1
     };
     Ok(Trashed {
-        snapshot: rescanned(shared),
+        rev: rescanned(shared),
         dir,
         path,
         undo,
@@ -866,20 +870,20 @@ pub(super) fn undo_trash(shared: &Shared, req: TrashUndoReq) -> Out<Restored> {
         path,
         id: tile.as_ref().map(|_| id),
         tile,
-        snapshot: shared.snapshot(),
+        rev: shared.told(),
     })
 }
 
 // ---- tiles ----------------------------------------------------------------------------------------
 
 /// A file appears at `dest`: listed, its build asked for, and its state answered with the list.
-fn listed_with_snapshot(shared: &Shared, dest: &Path) -> ListedIn {
+fn listed_in(shared: &Shared, dest: &Path) -> ListedIn {
     let l = super::edit::listed(shared, dest);
     ListedIn {
         path: l.path,
         id: l.id,
         tile: l.tile,
-        snapshot: shared.snapshot(),
+        rev: shared.told(),
     }
 }
 
@@ -939,7 +943,7 @@ pub(super) fn move_tile(
     };
     let to = dest_dir.join(name);
     if to == from {
-        return Ok(listed_with_snapshot(shared, &to));
+        return Ok(listed_in(shared, &to));
     }
     let clash = format!(
         "a tile called “{}” is already in that folder",
@@ -949,7 +953,7 @@ pub(super) fn move_tile(
     move_no_clobber(&from, &to, &clash)?;
     // its prints in the inventory follow it
     super::inventory::note_rename(shared, &from, &to);
-    Ok(listed_with_snapshot(shared, &to))
+    Ok(listed_in(shared, &to))
 }
 
 /// `POST /api/tiles/ID/duplicate`: a copy beside the tile, “Name copy”, never over a file.
@@ -967,7 +971,7 @@ pub(super) fn duplicate_tile(
         .file_stem()
         .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
     let dest = super::edit::write_new_bytes(dir, &format!("{stem} copy"), &text)?;
-    Ok(listed_with_snapshot(shared, &dest))
+    Ok(listed_in(shared, &dest))
 }
 
 /// Where a new tile goes: folder `dir` of place `root` when `root` is given, else My tiles.

@@ -4,7 +4,25 @@
 
 type AboutRes = { version: string, formats: string, };
 
-type Changed = { snapshot: Snapshot, };
+type BuildData = { build_s: number | null, triangles: number | null, target: string, 
+/**
+ * Seconds each stage took, by stage name.
+ */
+stage_secs: JsonValue, reused: number, 
+/**
+ * `hit` or `miss`.
+ */
+cache: string, 
+/**
+ * On a cache hit, how long the tile took when it was made.
+ */
+made_s: number | null, };
+
+type Changed = { 
+/**
+ * The stream's revision once the change was told: the page has the change when its stream reaches it.
+ */
+rev: number, };
 
 type CheckRes = { ok: boolean, errors: Array<Mistake>, stack: Array<JsonValue> | null, map: JsonValue | null, };
 
@@ -15,6 +33,8 @@ type CheckValueRes = { message: string | null, label: string | null, help: strin
 type ColourWord = "single" | "multi";
 
 type Deleted = { path: string, };
+
+type DiagData = { label?: string, unexpected?: boolean, };
 
 type Done = Record<string, never>;
 
@@ -76,7 +96,11 @@ where?: boolean | null, };
 
 type ExportRes = { out: string, shown: string, } | ExportBuilt;
 
-type FolderDone = { snapshot: Snapshot, dir: string, };
+type FolderDone = { 
+/**
+ * The stream's revision once the change was told: the page has the change when its stream reaches it.
+ */
+rev: number, dir: string, };
 
 type FolderJson = { root: number, path: string, };
 
@@ -87,6 +111,12 @@ type FolderReq = { root: number,
  * The folder, by its path below the place (`""` is the place).
  */
 dir: string, };
+
+type GateData = { triangles: number | null, watertight: boolean | null, band_mm2: number | null, band_budget_mm2: number | null, overhang_mm2: number | null, overhang_budget_mm2: number | null, 
+/**
+ * How many bodies the gate dropped.
+ */
+dropped: number, holes: number | null, voids_filled: number | null, failures: Array<string>, };
 
 type HeightName = { name: string, dmm: number, own: boolean, };
 
@@ -140,6 +170,8 @@ type InventoryWrote = { lines: Array<string>, file: string, };
 
 type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null;
 
+type Kind = "progress" | "check" | "build" | "gate" | "error" | "note" | "export" | "server";
+
 type List = { ids: Array<string>, added: Array<TileSummary>, };
 
 type ListEdited = { 
@@ -154,7 +186,11 @@ note: string | null, };
 
 type Listed = { path: string, id: string | null, tile: TileSummary | null, };
 
-type ListedIn = { path: string, id: string | null, tile: TileSummary | null, snapshot: Snapshot, };
+type ListedIn = { path: string, id: string | null, tile: TileSummary | null, 
+/**
+ * The stream's revision once the change was told: the page has the change when its stream reaches it.
+ */
+rev: number, };
 
 type ListsAddReq = { tile: string, 
 /**
@@ -260,6 +296,28 @@ type MapsSetReq = { list: string, id: string, set: PieceWords, docRev: number, }
 
 type MarkKind = "line" | "region";
 
+type MessageJson = { 
+/**
+ * Order in the stream.
+ */
+seq: number, 
+/**
+ * When, ISO 8601 UTC.
+ */
+t: string, kind: Kind, severity: Severity, scope: Scope, code: string | null, 
+/**
+ * The tile's id, and its name.
+ */
+tile: string, tile_name: string, 
+/**
+ * The stack entry it is about (its key).
+ */
+node: string | null, span: SpanJson | null, text: string, help: string | null, data: JsonValue, state: MessageState, };
+
+type MessageState = "open" | "cleared";
+
+type MessagesRes = { epoch: string, messages: Array<MessageJson>, };
+
 type Mistake = { code: string, message: string, file: string | null, line: number | null, column: number | null, help: string | null, 
 /**
  * A failure of the program, not of the document: shown as a bug.
@@ -338,7 +396,11 @@ bottom?: string | null, seed?: number | null,
  */
 print?: string | null, system?: string | null, };
 
-type PlaceAdded = { added: boolean, root: number, label: string, path: string, snapshot: Snapshot, };
+type PlaceAdded = { added: boolean, root: number, label: string, path: string, 
+/**
+ * The stream's revision once the change was told: the page has the change when its stream reaches it.
+ */
+rev: number, };
 
 type Places = { roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, };
 
@@ -390,7 +452,12 @@ type PrintersScanReq = { slicer?: string | null, };
 
 type PrintersScanRes = { slicers: Array<SlicerFound>, } | ScanJson;
 
-type Progress = { fraction: number, label: string, key: string, 
+type Progress = { 
+/**
+ * What the work is: `building` (a tile's stages) or `loading` (a map's pieces).  Work in flight for a document
+ * is this one record, whatever the work: the bar, the running row and the status line read nothing else.
+ */
+what: string, fraction: number, label: string, key: string, 
 /**
  * What the stage is counting: `[what, done, total]`; a total of 0 is just the step.
  */
@@ -400,10 +467,6 @@ type RenameReq = { name: string, };
 
 type ResourceEvent = { 
 /**
- * Always `resource`: the stream's event kind.
- */
-type: string, 
-/**
  * The stream's revision (for resuming).
  */
 rev: number, 
@@ -412,7 +475,11 @@ rev: number,
  */
 resRev: number, } & ({ "name": "places", "value": Places } | { "name": "target", "value": Target } | { "name": "printers", "value": Array<JsonValue> } | { "name": "inventory", "value": JsonValue } | { "name": "list", "value": List });
 
-type Restored = { path: string, id: string | null, tile: TileSummary | null, snapshot: Snapshot, };
+type Restored = { path: string, id: string | null, tile: TileSummary | null, 
+/**
+ * The stream's revision once the change was told: the page has the change when its stream reaches it.
+ */
+rev: number, };
 
 type RevealReq = { path: string, };
 
@@ -504,9 +571,19 @@ shelf: ShelfMark | null,
  */
 ownedSeeds: Array<OwnedSeed>, };
 
+type Scope = "check" | "build" | "export" | "server";
+
 type SeedWord = "fresh" | "if-needed";
 
+type ServerData = { 
+/**
+ * `server` or `page`.
+ */
+origin: string, kind: string, route: string | null, causes: JsonValue, backtrace: JsonValue, version: string | null, };
+
 type SessionRes = { token: string, };
+
+type Severity = "error" | "warning" | "note" | "info";
 
 type ShelfMark = { state: string, text: string, };
 
@@ -514,11 +591,11 @@ type SketchRef = { id: number, rough: boolean, };
 
 type SlicerFound = { slicer: string, label: string, title: string, };
 
-type Snapshot = { 
-/**
- * Always `snapshot`: the stream's event kind.
- */
-type: string, rev: number, epoch: string, system: string, printer: string, printers: Array<JsonValue>, overhangDeg: number, steepestDeg: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
+type Snapshot = { rev: number, epoch: string, system: string, printer: string, printers: Array<JsonValue>, overhangDeg: number, steepestDeg: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
+
+type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
+
+type StreamEvent = { "type": "snapshot" } & Snapshot | { "type": "resumed", rev: number, epoch: string, } | { "type": "tile", rev: number, tile: TileSummary, } | { "type": "progress", rev: number, id: string, progress: Progress, } | { "type": "message", rev: number, message: MessageJson, } | { "type": "tier", rev: number, key: string, docRev: number, error: string | null, } | { "type": "resource" } & ResourceEvent;
 
 type SystemWord = "db" | "ol";
 
@@ -550,7 +627,12 @@ type TiersWantReq = {
 /**
  * Whose wants these are (a map, the picture shelf): a post replaces the last of the same scope.
  */
-scope: string, wants: Array<TierWant>, };
+scope: string, 
+/**
+ * The document the work is for (a map's tile id): its pieces loading is one job of it, said as the document's
+ * progress and in the messages like a build.  None for the picture shelf.
+ */
+doc?: string | null, wants: Array<TierWant>, };
 
 type TiersWantRes = { keys: Array<string>, };
 
@@ -588,7 +670,11 @@ shown: JsonValue | null, };
 
 type TrashUndoReq = { undo: number, };
 
-type Trashed = { snapshot: Snapshot, dir: string | null, path: string | null, undo: number, };
+type Trashed = { 
+/**
+ * The stream's revision once the change was told: the page has the change when its stream reaches it.
+ */
+rev: number, dir: string | null, path: string | null, undo: number, };
 
 type Written = { name: string, 
 /**

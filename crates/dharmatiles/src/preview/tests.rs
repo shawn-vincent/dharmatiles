@@ -2913,6 +2913,112 @@ fn a_job_that_panics_on_a_lane_is_raised_again_in_its_request() {
 }
 
 #[test]
+fn a_maps_pieces_loading_is_one_job_of_its_document_said_as_progress_and_in_the_messages_and_ending_cleanly()
+ {
+    let r = start(&[FLAT], false);
+    let id = id0(&r);
+    let token = token_of(&r);
+    let mut c = TcpStream::connect(r.addr).unwrap();
+    write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
+    // six pieces wanted on behalf of the document: seeds of one tile
+    let wants: Vec<Value> = (1..=6)
+        .map(|s| serde_json::json!({"tile": id, "tier": "low", "seed": s}))
+        .collect();
+    let body = serde_json::json!({"scope": "map", "doc": id, "wants": wants}).to_string();
+    let (head, v) = post(&r, "/api/tiers/want", Some(&token), None, &body);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    let (mut counts, mut began, mut ended, mut cleared) = (Vec::new(), false, false, false);
+    for l in BufReader::new(c).lines() {
+        let l = l.unwrap();
+        let Some(data) = l.strip_prefix("data: ") else {
+            continue;
+        };
+        let v: Value = serde_json::from_str(data).unwrap();
+        match v["type"].as_str() {
+            Some("progress") if v["id"] == id => {
+                let p = &v["progress"];
+                assert_eq!(p["what"], "loading", "{p}");
+                assert_eq!(p["key"], "pieces", "{p}");
+                counts.push((
+                    p["count"][1].as_u64().unwrap(),
+                    p["count"][2].as_u64().unwrap(),
+                ));
+            }
+            Some("message")
+                if v["message"]["kind"] == "progress" && v["message"]["code"] == "pieces" =>
+            {
+                if v["message"]["state"] == "open" {
+                    began = true;
+                } else {
+                    cleared = true;
+                }
+            }
+            Some("tile")
+                if v["tile"]["id"] == id
+                    && v["tile"]["progress"].is_null()
+                    && !counts.is_empty() =>
+            {
+                ended = true;
+            }
+            _ => {}
+        }
+        if ended && cleared {
+            break;
+        }
+    }
+    assert!(began && cleared, "the job's running message came and went");
+    assert!(
+        counts.iter().all(|(d, t)| d <= t && *t <= 6) && counts.last().map(|c| c.1) == Some(6),
+        "done of total, ending on the six asked for: {counts:?}"
+    );
+    assert!(
+        counts.windows(2).all(|w| w[1].1 >= w[0].1),
+        "the total only grows: {counts:?}"
+    );
+    assert!(
+        counts.windows(2).all(|w| w[1].0 >= w[0].0),
+        "pieces done never go back: {counts:?}"
+    );
+    assert!(
+        counts.last().is_some_and(|c| c.0 >= 4),
+        "ends with all but the last done (the last one ends the job): {counts:?}"
+    );
+}
+
+#[test]
+fn a_withdrawn_job_ends_its_row_cleanly() {
+    let r = start(&[FLAT], false);
+    let id = id0(&r);
+    let token = token_of(&r);
+    let many: Vec<Value> = (1..=30)
+        .map(|s| serde_json::json!({"tile": id, "tier": "low", "seed": s}))
+        .collect();
+    let body = serde_json::json!({"scope": "map", "doc": id, "wants": many}).to_string();
+    assert!(
+        post(&r, "/api/tiers/want", Some(&token), None, &body)
+            .0
+            .starts_with("HTTP/1.1 200")
+    );
+    // the page lets go of everything: the job ends at once, whatever the lane was at
+    let none = serde_json::json!({"scope": "map", "doc": id, "wants": []}).to_string();
+    assert!(
+        post(&r, "/api/tiers/want", Some(&token), None, &none)
+            .0
+            .starts_with("HTTP/1.1 200")
+    );
+    wait_idle(&r);
+    let t = tiles(&r);
+    assert!(
+        t["tiles"][0]["progress"].is_null(),
+        "no work in flight: {}",
+        t["tiles"][0]["progress"]
+    );
+    let open: Vec<Value> = messages(&r, &format!("tile={id}&state=open&kind=progress"));
+    assert!(open.is_empty(), "no running row is left: {open:?}");
+}
+
+#[test]
 fn an_edit_is_answered_while_the_tier_lane_is_full_and_a_withdrawn_want_is_cancelled() {
     let r = start(&[FLAT], false);
     let id = id0(&r);

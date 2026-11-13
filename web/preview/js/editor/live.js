@@ -3,6 +3,7 @@
 // store and nowhere else.  Everything on the page that depends on the
 // server's word subscribes to that store; this part knows no other.
 
+import { signal } from '@preact/signals-core';
 import { tierReady, tiersReconnected } from '../tiers.js';
 import { setEnvironment, showError } from '../problems.js';
 import { ServerError } from '../server-error.js';
@@ -46,34 +47,40 @@ function followBuild(t) {
   else if (!now && building.delete(t.id)) log.endBuild(t.id);
 }
 
-let lastRev = -1; // the newest revision the stream has told
+/** The newest revision of the program's stream the page has taken (a call's answer names the revision its change was told at). */
+const streamRev = signal(-1);
 
 /**
- * The program's list, taken: the stream's snapshot, or the one a call's answer carries (a folder made,
- * a tile moved), which is the list as it is when the call ends.  A call's answer older than what the
- * stream has already told is not taken: it would put the list back.
+ * Resolves true once the stream has reached revision `rev`: the page then holds what an answer's change told.  False
+ * after a few seconds (the stream is down or behind): the caller says so, loudly.
  */
-export function applySnapshot(m, fromStream = false) {
-  if (!fromStream && (m.epoch !== server.get().epoch || m.rev < lastRev)) return;
-  lastRev = fromStream ? (m.rev ?? -1) : Math.max(lastRev, m.rev ?? -1);
+export function reached(rev) {
+  if (streamRev.peek() >= rev) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    /** @type {() => void} */
+    let off = () => {};
+    const timer = setTimeout(() => { off(); resolve(false); }, 5000);
+    off = streamRev.subscribe((v) => { if (v >= rev) { clearTimeout(timer); queueMicrotask(off); resolve(true); } });
+  });
+}
+
+/**
+ * The program's whole state, taken: the first event of a stream (a page that connects, or one whose stream cannot
+ * resume).  Nothing else carries the whole: a call's answer says only the revision its change was told at (`reached`).
+ */
+export function applySnapshot(m) {
   m.tiles.forEach(reportFailure);
   const ids = new Set(m.tiles.map((t) => t.id));
   for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }
   for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
   m.tiles.forEach(followBuild);
-  // the whole, taken part by part: what is the same as what the page holds is kept as it is (the same objects), so the
-  // answer of a call that carries the whole does not make the parts that did not change be drawn again
-  const now = server.get();
-  const keep = (old, next) => (JSON.stringify(old) === JSON.stringify(next) ? old : next);
-  const held = new Map(now.tiles.map((t) => [t.id, t]));
-  const tiles = m.tiles.map((t) => keep(held.get(t.id), serverTile(t)));
   server.set({
-    tiles: tiles.length === now.tiles.length && tiles.every((t, i) => t === now.tiles[i]) ? now.tiles : tiles,
+    tiles: m.tiles.map(serverTile),
     progress: progressOf(m.tiles),
-    roots: keep(now.roots, m.roots || []), folders: keep(now.folders, m.folders || []), home: m.home ?? null,
-    system: m.system, printer: m.printer || 'default', printers: keep(now.printers, m.printers || []),
+    roots: m.roots || [], folders: m.folders || [], home: m.home ?? null,
+    system: m.system, printer: m.printer || 'default', printers: m.printers || [],
     overhangDeg: m.overhangDeg, steepestDeg: m.steepestDeg ?? m.overhangDeg + 10,
-    inventory: keep(now.inventory, m.inventory ?? null), epoch: m.epoch, ready: true,
+    inventory: m.inventory ?? null, epoch: m.epoch, ready: true,
   });
 }
 
@@ -82,26 +89,30 @@ export function applySnapshot(m, fromStream = false) {
  * printers, the inventory or the list of tiles.  Each goes into its own part of the server store and the rest is left
  * as it is, so a new folder does not touch the inventory and an inventory change does not touch the tiles.
  */
+/** @param {import('../api').StreamEvent & { type: 'resource' }} m */
 export function applyResource(m) {
-  lastRev = Math.max(lastRev, m.rev ?? -1);
-  const v = m.value;
   switch (m.name) {
-    case 'places': server.set({ roots: v.roots, folders: v.folders, home: v.home ?? null }); break;
-    case 'target': server.set({ system: v.system, printer: v.printer, overhangDeg: v.overhangDeg, steepestDeg: v.steepestDeg }); break;
-    case 'printers': server.set({ printers: v }); break;
-    case 'inventory': server.set({ inventory: v }); break;
+    case 'places': server.set({ roots: m.value.roots, folders: m.value.folders, home: m.value.home ?? null }); break;
+    case 'target': server.set({ system: m.value.system, printer: m.value.printer, overhangDeg: m.value.overhangDeg, steepestDeg: m.value.steepestDeg }); break;
+    case 'printers': server.set({ printers: m.value }); break;
+    case 'inventory': server.set({ inventory: m.value }); break;
     case 'list': {
       // the tiles as they are, in the order the program says; a tile that joined comes with its state
       const have = new Map(server.get().tiles.map((t) => [t.id, t]));
-      for (const t of v.added) { reportFailure(t); followBuild(t); have.set(t.id, serverTile(t)); }
-      const ids = new Set(v.ids);
+      for (const t of m.value.added) { reportFailure(t); followBuild(t); have.set(t.id, serverTile(t)); }
+      const ids = new Set(m.value.ids);
       for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }
       for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
       const { progress } = server.get();
-      server.set({ tiles: v.ids.map((id) => have.get(id)).filter(Boolean), progress: Object.fromEntries(Object.entries(progress).filter(([id]) => ids.has(id))) });
+      server.set({ tiles: m.value.ids.map((id) => have.get(id)).filter(Boolean), progress: Object.fromEntries(Object.entries(progress).filter(([id]) => ids.has(id))) });
       break;
     }
-    default: throw new Error(`the program told a resource the page does not know: ${m.name}`);
+    default: {
+      // every resource the program can tell is handled above: one added in Rust and not here fails tsc on this line
+      /** @type {never} */
+      const unknown = m;
+      throw new Error(`the program told a resource the page does not know: ${JSON.stringify(unknown)}`);
+    }
   }
 }
 
@@ -122,7 +133,8 @@ export function init() {
       server.set({ live, ever: server.get().ever || live });
       if (live) tiersReconnected(); // what was announced while the stream was away is asked for again
     },
-    onSnapshot: (m) => applySnapshot(m, true),
+    onSnapshot: applySnapshot,
+    onRev: (rev, fresh) => { streamRev.value = fresh ? rev : Math.max(streamRev.peek(), rev); },
     onProgress: (id, p) => server.set({ progress: { ...server.get().progress, [id]: p } }),
     onMessage: (m) => log.apply(m),
     onTier: tierReady,

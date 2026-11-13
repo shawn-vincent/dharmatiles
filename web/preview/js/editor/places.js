@@ -23,10 +23,10 @@ import { openMenu } from '../menu.js';
 import { crumbsFor, moveRow, parseHash } from '../nav.js';
 import { copiedNote } from '../mine.js';
 import { systemName } from '../inventory.js';
-import { failed, whyOf } from '../problems.js';
+import { failed, showError, whyOf } from '../problems.js';
 import { $, host, toast } from './app.js';
 import { canLeave } from './document.js';
-import { applySnapshot } from './live.js';
+import { reached } from './live.js';
 import { levelSnapshot, restoreLevel } from './levels.js';
 import { select } from './open.js';
 import { nameField } from './rows.js';
@@ -55,8 +55,14 @@ function refusal(what, r) {
   if (!failed(what, r)) toast(`${what}: ${whyOf(r)}`, null, { ms: 9000 });
 }
 
-/** The program's answer to a call that changed the list: its list is taken at once. */
-const take = (r) => { if (r.body?.snapshot) applySnapshot(r.body.snapshot); };
+/**
+ * The program's answer to a call that changed the list names the revision of the stream its change was told at:
+ * the page waits for its stream to reach it, so the change is held (and drawn) the one way every change is.
+ */
+const take = async (r) => {
+  if (r.body?.rev == null) return;
+  if (!(await reached(r.body.rev))) showError('The list did not follow the change', new Error(`the program told the change at revision ${r.body.rev} and the page's stream had not reached it`));
+};
 
 // ---- going places ---------------------------------------------------------------------------------
 
@@ -202,7 +208,7 @@ async function renameFromList(t, name) {
 async function duplicate(t) {
   const r = await host.duplicateTile(t.id);
   if (r.status !== 200) { refusal(`Could not copy ${stemOf(t.path)}`, r); return; }
-  take(r);
+  await take(r);
   const name = stemOf(r.body.path);
   toast(`Made ${name}`, () => host.deleteTile(r.body.id).then((d) => { if (d.status !== 200) refusal(`Could not take ${name} away again`, d); }), { label: 'Undo' });
 }
@@ -219,7 +225,7 @@ async function moveTile(t, target) {
   const editing = view.get().page === 'edit';
   const r = await host.moveTile(t.id, target);
   if (r.status !== 200) { refusal(`Could not move ${stemOf(t.path)}`, r); return; }
-  take(r);
+  await take(r);
   if (open) await followOpen(r.body.path, here, editing);
   const to = roots[target.root];
   const where = target.dir ? target.dir.split('/').pop() : to?.label;
@@ -232,7 +238,7 @@ async function undoMove(id, from, name) {
   const editing = view.get().page === 'edit';
   const r = await host.moveTile(id, from);
   if (r.status !== 200) { refusal(`Could not move ${name} back`, r); return; }
-  take(r);
+  await take(r);
   if (open) await followOpen(r.body.path, here, editing);
 }
 
@@ -243,14 +249,14 @@ async function trashTile(t) {
   const name = stemOf(t.path);
   const r = await host.trashTile(t.id);
   if (r.status !== 200) { refusal(`Could not move ${name} to the Trash`, r); return; }
-  take(r);
+  await take(r);
   toast(`Moved ${name} to the Trash`, () => undoTrash(r.body.undo, name, open), { ms: 9000 });
 }
 
 async function undoTrash(n, name, reopen) {
   const r = await host.undoTrash(n);
   if (r.status !== 200) { refusal(`Could not put ${name} back`, r); return; }
-  take(r);
+  await take(r);
   if (reopen && r.body.id && (await whenListedWhere((x) => x.id === r.body.id))) { await select(r.body.id, true); view.set({ pageAt: 'edit' }); }
 }
 
@@ -259,7 +265,7 @@ async function trashFolder(root, dir) {
   const name = dir.split('/').pop();
   const r = await host.trashFolder(root, dir);
   if (r.status !== 200) { refusal(`Could not move ${name} to the Trash`, r); return; }
-  take(r);
+  await take(r);
   toast(`Moved the folder ${name} to the Trash`, () => undoTrash(r.body.undo, name, false), { ms: 9000 });
 }
 
@@ -273,7 +279,7 @@ async function renameFolder(root, dir, name) {
   const oldPrefix = `${roots[root].path}/${dir}/`;
   const r = await host.renameFolder(root, dir, name);
   if (r.status !== 200) { refusal(`Could not rename ${dir.split('/').pop()}`, r); return; }
-  take(r);
+  await take(r);
   const nowDir = r.body.dir;
   const l = levelNow();
   if (l.root === root) view.set({ placeAt: placeAt({ root, dir: renamedDir(l.dir, dir, nowDir) }) });
@@ -296,7 +302,7 @@ async function newFolder(anchor) {
     save: async (v) => {
       const r = await host.newFolder(l.root, l.dir, v);
       if (r.status !== 200) { refusal('Could not make the folder', r); return; }
-      take(r);
+      await take(r);
       goTo({ root: l.root, dir: r.body.dir }, { focus: true });
     },
   });
@@ -310,7 +316,7 @@ async function addPlace(anchor) {
   if (r.status !== 200) { refusal('Could not add the folder', r); return; }
   // the user closed the chooser: nothing was asked for, so nothing is said
   if ('cancelled' in r.body) return;
-  take(r);
+  await take(r);
   goTo({ root: r.body.root, dir: '' });
   toast(`Added ${r.body.label} to Places. The folder itself is untouched.`, null, { ms: 6000 });
 }
@@ -324,7 +330,7 @@ async function removePlace(i) {
   const l = levelNow();
   if (l.root === i) view.set({ placeAt: placeAt(TOP) });
   else if (l.root != null && l.root > i) view.set({ placeAt: placeAt({ root: l.root - 1, dir: l.dir }) });
-  take(r);
+  await take(r);
   toast(`Took ${r0.label} off the list. The folder and its tiles are still on disk.`, null, { ms: 7000 });
 }
 

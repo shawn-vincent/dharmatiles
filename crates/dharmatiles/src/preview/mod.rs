@@ -676,6 +676,7 @@ impl Shared {
     /// and sent now.  The tracker calls this about ten times a second.
     fn progress(&self, id: &str, status: &Status) {
         let body = api::Progress {
+            what: "building".to_owned(),
             fraction: status.fraction,
             label: status.label.clone(),
             key: status.key.clone(),
@@ -684,12 +685,25 @@ impl Shared {
             eta_s: Some(status.eta_s),
             estimate_s: Some(status.estimate_s),
         };
+        self.tell_progress(id, body, false);
+    }
+
+    /// Work in flight for document `id`, said: remembered for a browser that connects later, and sent now.  A job (a
+    /// map's pieces loading) never takes the place of the document's own build (`job`).
+    fn tell_progress(&self, id: &str, body: api::Progress, job: bool) {
         let mut tiles = lock(&self.tiles);
         if let Some(slot) = tiles.iter_mut().find(|t| t.id == id) {
+            if job && slot.status == State::Building {
+                return;
+            }
             slot.progress = Some(body.clone());
             let mut ev = lock(&self.events);
             let rev = ev.rev;
-            ev.send(&json!({"type": "progress", "rev": rev, "id": id, "progress": body}));
+            ev.send(&api::StreamEvent::Progress {
+                rev,
+                id: id.to_owned(),
+                progress: body,
+            });
         }
     }
 
@@ -705,7 +719,10 @@ impl Shared {
     fn send_messages(ev: &mut Events, changed: &[crate::message::Message]) {
         let rev = ev.rev;
         for m in changed {
-            ev.send(&json!({"type": "message", "rev": rev, "message": m.json()}));
+            ev.send(&api::StreamEvent::Message {
+                rev,
+                message: m.wire(),
+            });
         }
     }
 
@@ -759,7 +776,6 @@ impl Shared {
     fn snapshot_of(&self, tiles: &[Slot], rev: u64) -> api::Snapshot {
         let (target, places) = (self.target_value(), self.places_value());
         api::Snapshot {
-            kind: "snapshot".to_owned(),
             rev,
             epoch: self.epoch.clone(),
             system: target.system,
@@ -773,6 +789,14 @@ impl Shared {
             inventory: self.inventory_value(),
             tiles: tiles.iter().map(Slot::summary).collect(),
         }
+    }
+
+    /// Tell what changed (the resources that differ from what the pages were last told) and say the stream's
+    /// revision after it: an answer carries this, never the state itself, so the page takes the change from the
+    /// stream, the one path every change reaches it by.
+    fn told(&self) -> u64 {
+        self.publish(false);
+        lock(&self.events).rev
     }
 
     /// The snapshot as JSON, the way a test reads it.
@@ -891,7 +915,10 @@ impl Shared {
         let summary = slot.summary();
         let mut ev = lock(&self.events);
         let rev = ev.bump(Change::Tile(id.to_owned()));
-        ev.send(&json!({"type": "tile", "rev": rev, "tile": summary}));
+        ev.send(&api::StreamEvent::Tile {
+            rev,
+            tile: Box::new(summary),
+        });
     }
 
     /// The tile `id` as the page reads it, for a call that makes or moves
@@ -901,6 +928,17 @@ impl Shared {
             .iter()
             .find(|t| t.id == id)
             .map(Slot::summary)
+    }
+
+    /// One event to one new listener (the receiver is held by the caller: a send cannot fail).
+    fn send_to(tx: &std::sync::mpsc::Sender<String>, event: &api::StreamEvent) {
+        match serde_json::to_string(event) {
+            Ok(s) => {
+                // a page that went away between its connection and its first events
+                let _ = tx.send(s);
+            }
+            Err(e) => tell!("error: preview: an event could not be written: {e}"),
+        }
     }
 
     /// A new listener.  With the epoch and last revision of a stream that
@@ -936,16 +974,25 @@ impl Shared {
             if !list {
                 let rev = ev.rev;
                 // (the receiver is held here until this returns: a send cannot fail)
-                let _ = tx
-                    .send(json!({"type": "resumed", "rev": rev, "epoch": self.epoch}).to_string());
+                Self::send_to(
+                    &tx,
+                    &api::StreamEvent::Resumed {
+                        rev,
+                        epoch: self.epoch.clone(),
+                    },
+                );
                 // the last of each resource that changed since, not the whole
                 for event in Self::resource_events(&ev, &names) {
                     let _ = tx.send(event);
                 }
                 for id in ids {
                     if let Some(t) = tiles.iter().find(|t| t.id == id) {
-                        let _ = tx.send(
-                            json!({"type": "tile", "rev": rev, "tile": t.summary()}).to_string(),
+                        Self::send_to(
+                            &tx,
+                            &api::StreamEvent::Tile {
+                                rev,
+                                tile: Box::new(t.summary()),
+                            },
                         );
                     }
                 }
@@ -954,18 +1001,20 @@ impl Shared {
         }
         if !resumed {
             let rev = ev.rev;
-            match serde_json::to_string(&self.snapshot_of(&tiles, rev)) {
-                Ok(s) => {
-                    // a page that went away between its connection and its snapshot
-                    let _ = tx.send(s);
-                }
-                Err(e) => tell!("error: preview: the snapshot could not be written: {e}"),
-            }
+            Self::send_to(
+                &tx,
+                &api::StreamEvent::Snapshot(Box::new(self.snapshot_of(&tiles, rev))),
+            );
         }
         // every kept message follows, so a page that came (or came back) has the whole record
         for m in ev.messages.all() {
-            let _ =
-                tx.send(json!({"type": "message", "rev": ev.rev, "message": m.json()}).to_string());
+            Self::send_to(
+                &tx,
+                &api::StreamEvent::Message {
+                    rev: ev.rev,
+                    message: m.wire(),
+                },
+            );
         }
         ev.clients.push(tx);
         rx

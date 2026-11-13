@@ -30,6 +30,10 @@ import { createRequests, SUPERSEDED } from './requests.js';
 /** @template {keyof import('./api').Calls} R @typedef {import('./api').Req<R>} Req */
 /** @template {keyof import('./api').Calls} R @typedef {import('./api').Res<R>} Res */
 /** @typedef {import('./api').Snapshot} Snapshot */
+/** @typedef {import('./api').StreamEvent} StreamEvent */
+/** @typedef {import('./api').MessageJson} MessageJson */
+/** @typedef {Extract<StreamEvent, { type: 'tier' }>} TierEvent */
+/** @typedef {Extract<StreamEvent, { type: 'resource' }>} ResourceEvent */
 /** @typedef {import('./api').TileSummary} TileSummary */
 
 /**
@@ -200,12 +204,13 @@ export function browserHost(requests = createRequests()) {
      * @param {{
      *   onSnapshot: (s: Snapshot) => void, onTile: (t: TileSummary) => void,
      *   onProgress: (id: string, p: import('./api').Progress) => void,
-     *   onMessage: (m: any) => void, onState: (s: 'live' | 'offline') => void,
-     *   onTier?: (m: { key: string, docRev: number, error?: string | null }) => void,
-     *   onResource?: (m: any) => void,
+     *   onMessage: (m: MessageJson) => void, onState: (s: 'live' | 'offline') => void,
+     *   onTier?: (m: TierEvent) => void,
+     *   onResource?: (m: ResourceEvent) => void,
+     *   onRev?: (rev: number, fresh: boolean) => void,
      * }} handlers
      */
-    connect({ onSnapshot, onTile, onProgress, onMessage, onState, onTier, onResource }) {
+    connect({ onSnapshot, onTile, onProgress, onMessage, onState, onTier, onResource, onRev }) {
       /** @type {string | null} */
       let epoch = null;
       /** @type {number | null} */
@@ -214,7 +219,8 @@ export function browserHost(requests = createRequests()) {
         const q = epoch != null && rev != null ? `?epoch=${epoch}&since=${rev}` : '';
         const es = new EventSource(`/api/events${q}`);
         es.onmessage = (e) => {
-          const m = JSON.parse(e.data);
+          // the stream's one boundary: what the program sends is its StreamEvent type (api.rs), and the page reads it as that
+          const m = /** @type {StreamEvent} */ (JSON.parse(e.data));
           if (m.type !== 'progress' && m.type !== 'message' && m.type !== 'tier' && m.rev != null) rev = m.rev;
           if (m.type === 'snapshot') { epoch = m.epoch; onState('live'); onSnapshot(m); }
           else if (m.type === 'resumed') onState('live');
@@ -223,6 +229,8 @@ export function browserHost(requests = createRequests()) {
           else if (m.type === 'message') onMessage(m.message);
           else if (m.type === 'tier') onTier?.(m);
           else if (m.type === 'resource') onResource?.(m);
+          // what the page holds now includes this revision (a snapshot starts the count again: another run's revisions restart)
+          if (m.type !== 'progress' && m.type !== 'message' && m.type !== 'tier' && m.rev != null) onRev?.(m.rev, m.type === 'snapshot');
         };
         es.onerror = () => { es.close(); token = null; onState('offline'); setTimeout(open, 1000); };
       };

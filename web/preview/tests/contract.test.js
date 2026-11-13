@@ -50,3 +50,24 @@ test('a route that is not in the contract cannot be called', () => {
   assert.notEqual(r.status, 0);
   assert.match(r.out, /host\.js/);
 });
+
+test('a field of a message or an event renamed in the program fails in the page that reads it', () => {
+  // the gate's numbers: the panel's rows read them (the record showed "NaN mm²" when the page read other names)
+  let r = checkWith((t) => t.replaceAll('band_mm2', 'bandMm2'));
+  assert.notEqual(r.status, 0, 'tsc passed although the gate data no longer has band_mm2');
+  assert.match(r.out, /messages\.js/, r.out);
+  // a message's own field
+  r = checkWith((t) => t.replace('tile_name: string', 'tileName: string'));
+  assert.notEqual(r.status, 0, 'tsc passed although a message no longer has tile_name');
+  assert.match(r.out, /tile_name/, r.out);
+  // an event of the stream, read by the stream's reader
+  r = checkWith((t) => t.replace('"type": "tile", rev: number, tile: TileSummary', '"type": "tile", rev: number, summary: TileSummary'));
+  assert.notEqual(r.status, 0, 'tsc passed although the tile event no longer has tile');
+  assert.match(r.out, /host\.js/, r.out);
+});
+
+test('a resource the program can tell and the page does not handle fails tsc', () => {
+  const r = checkWith((t) => t.replace('{ "name": "list", "value": List }', '{ "name": "list", "value": List } | { "name": "newThing", "value": string }'));
+  assert.notEqual(r.status, 0, 'tsc passed although a resource has no case in the page');
+  assert.match(r.out, /live\.js/, r.out);
+});

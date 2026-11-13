@@ -1,3 +1,4 @@
+// @ts-check
 // The messages store: one stream of what happened (docs/standards/errors.html,
 // crates/dharmatiles/src/message.rs).  The program sends every check, build,
 // gate verdict, export and failure as a message on the event stream; this keeps
@@ -18,14 +19,33 @@ import { signal } from '@preact/signals-core';
 import { ServerError } from './server-error.js';
 import { detailsOf, tileErrorDetails } from './problems.js';
 
+/** @typedef {import('./api').MessageJson} MessageJson */
+/** @typedef {import('./api').GateData} GateData */
+/** @typedef {import('./api').BuildData} BuildData */
+/** @typedef {import('./api').ServerData} ServerData */
+
+// A message's `data` is the numbers of its kind (api.rs, `MessageJson`): these are the readings that pair a kind with its type, once,
+// here; the program makes each kind's data from the one type (crate::message), and a test holds the pairing.
+/** @param {MessageJson | null | undefined} m @returns {GateData | null} */
+export const gateOf = (m) => (m?.kind === 'gate' ? /** @type {GateData} */ (m.data) : null);
+/** @param {MessageJson | null | undefined} m @returns {BuildData | null} */
+export const buildOf = (m) => (m?.kind === 'build' && m.code == null ? /** @type {BuildData} */ (m.data) : null); // (a build's note about the cache has a code and no numbers)
+/** @param {MessageJson} m @returns {ServerData | null} */
+export const serverOf = (m) => (m.kind === 'server' ? /** @type {ServerData} */ (m.data) : null);
+
 /** Is this a problem (something to fix or look at), rather than a record of what happened? */
+/** @param {MessageJson} m */
 export const isProblem = (m) => m.severity === 'error' || m.severity === 'warning' || m.severity === 'note';
 /** The record of a build: its timing and the gate's verdict, shown at the top of the panel. */
+/** @param {MessageJson} m */
 export const isRecord = (m) => m.kind === 'build' || m.kind === 'gate';
 const BUILD_KINDS = new Set(['build', 'gate', 'export', 'check', 'progress']);
 const ORDER = { error: 0, warning: 1, note: 2, info: 3 };
 
-/** The panel's filters: All, Errors, Notes, Build. */
+/**
+ * The panel's filters: All, Errors, Notes, Build.
+ * @type {[string, string, (m: MessageJson) => boolean][]}
+ */
 export const FILTERS = [
   // the check's "read the tile" line is a record for the Build filter, not a row among the problems
   ['all', 'All', (m) => !(m.kind === 'check' && m.severity === 'info')],
@@ -43,6 +63,7 @@ export function countsText({ errors, notes }) {
 export function createLog() {
   // bumped by every change and followed by every read: what draws the messages is drawn again when they change
   const version = signal(0);
+  /** @type {Map<number, MessageJson>} */
   const items = new Map();       // seq -> message
   const builds = new Map();      // tile id -> {startSeq}: the build under way, and the newest message before it
   const since = new Map();       // tile id -> messages cleared since the last build ended
@@ -55,6 +76,7 @@ export function createLog() {
 
   return {
     /** Take one message from the stream (the same message again replaces itself). */
+    /** @param {MessageJson} m */
     apply(m) {
       if (m.kind === 'progress') return; // not kept: the status line draws the ticks
       const old = items.get(m.seq);
@@ -174,7 +196,7 @@ export function statusOf(view, { t = null, live = true, p = null } = {}) {
   const fails = view.record?.gate?.severity === 'error';
   if (t.status === 'failed') return { verdict: view.counts.errors ? 'no build' : 'build failed', tone: 'bad', counts, progress: null };
   if (fails) return { verdict: 'fails the gate', tone: 'bad', counts, progress: null };
-  const data = view.record?.build?.data;
+  const data = buildOf(view.record?.build);
   const secs = data?.build_s;
   const warn = view.counts.errors > 0;
   const took = data?.cache === 'hit' ? ' · cached' : secs != null ? ` · ${secs.toFixed(2)} s` : '';
@@ -193,10 +215,11 @@ const asTileError = (m) => ({
  * or the page's is `detailsOf`, with the whole chain and both stacks; a record says what it says.
  * `source` is the text of the file the span is in, when the page has it.
  */
+/** @param {MessageJson} m @param {{ source?: string | null, env?: any }} [o] */
 export function detailsFor(m, { source = null, env } = {}) {
   const opts = env ? { source, env } : { source };
-  if (m.kind === 'server') {
-    const d = m.data || {};
+  const d = serverOf(m);
+  if (d) {
     const se = new ServerError({
       kind: d.kind || 'failure', message: m.text, help: m.help, causes: d.causes || [], backtrace: d.backtrace || '',
       context: { route: d.route || null, tile: m.tile_name || m.tile || null, version: d.version || null },
@@ -219,6 +242,7 @@ export function fitMsgHeight(h, room) {
  * held to by a test in the program), `angles` the band's and the steepest angle.  A number the message does not carry is left
  * out of the row, never shown as NaN.
  */
+/** @param {GateData} data @param {{ overhangDeg: number, steepestDeg: number }} angles */
 export function gateRows(data, { overhangDeg, steepestDeg }) {
   const area = (mm2, budget) => (mm2 == null ? null : budget == null ? `${Number(mm2).toFixed(2)} mm²` : `${Number(mm2).toFixed(2)} / ${Number(budget).toFixed(2)} mm²`);
   const tone = (mm2, budget) => (mm2 > (budget ?? 0) ? 'bad' : mm2 > 0 ? 'warn' : 'ok');

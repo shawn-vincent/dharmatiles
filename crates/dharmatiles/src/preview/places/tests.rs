@@ -245,6 +245,21 @@ fn removing_a_place_moves_the_ones_after_it_down() {
 }
 
 #[test]
+fn an_answer_names_the_revision_it_was_told_at_and_carries_no_state() {
+    let (shared, _, _, _) = serve("rev");
+    let before = shared.told();
+    let r = new_folder(&shared, &json!({ "root": 0, "dir": "", "name": "dungeon" }));
+    let body = ok(&r);
+    assert!(
+        body.get("snapshot").is_none(),
+        "the change reaches the page on the stream, not in the answer: {body}"
+    );
+    let rev = body["rev"].as_u64().expect("the answer names a revision");
+    assert!(rev > before, "the folder was told after {before}: {rev}");
+    assert_eq!(rev, shared.told(), "nothing was left to tell");
+}
+
+#[test]
 fn a_folder_is_made_renamed_and_trashed_inside_a_place_only() {
     let (shared, home, _, trash) = serve("folders");
     let r = new_folder(&shared, &json!({ "root": 0, "dir": "", "name": "dungeon" }));

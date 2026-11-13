@@ -1,10 +1,11 @@
+// @ts-check
 // The messages panel (js/messages.js is the stream): the filters, and under them the running build, the build's record and
 // every open message as a row with its actions.  Neither owns a message: fix the cause and the row, the mark in the source and
 // the count go with it.  `MessagesBody({m, act})` and `MessageFilters({m, act})` are functions of the model (`m`, built in
 // editor/panel.js from the messages stream, the tile, the progress and the document) and of `act`, what the buttons do.
 // Which filter is on and which message a mark in the source pointed to are the model's.
 
-import { FILTERS, filterRows, gateRows } from '../messages.js';
+import { FILTERS, buildOf, filterRows, gateOf, gateRows, serverOf } from '../messages.js';
 import { CopyButton } from './copy-button.js';
 import { html, useEffect } from './html.js';
 
@@ -29,7 +30,7 @@ function Running({ m }) {
 
 /** The gate's numbers as rows under the record. */
 function Numbers({ gate, m, t }) {
-  const a = gate?.data;
+  const a = gateOf(gate);
   if (!a) return html`<dl class="nums"></dl>`;
   const rows = gateRows(a, m.angles.value);
   if (t?.record?.record?.seed != null) rows.push(['Seed', t.record.record.seed, '']);
@@ -41,14 +42,14 @@ function Record({ rec, m, act }) {
   const gate = rec.gate, fails = gate?.severity === 'error';
   // "Built in 2.1 s · passes the printability gate": the numbers below, and each reason the gate fails on its own line
   const verdict = gate?.text.split(':')[0].replace(/^(Passes|Fails)/, (w) => w.toLowerCase());
-  const target = rec.build?.data?.target ? ` · for ${rec.build.data.target}` : '';
+  const target = buildOf(rec.build)?.target ? ` · for ${buildOf(rec.build)?.target}` : '';
   void m.shown.value; // the worst face is known once the mesh is
   return html`<div class=${`msg rec${rec.dim ? ' dim' : ''}`}><i class=${`dot ${fails ? 'bad' : 'ok'}`}></i><div class="body">
     <div class="line">${`${[rec.build?.text, verdict].filter(Boolean).join(' · ')}${target}`}</div>
-    ${(gate?.data?.failures ?? []).map((f, i) => html`<div class="fail" key=${i}>${f}</div>`)}
+    ${(gateOf(gate)?.failures ?? []).map((f, i) => html`<div class="fail" key=${i}>${f}</div>`)}
     ${gate ? html`<${Numbers} gate=${gate} m=${m} t=${t} />` : null}
     <div class="acts">${gate && act.canShowWorst() ? html`<button type="button" class="btn" title="Take the camera to the largest face the gate painted" onClick=${act.showWorst}>Show worst face</button>` : null}
-      <${CopyButton} text=${() => `${rec.build?.text ?? ''}\n${gate?.text ?? ''}\n${JSON.stringify(gate?.data ?? {}, null, 2)}`} title="Copy the record" /></div></div></div>`;
+      <${CopyButton} text=${() => `${rec.build?.text ?? ''}\n${gate?.text ?? ''}\n${JSON.stringify(gateOf(gate) ?? {}, null, 2)}`} title="Copy the record" /></div></div></div>`;
 }
 
 function Row({ row, m, act }) {
@@ -63,7 +64,7 @@ function Row({ row, m, act }) {
   const source = msg.span && msg.span.file === m.file.value ? m.text.value ?? null : null;
   return html`<div class=${`msg ${msg.severity}${dim ? ' dim' : ''}${lit ? ' lit' : ''}`} data-seq=${msg.seq} ref=${(el) => { if (el && lit) el.scrollIntoView({ block: 'nearest' }); }}>
     <i class=${`dot ${msg.severity}`}></i>
-    <div class="body"><div class="head">${msg.code ? html`<code class="code">${msg.code}</code>` : null}<span class="text">${msg.kind === 'server' ? `${msg.data?.origin === 'page' ? 'The page: ' : ''}${msg.text}` : msg.text}</span></div>
+    <div class="body"><div class="head">${msg.code ? html`<code class="code">${msg.code}</code>` : null}<span class="text">${serverOf(msg)?.origin === 'page' ? 'The page: ' : ''}${msg.text}</span></div>
       ${msg.help ? html`<div class="help">${msg.help}</div>` : null}
       ${msg.span ? html`<div class="where" title=${msg.span.file}>${`${msg.span.file.split('/').slice(-1)[0]}:${msg.span.line}:${msg.span.col}`}</div>` : null}</div>
     <div class="acts">
