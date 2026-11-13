@@ -386,7 +386,33 @@ fn scene_messages(notes: &[Note], diags: &[Diag], id: &str, name: &str) -> Vec<M
 
 /// Open or rebuild a print list or a map for the page: the map's scene first
 /// (cheap: nothing is built but what the crown check looks at), then its plates.
+/// A test's hand on the moment between the files' times being taken and the files being read: `path`'s hook runs there,
+/// once, so a test can change a file exactly where a real change would be the race.
+#[cfg(test)]
+pub(super) static AFTER_SEEN: std::sync::Mutex<BTreeMap<String, Box<dyn FnOnce() + Send>>> =
+    std::sync::Mutex::new(BTreeMap::new());
+
+#[cfg(test)]
+fn after_seen(path: &str) {
+    if let Some(hook) = lock(&AFTER_SEEN).remove(path) {
+        hook();
+    }
+}
+
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
+    // the times of the files this plan will be of, taken *before* they are read: a file that changes while the plan is
+    // made is a change the worker sees afterwards, never one this plan is taken to have included
+    let mut seen = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
+    // the inventory decides what prints: the list is laid out again when it changes
+    if let Some(h) = shared.home.as_deref() {
+        let inv = dt_eval::inventory::path_in(h)
+            .to_string_lossy()
+            .into_owned();
+        let at = crate::watch::mtime(&inv);
+        seen.insert(inv, at);
+    }
+    #[cfg(test)]
+    after_seen(path);
     // one read: the revision, the scene and the plan are all of this text (a read that
     // failed is reported by the plan, below)
     // (and the file's revision, read with it: this plan and scene are of that revision)
@@ -423,7 +449,15 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         }
         (list, sc)
     });
-    rebuild_plates(shared, id, path, &text, rev, scene.as_ref().map(|(_, s)| s));
+    rebuild_plates(
+        shared,
+        id,
+        path,
+        &text,
+        rev,
+        scene.as_ref().map(|(_, s)| s),
+        seen,
+    );
 }
 
 fn rebuild_plates(
@@ -433,6 +467,7 @@ fn rebuild_plates(
     text: &Result<String, Vec<Diag>>,
     rev: u64,
     scene: Option<&Scene>,
+    seen: BTreeMap<String, Option<std::time::SystemTime>>,
 ) {
     let t0 = Instant::now();
     let scene_json = scene.map(|s| s.json.value());
@@ -441,15 +476,7 @@ fn rebuild_plates(
     let no_notes = (Vec::new(), Vec::new());
     let (notes, diags) = scene.map_or(no_notes, |s| (s.notes.clone(), s.diags.clone()));
     let is_map = scene.is_some_and(|s| s.json.map);
-    let mut files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
-    // the inventory decides what prints: the list is laid out again when it changes
-    if let Some(h) = shared.home.as_deref() {
-        let inv = dt_eval::inventory::path_in(h)
-            .to_string_lossy()
-            .into_owned();
-        let at = crate::watch::mtime(&inv);
-        files.insert(inv, at);
-    }
+    let files = seen;
     let writable = std::fs::metadata(path).is_ok_and(|m| !m.permissions().readonly());
     let view = lock(&shared.tiles)
         .iter()

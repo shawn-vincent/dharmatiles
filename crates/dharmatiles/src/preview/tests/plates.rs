@@ -136,3 +136,42 @@ fn a_print_list_that_does_not_plan_still_offers_its_printers() {
 fn p_rev(r: &Running) -> u64 {
     tiles(r)["tiles"][0]["docRev"].as_u64().unwrap_or(0)
 }
+
+#[test]
+fn a_file_that_changes_while_a_plan_is_made_is_a_change_the_worker_still_sees() {
+    let dir = std::env::temp_dir().join(format!("dt-plates-race-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("kit.dmap");
+    std::fs::write(
+        &file,
+        "dharmatiles version=1\nmap {\n    piece \"lib:tests/ground/1x1-flat\" at=\"(0sq, 0sq)\"\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n",
+    )
+    .unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let roots =
+        vec![Root::new("My tiles", RootKind::Dir(dir.clone())).with_role(roots::Role::Home)];
+    let shared =
+        Arc::new(Shared::with_roots(roots, &[], &Options::default()).with_home(dir.clone()));
+    shared.rescan();
+    let id = tile_id(&path);
+    // the inventory appears exactly between the plan's files being timed and being read: the race
+    let inv = dt_eval::inventory::path_in(&dir);
+    let at = inv.clone();
+    crate::preview::plates::AFTER_SEEN.lock().unwrap().insert(
+        path.clone(),
+        Box::new(move || {
+            std::fs::write(&at, "dharmatiles version=1\ninventory {\n}\n").unwrap();
+        }),
+    );
+    crate::preview::plates::rebuild(&shared, &id, &path);
+    let slot_changed = lock(&shared.tiles)
+        .iter()
+        .find(|t| t.id == id)
+        .is_some_and(Slot::changed);
+    assert!(
+        slot_changed,
+        "the plan was made without the inventory that appeared while it was made, and the worker is not told the file changed since"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
