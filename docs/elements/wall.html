@@ -88,7 +88,7 @@ tile size="1x1" seed=62 {
     stack {
         base
         dirt
-        wall at="north west" style=cut-stone seed=12 {
+        wall at="north west" style=cut-stone {
             height full                 // up to the wall-top level, $wallHeight
             thickness "7dmm"
         }
@@ -106,7 +106,7 @@ stack {
     dirt
     wall at=lane side=left style=cut-stone
 }</code></pre>
-<p>The line is cut into straight runs that stray no more than <code>0.35dmm</code> from it, and a run turns at each vertex. A left turn of exactly a right angle is a corner like an edge path's, the two runs taking turns passing through it. Any other turn is a bend: the two runs overlap, the one on the outside of the turn running on past the vertex so its face is whole. A wall turns at most 150 degrees at one point. The free ends of an open line are textured ends; a line that returns to its first point makes a ring. A line that meets a tile edge ends flush with it when it meets it square, and otherwise runs on past it and is cut at the tile edge. Library: <a href="../../library/tiles/walls/2x2-wall-curve.dtile"><code>lib:tiles/walls/2x2-wall-curve.dtile</code></a>. Pin a wall's look with <code>seed=</code> while the rest of the tile changes.</p>
+<p>The line is cut into straight runs that stray no more than <code>0.35dmm</code> from it, and a run turns at each vertex. A left turn of exactly a right angle is a corner like an edge path's, the two runs taking turns passing through it. Any other turn is a bend: the two runs overlap, the one on the outside of the turn running on past the vertex so its face is whole. A wall turns at most 150 degrees at one point. The free ends of an open line are textured ends; a line that returns to its first point makes a ring. A line that meets a tile edge ends flush with it when it meets it square, and otherwise runs on past it and is cut at the tile edge. Library: <a href="../../library/tiles/walls/2x2-wall-curve.dtile"><code>lib:tiles/walls/2x2-wall-curve.dtile</code></a>. Give a wall a <code>seed=</code> of its own to pin its look while the rest of the tile changes; the library walls do not, so they follow the tile seed.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference wall -->

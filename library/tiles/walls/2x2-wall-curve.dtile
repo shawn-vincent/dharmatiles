@@ -11,7 +11,7 @@ tile size="2x2" seed=33 {
     stack {
         base
         dirt
-        wall at=lane side=left style=cut-stone seed=7 {
+        wall at=lane side=left style=cut-stone {
             height full
             thickness "7dmm"
         }

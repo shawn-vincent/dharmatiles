@@ -135,3 +135,38 @@ test('the seed strip shows the current seed first and four new ones, marks one y
   assert.deepEqual(calls, [[10, 'seed', picked]], 'one write of the seed: one step of history');
   assert.equal(root.querySelectorAll('.seed-card').length, 0, 'the strip closes');
 });
+
+test('the seed row says which entries keep their own seed, from the stack items, and a name selects its entry', async () => {
+  const root = install();
+  const { render, html } = await import('../js/view/html.js');
+  const { Sheet, pinsOf, pinLine } = await import('../js/view/sheet.js');
+  const stack = [
+    { key: 'dirt', label: 'dirt', seed: null },
+    { key: 'wall', label: 'wall', seed: 15 },
+    { key: 'flagstones', label: 'flagstones', seed: 22 },
+    { key: null, label: 'base', seed: 3 },
+  ];
+  const none = pinsOf(stack.slice(0, 1));
+  assert.deepEqual(none, []);
+  assert.equal(pinLine(none), '');
+  assert.equal(pinLine(pinsOf([stack[1]])), 'wall keeps its own seed (15)');
+  assert.equal(pinLine(pinsOf(stack)), 'wall and flagstones keep their own seeds');
+  assert.equal(pinLine([{ key: 'a', name: 'a', seed: '1' }, { key: 'b', name: 'b', seed: '2' }, { key: 'c', name: 'c', seed: '3' }]), 'a, b and c keep their own seeds');
+  const f = fakeHost();
+  const svc = createThumbs({ host: f.host, draw: drawn, scope: 'strip' });
+  const schema = { name: 'tile', controls: [{ name: 'seed', unit: 'number', numeric: true, default: '1' }] };
+  const opened = [];
+  const model = {
+    title: 't', kind: 'tile', slim: true,
+    groups: [{ at: 10, schema, written: [{ name: 'seed', text: 'seed=97', span: [20, 7] }] }],
+    seedStrip: { svc, spec: { tile: 't', rev: '1' }, current: 97, owned: new Set(), onError: (e) => { throw e; } },
+    seedPins: pinsOf([stack[1]]), openEntry: (id) => opened.push(id),
+  };
+  const api = { writable: () => true, canMine: () => false, replace() {}, set() {}, onField() {}, checkValue: async () => null };
+  render(html`<${Sheet} model=${model} api=${api} />`, root);
+  await settle();
+  const line = root.querySelector('.pins');
+  assert.equal(line.textContent, 'wall keeps its own seed (15)');
+  line.querySelector('button').dispatchEvent({ type: 'click' });
+  assert.deepEqual(opened, ['wall']);
+});

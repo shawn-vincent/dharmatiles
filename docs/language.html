@@ -135,7 +135,7 @@ scatter perSquare=3 { stone size="[3dmm, 4dmm:3, 5.5dmm]" }</code></pre>
 
 <h3 id="entry">What every stack entry takes</h3>
 <ul>
-  <li><code>seed=</code>: pins this entry's own randomness while the tile seed changes everything else.</li>
+  <li><code>seed=</code>: pins this entry&rsquo;s own randomness while the tile seed changes everything else. The tile level&rsquo;s <code>seed</code> row says which entries do this (<q>wall keeps its own seed (15)</q>), since rolling the tile seed will not change them.</li>
   <li><code>id=</code>: a name for the entry, for edits and diagnostics.</li>
   <li><code>weight=</code>: only on a child of a <code>scatter</code>, its share of the mix.</li>
   <li>The place words its element accepts (<a href="#placement">section 5</a>).</li>
@@ -622,7 +622,7 @@ tile size="1x1" seed=64 {
 
         // Along the north edge, then the west edge.  On a tile edge a
         // wall always stands inside, its outer face flush with the edge.
-        wall at="north west" style=fieldstone seed=15 {
+        wall at="north west" style=fieldstone {
             height full                     // up to $wallHeight (33.1dmm)
             thickness "7dmm"
             coping loose                    // or: on-edge
@@ -638,7 +638,7 @@ tile size="1x1" seed=64 {
 }</code></pre>
 <ul>
   <li>Two edges in <code>at=</code> make a corner.</li>
-  <li>The wall's <code>seed=15</code> pins its stones while the tile seed varies everything else.</li>
+  <li>The wall has no <code>seed=</code> of its own, so its stones follow the tile seed; write one on the wall to pin them (the seed row then says so).</li>
   <li>On OpenLOCK, the <code>7dmm</code> thickness and the stone sizes all shrink with the square.</li>
 </ul>
 

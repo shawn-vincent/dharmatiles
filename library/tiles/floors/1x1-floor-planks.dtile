@@ -4,6 +4,6 @@ tile size="1x1" seed=73 {
     stack {
         base
         dirt                                // under the boards
-        planks style=random texture=worn seed=24
+        planks style=random texture=worn
     }
 }

@@ -13,7 +13,7 @@ import { failed, showError } from '../problems.js';
 import { html, render, useEffect, useRef } from '../view/html.js';
 import { Outline } from '../view/outline.js';
 import { PropertyPage } from '../view/property.js';
-import { Sheet } from '../view/sheet.js';
+import { pinsOf, Sheet } from '../view/sheet.js';
 import { ListBlock } from '../view/list-block.js';
 import { $, host, makeMine } from './app.js';
 import { edited, replaceBytes, spansUsable } from './document.js';
@@ -122,7 +122,7 @@ function tileModel() {
   });
   // under the tile's own controls: what the inventory says of it and "I have this", then what it holds
   const tail = html`${isTileDoc(t) ? html`${haveBlock(t)}<${ListBlock} t=${t} lists=${lists()} addTo=${addTo} />` : null}${tileContents()}`;
-  return { title: stem(t), kind: 'tile', href: node.href, groups, tail, slim: true, seedStrip: seedStrip(t, own) };
+  return { title: stem(t), kind: 'tile', href: node.href, groups, tail, slim: true, seedStrip: seedStrip(t, own), seedPins: pinsOf(stackItems()), openEntry: (/** @type {string} */ id) => outlineOn.open('entry', id) };
 }
 
 /** A run of written text (a line's points, a region's lines) as a sheet setting. */

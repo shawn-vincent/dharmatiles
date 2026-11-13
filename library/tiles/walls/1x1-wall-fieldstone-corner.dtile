@@ -11,7 +11,7 @@ tile size="1x1" seed=64 {
 
         // Along the north edge, then the west edge.  On a tile edge a
         // wall always stands inside, its outer face flush with the edge.
-        wall at="north west" style=fieldstone seed=15 {
+        wall at="north west" style=fieldstone {
             height full                     // up to the wall-top level (33.1dmm)
             thickness "7dmm"
             coping loose                    // or: on-edge

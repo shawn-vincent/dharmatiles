@@ -70,6 +70,8 @@ fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
     let mut v = item(named.label.clone(), &named.element);
     v["key"] = json!(named.id.as_str());
     v["what"] = json!(what);
+    // the seed the entry pins (`seed=`), from the decoded entry: the page says which entries keep their own
+    v["seed"] = json!(e.seed);
     v["file"] = json!(e.src.name());
     let (start, len) = (e.span.offset(), e.span.len());
     let text = e.src.inner();
@@ -224,6 +226,20 @@ mod tests {
                 "DungeonBlocks base",
             ]
         );
+    }
+
+    #[test]
+    fn an_entry_that_pins_its_seed_says_so_and_the_others_say_null() {
+        let c = dt_eval::check(
+            &Files,
+            "lib:tests/walls/1x1-wall-stone+grass.dtile",
+            &Options::default(),
+        )
+        .unwrap();
+        let items = super::items(c.tile.as_ref().unwrap(), "db").unwrap();
+        let seed = |what: &str| items.iter().find(|v| v["what"] == what).unwrap()["seed"].clone();
+        assert_eq!(seed("wall"), 11);
+        assert!(seed("dirt").is_null());
     }
 
     #[test]

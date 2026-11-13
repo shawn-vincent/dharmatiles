@@ -235,12 +235,45 @@ export function SeedStrip({ s, seeds, ro, onPick, onMore, onClose }) {
   <div class="seed-strip-acts"><button type="button" class="btn" onClick=${onMore}>Roll again</button><button type="button" class="btn" onClick=${onClose}>Close</button></div>`;
 }
 
+// ---- the entries that keep their own seed ---------------------------------------------------------------------
+
+/**
+ * The stack entries that write `seed=` (they keep their own randomness when the tile's seed is rolled), as the stack
+ * items the program describes say (`seed`, the entry's own `seed=`): `{key, name, seed}` in written order.  The base and an item without a
+ * `seed` are not in it.  @param {any[]} stack
+ */
+export function pinsOf(stack) {
+  const pins = [];
+  for (const it of stack) {
+    if (it.key != null && it.seed != null) pins.push({ key: it.key, name: it.label || it.what || it.key, seed: String(it.seed) });
+  }
+  return pins;
+}
+
+/**
+ * The words under the tile's seed row: the pins as names and the rest, e.g. ["wall", " keeps its own seed (15)"] or
+ * ["wall", " and ", "flagstones", " keep their own seeds"].  `pinLine` is the same words as one string.
+ * @param {{ key: string, name: string, seed: string }[]} pins
+ * @returns {(string | { key: string, name: string, seed: string })[]}
+ */
+export function pinParts(pins) {
+  if (!pins.length) return [];
+  if (pins.length === 1) return [pins[0], ` keeps its own seed (${pins[0].seed})`];
+  const out = [];
+  pins.forEach((p, i) => { if (i) out.push(i === pins.length - 1 ? ' and ' : ', '); out.push(p); });
+  out.push(' keep their own seeds');
+  return out;
+}
+export const pinLine = (/** @type {{ key: string, name: string, seed: string }[]} */ pins) => pinParts(pins).map((x) => (typeof x === 'string' ? x : x.name)).join('');
+
 // ---- a row ----------------------------------------------------------------------------------------------------
 
 function Row({ g, c, s, editable, api, put, model }) {
   // the tile's own seed row: its dice shows a strip of candidates under the row (`model.seedStrip`)
   const strip = c.name === 'seed' && model.seedStrip && model.groups[0] === g ? model.seedStrip : null;
   const [seeds, setSeeds] = useState(/** @type {(number | null)[] | null} */ (null));
+  // the entries that keep their own seed when this one is rolled (`model.seedPins`, from the stack)
+  const pins = strip ? model.seedPins || [] : [];
   const ro = !editable || (s && s.file);
   const v = s ? valueOf(s.text, c.name) : null;
   const shown = v ? v.text : (dflt(c) ?? '');
@@ -273,7 +306,8 @@ function Row({ g, c, s, editable, api, put, model }) {
     <span class="cell">${cell}</span>
     ${s && !ro && !c.required ? html`<button type="button" class="x" title=${`Take ${c.name} out (back to its default)`} onClick=${() => put(g, c.name, null)}><${Icon} name="x" size=${14} /></button>` : null}
     ${api.detail?.(c) ? html`<button type="button" class="chev" title=${`More about ${c.name}`} aria-label=${`More about ${c.name}`} onClick=${() => api.openControl?.(Math.max(0, model.groups.indexOf(g)), c.name)}><${Icon} name="chevron-right" size=${14} /></button>` : null}
-  </div>${strip && seeds ? html`<${SeedStrip} s=${strip} seeds=${seeds} ro=${ro}
+  </div>${pins.length ? html`<p class="note pins">${pinParts(pins).map((x) => (typeof x === 'string' ? x
+      : html`<button type="button" class="linkish" key=${x.key} title=${`Select ${x.name}`} onClick=${() => model.openEntry?.(x.key)}>${x.name}</button>`))}</p>` : null}${strip && seeds ? html`<${SeedStrip} s=${strip} seeds=${seeds} ro=${ro}
     onPick=${(/** @type {number | null} */ x) => { setSeeds(null); if (x !== strip.current && x != null) put(g, 'seed', x); }}
     onMore=${() => setSeeds(candidates(strip.current))} onClose=${() => setSeeds(null)} />` : null}`;
 }
