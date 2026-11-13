@@ -733,7 +733,13 @@ pub(super) fn show(shared: &Shared, v: &Value) -> (&'static str, Value) {
 
 /// Build the list again: its plate in view or its file changed.
 pub(super) fn again(shared: &Shared, id: &str) {
-    shared.update(id, |t| t.stale = true);
+    // building from now: a plan shown as ready while a newer one is due would be read as the answer
+    shared.update(id, |t| {
+        t.stale = true;
+        if t.status != State::Idle {
+            t.status = State::Building;
+        }
+    });
     shared.queue_cv.notify_all();
 }
 
@@ -812,10 +818,30 @@ pub(super) fn set(shared: &Shared, v: &Value) -> (&'static str, Value) {
     match set_word(&path, key, value) {
         Ok(()) => {
             if key == "printer" {
-                // another bed: back to the first plate
-                if let Some(t) = lock(&shared.tiles).iter_mut().find(|t| t.id == id) {
+                // another bed: back to the first plate; and the printer named at once (the title bar's
+                // chip and the status line read it), not only when the new plan lands
+                let name = value.unwrap_or(dt_doc::map::DEFAULT_PRINTER);
+                let machine = dt_eval::printer_machine(name, shared.home.as_deref()).ok();
+                shared.update(&id, |t| {
                     t.plate = 0;
-                }
+                    if let Some(p) = t
+                        .plan
+                        .as_mut()
+                        .and_then(|p| p.get_mut("plates"))
+                        .and_then(Value::as_object_mut)
+                    {
+                        p.insert("printer".into(), json!(name));
+                        p.insert(
+                            "label".into(),
+                            json!(machine.as_ref().map(dt_eval::Machine::label)),
+                        );
+                        p.insert("bed".into(), json!(machine.as_ref().and_then(|m| m.bed)));
+                        p.insert(
+                            "slots".into(),
+                            json!(machine.as_ref().map(dt_eval::Machine::slot_count)),
+                        );
+                    }
+                });
             }
             again(shared, &id);
             ("200 OK", json!({"ok": true}))

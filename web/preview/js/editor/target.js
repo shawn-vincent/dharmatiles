@@ -4,7 +4,8 @@
 // part shows it and asks.
 //
 // A print list or a map names its own printer (in its plates panel), so on one the chip says that
-// printer, "for this list"; the card still sets the target tiles build for.
+// printer, "this map", and the card's printer list changes that one: what the chip names is what
+// you pick.  The base system stays the target tiles build for.
 
 import { failed } from '../problems.js';
 import { $, host, toast } from './app.js';
@@ -41,22 +42,35 @@ function render() {
   if (d) {
     $('target-sys').textContent = d.label;
     $('target-printer').textContent = `this ${d.what}`;
-    $('target').title = `This ${d.what} prints on ${d.label} (${d.name}), the printer named in its plates panel. Tiles you open are built for ${targetLabel({ system, printer })}. Click to change that.`;
+    $('target').title = `This ${d.what} prints on ${d.label} (${d.name}). Click to choose its printer.`;
   } else {
     $('target-sys').textContent = SYSTEMS[system] || system;
     $('target-printer').textContent = printer;
     $('target').title = `Building for ${targetLabel({ system, printer })}. Click to change the base system or the printer.`;
   }
   $('target-for').hidden = !d;
-  if (d) $('target-for').textContent = `This ${d.what} prints on ${d.label}: choose that in its plates panel. The target below is for tiles.`;
+  if (d) $('target-for').textContent = `The printer below is this ${d.what}'s (its plates line). Tiles you open build for ${targetLabel({ system, printer })}; the base system here is theirs.`;
   for (const b of $('target-system').children) b.classList.toggle('on', b.dataset.sys === system);
   // the server lists them; one that has gone from disk is still the chosen one until it is changed
-  const names = printers.some((p) => p.name === printer) ? printers : [...printers, { name: printer, mine: false, bed: null }];
-  const sig = JSON.stringify([names, printer]);
+  const current = d ? d.name : printer;
+  const names = printers.some((p) => p.name === current) ? printers : [...printers, { name: current, mine: false, bed: null }];
+  const t = tile();
+  const sig = JSON.stringify([names, current, d ? t?.id : null]);
   if (sig === drawn && chooser) return; // the same list: leave a search or an import as it is
   drawn = sig;
-  chooser = printerChooser({ printers: names, current: printer, onPick: (name) => choose({ printer: name }), key: 'target' });
+  const onPick = d ? (name) => chooseFor(t.id, name) : (name) => choose({ printer: name });
+  chooser = printerChooser({ printers: names, current, onPick, needBed: !!d, key: 'target' });
   $('target-printers').replaceChildren(chooser);
+}
+
+/** A print list's or a map's own printer: its plates line, as its plates panel sets it. */
+async function chooseFor(id, name) {
+  const r = await host.platesSet(id, 'printer', name);
+  if (r.status !== 200) {
+    toast(r.body?.error || 'could not change the printer');
+    failed('Could not change the printer', r);
+  }
+  // the list plans again; its new printer comes back on the event stream at once
 }
 
 async function choose(body) {
