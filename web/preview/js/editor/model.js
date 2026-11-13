@@ -13,7 +13,8 @@
 import { computed, signal } from '@preact/signals-core';
 import * as M from '../map-model.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
-import { systemName } from '../inventory.js';
+import { pill as invPill, systemName } from '../inventory.js';
+import { levelOf, placesOf, writable } from '../folders.js';
 import { docs, planOf } from './docs.js';
 import './mode.js'; // `view.dmode` is derived there
 import { isPlates, server, stem, tile, view } from './stores.js';
@@ -96,4 +97,24 @@ export const platesPanel = {
   currentPrinter: computed(() => (tileNow.value && docs.scene(tileNow.value.id)?.printer) ?? plan.value?.printer),
   readOnly: computed(() => !(plan.value?.writable ?? planOf(tileNow.value)?.writable)),
   name: computed(() => (tileNow.value ? stem(tileNow.value).replace(/\.dmap$/i, '') : '')),
+};
+
+// ---- the folder levels ---------------------------------------------------------------------------------------------
+
+/** What the browser's levels draw (js/view/places-panel.js): the level `view.place` is, what the program lists there, and the filter's words. */
+export const browse = {
+  ready: computed(() => server.get().ready),
+  data: computed(() => {
+    const { roots, tiles, folders, home, inventory, system } = server.get();
+    const level = view.get().place;
+    const query = view.get().query;
+    const r = roots[level.root];
+    return {
+      roots, tiles, folders, level, query, places: placesOf(roots), openTile: view.get().tileId, home,
+      // have and need pills: what the inventory says of a tile for the target system (the chip in the title bar)
+      pill: (t) => invPill(inventory, t.path, system), system, inventory,
+      view: level.root == null ? null : levelOf({ roots, tiles, folders, root: level.root, dir: level.dir, query }),
+      writable: !!r && writable(r) && !query.trim(),
+    };
+  }),
 };

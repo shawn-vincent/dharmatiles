@@ -4,7 +4,7 @@
 //
 //   * the tile level (`haveBlock`): "3 printed · seeds 7, 12, 97" and **I have this**, which adds one good print
 //     of the tile's current seed, in the colour mode you pick (the last one you used by default);
-//   * the folder rows' have and need pills (folder-list.js, from js/inventory.js);
+//   * the folder rows' have and need pills (view/places-panel.js, from js/inventory.js);
 //   * the inventory document's own view (this file's `render`): its pieces grouped by tile with the filters
 //     (system, colour, have), the per-line actions (gone, reprint), a tile that moved with its one-click re-link,
 //     and **Source**, the file's own KDL.

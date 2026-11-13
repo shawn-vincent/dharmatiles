@@ -13,7 +13,7 @@
 //!   a file that is not understood is never added to.
 //!
 //! The page's side is `js/editor/inventory.js` (the view) and the pieces in
-//! `plates.js`, `folder-list.js` and `levels.js`.  Docs: docs/inventory.html.
+//! `plates.js`, `view/places-panel.js` and `levels.js`.  Docs: docs/inventory.html.
 
 use std::collections::BTreeMap;
 use std::path::Path;

@@ -5,22 +5,24 @@
 // is `view.place` ({root, dir}; root null is Places) and shows while the sidebar is on its browser
 // page; a tile opened from it shows the editor page, whose crumbs begin with the same path.
 //
-// This part draws the level (rows: js/folder-list.js; what a level lists: js/folders.js), slides
+// This part draws the level (rows: js/view/places-panel.js; what a level lists: js/folders.js), slides
 // between levels as the tile's levels do, keeps the address (`#place=…&dir=…`), and does what the
 // rows do: make a tile or a folder, rename, move (a drag onto a folder row or a crumb, or the row's
 // menu), copy, trash with an Undo, add a folder with the program's own chooser.  Every one is a call
 // to the program, which checks it again; the page never sends a path, only a place's number, a folder's
 // path below it and a tile's id.  The list is updated from the program's answer, which carries the list.
 
+import { effect } from '@preact/signals-core';
 import { fillCrumbs, keepEnd, pinEnd } from '../crumbs.js';
-import { buildFolderList, rows as listRows } from '../folder-list.js';
+import { html, render } from '../view/html.js';
+import { ContextLines, FolderActions, Levels } from '../view/places-panel.js';
 import {
-  canDrop, contextForFolder, levelExists, levelOf, levelOfParams, moveTargets, parentLevel, placeParams, placesOf, renamedDir, stemOf, whereIs, writable,
+  canDrop, contextForFolder, levelOf, levelOfParams, moveTargets, parentLevel, placeParams, placesOf, renamedDir, stemOf, whereIs, writable,
 } from '../folders.js';
 import { openMenu } from '../menu.js';
 import { buildHash, crumbsFor, moveRow, parseHash } from '../nav.js';
 import { copiedNote } from '../mine.js';
-import { pill as invPill, systemName } from '../inventory.js';
+import { systemName } from '../inventory.js';
 import { failed, whyOf } from '../problems.js';
 import { $, host, toast } from './app.js';
 import { canLeave } from './document.js';
@@ -30,7 +32,8 @@ import { select } from './open.js';
 import { nameField } from './rows.js';
 import { openNewTile, renameTile } from './tiles.js';
 import { listMenu, newList } from './lists.js';
-import { server, tile, tileById, view, whenListedWhere } from './stores.js';
+import { browse } from './model.js';
+import { placeAt, server, tile, tileById, view, whenListedWhere } from './stores.js';
 
 const SLIDE_MS = 200;
 const EASE = 'cubic-bezier(.2, .7, .2, 1)';
@@ -41,20 +44,10 @@ const levelNow = () => view.get().place || TOP;
 const depthOfLevel = (l) => (l.root == null ? 0 : 1 + (l.dir ? l.dir.split('/').length : 0));
 const keyOf = (l) => `${l.root ?? 'places'}|${l.dir || ''}`;
 const browsing = () => view.get().page === 'browse';
-const same = (a, b) => keyOf(a) === keyOf(b);
 
 const scrolls = new Map(); // a level's key -> how far its list was scrolled
-let drawn = null;          // {key, sig, depth}: what the list shows
 let started = false;
-let dirty = false;         // the data changed under a drag: drawn again when it ends
 let leftFrom = null;       // the folder or place the last Up left, so the keyboard goes back to its row
-
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
 
 // ---- what the program says of a refusal ----------------------------------------------------------
 
@@ -71,8 +64,7 @@ const take = (r) => { if (r.body?.snapshot) applySnapshot(r.body.snapshot); };
 /** Show the folder level `next` (Places for null), on the browser page. */
 export function goTo(next, { focus = false } = {}) {
   const to = next || TOP;
-  $('filter').value = '';
-  view.set({ place: { root: to.root ?? null, dir: to.dir || '' }, page: 'browse' });
+  view.set({ placeAt: placeAt(to), query: '', page: 'browse' });
   if (focus) requestAnimationFrame(() => focusRow());
 }
 
@@ -87,9 +79,9 @@ export function goUpFolder() {
 }
 
 function focusRow(match = null) {
-  const list = $('folder').querySelector('.flist');
+  const list = $('folder')?.querySelector('.flist');
   if (!list) return;
-  const all = listRows(list);
+  const all = [...list.querySelectorAll('.orow')];
   const row = (match && all.find((r) => r.dataset.kind === match.kind && r.dataset.id === match.id)) || all.find((r) => r.parentElement.classList.contains('sel')) || all[0];
   (row || $('folder')).focus({ preventScroll: true });
 }
@@ -120,43 +112,16 @@ function fromAddress() {
   if (!lv) return;
   if (lv.missing) { toast('That place is not on the list now'); goTo(TOP); return; }
   lastWritten = keyOf(lv);
-  $('filter').value = '';
-  view.set({ place: lv, page: 'browse' });
+  view.set({ placeAt: placeAt(lv), query: '', page: 'browse' });
 }
 
 // ---- drawing ---------------------------------------------------------------------------------------------
 
-function dataNow() {
-  const { roots, tiles, folders } = server.get();
-  const level = levelNow();
-  const query = $('filter').value;
-  const r = roots[level.root];
-  return {
-    roots, tiles, folders, level, query, places: placesOf(roots), openTile: view.get().tileId, home: server.get().home,
-    // have and need pills: what the inventory says of a tile for the target system (the chip in the title bar)
-    pill: (t) => invPill(server.get().inventory, t.path, server.get().system),
-    system: server.get().system, inventory: server.get().inventory,
-    view: level.root == null ? null : levelOf({ roots, tiles, folders, root: level.root, dir: level.dir, query }),
-    writable: !!r && writable(r) && !query.trim(),
-  };
-}
+const dataNow = () => browse.data.value;
 
-function signature(d) {
-  const t = (x) => [x.id, x.path, x.size, x.plan?.cols, x.plan?.rows, x.status, !!x.record && (x.record.audit.overhangMm2 > 0 || x.record.audit.bandMm2 > 0)];
-  return JSON.stringify([
-    d.level, d.query, d.openTile, d.writable, d.roots.map((r) => [r.label, r.exists, r.role, r.path]),
-    d.level.root == null ? d.places.map((r) => d.tiles.filter((x) => x.root === r.index).length) : [d.view && d.view.folders, d.view && d.view.items.map((i) => [...t(i.tile), i.where, d.pill(i.tile)?.text, d.pill(i.tile)?.title])],
-  ]);
-}
-
-function renderActions(d) {
-  const box = $('folder-actions');
-  const mk = (label, title, run, cls = '') => {
-    const b = el('button', `btn ${cls}`, label);
-    b.type = 'button'; b.title = title;
-    b.onclick = () => run(b);
-    return b;
-  };
+/** The buttons above the list: what can be added at the level. */
+function actionButtons(d) {
+  const mk = (label, title, run, cls = '') => ({ label, title, run, cls });
   const buttons = [];
   if (d.level.root == null) buttons.push(mk('Add a folder…', 'Choose a folder of tiles on this computer to list here', addPlace));
   else if (d.writable) {
@@ -165,102 +130,58 @@ function renderActions(d) {
     buttons.push(mk('New map', 'A new map (.dmap) in this folder: tiles placed on a grid, to see the scene before anything prints', (b) => newList(d.level.root, d.level.dir, b, placeName(d), true)));
     buttons.push(mk('New print list', 'A new print list (.dmap) in this folder: the tiles to print, laid out for a printer', (b) => newList(d.level.root, d.level.dir, b, placeName(d))));
   }
-  box.replaceChildren(...buttons);
+  return buttons;
 }
 
 const placeName = (d) => [d.roots[d.level.root]?.label, ...(d.level.dir ? d.level.dir.split('/') : [])].join(' › ');
 
-function renderCrumbs(d) {
-  const r = d.roots[d.level.root];
-  const list = crumbsFor({ place: r ? { root: d.level.root, label: r.label, dir: d.level.dir } : null });
-  fillCrumbs($('bcrumbs'), list, (c) => goTo(c.place));
-  pinEnd($('bcrumb-scroll'));
-  $('bback').disabled = d.level.root == null;
-  $('bback').title = d.level.root == null ? 'Places is the top' : 'Up a level (⌘[)';
-}
-
-function renderContext(d) {
-  const lines = contextForFolder({ roots: d.roots, level: d.level, view: d.view, home: d.home });
-  // the pills are for one system, the title bar's chip: said once, where they are
-  if (d.level.root != null && d.inventory?.exists && d.view?.items.length && lines.length) lines[0] = `${lines[0]} · have and need for ${systemName(d.system)}`;
-  $('bctx-lines').replaceChildren(...lines.map((l) => el('div', 'ln', l)));
-}
-
-const listHandlers = () => ({
+const listHandlers = {
   place: (i) => goTo({ root: i, dir: '' }, { focus: !!$('browser').contains(document.activeElement) }),
   folder: (dir) => goTo({ root: levelNow().root, dir }, { focus: !!$('browser').contains(document.activeElement) }),
-  tile: openTile,
-  menu: openRowMenu,
-  act: rowAction,
+  tile: (id) => openTile(id),
+  menu: (kind, id, anchor) => openRowMenu(kind, id, anchor),
+  act: (action, kind, id, anchor) => rowAction(action, kind, id, anchor),
   canDrop: (id, target) => canDrop(server.get().roots, tileById(id), target),
   drop: (id, target) => { const t = tileById(id); if (t) moveTile(t, target); },
-});
+};
 
-/** Draw the level; `slide` the way it moved (1 deeper, -1 shallower, 0 none). */
-function paint(d, slide) {
-  const vp = $('folder-vp'), cur = $('folder');
-  const list = buildFolderList(d, listHandlers());
-  const key = keyOf(d.level);
-  let ghost = null;
-  if (slide && !reduced() && drawn) {
-    ghost = cur.cloneNode(true);
-    ghost.removeAttribute('id'); ghost.removeAttribute('role'); ghost.inert = true;
-    ghost.classList.add('ghost');
-    ghost.scrollTop = cur.scrollTop;
-    vp.append(ghost);
-  }
-  cur.replaceChildren(list);
-  cur.scrollTop = scrolls.get(key) ?? 0;
-  if (ghost) {
-    const opts = { duration: SLIDE_MS, easing: EASE, fill: 'both' };
-    const inn = cur.animate([{ transform: `translateX(${slide * 100}%)` }, { transform: 'translateX(0)' }], opts);
-    const out = ghost.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-slide * 100}%)` }], opts);
-    let over = false;
-    const done = () => { if (over) return; over = true; inn.cancel(); ghost.remove(); };
-    out.onfinish = done;
-    // a page whose frames are paused still ends on one level
-    setTimeout(done, SLIDE_MS + 100);
-  }
+/** Draw what the browser page shows from the model: the level, the crumbs, the strip, the buttons; all of it follows the level and the program's list. */
+function bind() {
+  // the list, sliding between levels
+  render(html`<${BrowserLevels} />`, $('folder-vp'));
+  effect(() => {
+    if (!browse.ready.value) return;
+    const d = browse.data.value;
+    const r = d.roots[d.level.root];
+    // Places has nothing to filter
+    $('filter').hidden = d.level.root == null;
+    if ($('filter').value !== d.query) $('filter').value = d.query;
+    const crumbs = crumbsFor({ place: r ? { root: d.level.root, label: r.label, dir: d.level.dir } : null });
+    fillCrumbs($('bcrumbs'), crumbs, (c) => goTo(c.place));
+    pinEnd($('bcrumb-scroll'));
+    $('bback').disabled = d.level.root == null;
+    $('bback').title = d.level.root == null ? 'Places is the top' : 'Up a level (⌘[)';
+    const lines = contextForFolder({ roots: d.roots, level: d.level, view: d.view, home: d.home });
+    // the pills are for one system, the title bar's chip: said once, where they are
+    if (d.level.root != null && d.inventory?.exists && d.view?.items.length && lines.length) lines[0] = `${lines[0]} · have and need for ${systemName(d.system)}`;
+    render(html`<${ContextLines} lines=${lines} />`, $('bctx-lines'));
+    render(html`<${FolderActions} buttons=${actionButtons(d)} />`, $('folder-actions'));
+  });
+  // the address follows the level (a new level is a step of the browser's history)
+  effect(() => { if (browse.ready.value && view.get().page === 'browse') { void view.get().place; syncAddress(); } });
 }
 
-/** A level that is gone (a place removed, a folder trashed) is shown as its parent. */
-function settle() {
-  const l = levelNow();
-  if (l.root == null) return true;
-  const { roots, tiles, folders } = server.get();
-  if (levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) return true;
-  view.set({ place: parentLevel(l) });
-  return false;
-}
-
-function render() {
-  if (!started || !server.get().ready) return;
-  if (!settle()) return;
-  const d = dataNow();
-  const level = d.level;
-  // Places has nothing to filter
-  $('filter').hidden = d.level.root == null;
-  renderCrumbs(d);
-  renderContext(d);
-  const key = keyOf(level);
-  const sig = signature(d);
-  if (drawn && drawn.key === key && drawn.sig === sig) { syncAddress(); return; }
-  if ($('folder').querySelector('.flist.dragging')) { dirty = true; return; }
-  const was = /** @type {HTMLElement | null} */ ($('browser').contains(document.activeElement) ? document.activeElement.closest?.('.orow') : null);
-  const keep = was ? { kind: was.dataset.kind, id: was.dataset.id } : null;
-  const depth = depthOfLevel(level);
-  if (drawn && drawn.key !== key) scrolls.set(drawn.key, $('folder').scrollTop);
-  paint(d, drawn && drawn.key !== key ? Math.sign(depth - drawn.depth) : 0);
-  const moved = !drawn || drawn.key !== key;
-  if (moved) renderActions(d);
-  drawn = { key, sig, depth };
-  if (keep && !moved) focusRow(keep);
-  else if (moved && $('browser').contains(document.activeElement)) {
+/** The level in the viewport: the component reads the model itself, so it is drawn again by itself. */
+function BrowserLevels() {
+  if (!browse.ready.value) return null;
+  // once a level has come in, the keyboard goes to the row it came from (or the first), if it was in the list
+  const arrived = () => {
+    if (!$('browser').contains(document.activeElement)) return;
     const goBack = leftFrom;
     leftFrom = null;
     setTimeout(() => focusRow(goBack), reduced() ? 0 : SLIDE_MS + 20);
-  }
-  syncAddress();
+  };
+  return html`<${Levels} d=${browse.data.value} on=${listHandlers} scrolls=${scrolls} arrived=${arrived} />`;
 }
 
 // ---- opening a tile -------------------------------------------------------------------------------------------
@@ -374,7 +295,7 @@ async function renameFolder(root, dir, name) {
   take(r);
   const nowDir = r.body.dir;
   const l = levelNow();
-  if (l.root === root) view.set({ place: { root, dir: renamedDir(l.dir, dir, nowDir) } });
+  if (l.root === root) view.set({ placeAt: placeAt({ root, dir: renamedDir(l.dir, dir, nowDir) }) });
   if (inside && open) await followOpen(`${roots[root].path}/${nowDir}/${open.path.slice(oldPrefix.length)}`, here, editing);
 }
 
@@ -420,8 +341,8 @@ async function removePlace(i) {
   if (r.status !== 200) { refusal(`Could not take ${r0.label} off the list`, r); return; }
   // the places after it are numbered one less now
   const l = levelNow();
-  if (l.root === i) view.set({ place: TOP });
-  else if (l.root != null && l.root > i) view.set({ place: { root: l.root - 1, dir: l.dir } });
+  if (l.root === i) view.set({ placeAt: placeAt(TOP) });
+  else if (l.root != null && l.root > i) view.set({ placeAt: placeAt({ root: l.root - 1, dir: l.dir }) });
   take(r);
   toast(`Took ${r0.label} off the list. The folder and its tiles are still on disk.`, null, { ms: 7000 });
 }
@@ -531,7 +452,7 @@ function rowAction(action, kind, id, anchor) {
 function onListKey(e) {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const row = e.target.closest?.('.orow');
-  const all = listRows($('folder'));
+  const all = [...$('folder').querySelectorAll('.orow')];
   if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
     e.preventDefault();
     all[moveRow(row ? all.indexOf(row) : -1, e.key, all.length)]?.focus();
@@ -544,44 +465,28 @@ function onListKey(e) {
 
 // ---- wiring ----------------------------------------------------------------------------------------------------------------
 
-/** Wire this part of the page (once, at load). */
 export function init() {
   started = true;
   keepEnd($('bcrumb-scroll'));
   keepEnd($('crumb-scroll'));
   $('bback').onclick = () => { if (!goUpFolder()) $('folder').focus(); };
-  $('folder').addEventListener('keydown', onListKey);
-  $('folder').addEventListener('scroll', () => { if (drawn) scrolls.set(drawn.key, $('folder').scrollTop); });
-  $('filter').oninput = () => render();
+  $('folder-vp').addEventListener('keydown', (e) => { if (e.target.closest?.('#folder')) onListKey(e); });
+  $('filter').oninput = () => view.set({ query: $('filter').value });
   $('filter').onkeydown = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); focusRow(); return; }
     if (e.key === 'Escape') {
       e.preventDefault(); e.stopPropagation();
-      if ($('filter').value) { $('filter').value = ''; render(); return; }
+      if (view.get().query) { view.set({ query: '' }); return; }
       if (tile()) view.set({ page: 'edit' }); else goUpFolder();
       return;
     }
     if (e.key === 'Enter') $('folder').querySelector('.orow[data-kind="tile"], .orow')?.click();
   };
   $('forward').onclick = () => { if (tile()) view.set({ page: 'edit' }); };
-  server.subscribe(['tiles', 'roots', 'folders', 'ready', 'home'], render);
-  view.subscribe(['place', 'tileId'], render);
+  bind();
   view.subscribe(['page'], () => {
-    if (browsing()) {
-      // the tile's folder is where the level begins when you come back from it
-      render();
-      requestAnimationFrame(() => { if (browsing()) $('filter').focus({ preventScroll: true }); });
-    }
-    syncAddress();
+    // coming back to the browser, the filter has the keyboard
+    if (browsing()) requestAnimationFrame(() => { if (browsing()) $('filter').focus({ preventScroll: true }); });
   });
-  // a tile opened is in its folder: that is the level Back goes to
-  view.subscribe(['tileId'], () => {
-    const t = tile();
-    const at = t && whereIs(server.get().roots, t);
-    if (at && !same(at, levelNow())) view.set({ place: at });
-  });
-  server.subscribe(['roots'], () => { if (view.get().tileId != null && !same(levelNow(), TOP)) render(); });
   addEventListener('popstate', fromAddress);
-  addEventListener('pointerup', () => { if (dirty) { dirty = false; setTimeout(render, 0); } }, true);
-  render();
 }

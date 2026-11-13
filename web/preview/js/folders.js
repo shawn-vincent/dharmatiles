@@ -4,7 +4,7 @@
 // This is the model and nothing else (no page here): what the places are and in what
 // order, what a folder level lists, the strip of context under the crumbs, the address of
 // a level in the URL hash, and which drops of a tile are allowed.  editor/places.js draws it;
-// folder-list.js builds the rows.
+// view/places-panel.js draws the rows.
 //
 // A place is a root of the program's snapshot ({index, label, kind, path, role, writable,
 // exists}); a level is `{root, dir}`: `root` the place's index (null for Places itself) and

@@ -5,6 +5,7 @@ class Node {
   constructor(nodeType, nodeName) {
     this.nodeType = nodeType; this.nodeName = nodeName; this.parentNode = null; this.childNodes = [];
   }
+  get parentElement() { return this.parentNode; }
   get firstChild() { return this.childNodes[0] ?? null; }
   get lastChild() { return this.childNodes[this.childNodes.length - 1] ?? null; }
   get nextSibling() { const p = this.parentNode; return p ? p.childNodes[p.childNodes.indexOf(this) + 1] ?? null : null; }
@@ -38,6 +39,12 @@ class Element extends Node {
     this.className = ''; this.disabled = false; this.title = ''; this.type = ''; this.placeholder = ''; this.spellcheck = true; this.hidden = false;
     if (name === 'input' || name === 'textarea') { this.value = ''; this.min = ''; this.step = ''; }
   }
+  get dataset() {
+    const out = {};
+    for (const [k, v] of this.attributes) if (k.startsWith('data-')) out[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v;
+    return out;
+  }
+  closest(sel) { for (let n = this; n; n = n.parentNode) if (n.nodeType === 1 && ((sel.startsWith('.') && (n.className || n.getAttribute('class') || '').split(/\s+/).includes(sel.slice(1))) || n.localName === sel)) return n; return null; }
   setAttribute(k, v) { this.attributes.set(k, String(v)); }
   getAttribute(k) { return this.attributes.get(k) ?? null; }
   removeAttribute(k) { this.attributes.delete(k); }

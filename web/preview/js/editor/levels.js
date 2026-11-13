@@ -26,7 +26,7 @@ import { $, toast } from './app.js';
 import { texts } from './document.js';
 import { linesOf, setSel } from './selection.js';
 import {
-  doc, entrySel, isInventory, isMapView, isMark, isPlates, itemOf, mapNode, markSel, server, stackItems, stackIndex, tile, tileSel, view,
+  doc, entrySel, isInventory, isMapView, isMark, isPlates, itemOf, mapNode, markSel, placeAt, server, stackItems, stackIndex, tile, tileSel, view,
 } from './stores.js';
 import { contextLines } from './plates.js';
 import { contextLines as mapLines } from './model.js';
@@ -156,7 +156,7 @@ function renderCrumbs() {
   const list = crumbsFor({ place, tileName: $('tilename').textContent, sel, what: thingName(), control });
   const up = at ? `${[roots[at.root]?.label, ...(at.dir ? at.dir.split('/') : [])].join(' › ')}: the folder (⌘[ from the tile)` : 'Places (⌘[ from the tile)';
   $('back').title = up;
-  fillCrumbs($('crumbs-path'), list.filter((c) => c.depth === -1), (c) => { $('filter').value = ''; view.set({ place: c.place ? { root: c.place.root, dir: c.place.dir } : { root: null, dir: '' }, page: 'browse' }); }, { trailing: true });
+  fillCrumbs($('crumbs-path'), list.filter((c) => c.depth === -1), (c) => { view.set({ placeAt: placeAt(c.place ? { root: c.place.root, dir: c.place.dir } : { root: null, dir: '' }), query: '', page: 'browse' }); }, { trailing: true });
   $('tilebtn').classList.toggle('cur', depth === 0 && face === 'tile');
   $('tilebtn').setAttribute('aria-current', depth === 0 ? 'location' : 'false');
   const deep = list.filter((c) => c.depth >= 1);

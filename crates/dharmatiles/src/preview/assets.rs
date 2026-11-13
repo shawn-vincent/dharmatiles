@@ -212,11 +212,6 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/crumbs.js"),
     ),
     (
-        "/js/folder-list.js",
-        "text/javascript; charset=utf-8",
-        include_bytes!("../../../../web/preview/js/folder-list.js"),
-    ),
-    (
         "/js/folders.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/folders.js"),
@@ -600,6 +595,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/js/view/crumbs.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/view/crumbs.js"),
+    ),
+    (
+        "/js/view/places-panel.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/places-panel.js"),
     ),
 ];
 

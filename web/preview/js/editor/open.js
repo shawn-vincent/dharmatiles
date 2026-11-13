@@ -13,7 +13,7 @@ import { levelOfParams } from '../folders.js';
 import { parseHash } from '../nav.js';
 import { toast } from './app.js';
 import { docs, planOf } from './docs.js';
-import { isEntry, isMapView, server, stackIndex, stem, tile, tileById, view } from './stores.js';
+import { isEntry, isMapView, placeAt, server, stackIndex, stem, tile, tileById, view } from './stores.js';
 
 // ---- choosing a tile ---------------------------------------------------
 
@@ -63,7 +63,7 @@ function pickFirst() {
   if (wanted) return select(wanted.id, true);
   const level = levelOfParams(roots, parseHash(location.hash));
   if (level?.missing) toast('That place is not on the list now');
-  else if (level) view.set({ place: level, page: 'browse' });
+  else if (level) view.set({ placeAt: placeAt(level), page: 'browse' });
   else {
     const files = roots.findIndex((r) => r.kind === 'files');
     const named = files >= 0 ? tiles.find((t) => t.root === files) : null;

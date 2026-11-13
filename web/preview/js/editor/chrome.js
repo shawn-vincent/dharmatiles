@@ -10,7 +10,7 @@ import { legendRows } from '../debug-layer.js';
 import { $, host, pickView, viewer } from './app.js';
 import { copyButton, versionParts } from '../copy.js';
 import { goUp, setFace } from './levels.js';
-import { isInventory, isPlatesView, server, tile, view } from './stores.js';
+import { isInventory, isPlatesView, placeAt, server, tile, view } from './stores.js';
 
 // ---- the view's controls: views and the display menu -------------------
 
@@ -268,8 +268,7 @@ export function init() {
   // Choose from the library: the library's folder level
   $('choose').onclick = () => {
     const lib = server.get().roots.findIndex((r) => r.role === 'library');
-    $('filter').value = '';
-    view.set({ place: lib >= 0 ? { root: lib, dir: '' } : { root: null, dir: '' }, page: 'browse' });
+    view.set({ placeAt: placeAt(lib >= 0 ? { root: lib, dir: '' } : { root: null, dir: '' }), query: '', page: 'browse' });
     renderPage();
   };
   // Up from the tile: the folder it is in (its level was set when it opened)

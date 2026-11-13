@@ -17,6 +17,7 @@
 import { batch, computed, effect, signal, untracked } from '@preact/signals-core';
 import { showError } from '../problems.js';
 import { createLog } from '../messages.js';
+import { levelExists, parentLevel, whereIs } from '../folders.js';
 
 // `report(what, err)` takes what a subscriber threw: the error panel by default.
 //
@@ -79,7 +80,8 @@ export const log = createLog();
 
 export const view = createStore({
   tileId: null,
-  place: { root: null, dir: '' }, // the folder level the browser page shows (js/folders.js): the place's number and the folder below it; root null is Places
+  placeAt: { root: null, dir: '', tile: null }, // the folder level chosen on the browser page (js/folders.js: the place's number, the folder below it; root null is Places) and the tile that was open when it was chosen; `place` is derived from it below
+  query: '',           // the browser's filter: the words a tile's name must have
   sel: null,           // {kind, id, piece?}: kind entry (id: the entry's key), region or line (id: the name), tile; or null
   control: null,       // {name, group}: the control open as a level on the selected thing (js/nav.js)
   face: 'tile',        // what the panel shows: 'tile' (the levels) or 'source'
@@ -212,3 +214,25 @@ export function whenListedWhere(pred) {
     const timer = setTimeout(() => stop(null), 5000);
   });
 }
+
+// ---- the folder level the browser shows ----------------------------------------------------------------------
+
+const levels = new Map();
+/** One object for each level, so a level that did not change is the same object. */
+const levelNamed = (root, dir) => { const k = `${root ?? ''}|${dir}`; let l = levels.get(k); if (!l) { l = { root, dir }; levels.set(k, l); } return l; };
+
+/** The level the browser stands for a choice made while the tile `tile` was open: `{root, dir, tile}`. */
+export const placeAt = (l) => ({ root: l.root ?? null, dir: l.dir || '', tile: view.get().tileId });
+
+// The level is the one chosen on the browser page, for as long as the tile that was open then is the open one; a tile
+// that opens puts it at the folder the tile is in.  A level that is gone (a place taken off, a folder trashed) is its
+// parent.  It is worked out, not stored, so nothing has to be told that a tile opened or a folder went.
+view.derive('place', () => {
+  const { placeAt: p, tileId } = view.get();
+  const roots = server.get().roots;
+  const inFolder = p.tile === tileId ? null : whereIs(roots, tile());
+  let l = levelNamed(inFolder ? inFolder.root : p.root, inFolder ? inFolder.dir : p.dir);
+  const { tiles, folders } = server.get();
+  while (l.root != null && !levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) { const up = parentLevel(l); l = levelNamed(up.root, up.dir); }
+  return l;
+});
