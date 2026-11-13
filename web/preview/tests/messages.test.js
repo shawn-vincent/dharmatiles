@@ -237,3 +237,9 @@ test('work in flight for a document is one record: a tile build and a map\'s pie
   // no job, no building: the verdict is the document's own
   assert.equal(statusOf(log.view('a'), { t: tile }).verdict, 'passes');
 });
+
+test('a build stage with no words yet shows its percent alone, never a separator with nothing after it', () => {
+  const t = { status: 'building', name: 'x', shown: { checked: false } };
+  assert.equal(statusOf(createLog().view('a'), { t, p: { fraction: 0.77, label: '', what: 'building' } }).verdict, 'rebuilding 77%');
+  assert.equal(statusOf(createLog().view('a'), { t, p: { fraction: 0.5, label: 'grass', what: 'building' } }).verdict, 'rebuilding 50% · grass');
+});

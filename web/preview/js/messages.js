@@ -204,7 +204,8 @@ export function statusOf(view, { t = null, live = true, p = null } = {}) {
   if (t.status === 'building' || view.running || p) {
     const pct = p ? Math.floor(p.fraction * 100) : 0;
     const words = p ? jobWords(p, t.name) : null;
-    const stage = words ? `${pct}% · ${words.short}` : 'starting';
+    // a stage with no words yet is just its percent: never a separator with nothing after it
+    const stage = words ? [`${pct}%`, words.short].filter(Boolean).join(' · ') : 'starting';
     const what = words?.verb === 'loading' ? 'loading' : t.shown ? 'rebuilding' : 'building';
     // a draft on show (nothing earlier of the tile was kept) has not been through the gate: `unchecked`, said once by the status line
     return { verdict: `${what} ${stage}`, tone: 'busy', counts, progress: p ? p.fraction : 0, unchecked: t.shown?.checked === false };
