@@ -166,7 +166,7 @@ pub enum Expr {
     },
     /// A weighted range, `low(1..6, 4)`: the range and the odds along it
     /// (`name` is one of [`WEIGHTINGS`], `args` the numbers after the
-    /// range).  The odds are `dt_geom::Weighting`'s; they are checked where
+    /// range).  The odds are `dt_value::Weighting`'s; they are checked where
     /// the value is drawn.
     Weighted {
         /// The function: one of [`WEIGHTINGS`].

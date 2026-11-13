@@ -19,7 +19,8 @@
     clippy::float_cmp
 )]
 
-use dt_geom::{BoolOp, Bounds, Fnv, IdBlock, Seed, Solid, TriMesh, batch_in_order};
+use dt_geom::{BoolOp, Bounds, Fnv, IdBlock, Solid, TriMesh, batch_in_order};
+use dt_value::Seed;
 use rayon::prelude::*;
 
 const N: usize = 384; // grid cells per side

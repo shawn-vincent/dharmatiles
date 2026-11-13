@@ -12,7 +12,7 @@ use dt_doc::consts::ConstTable;
 use dt_doc::expr::{Algebra, BinOp, Expr, Odds, UnitWord};
 use dt_doc::model::{Num, Value};
 use dt_doc::schema;
-use dt_geom::{Dist, Draw, Op, Weighting};
+use dt_value::{Dist, Draw, Op, Weighting};
 
 /// The tile's `let`s as an element control sees them.
 #[derive(Clone, Debug, Default)]
@@ -504,7 +504,7 @@ impl Algebra for Lowerer<'_> {
 }
 
 /// A weighting that cannot be made, as the diagnostic it is.
-fn refused(w: dt_geom::WeightingError) -> Refused {
+fn refused(w: dt_value::WeightingError) -> Refused {
     Refused {
         code: w.code,
         message: w.message,

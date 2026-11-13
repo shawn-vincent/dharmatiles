@@ -77,10 +77,9 @@ pub use band::{
     lints, solve, solve_traced,
 };
 pub use dt_geom::Convex;
-pub use dt_geom::{
-    Dist, Draw, Grid, Iv, Mask, Op, Rng, Seed, TriMesh, WEIGHTINGS, Weighting, WeightingFn, vec3,
-};
+pub use dt_geom::{Grid, Iv, Mask, TriMesh, vec3};
 pub use dt_geom::{Structuring, distance_nearest};
+pub use dt_value::{Dist, Draw, Op, Rng, Seed, WEIGHTINGS, Weighting, WeightingFn};
 pub use entry::EntryId;
 pub use field::{
     Field, Noise, OnFrame, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at,

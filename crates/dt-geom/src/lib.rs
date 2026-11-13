@@ -11,9 +11,6 @@
 //!   panels); [`hash`]: a spatial hash; [`convex`]: polytopes cut by half-spaces (rock facets and chips);
 //!   [`vec3`]: the 3-vector helpers.
 //! - [`iv::Iv`]: intervals and their arithmetic, for ranges in heights.
-//! - [`weighting`]: a range's odds ([`Weighting`], [`Dist`]): one draw, any width.
-//! - [`seed::Seed`], the deterministic path-keyed seed derivation, and the
-//!   seeded stream [`Rng`].
 //! - [`Solid`] (booleans, hull, refine, transform, slice), Manifold's
 //!   C++ kernel through manifold-csg; [`mesh`], the indexed triangle mesh
 //!   it imports and exports; [`rays`], ray casts on a BVH; [`source`], the
@@ -31,12 +28,10 @@ pub mod mesh;
 pub mod noise;
 pub mod raster;
 pub mod rays;
-pub mod seed;
 pub mod solid;
 pub mod source;
 pub mod stack;
 pub mod vec3;
-pub mod weighting;
 
 pub use convex::Convex;
 pub use filter::{Structuring, blur, blur_recursive, dilate, erode, quantile};
@@ -47,14 +42,9 @@ pub use iv::Iv;
 pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, MeshError, TriMesh, half_space};
 pub use raster::{Mask, draw_line, fill, fill_polygons};
 pub use rays::{Hit, ObvhsRays, Ray};
-pub use seed::{Rng, Seed};
 pub use source::{IdBlock, batch_in_order};
 pub use stack::{
     CORNER_BLEND_MM, Lattice, Layer, LayerRelief, Round, Sides, lift_stack, rim_profile,
 };
 
 pub use solid::Solid;
-pub use weighting::{
-    Dist, Draw, ENDS_POWER, MAX_BINS, MAX_LIST, MAX_MIX, Op, WEIGHTINGS, Weighting, WeightingArg,
-    WeightingError, WeightingFn, WeightingRest, weighting_names,
-};

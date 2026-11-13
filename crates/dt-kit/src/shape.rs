@@ -143,7 +143,7 @@ pub fn wobble(
     amount: f64,
     sigma: f64,
     step: f64,
-    seed: dt_geom::Seed,
+    seed: dt_value::Seed,
 ) -> Vec<[f64; 2]> {
     let positive = |v: f64| v.is_finite() && v > 0.0;
     if points.len() < 2 || !positive(amount) || !positive(sigma) || !positive(step) {

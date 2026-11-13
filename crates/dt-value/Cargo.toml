@@ -1,0 +1,19 @@
+[package]
+name = "dt-value"
+description = "dharmatiles values: keyed seeds and the seeded stream, and weighted ranges (a range's odds); no geometry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Seeded maths uses libm, never std's platform maths.
+[dependencies]
+libm.workspace = true
+
+[dev-dependencies]
+dt-lang.workspace = true
+
+[lints]
+workspace = true

@@ -415,6 +415,7 @@ dependencies = [
  "dt-elements",
  "dt-geom",
  "dt-kit",
+ "dt-value",
  "insta",
  "kdl",
  "miette",
@@ -426,7 +427,7 @@ name = "dt-geom"
 version = "1.0.0"
 dependencies = [
  "bytemuck",
- "dt-lang",
+ "dt-value",
  "glam 0.34.2",
  "libm",
  "manifold-csg",
@@ -441,6 +442,7 @@ version = "1.0.0"
 dependencies = [
  "crc32fast",
  "dt-geom",
+ "dt-value",
  "flate2",
  "libm",
  "parry3d",
@@ -452,6 +454,14 @@ dependencies = [
 [[package]]
 name = "dt-lang"
 version = "1.0.0"
+
+[[package]]
+name = "dt-value"
+version = "1.0.0"
+dependencies = [
+ "dt-lang",
+ "libm",
+]
 
 [[package]]
 name = "either"

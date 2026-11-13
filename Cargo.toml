@@ -18,6 +18,7 @@ publish = false
 # (dt-eval's features), so it is pulled in without default features.
 dt-geom = { path = "crates/dt-geom", default-features = false }
 dt-lang = { path = "crates/dt-lang" }
+dt-value = { path = "crates/dt-value" }
 dt-doc = { path = "crates/dt-doc" }
 dt-kit = { path = "crates/dt-kit", default-features = false }
 dt-elements = { path = "crates/dt-elements", default-features = false }
@@ -60,6 +61,8 @@ opt-level = 3
 # (Rust does not contract or reorder float maths at any level, so the
 # hashes are the same as a release build's.)
 [profile.dev.package.dt-geom]
+opt-level = 3
+[profile.dev.package.dt-value]
 opt-level = 3
 [profile.dev.package.dt-kit]
 opt-level = 3

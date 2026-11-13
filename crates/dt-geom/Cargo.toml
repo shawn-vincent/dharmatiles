@@ -16,6 +16,7 @@ default = ["manifold-parallel"]
 manifold-parallel = ["manifold-csg/parallel"]
 
 [dependencies]
+dt-value.workspace = true
 bytemuck.workspace = true
 glam.workspace = true
 libm.workspace = true
@@ -26,7 +27,6 @@ rayon.workspace = true
 manifold-csg = { workspace = true }
 
 [dev-dependencies]
-dt-lang.workspace = true
 serde_json.workspace = true
 
 [lints]

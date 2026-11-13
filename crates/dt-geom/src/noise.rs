@@ -29,7 +29,7 @@ pub fn lattice(seed: u64, ix: i64, iy: i64) -> f64 {
     2.0 * u - 1.0
 }
 
-use crate::seed::splitmix64 as mix;
+use dt_value::seed::splitmix64 as mix;
 
 /// Lattice spacing of [`smooth`], as a share of `sigma`.  Half a sigma
 /// keeps the variance flat to about 0.1% between lattice points.

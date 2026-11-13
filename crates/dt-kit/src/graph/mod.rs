@@ -245,7 +245,7 @@ mod tests {
     use super::*;
 
     fn cloud(seed: u64, n: usize) -> Vec<[f64; 3]> {
-        let mut rng = dt_geom::Rng::new(dt_geom::Seed::new(seed));
+        let mut rng = dt_value::Rng::new(dt_value::Seed::new(seed));
         (0..n)
             .map(|_| {
                 let a = rng.uniform(0.0, std::f64::consts::TAU);

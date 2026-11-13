@@ -35,7 +35,8 @@
 
 use std::sync::Arc;
 
-use dt_geom::{Iv, Mask, Weighting, distance_nearest};
+use dt_geom::{Iv, Mask, distance_nearest};
+use dt_value::Weighting;
 
 use crate::Field;
 

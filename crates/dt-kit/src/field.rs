@@ -14,7 +14,8 @@
 //! print-scale details (grit, clods, pebbles) keep their true mm
 //! ([`Scale::Print`], default 1).
 
-use dt_geom::{Grid, Rng, Seed, SpatialHash};
+use dt_geom::{Grid, SpatialHash};
+use dt_value::{Rng, Seed};
 use rayon::prelude::*;
 
 use crate::Frame;

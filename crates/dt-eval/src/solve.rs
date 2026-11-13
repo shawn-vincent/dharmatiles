@@ -15,10 +15,10 @@ use dt_doc::consts::ConstTable;
 use dt_doc::expr::{Algebra, BinOp, Expr, Func, Odds, UnitWord, sin_deg, smooth};
 use dt_doc::model::PlaceRef;
 use dt_doc::schema::Body;
-use dt_geom::{Dist, Weighting};
 use dt_kit::{
     Band, Ease, Field, Frame, Iv, Lint, Mask, OddsBuilder, Pin, Refusal, lints, solve_traced,
 };
+use dt_value::{Dist, Weighting};
 
 use crate::Options;
 use crate::coords::Coords;
@@ -464,7 +464,7 @@ impl Flaw {
         }
     }
 
-    fn weighting(w: dt_geom::WeightingError) -> Self {
+    fn weighting(w: dt_value::WeightingError) -> Self {
         Self {
             code: w.code,
             message: w.message,

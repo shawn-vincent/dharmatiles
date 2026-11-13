@@ -2,7 +2,8 @@
 //! by area) and the tagged solids elements add, with the source-ID block and
 //! material table of `dt_geom::source`.
 
-use dt_geom::{BoolOp, Grid, IdBlock, Mask, Seed, TriMesh, batch_in_order};
+use dt_geom::{BoolOp, Grid, IdBlock, Mask, TriMesh, batch_in_order};
+use dt_value::Seed;
 
 use crate::KitError;
 

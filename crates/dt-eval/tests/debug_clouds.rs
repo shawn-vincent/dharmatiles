@@ -111,8 +111,8 @@ fn a_pinned_cloud_and_a_water_cloud_draw_their_sheets() {
 
 #[test]
 fn a_flat_cloud_shades_at_half() {
-    use dt_geom::Weighting;
     use dt_kit::debug::shade_of;
+    use dt_value::Weighting;
     assert_eq!(shade_of(None, 0.0), 0.5);
     assert_eq!(shade_of(Some(&Weighting::Flat), 0.7), 0.5);
     let low = Weighting::Low(3.0);

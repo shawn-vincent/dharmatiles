@@ -17,6 +17,7 @@ test-panic = []
 [dependencies]
 dt-doc.workspace = true
 dt-geom.workspace = true
+dt-value.workspace = true
 dt-kit.workspace = true
 dt-elements.workspace = true
 kdl.workspace = true

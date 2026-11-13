@@ -651,12 +651,12 @@ impl<'a> Plan<'a> {
             };
             let shades = |u: f64| -> Vec<f32> {
                 // one weighting is read at many nodes: ask once each
-                let mut seen: Vec<(*const dt_geom::Weighting, f32)> = Vec::new();
+                let mut seen: Vec<(*const dt_value::Weighting, f32)> = Vec::new();
                 (0..area.bits.len())
                     .map(|n| match band.weighting(node(n)) {
                         None => dt_kit::debug::shade_of(None, u),
                         Some(w) => {
-                            let p: *const dt_geom::Weighting = w;
+                            let p: *const dt_value::Weighting = w;
                             if let Some(&(_, v)) = seen.iter().find(|(q, _)| *q == p) {
                                 v
                             } else {

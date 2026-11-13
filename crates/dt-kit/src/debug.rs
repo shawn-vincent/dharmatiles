@@ -12,7 +12,7 @@
 //! [`Scene::clouds`]: crate::Scene::clouds
 //! [`Scene::marks`]: crate::Scene::marks
 
-use dt_geom::Weighting;
+use dt_value::Weighting;
 
 use crate::{EntryId, Field, Mask};
 

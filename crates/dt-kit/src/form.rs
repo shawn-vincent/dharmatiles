@@ -245,7 +245,7 @@ fn relief_along(
     let p = mesh.positions.clone();
     let relaxed = taubin(&p, &mesh.triangles, 10);
     let vn = vertex_normals(&relaxed, &mesh.triangles);
-    let mut rng = dt_geom::Rng::new(dt_geom::Seed::new(seed));
+    let mut rng = dt_value::Rng::new(dt_value::Seed::new(seed));
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let nseed = (rng.random() * 2_147_483_648.0) as u64;
     let rot = random_rotation(&mut rng);
@@ -321,7 +321,7 @@ pub fn subdivide(mesh: &TriMesh) -> TriMesh {
 }
 
 /// A uniformly random rotation (from a random unit quaternion).
-fn random_rotation(rng: &mut dt_geom::Rng) -> [[f64; 3]; 3] {
+fn random_rotation(rng: &mut dt_value::Rng) -> [[f64; 3]; 3] {
     let mut q = [0.0; 4];
     for v in &mut q {
         *v = rng.normal(0.0, 1.0);
