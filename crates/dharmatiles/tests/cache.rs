@@ -79,7 +79,7 @@ fn a_second_build_comes_from_the_cache_and_writes_the_same_stl() {
     assert!(String::from_utf8_lossy(&list.stdout).contains("lib:tests/ground/1x1-flat.dtile"));
 
     // a damaged entry is told, the build is real, and the cache is whole again
-    let slot = std::fs::read_dir(cache.join("v1"))
+    let slot = std::fs::read_dir(cache.join("v2"))
         .unwrap()
         .next()
         .unwrap()

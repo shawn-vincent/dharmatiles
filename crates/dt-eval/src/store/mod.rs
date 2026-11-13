@@ -33,7 +33,6 @@
 //! makes: a hit is the bytes a build made.
 
 mod codec;
-mod sha256;
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -43,17 +42,26 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dt_kit::debug::Collect;
+use sha2::{Digest, Sha256};
 
 use crate::build::Built;
+use crate::canon::Canon;
 use crate::hash;
 use crate::options::Options;
 use crate::source::Source;
 
-/// The cache format.  Bump it by hand when the bytes an entry holds or
-/// what a [`Built`] means changes without the engine's source changing (the
-/// source hash covers every code change): old entries are then never read
-/// (a new `v<FORMAT>` folder) and are cleared as they age out.
-pub const FORMAT: u32 = 1;
+/// The cache format.  Bump it by hand when the bytes an entry holds, how a
+/// key is made, or what a [`Built`] means changes without the engine's
+/// source changing (the source hash covers every code change): old entries
+/// are then never read (a new `v<FORMAT>` folder) and are cleared as they
+/// age out.  2: keys are made of the canonical form ([`crate::canon`]), not
+/// of `Debug` text.
+pub const FORMAT: u32 = 2;
+
+/// The SHA-256 of `bytes`, as lower-case hex.
+fn hex_of(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
 
 /// The default size limit: 4 GiB.
 pub const DEFAULT_LIMIT: u64 = 4 << 30;
@@ -420,34 +428,25 @@ impl Store {
 
     fn key_for(&self, reads: &Reads, path: &str, opts: &Options, tier: Tier) -> Key {
         let target = opts.target();
-        let mut h = sha256::Sha256::new();
-        let mut field = |name: &str, v: &str| {
-            h.update(name.as_bytes());
-            h.update(&(v.len() as u64).to_le_bytes());
-            h.update(v.as_bytes());
-        };
-        field("format", &FORMAT.to_string());
-        field("engine", &self.engine);
-        field("tier", tier.name());
-        field("system", &opts.system);
-        field("printer", &opts.printer.name);
-        field("printer-values", &format!("{:?}", opts.printer));
-        field("seed", &format!("{:?}", opts.seed));
-        field("cells", &format!("{:?}", opts.cells));
-        field("path", path);
+        let mut c = Canon::new();
+        c.field("format", &FORMAT)
+            .field("engine", &self.engine)
+            .field("tier", tier.name())
+            .field("system", &opts.system)
+            .field("printer", &opts.printer.name)
+            .field("printer-values", &opts.printer)
+            .field("seed", &opts.seed)
+            .field("cells", &opts.cells)
+            .field("path", path);
         for (p, t) in &reads.0 {
-            field("file", p);
-            field("text", t);
+            c.field("file", p).field("text", t);
         }
-        let id = sha256::hex(&h.finish())[..32].to_owned();
-        let mut s = sha256::Sha256::new();
-        for part in [path, &target, tier.name()] {
-            s.update(&(part.len() as u64).to_le_bytes());
-            s.update(part.as_bytes());
-        }
+        let id = hex_of(c.bytes())[..32].to_owned();
+        let mut s = Canon::new();
+        s.put(path).put(&target).put(tier.name());
         Key {
             id,
-            slot: sha256::hex(&s.finish())[..16].to_owned(),
+            slot: hex_of(s.bytes())[..16].to_owned(),
             path: path.to_owned(),
             target,
             tier,
@@ -952,6 +951,33 @@ fn split(bytes: &[u8]) -> Result<(Head, &[u8]), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_digest_is_sha256() {
+        // the standard test vectors
+        assert_eq!(
+            hex_of(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            hex_of(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        assert_eq!(
+            hex_of(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+        );
+    }
+
+    #[test]
+    fn a_key_is_the_one_a_known_input_always_made() {
+        // a change of this key is a change of how keys are made: bump
+        // [`FORMAT`] with it, so old entries are ignored and not misread
+        let store = Store::new("unused", "pinned-engine");
+        let reads = Reads(vec![("mem/t.dtile".to_owned(), "tile".to_owned())]);
+        let key = store.key(&reads, "mem/t.dtile", &Options::default());
+        assert_eq!(key.id(), "5db5be104b958dd6e40cfb628093e1ea");
+    }
 
     #[test]
     fn sizes_parse() {

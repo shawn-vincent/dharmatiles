@@ -438,7 +438,7 @@ fn writers_in_a_crowd_leave_whole_entries() {
     assert_eq!(st.entries, 1, "one key, one entry");
     assert_eq!(st.strays, 0);
     // no temporary is left in the slot's folder
-    let slot = std::fs::read_dir(dir.join("v1"))
+    let slot = std::fs::read_dir(dir.join(format!("v{}", dt_eval::store::FORMAT)))
         .unwrap()
         .next()
         .unwrap()

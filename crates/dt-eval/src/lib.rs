@@ -13,6 +13,7 @@
 pub mod atomic;
 mod build;
 mod cache;
+mod canon;
 mod check;
 pub mod coords;
 pub mod crash_switch;
