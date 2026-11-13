@@ -5,7 +5,7 @@
 // which file to show; it knows nothing of the selection or the view.
 
 import { suggest } from '../complete.js';
-import { effect } from '@preact/signals-core';
+import { effect, signal } from '@preact/signals-core';
 import { describeChange } from '../history.js';
 import { html, render } from '../view/html.js';
 import { HistoryMenu, SaveState } from '../view/title-bar.js';
@@ -27,22 +27,18 @@ import { docs, planOf } from './docs.js';
 // cleanly; the worker sees the saved file and rebuilds.  A text with a
 // mistake stays here, unsaved, until it is fixed.
 
-// The disk's text and its revision are the documents module's (js/documents.js: a source is a document whose
-// state the program's answers make, and whose saves go through it in turn).  `doc.base` and `doc.docRev` are
-// that state as this store shows it, written by `sourceFields` and nowhere else.
-/** The id of the source document of `file` of tile `t`: the tile's own file is the tile's id. */
-let curSid = null; // the source document the pane shows
-/**
- * What the store shows of source `sid`'s held state: the text on disk (`base`), its revision, and whose it is (the tile
- * and the file): `doc.tileId` and `doc.file` are this and nothing else's, so they cannot disagree with the text held.
- */
-function sourceFields(sid) {
-  const h = sid ? docs.get(sid) : null;
-  return { docRev: h?.source?.rev ?? null, base: h?.source?.text ?? null, tileId: h?.source?.tile ?? null, file: h?.source?.file ?? null };
-}
-docs.subscribe((id) => { if (id === curSid && !run.reading) doc.set(sourceFields(id)); });
+// The disk's text and its revision are the documents module's (js/documents.js: a source is a document whose state the
+// program's answers make, and whose saves go through it in turn).  `doc.base`, `doc.docRev`, `doc.tileId` and `doc.file` are
+// that state, worked out from which source the pane shows (`shownSid`, the id of the source document, set by the load that
+// put its text in the pane): derived, never copied, so they cannot disagree with the text held.
+const shownSid = signal(/** @type {string | null} */ (null));
+const heldSource = () => { const sid = shownSid.value; return sid ? docs.get(sid)?.source ?? null : null; };
+doc.derive('base', () => heldSource()?.text ?? null);
+doc.derive('docRev', () => heldSource()?.rev ?? null);
+doc.derive('tileId', () => heldSource()?.tile ?? null);
+doc.derive('file', () => heldSource()?.file ?? null);
 
-const run = { reading: false, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, saving: false, openText: '' };
+const run = { lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, saving: false, openText: '' };
 
 // The history is the page's one (js/doc-history.js): a tile's source is a document whose steps are made here,
 // typing and the lens, each `{before, after, label, change, caret}`; a print list or a map is a document the
@@ -113,8 +109,8 @@ function clearDocument() {
   loadKey = null;
   history.clear(textKey());
   run.lastKind = null;
-  curSid = null;
-  doc.set({ text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null, ...sourceFields(null) });
+  shownSid.value = null;
+  doc.set({ text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null });
 }
 function record(text, kind, label = null) {
   // a document the program owns has its steps from the program: the source's saves (save() below)
@@ -261,7 +257,7 @@ async function save(now = false) {
   }
   d = doc.get();
   if (d.checked !== d.text || !d.ok) return false; // a mistake: kept here until it is fixed
-  const t = tile(), text = d.text, file = d.file, sid = curSid;
+  const t = tile(), text = d.text, file = d.file, sid = shownSid.value;
   if (!t || !file || !sid) return false;
   run.saving = true;
   doc.set({ saving: true });
@@ -340,25 +336,26 @@ export async function loadText(file) {
       // taken unless the page has unsaved changes on this very text, or a later load has begun
       const mine = (v) => dirty() && texts.file === v.file && doc.get().tileId === t.id;
       let read = null;
-      run.reading = true; // the store follows the held state by itself, except while this load makes the whole step
-      let st;
-      try {
-        st = await docs.loadSource(sid, { tile: t.id, own: want === t.path }, async () => (read = await host.text(t.id, want === t.path ? null : want)), (v) => token === loadToken && !mine(v));
-      } finally { run.reading = false; }
+      // the text, the pane and the source shown change in the same step as the held state is taken (no reader sees one without the others)
+      let fresh = false;
+      const apply = (state) => {
+        const v = { file: state.source.file, text: state.source.text, writable: state.source.writable };
+        fresh = doc.get().tileId !== t.id || texts.file !== v.file;
+        texts.show(v.file, v.text, v.writable);
+        shownSid.value = sid;
+        doc.set({
+          text: v.text, writable: v.writable,
+          conflict: null, note: null,
+          checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
+          ...(fresh ? { map: null, names: null } : {}),
+        });
+      };
+      const st = await docs.loadSource(sid, { tile: t.id, own: want === t.path }, async () => (read = await host.text(t.id, want === t.path ? null : want)), (v) => token === loadToken && !mine(v), apply);
       if (!st?.source) {
         if (!read) loadKey = null;
         return !!read && token === loadToken && mine(read);
       }
-      const v = { file: st.source.file, text: st.source.text, writable: st.source.writable };
-      const fresh = doc.get().tileId !== t.id || texts.file !== v.file;
-      texts.show(v.file, v.text, v.writable);
-      curSid = sid;
-      doc.set({
-        text: v.text, writable: v.writable, ...sourceFields(sid),
-        conflict: null, note: null,
-        checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
-        ...(fresh ? { map: null, names: null } : {}),
-      });
+      const v = { text: st.source.text };
       const key = `text:${t.id}`;
       if (fresh && carried && history.has(carried.key) && stateTextOf(carried.key, history.at(carried.key)) === v.text) {
         history.rename(carried.key, key); run.openText = v.text; // a rename keeps its undo
@@ -402,8 +399,8 @@ function showTextBar() {
   st.classList.toggle('bad', conflict || !!words?.bad);
   // the disk's text and revision are already the held state (js/documents.js): choosing says which text is the user's
   render(html`<${SaveState} words=${words} conflict=${conflict}
-    onTake=${() => { const disk = docs.resolveConflict(curSid) ?? d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }}
-    onKeep=${() => { docs.resolveConflict(curSid); doc.set({ conflict: null }); changed(); }} />`, st);
+    onTake=${() => { const disk = docs.resolveConflict(shownSid.value) ?? d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }}
+    onKeep=${() => { docs.resolveConflict(shownSid.value); doc.set({ conflict: null }); changed(); }} />`, st);
 }
 
 /**

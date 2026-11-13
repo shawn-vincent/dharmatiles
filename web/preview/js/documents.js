@@ -19,7 +19,7 @@
 // No DOM and no network of its own: `send(name, body)` is the host's call, `report` says what went wrong where
 // the user is looking, and `subscribe` tells each listener once per state taken.
 
-import { signal } from '@preact/signals-core';
+import { batch, signal } from '@preact/signals-core';
 import { createHistory } from './doc-history.js';
 
 /**
@@ -159,14 +159,19 @@ export function createDocuments({ send, report = {}, history = createHistory() }
      * Read the source of document `id` (`read()` is the program's text of the file: `{file, text, writable, docRev}`)
      * and take it in its turn.  `meta` says whose it is: `{tile, own}` (own: the tile's own file, not one it uses).
      * `accept(v)` is asked when it has been read and says whether to take it (unsaved changes on the text held say no).
+     * `apply(state)` is called with the state just taken, in the same step as taking it (nothing reads the held state between the
+     * two), so what shows the document can change with it at once.
      * Resolves the state held after it, or null when nothing was read or taken.
      */
-    loadSource(id, meta, read, accept = () => true) {
+    loadSource(id, meta, read, accept = () => true, apply = null) {
       return enqueue(id, async () => {
         const v = await read();
         if (!v || !accept(v)) return null;
         conflicts.delete(id); // a fresh reading the page took has no unsaved text of its own to conflict with // nothing there, or the page has changes of its own on the text it holds: what was read is not taken
-        receive({ id, docRev: v.docRev, source: { tile: meta.tile, own: meta.own, file: v.file, text: v.text, writable: v.writable } });
+        batch(() => {
+          receive({ id, docRev: v.docRev, source: { tile: meta.tile, own: meta.own, file: v.file, text: v.text, writable: v.writable } });
+          apply?.(held.get(id));
+        });
         notify(id);
         return held.get(id) ?? null;
       });

@@ -461,3 +461,20 @@ test('doc.tileId and doc.file are the held source\'s, written by one function (n
   }
   assert.deepEqual(bad, [], 'only sourceFields (editor/document.js) says which tile and file the text is of');
 });
+
+test('what shows a source changes in the same step as its state is taken: no reader sees the new state with the old pane', async () => {
+  const { signal, effect } = await import('@preact/signals-core');
+  const f = fakeFile('one');
+  const { docs } = sourceWorld(f);
+  const pane = signal('');      // what the pane shows
+  const seen = [];
+  effect(() => { seen.push([docs.get('t1')?.source?.text ?? null, pane.value]); }); // a reader of both, as the page's derived fields are
+  await docs.loadSource('t1', { tile: 't1', own: true }, f.read, () => true, (state) => { pane.value = state.source.text; });
+  assert.deepEqual(seen.at(-1), ['one', 'one']);
+  assert.ok(seen.every(([held, shown]) => held === shown || (held == null && shown === '')), `a mismatched pair was seen: ${JSON.stringify(seen)}`);
+  // a refused load applies nothing
+  const before = seen.length;
+  await docs.loadSource('t1', { tile: 't1', own: true }, f.read, () => false, () => { pane.value = 'not taken'; });
+  assert.equal(pane.value, 'one');
+  assert.equal(seen.length, before);
+});

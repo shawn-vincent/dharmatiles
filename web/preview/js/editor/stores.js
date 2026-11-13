@@ -105,7 +105,7 @@ export const view = createStore({
 });
 
 export const doc = createStore({
-  tileId: null, file: null, base: null, text: null, writable: false, docRev: null, // docRev and base: what the documents module holds of the file (editor/document.js sourceFields); a save is made against that revision
+  tileId: null, file: null, base: null, text: null, writable: false, docRev: null, // tileId, file, base and docRev are derived in editor/document.js from the source the pane shows (what the documents module holds of it; a save is made against that revision): these are only their shape; text and writable are the pane's
   checked: null, checkedFile: null, checkedTile: null, // the text last checked, and the file and tile it was checked for
   ok: true, errors: [], stack: null, map: null,
   names: null,         // the definitions, regions, lines and points the text makes now, by the program's parser (kept while the text does not parse)
