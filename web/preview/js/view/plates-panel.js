@@ -166,12 +166,13 @@ export function PlatesPanel({ m, act }) {
   const p = m.plan.value;
   const ro = m.readOnly.value;
   const errors = t.errors ?? [];
+  // the list's own mistakes, in the same words whether or not a plan came back with them
+  const why = html`${errors.slice(0, 3).map((e, i) => html`<p class="note bad" key=${i}>${e.message}${e.help ? html`<span class="pl-help">${` ${e.help}`}</span>` : null}</p>`)}
+          ${errors.length > 3 ? html`<p class="note">${`and ${errors.length - 3} more in the messages`}</p>` : null}`;
   return html`
     <div class="body">
-      ${!p ? html`<div class="empty">${t.status === 'failed' ? 'This list does not plan.' : 'Laying out the plates…'}</div>` : html`
-        ${!p.planned ? html`<p class="note bad">This list does not plan yet. You can still choose the printer and the mode here.</p>
-          ${errors.slice(0, 3).map((e, i) => html`<p class="note bad" key=${i}>${e.message}${e.help ? html`<span class="pl-help">${` ${e.help}`}</span>` : null}</p>`)}
-          ${errors.length > 3 ? html`<p class="note">${`and ${errors.length - 3} more in the messages`}</p>` : null}` : null}
+      ${!p ? html`<div class="empty">${t.status === 'failed' ? html`<b>This list does not plan.</b>${why}` : 'Laying out the plates…'}</div>` : html`
+        ${!p.planned ? html`<p class="note bad">This list does not plan yet. You can still choose the printer and the mode here.</p>${why}` : null}
         ${ro ? html`<p class="note">This file cannot be changed here.</p>` : null}
         ${p.planned ? html`<${Plates} m=${m} p=${p} act=${act} /><${Pins} p=${p} ro=${ro} act=${act} /><${Export} m=${m} p=${p} act=${act} /><${After} m=${m} p=${p} act=${act} />` : null}
         <${Pieces} m=${m} p=${p} ro=${ro} act=${act} /><${Inventory} m=${m} p=${p} ro=${ro} act=${act} /><${Printer} m=${m} p=${p} ro=${ro} act=${act} /><${Mode} p=${p} ro=${ro} act=${act} />

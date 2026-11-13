@@ -21,6 +21,9 @@ import { setCloud, doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, ma
 import { closeControl, openControl, showSourceAt } from './levels.js';
 import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
+import { firstError, tileLevelState } from '../messages.js';
+import { Unread } from '../view/messages-panel.js';
+import { showLine } from './panel.js';
 import { haveBlock, isTileDoc } from './inventory.js';
 import { canonOf, tileHave } from '../inventory.js';
 import { token } from '../tokens.js';
@@ -275,7 +278,21 @@ function thingModel() {
 
 // ---- the levels ------------------------------------------------------------------------------------------------
 
-const TileLevel = () => html`<${Sheet} model=${tileModel()} api=${sheetApi} emptyTitle="No tile" emptyText="Choose a tile to see what it holds." />`;
+/**
+ * The tile level: its sheet; or, for a tile that is open but could not be read or built, its mistake (never "No tile": that is
+ * only for no tile open); or "Reading" while the program has not described it yet.  `tileLevelState` decides, in one place.
+ */
+function TileLevel() {
+  const t = tile(), model = tileModel();
+  const first = firstError(t, log.view(t?.id ?? ''));
+  const state = tileLevelState(t, model, first);
+  if (state === 'unread') {
+    const go = first?.span?.line ? () => showLine(first.span.file === t.path ? null : first.span.file, first.span.line) : null;
+    return html`<${Unread} name=${stem(t)} first=${first} go=${go} openPanel=${() => view.set({ panel: true })} />`;
+  }
+  const empty = state === 'reading' ? { emptyTitle: 'Reading the tile', emptyText: 'The program is checking what it holds.' } : { emptyTitle: 'No tile', emptyText: 'Choose a tile to see what it holds.' };
+  return html`<${Sheet} model=${model} api=${sheetApi} ...${empty} />`;
+}
 const ThingLevel = () => html`<${Sheet} model=${thingModel()} api=${thingApi} />`;
 
 const HEIGHT_NAMES = /bottom|height/i;

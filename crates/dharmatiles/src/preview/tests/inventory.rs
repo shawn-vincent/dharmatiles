@@ -1115,45 +1115,53 @@ fn events_until(h: &Home, on_open: impl FnOnce(), stop: impl Fn(&Value) -> bool)
 #[test]
 fn a_change_is_told_as_the_resource_that_changed_and_not_as_the_whole() {
     let h = start_home("resources", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
-    // the stream is open once its snapshot is in; then a folder is made: that is the places, and only them
-    let first = events_until(
+    let new_folder = |name: &str| {
+        let (head, v) = h.call(
+            "/api/folders/new",
+            serde_json::json!({"root": 0, "dir": "", "name": name}),
+        );
+        assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    };
+    let names_folder = |v: &Value, name: &str| {
+        v["type"] == "resource"
+            && v["name"] == "places"
+            && v["value"]["folders"]
+                .as_array()
+                .is_some_and(|f| f.iter().any(|f| f["path"] == name))
+    };
+    // The stream is open once its snapshot is in.  What the server tells after a start (the inventory settling, a tile
+    // read) is told before the first folder is made: wait until it has nothing left, so none of it can be mistaken for
+    // what the folder changed.  Then a folder, and a second one as the end of the first one's telling: one change is
+    // one batch (places first), so what lies between the two places events is the rest of the first batch.
+    let seen = events_until(
         &h,
         || {
-            let (head, v) = h.call(
-                "/api/folders/new",
-                serde_json::json!({"root": 0, "dir": "", "name": "dungeon"}),
-            );
-            assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+            wait_idle(&h.r);
+            new_folder("dungeon");
+            new_folder("sentinel");
         },
-        |v| v["type"] == "resource" && v["name"] == "places",
+        |v| names_folder(v, "sentinel"),
     );
     assert_eq!(
-        first[0]["type"], "snapshot",
+        seen[0]["type"], "snapshot",
         "the stream begins with the whole"
     );
-    let told: Vec<&Value> = first[1..]
+    let at = seen
         .iter()
-        .filter(|v| v["type"] == "resource")
-        .collect();
-    assert_eq!(told.len(), 1, "{told:?}");
-    assert_eq!(told[0]["name"], "places");
+        .position(|v| names_folder(v, "dungeon"))
+        .expect("the folder is told as the places");
+    let end = seen.len() - 1;
+    // the folder is told as the places, with a revision of its own that rose
+    assert!(seen[at]["resRev"].as_u64().unwrap() >= 1);
+    // and as nothing else: no whole snapshot, no inventory, no list of tiles, no tile
     assert!(
-        told[0]["value"]["folders"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|f| f["path"] == "dungeon"),
-        "{}",
-        told[0]
+        seen[at + 1..end].iter().all(|v| v["type"] != "snapshot"
+            && v["type"] != "tile"
+            && v["name"] != "inventory"
+            && v["name"] != "list"),
+        "a folder does not resend the inventory or the tiles: {:?}",
+        &seen[at + 1..end]
     );
-    assert!(
-        first[1..]
-            .iter()
-            .all(|v| v["type"] != "snapshot" && v["name"] != "inventory" && v["name"] != "list"),
-        "a folder does not resend the inventory or the tiles"
-    );
-    // each resource has a revision of its own that rises when it changes
-    assert!(told[0]["resRev"].as_u64().unwrap() >= 1);
 }
 
 #[test]

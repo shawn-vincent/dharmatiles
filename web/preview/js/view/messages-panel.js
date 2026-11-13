@@ -5,7 +5,7 @@
 // editor/panel.js from the messages stream, the tile, the progress and the document) and of `act`, what the buttons do.
 // Which filter is on and which message a mark in the source pointed to are the model's.
 
-import { FILTERS, buildOf, filterRows, gateOf, gateRows, gaugeOf, jobWords, serverOf } from '../messages.js';
+import { FILTERS, buildOf, filterRows, firstError, gateOf, gateRows, gaugeOf, jobWords, serverOf } from '../messages.js';
 import { CopyButton } from './copy-button.js';
 import { html, useEffect } from './html.js';
 import { Icon } from './icons.js';
@@ -122,11 +122,23 @@ export function ErrorCard({ m, act }) {
   const t = m.tile.value;
   const v = m.view.value;
   if (!t || t.status !== 'failed' || v.running) return null;
-  const first = v.rows.map((r) => r.m).filter((x) => x.severity === 'error' && !x.dim)[0];
+  const first = firstError(t, v);
   if (!first) return null;
   const go = first.span?.line ? () => act.showLine(first.span.file === t.path ? null : first.span.file, first.span.line) : null;
   return html`<div class="doc-error" role="alert"><div class="de-title">Nothing built</div>
     <div class="de-text">${tickWords(first.text)}${first.span?.line ? html` <span class="de-at">${`(line ${first.span.line})`}</span>` : null}</div>
     ${first.help ? html`<div class="de-help">${tickWords(first.help)}</div>` : null}
     <div class="de-acts">${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${() => act.openPanel()}>All messages</button></div></div>`;
+}
+
+/**
+ * The tile level of the left panel for a tile that is open and could not be read or built: it says so, shows the first
+ * mistake (code and words) and offers Go to line.  `first` is `firstError` (the same record as the card and the messages);
+ * `go` jumps into the source (null: the mistake has no line).
+ */
+export function Unread({ name, first, go, openPanel }) {
+  return html`<div class="empty unread" role="alert"><b>${name ? `${name} could not be read` : 'This tile could not be read'}</b>
+    ${first ? html`<div class="de-text">${first.code ? html`<code>${first.code}</code> ` : null}${tickWords(first.text)}${first.span?.line ? html` <span class="de-at">${`(line ${first.span.line})`}</span>` : null}</div>
+      ${first.help ? html`<div class="de-help">${tickWords(first.help)}</div>` : null}` : html`<div class="de-text">The program gave no reason: see the messages.</div>`}
+    <div class="de-acts">${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${openPanel}>All messages</button></div></div>`;
 }

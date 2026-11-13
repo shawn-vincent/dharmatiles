@@ -303,6 +303,14 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .lvlbox .body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 16px; }
 .lvlbox .empty { margin: auto; max-width: 22ch; padding: 28px 18px; color: var(--muted); text-align: center; line-height: 1.55; }
 .lvlbox .empty b { display: block; margin-bottom: 5px; color: var(--ink); font: 700 var(--fs-l)/1.1 var(--f-display); }
+.lvlbox .empty.unread { margin: 0; max-width: none; text-align: left; padding: 16px 14px 16px 12px; border-left: 3px solid var(--err); }
+.lvlbox .empty.unread b { color: var(--err); font: 600 var(--fs-l)/var(--lh-l) var(--f-body); }
+.unread .de-text { margin-top: 4px; font-size: var(--fs-m); line-height: var(--lh-m); overflow-wrap: anywhere; color: var(--ink); }
+.unread .de-text code { display: block; font: var(--fs-s) var(--f-code); color: var(--muted); }
+.unread .de-at, .unread .de-help { color: var(--muted); font-size: var(--fs-s); }
+.unread .de-help { margin-top: 2px; font-size: var(--fs-m); }
+.unread .w { font: var(--fs-s) var(--f-code); background: rgb(26 23 20 / .08); border-radius: var(--r); padding: 0 3px; }
+.unread .de-acts { display: flex; gap: 8px; margin-top: 10px; }
 /* a sheet that goes on below the pane says so, as the tile list does with its shadow */
 .lvlbox .grp { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-s); color: var(--muted); margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line); }
 

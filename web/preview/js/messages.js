@@ -167,6 +167,33 @@ export function createLog() {
   };
 }
 
+/**
+ * The first mistake of a tile that did not build, as a message (`{code, text, help, span}`): the first open error of the
+ * stream's view, else what the program said of the tile itself (`errors`, then `failure`), else null.  The one answer the
+ * view's card and the left panel both read, so neither keeps a copy of it.
+ * @param {any} t the tile's state from the program @param {{rows: Array<{m: any, dim?: boolean}>}} v the stream's view of it
+ */
+export function firstError(t, v) {
+  if (!t || t.status !== 'failed') return null;
+  const row = v.rows.map((r) => r.m).find((x) => x.severity === 'error' && !x.dim);
+  if (row) return row;
+  const e = t.errors?.[0];
+  if (e) return { code: e.code, text: e.message, help: e.help, span: e.line ? { file: e.file ?? t.path, line: e.line } : null };
+  if (t.failure) return { code: t.failure.kind, text: t.failure.message, help: t.failure.help, span: null };
+  return null;
+}
+
+/**
+ * What the tile level of the left panel is: 'none' (no tile is open), 'unread' (it is open and could not be read or built:
+ * it carries its mistake, `firstError`), 'reading' (open, not yet described) or 'sheet'.  A tile that failed is never 'none'.
+ * @param {any} t @param {any} model the sheet model, or null @param {any} first `firstError` of the tile
+ */
+export function tileLevelState(t, model, first) {
+  if (!t) return 'none';
+  if (model) return 'sheet';
+  return t.status === 'failed' || first ? 'unread' : 'reading';
+}
+
 /** The rows `filter` ('all', 'errors', 'notes', 'build') keeps. */
 export function filterRows(rows, filter) {
   const keep = FILTERS.find((f) => f[0] === filter)?.[2] ?? (() => true);

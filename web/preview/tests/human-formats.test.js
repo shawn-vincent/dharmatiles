@@ -45,5 +45,5 @@ test('no second path: the inventory has no count of its own, and a message has n
   assert.doesNotMatch(read('js/view/inventory-panel.js'), /inv-count|`×\$\{/);
   assert.doesNotMatch(read('js/editor/inventory.js'), /nothing is edited away/);
   const m = read('js/view/messages-panel.js');
-  assert.equal((m.match(/>Go to line</g) ?? []).length, 1, 'only the error card on the view has the button; a row is pressed');
+  assert.equal((m.match(/>Go to line</g) ?? []).length, 2, 'only the error card on the view and the tile level of the left panel (Unread) have the button, both from firstError; a row is pressed');
 });

@@ -8,6 +8,14 @@ import { createThumbs, LIMIT, thumbKey } from '../js/thumbs.js';
 import { tierReady } from '../js/tiers.js';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
+/** Wait for exactly what a test asked for: until `ok()` is true (checked every tick), never a fixed time; a 10 s deadline fails with `what`. */
+async function until(ok, what) {
+  const end = Date.now() + 10000;
+  while (!ok()) {
+    if (Date.now() > end) assert.fail(`timed out waiting for ${what}`);
+    await tick();
+  }
+}
 
 /** A fake program: it holds every want until told it is done, and remembers what it was asked. */
 function fakeHost() {
@@ -122,7 +130,7 @@ test('the seed strip shows the current seed first and four new ones, marks one y
   assert.equal(root.querySelectorAll('.seed-card').length, 0, 'nothing is built until the dice is pressed');
   assert.equal(f.asked.length, 0);
   root.querySelector('.dice').dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => f.asked.length >= 5 && root.querySelectorAll('.seed-card').length >= 5, 'the five low builds asked for and the five cards drawn');
   const cards = root.querySelectorAll('.seed-card');
   assert.equal(cards.length, 5);
   assert.match(cards[0].textContent, /97now/);
@@ -131,9 +139,8 @@ test('the seed strip shows the current seed first and four new ones, marks one y
   assert.ok(f.asked.every((a) => a.want.tier === 'super-low'));
   const picked = Number(cards[2].textContent.match(/\d+/)[0]);
   cards[2].dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => calls.length >= 1 && root.querySelectorAll('.seed-card').length === 0, 'the seed written and the strip closed');
   assert.deepEqual(calls, [[10, 'seed', picked]], 'one write of the seed: one step of history');
-  assert.equal(root.querySelectorAll('.seed-card').length, 0, 'the strip closes');
 });
 
 test('the seed row says which entries keep their own seed, from the stack items, and a name selects its entry', async () => {
