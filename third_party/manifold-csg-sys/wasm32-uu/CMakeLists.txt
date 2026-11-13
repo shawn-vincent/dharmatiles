@@ -71,10 +71,21 @@ add_compile_options(
 # default (currently 3ce9622b) is older than typical host pins; without
 # this override, the wasm-uu lane would link against an older C API
 # surface than our FFI declarations target.
+# dharmatiles: Clipper2 uses std::back_inserter and std::llabs without
+# including <iterator> and <cstdlib>, which older libc++ pulled in through
+# other headers and current LLVM's (23) does not.  Include them for every C++
+# file instead of patching Clipper2.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include iterator -include cstdlib")
+
+# dharmatiles: the host lane's carried Manifold patch (-DDT_MANIFOLD_PATCH).
+set(_dt_patch_args)
+if(DT_MANIFOLD_PATCH)
+    set(_dt_patch_args EXTRA_MANIFOLD_PATCHES ${DT_MANIFOLD_PATCH})
+endif()
 if(MANIFOLD_GIT_TAG)
-    wasm_cxx_shim_add_manifold(MANIFOLD_GIT_TAG ${MANIFOLD_GIT_TAG})
+    wasm_cxx_shim_add_manifold(MANIFOLD_GIT_TAG ${MANIFOLD_GIT_TAG} ${_dt_patch_args})
 else()
-    wasm_cxx_shim_add_manifold()
+    wasm_cxx_shim_add_manifold(${_dt_patch_args})
 endif()
 
 # Force the manifold + Clipper2 archives to build by default. Without

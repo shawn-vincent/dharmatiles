@@ -97,3 +97,7 @@ opt-level = 3
 # has the fix.
 [patch.crates-io]
 manifold-csg-sys = { path = "third_party/manifold-csg-sys" }
+# obvhs 0.4.0 with its builders' `Instant` replaced by a clock that does not
+# run on wasm32, where std's `Instant::now()` panics (third_party/obvhs/src/
+# instant.rs); the rest is the published source.  Drop it once obvhs has the fix.
+obvhs = { path = "third_party/obvhs" }

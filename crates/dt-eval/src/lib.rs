@@ -15,6 +15,7 @@ mod build;
 mod cache;
 mod canon;
 mod check;
+pub mod clock;
 pub mod coords;
 pub mod crash_switch;
 mod crowns;

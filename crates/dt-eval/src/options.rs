@@ -8,7 +8,7 @@ use dt_kit::{Frame, Printer};
 use crate::diag::Diag;
 use crate::doc;
 use crate::machine::printer_profile;
-use crate::source::Library;
+use crate::source::{Library, Source};
 
 /// How to build.
 #[derive(Clone, Debug)]
@@ -118,7 +118,16 @@ impl Options {
     /// The library's default printer cannot be read or does not decode (a
     /// broken `$DT_LIBRARY`, say), as the diagnostics from the document.
     pub fn new() -> Result<Self, Vec<Diag>> {
-        let printer = doc::printer(&Library, doc::PRINTER)?;
+        Self::in_source(&Library)
+    }
+
+    /// [`Options::new`] with the default printer read through `sources`
+    /// (the browser build has no disk: its library is a map).
+    ///
+    /// # Errors
+    /// As [`Options::new`].
+    pub fn in_source(sources: &dyn Source) -> Result<Self, Vec<Diag>> {
+        let printer = doc::printer(sources, doc::PRINTER)?;
         Ok(Self {
             system: "db".to_owned(),
             seed: None,

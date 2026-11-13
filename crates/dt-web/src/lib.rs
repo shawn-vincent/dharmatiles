@@ -1,29 +1,28 @@
-//! dt-web: the language crates in the browser.
+//! dt-web: the engine in the browser.
 //!
 //! What `dharmatiles check`, the preview's outline and the editor's printed
-//! sizes already do, behind `wasm-bindgen`, with nothing from the geometry
-//! crates: [`dt_doc`] reads and checks a document and says what a length
-//! prints, [`dt_value`] draws from a weighted range.  Every call returns JSON
-//! (the page parses it) or throws: nothing is swallowed on the way.
+//! sizes already do, and now what `dharmatiles build` does, behind
+//! `wasm-bindgen`: [`dt_eval`] reads a document and its library, plans it and
+//! builds it; [`dt_doc`] describes it and says what a length prints;
+//! [`dt_value`] draws from a weighted range.  Every call returns JSON (the
+//! page parses it), typed arrays, or throws: nothing is swallowed on the way.
 //!
-//! The library (`parts/heights.dtile` and the files a document `use`s) is
-//! passed in from the page with [`set_library`], as one JSON object of
-//! `lib:` path to text; nothing of it is compiled in.
+//! The library (`parts/heights.dtile`, the printer, and the files a document
+//! `use`s) is passed in from the page with [`set_library`], as one JSON
+//! object of `lib:` path to text; nothing of it is compiled in.  The engine
+//! reads it through [`dt_eval::Source`], the same trait the program reads its
+//! disk through.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
-use dt_doc::DocError;
-use dt_doc::Known;
 use dt_doc::consts::ConstTable;
-use dt_doc::error::Src;
-use dt_doc::model::{ConstKind, Document, Entry, Setting};
-use dt_doc::paths::{HEIGHTS, use_path};
+use dt_doc::model::{ConstKind, Entry, Setting};
+use dt_doc::paths::HEIGHTS;
 use dt_doc::schema::{OPENLOCK_SQUARE_MM, SQUARE_MM};
 use dt_doc::units::Units;
+use dt_eval::{Diag, Options, Source};
 use dt_value::{Rng, Seed};
-use miette::{NamedSource, SourceSpan};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -37,7 +36,28 @@ thread_local! {
     static LIBRARY: RefCell<BTreeMap<String, String>> = const { RefCell::new(BTreeMap::new()) };
 }
 
-/// Give the module the library: a JSON object of `lib:` path to text.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = performance, js_name = now)]
+    fn performance_now() -> f64;
+}
+
+#[cfg(target_arch = "wasm32")]
+fn clock_secs() -> f64 {
+    performance_now() / 1000.0
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console, js_name = error)]
+    fn console_error(message: &str);
+}
+
+/// Give the module the library: a JSON object of `lib:` path to text.  In the
+/// browser it also gives the engine the page's clock (`performance.now()`),
+/// which a build times its stages with.
 ///
 /// # Errors
 /// The text is not a JSON object of strings.
@@ -46,7 +66,33 @@ pub fn set_library(json: &str) -> Result<(), JsError> {
     let map: BTreeMap<String, String> = serde_json::from_str(json)
         .map_err(|e| JsError::new(&format!("the library is not a JSON object of text: {e}")))?;
     LIBRARY.with(|l| *l.borrow_mut() = map);
+    #[cfg(target_arch = "wasm32")]
+    {
+        dt_eval::clock::set_clock(clock_secs);
+        // a Rust panic is a wasm trap (`unreachable`) with nothing to read: say
+        // what it was on the console first, where the page's worker picks it up
+        std::panic::set_hook(Box::new(|info| console_error(&format!("panic: {info}"))));
+    }
     Ok(())
+}
+
+/// The page's library and its document, as the engine's [`Source`]: the
+/// document is `tile.dtile`, every other path is a library file.
+struct Overlay<'a> {
+    library: &'a BTreeMap<String, String>,
+    text: &'a str,
+}
+
+impl Source for Overlay<'_> {
+    fn read(&self, path: &str) -> Result<String, String> {
+        if path == MAIN {
+            return Ok(self.text.to_owned());
+        }
+        self.library
+            .get(path)
+            .cloned()
+            .ok_or_else(|| format!("the page's library has no `{path}`"))
+    }
 }
 
 /// What `mm`, `in` and `layer` are worth on a build target (`db` or `ol`).
@@ -66,113 +112,19 @@ fn units_for(system: &str) -> Result<Units, JsError> {
     })
 }
 
-/// A decoded file with its text.
-struct Loaded {
-    src: Src,
-    doc: Document,
-}
-
-/// Reads a document and the library files it uses, each once, as dt-eval's
-/// reader does for the program (`Reader::load`), over the page's library map
-/// instead of the disk.
-struct Loader<'a> {
-    library: &'a BTreeMap<String, String>,
-    units: Units,
-    files: BTreeMap<String, Arc<Loaded>>,
-    loading: Vec<String>,
-    errors: Vec<DocError>,
-}
-
-impl Loader<'_> {
-    fn load(
-        &mut self,
-        path: &str,
-        text: Option<&str>,
-        from: Option<(&Src, SourceSpan)>,
-    ) -> Option<Arc<Loaded>> {
-        if let Some(f) = self.files.get(path) {
-            return Some(Arc::clone(f));
-        }
-        if self.loading.iter().any(|p| p == path) {
-            if let Some((src, span)) = from {
-                self.errors.push(
-                    DocError::new(
-                        src,
-                        "dt::use",
-                        span,
-                        format!("`{path}` uses itself, through {}", self.loading.join(" → ")),
-                        "a loop of files",
-                    )
-                    .maybe_help(Some(
-                        "files may use each other, but never round to themselves".into(),
-                    )),
-                );
-            }
-            return None;
-        }
-        let text = match text {
-            Some(t) => t.to_owned(),
-            None => match self.library.get(path) {
-                Some(t) => t.clone(),
-                None => {
-                    if let Some((src, span)) = from {
-                        self.errors.push(
-                            DocError::new(
-                                src,
-                                "dt::use",
-                                span,
-                                format!("the library has no `{}`", path.trim_start_matches("lib:")),
-                                "used here",
-                            )
-                            .maybe_help(Some(
-                                "the page's library holds the bundled parts; `./` files of your project are not available here".into(),
-                            )),
-                        );
-                        return None;
-                    }
-                    // a file the page was never given is the page's mistake, said by the caller
-                    return None;
-                }
-            },
-        };
-        let src: Src = Arc::new(NamedSource::new(path, text.clone()));
-        let uses = match dt_doc::uses(path, &text) {
-            Ok(u) => u,
-            Err(es) => {
-                self.errors.extend(es);
-                return None;
-            }
-        };
-        let mut known = Known::new().with_units(self.units);
-        if path != HEIGHTS {
-            // every file sees the library's heights
-            let heights = self.load(HEIGHTS, None, None)?;
-            known.add_consts(&heights.doc);
-        }
-        let mut ok = true;
-        self.loading.push(path.to_owned());
-        for u in &uses {
-            match self.load(&use_path(path, u), None, Some((&src, u.path.span))) {
-                Some(f) => known.add(u.key(), &f.doc),
-                None => ok = false,
-            }
-        }
-        self.loading.pop();
-        if !ok {
-            return None;
-        }
-        match dt_doc::decode(path, &text, &known) {
-            Ok(doc) => {
-                let f = Arc::new(Loaded { src, doc });
-                self.files.insert(path.to_owned(), Arc::clone(&f));
-                Some(f)
-            }
-            Err(es) => {
-                self.errors.extend(es);
-                None
-            }
-        }
-    }
+/// The engine's options for a target: the library's default printer, read
+/// through the page's library.
+fn options(source: &dyn Source, system: &str) -> Result<Options, JsError> {
+    units_for(system)?;
+    let mut o = Options::in_source(source).map_err(|ds| {
+        let why: Vec<&str> = ds.iter().map(|d| d.message.as_str()).collect();
+        JsError::new(&format!(
+            "the library's default printer does not read: {}",
+            why.join("; ")
+        ))
+    })?;
+    system.clone_into(&mut o.system);
+    Ok(o)
 }
 
 /// UTF-16 units before byte offset `at` of `text`: what a browser's text
@@ -213,9 +165,18 @@ struct Diagnostic {
     col: usize,
 }
 
-fn diagnostic(e: &DocError) -> Diagnostic {
-    let text = e.src().inner();
-    let (o, l) = (e.span.offset(), e.span.len());
+fn diagnostic(e: &Diag) -> Diagnostic {
+    let (file, text, o, l) = e.at.as_ref().map_or_else(
+        || (String::new(), "", 0, 0),
+        |(src, span)| {
+            (
+                src.name().to_owned(),
+                src.inner().as_str(),
+                span.offset(),
+                span.len(),
+            )
+        },
+    );
     let (line, col) = line_col(text, o);
     let s16 = utf16_at(text, o);
     let e16 = utf16_at(text, o + l);
@@ -224,7 +185,7 @@ fn diagnostic(e: &DocError) -> Diagnostic {
         message: e.message.clone(),
         label: e.label.clone(),
         help: e.help.clone(),
-        file: e.src().name().to_owned(),
+        file,
         span: [o, l],
         span16: [s16, e16 - s16],
         line,
@@ -345,15 +306,14 @@ fn json<T: Serialize>(v: &T) -> Result<String, JsError> {
 }
 
 /// Read and check `text` as a `.dtile` for the build target `system` (`db`
-/// or `ol`), and describe it: its diagnostics (code, message, help, spans),
-/// its tile and its stack with each control as written and as printed on
-/// both targets.  JSON.
+/// or `ol`) with the engine's own reader and planner, and describe it: its
+/// diagnostics (code, message, help, spans), its tile and its stack with each
+/// control as written and as printed on both targets.  JSON.
 ///
 /// # Errors
 /// An unknown target, or the library was never set.
 #[wasm_bindgen]
 pub fn analyze(text: &str, system: &str) -> Result<String, JsError> {
-    let units = units_for(system)?;
     let (db, ol) = (units_for("db")?, units_for("ol")?);
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
@@ -362,62 +322,42 @@ pub fn analyze(text: &str, system: &str) -> Result<String, JsError> {
                 "the library has no parts/heights.dtile: call set_library first",
             ));
         }
-        let mut loader = Loader {
+        let source = Overlay {
             library: &lib,
-            units,
-            files: BTreeMap::new(),
-            loading: Vec::new(),
-            errors: Vec::new(),
+            text,
         };
-        let main = loader.load(MAIN, Some(text), None);
-        let diagnostics: Vec<Diagnostic> = loader.errors.iter().map(diagnostic).collect();
-        let (Some(main), true) = (main, diagnostics.is_empty()) else {
-            return json(&Analysis {
-                ok: false,
-                diagnostics,
-                tile: None,
-                stack: Vec::new(),
-            });
+        let opts = options(&source, system)?;
+        let checked = match dt_eval::check(&source, MAIN, &opts) {
+            Ok(c) => c,
+            Err(ds) => {
+                return json(&Analysis {
+                    ok: false,
+                    diagnostics: ds.iter().map(diagnostic).collect(),
+                    tile: None,
+                    stack: Vec::new(),
+                });
+            }
         };
-        let heights = loader
-            .files
-            .get(HEIGHTS)
-            .ok_or_else(|| JsError::new("the heights file was not read"))?;
-        // the library's heights are `$` names at the root, and the tile's own
-        // `let`s are the first scope, as the program's reader makes it
-        let library_consts: Vec<_> = heights
-            .doc
-            .consts
-            .iter()
-            .filter(|c| c.kind == ConstKind::Let)
-            .cloned()
-            .collect();
-        let Some(def) = main.doc.tile() else {
+        let Some(def) = checked.file.doc.tile() else {
             return json(&Analysis {
                 ok: true,
-                diagnostics,
+                diagnostics: Vec::new(),
                 tile: None,
                 stack: Vec::new(),
             });
         };
-        let (consts, scope) = ConstTable::root(&library_consts).enter(&def.consts);
-        let mut diagnostics = diagnostics;
-        for s in &scope {
-            let e = DocError::new(&main.src, s.code, s.span, s.message.clone(), s.label)
-                .maybe_help(s.help.clone());
-            diagnostics.push(diagnostic(&e));
-        }
+        let empty = ConstTable::default();
+        let consts = checked.tile.as_ref().map_or(&empty, |t| &t.heights.consts);
         let cx = Ctx {
             text,
-            consts: &consts,
+            consts,
             db,
             ol,
         };
-        let header = def.header();
         json(&Analysis {
-            ok: diagnostics.is_empty(),
-            diagnostics,
-            tile: header.map(|h| TileInfo {
+            ok: true,
+            diagnostics: Vec::new(),
+            tile: def.header().map(|h| TileInfo {
                 name: def.name.value.clone(),
                 cols: h.cols,
                 rows: h.rows,
@@ -441,21 +381,19 @@ pub fn printed(typed: &str) -> Result<String, JsError> {
     let (db, ol) = (units_for("db")?, units_for("ol")?);
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
-        let mut loader = Loader {
+        let source = Overlay {
             library: &lib,
-            units: db,
-            files: BTreeMap::new(),
-            loading: Vec::new(),
-            errors: Vec::new(),
+            text: "",
         };
-        let Some(heights) = loader.load(HEIGHTS, None, None) else {
-            let why: Vec<String> = loader.errors.iter().map(|e| e.message.clone()).collect();
-            return Err(JsError::new(&format!(
+        let read = dt_eval::doc::read_with(&source, HEIGHTS, db).map_err(|ds| {
+            let why: Vec<&str> = ds.iter().map(|d| d.message.as_str()).collect();
+            JsError::new(&format!(
                 "the library's heights do not read: {}",
                 why.join("; ")
-            )));
-        };
-        let library_consts: Vec<_> = heights
+            ))
+        })?;
+        let library_consts: Vec<_> = read
+            .file
             .doc
             .consts
             .iter()
@@ -474,6 +412,212 @@ pub fn printed(typed: &str) -> Result<String, JsError> {
                 db: a.unwrap_or_default(),
                 ol: b.unwrap_or_default(),
             }),
+        })
+    })
+}
+
+/// A tile as the page draws it: three floats a corner, a colour a corner.
+#[wasm_bindgen]
+pub struct Tile {
+    meta: String,
+    positions: Vec<f32>,
+    colours: Vec<f32>,
+}
+
+#[wasm_bindgen]
+impl Tile {
+    /// What the build found, as JSON.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn meta(&self) -> String {
+        self.meta.clone()
+    }
+
+    /// Corner positions, mm, three floats each, three corners a triangle.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn positions(&self) -> Vec<f32> {
+        self.positions.clone()
+    }
+
+    /// Corner colours, linear 0 to 1, three floats each: the editor's paint
+    /// (overhang past the band red, the 55 to 65 degree band orange).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn colours(&self) -> Vec<f32> {
+        self.colours.clone()
+    }
+}
+
+#[derive(Serialize)]
+struct BuildMeta {
+    /// False when the document did not build: `diagnostics` says why.
+    built: bool,
+    diagnostics: Vec<Diagnostic>,
+    triangles: usize,
+    vertices: usize,
+    /// Cells per square the build used; 0 is the build's own finest.
+    cells: u32,
+    /// The gate's verdict: it passes when `failures` is empty and the build
+    /// was checked.
+    passes: bool,
+    checked: bool,
+    failures: Vec<String>,
+    watertight: bool,
+    overhang_mm2: f64,
+    overhang_budget_mm2: f64,
+    band_mm2: f64,
+    band_budget_mm2: f64,
+    holes: usize,
+    bodies: usize,
+    volume_mm3: f64,
+    footprint: [f64; 2],
+    /// SHA-256 of the STL's triangles (the file after its 80-byte header,
+    /// which names the engine and document), as hex.
+    stl_sha256: String,
+    stl_bytes: usize,
+    /// Each stage's hash, in build order.
+    stages: Vec<(String, String)>,
+    /// How long each stage took in the page, seconds.
+    stage_secs: Vec<(String, f64)>,
+}
+
+/// One build, as the program does it: the text of a document, a build
+/// target, a seed (negative keeps the tile's own) and cells per square (0
+/// keeps the build's finest).  The one function the browser and the native
+/// parity test both call.
+///
+/// # Errors
+/// The document's mistakes, as the program's diagnostics.
+pub fn build_with(
+    source: &dyn Source,
+    system: &str,
+    seed: i64,
+    cells: u32,
+) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
+    let mut opts = Options::in_source(source)?;
+    system.clone_into(&mut opts.system);
+    opts.seed = u64::try_from(seed).ok();
+    opts.cells = (cells > 0).then_some(cells);
+    let built = dt_eval::build(source, MAIN, &opts)?;
+    Ok((built, opts))
+}
+
+/// The STL of a build, and the hash the parity check compares: SHA-256 of
+/// everything after the 80-byte header.
+#[must_use]
+pub fn stl_sha256(built: &dt_eval::Built) -> (String, usize) {
+    use sha2::{Digest, Sha256};
+    let bytes = dt_kit::stl(&built.export.mesh, &built.record);
+    let digest = Sha256::digest(&bytes[80..]);
+    let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+    (hex, bytes.len())
+}
+
+/// Build `text` for `system` and hand back the mesh, painted, with the
+/// gate's findings.  `seed` below 0 keeps the tile's own; `cells` is cells
+/// per square (0: the build's finest).  A document with a mistake is not an
+/// error: the result is unbuilt and says where, in `meta`.
+///
+/// # Errors
+/// An unknown target, or the library was never set.
+#[wasm_bindgen]
+pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Tile, JsError> {
+    units_for(system)?;
+    LIBRARY.with(|lib| {
+        let lib = lib.borrow();
+        if !lib.contains_key(HEIGHTS) {
+            return Err(JsError::new(
+                "the library has no parts/heights.dtile: call set_library first",
+            ));
+        }
+        let source = Overlay {
+            library: &lib,
+            text,
+        };
+        let (built, opts) = match build_with(&source, system, i64::from(seed), cells) {
+            Ok(b) => b,
+            Err(ds) => {
+                let meta = BuildMeta {
+                    built: false,
+                    diagnostics: ds.iter().map(diagnostic).collect(),
+                    triangles: 0,
+                    vertices: 0,
+                    cells,
+                    passes: false,
+                    checked: false,
+                    failures: Vec::new(),
+                    watertight: false,
+                    overhang_mm2: 0.0,
+                    overhang_budget_mm2: 0.0,
+                    band_mm2: 0.0,
+                    band_budget_mm2: 0.0,
+                    holes: 0,
+                    bodies: 0,
+                    volume_mm3: 0.0,
+                    footprint: [0.0; 2],
+                    stl_sha256: String::new(),
+                    stl_bytes: 0,
+                    stages: Vec::new(),
+                    stage_secs: Vec::new(),
+                };
+                return Ok(Tile {
+                    meta: json(&meta)?,
+                    positions: Vec::new(),
+                    colours: Vec::new(),
+                });
+            }
+        };
+        let mesh = &built.export.mesh;
+        let mut positions = Vec::with_capacity(mesh.triangles.len() * 9);
+        for t in &mesh.triangles {
+            for &i in t {
+                for x in mesh.positions[i as usize] {
+                    #[allow(clippy::cast_possible_truncation)]
+                    positions.push(x as f32);
+                }
+            }
+        }
+        let mut colours = Vec::with_capacity(mesh.triangles.len() * 9);
+        for c in built.colours() {
+            for _ in 0..3 {
+                colours.extend_from_slice(&c);
+            }
+        }
+        let failures = built.audit.failures(&opts.printer);
+        let (stl_sha256, stl_bytes) = stl_sha256(&built);
+        let a = &built.audit;
+        let meta = BuildMeta {
+            built: true,
+            diagnostics: Vec::new(),
+            triangles: a.triangles,
+            vertices: a.vertices,
+            cells,
+            passes: built.checked && failures.is_empty(),
+            checked: built.checked,
+            failures,
+            watertight: a.watertight,
+            overhang_mm2: a.overhang_mm2,
+            overhang_budget_mm2: a.overhang_budget_mm2.max(opts.printer.overhang_budget_mm2),
+            band_mm2: a.band_mm2,
+            band_budget_mm2: a.band_budget_mm2,
+            holes: a.holes,
+            bodies: a.bodies,
+            volume_mm3: a.volume_mm3,
+            footprint: built.footprint,
+            stl_sha256,
+            stl_bytes,
+            stages: built
+                .stages
+                .iter()
+                .map(|s| (s.name.clone(), format!("{:016x}", s.hash)))
+                .collect(),
+            stage_secs: built.stage_secs.clone(),
+        };
+        Ok(Tile {
+            meta: json(&meta)?,
+            positions,
+            colours,
         })
     })
 }
@@ -572,11 +716,27 @@ mod tests {
 
     use super::*;
 
-    const HEIGHTS_TEXT: &str = "dharmatiles version=\"1.0.0\"\nlet $groundHeight \"5dmm\"\n";
-
     fn lib() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
         let mut m = BTreeMap::new();
-        m.insert(HEIGHTS.to_owned(), HEIGHTS_TEXT.to_owned());
+        for group in ["parts", "printers", "tiles"] {
+            let mut dirs = vec![root.join(group)];
+            while let Some(d) = dirs.pop() {
+                for e in std::fs::read_dir(d).unwrap() {
+                    let p = e.unwrap().path();
+                    if p.is_dir() {
+                        dirs.push(p);
+                    } else if p.extension().is_some_and(|x| x == "dtile") {
+                        let rel = p
+                            .strip_prefix(&root)
+                            .unwrap()
+                            .to_string_lossy()
+                            .into_owned();
+                        m.insert(format!("lib:{rel}"), std::fs::read_to_string(&p).unwrap());
+                    }
+                }
+            }
+        }
         LIBRARY.with(|l| *l.borrow_mut() = m);
     }
 
@@ -609,6 +769,38 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .starts_with("dt::")
+        );
+    }
+
+    /// Prints the parity hash of a build, for comparing with the browser's:
+    /// `PARITY_TILE=lib:tiles/ground/1x1-grass.dtile PARITY_CELLS=48 cargo test --release -p dt-web parity -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "a hash for comparing with the browser's: run by hand"]
+    fn parity() {
+        lib();
+        let var = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.to_owned());
+        let tile = var("PARITY_TILE", "lib:tiles/ground/1x1-grass.dtile");
+        let system = var("PARITY_SYSTEM", "db");
+        let seed: i64 = var("PARITY_SEED", "-1").parse().unwrap();
+        let cells: u32 = var("PARITY_CELLS", "0").parse().unwrap();
+        let lib = LIBRARY.with(|l| l.borrow().clone());
+        // PARITY_FILE: a document on disk (the page's own presets) instead of a library tile
+        let text = match std::env::var("PARITY_FILE") {
+            Ok(f) => std::fs::read_to_string(f).unwrap(),
+            Err(_) => lib.get(&tile).unwrap().clone(),
+        };
+        let t0 = std::time::Instant::now();
+        let source = Overlay {
+            library: &lib,
+            text: &text,
+        };
+        let (built, opts) = build_with(&source, &system, seed, cells).unwrap();
+        let (hash, bytes) = stl_sha256(&built);
+        println!(
+            "PARITY {tile} {system} seed={seed} cells={cells}: sha256={hash} bytes={bytes} triangles={} failures={:?} secs={:.2}",
+            built.audit.triangles,
+            built.audit.failures(&opts.printer),
+            t0.elapsed().as_secs_f64()
         );
     }
 }

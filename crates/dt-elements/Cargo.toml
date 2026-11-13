@@ -11,16 +11,16 @@ publish.workspace = true
 [features]
 default = ["manifold-parallel"]
 manifold-parallel = ["dt-kit/manifold-parallel"]
+wasm = ["dt-kit/wasm"]
 
 # Only the kit: a element cannot reach into the kernels or another element.
 [dependencies]
 dt-kit.workspace = true
 dt-lang.workspace = true
 libm.workspace = true
-rayon.workspace = true
 
-[dev-dependencies]
-rayon.workspace = true
+# rayon through dt-par: the one place that runs it sequentially in the browser
+rayon = { package = "dt-par", path = "../dt-par" }
 
 [lints]
 workspace = true

@@ -122,12 +122,25 @@ td.n { white-space: nowrap; }
 .facts b { color: var(--ink); font-family: var(--f-code); font-weight: 600; }
 .printed { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin-top: 8px; font-family: var(--f-code); font-size: 13px; }
 .printed span:nth-child(odd) { color: var(--muted); font-family: var(--f-body); font-size: var(--fs-s); }
+.bgrid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .bgrid { grid-template-columns: minmax(0, 1fr); } }
+.viewwrap { position: relative; background: var(--plate); border-radius: var(--r); overflow: hidden; aspect-ratio: 4 / 3; min-height: 240px; }
+.viewwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.legend { position: absolute; left: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-s); line-height: var(--lh-s); color: #1A1714; background: rgb(255 255 255 / .88); padding: 2px 8px; border-radius: var(--r); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; }
+.verdict { display: inline-block; font: 800 var(--fs-l)/var(--lh-l) var(--f-display); letter-spacing: .06em; padding: 0 10px; border-radius: var(--r); color: #fff; }
+.verdict.pass { background: var(--ok); }
+.verdict.fail { background: var(--err); }
+.bout dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 8px 0 0; font-size: 13px; }
+.bout dt { color: var(--muted); font-size: var(--fs-s); }
+.bout dd { margin: 0; font-family: var(--f-code); overflow-wrap: anywhere; }
+.bout .why { color: var(--err); font-size: var(--fs-s); line-height: var(--lh-s); margin-top: 4px; }
 .ms { color: var(--muted); font-size: var(--fs-s); font-family: var(--f-code); }
 </style>
 
 <div class="wrap">
-  <h1>dharmatiles <small>stage 1: the language, in your browser</small></h1>
-  <p class="lede">This is the real language engine (<code>dt-lang</code>, <code>dt-value</code>, <code>dt-doc</code>) compiled to WebAssembly, not a copy: the same Rust that checks a tile in the program checks the source below as you type. Nothing leaves your browser.</p>
+  <h1>dharmatiles <small>stage 2: the engine, in your browser</small></h1>
+  <p class="lede">This is the real engine compiled to WebAssembly, not a copy: the same Rust that checks and builds a tile in the program does it here, as you type and when you press Build. Nothing leaves your browser.</p>
 
   <div id="fatal" class="fatal" role="alert"></div>
 
@@ -138,9 +151,36 @@ td.n { white-space: nowrap; }
     <li>check, median of last 50 <b id="s-med">-</b></li>
     <li>check, slowest of last 50 <b id="s-max">-</b></li>
     <li>range draws, last <b id="s-draw">-</b></li>
+    <li>last build <b id="s-build">-</b></li>
   </ul>
 
-  <div class="grid">
+  <div class="card" id="buildcard">
+    <h2>Build it</h2>
+    <p class="about" style="margin:0 0 8px">The same engine builds the tile in a worker, in this tab: Manifold compiled to WebAssembly, one thread, the gate checking what it makes. Pick a tile, or build whatever is in the source below.</p>
+    <div class="row">
+      <label>tile <select id="preset" aria-label="Tile to build">
+        <option value="rocks">Dirt and rocks</option>
+        <option value="grass">Dirt, rocks and grass</option>
+        <option value="pool">A pool (library: water+grass-angle)</option>
+        <option value="source">The source below, as it is</option>
+      </select></label>
+      <label>detail <select id="lod" aria-label="Level of detail">
+        <option value="24">coarse, 24 cells a square</option>
+        <option value="48" selected>draft, 48 cells a square</option>
+        <option value="96">fine, 96 cells a square</option>
+        <option value="0">full (the program's own)</option>
+      </select></label>
+      <button id="build" type="button">Build</button>
+      <span id="busy" class="ms" aria-live="polite"></span>
+    </div>
+    <div id="builderr" class="diag" hidden></div>
+    <div class="bgrid">
+      <div class="viewwrap"><canvas id="view" aria-label="The built tile, drag to turn"></canvas><div class="legend"><span><i style="background:#FF8C1A"></i> overhang 55 to 65&deg;</span><span><i style="background:#E5483B"></i> past 65&deg;</span></div></div>
+      <div id="bout" class="bout"><div class="about">Nothing built yet.</div></div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:16px">
     <div class="col">
       <div class="card">
         <h2>Source</h2>
@@ -194,6 +234,7 @@ td.n { white-space: nowrap; }
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script type="module">
 const $ = (id) => document.getElementById(id);
 const MAIN = "tile.dtile";
@@ -345,6 +386,140 @@ function histogram() {
   }
 }
 
+// ---- building: the worker builds, the page draws with three.js ----
+const PRESETS = {
+  rocks: `dharmatiles version="1.0.0"
+
+tile size="1x1" seed=7 {
+    about "Dirt with a few rocks."
+    stack {
+        base
+        dirt
+        scatter count=5 { rock size="5dmm .. 10dmm" }
+    }
+}
+`,
+  grass: `dharmatiles version="1.0.0"
+
+tile size="1x1" seed=7 {
+    about "Dirt, a few rocks, and grass over it."
+    stack {
+        base
+        dirt
+        scatter count=5 { rock size="5dmm .. 10dmm" }
+        grass
+    }
+}
+`,
+};
+let worker = null, workerReady = false, buildId = 0, building = null, library = {};
+function startWorker(module, libJson) {
+  library = JSON.parse(libJson);
+  try {
+    worker = new Worker("worker.js", { type: "module" });
+  } catch (e) { fatal("The page could not start its build worker", e); return; }
+  worker.onerror = (ev) => { building = null; $("busy").textContent = ""; fatal("The build worker failed", ev.message || "(no message; it may be blocked from loading)"); };
+  worker.onmessage = (ev) => {
+    const m = ev.data;
+    if (m.type === "ready") { workerReady = true; $("build").disabled = false; }
+    else if (m.type === "built") done(m);
+    else if (m.type === "error") { building = null; $("busy").textContent = ""; $("build").disabled = false; fatal("The build worker threw", m.message + (m.stack ? "\n" + m.stack : "")); }
+  };
+  $("build").disabled = true;
+  worker.postMessage({ type: "init", module, library: libJson });
+}
+function recipe() {
+  const p = $("preset").value;
+  if (p === "source") return src.value;
+  if (p === "pool") return library["lib:tiles/water/1x1-water+grass-angle.dtile"];
+  return PRESETS[p];
+}
+function startBuild() {
+  if (!workerReady || building) return;
+  const text = recipe();
+  if (!text) { fatal("There is no such tile in the library", $("preset").value); return; }
+  if ($("preset").value !== "source") { src.value = text; check(); }
+  const cells = +$("lod").value;
+  building = { id: ++buildId, t0: performance.now() };
+  $("build").disabled = true; $("builderr").hidden = true;
+  const tick = () => { if (building) { $("busy").textContent = `building… ${((performance.now() - building.t0) / 1000).toFixed(1)} s (the page is free)`; requestAnimationFrame(tick); } };
+  tick();
+  worker.postMessage({ type: "build", id: building.id, text, system, seed: -1, cells });
+}
+function done(m) {
+  const wall = performance.now() - building.t0;
+  building = null; $("busy").textContent = ""; $("build").disabled = false;
+  const k = m.meta, out = $("bout");
+  if (!k.built) {
+    const e = $("builderr");
+    e.hidden = false;
+    e.innerHTML = k.diagnostics.map((d) => `<div><span class="code">${esc(d.code)}</span> ${esc(d.message)} <span class="at">${esc(d.file)} ${d.line}:${d.col}</span></div>`).join("");
+    out.innerHTML = `<div class="about">The document did not build.</div>`;
+    return;
+  }
+  showMesh(m.positions, m.colours, k.footprint);
+  const f = (v, n = 2) => v.toFixed(n);
+  const stages = k.stage_secs.map(([n, s]) => `${esc(n)} ${(s * 1000).toFixed(0)} ms`).join(" · ");
+  out.innerHTML = `
+    <div><span class="verdict ${k.passes ? "pass" : "fail"}">${k.passes ? "GATE PASSES" : k.checked ? "GATE FAILS" : "NOT CHECKED"}</span></div>
+    ${k.failures.map((x) => `<div class="why">${esc(x)}</div>`).join("")}
+    <dl>
+      <dt>build time</dt><dd>${(m.ms / 1000).toFixed(2)} s in the worker (${(wall / 1000).toFixed(2)} s with the messages)</dd>
+      <dt>triangles</dt><dd>${k.triangles.toLocaleString()} (${k.vertices.toLocaleString()} vertices, ${k.bodies} bod${k.bodies === 1 ? "y" : "ies"})</dd>
+      <dt>watertight</dt><dd>${k.watertight ? "yes, after the float32 reload" : "NO"}</dd>
+      <dt>past 65&deg; (red)</dt><dd>${f(k.overhang_mm2)} mm&sup2; of ${f(k.overhang_budget_mm2)} allowed</dd>
+      <dt>55 to 65&deg; (orange)</dt><dd>${f(k.band_mm2)} mm&sup2; of ${f(k.band_budget_mm2)} allowed</dd>
+      <dt>detail</dt><dd>${k.cells ? k.cells + " cells a square" : "the build's own finest"}</dd>
+      <dt>stages</dt><dd>${stages}</dd>
+      <dt>STL sha-256</dt><dd>${k.stl_sha256.slice(0, 16)}&hellip; (${k.stl_bytes.toLocaleString()} bytes)</dd>
+    </dl>`;
+  $("s-build").textContent = `${(m.ms / 1000).toFixed(2)} s`;
+  window.lastBuild = k;
+}
+
+let tv = null;
+function showMesh(positions, colours, footprint) {
+  if (typeof THREE === "undefined") { fatal("three.js did not load", "the cdnjs script for three is blocked or offline"); return; }
+  const canvas = $("view");
+  if (!tv) {
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xD9E0EB);
+    const camera = new THREE.PerspectiveCamera(35, 1, 1, 2000);
+    camera.up.set(0, 0, 1);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.85));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-1, -2, 3); scene.add(sun);
+    tv = { renderer, scene, camera, az: -0.6, el: 0.7, dist: 90, target: new THREE.Vector3(), mesh: null };
+    const redraw = () => {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (canvas.width !== w * devicePixelRatio || canvas.height !== h * devicePixelRatio) { renderer.setPixelRatio(devicePixelRatio); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+      const { az, el, dist, target } = tv;
+      camera.position.set(target.x + dist * Math.cos(el) * Math.sin(az), target.y - dist * Math.cos(el) * Math.cos(az), target.z + dist * Math.sin(el));
+      camera.lookAt(target);
+      renderer.render(scene, camera);
+    };
+    tv.redraw = redraw;
+    let drag = null;
+    canvas.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener("pointerup", () => { drag = null; });
+    canvas.addEventListener("pointermove", (e) => { if (!drag) return; tv.az -= (e.clientX - drag[0]) * 0.008; tv.el = Math.max(0.05, Math.min(1.5, tv.el + (e.clientY - drag[1]) * 0.008)); drag = [e.clientX, e.clientY]; redraw(); });
+    canvas.addEventListener("wheel", (e) => { e.preventDefault(); tv.dist = Math.max(15, Math.min(400, tv.dist * Math.exp(e.deltaY * 0.001))); redraw(); }, { passive: false });
+    new ResizeObserver(redraw).observe(canvas);
+  }
+  if (tv.mesh) { tv.scene.remove(tv.mesh); tv.mesh.geometry.dispose(); tv.mesh.material.dispose(); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  g.computeVertexNormals();
+  tv.mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  tv.scene.add(tv.mesh);
+  g.computeBoundingBox();
+  const c = new THREE.Vector3(); g.boundingBox.getCenter(c);
+  tv.target.copy(c);
+  tv.dist = Math.max(footprint[0], footprint[1]) * 2.1;
+  tv.redraw();
+}
+
 function setSystem(s) {
   system = s;
   $("sys-db").className = s === "db" ? "on" : "alt";
@@ -359,8 +534,10 @@ async function main() {
     fetch("library.json").then((r) => { if (!r.ok) throw new Error(`library.json: ${r.status}`); return r.json(); }),
     fetch("dt_web_bg.wasm").then((r) => { if (!r.ok) throw new Error(`dt_web_bg.wasm: ${r.status}`); return r.arrayBuffer(); }),
   ]);
-  await glue.default({ module_or_path: bin });
+  const module = await WebAssembly.compile(bin);
+  await glue.default({ module_or_path: module });
   wasm = glue;
+  startWorker(module, JSON.stringify(lib));
   wasm.set_library(JSON.stringify(lib));
   $("s-wasm").textContent = `${kb(bin.byteLength)} (.wasm)`;
   $("s-load").textContent = fmt(performance.now() - t0);
@@ -378,6 +555,7 @@ async function main() {
   $("sys-ol").addEventListener("click", () => setSystem("ol"));
   $("len").addEventListener("input", length);
   for (const id of ["rng", "draws", "bins", "seed"]) $(id).addEventListener("input", histogram);
+  $("build").addEventListener("click", startBuild);
   $("redraw").addEventListener("click", () => { $("seed").value = (+$("seed").value || 0) + 1; histogram(); });
   load(); length(); histogram();
 }

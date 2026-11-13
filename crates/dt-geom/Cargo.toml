@@ -14,6 +14,8 @@ default = ["manifold-parallel"]
 # default: the C++ kernel is 3x slower without it, and its output is
 # identical run to run on one machine.
 manifold-parallel = ["manifold-csg/parallel"]
+# the browser build: Manifold through wasm-cxx-shim, single-threaded
+wasm = ["manifold-csg/unstable-wasm-uu"]
 
 [dependencies]
 dt-lang.workspace = true
@@ -21,11 +23,19 @@ dt-value.workspace = true
 bytemuck.workspace = true
 glam.workspace = true
 libm.workspace = true
-obvhs.workspace = true
-rayon.workspace = true
 # Manifold's C++ library (v3.5.3): needs git, cmake and a C++ compiler;
 # the first build compiles Manifold (and TBB, with manifold-parallel).
 manifold-csg = { workspace = true }
+
+# rayon through dt-par: the one place that runs it sequentially in the browser
+rayon = { package = "dt-par", path = "../dt-par" }
+
+# obvhs's parallel build is rayon's: off for the browser, where there are no threads
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+obvhs.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+obvhs = { version = "0.4.0" }
 
 [dev-dependencies]
 serde_json.workspace = true

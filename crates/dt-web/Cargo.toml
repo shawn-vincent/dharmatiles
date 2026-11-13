@@ -11,10 +11,14 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-# Language crates only: no dt-geom, dt-kit, dt-elements or dt-eval.
+# The language crates, and the engine behind dt-eval (stage 2): the browser build
+# runs Manifold through wasm-cxx-shim, and rayon is `rayon-seq` there.
 [dependencies]
 dt-doc.workspace = true
 dt-value.workspace = true
+dt-eval = { workspace = true, features = ["wasm"] }
+dt-kit.workspace = true
+sha2.workspace = true
 miette.workspace = true
 serde.workspace = true
 serde_json.workspace = true

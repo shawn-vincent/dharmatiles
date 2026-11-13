@@ -11,6 +11,7 @@ publish.workspace = true
 [features]
 default = ["manifold-parallel"]
 manifold-parallel = ["dt-kit/manifold-parallel", "dt-elements/manifold-parallel"]
+wasm = ["dt-kit/wasm", "dt-elements/wasm"]
 # The crash switch the CLI tests drive (DT_TEST_PANIC). Only the dharmatiles
 # crate's dev-dependencies turn it on, so no shipped program has it.
 test-panic = []

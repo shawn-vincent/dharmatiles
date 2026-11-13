@@ -444,8 +444,8 @@ version = "1.0.0"
 dependencies = [
  "dt-kit",
  "dt-lang",
+ "dt-par",
  "libm",
- "rayon",
 ]
 
 [[package]]
@@ -471,12 +471,12 @@ version = "1.0.0"
 dependencies = [
  "bytemuck",
  "dt-lang",
+ "dt-par",
  "dt-value",
  "glam 0.34.2",
  "libm",
  "manifold-csg",
  "obvhs",
- "rayon",
  "serde_json",
 ]
 
@@ -487,18 +487,25 @@ dependencies = [
  "crc32fast",
  "dt-geom",
  "dt-lang",
+ "dt-par",
  "dt-value",
  "flate2",
  "libm",
  "parry3d",
  "png",
- "rayon",
  "serde_json",
 ]
 
 [[package]]
 name = "dt-lang"
 version = "1.0.0"
+
+[[package]]
+name = "dt-par"
+version = "1.0.0"
+dependencies = [
+ "rayon",
+]
 
 [[package]]
 name = "dt-value"
@@ -513,10 +520,13 @@ name = "dt-web"
 version = "1.0.0"
 dependencies = [
  "dt-doc",
+ "dt-eval",
+ "dt-kit",
  "dt-value",
  "miette",
  "serde",
  "serde_json",
+ "sha2",
  "wasm-bindgen",
 ]
 
@@ -1028,8 +1038,6 @@ dependencies = [
 [[package]]
 name = "obvhs"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e079e5dff9fc17017bfb526d5b71fe077e603de662e4b22f6deb4b6b36e5895"
 dependencies = [
  "bytemuck",
  "glam 0.34.2",

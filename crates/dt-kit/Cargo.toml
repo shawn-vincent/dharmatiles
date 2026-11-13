@@ -11,6 +11,7 @@ publish.workspace = true
 [features]
 default = ["manifold-parallel"]
 manifold-parallel = ["dt-geom/manifold-parallel"]
+wasm = ["dt-geom/wasm"]
 
 [dependencies]
 dt-geom.workspace = true
@@ -22,7 +23,9 @@ png.workspace = true
 flate2.workspace = true
 crc32fast.workspace = true
 serde_json.workspace = true
-rayon.workspace = true
+
+# rayon through dt-par: the one place that runs it sequentially in the browser
+rayon = { package = "dt-par", path = "../dt-par" }
 
 [lints]
 workspace = true

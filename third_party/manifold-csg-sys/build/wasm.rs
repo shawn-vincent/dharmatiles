@@ -419,6 +419,15 @@ pub fn build_wasm_unknown_unknown() {
             // declarations target the host's (newer) C API surface and
             // the wasm link fails with unresolved imports.
             &format!("-DMANIFOLD_GIT_TAG={}", crate::MANIFOLD_VERSION),
+            // dharmatiles: the host lane's carried Manifold patch (the level
+            // set's resize read of vertPos[-1]) applies here too, so the
+            // browser builds the Manifold the program does.
+            &format!(
+                "-DDT_MANIFOLD_PATCH={}",
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("patches/0001-levelset-resize-reads-no-last-vert.patch")
+                    .display()
+            ),
         ])
         .args(crate::cmake_launcher_args())
         .status()

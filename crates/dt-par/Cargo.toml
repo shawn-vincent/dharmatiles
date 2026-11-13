@@ -1,0 +1,15 @@
+[package]
+name = "dt-par"
+description = "Parallel iteration for the engine: rayon everywhere but the browser, where there are no threads and the same calls run in order"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon.workspace = true
+
+[lints]
+workspace = true

@@ -724,7 +724,7 @@ impl<'a> Plan<'a> {
             }
         }
         for (n, step) in c.steps.iter().enumerate().skip(first) {
-            let t_stage = std::time::Instant::now();
+            let t_stage = crate::clock::Stopwatch::start();
             let (key, label) = &self.stages[n];
             progress.begin(key, label);
             match *step {
@@ -761,7 +761,7 @@ impl<'a> Plan<'a> {
                 sketched = scene.parts().len();
             }
             progress.end(key);
-            stage_secs.push((key.clone(), t_stage.elapsed().as_secs_f64()));
+            stage_secs.push((key.clone(), t_stage.elapsed_secs()));
             if let Some(cache) = cache {
                 let mut scene = scene.clone();
                 scene.set_progress(Progress::none());
@@ -797,7 +797,7 @@ impl<'a> Plan<'a> {
             mut stage_secs,
             reused,
         } = ran;
-        let t_stage = std::time::Instant::now();
+        let t_stage = crate::clock::Stopwatch::start();
         progress.begin(progress::UNION, "joining the parts");
         // the masonry is brick when every wall and floor is, and there is some
         let masonry: Vec<bool> = tile
@@ -820,8 +820,8 @@ impl<'a> Plan<'a> {
         .map_err(|e| build_error(e.to_string()))?;
         let (entry_in, piece_in) = trace_entries(&scene, &mesh, self);
         progress.end(progress::UNION);
-        stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed().as_secs_f64()));
-        let t_stage = std::time::Instant::now();
+        stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed_secs()));
+        let t_stage = crate::clock::Stopwatch::start();
         progress.begin(progress::AUDIT, "checking printability");
         let footprint = c.frame.size_mm();
         // the band every element gets: the printer's overhang to its steepest
@@ -845,7 +845,7 @@ impl<'a> Plan<'a> {
             )
         };
         progress.end(progress::AUDIT);
-        stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
+        stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed_secs()));
         let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
         let entries = export
             .source
