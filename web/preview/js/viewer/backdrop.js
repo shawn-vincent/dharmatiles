@@ -34,6 +34,11 @@ float vnoise(vec2 p) {
   return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 float fbm(vec2 p) { float v = 0.0, a = 0.5; mat2 r = mat2(0.8, -0.6, 0.6, 0.8); for (int i = 0; i < 5; i++) { v += a * vnoise(p); p = r * p * 2.03 + vec2(17.1, 9.7); a *= 0.5; } return v; }
+// The horizon, defined once for the dome and the ground: Wilderness's near range of mountains, whose foot is the colour the
+// far ground meets (FOOT is how dark a range is at its foot), so no seam of another colour runs between grass and mountains.
+const float FOOT = 0.9;
+vec3 nearRange() { return mix(vec3(0.4, 0.5, 0.61), vec3(0.1, 0.14, 0.24), uNight); }
+vec3 horizon() { return uKind < 0.5 ? nearRange() * FOOT : uHaze; }
 `;
 
 const DOME_VERT = `varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); }`;
@@ -62,7 +67,7 @@ vec3 ridge(vec3 col, float th, float el, float base, float amp, float k, float o
   float inside = 1.0 - smoothstep(0.0, 0.0012, el - h);
   float up = clamp(el / max(h, 1e-4), 0.0, 1.0);
   float tex = 0.92 + 0.16 * fbm(vec2(th * 28.0, el * 90.0) + off);
-  return mix(col, c * tex * mix(0.9, 1.07, up), inside);
+  return mix(col, c * tex * mix(FOOT, 1.07, up), inside);
 }
 // underground: below the horizon the world is earth, dark in the distance
 vec3 below(vec3 col, float el) { return mix(col, vec3(0.0), smoothstep(0.0, 0.003, -el)); }
@@ -75,7 +80,7 @@ vec3 wild(vec3 d) {
   vec3 col = mix(uHaze, band, smoothstep(0.0, 0.22, t));
   col = mix(col, zenith, smoothstep(0.18, 0.9, t));
   vec3 mid = mix(vec3(0.52, 0.62, 0.73), vec3(0.15, 0.2, 0.32), uNight);
-  vec3 near = mix(vec3(0.4, 0.5, 0.61), vec3(0.1, 0.14, 0.24), uNight);
+  vec3 near = nearRange();
   col = ridge(col, th, el, 0.03, 0.09, 3.0, 11.0, 13.0, 0.14, mid);   // the far range: tall single peaks over long runs
   col = ridge(col, th, el, 0.01, 0.06, 4.3, 23.0, 19.0, 0.055, near);  // the near range: lower, rounder hills in front
   return below(col, el);
@@ -192,7 +197,8 @@ void main() {
     s = max(s, 1.0 - smoothstep(0.0, 11.0, d));
   }
   col *= 1.0 - (uKind > 0.5 && uKind < 1.5 ? 0.6 : 0.34) * s;
-  col = mix(col, uHaze, haze);
+  // the haze thickens with distance toward the horizon's own colour, what stands behind the ground (a mountain's foot in Wilderness)
+  col = mix(col, horizon(), haze);
   gl_FragColor = vec4(col, 1.0);
 }`;
 
