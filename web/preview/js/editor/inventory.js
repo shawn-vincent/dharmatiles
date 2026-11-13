@@ -50,8 +50,7 @@ export function contextLines() {
   const p = t?.plan?.inventory;
   if (t?.status === 'failed') return ['This inventory does not read.', 'Source shows the file; the messages say where'];
   if (!p) return ['Reading the inventory…'];
-  const lines = p.pieces.reduce((n, x) => n + x.printed + x.failed + x.gone, 0);
-  return [`${plural(p.pieces.filter((x) => x.have > 0).length, 'piece')} on the shelf`, `${plural(lines, 'log line')} · a log: nothing is edited away`];
+  return [`${plural(p.pieces.filter((x) => x.have > 0).length, 'piece')} on the shelf`];
 }
 
 async function act(label, run) {

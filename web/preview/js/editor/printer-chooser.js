@@ -6,6 +6,8 @@ import { failed } from '../problems.js';
 import { html } from '../view/html.js';
 import { PrinterChooser } from '../view/printer-chooser.js';
 import { host, toast } from './app.js';
+import { server } from './stores.js';
+import { squareOf } from '../printers.js';
 
 /** The chooser as a vnode for `{printers, current, onPick, needBed, disabled, skey}`. @param {any} props */
-export const chooserFor = (props) => html`<${PrinterChooser} ...${props} scan=${host.printersScan} importFrom=${host.printersImport} say=${failed} toast=${toast} />`;
+export const chooserFor = (props) => html`<${PrinterChooser} square=${squareOf(server.get().system)} ...${props} scan=${host.printersScan} importFrom=${host.printersImport} say=${failed} toast=${toast} />`;

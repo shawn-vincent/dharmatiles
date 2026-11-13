@@ -14,7 +14,9 @@ import { computed, signal } from '@preact/signals-core';
 import * as M from '../map-model.js';
 import { listFrom } from '../map-list.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
-import { pill as invPill, systemName } from '../inventory.js';
+import { canonOf, pill as invPill, systemName } from '../inventory.js';
+import { showError } from '../problems.js';
+import { thumbs } from './scene-thumbs.js';
 import { levelOf, placesOf, settledLevel, whereIs, writable } from '../folders.js';
 import { ADD_PANES, mapLevelOf } from '../nav.js';
 import { token } from '../tokens.js';
@@ -230,5 +232,11 @@ export const inventoryPanel = {
   inventory,
   system: haveBlockModel.system,
   tiles: computed(() => server.get().tiles),
+  /** The picture of a piece: the thumbnail service and the spec of its tile (null when the tile is not at its path any more). */
+  picture: (/** @type {string} */ canon, /** @type {string} */ system) => {
+    const home = server.get().inventory?.home;
+    const t = server.get().tiles.find((x) => canonOf(x.path, home) === canon);
+    return t ? { svc: thumbs, spec: { tile: t.id, rev: String(t.docRev ?? 0), system, printer: server.get().printer, plate: token('--plate') || '#D9E0EB', w: 88, h: 62 }, onError: (/** @type {Error} */ e) => showError('Could not draw the piece', e) } : null;
+  },
   lists: computed(() => server.get().tiles.filter((x) => /\.dmap$/i.test(x.path))),
 };

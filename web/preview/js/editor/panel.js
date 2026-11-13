@@ -12,7 +12,7 @@ import { computed, effect, signal, untracked } from '@preact/signals-core';
 import { setReporter, serverErrorIn } from '../problems.js';
 import { detailsFor, fitMsgHeight, statusOf } from '../messages.js';
 import { html, render } from '../view/html.js';
-import { CopyAll, MessageFilters, MessagesBody } from '../view/messages-panel.js';
+import { CopyAll, ErrorCard, MessageFilters, MessagesBody } from '../view/messages-panel.js';
 import { reveal } from '../slide.js';
 import { $, host, viewer } from './app.js';
 import { openFile, saveWords, texts } from './document.js';
@@ -82,6 +82,7 @@ function showBar() {
 const act = {
   setFilter: (/** @type {string} */ id) => { filter.value = id; },
   showLine,
+  openPanel: () => togglePanel(true),
   showNode: (/** @type {string} */ node) => view.set({ sel: entrySel(node) }),
   dismiss: (/** @type {number} */ seq) => log.dismiss(seq),
   details: (/** @type {any} */ m, /** @type {string | null} */ source) => detailsFor(m, { source }),
@@ -104,6 +105,7 @@ function bindPanel() {
   render(html`<${MessageFilters} m=${model} act=${act} />`, $('msg-filters'));
   render(html`<${MessagesBody} m=${model} act=${act} />`, $('msg-body'));
   render(html`<${CopyAll} act=${act} />`, $('msg-copy'));
+  render(html`<${ErrorCard} m=${model} act=${act} />`, $('doc-error'));
 }
 
 /**

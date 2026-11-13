@@ -9,9 +9,10 @@
 // same when the panel is drawn again; the list a reprint goes into and the tile a re-link points to are the form's own.
 
 import {
-  SYSTEMS, canonOf, colourName, groups, haveLine, nameOf, numbered, relinkCandidates, systemName, tileHave, totalsLine, exists,
+  SYSTEMS, canonOf, colourName, groups, haveLine, nameOf, numbered, pieceLine, relinkCandidates, systemName, tileHave, totalsLine, exists,
 } from '../inventory.js';
 import { html, useState } from './html.js';
+import { Thumb } from '../thumbs.js';
 import { Seg, plural } from './widgets.js';
 
 /** What the inventory says of tile `t`, and the one button that adds to it. */
@@ -29,12 +30,13 @@ export function HaveBlock({ t, m, act }) {
 }
 
 function PieceRow({ g, p, system, m, act }) {
+  const pic = m.picture ? m.picture(g.tile, p.system) : null;
   const key = `${p.tile}|${p.seed}|${p.system}|${p.colour}`;
   const open = m.ui.value.reprint === key;
   return html`<div class="inv-wrap">
     <div class=${`inv-piece${p.have ? '' : ' off'}`} title=${system && p.system !== system ? systemName(p.system) : undefined}>
-      <span class="inv-what"><b>${`seed ${p.seed}`}</b><span class="inv-colour">${colourName(p.colour)}</span></span>
-      <span class="inv-nums"><span class="inv-count">${`×${p.have}`}</span>${p.failed ? html`<span class="inv-tag">${`${p.failed} failed`}</span>` : null}${p.gone ? html`<span class="inv-tag">${`${p.gone} gone`}</span>` : null}${p.last ? html`<span class="inv-tag date">${p.last}</span>` : null}</span>
+      ${pic ? html`<${Thumb} svc=${pic.svc} spec=${{ ...pic.spec, seed: p.seed }} className="inv-pic" onError=${pic.onError} />` : null}
+      <span class="inv-what">${pieceLine(p)}${p.failed ? html`<span class="inv-tag">${`${p.failed} failed`}</span>` : null}${p.gone ? html`<span class="inv-tag">${`${p.gone} gone`}</span>` : null}</span>
       <span class="inv-acts">
         <button type="button" class="linkish" disabled=${p.have === 0} title=${p.have ? 'One of these is lost or broken: a line is added to the log, nothing is edited away' : 'None of these is on the shelf'} onClick=${() => act.gone(g, p)}>Gone</button>
         <button type="button" class="linkish" title="Add this exact piece (its seed) to a print list" onClick=${() => act.toggleReprint(key)}>Reprint</button>
@@ -66,7 +68,7 @@ function Relink({ g, m, act }) {
 }
 
 function Group({ g, system, m, act }) {
-  return html`<section class="inv-group"><div class="inv-head"><b>${g.name}</b><span class="inv-path">${g.tile}</span>
+  return html`<section class="inv-group"><div class="inv-head"><b title=${g.tile}>${g.name}</b>
       ${g.edited ? html`<span class="inv-tag edited" title="The tile changed since the print was made. It still counts; this is only to tell you.">edited since printing</span>` : null}</div>
     ${g.missing ? html`<${Relink} g=${g} m=${m} act=${act} />` : null}
     ${g.pieces.map((p) => html`<${PieceRow} key=${`${p.tile}|${p.seed}|${p.system}|${p.colour}`} g=${g} p=${p} system=${system} m=${m} act=${act} />`)}</section>`;

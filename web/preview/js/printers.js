@@ -37,6 +37,20 @@ export function selectionOf(printers, name) {
   return { model: name, ams: false };
 }
 
+/** The side of one square in mm for a base system: 35 for DungeonBlocks, 25.4 for OpenLOCK. @param {string | null | undefined} system */
+export const squareOf = (system) => (system === 'ol' ? 25.4 : 35);
+
+/** How many whole squares fit along each side of the bed: `[6, 6]`, or null for a profile with no bed. */
+export const squaresOf = (p, square) => (p.bed ? [Math.floor(p.bed[0] / square), Math.floor(p.bed[1] / square)] : null);
+
+/** The model's answer in words, squares first: `6 × 6 squares · 1 colour · 220 × 220 mm`. */
+export function fitWords(p, square) {
+  const n = squaresOf(p, square);
+  if (!n) return 'printability floors only';
+  const f = p.slots === 1 ? '1 colour' : `${p.slots} colours`;
+  return `${n[0]} × ${n[1]} squares · ${f} · ${p.bed[0]} × ${p.bed[1]} mm`;
+}
+
 /** The model's size in words: `256 × 256 mm · 1 filament`. */
 export function sizeWords(p) {
   if (!p.bed) return 'printability floors only';

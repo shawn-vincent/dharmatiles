@@ -255,6 +255,23 @@ export function fitMsgHeight(h, room) {
 }
 
 /**
+ * One gauge of the gate's verdict: how much of an overhang budget was used.  `fill` is 0 to 1 (full at the budget), `over` the
+ * multiple past it written in the bar (`16×`; `over` for a budget of nothing), null while within it, `tone` ok / warn / bad.
+ * `null` when the gate did not send the area.  @param {number | null | undefined} used @param {number | null | undefined} budget
+ */
+export function gaugeOf(used, budget) {
+  if (used == null) return null;
+  const b = budget ?? 0;
+  const past = used > b;
+  return {
+    used, budget: b,
+    fill: past ? 1 : b > 0 ? used / b : 0,
+    over: past ? (b > 0 ? `${Math.max(2, Math.round(used / b))}×` : 'over') : null,
+    tone: past ? 'bad' : used > 0 ? 'warn' : 'ok',
+  };
+}
+
+/**
  * The gate's numbers as rows for the messages panel: `[name, value, tone]`.  `data` is the gate message's data as the program
  * sends it (`crate::message`: snake_case names, as every field of a message is; tests/fixtures/gate-numbers.json is that data,
  * held to by a test in the program), `angles` the band's and the steepest angle.  A number the message does not carry is left

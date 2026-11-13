@@ -5,7 +5,7 @@
 // editor/panel.js from the messages stream, the tile, the progress and the document) and of `act`, what the buttons do.
 // Which filter is on and which message a mark in the source pointed to are the model's.
 
-import { FILTERS, buildOf, filterRows, gateOf, gateRows, jobWords, serverOf } from '../messages.js';
+import { FILTERS, buildOf, filterRows, gateOf, gateRows, gaugeOf, jobWords, serverOf } from '../messages.js';
 import { CopyButton } from './copy-button.js';
 import { html, useEffect } from './html.js';
 import { Icon } from './icons.js';
@@ -30,13 +30,23 @@ function Running({ m }) {
   return html`<div class="msg run" id="msg-run"><i class="dot busy"></i><div class="body"><div class="line">${words?.title ?? `Building ${t?.name ?? ''}`}</div><div class="sub">${p ? `${stage} · ${secs(p.elapsedS)}${p.estimateS != null ? ` of ~${secs(p.estimateS)}` : ''}` : 'starting'}</div><div class="rbar"><i style=${`width: ${p ? Math.floor(p.fraction * 100) : 0}%`}></i></div></div></div>`;
 }
 
-/** The gate's numbers as rows under the record. */
+/** One overhang budget as a bar: full at the budget, the multiple written in it when it is past. */
+function Gauge({ label, g }) {
+  return html`<div class=${`gauge ${g.tone}`}><span class="g-lab">${label}</span>
+    <span class="g-bar" role="meter" aria-valuemin="0" aria-valuemax=${g.budget} aria-valuenow=${g.used} aria-label=${label}><i style=${`width: ${Math.round(g.fill * 100)}%`}>${g.over ? html`<b>${g.over}</b>` : null}</i></span>
+    <span class="g-num">${`${g.used.toFixed(2)} of ${g.budget.toFixed(2)} mm²`}</span></div>`;
+}
+
+/** The gate's verdict: the two budgets that decide as bars, everything else in one Details line. */
 function Numbers({ gate, m, t }) {
   const a = gateOf(gate);
-  if (!a) return html`<dl class="nums"></dl>`;
-  const rows = gateRows(a, m.angles.value);
-  if (t?.record?.record?.seed != null) rows.push(['Seed', t.record.record.seed, '']);
-  return html`<dl class="nums">${rows.map(([k, v, cls]) => html`<div class="pair" key=${k}><dt>${k}</dt><dd class=${cls || undefined}>${v}</dd></div>`)}</dl>`;
+  if (!a) return null;
+  const { overhangDeg, steepestDeg } = m.angles.value;
+  const past = gaugeOf(a.overhang_mm2, a.overhang_budget_mm2), band = gaugeOf(a.band_mm2, a.band_budget_mm2);
+  const rest = /** @type {any[][]} */ (gateRows(a, m.angles.value)).filter(([k]) => !/^(Band|Past) /.test(k));
+  if (t?.record?.record?.seed != null) rest.push(['Seed', t.record.record.seed, '']);
+  return html`<div class="gauges">${past ? html`<${Gauge} label=${`Past ${steepestDeg}°`} g=${past} />` : null}${band ? html`<${Gauge} label=${`${overhangDeg} to ${steepestDeg}° band`} g=${band} />` : null}</div>
+    <details class="gate-details"><summary>Details</summary><dl class="nums">${rest.map(([k, v, cls]) => html`<div class="pair" key=${k}><dt>${k}</dt><dd class=${cls || undefined}>${v}</dd></div>`)}</dl></details>`;
 }
 
 function Record({ rec, m, act }) {
@@ -54,6 +64,11 @@ function Record({ rec, m, act }) {
       <${CopyButton} text=${() => `${rec.build?.text ?? ''}\n${gate?.text ?? ''}\n${JSON.stringify(gateOf(gate) ?? {}, null, 2)}`} title="Copy the record" /></div></div></div>`;
 }
 
+/** The program's `quoted` words as the page's own mono words, never with the backticks. @param {string} text */
+function tickWords(text) {
+  return String(text).split(/`([^`]+)`/).map((part, i) => (i % 2 ? html`<code class="w">${part}</code>` : part));
+}
+
 function Row({ row, m, act }) {
   const { m: msg, dim } = row;
   const t = m.tile.value;
@@ -64,13 +79,16 @@ function Row({ row, m, act }) {
     return () => clearTimeout(timer);
   }, [lit]);
   const source = msg.span && msg.span.file === m.file.value ? m.text.value ?? null : null;
-  return html`<div class=${`msg ${msg.severity}${dim ? ' dim' : ''}${lit ? ' lit' : ''}`} data-seq=${msg.seq} ref=${(el) => { if (el && lit) el.scrollIntoView({ block: 'nearest' }); }}>
+  const line = msg.span?.line ? () => act.showLine(msg.span.file === t?.path ? null : msg.span.file, msg.span.line) : null;
+  const here = msg.span ? `${msg.span.file.split('/').slice(-1)[0]}:${msg.span.line}:${msg.span.col}` : null;
+  // the sentence first; the code, a name for looking up, last and quiet.  A row with a place goes to it when clicked.
+  return html`<div class=${`msg ${msg.severity}${dim ? ' dim' : ''}${lit ? ' lit' : ''}${line ? ' goes' : ''}`} data-seq=${msg.seq} ref=${(el) => { if (el && lit) el.scrollIntoView({ block: 'nearest' }); }}
+      title=${line ? 'Show the line in the source' : undefined} role=${line ? 'button' : undefined} tabIndex=${line ? 0 : undefined} onKeyDown=${line ? (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) line(); } : undefined} onClick=${line ? (e) => { if (!e.target.closest('.acts')) line(); } : undefined}>
     <i class=${`dot ${msg.severity}`}></i>
-    <div class="body"><div class="head">${msg.code ? html`<code class="code">${msg.code}</code>` : null}<span class="text">${serverOf(msg)?.origin === 'page' ? 'The page: ' : ''}${msg.text}</span></div>
-      ${msg.help ? html`<div class="help">${msg.help}</div>` : null}
-      ${msg.span ? html`<div class="where" title=${msg.span.file}>${`${msg.span.file.split('/').slice(-1)[0]}:${msg.span.line}:${msg.span.col}`}</div>` : null}</div>
+    <div class="body"><div class="head"><span class="text">${serverOf(msg)?.origin === 'page' ? 'The page: ' : ''}${tickWords(msg.text)}</span></div>
+      ${msg.help ? html`<div class="help">${tickWords(msg.help)}</div>` : null}
+      <div class="where">${here ? html`<span title=${msg.span.file}>${here}</span>` : null}${msg.code ? html`<code class="code">${msg.code}</code>` : null}</div></div>
     <div class="acts">
-      ${msg.span?.line ? html`<button type="button" class="btn" title="Show the line in the source" onClick=${() => act.showLine(msg.span.file === t?.path ? null : msg.span.file, msg.span.line)}>Go to line</button>` : null}
       ${msg.node && t ? html`<button type="button" class="btn" title="Select the stack entry this is about" onClick=${() => act.showNode(msg.node)}>Show on tile</button>` : null}
       <${CopyButton} text=${() => act.details(msg, source)} title="Copy details: the code, where it is, its source line and this environment" />
       ${msg.kind === 'server' ? html`<button type="button" class="btn icon" title="Put this away" aria-label="Put this message away" onClick=${() => act.dismiss(msg.seq)}><${Icon} name="x" size=${14} /></button>` : null}
@@ -94,3 +112,21 @@ export function MessagesBody({ m, act }) {
 
 /** Copy all: the program's own text of the tile's open messages (one renderer), never the page's. */
 export const CopyAll = ({ act }) => html`<${CopyButton} text=${act.allText} label="Copy all" title="Copy every open message of this tile as text" />`;
+
+/**
+ * The view's card when a document does not build: the first error in its words, laid over the plate in the plate's own light
+ * colours (the `--chip-*` tokens), so the place the user looks says what is wrong.  The messages panel stays the full record.
+ * Nothing is drawn while the tile builds or reads.  `m` is the panel's model, `act` its actions.
+ */
+export function ErrorCard({ m, act }) {
+  const t = m.tile.value;
+  const v = m.view.value;
+  if (!t || t.status !== 'failed' || v.running) return null;
+  const first = v.rows.map((r) => r.m).filter((x) => x.severity === 'error' && !x.dim)[0];
+  if (!first) return null;
+  const go = first.span?.line ? () => act.showLine(first.span.file === t.path ? null : first.span.file, first.span.line) : null;
+  return html`<div class="doc-error" role="alert"><div class="de-title">Nothing built</div>
+    <div class="de-text">${tickWords(first.text)}${first.span?.line ? html` <span class="de-at">${`(line ${first.span.line})`}</span>` : null}</div>
+    ${first.help ? html`<div class="de-help">${tickWords(first.help)}</div>` : null}
+    <div class="de-acts">${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${() => act.openPanel()}>All messages</button></div></div>`;
+}

@@ -28,6 +28,27 @@ export function canonOf(path, home) {
   return p;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * A date as a person says it: "today", "13 Nov" for this year, "13 Nov 2025" otherwise.  `iso` is the log's `2026-11-13`
+ * (anything else is returned as written); `now` is a Date, the clock unless a test sets it.
+ * @param {string} iso @param {Date} [now]
+ */
+export function dateWords(iso, now = new Date()) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  if (!m) return String(iso);
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (y === now.getFullYear() && mo === now.getMonth() + 1 && d === now.getDate()) return 'today';
+  return `${d} ${MONTHS[mo - 1]}${y === now.getFullYear() ? '' : ` ${y}`}`;
+}
+
+/** What the shelf holds of one piece, as a sentence: `On the shelf: 2 · printed 13 Nov · single colour · seed 9486`. */
+export function pieceLine(p) {
+  const when = p.last ? (dateWords(p.last) === 'today' ? 'printed today' : `printed ${dateWords(p.last)}`) : '';
+  return [`On the shelf: ${p.have}`, when, colourName(p.colour), `seed ${p.seed}`].filter(Boolean).join(' · ');
+}
+
 /** A tile of the log as a short name: the last part of its path. */
 export const nameOf = (canon) => String(canon).replace(/^(lib|home):/, '').split('/').pop();
 

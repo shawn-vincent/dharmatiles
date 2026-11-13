@@ -7,7 +7,7 @@
 // `scan(slicer?)` and `importFrom(body)` are the program's calls (js/host.js), `say(label, reply)` shows a failure.
 
 import { signal } from '@preact/signals-core';
-import { groupPrinters, selectionOf, sizeWords } from '../printers.js';
+import { fitWords, groupPrinters, selectionOf, squareOf, squaresOf } from '../printers.js';
 import { html, useEffect, useRef, useState } from './html.js';
 import { Icon } from './icons.js';
 
@@ -27,7 +27,19 @@ function askSlicers(scan, say) {
 
 const own = (e) => String(e?.message || e);
 
-function Pick({ printers, current, onPick, needBed, disabled, skey, scan, begin, say }) {
+const BED_SCALE = 0.14; // px per mm, the same for every bed in the list: a bigger printer is a bigger drawing
+
+/** The bed at scale with the squares that fit drawn in it. */
+function Bed({ p, square }) {
+  const n = squaresOf(p, square);
+  if (!n) return html`<span class="pc-bed none" aria-hidden="true"></span>`;
+  const w = p.bed[0] * BED_SCALE, h = p.bed[1] * BED_SCALE, s = square * BED_SCALE;
+  const cells = [];
+  for (let i = 0; i < n[0]; i += 1) for (let j = 0; j < n[1]; j += 1) cells.push(html`<rect key=${`${i}-${j}`} x=${i * s + 0.5} y=${j * s + 0.5} width=${s - 1} height=${s - 1} rx="1" />`);
+  return html`<svg class="pc-bed" width=${w} height=${h} viewBox=${`0 0 ${w} ${h}`} aria-hidden="true"><rect class="bedrect" x=".5" y=".5" width=${w - 1} height=${h - 1} rx="2" />${cells}</svg>`;
+}
+
+function Pick({ printers, current, onPick, needBed, disabled, skey, scan, begin, say, square = 35 }) {
   const [query, setQuery] = useState(searches.get(skey) || '');
   const list = useRef(/** @type {HTMLElement | null} */ (null));
   useEffect(() => { askSlicers(scan, say); }, []);
@@ -48,14 +60,16 @@ function Pick({ printers, current, onPick, needBed, disabled, skey, scan, begin,
       ${groups.map((g) => html`<div class=${`cap pc-group ${g.kind}`} key=${`g${g.label}`}>${g.label}</div>${g.models.map((m) => html`
         <button type="button" key=${m.name} class=${`pc-row${m.name === sel.model ? ' on' : ''}`} disabled=${disabled || !!m.p.broken} role="option" aria-selected=${String(m.name === sel.model)} data-printer=${m.name}
           onClick=${() => onPick(sel.ams && m.ams ? m.ams.name : m.name)}>
-          <span class="pc-top"><span class="pc-name">${m.title}</span>
+          <${Bed} p=${m.p} square=${square} />
+          <span class="pc-text"><span class="pc-top"><span class="pc-name">${m.title}</span>
             ${m.p.verify ? html`<span class="verify" title=${`Not yet checked against the maker: ${m.p.verify}`}>unchecked</span>` : null}
             ${m.p.fromSlicer ? html`<span class="own" title=${`From ${m.p.fromSlicer}`}>imported</span>` : null}</span>
-          <span class="pc-meta">${m.p.broken ? `does not read: ${m.p.broken}` : `${sizeWords(m.p)}${m.ams ? ' · AMS available' : ''}`}</span></button>`)}`)}
+          <span class="pc-meta">${m.p.broken ? `does not read: ${m.p.broken}` : `${fitWords(m.p, square)}${m.ams ? ' · AMS available' : ''}`}</span></span></button>`)}`)}
     </div>
     ${withAms ? html`<div class="seg pc-ams" role="group" aria-label="AMS">${[[cur.name, 'No AMS', 'One filament at a time'], [withAms.name, 'AMS', `${withAms.slots} filaments`]].map(([name, text, title]) => html`
       <button type="button" key=${name} title=${title} disabled=${disabled} aria-pressed=${String(name === current)} onClick=${() => { if (name !== current) onPick(name); }}>${text}</button>`)}</div>` : null}
-    <div class="pc-foot">${(slicers.value || []).map((s) => html`<button type="button" class="btn pc-import" key=${s.slicer} title=${`Read ${s.label}'s machine profiles into your printers`} data-slicer=${s.slicer} onClick=${() => begin(s)}>${`Import from ${s.title}…`}</button>`)}</div>
+    ${(slicers.value || []).length ? html`<details class="pc-foot"><summary class="btn pc-import-menu">Import from a slicer<${Icon} name="chevron-down" size=${14} /></summary>${(slicers.value || []).map((s) => html`<button type="button" class="btn pc-import" key=${s.slicer} title=${`Read ${s.label}'s machine profiles into your printers`} data-slicer=${s.slicer} onClick=${() => begin(s)}>${s.title}</button>`)}</details>` : null}
+    <p class="pc-scale">Beds drawn at one scale; each square is ${`${square} mm`}.</p>
   </div>`;
 }
 
