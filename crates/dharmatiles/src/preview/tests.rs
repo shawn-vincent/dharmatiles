@@ -94,6 +94,8 @@ fn id0(r: &Running) -> String {
 fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Value {
     let t0 = Instant::now();
     loop {
+        // the server's own word that nothing is queued or running, not a guess at how long a build takes
+        wait_idle(r);
         let v = tiles(r);
         if ok(&v["tiles"][0]) {
             return v["tiles"][0].clone();
@@ -102,7 +104,8 @@ fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Valu
             t0.elapsed() < Duration::from_secs(120),
             "timed out waiting for {what}: {v}"
         );
-        std::thread::sleep(Duration::from_millis(100));
+        // idle and not yet so: a tile the page has not chosen waits to be asked for, so look again shortly
+        std::thread::sleep(Duration::from_millis(20));
     }
 }
 
@@ -1657,7 +1660,7 @@ fn a_panic_in_a_build_is_reported_and_the_server_keeps_serving() {
         .any(|n| !matches!(tile(n)["status"].as_str(), Some("failed" | "ready")))
     {
         assert!(t0.elapsed() < Duration::from_secs(120), "timed out");
-        std::thread::sleep(Duration::from_millis(100));
+        wait_idle(&r);
     }
     for (name, words) in [
         ("panic-in-build", "a test panic in the build"),

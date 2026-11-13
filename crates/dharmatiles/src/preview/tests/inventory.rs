@@ -1086,12 +1086,14 @@ fn fresh_seeds_are_not_owned_not_on_the_map_and_not_repeated_within_an_edit() {
 }
 
 /// What the stream says, for as long as it says anything: the events (parsed) from a stream opened now, until one
-/// that `stop` accepts.
-fn events_until(h: &Home, stop: impl Fn(&Value) -> bool) -> Vec<Value> {
+/// that `stop` accepts.  `on_open` runs once the stream's first event (the snapshot) is in: the stream is then
+/// subscribed, so what `on_open` makes happen is told on it and nothing is missed.
+fn events_until(h: &Home, on_open: impl FnOnce(), stop: impl Fn(&Value) -> bool) -> Vec<Value> {
     let mut c = TcpStream::connect(h.r.addr).unwrap();
     write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", h.r.addr).unwrap();
     c.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
     let mut seen = Vec::new();
+    let mut on_open = Some(on_open);
     for l in BufReader::new(c).lines() {
         let Ok(l) = l else { break };
         let Some(data) = l.strip_prefix("data: ") else {
@@ -1103,6 +1105,9 @@ fn events_until(h: &Home, stop: impl Fn(&Value) -> bool) -> Vec<Value> {
         if done {
             break;
         }
+        if let Some(f) = on_open.take() {
+            f();
+        }
     }
     seen
 }
@@ -1110,18 +1115,18 @@ fn events_until(h: &Home, stop: impl Fn(&Value) -> bool) -> Vec<Value> {
 #[test]
 fn a_change_is_told_as_the_resource_that_changed_and_not_as_the_whole() {
     let h = start_home("resources", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
-    let first = std::thread::scope(|s| {
-        let reader =
-            s.spawn(|| events_until(&h, |v| v["type"] == "resource" && v["name"] == "places"));
-        // the stream is open once its snapshot is in; then a folder is made: that is the places, and only them
-        std::thread::sleep(Duration::from_millis(400));
-        let (head, v) = h.call(
-            "/api/folders/new",
-            serde_json::json!({"root": 0, "dir": "", "name": "dungeon"}),
-        );
-        assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
-        reader.join().unwrap()
-    });
+    // the stream is open once its snapshot is in; then a folder is made: that is the places, and only them
+    let first = events_until(
+        &h,
+        || {
+            let (head, v) = h.call(
+                "/api/folders/new",
+                serde_json::json!({"root": 0, "dir": "", "name": "dungeon"}),
+            );
+            assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+        },
+        |v| v["type"] == "resource" && v["name"] == "places",
+    );
     assert_eq!(
         first[0]["type"], "snapshot",
         "the stream begins with the whole"
@@ -1165,10 +1170,19 @@ fn a_documents_scene_and_plates_are_of_one_revision_whenever_the_page_is_sent_th
     let planned =
         |t: &Value| map(t) && t["status"] == "ready" && t["plan"]["plates"]["planned"] == true;
     // every state of the map the stream sends (the whole first, then each change) names one revision for its scene and its plan
-    h.wait("town.dmap", "the plates", |t| {
-        t["plan"]["plates"]["planned"] == true
-    });
-    let seen = events_until(&h, |v| tiles_of(v).iter().any(planned));
+    // a tile in a folder builds when it is chosen (the page asks when you open it): the stream is open first, then
+    // the map is chosen, and the plates it plans are told on the stream.  (Waiting for them before the stream is
+    // opened, as this test once did, is how it hung: nothing had asked, so nothing was ever planned to tell.)
+    let seen = events_until(
+        &h,
+        || {
+            assert!(
+                h.shared.want(&h.id("town.dmap")),
+                "the map was not asked for"
+            );
+        },
+        |v| tiles_of(v).iter().any(planned),
+    );
     let mut n = 0;
     for v in &seen {
         for t in tiles_of(v)
