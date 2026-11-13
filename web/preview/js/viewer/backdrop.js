@@ -41,31 +41,24 @@ const DOME_FRAG = `
 uniform float uKind; uniform float uNight; uniform vec3 uHaze;
 varying vec3 vDir;
 ${NOISE}
-// One range of mountains: a long run (the ridge line, low-frequency noise round the horizon) in front, with single peaks
-// rising behind it.  The horizon is cut into n cells; most hold one peak (placed, sized and leaning by the cell's hash), some
-// none, so the skyline has summits and saddles, not one ridge forever.  Each peak has a depth: where two overlap the nearer
-// covers the farther along its own outline, and the farther is a little hazier.  A peak's two faces take the light
-// differently (the sun is to the west), which is what makes it read as a mountain and not a cut-out.
+// One range of mountains, one flat blue-grey fading upward: its skyline is a long run (low-frequency noise round the horizon)
+// with single peaks rising out of it.  The horizon is cut into n cells; most hold one peak (placed, sized and leaning by the
+// cell's hash), some none, so the skyline has summits and saddles, not one ridge forever.  No light and no depth inside a
+// range: two ranges, two tones, simple.
 vec3 ridge(vec3 col, float th, float el, float base, float amp, float k, float off, float n, float peak, vec3 c) {
-  float run = base + amp * fbm(vec2(cos(th), sin(th)) * k + off), cell = 6.2831853 / n, i0 = floor(th / cell);
-  float h = run, near = el < run ? 2.0 : -1.0, top = run, face = 0.0;   // the run is nearest of all
+  float h = base + amp * fbm(vec2(cos(th), sin(th)) * k + off), cell = 6.2831853 / n, i0 = floor(th / cell);
   for (int j = -3; j <= 3; j++) {   // a peak reaches at most 2.5 cells from its own
     float i = i0 + float(j), id = mod(i, n);
-    float r1 = hash(vec2(id, off)), r2 = hash(vec2(id + 7.0, off)), r3 = hash(vec2(id + 13.0, off)), r4 = hash(vec2(id + 29.0, off));
+    float r1 = hash(vec2(id, off)), r2 = hash(vec2(id + 7.0, off)), r3 = hash(vec2(id + 13.0, off));
     if (r3 < 0.22) continue;                                   // a saddle: no peak in this cell
     float dx = (th - (i + 0.2 + 0.6 * r1) * cell) / (cell * (0.6 + 0.6 * r2));
-    float a = dx < 0.0 ? -dx * (0.75 + 0.5 * r1) : dx * (1.25 - 0.5 * r1);   // one face steeper than the other
-    float ph = base + peak * (0.4 + 0.6 * r3) * pow(max(1.0 - a, 0.0), 1.35);
-    ph += peak * 0.12 * (fbm(vec2(th * 40.0, id + off)) - 0.5) * (1.0 - a);   // broken, rocky faces
-    h = max(h, ph);
-    if (el < ph && r4 > near) { near = r4; top = ph; face = dx / (abs(dx) + 0.04); }
+    float a = dx < 0.0 ? -dx * (0.75 + 0.5 * r1) : dx * (1.25 - 0.5 * r1);   // one side steeper than the other
+    h = max(h, base + peak * (0.4 + 0.6 * r3) * pow(max(1.0 - a, 0.0), 1.35));
   }
   float inside = 1.0 - smoothstep(0.0, 0.0012, el - h);
-  float up = clamp(el / max(top, 1e-4), 0.0, 1.0);
+  float up = clamp(el / max(h, 1e-4), 0.0, 1.0);
   float tex = 0.92 + 0.16 * fbm(vec2(th * 28.0, el * 90.0) + off);
-  vec3 m = c * tex * mix(0.9, 1.07, up) * mix(1.0, face < 0.0 ? 1.14 : 0.78, abs(face) * up);
-  if (near <= 1.0) m = mix(m, uHaze, 0.14 * (1.0 - near));   // a far peak takes more of the haze
-  return mix(col, m, inside);
+  return mix(col, c * tex * mix(0.9, 1.07, up), inside);
 }
 // underground: below the horizon the world is earth, dark in the distance
 vec3 below(vec3 col, float el) { return mix(col, vec3(0.0), smoothstep(0.0, 0.003, -el)); }
