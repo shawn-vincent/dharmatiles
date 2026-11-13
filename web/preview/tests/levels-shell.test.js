@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { LEVELS, mapLevelOf, slideBetween, tileLevelOf } from '../js/nav.js';
+import { LEVELS, folderDepth, mapLevelOf, slideBetween, slideDir, tileLevelOf, trailDepth } from '../js/nav.js';
 
 const entry = { kind: 'entry', id: 'rock' };
 
@@ -58,11 +58,51 @@ test('no level view renders its own level switching: the shell shows, hides and 
   // a view showing or hiding itself, animating, or asking which level is on screen
   const own = /\.hidden\s*=|\bhidden=\$\{[^}]*level|\.animate\(|getAnimations|translateX|\bm\.level\b|\blevel\.value\b|\bmapLevel\b|slideBetween|data-depth|dataset\.depth/;
   const seen = [];
-  // the folder browser's list slides its own folders (a ghost of the level it leaves, places-panel.js): folders are not a document's levels
-  for (const f of readdirSync(dir).filter((x) => x !== 'places-panel.js')) {
+  for (const f of readdirSync(dir)) {
     readFileSync(new URL(f, dir), 'utf8').split('\n').forEach((line, i) => { if (own.test(line) && !/^\s*(\/\/|\*|\/\*)/.test(line)) seen.push(`${f}:${i + 1}: ${line.trim()}`); });
   }
   assert.deepEqual(seen, []);
+});
+
+test('folders, a document and its levels are steps of one trail, by one direction rule', () => {
+  const lvl = (root, dir = '') => ({ root, dir });
+  assert.equal(folderDepth(lvl(null)), 0);
+  assert.equal(folderDepth(lvl(1)), 1);
+  assert.equal(folderDepth(lvl(1, 'dungeon')), 2);
+  assert.equal(folderDepth(lvl(1, 'dungeon/rooms')), 3);
+  // a folder to a subfolder: deeper; back: shallower; across a sibling: a swap
+  assert.equal(slideDir(folderDepth(lvl(1)), folderDepth(lvl(1, 'a'))), 1);
+  assert.equal(slideDir(folderDepth(lvl(1, 'a')), folderDepth(lvl(1))), -1);
+  assert.equal(slideDir(folderDepth(lvl(1, 'a')), folderDepth(lvl(1, 'b'))), 0);
+  // a tile opened from its folder is one deeper, and Up from it one shallower, at every depth of folder and every level of the document
+  for (const folder of [lvl(1), lvl(1, 'a'), lvl(2, 'a/b')]) {
+    assert.equal(slideDir(folderDepth(folder), trailDepth(folder)), 1);
+    assert.equal(slideDir(trailDepth(folder), folderDepth(folder)), -1);
+    assert.equal(slideDir(trailDepth(folder, LEVELS.control.depth), folderDepth(folder)), -1, 'a crumb from a control to the folder');
+    assert.equal(slideDir(trailDepth(folder, LEVELS.piece.depth), trailDepth(folder, LEVELS.map.depth)), -1);
+  }
+  // the shell's own table agrees with the rule
+  assert.equal(slideBetween('tile', 'entry'), slideDir(trailDepth(lvl(1)), trailDepth(lvl(1), 1)));
+});
+
+test('one function animates a level change: nothing else animates, translates or reads the motion setting', () => {
+  const seen = [];
+  const walk = (base) => {
+    const dir = new URL(base, import.meta.url);
+    for (const f of readdirSync(dir, { withFileTypes: true })) {
+      if (f.isDirectory()) { if (!['vendor', 'viewer'].includes(f.name)) walk(`${base}${f.name}/`); continue; }
+      if (!f.name.endsWith('.js') || (base === '../js/' && f.name === 'slide.js')) continue;
+      readFileSync(new URL(f.name, dir), 'utf8').split('\n').forEach((line, i) => {
+        if (/\.animate\(\s*\[|new Animation\b|getAnimations|translateX|prefers-reduced-motion|SLIDE_MS|cubic-bezier/.test(line) && !/^\s*(\/\/|\*|\/\*)/.test(line)) seen.push(`${base}${f.name}:${i + 1}: ${line.trim()}`);
+      });
+    }
+  };
+  walk('../js/');
+  assert.deepEqual(seen, []);
+  // and the stylesheet gives the pages no slide of its own
+  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /#track[^{]*\{[^}]*(transition|translateX)/);
+  assert.doesNotMatch(css, /#side\.editing #track/);
 });
 
 test('only the shell and the model name the levels\' sections', () => {

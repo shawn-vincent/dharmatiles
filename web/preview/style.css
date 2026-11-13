@@ -17,12 +17,13 @@ button { font: inherit; color: inherit; }
        grid-template-areas: "title title title" "side sash-side view"; }
 
 /* ---- the sidebar: the tile browser, and beside it the editor page ----
-   Choosing a tile slides the page in from the right; ‹ slides back. */
+   Choosing a tile slides the page in from the right; ‹ slides back (the same slide as every level's). */
 /* clip, not hidden: a hidden box can still be scrolled (focus, a cursor kept in view), which leaves the track part way */
 #side { grid-area: side; position: relative; overflow: clip; min-width: 0; min-height: 0; background: var(--panel); }
-#track { display: flex; width: 200%; height: 100%; transition: transform .28s var(--ease); }
-#side.editing #track { transform: translateX(-50%); }
-#browser, #editpage { flex: 0 0 50%; min-width: 0; height: 100%; display: flex; flex-direction: column; }
+/* the two pages are stacked in one box, and the one slide of the panel (js/slide.js) takes one away and the other in; the one left is only invisible */
+#track { position: relative; height: 100%; }
+#browser, #editpage { position: absolute; inset: 0; min-width: 0; display: flex; flex-direction: column; background: var(--panel); }
+#browser.off, #editpage.off { visibility: hidden; }
 /* the crumbs: Places, the folders, the tile, then the thing and the control the level is at; and the Tile | Source switch */
 /* the ones behind give way first, so where you are is always readable */
 #rochip { flex: none; margin-left: 4px; }

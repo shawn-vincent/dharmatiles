@@ -21,6 +21,7 @@ import {
 } from '../folders.js';
 import { openMenu } from '../menu.js';
 import { crumbsFor, moveRow, parseHash } from '../nav.js';
+import { afterSlide } from '../slide.js';
 import { copiedNote } from '../mine.js';
 import { systemName } from '../inventory.js';
 import { failed, showError, whyOf } from '../problems.js';
@@ -35,13 +36,9 @@ import { listMenu, newList } from './lists.js';
 import { browse } from './model.js';
 import { placeAt, server, tile, tileById, view, whenListedWhere } from './stores.js';
 
-const SLIDE_MS = 200;
-const EASE = 'cubic-bezier(.2, .7, .2, 1)';
-const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const TOP = { root: null, dir: '' };
 const levelNow = () => view.get().place || TOP;
-const depthOfLevel = (l) => (l.root == null ? 0 : 1 + (l.dir ? l.dir.split('/').length : 0));
 const browsing = () => view.get().page === 'browse';
 
 const scrolls = new Map(); // a level's key -> how far its list was scrolled
@@ -166,7 +163,7 @@ function BrowserLevels() {
     if (!$('browser').contains(document.activeElement)) return;
     const goBack = leftFrom;
     leftFrom = null;
-    setTimeout(() => focusRow(goBack), reduced() ? 0 : SLIDE_MS + 20);
+    afterSlide(() => focusRow(goBack));
   };
   return html`<${Levels} d=${browse.data.value} on=${listHandlers} scrolls=${scrolls} arrived=${arrived} />`;
 }

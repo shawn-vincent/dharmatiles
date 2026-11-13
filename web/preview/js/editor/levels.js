@@ -18,14 +18,15 @@
 // This is the one shell of the levels, for every kind of document: a tile's levels (tile, entry, control) and a map's (map, piece,
 // property) are views drawn into its sections (`lvl-<id>`, one per row of nav.js `LEVELS`), and the shell alone decides which one is on
 // screen, which way it slides (nav.js `slideBetween`), what it keeps (each level's scroll), where the keyboard goes after a slide and how
-// reduced motion reads.  A view never shows or hides itself, never animates and never says which level is on screen (a test reads the
+// reduced motion reads (all of it js/slide.js, which the folder levels and the step between a folder and a document use too, `showPage`).  A view never shows or hides itself, never animates and never says which level is on screen (a test reads the
 // views for it); a level added later is a row of `LEVELS`, a section of the page and a view.
 
 import {
-  LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf, sameLevel,
-  sizeWords, slideBetween, standing, systemName, tileLevelOf, up as levelUp,
+  LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, folderDepth, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf, sameLevel,
+  sizeWords, slideBetween, slideDir, standing, systemName, tileLevelOf, trailDepth, up as levelUp,
 } from '../nav.js';
 import { effect } from '@preact/signals-core';
+import { afterSlide, finishSlide, slide } from '../slide.js';
 import { fillCrumbs, pinEnd } from '../crumbs.js';
 import { DeepCrumbs } from '../view/crumbs.js';
 import { html, render as renderInto } from '../view/html.js';
@@ -44,11 +45,8 @@ import { held } from './address.js';
 import { label as pieceLabel } from '../map-model.js';
 import { contextLines as inventoryLines } from './inventory.js';
 
-const SLIDE_MS = 200;
 /** What a level's rows are, for the arrow keys and for where the keyboard lands: the tile's rows, the map's pieces, the Add level's pictures and folders. */
 const ROWS = '.orow, .mp-group, .acard';
-const EASE = 'cubic-bezier(.2, .7, .2, 1)';
-const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const scrolls = new Map(); // tile id + level key -> how far its list was scrolled
 let shown = 'tile';        // the level on screen (a row of LEVELS)
@@ -273,38 +271,58 @@ function focusLevel(id) {
   (first || pane).focus({ preventScroll: true });
 }
 
-/** Put level `id` on screen: slide from the old one (which way: nav.js `slideBetween`), or swap at once. */
+/** Put level `id` on screen: the one slide (js/slide.js) from the old one, which way nav.js `slideBetween` says, or a swap at once. */
 function showLevel(id, animate) {
   const from = shown;
   if (from === id && !paneEl(id).hidden) return;
-  for (const a of document.getAnimations()) if (Object.keys(LEVELS).some((l) => paneEl(l).contains(a.effect?.target))) a.finish();
   const to = paneEl(id), out = paneEl(from);
+  finishSlide($('levels')); // a slide still running ends first, so the panes left over are hidden
   for (const l of Object.keys(LEVELS)) if (l !== id && l !== from) paneEl(l).hidden = true;
   to.hidden = false;
   shown = id;
   restore(id);
-  const dir = slideBetween(from, id);
-  if (!animate || reduced() || !dir || out.hidden) { out.hidden = from === id ? false : true; return; }
-  const opts = { duration: SLIDE_MS, easing: EASE, fill: 'both' };
-  to.animate([{ transform: `translateX(${dir * 100}%)` }, { transform: 'translateX(0)' }], opts);
-  const gone = out.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-dir * 100}%)` }], opts);
-  // the old level leaves when the slide ends; a timer backs that up, so a page whose frames are paused still ends on one level
-  let over = false;
-  const done = () => {
-    if (over) return;
-    over = true;
-    for (const a of to.getAnimations()) a.cancel();
-    gone.cancel();
-    if (shown === id) out.hidden = true;
-  };
-  gone.onfinish = done;
-  setTimeout(done, SLIDE_MS + 100);
+  slide({ scope: $('levels'), to, out: from !== id && !out.hidden ? out : null, dir: slideBetween(from, id), animate, leave: (el) => { el.hidden = true; } });
 }
 // the scroll of a level is kept by the level (the scroll listener in init), and given back when it is shown
 function restore(id) {
   const l = shellLevel();
   const b = bodyOf(id);
   if (l && b) requestAnimationFrame(() => { b.scrollTop = scrolls.get(memoryKey(l)) ?? 0; });
+}
+
+// ---- the two pages: the folder browser and the document -------------------------------------------------------------
+// The sidebar is two pages stacked in one box: the folder levels (places.js) and the document's levels.  Opening a document from its
+// folder is a step one deeper in the same trail, Up from it one shallower, so the step between the pages is the same slide as any other
+// (slide.js), by the same rule, measured on the trail's whole depth.
+
+const TOP = { root: null, dir: '' };
+/** How deep the page is in the trail: the folder level the browser is at, or the document's own level below the folder it is in. */
+function pageDepth(edit) {
+  if (!edit) return folderDepth(view.get().place || TOP);
+  const t = tile();
+  const l = shellLevel();
+  return trailDepth((t && whereIs(server.get().roots, t)) || TOP, l ? LEVELS[l.id].depth : 0);
+}
+let pageIsEdit = null;
+/**
+ * Bring the browser page (`edit` false) or the document's on screen: the step is the trail's depth before and after, read here, before
+ * the new page's level can change it.  The keyboard follows only when it was in the page left (as a level's does).
+ */
+export function showPage(edit, animate) {
+  if (pageIsEdit === edit) return;
+  const to = $(edit ? 'editpage' : 'browser'), out = $(edit ? 'browser' : 'editpage');
+  const first = pageIsEdit == null;
+  finishSlide($('track')); // a step still running ends first
+  const dir = first ? 0 : slideDir(pageDepth(!edit), pageDepth(edit));
+  const had = out.contains(document.activeElement);
+  pageIsEdit = edit;
+  $('side').classList.toggle('editing', edit);
+  to.classList.remove('off'); to.inert = false;
+  out.inert = true;
+  const away = (el) => { el.classList.add('off'); };
+  if (first) { away(out); return; }
+  slide({ scope: $('track'), to, out, dir, animate, leave: away });
+  if (had) afterSlide(() => { if (pageIsEdit === edit) { if (edit) focusLevel(shown); else ($('folder').querySelector('.orwrap.sel .orow, .orow') || $('folder')).focus({ preventScroll: true }); } });
 }
 
 let lastLevelId = null, lastTile = null, lastKey = null;
@@ -349,7 +367,6 @@ function returnRow(id) {
   const k = leftFrom?.sel;
   return id === 'tile' && k ? rows.find((r) => r.dataset.kind === k.kind && r.dataset.id === k.id) : null;
 }
-const afterSlide = (fn) => setTimeout(fn, reduced() ? 0 : SLIDE_MS + 20);
 
 // ---- the address -------------------------------------------------------------------
 // (written by one effect for every level: address.js; this takes a level an address asks for)

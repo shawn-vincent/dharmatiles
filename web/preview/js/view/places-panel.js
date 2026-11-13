@@ -14,16 +14,14 @@
 // level lists is js/folders.js.
 
 import { signal } from '@preact/signals-core';
+import { folderDepth, slideDir } from '../nav.js';
+import { slide } from '../slide.js';
 import { sizeLine, sizeSquares, stemOf, wherePath } from '../folders.js';
 import { thumbBox } from '../rows.js';
 import { html, useEffect, useLayoutEffect, useRef, useState } from './html.js';
 import { plural } from './widgets.js';
 
-const SLIDE_MS = 200;
-const EASE = 'cubic-bezier(.2, .7, .2, 1)';
-const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const keyOf = (l) => `${l.root ?? 'places'}|${l.dir || ''}`;
-const depthOf = (l) => (l.root == null ? 0 : 1 + (l.dir ? l.dir.split('/').length : 0));
 
 // ---- the pictures ---------------------------------------------------------------------------
 
@@ -265,38 +263,30 @@ export function FolderList({ d, on, ghost = false }) {
 }
 
 /**
- * The level in the viewport, slid in from the side it came from: a deeper level from the right, a shallower from
- * the left.  The level it replaces stays one more moment as a ghost going the other way.  How far each level was
- * scrolled is remembered, and given back when it is shown again.
+ * The level in the viewport.  A step between levels is the panel's one slide (js/slide.js, which way: nav.js `slideDir` of the folder
+ * depths): the level the list was on stays one more moment as a ghost for it to take away.  How far each level was scrolled is
+ * remembered, and given back when it is shown again.  The same list is the Add tiles pane's, and slides inside its own box.
  */
 export function Levels({ d, on, scrolls, arrived, id = 'folder' }) {
   const key = keyOf(d.level);
-  const last = useRef({ key, depth: depthOf(d.level), d, ghost: null });
+  const last = useRef({ key, depth: folderDepth(d.level), d, ghost: null });
   const cur = useRef(/** @type {HTMLElement | null} */ (null));
   const old = useRef(/** @type {HTMLElement | null} */ (null));
   const [, redraw] = useState(0);
   const moved = last.current.key !== key;
   if (moved) {
-    // the level the list was on is the ghost of the slide (nothing slides for reduced motion, or the first level)
-    last.current.ghost = reduced() ? null : { d: last.current.d, dir: Math.sign(depthOf(d.level) - last.current.depth), scroll: scrolls.get(last.current.key) ?? 0 };
-    last.current.key = key; last.current.depth = depthOf(d.level);
+    // the level the list was on is the ghost of the slide
+    last.current.ghost = { d: last.current.d, dir: slideDir(last.current.depth, folderDepth(d.level)), scroll: scrolls.get(last.current.key) ?? 0 };
+    last.current.key = key; last.current.depth = folderDepth(d.level);
   }
   last.current.d = d;
   const ghost = last.current.ghost;
   useLayoutEffect(() => {
     if (cur.current) cur.current.scrollTop = scrolls.get(key) ?? 0;
     if (moved) arrived?.();
-    if (!ghost || !moved || !cur.current || !old.current) return undefined;
+    if (!ghost || !moved || !cur.current || !old.current) return;
     old.current.scrollTop = ghost.scroll;
-    const opts = { duration: SLIDE_MS, easing: EASE, fill: 'both' };
-    const inn = cur.current.animate([{ transform: `translateX(${ghost.dir * 100}%)` }, { transform: 'translateX(0)' }], opts);
-    const out = old.current.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-ghost.dir * 100}%)` }], opts);
-    let over = false;
-    const done = () => { if (over) return; over = true; inn.cancel(); last.current.ghost = null; redraw((n) => n + 1); };
-    out.onfinish = done;
-    // a page whose frames are paused still ends on one level
-    const timer = setTimeout(done, SLIDE_MS + 100);
-    return () => clearTimeout(timer);
+    slide({ scope: cur.current.parentElement, to: cur.current, out: old.current, dir: ghost.dir, leave: () => { if (last.current.ghost === ghost) { last.current.ghost = null; redraw((n) => n + 1); } } });
   }, [key]);
   return html`<div id=${id} class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1" ref=${cur} onScroll=${(e) => scrolls.set(key, e.currentTarget.scrollTop)}><${FolderList} d=${d} on=${on} /></div>
     ${ghost ? html`<div class="flvl ghost" ref=${old} inert=${true}><${FolderList} d=${ghost.d} on=${on} ghost=${true} /></div>` : null}`;

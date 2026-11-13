@@ -56,8 +56,21 @@ export const mapLevelOf = ({ pieces = 0, prop = null, add = false }) => (prop &&
 export function slideBetween(from, to) {
   const a = LEVELS[from], b = LEVELS[to];
   if (!a || !b || a.doc !== b.doc) return 0;
-  return Math.sign(b.depth - a.depth);
+  return slideDir(a.depth, b.depth);
 }
+
+/** The one direction rule of every slide: from depth `a` to depth `b` of the trail, 1 deeper (in from the right), -1 shallower (in from the left), 0 the same depth (a swap). */
+export const slideDir = (a, b) => Math.sign(b - a);
+
+/** How deep a folder level is: Places 0, a place 1, a folder in it 2, its subfolder 3. */
+export const folderDepth = (l) => (l.root == null ? 0 : 1 + (l.dir ? l.dir.split('/').length : 0));
+
+/**
+ * How deep a document's level is in the whole trail (Places › a place › folders › the tile › a thing › a control): the depth of the
+ * folder it is in, one for the document, and its own level below that.  A folder and a document are steps of the same trail, so the step
+ * between them slides by the same rule: opening a tile from its folder is one deeper, Up from it one shallower.
+ */
+export const trailDepth = (folder, levelDepth = 0) => folderDepth(folder) + 1 + levelDepth;
 
 /** The key a level keeps its scroll position under. */
 export function levelKey(sel, control = null) {

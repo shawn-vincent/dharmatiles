@@ -2,7 +2,7 @@
 // sidebar's two pages, light and dark, the projection, the panes and the
 // keyboard.
 
-import { effect, signal } from '@preact/signals-core';
+import { effect, signal, untracked } from '@preact/signals-core';
 import { Layout } from '../layout.js';
 import { CopyButton } from '../view/copy-button.js';
 import { html, render } from '../view/html.js';
@@ -13,7 +13,7 @@ import { KINDS as BACKDROPS } from '../viewer/backdrop.js';
 import { legendRows } from '../debug-layer.js';
 import { $, host, pickView, viewer } from './app.js';
 import { versionParts } from '../copy.js';
-import { goUp, setFace } from './levels.js';
+import { goUp, setFace, showPage } from './levels.js';
 import { isInventory, isPlatesView, placeAt, server, tile, view } from './stores.js';
 
 // ---- the view's controls: views and the display menu -------------------
@@ -80,15 +80,13 @@ const closePopovers = () => {
 
 const browsing = () => view.get().page === 'browse';
 function bindPage() {
+  let first = true;
   effect(() => {
-    if (!browsing()) {
-      $('side').classList.add('editing');
-      $('browser').inert = true; $('editpage').inert = false;
-      return;
-    }
-    layout.showSide();
-    $('side').classList.remove('editing');
-    $('browser').inert = false; $('editpage').inert = true;
+    const edit = !browsing();
+    if (!edit) layout.showSide();
+    // the one slide of the panel (levels.js, slide.js); the first draw is not a step
+    untracked(() => showPage(edit, !first));
+    first = false;
   });
 }
 
