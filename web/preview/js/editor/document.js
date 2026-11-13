@@ -24,7 +24,20 @@ import { docs, planOf } from './docs.js';
 // cleanly; the worker sees the saved file and rebuilds.  A text with a
 // mistake stays here, unsaved, until it is fixed.
 
-const run = { lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, checkSeq: 0, namesSeq: 0, saving: false, openText: '' };
+// The disk's text and its revision are the documents module's (js/documents.js: a source is a document whose
+// state the program's answers make, and whose saves go through it in turn).  `doc.base` and `doc.docRev` are
+// that state as this store shows it, written by `sourceFields` and nowhere else.
+/** The id of the source document of `file` of tile `t`: the tile's own file is the tile's id. */
+const sourceId = (t, file) => (file === t.path ? t.id : `${t.id}#${file}`);
+let curSid = null; // the source document the pane shows
+/** What the store shows of source `sid`'s held state: the text on disk (`base`) and its revision. */
+function sourceFields(sid) {
+  const h = sid ? docs.get(sid) : null;
+  return { docRev: h?.source?.rev ?? null, base: h?.source?.text ?? null };
+}
+docs.subscribe((id) => { if (id === curSid && !run.reading) doc.set(sourceFields(id)); });
+
+const run = { reading: false, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, checkSeq: 0, namesSeq: 0, saving: false, openText: '' };
 
 // The history is the page's one (js/doc-history.js): a tile's source is a document whose steps are made here,
 // typing and the lens, each `{before, after, label, change, caret}`; a print list or a map is a document the
@@ -112,7 +125,8 @@ function clearDocument() {
   loadKey = null;
   history.clear(textKey());
   run.lastKind = null;
-  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null, docRev: null });
+  curSid = null;
+  doc.set({ tileId: null, file: null, text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null, ...sourceFields(null) });
   renderHistory();
 }
 function record(text, kind, label = null) {
@@ -262,21 +276,18 @@ async function save(now = false) {
   }
   d = doc.get();
   if (d.checked !== d.text || !d.ok) return false; // a mistake: kept here until it is fixed
-  const t = tile(), text = d.text, file = d.file;
-  if (!t || !file) return false;
+  const t = tile(), text = d.text, file = d.file, sid = curSid;
+  if (!t || !file || !sid) return false;
   run.saving = true;
   doc.set({ saving: true });
   try {
-    const r = await host.save(t.id, { text, docRev: d.docRev, file: file === t.path ? undefined : file });
-    if (r.status === 200) {
-      doc.set({ note: null, base: text, conflict: null, docRev: r.body.docRev });
+    const r = await docs.saveSource(sid, text, `Could not save ${stem(t)}`);
+    if (r.status === 'saved') {
+      doc.set({ note: null, conflict: null });
       // a print list or a map: the source's save is a step of its history, like the program's own edits
-      if (isPlates(t) && file === t.path) docs.adopt(t.id, 'Edited source', { before: d.base, text, docRev: r.body.docRev });
-    } else if (r.status === 409) doc.set({ note: null, conflict: r.body?.text ?? '', conflictRev: r.body?.docRev ?? null });
-    else {
-      doc.set({ note: r.body?.error || `could not save (${r.status})` });
-      failed(`Could not save ${stem(t)}`, r);
-    }
+      if (isPlates(t) && file === t.path) docs.adopt(t.id, 'Edited source', { before: d.base, text, docRev: r.docRev });
+    } else if (r.status === 'conflict') doc.set({ note: null, conflict: r.disk });
+    else if (r.status === 'failed') doc.set({ note: r.reply.body?.error || `could not save (${r.reply.status})` });
   } finally {
     run.saving = false;
     doc.set({ saving: false });
@@ -340,13 +351,25 @@ export async function loadText(file) {
   const token = ++loadToken;
   loading = (async () => {
     try {
-      const v = await host.text(t.id, want === t.path ? null : want);
-      if (token !== loadToken || !v) { if (!v) loadKey = null; return false; }
-      if (dirty() && texts.file === v.file && doc.get().tileId === t.id) return true;
+      const sid = sourceId(t, want);
+      // taken unless the page has unsaved changes on this very text, or a later load has begun
+      const mine = (v) => dirty() && texts.file === v.file && doc.get().tileId === t.id;
+      let read = null;
+      run.reading = true; // the store follows the held state by itself, except while this load makes the whole step
+      let st;
+      try {
+        st = await docs.loadSource(sid, { tile: t.id, own: want === t.path }, async () => (read = await host.text(t.id, want === t.path ? null : want)), (v) => token === loadToken && !mine(v));
+      } finally { run.reading = false; }
+      if (!st?.source) {
+        if (!read) loadKey = null;
+        return !!read && token === loadToken && mine(read);
+      }
+      const v = { file: st.source.file, text: st.source.text, writable: st.source.writable };
       const fresh = doc.get().tileId !== t.id || texts.file !== v.file;
       texts.show(v.file, v.text, v.writable);
+      curSid = sid;
       doc.set({
-        tileId: t.id, file: v.file, text: v.text, base: v.text, writable: v.writable, docRev: v.docRev,
+        tileId: t.id, file: v.file, text: v.text, writable: v.writable, ...sourceFields(sid),
         conflict: null, note: null,
         checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
         ...(fresh ? { map: null, names: null } : {}),
@@ -401,8 +424,9 @@ function renderTextBar() {
   if (d.writable && d.conflict != null) {
     st.classList.add('bad');
     st.append('changed on disk: ');
-    st.append(button('take the disk’s', () => { const disk = d.conflict; doc.set({ conflict: null, base: disk, docRev: d.conflictRev }); edited(disk, 'disk'); }), ' or ',
-      button('keep mine', () => { doc.set({ base: d.conflict, conflict: null, docRev: d.conflictRev }); changed(); }));
+    // the disk's text and revision are already the held state (js/documents.js): choosing says which text is the user's
+    st.append(button('take the disk’s', () => { const disk = d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }), ' or ',
+      button('keep mine', () => { doc.set({ conflict: null }); changed(); }));
     return;
   }
   const w = saveWords();

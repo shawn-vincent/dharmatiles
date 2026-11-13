@@ -312,3 +312,115 @@ test('random actions with answers and events arriving in any order leave the pag
   assert.ok(refusals > 20, `only ${refusals} refusals: the sessions did not race`);
   assert.ok(revs > 1000, `only ${revs} revisions in all`);
 });
+
+// ---- a source is a document too: the text on disk, its revision, and the saves made against it ---------------
+
+/** The program's side of one file: its text, a revision that only rises, and what it was asked. */
+function fakeFile(text = 'a') {
+  const f = { text, rev: 1, saves: [], told: new Set([1]) };
+  f.read = async () => ({ file: 'f.dtile', text: f.text, writable: true, docRev: f.rev });
+  f.outside = (t) => { f.text = t; f.rev += 1; };
+  f.answer = (name, body) => {
+    assert.equal(name, 'save');
+    f.saves.push(body.docRev);
+    if (body.docRev !== f.rev) return { status: 409, body: { error: { message: 'moved' }, text: f.text, docRev: f.rev } };
+    if (body.text !== f.text) { f.text = body.text; f.rev += 1; }
+    return { status: 200, body: { docRev: f.rev } };
+  };
+  return f;
+}
+
+function sourceWorld(file) {
+  const said = [];
+  const { docs, receive } = createDocuments({ send: async (n, b) => file.answer(n, b), report: { failure: (l) => said.push(l) } });
+  return { docs, receive, said };
+}
+
+test('a source is read into the document and saved against the revision its text is of', async () => {
+  const f = fakeFile('one');
+  const { docs } = sourceWorld(f);
+  const st = await docs.loadSource('t1', { tile: 't1', own: true }, f.read);
+  assert.equal(st.source.text, 'one');
+  assert.equal(st.source.rev, 1);
+  assert.deepEqual(await docs.saveSource('t1', 'two'), { status: 'saved', docRev: 2 });
+  assert.equal(docs.get('t1').source.text, 'two');
+  assert.equal(docs.get('t1').source.rev, 2);
+  assert.deepEqual(f.saves, [1]);
+});
+
+test('the program saying the file changed does not let a save through against text that was not read', async () => {
+  const f = fakeFile('one');
+  const { docs, receive } = sourceWorld(f);
+  await docs.loadSource('t1', { tile: 't1', own: true }, f.read);
+  f.outside('theirs');
+  receive({ id: 't1', docRev: f.rev, plan: { printer: 'x' } }); // the stream tells the revision, not the text
+  assert.equal(docs.get('t1').docRev, 2);
+  assert.equal(docs.get('t1').source.rev, 1, 'the text held is still the revision it was read at');
+  const r = await docs.saveSource('t1', 'mine');
+  assert.equal(r.status, 'conflict', 'the save is made against revision 1 and refused');
+  assert.equal(r.disk, 'theirs');
+  assert.equal(f.text, 'theirs', 'nothing was overwritten');
+  assert.equal(docs.get('t1').source.text, 'theirs', 'the disk\'s text is what is held now');
+  assert.deepEqual(await docs.saveSource('t1', 'mine'), { status: 'saved', docRev: 3 });
+});
+
+test('saves of one document run one after another, each from the revision the last left', async () => {
+  const f = fakeFile('a');
+  const { docs } = sourceWorld(f);
+  await docs.loadSource('t1', { tile: 't1', own: true }, f.read);
+  const rs = await Promise.all(['b', 'c', 'd'].map((t) => docs.saveSource('t1', t)));
+  assert.deepEqual(rs.map((r) => r.status), ['saved', 'saved', 'saved']);
+  assert.deepEqual(f.saves, [1, 2, 3]);
+  assert.equal(f.text, 'd');
+});
+
+test('a library file has no revision and what it says now replaces what was held; it cannot be saved', async () => {
+  const f = { text: 'v1' };
+  const read = async () => ({ file: 'lib:a.dtile', text: f.text, writable: false, docRev: 0 });
+  const { docs } = sourceWorld(fakeFile());
+  await docs.loadSource('lib', { tile: 'lib', own: true }, read);
+  f.text = 'v2';
+  const st = await docs.loadSource('lib', { tile: 'lib', own: true }, read);
+  assert.equal(st.source.text, 'v2');
+  assert.equal((await docs.saveSource('lib', 'x')).status, 'unwritable');
+});
+
+test('random reads, saves and outside changes never save against text the page has not read (seeded)', async () => {
+  for (let seed = 1; seed <= 60; seed++) {
+    const rand = mulberry(seed);
+    const f = fakeFile('t0');
+    const sent = [];
+    const { docs, receive } = createDocuments({ send: async (n, b) => { sent.push(b.docRev); return f.answer(n, b); }, report: {} });
+    const readAt = new Set();
+    const read = async () => { const v = await f.read(); readAt.add(v.docRev); return v; };
+    await docs.loadSource('t1', { tile: 't1', own: true }, read);
+    const ops = [];
+    let n = 0;
+    for (let i = 0; i < 25; i++) {
+      const k = rand();
+      if (k < 0.4) ops.push(docs.saveSource('t1', `s${++n}`).then((r) => { if (r.status === 'saved' || r.status === 'conflict') readAt.add(r.docRev); }));
+      else if (k < 0.6) f.outside(`o${++n}`);
+      else if (k < 0.8) receive({ id: 't1', docRev: f.rev, plan: { n } });
+      else ops.push(docs.loadSource('t1', { tile: 't1', own: true }, read));
+      if (rand() < 0.5) await Promise.resolve();
+    }
+    await Promise.all(ops);
+    for (const r of sent) assert.ok(readAt.has(r), `seed ${seed}: a save was made against revision ${r}, which the page never had the text of`);
+    const h = docs.get('t1');
+    assert.ok(h.source.rev <= f.rev && h.docRev <= f.rev, `seed ${seed}`);
+  }
+});
+
+test('a source is written only through the documents module (one way out)', () => {
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'js');
+  const found = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== 'vendor') walk(p); }
+      else if (p.endsWith('.js') && /\bhost\.save\(/.test(fs.readFileSync(p, 'utf8'))) found.push(path.relative(dir, p));
+    }
+  };
+  walk(dir);
+  assert.deepEqual(found.sort(), ['editor/docs.js'], `host.save is called only where the documents module is wired: ${found}`);
+});

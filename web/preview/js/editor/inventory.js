@@ -20,6 +20,7 @@ import {
 } from '../inventory.js';
 import { isInventory, server, tile, view } from './stores.js';
 import { seg } from './controls.js';
+import { docs } from './docs.js';
 
 const el = (tag, cls, text) => {
   const x = document.createElement(tag);
@@ -192,7 +193,7 @@ function reprintRow(p) {
   const go = el('button', 'btn', 'Add');
   go.type = 'button';
   go.onclick = async () => {
-    const b = await act('Could not reprint', () => host.inventoryReprint({ tile: p.tile, seed: p.seed, system: p.system, colour: p.colour, list: s.value || null }));
+    const b = await act('Could not reprint', () => host.inventoryReprint({ tile: p.tile, seed: p.seed, system: p.system, colour: p.colour, list: s.value || null, docRev: s.value ? docs.get(s.value)?.docRev : undefined }));
     if (!b) return;
     ui.reprint = null; ui.drawn = null; render();
     toast(`${b.made ? 'Made' : 'Added it to'} ${b.list.split(/[\\/]/).pop()}${b.warning ? `. ${b.warning}` : ''}`, () => import('./open.js').then(({ select }) => select(b.id).then(() => view.set({ page: 'edit' }))), { label: 'Open', ms: b.warning ? 12000 : 7000 });

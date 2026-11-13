@@ -47,7 +47,7 @@ async function call(label, run) {
 
 /** Add one copy of tile `t` to the list `listId`, or to a new list when null. */
 export async function addTo(t, listId) {
-  const b = await call('Could not add to the print list', () => host.listsAdd({ tile: t.id, list: listId }));
+  const b = await call('Could not add to the print list', () => host.listsAdd({ tile: t.id, list: listId, docRev: listId ? docs.get(listId)?.docRev : undefined }));
   if (!b) return;
   const name = b.path.split(/[\\/]/).pop().replace(/\.dmap$/i, '');
   if (b.made) {

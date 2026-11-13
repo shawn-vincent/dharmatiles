@@ -19,7 +19,7 @@ const calls = {
   mapsAdd: host.mapsAdd, mapsSet: host.mapsSet, mapsBatch: host.mapsBatch, mapsDup: host.mapsDup, mapsRemove: host.mapsRemove,
   mapsPin: host.mapsPin, mapsUnpin: host.mapsUnpin, mapsUnpinAll: host.mapsUnpinAll, platesSet: host.platesSet,
 };
-const send = (name, body) => calls[name](body);
+const send = (name, body) => (name === 'save' ? host.save(body.tile, { text: body.text, docRev: body.docRev, file: body.file }) : calls[name](body));
 
 const report = {
   /** The file moved on under an edit: the refusal, in words, where the user is looking. */
