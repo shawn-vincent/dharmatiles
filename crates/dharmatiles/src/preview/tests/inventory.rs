@@ -443,6 +443,54 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
 }
 
 #[test]
+fn undo_is_refused_when_the_file_changed_since_the_edit() {
+    let h = start_home("undo409", &[("glade.dtile", GLADE)]);
+    h.call("/api/lists/new", serde_json::json!({"name": "Crossing"}));
+    let file = h.dir.join("Crossing.dmap");
+    let list = h.id("Crossing.dmap");
+    let b = h.ok(
+        "/api/lists/add",
+        serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
+    );
+    let (before, after) = (b["before"].clone(), b["after"].clone());
+    // the file is changed behind the editor's back (another tab, a text editor)
+    let other = std::fs::read_to_string(&file)
+        .unwrap()
+        .replace("count=1", "count=7");
+    assert!(other.contains("count=7"), "{other}");
+    std::fs::write(&file, &other).unwrap();
+    let (head, v) = h.call(
+        "/api/lists/restore",
+        serde_json::json!({"list": list, "text": before, "expect": after}),
+    );
+    assert!(head.starts_with("HTTP/1.1 409"), "{head} {v}");
+    assert_eq!(
+        v["text"],
+        other.as_str(),
+        "the answer carries the file as it is"
+    );
+    assert!(
+        v["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("changed since this edit"),
+        "{v}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        other,
+        "nothing was written"
+    );
+    // a restore that says nothing of what it expects is not a restore
+    let (head, _) = h.call(
+        "/api/lists/restore",
+        serde_json::json!({"list": list, "text": before}),
+    );
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), other);
+}
+
+#[test]
 fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     let h = start_home("lists", &[("glade.dtile", GLADE)]);
     // a new list in My tiles: an empty map for the printer last chosen, never over a file
@@ -517,7 +565,7 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     );
     h.ok(
         "/api/lists/restore",
-        serde_json::json!({"list": list, "text": r["before"]}),
+        serde_json::json!({"list": list, "text": r["before"], "expect": r["after"]}),
     );
     assert!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap"))
@@ -720,11 +768,11 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
         !text.contains("p5") && !text.contains("pin "),
         "the piece goes with its pin: {text}"
     );
-    h.ok("/api/maps/unpin-all", serde_json::json!({"list": list}));
+    let u = h.ok("/api/maps/unpin-all", serde_json::json!({"list": list}));
     // undo through the print lists' restore, the scene answered at once
     let r = h.ok(
         "/api/lists/restore",
-        serde_json::json!({"list": list, "text": TOWN}),
+        serde_json::json!({"list": list, "text": TOWN, "expect": u["after"]}),
     );
     assert_eq!(r["scene"]["pieces"].as_array().unwrap().len(), 3);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), TOWN);

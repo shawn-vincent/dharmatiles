@@ -21,13 +21,29 @@ use crate::{AUDIT_FAILED, ERROR, OK, report};
 /// # Errors
 /// The file cannot be read, or does not decode: every mistake at its text.
 pub(crate) fn read_list(path: &Path) -> Result<PrintList, Vec<Diag>> {
-    let text = std::fs::read_to_string(path).map_err(|e| {
+    read_list_text(path, &read_text(path)?)
+}
+
+/// A print list's file, read once: whoever hashes the text and decodes it
+/// must use this one read, or the hash can label a different text.
+///
+/// # Errors
+/// The file cannot be read.
+pub(crate) fn read_text(path: &Path) -> Result<String, Vec<Diag>> {
+    std::fs::read_to_string(path).map_err(|e| {
         vec![Diag::plain(
             "dt::source",
             format!("cannot read {}: {e}", path.display()),
         )]
-    })?;
-    dt_doc::map::decode(&path.display().to_string(), &text)
+    })
+}
+
+/// Decode `text`, which is what `path` holds (read by [`read_text`]).
+///
+/// # Errors
+/// The text does not decode: every mistake at its text.
+pub(crate) fn read_list_text(path: &Path, text: &str) -> Result<PrintList, Vec<Diag>> {
+    dt_doc::map::decode(&path.display().to_string(), text)
         .map_err(|e| e.iter().map(Diag::from).collect())
 }
 

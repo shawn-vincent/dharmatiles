@@ -360,6 +360,8 @@ pub(crate) enum Command {
     /// audit tiles for an agent).
     Mcp {
         /// Serve Streamable HTTP on this address (e.g. 127.0.0.1:8787) instead of stdio.
+        /// Loopback only: a request whose Host or Origin is not the loopback, that is not
+        /// application/json, or whose body is over 4 MiB is refused.
         #[arg(long)]
         http: Option<String>,
     },

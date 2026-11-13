@@ -207,11 +207,8 @@ impl Timings {
             .iter()
             .map(|(k, v)| format!("{k}\t{v:.4}\n"))
             .collect();
-        let tmp = path.with_extension(format!("tmp{}", std::process::id()));
-        if std::fs::write(&tmp, text).is_ok() && std::fs::rename(&tmp, path).is_err() {
-            // best-effort cleanup of the temporary file
-            let _ = std::fs::remove_file(&tmp);
-        }
+        // best effort, like the rest of this: a time not remembered is estimated again
+        let _ = crate::atomic::write_atomic(path, text);
     }
 }
 

@@ -170,15 +170,12 @@ pub fn append(home: &Path, lines: &[String]) -> Result<PathBuf, Vec<Diag>> {
             doc::new_text(&dt_doc::header::stamp(env!("CARGO_PKG_VERSION")), lines)
         }
     };
-    let tmp = home.join(format!(".{}.writing", doc::FILE));
-    let io = |what: &str, p: &Path, e: &std::io::Error| {
+    crate::atomic::write_atomic(&path, text).map_err(|e| {
         vec![Diag::plain(
             "dt::inventory",
-            format!("cannot {what} {}: {e}", p.display()),
+            format!("cannot write {}: {e}", path.display()),
         )]
-    };
-    std::fs::write(&tmp, text).map_err(|e| io("write", &tmp, &e))?;
-    std::fs::rename(&tmp, &path).map_err(|e| io("replace", &path, &e))?;
+    })?;
     Ok(path)
 }
 

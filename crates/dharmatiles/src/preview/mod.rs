@@ -44,7 +44,7 @@
 //! the finished mesh.  Errors are pushed with their file, line and column.
 
 mod assets;
-mod http;
+pub(crate) mod http;
 mod queue;
 mod route;
 

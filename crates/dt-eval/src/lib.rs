@@ -10,6 +10,7 @@
 //! definitions and defaults resolved, the edge contract read, and what
 //! needs an element not built yet set aside (see its module docs).
 
+pub mod atomic;
 mod build;
 mod cache;
 mod check;

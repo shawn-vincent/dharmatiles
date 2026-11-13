@@ -80,17 +80,19 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         return Reply::Text("403 Forbidden", "loopback only");
     }
     let tile = tile_route(&req.path);
-    // the editor's calls: this run's token, from a loopback page
-    if req.path.starts_with("/api/") && req.method == "POST" && !matches!(tile, Some((_, "build")))
-    {
+    // every POST: this run's token, from a loopback page (the build call too:
+    // a page of any other site must not make the editor build)
+    if req.path.starts_with("/api/") && req.method == "POST" {
         let origin_ok = req
             .origin
             .as_deref()
-            .is_none_or(|o| o.strip_prefix("http://").is_some_and(loopback));
+            .is_none_or(super::http::loopback_origin);
         if !origin_ok || req.token.as_deref() != Some(shared.token.as_str()) {
             return Reply::Text("403 Forbidden", "not this page");
         }
-        return edit::post(shared, &req.path, &req.body);
+        if !matches!(tile, Some((_, "build"))) {
+            return edit::post(shared, &req.path, &req.body);
+        }
     }
     let bytes = |b: Option<Arc<Vec<u8>>>, missing: &'static str| {
         b.map_or(Reply::Text("404 Not Found", missing), Reply::Bytes)

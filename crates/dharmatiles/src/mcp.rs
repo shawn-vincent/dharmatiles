@@ -35,8 +35,10 @@ pub fn run() -> u8 {
 
 /// Serve the same tools as Streamable HTTP: `POST /mcp` with one JSON-RPC
 /// message answers with its reply as `application/json` (202 for a
-/// notification). Local use: it binds where it is told and does no
-/// authentication, so give it a loopback address.
+/// notification). Local use: it binds where it is told and has no token
+/// (a configured client could not send one), so give it a loopback address;
+/// it refuses a `Host` or `Origin` that is not the loopback, a request that
+/// is not `application/json`, and a body over 4 MiB.
 pub fn serve_http(addr: &str) -> u8 {
     let listener = match std::net::TcpListener::bind(addr) {
         Ok(l) => l,
@@ -50,6 +52,14 @@ pub fn serve_http(addr: &str) -> u8 {
         std::thread::spawn(move || http_one(conn));
     }
     0
+}
+
+/// Is a `Content-Type` value `application/json` (parameters such as the charset allowed)?
+fn is_json(ctype: &str) -> bool {
+    ctype
+        .split(';')
+        .next()
+        .is_some_and(|t| t.trim().eq_ignore_ascii_case("application/json"))
 }
 
 fn http_one(mut conn: std::net::TcpStream) {
@@ -85,6 +95,7 @@ fn http_one(mut conn: std::net::TcpStream) {
         Err(e) => return bad(&mut conn, format!("cannot read the request: {e}")),
     }
     let mut len = 0usize;
+    let (mut host, mut origin, mut ctype) = (String::new(), None::<String>, String::new());
     loop {
         let mut h = String::new();
         match reader.read_line(&mut h) {
@@ -93,14 +104,61 @@ fn http_one(mut conn: std::net::TcpStream) {
             Ok(_) => {}
             Err(e) => return bad(&mut conn, format!("cannot read the request headers: {e}")),
         }
-        if let Some((k, v)) = h.split_once(':')
-            && k.eq_ignore_ascii_case("content-length")
-        {
-            match v.trim().parse() {
-                Ok(n) => len = n,
-                Err(e) => return bad(&mut conn, format!("bad Content-Length `{}`: {e}", v.trim())),
+        if let Some((k, v)) = h.split_once(':') {
+            let v = v.trim();
+            if k.eq_ignore_ascii_case("content-length") {
+                match v.parse() {
+                    Ok(n) => len = n,
+                    Err(e) => return bad(&mut conn, format!("bad Content-Length `{v}`: {e}")),
+                }
+            } else if k.eq_ignore_ascii_case("host") {
+                v.clone_into(&mut host);
+            } else if k.eq_ignore_ascii_case("origin") {
+                origin = Some(v.to_owned());
+            } else if k.eq_ignore_ascii_case("content-type") {
+                v.clone_into(&mut ctype);
             }
         }
+    }
+    // A web page must not reach this server: not by DNS rebinding (a `Host`
+    // that is not the loopback), not by a cross-site POST (browsers always
+    // send an `Origin`; an MCP client sends none), not by a "simple" request
+    // (`text/plain`, which needs no preflight).  No token: a configured
+    // client could not send one.
+    let refuse_as = |conn: &mut std::net::TcpStream, status: &str, why: &str| {
+        eprintln!("error: dharmatiles mcp: refused: {why}");
+        reply(conn, status, &error(&Value::Null, -32600, why).to_string());
+    };
+    let refuse = |conn: &mut std::net::TcpStream, why: &str| refuse_as(conn, "403 Forbidden", why);
+    if !crate::preview::http::loopback(&host) {
+        return refuse(
+            &mut conn,
+            "loopback only: the Host is not 127.0.0.1, localhost or ::1",
+        );
+    }
+    if let Some(o) = &origin
+        && !crate::preview::http::loopback_origin(o)
+    {
+        return refuse(
+            &mut conn,
+            "a web page of another site cannot call this server (its Origin is not the loopback)",
+        );
+    }
+    if !is_json(&ctype) {
+        return refuse(
+            &mut conn,
+            "the request must be Content-Type: application/json",
+        );
+    }
+    if len > crate::preview::http::MAX_BODY {
+        return refuse_as(
+            &mut conn,
+            "413 Payload Too Large",
+            &format!(
+                "the body is {len} bytes; the most read is {}",
+                crate::preview::http::MAX_BODY
+            ),
+        );
     }
     if !first.starts_with("POST /mcp") {
         reply(&mut conn, "404 Not Found", "{}");
@@ -390,5 +448,88 @@ mod tests {
         assert!(
             handle(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"})).is_none()
         );
+    }
+
+    /// One request to a real `http_one`; the status line and the body come back.
+    fn call(head: &str, body: &str) -> String {
+        use std::io::Read;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || http_one(listener.accept().unwrap().0));
+        let mut c = std::net::TcpStream::connect(addr).unwrap();
+        write!(c, "{head}\r\n{body}").unwrap();
+        let mut all = String::new();
+        c.read_to_string(&mut all).unwrap();
+        server.join().unwrap();
+        all
+    }
+
+    const PING: &str = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+
+    fn post(extra: &str, body: &str) -> String {
+        call(
+            &format!(
+                "POST /mcp HTTP/1.1\r\nContent-Length: {}\r\n{extra}",
+                body.len()
+            ),
+            body,
+        )
+    }
+
+    #[test]
+    fn http_answers_a_loopback_json_client() {
+        let r = post(
+            "Host: 127.0.0.1:8765\r\nContent-Type: application/json; charset=utf-8\r\n",
+            PING,
+        );
+        assert!(r.starts_with("HTTP/1.1 200"), "{r}");
+        let r = post(
+            "Host: localhost:1\r\nContent-Type: application/json\r\nOrigin: http://localhost:3000\r\n",
+            PING,
+        );
+        assert!(r.starts_with("HTTP/1.1 200"), "{r}");
+    }
+
+    #[test]
+    fn http_refuses_a_host_that_is_not_the_loopback() {
+        let r = post(
+            "Host: evil.example:8765\r\nContent-Type: application/json\r\n",
+            PING,
+        );
+        assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+        let r = post("Content-Type: application/json\r\n", PING);
+        assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+    }
+
+    #[test]
+    fn http_refuses_a_web_pages_origin() {
+        let r = post(
+            "Host: 127.0.0.1:1\r\nOrigin: https://evil.example\r\nContent-Type: application/json\r\n",
+            PING,
+        );
+        assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+        let r = post(
+            "Host: 127.0.0.1:1\r\nOrigin: null\r\nContent-Type: application/json\r\n",
+            PING,
+        );
+        assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+    }
+
+    #[test]
+    fn http_refuses_a_simple_request_that_is_not_json() {
+        let r = post("Host: 127.0.0.1:1\r\nContent-Type: text/plain\r\n", PING);
+        assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+        let r = post("Host: 127.0.0.1:1\r\n", PING);
+        assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+    }
+
+    #[test]
+    fn http_refuses_a_body_over_the_cap_before_reading_it() {
+        // the head names a body of 5 MiB and sends none: refused on the number alone
+        let r = call(
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:1\r\nContent-Type: application/json\r\nContent-Length: 5242880\r\n",
+            "",
+        );
+        assert!(r.starts_with("HTTP/1.1 413"), "{r}");
     }
 }

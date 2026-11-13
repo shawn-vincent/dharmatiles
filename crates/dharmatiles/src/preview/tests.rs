@@ -64,6 +64,24 @@ fn get(r: &Running, path: &str) -> (String, Vec<u8>) {
     request(r.addr, "GET", path, &r.addr.to_string())
 }
 
+/// This run's token, as the page reads it.
+fn session_token(r: &Running) -> String {
+    let v: Value = serde_json::from_slice(&get(r, "/api/session").1).unwrap();
+    v["token"].as_str().unwrap().to_owned()
+}
+
+/// `POST /api/tiles/ID/build` as the page makes it: with the token.
+fn build_post(r: &Running, id: &str) -> String {
+    post_raw(
+        r,
+        &format!("/api/tiles/{id}/build"),
+        Some(&session_token(r)),
+        None,
+        "",
+    )
+    .0
+}
+
 fn tiles(r: &Running) -> Value {
     serde_json::from_slice(&get(r, "/api/tiles").1).unwrap()
 }
@@ -250,21 +268,27 @@ fn a_library_tile_is_built_only_when_asked() {
     let r = start(&[FLAT], false);
     std::thread::sleep(Duration::from_millis(600));
     assert_eq!(tiles(&r)["tiles"][0]["status"], "idle");
+    // the build call is a POST like the rest: no token, a wrong one or a foreign page is refused
+    let path = format!("/api/tiles/{}/build", id0(&r));
+    assert!(post_raw(&r, &path, None, None, "").0.contains("403"));
     assert!(
-        request(
-            r.addr,
-            "POST",
-            &format!("/api/tiles/{}/build", id0(&r)),
-            &r.addr.to_string()
-        )
-        .0
-        .contains("202")
-    );
-    assert!(
-        request(r.addr, "POST", "/api/tiles/nope/build", &r.addr.to_string())
+        post_raw(&r, &path, Some("wrong"), None, "")
             .0
-            .contains("404")
+            .contains("403")
     );
+    let token = session_token(&r);
+    assert!(
+        post_raw(&r, &path, Some(&token), Some("http://evil.example"), "")
+            .0
+            .contains("403")
+    );
+    assert_eq!(
+        tiles(&r)["tiles"][0]["status"],
+        "idle",
+        "a refused call built nothing"
+    );
+    assert!(build_post(&r, &id0(&r)).contains("202"));
+    assert!(build_post(&r, "nope").contains("404"));
     wait_for(&r, "ready", |t| t["status"] == "ready");
 }
 
@@ -324,16 +348,7 @@ fn a_build_pushes_progress_events_that_never_go_back() {
     let mut c = TcpStream::connect(r.addr).unwrap();
     write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
     c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
-    assert!(
-        request(
-            r.addr,
-            "POST",
-            &format!("/api/tiles/{}/build", id0(&r)),
-            &r.addr.to_string()
-        )
-        .0
-        .contains("202")
-    );
+    assert!(build_post(&r, &id0(&r)).contains("202"));
     let mut fractions = Vec::new();
     for l in BufReader::new(c).lines() {
         let l = l.unwrap();
@@ -881,7 +896,7 @@ fn the_debug_layer_is_collected_only_for_a_tile_the_page_has_it_on_for() {
             &http::Request::build(
                 "POST",
                 &format!("/api/tiles/{id}/build?debug={on}"),
-                None,
+                Some(&shared.token),
                 b"",
             ),
         )
@@ -1362,16 +1377,7 @@ fn a_build_sends_sketches_as_it_goes_and_drops_them_when_done() {
             break;
         }
     }
-    assert!(
-        request(
-            r.addr,
-            "POST",
-            &format!("/api/tiles/{}/build", id0(&r)),
-            &r.addr.to_string()
-        )
-        .0
-        .starts_with("HTTP/1.1 202")
-    );
+    assert!(build_post(&r, &id0(&r)).starts_with("HTTP/1.1 202"));
     let mut sketched = 0;
     for l in lines.by_ref() {
         let l = l.unwrap();
@@ -2603,4 +2609,50 @@ mod stored {
         assert!(said.iter().any(|t| t.starts_with("Built in")), "{said:?}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
+}
+
+/// A document of the user's is written only by `dt_eval::atomic::write_atomic`
+/// (a whole file or none).  A bare `std::fs::write` or `File::create` in the
+/// preview server, or in the other writers of the user's files, fails here.
+/// (A clippy `disallowed-methods` entry cannot be scoped to one module; it
+/// would also bind the tests and every other crate.)
+#[test]
+fn atomic_only() {
+    fn rs_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                if p.file_name().is_some_and(|n| n != "tests") {
+                    rs_files(&p, out);
+                }
+            } else if p.extension().is_some_and(|x| x == "rs")
+                && p.file_name().is_some_and(|n| n != "tests.rs")
+            {
+                out.push(p);
+            }
+        }
+    }
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    rs_files(&src.join("preview"), &mut files);
+    files.push(src.join("slicers.rs"));
+    files.push(src.join("library.rs"));
+    files.push(src.join("../../dt-eval/src/inventory.rs"));
+    let mut bad = Vec::new();
+    for f in &files {
+        let text = std::fs::read_to_string(f).unwrap();
+        // the file's tests come last: only the program's own code is held to it
+        let code = text.split("#[cfg(test)]").next().unwrap();
+        for (n, line) in code.lines().enumerate() {
+            let l = line.trim_start();
+            if !l.starts_with("//") && (l.contains("fs::write(") || l.contains("File::create(")) {
+                bad.push(format!("{}:{}: {l}", f.display(), n + 1));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "write a document with dt_eval::atomic::write_atomic:\n{}",
+        bad.join("\n")
+    );
 }

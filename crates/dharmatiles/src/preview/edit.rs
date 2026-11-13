@@ -778,19 +778,14 @@ fn save(file: &str, v: &Value) -> (&'static str, Value) {
     if now == text {
         return ("200 OK", json!({ "ok": true }));
     }
-    // a whole file or none: write beside it, then rename over it
-    let tmp = format!("{file}.dt-save");
-    match std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, file)) {
+    // a whole file or none
+    match dt_eval::atomic::write_atomic(std::path::Path::new(file), text) {
         Ok(()) => ("200 OK", json!({ "ok": true })),
-        Err(e) => {
-            // best-effort cleanup of the temporary file; the write error is what is reported
-            let _ = std::fs::remove_file(&tmp);
-            fail::failure_from(
-                "500 Internal Server Error",
-                format!("cannot write {file}: {e}"),
-                &e,
-            )
-        }
+        Err(e) => fail::failure_from(
+            "500 Internal Server Error",
+            format!("cannot write {file}: {e}"),
+            &e,
+        ),
     }
 }
 

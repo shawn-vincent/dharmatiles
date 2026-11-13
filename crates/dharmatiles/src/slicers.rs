@@ -936,7 +936,7 @@ pub(crate) fn write(
                 std::fs::create_dir_all(dir)
                     .map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
             }
-            std::fs::write(&path, text)
+            dt_eval::atomic::write_atomic(&path, text)
                 .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
             out.push(Written {
                 name: n,

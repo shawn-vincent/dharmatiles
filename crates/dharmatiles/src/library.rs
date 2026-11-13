@@ -170,7 +170,7 @@ pub(crate) fn remember_target(
     let text = serde_json::json!({"system": system, "printer": printer}).to_string() + "\n";
     let file = home.join(TARGET_FILE);
     std::fs::create_dir_all(home)
-        .and_then(|()| std::fs::write(&file, text))
+        .and_then(|()| dt_eval::atomic::write_atomic(&file, text))
         .map_err(|e| {
             format!(
                 "cannot remember the build target in {}: {e}",

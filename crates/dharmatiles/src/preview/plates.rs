@@ -279,7 +279,18 @@ fn plan_for(
     path: &str,
     ov: &Overrides,
 ) -> Result<(dt_doc::map::PrintList, Plan), Box<Unplanned>> {
-    let list = cli::read_list(Path::new(path)).map_err(|e| Box::new((None, e)))?;
+    let text = cli::read_text(Path::new(path)).map_err(|e| Box::new((None, e)))?;
+    plan_from(shared, path, &text, ov)
+}
+
+/// [`plan_for`] from the text already read.
+fn plan_from(
+    shared: &Shared,
+    path: &str,
+    text: &str,
+    ov: &Overrides,
+) -> Result<(dt_doc::map::PrintList, Plan), Box<Unplanned>> {
+    let list = cli::read_list_text(Path::new(path), text).map_err(|e| Box::new((None, e)))?;
     let base = shared.options();
     let dir = Path::new(path).parent();
     let shelf = cli::shelf_for(&list, ov, shared.home.as_deref())
@@ -325,8 +336,15 @@ fn scene_messages(notes: &[Note], diags: &[Diag], id: &str, name: &str) -> Vec<M
 /// Open or rebuild a print list or a map for the page: the map's scene first
 /// (cheap: nothing is built but what the crown check looks at), then its plates.
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
-    let rev = std::fs::read_to_string(path).map_or(0, |t| dt_eval::doc::text_hash(&t));
-    let scene = cli::read_list(Path::new(path)).ok().map(|list| {
+    // one read: the revision, the scene and the plan are all of this text (a read that
+    // failed is reported by the plan, below)
+    let text = cli::read_text(Path::new(path));
+    let rev = text.as_ref().map_or(0, |t| dt_eval::doc::text_hash(t));
+    let list = text
+        .as_ref()
+        .ok()
+        .and_then(|t| cli::read_list_text(Path::new(path), t).ok());
+    let scene = list.map(|list| {
         let mut sc = scene::read(shared, path, &list, rev);
         // the scene reaches the page now, before anything is built: a map shows its pieces
         // (as boxes, then their meshes) while its plates are still being laid out
@@ -344,10 +362,16 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         }
         (list, sc)
     });
-    rebuild_plates(shared, id, path, scene.as_ref().map(|(_, s)| s));
+    rebuild_plates(shared, id, path, &text, scene.as_ref().map(|(_, s)| s));
 }
 
-fn rebuild_plates(shared: &Arc<Shared>, id: &str, path: &str, scene: Option<&Scene>) {
+fn rebuild_plates(
+    shared: &Arc<Shared>,
+    id: &str,
+    path: &str,
+    text: &Result<String, Vec<Diag>>,
+    scene: Option<&Scene>,
+) {
     let t0 = Instant::now();
     let scene_json = scene.map(|s| s.json.clone());
     let kept: Vec<Note> = scene.map_or_else(Vec::new, |s| s.notes.clone());
@@ -409,7 +433,11 @@ fn rebuild_plates(shared: &Arc<Shared>, id: &str, path: &str, scene: Option<&Sce
             }));
         });
     };
-    let (list, plan) = match plan_for(shared, path, &Overrides::default()) {
+    let planned = match text {
+        Ok(t) => plan_from(shared, path, t, &Overrides::default()),
+        Err(e) => Err(Box::new((None, e.clone()))),
+    };
+    let (list, plan) = match planned {
         Ok(x) => x,
         Err(b) => return fail_with(b.0.as_ref(), b.1, Scope::Check),
     };
@@ -776,7 +804,8 @@ fn set_word(path: &str, key: &str, value: Option<&str>) -> Result<(), String> {
             node.remove(key);
         }
     }
-    std::fs::write(path, doc.to_string()).map_err(|e| format!("cannot write {path}: {e}"))
+    dt_eval::atomic::write_atomic(std::path::Path::new(path), doc.to_string())
+        .map_err(|e| format!("cannot write {path}: {e}"))
 }
 
 /// `/api/plates/set` `{tile, key, value}`: change a word of the `plates` line
@@ -953,7 +982,7 @@ pub(super) fn export(shared: &Shared, v: &Value) -> (&'static str, Value) {
     let mut written = Vec::new();
     for (name, bytes) in &files {
         let p = out.join(name);
-        if let Err(e) = std::fs::write(&p, bytes) {
+        if let Err(e) = dt_eval::atomic::write_atomic(&p, bytes) {
             return fail::failure(
                 "500 Internal Server Error",
                 format!("cannot write {}: {e}", p.display()),

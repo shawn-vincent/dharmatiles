@@ -132,10 +132,7 @@ pub fn save_places(dir: &Path, places: &[PathBuf]) -> Result<(), String> {
     let file = places_file(dir);
     let body = json!({ "places": places.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>() });
     let text = serde_json::to_string_pretty(&body).map_err(|e| e.to_string())?;
-    // written beside, then renamed over: a crash leaves the old list, never half of one
-    let tmp = dir.join("places.json.tmp");
-    std::fs::write(&tmp, format!("{text}\n"))
-        .and_then(|()| std::fs::rename(&tmp, &file))
+    dt_eval::atomic::write_atomic(&file, format!("{text}\n"))
         .map_err(|e| format!("cannot write {}: {e}", file.display()))
 }
 

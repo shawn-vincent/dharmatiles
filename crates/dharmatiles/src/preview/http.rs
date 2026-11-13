@@ -19,7 +19,7 @@ pub(super) struct Request {
 }
 
 /// The largest request body read: a document, not a mesh.
-pub(super) const MAX_BODY: usize = 4 << 20;
+pub(crate) const MAX_BODY: usize = 4 << 20;
 /// The request line and headers, at most.
 const MAX_HEAD: u64 = 16 << 10;
 
@@ -127,13 +127,19 @@ fn unescape(s: &str) -> String {
 }
 
 /// Is `host` (a `Host` header, with its port) the loopback address?
-pub(super) fn loopback(host: &str) -> bool {
+pub(crate) fn loopback(host: &str) -> bool {
     let name = if let Some(rest) = host.strip_prefix('[') {
         rest.split(']').next().unwrap_or("")
     } else {
         host.rsplit_once(':').map_or(host, |(n, _)| n)
     };
     matches!(name, "127.0.0.1" | "localhost" | "::1")
+}
+
+/// Is `origin` (an `Origin` header) a loopback page?  A browser sends one on
+/// every cross-site `POST`; a program (an MCP client, `curl`) sends none.
+pub(crate) fn loopback_origin(origin: &str) -> bool {
+    origin.strip_prefix("http://").is_some_and(loopback)
 }
 
 /// Write a whole response; the connection closes after it.

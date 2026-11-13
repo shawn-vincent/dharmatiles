@@ -70,7 +70,7 @@ fn edit_with(
     }
     let mut extra = extra;
     extra["scene"] = scene_of(shared, &path, &new);
-    done(&path, Some(text), extra)
+    done(&path, Some(text), &new, extra)
 }
 
 fn index_of(v: &Value) -> Option<usize> {

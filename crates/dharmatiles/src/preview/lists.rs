@@ -2,8 +2,8 @@
 //!
 //! Every call is an edit of the list's text, made by `dt_doc::map` and written
 //! to the file (the worker sees it and plans the plates again), and every call
-//! that changes a list answers with `before`, the text it replaced, so the
-//! page can offer Undo (`/api/lists/restore` writes it back).  A new list is
+//! that changes a list answers with `before`, the text it replaced, and
+//! `after`, the key of the text it wrote, so the page can offer Undo (`/api/lists/restore` writes it back).  A new list is
 //! made through the places' rules like a new tile: in My tiles or a folder of
 //! a place the page names, never over a file.  A mistake in a list's text is
 //! shown as data (`{ok: false, errors}`), and nothing is written.
@@ -15,7 +15,8 @@
 //!   same seed and system has its `count` raised.
 //! - `/api/lists/count` `{list, index, count}`, `/api/lists/remove` `{list,
 //!   index}`: a piece's copies, or the piece itself.
-//! - `/api/lists/restore` `{list, text}`: Undo.
+//! - `/api/lists/restore` `{list, text, expect}`: Undo, if the file still
+//!   holds what the change wrote (`expect` is its answer's `after`); else 409.
 
 use std::path::{Path, PathBuf};
 
@@ -101,10 +102,11 @@ pub(super) fn list_path(shared: &Shared, id: &str) -> Result<String, (&'static s
 
 /// A list's text changed: written, and planned again.
 pub(super) fn write(shared: &Shared, path: &str, text: &str) -> Result<(), (&'static str, Value)> {
-    std::fs::write(path, text).map_err(|e| {
-        fail::failure(
+    dt_eval::atomic::write_atomic(std::path::Path::new(path), text).map_err(|e| {
+        fail::failure_from(
             "500 Internal Server Error",
             format!("cannot write {path}: {e}"),
+            &e,
         )
     })?;
     super::plates::again(shared, &super::tile_id(path));
@@ -120,10 +122,24 @@ pub(super) fn read(path: &str) -> Result<String, (&'static str, Value)> {
     })
 }
 
-/// What a call that changed a list answers.
-pub(super) fn done(path: &str, before: Option<String>, extra: Value) -> (&'static str, Value) {
+/// The key of a list's text: what a change answers (`after`) and Undo sends
+/// back (`expect`), so Undo can tell the file is still the one the change made.
+pub(super) fn text_key(text: &str) -> String {
+    format!("{:016x}", dt_eval::doc::text_hash(text))
+}
+
+/// What a call that changed a list answers: the text it replaced (`before`,
+/// for Undo to write back) and the key of the text it wrote (`after`, which
+/// Undo must send as `expect`).
+pub(super) fn done(
+    path: &str,
+    before: Option<String>,
+    after: &str,
+    extra: Value,
+) -> (&'static str, Value) {
     let mut v = json!({
         "ok": true, "list": super::tile_id(path), "path": path, "before": before,
+        "after": text_key(after),
     });
     if let (Some(o), Some(e)) = (v.as_object_mut(), extra.as_object()) {
         o.extend(e.clone());
@@ -173,6 +189,8 @@ pub(super) struct Put {
     pub(super) made: bool,
     pub(super) count: u32,
     pub(super) before: Option<String>,
+    /// The text the list holds now.
+    pub(super) after: String,
 }
 
 /// One more copy of `want` in the list `list` (a listed `.dmap`'s id), or in
@@ -197,6 +215,7 @@ pub(super) fn put(
             made: false,
             count,
             before: Some(text),
+            after: new,
         });
     }
     let home = edit::home(shared)?;
@@ -220,6 +239,7 @@ pub(super) fn put(
         made: true,
         count: 1,
         before: None,
+        after: text,
     })
 }
 
@@ -258,6 +278,7 @@ pub(super) fn add(shared: &Shared, v: &Value) -> (&'static str, Value) {
             done(
                 &p.path.to_string_lossy(),
                 p.before,
+                &p.after,
                 json!({"count": p.count, "made": p.made}),
             )
         }
@@ -313,32 +334,46 @@ fn edit_text(
         return diags(&e);
     }
     match write(shared, &path, &new) {
-        Ok(()) => done(&path, Some(text), json!({})),
+        Ok(()) => done(&path, Some(text), &new, json!({})),
         Err(e) => e,
     }
 }
 
-/// `/api/lists/restore`: Undo of a change, the text it replaced written back
-/// (only if it reads as a print list).
+/// `/api/lists/restore` `{list, text, expect}`: Undo of a change, the text it
+/// replaced written back (only if it reads as a print list) and only if the
+/// file still holds what the change wrote (`expect`, the `after` of its
+/// answer).  A file that changed since (another tab, a text editor) is
+/// refused with a 409 and its current text, and left as it is: Undo would
+/// lose that change.
 pub(super) fn restore(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(id), Some(text)) = (v["list"].as_str(), v["text"].as_str()) else {
-        return bad("give the list and its text");
+    let (Some(id), Some(text), Some(expect)) =
+        (v["list"].as_str(), v["text"].as_str(), v["expect"].as_str())
+    else {
+        return bad("give the list, its text and what the file holds now (expect)");
     };
     let path = match list_path(shared, id) {
         Ok(p) => p,
         Err(e) => return e,
     };
-    if let Err(e) = dt_doc::map::decode(&path, text) {
-        return diags(&e);
-    }
     let now = match read(&path) {
         Ok(t) => t,
         Err(e) => return e,
     };
+    if text_key(&now) != expect {
+        return fail::refused_with(
+            "409 Conflict",
+            "The file changed since this edit (in another tab or your text editor); Undo would lose that change.",
+            json!({ "text": now }),
+        );
+    }
+    if let Err(e) = dt_doc::map::decode(&path, text) {
+        return diags(&e);
+    }
     match write(shared, &path, text) {
         Ok(()) => done(
             Path::new(&path).to_str().unwrap_or(&path),
             Some(now),
+            text,
             // a map shows the text it has again at once
             json!({"scene": super::maps::scene_of(shared, &path, text)}),
         ),
