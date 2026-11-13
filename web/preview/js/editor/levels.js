@@ -19,14 +19,18 @@ import {
   buildHash, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, levelParams, moveRow, orderStack, parseHash, placeOf, sameLevel, sizeWords,
   standing, systemName, up as levelUp,
 } from '../nav.js';
+import { effect } from '@preact/signals-core';
 import { fillCrumbs, pinEnd } from '../crumbs.js';
+import { DeepCrumbs } from '../view/crumbs.js';
+import { html, render as renderInto } from '../view/html.js';
+import { ContextLines } from '../view/places-panel.js';
 import { levelOfParams, whereIs } from '../folders.js';
 import { byteToIndex } from '../text.js';
 import { $, toast } from './app.js';
 import { texts } from './document.js';
 import { linesOf, setSel } from './selection.js';
 import {
-  doc, entrySel, isInventory, isMapView, isMark, isPlates, itemOf, mapNode, markSel, placeAt, server, stackItems, stackIndex, tile, tileSel, view,
+  doc, entrySel, isInventory, isMapView, isMark, isPlates, itemOf, mapNode, markSel, placeAt, server, stackItems, stackIndex, stem, tile, tileSel, view,
 } from './stores.js';
 import { contextLines } from './plates.js';
 import { contextLines as mapLines } from './model.js';
@@ -132,13 +136,6 @@ export function showSourceLine(n) {
 
 // ---- drawing ---------------------------------------------------------------------
 
-const el = (tag, cls, text) => {
-  const x = document.createElement(tag);
-  if (cls) x.className = cls;
-  if (text != null) x.textContent = text;
-  return x;
-};
-
 /** What the thing at the level is called in the crumbs. */
 function thingName() {
   const { sel } = view.get();
@@ -153,26 +150,13 @@ function renderCrumbs() {
   const { roots } = server.get();
   const at = t && whereIs(roots, t);
   const place = at && roots[at.root] ? { root: at.root, label: roots[at.root].label, dir: at.dir } : null;
-  const list = crumbsFor({ place, tileName: $('tilename').textContent, sel, what: thingName(), control });
+  const list = crumbsFor({ place, tileName: t ? stem(t) : '', sel, what: thingName(), control });
   const up = at ? `${[roots[at.root]?.label, ...(at.dir ? at.dir.split('/') : [])].join(' › ')}: the folder (⌘[ from the tile)` : 'Places (⌘[ from the tile)';
   $('back').title = up;
   fillCrumbs($('crumbs-path'), list.filter((c) => c.depth === -1), (c) => { view.set({ placeAt: placeAt(c.place ? { root: c.place.root, dir: c.place.dir } : { root: null, dir: '' }), query: '', page: 'browse' }); }, { trailing: true });
   $('tilebtn').classList.toggle('cur', depth === 0 && face === 'tile');
   $('tilebtn').setAttribute('aria-current', depth === 0 ? 'location' : 'false');
-  const deep = list.filter((c) => c.depth >= 1);
-  const nodes = [];
-  for (const c of deep) {
-    const sep = el('span', 'sep', '›');
-    sep.setAttribute('aria-hidden', 'true');
-    const b = el('button', `crumb${c.current ? ' cur' : ''}`);
-    b.type = 'button';
-    b.append(el('span', '', c.label));
-    b.title = c.depth === 1 ? 'Back to this thing' : c.label;
-    if (c.current) b.setAttribute('aria-current', 'location');
-    b.onclick = () => goDepth(c.depth);
-    nodes.push(sep, b);
-  }
-  $('crumbs-deep').replaceChildren(...nodes);
+  renderInto(html`<${DeepCrumbs} crumbs=${list.filter((c) => c.depth >= 1)} go=${goDepth} />`, $('crumbs-deep'));
   // where you are is the end of the path: it stays in view when the path is longer than the bar
   pinEnd($('crumb-scroll'));
   // the first half of the switch is named for what the document is: a tile's levels, a map's plates and scene
@@ -215,7 +199,7 @@ function renderContext() {
     entry = { note: i < 0 ? sel.kind : `${sel.kind} ${i + 1} of ${list.length}` };
   }
   const lines = contextFor({ depth, tile: tileInfo, entry, thing: depth === 2 ? thingName() : '', control: control?.name, value });
-  $('ctx-lines').replaceChildren(...(isPlates(t) ? (isMapView() ? mapLines() : contextLines()) : isInventory(t) ? inventoryLines() : lines).map((l) => el('div', 'ln', l)));
+  renderInto(html`<${ContextLines} lines=${isPlates(t) ? (isMapView() ? mapLines() : contextLines()) : isInventory(t) ? inventoryLines() : lines} />`, $('ctx-lines'));
 }
 
 function focusLevel() {
@@ -292,8 +276,6 @@ function render() {
   // a print list's panel is the plates', or its source (the same switch as a tile's); the inventory's own view has its own switch
   $('stage').dataset.face = plates ? (face === 'source' ? 'source' : isMapView() ? 'map' : 'plates') : inventory ? 'inventory' : face;
   $('face').hidden = inventory;
-  renderCrumbs();
-  renderContext();
   syncAddress();
 }
 const afterSlide = (fn) => setTimeout(fn, reduced() ? 0 : SLIDE_MS + 20);
@@ -304,7 +286,8 @@ const afterSlide = (fn) => setTimeout(fn, reduced() ? 0 : SLIDE_MS + 20);
 function syncAddress() {
   const { tileId, sel, control, face } = view.get();
   const t = tile();
-  if (!started || pending || applying || !t || tileId == null) return;
+  // while the browser page shows, the address is the folder level's (places.js): the two never write it in the same moment
+  if (!started || pending || applying || !t || tileId == null || view.get().page === 'browse') return;
   const cur = parseHash(location.hash);
   const next = { ...cur };
   for (const k of ['at', 'piece', 'control', 'group', 'face', 'place', 'dir']) delete next[k];
@@ -428,12 +411,12 @@ export function init() {
   }
   $('lvl-tile').addEventListener('focusin', rowFocus);
   $('lvl-tile').addEventListener('focusout', rowBlur);
-  view.subscribe(['sel', 'control', 'tileId', 'page', 'face', 'dmode'], render);
-  // the thing's name in the crumbs and the strip follow the text
-  doc.subscribe(['stack', 'map', 'file', 'tileId', 'checked'], () => { renderCrumbs(); renderContext(); tryPending(); });
-  server.subscribe(['tiles', 'system'], () => { renderCrumbs(); renderContext(); });
+  // the panes, the stage and the address follow where you are; the crumbs and the strip follow what they say; the level
+  // asked for by an address is taken as soon as the tile has it.  Each reads what it shows, so each runs when that changes.
+  effect(() => { void view.get().page; void view.get().dmode; render(); });
+  effect(() => { renderCrumbs(); });
+  effect(() => { renderContext(); });
+  effect(() => { const d = doc.get(); void d.tileId; void d.checked; void d.text; void view.get().tileId; tryPending(); });
   addEventListener('keydown', onKey);
   addEventListener('popstate', fromAddress);
-  render();
-  tryPending();
 }
