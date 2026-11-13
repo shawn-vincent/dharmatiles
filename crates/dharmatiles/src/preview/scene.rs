@@ -435,6 +435,13 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             checked
                 .entry((tpath.clone(), seed, system.clone()))
                 .or_insert_with(|| {
+                    // a tile's size and seed, kept while its file is as it was (the reading of a map is asked often:
+                    // every edit of it); a mistake is never kept, it is found again each time
+                    let stamp = crate::watch::mtime(&tpath);
+                    let memo = (tpath.clone(), seed, system.clone(), stamp);
+                    if let Some(known) = lock(&shared.scene_checks).get(&memo) {
+                        return Ok(*known);
+                    }
                     let opts = Options {
                         system: system.clone(),
                         seed,
@@ -445,6 +452,13 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
                             .tile
                             .as_ref()
                             .map(|t| (t.cols, t.rows, c.seed))
+                            .inspect(|found| {
+                                let mut kept = lock(&shared.scene_checks);
+                                if kept.len() > 500 {
+                                    kept.clear();
+                                }
+                                kept.insert(memo, *found);
+                            })
                             .ok_or_else(|| format!("`{}` is not a tile", p.tile.value)),
                         Err(e) => Err(format!(
                             "`{}` does not check: {}",

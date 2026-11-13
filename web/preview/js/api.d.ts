@@ -140,6 +140,8 @@ type InventoryWrote = { lines: Array<string>, file: string, };
 
 type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null;
 
+type List = { ids: Array<string>, added: Array<TileSummary>, };
+
 type ListEdited = { 
 /**
  * The list's id.
@@ -338,6 +340,8 @@ print?: string | null, system?: string | null, };
 
 type PlaceAdded = { added: boolean, root: number, label: string, path: string, snapshot: Snapshot, };
 
+type Places = { roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, };
+
 type PlacesAddRes = { cancelled: boolean, } | PlaceAdded;
 
 type PlacesRemoveReq = { 
@@ -393,6 +397,20 @@ type Progress = { fraction: number, label: string, key: string,
 count: [string, number, number] | null, elapsedS: number, etaS: number | null, estimateS: number | null, };
 
 type RenameReq = { name: string, };
+
+type ResourceEvent = { 
+/**
+ * Always `resource`: the stream's event kind.
+ */
+type: string, 
+/**
+ * The stream's revision (for resuming).
+ */
+rev: number, 
+/**
+ * The resource's own revision: it rises when this resource changes and not otherwise.
+ */
+resRev: number, } & ({ "name": "places", "value": Places } | { "name": "target", "value": Target } | { "name": "printers", "value": Array<JsonValue> } | { "name": "inventory", "value": JsonValue } | { "name": "list", "value": List });
 
 type Restored = { path: string, id: string | null, tile: TileSummary | null, snapshot: Snapshot, };
 
@@ -503,6 +521,8 @@ type Snapshot = {
 type: string, rev: number, epoch: string, system: string, printer: string, printers: Array<JsonValue>, overhangDeg: number, steepestDeg: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
 
 type SystemWord = "db" | "ol";
+
+type Target = { system: string, printer: string, overhangDeg: number, steepestDeg: number, };
 
 type TargetReq = { system?: string | null, printer?: string | null, };
 

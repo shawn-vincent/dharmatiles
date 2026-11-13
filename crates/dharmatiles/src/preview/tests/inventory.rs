@@ -1084,3 +1084,100 @@ fn fresh_seeds_are_not_owned_not_on_the_map_and_not_repeated_within_an_edit() {
     );
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
 }
+
+/// What the stream says, for as long as it says anything: the events (parsed) from a stream opened now, until one
+/// that `stop` accepts.
+fn events_until(h: &Home, stop: impl Fn(&Value) -> bool) -> Vec<Value> {
+    let mut c = TcpStream::connect(h.r.addr).unwrap();
+    write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", h.r.addr).unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
+    let mut seen = Vec::new();
+    for l in BufReader::new(c).lines() {
+        let Ok(l) = l else { break };
+        let Some(data) = l.strip_prefix("data: ") else {
+            continue;
+        };
+        let v: Value = serde_json::from_str(data).unwrap();
+        let done = stop(&v);
+        seen.push(v);
+        if done {
+            break;
+        }
+    }
+    seen
+}
+
+#[test]
+fn a_change_is_told_as_the_resource_that_changed_and_not_as_the_whole() {
+    let h = start_home("resources", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
+    let first = std::thread::scope(|s| {
+        let reader =
+            s.spawn(|| events_until(&h, |v| v["type"] == "resource" && v["name"] == "places"));
+        // the stream is open once its snapshot is in; then a folder is made: that is the places, and only them
+        std::thread::sleep(Duration::from_millis(400));
+        let (head, v) = h.call(
+            "/api/folders/new",
+            serde_json::json!({"root": 0, "dir": "", "name": "dungeon"}),
+        );
+        assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+        reader.join().unwrap()
+    });
+    assert_eq!(
+        first[0]["type"], "snapshot",
+        "the stream begins with the whole"
+    );
+    let told: Vec<&Value> = first[1..]
+        .iter()
+        .filter(|v| v["type"] == "resource")
+        .collect();
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0]["name"], "places");
+    assert!(
+        told[0]["value"]["folders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["path"] == "dungeon"),
+        "{}",
+        told[0]
+    );
+    assert!(
+        first[1..]
+            .iter()
+            .all(|v| v["type"] != "snapshot" && v["name"] != "inventory" && v["name"] != "list"),
+        "a folder does not resend the inventory or the tiles"
+    );
+    // each resource has a revision of its own that rises when it changes
+    assert!(told[0]["resRev"].as_u64().unwrap() >= 1);
+}
+
+#[test]
+fn a_documents_scene_and_plates_are_of_one_revision_whenever_the_page_is_sent_them() {
+    let h = start_home("onerev", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
+    let tiles_of = |v: &Value| -> Vec<Value> {
+        match v["type"].as_str() {
+            Some("tile") => vec![v["tile"].clone()],
+            Some("snapshot") => v["tiles"].as_array().unwrap().clone(),
+            _ => vec![],
+        }
+    };
+    let map = |t: &Value| t["path"].as_str().unwrap_or("").ends_with(".dmap");
+    let planned =
+        |t: &Value| map(t) && t["status"] == "ready" && t["plan"]["plates"]["planned"] == true;
+    // every state of the map the stream sends (the whole first, then each change) names one revision for its scene and its plan
+    h.wait("town.dmap", "the plates", |t| {
+        t["plan"]["plates"]["planned"] == true
+    });
+    let seen = events_until(&h, |v| tiles_of(v).iter().any(planned));
+    let mut n = 0;
+    for v in &seen {
+        for t in tiles_of(v)
+            .iter()
+            .filter(|t| map(t) && !t["plan"]["scene"].is_null())
+        {
+            n += 1;
+            assert_eq!(t["plan"]["scene"]["docRev"], t["plan"]["docRev"]);
+        }
+    }
+    assert!(n > 0, "no state of the map was seen");
+}

@@ -61,11 +61,48 @@ export function applySnapshot(m, fromStream = false) {
   for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }
   for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
   m.tiles.forEach(followBuild);
+  // the whole, taken part by part: what is the same as what the page holds is kept as it is (the same objects), so the
+  // answer of a call that carries the whole does not make the parts that did not change be drawn again
+  const now = server.get();
+  const keep = (old, next) => (JSON.stringify(old) === JSON.stringify(next) ? old : next);
+  const held = new Map(now.tiles.map((t) => [t.id, t]));
+  const tiles = m.tiles.map((t) => keep(held.get(t.id), serverTile(t)));
   server.set({
-    tiles: m.tiles.map(serverTile), progress: progressOf(m.tiles), roots: m.roots || [], folders: m.folders || [], home: m.home ?? null,
-    system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhangDeg, steepestDeg: m.steepestDeg ?? m.overhangDeg + 10,
-    inventory: m.inventory ?? null, epoch: m.epoch, ready: true,
+    tiles: tiles.length === now.tiles.length && tiles.every((t, i) => t === now.tiles[i]) ? now.tiles : tiles,
+    progress: progressOf(m.tiles),
+    roots: keep(now.roots, m.roots || []), folders: keep(now.folders, m.folders || []), home: m.home ?? null,
+    system: m.system, printer: m.printer || 'default', printers: keep(now.printers, m.printers || []),
+    overhangDeg: m.overhangDeg, steepestDeg: m.steepestDeg ?? m.overhangDeg + 10,
+    inventory: keep(now.inventory, m.inventory ?? null), epoch: m.epoch, ready: true,
   });
+}
+
+/**
+ * One resource the program says changed (crates/dharmatiles/src/preview/resources.rs): the places, the target, the
+ * printers, the inventory or the list of tiles.  Each goes into its own part of the server store and the rest is left
+ * as it is, so a new folder does not touch the inventory and an inventory change does not touch the tiles.
+ */
+export function applyResource(m) {
+  lastRev = Math.max(lastRev, m.rev ?? -1);
+  const v = m.value;
+  switch (m.name) {
+    case 'places': server.set({ roots: v.roots, folders: v.folders, home: v.home ?? null }); break;
+    case 'target': server.set({ system: v.system, printer: v.printer, overhangDeg: v.overhangDeg, steepestDeg: v.steepestDeg }); break;
+    case 'printers': server.set({ printers: v }); break;
+    case 'inventory': server.set({ inventory: v }); break;
+    case 'list': {
+      // the tiles as they are, in the order the program says; a tile that joined comes with its state
+      const have = new Map(server.get().tiles.map((t) => [t.id, t]));
+      for (const t of v.added) { reportFailure(t); followBuild(t); have.set(t.id, serverTile(t)); }
+      const ids = new Set(v.ids);
+      for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }
+      for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
+      const { progress } = server.get();
+      server.set({ tiles: v.ids.map((id) => have.get(id)).filter(Boolean), progress: Object.fromEntries(Object.entries(progress).filter(([id]) => ids.has(id))) });
+      break;
+    }
+    default: throw new Error(`the program told a resource the page does not know: ${m.name}`);
+  }
 }
 
 /** Wire this part of the page (once, at load). */
@@ -89,6 +126,7 @@ export function init() {
     onProgress: (id, p) => server.set({ progress: { ...server.get().progress, [id]: p } }),
     onMessage: (m) => log.apply(m),
     onTier: tierReady,
+    onResource: applyResource,
     onTile: (t) => {
       reportFailure(t);
       followBuild(t);

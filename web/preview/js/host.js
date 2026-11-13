@@ -157,9 +157,10 @@ export function browserHost() {
      *   onProgress: (id: string, p: import('./api').Progress) => void,
      *   onMessage: (m: any) => void, onState: (s: 'live' | 'offline') => void,
      *   onTier?: (m: { key: string, docRev: number, error?: string | null }) => void,
+     *   onResource?: (m: any) => void,
      * }} handlers
      */
-    connect({ onSnapshot, onTile, onProgress, onMessage, onState, onTier }) {
+    connect({ onSnapshot, onTile, onProgress, onMessage, onState, onTier, onResource }) {
       /** @type {string | null} */
       let epoch = null;
       /** @type {number | null} */
@@ -176,6 +177,7 @@ export function browserHost() {
           else if (m.type === 'progress') onProgress(m.id, m.progress);
           else if (m.type === 'message') onMessage(m.message);
           else if (m.type === 'tier') onTier?.(m);
+          else if (m.type === 'resource') onResource?.(m);
         };
         es.onerror = () => { es.close(); token = null; onState('offline'); setTimeout(open, 1000); };
       };

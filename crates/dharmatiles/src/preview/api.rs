@@ -447,6 +447,7 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     use ts_rs::TS;
     all.add::<super::edit::DraftReq>();
     all.add::<ErrorBody>();
+    all.add::<super::resources::ResourceEvent>();
     routes.push_str(&format!(
         "  \"POST /api/tiles/:id/draft\": {{ req: {}; res: ArrayBuffer }};\n",
         super::edit::DraftReq::name(&all.cfg)

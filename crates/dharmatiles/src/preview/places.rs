@@ -520,13 +520,9 @@ fn leaf_name(name: &str, what: &str) -> Result<String, Reply> {
 
 // ---- the places -----------------------------------------------------------------------------
 
-/// Tell every listener the list changed, with its snapshot.
+/// Tell every listener what changed among the places, the inventory and the list (only that: see `resources`).
 pub(super) fn announce(shared: &Shared) {
-    let tiles = lock(&shared.tiles);
-    let mut ev = lock(&shared.events);
-    let rev = ev.bump(Change::List);
-    let snap = shared.snapshot_of(&tiles, rev);
-    ev.send(&snap);
+    shared.publish(false);
 }
 
 /// `POST /api/places/add`: show the chooser; the folder chosen is a place from now on.

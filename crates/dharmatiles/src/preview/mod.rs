@@ -85,6 +85,7 @@ pub(crate) mod places;
 mod placing;
 mod plates;
 mod printers;
+mod resources;
 pub(crate) mod roots;
 mod scene;
 mod server;
@@ -136,6 +137,9 @@ fn stale_mesh(rev: u64) -> (&'static str, Value) {
         |b| b.doc_rev = Some(rev),
     )
 }
+
+/// What a tile's size and seed are remembered by: its path, the seed asked, the system and its file's time.
+type SceneCheck = (String, Option<u64>, String, Option<SystemTime>);
 
 /// A tile's name for the page: 16 hex digits of a hash of its path.  The
 /// same path is the same id for as long as it is listed, and across runs.
@@ -283,8 +287,8 @@ impl Slot {
 /// What changed, as the event log remembers it.
 enum Change {
     Tile(TileId),
-    /// Tiles joined or left the list.
-    List,
+    /// A resource (places, target, printers, inventory, list) changed: see [`resources`].
+    Resource(&'static str),
 }
 
 /// The listeners and the changes they have been sent.  Every change to
@@ -296,6 +300,8 @@ struct Events {
     clients: Vec<Sender<String>>,
     /// What happened to each tile ([`crate::message`]): kept here so it is sent in step with the changes.
     messages: crate::message::Log,
+    /// What the pages were last told of each resource.
+    told: resources::Told,
 }
 
 impl Events {
@@ -377,6 +383,8 @@ pub struct Shared {
     inventory_seen: Mutex<String>,
     /// The tiers the page wants of a map's pieces, what is building and what is built ([`tiers`]).
     tier_book: Mutex<tiers::TierBook>,
+    /// A tile's size and seed as a map's piece reads them, by tile, seed, system and the file's time ([`scene`]).
+    scene_checks: Mutex<BTreeMap<SceneCheck, (u32, u32, u64)>>,
     /// The owner of each document file: its revision and its lock ([`docs`]).
     docs: docs::Docs,
 }
@@ -458,6 +466,7 @@ impl Shared {
                 log: VecDeque::new(),
                 clients: Vec::new(),
                 messages: crate::message::Log::default(),
+                told: resources::Told::default(),
             }),
             epoch: edit::token()[..12].to_owned(),
             queue: Mutex::new(queue::Queue::default()),
@@ -478,6 +487,7 @@ impl Shared {
             store: None,
             inventory_seen: Mutex::new(String::new()),
             tier_book: Mutex::new(tiers::TierBook::default()),
+            scene_checks: Mutex::new(BTreeMap::new()),
             docs: docs::Docs::default(),
         };
         me.rescan();
@@ -564,11 +574,7 @@ impl Shared {
 
     /// Tell every page the state again (the printers there are changed on disk).
     fn announce(&self) {
-        let tiles = lock(&self.tiles);
-        let mut ev = lock(&self.events);
-        let rev = ev.bump(Change::List);
-        let snap = self.snapshot_of(&tiles, rev);
-        ev.send(&snap);
+        self.publish(true);
     }
 
     /// Choose the build target: the base system and the printer (either
@@ -596,11 +602,7 @@ impl Shared {
         for t in tiles.iter_mut().filter(|t| t.status != State::Idle) {
             t.stale = true;
         }
-        let mut ev = lock(&self.events);
-        let rev = ev.bump(Change::List);
-        let snap = self.snapshot_of(&tiles, rev);
-        ev.send(&snap);
-        drop(ev);
+        self.publish_locked(&tiles, false);
         drop(tiles);
         self.queue_cv.notify_all();
         Ok(())
@@ -755,35 +757,20 @@ impl Shared {
 
     /// Every tile's state: the `/api/tiles` body and the first event.
     fn snapshot_of(&self, tiles: &[Slot], rev: u64) -> api::Snapshot {
-        let target = self.options();
+        let (target, places) = (self.target_value(), self.places_value());
         api::Snapshot {
             kind: "snapshot".to_owned(),
             rev,
             epoch: self.epoch.clone(),
             system: target.system,
-            printer: target.printer.name.clone(),
-            printers: plates::printers_json(self.home.as_deref())
-                .iter()
-                .map(api::camel_keys)
-                .collect(),
-            overhang_deg: target.printer.overhang_deg,
-            steepest_deg: target.printer.steepest_deg,
-            roots: lock(&self.roots)
-                .iter()
-                .enumerate()
-                .map(|(i, r)| r.json(i))
-                .collect(),
-            folders: lock(&self.folders)
-                .iter()
-                .flat_map(|(r, v)| {
-                    v.iter().map(move |p| api::FolderJson {
-                        root: *r,
-                        path: p.clone(),
-                    })
-                })
-                .collect(),
-            home: std::env::var("HOME").ok(),
-            inventory: api::camel_keys(&inventory::snapshot(self.home.as_deref())),
+            printer: target.printer,
+            printers: self.printers_value(),
+            overhang_deg: target.overhang_deg,
+            steepest_deg: target.steepest_deg,
+            roots: places.roots,
+            folders: places.folders,
+            home: places.home,
+            inventory: self.inventory_value(),
             tiles: tiles.iter().map(Slot::summary).collect(),
         }
     }
@@ -882,10 +869,7 @@ impl Shared {
                 || folders_changed
                 || inventory_changed;
             if changed {
-                let mut ev = lock(&self.events);
-                let rev = ev.bump(Change::List);
-                let snap = self.snapshot_of(&tiles, rev);
-                ev.send(&snap);
+                self.publish_locked(&tiles, false);
             }
             changed
         };
@@ -938,9 +922,13 @@ impl Shared {
         {
             let mut ids = Vec::new();
             let mut list = false;
+            let mut names: Vec<&'static str> = Vec::new();
             for (_, c) in ev.log.iter().filter(|(r, _)| *r > since) {
                 match c {
-                    Change::List => list = true,
+                    // tiles that joined or left: the page starts over from the whole
+                    Change::Resource("list") => list = true,
+                    Change::Resource(n) if !names.contains(n) => names.push(n),
+                    Change::Resource(_) => {}
                     Change::Tile(id) if !ids.contains(id) => ids.push(id.clone()),
                     Change::Tile(_) => {}
                 }
@@ -950,6 +938,10 @@ impl Shared {
                 // (the receiver is held here until this returns: a send cannot fail)
                 let _ = tx
                     .send(json!({"type": "resumed", "rev": rev, "epoch": self.epoch}).to_string());
+                // the last of each resource that changed since, not the whole
+                for event in Self::resource_events(&ev, &names) {
+                    let _ = tx.send(event);
+                }
                 for id in ids {
                     if let Some(t) = tiles.iter().find(|t| t.id == id) {
                         let _ = tx.send(
