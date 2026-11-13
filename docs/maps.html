@@ -67,7 +67,7 @@ plates printer="bambu/x1c-ams" {
 <tr><td><code>seed=3</code></td><td>Which variant of the tile. Left off, the piece has the tile's own seed.</td></tr>
 <tr><td><code>system="ol"</code></td><td>The piece is built for that base system, in place of the <code>plates</code> line's. A map may mix them.</td></tr>
 <tr><td><code>print=skip</code></td><td><code>missing</code> (the default), <code>always</code> or <code>skip</code>, as in a <a href="plates.html">print list</a>. A skipped piece stays on the map and is left off the plates.</td></tr>
-<tr><td><code>count=</code></td><td>Only in the tray: a placed piece is one piece. Give each copy its own line and its own place.</td></tr>
+<tr><td><code>count=</code></td><td>Only in the tray: a placed piece is one piece. <em>Place</em> on a tray line puts one copy on the map as a piece of its own (its own line, a seed you do not own) and lowers the count; <em>Place all</em> places every copy.</td></tr>
 <tr><td><code>grid cols=8 rows=5</code></td><td>The map's extent in squares, drawn as the ground's grid. A document with a <code>grid</code>, or with any placed piece, opens as a map; a new map has one.</td></tr>
 <tr><td><code>let $plinth "20dmm"</code></td><td>A name for a height, visible to every piece of the map as the standard ones are.</td></tr>
 <tr><td><code>pin p4 plate=1 at="(0mm, 120mm)" turn=90</code></td><td>Inside the <code>plates</code> line. See <a href="#pins">Pins on the plates</a>.</td></tr>

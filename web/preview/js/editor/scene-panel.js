@@ -137,7 +137,8 @@ function mapLevel(body, ro) {
     for (const p of tray) {
       const r = el('div', 'mp-tray');
       r.append(el('b', null, p.name), el('span', 'mp-n', p.count > 1 ? `× ${p.count}` : ''));
-      r.append(button('Place', () => E.place(p), { cls: 'btn', disabled: ro || p.count > 1 || !!p.error, title: p.count > 1 ? 'A count of more than one stays in the print list: give each its own piece line to place it' : 'Put it on the map at the nearest free place' }));
+      r.append(button('Place', () => E.place(p), { cls: 'btn', disabled: ro || !!p.error, title: p.count > 1 ? 'Put one copy on the map at the nearest free place, with a seed of its own' : 'Put it on the map at the nearest free place' }));
+      if (p.count > 1) r.append(button('Place all', () => E.place(p, true), { cls: 'btn', disabled: ro || !!p.error, title: `Put all ${p.count} on the map, each with a seed of its own` }));
       t.append(r);
     }
     body.append(t);

@@ -76,9 +76,21 @@ export function setWords(label, note, edits) {
 /** A piece's own words. */
 export const setPiece = (p, set, note) => setWords('Could not change the piece', note ?? `Changed ${p.name}`, [{ index: p.index, set }]);
 
+/**
+ * The pieces as the map has them now, by number.  A caller may hold pieces from a scene an earlier change
+ * replaced (a panel's buttons keep the selection they were drawn with): compared as objects, a piece would not
+ * be found among the current ones and would stand in its own way.
+ */
+const current = (ps) => {
+  const by = new Map(pieces().map((q) => [q.index, q]));
+  return ps.map((p) => by.get(p.index)).filter(Boolean);
+};
+
 /** Turn pieces a quarter (`dir` 1 clockwise, -1 counter-clockwise), each to the nearest free place its new footprint fits. */
 export function turn(ps, dir) {
-  const others = pieces().filter((q) => q.at && !ps.includes(q));
+  ps = current(ps);
+  const mine = new Set(ps.map((p) => p.index));
+  const others = pieces().filter((q) => q.at && !mine.has(q.index));
   const edits = [];
   let moved = 0;
   for (const p of ps) {
@@ -95,7 +107,8 @@ export function turn(ps, dir) {
 
 /** Put pieces down at places (squares of each piece), `moves`: [{p, x, y, rot?}]; a place taken is the nearest free one. */
 export function moveTo(moves, note) {
-  const stay = pieces().filter((q) => q.at && !moves.some((m) => m.p === q));
+  moves = moves.map((m) => ({ ...m, p: current([m.p])[0] })).filter((m) => m.p);
+  const stay = pieces().filter((q) => q.at && !moves.some((m) => m.p.index === q.index));
   const edits = [];
   let shifted = 0;
   for (const m of moves) {
@@ -111,6 +124,7 @@ export function moveTo(moves, note) {
 
 /** A copy of each piece, put next to it in the nearest free place; it starts with the same seed. */
 export function duplicate(ps) {
+  ps = current(ps);
   let taken = pieces().filter((q) => q.at);
   const steps = [];
   for (const p of ps) {
@@ -125,15 +139,49 @@ export function duplicate(ps) {
 
 /** Take pieces off the map (last first, so the numbers the rest keep stay true while it goes). */
 export function remove(ps) {
+  ps = current(ps);
   const order = [...ps].sort((a, b) => b.index - a.index);
   select([]);
   return change('Could not take the piece out', ps.length === 1 ? `Took ${ps[0].name} out` : asNote('Took out', ps.length), order.map((p) => () => host.mapsRemove({ list: listId(), index: p.index })));
 }
 
-/** A tray piece (no place yet) goes on the map at the nearest free place to the corner. */
-export function place(p) {
-  const free = M.nearestFree(pieces().filter((q) => q.at), p, { x: 0, y: 0 });
-  return setPiece(p, { at: M.atWord(free.x, free.y), rot: p.rot ?? 0 }, `Placed ${p.name}`);
+/**
+ * Tray pieces (no place yet) go on the map at the nearest free places to the corner: one copy, or `all` of a
+ * line's copies.  A line with one copy is given its place; from a line with several, each copy placed is a new
+ * piece line with a seed of its own (one you do not own, not on the map), and the tray line's count goes down.
+ * One change, one Undo.
+ */
+export function place(p, all = false) {
+  [p] = current([p]);
+  if (!p) return null;
+  const n = all ? p.count : 1;
+  let taken = pieces().filter((q) => q.at);
+  const spot = () => {
+    const f = M.nearestFree(taken, p, { x: 0, y: 0 });
+    taken = [...taken, { ...p, at: [f.x * p.sq, f.y * p.sq] }];
+    return f;
+  };
+  if (p.count <= 1) {
+    const f = spot();
+    return setPiece(p, { at: M.atWord(f.x, f.y), rot: p.rot ?? 0 }, `Placed ${p.name}`);
+  }
+  const steps = [];
+  const left = p.count - n;
+  // the tray line keeps the copies not placed; when none are left it becomes the last one placed, so its seed stays
+  if (left > 0) steps.push(() => host.listsCount({ list: listId(), index: p.index, count: left }));
+  else steps.push(() => host.listsCount({ list: listId(), index: p.index, count: 1 }));
+  const got = new Set();
+  for (let k = 0; k < (left > 0 ? n : n - 1); k++) {
+    const f = spot();
+    const seed = newSeedFor(p, got);
+    got.add(seed);
+    steps.push(() => host.mapsAdd({ list: listId(), tile: p.tile_id, at: M.atWord(f.x, f.y), rot: 0, seed, ...(p.system && p.system !== sceneNow()?.system ? { system: p.system } : {}) }));
+  }
+  if (left === 0) {
+    const f = spot();
+    steps.push(() => host.mapsSet({ list: listId(), index: p.index, set: { at: M.atWord(f.x, f.y), rot: p.rot ?? 0 } }));
+  }
+  return change('Could not place the piece', n === 1 ? `Placed ${p.name}` : `Placed ${n} × ${p.name}, each with a seed of its own`, steps);
 }
 
 // ---- seeds and variants -----------------------------------------------------------------------------
