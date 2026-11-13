@@ -79,7 +79,7 @@ export function applySnapshot(m) {
     progress: progressOf(m.tiles),
     roots: m.roots || [], folders: m.folders || [], home: m.home ?? null,
     system: m.system, printer: m.printer || 'default', printers: m.printers || [],
-    overhangDeg: m.overhangDeg, steepestDeg: m.steepestDeg ?? m.overhangDeg + 10,
+    overhangDeg: m.overhangDeg, steepestDeg: m.steepestDeg ?? m.overhangDeg + 10, squareMm: m.squareMm,
     inventory: m.inventory ?? null, epoch: m.epoch, ready: true,
   });
 }
@@ -93,7 +93,7 @@ export function applySnapshot(m) {
 export function applyResource(m) {
   switch (m.name) {
     case 'places': server.set({ roots: m.value.roots, folders: m.value.folders, home: m.value.home ?? null }); break;
-    case 'target': server.set({ system: m.value.system, printer: m.value.printer, overhangDeg: m.value.overhangDeg, steepestDeg: m.value.steepestDeg }); break;
+    case 'target': server.set({ system: m.value.system, printer: m.value.printer, overhangDeg: m.value.overhangDeg, steepestDeg: m.value.steepestDeg, squareMm: m.value.squareMm }); break;
     case 'printers': server.set({ printers: m.value }); break;
     case 'inventory': server.set({ inventory: m.value }); break;
     case 'list': {

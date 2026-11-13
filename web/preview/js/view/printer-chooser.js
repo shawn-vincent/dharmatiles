@@ -7,7 +7,7 @@
 // `scan(slicer?)` and `importFrom(body)` are the program's calls (js/host.js), `say(label, reply)` shows a failure.
 
 import { signal } from '@preact/signals-core';
-import { fitWords, groupPrinters, selectionOf, squareOf, squaresOf } from '../printers.js';
+import { fitWords, groupPrinters, selectionOf, squaresOf } from '../printers.js';
 import { html, useEffect, useRef, useState } from './html.js';
 import { Icon } from './icons.js';
 

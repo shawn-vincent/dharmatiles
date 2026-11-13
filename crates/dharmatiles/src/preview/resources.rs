@@ -46,6 +46,8 @@ pub struct Target {
     pub printer: String,
     pub overhang_deg: f64,
     pub steepest_deg: f64,
+    /// One square's side on the chosen system, mm (35 DungeonBlocks, 25.4 OpenLOCK): the page's only source for it.
+    pub square_mm: f64,
 }
 
 /// The tiles listed, in order, with the state of the ones that joined since the pages were last told.
@@ -120,6 +122,7 @@ impl Shared {
             system: t.system.clone(),
             overhang_deg: t.printer.overhang_deg,
             steepest_deg: t.printer.steepest_deg,
+            square_mm: dt_kit::Frame::for_system(&t.system, 1, 1).square_mm,
             printer: t.printer.name.clone(),
         }
     }

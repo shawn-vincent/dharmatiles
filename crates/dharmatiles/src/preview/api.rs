@@ -290,6 +290,7 @@ pub struct Snapshot {
     pub printers: Vec<Json>,
     pub overhang_deg: f64,
     pub steepest_deg: f64,
+    pub square_mm: f64,
     pub roots: Vec<RootJson>,
     pub folders: Vec<FolderJson>,
     pub home: Option<String>,

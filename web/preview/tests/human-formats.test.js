@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { dateWords, pieceLine } from '../js/inventory.js';
 import { gaugeOf } from '../js/messages.js';
-import { fitWords, squareOf, squaresOf } from '../js/printers.js';
+import { fitWords, squaresOf } from '../js/printers.js';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -24,8 +24,8 @@ test('a piece is a sentence: the count, the date, the colour, the seed', () => {
 
 test('a printer is the squares that fit its bed, for the system chosen', () => {
   const p = { bed: [220, 220], slots: 1 };
-  assert.deepEqual(squaresOf(p, squareOf('db')), [6, 6]);
-  assert.deepEqual(squaresOf(p, squareOf('ol')), [8, 8]);
+  assert.deepEqual(squaresOf(p, 35), [6, 6]);
+  assert.deepEqual(squaresOf(p, 25.4), [8, 8]);
   assert.equal(fitWords(p, 35), '6 × 6 squares · 1 colour · 220 × 220 mm');
   assert.equal(squaresOf({ bed: null }, 35), null);
 });

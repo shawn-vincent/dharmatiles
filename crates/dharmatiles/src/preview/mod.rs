@@ -787,6 +787,7 @@ impl Shared {
             printers: self.printers_value(),
             overhang_deg: target.overhang_deg,
             steepest_deg: target.steepest_deg,
+            square_mm: target.square_mm,
             roots: places.roots,
             folders: places.folders,
             home: places.home,

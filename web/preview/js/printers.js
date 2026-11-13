@@ -37,9 +37,6 @@ export function selectionOf(printers, name) {
   return { model: name, ams: false };
 }
 
-/** The side of one square in mm for a base system: 35 for DungeonBlocks, 25.4 for OpenLOCK. @param {string | null | undefined} system */
-export const squareOf = (system) => (system === 'ol' ? 25.4 : 35);
-
 /** How many whole squares fit along each side of the bed: `[6, 6]`, or null for a profile with no bed. */
 export const squaresOf = (p, square) => (p.bed ? [Math.floor(p.bed[0] / square), Math.floor(p.bed[1] / square)] : null);
 
