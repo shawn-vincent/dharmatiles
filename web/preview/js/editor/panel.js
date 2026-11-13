@@ -29,6 +29,7 @@ const viewOf = () => log.view(tileId());
 const filter = signal('all');
 const lit = signal(/** @type {number | null} */ (null));
 const model = {
+  open: computed(() => !!view.get().panel),
   view: computed(viewOf),
   filter,
   lit,

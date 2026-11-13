@@ -8,7 +8,7 @@ import { FILTERS, filterRows } from '../messages.js';
 import { CopyButton } from './copy-button.js';
 import { html, useEffect } from './html.js';
 
-const secs = (s) => (s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
+const secs = (s) => (s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
 const fmt = (x, d = 2) => Number(x).toFixed(d);
 
 export function MessageFilters({ m, act }) {
@@ -25,7 +25,7 @@ function Running({ m }) {
   const t = m.tile.value;
   const p = m.progress.value;
   const stage = !p ? 'starting' : !p.count ? p.label : p.count[2] === 0 ? `${p.label}: ${p.count[0]}` : `${p.label}: ${p.count[0]} ${p.count[1]}/${p.count[2]}`;
-  return html`<div class="msg run" id="msg-run"><i class="dot busy"></i><div class="body"><div class="line">${`Building ${t?.name ?? ''}`}</div><div class="sub">${p ? `${stage} · ${secs(p.elapsedS)} of ~${secs(p.estimateS)}` : 'starting'}</div><div class="rbar"><i style=${`width: ${p ? Math.floor(p.fraction * 100) : 0}%`}></i></div></div></div>`;
+  return html`<div class="msg run" id="msg-run"><i class="dot busy"></i><div class="body"><div class="line">${`Building ${t?.name ?? ''}`}</div><div class="sub">${p ? `${stage} · ${secs(p.elapsedS)}${p.estimateS != null ? ` of ~${secs(p.estimateS)}` : ''}` : 'starting'}</div><div class="rbar"><i style=${`width: ${p ? Math.floor(p.fraction * 100) : 0}%`}></i></div></div></div>`;
 }
 
 /** The gate's numbers as rows under the record. */
@@ -86,6 +86,7 @@ function Row({ row, m, act }) {
 }
 
 export function MessagesBody({ m, act }) {
+  if (!m.open.value) return null; // shut: nothing is drawn
   const t = m.tile.value;
   const v = m.view.value;
   const shown = filterRows(v.rows, m.filter.value);

@@ -17,7 +17,7 @@ import { Sheet } from '../view/sheet.js';
 import { ListBlock } from '../view/list-block.js';
 import { $, host, makeMine } from './app.js';
 import { edited, replaceBytes, spansUsable } from './document.js';
-import { doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
+import { setCloud, doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
 import { closeControl, openControl, showSourceAt } from './levels.js';
 import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
@@ -33,8 +33,8 @@ const sheetApi = {
   set: setControl,
   canMine: () => canMine(),
   // the top field in focus (typed in or scrubbed) selects the entry's cloud; hovered, it shows quietly
-  onField: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') view.set({ cloudSheet: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
-  onFieldHover: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') view.set({ cloudSheetHov: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
+  onField: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') setCloud({ sheet: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
+  onFieldHover: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') setCloud({ sheetHov: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
   checkValue: async (/** @type {string} */ element, /** @type {string} */ control, /** @type {string} */ typed) => {
     const r = await host.checkValue(element, control, typed);
     if (failed(`Could not check what was typed for ${control}`, r)) return null;

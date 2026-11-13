@@ -86,10 +86,7 @@ export const view = createStore({
   control: null,       // {name, group}: the control open as a level on the selected thing (js/nav.js)
   face: 'tile',        // what the panel shows: 'tile' (the levels) or 'source'
   hov: null,           // the same, under the pointer (view or text)
-  cloudText: null,     // the key of the entry whose cloud (a top= or pin) the source's caret is in
-  cloudSheet: null,    // the key of the entry whose top field has focus in the sheet
-  cloudHov: null,      // the key of the entry whose cloud is under the pointer in the source
-  cloudSheetHov: null, // the key of the entry whose top row is under the pointer in the sheet
+  cloudAt: { tile: null, text: null, sheet: null, hov: null, sheetHov: null }, // which entry's cloud (a top= or pin) is lit, for the tile `tile`: `text` the one the source's caret is in, `sheet` the one whose top field has focus in the sheet, `hov` and `sheetHov` the ones under the pointer in the source and in the sheet (the keys of entries); read with `cloudOf`
   debug: false,        // the debug layer is on (the program collects its marks only then)
   mode: 'painted',     // the view's preset
   pick: null,          // {name, animate}: a preset asked for (a fresh object each time, so asking again counts)
@@ -240,3 +237,9 @@ view.derive('place', () => {
 // The sidebar's page: the one chosen, except that with no tile shown the tile browser is the page.  Worked out, so nothing has
 // to put it back when the last tile goes.
 view.derive('page', () => (view.get().tileId == null ? 'browse' : view.get().pageAt));
+
+const NO_CLOUD = { text: null, sheet: null, hov: null, sheetHov: null };
+/** The clouds lit now: what was set for the tile shown, and nothing for any other (so a new tile starts with none, and nothing has to clear them). */
+export const cloudOf = () => { const c = view.get().cloudAt; return c.tile === view.get().tileId ? c : NO_CLOUD; };
+/** Light or put out clouds (`{text, sheet, hov, sheetHov}`: the parts to change) for the tile shown. */
+export const setCloud = (patch) => view.set({ cloudAt: { ...cloudOf(), ...patch, tile: view.get().tileId } });

@@ -16,8 +16,8 @@ import { cloudAtCaret, cloudOnLine, cloudsIn } from '../cloud.js';
 import { $, pickView, toast, viewer } from './app.js';
 import { texts, canLeave } from './document.js';
 import {
-  controlText, dirty, isMapView, log, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, sourceId, stackItems, stem,
-  tile, tileSel, view,
+  cloudOf, controlText, dirty, isMapView, log, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, sourceId, stackItems, stem,
+  setCloud, tile, tileSel, view,
 } from './stores.js';
 
 /** The entry `key` as the mesh on screen has it (`{key, label, element, what}`), or null: the view's stack, not the text's. */
@@ -150,11 +150,11 @@ const shownClouds = () => cloudsIn(texts.text, stackItems(), texts.file);
 /** The cloud the caret is in, as its stack entry. */
 function caretCloud() {
   const c = texts.text ? cloudAtCaret(shownClouds(), texts.caret().index) : null;
-  view.set({ cloudText: c ? c.key : null });
+  setCloud({ text: c ? c.key : null });
 }
 function paintCloud() {
-  const v = view.get();
-  viewer.setCloud(v.cloudSheet ?? v.cloudText, v.cloudSheetHov ?? v.cloudHov);
+  const c = cloudOf();
+  viewer.setCloud(c.sheet ?? c.text, c.sheetHov ?? c.hov);
 }
 
 /** A node a gesture just wrote, once it is in a clean check, becomes the selection. */
@@ -222,11 +222,10 @@ export function init() {
   texts.cb.onCaret = caretCloud; // on every move of the caret and every edit, not only a click or a key
   texts.cb.onHoverLine = (n) => {
     setHov(n == null ? null : entryAtLine(n, true));
-    view.set({ cloudHov: n == null ? null : cloudOnLine(texts.text, shownClouds(), n)?.key ?? null });
+    setCloud({ hov: n == null ? null : cloudOnLine(texts.text, shownClouds(), n)?.key ?? null });
   };
-  view.subscribe(['cloudText', 'cloudSheet', 'cloudHov', 'cloudSheetHov'], paintCloud);
+  view.subscribe(['cloudAt', 'tileId'], paintCloud);
   // another tile, or a stack checked again (its entries may have moved): ask the caret again
-  view.subscribe(['tileId'], () => view.set({ cloudText: null, cloudSheet: null, cloudHov: null, cloudSheetHov: null }));
   doc.subscribe(['stack', 'file', 'tileId'], caretCloud);
 
   view.subscribe(['sel', 'hov', 'shown', 'draft', 'tileId'], paintHighlight);
