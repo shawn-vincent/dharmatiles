@@ -90,7 +90,7 @@ const buttons = {
     const b = await act('Could not reprint', () => host.inventoryReprint({ tile: p.tile, seed: p.seed, system: p.system, colour: p.colour, list: list || null, docRev: list ? docs.get(list)?.docRev : undefined }));
     if (!b) return;
     edit(() => ({ reprint: null }));
-    toast(`${b.made ? 'Made' : 'Added it to'} ${b.list.split(/[\\/]/).pop()}${b.warning ? `. ${b.warning}` : ''}`, () => import('./open.js').then(({ select }) => select(b.id).then(() => view.set({ page: 'edit' }))), { label: 'Open', ms: b.warning ? 12000 : 7000 });
+    toast(`${b.made ? 'Made' : 'Added it to'} ${b.list.split(/[\\/]/).pop()}${b.warning ? `. ${b.warning}` : ''}`, () => import('./open.js').then(({ select }) => select(b.id).then(() => view.set({ pageAt: 'edit' }))), { label: 'Open', ms: b.warning ? 12000 : 7000 });
   },
   relink: async (/** @type {any} */ g, /** @type {string} */ id, /** @type {string} */ label) => {
     const b = await act('Could not re-link', () => host.inventoryRelink({ from: g.tile, to: id, on: today() }));

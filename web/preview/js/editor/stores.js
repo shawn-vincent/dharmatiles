@@ -98,7 +98,7 @@ export const view = createStore({
   shown: null,         // {id, epoch, version}: the build's mesh the view holds
   draft: null,         // {tileId, payload}: a draft shown in its place
   source: null,        // the id of the source document the text pane should show (`tile#file`, see `sourceId`); null: the tile's own
-  page: 'browse',      // the sidebar's page: the tile browser, or the editor ('edit')
+  pageAt: 'browse',    // the sidebar's page the user chose: the tile browser, or the editor ('edit'); `page` is derived from it below
   // dmode (a .dmap's mode: 'map' or 'plates'; null: not a .dmap, or its plan has not come) is derived, in editor/mode.js
   msel: [],            // the pieces selected on the map (their ids: editor/scene.js `selected()` reads the ones the map has now)
   mprop: null,         // the property open as a level on the selected piece: 'bottom' | 'seed' | 'print' (editor/scene-panel.js)
@@ -236,3 +236,7 @@ view.derive('place', () => {
   while (l.root != null && !levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) { const up = parentLevel(l); l = levelNamed(up.root, up.dir); }
   return l;
 });
+
+// The sidebar's page: the one chosen, except that with no tile shown the tile browser is the page.  Worked out, so nothing has
+// to put it back when the last tile goes.
+view.derive('page', () => (view.get().tileId == null ? 'browse' : view.get().pageAt));

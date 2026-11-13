@@ -44,7 +44,7 @@ export async function renameTile(t, name) {
   carryHistory();
   const id = r.body.id, here = levelSnapshot();
   // the old name leaves the list as the new one joins: for a moment no tile is shown, and the panel went to its folder
-  if (await whenListed(id)) { await select(id, true); restoreLevel(here); if (editing) view.set({ page: 'edit' }); }
+  if (await whenListed(id)) { await select(id, true); restoreLevel(here); if (editing) view.set({ pageAt: 'edit' }); }
   return { ok: true, id };
 }
 
@@ -178,7 +178,7 @@ export function init() {
       return;
     }
     $('new-dialog').close();
-    if (await whenListed(r.body.id) && (await select(r.body.id, true)) !== false) view.set({ page: 'edit' });
+    if (await whenListed(r.body.id) && (await select(r.body.id, true)) !== false) view.set({ pageAt: 'edit' });
   };
   $('tilebtn').ondblclick = (e) => { e.preventDefault(); startRename(); };
   addEventListener('keydown', (e) => {

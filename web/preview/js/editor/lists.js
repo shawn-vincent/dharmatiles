@@ -33,7 +33,7 @@ export const lists = () => server.get().tiles.filter((t) => /\.dmap$/i.test(t.pa
 async function openId(id, mode = null) {
   const { select } = await import('./open.js');
   if (mode) { const t = server.get().tiles.find((x) => x.id === id); if (t) (await import('./scene.js')).setChosen(t.path, mode); }
-  if ((await select(id)) !== false) view.set({ page: 'edit' });
+  if ((await select(id)) !== false) view.set({ pageAt: 'edit' });
 }
 
 /** A call that edits a list: the program's refusal shown, the success returned; null when it did not go through. */

@@ -64,7 +64,7 @@ const take = (r) => { if (r.body?.snapshot) applySnapshot(r.body.snapshot); };
 /** Show the folder level `next` (Places for null), on the browser page. */
 export function goTo(next, { focus = false } = {}) {
   const to = next || TOP;
-  view.set({ placeAt: placeAt(to), query: '', page: 'browse' });
+  view.set({ placeAt: placeAt(to), query: '', pageAt: 'browse' });
   if (focus) requestAnimationFrame(() => focusRow());
 }
 
@@ -112,7 +112,7 @@ function fromAddress() {
   if (!lv) return;
   if (lv.missing) { toast('That place is not on the list now'); goTo(TOP); return; }
   lastWritten = keyOf(lv);
-  view.set({ placeAt: placeAt(lv), query: '', page: 'browse' });
+  view.set({ placeAt: placeAt(lv), query: '', pageAt: 'browse' });
 }
 
 // ---- drawing ---------------------------------------------------------------------------------------------
@@ -187,8 +187,8 @@ function BrowserLevels() {
 // ---- opening a tile -------------------------------------------------------------------------------------------
 
 async function openTile(id) {
-  if (id === view.get().tileId) { view.set({ page: 'edit' }); return; }
-  if ((await select(id)) !== false) view.set({ page: 'edit' });
+  if (id === view.get().tileId) { view.set({ pageAt: 'edit' }); return; }
+  if ((await select(id)) !== false) view.set({ pageAt: 'edit' });
 }
 
 // ---- the actions ------------------------------------------------------------------------------------------------
@@ -208,7 +208,7 @@ async function followOpen(path, here, editing) {
   if (!t) return;
   await select(t.id, true);
   restoreLevel(here);
-  if (editing) view.set({ page: 'edit' });
+  if (editing) view.set({ pageAt: 'edit' });
 }
 
 /** Rename tile `t` (the open one keeps its level). */
@@ -270,7 +270,7 @@ async function undoTrash(n, name, reopen) {
   const r = await host.undoTrash(n);
   if (r.status !== 200) { refusal(`Could not put ${name} back`, r); return; }
   take(r);
-  if (reopen && r.body.id && (await whenListedWhere((x) => x.id === r.body.id))) { await select(r.body.id, true); view.set({ page: 'edit' }); }
+  if (reopen && r.body.id && (await whenListedWhere((x) => x.id === r.body.id))) { await select(r.body.id, true); view.set({ pageAt: 'edit' }); }
 }
 
 async function trashFolder(root, dir) {
@@ -477,12 +477,12 @@ export function init() {
     if (e.key === 'Escape') {
       e.preventDefault(); e.stopPropagation();
       if (view.get().query) { view.set({ query: '' }); return; }
-      if (tile()) view.set({ page: 'edit' }); else goUpFolder();
+      if (tile()) view.set({ pageAt: 'edit' }); else goUpFolder();
       return;
     }
     if (e.key === 'Enter') $('folder').querySelector('.orow[data-kind="tile"], .orow')?.click();
   };
-  $('forward').onclick = () => { if (tile()) view.set({ page: 'edit' }); };
+  $('forward').onclick = () => { if (tile()) view.set({ pageAt: 'edit' }); };
   bind();
   view.subscribe(['page'], () => {
     // coming back to the browser, the filter has the keyboard

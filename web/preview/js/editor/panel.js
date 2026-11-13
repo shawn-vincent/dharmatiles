@@ -43,7 +43,7 @@ const model = {
 
 /** Show line `line` of `file` (null: the tile's own) in the source: the panel turns to it. */
 async function showLine(file, line) {
-  view.set({ page: 'edit' });
+  view.set({ pageAt: 'edit' });
   await openFile(file, null);
   showSourceLine(line);
 }

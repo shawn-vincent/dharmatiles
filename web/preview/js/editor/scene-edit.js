@@ -193,7 +193,7 @@ export async function openTile(id) {
   const p = pieceAt(id);
   if (!p?.tileId) return;
   const { select: open } = await import('./open.js');
-  if ((await open(p.tileId)) !== false) view.set({ page: 'edit' });
+  if ((await open(p.tileId)) !== false) view.set({ pageAt: 'edit' });
 }
 
 /** May the map be changed here (a file of yours, not the library's)? */

@@ -153,7 +153,7 @@ function renderCrumbs() {
   const list = crumbsFor({ place, tileName: t ? stem(t) : '', sel, what: thingName(), control });
   const up = at ? `${[roots[at.root]?.label, ...(at.dir ? at.dir.split('/') : [])].join(' › ')}: the folder (⌘[ from the tile)` : 'Places (⌘[ from the tile)';
   $('back').title = up;
-  fillCrumbs($('crumbs-path'), list.filter((c) => c.depth === -1), (c) => { view.set({ placeAt: placeAt(c.place ? { root: c.place.root, dir: c.place.dir } : { root: null, dir: '' }), query: '', page: 'browse' }); }, { trailing: true });
+  fillCrumbs($('crumbs-path'), list.filter((c) => c.depth === -1), (c) => { view.set({ placeAt: placeAt(c.place ? { root: c.place.root, dir: c.place.dir } : { root: null, dir: '' }), query: '', pageAt: 'browse' }); }, { trailing: true });
   $('tilebtn').classList.toggle('cur', depth === 0 && face === 'tile');
   $('tilebtn').setAttribute('aria-current', depth === 0 ? 'location' : 'false');
   renderInto(html`<${DeepCrumbs} crumbs=${list.filter((c) => c.depth >= 1)} go=${goDepth} />`, $('crumbs-deep'));
@@ -350,7 +350,7 @@ function fromAddress() {
     import('./open.js').then(({ select }) => select(t.id)).then((ok) => { if (ok !== false) wantLevel(want); });
     return;
   }
-  view.set({ page: 'edit' });
+  view.set({ pageAt: 'edit' });
   wantLevel(want);
 }
 
@@ -363,7 +363,7 @@ function onKey(e) {
   if (mod && (e.key === '[' || e.key === ']') && view.get().face === 'tile') {
     if (!editing()) {
       e.preventDefault();
-      if (e.key === ']') { if (tile()) view.set({ page: 'edit' }); } else $('bback').click(); // up a folder level
+      if (e.key === ']') { if (tile()) view.set({ pageAt: 'edit' }); } else $('bback').click(); // up a folder level
       return;
     }
     e.preventDefault();

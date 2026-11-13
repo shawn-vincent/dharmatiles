@@ -110,10 +110,10 @@ function pickMode(mode) {
   const t = server.get().tiles.find((x) => x.path === path);
   if (t) {
     if (mode !== 'tile') setChosen(t.path, mode);
-    view.set({ tileId: t.id, page: 'edit', sel: null, control: null });
+    view.set({ tileId: t.id, pageAt: 'edit', sel: null, control: null });
     return;
   }
-  view.set({ page: 'browse' });
+  view.set({ pageAt: 'browse' });
   toast(mode === 'map' ? 'Choose a map (.dmap) from a folder.' : mode === 'plates' ? 'Choose a print list (.dmap) from a folder.' : 'Choose a tile.');
 }
 
