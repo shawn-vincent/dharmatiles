@@ -128,6 +128,5 @@ export function init() {
   server.subscribe(['tiles', 'live', 'epoch'], showBuild);
   view.subscribe(['debug', 'tileId'], syncMarks);
   server.subscribe(['live', 'epoch'], syncMarks);
-  const user = viewer.onUserViewChange;
-  viewer.onUserViewChange = () => { following = null; user?.(); };
+  viewer.onUserViewChangeHook(() => { following = null; });
 }

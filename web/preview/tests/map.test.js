@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BUDGET, atWord, bounds, chooseTiers, footprint, freshSeed, bottomWords, matrixOf, nearestFree, overlaps, ownedSeeds, pills, snapSquares, tierCounts, toWorld, totals, totalsText, turned, wantedTier,
+  BUDGET, atWord, bounds, chooseTiers, footprint, freshSeed, bottomWords, matrixOf, nearestFree, overlaps, ownedSeeds, pills, snapSquares, staleKeys, tierCounts, toWorld, totals, totalsText, turned, wantedTier,
 } from '../js/map-model.js';
 
 const piece = (over = {}) => ({
@@ -152,4 +152,12 @@ test('words for a piece’s level and its turn', () => {
   assert.equal(bottomWords(piece({ bottom: '20dmm' }), names), '20dmm');
   assert.equal(turned(270, 1), 0);
   assert.equal(turned(0, -1), 270);
+});
+
+test('a scene lets go of the geometry none of its pieces uses', () => {
+  const held = new Map([['a|1', 1], ['b|2', 2], ['c|3', 3]]);
+  const ps = [{ gkey: 'a|1' }, { gkey: null }, { gkey: 'a|1' }, { gkey: 'c|3' }];
+  assert.deepEqual(staleKeys(held.keys(), ps), ['b|2']);
+  assert.deepEqual(staleKeys(held.keys(), []), ['a|1', 'b|2', 'c|3'], 'an empty map keeps nothing');
+  assert.deepEqual(staleKeys([], ps), []);
 });

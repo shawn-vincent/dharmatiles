@@ -182,6 +182,16 @@ export const BUDGET = 900_000;
 /** A piece smaller than LOW_PX on screen (its longer side, CSS px) is drawn super-low; under FULL_PX, low; else full. */
 export const LOW_PX = 48, FULL_PX = 260;
 /** What a tier costs before it is known, triangles (the program's budgets: super-low 12 000, low about 60 000). */
+/**
+ * The geometry keys held that no piece of the scene uses: what the page lets go of when a scene arrives
+ * (a piece moved to another seed, tile build or printer, or left the map, leaves its old mesh behind).
+ * `held` is the keys kept, `pieces` the scene's (each with its `gkey`, null for one with no mesh).
+ */
+export function staleKeys(held, pieces) {
+  const used = new Set(pieces.map((p) => p.gkey).filter(Boolean));
+  return [...held].filter((k) => !used.has(k));
+}
+
 export const GUESS = { 'super-low': 12_000, low: 60_000, full: 350_000 };
 
 /** The tier a piece of `px` pixels wants: its own size, never more than `cap`. */

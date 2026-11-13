@@ -119,7 +119,7 @@ export function init() {
     note: (text) => { const h = $('hint'); h.textContent = text; h.style.display = 'block'; h.style.left = '12px'; h.style.top = '56px'; setTimeout(() => { h.style.display = 'none'; }, 2600); },
   });
   $('tool').querySelector('button').onclick = () => tools.stop();
-  viewer.onRender = () => drawOverlay();
+  viewer.onRenderHook(drawOverlay);
   // the map follows the text's last good check and the selection; the ground's heights, the mesh shown
   doc.subscribe(['map', 'tileId'], drawOverlay);
   view.subscribe(['sel', 'hov', 'tileId'], () => { tools.paint(); drawOverlay(); });

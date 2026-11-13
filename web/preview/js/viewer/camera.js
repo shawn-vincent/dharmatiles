@@ -34,7 +34,7 @@ export const cameraMethods = {
     this.controls.enableRotate = this.orbit !== false;
     let userMoving = false;
     this.controls.addEventListener('change', () => {
-      if (userMoving) this.onUserViewChange?.();
+      if (userMoving) this.userViewHooks.run();
       this.sample();
       this.draw();
     });

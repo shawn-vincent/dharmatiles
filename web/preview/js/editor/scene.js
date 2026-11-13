@@ -131,6 +131,7 @@ function sync() {
   }
   if (!mounted || mountedPath !== t.path) mount(t, sc);
   const ps = augment(sc);
+  release(ps);
   sceneStore.set({ pieces: ps, scene: sc });
   // a piece that is gone leaves the selection
   const live = new Set(ps.map((p) => p.index));
@@ -195,6 +196,17 @@ function request(ps) {
   }
 }
 
+/** Let go of the geometry no piece of the scene uses any more: the page's record, its queued and the viewer's meshes. */
+function release(ps) {
+  const stale = new Set(M.staleKeys(geoms.keys(), ps));
+  if (!stale.size) return;
+  for (const g of stale) {
+    for (const tier of geoms.get(g).tiers.keys()) viewer.dropSceneGeometry(gidOf(g, tier));
+    geoms.delete(g);
+  }
+  for (let i = queue.length - 1; i >= 0; i--) if (stale.has(queue[i].gkey)) queue.splice(i, 1);
+}
+
 function entry(gkey) {
   let e = geoms.get(gkey);
   if (!e) { e = { tiers: new Map(), asked: new Set(), failed: new Set() }; geoms.set(gkey, e); }
@@ -223,12 +235,13 @@ function pump() {
 }
 
 async function run({ p, tier, gkey }) {
-  const e = entry(gkey);
+  const e = geoms.get(gkey);
+  if (!e) return; // let go of while it waited
   try {
     const buf = await host.fetchTier(p.tile_id, { tier, seed: p.seed ?? undefined, system: p.system, printer: sceneNow()?.printer });
     const payload = parsePayload(buf);
     // the tile moved on while it came (another build, another map): what came is not kept
-    if (!geoms.has(gkey)) return;
+    if (geoms.get(gkey) !== e) return;
     e.tiers.set(tier, { tris: payload.triangles, checked: payload.meta.checked !== false, failures: payload.meta.failures ?? [] });
     viewer.setSceneGeometry(gidOf(gkey, tier), payload);
     evaluate(true);
@@ -430,8 +443,7 @@ export function init() {
   c.addEventListener('pointerup', onPointerUp);
   c.addEventListener('pointermove', onPointerMove);
   c.addEventListener('pointerleave', () => hover(-1));
-  const prev = viewer.onRender;
-  viewer.onRender = () => { prev?.(); cameraMoved(); drawTags(); };
+  viewer.onRenderHook(() => { cameraMoved(); drawTags(); });
   try { pillsOn = localStorage.getItem('dt-pills') !== '0'; } catch { /* private mode: the default stands */ }
   $('t-pills').checked = pillsOn;
   $('t-pills').onchange = (e) => { pillsOn = e.target.checked; try { localStorage.setItem('dt-pills', pillsOn ? '1' : '0'); } catch { /* private mode */ } viewer.draw(); };

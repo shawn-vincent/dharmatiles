@@ -238,7 +238,7 @@ export function init() {
   }
   view.subscribe(['dmode', 'tileId'], applyBackdrop);
   renderViewShortcuts();
-  viewer.onUserViewChange = () => view.set({ activeView: null });
+  viewer.onUserViewChangeHook(() => view.set({ activeView: null }));
   view.subscribe(['pick'], ({ pick }) => applyPick(pick));
   view.subscribe(['activeView'], ({ activeView }) => showActiveView(activeView));
   view.subscribe(['popover'], renderPopovers);

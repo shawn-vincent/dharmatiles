@@ -13,7 +13,7 @@ import { say } from './inventory.js';
 import { isMapView, server, tile, view } from './stores.js';
 import { pieceAt, pieces, sceneNow, selected, takeScene, select } from './scene.js';
 
-/** The edits made, newest last: [{list, before}], for ⌘Z. */
+/** The edits made, newest last: [{list, before, after}], for ⌘Z.  `after` is the key of the text the edit wrote. */
 const undone = [];
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -31,17 +31,21 @@ async function call(label, run) {
   } catch (e) { showError(label, e); return null; }
 }
 
-/** The text a change replaced is written back (Undo). */
-export async function restore(list, before) {
-  const r = await call('Could not undo', () => host.listsRestore({ list, text: before }));
+/**
+ * The text a change replaced is written back (Undo), if the file still holds what the change wrote (`expect`):
+ * a file changed since (another tab, a text editor) is refused and the refusal shown.  True when it was undone.
+ */
+export async function restore(list, before, expect) {
+  const r = await call('Could not undo', () => host.listsRestore({ list, text: before, expect }));
   if (r?.scene) takeScene(r.scene);
+  return !!r;
 }
 
 /** ⌘Z on the map: the last change taken back.  False when there is none. */
 export async function undoLast() {
   const u = undone.pop();
   if (!u) return false;
-  await restore(u.list, u.before);
+  await restore(u.list, u.before, u.after);
   return true;
 }
 
@@ -59,8 +63,14 @@ async function change(label, note, steps) {
   }
   if (!last) return null;
   takeScene(last.scene);
-  undone.push({ list: first.list, before: first.before });
-  toast(note, () => { undone.pop(); restore(first.list, first.before); });
+  const entry = { list: first.list, before: first.before, after: last.after };
+  undone.push(entry);
+  toast(note, async () => {
+    // this change's own entry leaves the ⌘Z stack, and only when it was undone
+    if (!(await restore(entry.list, entry.before, entry.after))) return;
+    const i = undone.indexOf(entry);
+    if (i >= 0) undone.splice(i, 1);
+  });
   return last;
 }
 

@@ -29,9 +29,9 @@ async function call(label, run) {
   } catch (e) { showError(label, e); return null; }
 }
 
+/** Undo of a pin change: written back only if the file still holds what the change wrote (`b.after`). */
 async function undo(b) {
-  const r = await call('Could not undo', () => host.listsRestore({ list: b.list, text: b.before }));
-  void r;
+  await call('Could not undo', () => host.listsRestore({ list: b.list, text: b.before, expect: b.after }));
 }
 
 /** Pin the piece (list index `index`) at `x`, `y` (the footprint's north-west corner from the bed's, mm) on plate `plate` (from 1). */
@@ -129,7 +129,6 @@ export function init() {
   addEventListener('pointermove', onMove);
   addEventListener('pointerup', onUp);
   addEventListener('pointercancel', onUp);
-  const prev = viewer.onRender;
-  viewer.onRender = () => { prev?.(); drawTags(); };
+  viewer.onRenderHook(drawTags);
   view.subscribe(['dmode', 'tileId'], () => { viewer.setGhostRect(null); viewer.draw(); });
 }

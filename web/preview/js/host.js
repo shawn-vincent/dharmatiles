@@ -195,7 +195,7 @@ export function browserHost() {
     async build(id, { debug } = {}) {
       let r;
       const q = typeof debug === 'boolean' ? `?debug=${debug ? 1 : 0}` : '';
-      try { r = await netFetch(tile(id, `build${q}`), { method: 'POST' }); } catch (e) {
+      try { r = await netFetch(tile(id, `build${q}`), { method: 'POST', headers: { 'X-DT-Token': await session() } }); } catch (e) {
         if (offline(e)) return; // offline: asked again on reconnect
         throw e;
       }

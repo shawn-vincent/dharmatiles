@@ -33,11 +33,13 @@ async function openId(id, mode = null) {
   if ((await select(id)) !== false) view.set({ page: 'edit' });
 }
 
+// Undo writes `before` back only if the file still holds what the change wrote (`after`, the change's own
+// answer); a file changed since (another tab, a text editor) is refused by the program and the refusal shown.
 async function undoTo(r) {
   if (r.before == null) return;
-  const u = await host.listsRestore({ list: r.list, text: r.before });
-  if (u.status !== 200) failed('Could not undo', u);
-  else if (u.body.ok === false) say(u.body, 'Could not undo');
+  const u = await host.listsRestore({ list: r.list, text: r.before, expect: r.after });
+  if (u.status === 200) { if (u.body.ok === false) say(u.body, 'Could not undo'); return; }
+  if (u.status !== 0 && !failed('Could not undo', u)) toast(`Could not undo: ${u.body?.error ?? 'refused'}`, null, { ms: 9000 });
 }
 
 /** A call that edits a list: the program's refusal shown, the success returned; null when it did not go through. */

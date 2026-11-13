@@ -9,12 +9,15 @@ import { fadeMethods } from './viewer/fade.js';
 import { layersMethods } from './viewer/layers.js';
 import { sceneMethods } from './viewer/scene.js';
 import { Backdrop } from './viewer/backdrop.js';
+import { hookSet } from './hooks.js';
 
 export { VIEWS } from './viewer/consts.js';
 
 export class Viewer {
   constructor(canvas) {
     this.canvas = canvas;
+    this.renderHooks = hookSet();
+    this.userViewHooks = hookSet();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setClearColor(0x000000, 0); // the plate is the page's backdrop behind the canvas
     this.scene = new THREE.Scene();
@@ -306,8 +309,19 @@ export class Viewer {
     this.uniforms.uL2.value.copy(dirv(elev - 20, azim + 110));
     this.renderScene();
     this.renderOutline();
-    this.onRender?.();
+    this.renderHooks.run();
   }
+
+  /** `fn()` after every draw; the result removes it.  Every part that draws over the view adds its own. */
+  onRenderHook(fn) { return this.renderHooks.add(fn); }
+
+  /** `fn()` when the person moves the view (not when the program does); the result removes it. */
+  onUserViewChangeHook(fn) { return this.userViewHooks.add(fn); }
+
+  // The one-slot properties these hooks replaced: assigning one would drop the others, so it is an error.
+  set onRender(_) { throw new Error('viewer.onRender is gone: add a hook with viewer.onRenderHook(fn)'); }
+
+  set onUserViewChange(_) { throw new Error('viewer.onUserViewChange is gone: add a hook with viewer.onUserViewChangeHook(fn)'); }
 
   /** The tile's own mesh (and what stands on it) does not show under a map's pieces. */
   hideTileMesh() {
