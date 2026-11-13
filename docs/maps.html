@@ -102,12 +102,12 @@ plates printer="bambu/x1c-ams" {
 <h2 id="backdrop">The backdrop</h2>
 <p>The tiles stand on the ground, never in the air. The <em>Backdrop</em> row of the <kbd>⋯</kbd> menu chooses the place; the choice is yours, kept in this browser, and used for the map and for the tile editor alike. It is never in a map or a tile: a backdrop cannot change what prints.</p>
 <ul>
-<li><strong>Wilderness</strong> (the default): a mottled green ground with a faint grid, under a horizon of distant blue-grey mountains, sky and cloud. In the dark theme it is evening.</li>
+<li><strong>Wilderness</strong> (the default): a mottled green ground with a faint grid, under a horizon of distant blue-grey mountains and a clear sky. In the dark theme it is evening.</li>
 <li><strong>Cavern</strong>: a dark rock floor and walls all round, with a warm light over the tiles.</li>
 <li><strong>Table</strong>: a wooden tabletop under the tiles, a dim room beyond its edge.</li>
 <li><strong>Plain</strong>: the plate colour and the grid, as the tile view has always looked.</li>
 </ul>
-<p>The map's ground is at zero, and whatever of a piece is below it (the connector at a bottom of 0) is hidden by it, seen from above, from the side and from underneath alike. Each piece casts a soft shadow on it. The plates keep the printer's bed whatever you chose. Desert, Jungle, Swamp and Town come later.</p>
+<p>The map's ground is at zero, and it is solid. From above it hides whatever of a piece is below it (the connector at a bottom of 0); from underneath it is earth (soil under the meadow, rock in the cavern, the underside of the table) and hides what stands on it, and below the horizon the world is dark. The tile editor's ground, at the tile's lowest point, is solid the same way: choose <em>Plain</em> to look at a tile's underside. Each piece casts a soft shadow on it. The plates keep the printer's bed whatever you chose. Desert, Jungle, Swamp and Town come later.</p>
 
 <h2 id="detail">Detail by distance</h2>
 <p>Every piece is the real mesh of its tile, so a table of forty pieces is drawn from three tiers (see <a href="preview.html#cache">the cache</a>): <em>super-low</em> (about 12 000 triangles) far away, <em>low</em> (about 15 000 to 100 000) in the middle, and <em>full</em> close up and for what you look at. The tier is chosen by the piece's size on screen (under about 50 pixels, super-low; under about 260, low; else full), and the map as a whole is held under 900 000 triangles by lowering the pieces that are smallest on screen first. Twelve copies of one tile at one seed are one mesh.</p>

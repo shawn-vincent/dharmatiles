@@ -44,17 +44,18 @@ export const sceneMethods = {
     };
     this.sceneSel = new Set();
     this.sceneHov = -1;
-    // The map's ground hides what is below it: a plane at the ground, front side up, drawn first into depth only
-    // (the backdrop is its own pass), so a camera that orbits underneath still sees everything.
+    // The ground is solid: a plane at the ground drawn first into depth only (the backdrop is its own pass, and
+    // paints it), both sides, so from above it hides what is below it (a connector at bottom 0) and from below it
+    // hides what stands on it (seen from underground you see the earth, never a tile's top through it).
     this.groundMask = new THREE.Mesh(
       new THREE.PlaneGeometry(2e5, 2e5),
-      new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, side: THREE.FrontSide }),
+      new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, side: THREE.DoubleSide }),
     );
     this.groundMask.renderOrder = -1;
     this.groundMask.frustumCulled = false;
     this.groundMask.position.z = GROUND_MASK_Z;
     this.groundMask.visible = false;
-    this.sceneGroup.add(this.groundMask);
+    this.scene.add(this.groundMask); // the map's and the tile editor's alike, so not in the map's group
     this.scene.add(this.sceneGroup);
     this.pickScene.add(this.scenePickGroup);
     this.maskScene.add(this.sceneMaskGroup);
@@ -143,7 +144,7 @@ export const sceneMethods = {
    * connector shows while it is edited; a plate keeps the bed.
    */
   placeGround() {
-    this.groundMask.visible = this.sceneOn && this.backdrop.on();
+    this.groundMask.visible = false;
     if (!this.backdrop.on()) return;
     let z = 0, box = null, sq = 35;
     const rects = [];
@@ -179,7 +180,10 @@ export const sceneMethods = {
       z = -7;
     }
     if (!box) return;
-    this.backdrop.setGround(box, sq, this.sceneOn ? GROUND_MASK_Z : z - 0.05);
+    const gz = this.sceneOn ? GROUND_MASK_Z : z - 0.05;
+    this.groundMask.position.z = gz;
+    this.groundMask.visible = true;
+    this.backdrop.setGround(box, sq, gz);
     this.backdrop.setRects(rects);
   },
 

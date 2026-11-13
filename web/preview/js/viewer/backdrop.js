@@ -2,7 +2,8 @@
 // whatever you chose last is used for the map and for the tile editor.  The tiles stand on a ground that runs
 // out to a horizon and has a world round it, never in a sky.
 //
-//   wilderness  a mottled green ground with a faint grid, a horizon of distant blue-grey mountains, sky and cloud
+//   wilderness  a mottled green ground with a faint grid (soil seen from below), a horizon of distant blue-grey
+//               mountains under a clear sky shading from pale at the horizon to deep blue overhead
 //   cavern      dark rock floor and walls all round, a warm light over the tiles
 //   table       a wooden tabletop under the tiles, a dim room beyond its edge
 //   plain       nothing: the plate colour and the grid, as the tile view has always looked
@@ -11,7 +12,9 @@
 // the tile view's near and far planes are not stretched by a ground that has no end; then the depth is cleared
 // and the pieces are drawn over it.  Everything is procedural (shaders): no pictures, nothing to load.  The sky
 // is a dome that follows the camera, the ground a plane at the map's zero (the tile's lowest point on a tile) with a haze that matches the
-// dome's horizon, and each piece casts a soft contact shadow on it.
+// dome's horizon, and each piece casts a soft contact shadow on it.  The ground is solid: seen from below it is
+// earth (soil, rock or the underside of the table), never see-through, and below the horizon the world is dark,
+// because it is underground.  The viewer's ground mask (viewer/scene.js) hides what stands above it from below.
 
 import * as THREE from 'three';
 
@@ -47,20 +50,23 @@ vec3 ridge(vec3 col, float th, float el, float base, float amp, float k, float o
   m = mix(m, mix(m, vec3(0.94, 0.96, 1.0), 0.55), snow * smoothstep(0.78, 0.97, up));
   return mix(col, m, inside);
 }
+// underground: below the horizon the world is earth, dark in the distance
+vec3 below(vec3 col, float el) { return mix(col, vec3(0.0), smoothstep(0.0, 0.003, -el)); }
 vec3 wild(vec3 d) {
   float el = asin(clamp(d.z, -1.0, 1.0)), th = atan(d.y, d.x);
-  vec3 col = mix(uHaze, mix(vec3(0.30, 0.48, 0.74), vec3(0.03, 0.06, 0.16), uNight), pow(clamp(el * 2.2, 0.0, 1.0), 0.55));
-  if (d.z > 0.0) {
-    float c = fbm(d.xy / (d.z + 0.3) * 1.5 + vec2(3.0, 1.0));
-    col = mix(col, mix(vec3(1.0), vec3(0.34, 0.4, 0.55), uNight), smoothstep(0.5, 0.78, c) * 0.5 * smoothstep(0.0, 0.3, el));
-  }
+  // a clear sky: pale at the horizon, a soft blue band, deep blue overhead
+  vec3 band = mix(vec3(0.47, 0.64, 0.86), vec3(0.08, 0.13, 0.28), uNight);
+  vec3 zenith = mix(vec3(0.20, 0.38, 0.70), vec3(0.02, 0.04, 0.12), uNight);
+  float t = clamp(el / 1.5708, 0.0, 1.0);
+  vec3 col = mix(uHaze, band, smoothstep(0.0, 0.22, t));
+  col = mix(col, zenith, smoothstep(0.18, 0.9, t));
   vec3 far = mix(vec3(0.64, 0.73, 0.83), vec3(0.2, 0.26, 0.4), uNight);
   vec3 mid = mix(vec3(0.52, 0.62, 0.73), vec3(0.15, 0.2, 0.32), uNight);
   vec3 near = mix(vec3(0.4, 0.5, 0.61), vec3(0.1, 0.14, 0.24), uNight);
   col = ridge(col, th, el, 0.06, 0.17, 2.1, 3.0, far, 1.0);
   col = ridge(col, th, el, 0.03, 0.13, 3.0, 11.0, mid, 0.5);
   col = ridge(col, th, el, 0.01, 0.09, 4.3, 23.0, near, 0.0);
-  return d.z < 0.0 ? uHaze : col;
+  return below(col, el);
 }
 vec3 cave(vec3 d) {
   float el = asin(clamp(d.z, -1.0, 1.0)), th = atan(d.y, d.x);
@@ -70,12 +76,12 @@ vec3 cave(vec3 d) {
   float up = smoothstep(0.05, 1.0, d.z);
   vec3 col = rock * mix(1.0, 0.3, up);
   col += vec3(0.2, 0.11, 0.05) * (1.0 - smoothstep(0.0, 0.3, abs(el - 0.05))) * (0.5 + n);
-  return mix(uHaze, col, smoothstep(0.0, 0.14, el));
+  return below(mix(uHaze, col, smoothstep(0.0, 0.14, el)), el);
 }
 vec3 room(vec3 d) {
   vec3 col = mix(uHaze, vec3(0.2, 0.17, 0.15), smoothstep(-0.05, 0.8, d.z));
   col += vec3(0.1, 0.085, 0.06) * smoothstep(0.93, 1.0, dot(d, normalize(vec3(0.4, 0.5, 0.6))));
-  return col;
+  return below(col, asin(clamp(d.z, -1.0, 1.0)));
 }
 void main() {
   vec3 d = normalize(vDir);
@@ -124,9 +130,23 @@ vec3 wood(vec2 p, float outside) {
   col *= 0.6 + 0.4 * smoothstep(0.0, 1.2, min(xx, 980.0 - xx));
   return col;
 }
+// the ground seen from below: earth, darkening into the distance
+vec3 soil(vec2 p) {
+  float a = fbm(p / 70.0), b = fbm(p / 13.0 + 5.0), c = vnoise(p / 2.2);
+  vec3 col = mix(vec3(0.22, 0.15, 0.09), vec3(0.36, 0.25, 0.15), a) * (0.82 + 0.3 * b) * (0.94 + 0.12 * c);
+  col = mix(col, col * vec3(0.55, 0.52, 0.5), smoothstep(0.62, 0.74, fbm(p / 30.0 + 11.0)) * 0.6);
+  if (uKind > 0.5 && uKind < 1.5) col = mix(vec3(0.12, 0.1, 0.09), vec3(0.22, 0.19, 0.17), a) * (0.8 + 0.3 * b);
+  if (uKind > 1.5) col = vec3(0.3, 0.19, 0.1) * (0.8 + 0.3 * fbm(vec2(p.x / 240.0, p.y / 5.0)));
+  return col * mix(1.0, 0.45, uNight);
+}
 void main() {
   vec2 p = vW.xy;
   float dist = length(p - uEye.xy);
+  if (uEye.z < vW.z) {
+    vec3 under = soil(p);
+    gl_FragColor = vec4(mix(under, vec3(0.0), 1.0 - exp(-dist / (uFog * 0.08))), 1.0);
+    return;
+  }
   vec3 col;
   float gridA = 0.16, gridOn = 1.0, haze = 1.0 - exp(-dist / uFog);
   if (uKind < 0.5) col = meadow(p);
