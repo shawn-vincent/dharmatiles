@@ -16,6 +16,7 @@ default = ["manifold-parallel"]
 manifold-parallel = ["manifold-csg/parallel"]
 
 [dependencies]
+dt-lang.workspace = true
 dt-value.workspace = true
 bytemuck.workspace = true
 glam.workspace = true

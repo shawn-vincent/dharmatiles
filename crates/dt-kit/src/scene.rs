@@ -873,7 +873,7 @@ impl Terrain {
             for k in (0..n).filter(|&k| spec.mask.bits[k] && rim.z[k] < r) {
                 let drop = dt_geom::rim_profile(rim.z[k], r);
                 let thick = f64::from(top[k]) - f64::from(self.land.z[k]);
-                let taper = crate::smooth01((thick - spec.skin_mm) / spec.skin_mm.max(1e-9));
+                let taper = crate::smooth((thick - spec.skin_mm) / spec.skin_mm.max(1e-9));
                 top[k] -= (drop * taper) as f32;
             }
         }
@@ -1723,7 +1723,7 @@ fn lift_layers(
 fn crumble(seed: Seed, p: [f64; 3]) -> f64 {
     let s = seed.key("side").value();
     let n = dt_geom::noise::fbm3(s, SIDE_LUMP_MM, 3, p);
-    crate::smooth01((n + 0.45) / 0.9)
+    crate::smooth((n + 0.45) / 0.9)
 }
 
 /// A leaf solid from a mesh, relabelled with its slot (rule 2).

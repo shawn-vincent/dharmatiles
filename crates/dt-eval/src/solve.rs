@@ -12,12 +12,13 @@
 //! pin are the node itself, which for a pin's place is its nearest point.
 
 use dt_doc::consts::ConstTable;
-use dt_doc::expr::{Algebra, BinOp, Expr, Func, Odds, UnitWord, sin_deg, smooth};
+use dt_doc::expr::{Algebra, BinOp, Expr, Func, Odds, UnitWord, sin_deg};
 use dt_doc::model::PlaceRef;
 use dt_doc::schema::Body;
 use dt_kit::{
     Band, Ease, Field, Frame, Iv, Lint, Mask, OddsBuilder, Pin, Refusal, lints, solve_traced,
 };
+use dt_lang::smooth;
 use dt_value::{Dist, Weighting};
 
 use crate::Options;

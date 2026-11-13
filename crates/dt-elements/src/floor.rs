@@ -1,7 +1,6 @@
 //! `flagstones` and `planks`: the floors, two pieces bodies.
 //!
-//! A floor is a wall laid on its side (Shawn: "the floor should just be a
-//! wall laying on its side"): the masonry chassis lays the slabs, or the
+//! A floor is a wall laid on its side: the masonry chassis lays the slabs, or the
 //! boards, as separate solids (each its own slot), and their union is the
 //! body. The body has a band like dirt has (`top=`, solved with its pins,
 //! each held to its place, nothing eased: slabs step). What is different

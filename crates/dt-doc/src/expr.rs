@@ -1124,13 +1124,6 @@ pub fn cos_deg(deg: f64) -> f64 {
     sin_deg(deg + 90.0)
 }
 
-/// Smoothstep of `t` clamped to 0..1.
-#[must_use]
-pub fn smooth(t: f64) -> f64 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
-}
-
 /// A function of the heights language, once its name and the number of values
 /// it is given have been checked against the one table ([`FUNCTIONS`]).  Every
 /// evaluation of an expression (a number, an interval, a rolled value) picks
@@ -1188,7 +1181,7 @@ impl Func {
             Self::Min => a[0].min(a[1]),
             Self::Max => a[0].max(a[1]),
             Self::Clamp => a[0].max(a[1]).min(a[2]),
-            Self::Smooth => smooth(a[0]),
+            Self::Smooth => dt_lang::smooth(a[0]),
         }
     }
 }

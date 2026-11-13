@@ -182,7 +182,7 @@ pub fn wobble(
     pts.iter()
         .zip(&v)
         .map(|((p, s, n), x)| {
-            let taper = crate::smooth01(s / sigma) * crate::smooth01((total - s) / sigma);
+            let taper = crate::smooth(s / sigma) * crate::smooth((total - s) / sigma);
             let o = amount * x / peak * taper;
             [p[0] + o * n[0], p[1] + o * n[1]]
         })

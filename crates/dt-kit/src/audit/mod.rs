@@ -1,8 +1,7 @@
 //! The audit gate: the mesh as a slicer sees it.
 //!
 //! Pinch separation, the float32 reload, keeping the largest body, and the
-//! layer-reach overhang rule (`Slices`, the 55° rule that wins over
-//! the other three `audit_overhang` copies). Order, as `stl_safe`: separate
+//! layer-reach overhang rule (`Slices`, the 55° rule). In order: separate
 //! pinches, quantise to float32 and merge by position, split into bodies
 //! and keep the largest (reporting the rest), then check watertightness,
 //! overhang and see-through holes on what is written.
@@ -31,13 +30,11 @@ use repair::{canonical, contains, keep_largest, quantise, separate_pinches};
 /// The tolerance band: faces past the printer's overhang (55°, the
 /// conservative target everything aims for by construction) but within
 /// `max_deg` are reported as band, not overhang, up to `share` of the
-/// downward-facing area. Past `max_deg` they are overhang and fail. Shawn,
-/// 3 Nov 2026 for trees, generalised 4 Nov 2026 to every element: 55–65° in
-/// small patches, 65° the hard cap (a 0.2 mm layer steps 0.2·tan 65° =
-/// 0.43 mm, under a 0.45 mm line). The share is the trees' measured one.
-/// Past the cap, small patches are allowed too (Shawn, 4 Nov 2026: "allow
-/// small patches over 65°, like the band"): up to `over_share` of the same
-/// downward area; more than that fails.
+/// downward-facing area. Past `max_deg` they are overhang and fail. The
+/// band is for small patches (55–65°), and 65° is the hard cap: a 0.2 mm
+/// layer steps 0.2·tan 65° = 0.43 mm, under a 0.45 mm line. Past the cap,
+/// small patches are allowed too, up to `over_share` of the same downward
+/// area; more than that fails.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HangBand {
     /// The materials the band covers; empty: every material.

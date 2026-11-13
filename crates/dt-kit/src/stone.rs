@@ -12,9 +12,13 @@ use dt_geom::{Convex, TriMesh};
 
 use crate::piece::welded;
 use crate::scene::{Slot, Solid, leaf};
-use crate::{KitError, smooth01};
+use crate::{KitError, smooth};
 
-/// **hull**: the convex hull of `points` (mm), as a closed mesh.
+/// **hull**: the convex hull of `points` (mm), as a closed mesh, made by
+/// Manifold's kernel in f64.  [`crate::form::hull`] is another function: it
+/// hulls with parry3d in f32 about the points' centre, and the two do not
+/// give the same vertices, so a form picks the one whose numbers its hashes
+/// were made with.
 ///
 /// # Errors
 /// [`KitError::Shape`] when the points span no volume.
@@ -117,10 +121,10 @@ pub fn grain(stone: &Convex, g: &Grain, seed: u64) -> Result<TriMesh, KitError> 
             let we = if sharp.is_empty() {
                 1.0
             } else {
-                smooth01(dmin / g.keep_mm)
+                smooth(dmin / g.keep_mm)
             };
             let w = if nv[2] > g.down_nz {
-                smooth01((q[2] - g.base_mm) / g.fade_mm)
+                smooth((q[2] - g.base_mm) / g.fade_mm)
             } else {
                 0.0
             };

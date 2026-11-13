@@ -36,6 +36,7 @@
 use std::sync::Arc;
 
 use dt_geom::{Iv, Mask, distance_nearest};
+use dt_lang::smooth;
 use dt_value::Weighting;
 
 use crate::Field;
@@ -648,12 +649,6 @@ pub struct Solved {
     /// At each node, the pin pulling hardest (the owner where there is
     /// one), `None` where no pin reaches.
     pub lead: Vec<Option<usize>>,
-}
-
-/// Smoothstep of `t` clamped to 0..1.
-fn smooth(t: f64) -> f64 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
 }
 
 /// A weight this close to 1 is 1: the pin is exact there.

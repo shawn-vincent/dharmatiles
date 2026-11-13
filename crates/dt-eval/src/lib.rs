@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn out_paths_stay_inside_the_system_folder() {
-        // was: db/../../t/evil/f-db.stl, outside out/
+        // a path that climbs out of its folder stays inside it
         assert_eq!(
             out_path("tiles/../../t/evil/f.dtile", "db"),
             PathBuf::from("db/t/evil/f-db.stl")

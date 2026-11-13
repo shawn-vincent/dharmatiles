@@ -16,6 +16,7 @@ manifold-parallel = ["dt-kit/manifold-parallel", "dt-elements/manifold-parallel"
 test-panic = []
 [dependencies]
 dt-doc.workspace = true
+dt-lang.workspace = true
 dt-geom.workspace = true
 dt-value.workspace = true
 dt-kit.workspace = true

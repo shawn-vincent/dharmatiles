@@ -481,10 +481,10 @@ pub(crate) fn run(
         checks: m.checks,
     };
     let mut placed: Vec<Placed> = Vec::new();
-    if let Some(f) = &field {
+    if field.is_some() {
         let mut stones: Vec<fieldstone::Stone> = cells
             .iter()
-            .filter_map(|c| fieldstone::stone(m, &run, f, c, seed))
+            .filter_map(|c| fieldstone::stone(m, &run, c, seed))
             .collect();
         if !run.laid {
             fieldstone::hold_proud(&mut stones);

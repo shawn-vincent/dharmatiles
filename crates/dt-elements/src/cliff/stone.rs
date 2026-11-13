@@ -18,7 +18,7 @@ use super::form::{Form, GRID_MM};
 use super::relief::relief;
 use super::stack::{Placed, SINK_MM};
 use super::util::{Grid, P2, Z_UP, bounds, cell_grid, norm2, point_in, ring_dist, trace_outline};
-use dt_kit::{Field, smooth01};
+use dt_kit::{Field, smooth};
 
 /// A stone the cuts leave with less than this is not made, mm³.
 const SCRAP_MM3: f64 = 12.0;
@@ -620,15 +620,14 @@ pub fn grain(
                 dmin = dmin.min(norm(sub(*q, c)));
             }
         }
-        let we = smooth01(if dmin.is_finite() {
+        let we = smooth(if dmin.is_finite() {
             dmin / EDGE_KEEP_MM
         } else {
             1e9
         });
-        let mut w =
-            smooth01((q[2] - z0 - 0.15) / TEX_BASE_FADE_MM) * smooth01((n[i][2] + 0.5) / 0.4);
+        let mut w = smooth((q[2] - z0 - 0.15) / TEX_BASE_FADE_MM) * smooth((n[i][2] + 0.5) / 0.4);
         let gap = hits[i].map_or(f64::INFINITY, |h| norm(sub(h.point, *q)));
-        w *= smooth01((gap - 0.8) / 0.8);
+        w *= smooth((gap - 0.8) / 0.8);
         let amp = FACE_GRAIN_MM * gr * (0.5 + 0.5 * we) * w;
         out[i] = [
             q[0] + amp * n[i][0],

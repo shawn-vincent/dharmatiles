@@ -51,7 +51,10 @@ pub fn level_set(
     Ok(s.to_tri_mesh())
 }
 
-/// **hull**: the convex hull of `points`, outward wound.
+/// **hull**: the convex hull of `points`, outward wound, made by parry3d in
+/// f32 about the points' centre.  [`crate::stone::hull`] is another
+/// function (Manifold's kernel, f64): the two do not give the same
+/// vertices, so each keeps the numbers its callers' hashes were made with.
 ///
 /// # Errors
 /// [`KitError::Shape`] for fewer than four points or a flat set.

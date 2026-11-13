@@ -10,6 +10,8 @@ use dt_kit::pieces::{Pieces, Plane};
 use dt_kit::{Band, Frame, Mask};
 
 use super::form::GRID_MM;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use super::util::Cells;
 
 /// The band's fitter on the tile's lattice.
@@ -21,6 +23,9 @@ pub struct Fit<'a> {
     step: f64,
     /// The foot the stone heights are counted from, world mm.
     foot: f64,
+    /// How many tops were cut flat because the band jumps across the stone
+    /// (counted as the stack fits them; the build reports it).
+    flattened: AtomicUsize,
 }
 
 impl<'a> Fit<'a> {
@@ -33,7 +38,13 @@ impl<'a> Fit<'a> {
             ny,
             step: frame.step_mm(),
             foot,
+            flattened: AtomicUsize::new(0),
         }
+    }
+
+    /// How many tops have been cut flat at a band's step so far.
+    pub fn flattened(&self) -> usize {
+        self.flattened.load(Ordering::Relaxed)
     }
 
     fn pos(&self, k: usize) -> [f64; 2] {
@@ -106,7 +117,10 @@ impl<'a> Fit<'a> {
         if !self.pieces.reaches(&nodes, want) {
             return top;
         }
-        let got = self.pieces.plane_or_flat(&nodes, want);
+        let (got, flat) = self.pieces.plane_or_flat(&nodes, want);
+        if flat {
+            self.flattened.fetch_add(1, Ordering::Relaxed);
+        }
         (
             got.z - self.foot - got.g[0] * got.at[0] - got.g[1] * got.at[1],
             got.g[0],

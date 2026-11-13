@@ -29,6 +29,7 @@
 //!   ([`Layer::relief`]). A rim edge a boundary crosses gets the crossing
 //!   as a rim vertex, unless it snapped onto a node.
 
+use dt_lang::smooth;
 use std::collections::HashMap;
 
 use crate::TriMesh;
@@ -126,11 +127,6 @@ pub fn rim_profile(t: f64, round: f64) -> f64 {
     } else {
         round - libm::sqrt((round * round - (round - t) * (round - t)).max(0.0))
     }
-}
-
-fn smooth01(t: f64) -> f64 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
 }
 
 /// The relief of one layer's side panel.
@@ -540,7 +536,7 @@ impl<'l, 'a> Mesher<'l, 'a> {
             // corner), so the relief turns the corner as one surface
             let (ix, iy) = (a % self.nx, a / self.nx);
             let (on_x, on_y) = (ix == 0 || ix == self.nx - 1, iy == 0 || iy == self.ny - 1);
-            let blend = |dist: f64| smooth01(1.0 - dist / sides.corner_blend_mm.max(1e-9));
+            let blend = |dist: f64| smooth(1.0 - dist / sides.corner_blend_mm.max(1e-9));
             let to_x = ix.min(self.nx - 1 - ix) as f64 * self.step;
             let to_y = iy.min(self.ny - 1 - iy) as f64 * self.step;
             let (gx, gy) = (
@@ -590,7 +586,7 @@ impl<'l, 'a> Mesher<'l, 'a> {
                         let u = match rel {
                             Some(r) if q > 0 && q < n => {
                                 let s = (r.shape)([xy[0], xy[1], z]).clamp(0.0, 1.0);
-                                let fz = smooth01((z - lo) / f) * smooth01((hi - z) / f);
+                                let fz = smooth((z - lo) / f) * smooth((hi - z) / f);
                                 r.depth * s * fz
                             }
                             _ => 0.0,

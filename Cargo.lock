@@ -453,6 +453,7 @@ dependencies = [
  "dt-elements",
  "dt-geom",
  "dt-kit",
+ "dt-lang",
  "dt-value",
  "insta",
  "kdl",
@@ -466,6 +467,7 @@ name = "dt-geom"
 version = "1.0.0"
 dependencies = [
  "bytemuck",
+ "dt-lang",
  "dt-value",
  "glam 0.34.2",
  "libm",
@@ -481,6 +483,7 @@ version = "1.0.0"
 dependencies = [
  "crc32fast",
  "dt-geom",
+ "dt-lang",
  "dt-value",
  "flate2",
  "libm",

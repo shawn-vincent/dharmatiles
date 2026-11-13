@@ -34,9 +34,7 @@
 //! final 0.06 mm blur is below the grid and is left out.
 
 use dt_kit::OnFrame;
-use dt_kit::{
-    Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smax, smooth01,
-};
+use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smax, smooth};
 
 use crate::{Control, Ctx, Element, LookError, Plan, Write};
 
@@ -289,7 +287,7 @@ fn tide(frame: &dt_kit::Frame, seed: Seed) -> Field {
 /// How far the edge holds at `d` mm from the nearest tile edge: 1 at the
 /// edge, fading to 0 over the tide's edge fade.
 fn edge_fade(s: f64, d: f64) -> f64 {
-    smooth01(1.0 - d / (TIDE_EDGE_FADE_MM * s))
+    smooth(1.0 - d / (TIDE_EDGE_FADE_MM * s))
 }
 
 /// The library's tide profile at position `t` (mm) along an edge, the
@@ -379,7 +377,7 @@ impl Element for Water {
         } else {
             (Field::new(&frame, 1e3), Field::new(&frame, 1e3))
         };
-        let rim_f = rim(&frame).map(|r| smooth01(r / (RIM_FADE_MM * s)));
+        let rim_f = rim(&frame).map(|r| smooth(r / (RIM_FADE_MM * s)));
         let seed = ctx.seed;
         let mut rng = Rng::new(seed.key("swell"));
         let masks = Masks {
@@ -405,7 +403,7 @@ impl Element for Water {
             let up = ((hi.z[k] - wlk[k]) / crest).clamp(0.0, 1.0);
             let down = ((wlk[k] - lo.z[k]) / trough).clamp(0.0, 1.0);
             let wave = if z[k] >= 0.0 { z[k] * up } else { z[k] * down };
-            let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
+            let fade = smooth(raw_d.z[k] / (SHORE_FADE_MM * s));
             waves[k] =
                 wlk[k] + wave * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k];
             present[k] = ctx.area.bits[k] && (water[k] || thing_mask[k]);
@@ -641,7 +639,7 @@ fn relief(
         .map(|k| {
             let dom = num[k] / den[k].max(1e-12);
             let chaos = lin[k] / libm::sqrt(w2[k]).max(1e-9);
-            let c = smooth01((order[k] - CHAOS_ORDER.0) / (CHAOS_ORDER.1 - CHAOS_ORDER.0));
+            let c = smooth((order[k] - CHAOS_ORDER.0) / (CHAOS_ORDER.1 - CHAOS_ORDER.0));
             (c * dom + (1.0 - c) * chaos) * (CHAOS_FAR_AMP + (1.0 - CHAOS_FAR_AMP) * c)
         })
         .collect();

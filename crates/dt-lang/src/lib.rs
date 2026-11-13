@@ -141,9 +141,27 @@ pub fn function_words() -> Vec<&'static str> {
     out
 }
 
+/// Smoothstep of `t` clamped to 0..1: the `smooth(t)` of the heights
+/// language, and the one ease the geometry and the elements share.
+#[must_use]
+pub fn smooth(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn smooth_is_the_smoothstep_held_to_the_unit_interval() {
+        assert_eq!(smooth(-1.0), 0.0);
+        assert_eq!(smooth(0.0), 0.0);
+        assert_eq!(smooth(0.5), 0.5);
+        assert_eq!(smooth(1.0), 1.0);
+        assert_eq!(smooth(2.0), 1.0);
+        assert_eq!(smooth(0.25), 0.25 * 0.25 * (3.0 - 0.5));
+    }
 
     #[test]
     fn every_word_has_one_kind() {

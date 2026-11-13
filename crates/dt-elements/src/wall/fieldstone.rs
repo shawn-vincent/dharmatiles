@@ -524,7 +524,6 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
             p[1] += ovt * u - ovb * (1.0 - u);
         }
     }
-    let _ = m;
     pts
 }
 
@@ -731,8 +730,7 @@ fn segmentize(p: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
 /// Draw the stone for a cell (`_place_block`, up to the mesh), or `None`
 /// for a cell the rounding swallows.
 #[allow(clippy::too_many_lines)]
-pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Option<Stone> {
-    let _ = f;
+pub(crate) fn stone(m: &Mason, run: &Run, c: &Cell, seed: Seed) -> Option<Stone> {
     let s = run.scale;
     let bs = super::cell_seed(seed, "stone", &c.key);
     let mut r = Rng::new(bs.key("draw"));

@@ -59,6 +59,8 @@ pub(super) struct Planned {
     pub st: stack::Stacked,
     rng: Rng,
     pub foot: f64,
+    /// Stone tops cut flat because the band jumps across them.
+    pub flattened: usize,
 }
 
 impl Planned {
@@ -116,12 +118,14 @@ pub(super) fn plan(look: &Look, site: &Site<'_>) -> Result<Planned, LookError> {
     let mut st = stack::stack(&mut rng, &fm, &zone, s, max_rocks, &fit)
         .map_err(|e| LookError::band(&e, "the cliff's stones"))?;
     stack::reconcile(&mut st.rocks, &fm, &mut st.s);
+    let flattened = fit.flattened();
     Ok(Planned {
         fm,
         zone,
         st,
         rng,
         foot,
+        flattened,
     })
 }
 

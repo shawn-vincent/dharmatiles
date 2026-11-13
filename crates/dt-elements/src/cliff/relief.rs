@@ -13,7 +13,7 @@ use dt_kit::{KitError, Piece, TriMesh, hung, tri_normal};
 use super::faces::{Face, RELIEF_GRID_MM};
 use super::util::{Cells, Z_UP, cell_grid, edt_in};
 use dt_kit::Field;
-use dt_kit::smooth01;
+use dt_kit::smooth;
 
 const CRACK_GRID_MM: f64 = 0.1;
 const SHEAR_DEG: f64 = 45.0;
@@ -258,7 +258,7 @@ pub fn relief(
         let mut w = cell_grid(n_us, n_zs, 0.0_f64);
         for k in 0..nn {
             if hit.z[k] && nzf.z[k] > -0.85 {
-                w.z[k] = smooth01((al.z[k] - 0.35) / 0.3);
+                w.z[k] = smooth((al.z[k] - 0.35) / 0.3);
             }
         }
         let m_raw = w.map(|v| v > 0.5);
@@ -288,7 +288,7 @@ pub fn relief(
                 let (cxu, cz) = (ui / RELIEF_GRID_MM, (zj - fc.z0) / RELIEF_GRID_MM);
                 gg.set(i, j, sample(&fc.g, cxu, cz, true));
                 let mut fv = sample(&fc.f, cxu, cz, false);
-                fv *= smooth01(ui.min(fc.l - ui) / FACET_END_MM);
+                fv *= smooth(ui.min(fc.l - ui) / FACET_END_MM);
                 ff.set(i, j, fv);
             }
         }
@@ -297,12 +297,12 @@ pub fn relief(
                 for i in 0..n_us {
                     let q = j * n_us + i;
                     let fr = if front.z[q].is_nan() { 0.0 } else { front.z[q] };
-                    let mut off = smooth01(RELIEF_OFF_MM - (sm + libm::cos(a) * (1.0 - fr)).abs());
+                    let mut off = smooth(RELIEF_OFF_MM - (sm + libm::cos(a) * (1.0 - fr)).abs());
                     if !fc.rim {
                         let x = origins[q][0] + fr * d3[0];
                         let y = origins[q][1] + fr * d3[1];
                         let bd = x.min(cw - x).min(y.min(ch - y));
-                        off *= smooth01(bd - 1.0);
+                        off *= smooth(bd - 1.0);
                     }
                     ff.z[q] *= off;
                     gg.z[q] *= off;
@@ -389,7 +389,7 @@ pub fn relief(
             let mut o = cell_grid(n_us, n_zs, 0.0_f64);
             for q in 0..nn {
                 o.z[q] = if crack.z[q] > 0.01 {
-                    fr.z[q] + crack.z[q] - CUT_SHORT_MM * (1.0 - smooth01(crack.z[q] / 0.2))
+                    fr.z[q] + crack.z[q] - CUT_SHORT_MM * (1.0 - smooth(crack.z[q] / 0.2))
                 } else {
                     0.02
                 };

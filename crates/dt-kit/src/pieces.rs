@@ -178,17 +178,25 @@ impl<'a> Pieces<'a> {
     /// the piece (no plane fits), a flat top at the lowest of the band's
     /// highs over `nodes`: the piece stands over its lower side and stops
     /// short of the higher. A pieces body that cannot be set to a band's
-    /// step (a cliff's stone) takes this; a floor refuses instead.
+    /// step (a cliff's stone) takes this; a floor refuses instead.  The flag
+    /// is true where the flat top was taken, so the caller can say so (the
+    /// build reports it with what an element left out).
     #[must_use]
-    pub fn plane_or_flat(&self, nodes: &[usize], want: Plane) -> Plane {
-        self.plane(nodes, want).unwrap_or_else(|_| Plane {
-            at: want.at,
-            z: nodes
-                .iter()
-                .map(|&k| self.band.at(k).hi)
-                .fold(f64::INFINITY, f64::min),
-            g: [0.0, 0.0],
-        })
+    pub fn plane_or_flat(&self, nodes: &[usize], want: Plane) -> (Plane, bool) {
+        match self.plane(nodes, want) {
+            Ok(plane) => (plane, false),
+            Err(_) => (
+                Plane {
+                    at: want.at,
+                    z: nodes
+                        .iter()
+                        .map(|&k| self.band.at(k).hi)
+                        .fold(f64::INFINITY, f64::min),
+                    g: [0.0, 0.0],
+                },
+                true,
+            ),
+        }
     }
 
     /// Whether `plane` is under the band's high at every one of `nodes`.
@@ -259,7 +267,6 @@ impl<'a> Pieces<'a> {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use crate::OnFrame;
 
     fn frame() -> Frame {
         Frame::for_system("db", 1, 1)
@@ -337,6 +344,5 @@ mod tests {
         };
         assert!(p.admits(&tri(7.4)).is_ok());
         assert!(p.admits(&tri(7.5)).is_err());
-        let _ = Field::new(&fr, 0.0);
     }
 }

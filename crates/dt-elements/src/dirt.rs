@@ -26,7 +26,7 @@
 use dt_kit::OnFrame;
 use dt_kit::{
     Band, Banded, Field, Noise, Placed, Plane, Rng, Scale, Scene, Seed, Spread, cap, noise, rim,
-    scatter, smax, smooth01,
+    scatter, smax, smooth,
 };
 
 use crate::read::Settings;
@@ -319,7 +319,7 @@ pub fn surface(dirt: &Dirt, scene: &mut Scene, seed: Seed, on: &Ground<'_>) -> M
         |u| {
             let s = frame.scale();
             base.zip(u, |b, w| {
-                1.0 - smooth01((w - b - DRY_MARGIN_MM * s) / (0.8 * s))
+                1.0 - smooth((w - b - DRY_MARGIN_MM * s) / (0.8 * s))
             })
         },
     );
@@ -379,7 +379,7 @@ fn clod_layer(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, base: &Field) -> (
     );
     let dens = patch.map(|p| {
         CLOD_DENS_FLOOR
-            + (1.0 - CLOD_DENS_FLOOR) * smooth01(0.5 + CLOD_PATCH_CONTRAST * (p + CLOD_PATCH_BIAS))
+            + (1.0 - CLOD_DENS_FLOOR) * smooth(0.5 + CLOD_PATCH_CONTRAST * (p + CLOD_PATCH_BIAS))
     });
     let [w, h] = frame.size_mm();
     let mut rng = Rng::new(seed.key("clods"));
@@ -728,7 +728,7 @@ fn place_pebbles(
         libm::tan(PEB_SIT_DEG.1.to_radians()),
     );
     let sits = gx.zip(&gy, |a, b| {
-        1.0 - smooth01((libm::hypot(a, b) - lo_t) / (hi_t - lo_t))
+        1.0 - smooth((libm::hypot(a, b) - lo_t) / (hi_t - lo_t))
     });
     let placed = scatter(
         frame,
@@ -1101,7 +1101,6 @@ mod tests {
         // and a smooth surface is left whole
         let (frame, area, flat) = on(|_, _| 10.0);
         assert_eq!(count(&held_area(&frame, &area, &flat, 35.0)), count(&area));
-        let _ = ny;
     }
 
     #[test]

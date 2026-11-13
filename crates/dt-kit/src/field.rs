@@ -70,13 +70,6 @@ pub fn smax(a: f64, b: f64, k: f64) -> f64 {
     a * (1.0 - h) + b * h + k * h * (1.0 - h)
 }
 
-/// Smoothstep of `t` clamped to [0, 1].
-#[must_use]
-pub fn smooth01(t: f64) -> f64 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
-}
-
 /// Distance to the nearest tile edge, mm, at every node.
 #[must_use]
 pub fn rim(frame: &Frame) -> Field {
