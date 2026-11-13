@@ -174,3 +174,13 @@ export const turned = (rot, dir) => norm(rot + 90 * dir);
 
 /** A piece as the page draws it on a plate pin: nothing here, see js/editor/plates.js. */
 export const isPlaced = (p) => !!p.at;
+
+/** The groups of the map's pieces by tile: [{canon, name, pieces}], in the order the tiles first appear. */
+export function groupsOf(ps) {
+  const by = new Map();
+  for (const p of ps) {
+    if (!by.has(p.canon)) by.set(p.canon, { canon: p.canon, name: p.name, pieces: [] });
+    by.get(p.canon).pieces.push(p);
+  }
+  return [...by.values()];
+}
