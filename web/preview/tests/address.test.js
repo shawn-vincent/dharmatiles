@@ -1,7 +1,7 @@
 // The path and its address: the crumbs and the URL are two drawings of one path (js/nav.js, editor/address.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addressLevel, buildHash, crumbsFor, levelOfHash, levelParams, stepsHistory } from '../js/nav.js';
+import { OWNED, addressLevel, buildHash, crumbsFor, levelOfHash, levelParams, stepsHistory } from '../js/nav.js';
 
 const tileSel = { kind: 'tile' };
 
@@ -48,17 +48,30 @@ test('one rule says when the address takes a step of history', () => {
   assert.equal(addressLevel(tile({ pieces: 'p1', prop: 'seed' })), 'pieces/seed');
 });
 
-test('the Add tiles level is a level of the map\'s trail with its own address', () => {
-  assert.deepEqual(levelParams({ sel: tileSel, control: null, face: 'tile', pieces: [], add: true }), { add: '1' });
-  assert.deepEqual(levelParams({ sel: tileSel, control: null, face: 'tile', pieces: ['p2'], add: true }), { pieces: 'p2' }, 'a piece selected is the piece\'s level');
-  const h = buildHash({ tile: '/x.dmap', ...levelParams({ sel: tileSel, control: null, face: 'tile', pieces: [], add: true }) });
-  assert.equal(h, '#tile=%2Fx.dmap&add=1');
-  assert.equal(levelOfHash(h).add, true);
-  assert.equal(levelOfHash('#tile=x&pieces=p2&add=1').add, undefined);
-  assert.equal(addressLevel({ tile: '/x.dmap', add: '1' }), 'add');
+test("a folder of the Add step is a level of the map's trail with its own address", () => {
+  const add = (place, dir = '') => levelParams({ sel: tileSel, control: null, face: 'tile', pieces: [], add: { place, ...(dir && { dir }) } });
+  assert.deepEqual(add(''), { add: '' }, 'Places of the Add step');
+  assert.deepEqual(add('/Users/x/tiles'), { add: '/Users/x/tiles' });
+  assert.deepEqual(add('/Users/x/tiles', 'dungeon/rooms'), { add: '/Users/x/tiles', adir: 'dungeon/rooms' });
+  assert.deepEqual(levelParams({ sel: tileSel, control: null, face: 'tile', pieces: ['p2'], add: { place: '' } }), { pieces: 'p2' }, "a piece selected is the piece's level");
+  const h = buildHash({ tile: '/x.dmap', ...add('/Users/x/tiles', 'dungeon') });
+  assert.equal(h, '#tile=%2Fx.dmap&add=/Users/x/tiles&adir=dungeon');
+  assert.deepEqual(levelOfHash(h).add, { place: '/Users/x/tiles', dir: 'dungeon' });
+  assert.deepEqual(levelOfHash('#tile=x&add=').add, { place: '', dir: '' }, 'Places has an empty key');
+  assert.equal(levelOfHash('#tile=x&pieces=p2&add=').add, undefined);
+  assert.equal(levelOfHash('#tile=x').add, undefined);
+  for (const k of ['add', 'adir']) assert.ok(OWNED.includes(k), `${k} is the address's`);
+  // each folder is its own level of the address, so a step into one is a step of the history, and the same folder again is not
+  const a = (place, dir) => ({ tile: '/a.dmap', add: place, ...(dir && { adir: dir }) });
+  assert.notEqual(addressLevel(a('/t', '')), addressLevel(a('/t', 'dungeon')));
+  assert.notEqual(addressLevel(a('', '')), addressLevel(a('/t', '')));
+  assert.equal(addressLevel(a('/t', 'x')), addressLevel(a('/t', 'x')));
   const tile = (extra = {}) => ({ tile: '/a.dmap', ...extra });
-  assert.equal(stepsHistory(tile(), tile({ add: '1' })), true);
-  assert.equal(stepsHistory(tile({ add: '1' }), tile({ pieces: 'p1' })), true);
+  assert.equal(stepsHistory(tile(), a('/t')), true, 'the map into Add');
+  assert.equal(stepsHistory(a('/t'), a('/t', 'dungeon')), true, 'a folder into a folder');
+  assert.equal(stepsHistory(a('/t', 'dungeon'), a('/t')), true, 'and back up to one');
+  assert.equal(stepsHistory(a('/t', 'dungeon'), a('/t', 'dungeon')), false);
+  assert.equal(stepsHistory(a('/t', 'dungeon'), tile({ pieces: 'p1' })), true);
   const place = { root: 0, label: 'My tiles', dir: '' };
-  assert.deepEqual(crumbsFor({ place, tileName: 'first-plate.dmap', depth: 1, what: 'Add tiles' }).slice(-2).map((c) => [c.label, c.current]), [['first-plate.dmap', false], ['Add tiles', true]]);
+  assert.deepEqual(crumbsFor({ place, tileName: 'first-plate.dmap', add: place }).slice(-4).map((c) => [c.label, c.current]), [['first-plate.dmap', false], ['Add', false], ['Places', false], ['My tiles', true]]);
 });

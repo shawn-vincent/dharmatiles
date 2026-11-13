@@ -1,7 +1,7 @@
 // The address in the URL: one derivation of the path the crumbs show, written by one effect.
 //
 // Where you are is a path: Places, a place, its folders, then (when a document is open) the document and the levels
-// below it (a tile's entry and control, or a map's pieces and the property of them).  The crumbs over the panel
+// below it (a tile's entry and control, or a map's pieces and the property of them, or the folders of its Add step).  The crumbs over the panel
 // (levels.js `renderCrumbs`) are that path drawn; the hash of the URL is that path written
 // (`#place=…&dir=…` for a folder level, `#tile=…&at=…&control=…` or `#tile=…&pieces=p1,p2&prop=seed` for a document's),
 // so a reload, a pasted link and the browser's Back and Forward land on the same level.  Nothing else writes the
@@ -13,9 +13,9 @@
 // given is being taken (`held`: levels.js), or while what the path needs is not there yet (a map's scene).
 
 import { effect, signal, untracked } from '@preact/signals-core';
-import { OWNED, buildHash, levelParams, parseHash, stepsHistory } from '../nav.js';
+import { ADD_PANES, OWNED, buildHash, levelParams, parseHash, stepsHistory } from '../nav.js';
 import { placeParams } from '../folders.js';
-import { level as mapLevel, selected as mapSelected, mprop, scene as mapScene } from './model.js';
+import { addLevel, level as mapLevel, selected as mapSelected, mprop, scene as mapScene } from './model.js';
 import { isMapView, isPlates, server, tile, view } from './stores.js';
 
 /** True while a level the address asked for is being taken: the page is part way to it, and writes nothing meanwhile. */
@@ -33,7 +33,7 @@ export function pairsNow() {
   const map = isMapView();
   if (map && !mapScene.value) return null;
   const pieces = map ? mapSelected.value.map((p) => p.id) : null;
-  return { tile: t.path, ...levelParams({ sel: v.sel, control: v.control, face: v.face, pieces, prop: pieces?.length === 1 ? mprop.value : null, add: map && mapLevel.value === 'add' }) };
+  return { tile: t.path, ...levelParams({ sel: v.sel, control: v.control, face: v.face, pieces, prop: pieces?.length === 1 ? mprop.value : null, add: map && ADD_PANES.includes(mapLevel.value) ? placeParams(roots, addLevel.value) : null }) };
 }
 
 /** Write `pairs` over the address, keeping what it holds that is not the address's (the theme, the paint). */

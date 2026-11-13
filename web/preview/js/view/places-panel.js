@@ -5,9 +5,10 @@
 // tile row can be dragged onto a folder row or a folder crumb to move it there.  `ContextLines` and `FolderActions`
 // are the strip under the crumbs and the buttons above the list.
 //
-// The same list is the Add tiles level's pane (docs/maps.html) in its add mode (`d.add`): the folders are the same rows, the
+// The same list (`FolderList`) is the Add step's pane (docs/maps.html) in its add mode (`d.add`): the folders are the same rows, the
 // tiles are pictures in a two-column grid (`AddCard`), pressed to put the tile on the map or dragged to where it should
-// stand.  There is one walk of the places and folders; the add mode only draws the tiles another way.
+// stand.  There is one walk of the places and folders; the add mode only draws the tiles another way.  Only the browser slides
+// between folders here (`Levels`); the Add step's folders are levels of the panel's own shell (editor/levels.js).
 //
 // These are functions of the model (js/editor/model.js `browse`) and of `on`, what a row or a button does
 // (editor/places.js).  Nothing is stored here but how far each level was scrolled and the drag in progress.  What a
@@ -265,9 +266,9 @@ export function FolderList({ d, on, ghost = false }) {
 /**
  * The level in the viewport.  A step between levels is the panel's one slide (js/slide.js, which way: nav.js `slideDir` of the folder
  * depths): the level the list was on stays one more moment as a ghost for it to take away.  How far each level was scrolled is
- * remembered, and given back when it is shown again.  The same list is the Add tiles pane's, and slides inside its own box.
+ * remembered, and given back when it is shown again.
  */
-export function Levels({ d, on, scrolls, arrived, id = 'folder' }) {
+export function Levels({ d, on, scrolls, arrived }) {
   const key = keyOf(d.level);
   const last = useRef({ key, depth: folderDepth(d.level), d, ghost: null });
   const cur = useRef(/** @type {HTMLElement | null} */ (null));
@@ -288,7 +289,7 @@ export function Levels({ d, on, scrolls, arrived, id = 'folder' }) {
     old.current.scrollTop = ghost.scroll;
     slide({ scope: cur.current.parentElement, to: cur.current, out: old.current, dir: ghost.dir, leave: () => { if (last.current.ghost === ghost) { last.current.ghost = null; redraw((n) => n + 1); } } });
   }, [key]);
-  return html`<div id=${id} class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1" ref=${cur} onScroll=${(e) => scrolls.set(key, e.currentTarget.scrollTop)}><${FolderList} d=${d} on=${on} /></div>
+  return html`<div id="folder" class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1" ref=${cur} onScroll=${(e) => scrolls.set(key, e.currentTarget.scrollTop)}><${FolderList} d=${d} on=${on} /></div>
     ${ghost ? html`<div class="flvl ghost" ref=${old} inert=${true}><${FolderList} d=${ghost.d} on=${on} ghost=${true} /></div>` : null}`;
 }
 

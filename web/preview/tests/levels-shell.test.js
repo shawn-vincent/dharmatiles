@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { LEVELS, folderDepth, mapLevelOf, slideBetween, slideDir, tileLevelOf, trailDepth } from '../js/nav.js';
+import { ADD_PANES, LEVELS, crumbsFor, folderDepth, levelDepth, mapLevelOf, slideBetween, slideDir, tileLevelOf, trailDepth } from '../js/nav.js';
 
 const entry = { kind: 'entry', id: 'rock' };
 
@@ -16,16 +16,46 @@ test('which level a tile and a map are at', () => {
   assert.equal(mapLevelOf({ pieces: 1, prop: 'seed' }), 'prop');
   assert.equal(mapLevelOf({ pieces: 2, prop: 'seed' }), 'piece', 'a property is of one piece');
   assert.equal(mapLevelOf({ pieces: 0, prop: 'seed' }), 'map');
-  assert.equal(mapLevelOf({ pieces: 0, add: true }), 'add');
-  assert.equal(mapLevelOf({ pieces: 2, add: true }), 'piece', 'a piece selected leaves Add');
+  assert.equal(mapLevelOf({ pieces: 0, add: 0 }), 'add');
+  assert.equal(mapLevelOf({ pieces: 0, add: 1 }), 'add2', "the Add step's folders take its two sections in turn");
+  assert.equal(mapLevelOf({ pieces: 2, add: 0 }), 'piece', 'a piece selected leaves Add');
+  assert.deepEqual(ADD_PANES, ['add', 'add2']);
 });
 
-test('the Add tiles level is one step deeper than the map and a sibling of a piece', () => {
+test('the Add step is one step deeper than the map, and each folder it walks one deeper again', () => {
+  const at = (root, dir = '') => ({ root, dir });
+  assert.equal(levelDepth('add', at(null)), 1, 'Places of the Add step is the step itself');
+  assert.equal(levelDepth('add', at(0)), 2);
+  assert.equal(levelDepth('add2', at(0, 'dungeon')), 3);
+  assert.equal(levelDepth('add', at(0, 'dungeon/rooms')), 4);
+  assert.equal(levelDepth('map'), 0);
+  assert.equal(levelDepth('piece'), 1);
   assert.equal(slideBetween('map', 'add'), 1);
   assert.equal(slideBetween('add', 'map'), -1);
-  assert.equal(slideBetween('add', 'prop'), 1);
-  assert.equal(slideBetween('prop', 'add'), -1);
+  assert.equal(slideBetween('map', { id: 'add2', folder: at(0) }), 1);
   assert.equal(slideBetween('add', 'piece'), 0, 'the same depth: a swap');
+  // into a folder: deeper; back up: shallower; across to a sibling folder: a swap; a jump back several folders: the way of the depth
+  assert.equal(slideBetween({ id: 'add', folder: at(0) }, { id: 'add2', folder: at(0, 'dungeon') }), 1);
+  assert.equal(slideBetween({ id: 'add2', folder: at(0, 'dungeon') }, { id: 'add', folder: at(0) }), -1);
+  assert.equal(slideBetween({ id: 'add', folder: at(0, 'a') }, { id: 'add2', folder: at(0, 'b') }), 0);
+  assert.equal(slideBetween({ id: 'add', folder: at(0, 'a/b') }, { id: 'add2', folder: at(null) }), -1);
+  // the same rule as a folder of the browser: one deeper than the one above it
+  assert.equal(slideDir(levelDepth('add', at(0)), levelDepth('add2', at(0, 'dungeon'))), slideDir(folderDepth(at(0)), folderDepth(at(0, 'dungeon'))));
+});
+
+test('the trail through the Add step: every folder a crumb, Add and Places first, each at its own depth', () => {
+  const list = crumbsFor({ place: { root: 0, label: 'My tiles', dir: '' }, tileName: 'first-plate.dmap', add: { root: 0, label: 'My tiles', dir: 'dungeon/rooms' } });
+  assert.deepEqual(list.map((c) => c.label), ['Places', 'My tiles', 'first-plate.dmap', 'Add', 'Places', 'My tiles', 'dungeon', 'rooms']);
+  assert.deepEqual(list.filter((c) => c.add).map((c) => [c.label, c.add.root, c.add.dir, c.depth]), [
+    ['Add', null, '', 1], ['Places', null, '', 1], ['My tiles', 0, '', 2], ['dungeon', 0, 'dungeon', 3], ['rooms', 0, 'dungeon/rooms', 4],
+  ]);
+  assert.deepEqual(list.filter((c) => c.current).map((c) => c.label), ['rooms']);
+  // at Places of the Add step
+  const top = crumbsFor({ place: null, tileName: 'a.dmap', add: null });
+  assert.deepEqual(top.map((c) => c.label), ['Places', 'a.dmap', 'Add', 'Places']);
+  assert.equal(top.at(-1).current, true);
+  // a map without the Add step has no such crumbs
+  assert.deepEqual(crumbsFor({ place: null, tileName: 'a.dmap' }).map((c) => c.label), ['Places', 'a.dmap']);
 });
 
 test('a deeper level slides in from the right, a shallower one from the left, the same for every document', () => {
@@ -49,7 +79,7 @@ test('no slide between documents of different kinds, or from no level', () => {
 
 test('every level of the table has its section on the page, and the page has no other', async () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const sections = [...html.matchAll(/<section class="lvl" id="lvl-([a-z]+)"/g)].map((m) => m[1]).sort();
+  const sections = [...html.matchAll(/<section class="lvl" id="lvl-([a-z0-9]+)"/g)].map((m) => m[1]).sort();
   assert.deepEqual(sections, Object.keys(LEVELS).sort());
 });
 
@@ -111,8 +141,30 @@ test('only the shell and the model name the levels\' sections', () => {
     const dir = new URL(base, import.meta.url);
     for (const f of readdirSync(dir)) {
       if (!f.endsWith('.js') || ['levels.js', 'nav.js'].includes(f)) continue;
-      readFileSync(new URL(f, dir), 'utf8').split('\n').forEach((line, i) => { if (/lvl-(tile|entry|control|map|piece|prop|add)\b/.test(line) && !/^\s*(\/\/|\*)/.test(line)) seen.push(`${base}${f}:${i + 1}: ${line.trim()}`); });
+      readFileSync(new URL(f, dir), 'utf8').split('\n').forEach((line, i) => { if (/lvl-(tile|entry|control|map|piece|prop|add2?)\b/.test(line) && !/^\s*(\/\/|\*)/.test(line)) seen.push(`${base}${f}:${i + 1}: ${line.trim()}`); });
     }
   }
   assert.deepEqual(seen, []);
+});
+
+test('the Add step draws no navigation of its own: no crumb bar, no up button, no folder slide, no depth', () => {
+  // its trail is the panel's (editor/levels.js, the crumbs over the panel), its ‹ is the panel's, its folders are levels of the shell
+  const src = readFileSync(new URL('../js/view/map-panel.js', import.meta.url), 'utf8');
+  const own = /crumbbar|class="up"|\bCrumbs\b|DeepCrumbs|crumbsFor|\bLevels\b|parentLevel|folderDepth|levelDepth|\bghost\b|\bscrolls\b|addUp|addScrolls|aria-label="Up a/;
+  const seen = [];
+  src.split('\n').forEach((line, i) => { if (own.test(line) && !/^\s*(\/\/|\*|\/\*)/.test(line)) seen.push(`map-panel.js:${i + 1}: ${line.trim()}`); });
+  assert.deepEqual(seen, []);
+  // `Levels` (the browser's sliding ghost) is drawn by the browser alone
+  const users = [];
+  for (const base of ['../js/', '../js/editor/', '../js/view/']) {
+    const dir = new URL(base, import.meta.url);
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith('.js')) continue;
+      readFileSync(new URL(f, dir), 'utf8').split('\n').forEach((line) => { if (/<\$\{Levels\}/.test(line)) users.push(`${base}${f}`); });
+    }
+  }
+  assert.deepEqual(users, ['../js/editor/places.js']);
+  // and the stylesheet has no bar for it
+  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /\.add-head/);
 });

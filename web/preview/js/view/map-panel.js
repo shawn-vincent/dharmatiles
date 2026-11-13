@@ -15,11 +15,7 @@
 
 import * as M from '../map-model.js';
 import { FILTERS, SORTS, sectionsOf } from '../map-list.js';
-import { parentLevel } from '../folders.js';
-import { crumbsFor } from '../nav.js';
-import { pinEnd } from '../crumbs.js';
-import { Crumbs } from './crumbs.js';
-import { Levels } from './places-panel.js';
+import { FolderList } from './places-panel.js';
 import { haveLine, systemName, tileHave } from '../inventory.js';
 import { Field } from './field.js';
 import { html, useEffect, useRef } from './html.js';
@@ -220,29 +216,23 @@ function PropView({ m, act, p, kind }) {
 }
 
 /**
- * The Add tiles level: above, the piece list, compact (the row of a tile just put down lights up; a row leaves Add for that piece's level),
- * and below, the panel's own folder browser in its add mode, with the path it is at in its own header (not in the trail above the panel).
- * On a short panel the list folds to one line (the style sheet does it by the panel's height; both are in the page).
+ * The Add step's level, for one folder: above, the piece list, compact (the row of a tile just put down lights up; a row leaves Add for that
+ * piece's level), and below, the folder's own list in its add mode (folders as rows, tiles as pictures).  The path to it is the panel's one
+ * trail and the step to another folder is the shell's slide between this section and the other one (`slot`): this draws a folder, and keeps
+ * it while it slides out.  On a short panel the list folds to one line (the style sheet does it by the panel's height; both are in the page).
  */
-function AddView({ m, act }) {
-  const a = m.add.value;
+function AddView({ m, act, slot }) {
+  const live = m.add.value;
+  const a = held(live && live.slot === slot ? live : null);
   const placed = m.pieces.value.filter((p) => p.at).length;
   const added = m.added.value;
-  const crumbs = useRef(/** @type {HTMLElement | null} */ (null));
-  useEffect(() => { if (crumbs.current) pinEnd(crumbs.current); });
   if (!a) return null;
-  const r = a.roots[a.level.root];
-  const trail = crumbsFor({ place: r ? { root: a.level.root, label: r.label, dir: a.level.dir } : null });
   return html`<div class="addlvl">
     <div class="add-up"><${PieceList} m=${m} act=${act} compact=${true} /></div>
     <div class="add-fold" aria-live="polite">${`${placed} on the map`}${added ? ` · ${added.name} ${m.fresh.value ? 'just added' : 'added last'}` : ''}</div>
     <div class="add-low">
-      <div class="crumbbar add-head">
-        <button type="button" class="up" title="Up a folder" aria-label="Up a folder" disabled=${!parentLevel(a.level)} onClick=${act.addUp}><span aria-hidden="true">‹</span></button>
-        <div class="cr" ref=${crumbs}><nav class="crumbs" aria-label="The folder the tiles are chosen from"><${Crumbs} crumbs=${trail} go=${(c) => act.addGo(c.place)} /></nav></div>
-      </div>
       ${a.level.root == null ? null : html`<div class="add-filter"><${Field} type="search" commit="input" placeholder="Filter tiles" spellcheck=${false} aria-label="Filter the tiles of this place" value=${a.query} onCommit=${act.addFilter} /></div>`}
-      <div class="add-body"><${Levels} id="add-folder" d=${a} on=${act.addOn} scrolls=${act.addScrolls} /></div>
+      <div class="add-body"><div class="flvl" role="listbox" aria-label="Tiles to add" tabindex="-1"><${FolderList} d=${a} on=${act.addOn} /></div></div>
     </div>
   </div>`;
 }
@@ -267,9 +257,9 @@ export function PieceLevel({ m, act }) {
   return html`<${Body} m=${m}>${sel ? html`<${PieceView} m=${m} act=${act} sel=${sel} />` : null}<//>`;
 }
 
-/** The Add tiles level: nothing to add to on a map that cannot be changed here. */
-export function AddLevel({ m, act }) {
-  return html`<${Body} m=${m} bare=${true}>${m.readOnly.value ? html`<div class="body"><p class="note">This file cannot be changed here, so no tile can be added to it.</p></div>` : html`<${AddView} m=${m} act=${act} />`}<//>`;
+/** The Add step's level in section `slot` (0 or 1: nav.js `ADD_PANES`): nothing to add to on a map that cannot be changed here. */
+export function AddLevel({ m, act, slot }) {
+  return html`<${Body} m=${m} bare=${true}>${m.readOnly.value ? html`<div class="body"><p class="note">This file cannot be changed here, so no tile can be added to it.</p></div>` : html`<${AddView} m=${m} act=${act} slot=${slot} />`}<//>`;
 }
 
 /** The property level: the property open on the selected piece, or the last one while the level slides out. */

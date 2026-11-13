@@ -101,8 +101,9 @@ export const view = createStore({
   msel: [],            // the pieces selected on the map (their ids: editor/scene.js `selected()` reads the ones the map has now)
   mprop: null,         // the property open as a level on the selected piece: 'bottom' | 'seed' | 'print' (editor/scene-panel.js)
   mlist: {},           // how each map's list of pieces is sorted, filtered and searched, by the map's tile id: {sort, filter, query} (editor/scene-panel.js; sort and filter are kept in localStorage)
-  madd: false,         // the map's Add tiles level is open (editor/model.js `level`: it is the level only while no piece is selected)
-  addAt: null,         // the folder level the Add tiles level browses, {root, dir}: chosen, and kept for the session (null: where the map's first tile lives, else the library)
+  madd: false,         // the map's Add step is open (editor/model.js `level`: it is the level only while no piece is selected)
+  addAt: null,         // the folder the Add step is at, {root, dir}: the one last browsed, kept for the session (null: the folder the map is in, else the library)
+  addSlot: 0,          // which of the Add step's two sections (nav.js `ADD_PANES`) its folder is in: each step to another folder takes the other
   addQuery: '',        // the words filtering the folder the Add tiles level browses
   panel: false,        // the messages panel is open
   popover: null,       // the id of the open popover, if any

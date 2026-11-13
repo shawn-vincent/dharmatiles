@@ -16,14 +16,14 @@
 // (places.js): the crumbs here begin with the same path (Places › My tiles › dungeon › the tile).
 //
 // This is the one shell of the levels, for every kind of document: a tile's levels (tile, entry, control) and a map's (map, piece,
-// property) are views drawn into its sections (`lvl-<id>`, one per row of nav.js `LEVELS`), and the shell alone decides which one is on
+// property, and the folders its Add step walks: each a level, in the sections `add` and `add2` in turn) are views drawn into its sections (`lvl-<id>`, one per row of nav.js `LEVELS`), and the shell alone decides which one is on
 // screen, which way it slides (nav.js `slideBetween`), what it keeps (each level's scroll), where the keyboard goes after a slide and how
 // reduced motion reads (all of it js/slide.js, which the folder levels and the step between a folder and a document use too, `showPage`).  A view never shows or hides itself, never animates and never says which level is on screen (a test reads the
 // views for it); a level added later is a row of `LEVELS`, a section of the page and a view.
 
 import {
-  LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, folderDepth, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf, sameLevel,
-  slideBetween, slideDir, standing, tileLevelOf, trailDepth, up as levelUp,
+  ADD_PANES, LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, folderDepth, levelDepth, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf,
+  sameLevel, slideBetween, slideDir, standing, tileLevelOf, trailDepth, up as levelUp,
 } from '../nav.js';
 import { effect } from '@preact/signals-core';
 import { afterSlide, finishSlide, slide } from '../slide.js';
@@ -31,7 +31,7 @@ import { fillCrumbs, pinEnd } from '../crumbs.js';
 import { DeepCrumbs } from '../view/crumbs.js';
 import { html, render as renderInto } from '../view/html.js';
 import { ContextLines } from '../view/places-panel.js';
-import { levelOfParams, whereIs } from '../folders.js';
+import { levelOfParams, parentLevel, whereIs } from '../folders.js';
 import { byteToIndex } from '../text.js';
 import { $, toast } from './app.js';
 import { texts } from './document.js';
@@ -40,16 +40,18 @@ import {
   doc, entrySel, isInventory, isMapView, isMark, isPlates, itemOf, mapNode, markSel, placeAt, server, stackItems, stackIndex, stem, tile, tileSel, view,
 } from './stores.js';
 import { contextLines } from './plates.js';
-import { contextLines as mapLines, level as mapLevel, mprop as mapProp, scene as mapScene, selected as mapSelected } from './model.js';
+import { addLevel, contextLines as mapLines, level as mapLevel, mprop as mapProp, scene as mapScene, selected as mapSelected } from './model.js';
 import { held } from './address.js';
 import { label as pieceLabel } from '../map-model.js';
 import { contextLines as inventoryLines } from './inventory.js';
 
-/** What a level's rows are, for the arrow keys and for where the keyboard lands: the tile's rows, the map's pieces, the Add level's pictures and folders. */
+/** What a level's rows are, for the arrow keys and for where the keyboard lands: the tile's rows, the map's pieces, the Add step's folders and pictures. */
 const ROWS = '.orow, .mp-group, .acard';
+/** What scrolls in a level: its body, or the folder list of the Add step. */
+const SCROLLS = '.body, .flvl';
 
 const scrolls = new Map(); // tile id + level key -> how far its list was scrolled
-let shown = 'tile';        // the level on screen (a row of LEVELS)
+let shown = { id: 'tile' }; // the level on screen: a row of LEVELS, and for the Add step the folder it is at
 let pending = null;        // a level asked for by the address, until the tile has it
 let started = false;
 let applying = false;      // the address is being applied: it is not written back
@@ -58,21 +60,24 @@ let leftMap = null;        // the same for a map: the pieces and the property th
 /** Is the editor page of the sidebar the one showing (not the tile browser)?  `view.page` is only its change; the class is what is on screen. */
 const editing = () => $('side').classList.contains('editing');
 const paneEl = (id) => $(`lvl-${id}`);
-const bodyOf = (id) => paneEl(id).querySelector('.body');
+const scrollerOf = (id) => paneEl(id).querySelector(SCROLLS);
 
 /** Tell the address's writer (address.js) whether a level it was given is still being taken. */
 const hold = () => { held.value = !!pending || applying; };
 
 const entryLike = (s) => s?.kind === 'entry' || isMark(s);
 const levelNow = () => ({ sel: view.get().sel, control: view.get().control });
-/** The level the shell shows now, `{id, key}`: a row of LEVELS and the key its scroll is kept under; null while the document has no levels (plates, inventory). */
+/** The key a folder of the Add step keeps its scroll under. */
+const folderKey = (l) => `add|${l.root ?? 'places'}|${l.dir || ''}`;
+/** The level the shell shows now, `{id, key}`: a row of LEVELS and the key its scroll is kept under (and, in the Add step, the `folder` it is at); null while the document has no levels (plates, inventory). */
 function shellLevel() {
   const t = tile();
   if (isInventory(t)) return null;
   if (isPlates(t)) {
     if (!isMapView()) return null;
     const id = mapLevel.value;
-    return { id, key: id === 'map' || id === 'add' ? id : `${id}:${mapSelected.value.map((p) => p.id).join(',')}${id === 'prop' ? `/${mapProp.value}` : ''}` };
+    if (ADD_PANES.includes(id)) return { id, key: folderKey(addLevel.value), folder: addLevel.value };
+    return { id, key: id === 'map' ? id : `${id}:${mapSelected.value.map((p) => p.id).join(',')}${id === 'prop' ? `/${mapProp.value}` : ''}` };
   }
   const { sel, control } = view.get();
   return { id: tileLevelOf(sel, control), key: levelKey(sel, control) };
@@ -87,9 +92,15 @@ export function goUp() {
   if (isMapView()) {
     // a map's levels are the same path: a property to its pieces, the pieces to the map
     const { mprop, msel, madd } = view.get();
-    if (mprop) { leftMap = { msel, mprop, add: false }; view.set({ mprop: null }); return true; }
-    if (msel.length) { leftMap = { msel, mprop: null, add: false }; view.set({ msel: [] }); return true; }
-    if (madd) { leftMap = { msel: [], mprop: null, add: true }; view.set({ madd: false }); return true; }
+    if (mprop) { leftMap = { msel, mprop, add: null }; view.set({ mprop: null }); return true; }
+    if (msel.length) { leftMap = { msel, mprop: null, add: null }; view.set({ msel: [] }); return true; }
+    if (madd) {
+      // the Add step's folders are steps of the same path: a folder to the one it is in, Places to the map
+      const here = addLevel.value, up = parentLevel(here);
+      leftMap = { msel: [], mprop: null, add: here };
+      if (up) goAdd(up); else view.set({ madd: false });
+      return true;
+    }
     return false;
   }
   const next = levelUp(levelNow(), tileSel());
@@ -108,7 +119,13 @@ export function goForward() {
     const have = new Set(mapScene.value?.pieces.map((p) => p.id));
     const ids = to.msel.filter((i) => have.has(i));
     const here = mapLevel.value;
-    if (to.add) { if (here !== 'map') return false; view.set({ madd: true }); return true; }
+    if (to.add) {
+      // back down into the folder the last Up left: from the folder above it, or from the map when it left Places
+      const up = parentLevel(to.add);
+      if (!(up ? ADD_PANES.includes(here) && sameFolder(addLevel.value, up) : here === 'map')) return false;
+      goAdd(to.add);
+      return true;
+    }
     if (to.mprop && here === 'piece' && ids.length === 1 && mapSelected.value[0]?.id === ids[0]) view.set({ mprop: to.mprop });
     else if (!to.mprop && here === 'map' && ids.length) view.set({ msel: ids });
     else return false;
@@ -123,6 +140,25 @@ export function goForward() {
   setSel(to.sel, { from: 'view' });
   view.set({ control: to.control });
   return true;
+}
+
+const sameFolder = (a, b) => (a.root ?? null) === (b.root ?? null) && (a.dir || '') === (b.dir || '');
+
+/**
+ * Go to the Add step at folder `level` (`{root, dir}`; the folder it was last at, else where it starts, with none): from the map it opens, from a
+ * folder it is a step to another folder, which takes the other of the step's two sections so that the shell slides between them.  The one
+ * way into the Add step, for a press on a row, a crumb, the keys and an address.
+ */
+export function goAdd(level = null) {
+  const { madd, addSlot } = view.get();
+  const to = level ? { root: level.root ?? null, dir: level.dir || '' } : addLevel.peek();
+  if (madd && sameFolder(to, addLevel.peek())) return;
+  view.set({ msel: [], mprop: null, madd: true, addAt: to, ...(madd ? { addQuery: '', addSlot: 1 - addSlot } : {}) });
+}
+
+/** A crumb of the trail below the tile: a folder of the Add step goes to it, any other goes to its depth. */
+export function goCrumb(c) {
+  if (c.add) { view.set({ face: 'tile' }); goAdd(c.add); } else goDepth(c.depth);
 }
 
 /** Go to depth `d` of the path now: 0 the tile, 1 the thing (a crumb's click). */
@@ -162,7 +198,7 @@ export function setFace(face, { focus = false } = {}) {
     const at = isPlates(tile()) ? null : sourceLine(sel, null);
     // once the source is on screen (it was not drawn a moment ago)
     requestAnimationFrame(() => { if (from !== 'source' && at) texts.placeCaret(at); if (focus) texts.focus(); });
-  } else if (focus) focusLevel(shown);
+  } else if (focus) focusLevel(shown.id);
 }
 const sourceLine = (sel, byte) => (byte != null ? lineOfByte(byte) : sel?.kind === 'tile' ? null : caretLineFor(linesOf(sel)));
 
@@ -199,7 +235,8 @@ function trailNow() {
     const ps = mapSelected.value;
     const id = mapLevel.value;
     const prop = id === 'prop' ? mapProp.value : null;
-    return { depth: LEVELS[id].depth, what: id === 'add' ? 'Add tiles' : ps.length > 1 ? `${ps.length} pieces` : ps[0] ? pieceLabel(ps[0]) : '', control: PROPS[prop] ?? prop ?? '' };
+    if (ADD_PANES.includes(id)) return { depth: levelDepth(id, addLevel.value), add: addLevel.value };
+    return { depth: LEVELS[id].depth, what: ps.length > 1 ? `${ps.length} pieces` : ps[0] ? pieceLabel(ps[0]) : '', control: PROPS[prop] ?? prop ?? '' };
   }
   const { sel, control } = view.get();
   return { depth: depthOf(sel, control), what: thingName(), control: control?.name ?? '' };
@@ -207,18 +244,20 @@ function trailNow() {
 
 function renderCrumbs() {
   const t = tile(), { face } = view.get();
-  const { depth, what: thing, control: ctl } = trailNow();
+  const { depth, what: thing, control: ctl, add } = trailNow();
   // the folders the tile is in, as crumbs: Places › My tiles › dungeon › combo; each one goes to its level and takes a tile dropped on it
   const { roots } = server.get();
   const at = t && whereIs(roots, t);
   const place = at && roots[at.root] ? { root: at.root, label: roots[at.root].label, dir: at.dir } : null;
-  const list = crumbsFor({ place, tileName: t ? stem(t) : '', depth, what: thing, control: ctl });
+  // the Add step's folders are crumbs of the same trail, below the map: Add › Places › My tiles › dungeon
+  const addRoot = add && add.root != null ? roots[add.root] : null;
+  const list = crumbsFor({ place, tileName: t ? stem(t) : '', depth, what: thing, control: ctl, add: add ? (addRoot ? { root: add.root, label: addRoot.label, dir: add.dir } : null) : undefined });
   const up = at ? `${[roots[at.root]?.label, ...(at.dir ? at.dir.split('/') : [])].join(' › ')}: the folder (⌘[ from the tile)` : 'Places (⌘[ from the tile)';
   $('back').title = depth > 0 ? 'Up a level (Esc, ⌘[)' : up;
   fillCrumbs($('crumbs-path'), list.filter((c) => c.depth === -1), (c) => { view.set({ placeAt: placeAt(c.place ? { root: c.place.root, dir: c.place.dir } : { root: null, dir: '' }), query: '', pageAt: 'browse' }); }, { trailing: true });
   $('tilebtn').classList.toggle('cur', depth === 0 && face === 'tile');
   $('tilebtn').setAttribute('aria-current', depth === 0 ? 'location' : 'false');
-  renderInto(html`<${DeepCrumbs} crumbs=${list.filter((c) => c.depth >= 1)} go=${goDepth} />`, $('crumbs-deep'));
+  renderInto(html`<${DeepCrumbs} crumbs=${list.filter((c) => c.depth >= 1)} go=${goCrumb} />`, $('crumbs-deep'));
   // where you are is the end of the path: it stays in view when the path is longer than the bar
   pinEnd($('crumb-scroll'));
   // the first half of the switch is named for what the document is: a tile's levels, a map's plates and scene
@@ -262,29 +301,29 @@ function renderContext() {
   renderInto(html`<${ContextLines} lines=${isPlates(t) ? (isMapView() ? mapLines() : contextLines()) : isInventory(t) ? inventoryLines() : lines} />`, $('ctx-lines'));
 }
 
-/** Put the keyboard in level `id`: its first row (the tile's rows, the map's), else the level itself. */
+/** Put the keyboard in level `id`: its first row (the tile's rows, the map's; the Add step's folders and pictures before its list of pieces), else the level itself. */
 function focusLevel(id) {
   const pane = paneEl(id);
-  const first = pane.querySelector(ROWS);
+  const first = pane.querySelector('.flvl .orow, .flvl .acard') || pane.querySelector(ROWS);
   (first || pane).focus({ preventScroll: true });
 }
 
-/** Put level `id` on screen: the one slide (js/slide.js) from the old one, which way nav.js `slideBetween` says, or a swap at once. */
-function showLevel(id, animate) {
-  const from = shown;
-  if (from === id && !paneEl(id).hidden) return;
-  const to = paneEl(id), out = paneEl(from);
+/** Put level `now` (`{id, folder}`, from `shellLevel`) on screen: the one slide (js/slide.js) from the old one, which way nav.js `slideBetween` says, or a swap at once. */
+function showLevel(now, animate) {
+  const { id } = now, from = shown;
+  if (from.id === id && !paneEl(id).hidden) { shown = now; return; }
+  const to = paneEl(id), out = paneEl(from.id);
   finishSlide($('levels')); // a slide still running ends first, so the panes left over are hidden
-  for (const l of Object.keys(LEVELS)) if (l !== id && l !== from) paneEl(l).hidden = true;
+  for (const l of Object.keys(LEVELS)) if (l !== id && l !== from.id) paneEl(l).hidden = true;
   to.hidden = false;
-  shown = id;
+  shown = now;
   restore(id);
-  slide({ scope: $('levels'), to, out: from !== id && !out.hidden ? out : null, dir: slideBetween(from, id), animate, leave: (el) => { el.hidden = true; } });
+  slide({ scope: $('levels'), to, out: from.id !== id && !out.hidden ? out : null, dir: slideBetween(from, now), animate, leave: (el) => { el.hidden = true; } });
 }
 // the scroll of a level is kept by the level (the scroll listener in init), and given back when it is shown
 function restore(id) {
   const l = shellLevel();
-  const b = bodyOf(id);
+  const b = scrollerOf(id);
   if (l && b) requestAnimationFrame(() => { b.scrollTop = scrolls.get(memoryKey(l)) ?? 0; });
 }
 
@@ -299,7 +338,7 @@ function pageDepth(edit) {
   if (!edit) return folderDepth(view.get().place || TOP);
   const t = tile();
   const l = shellLevel();
-  return trailDepth((t && whereIs(server.get().roots, t)) || TOP, l ? LEVELS[l.id].depth : 0);
+  return trailDepth((t && whereIs(server.get().roots, t)) || TOP, l ? levelDepth(l.id, l.folder) : 0);
 }
 let pageIsEdit = null;
 /**
@@ -320,10 +359,10 @@ export function showPage(edit, animate) {
   const away = (el) => { el.classList.add('off'); };
   if (first) { away(out); return; }
   slide({ scope: $('track'), to, out, dir, animate, leave: away });
-  if (had) afterSlide(() => { if (pageIsEdit === edit) { if (edit) focusLevel(shown); else ($('folder').querySelector('.orwrap.sel .orow, .orow') || $('folder')).focus({ preventScroll: true }); } });
+  if (had) afterSlide(() => { if (pageIsEdit === edit) { if (edit) focusLevel(shown.id); else ($('folder').querySelector('.orwrap.sel .orow, .orow') || $('folder')).focus({ preventScroll: true }); } });
 }
 
-let lastLevelId = null, lastTile = null, lastKey = null;
+let lastLevel = null, lastTile = null, lastKey = null;
 function render() {
   const { sel, control, tileId, face } = view.get();
   // a control only belongs to a thing of the tile
@@ -333,20 +372,21 @@ function render() {
   lastTile = tileId;
   if (now) {
     // the views draw themselves (view/*.js, editor/sheet.js, scene-panel.js); this brings the right one on screen
-    showLevel(now.id, settled && now.id !== lastLevelId);
+    const from = lastLevel;
+    showLevel(now, settled && now.id !== from?.id);
     const key = memoryKey(now);
-    if (key !== lastKey && now.id === lastLevelId) restore(now.id);
+    if (key !== lastKey && now.id === from?.id) restore(now.id);
     lastKey = key;
     // the keyboard follows only when it was already in the panel (a row or a crumb was pressed, or a key in it)
-    if (now.id !== lastLevelId && settled && $('side').contains(document.activeElement)) {
-      const dir = slideBetween(lastLevelId, now.id);
+    if (now.id !== from?.id && settled && $('side').contains(document.activeElement)) {
+      const dir = slideBetween(from, now);
       afterSlide(() => {
         const row = dir < 0 && returnRow(now.id);
         if (row) { row.focus({ preventScroll: true }); return; }
         focusLevel(now.id);
       });
     }
-    lastLevelId = now.id;
+    lastLevel = now;
   }
   // a print list's panel is the plates' (plates.js), not the levels or source
   const plates = isPlates(tile()) && !isMapView();
@@ -359,6 +399,9 @@ function render() {
 function returnRow(id) {
   const rows = [...paneEl(id).querySelectorAll(ROWS)];
   if (isMapView()) {
+    // up from a folder of the Add step: the row of the folder it left; else the piece the level was left from
+    const left = leftMap?.add;
+    if (left && ADD_PANES.includes(id)) return rows.find((r) => (left.dir ? r.dataset.kind === 'folder' && r.dataset.id === left.dir : r.dataset.kind === 'place' && r.dataset.id === String(left.root)));
     const first = leftMap?.msel[0];
     return first ? rows.find((r) => r.dataset.ids?.split(',').includes(first)) : null;
   }
@@ -385,7 +428,12 @@ function takePieces(want) {
   const have = new Set(mapScene.value.pieces.map((p) => p.id));
   const ids = want.pieces.filter((i) => have.has(i));
   if (ids.length < want.pieces.length) toast(ids.length ? 'Some of those pieces are not on the map now' : 'The map has no such piece now');
-  view.set({ face: want.face, msel: ids, mprop: ids.length === 1 && want.prop ? want.prop : null, madd: !!want.add && !ids.length });
+  view.set({ face: want.face, msel: ids, mprop: ids.length === 1 && want.prop ? want.prop : null, madd: false });
+  if (!want.add || ids.length) return;
+  // the Add step at the folder the address names: the place by its key (a place the program does not list is said, and the step opens where it starts)
+  const at = levelOfParams(server.get().roots, want.add);
+  if (at?.missing != null) toast(`There is no place “${at.missing}” now`);
+  goAdd(at?.missing == null ? at : null);
 }
 function tryPending() {
   if (!pending) return;
@@ -500,7 +548,7 @@ export function init() {
   for (const id of Object.keys(LEVELS)) {
     paneEl(id).addEventListener('scroll', (e) => {
       const l = shellLevel();
-      if (l && l.id === id && e.target.classList?.contains('body')) scrolls.set(memoryKey(l), e.target.scrollTop);
+      if (l && l.id === id && e.target.matches?.(SCROLLS)) scrolls.set(memoryKey(l), e.target.scrollTop);
     }, true);
   }
   $('lvl-tile').addEventListener('focusin', rowFocus);

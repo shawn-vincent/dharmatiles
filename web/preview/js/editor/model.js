@@ -16,7 +16,7 @@ import { listFrom } from '../map-list.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
 import { pill as invPill, systemName } from '../inventory.js';
 import { levelOf, placesOf, settledLevel, whereIs, writable } from '../folders.js';
-import { mapLevelOf } from '../nav.js';
+import { ADD_PANES, mapLevelOf } from '../nav.js';
 import { token } from '../tokens.js';
 import { defaultFilters } from '../inventory.js';
 import { docs, planOf } from './docs.js';
@@ -41,8 +41,8 @@ export const marks = computed(() => M.marks(pieces.value));
 export const mapList = computed(() => listFrom(view.get().mlist[tileNow.value?.id ?? '']));
 /** The property open on the selected piece, if one is. */
 export const mprop = computed(() => view.get().mprop);
-/** The level the map is at: 'map', 'add', 'piece' or 'prop' (nav.js `mapLevelOf`). */
-export const level = computed(() => mapLevelOf({ pieces: selected.value.length, prop: mprop.value, add: view.get().madd }));
+/** The level the map is at: 'map', 'add' or 'add2' (the Add step: its folders take the two in turn), 'piece' or 'prop' (nav.js `mapLevelOf`). */
+export const level = computed(() => mapLevelOf({ pieces: selected.value.length, prop: mprop.value, add: view.get().madd ? view.get().addSlot : null }));
 export const inventory = computed(() => server.get().inventory);
 /** May the map not be changed here (a library file, or one the program says is read only)? */
 export const readOnly = computed(() => {
@@ -130,28 +130,29 @@ export const browse = {
   data: computed(() => folderData(view.get().place, view.get().query, server.get().system, () => true, { openTile: view.get().tileId })),
 };
 
-// ---- the Add tiles level ------------------------------------------------------------------------------------------
+// ---- the Add step ------------------------------------------------------------------------------------------
 
-/** The place and folder the Add tiles level opens at the first time: where the map's first tile lives, else the library. */
+/** The place and folder the Add step opens at the first time: the folder the map itself is in, else the library. */
 function addStart() {
-  const { roots, tiles } = server.get();
+  const { roots } = server.get();
   const lib = roots.findIndex((r) => r.role === 'library');
-  const first = tiles.find((t) => t.id === scene.value?.pieces?.[0]?.tileId);
-  const at = first && whereIs(roots, first);
-  return at || { root: lib >= 0 ? lib : 0, dir: '' };
+  return (tileNow.value && whereIs(roots, tileNow.value)) || { root: lib >= 0 ? lib : 0, dir: '' };
 }
-/** The folder the Add tiles level browses: the one chosen (kept for the session), else where it starts, settled among what the program lists now. */
+/** The folder the Add step is at: the one last browsed (kept for the session), else where it starts, settled among what the program lists now. */
 export const addLevel = computed(() => {
   const { roots, tiles, folders } = server.get();
   return settledLevel({ roots, tiles, folders }, view.get().addAt ?? addStart());
 });
 
-/** What the Add tiles level's pane draws: the browser's own folder level in its add mode (tiles as pictures), or null when no map is the view. */
+/**
+ * What the Add step's pane draws for the folder it is at: the browser's own folder level in its add mode (tiles as pictures), and `slot`,
+ * the section of the page the folder is in (the pane in the other one is the folder it came from, sliding out); null while the Add step is not the level.
+ */
 export const addData = computed(() => {
-  if (!mapOn.value) return null;
+  if (!ADD_PANES.includes(level.value)) return null;
   const system = scene.value?.system ?? 'db';
   return folderData(addLevel.value, view.get().addQuery, system, isDtile, {
-    add: true, writable: false, openTile: null, plate: token('--plate') || '#D9E0EB',
+    add: true, slot: ADD_PANES.indexOf(level.value), writable: false, openTile: null, plate: token('--plate') || '#D9E0EB',
     places: placesOf(server.get().roots).filter((r) => r.kind !== 'files'),
   });
 });

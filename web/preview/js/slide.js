@@ -1,6 +1,6 @@
 // The one slide of the panel (docs/preview.html, "The panel").  Every step between two levels of the trail, whatever it crosses, is this
 // function: a tile's levels and a map's (editor/levels.js), the folder levels (view/places-panel.js), the step between the folder browser
-// and a document (editor/levels.js `showPage`) and the Add tiles pane's own folders.  The timing, the easing, the way reduced motion
+// and a document (editor/levels.js `showPage`).  The timing, the easing, the way reduced motion
 // reads, the direction rule (nav.js `slideDir`: deeper comes from the right, shallower from the left) and the keyboard's wait for the
 // slide to end are here and nowhere else; a test reads the code for any other animation of a level.
 

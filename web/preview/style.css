@@ -772,8 +772,8 @@ body.inventory #view, body.inventory #sash-side { display: none !important; }
 body.map #place { display: none; }
 #canvas.grab { cursor: grab; }
 
-/* ---- the Add tiles level (js/view/map-panel.js AddView; docs/maps.html): the piece list above, the browser's folder level with pictures below ---- */
-#lens-add { container-type: size; }
+/* ---- the Add step's level (js/view/map-panel.js AddView; docs/maps.html): the piece list above, the folder's list with pictures below; its trail is the panel's ---- */
+#lens-add, #lens-add2 { container-type: size; }
 .addlvl { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .add-up { flex: 0 1 auto; max-height: 34%; min-height: 0; overflow: auto; padding: 2px 12px 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .add-up .mp-h { margin-top: 8px; }
@@ -781,7 +781,6 @@ body.map #place { display: none; }
 /* a short panel keeps one line of the list: what is on the map and what was just added */
 @container (max-height: 540px) { .add-up { display: none; } .add-fold { display: block; } }
 .add-low { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
-.add-head { border-bottom: 0; background: var(--panel); }
 .add-filter { flex: none; padding: 0 12px 8px; }
 .add-filter input { width: 100%; min-width: 0; }
 .add-body { position: relative; flex: 1; min-height: 0; overflow: clip; }
