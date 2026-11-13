@@ -14,24 +14,47 @@
 // A part of the page renders by subscribing to the keys it draws from;
 // none of them calls another to say that something changed.
 
+import { batch, computed, effect, signal, untracked } from '@preact/signals-core';
 import { showError } from '../problems.js';
 import { createLog } from '../messages.js';
 
 // `report(what, err)` takes what a subscriber threw: the error panel by default.
+//
+// Each key of a store is a signal (@preact/signals-core), and `get()` is an object whose properties read them: read
+// inside a component or a `computed`, a key is followed by whoever read it; read anywhere else, it is a plain read.
+// `set` writes the keys in one batch.  `subscribe` is for the parts of the page not yet written as components.
 export function createStore(initial, report = showError) {
-  const state = { ...initial };
+  const sigs = new Map();
+  const state = /** @type {typeof initial} */ ({});
   const subs = new Set();
+  const own = (k, v) => {
+    const s = signal(v);
+    sigs.set(k, s);
+    Object.defineProperty(state, k, { enumerable: true, configurable: true, get: () => s.value });
+    return s;
+  };
+  for (const [k, v] of Object.entries(initial)) own(k, v);
+  const tell = (changed) => {
+    // every subscriber runs, and one that throws is reported, never allowed to stop the rest
+    for (const s of [...subs]) {
+      if (s.keys && !changed.some((k) => s.keys.includes(k))) continue;
+      try { s.fn(state, changed); } catch (e) { report(`A part of the page failed to follow a change (${changed.join(', ')})`, e); }
+    }
+  };
   return {
     get: () => state,
+    /** A key worked out from other state and stored nowhere: `fn` is read like any other key, and a change of its value is told to the subscribers of its key. */
+    derive(k, fn) {
+      const c = computed(fn);
+      Object.defineProperty(state, k, { enumerable: true, configurable: true, get: () => c.value });
+      let last = c.peek();
+      effect(() => { const v = c.value; if (!Object.is(v, last)) { last = v; untracked(() => tell([k])); } });
+    },
     set(patch) {
-      const changed = Object.keys(patch).filter((k) => !Object.is(state[k], patch[k]));
+      const changed = Object.keys(patch).filter((k) => !Object.is(untracked(() => state[k]), patch[k]));
       if (!changed.length) return;
-      for (const k of changed) state[k] = patch[k];
-      // every subscriber runs, and one that throws is reported, never allowed to stop the rest
-      for (const s of [...subs]) {
-        if (s.keys && !changed.some((k) => s.keys.includes(k))) continue;
-        try { s.fn(state, changed); } catch (e) { report(`A part of the page failed to follow a change (${changed.join(', ')})`, e); }
-      }
+      batch(() => { for (const k of changed) (sigs.get(k) ?? own(k, undefined)).value = patch[k]; });
+      tell(changed);
     },
     /** `fn(state, changedKeys)` after a change to any of `keys` (all of them when `keys` is null); returns the way to stop. */
     subscribe(keys, fn) {
@@ -72,9 +95,9 @@ export const view = createStore({
   pieces: new Map(),   // entry key -> how many pieces its geometry has (from the mesh shown)
   shown: null,         // {id, epoch, version}: the build's mesh the view holds
   draft: null,         // {tileId, payload}: a draft shown in its place
-  textFile: null,      // the file the text pane should show (null: the tile's own)
+  source: null,        // the id of the source document the text pane should show (`tile#file`, see `sourceId`); null: the tile's own
   page: 'browse',      // the sidebar's page: the tile browser, or the editor ('edit')
-  dmode: null,         // a .dmap's mode: 'map' or 'plates' (null: not a .dmap, or its plan has not come)
+  // dmode (a .dmap's mode: 'map' or 'plates'; null: not a .dmap, or its plan has not come) is derived, in editor/mode.js
   msel: [],            // the pieces selected on the map (their ids: editor/scene.js `selected()` reads the ones the map has now)
   mprop: null,         // the property open as a level on the selected piece: 'bottom' | 'seed' | 'print' (editor/scene-panel.js)
   drawer: false,       // the catalog drawer along the bottom of the map is open
@@ -103,6 +126,10 @@ export function tileById(id) {
 export const rootOf = (r) => server.get().roots[r] || { kind: 'files', label: 'Files', path: null };
 /** May the tile's file be renamed here? */
 export const renameable = (t) => !!t && !t.path.startsWith('lib:') && /\.dtile$/i.test(t.path) && !!rootOf(t.root).writable;
+/** The id of the document that holds `file` of tile `t`: the tile's own file is the tile's id, a part of it `id#file`. */
+export const sourceId = (t, file) => (!file || file === t.path ? t.id : `${t.id}#${file}`);
+/** The file a source id of tile `t` names (null: the tile's own). */
+export const sourceFile = (t, sid) => (!sid || sid === t.id || !sid.startsWith(`${t.id}#`) ? null : sid.slice(t.id.length + 1));
 /** The tile shown. */
 export const tile = () => tileById(view.get().tileId);
 export const progressOf = (id) => server.get().progress[id] || null;

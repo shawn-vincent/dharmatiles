@@ -16,7 +16,7 @@ import { cloudAtCaret, cloudOnLine, cloudsIn } from '../cloud.js';
 import { $, pickView, toast, viewer } from './app.js';
 import { texts, canLeave } from './document.js';
 import {
-  controlText, dirty, isMapView, log, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, stackItems, stem,
+  controlText, dirty, isMapView, log, regionOf, doc, entrySel, isEntry, isMark, isPlace, itemOf, mapNode, markSel, same, server, sourceId, stackItems, stem,
   tile, tileSel, view,
 } from './stores.js';
 
@@ -63,8 +63,8 @@ export function setSel(w, { from, guarded = false } = {}) {
   if (!(w && cur && w.kind === cur.kind && w.id === cur.id)) patch.control = null;
   if (isEntry(w)) {
     // the text follows: the selection's own file (unless it was the text that asked)
-    if (targetFile && from !== 'text') patch.textFile = targetFile === tile()?.path ? null : targetFile;
-  } else if (w) patch.textFile = null; // the tile, a region, a line: the tile's own text
+    if (targetFile && from !== 'text') patch.source = sourceId(tile(), targetFile) === tile()?.id ? null : sourceId(tile(), targetFile);
+  } else if (w) patch.source = null; // the tile, a region, a line: the tile's own text
   view.set(patch);
   if (from !== 'text') revealSel();
 }

@@ -546,6 +546,16 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "text/plain; charset=utf-8",
         include_bytes!("../../../../web/preview/vendor/LICENSE-preact-signals"),
     ),
+    (
+        "/js/requests.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/requests.js"),
+    ),
+    (
+        "/js/editor/model.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/editor/model.js"),
+    ),
 ];
 
 /// The file served at `path`.

@@ -30,7 +30,7 @@ export async function select(id, guarded = false) {
     cameras.set(tile().path, { camera: viewer.getCamera(), activeView: view.get().activeView });
   }
   const to = t ? t.id : null;
-  view.set(to === cur.tileId ? {} : { tileId: to, sel: null, control: null, hov: null, activeView: null, textFile: null });
+  view.set(to === cur.tileId ? {} : { tileId: to, sel: null, control: null, hov: null, activeView: null, source: null });
   return true;
 }
 

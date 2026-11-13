@@ -20,11 +20,12 @@ import { showError } from '../problems.js';
 import { FOV } from '../viewer/consts.js';
 import * as M from '../map-model.js';
 import { $, host, pickView, viewer } from './app.js';
-import { piecesOf, selectedOf, chipOf, verdictOf } from '../doc-views.js';
+import { chipOf, verdictOf } from '../doc-views.js';
 import { createTiers } from '../tiers.js';
-import { createStore, isPlates, log, server, tile, tileById, view } from './stores.js';
+import { createStore, log, server, tile, tileById, view } from './stores.js';
 import { docs } from './docs.js';
-import { applyMode, chooseMode, init as initMode, setChosen } from './mode.js';
+import * as model from './model.js';
+import { chooseMode, setChosen } from './mode.js';
 
 export { chooseMode, setChosen };
 
@@ -44,14 +45,13 @@ const shown = new Map();      // piece id -> {gid, tileId}: what it was last dra
 export const live = new Map();
 
 /** Is the map of the document in view (the title bar's Map)? */
-export const mapMode = () => isPlates(tile()) && view.get().dmode === 'map';
-
+export const mapMode = () => model.mapOn.value;
 /** The map's scene as the program last said it (null when the map is not the view). */
-export const sceneNow = () => (mapMode() ? docs.scene(tile().id) : null);
-/** The pieces of the map now: worked out from the document's state each time it is asked. */
-export const pieces = () => piecesOf(sceneNow(), server.get().tiles);
+export const sceneNow = () => model.scene.value;
+/** The pieces of the map now: the model's, worked out from the document's state. */
+export const pieces = () => model.pieces.value;
 /** The selected pieces: the selection's ids that the map has now. */
-export const selected = () => selectedOf(view.get().msel, pieces());
+export const selected = () => model.selected.value;
 export const pieceAt = (id) => pieces().find((p) => p.id === id) ?? null;
 
 // ---- the pieces ---------------------------------------------------------------------------------------
@@ -73,7 +73,6 @@ function frameBox(ps, scene) {
 
 /** Put the map in the view as the document's state says it is now (or take it out when the map is not the view). */
 function sync() {
-  applyMode();
   const t = tile();
   const on = mapMode();
   const sc = on ? docs.scene(t.id) : null;
@@ -381,7 +380,7 @@ export const sceneEdit = { dragged: false };
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  view.set({ dmode: null, msel: [], mprop: null });
+  view.set({ msel: [], mprop: null });
   const c = $('canvas');
   c.addEventListener('pointerdown', onPointerDown);
   c.addEventListener('pointerup', onPointerUp);
@@ -397,6 +396,5 @@ export function init() {
   // a theme or a display switch repaints the pieces' colours
   // the document's state changed (a reply, the stream): the map is drawn from it again
   docs.subscribe(sync);
-  initMode();
   sync();
 }

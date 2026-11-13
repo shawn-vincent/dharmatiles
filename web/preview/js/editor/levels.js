@@ -29,7 +29,7 @@ import {
   doc, entrySel, isInventory, isMapView, isMark, isPlates, itemOf, mapNode, markSel, server, stackItems, stackIndex, tile, tileSel, view,
 } from './stores.js';
 import { contextLines } from './plates.js';
-import { contextLines as mapLines } from './scene-panel.js';
+import { contextLines as mapLines } from './model.js';
 import { contextLines as inventoryLines } from './inventory.js';
 
 const PANES = ['lvl-tile', 'lvl-element', 'lvl-prop'];

@@ -14,7 +14,7 @@ import { createDrafter } from '../drafts.js';
 import { STALE_NOTE, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
 import { $, host, makeMine, toast } from './app.js';
-import { dirty, doc, isPlates, server, stem, tile, view } from './stores.js';
+import { dirty, doc, isPlates, server, sourceFile, sourceId, stem, tile, view } from './stores.js';
 import { docs, planOf } from './docs.js';
 
 // ---- the document: the text, one history, checking and saving -----------------
@@ -28,7 +28,6 @@ import { docs, planOf } from './docs.js';
 // state the program's answers make, and whose saves go through it in turn).  `doc.base` and `doc.docRev` are
 // that state as this store shows it, written by `sourceFields` and nowhere else.
 /** The id of the source document of `file` of tile `t`: the tile's own file is the tile's id. */
-const sourceId = (t, file) => (file === t.path ? t.id : `${t.id}#${file}`);
 let curSid = null; // the source document the pane shows
 /**
  * What the store shows of source `sid`'s held state: the text on disk (`base`), its revision, and whose it is (the tile
@@ -40,7 +39,7 @@ function sourceFields(sid) {
 }
 docs.subscribe((id) => { if (id === curSid && !run.reading) doc.set(sourceFields(id)); });
 
-const run = { reading: false, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, checkSeq: 0, namesSeq: 0, saving: false, openText: '' };
+const run = { reading: false, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, saving: false, openText: '' };
 
 // The history is the page's one (js/doc-history.js): a tile's source is a document whose steps are made here,
 // typing and the lens, each `{before, after, label, change, caret}`; a print list or a map is a document the
@@ -234,12 +233,12 @@ export function spansUsable() {
  * that does not parse keeps the names it had; the check shows its mistakes.
  */
 async function askNames() {
-  const text = doc.get().text, seq = ++run.namesSeq;
+  const text = doc.get().text;
   if (text == null) return;
   const r = await host.names(text);
-  if (r.status === 0) return; // the server is away: the names it had stay
+  if (r.status === 0) return; // the server is away, or a newer reading took its place: the names it had stay
   if (failed('Could not read the names in the text', r)) return;
-  if (seq !== run.namesSeq || !r.body?.ok) return;
+  if (!r.body?.ok) return;
   const { defs, regions, lines, points } = r.body;
   doc.set({ names: { defs, regions, lines, points } });
 }
@@ -256,11 +255,11 @@ function changed(dragging = false) {
 async function check() {
   const t = tile(), d = doc.get();
   if (!t || d.text == null) return false;
-  const text = d.text, seq = ++run.checkSeq;
+  const text = d.text;
   const r = await host.check(t.id, { text, file: d.file === t.path ? undefined : d.file });
-  if (r.status === 0) return false; // the server is away: not checked yet, and checked again when it is back
+  if (r.status === 0) return false; // the server is away (not checked yet, and checked again when it is back), or a newer check took its place
   if (failed(`Could not check ${stem(t)}`, r)) return false;
-  if (seq !== run.checkSeq || text !== doc.get().text || !r.body || t.id !== view.get().tileId) return false;
+  if (text !== doc.get().text || !r.body || t.id !== view.get().tileId) return false;
   const patch = { note: null, checked: text, checkedFile: d.file, checkedTile: d.tileId, ok: !!r.body.ok, errors: r.body.errors || [] };
   if (r.body.ok && r.body.stack) patch.stack = r.body.stack; // the last good stack stays while there are mistakes
   if (r.body.ok && r.body.map) patch.map = r.body.map;
@@ -399,8 +398,8 @@ export async function loadText(file) {
 /** Show `file` (null: the tile's own) and, once it is there, scroll to `line`. */
 export async function openFile(file, line) {
   const t = tile();
-  view.set({ textFile: !file || file === t?.path ? null : file });
-  if (await loadText(view.get().textFile) && line) texts.reveal(line);
+  view.set({ source: !file || file === t?.path ? null : sourceId(t, file) });
+  if (await loadText(sourceFile(t, view.get().source)) && line) texts.reveal(line);
 }
 
 /**
@@ -546,8 +545,8 @@ function compKey(e) {
 /** Wire this part of the page (once, at load). */
 export function init() {
   // what the text pane shows follows the tile, the file wanted, and the tile's builds
-  const follow = () => { if (view.get().tileId != null || tile()) loadText(view.get().textFile); else if (server.get().ready) clearDocument(); };
-  view.subscribe(['tileId', 'textFile'], follow);
+  const follow = () => { if (view.get().tileId != null || tile()) loadText(sourceFile(tile(), view.get().source)); else if (server.get().ready) clearDocument(); };
+  view.subscribe(['tileId', 'source'], follow);
   server.subscribe(['tiles'], follow);
   view.subscribe(['tileId'], closeComp);
   doc.subscribe(null, renderTextBar);

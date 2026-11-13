@@ -23,6 +23,7 @@
 // what changed since, or a fresh snapshot.
 
 import { serverErrorOf } from './server-error.js';
+import { createRequests, SUPERSEDED } from './requests.js';
 
 /** @typedef {import('./api').Calls} Calls */
 /** @typedef {import('./api').Reads} Reads */
@@ -57,9 +58,9 @@ export class Offline extends Error {
 /** @param {unknown} e */
 export const isOffline = (e) => e instanceof Offline;
 const offline = isOffline;
-/** `fetch`, whose network failure is an `Offline` and nothing else is. */
+/** `fetch`, whose network failure is an `Offline` and nothing else is.  Only `browserHost`'s `netFetch` calls it: it counts. */
 /** @type {typeof fetch} */
-async function netFetch(...args) {
+async function rawFetch(...args) {
   try {
     return await fetch(...args);
   } catch (e) {
@@ -101,7 +102,28 @@ const urlOf = (/** @type {string} */ route, /** @type {string | undefined} */ id
   return id === undefined ? path : path.replace(':id', encodeURIComponent(id));
 };
 
-export function browserHost() {
+// The calls whose answer is only worth taking if it is of the newest one asked: what a text says (its names, its
+// check, what may be added at a place, a typed value's reading, a draft) and which plate or target is wanted.  The
+// key says which requests replace which.  Every other call is made as it is asked: a write is answered into the
+// document module by its revision (js/documents.js), never dropped.
+/** @type {Record<string, (body: any, id?: string) => string>} */
+const LATEST = {
+  'POST /api/names': () => 'names',
+  'POST /api/tiles/:id/check': (_b, id) => `check:${id}`,
+  'POST /api/tiles/:id/offers': (_b, id) => `offers:${id}`,
+  'POST /api/tiles/:id/draft': (_b, id) => `draft:${id}`,
+  'POST /api/check-value': (b) => `check-value:${b.element}.${b.control}`,
+  'POST /api/plates/show': (b) => `plates-show:${b.list}`,
+  'POST /api/target': () => 'target',
+};
+
+/** What a call answers when a newer one of its key took its place: nothing happened, and nothing is said. */
+const superseded = () => /** @type {any} */ ({ status: 0, body: { error: 'a newer request took its place', superseded: true } });
+
+/** @param {ReturnType<typeof createRequests>} [requests] */
+export function browserHost(requests = createRequests()) {
+  /** Every request of the page is made here, so the layer counts it. @type {typeof fetch} */
+  const netFetch = (...args) => requests.direct(() => rawFetch(...args));
   /** @type {string | null} */
   let token = null;
   const session = async () => {
@@ -121,6 +143,13 @@ export function browserHost() {
    * @returns {Promise<Reply<Res<R>>>}
    */
   const call = async (route, body, id) => {
+    const key = LATEST[route]?.(body, id);
+    if (key === undefined) return send(route, body, id);
+    const r = await requests.latest(key, () => send(route, body, id));
+    return r === SUPERSEDED ? superseded() : r;
+  };
+  /** @template {keyof Calls} R @param {R} route @param {Req<R>} body @param {string} [id] @returns {Promise<Reply<Res<R>>>} */
+  const send = async (route, body, id) => {
     const path = urlOf(route, id);
     try {
       const r = await netFetch(path, {
@@ -138,6 +167,22 @@ export function browserHost() {
   const read = async (/** @type {string} */ path, /** @type {Record<string, string>} */ query) => {
     try {
       const r = await netFetch(`${path}?${new URLSearchParams(query)}`, { cache: 'no-store' });
+      return await reply(r, path);
+    } catch (e) {
+      if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
+      throw e;
+    }
+  };
+  /** @param {string} id @param {Req<'POST /api/tiles/:id/draft'>} body @returns {Promise<{status: number, buffer: ArrayBuffer} | Reply<{}>>} */
+  const sendDraft = async (id, body) => {
+    const path = urlOf('POST /api/tiles/:id/draft', id);
+    try {
+      const r = await netFetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-DT-Token': await session() },
+        body: JSON.stringify(body),
+      });
+      if (r.ok) return { status: r.status, buffer: await r.arrayBuffer() };
       return await reply(r, path);
     } catch (e) {
       if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
@@ -275,20 +320,11 @@ export function browserHost() {
      * @returns {Promise<{status: number, buffer: ArrayBuffer} | Reply<{}>>}
      */
     async draft(id, body) {
-      const path = urlOf('POST /api/tiles/:id/draft', id);
-      try {
-        const r = await netFetch(path, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-DT-Token': await session() },
-          body: JSON.stringify(body),
-        });
-        if (r.ok) return { status: r.status, buffer: await r.arrayBuffer() };
-        return await reply(r, path);
-      } catch (e) {
-        if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
-        throw e;
-      }
+      const r = await requests.latest(`draft:${id}`, () => sendDraft(id, body));
+      return r === SUPERSEDED ? superseded() : r;
     },
+    /** The requests in flight, for a test or a page that waits for quiet. */
+    requests,
     /** Write the text to its file, if the file is still at `docRev` (else 409 with its text and docRev). @param {string} id @param {Req<'POST /api/tiles/:id/save'>} body */
     save: (id, body) => call('POST /api/tiles/:id/save', body, id),
     /** Rename a tile's file. @param {string} id @param {string} name */

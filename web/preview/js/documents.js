@@ -17,15 +17,14 @@
 //   history  every change made is an entry of one history (doc-history.js); Undo and Redo are calls too.
 //
 // No DOM and no network of its own: `send(name, body)` is the host's call, `report` says what went wrong where
-// the user is looking, `derive(id, state)` is what the page derives from a new state before anyone is told,
-// and `subscribe` tells each listener once per state taken.
+// the user is looking, and `subscribe` tells each listener once per state taken.
 
+import { signal } from '@preact/signals-core';
 import { createHistory } from './doc-history.js';
 
 /**
  * @param {{send: (name: string, body: object) => Promise<{status: number, body: any}>,
  *   report?: {refusal(label: string, r: object): void, failure(label: string, r: object): void, note(text: string): void},
- *   derive?: (id: string, state: object) => void,
  *   history?: ReturnType<typeof createHistory>}} deps
  * @returns {{docs: object, receive: (state: object) => boolean}} the readers and actions, and the setter apart from them
  */
@@ -38,8 +37,11 @@ function deepFreeze(v) {
   return v;
 }
 
-export function createDocuments({ send, report = {}, derive = () => {}, history = createHistory() }) {
-  const held = new Map();
+export function createDocuments({ send, report = {}, history = createHistory() }) {
+  // each document's state is a signal (@preact/signals-core): what reads it inside a component or a `computed` follows it
+  const slots = new Map();
+  const slot = (id) => { let s = slots.get(id); if (!s) { s = signal(undefined); slots.set(id, s); } return s; };
+  const held = { get: (id) => slot(id).value, set: (id, v) => { slot(id).value = v; }, has: (id) => slot(id).value !== undefined };
   const subs = new Set();
   const queues = new Map();
   const conflicts = new Map(); // id -> the disk's text, while a save was refused and the user has not chosen
@@ -53,7 +55,6 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
 
   function commit(id, state) {
     held.set(id, deepFreeze(state));
-    derive(id, state);
     notify(id);
   }
 

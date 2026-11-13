@@ -1,6 +1,5 @@
 // @ts-check
-// The page's documents (js/documents.js) wired to this page: the host's calls, the toasts, and the one thing
-// the page derives from a document before anyone is told (the mode a .dmap is shown in).
+// The page's documents (js/documents.js) wired to this page: the host's calls and the toasts.
 //
 // `docs` reads documents and makes every change to them.  `applyDocState` is the setter: the program's word on
 // a document goes through it and only it, and only live.js (the event stream) imports it (tests/documents.test.js
@@ -10,7 +9,6 @@ import { createDocuments } from '../documents.js';
 import { failed } from '../problems.js';
 import { host, toast } from './app.js';
 import { say } from './inventory.js';
-import { derivedMode } from './mode.js';
 import { isPlates } from './stores.js';
 
 /** The calls a document's steps name (js/steps.js), each made with the list and the revision the document supplies. */
@@ -31,7 +29,7 @@ const report = {
   note: (text) => toast(text, null, { ms: 7000 }),
 };
 
-export const { docs, receive: applyDocState } = createDocuments({ send, report, derive: (id) => derivedMode(id) });
+export const { docs, receive: applyDocState } = createDocuments({ send, report });
 
 /** A toast's Undo: the one history's, while the toast's change is still the last one; else it says so and writes nothing. */
 export async function undoToast(id, entry) {
