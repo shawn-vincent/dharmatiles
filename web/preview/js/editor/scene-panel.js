@@ -5,14 +5,24 @@
 import { html, render } from '../view/html.js';
 import { MapPanel } from '../view/map-panel.js';
 import { $ } from './app.js';
+import { keep, readKept } from './list-keep.js';
 import { mapPanel } from './model.js';
 import * as E from './scene-edit.js';
-import { chooseMode, mapMode, select } from './scene.js';
+import { chooseMode, hoverPieces, mapMode, select } from './scene.js';
 import { view } from './stores.js';
 
 /** What the panel's buttons do. */
 const act = {
   select: (ids) => select(ids),
+  hover: (ids) => hoverPieces(ids),
+  /** Change how this map's list is sorted, filtered or searched: view state, kept for the map (sort and filter) across visits. */
+  list: (patch) => {
+    const id = view.get().tileId;
+    if (id == null) return;
+    const next = { ...mapPanel.list.value, ...patch };
+    view.set({ mlist: { ...view.get().mlist, [id]: next } });
+    keep(id, next);
+  },
   setProp: (kind) => view.set({ mprop: kind }),
   toggleDrawer: () => view.set({ drawer: !view.get().drawer }),
   chooseMode,
@@ -34,6 +44,7 @@ export function up() {
 
 /** Wire this part of the page (once, at load). */
 export function init() {
+  view.set({ mlist: readKept() });
   render(html`<${MapPanel} m=${mapPanel} act=${act} />`, $('lens-map'));
   // Esc is one level up: a property to its piece, a piece to the map (before the page's own Esc, which leaves the tile)
   addEventListener('keydown', (e) => {

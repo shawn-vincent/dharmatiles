@@ -19,6 +19,7 @@ import { isOffline } from '../host.js';
 import { showError } from '../problems.js';
 import { FOV } from '../viewer/consts.js';
 import * as M from '../map-model.js';
+import { pillsWanted } from '../map-list.js';
 import { $, host, viewer } from './app.js';
 import { frameBox } from './framing.js';
 import { chipOf, verdictOf } from '../doc-views.js';
@@ -240,7 +241,7 @@ export function evaluate(now = false) {
   for (const [g, e] of geoms) {
     for (const tier of ['low', 'full']) if (e.asked.has(tier) && !e.tiers.has(tier) && !wanted.has(`${g}|${tier}`)) tierSet.drop(`${g}|${tier}`);
   }
-  viewer.setSceneHighlight(slotsOf([...sel]), hovered);
+  highlight();
   viewer.placeGround();
 }
 
@@ -273,7 +274,7 @@ export const chip = () => chipOf(sceneNow());
 
 // ---- pills on the pieces -------------------------------------------------------------------------------
 
-let pillsOn = true;
+let pillsOn = false; // off until the user turns them on: the list in the panel carries the shelf's words
 const tags = new Map(); // piece id -> its element
 
 /** A small pill over each piece the program has a word for: have (on your shelf), to print, or the caution of the other colour mode. */
@@ -312,11 +313,24 @@ const idAt = (slot) => (slot >= 0 ? drawn[slot] ?? null : null);
 /** The id of the piece the view's pick `slot` names (what scene-drag.js asks after a pick). */
 export const pickAt = (x, y) => idAt(viewer.scenePick(x, y));
 
+let listHover = []; // the ids of the pieces whose row in the panel's list the pointer is on
+
+/** What the view lights: the selection, and the pieces of the row under the pointer in the list, outlined like a selection. */
+function highlight() {
+  viewer.setSceneHighlight(slotsOf([...view.get().msel, ...listHover]), hovered);
+}
+
+/** Light the pieces of a row of the panel's list (their ids; none ends it): the same highlight as the pointer's own. */
+export function hoverPieces(ids) {
+  listHover = ids;
+  highlight();
+}
+
 /** Set the piece under the pointer. */
 function hover(i) {
   if (hovered === i) return;
   hovered = i;
-  viewer.setSceneHighlight(slotsOf(view.get().msel), hovered);
+  highlight();
   $('canvas').classList.toggle('grab', i >= 0);
 }
 
@@ -371,7 +385,7 @@ export function init() {
   c.addEventListener('pointermove', onPointerMove);
   c.addEventListener('pointerleave', () => hover(-1));
   viewer.onRenderHook(() => { cameraMoved(); drawTags(); });
-  try { pillsOn = localStorage.getItem('dt-pills') !== '0'; } catch { /* private mode: the default stands */ }
+  try { pillsOn = pillsWanted(localStorage.getItem('dt-pills')); } catch { /* private mode: the default stands */ }
   $('t-pills').checked = pillsOn;
   $('t-pills').onchange = (e) => { pillsOn = e.target.checked; try { localStorage.setItem('dt-pills', pillsOn ? '1' : '0'); } catch { /* private mode */ } viewer.draw(); };
   server.subscribe(['tiles', 'inventory'], sync);

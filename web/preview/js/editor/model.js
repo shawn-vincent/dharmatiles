@@ -12,6 +12,7 @@
 
 import { computed, signal } from '@preact/signals-core';
 import * as M from '../map-model.js';
+import { listFrom } from '../map-list.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
 import { pill as invPill, systemName } from '../inventory.js';
 import { levelOf, placesOf, whereIs, writable } from '../folders.js';
@@ -35,6 +36,8 @@ export const pieces = computed(() => piecesOf(scene.value, server.get().tiles));
 export const selected = computed(() => selectedOf(view.get().msel, pieces.value));
 /** What the program says of each piece with a word (have, need, other, skip). */
 export const marks = computed(() => M.marks(pieces.value));
+/** How this map's list of pieces is sorted, filtered and searched (view state, per map: `view.mlist`, id -> choice). */
+export const mapList = computed(() => listFrom(view.get().mlist[tileNow.value?.id ?? '']));
 /** The property open on the selected piece, if one is. */
 export const mprop = computed(() => view.get().mprop);
 /** The level the map's panel is on: 'map', 'piece' or 'prop'. */
@@ -63,7 +66,7 @@ export const contextLines = () => {
 };
 
 /** What the map's panel (js/view/map-panel.js) reads: one object of signals. */
-export const mapPanel = { on: mapOn, tile: tileNow, scene, pieces, selected, marks, mprop, level, inventory, readOnly, mapName, waiting };
+export const mapPanel = { on: mapOn, tile: tileNow, scene, pieces, selected, marks, list: mapList, mprop, level, inventory, readOnly, mapName, waiting };
 
 // ---- the plates' panel ---------------------------------------------------------------------------------------------
 

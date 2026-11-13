@@ -10,20 +10,22 @@
 // is, so a word being typed is not lost (field.js).
 
 import * as M from '../map-model.js';
+import { FILTERS, SORTS, sectionsOf } from '../map-list.js';
 import { haveLine, systemName, tileHave } from '../inventory.js';
 import { Field } from './field.js';
-import { html } from './html.js';
+import { html, useEffect, useRef } from './html.js';
 import { Button, Section, Seg, plural } from './widgets.js';
 
 /** The have or to-print pill of a piece (caution yellow where only the other colour mode is on the shelf). */
+const TITLES = {
+  have: 'A print you own is this piece (tile, seed, system and colour mode): it is left off the plates',
+  need: 'It prints',
+  other: 'You own this tile and seed in the other colour mode; it prints unless you leave it off',
+  skip: 'print=skip: it stays on the map and off the plates',
+};
 export const Pill = ({ state }) => {
   const word = { have: 'have', need: 'to print', other: 'have, other colour', skip: 'left off' }[state] ?? state;
-  const title = {
-    have: 'A print you own is this piece (tile, seed, system and colour mode): it is left off the plates',
-    need: 'It prints',
-    other: 'You own this tile and seed in the other colour mode; it prints unless you leave it off',
-    skip: 'print=skip: it stays on the map and off the plates',
-  }[state];
+  const title = TITLES[state];
   return html`<span class=${`ipill ${state === 'have' ? 'have' : state === 'other' ? 'caution' : 'need'}`} title=${title}>${word}</span>`;
 };
 
@@ -40,13 +42,67 @@ function Head({ m, act }) {
     <nav class="mp-crumbs">${crumbs.map((c, i) => html`${i ? html`<span class="sep">›</span>` : null}<button type="button" class=${`crumb${i === crumbs.length - 1 ? ' cur' : ''}`} onClick=${c.go}>${c.label}</button>`)}</nav></div></div>`;
 }
 
+/** The have, to-print and caution pills of a row of the list: what the shelf says of its pieces (the states are apart: a piece is in one). */
+const RowPills = ({ row }) => html`<span class="mp-pills">
+  ${row.skip ? html`<${Pill} state="skip" />` : null}
+  ${row.have ? html`<span class="ipill have" title=${TITLES.have}>${`${row.have} have`}</span>` : null}
+  ${row.toPrint - row.other ? html`<span class="ipill need" title=${TITLES.need}>${`${row.toPrint - row.other} to print`}</span>` : null}
+  ${row.other ? html`<span class="ipill caution" title=${TITLES.other}>${`${row.other} other colour`}</span>` : null}</span>`;
+
+/**
+ * The map's pieces by tile, in the sections placed, not placed and left off (map-list.js), under the sort, the filter
+ * and the search the model holds for this map.  A row lights its pieces in the view while the pointer is on it
+ * (`act.hover`), selects them when pressed, and is marked, and brought into view in the list, while one of its pieces
+ * is selected: so it reads the selection the same wherever the selection was made.
+ */
+function PieceList({ m, act, capped = false }) {
+  const ro = m.readOnly.value;
+  const ps = m.pieces.value;
+  const how = m.list.value;
+  const secs = sectionsOf(ps, m.marks.value, how);
+  const picked = new Set(m.selected.value.map((p) => p.id));
+  const box = useRef(/** @type {any} */ (null));
+  const key = [...picked].join(',');
+  // bring the first marked row into view inside the list itself, never moving the panel around it
+  useEffect(() => {
+    const el = box.current, row = el?.querySelector('.mp-group.on');
+    if (!el || !row || el.scrollHeight <= el.clientHeight) return;
+    const top = row.offsetTop - el.offsetTop;
+    if (top < el.scrollTop) el.scrollTop = top;
+    else if (top + row.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = top + row.offsetHeight - el.clientHeight;
+  }, [key]);
+  const Row = (row) => {
+    const on = row.ids.some((id) => picked.has(id));
+    return html`<button type="button" class=${`mp-group${on ? ' on' : ''}`} key=${row.key} aria-pressed=${String(on)} title=${`Select the ${plural(row.pieces.length, 'piece')} of ${row.name}`}
+      onClick=${() => act.select(row.ids)} onPointerEnter=${() => act.hover(row.ids)} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover(row.ids)} onBlur=${() => act.hover([])}>
+      <b>${row.name}</b><span class="mp-n">${`× ${row.count}`}</span><${RowPills} row=${row} /></button>`;
+  };
+  const Head = ({ text, n, note }) => html`<h4 class="mp-h" title=${note}>${text}<span class="mp-n">${n}</span></h4>`;
+  return html`<${Section} title=${ps.length ? 'Pieces' : 'No pieces yet'} cls=${capped ? 'mp-capped' : ''}>
+    ${ps.length ? null : html`<p class="note">Open the catalog and put tiles on the map. Each is a piece with a place, a turn and a seed; nothing prints until you ask for the plates.</p>`}
+    ${ps.length ? html`
+      <${Seg} label="Sort" options=${SORTS} current=${how.sort} on=${(v) => act.list({ sort: v })} />
+      <${Seg} label="Show" options=${FILTERS} current=${how.filter} on=${(v) => act.list({ filter: v })} />
+      <div class="pl-field"><span class="pl-lab">Find</span>
+        <${Field} type="search" commit="input" placeholder="Part of a tile’s name" spellcheck=${false} aria-label="Find a tile on the map by name" value=${how.query} onCommit=${(v) => act.list({ query: v })} /></div>
+      <div class="mp-list" ref=${box}>
+        ${secs.shown ? null : html`<p class="note">No piece matches.</p>`}
+        ${secs.placed.length ? html`<${Head} text="Placed" n=${secs.placed.reduce((n, r) => n + r.count, 0)} />${secs.placed.map((r) => Row(r))}` : null}
+        ${secs.tray.length ? html`<${Head} text="Not placed" n=${secs.tray.reduce((n, r) => n + r.count, 0)} note="Pieces with no place yet: they print, and wait to be put on the map" />${secs.tray.map((r) => html`<div class="mp-tray" key=${r.key}>
+          <b>${r.name}</b><span class="mp-n">${r.count > 1 ? `× ${r.count}` : ''}</span>
+          <${Button} text="Place" run=${() => act.place(r.key)} disabled=${ro || !!r.pieces[0].error} title=${r.count > 1 ? 'Put one copy on the map at the nearest free place, with a seed of its own' : 'Put it on the map at the nearest free place'} />
+          ${r.count > 1 ? html`<${Button} text="Place all" run=${() => act.place(r.key, true)} disabled=${ro || !!r.pieces[0].error} title=${`Put all ${r.count} on the map, each with a seed of its own`} />` : null}
+        </div>`)}` : null}
+        ${secs.off.length ? html`<${Head} text="Left off" n=${secs.off.reduce((n, r) => n + r.count, 0)} note="print=skip: these stay on the map and off the plates" />${secs.off.map((r) => Row(r))}` : null}
+      </div>` : null}
+  <//>`;
+}
+
 function MapLevel({ m, act }) {
   const ro = m.readOnly.value;
   const ps = m.pieces.value;
   const sc = m.scene.value;
-  const states = m.marks.value;
   const placed = ps.filter((p) => p.at);
-  const tray = ps.filter((p) => !p.at);
   return html`
     <${Section} title="On the map">
       <p class="inv-sum"><b>${sc?.shelfExists ? `${sc.have} in inventory` : 'No inventory yet'}</b>${` · ${sc?.toPrint ?? 0} to print`}</p>
@@ -55,23 +111,7 @@ function MapLevel({ m, act }) {
         <${Button} text="Print what’s missing" run=${() => act.chooseMode('plates')} cls="btn on" title="The plates for this map: only the pieces your inventory lacks" />
       </div>
     <//>
-    <${Section} title=${placed.length ? 'Pieces' : 'No pieces yet'}>
-      ${placed.length ? null : html`<p class="note">Open the catalog and put tiles on the map. Each is a piece with a place, a turn and a seed; nothing prints until you ask for the plates.</p>`}
-      ${M.groupsOf(placed).map((g) => {
-        const have = g.pieces.filter((p) => states.get(p.id)?.state === 'have').length;
-        return html`<button type="button" class="mp-group" key=${g.canon} title=${`Select the ${plural(g.pieces.length, 'piece')} of ${g.name}`} onClick=${() => act.select(g.pieces.map((p) => p.id))}>
-          <b>${g.name}</b><span class="mp-n">${`× ${g.pieces.length}`}</span>
-          <span class="mp-pills">${have ? html`<span class="ipill have">${`${have} have`}</span>` : null}${g.pieces.length - have ? html`<span class="ipill need">${`${g.pieces.length - have} to print`}</span>` : null}</span></button>`;
-      })}
-    <//>
-    ${tray.length ? html`<${Section} title="In the tray">
-      <p class="note">Pieces with no place yet: they print, and wait to be put on the map.</p>
-      ${tray.map((p) => html`<div class="mp-tray" key=${p.id}>
-        <b>${p.name}</b><span class="mp-n">${p.count > 1 ? `× ${p.count}` : ''}</span>
-        <${Button} text="Place" run=${() => act.place(p.id)} disabled=${ro || !!p.error} title=${p.count > 1 ? 'Put one copy on the map at the nearest free place, with a seed of its own' : 'Put it on the map at the nearest free place'} />
-        ${p.count > 1 ? html`<${Button} text="Place all" run=${() => act.place(p.id, true)} disabled=${ro || !!p.error} title=${`Put all ${p.count} on the map, each with a seed of its own`} />` : null}
-      </div>`)}
-    <//>` : null}
+    <${PieceList} m=${m} act=${act} />
     <${Section} title="Variants">
       <p class="note">A new variant is the same tile with a new seed: a new print. New pieces already get a seed you do not own.</p>
       <div class="mp-row wrap">
@@ -125,7 +165,8 @@ function PieceLevel({ m, act }) {
         <${Button} text="Duplicate" run=${() => act.duplicate(ids)} disabled=${ro} title="A copy next to it, with the same seed (D)" />
         <${Button} text="Remove" run=${() => act.remove(ids)} cls="btn danger" disabled=${ro} title="Take it off the map (Backspace)" />
       </div>
-    <//>`;
+    <//>
+    <${PieceList} m=${m} act=${act} capped=${true} />`;
 }
 
 function PropLevel({ m, act }) {

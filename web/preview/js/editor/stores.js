@@ -100,6 +100,7 @@ export const view = createStore({
   // dmode (a .dmap's mode: 'map' or 'plates'; null: not a .dmap, or its plan has not come) is derived, in editor/mode.js
   msel: [],            // the pieces selected on the map (their ids: editor/scene.js `selected()` reads the ones the map has now)
   mprop: null,         // the property open as a level on the selected piece: 'bottom' | 'seed' | 'print' (editor/scene-panel.js)
+  mlist: {},           // how each map's list of pieces is sorted, filtered and searched, by the map's tile id: {sort, filter, query} (editor/scene-panel.js; sort and filter are kept in localStorage)
   drawer: false,       // the catalog drawer along the bottom of the map is open
   panel: false,        // the messages panel is open
   popover: null,       // the id of the open popover, if any
