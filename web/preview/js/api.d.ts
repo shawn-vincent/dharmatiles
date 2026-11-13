@@ -607,7 +607,11 @@ type SketchRef = { id: number, rough: boolean, };
 
 type SlicerFound = { slicer: string, label: string, title: string, };
 
-type Snapshot = { rev: number, epoch: string, system: string, printer: string, printers: Array<JsonValue>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
+type Snapshot = { 
+/**
+ * The contract stamp of this program (`contract()`): a page that imported a different one is from another build.
+ */
+contract: string, rev: number, epoch: string, system: string, printer: string, printers: Array<JsonValue>, overhangDeg: number, steepestDeg: number, squareMm: number, roots: Array<RootJson>, folders: Array<FolderJson>, home: string | null, inventory: JsonValue, tiles: Array<TileSummary>, };
 
 type SpanJson = { file: string, line: number, col: number, offset: number, len: number, };
 

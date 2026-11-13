@@ -4,6 +4,7 @@
 // server's word subscribes to that store; this part knows no other.
 
 import { signal } from '@preact/signals-core';
+import { refuseOtherBuild, sameBuild } from './same-build.js';
 import { tierReady, tiersReconnected } from '../tiers.js';
 import { setEnvironment, showError } from '../problems.js';
 import { ServerError } from '../server-error.js';
@@ -69,6 +70,7 @@ export function reached(rev) {
  * resume).  Nothing else carries the whole: a call's answer says only the revision its change was told at (`reached`).
  */
 export function applySnapshot(m) {
+  if (!sameBuild(m.contract)) { refuseOtherBuild(); return; } // a page of another build takes nothing from this program
   m.tiles.forEach(reportFailure);
   const ids = new Set(m.tiles.map((t) => t.id));
   for (const id of [...building]) if (!ids.has(id)) { building.delete(id); log.forget(id); }

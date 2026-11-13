@@ -780,6 +780,7 @@ impl Shared {
     fn snapshot_of(&self, tiles: &[Slot], rev: u64) -> api::Snapshot {
         let (target, places) = (self.target_value(), self.places_value());
         api::Snapshot {
+            contract: api::contract().to_owned(),
             rev,
             epoch: self.epoch.clone(),
             system: target.system,

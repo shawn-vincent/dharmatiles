@@ -262,7 +262,7 @@
     <div class="row-btns"><button class="btn danger" id="leave-discard" value="discard">Discard changes</button><button class="btn on" value="cancel" autofocus>Keep editing</button></div>
   </form>
 </dialog>
-<div id="boot-error" role="alert" hidden><b>The editor didn't start.</b> <span id="boot-why"></span> <button class="btn" type="button" onclick="location.reload()">Reload</button></div>
+<div id="boot-error" role="alert" hidden><b id="boot-title">The editor didn't start.</b> <span id="boot-why"></span> <button class="btn" type="button" onclick="location.reload()">Reload</button></div>
 <script>
 // Until main.js has wired everything (it sets dtStarted last), any failure to load or start is shown here,
 // loudly: one module that fails to load stops all of them, and the page would otherwise sit there half-drawn.

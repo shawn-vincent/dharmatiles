@@ -283,6 +283,8 @@ pub struct FolderJson {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    /// The contract stamp of this program (`contract()`): a page that imported a different one is from another build.
+    pub contract: String,
     pub rev: u64,
     pub epoch: String,
     pub system: String,
@@ -296,6 +298,22 @@ pub struct Snapshot {
     pub home: Option<String>,
     pub inventory: Json,
     pub tiles: Vec<TileSummary>,
+}
+
+/// This program's contract stamp: a hash of the contract (`web/preview/js/api.d.ts`), read at compile time from
+/// `web/preview/js/contract.js`, the same file the page imports when it loads.  A page served from files newer
+/// or older than the running program (a page read from disk after a merge, or a tab left open across a restart)
+/// imported a different stamp, sees it differ in the first snapshot, and shows only that.  The test
+/// `the_page_contract_is_current` writes and checks the file with `api.d.ts`.
+pub fn contract() -> &'static str {
+    const FILE: &str = include_str!("../../../../web/preview/js/contract.js");
+    // the file is one generated line, `export const CONTRACT = '…';` (checked by the contract test); were it ever
+    // malformed, the whole file would stand as the stamp, match no page, and every page would say so
+    let value = FILE
+        .split("CONTRACT = '")
+        .nth(1)
+        .and_then(|rest| rest.split('\'').next());
+    value.unwrap_or(FILE)
 }
 
 /// The calls the page makes, each with its request and response type.  Makes
