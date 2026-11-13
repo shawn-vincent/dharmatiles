@@ -160,7 +160,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             "square_mm": frame.square_mm, "size_mm": [w, h],
             // the tile's zero height: where the base meets the tile body
             "datum_z": 0.0,
-            "stack": stack::items(t, &opts.system)?,
+            "stack": stack::items(t, checked.solved.as_ref(), &opts.system)?,
         }))
     }) {
         Some(Err(e)) => {

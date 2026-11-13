@@ -30,7 +30,7 @@ use dt_kit::{
 };
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Element, LookError, Plan, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Shown, Write, num_text};
 
 /// The height-field resolution, true mm.
 const CELL_MM: f64 = 0.15;
@@ -927,6 +927,14 @@ fn close(frame: &dt_kit::Frame, mask: &[bool], r_mm: f64) -> Vec<bool> {
 }
 
 impl Element for Dirt {
+    fn shown(&self) -> Vec<Shown> {
+        vec![Shown::new(
+            "bumpSize",
+            format!("{}dmm", num_text(self.size_mm)),
+            "default",
+        )]
+    }
+
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Surface,

@@ -3,7 +3,9 @@
 //! written (`file`, byte `span`, 1-based `lines`) so the editor can light
 //! its text when its geometry is picked.
 
-use dt_eval::doc::{Entry, Named, Tile};
+use dt_eval::doc::{Entry, Named, Origin, Tile};
+use dt_eval::solve::{SolveReport, SolvedTop};
+use dt_eval::unwritten::{Unwritten, library_name, unwritten};
 use serde_json::{Value, json};
 
 pub use crate::elements::DOCS;
@@ -28,14 +30,26 @@ fn item(label: String, element: &str) -> Value {
 /// the entry's id ([`dt_eval::doc::Entry::id`]): what the page keeps to
 /// find the entry again whatever the stack looks like later.
 ///
+/// Each entry also says what its controls are where nothing is written
+/// (`defaults`, see [`dt_eval::unwritten`]): `solved` is what the solver made
+/// of the bodies, which is where a body's default `top` is picked.
+///
 /// # Errors
 /// If a span the plan holds does not lie in its own source (a bug: the
-/// page would be sent empty text in its place).
-pub fn items(tile: &Tile, system: &str) -> Result<Vec<Value>, String> {
+/// page would be sent empty text in its place), or a control has nothing to
+/// show where it is not written (a mistake in the schema's table).
+pub fn items(
+    tile: &Tile,
+    solved: Option<&SolveReport>,
+    system: &str,
+) -> Result<Vec<Value>, String> {
     let names = tile.names(system);
     let mut out = Vec::with_capacity(names.len());
-    for (e, named) in tile.stack.iter().zip(&names) {
-        out.push(entry(e, named)?);
+    for (k, (e, named)) in tile.stack.iter().zip(&names).enumerate() {
+        let top = solved
+            .and_then(|s| s.bodies.iter().find(|b| b.entry == k))
+            .map(|b| &b.top);
+        out.push(entry(e, named, top)?);
     }
     if let Some(span) = tile.base_span {
         let mut v = base(system);
@@ -65,7 +79,14 @@ pub fn base(system: &str) -> Value {
     })
 }
 
-fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
+/// What a control shows where nothing is written, as the page reads it.
+fn defaults_json(list: &[Unwritten]) -> Vec<Value> {
+    list.iter()
+        .map(|u| json!({ "control": u.control, "text": u.text, "from": u.from }))
+        .collect()
+}
+
+fn entry(e: &Entry, named: &Named, top: Option<&SolvedTop>) -> Result<Value, String> {
     let what = e.what.value.as_str();
     let mut v = item(named.label.clone(), &named.element);
     v["key"] = json!(named.id.as_str());
@@ -86,7 +107,14 @@ fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
         "file": src.name(),
         "span": [span.offset(), span.len()],
     })));
-    v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name())?);
+    v["controls"] = json!(settings(&e.controls, e.src.name())?);
+    let missing = unwritten(what, &e.controls, &e.children, top).map_err(|err| {
+        format!(
+            "the `{what}` entry at byte {start} of {}: {err}",
+            e.src.name()
+        )
+    })?;
+    v["defaults"] = json!(defaults_json(&missing));
     v["clouds"] = json!(clouds(e)?);
     // where it is put (at=), as written, for the map's handles
     const PLACE: [&str; 1] = ["at"];
@@ -114,10 +142,17 @@ fn entry(e: &Entry, named: &Named) -> Result<Value, String> {
     // node is addressed by the offset its name starts at
     let mut things = Vec::with_capacity(e.children.len());
     for c in &e.children {
+        let missing = unwritten(&c.what.value, &c.controls, &[], None).map_err(|err| {
+            format!(
+                "the `{}` in the `{what}` entry at byte {start}: {err}",
+                c.what.value
+            )
+        })?;
         things.push(json!({
             "what": c.what.value,
             "at": c.what.span.offset(),
-            "controls": settings(&c.controls, &c.what.span, e.src.name())?,
+            "controls": settings(&c.controls, e.src.name())?,
+            "defaults": defaults_json(&missing),
         }));
     }
     v["things"] = json!(things);
@@ -165,18 +200,15 @@ fn clouds(e: &Entry) -> Result<Vec<Value>, String> {
     Ok(out)
 }
 
-/// The controls written on an entry (a default is not written: its span
-/// is the entry's name): name, the text written (`size="6dmm .. 10dmm"`, or a
-/// child line `height 35`) and its byte span, and the file it is in (a
-/// definition's controls are written in the definition's file).
-fn settings(
-    controls: &[dt_eval::doc::Setting],
-    name: &miette::SourceSpan,
-    file: &str,
-) -> Result<Vec<Value>, String> {
+/// The controls written on an entry (a default, a number a word stands for
+/// or one worked out from a line is not written: [`Origin`]): name, the text
+/// written (`size="6dmm .. 10dmm"`, or a child line `height 35`) and its byte
+/// span, and the file it is in (a definition's controls are written in the
+/// definition's file).
+fn settings(controls: &[dt_eval::doc::Setting], file: &str) -> Result<Vec<Value>, String> {
     controls
         .iter()
-        .filter(|c| c.span != *name)
+        .filter(|c| c.origin == Origin::Written)
         .map(|c| {
             let (o, l) = (c.span.offset(), c.span.len());
             let text = c.src.inner();
@@ -192,6 +224,8 @@ fn settings(
                 "text": written,
                 "span": [o, l],
                 "file": (c.src.name() != file).then(|| c.src.name()),
+                // written in a part the entry calls: what the sheet says it comes from
+                "from": (c.src.name() != file).then(|| library_name(c.src.name())),
             }))
         })
         .collect()
@@ -205,7 +239,7 @@ mod tests {
 
     fn labels(path: &str, system: &str) -> Vec<String> {
         let c = dt_eval::check(&Files, path, &Options::default()).unwrap();
-        super::items(c.tile.as_ref().unwrap(), system)
+        super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), system)
             .unwrap()
             .iter()
             .map(|v| v["label"].as_str().unwrap().to_owned())
@@ -236,7 +270,7 @@ mod tests {
             &Options::default(),
         )
         .unwrap();
-        let items = super::items(c.tile.as_ref().unwrap(), "db").unwrap();
+        let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
         let seed = |what: &str| items.iter().find(|v| v["what"] == what).unwrap()["seed"].clone();
         assert_eq!(seed("wall"), 11);
         assert!(seed("dirt").is_null());
@@ -270,7 +304,7 @@ mod tests {
             if let Ok(c) = dt_eval::check(&Files, &path, &Options::default())
                 && let Some(t) = c.tile.as_ref()
             {
-                super::items(t, "db").unwrap_or_else(|e| panic!("{path}: {e}"));
+                super::items(t, None, "db").unwrap_or_else(|e| panic!("{path}: {e}"));
             }
         }
     }
@@ -279,7 +313,7 @@ mod tests {
     fn clouds_of(text: &str) -> Vec<(String, Vec<(String, String)>)> {
         let m = dt_eval::Memory([("t.dtile".to_owned(), text.to_owned())].into());
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
-        super::items(c.tile.as_ref().unwrap(), "db")
+        super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db")
             .unwrap()
             .iter()
             .filter(|v| v["key"] != "tile/connector")
@@ -350,7 +384,7 @@ mod tests {
             .into(),
         );
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
-        let items = super::items(c.tile.as_ref().unwrap(), "db").unwrap();
+        let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
         let tree = items.iter().find(|v| v["what"] == "tree").unwrap();
         let cloud = &tree["clouds"][0];
         let text = c.file.src.inner();
@@ -372,7 +406,7 @@ mod tests {
             .into(),
         );
         let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
-        let items = super::items(c.tile.as_ref().unwrap(), "db").unwrap();
+        let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
         let top = items[0]["controls"]
             .as_array()
             .unwrap()
@@ -380,6 +414,65 @@ mod tests {
             .find(|c| c["name"] == "top")
             .unwrap();
         assert_eq!(top["text"], "top=\"$groundHeight + 1dmm\"");
+    }
+
+    /// A word written stands for numbers (`height full` for the wall top),
+    /// which are no controls of their own: the sheet lists what is written
+    /// and nothing it derives.  What is not written comes with the value a
+    /// build uses and where it is from.
+    #[test]
+    fn a_written_word_gives_one_row_and_the_rest_come_with_what_a_build_uses() {
+        let m = dt_eval::Memory(
+            [(
+                "t.dtile".to_owned(),
+                "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=3 { stack { base\n dirt\n wall at=\"north\" style=brick { height full } } }\n"
+                    .to_owned(),
+            )]
+            .into(),
+        );
+        let c = dt_eval::check(&m, "t.dtile", &Options::default()).unwrap();
+        let items = super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "db").unwrap();
+        let wall = items.iter().find(|v| v["what"] == "wall").unwrap();
+        let written: Vec<&str> = wall["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(written, ["style", "height"], "no `height.height`");
+        let of = |item: &serde_json::Value, control: &str| -> (String, String) {
+            let d = item["defaults"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|d| d["control"] == control)
+                .unwrap_or_else(|| panic!("no default for {control}"));
+            (
+                d["text"].as_str().unwrap().to_owned(),
+                d["from"].as_str().unwrap().to_owned(),
+            )
+        };
+        assert_eq!(
+            of(wall, "stones/height"),
+            ("2.5dmm .. 3dmm".to_owned(), "style brick".to_owned())
+        );
+        assert_eq!(
+            of(wall, "thickness"),
+            ("7dmm".to_owned(), "default".to_owned())
+        );
+        // a body's top is the band the solver used, from the library's edges
+        let dirt = items.iter().find(|v| v["what"] == "dirt").unwrap();
+        let (top, from) = of(dirt, "top");
+        assert!(top.contains("$groundHeight"), "{top}");
+        assert_eq!(from, "parts/edges");
+        // what is written is not in the list
+        assert!(
+            wall["defaults"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|d| d["control"] != "style")
+        );
     }
 
     #[test]
@@ -390,7 +483,7 @@ mod tests {
             &Options::default(),
         )
         .unwrap();
-        for v in super::items(c.tile.as_ref().unwrap(), "ol").unwrap() {
+        for v in super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "ol").unwrap() {
             assert!(v["href"].as_str().unwrap().starts_with(super::DOCS));
         }
     }

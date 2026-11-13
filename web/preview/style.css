@@ -312,7 +312,13 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .lvlbox .row .cell:last-child { grid-column: 2 / 5; } .lvlbox .row .cell:has(+ .x:last-child) { grid-column: 2 / 4; } /* a value runs to the one right edge when nothing follows it */
 .lvlbox .row .nm { font-size: var(--fs-m); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lvlbox .row.faint .nm, .lvlbox .row.faint .val { opacity: .55; }
-.lvlbox .cell { min-width: 0; min-height: var(--h-md); display: flex; align-items: center; gap: 4px; }
+/* a control not written shows what a build uses, faint, with where that comes from beside it; a chosen word is outlined, not filled */
+.lvlbox .row .from { color: var(--muted); font: var(--fs-s) var(--f-body); white-space: nowrap; flex: none; }
+.lvlbox .row .absent { font-style: italic; }
+.lvlbox .row .lost { color: var(--err); }
+.lvlbox .row.faint .words button.on, .lvlbox .row.faint .flip.on { background: none; color: var(--ink); border-color: var(--muted); opacity: .75; }
+.lvlbox .row.faint .word-select { color: var(--muted); opacity: .75; }
+.lvlbox .cell { min-width: 0; min-height: var(--h-md); display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; }
 .lvlbox .val { font: var(--fs-m) var(--f-code); padding: 2px 6px; border-radius: var(--r); cursor: text; white-space: normal; overflow-wrap: anywhere; }
 .lvlbox .val:not(:has(.num)) { font-family: var(--f-body); }
 .lvlbox .val:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -334,6 +340,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .lvlbox .words button, .lvlbox .flip, .value-pop .words button { border: 1px solid var(--line); background: none; border-radius: var(--r); padding: 0 6px; font-size: var(--fs-s); cursor: pointer; }
 .lvlbox .words button.on, .lvlbox .flip.on, .value-pop .words button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .lvlbox .word-select { width: 100%; min-width: 0; padding-right: 24px; cursor: pointer; }
+.lvlbox .cell > .word-select { width: auto; flex: 1 1 7rem; } /* the mark of where an inherited value comes from sits beside it */
 .lvlbox .word-select:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent); outline-offset: 0; }
 .lvlbox .word-select:disabled { cursor: default; opacity: .7; }
 .lvlbox button:disabled { cursor: default; opacity: .7; }

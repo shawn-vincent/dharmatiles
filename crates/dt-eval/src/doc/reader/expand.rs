@@ -309,6 +309,7 @@ impl Reader<'_> {
                             // sheet the schema describes (the solver reads `top`)
                             if let Some(cs) = controls.as_mut() {
                                 cs.push(Setting {
+                                    origin: Origin::Written,
                                     name: "top".to_owned(),
                                     value: dt_elements::Value::Formula(dt_elements::Formula {
                                         owner: entry_id.clone(),
@@ -354,6 +355,7 @@ impl Reader<'_> {
                     {
                         cs.retain(|c| c.name != "reach");
                         cs.push(Setting {
+                            origin: Origin::LineWidth,
                             name: "reach".to_owned(),
                             value: dt_elements::Value::Number(w / 2.0),
                             span: e.what.span,

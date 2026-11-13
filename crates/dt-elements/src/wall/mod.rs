@@ -30,7 +30,9 @@ pub(crate) mod rubble;
 use dt_kit::{Kind, Scene};
 
 use crate::read::{Pick, Settings};
-use crate::{Control, Ctx, Draw, Element, LookError, Plan, Read, Write};
+use crate::{
+    Control, Ctx, Draw, Element, LookError, Plan, Read, Shown, Write, draw_text, num_text,
+};
 #[cfg(test)]
 use chassis::percentile;
 pub(crate) use chassis::{Laid, Run, build, cell_seed, finish_build, run};
@@ -72,6 +74,18 @@ pub(crate) enum Family {
     Fieldstone,
     /// A floor slab (`StoneFloor`).
     Slab,
+}
+
+impl Family {
+    /// The `style` word that picks it.
+    pub(crate) fn word(self) -> &'static str {
+        match self {
+            Family::CutStone | Family::Slab => "cut-stone",
+            Family::Brick => "brick",
+            Family::RegularBrick => "regular-brick",
+            Family::Fieldstone => "fieldstone",
+        }
+    }
 }
 
 /// Where the wall's top goes.
@@ -238,6 +252,18 @@ impl Mason {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Wall {
     mason: Mason,
+    /// What the controls said, for what the editor shows of the rest
+    /// ([`Element::shown`]).
+    told: Told,
+}
+
+/// Which of a wall's own numbers a control moved off its style's.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Told {
+    /// The `stones texture` word written, which sets the corners' rounding.
+    texture: Option<String>,
+    /// The joints' depth was made shallower to fit a thin wall.
+    thinned: bool,
 }
 
 impl Wall {
@@ -267,6 +293,8 @@ impl Wall {
         m.across = s.number_or("thickness", m.across)?;
         m.course = s.dist_or("stones/height", m.course)?;
         m.bay = s.dist_or("stones/length", m.bay)?;
+        let told_texture = s.word("stones/texture")?.map(str::to_owned);
+        let mut thinned = false;
         if let Some(t) = s.word("stones/texture")?.and_then(texture) {
             if family == Family::Fieldstone {
                 // fieldstone keeps its pebble roundings; the
@@ -321,6 +349,7 @@ impl Wall {
                     ));
                 }
                 m.reveal = deepest.max(0.0);
+                thinned = true;
             }
         }
         if m.bond == Bond::Running && family != Family::RegularBrick {
@@ -328,8 +357,27 @@ impl Wall {
             let mid = 0.5 * (m.course.lo() + m.course.hi());
             m.course = Draw::flat(mid, mid);
         }
-        Ok(Self { mason: m })
+        Ok(Self {
+            mason: m,
+            told: Told {
+                texture: told_texture,
+                thinned,
+            },
+        })
     }
+}
+
+/// The preset word whose chip, rounding and relief a masonry has, if one does.
+fn finish_word(m: &Mason) -> Option<&'static str> {
+    ["chipped", "worn", "hewn", "dressed"]
+        .into_iter()
+        .find(|w| {
+            texture(w).is_some_and(|(chip, r, rel)| {
+                (chip, r) == (m.chip, m.rounding.lo())
+                    && m.rounding.is_point()
+                    && m.relief == Some(rel)
+            })
+        })
 }
 
 impl Element for Wall {
@@ -339,6 +387,52 @@ impl Element for Wall {
             reads: vec![Read::Solids(Kind::Terrain)],
             cell_mm: None,
         }
+    }
+
+    fn shown(&self) -> Vec<Shown> {
+        let m = &self.mason;
+        let style = format!("style {}", m.family.word());
+        let dmm = |v: f64| format!("{}dmm", num_text(v));
+        let from_style = |control: &str, text: String| Shown::new(control, text, style.clone());
+        let by_texture = |control: &str, text: String| match &self.told.texture {
+            Some(t) if m.family != Family::Fieldstone => {
+                Shown::new(control, text, format!("stones texture {t}"))
+            }
+            _ => from_style(control, text),
+        };
+        let finish = finish_word(m).map_or_else(
+            || format!("{}'s own finish", m.family.word()),
+            str::to_owned,
+        );
+        let bond = if m.bond == Bond::Running {
+            "running"
+        } else {
+            "irregular"
+        };
+        vec![
+            from_style("stones/height", draw_text(&m.course, "dmm", 1.0)),
+            from_style("stones/length", draw_text(&m.bay, "dmm", 1.0)),
+            from_style("stones/texture", finish),
+            from_style("joints/width", dmm(m.joint)),
+            if self.told.thinned {
+                Shown::new("joints/depth", dmm(m.reveal), "thickness")
+            } else {
+                from_style("joints/depth", dmm(m.reveal))
+            },
+            by_texture("edges/rounding", draw_text(&m.rounding, "dmm", 1.0)),
+            from_style("bond", bond.to_owned()),
+            Shown::new("ruin", format!("{}%", num_text(m.ruin * 100.0)), "default"),
+            Shown::new(
+                "coping",
+                if m.coping_on_edge { "on-edge" } else { "loose" },
+                "default",
+            ),
+            Shown::new(
+                "top",
+                if m.battlements { "battlements" } else { "flat" },
+                "default",
+            ),
+        ]
     }
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {

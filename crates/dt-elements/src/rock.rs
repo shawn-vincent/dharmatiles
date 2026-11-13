@@ -35,7 +35,7 @@ use dt_kit::{
 };
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Draw, Element, LookError, Plan, Write};
+use crate::{Control, Ctx, Draw, Element, LookError, Plan, Shown, Write, draw_text, num_text};
 
 // body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -584,6 +584,15 @@ impl Thing {
         Ok(t)
     }
 
+    /// What it works out for itself (see [`Element::shown`]).
+    pub(crate) fn shown(&self) -> Vec<Shown> {
+        vec![Shown::new(
+            "buried",
+            draw_text(&self.buried, "%", 100.0),
+            "default",
+        )]
+    }
+
     /// One draw of the size: flat unless the size is weighted.
     pub(crate) fn draw(&self, rng: &mut Rng) -> f64 {
         self.size.draw(rng)
@@ -920,6 +929,10 @@ impl Single {
 }
 
 impl Element for Single {
+    fn shown(&self) -> Vec<Shown> {
+        self.thing.shown()
+    }
+
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Rock),
@@ -1187,6 +1200,22 @@ impl Scatter {
 }
 
 impl Element for Scatter {
+    /// The reach is none until it is placed: a line's or a foot's own.
+    fn shown(&self) -> Vec<Shown> {
+        let mut out = vec![
+            Shown::new("perSquare", draw_text(&self.per_square, "", 1.0), "default"),
+            Shown::new("gap", format!("{}dmm", num_text(self.gap)), "default"),
+        ];
+        if let Some(r) = self.reach {
+            out.push(Shown::new(
+                "reach",
+                format!("{}dmm", num_text(r)),
+                "default",
+            ));
+        }
+        out
+    }
+
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Rock),

@@ -21,6 +21,7 @@ const fn c(name: &'static str, value: Axis, about: &'static str) -> Control {
         weighted: false,
         planned: false,
         default: "",
+        absent: "",
         about,
     }
 }
@@ -38,6 +39,7 @@ const fn group(name: &'static str, subs: &'static [Control], about: &'static str
         weighted: false,
         planned: false,
         default: "",
+        absent: "",
         about,
     }
 }
@@ -102,6 +104,11 @@ impl Control {
         self.default = d;
         self
     }
+    /// What leaving it out means, where there is no value to show for it.
+    const fn absent(mut self, what: &'static str) -> Self {
+        self.absent = what;
+        self
+    }
 }
 
 // ---- the top of a body or a cloud ----------------------------------------
@@ -120,7 +127,8 @@ const THING_TOP: Control = c(
     "top",
     Axis::Height,
     "how high the top stands, as a height worked out where it stands: `$bottom + [4dmm .. 9dmm]`",
-);
+)
+.absent("its own height, not held to a level");
 
 // ---- the tile's own nodes -----------------------------------------------
 
@@ -150,7 +158,8 @@ pub static NODES: &[Node] = &[
                 "about",
                 Axis::Text,
                 "a sentence on what the tile is; shown in the library",
-            ),
+            )
+            .absent("no description"),
         ],
     },
     Node {
@@ -164,7 +173,8 @@ pub static NODES: &[Node] = &[
                 "width",
                 Axis::Dmm,
                 "makes the line a strip; an element at= it covers the strip",
-            ),
+            )
+            .absent("a plain line, no strip"),
             c(
                 "through",
                 Axis::Raw,
@@ -296,7 +306,9 @@ const fn rock_controls(size: &'static str) -> [Control; 5] {
             .over(0.0, 200.0)
             .weighted()
             .default(size),
-        c("shape", Axis::Word, "river stones, broken rock, flat slabs").words(ROCK_SHAPE),
+        c("shape", Axis::Word, "river stones, broken rock, flat slabs")
+            .words(ROCK_SHAPE)
+            .absent("a mix of all three"),
         c("wear", Axis::Word, "sharp, or chipped and rounded edges")
             .words(WEAR)
             .planned(),
@@ -443,7 +455,8 @@ static TREE: &[Control] = &[
                 .default("18"),
             c("width", Axis::Dmm, "trunk thickness at the ground")
                 .limits(0.5, 40.0)
-                .weighted(),
+                .weighted()
+                .absent("grows with the branches it carries"),
         ],
         "the bare trunk",
     ),
@@ -774,12 +787,15 @@ static CLIFF: &[Control] = &[
         "height",
         Axis::Share,
         "how far up the shelf is, as a share of the cliff",
-    )]),
+    )
+    .absent("drawn for each shelf")]),
     group(
         "shattered",
         &[
-            c("patches", Axis::Count, "broken patches along the run"),
-            c("width", Axis::Dmm, "how wide each patch is").weighted(),
+            c("patches", Axis::Count, "broken patches along the run").absent("drawn along the run"),
+            c("width", Axis::Dmm, "how wide each patch is")
+                .weighted()
+                .absent("drawn for each patch"),
         ],
         "broken patches with more cracks and scree",
     ),
@@ -790,7 +806,8 @@ static CLIFF: &[Control] = &[
 static SCATTER: &[Control] = &[
     c("count", Axis::Count, "how many, in total")
         .limits(0.0, 10_000.0)
-        .weighted(),
+        .weighted()
+        .absent("not counted: perSquare says how many"),
     c(
         "perSquare",
         Axis::PerSquare,
@@ -806,8 +823,9 @@ static SCATTER: &[Control] = &[
     c(
         "reach",
         Axis::Dmm,
-        "with at=foot(…): how far out from the foot; with at= a line: how far either side of it (default 5dmm)",
-    ),
+        "with at=foot(…): how far out from the foot; with at= a line: how far either side of it",
+    )
+    .absent("where the rocks stand: a foot's or a line's own"),
     c(
         "clumps",
         Axis::PerSquare,

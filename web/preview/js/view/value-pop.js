@@ -26,7 +26,7 @@ export function ValuePopBox({ c, dflt, input, typed, items, index, check, onForm
   });
   // the field keeps the focus: a click in the helper is not a blur
   return html`<div class="value-pop" ref=${box} onPointerDown=${(e) => e.preventDefault()} onMouseDown=${(e) => e.preventDefault()}>
-    <div class="vp-takes">${[[c.unit, c.takes].filter(Boolean).join(', '), dflt && `default ${dflt}`].filter(Boolean).join(' · ')}</div>
+    <div class="vp-takes">${[[c.unit, c.takes].filter(Boolean).join(', '), dflt].filter(Boolean).join(' · ')}</div>
     <div class="vp-check" hidden=${!check}>${check || ''}</div>
     ${c.ranges ? html`<div class="words vp-forms"><button type="button" class=${form === 'number' ? 'on' : undefined} onClick=${() => onForm('number')}>one number</button><button type="button" class=${form === 'range' ? 'on' : undefined} onClick=${() => onForm('range')}>a range</button></div>` : null}
     <div class="vp-list" role="listbox" hidden=${!items.length}>${items.map((it, k) => html`<div class=${`it${k === index ? ' on' : ''}`} role="option" aria-selected=${String(k === index)} key=${k} onPointerDown=${(e) => { e.preventDefault(); onPick(k); }}><span class="nm">${it.label}</span><span class="ds">${it.about || it.kind}</span></div>`)}</div>

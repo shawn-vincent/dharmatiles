@@ -813,7 +813,7 @@ pub(super) fn check_value(shared: &Shared, v: CheckValueReq) -> Out<CheckValueRe
     let opts = shared.options();
     let (element, control, typed) = (&v.element, &v.control, &v.typed);
     let flaw = dt_doc::schema::element(element)
-        .and_then(|e| e.control(control))
+        .and_then(|e| e.control_at(control))
         .and_then(|c| dt_doc::decode::check_text_in(c, element, typed, opts.units()));
     // the reader's check first; then the weighting's numbers against their
     // limits, which the reader only meets when the value is lowered
@@ -858,7 +858,7 @@ pub(super) fn printed(shared: &Shared, t: &TileRef, v: PrintedReq) -> Out<Printe
         .iter()
         .map(|i| {
             let axis = dt_doc::schema::element(&i.element)
-                .and_then(|e| e.control(&i.control))
+                .and_then(|e| e.control_at(&i.control))
                 .and_then(|c| c.value)?;
             dt_doc::printed::printed_size(axis, &i.typed, units, consts).map(|p| PrintedSize {
                 ends: p.ends,
@@ -982,7 +982,11 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
     };
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
-            let stack = match c.tile.as_ref().map(|t| stack::items(t, &opts.system)) {
+            let stack = match c
+                .tile
+                .as_ref()
+                .map(|t| stack::items(t, c.solved.as_ref(), &opts.system))
+            {
                 Some(Err(e)) => {
                     return Err(fail::failure(
                         "500 Internal Server Error",

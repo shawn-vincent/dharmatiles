@@ -193,7 +193,7 @@ enum Taken {
 
 /// One control on the wire, the same shape for every element and node:
 /// `name`, `unit` (what it measures), `numeric`, `limits`/`above`, `ranges`,
-/// `weighted`, `takes`, `default` and `default1`, `required`, `expert`,
+/// `weighted`, `takes`, `default` and `default1`, `absent`, `required`, `expert`,
 /// `taken`, `about` (its help), its `words` and its `subs`.  The element or
 /// node it belongs to carries the `href` of its page.
 fn control_json(takes: Taken, path: &str, c: &Control) -> Value {
@@ -215,6 +215,8 @@ fn control_json(takes: Taken, path: &str, c: &Control) -> Value {
         "default": (!c.default.is_empty()).then_some(c.default),
         // as a format 1 document writes it (a length with its unit)
         "default1": (!c.default.is_empty()).then(|| c.default_written()),
+        // what leaving it out means, where there is no value to show
+        "absent": (!c.absent.is_empty()).then_some(c.absent),
         "required": c.required,
         "expert": c.expert,
         "taken": taken,

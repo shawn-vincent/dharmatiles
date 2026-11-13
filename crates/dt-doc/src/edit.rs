@@ -319,9 +319,32 @@ pub fn set_control_at(
     name: &str,
     value: impl Into<KdlValue>,
 ) -> Result<String, EditError> {
+    let value = value.into();
+    // a sub-control (`stones/height`) is a property of its group's line: the
+    // group's child line is made when it is not written yet
+    if let Some((group, sub)) = name.split_once('/') {
+        let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+        let parent =
+            node_at(&doc, offset).ok_or_else(|| EditError::NoNode(format!("byte {offset}")))?;
+        return match group_line(parent, group) {
+            Some(at) => set_control_at(text, at, sub, value),
+            None => insert_child_at(text, offset, &format!("{group} {sub}={value}"))
+                .map(|(text, _)| text),
+        };
+    }
     let path = path_at(text, offset)?;
     let steps: Vec<&str> = path.iter().map(String::as_str).collect();
     set_control(text, &steps, name, value)
+}
+
+/// The byte where the group's child line of `parent` starts its name.
+fn group_line(parent: &KdlNode, group: &str) -> Option<usize> {
+    parent
+        .children()?
+        .nodes()
+        .iter()
+        .find(|c| c.name().value() == group)
+        .map(|c| c.name().span().offset())
 }
 
 /// Replace the positional argument `index` of the node at byte `offset`
@@ -345,6 +368,24 @@ pub fn set_arg_at(
 /// # Errors
 /// As [`path_at`] and [`remove_control`].
 pub fn remove_control_at(text: &str, offset: usize, name: &str) -> Result<String, EditError> {
+    // a sub-control (`stones/height`) comes off its group's line, and the
+    // line goes with the last of its properties
+    if let Some((group, sub)) = name.split_once('/') {
+        let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+        let parent =
+            node_at(&doc, offset).ok_or_else(|| EditError::NoNode(format!("byte {offset}")))?;
+        let at = group_line(parent, group).ok_or_else(|| EditError::NoEntry(name.to_owned()))?;
+        let out = remove_control_at(text, at, sub)?;
+        let left = KdlDocument::parse(&out).map_err(|e| EditError::Parse(e.to_string()))?;
+        let empty = node_at(&left, at).is_some_and(|n| {
+            n.name().value() == group && n.entries().is_empty() && n.children().is_none()
+        });
+        return if empty {
+            remove_node_at(&out, at)
+        } else {
+            Ok(out)
+        };
+    }
     let path = path_at(text, offset)?;
     let steps: Vec<&str> = path.iter().map(String::as_str).collect();
     remove_control(text, &steps, name)
@@ -1291,6 +1332,34 @@ mod move_tests {
         assert!(matches!(
             insert_node(S, Place::Before(3), "boulder"),
             Err(EditError::NoNode(_))
+        ));
+    }
+    #[test]
+    fn a_sub_control_is_a_property_of_its_groups_line() {
+        let t = "tile {\n    stack {\n        wall at=north {\n            height full\n        }\n    }\n}\n";
+        let wall = t.find("wall").unwrap();
+        // no group line yet: it is made, as a child line
+        let a = set_control_at(t, wall, "stones/height", "3dmm").unwrap();
+        assert!(a.contains("            stones height=\"3dmm\"\n"), "{a}");
+        // a group line already written: the property goes on it
+        let b = set_control_at(&a, wall, "stones/length", "9dmm").unwrap();
+        assert!(b.contains("stones height=\"3dmm\" length=\"9dmm\""), "{b}");
+        // and changes in place
+        let c = set_control_at(&b, wall, "stones/height", "4dmm").unwrap();
+        assert!(c.contains("stones height=\"4dmm\" length=\"9dmm\""), "{c}");
+        // taken out, the line stays while it holds another, and goes with the last
+        let d = remove_control_at(&c, wall, "stones/height").unwrap();
+        assert!(
+            d.contains("stones length=\"9dmm\"") && !d.contains("height=\"4"),
+            "{d}"
+        );
+        let e = remove_control_at(&d, wall, "stones/length").unwrap();
+        assert!(!e.contains("stones"), "{e}");
+        assert!(e.contains("height full"), "{e}");
+        KdlDocument::parse(&e).unwrap();
+        assert!(matches!(
+            remove_control_at(t, wall, "stones/height"),
+            Err(EditError::NoEntry(_))
         ));
     }
 }

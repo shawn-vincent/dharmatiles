@@ -482,6 +482,16 @@ pub trait Element: Send + Sync {
     /// What it reads and writes.
     fn plan(&self) -> Plan;
 
+    /// The controls it works out for itself where nothing is written (a
+    /// wall's stone size from its style): each as the value this element
+    /// is built with, read off the same fields the build reads, so the
+    /// editor shows what a build uses and there is no second table of it.
+    /// The schema's own defaults and its `absent` words are not listed
+    /// here.
+    fn shown(&self) -> Vec<Shown> {
+        Vec::new()
+    }
+
     /// Build into the scene.
     ///
     /// # Errors
@@ -496,6 +506,60 @@ pub trait Element: Send + Sync {
     fn foot(&self, _frame: &dt_kit::Frame, _ctx: &Ctx<'_>) -> Result<Option<Foot>, LookError> {
         Ok(None)
     }
+}
+
+/// A control's value as its element has it, with where it comes from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Shown {
+    /// The control's path: `joints/width`.
+    pub control: String,
+    /// The value as a document writes it: `0.11dmm`, `running`, `30%`.
+    pub text: String,
+    /// What it comes from, after "from": `style brick`.
+    pub from: String,
+}
+
+impl Shown {
+    /// `control` has value `text`, from `from`.
+    pub(crate) fn new(control: &str, text: impl Into<String>, from: impl Into<String>) -> Self {
+        Self {
+            control: control.to_owned(),
+            text: text.into(),
+            from: from.into(),
+        }
+    }
+}
+
+/// A number as a document writes it: at most four decimals, no trailing zeros.
+pub(crate) fn num_text(v: f64) -> String {
+    let t = format!("{v:.4}");
+    t.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+/// A draw as a document writes it, each end (times `scale`: 100 for a share
+/// held as a fraction) followed by `unit`: `5.5dmm .. 8.5dmm`, or one
+/// number where the ends are the same.
+pub(crate) fn draw_text(d: &Draw, unit: &str, scale: f64) -> String {
+    let (lo, hi) = (num_text(d.lo() * scale), num_text(d.hi() * scale));
+    if lo == hi {
+        format!("{lo}{unit}")
+    } else {
+        format!("{lo}{unit} .. {hi}{unit}")
+    }
+}
+
+/// What `name` works out for itself where nothing is written (see
+/// [`Element::shown`]), built from the controls and children it has.
+///
+/// # Errors
+/// [`LookError`] for an unknown element, or one its controls or children
+/// cannot build.
+pub fn shown(
+    name: &str,
+    controls: &[Control],
+    children: &[Child],
+) -> Result<Vec<Shown>, LookError> {
+    Ok(element_with(name, controls, children)?.shown())
 }
 
 /// Builds an element from the name as written (a rock row serves four

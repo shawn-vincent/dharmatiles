@@ -837,8 +837,8 @@ fn every_control_of_every_element_and_node_has_one_shape_on_the_wire() {
     }
     for c in controls {
         for key in [
-            "name", "unit", "numeric", "default", "default1", "required", "taken", "about",
-            "words", "subs",
+            "name", "unit", "numeric", "default", "default1", "absent", "required", "taken",
+            "about", "words", "subs",
         ] {
             assert!(c.get(key).is_some(), "{} lacks {key}", c["name"]);
         }

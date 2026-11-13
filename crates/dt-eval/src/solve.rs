@@ -58,6 +58,16 @@ pub enum Role {
     Fluid,
 }
 
+/// The `top=` a body was solved from, and where it is written.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SolvedTop {
+    /// The formula as written.
+    pub text: String,
+    /// The library file it is a default of (`lib:parts/edges.dtile`); `None`
+    /// when the tile writes it.
+    pub default_from: Option<String>,
+}
+
 /// One solved body.
 #[derive(Clone, Debug)]
 pub struct SolvedBody {
@@ -84,6 +94,8 @@ pub struct SolvedBody {
     /// The tile writes its band: a `top=` or a pin of its own (the debug
     /// layer draws only these).
     pub written: bool,
+    /// The `top=` this body's band was solved from, as written.
+    pub top: SolvedTop,
     /// How many times laying this body into the surface under later bodies
     /// was left out (its band came out degenerate): 0 or 1.
     pub left_out: usize,
@@ -1297,6 +1309,14 @@ pub fn solve(
             below,
             land_mm,
             written: b.top.is_some() || !b.pins.is_empty(),
+            top: SolvedTop {
+                text: text_of(top_src, top_span),
+                default_from: b
+                    .top
+                    .is_none()
+                    .then(|| default.map(|d| d.from.path.clone()))
+                    .flatten(),
+            },
             pins: reports,
             left_out,
             nx,

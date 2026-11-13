@@ -112,7 +112,7 @@ tile size="2x2" seed=8 {
 <tbody>
 <tr id="c-trunk"><td><code>trunk</code></td><td>group</td><td>—</td><td>the bare trunk</td></tr>
 <tr id="c-trunk-height"><td><code>trunk height</code></td><td>length (dmm), 0 to 200, or a range, or a weighted range</td><td><code>18dmm</code></td><td>bare trunk below the crown</td></tr>
-<tr id="c-trunk-width"><td><code>trunk width</code></td><td>length (dmm), 0.5 to 40, or a range, or a weighted range</td><td>—</td><td>trunk thickness at the ground</td></tr>
+<tr id="c-trunk-width"><td><code>trunk width</code></td><td>length (dmm), 0.5 to 40, or a range, or a weighted range</td><td><span class="muted">grows with the branches it carries</span></td><td>trunk thickness at the ground</td></tr>
 <tr id="c-crown"><td><code>crown</code></td><td>group</td><td>—</td><td>the crown</td></tr>
 <tr id="c-crown-width"><td><code>crown width</code></td><td>length (dmm), 2 to 200, or a range, or a weighted range</td><td><code>30dmm</code></td><td>crown width</td></tr>
 <tr id="c-crown-shape"><td><code>crown shape</code></td><td>word</td><td><code>round</code></td><td>silhouette<dl class="words"><dt><code>round</code></dt><dd>a round crown</dd><dt><code>cone</code></dt><dd>pointed at the top, like a fir (provisional)</dd><dt><code>wide</code></dt><dd>a broad, flat-bottomed spread (provisional)</dd><dt><code>tall</code></dt><dd>a narrow column (provisional)</dd></dl></td></tr>
@@ -123,7 +123,7 @@ tile size="2x2" seed=8 {
 <tr id="c-leaf"><td><code>leaf</code></td><td>group</td><td>—</td><td>one leaf</td></tr>
 <tr id="c-leaf-length"><td><code>leaf length</code></td><td>length (dmm), 0.5 to 20, or a range, or a weighted range</td><td><code>4.5dmm</code></td><td>leaf length</td></tr>
 <tr id="c-leaf-width"><td><code>leaf width</code></td><td>length (dmm), 0.5 to 20, or a range, or a weighted range</td><td><code>3dmm</code></td><td>leaf width</td></tr>
-<tr id="c-top"><td><code>top</code></td><td>height</td><td>—</td><td>how high the top stands, as a height worked out where it stands: <code>$bottom + [4dmm .. 9dmm]</code></td></tr>
+<tr id="c-top"><td><code>top</code></td><td>height</td><td><span class="muted">its own height, not held to a level</span></td><td>how high the top stands, as a height worked out where it stands: <code>$bottom + [4dmm .. 9dmm]</code></td></tr>
 </tbody></table></div>
 <details><summary>Expert controls (parts files only)</summary>
 <div class="tbl"><table class="controls">

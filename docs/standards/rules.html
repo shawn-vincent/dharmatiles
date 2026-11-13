@@ -74,6 +74,7 @@
   <li><a href="../elements/dirt.html#rules">dirt</a>, <a href="../elements/grass.html#rules">grass</a>, <a href="../elements/reeds.html#rules">reeds</a>, <a href="../elements/water.html#rules">water</a>, <a href="../elements/flagstones.html#rules">flagstones</a>, <a href="../elements/planks.html#rules">planks</a></li>
   <li><a href="../elements/rock.html#rules">rock</a>, <a href="../elements/cliff.html#rules">cliff</a>, <a href="../elements/wall.html#rules">wall</a>, <a href="../elements/tree.html#rules">tree</a></li>
   <li>How they share a tile: <a href="../composing.html#rules">composing</a></li>
+  <li><strong>Every control has one source for what it is where nothing is written.</strong> The editor shows every control of an element, written or not, with the value a build uses and where it comes from, and never &ldquo;not set&rdquo;. A value an element works out for itself (a wall&rsquo;s stone size from its style) is read off the fields the element is built with (<code>Element::shown</code>), a plain default is the schema&rsquo;s <code>default</code>, and where there is no value the schema&rsquo;s <code>absent</code> words say what leaving it out means. The page never works one out, and a control with none of the three is an error (<code>crates/dt-eval/tests/unwritten.rs</code> runs every element).</li>
 </ul>
 
 <h2 id="pictures">Pictures</h2>

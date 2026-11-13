@@ -35,7 +35,9 @@ use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
 use crate::read::Settings;
-use crate::{Control, Ctx, Degrees, Draw, Element, LookError, Plan, Read, Write};
+use crate::{
+    Control, Ctx, Degrees, Draw, Element, LookError, Plan, Read, Shown, Write, draw_text, num_text,
+};
 use site::{crumbs, fill_pockets, ground_at, ground_drop, place, scatter_sites};
 pub(crate) use site::{drop_crumbs, ground_box};
 
@@ -104,6 +106,8 @@ struct Params {
     clumps_on: bool,
     leaf_length: Draw,
     leaf_width: Draw,
+    /// The `crown branching` word the six knobs come from, if one is given.
+    branching: Option<String>,
 }
 
 /// A tree's crown diameter when none is written, mm at the 35 mm square:
@@ -146,6 +150,7 @@ impl Default for Params {
             clumps_on: true,
             leaf_length: Draw::flat(4.5, 4.5),
             leaf_width: Draw::flat(3.0, 3.0),
+            branching: None,
         }
     }
 }
@@ -265,6 +270,7 @@ impl Tree {
         p.balance = knob(&BALANCE, p.balance)?;
         p.exponent = knob(&EXPONENT, p.exponent)?;
         p.min_radius = knob(&MIN_RADIUS, p.min_radius)?;
+        p.branching = s.word("crown/branching")?.map(str::to_owned);
         if let Some(w) = s.word("leaves")? {
             (p.leaves, p.clumps_on) = leaves_word(w);
         }
@@ -855,6 +861,24 @@ impl Tree {
 }
 
 impl Element for Tree {
+    /// The six branch knobs, as the `branching` word sets them.
+    fn shown(&self) -> Vec<Shown> {
+        let p = &self.p;
+        let from = p.branching.as_ref().map_or_else(
+            || "crown branching".to_owned(),
+            |w| format!("crown branching {w}"),
+        );
+        let knob = |name: &str, text: String| Shown::new(name, text, from.clone());
+        vec![
+            knob("branch/split", format!("{}deg", num_text(p.split.0))),
+            knob("branch/eagerness", num_text(p.eagerness)),
+            knob("branch/target", num_text(p.target)),
+            knob("branch/balance", num_text(p.balance)),
+            knob("branch/exponent", num_text(p.exponent)),
+            knob("branch/minRadius", format!("{}dmm", num_text(p.min_radius))),
+        ]
+    }
+
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Tree),
@@ -931,6 +955,14 @@ impl Scatter {
 }
 
 impl Element for Scatter {
+    fn shown(&self) -> Vec<Shown> {
+        vec![
+            Shown::new("perSquare", draw_text(&self.per_square, "", 1.0), "default"),
+            Shown::new("gap", format!("{}dmm", num_text(self.gap)), "default"),
+            Shown::new("reach", format!("{}dmm", num_text(self.reach)), "default"),
+        ]
+    }
+
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid(Kind::Tree),

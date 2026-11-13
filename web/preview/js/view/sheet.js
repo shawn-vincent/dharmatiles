@@ -33,16 +33,57 @@ const bytes = (s) => enc.encode(s).length;
 const decimals = (s) => (s.includes('.') ? s.split('.')[1].length : 0);
 const dflt = (c) => c.default1 ?? c.default;
 
+/**
+ * What an unwritten control shows: `{text, from}`.  An entry's controls come with what the program says each is where nothing is
+ * written (`g.defaults`: the value a build uses and what it comes from: "default", "style brick", "parts/edges", or no `from`
+ * when `text` says what leaving it out means); the tile's own nodes show their schema's default or its `absent` words.  The
+ * page works nothing out.  Null where nothing says, which the row shows as a mistake, never as a blank.
+ * @param {{ defaults?: {control: string, text: string, from: string}[] }} g
+ * @param {any} c
+ * @returns {{text: string, from: string} | null}
+ */
+export function inheritedOf(g, c) {
+  if (g.defaults) {
+    const d = g.defaults.find((x) => x.control === c.name);
+    return d ? { text: d.text, from: d.from } : null;
+  }
+  const v = dflt(c);
+  if (v) return { text: v, from: 'default' };
+  return c.absent ? { text: c.absent, from: '' } : null;
+}
+/**
+ * An element's controls as the sheet's rows: a group's sub-controls are rows of their own, named by their path
+ * (`stones/height`) as the document's written controls are, so a row, its written text, the edit of it and its page all
+ * answer to one name.  A group has no value of its own to show, so it has no row.
+ */
+export function rowsOf(/** @type {any[]} */ controls, prefix = '', /** @type {any} */ up = {}) {
+  const out = [];
+  for (const c of controls) {
+    const path = `${prefix}${c.name}`;
+    const expert = up.expert || c.expert;
+    const untaken = up.untaken || c.taken === false;
+    if (c.unit) out.push({ ...c, name: path, label: path.replace('/', ' '), expert, taken: untaken ? false : c.taken, subs: [] });
+    out.push(...rowsOf(c.subs || [], `${path}/`, { expert, untaken }));
+  }
+  return out;
+}
+/** What the mark beside an inherited value says. */
+const fromText = (/** @type {string} */ from) => (from === 'default' ? 'default' : `from ${from}`);
+/** An inherited value in a phrase, for the helper under a field: `default 5dmm`, `2.5dmm .. 3dmm (from style brick)`, or the words for what leaving it out means. */
+export const inheritedPhrase = (/** @type {{text: string, from: string} | null} */ inh) => (!inh ? '' : !inh.from ? inh.text : inh.from === 'default' ? `default ${inh.text}` : `${inh.text} (${fromText(inh.from)})`);
+/** The value an unwritten control shows to the cell: its text where that is a value, else nothing (the words say what leaving it out means). */
+const valueIn = (/** @type {{text: string, from: string} | null} */ inh) => (inh?.from ? inh.text : '');
+
 // a die showing five
 
 // ---- a value typed in place ------------------------------------------------------------------------------------
 
 /** A value being typed: the field, the helper under it (or the size grid), and the writes it makes as it goes. */
-function TypeIn({ g, c, s, v, api, put, onDone }) {
+function TypeIn({ g, c, s, v, inh, api, put, onDone }) {
   const text = c.unit === 'text'; // plain words: typed without quotes, written as a KDL string
   // a number, range or expression: typed bare, quoted as it is written
   const num = isNumeric(c);
-  const shown = v ? v.text : (dflt(c) ?? '');
+  const shown = v ? v.text : valueIn(inh);
   const initial = text || num ? unquote(shown) : shown;
   const [val, setVal] = useState(initial);
   const [caret, setCaret] = useState(initial.length);
@@ -120,7 +161,7 @@ function TypeIn({ g, c, s, v, api, put, onDone }) {
       render(html`<${SizeGridBox} pick=${pointed ?? parseSize(val)} full=${false} input=${input.current}
         onPoint=${(p) => { st.current.pointed = p; const f = p ? `"${p[0]}x${p[1]}"` : st.current.typed; st.current.val = f; setVal(f); }} onTake=${(p) => { st.current.val = `"${p[0]}x${p[1]}"`; finish(true); }} />`, mount.current);
     } else if (num) {
-      render(html`<${ValuePopBox} c=${c} dflt=${dflt(c)} input=${input.current} typed=${val} items=${items} index=${pick} check=${check}
+      render(html`<${ValuePopBox} c=${c} dflt=${inheritedPhrase(inh)} input=${input.current} typed=${val} items=${items} index=${pick} check=${check}
         onForm=${(f) => { const next = f === 'number' ? asNumber(val) : asRange(val); set(next); write?.(next); askLater.current(next); input.current?.focus(); }} onPick=${(k) => take(k)} />`, mount.current);
     }
   });
@@ -172,12 +213,12 @@ function PrintedSize({ g, c, s, v, ro, body, printed, api, put }) {
 // ---- a value shown --------------------------------------------------------------------------------------------
 
 /** A value: its numbers scrubbed by a drag, the whole of it typed after a click. */
-function ValueCell({ g, c, s, v, ro, api, put, roll, printed }) {
+function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
   const [typing, setTyping] = useState(false);
   const [live, setLive] = useState(/** @type {Record<number, string> | null} */ (null)); // the numbers as the drag has them now
   const drag = useRef(/** @type {any} */ (null));
   const moved = useRef(false);
-  const shownRaw = v ? v.text : (dflt(c) ?? '');
+  const shownRaw = v ? v.text : valueIn(inh);
   // a quoted value shows without its quotes ("20%" reads as 20%, like 100%); they stay in the text, hidden, so a scrub rewrites them as written
   const pre = c.unit === 'text' || c.unit === 'raw' ? '' : (shownRaw.match(/^#?"/) || [''])[0];
   const post = pre ? (shownRaw.slice(pre.length).match(/"#?$/) || [''])[0] : '';
@@ -213,7 +254,7 @@ function ValueCell({ g, c, s, v, ro, api, put, roll, printed }) {
       if (e.button !== 0) return;
       e.preventDefault();
       moved.current = false;
-      if (!s) { moved.current = true; put(g, c.name, parseValue(dflt(c) ?? '0')); return; } // write the default; drag again
+      if (!s) { moved.current = true; put(g, c.name, parseValue(valueIn(inh) || '0')); return; } // write what it inherits; drag again
       e.currentTarget.setPointerCapture(e.pointerId);
       api.onField?.(c.name, true);
       const start = Number(p.num);
@@ -255,11 +296,11 @@ function ValueCell({ g, c, s, v, ro, api, put, roll, printed }) {
   const dice = c.name === 'seed' && !ro;
   const unit = c.unit && /\d/.test(shownRaw) && !carriesUnit(shownRaw) && !['number', 'word', 'tag', 'count', 'text', 'raw', 'size', 'height', 'several'].includes(c.unit) ? (c.unit === 'degrees' ? '°' : c.unit === 'percent' ? '' : c.unit) : null;
   return html`${typing
-    ? html`<${TypeIn} g=${g} c=${c} s=${s} v=${v} api=${api} put=${put} onDone=${() => setTyping(false)} />`
+    ? html`<${TypeIn} g=${g} c=${c} s=${s} v=${v} inh=${inh} api=${api} put=${put} onDone=${() => setTyping(false)} />`
     : html`<span class=${`val${ro ? ' ro' : ''}`} onClick=${() => { if (!moved.current && !ro) setTyping(true); }}>
       ${pre ? html`<span class="q">${pre}</span>` : null}${parts.map((p, i) => (p.num != null
         ? html`<span class=${`num${drag.current?.k === p.k ? ' active' : ''}`} key=${i} ...${ro ? {} : scrub(p)}>${none && (live?.[p.k] ?? p.num) === '0' ? 'none' : (live?.[p.k] ?? p.num)}</span>`
-        : tidy && i === 2 ? between(p.text) : i > 0 && parts[i - 1].num != null ? afterNumber(p.text) : p.text))}${post ? html`<span class="q">${post}</span>` : null}${!shownRaw ? html`<span class="unit">not set</span>` : null}</span>`}
+        : tidy && i === 2 ? between(p.text) : i > 0 && parts[i - 1].num != null ? afterNumber(p.text) : p.text))}${post ? html`<span class="q">${post}</span>` : null}${!shownRaw ? html`<span class=${inh ? 'absent' : 'unit lost'}>${inh ? inh.text : `no default for ${c.name}`}</span>` : null}</span>`}
     ${dice ? html`<button type="button" class="dice" title=${roll ? 'Show five arrangements to choose from' : 'Roll a new seed: another arrangement'} aria-label=${roll ? 'Show five seeds' : 'Roll a new seed'} onClick=${roll ?? (() => put(g, c.name, newSeed()))}><${Icon} name="dice" size=${16} /></button>` : null}
     ${unit ? html`<span class="unit">${unit}</span>` : null}
     ${printed ? html`<${PrintedSize} g=${g} c=${c} s=${s} v=${v} ro=${ro} body=${unquote(shownRaw)} printed=${printed} api=${api} put=${put} />` : null}`;
@@ -332,8 +373,13 @@ function Row({ g, c, s, editable, api, put, model, printed }) {
   // the entries that keep their own seed when this one is rolled (`model.seedPins`, from the stack)
   const pins = strip ? model.seedPins || [] : [];
   const ro = !editable || (s && s.file);
+  // a value written in a part the entry calls (`lawn` writes the grass) is inherited too: from that part, and not the entry's to change here
+  const via = s?.file ? (s.from ?? s.file) : null;
   const v = s ? valueOf(s.text, c.name) : null;
-  const shown = v ? v.text : (dflt(c) ?? '');
+  // what an unwritten control is: the value a build uses, and where it comes from (shown quietly beside it)
+  const inh = s ? null : inheritedOf(g, c);
+  if (!s && !inh) console.error(`the sheet has no default for ${g.schema?.name ?? ''} ${c.name}: the program's table needs one`);
+  const shown = v ? v.text : valueIn(inh);
   const words = c.words?.length ? c.words : null;
   let cell;
   if (words && c.unit === 'several') {
@@ -348,19 +394,20 @@ function Row({ g, c, s, editable, api, put, model, printed }) {
     if (wordControlNeedsSelect(words)) {
       const known = words.some((w) => w.word === cur);
       cell = html`<select class="word-select" disabled=${ro} value=${known ? cur : ''} title=${words.find((w) => w.word === cur)?.about || c.about || ''} onChange=${(e) => put(g, c.name, e.target.value)}>
-        ${known ? null : html`<option value="" disabled>not set</option>`}${words.map((w) => html`<option value=${w.word} title=${w.about || ''} key=${w.word}>${w.word}</option>`)}</select>`;
+        ${known ? null : html`<option value="" disabled>${inh?.text ?? `no default for ${c.name}`}</option>`}${words.map((w) => html`<option value=${w.word} title=${w.about || ''} key=${w.word}>${w.word}</option>`)}</select>`;
     } else {
-      cell = html`<span class="words">${words.map((w) => html`<button type="button" key=${w.word} class=${w.word === cur ? 'on' : undefined} title=${w.about || ''} disabled=${ro} onClick=${() => put(g, c.name, w.word)}>${w.word}</button>`)}</span>`;
+      cell = html`<span class="words">${words.map((w) => html`<button type="button" key=${w.word} class=${w.word === cur ? (s ? 'on' : 'on inh') : undefined} title=${w.about || ''} disabled=${ro} onClick=${() => put(g, c.name, w.word)}>${w.word}</button>`)}</span>`;
     }
   } else if (c.unit === 'switch') {
     const on = /#?true/.test(shown);
     cell = html`<button type="button" class=${`flip${on ? ' on' : ''}`} disabled=${ro} onClick=${() => put(g, c.name, !on)}>${on ? 'on' : 'off'}</button>`;
   } else {
-    cell = html`<${ValueCell} g=${g} c=${c} s=${s} v=${v} ro=${ro} api=${api} put=${put} roll=${strip ? () => setSeeds(seeds ? null : candidates(strip.current)) : null} printed=${printed} />`;
+    cell = html`<${ValueCell} g=${g} c=${c} s=${s} v=${v} inh=${inh} ro=${ro} api=${api} put=${put} roll=${strip ? () => setSeeds(seeds ? null : candidates(strip.current)) : null} printed=${printed} />`;
   }
-  return html`<div class=${`row${s ? '' : ' faint'}`} onMouseEnter=${() => api.onFieldHover?.(c.name, true)} onMouseLeave=${() => api.onFieldHover?.(c.name, false)}>
-    <span class="nm" title=${[c.about, c.unit && `in ${c.unit}`, c.takes].filter(Boolean).join(' · ')}>${c.name}</span>
-    <span class="cell">${cell}</span>
+  const mark = s ? via : inh?.from;
+  return html`<div class=${`row${!s || via ? ' faint' : ''}`} onMouseEnter=${() => api.onFieldHover?.(c.name, true)} onMouseLeave=${() => api.onFieldHover?.(c.name, false)}>
+    <span class="nm" title=${[c.about, c.unit && `in ${c.unit}`, c.takes].filter(Boolean).join(' · ')}>${c.label ?? c.name}</span>
+    <span class="cell">${cell}${mark ? html`<span class="from" title=${s ? `Written in ${mark}, not in this tile` : `Not written: a build uses this. Change it to write it${mark === 'default' ? '' : `; it comes from ${mark}`}.`}>${fromText(mark)}</span>` : null}</span>
     ${s && !ro && !c.required ? html`<button type="button" class="x" title=${`Take ${c.name} out (back to its default)`} onClick=${() => put(g, c.name, null)}><${Icon} name="x" size=${14} /></button>` : null}
     ${api.detail?.(c) ? html`<button type="button" class="chev" title=${`More about ${c.name}`} aria-label=${`More about ${c.name}`} onClick=${() => api.openControl?.(Math.max(0, model.groups.indexOf(g)), c.name)}><${Icon} name="chevron-right" size=${14} /></button>` : null}
   </div>${pins.length ? html`<p class="note pins">${pinParts(pins).map((x) => (typeof x === 'string' ? x
@@ -383,7 +430,7 @@ function printedWanted(/** @type {any} */ model) {
     for (const c of g.schema.controls || []) {
       if (c.unit !== 'dmm' && c.unit !== 'height') continue;
       const w = g.written.find((/** @type {any} */ x) => x.name === c.name);
-      const typed = unquote(w ? valueOf(w.text, c.name).text : (dflt(c) ?? ''));
+      const typed = unquote(w ? valueOf(w.text, c.name).text : valueIn(inheritedOf(g, c)));
       if (typed) out.push({ key: printedKey(g, c), element: g.schema.name, control: c.name, typed });
     }
   }
@@ -421,7 +468,7 @@ export function Sheet({ model, api, emptyTitle = 'Nothing selected', emptyText =
       const s = writtenBy.get(c.name);
       if (!s && (c.expert || c.taken === false) && !more) { hidden++; continue; }
       const p = printed[printedKey(g, c)];
-      const typedNow = unquote(s ? valueOf(s.text, c.name).text : (dflt(c) ?? ''));
+      const typedNow = unquote(s ? valueOf(s.text, c.name).text : valueIn(inheritedOf(g, c)));
       rows.push(html`<${Row} key=${`${gi}.${c.name}`} g=${g} c=${c} s=${s} editable=${editable} api=${api} put=${put} model=${model} printed=${p ? { ...p, stale: p.typed !== typedNow } : null} />`);
     }
     // written controls the schema does not know (a definition's arguments)

@@ -226,7 +226,7 @@ fn elements_dirt_json_has_units_limits_defaults_and_subs() {
     let controls = v["controls"].as_array().unwrap();
     let find = |n: &str| controls.iter().find(|c| c["name"] == n).unwrap();
     let size = find("bumpSize");
-    assert_eq!(size["unit"], "mm");
+    assert_eq!(size["unit"], "dmm"); // a design millimetre: it scales with the system
     assert_eq!(size["limits"], serde_json::json!([5.0, 70.0]));
     assert!(
         controls

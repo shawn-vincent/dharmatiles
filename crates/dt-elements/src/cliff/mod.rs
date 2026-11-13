@@ -55,13 +55,15 @@ use dt_kit::Kind;
 use dt_kit::{Band, Field, Material, OnFrame, Scene, Tag};
 
 use crate::read::{Pick, Settings};
-use crate::{Control, Ctx, Element, LookError, Plan, Write};
+use crate::{Control, Ctx, Element, LookError, Plan, Shown, Write, num_text};
 use pile::{Look, Planned, Site};
 
 /// The cliff element.
 #[derive(Clone, Debug)]
 pub struct Cliff {
     look: Look,
+    /// The `rock` word the five weights come from, if one is given.
+    rock: Option<String>,
     /// The pile planned for this build, kept from the plan pass (a scatter
     /// reads the foot) to the build, which starts from the same plan.
     plan: Memo,
@@ -102,9 +104,11 @@ impl Cliff {
                 ledge_height: None,
             },
             plan: Memo::default(),
+            rock: None,
         };
         let mut w = [f64::NAN; 5];
         let s = Settings::new(controls);
+        c.rock = s.word("rock")?.map(str::to_owned);
         // a word stands for its number (`stoneSize.stoneSize`: rubble 1,
         // broken 1.15, massive 1.35); a share under 1 sits between rubble
         // and massive
@@ -214,6 +218,22 @@ fn site<'a>(frame: &'a dt_kit::Frame, ctx: &'a Ctx<'_>) -> Result<Site<'a>, Look
 }
 
 impl Element for Cliff {
+    /// The five stone weights, as the `rock` word sets them.
+    fn shown(&self) -> Vec<Shown> {
+        let Some(w) = self.look.weights else {
+            return Vec::new();
+        };
+        let from = self
+            .rock
+            .as_ref()
+            .map_or_else(|| "rock".to_owned(), |r| format!("rock {r}"));
+        KIND_NAMES
+            .iter()
+            .zip(w)
+            .map(|(k, v)| Shown::new(&format!("rock/{k}"), num_text(v), from.clone()))
+            .collect()
+    }
+
     fn plan(&self) -> Plan {
         Plan {
             // the cliff lays its rock core with the land, before the lift,

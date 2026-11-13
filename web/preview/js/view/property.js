@@ -15,6 +15,7 @@
 import { parseValue, valueOf } from '../lens.js';
 import { asNumber, asRange, debounce, formOf, unquote, written } from '../value.js';
 import { html, useEffect, useRef, useState } from './html.js';
+import { inheritedPhrase } from './sheet.js';
 
 const CHECK_PAUSE_MS = 200;
 const enc = new TextEncoder();
@@ -46,7 +47,8 @@ export function PropertyPage({ model, api }) {
   const { c, s } = model;
   const ro = !(api.writable() || api.canMine?.());
   const v = s ? valueOf(s.text, c.name) : null;
-  const dflt = c.default1 ?? c.default ?? '';
+  // what it is where nothing is written: the program's (`model.inherited`), said as a phrase
+  const dflt = inheritedPhrase(model.inherited ?? null);
   const shown = v ? v.text : '';
   const written0 = unquote(shown);
   const [draft, setDraft] = useState(/** @type {string | null} */ (null)); // typed, not yet committed
@@ -76,12 +78,12 @@ export function PropertyPage({ model, api }) {
   const { range: r, name } = innerRange(value, weightNames);
   const form = formOf(r);
   const simple = simpleWeightings(weights);
-  const takes = [['unit', c.unit], ['takes', c.takes], ['default', dflt || null], ['limits', c.limits ? `${c.limits[0]} to ${c.limits[1] ?? '…'}` : null]].filter(([, x]) => x);
+  const takes = [['unit', c.unit], ['takes', c.takes], ['inherited', dflt || null], ['limits', c.limits ? `${c.limits[0]} to ${c.limits[1] ?? '…'}` : null]].filter(([, x]) => x);
   return html`
     <div class="body">
       ${c.about ? html`<p class="pabout">${c.about}</p>` : null}
       <div class="cap plab">Value</div>
-      <div class="pfield"><input class="pin" ref=${input} type="text" spellcheck=${false} autocomplete="off" aria-label=${`${c.name}, as written`} value=${value} placeholder=${dflt ? `default ${dflt}` : 'not set'} disabled=${ro}
+      <div class="pfield"><input class="pin" ref=${input} type="text" spellcheck=${false} autocomplete="off" aria-label=${`${c.name}, as written`} value=${value} placeholder=${dflt || `no default for ${c.name}`} disabled=${ro}
         onInput=${(e) => type(e.target.value)}
         onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(value); } if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); input.current?.blur(); } }}
         onBlur=${() => { if (draft !== null) commit(draft); }} />

@@ -73,6 +73,7 @@ impl Reader<'_> {
                 return None;
             }
             out.push(Setting {
+                origin: Origin::Written,
                 name: "top".to_owned(),
                 value: dt_elements::Value::Formula(dt_elements::Formula {
                     owner: owner.0.clone(),
@@ -102,7 +103,15 @@ impl Reader<'_> {
                 && let Some(raw) = c.default_value()
                 && let Ok(Lowered { value, .. }) = element_value(&raw, &scope.lets)
             {
-                push_setting(&mut out, &s.name.value, &raw, value, s.span, src);
+                push_setting(
+                    &mut out,
+                    Origin::Default,
+                    &s.name.value,
+                    &raw,
+                    value,
+                    s.span,
+                    src,
+                );
             }
             if let Some(v) = &s.value {
                 items.push(Item {
@@ -205,7 +214,15 @@ impl Reader<'_> {
                     }
                     continue;
                 }
-                push_setting(&mut out, &name, &b.value.value, value, b.value.span, &b.src);
+                push_setting(
+                    &mut out,
+                    Origin::Written,
+                    &name,
+                    &b.value.value,
+                    value,
+                    b.value.span,
+                    &b.src,
+                );
             }
         }
         for c in element.controls {
@@ -214,7 +231,15 @@ impl Reader<'_> {
                 && let Some(raw) = c.default_value()
                 && let Ok(Lowered { value, .. }) = element_value(&raw, &scope.lets)
             {
-                push_setting(&mut out, c.name, &raw, value, e.what.span, src);
+                push_setting(
+                    &mut out,
+                    Origin::Default,
+                    c.name,
+                    &raw,
+                    value,
+                    e.what.span,
+                    src,
+                );
             }
         }
         ok.then_some((out, cloud_top))
@@ -260,6 +285,7 @@ pub(super) fn checked(
 /// (`clods some`), each number as `control.name` (`clods.density`).
 pub(super) fn push_setting(
     out: &mut Vec<Setting>,
+    origin: Origin,
     name: &str,
     raw: &Value,
     value: dt_elements::Value,
@@ -269,6 +295,7 @@ pub(super) fn push_setting(
     if let Value::Word(w) = raw {
         for (k, v) in w.sets {
             out.push(Setting {
+                origin: Origin::Word,
                 name: format!("{name}.{k}"),
                 value: dt_elements::Value::Number(*v),
                 span,
@@ -277,6 +304,7 @@ pub(super) fn push_setting(
         }
     }
     out.push(Setting {
+        origin,
         name: name.to_owned(),
         value,
         span,

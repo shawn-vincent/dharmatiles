@@ -48,9 +48,26 @@ pub struct File {
     pub doc: Document,
 }
 
+/// Where a control an element is given came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Origin {
+    /// The document wrote it.
+    Written,
+    /// A number a written word stands for (`clods some` gives
+    /// `clods.density`): never a control of its own.
+    Word,
+    /// The schema's default, filled in where nothing was written.
+    Default,
+    /// Worked out from the line a scatter runs along (its strip's half
+    /// width is the default `reach`).
+    LineWidth,
+}
+
 /// A control an element is given, resolved to mm or a word.
 #[derive(Clone, Debug)]
 pub struct Setting {
+    /// Where it came from: only a written one is a row of the sheet.
+    pub origin: Origin,
     /// The control's name.
     pub name: String,
     /// Its value.

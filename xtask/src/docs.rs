@@ -325,9 +325,12 @@ fn row(s: &mut String, c: &Value, parent: Option<&str>) {
     let name = c["name"].as_str().unwrap_or_default();
     let shown = parent.map_or_else(|| name.to_owned(), |p| format!("{p} {name}"));
     // `default1` is the default as a format 1 document writes it (`5dmm`, `34deg`)
-    let default = c["default1"]
-        .as_str()
-        .map_or_else(|| "—".to_owned(), |d| format!("<code>{}</code>", esc(d)));
+    // no default value: the words for what leaving it out means, where it has them (the sheet says the same)
+    let default = match (c["default1"].as_str(), c["absent"].as_str()) {
+        (Some(d), _) => format!("<code>{}</code>", esc(d)),
+        (None, Some(a)) => format!("<span class=\"muted\">{}</span>", esc(a)),
+        (None, None) => "—".to_owned(),
+    };
     let mut about = prose(c["about"].as_str().unwrap_or_default());
     if c["required"].as_bool() == Some(true) {
         about.push_str(" <strong>Required.</strong>");

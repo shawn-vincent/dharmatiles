@@ -23,7 +23,9 @@ use crate::flowers::{self, Plant};
 use crate::read::Settings;
 use crate::rock::{self, Item, Tally, Thing};
 use crate::tree::{self, Tree};
-use crate::{Child, Control, Ctx, Draw, Element, LookError, Plan, Read, Write};
+use crate::{
+    Child, Control, Ctx, Draw, Element, LookError, Plan, Read, Shown, Write, draw_text, num_text,
+};
 
 /// How far apart things keep when a mixed scatter writes no `gap`, mm at
 /// the 35 mm square.
@@ -97,6 +99,14 @@ impl Scatter {
 }
 
 impl Element for Scatter {
+    fn shown(&self) -> Vec<Shown> {
+        vec![
+            Shown::new("perSquare", draw_text(&self.per_square, "", 1.0), "default"),
+            Shown::new("gap", format!("{}dmm", num_text(self.gap)), "default"),
+            Shown::new("reach", format!("{}dmm", num_text(self.reach)), "default"),
+        ]
+    }
+
     fn plan(&self) -> Plan {
         let has = |f: fn(&Part) -> bool| self.parts.iter().any(f);
         let (r, f, t) = (

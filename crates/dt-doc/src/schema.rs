@@ -149,6 +149,12 @@ pub struct Control {
     pub planned: bool,
     /// The default, as an author would write it; empty if none.
     pub default: &'static str,
+    /// What leaving it out means, in words, for a control with no default
+    /// value to show: "no strip", "worked out from the run".  A control
+    /// shows its default, or what its element works out (`Element::shown`),
+    /// or this; a control with none of the three is a mistake in the table
+    /// (`crates/dt-eval/tests/shown.rs` says so).
+    pub absent: &'static str,
     /// One line of help.
     pub about: &'static str,
 }
@@ -712,6 +718,15 @@ impl Element {
     #[must_use]
     pub fn control(&'static self, name: &str) -> Option<&'static Control> {
         self.controls.iter().find(|c| c.name == name)
+    }
+
+    /// The control at `path`: `height`, or `crown/width` for a sub-control.
+    #[must_use]
+    pub fn control_at(&'static self, path: &str) -> Option<&'static Control> {
+        match path.split_once('/') {
+            None => self.control(path),
+            Some((group, sub)) => self.control(group)?.sub(sub),
+        }
     }
 
     /// Whether a build takes the control at `path` (`height`, or

@@ -29,7 +29,9 @@ use dt_kit::{
 };
 
 use crate::read::Settings;
-use crate::{Child, Control, Ctx, Draw, Element, LookError, Plan, Read, Write};
+use crate::{
+    Child, Control, Ctx, Draw, Element, LookError, Plan, Read, Shown, Write, draw_text, num_text,
+};
 
 const AZ: usize = 16;
 const EL: usize = 8;
@@ -479,6 +481,14 @@ impl Scatter {
 }
 
 impl Element for Scatter {
+    fn shown(&self) -> Vec<Shown> {
+        vec![
+            Shown::new("perSquare", draw_text(&self.per_square, "", 1.0), "default"),
+            Shown::new("gap", format!("{}dmm", num_text(self.gap)), "default"),
+            Shown::new("reach", format!("{}dmm", num_text(self.reach)), "default"),
+        ]
+    }
+
     fn plan(&self) -> Plan {
         plan()
     }

@@ -13,7 +13,7 @@ import { failed, showError } from '../problems.js';
 import { html, render, useEffect, useRef } from '../view/html.js';
 import { Outline } from '../view/outline.js';
 import { PropertyPage } from '../view/property.js';
-import { pinsOf, Sheet } from '../view/sheet.js';
+import { inheritedOf, pinsOf, rowsOf, Sheet } from '../view/sheet.js';
 import { ListBlock } from '../view/list-block.js';
 import { $, host, makeMine } from './app.js';
 import { edited, replaceBytes, spansUsable } from './document.js';
@@ -237,6 +237,15 @@ function markModel(kind, m) {
   };
 }
 
+const rowed = new WeakMap();
+/** The program's description of element `name`, its controls as rows (`rowsOf`). */
+function elementRows(/** @type {string} */ name) {
+  const el = elementNamed(name);
+  if (!el) return el;
+  if (!rowed.has(el)) rowed.set(el, { ...el, controls: rowsOf(el.controls || []) });
+  return rowed.get(el);
+}
+
 /** The sheet model of the entry `s` selects, or null while the text, the check or the program's description is not there. */
 function entryModel(/** @type {any} */ s) {
   const it = itemOf(s);
@@ -245,8 +254,8 @@ function entryModel(/** @type {any} */ s) {
   if (!it || !it.span || it.file !== file || !elements.length) return null;
   // the base line: no settings of its own; the build target (the system chip) picks the connector
   const base = it.element === 'connector';
-  const groups = base ? [] : [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
-  for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
+  const groups = base ? [] : [{ at: it.span[0], schema: elementRows(it.what), written: it.controls || [], defaults: it.defaults }];
+  for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementRows(th.what), written: th.controls || [], defaults: th.defaults });
   const actions = [];
   if (it.file === file && (writable || canMine())) {
     actions.push(
@@ -285,7 +294,7 @@ function PropertyLevel() {
   const element = g.schema?.name;
   const written = g.written.find((/** @type {any} */ w) => w.name === c.name);
   const page = html`<${PropertyPage} key=${`${tileId}|${sel.id}|${control.group}|${control.name}`} model=${{
-    element, label: `${model.title}${g.heading ? ` · ${g.heading}` : ''}`, c, s: written, at: g.at,
+    element, label: `${model.title}${g.heading ? ` · ${g.heading}` : ''}`, c, s: written, at: g.at, inherited: written ? null : inheritedOf(g, c),
     weightings: elementNamed(element)?.weightings,
     // the names the program reads in this tile (its own heights too), else the language's plain ones
     names: { heights: (doc.get().map?.language?.names || server.get().language?.names || []).filter((/** @type {string} */ n) => HEIGHT_NAMES.test(n)) },
