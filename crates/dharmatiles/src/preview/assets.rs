@@ -227,16 +227,6 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/nav.js"),
     ),
     (
-        "/js/outline.js",
-        "text/javascript; charset=utf-8",
-        include_bytes!("../../../../web/preview/js/outline.js"),
-    ),
-    (
-        "/js/property.js",
-        "text/javascript; charset=utf-8",
-        include_bytes!("../../../../web/preview/js/property.js"),
-    ),
-    (
         "/js/problems.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/problems.js"),
@@ -365,11 +355,6 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/js/lens.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/lens.js"),
-    ),
-    (
-        "/js/size-grid.js",
-        "text/javascript; charset=utf-8",
-        include_bytes!("../../../../web/preview/js/size-grid.js"),
     ),
     (
         "/js/value.js",
@@ -605,6 +590,36 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/js/view/inventory-panel.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/view/inventory-panel.js"),
+    ),
+    (
+        "/js/view/sheet.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/sheet.js"),
+    ),
+    (
+        "/js/view/outline.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/outline.js"),
+    ),
+    (
+        "/js/view/property.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/property.js"),
+    ),
+    (
+        "/js/view/size-grid.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/size-grid.js"),
+    ),
+    (
+        "/js/view/value-pop.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/value-pop.js"),
+    ),
+    (
+        "/js/view/list-block.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/list-block.js"),
     ),
 ];
 

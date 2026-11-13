@@ -1,15 +1,20 @@
 // @ts-check
-// The property sheet (the lens): the controls of the selection, and edits
-// made there.
+// The property sheet on this page: the controls of the selection, and edits made there.  The three levels it fills (the
+// tile's, the selected thing's, one control's page) are components (js/view/sheet.js, js/view/property.js) drawn from the
+// document, the checked text and the program's descriptions: each reads what it shows, so each is drawn again by itself
+// when that changes.  This part is what a level is made of (the models built from the document) and what its edits do.
 
-import { Lens, kdlString } from '../lens.js';
-import { buildOutline } from '../outline.js';
+import { kdlString } from '../lens.js';
 import {
   addFrom, canMine, editable, moveEntry, muteAt, stepEntry, openRowMenu, removeAt, renameMark, rowAction, setControl, takeFocusIndex, tileEdit,
 } from './rows.js';
 import { orderStack } from '../nav.js';
-import { showProperty } from '../property.js';
 import { failed, showError } from '../problems.js';
+import { html, render, useEffect, useRef } from '../view/html.js';
+import { Outline } from '../view/outline.js';
+import { PropertyPage } from '../view/property.js';
+import { Sheet } from '../view/sheet.js';
+import { ListBlock } from '../view/list-block.js';
 import { $, host, makeMine } from './app.js';
 import { edited, replaceBytes, spansUsable } from './document.js';
 import { doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, mapNode, markSel, nodeControl, nodeNamed, server, stackItems, stem, tile, view } from './stores.js';
@@ -18,10 +23,9 @@ import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
 import { startRename } from './tiles.js';
 import { haveBlock, isTileDoc } from './inventory.js';
-import { listBlock } from './lists.js';
+import { addTo, lists } from './lists.js';
 
-
-// ---- the lens ---------------------------------------------------------------
+// ---- what edits do -----------------------------------------------------------------------------------------
 
 const sheetApi = {
   writable: () => doc.get().writable,
@@ -29,61 +33,55 @@ const sheetApi = {
   set: setControl,
   canMine: () => canMine(),
   // the top field in focus (typed in or scrubbed) selects the entry's cloud; hovered, it shows quietly
-  onField: (name, on) => { if (name === 'top') view.set({ cloudSheet: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
-  onFieldHover: (name, on) => { if (name === 'top') view.set({ cloudSheetHov: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
-  checkValue: async (element, control, typed) => {
+  onField: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') view.set({ cloudSheet: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
+  onFieldHover: (/** @type {string} */ name, /** @type {boolean} */ on) => { if (name === 'top') view.set({ cloudSheetHov: on && isEntry(view.get().sel) ? view.get().sel.id : null }); },
+  checkValue: async (/** @type {string} */ element, /** @type {string} */ control, /** @type {string} */ typed) => {
     const r = await host.checkValue(element, control, typed);
     if (failed(`Could not check what was typed for ${control}`, r)) return null;
     return r.body?.message ?? null; // offline: nothing to say yet; the edit is checked again when it is sent
   },
-  // the gallery's curves are the program's: a failure goes to the error panel,
-  // a value the program refuses ({ok: false, message}) is for the gallery to show
-  weighting: async (query) => {
-    const r = await host.weightings(query);
-    // the program refuses a value with 200 and {ok: false}; any error status is the page asking wrongly
-    if (failed('Could not read the weighting curves', r)) return null;
-    if (r.status >= 400) { showError('Could not read the weighting curves', new Error('Could not read the weighting curves', { cause: r.error })); return null; }
-    return r.status === 0 ? null : r.body;
-  },
 };
-// the three levels draw with the same api: the thing's sheet, the tile's (with what it holds under it) and one control's page
-const lens = new Lens($('lens'), {
+// the thing's sheet: a control with more to show opens its own level (a stack entry's: ranges and heights)
+const thingApi = {
   ...sheetApi,
-  // a control with more to show opens its own level (a stack entry's: ranges and heights)
-  detail: (c) => isEntry(view.get().sel) && (c.ranges || c.unit === 'height'),
-  openControl: (group, name) => openControl(group, name),
-});
-/** @type {any} */
-const tileLens = new Lens($('lens-tile'), sheetApi);
-tileLens.emptyTitle = 'No tile'; tileLens.emptyText = 'Choose a tile to see what it holds.';
+  detail: (/** @type {any} */ c) => isEntry(view.get().sel) && (c.ranges || c.unit === 'height'),
+  openControl: (/** @type {number} */ group, /** @type {string} */ name) => openControl(group, name),
+};
+
+// ---- the models ---------------------------------------------------------------------------------------------
+
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty.
 // What each is (its unit, help, default) is the program's; this only picks the rows
 const tileRows = (names) => ({ controls: names.map((n) => nodeControl('tile', n)).filter(Boolean) });
-// a written property as the lens reads it: `name=value` and its span
+// a written property as the sheet reads it: `name=value` and its span
 const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] });
+
+/** What a row of the tile level does. */
+const outlineOn = {
+  open: (/** @type {string} */ kind, /** @type {string} */ id) => setSel(kind === 'entry' ? entrySel(id) : markSel(kind, id), /** @type {any} */ ({ from: 'view' })),
+  hover: (/** @type {any} */ w) => view.set({ hov: w && w.kind === 'entry' ? entrySel(w.id) : null }),
+  menu: openRowMenu,
+  act: rowAction,
+  add: addFrom,
+  move: moveEntry,
+  step: stepEntry,
+  // after a move the keyboard follows the row to where it went (its key may have changed with its place)
+  focusAfter: takeFocusIndex,
+};
+
 /** The tile level's rows: what the tile holds (lines, regions, the stack in build order) and the messages each stack row wears. */
 function tileContents() {
   const t = tile(), map = doc.get().map;
   const stack = orderStack(stackItems()).map((it) => ({ ...it, family: elementNamed(it.what)?.family }));
-  const hover = (w) => view.set({ hov: w && w.kind === 'entry' ? entrySel(w.id) : null });
-  return buildOutline(
-    {
-      lines: map?.lines, regions: map?.regions, stack, badges: t ? log.byNode(t.id) : new Map(),
-      cols: map?.cols ?? t?.plan?.cols ?? 1, rows: map?.rows ?? t?.plan?.rows ?? 1,
-      // rows can be changed when the document is the tile's own and has been checked (an unchecked one has no spans to address)
-      editable: editable() && !!map && doc.get().tileId === view.get().tileId,
-    },
-    {
-      open: (kind, id) => setSel(kind === 'entry' ? entrySel(id) : markSel(kind, id), /** @type {any} */ ({ from: 'view' })),
-      hover,
-      menu: openRowMenu,
-      act: rowAction,
-      add: addFrom,
-      move: moveEntry,
-      step: stepEntry,
-    },
-  );
+  const data = {
+    lines: map?.lines, regions: map?.regions, stack, badges: t ? log.byNode(t.id) : new Map(),
+    cols: map?.cols ?? t?.plan?.cols ?? 1, rows: map?.rows ?? t?.plan?.rows ?? 1,
+    // rows can be changed when the document is the tile's own and has been checked (an unchecked one has no spans to address)
+    editable: editable() && !!map && doc.get().tileId === view.get().tileId,
+  };
+  return html`<${Outline} data=${data} on=${outlineOn} />`;
 }
+
 function tileModel() {
   const t = tile(), own = doc.get().map?.tile;
   if (!t || !own || doc.get().file !== t.path) return null;
@@ -97,7 +95,7 @@ function tileModel() {
     at: own.at,
     schema: tileRows(['about']),
     written: av ? [asWritten({ name: 'about', text: av.text, span: av.span })] : [],
-    set: (_, value) => (value == null
+    set: (/** @type {any} */ _, /** @type {any} */ value) => (value == null
       ? about && tileEdit({ op: 'remove', at: about.at }, 'Took out the description')
       : about ? null : tileEdit({ op: 'insert', place: 'tile', node: `about ${kdlString(String(value))}` }, 'Described the tile')),
   });
@@ -105,13 +103,13 @@ function tileModel() {
     { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
   ] : [];
   // under the tile's own controls: what the inventory says of it and "I have this", then what it holds
-  const tail = document.createElement('div');
-  if (isTileDoc(t)) tail.append(haveBlock(t), listBlock(t));
-  tail.append(tileContents());
+  const tail = html`${isTileDoc(t) ? html`${haveBlock(t)}<${ListBlock} t=${t} lists=${lists()} addTo=${addTo} />` : null}${tileContents()}`;
   return { title: stem(t), kind: 'tile', href: node.href, groups, actions, tail, slim: true };
 }
-/** A run of written text (a line's points, a region's lines) as a lens setting. */
+
+/** A run of written text (a line's points, a region's lines) as a sheet setting. */
 const runWritten = (name, run) => (run?.span ? asWritten({ name, text: run.text, span: run.span }) : null);
+
 /** Change one clause of a region (a `within`'s distance or place, an `except`'s regions), through the server's edit route like the other controls. */
 async function setClause(clause, name, value) {
   if (!doc.get().writable) return makeMine({ run: () => setClause(clause, name, value) });
@@ -129,6 +127,7 @@ async function setClause(clause, name, value) {
     edited(r.body.text, 'lens', 'Changed distance');
   }
 }
+
 /** The sheet of a drawn line or a region: its name, its controls, its points. */
 function markModel(kind, m) {
   const t = tile(), sh = m?.sheet;
@@ -144,7 +143,7 @@ function markModel(kind, m) {
     written.push(...sh.controls.map(asWritten));
     const th = runWritten('through', sh.through);
     if (th) written.push(th);
-    set = (name, value) => (name === 'name' ? renameMark('line', m.name, value) : setControl(sh.at, name, value));
+    set = (/** @type {string} */ name, /** @type {any} */ value) => (name === 'name' ? renameMark('line', m.name, value) : setControl(sh.at, name, value));
   } else {
     // a region is made as its source says: lines and fill points, places it reaches round and regions it excepts, or both
     const rk = regionKind(sh);
@@ -154,7 +153,7 @@ function markModel(kind, m) {
       controls.push(...node.controls.filter((c) => c.name !== 'name').map((c) => (c.name === 'boundedBy' ? { ...c, words: lines } : c)));
       for (const [n, run] of [['boundedBy', sh.boundedBy], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
     }
-    set = (name, value) => {
+    set = (/** @type {string} */ name, /** @type {any} */ value) => {
       if (name === 'name') return renameMark('region', m.name, value);
       if (name === 'boundedBy') {
         const run = sh.boundedBy;
@@ -167,11 +166,12 @@ function markModel(kind, m) {
     // each clause is a group with a × that takes it out of the source
     const clauses = clauseGroups(m, sh, doc.get().map, asWritten, nodeControl).map((g) => ({
       at: g.clause.at, heading: g.heading, schema: { controls: g.controls }, written: g.written,
-      set: (name, value) => setClause(g.clause, name, value),
+      set: (/** @type {string} */ name, /** @type {any} */ value) => setClause(g.clause, name, value),
       remove: { title: `Take out this ${g.clause.kind} clause`, run: () => tileEdit({ op: 'remove', at: g.clause.at }, `Took out a ${g.clause.kind} clause of ${m.name}`) },
     }));
     // the bucket (boundedBy and its fill points) is a clause too: one group, taken out together
     const bucket = controls.filter((c) => c.name !== 'name');
+    /** @type {any[]} */
     const main = [{ at: sh.at, schema: { controls: controls.filter((c) => c.name === 'name') }, written: written.filter((w) => w.name === 'name'), set }];
     if (bucket.length) {
       main.push({
@@ -199,8 +199,9 @@ function markModel(kind, m) {
     groups: [{ at: sh.at, schema: { controls }, written, set }], actions,
   };
 }
+
 /** The sheet model of the entry `s` selects, or null while the text, the check or the program's description is not there. */
-function entryModel(s) {
+function entryModel(/** @type {any} */ s) {
   const it = itemOf(s);
   const elements = server.get().elements;
   const { file, writable } = doc.get();
@@ -220,76 +221,45 @@ function entryModel(s) {
   return { title: it.label, kind: it.what || it.element, href: it.href, note, groups, actions };
 }
 
-/** The tile level: its controls, and under them what it holds. */
-function renderTile() {
-  const t = tileModel();
-  // a row the arrow keys are on keeps the focus when the rows are drawn again (a message came, a value changed);
-  // after a move the keyboard follows the row to where it went (its key may have changed with its place)
-  const was = /** @type {HTMLElement | null} */ (document.activeElement?.closest?.('#lens-tile .orow'));
-  const wasAt = was ? { kind: was.dataset.kind, id: was.dataset.id } : null;
-  const moved = takeFocusIndex();
-  if (t) tileLens.show(t); else tileLens.hide();
-  const rowsNow = [...$('lens-tile').querySelectorAll('.orow')];
-  if (moved != null) {
-    const r = rowsNow.find((x) => x.dataset.kind === 'entry' && Number(x.dataset.index) === moved);
-    if (r) { r.focus({ preventScroll: false }); return; }
-  }
-  if (wasAt) rowsNow.find((r) => r.dataset.kind === wasAt.kind && r.dataset.id === wasAt.id)?.focus({ preventScroll: true });
+/** The sheet model of the selected thing (a line, a region, a stack entry), or null. */
+function thingModel() {
+  const s = view.get().sel;
+  return isMark(s) ? markModel(s.kind, mapNode(s)) : isEntry(s) ? entryModel(s) : null;
 }
 
-/** Draw the three levels: the tile's (always), the selected thing's, and the open control's. */
-function renderLens() {
-  const s = view.get().sel;
-  renderTile();
-  const model = isMark(s) ? markModel(s.kind, mapNode(s)) : isEntry(s) ? entryModel(s) : null;
-  if (model) lens.show(model); else lens.hide();
-  renderProperty(model);
-}
+// ---- the levels ------------------------------------------------------------------------------------------------
+
+const TileLevel = () => html`<${Sheet} model=${tileModel()} api=${sheetApi} emptyTitle="No tile" emptyText="Choose a tile to see what it holds." />`;
+const ThingLevel = () => html`<${Sheet} model=${thingModel()} api=${thingApi} />`;
 
 const HEIGHT_NAMES = /bottom|height/i;
 /** The control page: the open control of the selected entry, if the sheet still has it (else the page closes). */
-function renderProperty(model) {
-  const { sel, control } = view.get();
-  const root = $('lens-prop');
-  if (!control || !isEntry(sel)) { root.replaceChildren(); delete root.dataset.key; return; }
-  if (!model) return; // the sheet is not drawn yet (the text is being checked): keep the page as it is
-  const g = model.groups[control.group];
-  const c = g?.schema?.controls?.find((x) => x.name === control.name);
-  if (!c) { closeControl(); return; }
-  // a value is being typed: the page is not redrawn under it (it is drawn again once the edit is written)
-  const field = /** @type {HTMLElement} */ (document.activeElement);
-  if (root.contains(field) && field.tagName === 'INPUT' && field.dataset.dirty) return;
-  const held = root.contains(field) && field.tagName === 'INPUT'; // the field kept the keyboard through its own edit
+function PropertyLevel() {
+  const held = useRef(/** @type {any} */ (null));
+  const { sel, control, tileId } = view.get();
+  const model = control && isEntry(sel) ? thingModel() : null;
+  const g = model?.groups[control?.group];
+  const c = g?.schema?.controls?.find((/** @type {any} */ x) => x.name === control?.name);
+  // a control the sheet no longer has closes its page
+  useEffect(() => { if (control && isEntry(sel) && model && !c) closeControl(); });
+  if (!control || !isEntry(sel)) { held.current = null; return null; }
+  if (!model) return held.current; // the sheet is not drawn yet (the text is being checked): keep the page as it is
+  if (!c) return null;
   const element = g.schema?.name;
-  // the same page drawn again (a value written) stays where it was scrolled to
-  const key = `${view.get().tileId}|${sel.id}|${control.group}|${control.name}`;
-  const kept = root.dataset.key === key ? root.querySelector('.body')?.scrollTop ?? 0 : 0;
-  root.dataset.key = key;
-  const page = showProperty(root, {
-    element, label: `${model.title}${g.heading ? ` · ${g.heading}` : ''}`, c,
-    s: g.written.find((w) => w.name === c.name), at: g.at,
+  const written = g.written.find((/** @type {any} */ w) => w.name === c.name);
+  const page = html`<${PropertyPage} key=${`${tileId}|${sel.id}|${control.group}|${control.name}`} model=${{
+    element, label: `${model.title}${g.heading ? ` · ${g.heading}` : ''}`, c, s: written, at: g.at,
     weightings: elementNamed(element)?.weightings,
     // the names the program reads in this tile (its own heights too), else the language's plain ones
-    names: { heights: (doc.get().map?.language?.names || server.get().language?.names || []).filter((n) => HEIGHT_NAMES.test(n)) },
-  }, { ...sheetApi, showSource: () => showSourceAt(view.get().sel, g.written.find((w) => w.name === c.name)?.span?.[0] ?? null) });
-  const body = root.querySelector('.body');
-  if (body) body.scrollTop = kept;
-  if (held) { page.input.focus({ preventScroll: true }); page.input.setSelectionRange(page.input.value.length, page.input.value.length); }
+    names: { heights: (doc.get().map?.language?.names || server.get().language?.names || []).filter((/** @type {string} */ n) => HEIGHT_NAMES.test(n)) },
+  }} api=${{ ...sheetApi, showSource: () => showSourceAt(view.get().sel, written?.span?.[0] ?? null) }} />`;
+  held.current = page;
+  return page;
 }
 
-let lastLists = null; // the print lists there are: the tile level's list chooser follows them
 /** Wire this part of the page (once, at load). */
 export function init() {
-  view.subscribe(['sel', 'tileId', 'control'], renderLens);
-  log.subscribe(renderTile);
-  doc.subscribe(['stack', 'map', 'file', 'writable', 'tileId'], renderLens);
-  server.subscribe(['elements', 'language', 'inventory', 'system'], renderLens);
-  server.subscribe(['tiles'], () => { const n = server.get().tiles.filter((t) => /\.dmap$/i.test(t.path)).map((t) => t.id).join(); if (n !== lastLists) { lastLists = n; renderLens(); } });
-  // before the text is checked the sheet reads the build's plan: not redrawn for builds that change nothing it shows
-  let plan = null;
-  server.subscribe(['tiles'], () => {
-    const now = doc.get().stack ? null : JSON.stringify(tile()?.plan?.stack);
-    if (now !== plan) { plan = now; renderLens(); }
-  });
-  renderLens();
+  render(html`<${TileLevel} />`, $('lens-tile'));
+  render(html`<${ThingLevel} />`, $('lens'));
+  render(html`<${PropertyLevel} />`, $('lens-prop'));
 }

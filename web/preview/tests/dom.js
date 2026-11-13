@@ -11,6 +11,7 @@ class Node {
   get nextSibling() { const p = this.parentNode; return p ? p.childNodes[p.childNodes.indexOf(this) + 1] ?? null : null; }
   get previousSibling() { const p = this.parentNode; return p ? p.childNodes[p.childNodes.indexOf(this) - 1] ?? null : null; }
   appendChild(c) { return this.insertBefore(c, null); }
+  append(...ns) { for (const n of ns) this.appendChild(typeof n === 'string' ? new Text(n) : n); }
   insertBefore(c, ref) {
     if (c.parentNode) c.parentNode.removeChild(c);
     const i = ref ? this.childNodes.indexOf(ref) : -1;
@@ -39,6 +40,15 @@ class Element extends Node {
     this.className = ''; this.disabled = false; this.title = ''; this.type = ''; this.placeholder = ''; this.spellcheck = true; this.hidden = false;
     if (name === 'input' || name === 'textarea') { this.value = ''; this.min = ''; this.step = ''; }
   }
+  setPointerCapture() {}
+  focus() { globalThis.document.activeElement = this; }
+  blur() { if (globalThis.document.activeElement === this) globalThis.document.activeElement = null; }
+  select() {}
+  setSelectionRange() {}
+  getBoundingClientRect() { return { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }; }
+  get offsetWidth() { return 0; }
+  get offsetHeight() { return 0; }
+  get scrollHeight() { return 0; }
   get dataset() {
     const out = {};
     for (const [k, v] of this.attributes) if (k.startsWith('data-')) out[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v;
@@ -70,6 +80,12 @@ class Element extends Node {
 }
 
 export const document = {
+  activeElement: null,
+  get body() { return (this._body ??= new Element('body')); },
+  documentElement: { clientWidth: 1000, clientHeight: 800 },
+  addEventListener() {},
+  removeEventListener() {},
+  contains: () => true,
   createElement: (name) => new Element(name),
   createElementNS: (ns, name) => new Element(name, ns),
   createTextNode: (d) => new Text(d),
@@ -78,6 +94,9 @@ export const document = {
 /** Put `document` where Preact looks for it and return a fresh container to draw into. */
 export function install() {
   globalThis.document = document;
+  globalThis.window = { innerWidth: 1000, innerHeight: 800, addEventListener() {}, removeEventListener() {} };
+  globalThis.addEventListener = () => {};
+  globalThis.removeEventListener = () => {};
   return document.createElement('div');
 }
 

@@ -7,7 +7,7 @@ import { failed, showError } from '../problems.js';
 import { $, host, onMakeMine, toast } from './app.js';
 import { abandonChanges, applyPatchOnCopy, canLeave, carryHistory, whenChecked } from './document.js';
 import { copiedNote } from '../mine.js';
-import { attachSizeGrid } from '../size-grid.js';
+import { attachSizeGrid } from '../view/size-grid.js';
 import { levelSnapshot, restoreLevel } from './levels.js';
 import { select } from './open.js';
 import { doc, renameable, server, stem, tile, view, whenListed } from './stores.js';

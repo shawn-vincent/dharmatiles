@@ -99,15 +99,11 @@ const buttons = {
 };
 
 /**
- * What the inventory says of this tile, and the one button that adds to it, as an element for the tile level (the
- * sheet, which still draws by hand, appends it).  `I have this` writes one good print for the tile's current seed, the
- * target system and the colour mode picked here; it works without any export.
+ * What the inventory says of this tile, and the one button that adds to it, for the tile level's sheet.  `I have this`
+ * writes one good print for the tile's current seed, the target system and the colour mode picked here; it works
+ * without any export.
  */
-export function haveBlock(t) {
-  const holder = document.createElement('div');
-  render(html`<${HaveBlock} t=${t} m=${haveBlockModel} act=${buttons} />`, holder);
-  return holder;
-}
+export const haveBlock = (t) => html`<${HaveBlock} t=${t} m=${haveBlockModel} act=${buttons} />`;
 
 /** Wire this part of the page (once, at load). */
 export function init() {

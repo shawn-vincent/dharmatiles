@@ -5,7 +5,7 @@ import {
   atOf, badgeOf, buildHash, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, levelParams, moveRow, orderStack, ordinal,
   parseHash, placeOf, sameLevel, selOfAt, sizeWords, standing, up,
 } from '../js/nav.js';
-import { innerRange, simpleWeightings, weightedAs } from '../js/property.js';
+import { innerRange, simpleWeightings, weightedAs } from '../js/view/property.js';
 
 const tileSel = { kind: 'tile', id: 't1' };
 const entry = (id, piece = null) => ({ kind: 'entry', id, piece });

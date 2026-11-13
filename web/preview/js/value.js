@@ -1,6 +1,6 @@
 // A control's value as the sheet edits it: what may be typed, what it is
 // written as, and what can go at the caret.  No page here;
-// the lens draws it (lens.js).  Nothing here checks a value: the program's
+// the sheet draws it (view/sheet.js).  Nothing here checks a value: the program's
 // check (dt_doc's `check_text`, by `/api/check-value`) is the only one.
 
 /** Whether a control's value is a number or an expression: the program says so (`numeric`) for every control it describes. */

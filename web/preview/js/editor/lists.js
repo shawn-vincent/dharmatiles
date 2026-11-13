@@ -66,25 +66,6 @@ export function listMenu(t, anchor) {
   openMenu(anchor, [{ head: `Add ${t.name} to` }, ...items], { label: `Add ${t.name} to a print list`, cls: 'addmenu', align: 'right' });
 }
 
-/** The tile level's block: add the tile to a print list. */
-export function listBlock(t) {
-  const box = el('section', 'inv-block');
-  box.append(el('h3', null, 'Print list'));
-  const ask = el('div', 'inv-ask');
-  const s = el('select', 'word-select');
-  s.setAttribute('aria-label', 'Print list');
-  for (const l of lists()) { const o = el('option', null, l.name); o.value = l.id; s.append(o); }
-  const fresh = el('option', null, 'A new list'); fresh.value = '';
-  s.append(fresh);
-  const b = el('button', 'btn', 'Add to print list');
-  b.type = 'button';
-  b.title = 'One more copy of this tile in the list; a tile already there at the same seed has its count raised';
-  b.onclick = () => addTo(t, s.value || null);
-  ask.append(s, b);
-  box.append(ask);
-  return box;
-}
-
 /** New print list in folder `dir` of place `root`: asks a name, writes it, opens it. */
 export function newList(root, dir, anchor, where, map = false) {
   nameField(anchor, {
