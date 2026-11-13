@@ -42,7 +42,7 @@ const RowPills = ({ row }) => html`<span class="mp-pills">
  * (`act.hover`), selects them when pressed, and is marked, and brought into view in the list, while one of its pieces
  * is selected: so it reads the selection the same wherever the selection was made.
  */
-function PieceList({ m, act, capped = false }) {
+function PieceList({ m, act }) {
   const ro = m.readOnly.value;
   const ps = m.pieces.value;
   const how = m.list.value;
@@ -65,7 +65,7 @@ function PieceList({ m, act, capped = false }) {
       <b>${row.name}</b><span class="mp-n">${`× ${row.count}`}</span><${RowPills} row=${row} /></button>`;
   };
   const Head = ({ text, n, note }) => html`<h4 class="mp-h" title=${note}>${text}<span class="mp-n">${n}</span></h4>`;
-  return html`<${Section} title=${ps.length ? 'Pieces' : 'No pieces yet'} cls=${capped ? 'mp-capped' : ''}>
+  return html`<${Section} title=${ps.length ? 'Pieces' : 'No pieces yet'} >
     ${ps.length ? null : html`<p class="note">Open the catalog and put tiles on the map. Each is a piece with a place, a turn and a seed; nothing prints until you ask for the plates.</p>`}
     ${ps.length ? html`
       <${Seg} label="Sort" options=${SORTS} current=${how.sort} on=${(v) => act.list({ sort: v })} />
@@ -152,8 +152,7 @@ function PieceLevel({ m, act }) {
         <${Button} text="Duplicate" run=${() => act.duplicate(ids)} disabled=${ro} title="A copy next to it, with the same seed (D)" />
         <${Button} text="Remove" run=${() => act.remove(ids)} cls="btn danger" disabled=${ro} title="Take it off the map (Backspace)" />
       </div>
-    <//>
-    <${PieceList} m=${m} act=${act} capped=${true} />`;
+    <//>`;
 }
 
 function PropLevel({ m, act }) {

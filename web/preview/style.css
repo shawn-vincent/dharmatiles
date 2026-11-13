@@ -744,7 +744,6 @@ body.inventory #view, body.inventory #sash-side { display: none !important; }
 .mp-group.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--raised)); box-shadow: inset 3px 0 0 var(--accent); }
 .mp-h { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 4px; font: 600 11px/1.2 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .mp-list { margin-top: 6px; }
-.mp-capped .mp-list { max-height: 36vh; overflow-y: auto; position: relative; padding-right: 2px; }
 .mp-list .note { margin: 6px 0; }
 .mp-tray { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
 .mp-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
