@@ -1,0 +1,385 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dharmatiles in the browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* tokens copied from docs/assets/theme.css: Lichen & Linen by day, Moonpool at night */
+:root {
+  --f-display: "Big Shoulders Display", "Arial Narrow", sans-serif-condensed, Impact, sans-serif;
+  --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r: 5px; --r-lg: 10px;
+  --fs-s: 12px; --lh-s: 16px; --fs-m: 14px; --lh-m: 20px; --fs-l: 17px; --lh-l: 24px; --fs-xl: 28px;
+  --plate: #D9E0EB; --plate-hi: #EBEFF5; --plate-ink: #2B3340;
+  --caution: #E2C21C;
+  --bg: #F3F2EC; --panel: #E6EAE1; --raised: #FCFCF8; --line: #C9D1C8; --line-2: #AEBBB0;
+  --ink: #1D2922; --muted: #657168;
+  --accent: #287B62; --accent-hi: #1F654F; --on-accent: #F5FFF9;
+  --water: #337F8A; --earth: #987563;
+  --ok: #397A55; --err: #B83B2E;
+  --code-bg: #E6EAE1;
+  --shadow: 0 1px 2px rgb(29 41 34 / .06), 0 12px 30px -18px rgb(40 51 45 / .3);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --r: 4px; --r-lg: 8px;
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
+  --water: #83A8FF; --earth: #C08A73;
+  --ok: #50B780; --err: #F06A5C;
+  --code-bg: #061015;
+  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 28px -10px rgb(0 0 0 / .6);
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --r: 4px; --r-lg: 8px;
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
+  --water: #83A8FF; --earth: #C08A73;
+  --ok: #50B780; --err: #F06A5C;
+  --code-bg: #061015;
+  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 28px -10px rgb(0 0 0 / .6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--fs-m)/var(--lh-m) var(--f-body); padding-inline: 16px; }
+.wrap { max-width: 1400px; margin: 0 auto; padding-block: 16px 40px; }
+h1 { font: 800 var(--fs-xl)/1.1 var(--f-display); letter-spacing: .02em; margin: 0; text-transform: uppercase; }
+h1 small { font: 600 var(--fs-s)/1 var(--f-body); letter-spacing: .04em; color: var(--muted); margin-left: .6em; text-transform: none; }
+h2 { font: 600 var(--fs-l)/var(--lh-l) var(--f-display); letter-spacing: .04em; text-transform: uppercase; margin: 0 0 8px; }
+p.lede { margin: 6px 0 14px; color: var(--muted); max-width: 70ch; }
+code, .mono { font-family: var(--f-code); font-size: 13px; }
+
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+.stats li { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 10px; font-size: var(--fs-s); line-height: var(--lh-s); }
+.stats b { font-family: var(--f-code); font-weight: 600; color: var(--accent); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; box-shadow: var(--shadow); min-width: 0; }
+.card + .card { margin-top: 16px; }
+.col > .card:first-child { margin-top: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+label { font-size: var(--fs-s); color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+select, input[type=text], input[type=number], button {
+  font: inherit; color: var(--ink); background: var(--raised); border: 1px solid var(--line-2);
+  border-radius: var(--r); height: 30px; padding: 0 8px; min-width: 0;
+}
+input[type=text] { font-family: var(--f-code); font-size: 13px; }
+input[type=number] { width: 80px; }
+button { cursor: pointer; background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight: 600; }
+button.alt { background: var(--raised); color: var(--ink); border-color: var(--line-2); font-weight: 400; }
+button.on { background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight: 600; }
+.seg { display: inline-flex; }
+.seg button { border-radius: 0; }
+.seg button:first-child { border-radius: var(--r) 0 0 var(--r); }
+.seg button:last-child { border-radius: 0 var(--r) var(--r) 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* the editor: a textarea over a mirror that underlines the spans */
+.editor { position: relative; height: 460px; background: var(--code-bg); border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+.editor pre, .editor textarea {
+  position: absolute; inset: 0; margin: 0; padding: 10px 12px; border: 0; width: 100%; height: 100%;
+  font: 400 13px/20px var(--f-code); tab-size: 4; white-space: pre; overflow: auto; letter-spacing: 0;
+}
+.editor pre { color: transparent; pointer-events: none; }
+.editor textarea { background: transparent; color: var(--ink); resize: none; outline: none; }
+.editor mark { color: transparent; background: transparent; text-decoration: underline wavy var(--err); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.editor mark.pick { background: color-mix(in srgb, var(--accent) 28%, transparent); text-decoration: none; }
+
+.diag { border-left: 3px solid var(--err); background: var(--raised); border-radius: 0 var(--r) var(--r) 0; padding: 6px 10px; margin: 0 0 6px; cursor: pointer; }
+.diag .code { font: 600 var(--fs-s)/var(--lh-s) var(--f-code); color: var(--err); }
+.diag .at { font: 400 var(--fs-s)/var(--lh-s) var(--f-code); color: var(--muted); margin-left: 6px; }
+.diag .help { color: var(--muted); font-size: var(--fs-s); line-height: var(--lh-s); margin-top: 2px; }
+.ok { color: var(--ok); font-weight: 600; }
+.fatal { border-left: 3px solid var(--err); background: var(--raised); padding: 10px 12px; margin: 0 0 14px; font-family: var(--f-code); font-size: 13px; white-space: pre-wrap; display: none; }
+.fatal.show { display: block; }
+
+.entry { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; margin: 0 0 8px; }
+.entry.child { margin: 6px 0 0 14px; }
+.entry .head { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.entry .what { font: 600 var(--fs-l)/var(--lh-l) var(--f-display); text-transform: uppercase; letter-spacing: .04em; }
+.entry .tag { font-size: var(--fs-s); color: var(--muted); }
+.entry .tag.def { color: var(--water); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 4px; }
+th { text-align: left; font: 600 var(--fs-s)/var(--lh-s) var(--f-body); color: var(--muted); padding: 2px 8px 2px 0; white-space: nowrap; }
+td { padding: 3px 8px 3px 0; vertical-align: baseline; border-top: 1px solid var(--line); }
+td.v { font-family: var(--f-code); cursor: pointer; }
+td.p { font-family: var(--f-code); white-space: nowrap; }
+td.p.same { color: var(--muted); }
+td.n { white-space: nowrap; }
+.about { color: var(--muted); font-size: var(--fs-s); }
+
+.plate { background: var(--plate); color: var(--plate-ink); border-radius: var(--r); padding: 10px; }
+.plate svg { display: block; width: 100%; height: auto; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; font-size: var(--fs-s); color: var(--muted); }
+.facts b { color: var(--ink); font-family: var(--f-code); font-weight: 600; }
+.printed { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin-top: 8px; font-family: var(--f-code); font-size: 13px; }
+.printed span:nth-child(odd) { color: var(--muted); font-family: var(--f-body); font-size: var(--fs-s); }
+.ms { color: var(--muted); font-size: var(--fs-s); font-family: var(--f-code); }
+</style>
+
+<div class="wrap">
+  <h1>dharmatiles <small>stage 1: the language, in your browser</small></h1>
+  <p class="lede">This is the real language engine (<code>dt-lang</code>, <code>dt-value</code>, <code>dt-doc</code>) compiled to WebAssembly, not a copy: the same Rust that checks a tile in the program checks the source below as you type. Nothing leaves your browser.</p>
+
+  <div id="fatal" class="fatal" role="alert"></div>
+
+  <ul class="stats" id="stats">
+    <li>module <b id="s-wasm">loading</b></li>
+    <li>fetch and compile <b id="s-load">-</b></li>
+    <li>check, last <b id="s-last">-</b></li>
+    <li>check, median of last 50 <b id="s-med">-</b></li>
+    <li>check, slowest of last 50 <b id="s-max">-</b></li>
+    <li>range draws, last <b id="s-draw">-</b></li>
+  </ul>
+
+  <div class="grid">
+    <div class="col">
+      <div class="card">
+        <h2>Source</h2>
+        <div class="row">
+          <label>tile <select id="tile" aria-label="Library tile"></select></label>
+          <span class="seg" role="group" aria-label="Build target">
+            <button class="on" id="sys-db" type="button">DungeonBlocks</button>
+            <button class="alt" id="sys-ol" type="button">OpenLOCK</button>
+          </span>
+        </div>
+        <div class="editor">
+          <pre id="mirror" aria-hidden="true"></pre>
+          <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Tile source"></textarea>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Diagnostics</h2>
+        <div id="diags"></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <h2>Stack</h2>
+        <div id="tileinfo" class="about" style="margin-bottom:8px"></div>
+        <div id="stack"></div>
+      </div>
+      <div class="card">
+        <h2>A length, printed</h2>
+        <div class="row">
+          <input type="text" id="len" value="7dmm" size="26" aria-label="A length" spellcheck="false">
+        </div>
+        <div id="lenout" class="printed"></div>
+      </div>
+      <div class="card">
+        <h2>A weighted range</h2>
+        <div class="row">
+          <input type="text" id="rng" value="low(1dmm .. 6dmm, 4)" size="26" aria-label="A weighted range" spellcheck="false">
+        </div>
+        <div class="row">
+          <label>draws <select id="draws"><option>1000</option><option selected>10000</option><option>100000</option><option>1000000</option></select></label>
+          <label>bins <input type="number" id="bins" value="24" min="2" max="80"></label>
+          <label>seed <input type="number" id="seed" value="1" min="0"></label>
+          <button class="alt" id="redraw" type="button">Draw again</button>
+        </div>
+        <div id="rngmsg" class="diag" hidden></div>
+        <div class="plate"><svg id="hist" viewBox="0 0 600 220" role="img" aria-label="Histogram of the draws"></svg></div>
+        <div class="facts" id="rngfacts"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const MAIN = "tile.dtile";
+let wasm = null, system = "db", picks = [];
+const times = [];
+
+function fatal(where, e) {
+  const box = $("fatal");
+  box.textContent = `${where}\n${e && e.stack ? e.stack : e}`;
+  box.classList.add("show");
+}
+window.addEventListener("error", (ev) => fatal("An error in the page", ev.error || ev.message));
+window.addEventListener("unhandledrejection", (ev) => fatal("An unhandled rejection in the page", ev.reason));
+
+const fmt = (ms) => ms < 1 ? `${(ms * 1000).toFixed(0)} µs` : ms < 100 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(0)} ms`;
+const kb = (n) => `${(n / 1024).toFixed(0)} KB`;
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const timed = (f) => { const t = performance.now(); const r = f(); return [r, performance.now() - t]; };
+
+// the editor: the mirror repeats the text and underlines the diagnostics' spans
+const src = $("src"), mirror = $("mirror");
+function paint(marks, pick) {
+  const text = src.value;
+  const spans = marks.map(([s, l]) => [s, Math.max(l, 1), ""]);
+  if (pick) spans.push([pick[0], Math.max(pick[1], 1), "pick"]);
+  spans.sort((a, b) => a[0] - b[0]);
+  let out = "", at = 0;
+  for (const [s, l, cls] of spans) {
+    if (s < at || s > text.length) continue;
+    const e = Math.min(s + l, text.length);
+    out += esc(text.slice(at, s)) + `<mark class="${cls}">${esc(text.slice(s, e))}</mark>`;
+    at = e;
+  }
+  mirror.innerHTML = out + esc(text.slice(at)) + "\n ";
+  mirror.scrollTop = src.scrollTop; mirror.scrollLeft = src.scrollLeft;
+}
+src.addEventListener("scroll", () => { mirror.scrollTop = src.scrollTop; mirror.scrollLeft = src.scrollLeft; });
+function pick(s, l) {
+  src.focus(); src.setSelectionRange(s, s + l);
+  const line = src.value.slice(0, s).split("\n").length - 1;
+  src.scrollTop = Math.max(0, line * 20 - src.clientHeight / 3);
+}
+
+function render(a) {
+  const mine = a.diagnostics.filter((d) => d.file === MAIN);
+  paint(mine.map((d) => d.span16));
+  const dg = $("diags");
+  if (a.ok) {
+    dg.innerHTML = `<div class="ok">No mistakes: this reads as a tile.</div>`;
+  } else {
+    dg.innerHTML = a.diagnostics.map((d, i) => `
+      <div class="diag" data-i="${i}">
+        <span class="code">${esc(d.code)}</span><span class="at">${esc(d.file)} ${d.line}:${d.col}</span>
+        <div>${esc(d.message)}${d.label ? ` <span class="about">(${esc(d.label)})</span>` : ""}</div>
+        ${d.help ? `<div class="help">${esc(d.help)}</div>` : ""}
+      </div>`).join("");
+    dg.querySelectorAll(".diag").forEach((el) => el.addEventListener("click", () => {
+      const d = a.diagnostics[+el.dataset.i];
+      if (d.file === MAIN) pick(...d.span16);
+    }));
+  }
+  const t = a.tile;
+  $("tileinfo").textContent = t ? `${t.name}: ${t.cols} × ${t.rows} squares, seed ${t.seed ?? "none written"}${t.about ? " · " + t.about : ""}` : (a.ok ? "no tile in this file" : "no outline while the source has a mistake");
+  const sh = $("stack");
+  sh.innerHTML = "";
+  if (a.ok) for (const e of a.stack) sh.append(entry(e, false));
+}
+
+function entry(e, child) {
+  const div = document.createElement("div");
+  div.className = "entry" + (child ? " child" : "");
+  const rows = e.controls.map((c, i) => {
+    const p = c.printed;
+    const cell = (ends) => ends && ends.length ? `<td class="p">${ends.join(" to ")} mm</td>` : `<td class="p same">${p ? "as written" : ""}</td>`;
+    return `<tr><td class="n">${esc(c.name)}</td><td class="v" data-i="${i}" title="${esc(c.about || "")}">${esc(c.value)}</td>${p ? cell(p.db) + cell(p.ol) : "<td></td><td></td>"}</tr>`;
+  }).join("");
+  div.innerHTML = `
+    <div class="head"><span class="what">${esc(e.what)}</span><span class="tag ${e.callee === "definition" ? "def" : ""}">${e.callee === "definition" ? "definition" : "element"} · line ${e.line}</span></div>
+    ${rows ? `<div class="scroll"><table><tr><th>control</th><th>written</th><th>DungeonBlocks</th><th>OpenLOCK</th></tr>${rows}</table></div>` : `<div class="about">no controls written</div>`}`;
+  div.querySelector(".head").addEventListener("click", () => pick(...e.span16));
+  div.querySelectorAll("td.v").forEach((td) => td.addEventListener("click", () => pick(...e.controls[+td.dataset.i].span16)));
+  for (const c of e.children) div.append(entry(c, true));
+  return div;
+}
+
+let queued = false;
+function check() {
+  if (queued) return;
+  queued = true;
+  requestAnimationFrame(() => {
+    queued = false;
+    try {
+      const [json, ms] = timed(() => wasm.analyze(src.value, system));
+      times.push(ms); if (times.length > 50) times.shift();
+      const s = [...times].sort((a, b) => a - b);
+      $("s-last").textContent = fmt(ms);
+      $("s-med").textContent = fmt(s[Math.floor(s.length / 2)]);
+      $("s-max").textContent = fmt(s[s.length - 1]);
+      render(JSON.parse(json));
+    } catch (e) { fatal("The module threw while checking the source", e); }
+  });
+}
+
+function length() {
+  try {
+    const j = JSON.parse(wasm.printed($("len").value));
+    const out = $("lenout");
+    if (!j) { out.innerHTML = `<span>result</span><span>not a length, or it prints as written</span>`; return; }
+    const show = (ends) => ends.length ? ends.join(" to ") + " mm" : "as written";
+    out.innerHTML = `<span>DungeonBlocks</span><span>${esc(show(j.db))}</span><span>OpenLOCK</span><span>${esc(show(j.ol))}</span>`;
+  } catch (e) { fatal("The module threw while printing a length", e); }
+}
+
+function histogram() {
+  const msg = $("rngmsg");
+  try {
+    const bins = Math.max(2, Math.min(80, +$("bins").value || 24));
+    const [json, ms] = timed(() => wasm.explore($("rng").value, system, bins, +$("draws").value, +$("seed").value >>> 0));
+    $("s-draw").textContent = fmt(ms);
+    msg.hidden = true;
+    const r = JSON.parse(json), W = 600, H = 220, L = 34, R = 10, T = 12, B = 34;
+    const iw = W - L - R, ih = H - T - B, n = r.counts.length;
+    const expect = r.draws / n;
+    const top = Math.max(...r.counts, ...(r.density ? r.density.map((d) => d * expect) : [0])) * 1.08 || 1;
+    const y = (v) => T + ih - (v / top) * ih;
+    let svg = "";
+    for (const f of [0, .5, 1]) svg += `<line x1="${L}" x2="${W - R}" y1="${y(top / 1.08 * f)}" y2="${y(top / 1.08 * f)}" stroke="currentColor" stroke-opacity=".15"/>`;
+    const bw = iw / n;
+    r.counts.forEach((c, i) => { svg += `<rect x="${L + i * bw + 1}" y="${y(c)}" width="${Math.max(bw - 2, 1)}" height="${T + ih - y(c)}" fill="#287B62" fill-opacity=".78"/>`; });
+    if (r.density) {
+      const pts = r.density.map((d, i) => `${L + (i + .5) * bw},${y(d * expect)}`).join(" ");
+      svg += `<polyline points="${pts}" fill="none" stroke="#B83B2E" stroke-width="2"/>`;
+    }
+    if (r.masses) for (const [t, share] of r.masses) {
+      const x = L + t * iw, yy = y(share * r.draws * (n / n));
+      svg += `<line x1="${x}" x2="${x}" y1="${y(0)}" y2="${Math.max(yy, T)}" stroke="#B83B2E" stroke-width="3"/>`;
+    }
+    const tick = (x, label, anchor) => `<text x="${x}" y="${H - 14}" font-size="11" text-anchor="${anchor}" fill="currentColor">${label}</text>`;
+    svg += tick(L, `${r.lo_mm.toFixed(2)} mm`, "start") + tick(W - R, `${r.hi_mm.toFixed(2)} mm`, "end");
+    svg += `<text x="${L + iw / 2}" y="${H - 2}" font-size="10.5" text-anchor="middle" fill="currentColor" fill-opacity=".7">bars: your draws · line: the program's own odds (${r.function})</text>`;
+    $("hist").innerHTML = svg;
+    $("rngfacts").innerHTML = `<span>as written <b>${esc(r.written)}</b> dmm</span><span>ends <b>${r.lo_dmm.toFixed(2)} to ${r.hi_dmm.toFixed(2)}</b> dmm</span><span>mean <b>${r.mean_dmm.toFixed(3)}</b> dmm</span><span>${r.draws.toLocaleString()} draws in <b>${fmt(ms)}</b></span>`;
+  } catch (e) {
+    // a value that is not a range is the program's refusal, shown here; anything else is loud
+    const text = String(e && e.message ? e.message : e);
+    const m = /^(dt::[\w-]+): ([\s\S]*)$/.exec(text);
+    if (m) { msg.hidden = false; msg.innerHTML = `<span class="code">${esc(m[1])}</span><div>${esc(m[2])}</div>`; }
+    else fatal("The module threw while drawing a range", e);
+  }
+}
+
+function setSystem(s) {
+  system = s;
+  $("sys-db").className = s === "db" ? "on" : "alt";
+  $("sys-ol").className = s === "ol" ? "on" : "alt";
+  check(); histogram();
+}
+
+async function main() {
+  const t0 = performance.now();
+  const [glue, lib, bin] = await Promise.all([
+    import("./dt_web.js"),
+    fetch("library.json").then((r) => { if (!r.ok) throw new Error(`library.json: ${r.status}`); return r.json(); }),
+    fetch("dt_web_bg.wasm").then((r) => { if (!r.ok) throw new Error(`dt_web_bg.wasm: ${r.status}`); return r.arrayBuffer(); }),
+  ]);
+  await glue.default({ module_or_path: bin });
+  wasm = glue;
+  wasm.set_library(JSON.stringify(lib));
+  $("s-wasm").textContent = `${kb(bin.byteLength)} (.wasm)`;
+  $("s-load").textContent = fmt(performance.now() - t0);
+
+  picks = Object.keys(lib).filter((k) => k.startsWith("lib:tiles/")).sort();
+  const sel = $("tile");
+  sel.innerHTML = picks.map((k) => `<option value="${esc(k)}">${esc(k.replace("lib:tiles/", "").replace(".dtile", ""))}</option>`).join("");
+  const start = picks.includes("lib:tiles/ground/1x1-grass.dtile") ? "lib:tiles/ground/1x1-grass.dtile" : picks[0];
+  const prefer = picks.find((k) => k.includes("1x1-water")) || start;
+  sel.value = prefer;
+  const load = () => { src.value = lib[sel.value]; check(); };
+  sel.addEventListener("change", load);
+  src.addEventListener("input", check);
+  $("sys-db").addEventListener("click", () => setSystem("db"));
+  $("sys-ol").addEventListener("click", () => setSystem("ol"));
+  $("len").addEventListener("input", length);
+  for (const id of ["rng", "draws", "bins", "seed"]) $(id).addEventListener("input", histogram);
+  $("redraw").addEventListener("click", () => { $("seed").value = (+$("seed").value || 0) + 1; histogram(); });
+  load(); length(); histogram();
+}
+main().catch((e) => fatal("The module could not start", e));
+</script>

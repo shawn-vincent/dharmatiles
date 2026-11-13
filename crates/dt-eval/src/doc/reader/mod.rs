@@ -6,13 +6,13 @@ use std::sync::Arc;
 use dt_doc::Known;
 use dt_doc::consts::ConstTable;
 use dt_doc::expr::Expr;
-use dt_doc::model::{self, Definition, PlaceRef, Spanned, Use, Value};
+use dt_doc::model::{self, Definition, PlaceRef, Spanned, Value};
 use dt_doc::place::{Along, Edge, Point};
 use miette::{NamedSource, SourceSpan};
 
 use crate::diag::{Diag, Src};
 use crate::lower::Lets;
-use crate::source::{LIB, Source, resolve};
+use crate::source::Source;
 
 use super::model::*;
 
@@ -34,15 +34,7 @@ pub fn text_hash(text: &str) -> u64 {
     crate::hash::bytes(crate::hash::OFFSET, text.as_bytes())
 }
 
-/// The path a `use` line in `from` names: the library for a bare or
-/// `lib:` path, the project (relative to `from`) for `./` or `../`.
-#[must_use]
-pub fn use_path(from: &str, u: &Use) -> String {
-    match &u.source {
-        model::Source::Library(p) => format!("{LIB}{p}.dtile"),
-        model::Source::Project(p) => resolve(from, p),
-    }
-}
+pub use dt_doc::paths::use_path;
 
 /// Read the document at `path` and its imports.  A tile is flattened
 /// into a [`Tile`]; any other file (parts, printers, heights, edges) is

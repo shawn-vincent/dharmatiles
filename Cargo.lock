@@ -433,6 +433,7 @@ name = "dt-doc"
 version = "1.0.0"
 dependencies = [
  "dt-lang",
+ "dt-value",
  "kdl",
  "miette",
 ]
@@ -505,6 +506,18 @@ version = "1.0.0"
 dependencies = [
  "dt-lang",
  "libm",
+]
+
+[[package]]
+name = "dt-web"
+version = "1.0.0"
+dependencies = [
+ "dt-doc",
+ "dt-value",
+ "miette",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
 ]
 
 [[package]]

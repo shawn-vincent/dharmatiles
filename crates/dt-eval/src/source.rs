@@ -12,8 +12,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-/// The bundled library's prefix.
-pub const LIB: &str = "lib:";
+pub use dt_doc::paths::{LIB, resolve};
 
 /// Where documents come from.
 pub trait Source: Sync {
@@ -158,80 +157,16 @@ impl Source for Memory {
     }
 }
 
-/// The path a `use "target"` in `from` names, with `.dtile` added if missing.
-#[must_use]
-pub fn resolve(from: &str, target: &str) -> String {
-    let target = if target.ends_with(".dtile") {
-        target.to_owned()
-    } else {
-        format!("{target}.dtile")
-    };
-    if target.starts_with(LIB) || target.starts_with('/') {
-        return target;
-    }
-    // Windows paths from the command line use `\`; uses are written `/`
-    let from = if cfg!(windows) {
-        from.replace('\\', "/")
-    } else {
-        from.to_owned()
-    };
-    let dir = from.rfind('/').map_or_else(
-        || {
-            if from.starts_with(LIB) {
-                LIB.to_owned()
-            } else {
-                String::new()
-            }
-        },
-        |i| from[..=i].to_owned(),
-    );
-    let mut parts: Vec<&str> = Vec::new();
-    let (prefix, rest) = dir
-        .strip_prefix(LIB)
-        .map_or(("", dir.as_str()), |r| (LIB, r));
-    let absolute = rest.starts_with('/');
-    for p in rest.split('/').chain(target.split('/')) {
-        match p {
-            "" | "." => {}
-            // a relative path keeps the `..` it cannot cancel (`../a`);
-            // above `/` there is nothing, so an absolute one drops it
-            ".." if parts.last().is_some_and(|l| *l != "..") => {
-                parts.pop();
-            }
-            ".." if absolute => {}
-            p => parts.push(p),
-        }
-    }
-    let lead = if absolute { "/" } else { "" };
-    format!("{prefix}{lead}{}", parts.join("/"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn resolves_relative_to_the_importer() {
-        assert_eq!(
-            resolve("lib:tiles/ground/x.dtile", "../../parts/grass"),
-            "lib:parts/grass.dtile"
-        );
-        assert_eq!(
-            resolve("lib:tiles/x.dtile", "lib:parts/grass"),
-            "lib:parts/grass.dtile"
-        );
-        assert_eq!(resolve("tiles/a.dtile", "parts.dtile"), "tiles/parts.dtile");
-        assert_eq!(resolve("a.dtile", "b"), "b.dtile");
-    }
-
-    #[test]
-    fn leading_dot_dots_are_kept() {
-        assert_eq!(resolve("../u/sub/t.dtile", "./p"), "../u/sub/p.dtile");
-        assert_eq!(resolve("a.dtile", "../shared/x"), "../shared/x.dtile");
-        assert_eq!(resolve("../a.dtile", "../../x"), "../../../x.dtile");
-        assert_eq!(resolve("t/a.dtile", "../../x"), "../x.dtile");
-        assert_eq!(resolve("/p/a.dtile", "../../../x"), "/x.dtile");
-        assert_eq!(resolve("lib:a.dtile", "../x"), "lib:../x.dtile");
+    fn the_squares_dt_doc_reads_are_the_kits() {
+        // dt-doc has no geometry, so it holds its own copy of each square
+        let kit = |system| dt_kit::Frame::for_system(system, 1, 1).square_mm.to_bits();
+        assert_eq!(dt_doc::schema::SQUARE_MM.to_bits(), kit("db"));
+        assert_eq!(dt_doc::schema::OPENLOCK_SQUARE_MM.to_bits(), kit("ol"));
     }
 
     #[test]

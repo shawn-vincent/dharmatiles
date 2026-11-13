@@ -1,0 +1,30 @@
+[package]
+name = "dt-web"
+description = "dharmatiles in the browser: the language crates (dt-lang, dt-value, dt-doc) behind wasm-bindgen, built by `cargo xtask wasm`"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Language crates only: no dt-geom, dt-kit, dt-elements or dt-eval.
+[dependencies]
+dt-doc.workspace = true
+dt-value.workspace = true
+miette.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen = "=0.2.130"
+
+# The workspace forbids unsafe code; wasm-bindgen's generated glue is unsafe,
+# so this crate takes the workspace's clippy lints and leaves that one out.
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+float_cmp = "warn"
+cast_possible_truncation = "warn"

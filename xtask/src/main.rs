@@ -7,6 +7,7 @@ mod docs;
 mod image;
 mod pictures;
 mod release;
+mod wasm;
 
 const USAGE: &str = r#"usage: cargo xtask <command>
 
@@ -36,6 +37,12 @@ commands:
            version is bumped; fmt, clippy, docs --check and the tests run
            (--no-tests skips the tests); then one commit, the tag
            v<version>, and a push of both (--no-push keeps them local)
+  wasm <out-dir> | --check
+           build the browser bundle of the language crates (dt-web) into
+           <out-dir>: dt_web_bg.wasm, dt_web.js, library.json, index.html
+           (needs wasm-bindgen-cli; uses wasm-opt when installed); --check
+           only checks dt-lang, dt-value, dt-doc and dt-web still compile
+           for wasm32-unknown-unknown
   help     show this message"#;
 
 fn main() -> ExitCode {
@@ -44,6 +51,7 @@ fn main() -> ExitCode {
         Some("sheet") => sheet(&args[1..]),
         Some("pictures") => pictures::run(&root(), &args[1..]),
         Some("docs") => docs::run(&root(), args.iter().any(|a| a == "--check")),
+        Some("wasm") => wasm::run_wasm(&root(), &args[1..]),
         Some("release") => release::run_release(&root(), &args[1..]),
         Some("help" | "-h" | "--help") => {
             println!("{USAGE}");

@@ -2,6 +2,19 @@
 # Plan and architecture: docs/rust/plan.html, docs/rust/architecture.html.
 [workspace]
 members = ["crates/*", "xtask"]
+# dt-web is the browser build (`cargo xtask wasm`): it stays out of a plain
+# `cargo build`, so the program's build is the same without it.
+default-members = [
+    "crates/dharmatiles",
+    "crates/dt-doc",
+    "crates/dt-elements",
+    "crates/dt-eval",
+    "crates/dt-geom",
+    "crates/dt-kit",
+    "crates/dt-lang",
+    "crates/dt-value",
+    "xtask",
+]
 resolver = "3"
 
 [workspace.package]

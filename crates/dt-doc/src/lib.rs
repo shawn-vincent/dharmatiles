@@ -16,6 +16,8 @@
 //! - [`edit`] changes, inserts and removes controls without disturbing
 //!   anything else in the file.
 //!
+//! - [`lower`] turns a written value into the numbers and odds a build draws from.
+//!
 //! This crate has no geometry dependency, so `dharmatiles check`, an
 //! editor or the browser can use it without building Manifold.
 
@@ -30,8 +32,10 @@ pub mod framed;
 pub mod header;
 pub mod inventory;
 pub mod known;
+pub mod lower;
 pub mod map;
 pub mod model;
+pub mod paths;
 pub mod place;
 pub mod printed;
 pub mod schema;

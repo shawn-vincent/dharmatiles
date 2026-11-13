@@ -18,7 +18,7 @@ pub const EDGES: &str = "lib:parts/edges.dtile";
 
 /// The library's heights, every tile's constants: read from disk like any
 /// other file, never compiled in.
-pub const HEIGHTS: &str = "lib:parts/heights.dtile";
+pub use dt_doc::paths::HEIGHTS;
 
 /// A line's wobble follows smooth noise of this sigma along it, mm at the
 /// reference square.

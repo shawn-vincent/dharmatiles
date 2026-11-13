@@ -12,6 +12,11 @@
 /// this scale; other systems scale the written sizes like a photocopy.
 pub const SQUARE_MM: f64 = 35.0;
 
+/// The OpenLOCK square, mm (one inch): the same number as dt-kit's
+/// `OPENLOCK_SQUARE_MM`, here for what reads a document without geometry
+/// (the browser build).
+pub const OPENLOCK_SQUARE_MM: f64 = 25.4;
+
 /// h: the official 33.1 mm wall top at the DungeonBlocks reference.  It is
 /// the engine's vertical scale (levels are kept as fractions of it), and
 /// an author may opt in to it with `(h)1.2`.

@@ -11,6 +11,7 @@ publish.workspace = true
 # No geometry crate, ever: dt-doc must build in milliseconds.
 [dependencies]
 dt-lang.workspace = true
+dt-value.workspace = true
 kdl.workspace = true
 miette.workspace = true
 
