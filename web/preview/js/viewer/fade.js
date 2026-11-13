@@ -77,15 +77,22 @@ export const fadeMethods = {
     this.draw();
   },
 
+  /**
+   * The fade belongs to whatever is on show: the tile's mesh, or a map's pieces (scene.js), one machinery for both.
+   * A map's pieces do not wait on the tile's build (its stale mesh or sketches are not on show), and each piece is
+   * given a role in the fade (selected, under the pointer, the rest) by `setSceneHighlight`, so the same uniforms,
+   * the same amounts (FADE, HOVER_REST, HOVER_LIFT) and the same tween (FADE_IN, FADE_OUT, HOVER_S) drive both.
+   */
   applyFade() {
     // a build's sketches stand in for the older mesh, which steps aside
-    const sketched = this.sketches.size > 0;
-    if (this.mesh) this.mesh.visible = !this.stale && !sketched;
-    this.ghost.u.uMode.value = this.stale ? 3 : 2;
+    const sketched = !this.sceneOn && this.sketches.size > 0;
+    const stale = this.stale && !this.sceneOn;
+    if (this.mesh) this.mesh.visible = !stale && !sketched;
+    this.ghost.u.uMode.value = stale ? 3 : 2;
     const u = this.uniforms, fx = this.fx;
     const sel = u.uSel.value, hov = u.uHov.value;
     const keep = u.uKeep.value, leave = u.uLeave.value, lift = u.uLift.value, drop = u.uDrop.value;
-    const can = this.fade && !this.stale && !sketched;
+    const can = this.fade && !stale && !sketched;
     u.uTintSel.value = can ? 0 : 1;
     const same = (a, b) => a.x === b.x && a.y === b.y;
     // a selected region is the selected item: nothing in the tile stands out, all of it fades deeper
@@ -148,6 +155,16 @@ export const fadeMethods = {
     this.fadeTween = requestAnimationFrame(tick);
   },
 
+  /** Nothing selected, nothing hovered, nothing on its way in or out: what the fade holds goes back to rest (the tile and the map take turns on the view). */
+  resetFade() {
+    if (this.fadeTween) cancelAnimationFrame(this.fadeTween);
+    this.fadeTween = null;
+    const u = this.uniforms;
+    for (const w of [u.uKeep, u.uLeave, u.uLift, u.uDrop]) w.value.set(-1, -1);
+    for (const k of Object.keys(this.fx)) this.fx[k] = 1;
+    this.fxTarget = { ...this.fx };
+  },
+
   /** At rest: what was left is part of the rest again; with nothing selected or hovered, nothing stands out. */
   settleFade() {
     const u = this.uniforms;
@@ -159,9 +176,9 @@ export const fadeMethods = {
 
   /** Set the passes for the fade as it stands now. */
   showFade() {
-    const sketched = this.sketches.size > 0;
+    const sketched = !this.sceneOn && this.sketches.size > 0;
     const [litDepth, litColour, ...rest] = this.ghosts;
-    if (this.stale) {
+    if (this.stale && !this.sceneOn) {
       this.ghost.u.uGhost.value = STALE;
       for (const g of rest) g.visible = !sketched;
       if (litDepth) litDepth.visible = litColour.visible = false;
@@ -179,6 +196,7 @@ export const fadeMethods = {
     u.uLiftA.value = fx.lift;
     u.uDropA.value = fx.drop;
     for (const g of this.ghosts) g.visible = on;
+    if (this.sceneOn) this.showSceneFade(on);
     this.styleRegions();
   },
 

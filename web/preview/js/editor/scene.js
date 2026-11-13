@@ -315,9 +315,9 @@ export const pickAt = (x, y) => idAt(viewer.scenePick(x, y));
 
 let listHover = []; // the ids of the pieces whose row in the panel's list the pointer is on
 
-/** What the view lights: the selection, and the pieces of the row under the pointer in the list, outlined like a selection. */
+/** What the view lights: the selection, and the pieces under the pointer: the one in the view, or the pieces of the row under the pointer in the list. */
 function highlight() {
-  viewer.setSceneHighlight(slotsOf([...view.get().msel, ...listHover]), hovered);
+  viewer.setSceneHighlight(slotsOf(view.get().msel), new Set([...(hovered >= 0 ? [hovered] : []), ...slotsOf(listHover)]));
 }
 
 /** Light the pieces of a row of the panel's list (their ids; none ends it): the same highlight as the pointer's own. */

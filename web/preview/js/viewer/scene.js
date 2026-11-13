@@ -32,7 +32,9 @@ export const sceneMethods = {
     this.scenePickGroup = new THREE.Group();
     this.sceneMaskGroup = new THREE.Group();
     this.sceneGeoms = new Map();    // gid -> {geometry, painted, clean, triangles, grey}
-    this.scenePieces = new Map();   // piece index -> {gid, render, pick, mask}
+    this.scenePieces = new Map();   // piece index -> {gid, shown, render, pick, mask, ghosts, role}
+    this.sceneFaded = false;        // the fade's passes are drawn instead of the pieces' own (something is selected, or on its way in or out)
+    this.tileHighlight = null;      // the tile's selection and hover, held while the map is on show
     this.sceneBox = null;           // {lo, hi}: the map's box, from the description (describe)
     this.sceneGridSpec = null;      // {sq, w, h, cx, cy}
     this.sceneUniforms = {
@@ -43,7 +45,7 @@ export const sceneMethods = {
       uMode: { value: 0 }, uGhost: { value: 1 },
     };
     this.sceneSel = new Set();
-    this.sceneHov = -1;
+    this.sceneHov = new Set();
     // The ground is solid: a plane at the ground drawn first into depth only (the backdrop is its own pass, and
     // paints it), both sides, so from above it hides what is below it (a connector at bottom 0) and from below it
     // hides what stands on it (seen from underground you see the earth, never a tile's top through it).
@@ -69,7 +71,19 @@ export const sceneMethods = {
     this.sceneGroup.visible = this.scenePickGroup.visible = this.sceneMaskGroup.visible = this.sceneOn;
     for (const g of this.ghosts) g.visible = g.visible && !this.sceneOn;
     if (this.mesh) this.mesh.visible = !this.sceneOn && !this.stale;
-    if (!this.sceneOn) this.applyFade();
+    // the map and the tile take turns at the fade: each starts from rest with its own selection
+    const u = this.uniforms;
+    if (this.sceneOn) {
+      this.tileHighlight = { sel: u.uSel.value.clone(), hov: u.uHov.value.clone() };
+      u.uSel.value.set(-1, -1); u.uHov.value.set(-1, -1);
+      this.resetFade();
+    } else {
+      this.sceneFaded = false;
+      this.showSceneFade(false);
+      this.resetFade();
+      if (this.tileHighlight) { u.uSel.value.copy(this.tileHighlight.sel); u.uHov.value.copy(this.tileHighlight.hov); this.tileHighlight = null; }
+      this.applyFade();
+    }
     this.buildGrid();
     this.placeGround();
     this.draw();
@@ -150,7 +164,7 @@ export const sceneMethods = {
       box = this.sceneBox;
       sq = this.sceneGridSpec?.sq ?? 35;
       for (const p of this.scenePieces.values()) {
-        if (!p.render.visible) continue;
+        if (!p.shown) continue;
         const g = p.render.geometry;
         if (!g.boundingBox) g.computeBoundingBox();
         const b = g.boundingBox;
@@ -191,7 +205,7 @@ export const sceneMethods = {
   useGeometry(p, gid) {
     const e = this.sceneGeoms.get(gid);
     if (!e) return;
-    for (const m of [p.render, p.pick, p.mask]) m.geometry = e.geometry;
+    for (const m of [p.render, p.pick, p.mask, ...p.ghosts]) m.geometry = e.geometry;
     p.gid = gid;
   },
 
@@ -203,8 +217,8 @@ export const sceneMethods = {
     const keep = new Set(list.map((p) => p.index));
     for (const [i, p] of this.scenePieces) {
       if (keep.has(i)) continue;
-      this.sceneGroup.remove(p.render); this.scenePickGroup.remove(p.pick); this.sceneMaskGroup.remove(p.mask);
-      p.render.material.dispose(); p.pick.material.dispose(); p.mask.material.dispose();
+      this.sceneGroup.remove(p.render, ...p.ghosts); this.scenePickGroup.remove(p.pick); this.sceneMaskGroup.remove(p.mask);
+      for (const m of [p.render, p.pick, p.mask, ...p.ghosts]) m.material.dispose();
       this.scenePieces.delete(i);
     }
     for (const { index, gid, matrix } of list) {
@@ -213,20 +227,34 @@ export const sceneMethods = {
         const who = { value: new THREE.Vector2(index + 1, 0) };
         const mk = (frag, extra = {}) => new THREE.ShaderMaterial({ uniforms: { ...extra, uWho: who }, vertexShader: VERT_S, fragmentShader: frag, side: THREE.DoubleSide });
         const empty = new THREE.BufferGeometry();
+        // the fade's passes, the tile's (viewer.js: the selection first, then the rest) with the model matrix put in; a
+        // piece's role in the fade rides in its own `uWho`: 1 selected, 2 under the pointer, 3 the rest (setSceneHighlight)
+        const role = { value: new THREE.Vector2(3, 0) };
+        const ghosts = [[this.lit, true], [this.lit, false], [this.ghost, true], [this.ghost, false]].map(([pair, depth], k) => {
+          const m = new THREE.Mesh(empty, new THREE.ShaderMaterial({
+            uniforms: { ...pair.u, uWho: role }, vertexShader: VERT_S, fragmentShader: FRAG, side: THREE.DoubleSide,
+            ...(depth ? { colorWrite: false } : { transparent: true, depthWrite: false }),
+          }));
+          m.renderOrder = 1 + k;
+          return m;
+        });
         p = {
-          gid: null,
+          gid: null, shown: false, role,
           render: new THREE.Mesh(empty, mk(FRAG, this.sceneUniforms)),
           pick: new THREE.Mesh(empty, mk(PICK_FRAG)),
           mask: new THREE.Mesh(empty, mk(MASK_S)),
+          ghosts,
         };
-        for (const m of [p.render, p.pick, p.mask]) { m.frustumCulled = false; m.matrixAutoUpdate = false; }
+        for (const m of [p.render, p.pick, p.mask, ...ghosts]) { m.frustumCulled = false; m.matrixAutoUpdate = false; }
         p.mask.visible = this.sceneSel.has(index);
-        this.sceneGroup.add(p.render); this.scenePickGroup.add(p.pick); this.sceneMaskGroup.add(p.mask);
+        p.role.value.x = this.roleOf(index);
+        this.sceneGroup.add(p.render, ...ghosts); this.scenePickGroup.add(p.pick); this.sceneMaskGroup.add(p.mask);
         this.scenePieces.set(index, p);
       }
-      for (const m of [p.render, p.pick, p.mask]) m.matrix.fromArray(matrix);
+      for (const m of [p.render, p.pick, p.mask, ...p.ghosts]) m.matrix.fromArray(matrix);
       const shown = gid != null && this.sceneGeoms.has(gid);
-      p.render.visible = p.pick.visible = shown;
+      p.shown = shown;
+      this.showPiece(p);
       p.mask.visible = shown && this.sceneSel.has(index);
       if (shown && p.gid !== gid) this.useGeometry(p, gid);
       else if (!shown) p.gid = gid;
@@ -234,14 +262,45 @@ export const sceneMethods = {
     this.draw();
   },
 
-  /** The selected pieces (a Set of indices) and the one under the pointer (-1: none). */
+  /** What a piece is to the fade: 1 selected, 2 under the pointer (and not selected), 3 the rest. */
+  roleOf(i) { return this.sceneSel.has(i) ? 1 : this.sceneHov.has(i) ? 2 : 3; },
+
+  /** A piece is on show as itself, or as the fade's passes while something is selected or on its way in or out. */
+  showPiece(p) {
+    p.render.visible = p.shown && !this.sceneFaded;
+    for (const g of p.ghosts) g.visible = p.shown && this.sceneFaded;
+    p.pick.visible = p.shown;
+  },
+
+  /** The fade says whether the pieces are drawn as themselves or through its passes (fade.js `showFade`). */
+  showSceneFade(on) {
+    if (this.sceneFaded === on) return;
+    this.sceneFaded = on;
+    for (const p of this.scenePieces.values()) this.showPiece(p);
+  },
+
+  /**
+   * The selected pieces (a Set of indices) and the ones the pointer is on (a Set, or one index; -1: none).
+   * A selection fades the rest, as a selection in the tile does: the fade's own machinery (fade.js `applyFade`)
+   * is told "something is selected" and "something is under the pointer", and each piece is given its role in it.
+   * Where the fade is off, the selection's tint (one piece) and the hover's remain, as they were.
+   */
   setSceneHighlight(sel, hov) {
     this.sceneSel = new Set(sel);
-    this.sceneHov = hov;
-    // one selected piece tints; several are outlined (the shader tints one index)
+    this.sceneHov = hov instanceof Set ? hov : new Set(hov >= 0 ? [hov] : []);
+    const hovered = [...this.sceneHov].filter((i) => !this.sceneSel.has(i));
+    // the fade off: one selected piece tints; several are outlined (the shader tints one index)
     this.sceneUniforms.uSel.value.set(this.sceneSel.size === 1 ? [...this.sceneSel][0] : -1, -1);
-    this.sceneUniforms.uHov.value.set(hov, -1);
-    for (const [i, p] of this.scenePieces) p.mask.visible = this.sceneSel.has(i) && p.render.visible;
+    this.sceneUniforms.uHov.value.set(hovered.length ? hovered[0] : -1, -1);
+    for (const [i, p] of this.scenePieces) {
+      p.role.value.x = this.roleOf(i);
+      p.mask.visible = this.sceneSel.has(i) && p.shown;
+    }
+    // the fade's: role 1 is the selection, role 2 the pointer's
+    const u = this.uniforms;
+    u.uSel.value.set(this.sceneSel.size ? 0 : -1, -1);
+    u.uHov.value.set(hovered.length ? 1 : -1, -1);
+    this.applyFade();
     this.draw();
   },
 
