@@ -84,6 +84,13 @@ fn each_element_family_builds_for_openlock() {
     TILES.par_iter().for_each(|p| passes(p, "ol"));
 }
 
+/// A narrow top stone between two head joints that leaned toward each other
+/// was a wedge touching nothing: dropped as a lost part on OpenLOCK.
+#[test]
+fn a_drystone_corner_has_no_loose_stone_on_openlock() {
+    passes("lib:tests/walls/1x1-wall-fieldstone-corner.dtile", "ol");
+}
+
 /// Every library tile whose elements are all built.
 fn buildable() -> Vec<String> {
     Library::paths()

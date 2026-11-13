@@ -169,6 +169,10 @@ pub(crate) struct Cell {
     pub side_bands: Option<Vec<(i64, f64, f64)>>,
     /// Fieldstone: an on-edge coping stone.
     pub coping: bool,
+    /// Fieldstone: the narrowest cell, mm, on either side of the joint at
+    /// each end (infinite until the layout is final): the head joint there
+    /// may drift only a share of it, so no stone is pinched to a wedge.
+    pub crack_w: [f64; 2],
 }
 
 /// How the courses and bays are drawn.
@@ -359,6 +363,7 @@ pub(crate) fn layout(segs: &[Seg], c: &Courses, rng: &mut Rng) -> Vec<Cell> {
                     key: vec![ci as i64, k as i64, b as i64],
                     side_bands: None,
                     coping: false,
+                    crack_w: [f64::INFINITY; 2],
                 });
             }
         }

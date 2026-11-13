@@ -1,0 +1,15 @@
+dharmatiles version="1.0.0"
+
+// A drystone corner at seed 2 on OpenLOCK (25.4 mm squares): a top stone only
+// 1.3 mm wide, between two head joints that once leaned toward each other
+// until the stone was a wedge touching nothing and was dropped as a lost part.
+// Kept as a test tile; the openlock test builds it for OpenLOCK.
+
+tile size="1x1" seed=2 {
+    about "A fieldstone wall round the north-west corner, a narrow top stone among its cracks: a test tile."
+    stack {
+        base
+        dirt
+        wall at="north west" style=fieldstone
+    }
+}

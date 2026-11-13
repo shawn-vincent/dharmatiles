@@ -28,6 +28,10 @@ const WOBBLE_WL: (f64, f64) = (11.0, 32.0);
 const WOBBLE_TAPER: f64 = 12.0;
 const DRIFT: f64 = 2.2;
 const BOW: f64 = 1.1;
+/// The most a head joint may lean or bow into the narrowest stone beside
+/// it, as a share of that stone's width: both its joints together then
+/// leave it at least 0.4 of its width at every height, never a wedge.
+const CRACK_SHARE: f64 = 0.3;
 const BED_OVERLAP: (f64, f64) = (0.35, 0.80);
 const END_MARGIN: f64 = 0.7;
 /// The press into the seat (drawn up to 0.22 × the height).
@@ -109,15 +113,22 @@ fn bed(seed: Seed, s: f64, seg: usize, len: f64, z: f64, t: f64) -> f64 {
         * taper
 }
 
-/// The (slant, bow) of the head joint at cut `t` in `course`.
-fn drift(seed: Seed, s: f64, seg: usize, course: i64, t: f64) -> (f64, f64) {
+/// The (slant, bow) of the head joint at cut `t` in `course`, its reach
+/// held to [`CRACK_SHARE`] of `narrowest`, the width of the narrowest
+/// cell beside it (the same for both stones flanking the joint, so they
+/// still evaluate one curve).
+fn drift(seed: Seed, s: f64, seg: usize, course: i64, t: f64, narrowest: f64) -> (f64, f64) {
     let mut r = Rng::new(
         seed.key("drift")
             .index(seg as u64)
             .index(course.cast_unsigned())
             .index(quant(t)),
     );
-    (r.uniform(-DRIFT, DRIFT) * s, r.uniform(-BOW, BOW) * s)
+    let (d, bow) = (r.uniform(-DRIFT, DRIFT) * s, r.uniform(-BOW, BOW) * s);
+    // the joint moves at most half the slant plus the bow from its cut
+    let reach = 0.5 * d.abs() + bow.abs();
+    let k = (CRACK_SHARE * narrowest / reach.max(1e-9)).min(1.0);
+    (d * k, bow * k)
 }
 
 /// The shared lean (dt per dz) of the coping joint at cut `t`.
@@ -147,12 +158,34 @@ pub(crate) fn cells(m: &Mason, run: &Run, courses: &Courses, rng: &mut Rng) -> (
         }
         cells.extend(coping_cells(&run.segs, run.across, hc, h, s, rng));
     }
+    set_crack_widths(&mut cells);
     let cap_z0 = cells
         .iter()
         .filter(|c| c.is_top)
         .map(|c| c.z0)
         .fold(h, f64::min);
     (cells, Field { cap_z0 })
+}
+
+/// Each joint's `crack_w`: the narrowest cell with an end at that cut on
+/// its segment, so the stones either side of a joint agree on how far it
+/// may drift (the cut is the same number on both, set where the layout
+/// made it).
+fn set_crack_widths(cells: &mut [Cell]) {
+    let ends: Vec<(usize, f64, f64)> = cells
+        .iter()
+        .filter(|c| !c.coping)
+        .flat_map(|c| [(c.seg, c.t0, c.t1 - c.t0), (c.seg, c.t1, c.t1 - c.t0)])
+        .collect();
+    let narrowest = |seg: usize, t: f64| {
+        ends.iter()
+            .filter(|e| e.0 == seg && (e.1 - t).abs() < 1e-6)
+            .map(|e| e.2)
+            .fold(f64::INFINITY, f64::min)
+    };
+    for c in cells.iter_mut().filter(|c| !c.coping) {
+        c.crack_w = [narrowest(c.seg, c.t0), narrowest(c.seg, c.t1)];
+    }
 }
 
 fn coping_cells(segs: &[Seg], t: f64, z0: f64, h: f64, s: f64, rng: &mut Rng) -> Vec<Cell> {
@@ -220,6 +253,7 @@ fn coping_cells(segs: &[Seg], t: f64, z0: f64, h: f64, s: f64, rng: &mut Rng) ->
                 key: vec![9000 + k as i64, k as i64, b as i64, K_COPING],
                 side_bands: None,
                 coping: true,
+                crack_w: [f64::INFINITY; 2],
             });
         }
     }
@@ -281,6 +315,7 @@ fn merge_throughstones(mut cells: Vec<Cell>, s: f64, rng: &mut Rng) -> Vec<Cell>
                 key: vec![course, seg as i64, c.key[2], K_THROUGH],
                 side_bands: Some(vec![(course, c.z0, c.z1), (course + 1, o.z0, o.z1)]),
                 coping: false,
+                crack_w: [f64::INFINITY; 2],
             });
             taken[i] = true;
             taken[a] = true;
@@ -423,7 +458,7 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
         }
         z + bed(seed, s, c.seg, g.len, z, t)
     };
-    let side = |t_cut: f64, end: End, off: f64, inward: f64| -> Vec<[f64; 2]> {
+    let side = |t_cut: f64, end: End, off: f64, inward: f64, narrowest: f64| -> Vec<[f64; 2]> {
         if end == End::Face {
             let em = if run.laid { -pad } else { END_MARGIN * s };
             let tq = t_cut + inward * em;
@@ -438,7 +473,7 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
         }
         let mut pts = Vec::new();
         for &(crs, zb0, zb1) in &bands {
-            let (d, bow) = drift(seed, s, c.seg, crs, t_cut);
+            let (d, bow) = drift(seed, s, c.seg, crs, t_cut, narrowest);
             let zm = 0.5 * (zb0 + zb1);
             let hh = 0.5 * (zb1 - zb0);
             for k in 0..5 {
@@ -469,8 +504,8 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
             ov1 += corner;
         }
     }
-    let left = side(c.t0, c.end0, -ov0, 1.0);
-    let right = side(c.t1, c.end1, ov1, -1.0);
+    let left = side(c.t0, c.end0, -ov0, 1.0, c.crack_w[0]);
+    let right = side(c.t1, c.end1, ov1, -1.0, c.crack_w[1]);
     let bedline = |z: f64, ta: f64, tb: f64| -> Vec<[f64; 2]> {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let n = ((libm::fabs(tb - ta) / (4.0 * s)) as usize + 2).max(2);
@@ -1061,6 +1096,52 @@ impl Stone {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    /// A head joint never leans or bows more than [`CRACK_SHARE`] of the
+    /// narrowest stone beside it, whatever the seed or the width, so two
+    /// joints leave a stone at least 0.4 of its width: never a wedge that
+    /// touches nothing (OpenLOCK, seed 2, the corner's top stone).
+    #[test]
+    fn a_joint_never_pinches_the_narrowest_stone_beside_it() {
+        for w in [0.5, 1.3, 2.0, 3.6, 8.0] {
+            for k in 0..400_u64 {
+                let (d, bow) = drift(Seed::new(k), 0.726, 0, 7, 14.79, w);
+                let reach = 0.5 * d.abs() + bow.abs();
+                assert!(reach <= CRACK_SHARE * w + 1e-9, "w {w} seed {k}: {reach}");
+            }
+        }
+        // wide stones keep the whole drift
+        let (d, bow) = drift(Seed::new(1), 1.0, 0, 7, 14.79, 100.0);
+        assert!(d.abs() <= DRIFT && bow.abs() <= BOW);
+        assert!(d != 0.0 && bow != 0.0);
+    }
+
+    /// The stones either side of a joint agree on its narrowest width.
+    #[test]
+    fn both_sides_of_a_joint_share_its_narrowest_width() {
+        let cell = |t0: f64, t1: f64| Cell {
+            seg: 0,
+            t0,
+            t1,
+            end0: End::Joint,
+            end1: End::Joint,
+            z0: 0.0,
+            z1: 3.0,
+            is_top: false,
+            is_bottom: false,
+            is_quoin: false,
+            key: vec![0],
+            side_bands: None,
+            coping: false,
+            crack_w: [f64::INFINITY; 2],
+        };
+        let mut cells = vec![cell(0.0, 6.0), cell(6.0, 7.3), cell(7.3, 15.0)];
+        set_crack_widths(&mut cells);
+        let near = |a: f64| (a - 1.3).abs() < 1e-9;
+        assert!(near(cells[0].crack_w[1]));
+        assert!(near(cells[1].crack_w[0]) && near(cells[1].crack_w[1]));
+        assert!(near(cells[2].crack_w[0]));
+    }
 
     #[test]
     fn corners_round_and_rings_close() {

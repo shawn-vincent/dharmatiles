@@ -33,8 +33,8 @@ lib:tiles/ground/2x2-glade.dtile	ca75d411f7753a42	1689138	269	3048	0	0	0	0.000	0
 lib:tiles/ground/2x2-grass-tree.dtile	9ad97a221419e065	1870496	260	2234	1	0	0	141.671	363.488	0	fail	14.8
 lib:tiles/walls/1x1-wall-brick-corner.dtile	189d6ccd1952c7d7	1047914	56	608	0	0	0	0.138	0.000	0	pass	4.4
 lib:tiles/walls/1x1-wall-brick.dtile	c017e80e5301dbef	779306	68	342	0	0	0	0.000	0.000	0	pass	3.7
-lib:tiles/walls/1x1-wall-fieldstone-corner.dtile	ee6100f8c8d274f9	572676	71	556	0	0	0	0.000	0.000	0	pass	3.5
-lib:tiles/walls/1x1-wall-fieldstone.dtile	c834553cb44ee23d	531036	87	480	0	0	0	0.000	0.000	0	pass	2.9
+lib:tiles/walls/1x1-wall-fieldstone-corner.dtile	0976cc55dc32e183	568560	70	530	0	0	0	0.000	0.000	0	pass	3.7
+lib:tiles/walls/1x1-wall-fieldstone.dtile	9f9f017afde544af	528212	85	448	0	0	0	0.000	0.000	0	pass	3.1
 lib:tiles/walls/1x1-wall-stone-corner.dtile	c00c30d9991a924a	622706	49	382	1	0	0	0.105	0.000	0	pass	3.1
 lib:tiles/walls/1x1-wall-stone.dtile	79a1fe233f4fc15d	503764	65	268	0	0	0	0.000	0.000	0	pass	2.6
 lib:tiles/walls/2x2-wall-curve.dtile	e65c772fef6c2ab8	2324864	296	2416	0	0	0	0.000	0.000	0	pass	14.5
