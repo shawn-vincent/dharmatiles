@@ -449,3 +449,15 @@ test('a source is written only through the documents module (one way out)', () =
   walk(dir);
   assert.deepEqual(found.sort(), ['editor/docs.js'], `host.save is called only where the documents module is wired: ${found}`);
 });
+
+test('doc.tileId and doc.file are the held source\'s, written by one function (no second path to which file is shown)', () => {
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'js', 'editor');
+  const bad = [];
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.js')) continue;
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    // a doc.set({ ... tileId: or file: ... }) written by hand
+    for (const m of src.matchAll(/\bdoc\.set\(\{([^}]*)\}\)/g)) if (/\b(tileId|file)\s*:/.test(m[1])) bad.push(`${f}: ${m[0].slice(0, 80)}`);
+  }
+  assert.deepEqual(bad, [], 'only sourceFields (editor/document.js) says which tile and file the text is of');
+});

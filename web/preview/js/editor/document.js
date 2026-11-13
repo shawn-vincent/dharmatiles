@@ -30,10 +30,13 @@ import { docs, planOf } from './docs.js';
 /** The id of the source document of `file` of tile `t`: the tile's own file is the tile's id. */
 const sourceId = (t, file) => (file === t.path ? t.id : `${t.id}#${file}`);
 let curSid = null; // the source document the pane shows
-/** What the store shows of source `sid`'s held state: the text on disk (`base`) and its revision. */
+/**
+ * What the store shows of source `sid`'s held state: the text on disk (`base`), its revision, and whose it is (the tile
+ * and the file): `doc.tileId` and `doc.file` are this and nothing else's, so they cannot disagree with the text held.
+ */
 function sourceFields(sid) {
   const h = sid ? docs.get(sid) : null;
-  return { docRev: h?.source?.rev ?? null, base: h?.source?.text ?? null };
+  return { docRev: h?.source?.rev ?? null, base: h?.source?.text ?? null, tileId: h?.source?.tile ?? null, file: h?.source?.file ?? null };
 }
 docs.subscribe((id) => { if (id === curSid && !run.reading) doc.set(sourceFields(id)); });
 
@@ -126,7 +129,7 @@ function clearDocument() {
   history.clear(textKey());
   run.lastKind = null;
   curSid = null;
-  doc.set({ tileId: null, file: null, text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null, ...sourceFields(null) });
+  doc.set({ text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null, ...sourceFields(null) });
   renderHistory();
 }
 function record(text, kind, label = null) {
@@ -369,7 +372,7 @@ export async function loadText(file) {
       texts.show(v.file, v.text, v.writable);
       curSid = sid;
       doc.set({
-        tileId: t.id, file: v.file, text: v.text, writable: v.writable, ...sourceFields(sid),
+        text: v.text, writable: v.writable, ...sourceFields(sid),
         conflict: null, note: null,
         checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
         ...(fresh ? { map: null, names: null } : {}),
