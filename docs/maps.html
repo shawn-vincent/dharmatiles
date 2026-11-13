@@ -61,7 +61,7 @@ plates printer="bambu/x1c-ams" {
 <div class="tbl"><table>
 <thead><tr><th>Word</th><th>Means</th></tr></thead>
 <tbody>
-<tr><td><code>piece p1 "…"</code></td><td>A piece. The optional name after <code>piece</code> is its id: what a pin calls it by. The editor gives one to each piece it places (<code>p1</code>, <code>p2</code>, the first not used). Ids are each piece's own.</td></tr>
+<tr><td><code>piece p1 "…"</code></td><td>A piece. The optional name after <code>piece</code> is its id: what a pin calls it by, and what every change the editor makes names the piece by. The editor gives one to each piece it places (<code>p1</code>, <code>p2</code>, the first not used), and the first change it makes to a file whose pieces have none writes one on every piece, in that same write, and says so once. An id is just a word: write your own, keep it unique. Ids are each piece's own.</td></tr>
 <tr><td><code>at="(2sq, 1sq)"</code></td><td>Where the piece's north-west corner stands, across and then down from the map's north-west corner. <code>sq</code> is a square of the piece's own system (35 mm on DungeonBlocks, 25.4 on OpenLOCK); <code>mm</code> is millimetres. A piece with no <code>at</code> is in the tray: it prints, and is not drawn.</td></tr>
 <tr><td><code>rot=90</code></td><td>0, 90, 180 or 270 degrees clockwise, seen from above, about the middle of the footprint. A <code>2x1</code> turned a quarter is <code>1x2</code>, and <code>at</code> is still the corner of what it covers now.</td></tr>
 <tr><td><code>bottom="$wallHeight"</code></td><td>How high the tile's zero (its ground level) stands above the map's ground, 0 by default: a <code>$</code> name from <code>library/parts/heights.dtile</code> or the map's own <code>let</code>, or a length with units, or a sum of them (<code>$plinth + 2mm</code>). See <a href="#bottom">Bottom</a>.</td></tr>
@@ -97,7 +97,9 @@ plates printer="bambu/x1c-ams" {
 <li><strong>The catalog drawer</strong> is the folder level with pictures, along the bottom of the view: the same places and folders as the panel's, a card for each tile with its picture (the real tile, from its super-low mesh, seen from above at an angle on the plate colour), its size and <em>have</em> or <em>need</em>. Press a card to put the tile on the map at the nearest free place; drag it to choose where. <strong>New map</strong> in a folder you own starts an empty map with a grid.</li>
 <li><strong>Moving.</strong> Look down on the map (Top) and drag a piece: it follows the pointer at its level and snaps to its own squares; the selection moves together. In the other views a drag orbits, and a press still selects. <kbd>R</kbd> turns the selection (<kbd>⇧R</kbd> the other way), <kbd>D</kbd> duplicates it, <kbd>⌫</kbd> removes it, <kbd>Esc</kbd> lets go of it, <kbd>⌘Z</kbd> takes the last change back.</li>
 </ul>
-<p>Every change is an edit of the map's text, made by the program and keeping every other byte, and answered with the text it replaced: the toast's <em>Undo</em> (or <kbd>⌘Z</kbd>) writes that back. The view shows the change at once, from the map the answer carries, and the plates are laid out again behind it.</p>
+<p>Every change is an edit of the map's text, made by the program and keeping every other byte. A change names the piece by its id and the <em>revision</em> of the file it was made against; the program numbers every state of a file, a number that only rises, and counts a change from outside (your text editor, another tab) as a new state. The answer carries the text it replaced, the text it wrote, the new revision and the map as it now reads, so the view shows the change at once and an older word that arrives late can never put the map back. Changes to one map are made one after another, each from the map as the one before left it, so two quick turns of a piece are two turns.</p>
+<p>If the file changed since a change was made (another tab, your text editor), the program refuses it, nothing is written, the page says so and takes the file as it is now: look at it and do it again.</p>
+<p><strong>Undo and Redo</strong> (the title bar, or <kbd>⌘Z</kbd> and <kbd>⌘⇧Z</kbd>) are one history for the map: placing, moving, turning, variants, pins, the plates' settings, the printer, the print list's counts and the saves of the Source. Each step is made against the revision the history last left the file at, so a file changed by anyone else since is refused and the history ends; a toast's <em>Undo</em> is the same Undo, offered only while its change is still the last one.</p>
 
 <h2 id="backdrop">The backdrop</h2>
 <p>The tiles stand on the ground, never in the air. The <em>Backdrop</em> row of the <kbd>⋯</kbd> menu chooses the place; the choice is yours, kept in this browser, and used for the map and for the tile editor alike. It is never in a map or a tile: a backdrop cannot change what prints.</p>
@@ -152,7 +154,7 @@ plates printer="bambu/x1c-ams" {
 <li>Nothing is forbidden by the shapes of the pieces: a crown over a taller neighbour is a note.</li>
 <li>Only a full build is checked, and only a full build is printed. Every other tier says so.</li>
 <li>A new piece, and a new variant, gets a seed you do not own; the same as one you have is an explicit choice.</li>
-<li>Every change to a map is an edit of its text with Undo.</li>
+<li>Every change to a map is an edit of its text, made against a revision, with Undo and Redo; a file that changed since is refused, never overwritten.</li>
 </ul>
 
 </article>
