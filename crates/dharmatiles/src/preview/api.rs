@@ -356,6 +356,7 @@ macro_rules! calls {
 pub(super) use calls;
 
 /// The tile a call under `/api/tiles/ID/` is for.
+#[derive(Clone)]
 pub(super) struct TileRef {
     pub id: String,
     pub path: String,

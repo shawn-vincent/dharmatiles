@@ -36,11 +36,10 @@ let mounted = false;          // the scene is in the view
 let mountedPath = null;
 let lastSig = '';
 let evalTimer = 0;
-const lanes = { fast: 0, full: 0 };
+let inflight = 0;              // tier requests the program has not answered: it queues them (its tier lane), the page does not
 const shown = new Map();      // piece id -> {gid, tileId}: what it was last drawn with, kept until its new mesh comes
 /** Pieces being dragged: id -> [x, y] mm, shown there until the change is written. */
 export const live = new Map();
-const queue = [];
 
 /** Is the map of the document in view (the title bar's Map)? */
 export const mapMode = () => isPlates(tile()) && view.get().dmode === 'map';
@@ -141,7 +140,7 @@ function request(ps) {
   }
 }
 
-/** Let go of the geometry no piece of the scene uses any more: the page's record, its queued and the viewer's meshes. */
+/** Let go of the geometry no piece of the scene uses any more: the page's record and the viewer's meshes. */
 function release(ps) {
   const stale = new Set(M.staleKeys(geoms.keys(), ps));
   if (!stale.size) return;
@@ -149,7 +148,6 @@ function release(ps) {
     for (const tier of geoms.get(g).tiers.keys()) viewer.dropSceneGeometry(gidOf(g, tier));
     geoms.delete(g);
   }
-  for (let i = queue.length - 1; i >= 0; i--) if (stale.has(queue[i].gkey)) queue.splice(i, 1);
 }
 
 function entry(gkey) {
@@ -163,20 +161,10 @@ function ensure(p, tier) {
   const e = entry(p.gkey);
   if (e.tiers.has(tier) || e.asked.has(tier) || e.failed.has(tier)) return;
   e.asked.add(tier);
-  queue.push({ p, tier, gkey: p.gkey });
-  pump();
-}
-
-function pump() {
-  for (let i = 0; i < queue.length;) {
-    const j = queue[i];
-    const lane = j.tier === 'full' ? 'full' : 'fast';
-    if (lanes[lane] >= (lane === 'full' ? 1 : 2)) { i += 1; continue; }
-    queue.splice(i, 1);
-    lanes[lane] += 1;
-    sceneStore.set({ busy: lanes.fast + lanes.full + queue.length });
-    run(j).finally(() => { lanes[lane] -= 1; sceneStore.set({ busy: lanes.fast + lanes.full + queue.length }); pump(); });
-  }
+  // the program has the one queue of builds (its tier lane: two at a time, a newer revision of a piece cancels the older)
+  inflight += 1;
+  sceneStore.set({ busy: inflight });
+  run({ p, tier, gkey: p.gkey }).finally(() => { inflight -= 1; sceneStore.set({ busy: inflight }); });
 }
 
 async function run({ p, tier, gkey }) {

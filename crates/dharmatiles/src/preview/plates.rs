@@ -941,6 +941,20 @@ pub(super) fn set(shared: &Shared, v: PlatesSetReq) -> Out<ListEdited> {
 /// the page waits, the stream says what is happening.
 pub(super) fn export(shared: &Shared, v: PlatesExportReq) -> Out<PlatesExported> {
     let (id, path) = slot_of(shared, &v.list)?;
+    let rev = shared.rev_of(&path);
+    // on the export lane, one at a time, in its turn
+    edit::lane_out(shared.on_lane(
+        super::queue::Lane::Export,
+        format!("export|{id}"),
+        rev,
+        &id.clone(),
+        move |shared, _| Ok(export_now(shared, &id, &path)),
+    ))
+}
+
+fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
+    let id = id.to_owned();
+    let path = path.to_owned();
     let t0 = Instant::now();
     let report_err = |errs: &[Diag]| {
         say(shared, &id, Scope::Export, |name| {

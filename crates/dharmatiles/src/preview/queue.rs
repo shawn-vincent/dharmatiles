@@ -6,6 +6,14 @@
 //!
 //! A full build is heavy, so one runs at a time; a draft runs beside it.
 //! Both are taken from here by identical worker lanes (see [`super::worker`]).
+//!
+//! The rest of the building the page asks for has its lanes here too, so no
+//! request builds on its own thread: a map piece's *tier* build (and a crown's
+//! look at a piece), two at a time, and an *export* (a tile's, a print list's),
+//! one at a time.  A request waits on its job ([`Shared::on_lane`]); a request
+//! for a newer revision of the same thing sets the older one's cancel token (a
+//! waiting job is dropped, a running tier build stops at its next progress
+//! report), and a tile leaving the list cancels its jobs.
 //! Each running build holds a cancel token the build looks at as it
 //! reports progress: a newer draft of the same tile sets the older one's,
 //! and a tile leaving the list sets its build's.
@@ -45,8 +53,69 @@ pub(super) enum Job {
     Full(TileId, Arc<AtomicBool>),
 }
 
+/// The lanes of the work that is not a tile's own build.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Lane {
+    /// A piece at a tier: quick, two at a time.
+    Tier,
+    /// A written file: heavy, one at a time.
+    Export,
+}
+
+impl Lane {
+    const fn limit(self) -> usize {
+        match self {
+            Self::Tier => 2,
+            Self::Export => 1,
+        }
+    }
+}
+
+/// How a job on a lane ended without an answer.
+pub(super) enum Interrupted {
+    /// A request for a newer revision of the same thing took its place, or its tile left.
+    Superseded,
+    /// The job panicked: the requester re-raises it, so it is answered as any panic in a route is.
+    Panicked(Box<dyn std::any::Any + Send>),
+}
+
+type SideRun = Box<dyn FnOnce(&Shared, &Arc<AtomicBool>) + Send>;
+
+/// A job for a side lane, waiting.
+pub(super) struct Side {
+    lane: Lane,
+    /// What it is a build of (the tile, the tier, the seed…): a newer revision of the same key replaces it.
+    key: String,
+    rev: u64,
+    tile: TileId,
+    cancel: Arc<AtomicBool>,
+    run: SideRun,
+}
+
+/// A side job running.
+struct Running {
+    lane: Lane,
+    key: String,
+    rev: u64,
+    tile: TileId,
+    cancel: Arc<AtomicBool>,
+}
+
+/// A reporter that does nothing but stop a build whose cancel token is set (see [`Shared::on_lane`]).
+pub(super) struct Cancelled(pub Arc<AtomicBool>);
+
+impl dt_kit::Reporter for Cancelled {
+    fn report(&self, _: &dt_kit::Event<'_>) {
+        if self.0.load(Ordering::Relaxed) {
+            std::panic::resume_unwind(Box::new(Superseded));
+        }
+    }
+}
+
 #[derive(Default)]
 pub(super) struct Queue {
+    side: VecDeque<Side>,
+    side_running: Vec<Running>,
     drafts: VecDeque<Draft>,
     /// Tiles asked for, in order.
     wanted: VecDeque<TileId>,
@@ -161,8 +230,12 @@ impl Shared {
     #[cfg(any(test, feature = "test-routes"))]
     pub(super) fn pending(&self) -> usize {
         let q = lock(&self.queue);
-        let queued =
-            q.drafts.len() + q.wanted.len() + usize::from(q.full.is_some()) + q.drafting.len();
+        let queued = q.drafts.len()
+            + q.wanted.len()
+            + usize::from(q.full.is_some())
+            + q.drafting.len()
+            + q.side.len()
+            + q.side_running.len();
         drop(q);
         let tiles = lock(&self.tiles);
         queued
@@ -170,6 +243,94 @@ impl Shared {
                 .iter()
                 .filter(|t| t.status == State::Building || t.changed())
                 .count()
+    }
+
+    /// Run `f` on `lane` and wait for its answer.  `key` says what it is a build of and `rev` which revision of it: a
+    /// job of the same key and an older revision, waiting or running, is cancelled by this one.  `f` is given the
+    /// program and its cancel token (a long build looks at it through [`Cancelled`]).
+    ///
+    /// # Errors
+    /// [`Interrupted`]: superseded (also when it was cancelled while running and stopped), or the job panicked.
+    pub(super) fn on_lane<T: Send + 'static>(
+        &self,
+        lane: Lane,
+        key: String,
+        rev: u64,
+        tile: &str,
+        f: impl FnOnce(&Shared, &Arc<AtomicBool>) -> Result<T, Interrupted> + Send + 'static,
+    ) -> Result<T, Interrupted> {
+        let (tx, rx) = mpsc::channel();
+        let run: SideRun = Box::new(move |shared, cancel| {
+            let ran = std::panic::catch_unwind(AssertUnwindSafe(|| f(shared, cancel)));
+            let answer = match ran {
+                Ok(r) => r,
+                Err(p) if p.is::<Superseded>() => Err(Interrupted::Superseded),
+                Err(p) => Err(Interrupted::Panicked(p)),
+            };
+            // Allowed (you cancelled): the requester may have gone already
+            let _ = tx.send(answer);
+        });
+        {
+            let mut q = lock(&self.queue);
+            // a waiting job of the same thing at an older revision is dropped: its requester finds its sender gone
+            q.side
+                .retain(|s| !(s.lane == lane && s.key == key && s.rev < rev));
+            for r in &q.side_running {
+                if r.lane == lane && r.key == key && r.rev < rev {
+                    r.cancel.store(true, Ordering::Relaxed);
+                }
+            }
+            q.side.push_back(Side {
+                lane,
+                key,
+                rev,
+                tile: tile.to_owned(),
+                cancel: Arc::new(AtomicBool::new(false)),
+                run,
+            });
+        }
+        self.queue_cv.notify_all();
+        rx.recv().unwrap_or(Err(Interrupted::Superseded))
+    }
+
+    /// The next job for a side lane, when fewer than the lane's limit are running; with nothing to do it waits a
+    /// moment for one and says `None`.
+    pub(super) fn next_side(&self, lane: Lane) -> Option<Side> {
+        let mut q = lock(&self.queue);
+        let running = q.side_running.iter().filter(|r| r.lane == lane).count();
+        if running < lane.limit()
+            && let Some(i) = q.side.iter().position(|s| s.lane == lane)
+        {
+            let s = q.side.remove(i)?;
+            q.side_running.push(Running {
+                lane,
+                key: s.key.clone(),
+                rev: s.rev,
+                tile: s.tile.clone(),
+                cancel: Arc::clone(&s.cancel),
+            });
+            return Some(s);
+        }
+        drop(
+            self.queue_cv
+                .wait_timeout(q, POLL)
+                .unwrap_or_else(PoisonError::into_inner),
+        );
+        None
+    }
+
+    /// Is a side job waiting (not yet taken by its lane)?  For the tests of the lanes.
+    #[cfg(test)]
+    pub(super) fn pending_has_side_waiting(&self) -> bool {
+        !lock(&self.queue).side.is_empty()
+    }
+
+    /// A side lane runs `job`, then is done with it.
+    pub(super) fn run_side(&self, job: Side) {
+        let cancel = Arc::clone(&job.cancel);
+        (job.run)(self, &cancel);
+        let mut q = lock(&self.queue);
+        q.side_running.retain(|r| !Arc::ptr_eq(&r.cancel, &cancel));
     }
 
     /// A lane is done with `job`.
@@ -196,6 +357,12 @@ impl Shared {
         for (t, cancel) in q.full.iter().chain(q.drafting.iter()) {
             if t == id {
                 cancel.store(true, Ordering::Relaxed);
+            }
+        }
+        q.side.retain(|s| s.tile != id);
+        for r in &q.side_running {
+            if r.tile == id {
+                r.cancel.store(true, Ordering::Relaxed);
             }
         }
     }

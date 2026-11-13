@@ -531,15 +531,37 @@ pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
             shapes.insert(key, None);
             continue;
         }
-        let built = dt_eval::build_tier(
-            &Files,
-            &p.path,
-            &opts,
-            Tier::Low,
-            &dt_eval::Progress::none(),
-            None,
-            shared.store.as_deref(),
+        // a piece's low build is a job on the tier lane, like the page's own look at it
+        let path = p.path.clone();
+        let jobkey = format!("tier|crown|{}|{:?}|{}", p.path, opts.seed, opts.system);
+        let built = shared.on_lane(
+            super::queue::Lane::Tier,
+            jobkey,
+            shared.rev_of(&path),
+            "",
+            move |shared, cancel| {
+                Ok(dt_eval::build_tier(
+                    &Files,
+                    &path,
+                    &opts,
+                    Tier::Low,
+                    &dt_eval::Progress::new(std::sync::Arc::new(super::queue::Cancelled(
+                        std::sync::Arc::clone(cancel),
+                    ))),
+                    None,
+                    shared.store.as_deref(),
+                ))
+            },
         );
+        let built = match built {
+            Ok(b) => b,
+            // a newer reading of the map is on its way and will look again
+            Err(super::queue::Interrupted::Superseded) => {
+                shapes.insert(key, None);
+                continue;
+            }
+            Err(super::queue::Interrupted::Panicked(pn)) => std::panic::resume_unwind(pn),
+        };
         shapes.insert(
             key,
             built.ok().map(|b| shape_of(&b.export.mesh, at.w, at.d)),

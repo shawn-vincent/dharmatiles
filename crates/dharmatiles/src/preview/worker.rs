@@ -687,8 +687,22 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
 pub fn work(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
     std::thread::scope(|s| {
         s.spawn(|| lane(shared, eager, stop));
+        // the lanes of the rest of the building (tiers, exports): see [`queue`]
+        for side in [queue::Lane::Tier, queue::Lane::Tier, queue::Lane::Export] {
+            s.spawn(move || side_lane(shared, side, stop));
+        }
         lane(shared, eager, stop);
     });
+}
+
+/// A lane for the work that is not a tile's own build: it takes the jobs of its kind, one after another.  A job
+/// answers its requester, panics included (the requester raises it), so nothing is lost here.
+fn side_lane(shared: &Arc<Shared>, lane: queue::Lane, stop: &AtomicBool) {
+    while !stop.load(Ordering::Relaxed) {
+        if let Some(job) = shared.next_side(lane) {
+            shared.run_side(job);
+        }
+    }
 }
 
 #[cfg(test)]

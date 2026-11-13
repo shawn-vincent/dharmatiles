@@ -126,6 +126,20 @@ const LOG: usize = 1024;
 #[derive(Debug)]
 struct Superseded;
 
+/// What a request gets for a job that ran on a lane: its answer; a 409 when it was superseded; a panic raised again, to be
+/// answered as any panic in a route is.
+fn lane_reply(r: Result<route::Reply, queue::Interrupted>) -> route::Reply {
+    match r {
+        Ok(reply) => reply,
+        Err(queue::Interrupted::Superseded) => fail::refused(
+            "409 Conflict",
+            "a request for a newer revision of this took its place",
+        )
+        .into(),
+        Err(queue::Interrupted::Panicked(p)) => std::panic::resume_unwind(p),
+    }
+}
+
 /// A mesh of another revision of the document than the one asked for: 409 with the revision it is of.
 fn stale_mesh(rev: u64) -> (&'static str, Value) {
     fail::refused_with(
@@ -1100,40 +1114,51 @@ impl Shared {
             )
             .into();
         }
-        let built = dt_eval::build_tier(
-            &dt_eval::Files,
-            &path,
-            &opts,
-            tier,
-            &dt_eval::Progress::none(),
-            None,
-            self.store.as_deref(),
-        )
-        .map(|b| {
-            if tier == dt_eval::Tier::Full {
-                dt_eval::tiers::thin_built(b, MAP_FULL_TRIANGLES)
-            } else {
-                b
-            }
-        });
-        match built {
-            Err(errs) => fail::refused(
-                "422 Unprocessable Entity",
-                errs.iter()
-                    .map(|d| d.message.clone())
-                    .collect::<Vec<_>>()
-                    .join("; "),
+        // on a lane of its own, two at a time; a request for a newer revision of this piece cancels it
+        let key = format!(
+            "tier|{id}|{}|{:?}|{}|{}",
+            tier.name(),
+            opts.seed,
+            opts.system,
+            opts.printer.name
+        );
+        let job = self.on_lane(queue::Lane::Tier, key, rev, id, move |shared, cancel| {
+            let progress = dt_eval::Progress::new(Arc::new(queue::Cancelled(Arc::clone(cancel))));
+            let built = dt_eval::build_tier(
+                &dt_eval::Files,
+                &path,
+                &opts,
+                tier,
+                &progress,
+                None,
+                shared.store.as_deref(),
             )
-            .into(),
-            Ok(b) => match payload::for_map(&b, tier.name(), rev, &opts, &self.palette()) {
-                Ok(bytes) => route::Reply::Bytes(Arc::new(bytes)),
-                Err(e) => fail::failure(
-                    "500 Internal Server Error",
-                    format!("cannot prepare the {} view: {e}", tier.name()),
-                )
-                .into(),
-            },
-        }
+            .map(|b| {
+                if tier == dt_eval::Tier::Full {
+                    dt_eval::tiers::thin_built(b, MAP_FULL_TRIANGLES)
+                } else {
+                    b
+                }
+            });
+            Ok(match built {
+                Err(errs) => fail::refused(
+                    "422 Unprocessable Entity",
+                    errs.iter()
+                        .map(|d| d.message.clone())
+                        .collect::<Vec<_>>()
+                        .join("; "),
+                ),
+                Ok(b) => match payload::for_map(&b, tier.name(), rev, &opts, &shared.palette()) {
+                    Ok(bytes) => return Ok(route::Reply::Bytes(Arc::new(bytes))),
+                    Err(e) => fail::failure(
+                        "500 Internal Server Error",
+                        format!("cannot prepare the {} view: {e}", tier.name()),
+                    ),
+                },
+            }
+            .into())
+        });
+        lane_reply(job)
     }
 
     fn sketch_mesh(&self, id: &str, sketch: u64) -> Option<Arc<Vec<u8>>> {

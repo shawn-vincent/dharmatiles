@@ -1002,6 +1002,34 @@ pub(super) fn mine(shared: &Shared, t: &TileRef, _: Nothing) -> Out<Listed> {
 /// It builds for the target the page chose (the title bar's chip);
 /// `threemf` adds the painted 3MF.
 pub(super) fn export(shared: &Shared, t: &TileRef, v: ExportReq) -> Out<ExportRes> {
+    // asking where is no build; a build waits its turn on the export lane
+    if v.ask_where == Some(true) {
+        return export_now(shared, t, &v);
+    }
+    let (tile, rev) = (t.clone(), shared.rev_of(&t.path));
+    lane_out(shared.on_lane(
+        queue::Lane::Export,
+        format!("export|{}", t.id),
+        rev,
+        &t.id,
+        move |shared, _| Ok(export_now(shared, &tile, &v)),
+    ))
+}
+
+/// What a request gets for an export that ran on its lane (see [`export`]): its answer; a 409 when a newer one took its
+/// place; a panic raised again.
+pub(super) fn lane_out<T>(r: Result<Out<T>, queue::Interrupted>) -> Out<T> {
+    match r {
+        Ok(out) => out,
+        Err(queue::Interrupted::Superseded) => Err(fail::refused(
+            "409 Conflict",
+            "a newer request for this took its place",
+        )),
+        Err(queue::Interrupted::Panicked(p)) => std::panic::resume_unwind(p),
+    }
+}
+
+fn export_now(shared: &Shared, t: &TileRef, v: &ExportReq) -> Out<ExportRes> {
     let tile = t.path.as_str();
     let threemf = v.threemf.unwrap_or(false);
     let template = if threemf {

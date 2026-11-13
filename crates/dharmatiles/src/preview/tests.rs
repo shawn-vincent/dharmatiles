@@ -2779,3 +2779,80 @@ fn a_mesh_is_fetched_by_the_revision_of_the_document_and_another_is_refused() {
     assert_eq!(meta["docRev"].as_u64(), Some(now));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A server with its lanes running and nothing listed, and its `Shared` for a test that talks to the lanes directly.
+fn lanes() -> (Arc<Shared>, Arc<AtomicBool>) {
+    let shared = Arc::new(Shared::with_roots(Vec::new(), &[], &Options::default()));
+    let stop = Arc::new(AtomicBool::new(false));
+    let (s, st) = (Arc::clone(&shared), Arc::clone(&stop));
+    std::thread::spawn(move || work(&s, false, &st));
+    (shared, stop)
+}
+
+#[test]
+fn a_request_for_a_newer_revision_cancels_the_older_one_on_a_lane_running_or_waiting() {
+    use queue::{Interrupted, Lane};
+    let (shared, stop) = lanes();
+    let (started_tx, started_rx) = std::sync::mpsc::channel::<()>();
+    let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+    // the export lane runs one at a time: a first job holds it until told, and sees its cancel token set
+    let s1 = Arc::clone(&shared);
+    let held = std::thread::spawn(move || {
+        s1.on_lane(Lane::Export, "k".to_owned(), 1, "t", move |_, cancel| {
+            started_tx.send(()).unwrap();
+            go_rx.recv().unwrap();
+            if cancel.load(Ordering::Relaxed) {
+                Err(Interrupted::Superseded)
+            } else {
+                Ok("old")
+            }
+        })
+    });
+    started_rx.recv().unwrap();
+    // a waiting job, then a newer revision of the same key that replaces it
+    let s2 = Arc::clone(&shared);
+    let waiting = std::thread::spawn(move || {
+        s2.on_lane(Lane::Export, "j".to_owned(), 1, "t", |_, _| Ok("never"))
+    });
+    while !shared.pending_has_side_waiting() {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let s3 = Arc::clone(&shared);
+    let newer = std::thread::spawn(move || {
+        s3.on_lane(Lane::Export, "j".to_owned(), 2, "t", |_, _| Ok("new"))
+    });
+    assert!(
+        matches!(waiting.join().unwrap(), Err(Interrupted::Superseded)),
+        "the waiting older one never ran"
+    );
+    // the running one is cancelled by a newer revision of its key
+    let s4 = Arc::clone(&shared);
+    let newest = std::thread::spawn(move || {
+        s4.on_lane(Lane::Export, "k".to_owned(), 2, "t", |_, _| Ok("newest"))
+    });
+    std::thread::sleep(Duration::from_millis(100));
+    go_tx.send(()).unwrap();
+    assert!(
+        matches!(held.join().unwrap(), Err(Interrupted::Superseded)),
+        "the running older one saw its cancel"
+    );
+    assert!(matches!(newer.join().unwrap(), Ok("new")));
+    assert!(matches!(newest.join().unwrap(), Ok("newest")));
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn a_job_that_panics_on_a_lane_is_raised_again_in_its_request() {
+    use queue::{Interrupted, Lane};
+    let (shared, stop) = lanes();
+    let r = shared.on_lane::<()>(Lane::Tier, "p".to_owned(), 1, "t", |_, _| {
+        panic!("a test panic on a lane")
+    });
+    assert!(matches!(r, Err(Interrupted::Panicked(_))));
+    // and the lane goes on
+    assert!(matches!(
+        shared.on_lane(Lane::Tier, "q".to_owned(), 1, "t", |_, _| Ok(7)),
+        Ok(7)
+    ));
+    stop.store(true, Ordering::Relaxed);
+}
