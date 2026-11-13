@@ -14,7 +14,8 @@ import { computed, signal } from '@preact/signals-core';
 import * as M from '../map-model.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
 import { pill as invPill, systemName } from '../inventory.js';
-import { levelOf, placesOf, writable } from '../folders.js';
+import { levelOf, placesOf, whereIs, writable } from '../folders.js';
+import { token } from '../tokens.js';
 import { defaultFilters } from '../inventory.js';
 import { docs, planOf } from './docs.js';
 import './mode.js'; // `view.dmode` is derived there
@@ -173,4 +174,33 @@ export const inventoryPanel = {
   system: haveBlockModel.system,
   tiles: computed(() => server.get().tiles),
   lists: computed(() => server.get().tiles.filter((x) => /\.dmap$/i.test(x.path))),
+};
+
+// ---- the catalog drawer ---------------------------------------------------------------------------------------------
+
+/** What the user chose in the drawer: the folder level it stands at (null: where the map's first tile lives, else the library) and the filter's words. */
+export const drawerUi = signal({ level: /** @type {{root: number, dir: string} | null} */ (null), query: '' });
+const isDtile = (t) => /\.dtile$/i.test(t.path);
+
+/** The place and folder the drawer opens at: where the map's first tile lives, else the library. */
+function drawerStart() {
+  const { roots, tiles } = server.get();
+  const lib = roots.findIndex((r) => r.role === 'library');
+  const first = tiles.find((t) => t.id === scene.value?.pieces?.[0]?.tileId);
+  const at = first && whereIs(roots, first);
+  return at || { root: lib >= 0 ? lib : 0, dir: '' };
+}
+
+/** What the drawer draws, or null when it is not shown (the drawer is open and a map is the view). */
+export const drawerPanel = {
+  data: computed(() => {
+    if (!(view.get().drawer && mapOn.value)) return null;
+    const { roots, tiles, folders } = server.get();
+    const ui = drawerUi.value;
+    const level = ui.level ?? drawerStart();
+    return {
+      level, query: ui.query, places: placesOf(roots).filter((r) => r.kind !== 'files'), sys: scene.value?.system ?? 'db', plate: token('--plate') || '#D9E0EB',
+      lv: levelOf({ roots, tiles: tiles.filter(isDtile), folders, root: level.root, dir: level.dir, query: ui.query }),
+    };
+  }),
 };
