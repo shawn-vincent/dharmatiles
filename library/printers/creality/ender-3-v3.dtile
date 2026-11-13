@@ -1,0 +1,15 @@
+dharmatiles version="1.0.0"
+
+// Creality Ender-3 V3: 220 x 220 x 250 mm.  The floors (line, layer, overhang, steepest, gap)
+// are the default profile's; a machine names the bed and the filaments.
+// VERIFY: the maker lists 220 x 220 x 250 mm; one source (the specification).
+
+printer ender-3-v3 {
+    brand   "Creality"
+    model   "Ender-3 V3"
+    bed     "220x220mm"
+    height  "250mm"
+    nozzle  "0.4mm"
+    slots   1
+    verify  "Hand-entered from the maker's published specification; not yet checked against a second source."
+}

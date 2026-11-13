@@ -25,6 +25,11 @@ test('an AMS variant is the model\'s switch, not a model', () => {
   assert.deepEqual(selectionOf(LIST, 'bambu/x1c'), { model: 'bambu/x1c', ams: false });
 });
 
+test('your own profiles carry their brand in the name, the others do not', () => {
+  const g = groupPrinters(LIST);
+  assert.equal(g[0].models[0].title, 'Bambu Lab P1P');
+});
+
 test('a variant with no plain model stays a model of its own', () => {
   const only = [P('a/m-ams', 'A', 'M + AMS')];
   assert.equal(groupPrinters(only)[0].models.length, 1);

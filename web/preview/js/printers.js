@@ -14,7 +14,8 @@ export function groupPrinters(printers, { needBed = false, query = '' } = {}) {
     // a variant folds into its plain model when that is listed too
     if (AMS.test(p.name) && have.has(p.name.replace(AMS, ''))) continue;
     const ams = printers.find((q) => q.name === `${p.name}-ams`) || null;
-    const title = p.model || p.label || p.name;
+    // in your own group the brand is not a heading above it, so the name carries it
+    const title = p.mine && p.brand && p.model ? `${p.brand} ${p.model}` : p.model || p.label || p.name;
     const hay = `${p.brand || ''} ${title} ${p.name} ${p.label || ''}`.toLowerCase();
     if (!words.every((w) => hay.includes(w))) continue;
     models.push({ name: p.name, title, p, ams });

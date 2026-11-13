@@ -17,18 +17,20 @@ td code{white-space:nowrap}
 <header class="hero">
   <div class="eyebrow">Reference · the machine a print list is laid out for</div>
   <h1>Printers</h1>
-  <p class="lede">A printer profile says what your printer is: how big its bed is, where it cannot print, its nozzle, and how many filaments it can hold. <a href="plates.html">Plates</a> are laid out on a profile's bed, and a profile's floors keep every build printable. The library has 41 models by brand, and you can add your own.</p>
+  <p class="lede">A printer profile says what your printer is: how big its bed is, where it cannot print, its nozzle, and how many filaments it can hold. <a href="plates.html">Plates</a> are laid out on a profile's bed, and a profile's floors keep every build printable. The library has 49 profiles by brand, you can import your own from the slicers on your computer, and you can write more.</p>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#choose">Choosing one</a></li>
   <li><a href="#fields">What a profile holds</a></li>
   <li><a href="#own">Your own</a></li>
+  <li><a href="#import">Importing from a slicer</a></li>
   <li><a href="#library">The library</a></li>
+  <li><a href="#licences">Licences</a></li>
 </ol></nav>
 <article class="doc">
 
 <h2 id="choose">Choosing one</h2>
-<p>A profile is named by its brand and model, <code>bambu/x1c</code>, or by a plain name, <code>fine</code>. <code>--printer bambu/x1c</code> builds for it (the output goes to <code>out/db-bambu-x1c/</code>: the slash becomes a dash), a print list names one in its <code>plates</code> block, and the plates view has a printer chooser that is brand, then model. <code>default</code> and <code>fine</code> are the older floors-only profiles: they hold no bed, so they build tiles but cannot hold plates.</p>
+<p>A profile is named by its brand and model, <code>bambu/x1c</code>, or by a plain name, <code>fine</code>. <code>--printer bambu/x1c</code> builds for it (the output goes to <code>out/db-bambu-x1c/</code>: the slash becomes a dash), a print list names one in its <code>plates</code> block, and everywhere a printer is chosen, the title bar&rsquo;s target card and the plates panel, it is the same chooser: a search, then brand and model, with your own profiles in a group of their own, a profile marked <span class="verify">unchecked</span> where its numbers have a <code>verify</code> mark, and an <em>AMS</em> switch under a model that has an AMS profile (<code>x1c</code> and <code>x1c-ams</code> are one model and a switch, not two models). On a print list or a map the title bar&rsquo;s chip says the printer <em>the document</em> uses (&ldquo;Bambu Lab X1 Carbon &middot; this print list&rdquo;), which is the one its plates panel names; the target card then sets the printer tiles are built for. <code>default</code> and <code>fine</code> are the older floors-only profiles: they hold no bed, so they build tiles but cannot hold plates.</p>
 <p>A machine profile gives only its machine. The printability floors (line, layer, overhang, steepest, gap) are the <code>default</code> profile's unless the profile writes its own, so the gate judges a tile the same on every printer; <code>--printer bambu/x1c</code> builds byte for byte what the default does.</p>
 
 <h2 id="fields">What a profile holds</h2>
@@ -43,6 +45,7 @@ td code{white-space:nowrap}
 <tr><td><code>slots</code></td><td><code>4</code></td><td>Filaments loaded at once (1 where a profile does not say). A multicolour print list that needs more is refused before anything builds.</td></tr>
 <tr><td><code>template</code></td><td><code>"bambu.3mf"</code></td><td>Optional. The slicer project whose printer and process settings a Bambu project takes: a file beside your tiles (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>); <code>bambu.3mf</code> there is the one used when a profile names none.</td></tr>
 <tr><td><code>verify</code></td><td><code>"sources disagree"</code></td><td>Optional. Marks numbers not yet checked against the maker; the chooser and the plates view show it.</td></tr>
+<tr><td><code>from-slicer</code></td><td><code>"Bambu Studio 2.9.1: Bambu Lab X1 Carbon 0.4 nozzle"</code></td><td>Optional. Where an imported profile came from: the slicer and its version, then the slicer&rsquo;s own name for the machine. The chooser marks the profile <em>imported</em>. It changes nothing about the machine and is not inherited by a profile that starts <code>from</code> this one.</td></tr>
 <tr><td><code>from</code></td><td><code>"lib:printers/bambu/x1c"</code></td><td>Optional. Start from another profile and change only what is written here.</td></tr>
 <tr><td><code>line</code>, <code>layer</code>, <code>overhang</code>, <code>steepest</code>, <code>gap</code></td><td><code>"0.45mm"</code> …</td><td>The printability floors (see <a href="standards/printing.html#profile">Printing</a>). A profile with a bed or a <code>from</code> may leave them out.</td></tr>
 </tbody></table></div>
@@ -78,7 +81,22 @@ printer shed-voron {
     }
 }</code></pre>
 
-<h2 id="library">The library</h2>
+<h2 id="import">Importing from a slicer</h2>
+<p>If a slicer is installed here, the chooser ends with <em>Import from Bambu Studio&hellip;</em> (and one entry for each of the others found). It lists every model the slicer knows, with a search; tick the ones you want and press <em>Import</em>. Each becomes a profile of yours, <code>printers/&lt;brand&gt;/&lt;model&gt;.dtile</code>, marked <code>from-slicer</code>. The command line does the same:</p>
+<pre><code>dharmatiles printers import                        # which slicers are installed
+dharmatiles printers import bambu --list           # what Bambu Studio has
+dharmatiles printers import bambu "x1 carbon"      # a part of the name is enough
+dharmatiles printers import orca --all             # every model
+dharmatiles printers import cura --path DIR        # a profiles folder of your own choosing</code></pre>
+<p>It reads <strong>Bambu Studio</strong> and <strong>OrcaSlicer</strong> (machine profiles, JSON with <code>inherits</code>), <strong>PrusaSlicer</strong> (the vendor <code>.ini</code> files in its settings folder) and <strong>UltiMaker Cura</strong> (<code>.def.json</code> definitions), each from its app and its own settings folder, read only: nothing is written to a slicer&rsquo;s folders. Each profile&rsquo;s <code>inherits</code> chain is followed (PrusaSlicer&rsquo;s several parents in the order written, the later over the earlier). One profile is made for each model, from its 0.4 mm nozzle profile where there is one. Only what dharmatiles uses is kept:</p>
+<ul>
+<li>the <strong>bed</strong>, from the printable area (a round or cut-corner bed is not read and is listed as a profile that could not be used), the <strong>height</strong> and the <strong>nozzle</strong>;</li>
+<li>the <strong>zones kept clear</strong> (Bambu Studio&rsquo;s and OrcaSlicer&rsquo;s <code>bed_exclude_area</code>, as rectangles from the bed&rsquo;s front-left corner; PrusaSlicer and Cura profiles name none that is read);</li>
+<li>the <strong>filaments</strong>: the number of extruders, or a PrusaSlicer MMU&rsquo;s filaments. A Bambu machine profile does not say whether an AMS is fitted, so a Bambu model also gets an <code>-ams</code> profile beside it (4 filaments a unit, one unit a nozzle); the chooser shows the two as one model with an <em>AMS</em> switch.</li>
+</ul>
+<p>A profile already in your folder is kept as it is (<code>--force</code> replaces it). A name the library already uses is never replaced by an import: the imported profile takes <code>-imported</code> after it. Anything that could not be read is listed with the import, never dropped quietly. Check an imported profile against your printer: the numbers are the slicer&rsquo;s.</p>
+
+<h2 id="library">The library
 <p>Hand-entered from the makers' specifications and several reviews. A row marked <span class="verify">verify</span> is one where the sources disagree, where there is only one source, or where the bed depends on the build; its profile carries the same mark in a <code>verify</code> word until it is checked against the maker's own page. Bambu models take an AMS (4 filaments a unit) in a separate <code>-ams</code> profile, the Prusa MK4 an MMU3 (5 filaments).</p>
 <div class="tbl"><table>
 <thead><tr><th>Profile</th><th>Machine</th><th>Bed</th><th>Height</th><th>Slots</th><th>Numbers</th></tr></thead>
@@ -90,6 +108,12 @@ printer shed-voron {
 <tr><td><code>bambu/p1s</code></td><td>Bambu Lab P1S</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td>checked</td></tr>
 <tr><td><code>bambu/p1s-ams</code></td><td>Bambu Lab P1S + AMS</td><td>256 × 256 mm</td><td>256 mm</td><td>4</td><td>checked</td></tr>
 <tr><td><code>bambu/p2s</code></td><td>Bambu Lab P2S</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>bambu/x1</code></td><td>Bambu Lab X1</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td><span class="verify" title="Hand-entered from the maker&#x27;s published specification; not yet checked against a second source.">verify</span> One source: the maker&rsquo;s specification.</td></tr>
+<tr><td><code>bambu/x1-ams</code></td><td>Bambu Lab X1 + AMS</td><td>256 × 256 mm</td><td>256 mm</td><td>4</td><td><span class="verify" title="As bambu/x1.">verify</span> As <code>bambu/x1</code>.</td></tr>
+<tr><td><code>bambu/x1e</code></td><td>Bambu Lab X1E</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td><span class="verify" title="Hand-entered from the maker&#x27;s published specification; not yet checked against a second source.">verify</span> One source: the maker&rsquo;s specification.</td></tr>
+<tr><td><code>bambu/x1e-ams</code></td><td>Bambu Lab X1E + AMS</td><td>256 × 256 mm</td><td>256 mm</td><td>4</td><td><span class="verify" title="As bambu/x1e.">verify</span> As <code>bambu/x1e</code>.</td></tr>
+<tr><td><code>bambu/p1p</code></td><td>Bambu Lab P1P</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td><span class="verify" title="Hand-entered from the maker&#x27;s published specification; not yet checked against a second source.">verify</span> One source: the maker&rsquo;s specification.</td></tr>
+<tr><td><code>bambu/p1p-ams</code></td><td>Bambu Lab P1P + AMS</td><td>256 × 256 mm</td><td>256 mm</td><td>4</td><td><span class="verify" title="As bambu/p1p.">verify</span> As <code>bambu/p1p</code>.</td></tr>
 <tr><td><code>bambu/x1c</code></td><td>Bambu Lab X1 Carbon</td><td>256 × 256 mm</td><td>256 mm</td><td>1</td><td>checked</td></tr>
 <tr><td><code>bambu/x1c-ams</code></td><td>Bambu Lab X1 Carbon + AMS</td><td>256 × 256 mm</td><td>256 mm</td><td>4</td><td>checked</td></tr>
 <tr><td><code>bambu/x2d</code></td><td>Bambu Lab X2D</td><td>256 × 256 mm</td><td>260 mm</td><td>1</td><td><span class="verify" title="One source only: 256 x 256 x 260.">verify</span> One source only: 256 x 256 x 260.</td></tr>
@@ -104,6 +128,8 @@ printer shed-voron {
 <tr><td><code>prusa/core-one-l</code></td><td>Prusa Research CORE One L</td><td>300 × 300 mm</td><td>330 mm</td><td>1</td><td>checked</td></tr>
 <tr><td><code>prusa/xl</code></td><td>Prusa Research XL</td><td>360 × 360 mm</td><td>360 mm</td><td>1</td><td>checked</td></tr>
 <tr><td><code>creality/ender-3-v2</code></td><td>Creality Ender-3 V2</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td>checked</td></tr>
+<tr><td><code>creality/ender-3-v3</code></td><td>Creality Ender-3 V3</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td><span class="verify" title="Hand-entered from the maker&#x27;s published specification; not yet checked against a second source.">verify</span> One source: the maker&rsquo;s specification.</td></tr>
+<tr><td><code>creality/ender-3-s1</code></td><td>Creality Ender-3 S1</td><td>220 × 220 mm</td><td>270 mm</td><td>1</td><td><span class="verify" title="Hand-entered from the maker&#x27;s published specification; not yet checked against a second source.">verify</span> One source: the maker&rsquo;s specification.</td></tr>
 <tr><td><code>creality/ender-3-v3-se</code></td><td>Creality Ender-3 V3 SE</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td><span class="verify" title="Sources disagree or there is only one: check the bed against the maker&#x27;s page.">verify</span> Sources disagree or there is only one: check the bed against the maker&#x27;s page.</td></tr>
 <tr><td><code>creality/k1</code></td><td>Creality K1</td><td>220 × 220 mm</td><td>250 mm</td><td>1</td><td>checked</td></tr>
 <tr><td><code>creality/k1-max</code></td><td>Creality K1 Max</td><td>300 × 300 mm</td><td>300 mm</td><td>1</td><td>checked</td></tr>
@@ -126,6 +152,9 @@ printer shed-voron {
 <tr><td><code>voron/trident-300</code></td><td>Voron Design Voron Trident (300 build)</td><td>300 × 300 mm</td><td>300 mm</td><td>1</td><td><span class="verify" title="Bed depends on the build.">verify</span> Bed depends on the build.</td></tr>
 </tbody></table></div>
 <p>The Bambu H2D prints on a different area in each nozzle mode (about 305 &times; 320 single-nozzle, 300 &times; 320 where both nozzles reach); the profile gives the largest and says verify.</p>
+
+<h2 id="licences">Licences</h2>
+<p>The library&rsquo;s profiles are written by hand from the makers&rsquo; published specifications; none is copied from a slicer. The slicers&rsquo; own profile files are other people&rsquo;s work under their licences: Bambu Studio, OrcaSlicer and PrusaSlicer are released under the GNU Affero General Public License v3, and Cura under the GNU Lesser General Public License v3, with no separate licence for their profile data. That is why importing writes only into <em>your</em> folder, on your computer, for your use, and why nothing a slicer holds is ever added to the library. A bed that is 256 mm is a fact, not a work, but the library still takes its numbers from the maker.</p>
 
 </article>
 </div>

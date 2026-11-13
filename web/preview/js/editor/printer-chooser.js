@@ -78,7 +78,7 @@ export function printerChooser({ printers, current, onPick, needBed = false, dis
     q.oninput = () => { searches.set(key, q.value); fill(); };
     fill();
     // the chosen model is in view when the list opens (the list scrolls itself, not the panel round it)
-    queueMicrotask(() => {
+    requestAnimationFrame(() => {
       const on = list.querySelector('.pc-row.on');
       if (on && !q.value) list.scrollTop = Math.max(0, on.offsetTop - list.clientHeight / 2 + on.offsetHeight / 2);
     });
