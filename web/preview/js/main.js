@@ -41,12 +41,13 @@ import { init as initPanel } from './editor/panel.js';
 import { init as initLive } from './editor/live.js';
 import { init as initScrollShadows } from './scroll-shadows.js';
 import { viewer } from './editor/app.js';
+import { docs } from './editor/docs.js';
 import { texts } from './editor/document.js';
 import { doc, log, server, view } from './editor/stores.js';
 
 installGlobalHandlers(); // a script error or an unhandled rejection lands in the error panel
 
-window.dtPreview = { server, view, doc, viewer, log, texts, mapEdit, mapScene, get tools() { return tools; } }; // for tests and the console
+window.dtPreview = { server, view, doc, viewer, log, texts, docs, mapEdit, mapScene, get tools() { return tools; } }; // for tests and the console
 
 // each part wires itself in the order the page was written in: the frame, the
 // build's camera, the tile menu, the view's tile, the text, the selection, the

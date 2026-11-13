@@ -52,6 +52,33 @@ impl Home {
         post(&self.r, route, Some(&self.token), None, &body.to_string())
     }
 
+    /// The revision the program holds for the document `id` (what the page names its edits against).
+    fn rev(&self, id: &str) -> u64 {
+        let (_, body) = get(&self.r, &format!("/api/tiles/{id}/text"));
+        serde_json::from_slice::<Value>(&body).unwrap()["docRev"]
+            .as_u64()
+            .unwrap()
+    }
+
+    /// `body` as the page sends an edit: made against the revision the program holds now.
+    fn with_rev(&self, mut body: Value) -> Value {
+        let id = body["list"]
+            .as_str()
+            .or_else(|| body["tile"].as_str())
+            .unwrap()
+            .to_owned();
+        body["docRev"] = self.rev(&id).into();
+        body
+    }
+
+    fn edit_call(&self, route: &str, body: Value) -> (String, Value) {
+        self.call(route, self.with_rev(body))
+    }
+
+    fn edit(&self, route: &str, body: Value) -> Value {
+        self.ok(route, self.with_rev(body))
+    }
+
     fn ok(&self, route: &str, body: Value) -> Value {
         let (head, v) = self.call(route, body);
         assert!(head.starts_with("HTTP/1.1 200"), "{route}: {head} {v}");
@@ -255,7 +282,7 @@ fn the_sheet_after_a_print_adds_the_plate_good_and_failed_and_the_plates_shrink(
     );
     assert_eq!(p["layout"][0]["pieces"].as_array().unwrap().len(), 1);
     // the switch: everything prints again, written in the list's plates line
-    h.ok(
+    h.edit(
         "/api/plates/set",
         serde_json::json!({"tile": h.id("kit.dmap"), "key": "inventory", "value": "ignore"}),
     );
@@ -405,7 +432,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     );
     let kit = std::fs::read_to_string(h.dir.join("kit.dmap")).unwrap();
     assert!(
-        kit.contains("piece \"home:clearing\" count=1 seed=5 system=db print=always"),
+        kit.contains("piece p2 \"home:clearing\" count=1 seed=5 system=db print=always"),
         "{kit}"
     );
     assert!(
@@ -424,7 +451,7 @@ fn gone_relink_rename_and_reprint_are_lines_added_never_edits() {
     assert_eq!(v["made"], true);
     let made = std::fs::read_to_string(v["list"].as_str().unwrap()).unwrap();
     assert!(
-        made.contains("piece \"home:clearing\" count=1 seed=5 system=db\n")
+        made.contains("piece p1 \"home:clearing\" count=1 seed=5 system=db\n")
             && !made.contains("always"),
         "{made}"
     );
@@ -452,7 +479,7 @@ fn undo_is_refused_when_the_file_changed_since_the_edit() {
         "/api/lists/add",
         serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
     );
-    let (before, after) = (b["before"].clone(), b["after"].clone());
+    let (before, rev) = (b["before"].clone(), b["docRev"].clone());
     // the file is changed behind the editor's back (another tab, a text editor)
     let other = std::fs::read_to_string(&file)
         .unwrap()
@@ -461,9 +488,13 @@ fn undo_is_refused_when_the_file_changed_since_the_edit() {
     std::fs::write(&file, &other).unwrap();
     let (head, v) = h.call(
         "/api/lists/restore",
-        serde_json::json!({"list": list, "text": before, "expect": after}),
+        serde_json::json!({"list": list, "text": before, "docRev": rev}),
     );
     assert!(head.starts_with("HTTP/1.1 409"), "{head} {v}");
+    assert!(
+        v["docRev"].as_u64().unwrap() > rev.as_u64().unwrap(),
+        "the file's change is a revision of its own: {v}"
+    );
     assert_eq!(
         v["text"],
         other.as_str(),
@@ -481,7 +512,7 @@ fn undo_is_refused_when_the_file_changed_since_the_edit() {
         other,
         "nothing was written"
     );
-    // a restore that says nothing of what it expects is not a restore
+    // a restore that says nothing of the revision it expects is not a restore
     let (head, _) = h.call(
         "/api/lists/restore",
         serde_json::json!({"list": list, "text": before}),
@@ -530,33 +561,39 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     assert_eq!(b["count"], 2);
     let before = b["before"].as_str().unwrap().to_owned();
     let now = std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap();
-    assert!(now.contains("piece \"home:glade\" count=2"), "{now}");
+    assert!(now.contains("piece p1 \"home:glade\" count=2"), "{now}");
     assert!(before.contains("count=1"));
     // the plates are laid out again with the two
     h.wait("Crossing.dmap", "two pieces planned", |t| {
         t["status"] == "ready" && t["plan"]["plates"]["pieces"][0]["count"] == 2
     });
     // count and remove through the panel's calls, Undo by restore
-    h.ok(
+    // the pieces are named by id (the editor wrote them), and nothing needs saying
+    let c = h.edit(
         "/api/lists/count",
-        serde_json::json!({"list": list, "index": 0, "count": 5}),
+        serde_json::json!({"list": list, "id": "p1", "count": 5}),
     );
+    assert!(c.get("note").is_none_or(Value::is_null), "{c}");
     assert!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap"))
             .unwrap()
             .contains("count=5")
     );
     assert!(
-        h.call(
+        h.edit_call(
             "/api/lists/count",
-            serde_json::json!({"list": list, "index": 0, "count": 0})
+            serde_json::json!({"list": list, "id": "p1", "count": 0})
         )
         .0
         .starts_with("HTTP/1.1 400")
     );
-    let r = h.ok(
+    let r = h.edit(
         "/api/lists/remove",
-        serde_json::json!({"list": list, "index": 0}),
+        serde_json::json!({"list": list, "id": "p1"}),
+    );
+    assert!(
+        r.get("note").is_none_or(Value::is_null),
+        "ids are written once: {r}"
     );
     assert!(
         !std::fs::read_to_string(h.dir.join("Crossing.dmap"))
@@ -565,7 +602,7 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     );
     h.ok(
         "/api/lists/restore",
-        serde_json::json!({"list": list, "text": r["before"], "expect": r["after"]}),
+        serde_json::json!({"list": list, "text": r["before"], "docRev": r["docRev"]}),
     );
     assert!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap"))
@@ -581,7 +618,7 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     assert!(
         std::fs::read_to_string(b["path"].as_str().unwrap())
             .unwrap()
-            .contains("piece \"home:glade\"")
+            .contains("piece p1 \"home:glade\"")
     );
     // a list that does not read is shown as data and never written
     std::fs::write(
@@ -609,7 +646,7 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     let edited = "dharmatiles version=1\nmap {\n piece \"home:glade\" count=7\n}\n";
     let (head, v) = h.call(
         &format!("/api/tiles/{list}/save"),
-        serde_json::json!({"text": edited, "base": served["text"]}),
+        serde_json::json!({"text": edited, "docRev": served["docRev"]}),
     );
     assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
     assert_eq!(
@@ -671,7 +708,12 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
             .iter()
             .any(|n| n["name"] == "wallHeight")
     );
-    assert!(sc["rev"].as_str().unwrap().len() == 16);
+    assert!(sc["docRev"].as_u64().unwrap() >= 1);
+    assert_eq!(sc["pieces"][1]["id"], "p2");
+    assert!(
+        sc["pieces"][1].get("index").is_none(),
+        "a piece is named by its id"
+    );
     // a tile of the map is served at a tier, as the map builds it (its own seed here)
     let id = h.id("glade.dtile");
     let (head, body) = get(
@@ -683,14 +725,34 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     let (head, _) = get(&h.r, &format!("/api/tiles/{id}/tier?tier=low&system=xx"));
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     // add: a new piece with its own id, in the answer's scene at once
-    let b = h.ok(
+    let b = h.edit(
         "/api/maps/add",
         serde_json::json!({"list": list, "tile": id, "at": "(3sq, 2sq)", "rot": 180, "seed": 77}),
     );
+    assert_eq!(b["id"].as_str(), Some("p4"));
     assert_eq!(
-        (b["id"].as_str(), b["index"].as_u64()),
-        (Some("p4"), Some(3))
+        b["scene"]["docRev"], b["docRev"],
+        "the scene is of the revision the call made"
     );
+    // an edit made against an older revision is refused with the file as it is
+    let stale = b["docRev"].as_u64().unwrap() - 1;
+    let (head, v) = h.call(
+        "/api/maps/set",
+        serde_json::json!({"list": list, "id": "p1", "set": {"rot": 90}, "docRev": stale}),
+    );
+    assert!(head.starts_with("HTTP/1.1 409"), "{head} {v}");
+    assert_eq!(v["docRev"], b["docRev"]);
+    assert_eq!(
+        v["scene"]["pieces"].as_array().unwrap().len(),
+        4,
+        "the current state comes with it"
+    );
+    // and one that names no revision is not an edit
+    let (head, _) = h.call(
+        "/api/maps/set",
+        serde_json::json!({"list": list, "id": "p1", "set": {"rot": 90}}),
+    );
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     assert_eq!(b["scene"]["pieces"].as_array().unwrap().len(), 4);
     assert_eq!(b["scene"]["pieces"][3]["seed"], 77);
     let text = std::fs::read_to_string(&file).unwrap();
@@ -704,9 +766,9 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     );
     // set: move and turn, take a seed off; the toast's Undo is the text it replaced
     let before = std::fs::read_to_string(&file).unwrap();
-    let b = h.ok(
+    let b = h.edit(
         "/api/maps/set",
-        serde_json::json!({"list": list, "index": 1, "set": {"at": "(1sq, 1sq)", "rot": 270, "seed": null}}),
+        serde_json::json!({"list": list, "id": "p2", "set": {"at": "(1sq, 1sq)", "rot": 270, "seed": null}}),
     );
     assert_eq!(b["before"], before.as_str());
     let l = dt_doc::map::decode("t", &std::fs::read_to_string(&file).unwrap()).unwrap();
@@ -714,9 +776,9 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     assert!(l.pieces[1].seed.is_none());
     // a word the document refuses is shown as data and writes nothing
     let was = std::fs::read_to_string(&file).unwrap();
-    let (head, v) = h.call(
+    let (head, v) = h.edit_call(
         "/api/maps/set",
-        serde_json::json!({"list": list, "index": 1, "set": {"rot": 45}}),
+        serde_json::json!({"list": list, "id": "p2", "set": {"rot": 45}}),
     );
     assert!(
         head.starts_with("HTTP/1.1 200") && v["ok"] == false,
@@ -724,24 +786,24 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), was);
     // batch: several pieces in one change
-    let b = h.ok(
+    let b = h.edit(
         "/api/maps/batch",
-        serde_json::json!({"list": list, "edits": [{"index": 0, "set": {"seed": 3}}, {"index": 2, "set": {"seed": 4, "print": "skip"}}]}),
+        serde_json::json!({"list": list, "edits": [{"id": "p1", "set": {"seed": 3}}, {"id": "p3", "set": {"seed": 4, "print": "skip"}}]}),
     );
     assert_eq!(b["changed"], 2);
     assert_eq!(b["scene"]["pieces"][2]["print"], "skip");
     // duplicate: its own id, the original's seed, the place asked for; remove takes the piece and its pin
-    let b = h.ok(
+    let b = h.edit(
         "/api/maps/dup",
-        serde_json::json!({"list": list, "index": 0, "at": "(0sq, 2sq)"}),
+        serde_json::json!({"list": list, "id": "p1", "at": "(0sq, 2sq)"}),
     );
     assert_eq!(b["id"], "p5");
     assert_eq!(b["scene"]["pieces"][1]["id"], "p5");
     assert_eq!(b["scene"]["pieces"][1]["seed"], 3);
-    // a pin names the piece by its id, a piece with none is given one
-    let b = h.ok(
+    // a pin names the piece by its id
+    let b = h.edit(
         "/api/maps/pin",
-        serde_json::json!({"list": list, "index": 1, "plate": 1, "x": 12.34, "y": 20.0, "turn": true}),
+        serde_json::json!({"list": list, "id": "p5", "plate": 1, "x": 12.34, "y": 20.0, "turn": true}),
     );
     assert_eq!(b["id"], "p5");
     let text = std::fs::read_to_string(&file).unwrap();
@@ -750,29 +812,29 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
         "{text}"
     );
     assert_eq!(b["scene"]["pieces"][1]["pinned"], true);
-    h.ok(
+    h.edit(
         "/api/maps/unpin",
-        serde_json::json!({"list": list, "index": 1}),
+        serde_json::json!({"list": list, "id": "p5"}),
     );
     assert!(!std::fs::read_to_string(&file).unwrap().contains("pin "));
-    h.ok(
+    h.edit(
         "/api/maps/pin",
-        serde_json::json!({"list": list, "index": 1, "plate": 1, "x": 5.0, "y": 5.0}),
+        serde_json::json!({"list": list, "id": "p5", "plate": 1, "x": 5.0, "y": 5.0}),
     );
-    h.ok(
+    h.edit(
         "/api/maps/remove",
-        serde_json::json!({"list": list, "index": 1}),
+        serde_json::json!({"list": list, "id": "p5"}),
     );
     let text = std::fs::read_to_string(&file).unwrap();
     assert!(
         !text.contains("p5") && !text.contains("pin "),
         "the piece goes with its pin: {text}"
     );
-    let u = h.ok("/api/maps/unpin-all", serde_json::json!({"list": list}));
+    let u = h.edit("/api/maps/unpin-all", serde_json::json!({"list": list}));
     // undo through the print lists' restore, the scene answered at once
     let r = h.ok(
         "/api/lists/restore",
-        serde_json::json!({"list": list, "text": TOWN, "expect": u["after"]}),
+        serde_json::json!({"list": list, "text": TOWN, "docRev": u["docRev"]}),
     );
     assert_eq!(r["scene"]["pieces"].as_array().unwrap().len(), 3);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), TOWN);
@@ -799,4 +861,59 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
             .len(),
         3
     );
+}
+
+#[test]
+fn the_first_edit_of_a_file_without_ids_writes_ids_on_every_piece_and_says_so_once() {
+    let hand = "dharmatiles version=1\n// by hand\nmap {\n    grid cols=4 rows=3\n    piece \"home:glade\" at=\"(0sq, 0sq)\" rot=0\n    piece p1 \"home:glade\" at=\"(1sq, 0sq)\" rot=0\n    piece \"home:glade\" at=\"(2sq, 0sq)\" rot=0\n}\n";
+    let h = start_home("noids", &[("glade.dtile", GLADE), ("hand.dmap", hand)]);
+    let list = h.id("hand.dmap");
+    // the scene names each piece by the id the first edit will write (p1 is taken: p2, then p1, then p3)
+    let t = h.wait("hand.dmap", "the scene", |t| {
+        t["plan"]["scene"]["pieces"]
+            .as_array()
+            .is_some_and(|p| p.len() == 3)
+    });
+    let ids: Vec<_> = t["plan"]["scene"]["pieces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            (
+                p["id"].as_str().unwrap().to_owned(),
+                p["written"].as_bool().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            ("p2".to_owned(), false),
+            ("p1".to_owned(), true),
+            ("p3".to_owned(), false)
+        ]
+    );
+    // turning the piece the scene calls p3 writes the ids on all of them, in that one write
+    let b = h.edit(
+        "/api/maps/set",
+        serde_json::json!({"list": list, "id": "p3", "set": {"rot": 90}}),
+    );
+    assert!(b["note"].as_str().unwrap().contains("an id"), "{b}");
+    let text = std::fs::read_to_string(h.dir.join("hand.dmap")).unwrap();
+    assert!(text.contains("// by hand"), "{text}");
+    assert!(
+        text.contains("piece p2 \"home:glade\" at=\"(0sq, 0sq)\""),
+        "{text}"
+    );
+    assert!(
+        text.contains("piece p3 \"home:glade\" at=\"(2sq, 0sq)\" rot=90"),
+        "{text}"
+    );
+    assert_eq!(b["scene"]["pieces"][2]["written"], true);
+    // the next edit has nothing to say
+    let b = h.edit(
+        "/api/maps/set",
+        serde_json::json!({"list": list, "id": "p2", "set": {"rot": 180}}),
+    );
+    assert!(b.get("note").is_none_or(Value::is_null), "{b}");
 }

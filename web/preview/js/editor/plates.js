@@ -7,6 +7,7 @@
 
 import { failed, showError } from '../problems.js';
 import { $, host, toast } from './app.js';
+import { docs, planOf, undoToast } from './docs.js';
 import { seg } from './controls.js';
 import { printerChooser } from './printer-chooser.js';
 import { exists, plateTotals, systemName, wantLine } from '../inventory.js';
@@ -31,7 +32,7 @@ const after = { open: false, plate: 1, bad: new Set(), busy: false };
 let drawn = null; // what the panel shows now, as text, so a tick that changes nothing draws nothing
 let lastList = null, lastTile = null; // the print list and the tile last shown, for the title bar's switch
 
-const plan = () => (isPlates(tile()) ? tile().plan?.plates ?? null : null);
+const plan = () => (isPlates(tile()) ? planOf(tile())?.plates ?? null : null);
 
 /** The strip under the crumbs: the printer, and what is laid out. */
 export function contextLines() {
@@ -43,13 +44,13 @@ export function contextLines() {
   return [`${plural(p.layout.reduce((a, x) => a + x.pieces.length, 0), 'piece')} on ${plural(n, 'plate')}${held ? ` · ${held} in inventory` : ''}`, `${p.label} · ${mm(p.bed[0])} × ${mm(p.bed[1])} mm · ${p.mode === 'single' ? 'single colour' : 'multicolour'}`];
 }
 
+/** A setting is a change to the list's document: the plates line's word, against the revision held, one step of the history. */
 async function set(key, value) {
   const t = tile();
   if (!t) return;
   try {
-    const r = await host.platesSet(t.id, key, value);
-    if (r.status !== 200) failed(`Could not change ${key}`, r);
-    else exporting.files = null;
+    const r = await docs.edit(t.id, () => ({ label: `Could not change ${key}`, note: `Set ${key}`, steps: [{ name: 'platesSet', body: { key, value } }] }));
+    if (r) { exporting.files = null; toast(r.note, () => undoToast(t.id, r.entry)); }
   } catch (e) { showError(`Could not change ${key}`, e); }
 }
 
@@ -70,10 +71,12 @@ function printerSection(p, ro) {
   // every profile there is (the server's list, which an import changes), not only the ones this plan was made with
   const printers = server.get().printers;
   // the same chooser as the title bar's: kept while the list is unchanged, so a search or an import stays open
-  const sig = JSON.stringify([printers, p.printer, ro]);
+  // the printer the document names now (its own word, from its scene), the plan's only until that is there
+  const current = docs.scene(tile().id)?.printer ?? p.printer;
+  const sig = JSON.stringify([printers, current, ro]);
   if (sig !== chooserSig || !chooser) {
     chooserSig = sig;
-    chooser = printerChooser({ printers, current: p.printer, onPick: (name) => set('printer', name), needBed: true, disabled: ro, key: 'plates' });
+    chooser = printerChooser({ printers, current, onPick: (name) => set('printer', name), needBed: true, disabled: ro, key: 'plates' });
   }
   sec.append(chooser);
   if (p.bed) sec.append(el('p', 'note', `${mm(p.bed[0])} × ${mm(p.bed[1])} mm bed${p.excluded?.length ? `, ${plural(p.excluded.length, 'zone')} kept clear` : ''} · ${plural(p.slots, 'filament slot')}`));
@@ -169,12 +172,12 @@ function pinsSection(p, ro) {
     : 'Look down on the bed (Top) and drag a piece: it stays where you drop it, and the rest are packed around it.'));
   for (const { plate, q } of pinned) {
     const r = el('div', 'pl-pc');
-    const line = (p.pieces ?? []).find((x) => x.index === q.piece);
+    const line = (p.pieces ?? []).find((x) => x.id === q.id);
     const lab = el('span', 'pl-pn');
     lab.append(el('b', null, q.name), el('span', 'pl-ps', `${line?.id ? `${line.id} · ` : ''}plate ${plate}`));
     const b = el('button', 'linkish', 'Unpin');
     b.type = 'button'; b.disabled = ro;
-    b.onclick = () => unpin(q.piece, q.name);
+    b.onclick = () => unpin(q.id, q.name);
     r.append(lab, b);
     r.style.gridTemplateColumns = 'minmax(0, 1fr) auto';
     sec.append(r);
@@ -209,7 +212,7 @@ function piecesSection(p, ro) {
     if (sub) lab.append(el('span', 'pl-ps', sub));
     const mk = (text, title, run, off) => { const b = el('button', 'pl-step', text); b.type = 'button'; b.title = title; b.disabled = ro || off; b.onclick = run; return b; };
     const n = el('span', 'pl-cnt', String(q.count));
-    row.append(lab, mk('−', 'One fewer', () => setCount(t.id, q.index, q.count - 1), q.count <= 1), n, mk('+', 'One more', () => setCount(t.id, q.index, q.count + 1), false), mk('✕', `Take ${name} out of the list`, () => removePiece(t.id, q.index, name), false));
+    row.append(lab, mk('−', 'One fewer', () => setCount(t.id, q.id, q.count - 1), q.count <= 1), n, mk('+', 'One more', () => setCount(t.id, q.id, q.count + 1), false), mk('✕', `Take ${name} out of the list`, () => removePiece(t.id, q.id, name), false));
     sec.append(row);
   }
   return sec;
@@ -364,11 +367,11 @@ function render() {
   if (!doc || isMapView()) return; // a map has its own panel (scene-panel.js)
   const p = plan();
   // a build's progress ticks come through here too: draw again only when what is drawn changed
-  const sig = JSON.stringify([t.id, t.plan, t.status, t.errors, exporting.busy, exporting.files, exporting.error, exporting.failures, after.open, after.plate, [...after.bad], after.busy, server.get().inventory?.exists, server.get().inventory?.pieces?.length]);
+  const sig = JSON.stringify([t.id, planOf(t), t.status, t.errors, exporting.busy, exporting.files, exporting.error, exporting.failures, after.open, after.plate, [...after.bad], after.busy, server.get().inventory?.exists, server.get().inventory?.pieces?.length]);
   if (sig === drawn) return;
   drawn = sig;
   const keep = box.querySelector('.body')?.scrollTop ?? 0;
-  const ro = !(p?.writable ?? t.plan?.writable);
+  const ro = !(p?.writable ?? planOf(t)?.writable);
   box.replaceChildren();
   const head = el('div', 'lt');
   const h = el('div', 'heading');
@@ -426,6 +429,7 @@ function pickMode(mode) {
 export function init() {
   for (const b of $('modes').children) b.onclick = () => pickMode(b.dataset.mode);
   server.subscribe(['tiles'], render);
+  docs.subscribe(render);
   view.subscribe(['dmode'], () => { drawn = null; render(); });
   view.subscribe(['tileId'], () => { drawn = null; exporting.files = null; exporting.error = null; exporting.failures = []; after.open = false; after.bad.clear(); render(); });
   server.subscribe(['inventory', 'printers'], () => { drawn = null; render(); });

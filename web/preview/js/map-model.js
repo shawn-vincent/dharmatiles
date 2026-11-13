@@ -144,15 +144,15 @@ export function pills(pieces, inv) {
   const out = new Map();
   for (const p of pieces) {
     if (p.error) continue;
-    if (p.print === 'skip') { out.set(p.index, { state: 'skip', text: 'left off' }); continue; }
+    if (p.print === 'skip') { out.set(p.id, { state: 'skip', text: 'left off' }); continue; }
     const k = key(p);
     const n = owned.get(k) || 0;
     if (p.print !== 'always' && inv?.exists && n > 0) {
       owned.set(k, n - 1);
-      out.set(p.index, { state: 'have', text: 'have' });
+      out.set(p.id, { state: 'have', text: 'have' });
     } else if (inv?.exists && !n && (other.get(k) || 0) > 0) {
-      out.set(p.index, { state: 'other', text: 'to print' });
-    } else out.set(p.index, { state: 'need', text: 'to print' });
+      out.set(p.id, { state: 'other', text: 'to print' });
+    } else out.set(p.id, { state: 'need', text: 'to print' });
   }
   return out;
 }

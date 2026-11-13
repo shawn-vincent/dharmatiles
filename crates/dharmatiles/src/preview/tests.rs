@@ -653,8 +653,11 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     let m = cv("size", "low(20dmm..60dmm, -2)").1["message"].clone();
     assert_eq!(m, "low's ratio must be above 0, not -2");
     assert!(cv("size", "low(20dmm..60dmm, 3)").1["message"].is_null());
-    // save: only over the text it was edited from
-    let s = serde_json::json!({ "text": edited, "base": "something else" }).to_string();
+    // save: only against the revision it was edited from
+    let served: Value =
+        serde_json::from_slice(&get(&r, &format!("/api/tiles/{}/text", id0(&r))).1).unwrap();
+    let rev = served["docRev"].as_u64().unwrap();
+    let s = serde_json::json!({ "text": edited, "docRev": rev + 1 }).to_string();
     let (h, v) = post(
         &r,
         &format!("/api/tiles/{}/save", id0(&r)),
@@ -664,7 +667,8 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     );
     assert!(h.starts_with("HTTP/1.1 409"), "{h}");
     assert_eq!(v["text"], text);
-    let s = serde_json::json!({ "text": edited, "base": text }).to_string();
+    assert_eq!(v["docRev"], rev);
+    let s = serde_json::json!({ "text": edited, "docRev": rev }).to_string();
     assert!(
         post(
             &r,
@@ -678,7 +682,7 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), edited);
     // only the tile's own files
-    let s = serde_json::json!({ "text": "x", "base": "", "file": "/etc/hosts" }).to_string();
+    let s = serde_json::json!({ "text": "x", "docRev": 1, "file": "/etc/hosts" }).to_string();
     assert!(
         post(
             &r,
@@ -699,7 +703,7 @@ fn a_library_tile_is_never_written() {
     let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
     let t = token["token"].as_str().unwrap();
     let text = dt_eval::Files.read(FLAT).unwrap();
-    let s = serde_json::json!({ "text": "tile {}", "base": text }).to_string();
+    let s = serde_json::json!({ "text": "tile {}", "docRev": 0 }).to_string();
     let (h, _) = post(
         &r,
         &format!("/api/tiles/{}/save", id0(&r)),
@@ -1497,7 +1501,7 @@ fn a_document_error_is_data_and_an_internal_failure_an_error_status() {
     assert!(e["code"].as_str().unwrap().starts_with("dt::"), "{e}");
     assert_eq!(e["unexpected"], false, "a mistake in the document");
     // an internal failure: the file cannot be read; 500 and the reason
-    let body = serde_json::json!({ "text": "x", "base": "y" }).to_string();
+    let body = serde_json::json!({ "text": "x", "docRev": 1 }).to_string();
     let (s, v) = call("POST", &format!("/api/tiles/{id}/save"), body.as_bytes());
     assert_eq!(s, "500 Internal Server Error");
     assert!(
@@ -2653,6 +2657,35 @@ fn atomic_only() {
     assert!(
         bad.is_empty(),
         "write a document with dt_eval::atomic::write_atomic:\n{}",
+        bad.join("\n")
+    );
+}
+
+/// A document of the user's (a tile, a map, a print list) is written by
+/// `docs::Docs::edit` and nothing else: it takes the file's lock and gives
+/// the write its revision.  Of the preview's own files only the settings
+/// (`places.rs`) and the plates' exported files (`plates.rs`, new files, one
+/// call) write otherwise.
+#[test]
+fn documents_are_written_only_through_the_document_registry() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/preview");
+    let mut bad = Vec::new();
+    for e in std::fs::read_dir(&dir).unwrap() {
+        let p = e.unwrap().path();
+        let name = p.file_name().unwrap().to_string_lossy().into_owned();
+        if !name.ends_with(".rs") || ["docs.rs", "places.rs", "tests.rs"].contains(&name.as_str()) {
+            continue;
+        }
+        let text = std::fs::read_to_string(&p).unwrap();
+        let code = text.split("#[cfg(test)]").next().unwrap();
+        let n = code.matches("write_atomic(").count();
+        if n > usize::from(name == "plates.rs") {
+            bad.push(format!("{name}: {n} calls of write_atomic"));
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "write a document through Shared::docs.edit:\n{}",
         bad.join("\n")
     );
 }

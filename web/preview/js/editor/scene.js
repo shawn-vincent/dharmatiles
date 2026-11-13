@@ -1,15 +1,15 @@
 // The map in the 3D view (docs/maps.html): a `.dmap` with placed pieces opens as a map, and the view shows
 // every piece's tile at its place, turned and raised, on the ground of the chosen backdrop.
 //
-// The program says what the map is (the scene: each piece's tile, seed, system, place, turn and bottom, in
-// `tile.plan.scene`); this module draws it.  A piece is its tile's mesh at one of three tiers (the program's
+// The program says what the map is (the scene: each piece's tile, seed, system, place, turn and bottom, in the
+// document's state, js/documents.js); this module draws it.  A piece is its tile's mesh at one of three tiers (the program's
 // `/api/tiles/ID/tier`, from its cache or built): super-low far away, low in the middle, full close up and
 // for what you select, chosen by how large the piece is on screen and held under a triangle budget, so a
 // table of forty pieces moves smoothly and nothing waits for a build.  Full is asked for only when close,
 // one at a time, and never blocks: the lower tier stays on screen until it lands.  What is not full is
 // marked `low · not yet checked` in the status line, as the plates mark theirs.
 //
-// The pieces of the map are one selection (`view.msel`, piece indices); editing them is scene-edit.js, the
+// The pieces of the map are one selection (`view.msel`, piece ids); editing them is scene-edit.js, the
 // panel is scene-panel.js.  Mode (Tile, Map, Plates) is the title bar's switch: a document with placed
 // pieces opens as a map, a print list opens on its plates, and the choice is kept for the session.
 
@@ -20,90 +20,42 @@ import { showError } from '../problems.js';
 import { FOV } from '../viewer/consts.js';
 import * as M from '../map-model.js';
 import { $, host, pickView, viewer } from './app.js';
+import { piecesOf, selectedOf, chipOf, verdictOf } from '../doc-views.js';
 import { createStore, isPlates, log, server, tile, view } from './stores.js';
+import { docs } from './docs.js';
+import { applyMode, chooseMode, init as initMode, setChosen } from './mode.js';
 
-/** What the map is now: the pieces (the program's scene, plus the page's), the tiers drawn, and the budget. */
-export const sceneStore = createStore({ pieces: [], scene: null, counts: M.tierCounts([]), triangles: 0, busy: 0 });
+export { chooseMode, setChosen };
 
-const chosen = new Map();     // document path -> 'map' | 'plates' (the session's choice)
+/** How the map is drawn: the tiers in use and the budget.  The map itself (its pieces) is the document's state, read when asked. */
+export const sceneStore = createStore({ counts: M.tierCounts([]), triangles: 0, busy: 0 });
+
 const geoms = new Map();      // gkey -> {tiers: Map(tier -> {tris}), asked: Set(tier), failed: Set(tier)}
 const cameras = new Map();    // document path -> {camera, activeView}
 let mounted = false;          // the scene is in the view
 let mountedPath = null;
-let local = null;             // {rev, at}: the scene a call answered with, until the program's update says the same
 let lastSig = '';
 let evalTimer = 0;
 const lanes = { fast: 0, full: 0 };
-const shown = new Map();      // piece index -> {gid, tile_id}: what it was last drawn with, kept until its new mesh comes
-/** Pieces being dragged: index -> [x, y] mm, shown there until the change is written. */
+const shown = new Map();      // piece id -> {gid, tile_id}: what it was last drawn with, kept until its new mesh comes
+/** Pieces being dragged: id -> [x, y] mm, shown there until the change is written. */
 export const live = new Map();
 const queue = [];
 
 /** Is the map of the document in view (the title bar's Map)? */
 export const mapMode = () => isPlates(tile()) && view.get().dmode === 'map';
 
-export const pieces = () => sceneStore.get().pieces;
-export const sceneNow = () => sceneStore.get().scene;
-export const selected = () => view.get().msel.map((i) => pieces().find((p) => p.index === i)).filter(Boolean);
-export const pieceAt = (index) => pieces().find((p) => p.index === index) ?? null;
-
-// ---- which scene: the program's, or the one a call just answered with ------------------------------
-
-/**
- * The scene to show: the one in the tile's plan, unless a call has just answered with a newer one (its `rev`
- * is the hash of the text it wrote): then that, until the program's update carries the same `rev` (it has
- * planned the new text), or a few seconds pass (the program's word is the truth).
- */
-function currentScene() {
-  const t = tile();
-  const inc = isPlates(t) ? t.plan?.scene ?? null : null;
-  if (local) {
-    if (inc && inc.rev === local.scene.rev) local = null;
-    else if (Date.now() - local.at > 4000) local = null;
-    else return local.scene;
-  }
-  return inc;
-}
-
-/** A call answered with the map as it now reads: show it at once. */
-export function takeScene(scene) {
-  if (!scene) return;
-  local = { scene, at: Date.now() };
-  sync();
-}
-
-// ---- the mode ----------------------------------------------------------------------------------------
-
-function modeFor(t) {
-  if (!isPlates(t)) return null;
-  const c = chosen.get(t.path);
-  if (c) return c;
-  const sc = t.plan?.scene;
-  return sc ? (sc.map ? 'map' : 'plates') : null;
-}
-
-/** The title bar's Map or Plates: the same document, the other view. */
-export function chooseMode(mode) {
-  const t = tile();
-  if (!isPlates(t)) return;
-  chosen.set(t.path, mode);
-  view.set({ dmode: mode });
-}
-
-/** Open `path` (a map) in `mode` the next time it is shown. */
-export const setChosen = (path, mode) => chosen.set(path, mode);
+/** The map's scene as the program last said it (null when the map is not the view). */
+export const sceneNow = () => (mapMode() ? docs.scene(tile().id) : null);
+/** The pieces of the map now: worked out from the document's state each time it is asked. */
+export const pieces = () => piecesOf(sceneNow(), server.get().tiles);
+/** The selected pieces: the selection's ids that the map has now. */
+export const selected = () => selectedOf(view.get().msel, pieces());
+export const pieceAt = (id) => pieces().find((p) => p.id === id) ?? null;
 
 // ---- the pieces ---------------------------------------------------------------------------------------
 
-const gkeyOf = (p, scene) => {
-  const t = server.get().tiles.find((x) => x.id === p.tile_id);
-  return `${p.tile_id}|${p.seed ?? ''}|${p.system}|${scene.printer}|${t?.mesh_version ?? 0}`;
-};
 const gidOf = (gkey, tier) => `${gkey}#${tier}`;
-
-function augment(scene) {
-  return scene.pieces.map((p) => ({ ...p, rot: p.rot ?? 0, gkey: p.tile_id && !p.error ? gkeyOf(p, scene) : null }));
-}
 
 /** The world box the view frames: the pieces' footprints and the grid, the ground to a little over the tallest. */
 function frameBox(ps, scene) {
@@ -118,25 +70,19 @@ function frameBox(ps, scene) {
   return { lo: [lo[0], -hi[1], -7], hi: [hi[0], -lo[1], top] };
 }
 
+/** Put the map in the view as the document's state says it is now (or take it out when the map is not the view). */
 function sync() {
+  applyMode();
   const t = tile();
-  const want = modeFor(t);
-  if (view.get().dmode !== want && (want || !isPlates(t))) view.set({ dmode: want });
   const on = mapMode();
-  const sc = on ? currentScene() : null;
+  const sc = on ? docs.scene(t.id) : null;
   if (!on || !sc) {
     if (mounted) unmount();
-    if (on) sceneStore.set({ pieces: [], scene: null });
     return;
   }
   if (!mounted || mountedPath !== t.path) mount(t, sc);
-  const ps = augment(sc);
+  const ps = pieces();
   release(ps);
-  sceneStore.set({ pieces: ps, scene: sc });
-  // a piece that is gone leaves the selection
-  const live = new Set(ps.map((p) => p.index));
-  const keep = view.get().msel.filter((i) => live.has(i));
-  if (keep.length !== view.get().msel.length) view.set({ msel: keep });
   const box = frameBox(ps, sc);
   viewer.setSceneBox(box);
   const sq = ps.find((p) => p.sq)?.sq ?? 35;
@@ -154,7 +100,7 @@ function mount(t, sc) {
   viewer.frameFor = frameFor;
   viewer.maxDistance = 4000;
   viewer.controls.maxDistance = 4000;
-  viewer.setSceneBox(frameBox(augment(sc), sc));
+  viewer.setSceneBox(frameBox(pieces(), sc));
   // the camera: the one this map had, else Iso over all of it
   const saved = cameras.get(t.path);
   if (saved) { viewer.setCamera(saved.camera); view.set({ activeView: saved.activeView }); } else pickView('painted', false);
@@ -173,7 +119,6 @@ function unmount() {
   viewer.controls.maxDistance = 600;
   viewer.maxDistance = null;
   view.set({ msel: [], mprop: null });
-  $('tileplan').textContent = '';
   // the plates (or the tile) frame themselves again
   pickView(view.get().mode, false);
 }
@@ -291,21 +236,23 @@ export function evaluate(now = false) {
   const ps = pieces().filter((p) => p.at);
   const sel = new Set(view.get().msel);
   const px = ps.map(screenSize);
-  const want = ps.map((p, i) => M.wantedTier(px[i], sel.has(p.index)));
+  const want = ps.map((p, i) => M.wantedTier(px[i], sel.has(p.id)));
   const have = ps.map((p) => new Set(p.gkey ? [...(geoms.get(p.gkey)?.tiers.keys() ?? [])] : []));
   const tris = ps.map((p) => (tier) => geoms.get(p.gkey)?.tiers.get(tier)?.tris ?? M.GUESS[tier]);
   const { tiers, total } = M.chooseTiers(want, px, have, tris);
   const list = ps.map((p, i) => {
     const t = tiers[i];
     let gid = null;
-    if (p.gkey && t) { gid = gidOf(p.gkey, t); shown.set(p.index, { gid, tile_id: p.tile_id }); }
-    else if (shown.get(p.index)?.tile_id === p.tile_id && viewer.sceneGeoms.has(shown.get(p.index).gid)) gid = shown.get(p.index).gid; // a new variant: the old one stays until it swaps in
+    if (p.gkey && t) { gid = gidOf(p.gkey, t); shown.set(p.id, { gid, tile_id: p.tile_id }); }
+    else if (shown.get(p.id)?.tile_id === p.tile_id && viewer.sceneGeoms.has(shown.get(p.id).gid)) gid = shown.get(p.id).gid; // a new variant: the old one stays until it swaps in
     else {
       gid = `box|${p.size[0]}|${p.size[1]}`;
       if (!viewer.sceneGeoms.has(gid)) viewer.setSceneGeometry(gid, boxPayload(p.size[0], p.size[1], 8));
     }
-    return { index: p.index, gid, matrix: M.matrixOf(live.has(p.index) ? { ...p, at: live.get(p.index) } : p) };
+    // the view names a piece by its place in this list (a slot); `drawn` is how a slot is read back
+    return { index: i, gid, matrix: M.matrixOf(live.has(p.id) ? { ...p, at: live.get(p.id) } : p) };
   });
+  drawn = ps.map((p) => p.id);
   viewer.setScenePieces(list);
   // what is drawn that is not the checked build, and what a close piece still wants in full
   const counts = M.tierCounts(tiers);
@@ -316,7 +263,7 @@ export function evaluate(now = false) {
   for (const i of ps.map((_, k) => k)) {
     if (want[i] === 'low' && !have[i].has('low') && ps[i].gkey) ensure(ps[i], 'low');
   }
-  viewer.setSceneHighlight(sel, hovered);
+  viewer.setSceneHighlight(slotsOf([...sel]), hovered);
   viewer.placeGround();
 }
 
@@ -334,10 +281,8 @@ function cameraMoved() {
 
 /** What the status line says of the map: `{verdict, counts}`. */
 export function statusLines() {
-  const { counts, pieces: ps } = sceneStore.get();
-  const placed = ps.filter((p) => p.at);
-  const inv = server.get().inventory;
-  const verdict = `${placed.length} piece${placed.length === 1 ? '' : 's'} · ${M.totalsText(ps, inv)}`;
+  const { counts } = sceneStore.get();
+  const verdict = verdictOf(pieces(), server.get().inventory);
   const notFull = counts.low + counts['super-low'] + counts.none;
   const parts = [];
   if (notFull) parts.push('low · not yet checked');
@@ -347,12 +292,12 @@ export function statusLines() {
 }
 
 /** The title bar's chip: `3 in inventory · 11 to print`. */
-export const chip = () => M.totalsText(pieces(), server.get().inventory);
+export const chip = () => chipOf(pieces(), server.get().inventory);
 
 // ---- pills on the pieces -------------------------------------------------------------------------------
 
 let pillsOn = true;
-const tags = new Map(); // piece index -> its element
+const tags = new Map(); // piece id -> its element
 
 /** A small pill over each piece the program has a word for: have (on your shelf), to print, or the caution of the other colour mode. */
 function drawTags() {
@@ -362,41 +307,46 @@ function drawTags() {
   const states = M.pills(ps, server.get().inventory);
   const live2 = new Set();
   for (const p of ps) {
-    const st = states.get(p.index);
+    const st = states.get(p.id);
     if (!st) continue;
-    const c = M.toWorld(p.at ? { ...p, at: live.get(p.index) ?? p.at } : p, p.size[0] / 2, p.size[1] / 2, 14);
+    const c = M.toWorld(p.at ? { ...p, at: live.get(p.id) ?? p.at } : p, p.size[0] / 2, p.size[1] / 2, 14);
     const px = screenSize(p);
     if (px < 34) continue;
     const s = viewer.project(c);
-    let e = tags.get(p.index);
-    if (!e) { e = document.createElement('span'); box.append(e); tags.set(p.index, e); }
+    let e = tags.get(p.id);
+    if (!e) { e = document.createElement('span'); box.append(e); tags.set(p.id, e); }
     const word = { have: 'have', need: 'to print', other: 'have, other colour', skip: 'left off' }[st.state];
     const cls = `mp-tag ${st.state === 'have' ? 'have' : st.state === 'other' ? 'caution' : 'need'}`;
     if (e.className !== cls) e.className = cls;
     if (e.textContent !== word) e.textContent = word;
     e.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) translate(-50%, -100%)`;
-    live2.add(p.index);
+    live2.add(p.id);
   }
   for (const [i, e] of tags) if (!live2.has(i)) { e.remove(); tags.delete(i); }
 }
 
 // ---- hover and click ---------------------------------------------------------------------------------
 
-let hovered = -1;
+let hovered = -1;       // the slot under the pointer
 let down = null;
+let drawn = [];         // the ids of the pieces in the order the view was last given them: the view names a piece by its place here
+const slotsOf = (ids) => new Set(drawn.flatMap((id, i) => (ids.includes(id) ? [i] : [])));
+const idAt = (slot) => (slot >= 0 ? drawn[slot] ?? null : null);
+/** The id of the piece the view's pick `slot` names (what scene-drag.js asks after a pick). */
+export const pickAt = (x, y) => idAt(viewer.scenePick(x, y));
 
 /** Set the piece under the pointer. */
 function hover(i) {
   if (hovered === i) return;
   hovered = i;
-  viewer.setSceneHighlight(view.get().msel, hovered);
+  viewer.setSceneHighlight(slotsOf(view.get().msel), hovered);
   $('canvas').classList.toggle('grab', i >= 0);
 }
 
-/** Select pieces (indices); `add` toggles one into the selection. */
-export function select(indices, add = false) {
+/** Select pieces (ids); `add` toggles one into the selection. */
+export function select(ids, add = false) {
   const cur = view.get().msel;
-  const next = add ? (indices.length === 1 && cur.includes(indices[0]) ? cur.filter((i) => i !== indices[0]) : [...new Set([...cur, ...indices])]) : indices;
+  const next = add ? (ids.length === 1 && cur.includes(ids[0]) ? cur.filter((i) => i !== ids[0]) : [...new Set([...cur, ...ids])]) : ids;
   view.set({ msel: next, mprop: next.length ? view.get().mprop : null });
 }
 
@@ -413,8 +363,8 @@ function onPointerUp(e) {
   if (!mapMode() || !d || d.b !== 0 || sceneEdit.dragged) return;
   if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4 || performance.now() - d.t > 600) return;
   const r = rect();
-  const i = viewer.scenePick(e.clientX - r.left, e.clientY - r.top);
-  if (i >= 0) select([i], d.shift);
+  const i = pickAt(e.clientX - r.left, e.clientY - r.top);
+  if (i != null) select([i], d.shift);
   else if (!d.shift) select([]);
 }
 
@@ -451,6 +401,8 @@ export function init() {
   view.subscribe(['tileId', 'dmode'], sync);
   view.subscribe(['msel'], () => { evaluate(true); });
   // a theme or a display switch repaints the pieces' colours
-  sceneStore.subscribe(['pieces'], () => { $('tileplan').textContent = mapMode() ? chip() : $('tileplan').textContent; });
+  // the document's state changed (a reply, the stream): the map is drawn from it again
+  docs.subscribe(sync);
+  initMode();
   sync();
 }

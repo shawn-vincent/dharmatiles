@@ -15,7 +15,8 @@ import { openFile, saveWords, texts } from './document.js';
 import { showSourceLine } from './levels.js';
 import { showWorst } from './selection.js';
 import { doc, entrySel, isMapView, log, progressOf, server, tile, view } from './stores.js';
-import { sceneStore, statusLines } from './scene.js';
+import { sceneNow, sceneStore, statusLines } from './scene.js';
+import { docs } from './docs.js';
 import { targetWords } from './target.js';
 import { fmt, secs } from './title.js';
 
@@ -44,7 +45,7 @@ function renderBar() {
   const t = tile(), v = viewOf();
   const s = statusOf(v, { t, live: server.get().live, p: t ? progressOf(t.id) : null });
   // on a map the line says what the shelf says of it, and that what is drawn is not yet checked
-  const map = isMapView() && sceneStore.get().scene ? statusLines() : null;
+  const map = isMapView() && sceneNow() ? statusLines() : null;
   // the plates of a map may not lay out (a tile needs more filaments than the printer has): that is the plates' to say
   const platesOnly = (t?.errors ?? []).every((e) => /^dt::(slots|plates|inventory|printer)$/.test(e.code));
   const calm = map && (s.tone === 'ok' || s.tone === 'note' || (s.tone === 'bad' && platesOnly));
@@ -311,7 +312,8 @@ export function init() {
   server.subscribe(['tiles', 'live', 'system', 'printer', 'overhangDeg', 'steepestDeg'], () => { renderBar(); renderPanel(); });
   server.subscribe(['progress'], () => { renderBar(); tickRunning(); });
   view.subscribe(['tileId', 'dmode'], () => { renderBar(); renderPanel(); });
-  sceneStore.subscribe(['counts', 'pieces', 'scene'], renderBar);
+  sceneStore.subscribe(['counts'], renderBar);
+  docs.subscribe(renderBar);
   view.subscribe(['panel'], () => { renderBar(); renderPanel(); });
   view.subscribe(['draft', 'shown'], renderPanel); // the worst face is known once the mesh is
   doc.subscribe(['base', 'writable', 'saving', 'note', 'conflict', 'ok', 'checked', 'text'], renderBar);

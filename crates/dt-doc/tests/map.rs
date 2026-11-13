@@ -145,7 +145,7 @@ fn the_header_is_checked_as_in_every_document() {
 
 #[test]
 fn a_piece_is_added_counted_and_taken_out_keeping_every_other_byte() {
-    use dt_doc::map::{Want, add_or_bump, remove_piece, set_count};
+    use dt_doc::map::{Want, add_or_bump, give_ids, piece_ids, remove_piece, set_count};
     let text = "dharmatiles version=1\n// kept\nmap {\n    piece \"lib:tiles/ground/1x1-grass\" count=2 // two\n    piece \"home:glade\" seed=7\n}\nplates printer=\"sovol/sv06\"\n";
     let want = |tile, seed| Want {
         tile,
@@ -160,11 +160,13 @@ fn a_piece_is_added_counted_and_taken_out_keeping_every_other_byte() {
         t.contains("count=3") && t.contains("// two") && t.contains("// kept"),
         "{t}"
     );
-    // another seed is another piece, added at the end of the map
+    // another seed is another piece, added at the end of the map (and the editor's edit names them all)
     let (t, n) = add_or_bump(text, &want("lib:tiles/ground/1x1-grass", Some(9))).unwrap();
     assert_eq!(n, 1);
     assert!(
-        t.contains("piece \"lib:tiles/ground/1x1-grass\" count=1 seed=9\n}"),
+        t.contains("piece p3 \"lib:tiles/ground/1x1-grass\" count=1 seed=9\n}")
+            && t.contains("piece p1 \"lib:tiles/ground/1x1-grass\" count=2")
+            && t.contains("piece p2 \"home:glade\" seed=7"),
         "{t}"
     );
     assert_eq!(decode("l", &t).unwrap().pieces.len(), 3);
@@ -175,16 +177,25 @@ fn a_piece_is_added_counted_and_taken_out_keeping_every_other_byte() {
     let empty = "dharmatiles version=1\nmap {\n}\n";
     let (t, _) = add_or_bump(empty, &want("home:a", None)).unwrap();
     assert_eq!(decode("l", &t).unwrap().pieces.len(), 1);
-    // count and removal
-    let t = set_count(text, 1, 4).unwrap();
+    // count and removal, by id: a piece with no id is not addressable until the ids are written
+    let (named, gave) = give_ids(text).unwrap();
+    assert!(gave && give_ids(&named).unwrap() == (named.clone(), false));
+    assert!(
+        named.contains("// two") && named.contains("// kept"),
+        "{named}"
+    );
+    let ids = piece_ids(&decode("l", text).unwrap());
+    assert_eq!(ids, ["p1", "p2"]);
+    assert!(set_count(text, "p2", 4).is_err());
+    let t = set_count(&named, "p2", 4).unwrap();
     assert!(t.contains("seed=7") && t.contains("count=4"), "{t}");
-    assert!(set_count(text, 0, 0).is_err() && set_count(text, 5, 2).is_err());
-    let t = remove_piece(text, 0).unwrap();
+    assert!(set_count(&named, "p1", 0).is_err() && set_count(&named, "p5", 2).is_err());
+    let t = remove_piece(&named, "p1").unwrap();
     assert!(
         !t.contains("1x1-grass") && t.contains("home:glade") && t.contains("plates printer"),
         "{t}"
     );
-    assert!(remove_piece(text, 2).is_err());
+    assert!(remove_piece(&named, "p7").is_err());
     // a list with a mistake is never edited
     assert!(
         add_or_bump(
@@ -260,8 +271,8 @@ fn a_map_reads_its_grid_names_places_heights_and_pins() {
 #[test]
 fn a_map_editor_writes_places_and_keeps_every_other_byte() {
     use dt_doc::map::{
-        At, Len, Prop, clear_pin, clear_pins, duplicate_piece, ensure_id, next_id, placed_line,
-        set_piece, set_pin,
+        At, Len, Prop, clear_pin, clear_pins, duplicate_piece, give_ids, next_id, piece_ids,
+        placed_line, set_piece, set_pin,
     };
     let at = |x, y| At {
         x: Len::Sq(x),
@@ -274,7 +285,7 @@ fn a_map_editor_writes_places_and_keeps_every_other_byte() {
     // move and turn one piece; a seed only when it is not the default
     let t = set_piece(
         MAP,
-        1,
+        "p2",
         &[
             ("at", Some(Prop::Str(at(3.0, 2.0).text()))),
             ("rot", Some(Prop::Int(180))),
@@ -307,18 +318,24 @@ fn a_map_editor_writes_places_and_keeps_every_other_byte() {
     assert_eq!(l.pieces.len(), 6);
     assert_eq!(l.pieces[5].place.unwrap().y, Len::Sq(3.5));
     // a duplicate has its own id and its own place; the original stays
-    let t = duplicate_piece(MAP, 2, "p9", at(6.0, 3.0)).unwrap();
+    let t = duplicate_piece(MAP, "p3", "p9", at(6.0, 3.0)).unwrap();
     let l = decode("t.dmap", &t).unwrap();
     assert_eq!(l.pieces.len(), 6);
     assert_eq!(l.pieces[3].id.as_ref().unwrap().value, "p9");
     assert_eq!(l.pieces[3].bottom.as_ref().unwrap().value, "$wallHeight");
     assert_eq!(l.pieces[2].place.unwrap().x, Len::Sq(4.0));
-    // a piece with no id is given one
-    let (t, id) = ensure_id(MAP, 4).unwrap();
-    assert_eq!(id, "p5");
-    assert!(decode("t.dmap", &t).unwrap().pieces[4].id.is_some());
-    let (same, id) = ensure_id(MAP, 0).unwrap();
-    assert_eq!((same.as_str(), id.as_str()), (MAP, "p1"));
+    // a piece with no id is named as the ids will be written; the first edit writes them all
+    let (t, gave) = give_ids(MAP).unwrap();
+    assert!(gave);
+    let l = decode("t.dmap", &t).unwrap();
+    assert_eq!(l.pieces[4].id.as_ref().unwrap().value, "p5");
+    assert_eq!(piece_ids(&l0)[4], "p5");
+    assert!(t.contains("// raised") && t.contains("// A map, as the editor writes it."));
+    let (same, gave) = give_ids(&t).unwrap();
+    assert_eq!((same.as_str(), gave), (t.as_str(), false));
+    // a hand-written id that is the next free one is skipped, not reused
+    let odd = "dharmatiles version=1\nmap {\n piece \"a\"\n piece p1 \"b\"\n piece \"c\"\n}\n";
+    assert_eq!(piece_ids(&decode("t", odd).unwrap()), ["p2", "p1", "p3"]);
     // pins: replaced, added inside the plates line, and taken away
     let t = set_pin(MAP, "p2", 2, mm(10.0, 20.0), false).unwrap();
     let l = decode("t.dmap", &t).unwrap();

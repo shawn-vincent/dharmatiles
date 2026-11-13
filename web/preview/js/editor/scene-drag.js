@@ -10,7 +10,7 @@
 import * as M from '../map-model.js';
 import { $, viewer } from './app.js';
 import { server, view } from './stores.js';
-import { evaluate, live, mapMode, pieces, sceneEdit, sceneNow, select } from './scene.js';
+import { evaluate, live, mapMode, pickAt, pieces, sceneEdit, sceneNow, select } from './scene.js';
 import { addTile, editable, moveTo } from './scene-edit.js';
 
 /** Is the camera looking (nearly) straight down? */
@@ -29,11 +29,12 @@ function onDown(e) {
   if (!mapMode() || e.button !== 0 || e.shiftKey || e.pointerType === 'touch') return;
   if (!editable() || !topDown()) return;
   const r = $('canvas').getBoundingClientRect();
-  const hit = viewer.scenePick(e.clientX - r.left, e.clientY - r.top);
-  if (hit < 0) return;
+  const hit = pickAt(e.clientX - r.left, e.clientY - r.top);
+  if (hit == null) return;
   const sel = view.get().msel.includes(hit) ? view.get().msel : [hit];
   if (!view.get().msel.includes(hit)) select([hit]);
-  const ps = sel.map((i) => pieces().find((p) => p.index === i)).filter((p) => p?.at);
+  // what is picked up now, as it stands now: the drag follows these ids and puts them down by id
+  const ps = pieces().filter((p) => sel.includes(p.id) && p.at);
   if (!ps.length) return;
   const z = ps[0].bottom_mm || 0;
   const pt = mapPoint(e, z);
@@ -54,9 +55,9 @@ function onMove(e) {
   if (!pt) return;
   drag.to = drag.ps.map((p, i) => {
     const s = M.snapSquares(p, pt[0] - drag.offs[i][0], pt[1] - drag.offs[i][1]);
-    return { p, x: s.x, y: s.y };
+    return { p, id: p.id, x: s.x, y: s.y };
   });
-  for (const m of drag.to) live.set(m.p.index, [m.x * m.p.sq, m.y * m.p.sq]);
+  for (const m of drag.to) live.set(m.id, [m.x * m.p.sq, m.y * m.p.sq]);
   if (!raf) raf = requestAnimationFrame(() => { raf = 0; evaluate(true); });
 }
 
@@ -68,7 +69,7 @@ async function onUp() {
   if (!d.moved || !d.to) { live.clear(); setTimeout(() => { sceneEdit.dragged = false; }, 0); return; }
   const changed = d.to.filter((m) => m.p.at && (Math.abs(m.x * m.p.sq - m.p.at[0]) > 0.01 || Math.abs(m.y * m.p.sq - m.p.at[1]) > 0.01));
   try {
-    if (changed.length) await moveTo(changed);
+    if (changed.length) await moveTo(changed.map(({ id, x, y }) => ({ id, x, y })));
   } finally {
     live.clear();
     evaluate(true);

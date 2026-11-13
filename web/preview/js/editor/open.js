@@ -11,6 +11,7 @@ import { canLeave, supersedeDrafts } from './document.js';
 import { levelOfParams } from '../folders.js';
 import { parseHash } from '../nav.js';
 import { toast } from './app.js';
+import { docs, planOf } from './docs.js';
 import { isEntry, isMapView, server, stackIndex, stem, tile, tileById, view } from './stores.js';
 
 // ---- choosing a tile ---------------------------------------------------
@@ -46,7 +47,7 @@ function reset(t) {
   history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
   // no mesh to frame yet and no view of yours kept: follow the build
   if (t.mesh_version == null && !cameras.get(t.path)) beginFollow(t.id);
-  if (t.plan) viewer.setPlan(t.plan);
+  if (planOf(t)) viewer.setPlan(planOf(t));
   followBuild();
 }
 
@@ -82,7 +83,7 @@ function follow() {
   if (tileId !== at) { at = tileId; reset(t); }
   if (!t) return;
   // a rescan or a reconnect: keep the view, catch up on a newer plan or mesh
-  if (planChanged(t.plan)) { viewer.setPlan(t.plan); followBuild(); }
+  if (planChanged(planOf(t))) { viewer.setPlan(planOf(t)); followBuild(); }
   const shown = view.get().shown;
   // a map draws its pieces, not the plates' mesh: that comes when the plates are shown
   if (!isMapView() && t.mesh_version != null && !(shown && shown.id === t.id && shown.epoch === epoch && shown.version === t.mesh_version)) loadMesh(t);
@@ -127,5 +128,6 @@ function showDraft() {
 export function init() {
   view.subscribe(['tileId', 'dmode'], follow);
   server.subscribe(['tiles', 'ready', 'epoch'], follow);
+  docs.subscribe(follow); // the plan of a print list or a map is its document's
   view.subscribe(['draft'], showDraft);
 }

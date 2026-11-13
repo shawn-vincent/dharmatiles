@@ -693,6 +693,6 @@ pub(super) fn reprint(shared: &Shared, v: &Value) -> (&'static str, Value) {
     }
     (
         "200 OK",
-        json!({"ok": true, "list": put.path.display().to_string(), "id": id, "made": put.made, "warning": warning, "always": have > 0, "before": put.before}),
+        json!({"ok": true, "list": put.path.display().to_string(), "id": id, "made": put.made, "warning": warning, "always": have > 0, "before": put.before, "text": put.after, "docRev": put.rev, "note": put.note}),
     )
 }

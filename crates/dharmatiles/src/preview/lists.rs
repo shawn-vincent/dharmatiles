@@ -2,8 +2,12 @@
 //!
 //! Every call is an edit of the list's text, made by `dt_doc::map` and written
 //! to the file (the worker sees it and plans the plates again), and every call
-//! that changes a list answers with `before`, the text it replaced, and
-//! `after`, the key of the text it wrote, so the page can offer Undo (`/api/lists/restore` writes it back).  A new list is
+//! that changes a list answers with `before`, the text it replaced, `text`,
+//! the text it wrote, and `docRev`, the revision the file has now (see
+//! [`super::docs`]), so the page can offer Undo and Redo (`/api/lists/restore`
+//! writes a text back).  An edit names its piece by id and the `docRev` it was
+//! made against, and a file that has moved on is refused with a 409 and the
+//! current text.  A new list is
 //! made through the places' rules like a new tile: in My tiles or a folder of
 //! a place the page names, never over a file.  A mistake in a list's text is
 //! shown as data (`{ok: false, errors}`), and nothing is written.
@@ -13,17 +17,22 @@
 //! - `/api/lists/add` `{tile, list?, seed?, system?}`: one more copy of a tile
 //!   in a list (a new list when none is named); a piece already there at the
 //!   same seed and system has its `count` raised.
-//! - `/api/lists/count` `{list, index, count}`, `/api/lists/remove` `{list,
-//!   index}`: a piece's copies, or the piece itself.
-//! - `/api/lists/restore` `{list, text, expect}`: Undo, if the file still
-//!   holds what the change wrote (`expect` is its answer's `after`); else 409.
+//! - `/api/lists/count` `{list, id, count, docRev}`, `/api/lists/remove`
+//!   `{list, id, docRev}`: a piece's copies, or the piece itself.
+//! - `/api/lists/restore` `{list, text, docRev}`: Undo or Redo, a text
+//!   written back, if the file is still at `docRev`; else 409.
+//!
+//! The first edit the editor makes to a file whose pieces have no ids writes
+//! an id (`p1`, `p2`, …) on every one, in the same write, and says so once in
+//! the answer's `note`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use dt_doc::map::{DEFAULT_PRINTER, Mode, Want};
 use dt_eval::Diag;
 use serde_json::{Value, json};
 
+use super::docs::{self, Edited};
 use super::messages::Scope;
 use super::{Shared, edit, fail, lock, places};
 use crate::errors_json;
@@ -100,51 +109,82 @@ pub(super) fn list_path(shared: &Shared, id: &str) -> Result<String, (&'static s
         .ok_or_else(|| fail::refused("404 Not Found", "no such print list"))
 }
 
-/// A list's text changed: written, and planned again.
-pub(super) fn write(shared: &Shared, path: &str, text: &str) -> Result<(), (&'static str, Value)> {
-    dt_eval::atomic::write_atomic(std::path::Path::new(path), text).map_err(|e| {
-        fail::failure_from(
-            "500 Internal Server Error",
-            format!("cannot write {path}: {e}"),
-            &e,
-        )
-    })?;
+/// A list's file changed: planned again.
+pub(super) fn changed(shared: &Shared, path: &str) {
     super::plates::again(shared, &super::tile_id(path));
-    Ok(())
 }
 
-pub(super) fn read(path: &str) -> Result<String, (&'static str, Value)> {
-    std::fs::read_to_string(path).map_err(|e| {
-        fail::failure(
-            "500 Internal Server Error",
-            format!("cannot read {path}: {e}"),
-        )
-    })
-}
-
-/// The key of a list's text: what a change answers (`after`) and Undo sends
-/// back (`expect`), so Undo can tell the file is still the one the change made.
-pub(super) fn text_key(text: &str) -> String {
-    format!("{:016x}", dt_eval::doc::text_hash(text))
-}
-
-/// What a call that changed a list answers: the text it replaced (`before`,
-/// for Undo to write back) and the key of the text it wrote (`after`, which
-/// Undo must send as `expect`).
-pub(super) fn done(
-    path: &str,
-    before: Option<String>,
-    after: &str,
-    extra: Value,
-) -> (&'static str, Value) {
+/// What a call that changed a list answers: the text it replaced (`before`),
+/// the text it wrote (`text`), the revision the file has now (`docRev`) and
+/// the map's scene as it now reads (cheap: nothing is built), so the page
+/// shows the change at once.
+pub(super) fn done(shared: &Shared, path: &str, e: &Edited) -> (&'static str, Value) {
     let mut v = json!({
-        "ok": true, "list": super::tile_id(path), "path": path, "before": before,
-        "after": text_key(after),
+        "ok": true, "list": super::tile_id(path), "path": path, "before": e.before,
+        "text": e.after, "docRev": e.rev,
+        "scene": super::maps::scene_of(shared, path, &e.after, e.rev),
     });
-    if let (Some(o), Some(e)) = (v.as_object_mut(), extra.as_object()) {
-        o.extend(e.clone());
+    if let (Some(o), Some(x)) = (v.as_object_mut(), e.extra.as_object()) {
+        o.extend(x.clone());
     }
     ("200 OK", v)
+}
+
+const GAVE_IDS: &str =
+    "Gave every piece an id (p1, p2, …) so edits can name it; the file keeps them.";
+
+/// Edit the list `id` made against the revision the call names: `f` is given
+/// the text (with an id on every piece) and what it reads as, and answers the
+/// new text and what to add to the answer.  The edit is made under the
+/// file's lock, checked to read, written whole, and the list is planned again.
+pub(super) fn edit_list(
+    shared: &Shared,
+    id: &str,
+    v: &Value,
+    f: impl FnOnce(&str, &dt_doc::map::PrintList) -> Result<(String, Value), String>,
+) -> (&'static str, Value) {
+    let rev = match docs::expected(v) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let path = match list_path(shared, id) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    let r = shared.docs.edit(&path, Some(rev), |text| {
+        dt_doc::map::decode(&path, text).map_err(|e| diags(&e))?;
+        let (named, gave) = dt_doc::map::give_ids(text).map_err(|m| bad(&m))?;
+        let list = dt_doc::map::decode(&path, &named).map_err(|e| diags(&e))?;
+        let (new, mut extra) = f(&named, &list).map_err(|m| bad(&m))?;
+        dt_doc::map::decode(&path, &new).map_err(|e| diags(&e))?;
+        if gave {
+            extra["note"] = json!(GAVE_IDS);
+        }
+        Ok((new, extra))
+    });
+    match r {
+        Ok(e) => {
+            changed(shared, &path);
+            done(shared, &path, &e)
+        }
+        Err(e) => with_current(shared, &path, e),
+    }
+}
+
+/// A refusal because the file moved on carries the file's scene as it is now,
+/// so the page takes the current state at once, not when the worker's next word comes.
+pub(super) fn with_current(
+    shared: &Shared,
+    path: &str,
+    mut reply: (&'static str, Value),
+) -> (&'static str, Value) {
+    if reply.0.starts_with("409")
+        && let (Some(text), Some(rev)) = (reply.1["text"].as_str(), reply.1["docRev"].as_u64())
+    {
+        let scene = super::maps::scene_of(shared, path, text, rev);
+        reply.1["scene"] = scene;
+    }
+    reply
 }
 
 /// `/api/lists/new`.
@@ -191,11 +231,16 @@ pub(super) struct Put {
     pub(super) before: Option<String>,
     /// The text the list holds now.
     pub(super) after: String,
+    /// The revision it has now.
+    pub(super) rev: u64,
+    /// Said once: the pieces were given ids.
+    pub(super) note: Option<&'static str>,
 }
 
 /// One more copy of `want` in the list `list` (a listed `.dmap`'s id), or in
 /// a new list in My tiles when none is named; `mode` lays a new list out in
-/// that colour mode.
+/// that colour mode.  Adding names no revision: it puts one piece at the end
+/// of a list the caller is not looking at.
 ///
 /// # Errors
 /// The list is not there, does not read (its mistakes), or cannot be written.
@@ -207,15 +252,24 @@ pub(super) fn put(
 ) -> Result<Put, (&'static str, Value)> {
     if let Some(id) = list {
         let path = list_path(shared, id)?;
-        let text = read(&path)?;
-        let (new, count) = dt_doc::map::add_or_bump(&text, want).map_err(|e| diags(&e))?;
-        write(shared, &path, &new)?;
+        let mut count = 0;
+        let mut gave = false;
+        let e = shared.docs.edit(&path, None, |text| {
+            let l = dt_doc::map::decode(&path, text).map_err(|e| diags(&e))?;
+            gave = l.pieces.iter().any(|p| p.id.is_none());
+            let (new, n) = dt_doc::map::add_or_bump(text, want).map_err(|e| diags(&e))?;
+            count = n;
+            Ok((new, json!({})))
+        })?;
+        changed(shared, &path);
         return Ok(Put {
             path: PathBuf::from(path),
             made: false,
             count,
-            before: Some(text),
-            after: new,
+            before: Some(e.before),
+            after: e.after,
+            rev: e.rev,
+            note: gave.then_some(GAVE_IDS),
         });
     }
     let home = edit::home(shared)?;
@@ -223,6 +277,7 @@ pub(super) fn put(
         &dt_doc::header::stamp(env!("DT_ENGINE_VERSION")),
         "Tiles to print.",
         &[dt_doc::map::piece_line(
+            Some("p1"),
             want.tile,
             1,
             want.seed,
@@ -234,12 +289,15 @@ pub(super) fn put(
         mode,
     );
     let dest = edit::write_new_ext(&home, "Print list", "dmap", text.as_bytes())?;
+    let rev = shared.docs.rev(&dest.to_string_lossy())?;
     Ok(Put {
         path: dest,
         made: true,
         count: 1,
         before: None,
         after: text,
+        rev,
+        note: None,
     })
 }
 
@@ -275,108 +333,70 @@ pub(super) fn add(shared: &Shared, v: &Value) -> (&'static str, Value) {
                 places::announce(shared);
                 shared.want(&super::tile_id(&p.path.to_string_lossy()));
             }
-            done(
-                &p.path.to_string_lossy(),
-                p.before,
-                &p.after,
-                json!({"count": p.count, "made": p.made}),
-            )
+            let path = p.path.to_string_lossy();
+            let mut v = json!({
+                "ok": true, "list": super::tile_id(&path), "path": path, "before": p.before,
+                "text": p.after, "docRev": p.rev, "count": p.count, "made": p.made,
+            });
+            if let Some(n) = p.note {
+                v["note"] = json!(n);
+            }
+            ("200 OK", v)
         }
         Err(e) => e,
     }
 }
 
-fn index_of(v: &Value) -> Option<usize> {
-    v["index"].as_u64().and_then(|n| usize::try_from(n).ok())
-}
-
 /// `/api/lists/count`.
 pub(super) fn set_count(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(id), Some(i), Some(n)) = (
+    let (Some(list), Some(piece), Some(n)) = (
         v["list"].as_str(),
-        index_of(v),
+        v["id"].as_str(),
         v["count"].as_u64().and_then(|n| u32::try_from(n).ok()),
     ) else {
-        return bad("give the list, the piece and the count");
+        return bad("give the list, the piece (its id) and the count");
     };
-    edit_text(shared, id, |t| dt_doc::map::set_count(t, i, n))
+    edit_list(shared, list, v, |t, _| {
+        dt_doc::map::set_count(t, piece, n).map(|t| (t, json!({})))
+    })
 }
 
 /// `/api/lists/remove`.
 pub(super) fn remove(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(id), Some(i)) = (v["list"].as_str(), index_of(v)) else {
-        return bad("give the list and the piece");
+    let (Some(list), Some(piece)) = (v["list"].as_str(), v["id"].as_str()) else {
+        return bad("give the list and the piece (its id)");
     };
-    edit_text(shared, id, |t| dt_doc::map::remove_piece(t, i))
+    edit_list(shared, list, v, |t, _| {
+        dt_doc::map::remove_piece(t, piece).map(|t| (t, json!({})))
+    })
 }
 
-fn edit_text(
-    shared: &Shared,
-    id: &str,
-    f: impl FnOnce(&str) -> Result<String, String>,
-) -> (&'static str, Value) {
-    let path = match list_path(shared, id) {
-        Ok(p) => p,
-        Err(e) => return e,
-    };
-    let text = match read(&path) {
-        Ok(t) => t,
-        Err(e) => return e,
-    };
-    if let Err(e) = dt_doc::map::decode(&path, &text) {
-        return diags(&e);
-    }
-    let new = match f(&text) {
-        Ok(n) => n,
-        Err(m) => return bad(&m),
-    };
-    if let Err(e) = dt_doc::map::decode(&path, &new) {
-        return diags(&e);
-    }
-    match write(shared, &path, &new) {
-        Ok(()) => done(&path, Some(text), &new, json!({})),
-        Err(e) => e,
-    }
-}
-
-/// `/api/lists/restore` `{list, text, expect}`: Undo of a change, the text it
-/// replaced written back (only if it reads as a print list) and only if the
-/// file still holds what the change wrote (`expect`, the `after` of its
-/// answer).  A file that changed since (another tab, a text editor) is
-/// refused with a 409 and its current text, and left as it is: Undo would
-/// lose that change.
+/// `/api/lists/restore` `{list, text, docRev}`: Undo or Redo, a text written
+/// back (only if it reads as a print list), and only if the file is still at
+/// `docRev`, the revision of the change this takes back.  A file that changed
+/// since (another tab, a text editor) is refused with a 409 and its current
+/// text, and left as it is: this would lose that change.
 pub(super) fn restore(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(id), Some(text), Some(expect)) =
-        (v["list"].as_str(), v["text"].as_str(), v["expect"].as_str())
-    else {
-        return bad("give the list, its text and what the file holds now (expect)");
+    let (Some(id), Some(text)) = (v["list"].as_str(), v["text"].as_str()) else {
+        return bad("give the list and its text");
+    };
+    let rev = match docs::expected(v) {
+        Ok(r) => r,
+        Err(e) => return e,
     };
     let path = match list_path(shared, id) {
         Ok(p) => p,
         Err(e) => return e,
     };
-    let now = match read(&path) {
-        Ok(t) => t,
-        Err(e) => return e,
-    };
-    if text_key(&now) != expect {
-        return fail::refused_with(
-            "409 Conflict",
-            "The file changed since this edit (in another tab or your text editor); Undo would lose that change.",
-            json!({ "text": now }),
-        );
-    }
-    if let Err(e) = dt_doc::map::decode(&path, text) {
-        return diags(&e);
-    }
-    match write(shared, &path, text) {
-        Ok(()) => done(
-            Path::new(&path).to_str().unwrap_or(&path),
-            Some(now),
-            text,
-            // a map shows the text it has again at once
-            json!({"scene": super::maps::scene_of(shared, &path, text)}),
-        ),
-        Err(e) => e,
+    let r = shared.docs.edit(&path, Some(rev), |_| {
+        dt_doc::map::decode(&path, text).map_err(|e| diags(&e))?;
+        Ok((text.to_owned(), json!({})))
+    });
+    match r {
+        Ok(e) => {
+            changed(shared, &path);
+            done(shared, &path, &e)
+        }
+        Err(e) => with_current(shared, &path, e),
     }
 }

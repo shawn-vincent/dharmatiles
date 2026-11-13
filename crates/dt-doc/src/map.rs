@@ -1208,13 +1208,18 @@ fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
 /// A `piece` line for a print list.
 #[must_use]
 pub fn piece_line(
+    id: Option<&str>,
     tile: &str,
     count: u32,
     seed: Option<u64>,
     system: Option<&str>,
     always: bool,
 ) -> String {
-    let mut l = format!("piece {} count={count}", crate::inventory::quote(tile));
+    let mut l = format!(
+        "piece {}{} count={count}",
+        id.map_or_else(String::new, |i| format!("{i} ")),
+        crate::inventory::quote(tile)
+    );
     if let Some(s) = seed {
         l.push_str(&format!(" seed={s}"));
     }
@@ -1260,22 +1265,34 @@ pub fn add_or_bump(text: &str, want: &Want) -> Result<(String, u32), Vec<DocErro
             && p.system.as_ref().map(|s| s.value.as_str()) == want.system
             && (p.print == PrintMode::Always) == want.always
     });
+    let wrap = |e: String| {
+        vec![DocError::new(
+            &list.src,
+            "dt::map",
+            list.span,
+            e,
+            "this list",
+        )]
+    };
+    // an edit of the editor's names every piece (the first one writes the ids of all)
+    let (text, _) = give_ids(text).map_err(wrap)?;
     if let Some(i) = found {
         let n = list.pieces[i].count.value + 1;
-        let out = set_count(text, i, n).map_err(|e| {
-            vec![DocError::new(
-                &list.src,
-                "dt::map",
-                list.span,
-                e,
-                "this list",
-            )]
-        })?;
+        let id = piece_ids(&list)[i].clone();
+        let out = set_count(&text, &id, n).map_err(wrap)?;
         return Ok((out, n));
     }
-    let line = piece_line(want.tile, 1, want.seed, want.system, want.always);
+    let list = decode("list", &text)?;
+    let line = piece_line(
+        Some(&next_id(&list)),
+        want.tile,
+        1,
+        want.seed,
+        want.system,
+        want.always,
+    );
     Ok((
-        crate::inventory::insert_in_block(text, list.span, &[line]),
+        crate::inventory::insert_in_block(&text, list.span, &[line]),
         1,
     ))
 }
@@ -1294,39 +1311,108 @@ fn map_nodes(doc: &mut KdlDocument) -> Result<&mut Vec<KdlNode>, String> {
         .nodes_mut())
 }
 
-/// Set piece number `index` (from 0, in the order written) to `count` copies,
-/// keeping every other byte.
+/// The id a piece node is written with (`piece p1 "tile"`), if any.
+fn node_id(n: &KdlNode) -> Option<String> {
+    let args: Vec<&KdlEntry> = n.entries().iter().filter(|e| e.name().is_none()).collect();
+    if args.len() == 2 {
+        args[0].value().as_string().map(str::to_owned)
+    } else {
+        None
+    }
+}
+
+/// Where piece `id` is among the map's nodes.
+fn piece_at(nodes: &[KdlNode], id: &str) -> Result<usize, String> {
+    nodes
+        .iter()
+        .position(|n| n.name().value() == "piece" && node_id(n).as_deref() == Some(id))
+        .ok_or_else(|| format!("the list has no piece {id}"))
+}
+
+/// The id of each piece of the list, in order: the one written, or the one
+/// [`give_ids`] writes (the first `pN` not taken, in order), so a page can
+/// name a piece before it has an id in its file.
+#[must_use]
+pub fn piece_ids(list: &PrintList) -> Vec<String> {
+    let mut taken: Vec<String> = list
+        .pieces
+        .iter()
+        .filter_map(|p| p.id.as_ref().map(|i| i.value.clone()))
+        .collect();
+    let mut n = 0;
+    list.pieces
+        .iter()
+        .map(|p| {
+            p.id.as_ref().map_or_else(
+                || loop {
+                    n += 1;
+                    let c = format!("p{n}");
+                    if !taken.contains(&c) {
+                        taken.push(c.clone());
+                        break c;
+                    }
+                },
+                |i| i.value.clone(),
+            )
+        })
+        .collect()
+}
+
+/// `text` with an id written on every piece that has none (`pN`, as
+/// [`piece_ids`] says), every other byte kept; and whether any was written.
+/// The editor's first change to a file does this in the same write.
+///
+/// # Errors
+/// The text does not read as a list, or is not KDL.
+pub fn give_ids(text: &str) -> Result<(String, bool), String> {
+    let list = decode("list", text).map_err(|e| {
+        e.first().map_or_else(
+            || "the list does not read".to_owned(),
+            |d| d.message.clone(),
+        )
+    })?;
+    if list.pieces.iter().all(|p| p.id.is_some()) {
+        return Ok((text.to_owned(), false));
+    }
+    let ids = piece_ids(&list);
+    let mut doc: KdlDocument = text.parse().map_err(|e: kdl::KdlError| e.to_string())?;
+    let nodes = map_nodes(&mut doc)?;
+    for (k, n) in nodes
+        .iter_mut()
+        .filter(|n| n.name().value() == "piece")
+        .enumerate()
+    {
+        if node_id(n).is_none() {
+            n.entries_mut()
+                .insert(0, KdlEntry::new(KdlValue::String(ids[k].clone())));
+        }
+    }
+    Ok((doc.to_string(), true))
+}
+
+/// Set piece `id` to `count` copies, keeping every other byte.
 ///
 /// # Errors
 /// There is no such piece, the count is not 1 to 10 000, or the text is not KDL.
-pub fn set_count(text: &str, index: usize, count: u32) -> Result<String, String> {
+pub fn set_count(text: &str, id: &str, count: u32) -> Result<String, String> {
     if !(1..=10_000).contains(&count) {
         return Err("a count is from 1 to 10 000: take the piece out to have none".to_owned());
     }
     let mut doc: KdlDocument = text.parse().map_err(|e: kdl::KdlError| e.to_string())?;
-    let node = map_nodes(&mut doc)?
-        .iter_mut()
-        .filter(|n| n.name().value() == "piece")
-        .nth(index)
-        .ok_or("the list has no such piece")?;
-    node.insert("count", KdlValue::Integer(i128::from(count)));
+    let nodes = map_nodes(&mut doc)?;
+    let at = piece_at(nodes, id)?;
+    nodes[at].insert("count", KdlValue::Integer(i128::from(count)));
     Ok(doc.to_string())
 }
 
-/// Take piece number `index` out of a list, keeping every other byte.
+/// Take piece `id` out of a list, keeping every other byte.
 ///
 /// # Errors
 /// There is no such piece, or the text is not KDL.
-pub fn remove_piece(text: &str, index: usize) -> Result<String, String> {
+pub fn remove_piece(text: &str, id: &str) -> Result<String, String> {
     let mut doc: KdlDocument = text.parse().map_err(|e: kdl::KdlError| e.to_string())?;
     let nodes = map_nodes(&mut doc)?;
-    let at = nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| n.name().value() == "piece")
-        .nth(index)
-        .map(|(i, _)| i)
-        .ok_or("the list has no such piece")?;
+    let at = piece_at(nodes, id)?;
     nodes.remove(at);
     Ok(doc.to_string())
 }
@@ -1360,27 +1446,16 @@ impl Prop {
     }
 }
 
-/// The piece nodes of a map, in order.
-fn piece_node(doc: &mut KdlDocument, index: usize) -> Result<&mut KdlNode, String> {
-    map_nodes(doc)?
-        .iter_mut()
-        .filter(|n| n.name().value() == "piece")
-        .nth(index)
-        .ok_or_else(|| "the map has no such piece".to_owned())
-}
-
-/// Set (`Some`) or take off (`None`) properties of piece number `index`,
-/// keeping every other byte.
+/// Set (`Some`) or take off (`None`) properties of piece `id`, keeping every
+/// other byte.
 ///
 /// # Errors
 /// There is no such piece, or the text is not KDL.
-pub fn set_piece(
-    text: &str,
-    index: usize,
-    edits: &[(&str, Option<Prop>)],
-) -> Result<String, String> {
+pub fn set_piece(text: &str, id: &str, edits: &[(&str, Option<Prop>)]) -> Result<String, String> {
     let mut doc: KdlDocument = text.parse().map_err(|e: kdl::KdlError| e.to_string())?;
-    let node = piece_node(&mut doc, index)?;
+    let nodes = map_nodes(&mut doc)?;
+    let at = piece_at(nodes, id)?;
+    let node = &mut nodes[at];
     for (k, v) in edits {
         match v {
             Some(v) => {
@@ -1410,31 +1485,6 @@ pub fn next_id(list: &PrintList) -> String {
         .unwrap_or_default()
 }
 
-/// The id of piece number `index`: the one written, or one given to it now
-/// (the text comes back with it written).
-///
-/// # Errors
-/// The text does not read as a map, or has no such piece.
-pub fn ensure_id(text: &str, index: usize) -> Result<(String, String), String> {
-    let list = decode("map", text).map_err(|e| {
-        e.first()
-            .map_or_else(|| "the map does not read".to_owned(), |d| d.message.clone())
-    })?;
-    let p = list
-        .pieces
-        .get(index)
-        .ok_or_else(|| "the map has no such piece".to_owned())?;
-    if let Some(id) = &p.id {
-        return Ok((text.to_owned(), id.value.clone()));
-    }
-    let id = next_id(&list);
-    let mut doc: KdlDocument = text.parse().map_err(|e: kdl::KdlError| e.to_string())?;
-    let node = piece_node(&mut doc, index)?;
-    node.entries_mut()
-        .insert(0, KdlEntry::new(KdlValue::String(id.clone())));
-    Ok((doc.to_string(), id))
-}
-
 /// A `piece` line for a piece placed on a map.
 #[must_use]
 pub fn placed_line(
@@ -1459,31 +1509,19 @@ pub fn placed_line(
     l
 }
 
-/// A copy of piece number `index` under a new id at `at`, put just after it.
+/// A copy of piece `id` under a new id at `at`, put just after it.
 ///
 /// # Errors
 /// There is no such piece, or the text is not KDL.
-pub fn duplicate_piece(text: &str, index: usize, id: &str, at: At) -> Result<String, String> {
+pub fn duplicate_piece(text: &str, id: &str, new_id: &str, at: At) -> Result<String, String> {
     let mut doc: KdlDocument = text.parse().map_err(|e: kdl::KdlError| e.to_string())?;
     let nodes = map_nodes(&mut doc)?;
-    let at_i = nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| n.name().value() == "piece")
-        .nth(index)
-        .map(|(i, _)| i)
-        .ok_or("the map has no such piece")?;
+    let at_i = piece_at(nodes, id)?;
     let mut copy = nodes[at_i].clone();
-    // the copy has the id the original has or none; either way it is its own
-    let named = copy.entries().iter().filter(|e| e.name().is_none()).count() == 2;
-    if named {
-        if let Some(e) = copy.entries_mut().iter_mut().find(|e| e.name().is_none()) {
-            e.set_value(KdlValue::String(id.to_owned()));
-            e.clear_format();
-        }
-    } else {
-        copy.entries_mut()
-            .insert(0, KdlEntry::new(KdlValue::String(id.to_owned())));
+    // the copy is its own piece: it has an id of its own
+    if let Some(e) = copy.entries_mut().iter_mut().find(|e| e.name().is_none()) {
+        e.set_value(KdlValue::String(new_id.to_owned()));
+        e.clear_format();
     }
     copy.insert("at", KdlValue::String(at.text()));
     nodes.insert(at_i + 1, copy);

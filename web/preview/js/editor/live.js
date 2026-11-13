@@ -7,8 +7,20 @@ import { ServerError } from '../server-error.js';
 import { setUnits } from '../value.js';
 import { host } from './app.js';
 import { doc, log, server, tile } from './stores.js';
+import { applyDocState } from './docs.js';
 
-const withoutProgress = (t) => { const { progress, ...rest } = t; return rest; };
+const isList = (t) => /\.dmap$/i.test(t.path);
+/**
+ * A tile as the server store keeps it: without its progress (kept apart) and, for a print list or a map, without
+ * its plan, which is the document's state: it goes to the document module (the one place that holds it, and
+ * takes it only if it is newer than what it holds).
+ */
+const serverTile = (t) => {
+  const { progress, plan, ...rest } = t;
+  if (!isList(t)) return plan === undefined ? rest : { ...rest, plan };
+  if (plan?.docRev != null) applyDocState({ id: t.id, docRev: plan.docRev, plan });
+  return rest;
+};
 const progressOf = (tiles) => Object.fromEntries(tiles.filter((t) => t.progress).map((t) => [t.id, t.progress]));
 
 // A build that failed with a bug or a failure the program reports
@@ -48,7 +60,7 @@ export function applySnapshot(m, fromStream = false) {
   for (const t of log.all()) if (t.tile && !ids.has(t.tile)) log.forget(t.tile);
   m.tiles.forEach(followBuild);
   server.set({
-    tiles: m.tiles.map(withoutProgress), progress: progressOf(m.tiles), roots: m.roots || [], folders: m.folders || [], home: m.home ?? null,
+    tiles: m.tiles.map(serverTile), progress: progressOf(m.tiles), roots: m.roots || [], folders: m.folders || [], home: m.home ?? null,
     system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhang_deg, steepestDeg: m.steepest_deg ?? m.overhang_deg + 10,
     inventory: m.inventory ?? null, epoch: m.epoch, ready: true,
   });
@@ -79,7 +91,7 @@ export function init() {
       const { tiles, progress } = server.get();
       const i = tiles.findIndex((x) => x.id === t.id);
       const next = tiles.slice();
-      if (i >= 0) next[i] = withoutProgress(t); else next.push(withoutProgress(t));
+      if (i >= 0) next[i] = serverTile(t); else next.push(serverTile(t));
       const { [t.id]: _old, ...rest } = progress;
       server.set({ tiles: next, progress: t.progress ? { ...rest, [t.id]: t.progress } : rest });
     },

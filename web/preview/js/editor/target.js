@@ -8,7 +8,9 @@
 // you pick.  The base system stays the target tiles build for.
 
 import { failed } from '../problems.js';
+import { printerOf } from '../doc-views.js';
 import { $, host, toast } from './app.js';
+import { docs, undoToast } from './docs.js';
 import { printerChooser } from './printer-chooser.js';
 import { isMapView, isPlates, server, tile, view } from './stores.js';
 
@@ -19,12 +21,11 @@ export function targetLabel({ system, printer }) {
   return `${SYSTEMS[system] || system}, ${printer === 'default' ? 'default printer' : `printer ${printer}`}`;
 }
 
-/** What the open document will use: a print list's or a map's own printer, else null (the global target stands). */
+/** What the open document will use: a print list's or a map's own printer, from the document's state now, else null (the global target stands). */
 export function documentPrinter() {
   const t = tile();
-  const p = isPlates(t) ? t.plan?.plates : null;
-  if (!p?.printer) return null;
-  return { name: p.printer, label: p.label || p.printer, what: isMapView() ? 'map' : 'print list' };
+  if (!isPlates(t)) return null;
+  return printerOf(docs.get(t.id), server.get().printers, { map: isMapView() });
 }
 
 /** The status line's words for the target: the document's printer on a list or a map, else system and printer. */
@@ -65,12 +66,10 @@ function render() {
 
 /** A print list's or a map's own printer: its plates line, as its plates panel sets it. */
 async function chooseFor(id, name) {
-  const r = await host.platesSet(id, 'printer', name);
-  if (r.status !== 200) {
-    toast(r.body?.error || 'could not change the printer');
-    failed('Could not change the printer', r);
-  }
-  // the list plans again; its new printer comes back on the event stream at once
+  // a change to the document, like any other: against the revision held, one step of the history; the answer's
+  // scene names the new printer, and the chip and the status line read it there at once
+  const r = await docs.edit(id, () => ({ label: 'Could not change the printer', note: `Printer: ${name}`, steps: [{ name: 'platesSet', body: { key: 'printer', value: name } }] }));
+  if (r) toast(r.note, () => undoToast(id, r.entry));
 }
 
 async function choose(body) {
@@ -85,6 +84,7 @@ async function choose(body) {
 /** Wire this part of the page (once, at load). */
 export function init() {
   server.subscribe(['system', 'printer', 'printers', 'tiles'], render);
+  docs.subscribe(render);
   view.subscribe(['tileId', 'dmode'], render);
   for (const b of $('target-system').children) b.onclick = () => choose({ system: b.dataset.sys });
   render();

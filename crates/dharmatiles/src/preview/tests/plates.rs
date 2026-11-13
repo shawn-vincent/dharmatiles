@@ -42,7 +42,10 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
     // a setting rewrites the plates line and nothing else; the token is needed
     let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
     let token = token["token"].as_str().unwrap().to_owned();
-    let body = serde_json::json!({ "tile": id0(&r), "key": "gap", "value": "10mm" }).to_string();
+    let served: Value =
+        serde_json::from_slice(&get(&r, &format!("/api/tiles/{}/text", id0(&r))).1).unwrap();
+    let body = serde_json::json!({ "tile": id0(&r), "key": "gap", "value": "10mm", "docRev": served["docRev"] })
+        .to_string();
     assert!(
         post(&r, "/api/plates/set", None, None, &body)
             .0

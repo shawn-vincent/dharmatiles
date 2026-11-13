@@ -172,14 +172,16 @@ fn loose_json(list: &dt_doc::map::PrintList, ov: &Overrides, home: Option<&Path>
 /// The list's own pieces, in the order written, for the panel to edit: the
 /// count, and taking one out, are edits of the list's text.
 pub(super) fn pieces_json(list: &dt_doc::map::PrintList) -> Value {
+    let ids = dt_doc::map::piece_ids(list);
     Value::Array(
         list.pieces
             .iter()
             .enumerate()
             .map(|(i, p)| {
                 json!({
-                    "index": i, "tile": p.tile.value, "count": p.count.value,
-                    "id": p.id.as_ref().map(|i| i.value.clone()),
+                    // the id the piece has, or the one the first edit of the file will write on it
+                    "tile": p.tile.value, "count": p.count.value,
+                    "id": ids[i],
                     "pinned": list.plates.pins.iter().any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
                     "seed": p.seed.as_ref().map(|s| s.value),
                     "system": p.system.as_ref().map(|s| s.value.clone()),
@@ -338,8 +340,17 @@ fn scene_messages(notes: &[Note], diags: &[Diag], id: &str, name: &str) -> Vec<M
 pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     // one read: the revision, the scene and the plan are all of this text (a read that
     // failed is reported by the plan, below)
-    let text = cli::read_text(Path::new(path));
-    let rev = text.as_ref().map_or(0, |t| dt_eval::doc::text_hash(t));
+    // (and the file's revision, read with it: this plan and scene are of that revision)
+    let (text, rev) = match shared.docs.read(path) {
+        Ok((t, r)) => (Ok(t), r),
+        Err(e) => (
+            Err(vec![Diag::plain(
+                "dt::source",
+                format!("cannot read {path}: {e}"),
+            )]),
+            0,
+        ),
+    };
     let list = text
         .as_ref()
         .ok()
@@ -355,6 +366,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
                 json!({"kind": "plates", "size_mm": [0, 0], "writable": true, "plates": loose})
             });
             plan["scene"] = sc.json.clone();
+            plan["docRev"] = json!(rev);
             t.plan = Some(plan);
         });
         if sc.pieces.iter().filter(|p| p.at.is_some()).count() > 1 {
@@ -362,7 +374,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         }
         (list, sc)
     });
-    rebuild_plates(shared, id, path, &text, scene.as_ref().map(|(_, s)| s));
+    rebuild_plates(shared, id, path, &text, rev, scene.as_ref().map(|(_, s)| s));
 }
 
 fn rebuild_plates(
@@ -370,6 +382,7 @@ fn rebuild_plates(
     id: &str,
     path: &str,
     text: &Result<String, Vec<Diag>>,
+    rev: u64,
     scene: Option<&Scene>,
 ) {
     let t0 = Instant::now();
@@ -429,7 +442,7 @@ fn rebuild_plates(
             t.mesh = None;
             t.plan = Some(json!({
                 "kind": "plates", "plates": loose, "writable": writable, "size_mm": [0, 0],
-                "scene": scene_json,
+                "scene": scene_json, "docRev": rev,
             }));
         });
     };
@@ -522,7 +535,23 @@ fn rebuild_plates(
             shared.home.as_deref(),
         );
         sp["plates"]["pieces"] = pieces_json(&list);
+        // each laid-out piece names its list piece by id, as an edit does
+        let ids = dt_doc::map::piece_ids(&list);
+        if let Some(plates) = sp["plates"]["layout"].as_array_mut() {
+            for pl in plates {
+                if let Some(on) = pl["pieces"].as_array_mut() {
+                    for p in on {
+                        p["id"] = p["piece"]
+                            .as_u64()
+                            .and_then(|i| usize::try_from(i).ok())
+                            .and_then(|i| ids.get(i))
+                            .map_or(Value::Null, |i| json!(i));
+                    }
+                }
+            }
+        }
         sp["scene"] = scene_json.clone().unwrap_or(Value::Null);
+        sp["docRev"] = json!(rev);
         let meta = json!({
             "overhang_deg": shared.options().printer.overhang_deg,
             "footprint": s.machine.bed,
@@ -771,13 +800,13 @@ pub(super) fn again(shared: &Shared, id: &str) {
     shared.queue_cv.notify_all();
 }
 
-/// Set one word of the list's `plates` line in its file, keeping the rest of
-/// the file as it is.
+/// `text` with one word of the list's `plates` line set (null takes it off),
+/// the rest of it as it is.
 ///
 /// # Errors
-/// The file does not parse, or cannot be written.
-fn set_word(path: &str, key: &str, value: Option<&str>) -> Result<(), String> {
-    let mut text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
+/// The text does not parse.
+fn with_word(path: &str, text: &str, key: &str, value: Option<&str>) -> Result<String, String> {
+    let mut text = text.to_owned();
     // a list with no plates line gets one at the end
     let has = text
         .lines()
@@ -804,11 +833,10 @@ fn set_word(path: &str, key: &str, value: Option<&str>) -> Result<(), String> {
             node.remove(key);
         }
     }
-    dt_eval::atomic::write_atomic(std::path::Path::new(path), doc.to_string())
-        .map_err(|e| format!("cannot write {path}: {e}"))
+    Ok(doc.to_string())
 }
 
-/// `/api/plates/set` `{tile, key, value}`: change a word of the `plates` line
+/// `/api/plates/set` `{tile, key, value, docRev}`: change a word of the `plates` line
 /// (the printer, the mode, the grouping, the gap, the margin, turns, the
 /// system); the file is the document, so it is rewritten and the list builds
 /// again.  A value of null removes the word.
@@ -844,38 +872,26 @@ pub(super) fn set(shared: &Shared, v: &Value) -> (&'static str, Value) {
     {
         return bad(&e[0].message);
     }
-    match set_word(&path, key, value) {
-        Ok(()) => {
+    let rev = match super::docs::expected(v) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let r = shared.docs.edit(&path, Some(rev), |text| {
+        with_word(&path, text, key, value)
+            .map(|t| (t, json!({})))
+            .map_err(|e| fail::failure("500 Internal Server Error", e))
+    });
+    match r {
+        Ok(e) => {
             if key == "printer" {
-                // another bed: back to the first plate; and the printer named at once (the title bar's
-                // chip and the status line read it), not only when the new plan lands
-                let name = value.unwrap_or(dt_doc::map::DEFAULT_PRINTER);
-                let machine = dt_eval::printer_machine(name, shared.home.as_deref()).ok();
-                shared.update(&id, |t| {
-                    t.plate = 0;
-                    if let Some(p) = t
-                        .plan
-                        .as_mut()
-                        .and_then(|p| p.get_mut("plates"))
-                        .and_then(Value::as_object_mut)
-                    {
-                        p.insert("printer".into(), json!(name));
-                        p.insert(
-                            "label".into(),
-                            json!(machine.as_ref().map(dt_eval::Machine::label)),
-                        );
-                        p.insert("bed".into(), json!(machine.as_ref().and_then(|m| m.bed)));
-                        p.insert(
-                            "slots".into(),
-                            json!(machine.as_ref().map(dt_eval::Machine::slot_count)),
-                        );
-                    }
-                });
+                // another bed: back to the first plate (the printer itself is the document's word,
+                // which the answer's scene carries: the chip and the status line read it there)
+                shared.update(&id, |t| t.plate = 0);
             }
             again(shared, &id);
-            ("200 OK", json!({"ok": true}))
+            super::lists::done(shared, &path, &e)
         }
-        Err(e) => fail::failure("500 Internal Server Error", e),
+        Err(e) => super::lists::with_current(shared, &path, e),
     }
 }
 

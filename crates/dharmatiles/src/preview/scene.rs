@@ -237,6 +237,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
     let mut out = Vec::new();
     let mut checked: Checks = BTreeMap::new();
     let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
+    let ids = dt_doc::map::piece_ids(list);
     for (index, p) in list.pieces.iter().enumerate() {
         let system = p
             .system
@@ -326,8 +327,9 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             .to_owned();
         let listed = tiles.contains(&tpath);
         out.push(json!({
-            "index": index,
-            "id": p.id.as_ref().map(|i| i.value.clone()),
+            // the id the piece has, or the one the first edit of the file will write on it
+            "id": ids[index],
+            "written": p.id.is_some(),
             "tile": p.tile.value,
             "canon": canon,
             "name": name,
@@ -349,7 +351,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         }));
         pieces.push(PieceInfo {
             index,
-            id: p.id.as_ref().map(|i| i.value.clone()),
+            id: Some(ids[index].clone()),
             name,
             path: tpath,
             seed_used,
@@ -367,7 +369,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         Value::Null
     };
     let json = json!({
-        "rev": format!("{rev:016x}"),
+        "docRev": rev,
         "map": is_map(list),
         "grid": grid,
         "about": list.about,

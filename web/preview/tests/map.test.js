@@ -5,7 +5,7 @@ import {
 } from '../js/map-model.js';
 
 const piece = (over = {}) => ({
-  index: 0, id: 'p1', name: 'grass', canon: 'lib:tiles/ground/1x1-grass', seed_used: 97, system: 'db', colour: 'multi', print: 'missing',
+  id: 'p1', name: 'grass', canon: 'lib:tiles/ground/1x1-grass', seed_used: 97, system: 'db', colour: 'multi', print: 'missing',
   size: [35, 35], sq: 35, at: [0, 0], rot: 0, bottom_mm: 0, ...over,
 });
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
@@ -105,19 +105,19 @@ test('the seeds you own are of that tile, system and colour mode', () => {
 
 test('copies of one piece share what you own, and each state is said', () => {
   const ps = [
-    piece({ index: 0 }), piece({ index: 1 }), piece({ index: 2 }),
-    piece({ index: 3, seed_used: 8 }), piece({ index: 4, seed_used: 44 }), piece({ index: 5, print: 'skip' }), piece({ index: 6, print: 'always' }),
-    piece({ index: 7, error: 'no such tile' }),
+    piece({ id: 'p0' }), piece({ id: 'p1' }), piece({ id: 'p2' }),
+    piece({ id: 'p3', seed_used: 8 }), piece({ id: 'p4', seed_used: 44 }), piece({ id: 'p5', print: 'skip' }), piece({ id: 'p6', print: 'always' }),
+    piece({ id: 'p7', error: 'no such tile' }),
   ];
   const m = pills(ps, inv);
-  assert.deepEqual([0, 1, 2].map((i) => m.get(i).state), ['have', 'have', 'need']);
+  assert.deepEqual(['p0', 'p1', 'p2'].map((i) => m.get(i).state), ['have', 'have', 'need']);
   // single colour owned, multicolour wanted: it prints, and says so
-  assert.equal(m.get(3).state, 'other');
-  assert.equal(m.get(4).state, 'need');
-  assert.equal(m.get(5).state, 'skip');
+  assert.equal(m.get('p3').state, 'other');
+  assert.equal(m.get('p4').state, 'need');
+  assert.equal(m.get('p5').state, 'skip');
   // print=always prints whatever you have
-  assert.equal(m.get(6).state, 'need');
-  assert.equal(m.has(7), false);
+  assert.equal(m.get('p6').state, 'need');
+  assert.equal(m.has('p7'), false);
   assert.deepEqual(totals(ps, inv), { have: 2, toPrint: 4 });
   assert.equal(totalsText(ps, inv), '2 in inventory · 4 to print');
   assert.equal(totalsText(ps, { exists: false }), '6 to print');

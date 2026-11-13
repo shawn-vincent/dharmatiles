@@ -10,7 +10,8 @@ import { exists, tileHave, haveLine, systemName } from '../inventory.js';
 import { $, toast } from './app.js';
 import { seg } from './controls.js';
 import * as E from './scene-edit.js';
-import { chooseMode, mapMode, pieces, sceneNow, sceneStore, select, selected } from './scene.js';
+import { chooseMode, mapMode, pieces, sceneNow, select, selected } from './scene.js';
+import { docs, planOf } from './docs.js';
 import { isPlates, server, stem, tile, view } from './stores.js';
 
 const el = (tag, cls, text) => {
@@ -119,14 +120,14 @@ function mapLevel(body, ro) {
   for (const g of groups(placed)) {
     const r = el('button', 'mp-group');
     r.type = 'button';
-    const have = g.pieces.filter((p) => states.get(p.index)?.state === 'have').length;
+    const have = g.pieces.filter((p) => states.get(p.id)?.state === 'have').length;
     r.append(el('b', null, g.name), el('span', 'mp-n', `× ${g.pieces.length}`));
     const pills = el('span', 'mp-pills');
     if (have) pills.append(el('span', 'ipill have', `${have} have`));
     if (g.pieces.length - have) pills.append(el('span', 'ipill need', `${g.pieces.length - have} to print`));
     r.append(pills);
     r.title = `Select the ${plural(g.pieces.length, 'piece')} of ${g.name}`;
-    r.onclick = () => select(g.pieces.map((p) => p.index));
+    r.onclick = () => select(g.pieces.map((p) => p.id));
     list.append(r);
   }
   body.append(list);
@@ -137,8 +138,8 @@ function mapLevel(body, ro) {
     for (const p of tray) {
       const r = el('div', 'mp-tray');
       r.append(el('b', null, p.name), el('span', 'mp-n', p.count > 1 ? `× ${p.count}` : ''));
-      r.append(button('Place', () => E.place(p), { cls: 'btn', disabled: ro || !!p.error, title: p.count > 1 ? 'Put one copy on the map at the nearest free place, with a seed of its own' : 'Put it on the map at the nearest free place' }));
-      if (p.count > 1) r.append(button('Place all', () => E.place(p, true), { cls: 'btn', disabled: ro || !!p.error, title: `Put all ${p.count} on the map, each with a seed of its own` }));
+      r.append(button('Place', () => E.place(p.id), { cls: 'btn', disabled: ro || !!p.error, title: p.count > 1 ? 'Put one copy on the map at the nearest free place, with a seed of its own' : 'Put it on the map at the nearest free place' }));
+      if (p.count > 1) r.append(button('Place all', () => E.place(p.id, true), { cls: 'btn', disabled: ro || !!p.error, title: `Put all ${p.count} on the map, each with a seed of its own` }));
       t.append(r);
     }
     body.append(t);
@@ -167,7 +168,7 @@ function pieceLevel(body, ro) {
   title.append(el('b', null, many ? `${sel.length} pieces` : p.name));
   if (!many) {
     if (p.id) title.append(el('span', 'mp-id', p.id));
-    title.append(pill(states.get(p.index)?.state ?? 'need'));
+    title.append(pill(states.get(p.id)?.state ?? 'need'));
   }
   top.append(title);
   if (!many) top.append(el('p', 'note', `${p.cols}×${p.rows} · ${systemName(p.system)} · seed ${p.seed_used}${p.seed == null ? ' (the tile’s own)' : ''}`));
@@ -185,8 +186,8 @@ function pieceLevel(body, ro) {
   turnRow.append(el('span', 'pl-lab', 'Turn'));
   const tb = el('span', 'mp-btns');
   tb.append(
-    button('⟲', () => E.turn(sel, -1), { cls: 'pl-step', title: 'A quarter turn counter-clockwise (⇧R)', disabled: ro }),
-    button('⟳', () => E.turn(sel, 1), { cls: 'pl-step', title: 'A quarter turn clockwise (R)', disabled: ro }),
+    button('⟲', () => E.turn(sel.map((q) => q.id), -1), { cls: 'pl-step', title: 'A quarter turn counter-clockwise (⇧R)', disabled: ro }),
+    button('⟳', () => E.turn(sel.map((q) => q.id), 1), { cls: 'pl-step', title: 'A quarter turn clockwise (R)', disabled: ro }),
   );
   if (!many) tb.append(el('span', 'mp-val', `${p.rot}°`));
   turnRow.append(tb);
@@ -204,7 +205,7 @@ function pieceLevel(body, ro) {
     sd.title = 'Which variant of the tile: a new one, or one you already have';
     sd.onclick = () => view.set({ mprop: 'seed' });
     props.append(sd);
-    props.append(seg('Print', [['missing', 'If missing', 'Print it unless your inventory has it'], ['always', 'Always', 'Print it whatever you have'], ['skip', 'Skip', 'Leave it off the plates']], p.print, (v) => E.setPiece(p, { print: v }, `${p.name}: print ${v === 'missing' ? 'if missing' : v}`), ro));
+    props.append(seg('Print', [['missing', 'If missing', 'Print it unless your inventory has it'], ['always', 'Always', 'Print it whatever you have'], ['skip', 'Skip', 'Leave it off the plates']], p.print, (v) => E.setPiece(p.id, { print: v }, `${p.name}: print ${v === 'missing' ? 'if missing' : v}`), ro));
   }
   body.append(props);
 
@@ -221,10 +222,10 @@ function pieceLevel(body, ro) {
   const acts = section(null);
   const ar = el('div', 'mp-row wrap');
   ar.append(
-    button('Duplicate', () => E.duplicate(sel), { disabled: ro, title: 'A copy next to it, with the same seed (D)' }),
-    button('Remove', () => E.remove(sel), { cls: 'btn danger', disabled: ro, title: 'Take it off the map (Backspace)' }),
+    button('Duplicate', () => E.duplicate(sel.map((q) => q.id)), { disabled: ro, title: 'A copy next to it, with the same seed (D)' }),
+    button('Remove', () => E.remove(sel.map((q) => q.id)), { cls: 'btn danger', disabled: ro, title: 'Take it off the map (Backspace)' }),
   );
-  if (!many) ar.prepend(button('Open tile', () => E.openTile(p), { cls: 'btn on', disabled: !p.tile_id, title: 'The tile itself, in the tile editor: the map is one click back' }));
+  if (!many) ar.prepend(button('Open tile', () => E.openTile(p.id), { cls: 'btn on', disabled: !p.tile_id, title: 'The tile itself, in the tile editor: the map is one click back' }));
   acts.append(ar);
   body.append(acts);
 }
@@ -243,7 +244,7 @@ function propLevel(body, ro) {
       b.append(el('b', null, text), el('span', 'mp-sub', sub));
       b.setAttribute('aria-pressed', String(on));
       b.disabled = ro;
-      b.onclick = () => E.setPiece(p, { bottom: name }, `${p.name}: ${text}`);
+      b.onclick = () => E.setPiece(p.id, { bottom: name }, `${p.name}: ${text}`);
       s.append(b);
     };
     choose(null, 'Ground level', 'zero');
@@ -253,7 +254,7 @@ function propLevel(body, ro) {
     const i = el('input');
     i.type = 'text'; i.placeholder = '20dmm'; i.spellcheck = false; i.value = p.bottom && !p.bottom.startsWith('$') ? p.bottom : ''; i.disabled = ro;
     i.setAttribute('aria-label', 'A bottom as a length with units');
-    i.onkeydown = (e) => { if (e.key === 'Enter' && i.value.trim()) E.setPiece(p, { bottom: i.value.trim() }, `${p.name}: ${i.value.trim()}`); };
+    i.onkeydown = (e) => { if (e.key === 'Enter' && i.value.trim()) E.setPiece(p.id, { bottom: i.value.trim() }, `${p.name}: ${i.value.trim()}`); };
     own.append(i);
     s.append(own);
   } else if (kind === 'seed') {
@@ -266,7 +267,7 @@ function propLevel(body, ro) {
       c.title = `Same as the ${o.have} you have: this piece is on your shelf`;
       c.setAttribute('aria-pressed', String(o.seed === p.seed_used));
       c.disabled = ro;
-      c.onclick = () => E.setPiece(p, { seed: o.seed }, `${p.name}: seed ${o.seed}, same as one you have`);
+      c.onclick = () => E.setPiece(p.id, { seed: o.seed }, `${p.name}: seed ${o.seed}, same as one you have`);
       chips.append(c);
     }
     if (mine.length) {
@@ -278,13 +279,13 @@ function propLevel(body, ro) {
     const i = el('input');
     i.type = 'number'; i.min = '0'; i.step = '1'; i.value = String(p.seed_used); i.disabled = ro;
     i.setAttribute('aria-label', 'Seed');
-    i.onkeydown = (e) => { if (e.key === 'Enter' && i.value !== '') E.setPiece(p, { seed: Number(i.value) }, `${p.name}: seed ${i.value}`); };
+    i.onkeydown = (e) => { if (e.key === 'Enter' && i.value !== '') E.setPiece(p.id, { seed: Number(i.value) }, `${p.name}: seed ${i.value}`); };
     row.append(i);
     s.append(row);
     const go = el('div', 'mp-row wrap');
     go.append(
       button('New variant', () => E.variants('piece'), { disabled: ro }),
-      button('The tile’s own seed', () => E.setPiece(p, { seed: null }, `${p.name}: the tile’s own seed`), { disabled: ro || p.seed == null }),
+      button('The tile’s own seed', () => E.setPiece(p.id, { seed: null }, `${p.name}: the tile’s own seed`), { disabled: ro || p.seed == null }),
     );
     s.append(go);
   }
@@ -312,14 +313,14 @@ export function render() {
   const box = $('lens-map');
   const t = tile();
   if (!box || !isPlates(t) || !mapMode()) return;
-  const { pieces: ps, scene } = sceneStore.get();
+  const ps = pieces(), scene = sceneNow();
   const level = levelOf();
-  const sig = JSON.stringify([t.id, level, view.get().msel, view.get().mprop, ps, scene?.heights?.length, server.get().inventory?.pieces, server.get().inventory?.exists, t.plan?.writable]);
+  const sig = JSON.stringify([t.id, level, view.get().msel, view.get().mprop, ps, scene?.heights?.length, server.get().inventory?.pieces, server.get().inventory?.exists, planOf(t)?.writable]);
   if (sig === drawn) return;
   drawn = sig;
   const keep = box.querySelector('.body')?.scrollTop ?? 0;
   box.replaceChildren();
-  const ro = !(t.plan?.writable ?? true) || !!t.path.startsWith('lib:');
+  const ro = !(planOf(t)?.writable ?? true) || !!t.path.startsWith('lib:');
   box.append(head(t, crumbsFor(level, t)));
   const body = el('div', 'body');
   if (!scene) body.append(el('div', 'empty', t.status === 'failed' ? 'This map does not read: mend it in Source.' : 'Reading the map…'));
@@ -347,7 +348,7 @@ export function init() {
     const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable || e.target.tagName === 'SELECT';
     if (e.key === 'Escape' && !typing && mapMode() && up()) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
-  sceneStore.subscribe(['pieces', 'scene'], render);
+  docs.subscribe(render);
   view.subscribe(['msel', 'mprop', 'dmode', 'tileId'], () => { drawn = ''; render(); });
   server.subscribe(['tiles', 'inventory'], render);
   render();

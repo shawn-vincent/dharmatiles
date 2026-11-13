@@ -7,13 +7,14 @@
 //   * In the plates' panel a piece's count and its removal (plates.js calls `setCount` and `removePiece`).
 //
 // Every one is an edit of the list's text made by the program (`/api/lists/*`); each answers with the text it
-// replaced, and the toast's Undo writes that back.
+// replaced and the text it wrote, which join the one history (editor/docs.js): Undo and Redo, the toast's too.
 
 import { failed, showError } from '../problems.js';
 import { openMenu } from '../menu.js';
 import { host, toast } from './app.js';
 import { nameField } from './rows.js';
 import { say } from './inventory.js';
+import { docs, undoToast } from './docs.js';
 import { server, view } from './stores.js';
 
 const el = (tag, cls, text) => {
@@ -31,15 +32,6 @@ async function openId(id, mode = null) {
   const { select } = await import('./open.js');
   if (mode) { const t = server.get().tiles.find((x) => x.id === id); if (t) (await import('./scene.js')).setChosen(t.path, mode); }
   if ((await select(id)) !== false) view.set({ page: 'edit' });
-}
-
-// Undo writes `before` back only if the file still holds what the change wrote (`after`, the change's own
-// answer); a file changed since (another tab, a text editor) is refused by the program and the refusal shown.
-async function undoTo(r) {
-  if (r.before == null) return;
-  const u = await host.listsRestore({ list: r.list, text: r.before, expect: r.after });
-  if (u.status === 200) { if (u.body.ok === false) say(u.body, 'Could not undo'); return; }
-  if (u.status !== 0 && !failed('Could not undo', u)) toast(`Could not undo: ${u.body?.error ?? 'refused'}`, null, { ms: 9000 });
 }
 
 /** A call that edits a list: the program's refusal shown, the success returned; null when it did not go through. */
@@ -61,7 +53,8 @@ export async function addTo(t, listId) {
     toast(`Made ${name} with ${t.name}`, () => openId(b.list), { label: 'Open' });
     return;
   }
-  toast(b.count > 1 ? `${t.name} is ${b.count} in ${name}` : `Added ${t.name} to ${name}`, () => undoTo(b));
+  const entry = docs.adopt(b.list, b.count > 1 ? `Raised ${t.name} to ${b.count}` : `Added ${t.name}`, b);
+  toast(b.count > 1 ? `${t.name} is ${b.count} in ${name}` : `Added ${t.name} to ${name}`, entry ? () => undoToast(b.list, entry) : null);
 }
 
 /** The menu of lists a tile can go to: each existing one, and a new one. */
@@ -108,15 +101,14 @@ export function newList(root, dir, anchor, where, map = false) {
   });
 }
 
-/** Set a piece of the list in view to `count` copies. */
-export async function setCount(listId, index, count) {
-  const b = await call('Could not change the count', () => host.listsCount({ list: listId, index, count }));
-  if (b) toast(`Now ${count}`, () => undoTo(b));
+/** Set a piece (by id) of the list `listId` to `count` copies. */
+export async function setCount(listId, id, count) {
+  const r = await docs.edit(listId, () => ({ label: 'Could not change the count', note: `Now ${count}`, steps: [{ name: 'listsCount', body: { id, count } }] }));
+  if (r) toast(r.note, () => undoToast(listId, r.entry));
 }
 
-/** Take a piece out of the list in view. */
-export async function removePiece(listId, index, name) {
-  const b = await call('Could not take the piece out', () => host.listsRemove({ list: listId, index }));
-  if (b) toast(`Took ${name} out of the list`, () => undoTo(b));
+/** Take a piece (by id) out of the list `listId`. */
+export async function removePiece(listId, id, name) {
+  const r = await docs.edit(listId, () => ({ label: 'Could not take the piece out', note: `Took ${name} out of the list`, steps: [{ name: 'listsRemove', body: { id } }] }));
+  if (r) toast(r.note, () => undoToast(listId, r.entry));
 }
-

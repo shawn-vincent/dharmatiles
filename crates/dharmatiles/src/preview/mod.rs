@@ -69,6 +69,7 @@ impl State {
         }
     }
 }
+mod docs;
 mod edit;
 pub(crate) mod fail;
 mod inventory;
@@ -343,6 +344,8 @@ pub struct Shared {
     /// The inventory as the last snapshot told it (text), so a change made
     /// outside the program (the file edited by hand) is told too.
     inventory_seen: Mutex<String>,
+    /// The owner of each document file: its revision and its lock ([`docs`]).
+    docs: docs::Docs,
 }
 
 /// Held while a tile builds: dropping it ends the build's progress message.
@@ -441,6 +444,7 @@ impl Shared {
             build_caches: Mutex::new(VecDeque::new()),
             store: None,
             inventory_seen: Mutex::new(String::new()),
+            docs: docs::Docs::default(),
         };
         me.rescan();
         me
@@ -932,11 +936,18 @@ impl Shared {
         if !path.ends_with(".dtile") && !path.ends_with(".dmap") {
             return Ok(None);
         }
-        let text = dt_eval::Source::read(&dt_eval::Files, &path)?;
+        // a library file is read only, and has no revision to edit against
+        let (text, doc_rev) = if path.starts_with(dt_eval::LIB) {
+            (dt_eval::Source::read(&dt_eval::Files, &path)?, 0)
+        } else {
+            self.docs
+                .read(&path)
+                .map_err(|e| format!("cannot read {path}: {e}"))?
+        };
         let writable = !path.starts_with(dt_eval::LIB)
             && std::fs::metadata(&path).is_ok_and(|m| !m.permissions().readonly());
         Ok(Some(
-            serde_json::json!({ "file": path, "text": text, "writable": writable }),
+            serde_json::json!({ "file": path, "text": text, "writable": writable, "docRev": doc_rev }),
         ))
     }
 

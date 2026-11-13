@@ -2,36 +2,35 @@
 //! duplicating and removing pieces, new variants, and pins on a plate.
 //!
 //! Like the print list's calls (`lists`), every call is an edit of the map's
-//! text made by `dt_doc::map`, written to the file (the worker sees it and
-//! plans again), and answers with `before`, the text it replaced, so the page
-//! offers Undo (`/api/lists/restore` writes it back).  A call also answers
-//! with the map's scene as it now reads (`scene`, cheap: nothing is built), so
-//! the page shows the change at once; the worker's later update, which adds
-//! the crown check and the plates, carries the same `rev`.
+//! text made by `dt_doc::map` under the file's lock ([`super::docs`]), written
+//! to the file (the worker sees it and plans again), and answers with
+//! `before` and `text` (the text it replaced and the text it wrote, for Undo
+//! and Redo), `docRev` (the revision the file has now) and the map's scene as
+//! it now reads (`scene`, cheap: nothing is built), so the page shows the
+//! change at once.  A piece is named by its `id`, and every call says the
+//! `docRev` it was made against: a file that has moved on is refused with a
+//! 409 and the current text, scene and `docRev`.
 //!
-//! - `/api/maps/add` `{list, tile, at, rot?, seed?, system?}`: a new placed
+//! - `/api/maps/add` `{list, tile, at, rot?, seed?, system?, docRev}`: a new placed
 //!   piece, with its own id.
-//! - `/api/maps/set` `{list, index, set}` and `/api/maps/batch` `{list, edits:
-//!   [{index, set}]}`: words of one piece, or of several in one change (`at`,
+//! - `/api/maps/set` `{list, id, set, docRev}` and `/api/maps/batch` `{list, edits:
+//!   [{id, set}], docRev}`: words of one piece, or of several in one change (`at`,
 //!   `rot`, `bottom`, `seed`, `print`, `system`; null takes a word off).
-//! - `/api/maps/dup` `{list, index, at}`, `/api/maps/remove` `{list, index}`.
-//! - `/api/maps/pin` `{list, index, plate, x, y, turn}`, `/api/maps/unpin`
-//!   `{list, index}`, `/api/maps/unpin-all` `{list}`.
+//! - `/api/maps/dup` `{list, id, at, docRev}`, `/api/maps/remove` `{list, id, docRev}`.
+//! - `/api/maps/pin` `{list, id, plate, x, y, turn, docRev}`, `/api/maps/unpin`
+//!   `{list, id, docRev}`, `/api/maps/unpin-all` `{list, docRev}`.
 
 use dt_doc::map::{At, Prop, decode};
 use serde_json::{Value, json};
 
-use super::lists::{bad, diags, done, list_path, read, write};
+use super::lists::{bad, edit_list};
 use super::{Shared, fail, lock, scene};
 
-/// What an edit gives: the new text and what to add to the answer.
-type Edited = Result<(String, Value), String>;
-
-/// The scene of `text` as the page reads it (no builds).
-pub(super) fn scene_of(shared: &Shared, path: &str, text: &str) -> Value {
+/// The scene of `text` (the file at revision `rev`) as the page reads it (no builds).
+pub(super) fn scene_of(shared: &Shared, path: &str, text: &str, rev: u64) -> Value {
     match decode(path, text) {
         Ok(list) => {
-            let mut s = scene::read(shared, path, &list, dt_eval::doc::text_hash(text));
+            let mut s = scene::read(shared, path, &list, rev);
             s.json["notes"] = json!([]);
             s.json
         }
@@ -39,42 +38,13 @@ pub(super) fn scene_of(shared: &Shared, path: &str, text: &str) -> Value {
     }
 }
 
-/// Edit the list `id`'s text with `f`, check the result reads, write it and
-/// answer with Undo's `before` and the new scene.
-fn edit_with(
-    shared: &Shared,
-    id: &str,
-    f: impl FnOnce(&str, &dt_doc::map::PrintList) -> Edited,
-) -> (&'static str, Value) {
-    let path = match list_path(shared, id) {
-        Ok(p) => p,
-        Err(e) => return e,
-    };
-    let text = match read(&path) {
-        Ok(t) => t,
-        Err(e) => return e,
-    };
-    let list = match decode(&path, &text) {
-        Ok(l) => l,
-        Err(e) => return diags(&e),
-    };
-    let (new, extra) = match f(&text, &list) {
-        Ok(x) => x,
-        Err(m) => return bad(&m),
-    };
-    if let Err(e) = decode(&path, &new) {
-        return diags(&e);
-    }
-    if let Err(e) = write(shared, &path, &new) {
-        return e;
-    }
-    let mut extra = extra;
-    extra["scene"] = scene_of(shared, &path, &new);
-    done(&path, Some(text), &new, extra)
+fn id_of(v: &Value) -> Option<&str> {
+    v["id"].as_str()
 }
 
-fn index_of(v: &Value) -> Option<usize> {
-    v["index"].as_u64().and_then(|n| usize::try_from(n).ok())
+fn first_message(e: &[dt_doc::DocError]) -> String {
+    e.first()
+        .map_or_else(|| "the map does not read".to_owned(), |d| d.message.clone())
 }
 
 /// A place from the call: `"(2sq, 1sq)"` as written.
@@ -137,28 +107,25 @@ pub(super) fn add(shared: &Shared, v: &Value) -> (&'static str, Value) {
     };
     let canon = dt_eval::inventory::canonical(&path, shared.home.as_deref());
     let seed = v["seed"].as_u64();
-    edit_with(shared, list, |text, l| {
+    edit_list(shared, list, v, |text, l| {
         let id = dt_doc::map::next_id(l);
         let line = dt_doc::map::placed_line(&id, &canon, at, rot, seed, system);
-        let new = dt_doc::map::add_pieces(text, &[line]).map_err(|e| {
-            e.first()
-                .map_or_else(|| "the map does not read".to_owned(), |d| d.message.clone())
-        })?;
-        Ok((new, json!({"id": id, "index": l.pieces.len()})))
+        let new = dt_doc::map::add_pieces(text, &[line]).map_err(|e| first_message(&e))?;
+        Ok((new, json!({"id": id})))
     })
 }
 
 /// `/api/maps/set`.
 pub(super) fn set(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(list), Some(i)) = (v["list"].as_str(), index_of(v)) else {
-        return bad("give the map and the piece");
+    let (Some(list), Some(piece)) = (v["list"].as_str(), id_of(v)) else {
+        return bad("give the map and the piece (its id)");
     };
     let props = match props_of(&v["set"]) {
         Ok(p) => p,
         Err(m) => return bad(&m),
     };
-    edit_with(shared, list, |text, _| {
-        dt_doc::map::set_piece(text, i, &props).map(|t| (t, json!({})))
+    edit_list(shared, list, v, |text, _| {
+        dt_doc::map::set_piece(text, piece, &props).map(|t| (t, json!({})))
     })
 }
 
@@ -169,18 +136,18 @@ pub(super) fn batch(shared: &Shared, v: &Value) -> (&'static str, Value) {
     };
     let mut all = Vec::new();
     for e in edits {
-        let (Some(i), props) = (index_of(e), props_of(&e["set"])) else {
-            return bad("each edit names its piece");
+        let (Some(i), props) = (id_of(e), props_of(&e["set"])) else {
+            return bad("each edit names its piece (its id)");
         };
         match props {
             Ok(p) => all.push((i, p)),
             Err(m) => return bad(&m),
         }
     }
-    edit_with(shared, list, |text, _| {
+    edit_list(shared, list, v, |text, _| {
         let mut t = text.to_owned();
         for (i, p) in &all {
-            t = dt_doc::map::set_piece(&t, *i, p)?;
+            t = dt_doc::map::set_piece(&t, i, p)?;
         }
         Ok((t, json!({"changed": all.len()})))
     })
@@ -188,42 +155,36 @@ pub(super) fn batch(shared: &Shared, v: &Value) -> (&'static str, Value) {
 
 /// `/api/maps/dup`.
 pub(super) fn dup(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(list), Some(i)) = (v["list"].as_str(), index_of(v)) else {
-        return bad("give the map and the piece");
+    let (Some(list), Some(piece)) = (v["list"].as_str(), id_of(v)) else {
+        return bad("give the map and the piece (its id)");
     };
     let at = match at_of(&v["at"]) {
         Ok(a) => a,
         Err(m) => return bad(&m),
     };
-    edit_with(shared, list, |text, l| {
+    edit_list(shared, list, v, |text, l| {
         let id = dt_doc::map::next_id(l);
-        let t = dt_doc::map::duplicate_piece(text, i, &id, at)?;
+        let t = dt_doc::map::duplicate_piece(text, piece, &id, at)?;
         // a copy starts with the original's seed: the same piece until it is made a variant
-        Ok((t, json!({"id": id, "index": i + 1})))
+        Ok((t, json!({"id": id})))
     })
 }
 
 /// `/api/maps/remove`: the piece, and the pin it had.
 pub(super) fn remove(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(list), Some(i)) = (v["list"].as_str(), index_of(v)) else {
-        return bad("give the map and the piece");
+    let (Some(list), Some(piece)) = (v["list"].as_str(), id_of(v)) else {
+        return bad("give the map and the piece (its id)");
     };
-    edit_with(shared, list, |text, l| {
-        let mut t = text.to_owned();
-        if let Some(id) = l.pieces.get(i).and_then(|p| p.id.as_ref()) {
-            t = dt_doc::map::clear_pin(&t, &id.value).map_err(|e| {
-                e.first()
-                    .map_or_else(|| "the map does not read".to_owned(), |d| d.message.clone())
-            })?;
-        }
-        dt_doc::map::remove_piece(&t, i).map(|t| (t, json!({})))
+    edit_list(shared, list, v, |text, _| {
+        let t = dt_doc::map::clear_pin(text, piece).map_err(|e| first_message(&e))?;
+        dt_doc::map::remove_piece(&t, piece).map(|t| (t, json!({})))
     })
 }
 
 /// `/api/maps/pin`: the piece stays where it was dropped on its plate.
 pub(super) fn pin(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(list), Some(i)) = (v["list"].as_str(), index_of(v)) else {
-        return bad("give the map and the piece");
+    let (Some(list), Some(piece)) = (v["list"].as_str(), id_of(v)) else {
+        return bad("give the map and the piece (its id)");
     };
     let (Some(plate), Some(x), Some(y)) = (
         v["plate"].as_u64().and_then(|p| u32::try_from(p).ok()),
@@ -236,37 +197,29 @@ pub(super) fn pin(shared: &Shared, v: &Value) -> (&'static str, Value) {
         return bad("the plate counts from 1");
     }
     let turn = v["turn"].as_bool().unwrap_or(false);
-    edit_with(shared, list, |text, _| {
-        let (t, id) = dt_doc::map::ensure_id(text, i)?;
+    edit_list(shared, list, v, |text, l| {
+        if !dt_doc::map::piece_ids(l).iter().any(|i| i == piece) {
+            return Err(format!("the map has no piece {piece}"));
+        }
         let at = At {
             x: dt_doc::map::Len::Mm((x * 10.0).round() / 10.0),
             y: dt_doc::map::Len::Mm((y * 10.0).round() / 10.0),
         };
-        let t = dt_doc::map::set_pin(&t, &id, plate, at, turn).map_err(|e| {
-            e.first()
-                .map_or_else(|| "the map does not read".to_owned(), |d| d.message.clone())
-        })?;
-        Ok((t, json!({"id": id})))
+        let t =
+            dt_doc::map::set_pin(text, piece, plate, at, turn).map_err(|e| first_message(&e))?;
+        Ok((t, json!({"id": piece})))
     })
 }
 
 /// `/api/maps/unpin`.
 pub(super) fn unpin(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(list), Some(i)) = (v["list"].as_str(), index_of(v)) else {
-        return bad("give the map and the piece");
+    let (Some(list), Some(piece)) = (v["list"].as_str(), id_of(v)) else {
+        return bad("give the map and the piece (its id)");
     };
-    edit_with(shared, list, |text, l| {
-        let id = l
-            .pieces
-            .get(i)
-            .and_then(|p| p.id.as_ref())
-            .ok_or("that piece has no pin")?;
-        dt_doc::map::clear_pin(text, &id.value)
+    edit_list(shared, list, v, |text, _| {
+        dt_doc::map::clear_pin(text, piece)
             .map(|t| (t, json!({})))
-            .map_err(|e| {
-                e.first()
-                    .map_or_else(|| "the map does not read".to_owned(), |d| d.message.clone())
-            })
+            .map_err(|e| first_message(&e))
     })
 }
 
@@ -275,12 +228,9 @@ pub(super) fn unpin_all(shared: &Shared, v: &Value) -> (&'static str, Value) {
     let Some(list) = v["list"].as_str() else {
         return bad("give the map");
     };
-    edit_with(shared, list, |text, _| {
+    edit_list(shared, list, v, |text, _| {
         dt_doc::map::clear_pins(text)
             .map(|t| (t, json!({})))
-            .map_err(|e| {
-                e.first()
-                    .map_or_else(|| "the map does not read".to_owned(), |d| d.message.clone())
-            })
+            .map_err(|e| first_message(&e))
     })
 }

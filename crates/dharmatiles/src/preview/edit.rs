@@ -173,7 +173,7 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
     };
     match what {
         "check" => check(shared, &tile, &file, &v).into(),
-        "save" => save(&file, &v).into(),
+        "save" => save(shared, &file, &v).into(),
         "mine" => mine(shared, &tile, &files).into(),
         "delete" => delete(shared, &tile).into(),
         "rename" => rename(shared, &tile, &v).into(),
@@ -749,9 +749,16 @@ pub(super) fn writable(file: &str) -> bool {
         && std::fs::metadata(file).is_ok_and(|m| m.is_file() && !m.permissions().readonly())
 }
 
-fn save(file: &str, v: &Value) -> (&'static str, Value) {
-    let (Some(text), Some(base)) = (v["text"].as_str(), v["base"].as_str()) else {
-        return bad("give the text and the base it was edited from");
+/// `/api/tiles/ID/save` `{text, docRev, file?}`: the text written, if the file is
+/// still at the revision the page edited it from (else a 409 with the file's
+/// current text and revision).  Answers the revision the file has now.
+fn save(shared: &Shared, file: &str, v: &Value) -> (&'static str, Value) {
+    let Some(text) = v["text"].as_str() else {
+        return bad("give the text");
+    };
+    let rev = match super::docs::expected(v) {
+        Ok(r) => r,
+        Err(e) => return e,
     };
     if !writable(file) {
         return fail::refused(
@@ -759,33 +766,12 @@ fn save(file: &str, v: &Value) -> (&'static str, Value) {
             "this file is read only: a library tile is copied into My tiles when it is first changed",
         );
     }
-    let now = match std::fs::read_to_string(file) {
-        Ok(t) => t,
-        Err(e) => {
-            return fail::failure(
-                "500 Internal Server Error",
-                format!("cannot read {file} to compare it: {e}"),
-            );
-        }
-    };
-    if now != base {
-        return fail::refused_with(
-            "409 Conflict",
-            "the file changed on disk",
-            json!({ "text": now }),
-        );
-    }
-    if now == text {
-        return ("200 OK", json!({ "ok": true }));
-    }
-    // a whole file or none
-    match dt_eval::atomic::write_atomic(std::path::Path::new(file), text) {
-        Ok(()) => ("200 OK", json!({ "ok": true })),
-        Err(e) => fail::failure_from(
-            "500 Internal Server Error",
-            format!("cannot write {file}: {e}"),
-            &e,
-        ),
+    match shared
+        .docs
+        .edit(file, Some(rev), |_| Ok((text.to_owned(), json!({}))))
+    {
+        Ok(e) => ("200 OK", json!({ "ok": true, "docRev": e.rev })),
+        Err(e) => e,
     }
 }
 

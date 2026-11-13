@@ -4,56 +4,33 @@
 // packs the rest around it, and says so when a pin cannot hold.  The dragging is the map's (scene-drag.js): the same
 // press, the same snap to a place, one change of the text with Undo.  A pinned piece wears a small pin pill.
 
-import { $, host, toast, viewer } from './app.js';
-import { failed, showError } from '../problems.js';
-import { say } from './inventory.js';
+import { $, toast, viewer } from './app.js';
+import { docs, planOf, undoToast } from './docs.js';
 import { isPlatesView, tile, view } from './stores.js';
 
-const plan = () => tile()?.plan?.plates ?? null;
+const plan = () => planOf(tile())?.plates ?? null;
 const topDown = () => viewer.camera.position.clone().sub(viewer.controls.target).normalize().z > 0.93;
-const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && (t.plan?.writable ?? true); };
+const editable = () => { const t = tile(); return !!t && !t.path.startsWith('lib:') && (planOf(t)?.writable ?? true); };
 
 /** The piece of the plate in view that triangle owner `n` is: its layout row. */
 const rowOf = (n) => plan()?.layout?.[plan().view]?.pieces?.[n] ?? null;
 
-/** A call that edits the list: the answer's body, or null after the refusal is shown. */
-async function call(label, run) {
-  try {
-    const r = await run();
-    if (r.status !== 200) {
-      if (r.status !== 0 && !failed(label, r)) toast(`${label}: ${r.body?.error ?? 'refused'}`, null, { ms: 9000 });
-      return null;
-    }
-    if (r.body.ok === false) { say(r.body, label); return null; }
-    return r.body;
-  } catch (e) { showError(label, e); return null; }
+/** One change to the map or print list in view: an action on its document, with a toast whose Undo is the history's. */
+async function change(label, note, step) {
+  const id = tile().id;
+  const r = await docs.edit(id, () => ({ label, note, steps: [step] }));
+  if (r) toast(r.note, () => undoToast(id, r.entry));
+  return r;
 }
 
-/** Undo of a pin change: written back only if the file still holds what the change wrote (`b.after`). */
-async function undo(b) {
-  await call('Could not undo', () => host.listsRestore({ list: b.list, text: b.before, expect: b.after }));
-}
-
-/** Pin the piece (list index `index`) at `x`, `y` (the footprint's north-west corner from the bed's, mm) on plate `plate` (from 1). */
-export async function pin(index, plate, x, y, turn, name) {
-  const b = await call('Could not pin the piece', () => host.mapsPin({ list: tile().id, index, plate, x, y, turn }));
-  if (b) toast(`Pinned ${name} on plate ${plate}`, () => undo(b));
-  return b;
-}
+/** Pin the piece (by id) at `x`, `y` (the footprint's north-west corner from the bed's, mm) on plate `plate` (from 1). */
+export const pin = (id, plate, x, y, turn, name) => change('Could not pin the piece', `Pinned ${name} on plate ${plate}`, { name: 'mapsPin', body: { id, plate, x, y, turn } });
 
 /** Take the pin of a piece away. */
-export async function unpin(index, name) {
-  const b = await call('Could not take the pin away', () => host.mapsUnpin({ list: tile().id, index }));
-  if (b) toast(`Took the pin off ${name}`, () => undo(b));
-  return b;
-}
+export const unpin = (id, name) => change('Could not take the pin away', `Took the pin off ${name}`, { name: 'mapsUnpin', body: { id } });
 
 /** Take every pin away. */
-export async function unpinAll() {
-  const b = await call('Could not take the pins away', () => host.mapsUnpinAll({ list: tile().id }));
-  if (b) toast('Took every pin away', () => undo(b));
-  return b;
-}
+export const unpinAll = () => change('Could not take the pins away', 'Took every pin away', { name: 'mapsUnpinAll', body: {} });
 
 let drag = null;
 
@@ -65,11 +42,11 @@ function onDown(e) {
   const h = viewer.pick(e.clientX - r.left, e.clientY - r.top);
   if (!h || h.entry < 0) return;
   const row = rowOf(h.entry);
-  if (!row || row.piece == null) return;
+  if (!row || row.id == null) return;
   const pt = viewer.pointAt(e.clientX - r.left, e.clientY - r.top, 0);
   if (!pt) return;
   // a piece that stands for several copies of one line cannot be told apart in the document
-  const line = (p.pieces ?? []).find((q) => q.index === row.piece);
+  const line = (p.pieces ?? []).find((q) => q.id === row.id);
   if (line && line.count > 1) { toast(`${row.name} is ${line.count} copies of one line: give each copy its own piece line to pin it`, null, { ms: 8000 }); return; }
   viewer.controls.enabled = false;
   drag = { row, line, x: e.clientX, y: e.clientY, offX: pt.p[0] - row.x, offY: pt.p[1] - row.y, moved: false, to: null };
@@ -96,7 +73,7 @@ async function onUp() {
   const p = plan();
   const bed = p.bed;
   try {
-    await pin(d.row.piece, p.view + 1, d.to.x, bed[1] - d.to.y - d.row.d, d.row.turned, d.row.name);
+    await pin(d.row.id, p.view + 1, d.to.x, bed[1] - d.to.y - d.row.d, d.row.turned, d.row.name);
   } finally {
     // the plate is laid out again with the pin: until it comes, the ghost shows where it was dropped
     setTimeout(() => viewer.setGhostRect(null), 1500);

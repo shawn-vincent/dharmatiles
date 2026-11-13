@@ -10,7 +10,7 @@
 //   fetchSketch(id, sketch) -> ArrayBuffer  one stage's sketch while it builds (null once the build has moved on)
 //   fetchTier(id, {tier, seed?, system?, printer?}) -> ArrayBuffer   a tile's mesh at a tier (`super-low`, `low`, `full`) for a map's piece: from the cache or built, not checked unless full; a piece as the map builds it (its seed, its system, the map's printer)
 //   build(id, {debug?})                     build a tile not built yet; `debug` says whether the debug layer is on for it (its marks are collected only then)
-//   text(id, file?) -> {file, text, writable}
+//   text(id, file?) -> {file, text, writable, docRev}   (docRev: the revision of the file the text is of; 0 for a library file)
 //   elements() -> [element]                 the element schema
 //   language() -> {docs, nodes, units, functions, names}   the tile's nodes with their controls, and the language's words
 //   names(text) -> {ok, defs, regions, lines, points}      the names the text makes, by the program's parser
@@ -21,7 +21,7 @@
 //   offers(id, {text, at, file?})            what the Add menu may offer at place `at` of the stack: {ok, offers: [{name, family, about, node, ok, why}]}
 //   checkValue(element, control, typed)  what the reader refuses in a typed value: {message, label, help} (message null when it takes it)
 //   draft(id, {text, file?, debug?})        a quick build of the text (with the debug layer's marks when `debug`): {status, buffer} (the mesh), 409 when a newer draft took its place
-//   save(id, {text, base, file?})           write the text to its file
+//   save(id, {text, docRev, file?})         write the text to its file, if the file is still at docRev (else 409 with its text and docRev); answers the new docRev
 //   rename(id, name)                        rename a tile's file: the new tile's {path, id}
 //   mine(id)                                copy a library tile to My tiles: {path, id}
 //   deleteTile(id)                          delete a tile's file from a folder the preview lists (Undo of that copy)
@@ -37,18 +37,20 @@
 //   exportTile(id, body)                    write STL / 3MF ({where: true} asks where it would go)
 //   reveal(path)                            show a written file in the file manager
 //   platesShow(id, plate)                   the plate of a print list the view shows (from 0)
-//   platesSet(id, key, value)               set a word of the list's `plates` line (printer, mode, group, gap, margin, turn); value null removes it
+//   platesSet({list, key, value, docRev})   set a word of the list's `plates` line (printer, mode, group, gap, margin, turn); value null removes it
 //   platesExport(id)                        build every piece in full and write the plates: {ok, files, format, plates, failures}
 //   listsNew({name, root?, dir?})           a new print list (.dmap) in My tiles or a folder of a place: {path, id, tile}
-//   listsAdd({tile, list?, seed?, system?}) one more copy of a tile in a list (a new list when none is named): {ok, list, path, count, made, before}
-//   listsCount({list, index, count})        a piece's copies; listsRemove({list, index}) takes the piece out; both answer with `before`
-//   listsRestore({list, text})              Undo: the text a change replaced, written back
-//   mapsAdd({list, tile, at, rot?, seed?, system?})   a new placed piece (at is `(2sq, 1sq)`): {ok, list, before, id, index, scene}
-//   mapsSet({list, index, set})             words of one piece (at, rot, bottom, seed, print, system; null takes one off)
-//   mapsBatch({list, edits: [{index, set}]})  the same for several pieces in one change
-//   mapsDup({list, index, at}) / mapsRemove({list, index})   a copy of a piece at a place / a piece taken out (and its pin)
-//   mapsPin({list, index, plate, x, y, turn}) / mapsUnpin({list, index}) / mapsUnpinAll({list})   a piece kept where it was dropped on a plate
-//     (every one answers with `before` for Undo, and `scene`: the map as it now reads, with its `rev`)
+//   listsAdd({tile, list?, seed?, system?}) one more copy of a tile in a list (a new list when none is named): {ok, list, path, count, made, before, text, docRev, note?}
+//   listsCount({list, id, count, docRev})   a piece's copies; listsRemove({list, id, docRev}) takes the piece out
+//   listsRestore({list, text, docRev})      Undo or Redo: a text written back, if the file is still at docRev
+//   mapsAdd({list, tile, at, rot?, seed?, system?, docRev})   a new placed piece (at is `(2sq, 1sq)`): {ok, list, before, text, docRev, id, scene}
+//   mapsSet({list, id, set, docRev})        words of one piece (at, rot, bottom, seed, print, system; null takes one off)
+//   mapsBatch({list, edits: [{id, set}], docRev})  the same for several pieces in one change
+//   mapsDup({list, id, at, docRev}) / mapsRemove({list, id, docRev})   a copy of a piece at a place / a piece taken out (and its pin)
+//   mapsPin({list, id, plate, x, y, turn, docRev}) / mapsUnpin({list, id, docRev}) / mapsUnpinAll({list, docRev})   a piece kept where it was dropped on a plate
+//     (every one answers with `before` and `text` for Undo and Redo, `docRev`: the revision the file has now, and `scene`: the map
+//     as it now reads; a file that has moved on since `docRev` is a 409 with its `text`, `docRev` and `scene`; the first edit of a file
+//     whose pieces have no ids writes ids on all of them and says so in `note`)
 //   inventoryHave(body)                     one good print of a tile: {tile, colour, system?, seed?, count?, on?}; {ok, lines} (docs/inventory.html)
 //   inventoryRecord(body)                   the sheet after a print: {list, plate, failed: [n…], on?}
 //   inventoryGone(body)                     one of a piece lost: {tile, seed, system, colour, note?, on?}
@@ -256,7 +258,7 @@ export function browserHost() {
     exportTile: (id, body) => call(tile(id, 'export'), body),
     reveal: (path) => call('/api/reveal', { path }),
     platesShow: (id, plate) => call('/api/plates/show', { tile: id, plate }),
-    platesSet: (id, key, value) => call('/api/plates/set', { tile: id, key, value }),
+    platesSet: ({ list, key, value, docRev }) => call('/api/plates/set', { tile: list, key, value, docRev }),
     platesExport: (id) => call('/api/plates/export', { tile: id }),
     listsNew: (body) => call('/api/lists/new', body),
     listsAdd: (body) => call('/api/lists/add', body),

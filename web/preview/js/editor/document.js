@@ -1,5 +1,5 @@
-// The document: the text pane, one history, checking, saving and loading the
-// text, drafts while a value is dragged, and completion.  It keeps the doc
+// The document: the text pane, its steps in the one history (editor/docs.js), checking,
+// saving and loading the text, drafts while a value is dragged, and completion.  It keeps the doc
 // store (the text and what is known of it) and follows the view store for
 // which file to show; it knows nothing of the selection or the view.
 
@@ -13,7 +13,8 @@ import { createDrafter } from '../drafts.js';
 import { STALE_NOTE, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
 import { $, host, makeMine, toast } from './app.js';
-import { dirty, doc, server, stem, tile, view } from './stores.js';
+import { dirty, doc, isPlates, server, stem, tile, view } from './stores.js';
+import { docs, planOf } from './docs.js';
 
 // ---- the document: the text, one history, checking and saving -----------------
 // The text pane edits the file shown (the tile's document, or a file it
@@ -22,7 +23,19 @@ import { dirty, doc, server, stem, tile, view } from './stores.js';
 // cleanly; the worker sees the saved file and rebuilds.  A text with a
 // mistake stays here, unsaved, until it is fixed.
 
-const run = { history: [], at: -1, lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, checkSeq: 0, namesSeq: 0, saving: false };
+const run = { lastKind: null, lastTime: 0, checkTimer: 0, saveTimer: 0, namesTimer: 0, scrubText: null, checkSeq: 0, namesSeq: 0, saving: false, openText: '' };
+
+// The history is the page's one (js/doc-history.js): a tile's source is a document whose steps are made here,
+// typing and the lens, each `{before, after, label, change, caret}`; a print list or a map is a document the
+// program owns, whose steps are the program's answers (docs.edit), so for one the source's saves join it as
+// steps of their own and Undo and Redo go through the program (docs.step), whichever face is showing.
+const history = docs.history;
+const textKey = () => `text:${tile()?.id ?? doc.get().tileId ?? ''}`;
+const owned = () => isPlates(tile());
+/** The text at state `i` of the history of `key` (0: as opened). */
+const stateTextOf = (key, i) => history.stateText(key, i) ?? run.openText;
+/** The text the source is at now, by the history's account. */
+const stateNow = (key) => stateTextOf(key, history.at(key));
 
 export const texts = new TextPane($('code'), {
   onEdit: (text, kind) => {
@@ -61,62 +74,79 @@ function historyButton(entry, target, distance, direction) {
     b.append(change);
   }
   b.title = `${direction} to ${entry.label}`;
-  b.onclick = () => { goHistory(target); view.set({ popover: null }); };
+  b.onclick = () => { if (owned()) undo(direction === 'Undo' ? -1 : 1); else goHistory(target); view.set({ popover: null }); };
   return b;
 }
 
 function renderHistory(buildMenus = false) {
-  const writable = doc.get().writable;
-  const canUndo = writable && run.at > 0;
-  const canRedo = writable && run.at >= 0 && run.at < run.history.length - 1;
+  const t = tile();
+  const mine = owned();
+  const key = mine ? t?.id : textKey();
+  const writable = mine ? !!(t && !t.path.startsWith('lib:') && (planOf(t)?.writable ?? true)) : doc.get().writable;
+  const canUndo = writable && !!key && history.canUndo(key);
+  const canRedo = writable && !!key && history.canRedo(key);
   $('undo').disabled = !canUndo; $('undo-drop').disabled = !canUndo;
   $('redo').disabled = !canRedo; $('redo-drop').disabled = !canRedo;
   if (!buildMenus) return;
   const undoMenu = $('undo-history'), redoMenu = $('redo-history');
   undoMenu.replaceChildren(); redoMenu.replaceChildren();
-  for (let target = run.at - 1; target >= 0; target--) {
-    undoMenu.append(historyButton(run.history[target + 1], target, run.at - target, 'Undo'));
+  if (!key) return;
+  const at = history.at(key), entries = history.entries(key);
+  // a program-owned document goes back one change at a time (each is a call against the file's revision)
+  for (let target = at - 1; target >= (mine ? at - 1 : 0); target--) {
+    undoMenu.append(historyButton(entries[target], target, at - target, 'Undo'));
   }
-  for (let target = run.at + 1; target < run.history.length; target++) {
-    redoMenu.append(historyButton(run.history[target], target, target - run.at, 'Redo'));
+  for (let target = at + 1; target <= (mine ? at + 1 : entries.length); target++) {
+    redoMenu.append(historyButton(entries[target - 1], target, target - at, 'Redo'));
   }
 }
 
 function resetHistory(text) {
-  run.history = [{ text, caret: 0, kind: 'open', label: 'Opened document' }];
-  run.at = 0; run.lastKind = null;
+  history.clear(textKey());
+  run.openText = text; run.lastKind = null;
   renderHistory();
 }
 function clearDocument() {
   texts.clear();
   loadKey = null;
-  run.history = []; run.at = -1; run.lastKind = null;
-  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null });
+  history.clear(textKey());
+  run.lastKind = null;
+  doc.set({ tileId: null, file: null, base: null, text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null, docRev: null });
   renderHistory();
 }
 function record(text, kind, label = null) {
+  // a document the program owns has its steps from the program: the source's saves (save() below)
+  if (owned()) return;
+  const key = textKey();
   const now = performance.now();
-  const join = kind === 'type' && run.lastKind === 'type' && now - run.lastTime < 1000 && run.at > 0;
-  run.history.length = run.at + 1;
-  const before = run.history[join ? run.at - 1 : run.at]?.text || '';
-  const change = describeChange(before, text, kind, label);
-  const h = { text, caret: texts.selectionStart, kind, label: change.title, change };
-  if (join) run.history[run.at] = h; else { run.history.push(h); run.at++; }
-  if (run.history.length > 400) { run.history.shift(); run.at--; }
+  const at = history.at(key);
+  const join = kind === 'type' && run.lastKind === 'type' && now - run.lastTime < 1000 && at > 0;
+  const prior = join ? history.entries(key)[at - 1].before : stateNow(key);
+  const change = describeChange(prior, text, kind, label);
+  if (join) history.amend(key, { after: text, caret: texts.selectionStart, kind, label: change.title, change });
+  else history.push(key, { before: prior, after: text, caret: texts.selectionStart, kind, label: change.title, change });
   run.lastKind = kind; run.lastTime = now;
   renderHistory();
 }
+/** The source goes to state `i` of its history (the text of a tile; a program-owned document is stepped by docs.step). */
 function goHistory(i) {
-  if (!doc.get().writable || i < 0 || i >= run.history.length) return;
-  run.at = i; run.lastKind = null;
-  const h = run.history[i];
-  texts.setText(h.text, h.caret);
+  const key = textKey();
+  if (owned() || !doc.get().writable || i < 0 || i > history.entries(key).length) return;
+  run.lastKind = null;
+  const text = stateTextOf(key, i);
+  texts.setText(text, i > 0 ? history.entries(key)[i - 1].caret : 0);
+  history.jump(key, i);
   doc.set({ text: texts.text });
   closeComp();
   changed();
   renderHistory();
 }
-export function undo(step) { goHistory(run.at + step); }
+/** Undo (`step` -1) or Redo (1): the page's one, for whichever document is open. */
+export function undo(step) {
+  const t = tile();
+  if (owned()) { if (t) docs.step(t.id, step); return; }
+  goHistory(history.at(textKey()) + step);
+}
 
 /**
  * The user changed the text: `kind` is type, lens, view, or drag (a scrub
@@ -236,9 +266,12 @@ async function save(now = false) {
   run.saving = true;
   doc.set({ saving: true });
   try {
-    const r = await host.save(t.id, { text, base: d.base, file: file === t.path ? undefined : file });
-    if (r.status === 200) doc.set({ note: null, base: text, conflict: null });
-    else if (r.status === 409) doc.set({ note: null, conflict: r.body?.text ?? '' });
+    const r = await host.save(t.id, { text, docRev: d.docRev, file: file === t.path ? undefined : file });
+    if (r.status === 200) {
+      doc.set({ note: null, base: text, conflict: null, docRev: r.body.docRev });
+      // a print list or a map: the source's save is a step of its history, like the program's own edits
+      if (isPlates(t) && file === t.path) docs.adopt(t.id, 'Edited source', { before: d.base, text, docRev: r.body.docRev });
+    } else if (r.status === 409) doc.set({ note: null, conflict: r.body?.text ?? '', conflictRev: r.body?.docRev ?? null });
     else {
       doc.set({ note: r.body?.error || `could not save (${r.status})` });
       failed(`Could not save ${stem(t)}`, r);
@@ -268,7 +301,7 @@ function confirmDiscard() {
       const base = doc.get().base;
       if (discard && base != null) {
         texts.setText(base);
-        resetHistory(base);
+        if (!owned()) resetHistory(base);
         doc.set({ text: base, checked: null, ok: true, errors: [], conflict: null, note: null });
         changed(); // checked afresh: the stack and map held are of the text just discarded
       }
@@ -288,9 +321,9 @@ export async function canLeave() {
 }
 
 let loadToken = 0, loadKey = null, loading = null;
-let carried = null; // the undo history a rename brings to the renamed file
+let carried = null; // the key of the undo history a rename brings to the renamed file
 /** Bring the undo history along to the file a rename is about to make. */
-export function carryHistory() { carried = { history: run.history, at: run.at }; }
+export function carryHistory() { carried = { key: textKey() }; }
 
 /** Show `file` of the tile shown (null: its own document); resolves true once it is there. */
 export async function loadText(file) {
@@ -312,15 +345,16 @@ export async function loadText(file) {
       const fresh = doc.get().tileId !== t.id || texts.file !== v.file;
       texts.show(v.file, v.text, v.writable);
       doc.set({
-        tileId: t.id, file: v.file, text: v.text, base: v.text, writable: v.writable,
+        tileId: t.id, file: v.file, text: v.text, base: v.text, writable: v.writable, docRev: v.docRev,
         conflict: null, note: null,
         checked: null, ok: !t.errors.length, errors: [], stack: null, // the build's plan is this source's; not checked as shown until check() below says so (the sheet waits for it)
         ...(fresh ? { map: null, names: null } : {}),
       });
-      if (fresh && carried && carried.history[carried.at]?.text === v.text) {
-        run.history = carried.history; run.at = carried.at; renderHistory(); // a rename keeps its undo
+      const key = `text:${t.id}`;
+      if (fresh && carried && history.has(carried.key) && stateTextOf(carried.key, history.at(carried.key)) === v.text) {
+        history.rename(carried.key, key); run.openText = v.text; renderHistory(); // a rename keeps its undo
       } else if (fresh) resetHistory(v.text);
-      else if (run.history[run.at]?.text !== v.text) record(v.text, 'disk'); // changed on disk: one more step
+      else if (stateNow(key) !== v.text) record(v.text, 'disk'); // changed on disk: one more step (a document the program owns has its own steps)
       renderHistory();
       if (fresh) carried = null;
       askNames(); // the names it makes, for completion
@@ -366,8 +400,8 @@ function renderTextBar() {
   if (d.writable && d.conflict != null) {
     st.classList.add('bad');
     st.append('changed on disk: ');
-    st.append(button('take the disk’s', () => { const disk = d.conflict; doc.set({ conflict: null, base: disk }); edited(disk, 'disk'); }), ' or ',
-      button('keep mine', () => { doc.set({ base: d.conflict, conflict: null }); changed(); }));
+    st.append(button('take the disk’s', () => { const disk = d.conflict; doc.set({ conflict: null, base: disk, docRev: d.conflictRev }); edited(disk, 'disk'); }), ' or ',
+      button('keep mine', () => { doc.set({ base: d.conflict, conflict: null, docRev: d.conflictRev }); changed(); }));
     return;
   }
   const w = saveWords();
@@ -499,6 +533,8 @@ export function init() {
   $('part-back').onclick = () => openFile(null);
   $('undo').onclick = () => undo(-1);
   $('redo').onclick = () => undo(1);
+  // the history is one: what it holds changes when a document's state or its steps do
+  docs.subscribe(() => renderHistory());
   view.subscribe(['popover'], ({ popover }) => { if (popover === 'undo-history' || popover === 'redo-history') renderHistory(true); });
   addEventListener('beforeunload', (e) => {
     if (dirty() && doc.get().writable) { e.preventDefault(); e.returnValue = ''; }
