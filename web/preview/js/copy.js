@@ -3,48 +3,15 @@
 // the clipboard.  The look is in docs/assets/theme.css (.copy); a button may
 // also carry a label ("Copy details"), which reads "Copied" while checked.
 
-const DONE_MS = 1600;
+import { CopyButton } from './view/copy-button.js';
+import { html, render } from './view/html.js';
 
-/** A copy button for `text()` (a string, or a function giving one, or a promise of one, when pressed). */
-export function copyButton(text, { label = '', title = 'Copy', note = null } = {}) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = label ? 'btn copy labelled' : 'btn icon copy';
-  b.title = title;
-  b.setAttribute('aria-label', title);
-  const i = document.createElement('i');
-  i.className = 'copy-glyph';
-  i.setAttribute('aria-hidden', 'true');
-  b.append(i);
-  const words = document.createElement('span');
-  if (label) { words.textContent = label; b.append(words); }
-  let timer = 0;
-  b.addEventListener('click', async () => {
-    try {
-      const value = await (typeof text === 'function' ? text() : text);
-      await navigator.clipboard.writeText(value);
-    } catch (e) {
-      // Expected when the browser refuses the clipboard: say so on the button, where it was pressed.
-      b.classList.remove('done');
-      b.classList.add('failed');
-      b.title = `Could not copy (${e.message}); select it and copy it yourself`;
-      if (note) note.textContent = `Could not copy (${e.message}). Open the details, select them and copy them yourself.`;
-      if (label) words.textContent = 'Could not copy';
-      return;
-    }
-    b.classList.remove('failed');
-    if (note) note.textContent = '';
-    b.classList.add('done');
-    b.title = 'Copied';
-    if (label) words.textContent = 'Copied';
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      b.classList.remove('done');
-      b.title = title;
-      if (label) words.textContent = label;
-    }, DONE_MS);
-  });
-  return b;
+/** A copy button (the component is view/copy-button.js) as an element, for the one place that is still drawn by hand. */
+export function copyButton(text, opts = {}) {
+  const holder = document.createElement('span');
+  holder.style.display = 'contents';
+  render(html`<${CopyButton} text=${text} ...${opts} />`, holder);
+  return holder;
 }
 
 /** The parts of a version as the About box shows them: `0.9.0` and `+123.gfd383a7.dirty`. */

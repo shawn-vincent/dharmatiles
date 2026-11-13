@@ -14,6 +14,7 @@
 // cleared, shown as one quiet line ("1 cleared by this build"), and what is
 // still true comes back to full strength.
 
+import { signal } from '@preact/signals-core';
 import { ServerError } from './server-error.js';
 import { detailsOf, tileErrorDetails } from './problems.js';
 
@@ -40,6 +41,8 @@ export function countsText({ errors, notes }) {
 }
 
 export function createLog() {
+  // bumped by every change and followed by every read: what draws the messages is drawn again when they change
+  const version = signal(0);
   const items = new Map();       // seq -> message
   const builds = new Map();      // tile id -> {startSeq}: the build under way, and the newest message before it
   const since = new Map();       // tile id -> messages cleared since the last build ended
@@ -47,7 +50,7 @@ export function createLog() {
   const dismissed = new Set();   // seqs the page put away (the program keeps them open)
   const listeners = new Set();
   let local = 0;
-  const notify = () => { for (const fn of [...listeners]) fn(); };
+  const notify = () => { version.value += 1; for (const fn of [...listeners]) fn(); };
   const maxSeq = () => { let n = 0; for (const k of items.keys()) n = Math.max(n, k); return n; };
 
   return {
@@ -94,8 +97,8 @@ export function createLog() {
     },
     /** Tell `fn` after every change; returns the way to stop. */
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    byId: (seq) => items.get(seq) ?? null,
-    all: () => [...items.values()],
+    byId: (seq) => { void version.value; return items.get(seq) ?? null; },
+    all: () => { void version.value; return [...items.values()]; },
 
     /**
      * What the surfaces draw for `tile` ('' for the program's own, which belong to no tile):
@@ -107,6 +110,7 @@ export function createLog() {
      *   running  a build is under way
      */
     view(tile) {
+      void version.value;
       const run = builds.get(tile);
       const mine = [...items.values()]
         .filter((m) => (m.tile === tile || m.tile === '') && m.state === 'open' && !dismissed.has(m.seq));
