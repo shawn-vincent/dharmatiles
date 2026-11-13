@@ -11,6 +11,10 @@
 // waits for the one before it), which replaces the last: so the page holds one short connection at most, never one
 // per piece, and an edit is never queued behind builds.  The program announces each finished tier on the event
 // stream; the page then fetches that result by key, once.
+//
+// The page learns a want's key from the post's answer, but the program announces what is already built while it
+// answers, so the announcement can come first.  An announcement that comes while a post is out and names no key the
+// page knows is held until that post's answer, then matched: the order the two arrive in cannot lose one.
 
 /** Every set, to hand the stream's announcements to. */
 const sets = new Set();
@@ -28,6 +32,8 @@ export function createTiers({ host, scope }) {
   const wants = new Map();
   /** @type {Map<string, string>} the program's key for each want, from the last post's answer */
   const byKey = new Map();
+  /** @type {Map<string, { key: string, docRev: number, error?: string | null }>} announcements that came while a post was out, before its answer named their key */
+  const early = new Map();
   let scheduled = false, posting = false, again = false;
 
   async function post() {
@@ -38,13 +44,16 @@ export function createTiers({ host, scope }) {
         again = false;
         const entries = [...wants.entries()];
         const r = await host.tiersWant({ scope, wants: entries.map(([, w]) => w.spec) });
-        if (r.status === 0) break; // disconnected: posted again on reconnect
+        if (r.status === 0) { early.clear(); break; } // disconnected: posted again on reconnect, which announces again
         if (r.status !== 200) {
           for (const [id, w] of entries) { wants.delete(id); w.reject(new Error(`the program refused the tiers wanted: ${r.body?.error ?? r.status}`)); }
           break;
         }
         byKey.clear();
         entries.forEach(([id], i) => byKey.set(r.body.keys[i], id));
+        const held = [...early.values()];
+        early.clear();
+        for (const m of held) if (byKey.has(m.key)) set.ready(m);
       } while (again);
     } finally { posting = false; }
   }
@@ -72,6 +81,8 @@ export function createTiers({ host, scope }) {
     /** @param {{ key: string, docRev: number, error?: string | null }} m */
     async ready(m) {
       const id = byKey.get(m.key);
+      // not known yet, and a post is out: its answer may name it (the program announces the built while it answers)
+      if (id === undefined && posting) { early.set(m.key, m); return; }
       const w = id !== undefined ? wants.get(id) : undefined;
       if (!w || id === undefined) return;
       wants.delete(id);

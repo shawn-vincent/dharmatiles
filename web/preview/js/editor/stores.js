@@ -95,6 +95,7 @@ export const view = createStore({
   shown: null,         // {id, epoch, version}: the build's mesh the view holds
   draft: null,         // {tileId, payload}: a draft shown in its place
   source: null,        // the id of the source document the text pane should show (`tile#file`, see `sourceId`); null: the tile's own
+  addressRead: false, // the start has taken where to go from the address (open.js pickFirst): nothing writes the address before, so a reload keeps its place
   pageAt: 'browse',    // the sidebar's page the user chose: the tile browser, or the editor ('edit'); `page` is derived from it below
   // dmode (a .dmap's mode: 'map' or 'plates'; null: not a .dmap, or its plan has not come) is derived, in editor/mode.js
   msel: [],            // the pieces selected on the map (their ids: editor/scene.js `selected()` reads the ones the map has now)

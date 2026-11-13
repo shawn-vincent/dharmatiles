@@ -287,7 +287,7 @@ function syncAddress() {
   const { tileId, sel, control, face } = view.get();
   const t = tile();
   // while the browser page shows, the address is the folder level's (places.js): the two never write it in the same moment
-  if (!started || pending || applying || !t || tileId == null || view.get().page === 'browse') return;
+  if (!started || !view.get().addressRead || pending || applying || !t || tileId == null || view.get().page === 'browse') return;
   const cur = parseHash(location.hash);
   const next = { ...cur };
   for (const k of ['at', 'piece', 'control', 'group', 'face', 'place', 'dir']) delete next[k];

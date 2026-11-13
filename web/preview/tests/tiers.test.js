@@ -70,3 +70,24 @@ test('a set is posted again after a reconnect, so a tier announced while the str
   await tick();
   assert.equal(f.posts.length, 2);
 });
+
+test('a tier the program announces while it answers the post (already built) is delivered, whichever arrives first', { timeout: 2000 }, async () => {
+  // the program announces what it holds while answering: the announcement reaches the page before the answer
+  const f = fakeHost();
+  f.results.set('e|full', { docRev: 4, buf: new ArrayBuffer(8) });
+  const tiersWant = f.host.tiersWant;
+  f.host.tiersWant = async (body) => {
+    for (const w of body.wants) if (f.results.has(`${w.tile}|${w.tier}`)) tierReady({ key: `${w.tile}|${w.tier}`, docRev: 4 });
+    return tiersWant(body);
+  };
+  const set = createTiers({ host: f.host, scope: 's' });
+  const e = set.want('e', { tile: 'e', tier: 'full' });
+  const late = set.want('g', { tile: 'g', tier: 'full' });
+  await tick();
+  assert.equal((await e)?.docRev, 4, 'the early announcement was held until the answer named its key');
+  // one that is not built is announced after the answer, as before
+  f.results.set('g|full', { docRev: 1, buf: new ArrayBuffer(2) });
+  tierReady({ key: 'g|full', docRev: 1 });
+  assert.equal((await late)?.docRev, 1);
+  assert.equal(set.size, 0);
+});

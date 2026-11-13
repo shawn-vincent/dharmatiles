@@ -33,7 +33,7 @@ export async function select(id, guarded = false) {
 function reset(t) {
   view.set({ shown: null, draft: null });
   // no tile: the folder level shows, and writes its own address (places.js)
-  if (!t) return;
+  if (!t || !view.get().addressRead) return; // the first tile is the address's own: it is not written over before it is read
   history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
 }
 
@@ -62,7 +62,7 @@ function follow() {
   const { ready, epoch } = server.get(), { tileId } = view.get();
   if (!ready) return;
   // the first tile shows the editor page (the page the sidebar starts on): `view.page` says so, so the keys that read it agree with what is on screen
-  if (!started) { started = true; pickFirst().then(() => { view.set({ page: view.get().tileId != null ? 'edit' : 'browse' }); }); return; }
+  if (!started) { started = true; pickFirst().then(() => { view.set({ pageAt: view.get().tileId != null ? 'edit' : view.get().pageAt, addressRead: true }); }); return; }
   const t = tile();
   // the tile shown is gone (trashed, moved away by another program): none is shown, and the panel is on its folder
   if (tileId != null && !t) { select(null, true); return; }

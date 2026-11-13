@@ -91,7 +91,7 @@ function focusRow(match = null) {
 let lastWritten = null;
 /** Write the folder level into the URL while the browser page shows: a new level is a step of the browser's history. */
 function syncAddress() {
-  if (!started || !browsing() || !server.get().ready) return;
+  if (!started || !view.get().addressRead || !browsing() || !server.get().ready) return;
   const { roots } = server.get();
   const cur = parseHash(location.hash);
   const next = { ...cur };
