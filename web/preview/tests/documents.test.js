@@ -317,12 +317,14 @@ test('random actions with answers and events arriving in any order leave the pag
 
 /** The program's side of one file: its text, a revision that only rises, and what it was asked. */
 function fakeFile(text = 'a') {
-  const f = { text, rev: 1, saves: [], told: new Set([1]) };
-  f.read = async () => ({ file: 'f.dtile', text: f.text, writable: true, docRev: f.rev });
+  const f = { text, rev: 1, saves: [], told: new Set([1]), pending: false, violations: [] };
+  f.read = async () => { f.pending = false; return { file: 'f.dtile', text: f.text, writable: true, docRev: f.rev }; };
   f.outside = (t) => { f.text = t; f.rev += 1; };
   f.answer = (name, body) => {
     assert.equal(name, 'save');
     f.saves.push(body.docRev);
+    if (body.docRev !== f.rev) f.pending = true;
+    else if (f.pending) f.violations.push(`a save was written over the disk's text after a refusal, with no choice made: ${body.text}`);
     if (body.docRev !== f.rev) return { status: 409, body: { error: { message: 'moved' }, text: f.text, docRev: f.rev } };
     if (body.text !== f.text) { f.text = body.text; f.rev += 1; }
     return { status: 200, body: { docRev: f.rev } };
@@ -361,7 +363,28 @@ test('the program saying the file changed does not let a save through against te
   assert.equal(r.disk, 'theirs');
   assert.equal(f.text, 'theirs', 'nothing was overwritten');
   assert.equal(docs.get('t1').source.text, 'theirs', 'the disk\'s text is what is held now');
+  docs.resolveConflict('t1'); // the user chose to keep theirs
   assert.deepEqual(await docs.saveSource('t1', 'mine'), { status: 'saved', docRev: 3 });
+});
+
+test('while a conflict stands nothing is saved; choosing ends it, and keep-mine saves against the disk\'s revision', async () => {
+  const f = fakeFile('one');
+  const { docs } = sourceWorld(f);
+  await docs.loadSource('t1', { tile: 't1', own: true }, f.read);
+  assert.equal((await docs.saveSource('t1', 'two')).status, 'saved');
+  f.outside('theirs');
+  assert.equal((await docs.saveSource('t1', 'three')).status, 'conflict');
+  const asked = f.saves.length;
+  // the user types on, without choosing: nothing is sent, the disk keeps its text
+  assert.equal((await docs.saveSource('t1', 'four')).status, 'conflict');
+  assert.equal((await docs.saveSource('t1', 'five')).status, 'conflict');
+  assert.equal(f.saves.length, asked, 'no save reached the program');
+  assert.equal(f.text, 'theirs');
+  assert.equal(docs.resolveConflict('t1'), 'theirs');
+  f.pending = false; // the user has chosen
+  assert.deepEqual(await docs.saveSource('t1', 'five'), { status: 'saved', docRev: 4 }, 'keep mine: the page\'s text against the disk\'s revision');
+  assert.equal(f.text, 'five');
+  assert.deepEqual(f.violations, []);
 });
 
 test('saves of one document run one after another, each from the revision the last left', async () => {
@@ -400,11 +423,13 @@ test('random reads, saves and outside changes never save against text the page h
       const k = rand();
       if (k < 0.4) ops.push(docs.saveSource('t1', `s${++n}`).then((r) => { if (r.status === 'saved' || r.status === 'conflict') readAt.add(r.docRev); }));
       else if (k < 0.6) f.outside(`o${++n}`);
-      else if (k < 0.8) receive({ id: 't1', docRev: f.rev, plan: { n } });
+      else if (k < 0.7) receive({ id: 't1', docRev: f.rev, plan: { n } });
+      else if (k < 0.8) { if (docs.resolveConflict('t1') != null) f.pending = false; }
       else ops.push(docs.loadSource('t1', { tile: 't1', own: true }, read));
       if (rand() < 0.5) await Promise.resolve();
     }
     await Promise.all(ops);
+    assert.deepEqual(f.violations, [], `seed ${seed}`);
     for (const r of sent) assert.ok(readAt.has(r), `seed ${seed}: a save was made against revision ${r}, which the page never had the text of`);
     const h = docs.get('t1');
     assert.ok(h.source.rev <= f.rev && h.docRev <= f.rev, `seed ${seed}`);

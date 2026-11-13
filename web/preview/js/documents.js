@@ -42,6 +42,7 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
   const held = new Map();
   const subs = new Set();
   const queues = new Map();
+  const conflicts = new Map(); // id -> the disk's text, while a save was refused and the user has not chosen
   const say = {
     refusal: report.refusal ?? (() => {}),
     failure: report.failure ?? (() => {}),
@@ -160,7 +161,8 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
     loadSource(id, meta, read, accept = () => true) {
       return enqueue(id, async () => {
         const v = await read();
-        if (!v || !accept(v)) return null; // nothing there, or the page has changes of its own on the text it holds: what was read is not taken
+        if (!v || !accept(v)) return null;
+        conflicts.delete(id); // a fresh reading the page took has no unsaved text of its own to conflict with // nothing there, or the page has changes of its own on the text it holds: what was read is not taken
         receive({ id, docRev: v.docRev, source: { tile: meta.tile, own: meta.own, file: v.file, text: v.text, writable: v.writable } });
         notify(id);
         return held.get(id) ?? null;
@@ -178,6 +180,8 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
         const h = held.get(id);
         const src = h?.source;
         if (!src?.writable) return { status: 'unwritable' };
+        // a file that moved on under a save stays refused until the user chooses (`resolveConflict`): nothing is written meanwhile
+        if (conflicts.has(id)) return { status: 'conflict', disk: conflicts.get(id), docRev: src.rev };
         const r = await send('save', { tile: src.tile, file: src.own ? undefined : src.file, text, docRev: src.rev });
         if (r.status === 200) {
           receive({ id, docRev: r.body.docRev, source: { ...src, text } });
@@ -187,12 +191,25 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
         if (r.status === 409 && r.body?.docRev != null) {
           receive({ id, docRev: r.body.docRev, source: { ...src, text: r.body.text ?? '' } });
           notify(id);
+          conflicts.set(id, r.body.text ?? '');
           return { status: 'conflict', disk: r.body.text ?? '', docRev: r.body.docRev };
         }
         say.failure(label, r);
         return { status: 'failed', reply: r };
       });
     },
+
+    /**
+     * The user has chosen between the disk's text and their own: saves are allowed again.  Resolves the disk's text
+     * the conflict was about (null when there was none).  "Keep mine" is then a save, against the disk's revision
+     * (already held); "take the disk's" is the page putting that text in its pane.
+     */
+    resolveConflict(id) {
+      const disk = conflicts.get(id) ?? null;
+      conflicts.delete(id);
+      return disk;
+    },
+    hasConflict: (id) => conflicts.has(id),
 
     /** A change made by a call outside the document's own page (a tile put on a list): its answer joins the history. */
     adopt(id, label, body) {

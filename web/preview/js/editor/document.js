@@ -425,8 +425,8 @@ function renderTextBar() {
     st.classList.add('bad');
     st.append('changed on disk: ');
     // the disk's text and revision are already the held state (js/documents.js): choosing says which text is the user's
-    st.append(button('take the disk’s', () => { const disk = d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }), ' or ',
-      button('keep mine', () => { doc.set({ conflict: null }); changed(); }));
+    st.append(button('take the disk’s', () => { const disk = docs.resolveConflict(curSid) ?? d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }), ' or ',
+      button('keep mine', () => { docs.resolveConflict(curSid); doc.set({ conflict: null }); changed(); }));
     return;
   }
   const w = saveWords();
