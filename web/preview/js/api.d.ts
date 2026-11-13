@@ -486,7 +486,11 @@ record: JsonValue | null, errors: Array<Mistake>,
 /**
  * A build that panicked or could not be encoded: an error body's `error`.
  */
-failure: ErrorDetail | null, progress: Progress | null, meshVersion: number | null, meshBytes: number | null, sketches: Array<SketchRef>, 
+failure: ErrorDetail | null, progress: Progress | null, meshVersion: number | null, 
+/**
+ * The revision of the document the mesh is of: the mesh is fetched by it.
+ */
+docRev: number | null, meshBytes: number | null, sketches: Array<SketchRef>, 
 /**
  * While the first build runs: the mesh on show is an earlier one (`kind`, `note`).
  */

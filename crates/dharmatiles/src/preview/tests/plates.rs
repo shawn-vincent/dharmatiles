@@ -32,7 +32,10 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
         "the chooser's profiles"
     );
     // the mesh says where its bed is, for the view to draw
-    let (head, body) = get(&r, &format!("/api/tiles/{}/mesh", id0(&r)));
+    let (head, body) = get(
+        &r,
+        &format!("/api/tiles/{}/mesh?docRev={}", id0(&r), p_rev(&r)),
+    );
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     let n = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
     let meta: Value = serde_json::from_slice(&body[8..8 + n]).unwrap();
@@ -127,4 +130,9 @@ fn a_print_list_that_does_not_plan_still_offers_its_printers() {
     assert_eq!(t["plan"]["plates"]["printer"], "sovol/sv06");
     assert!(t["plan"]["plates"]["printers"].as_array().unwrap().len() > 25);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The revision of the first tile's document the summary says the mesh is of.
+fn p_rev(r: &Running) -> u64 {
+    tiles(r)["tiles"][0]["docRev"].as_u64().unwrap_or(0)
 }

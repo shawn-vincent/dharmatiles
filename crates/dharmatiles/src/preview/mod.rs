@@ -126,6 +126,15 @@ const LOG: usize = 1024;
 #[derive(Debug)]
 struct Superseded;
 
+/// A mesh of another revision of the document than the one asked for: 409 with the revision it is of.
+fn stale_mesh(rev: u64) -> (&'static str, Value) {
+    fail::refused_with(
+        "409 Conflict",
+        "that is not the revision of the document the mesh is of",
+        |b| b.doc_rev = Some(rev),
+    )
+}
+
 /// A tile's name for the page: 16 hex digits of a hash of its path.  The
 /// same path is the same id for as long as it is listed, and across runs.
 type TileId = String;
@@ -164,6 +173,9 @@ pub struct Slot {
     failure: Option<api::ErrorDetail>,
     mesh: Option<Arc<Vec<u8>>>,
     mesh_version: u64,
+    /// The revision of the document the mesh is of (the tile's file, or the print list's): a mesh is asked for by it,
+    /// and one of another revision is refused, so an older build cannot be shown for a newer text.
+    doc_rev: Option<u64>,
     /// The build's progress (a `progress` event's body) while building.
     progress: Option<api::Progress>,
     /// Files the last build read, with their times.
@@ -222,6 +234,7 @@ impl Slot {
             failure: None,
             mesh: None,
             mesh_version: 0,
+            doc_rev: None,
             progress: None,
             files: BTreeMap::new(),
             stale: false,
@@ -246,6 +259,7 @@ impl Slot {
             failure: self.failure.clone(),
             progress: self.progress.clone(),
             mesh_version: self.mesh.as_ref().map(|_| self.mesh_version),
+            doc_rev: self.mesh.as_ref().and(self.doc_rev),
             mesh_bytes: self.mesh.as_ref().map(|m| m.len()),
             sketches: self
                 .sketches
@@ -999,8 +1013,27 @@ impl Shared {
         }))
     }
 
-    fn mesh(&self, id: &str) -> Option<Arc<Vec<u8>>> {
-        lock(&self.tiles).iter().find(|t| t.id == id)?.mesh.clone()
+    /// The tile's mesh, if it is of document revision `doc_rev`: `Ok(None)` when there is none yet, `Err(now)` (the
+    /// revision it is of) when it is of another, which is never sent as if it were this one's.
+    fn mesh(&self, id: &str, doc_rev: u64) -> Result<Option<Arc<Vec<u8>>>, u64> {
+        let tiles = lock(&self.tiles);
+        let Some(t) = tiles.iter().find(|t| t.id == id) else {
+            return Ok(None);
+        };
+        match (&t.mesh, t.doc_rev) {
+            (Some(m), Some(r)) if r == doc_rev => Ok(Some(Arc::clone(m))),
+            (Some(_), r) => Err(r.unwrap_or(0)),
+            (None, _) => Ok(None),
+        }
+    }
+
+    /// The revision of the document at `path` now: a library file has none (0).  A file that cannot be read is 0 too:
+    /// whatever reads it next says so, with the words.
+    fn rev_of(&self, path: &str) -> u64 {
+        if path.starts_with(dt_eval::LIB) {
+            return 0;
+        }
+        self.docs.read(path).map_or(0, |(_, r)| r)
     }
 
     /// The tile's mesh at a lower tier (`low` or `super-low`), the page's
@@ -1032,6 +1065,17 @@ impl Shared {
         else {
             return fail::refused("404 Not Found", "no such tile").into();
         };
+        // the revision the tile's document is at now; a page that asked for another is told this one
+        let rev = self.rev_of(&path);
+        if let Some(asked) = param("docRev") {
+            match asked.parse::<u64>() {
+                Ok(n) if n == rev => {}
+                Ok(_) => return stale_mesh(rev).into(),
+                Err(_) => {
+                    return fail::refused("400 Bad Request", "docRev is a whole number").into();
+                }
+            }
+        }
         let mut opts = self.options();
         match param("system") {
             None => {}
@@ -1081,7 +1125,7 @@ impl Shared {
                     .join("; "),
             )
             .into(),
-            Ok(b) => match payload::for_map(&b, tier.name(), &opts, &self.palette()) {
+            Ok(b) => match payload::for_map(&b, tier.name(), rev, &opts, &self.palette()) {
                 Ok(bytes) => route::Reply::Bytes(Arc::new(bytes)),
                 Err(e) => fail::failure(
                     "500 Internal Server Error",

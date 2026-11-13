@@ -106,6 +106,16 @@ fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Valu
     }
 }
 
+/// The URL of the first tile's mesh as the page asks for it: by the revision the tile's summary says it is of.
+fn mesh_url(r: &Running) -> String {
+    let t = tiles(r)["tiles"][0].clone();
+    format!(
+        "/api/tiles/{}/mesh?docRev={}",
+        t["id"].as_str().unwrap(),
+        t["docRev"].as_u64().unwrap_or(0)
+    )
+}
+
 /// Wait until the server has no work left (queued, running or changed on disk and not yet picked up), for as long
 /// as it takes: the way to know that nothing more will happen, in place of a sleep.
 fn wait_idle(r: &Running) {
@@ -226,7 +236,8 @@ fn builds_a_tile_and_serves_its_mesh() {
     assert!((t["plan"]["squareMm"].as_f64().unwrap() - 35.0).abs() < 1e-9);
     assert_eq!(t["record"]["audit"]["watertight"], true);
     assert_eq!(t["meshVersion"], 1);
-    let (head, body) = get(&r, &format!("/api/tiles/{}/mesh", id0(&r)));
+    assert_eq!(t["docRev"], 0, "a library tile's document has no revision");
+    let (head, body) = get(&r, &mesh_url(&r));
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert_eq!(&body[..4], payload::MAGIC);
     let jl = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
@@ -243,7 +254,7 @@ fn builds_a_tile_and_serves_its_mesh() {
     );
     assert_eq!(h["overhangDeg"], 55.0);
     assert!(
-        get(&r, "/api/tiles/ffffffffffffffff/mesh")
+        get(&r, "/api/tiles/ffffffffffffffff/mesh?docRev=0")
             .0
             .starts_with("HTTP/1.1 404")
     );
@@ -333,11 +344,7 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
     assert_eq!(e["file"], path.as_str());
     assert_eq!(e["line"].as_u64(), Some(line as u64), "{e}");
     assert_eq!(t["meshVersion"], 1, "the last good mesh is kept");
-    assert!(
-        get(&r, &format!("/api/tiles/{}/mesh", id0(&r)))
-            .0
-            .starts_with("HTTP/1.1 200")
-    );
+    assert!(get(&r, &mesh_url(&r)).0.starts_with("HTTP/1.1 200"));
 
     // fixed: rebuilt in place, a new mesh version
     std::fs::write(&doc, text.replace("seed=1", "seed=2")).unwrap();
@@ -875,7 +882,7 @@ fn a_draft_is_a_request_answered_with_its_mesh() {
     // nothing is written, and the tile never grew a draft route of its own
     assert_eq!(dt_eval::Files.read(FLAT).unwrap(), text);
     assert!(
-        get(&r, &format!("/api/tiles/{}/mesh?draft=1", id0(&r)))
+        get(&r, &format!("/api/tiles/{}/mesh?draft=1&docRev=0", id0(&r)))
             .0
             .starts_with("HTTP/1.1 404"),
         "the tile's own mesh route serves only its build, and it is not built"
@@ -961,7 +968,7 @@ fn routes_answer_without_a_socket() {
     assert!(matches!(
         route(
             &shared,
-            &http::Request::build("GET", &format!("/api/tiles/{id}/mesh"), None, b"")
+            &http::Request::build("GET", &format!("/api/tiles/{id}/mesh?docRev=0"), None, b"")
         ),
         Reply::Json("404 Not Found", _)
     ));
@@ -2703,4 +2710,72 @@ fn documents_are_written_only_through_the_document_registry() {
         "write a document through Shared::docs.edit:\n{}",
         bad.join("\n")
     );
+}
+
+#[test]
+fn a_mesh_is_fetched_by_the_revision_of_the_document_and_another_is_refused() {
+    let dir = std::env::temp_dir().join(format!("dt-meshrev-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let doc = dir.join("t.dtile");
+    std::fs::write(&doc, dt_eval::Library.read(FLAT).unwrap()).unwrap();
+    let path = doc.to_string_lossy().into_owned();
+    let r = start(&[&path], true);
+    let t = wait_for(&r, "first build", |t| t["status"] == "ready");
+    let rev = t["docRev"].as_u64().unwrap();
+    let id = id0(&r);
+    // the revision the summary says: the mesh
+    assert!(
+        get(&r, &format!("/api/tiles/{id}/mesh?docRev={rev}"))
+            .0
+            .starts_with("HTTP/1.1 200")
+    );
+    // an older (or any other) one is refused with the revision the mesh is of, never served as if it were
+    let (head, body) = get(&r, &format!("/api/tiles/{id}/mesh?docRev={}", rev + 7));
+    assert!(head.starts_with("HTTP/1.1 409"), "{head}");
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v["docRev"].as_u64(), Some(rev));
+    // no revision asked for is no mesh
+    assert!(
+        get(&r, &format!("/api/tiles/{id}/mesh"))
+            .0
+            .starts_with("HTTP/1.1 400")
+    );
+    // the file changes: the next build is of the next revision, and the old number no longer fetches
+    let text = std::fs::read_to_string(&doc).unwrap();
+    std::fs::write(&doc, format!("{text}\n// changed\n")).unwrap();
+    let t = wait_for(&r, "the rebuild", |t| {
+        t["docRev"].as_u64().is_some_and(|n| n > rev) && t["status"] == "ready"
+    });
+    let now = t["docRev"].as_u64().unwrap();
+    assert!(
+        get(&r, &format!("/api/tiles/{id}/mesh?docRev={rev}"))
+            .0
+            .starts_with("HTTP/1.1 409")
+    );
+    assert!(
+        get(&r, &format!("/api/tiles/{id}/mesh?docRev={now}"))
+            .0
+            .starts_with("HTTP/1.1 200")
+    );
+    // a tier is asked for at a revision too: a tile that has moved on says which it is at
+    let (head, body) = get(
+        &r,
+        &format!("/api/tiles/{id}/tier?tier=super-low&docRev={rev}"),
+    );
+    assert!(head.starts_with("HTTP/1.1 409"), "{head}");
+    assert_eq!(
+        serde_json::from_slice::<Value>(&body).unwrap()["docRev"].as_u64(),
+        Some(now)
+    );
+    let (head, body) = get(
+        &r,
+        &format!("/api/tiles/{id}/tier?tier=super-low&docRev={now}"),
+    );
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    // and the payload says which revision it is of
+    let jl = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
+    let meta: Value = serde_json::from_slice(&body[8..8 + jl]).unwrap();
+    assert_eq!(meta["docRev"].as_u64(), Some(now));
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -108,6 +108,9 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     if super::inventory::is_inventory(&path) {
         return super::inventory::rebuild(shared, id, &path);
     }
+    // the revision of the document this build is of; a file that changes during it makes the build superseded, so
+    // the mesh it ends with is of this revision or is dropped
+    let doc_rev = shared.rev_of(&path);
     let rec = Recording::watching(&path);
     // every file the build reads, with its text: what the disk cache's key covers
     let tracked = dt_eval::Tracked::new(&rec);
@@ -345,6 +348,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 t.record = Some(record);
                 t.mesh = Some(mesh);
                 t.mesh_version += 1;
+                t.doc_rev = Some(doc_rev);
                 t.shown = None;
                 t.files = watched(&rec, shared);
             });
@@ -439,6 +443,9 @@ pub(super) fn show_stored(
     });
     shared.update(id, |t| {
         if t.mesh.is_none() {
+            // an earlier build, shown while the new one runs (`shown` says so): labelled with the revision now, so
+            // the page can fetch it; it is never mistaken for the build, which replaces it
+            t.doc_rev = Some(shared.rev_of(path));
             t.mesh = Some(Arc::new(bytes));
             t.mesh_version += 1;
             // a low or super-low build is not yet checked: the status line says so
@@ -464,6 +471,7 @@ fn watched(rec: &Recording, shared: &Shared) -> BTreeMap<String, Option<std::tim
 /// look at any printable mesh, not only a document's.
 pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str) {
     let t0 = Instant::now();
+    let stl_rev = shared.rev_of(path);
     let files = BTreeMap::from([(path.to_owned(), mtime(path))]);
     let fail = |msg: String| {
         shared.report(id, Scope::Build, |name| {
@@ -533,6 +541,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         t.record = Some(record);
         t.mesh = Some(bytes);
         t.mesh_version += 1;
+        t.doc_rev = Some(stl_rev);
         t.files = files;
     });
 }

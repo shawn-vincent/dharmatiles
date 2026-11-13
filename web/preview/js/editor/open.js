@@ -92,10 +92,11 @@ function follow() {
 
 let loadToken = 0;
 async function loadMesh(t) {
-  const token = ++loadToken, { epoch } = server.get(), version = t.meshVersion;
+  const token = ++loadToken, { epoch } = server.get(), version = t.meshVersion, docRev = t.docRev ?? 0;
   try {
-    const buf = await host.fetchMesh(t.id);
-    if (token !== loadToken || t.id !== view.get().tileId) return;
+    const buf = await host.fetchMesh(t.id, docRev);
+    // the program's mesh is of another revision (null), the page moved on, or the tile did: not shown
+    if (!buf || token !== loadToken || t.id !== view.get().tileId || (tile()?.docRev ?? 0) !== docRev) return;
     const first = !viewer.payload;
     const p = parsePayload(buf);
     viewer.setMesh(p); // the new mesh swaps in place: the camera is kept

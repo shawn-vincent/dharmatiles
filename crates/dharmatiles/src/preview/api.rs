@@ -233,6 +233,8 @@ pub struct TileSummary {
     pub failure: Option<ErrorDetail>,
     pub progress: Option<Progress>,
     pub mesh_version: Option<u64>,
+    /// The revision of the document the mesh is of: the mesh is fetched by it.
+    pub doc_rev: Option<u64>,
     pub mesh_bytes: Option<usize>,
     pub sketches: Vec<SketchRef>,
     /// While the first build runs: the mesh on show is an earlier one (`kind`, `note`).

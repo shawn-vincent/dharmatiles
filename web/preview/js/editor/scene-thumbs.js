@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { parsePayload } from '../payload.js';
 import { FOV, FRAG, VERT, dirv } from '../viewer/consts.js';
 import { host } from './app.js';
+import { tileById } from './stores.js';
 
 const W = 176, H = 124;
 const pictures = new Map(); // key -> Promise<string | null>
@@ -72,8 +73,8 @@ export function pictureOf(id, key, plate) {
   const k = `${id}|${key}|${plate}`;
   if (!pictures.has(k)) {
     const job = chain.then(async () => {
-      const buf = await host.fetchTier(id, { tier: 'super-low' });
-      return draw(buf, plate);
+      const buf = await host.fetchTier(id, { tier: 'super-low', docRev: tileById(id)?.docRev });
+      return buf ? draw(buf, plate) : null; // the tile is at another revision: no picture, asked again at the next look
     });
     // one failure does not stop the pictures after it
     chain = job.then(() => undefined, () => undefined);

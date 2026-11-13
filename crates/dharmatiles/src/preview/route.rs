@@ -189,7 +189,19 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             Reply::Json(status, body)
         }
         ("GET", "/api/tiles", _) => ok(&shared.snapshot()).into(),
-        ("GET", _, Some((id, "mesh"))) => bytes(shared.mesh(id), "no mesh yet"),
+        ("GET", _, Some((id, "mesh"))) => {
+            let Some(asked) = req.param("docRev").and_then(|s| s.parse::<u64>().ok()) else {
+                return fail::refused(
+                    "400 Bad Request",
+                    "ask for the mesh of a revision: ?docRev=N",
+                )
+                .into();
+            };
+            match shared.mesh(id, asked) {
+                Ok(m) => bytes(m, "no mesh yet"),
+                Err(now) => super::stale_mesh(now).into(),
+            }
+        }
         // `?tier=low` or `?tier=super-low`: the tile's mesh at that tier, from the
         // cache or built, for a map that draws by distance.  Never checked.
         ("GET", _, Some((id, "tier"))) => shared.tier_mesh(id, &|k| req.param(k)),

@@ -21,7 +21,7 @@ import { FOV } from '../viewer/consts.js';
 import * as M from '../map-model.js';
 import { $, host, pickView, viewer } from './app.js';
 import { piecesOf, selectedOf, chipOf, verdictOf } from '../doc-views.js';
-import { createStore, isPlates, log, server, tile, view } from './stores.js';
+import { createStore, isPlates, log, server, tile, tileById, view } from './stores.js';
 import { docs } from './docs.js';
 import { applyMode, chooseMode, init as initMode, setChosen } from './mode.js';
 
@@ -183,10 +183,14 @@ async function run({ p, tier, gkey }) {
   const e = geoms.get(gkey);
   if (!e) return; // let go of while it waited
   try {
-    const buf = await host.fetchTier(p.tileId, { tier, seed: p.seed ?? undefined, system: p.system, printer: sceneNow()?.printer });
+    const docRev = tileById(p.tileId)?.docRev;
+    const buf = await host.fetchTier(p.tileId, { tier, docRev, seed: p.seed ?? undefined, system: p.system, printer: sceneNow()?.printer });
+    if (!buf) { e.asked.delete(tier); return; } // the tile is at another revision: asked again with the next look
     const payload = parsePayload(buf);
-    // the tile moved on while it came (another build, another map): what came is not kept
+    // the tile moved on while it came (another build, another map, another revision of its document): what came is not kept
     if (geoms.get(gkey) !== e) return;
+    if (docRev != null && payload.meta.docRev !== docRev) { e.asked.delete(tier); return; }
+    if (tileById(p.tileId)?.docRev !== docRev) { e.asked.delete(tier); return; }
     e.tiers.set(tier, { tris: payload.triangles, checked: payload.meta.checked !== false, failures: payload.meta.failures ?? [] });
     viewer.setSceneGeometry(gidOf(gkey, tier), payload);
     evaluate(true);

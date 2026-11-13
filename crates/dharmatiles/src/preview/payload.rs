@@ -214,6 +214,7 @@ pub fn from_built(
 pub fn for_map(
     b: &Built,
     tier: &str,
+    doc_rev: u64,
     opts: &dt_eval::Options,
     palette: &dt_kit::Palette,
 ) -> Result<Vec<u8>, String> {
@@ -221,6 +222,7 @@ pub fn for_map(
     let (lo, hi) = dt_kit::box_of(&b.export.mesh);
     let meta = json!({
         "tier": tier,
+        "doc_rev": doc_rev,
         "checked": b.checked,
         "failures": if b.checked { b.audit.failures(&opts.printer) } else { Vec::new() },
         "overhang_deg": opts.printer.overhang_deg,

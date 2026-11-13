@@ -619,6 +619,7 @@ fn rebuild_plates(
                 t.plan = Some(sp);
                 t.mesh = Some(Arc::new(bytes));
                 t.mesh_version += 1;
+                t.doc_rev = Some(rev);
                 t.files = files.clone();
                 t.errors.clear();
                 t.shown = running.then(|| {

@@ -179,24 +179,33 @@ export function browserHost() {
       };
       open();
     },
-    /** @param {string} id @returns {Promise<ArrayBuffer>} the tile's binary mesh */
-    async fetchMesh(id) {
-      const r = await netFetch(tile(id, 'mesh'), { cache: 'no-store' });
+    /**
+     * The tile's binary mesh, of the revision of its document the page asks for (its summary's `docRev`); null when the
+     * program's mesh is of another revision (a build is on its way: the next summary says which), never that mesh.
+     * @param {string} id @param {number} docRev @returns {Promise<ArrayBuffer | null>}
+     */
+    async fetchMesh(id, docRev) {
+      const r = await netFetch(`${tile(id, 'mesh')}?docRev=${docRev}`, { cache: 'no-store' });
+      if (r.status === 409) return null;
       if (!r.ok) throw await replyError(r, 'mesh');
       return r.arrayBuffer();
     },
     /**
      * A tile's mesh at a tier (`super-low`, `low`, `full`) for a map's piece: from the cache or built, not
      * checked unless full; a piece as the map builds it (its seed, its system, the map's printer).
-     * @param {string} id @param {{tier: string, seed?: number | null, system?: string, printer?: string}} q
-     * @returns {Promise<ArrayBuffer>}
+     * `docRev`, when the page knows the revision of the tile's document, is asked for: the program answers 409 (null here)
+     * for a tile that is at another, and the payload's header says which revision it is of.
+     * @param {string} id @param {{tier: string, docRev?: number | null, seed?: number | null, system?: string, printer?: string}} q
+     * @returns {Promise<ArrayBuffer | null>}
      */
-    async fetchTier(id, { tier, seed, system, printer }) {
+    async fetchTier(id, { tier, docRev, seed, system, printer }) {
       const q = new URLSearchParams({ tier });
+      if (docRev != null) q.set('docRev', String(docRev));
       if (seed != null) q.set('seed', String(seed));
       if (system) q.set('system', system);
       if (printer) q.set('printer', printer);
       const r = await netFetch(tile(id, `tier?${q}`), { cache: 'no-store' });
+      if (r.status === 409) return null;
       if (!r.ok) throw await replyError(r, `the ${tier} mesh`);
       return r.arrayBuffer();
     },
