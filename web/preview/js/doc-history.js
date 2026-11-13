@@ -11,11 +11,17 @@
 // anyone else since is refused by the program (and `clear` ends a history that can no longer be trusted).
 // No DOM, no network: the callers write the texts (documents.js for a map, document.js for the source pane).
 
+import { signal } from '@preact/signals-core';
+
 const LIMIT = 400;
 
 export function createHistory() {
   const docs = new Map(); // key -> {entries, at, head}
+  // a signal that every change to any history bumps, and every read follows: what draws a history (the title bar's Undo and Redo and their menus) is drawn again when it changes
+  const version = signal(0);
+  const changed = () => { version.value += 1; };
   const of = (key) => {
+    void version.value;
     let d = docs.get(key);
     if (!d) { d = { entries: [], at: 0, head: null }; docs.set(key, d); }
     return d;
@@ -29,6 +35,7 @@ export function createHistory() {
       d.at = d.entries.length;
       if (d.entries.length > LIMIT) { d.entries.shift(); d.at -= 1; }
       if (entry.docRev != null) d.head = entry.docRev;
+      changed();
     },
     /** The last change made is one more step of the same: its `after` (and revision) are now these (typing). */
     amend(key, patch) {
@@ -36,6 +43,7 @@ export function createHistory() {
       if (!d.at) return false;
       Object.assign(d.entries[d.at - 1], patch);
       if (patch.docRev != null) d.head = patch.docRev;
+      changed();
       return true;
     },
     entries: (key) => of(key).entries,
@@ -54,6 +62,7 @@ export function createHistory() {
       const d = of(key);
       d.at = Math.max(0, Math.min(d.entries.length, d.at + dir));
       if (rev != null) d.head = rev;
+      changed();
     },
     /** The text at state `i` (0: before the first change; `entries.length`: after the last). */
     stateText(key, i) {
@@ -62,11 +71,11 @@ export function createHistory() {
       return i === entries.length ? (entries.at(-1)?.after ?? null) : entries[i].before;
     },
     /** The pointer goes to state `i` (after the caller wrote that state's text). */
-    jump(key, i) { const d = of(key); d.at = Math.max(0, Math.min(d.entries.length, i)); },
+    jump(key, i) { const d = of(key); d.at = Math.max(0, Math.min(d.entries.length, i)); changed(); },
     /** A history that can no longer be trusted (the file changed under it), or a document that is gone. */
-    clear(key) { docs.delete(key); },
+    clear(key) { docs.delete(key); changed(); },
     /** A renamed document keeps its history. */
-    rename(from, to) { if (docs.has(from)) { docs.set(to, docs.get(from)); docs.delete(from); } },
-    has: (key) => docs.has(key),
+    rename(from, to) { if (docs.has(from)) { docs.set(to, docs.get(from)); docs.delete(from); changed(); } },
+    has: (key) => { void version.value; return docs.has(key); },
   };
 }

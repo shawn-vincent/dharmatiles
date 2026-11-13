@@ -5,7 +5,10 @@
 // which file to show; it knows nothing of the selection or the view.
 
 import { suggest } from '../complete.js';
+import { effect } from '@preact/signals-core';
 import { describeChange } from '../history.js';
+import { html, render } from '../view/html.js';
+import { HistoryMenu, SaveState } from '../view/title-bar.js';
 import { parsePayload } from '../payload.js';
 import { TextPane, byteToIndex } from '../text.js';
 import { patchOnCopy } from '../mine.js';
@@ -69,58 +72,41 @@ export const texts = new TextPane($('code'), {
 });
 // the selection part adds onCaretLine and onHoverLine to texts.cb
 
-// one history for the file shown: typing (a pause or another kind of change
-// starts a new step), changes from the lens, and changes on disk
-function historyButton(entry, target, distance, direction) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  const action = document.createElement('span'); action.className = 'action'; action.textContent = entry.label;
-  const away = document.createElement('span'); away.className = 'distance'; away.textContent = distance === 1 ? '1 step' : `${distance} steps`;
-  b.append(action, away);
-  if (entry.change?.removed || entry.change?.added) {
-    const change = document.createElement('span'); change.className = 'change';
-    if (entry.change.removed) {
-      const removed = document.createElement('code'); removed.className = 'removed'; removed.textContent = `− ${entry.change.removed}`;
-      change.append(removed);
-    }
-    if (entry.change.added) {
-      const added = document.createElement('code'); added.className = 'added'; added.textContent = `+ ${entry.change.added}`;
-      change.append(added);
-    }
-    b.append(change);
-  }
-  b.title = `${direction} to ${entry.label}`;
-  b.onclick = () => { if (owned()) undo(direction === 'Undo' ? -1 : 1); else goHistory(target); view.set({ popover: null }); };
-  return b;
-}
-
-function renderHistory(buildMenus = false) {
-  const t = tile();
-  const mine = owned();
-  const key = mine ? t?.id : textKey();
-  const writable = mine ? !!(t && !t.path.startsWith('lib:') && (planOf(t)?.writable ?? true)) : doc.get().writable;
-  const canUndo = writable && !!key && history.canUndo(key);
-  const canRedo = writable && !!key && history.canRedo(key);
-  $('undo').disabled = !canUndo; $('undo-drop').disabled = !canUndo;
-  $('redo').disabled = !canRedo; $('redo-drop').disabled = !canRedo;
-  if (!buildMenus) return;
-  const undoMenu = $('undo-history'), redoMenu = $('redo-history');
-  undoMenu.replaceChildren(); redoMenu.replaceChildren();
-  if (!key) return;
+// one history for the file shown: typing (a pause or another kind of change starts a new step), changes from the lens, and
+// changes on disk.  The title bar's Undo and Redo and their menus are bound to it (`bindHistory`): they read the history's
+// signal, the tile and the document, so they follow every change without being told.
+function historyItems(key, mine) {
   const at = history.at(key), entries = history.entries(key);
   // a program-owned document goes back one change at a time (each is a call against the file's revision)
-  for (let target = at - 1; target >= (mine ? at - 1 : 0); target--) {
-    undoMenu.append(historyButton(entries[target], target, at - target, 'Undo'));
-  }
-  for (let target = at + 1; target <= (mine ? at + 1 : entries.length); target++) {
-    redoMenu.append(historyButton(entries[target - 1], target, target - at, 'Redo'));
-  }
+  const undo = [], redo = [];
+  // (a step that is not there, at the ends, is not offered: the menus are drawn whatever the buttons say)
+  for (let target = at - 1; target >= (mine ? at - 1 : 0); target--) if (entries[target]) undo.push({ entry: entries[target], target, distance: at - target, direction: 'Undo' });
+  for (let target = at + 1; target <= (mine ? at + 1 : entries.length); target++) if (entries[target - 1]) redo.push({ entry: entries[target - 1], target, distance: target - at, direction: 'Redo' });
+  return { undo, redo };
+}
+function pickHistory(direction, target) {
+  if (owned()) undo(direction === 'Undo' ? -1 : 1); else goHistory(target);
+  view.set({ popover: null });
+}
+function bindHistory() {
+  effect(() => {
+    const t = tile();
+    const mine = owned();
+    const key = mine ? t?.id : textKey();
+    const writable = mine ? !!(t && !t.path.startsWith('lib:') && (planOf(t)?.writable ?? true)) : doc.get().writable;
+    const canUndo = writable && !!key && history.canUndo(key);
+    const canRedo = writable && !!key && history.canRedo(key);
+    $('undo').disabled = !canUndo; $('undo-drop').disabled = !canUndo;
+    $('redo').disabled = !canRedo; $('redo-drop').disabled = !canRedo;
+    const items = key ? historyItems(key, mine) : { undo: [], redo: [] };
+    render(html`<${HistoryMenu} items=${items.undo} onPick=${pickHistory} />`, $('undo-history'));
+    render(html`<${HistoryMenu} items=${items.redo} onPick=${pickHistory} />`, $('redo-history'));
+  });
 }
 
 function resetHistory(text) {
   history.clear(textKey());
   run.openText = text; run.lastKind = null;
-  renderHistory();
 }
 function clearDocument() {
   texts.clear();
@@ -129,7 +115,6 @@ function clearDocument() {
   run.lastKind = null;
   curSid = null;
   doc.set({ text: null, writable: false, stack: null, map: null, names: null, conflict: null, note: null, ...sourceFields(null) });
-  renderHistory();
 }
 function record(text, kind, label = null) {
   // a document the program owns has its steps from the program: the source's saves (save() below)
@@ -143,7 +128,6 @@ function record(text, kind, label = null) {
   if (join) history.amend(key, { after: text, caret: texts.selectionStart, kind, label: change.title, change });
   else history.push(key, { before: prior, after: text, caret: texts.selectionStart, kind, label: change.title, change });
   run.lastKind = kind; run.lastTime = now;
-  renderHistory();
 }
 /** The source goes to state `i` of its history (the text of a tile; a program-owned document is stepped by docs.step). */
 function goHistory(i) {
@@ -156,7 +140,6 @@ function goHistory(i) {
   doc.set({ text: texts.text });
   closeComp();
   changed();
-  renderHistory();
 }
 /** Undo (`step` -1) or Redo (1): the page's one, for whichever document is open. */
 export function undo(step) {
@@ -378,10 +361,9 @@ export async function loadText(file) {
       });
       const key = `text:${t.id}`;
       if (fresh && carried && history.has(carried.key) && stateTextOf(carried.key, history.at(carried.key)) === v.text) {
-        history.rename(carried.key, key); run.openText = v.text; renderHistory(); // a rename keeps its undo
+        history.rename(carried.key, key); run.openText = v.text; // a rename keeps its undo
       } else if (fresh) resetHistory(v.text);
       else if (stateNow(key) !== v.text) record(v.text, 'disk'); // changed on disk: one more step (a document the program owns has its own steps)
-      renderHistory();
       if (fresh) carried = null;
       askNames(); // the names it makes, for completion
       check(); // its stack and map, for the sheet and the overlay: spans of exactly this text
@@ -407,34 +389,21 @@ export async function openFile(file, line) {
  * part of the tile, which has a bar of its own) which file this is.  The tile
  * itself is named in the crumb above; a library tile has its chip there.
  */
-function renderTextBar() {
-  const t = tile(), d = doc.get(), f = d.file, live = server.get().live;
+function showTextBar() {
+  const t = tile(), d = doc.get(), f = d.file;
   const part = !!f && f !== t?.path;
   $('partbar').hidden = !part;
   $('sourcepath').textContent = part ? `\u200e${f}` : '';
   $('sourcepath').title = f || '';
   $('rochip').hidden = !t?.path.startsWith('lib:');
   const st = $('savestate');
-  st.replaceChildren();
-  st.classList.remove('bad');
-  const button = (label, fn) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.textContent = label; b.onclick = fn;
-    return b;
-  };
-  if (!f) return;
-  if (d.writable && d.conflict != null) {
-    st.classList.add('bad');
-    st.append('changed on disk: ');
-    // the disk's text and revision are already the held state (js/documents.js): choosing says which text is the user's
-    st.append(button('take the disk’s', () => { const disk = docs.resolveConflict(curSid) ?? d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }), ' or ',
-      button('keep mine', () => { docs.resolveConflict(curSid); doc.set({ conflict: null }); changed(); }));
-    return;
-  }
-  const w = saveWords();
-  if (!w) return;
-  st.textContent = w.text;
-  if (w.bad) st.classList.add('bad');
+  const conflict = !!f && d.writable && d.conflict != null;
+  const words = f && !conflict ? saveWords() : null;
+  st.classList.toggle('bad', conflict || !!words?.bad);
+  // the disk's text and revision are already the held state (js/documents.js): choosing says which text is the user's
+  render(html`<${SaveState} words=${words} conflict=${conflict}
+    onTake=${() => { const disk = docs.resolveConflict(curSid) ?? d.conflict; doc.set({ conflict: null }); edited(disk, 'disk'); }}
+    onKeep=${() => { docs.resolveConflict(curSid); doc.set({ conflict: null }); changed(); }} />`, st);
 }
 
 /**
@@ -549,8 +518,8 @@ export function init() {
   view.subscribe(['tileId', 'source'], follow);
   server.subscribe(['tiles'], follow);
   view.subscribe(['tileId'], closeComp);
-  doc.subscribe(null, renderTextBar);
-  server.subscribe(['live', 'tiles'], renderTextBar);
+  effect(showTextBar);
+  bindHistory();
   // the server was away and is back: an edit it never got is checked and saved now
   let wasLive = server.get().live;
   server.subscribe(['live'], ({ live }) => {
@@ -561,8 +530,6 @@ export function init() {
   $('undo').onclick = () => undo(-1);
   $('redo').onclick = () => undo(1);
   // the history is one: what it holds changes when a document's state or its steps do
-  docs.subscribe(() => renderHistory());
-  view.subscribe(['popover'], ({ popover }) => { if (popover === 'undo-history' || popover === 'redo-history') renderHistory(true); });
   addEventListener('beforeunload', (e) => {
     if (dirty() && doc.get().writable) { e.preventDefault(); e.returnValue = ''; }
   });
@@ -573,5 +540,4 @@ export function init() {
       undo(e.key === 'y' || e.shiftKey ? 1 : -1);
     }
   });
-  renderTextBar();
 }

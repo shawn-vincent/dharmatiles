@@ -1,3 +1,4 @@
+// PARKED: nothing in the page uses this; the weighted-range gallery is off until the sheet writes units.  When it is switched on it is ported to a Preact component (view/) first, not switched on as it is.
 // The weighting gallery under a range being edited (the value pop-up in
 // lens.js): the weighting functions as small curve thumbnails, a pick that
 // rewrites the source, and a slider for each number the function takes.
