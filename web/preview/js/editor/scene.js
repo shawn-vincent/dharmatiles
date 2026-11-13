@@ -99,7 +99,7 @@ function unmount() {
   viewer.setSceneOn(false);
   viewer.controls.maxDistance = 600;
   viewer.maxDistance = null;
-  view.set({ msel: [], mprop: null });
+  view.set({ msel: [], mprop: null, madd: false });
 }
 
 // ---- the tiers ----------------------------------------------------------------------------------------
@@ -338,7 +338,8 @@ function hover(i) {
 export function select(ids, add = false) {
   const cur = view.get().msel;
   const next = add ? (ids.length === 1 && cur.includes(ids[0]) ? cur.filter((i) => i !== ids[0]) : [...new Set([...cur, ...ids])]) : ids;
-  view.set({ msel: next, mprop: next.length ? view.get().mprop : null });
+  // a piece selected is the piece's level: the Add tiles level is left for it
+  view.set({ msel: next, mprop: next.length ? view.get().mprop : null, ...(next.length ? { madd: false } : {}) });
 }
 
 const rect = () => $('canvas').getBoundingClientRect();
@@ -378,7 +379,7 @@ export const sceneEdit = { dragged: false };
 
 /** Wire this part of the page (once, at load). */
 export function init() {
-  view.set({ msel: [], mprop: null });
+  view.set({ msel: [], mprop: null, madd: false });
   const c = $('canvas');
   c.addEventListener('pointerdown', onPointerDown);
   c.addEventListener('pointerup', onPointerUp);

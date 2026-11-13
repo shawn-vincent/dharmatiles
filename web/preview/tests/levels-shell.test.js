@@ -16,6 +16,16 @@ test('which level a tile and a map are at', () => {
   assert.equal(mapLevelOf({ pieces: 1, prop: 'seed' }), 'prop');
   assert.equal(mapLevelOf({ pieces: 2, prop: 'seed' }), 'piece', 'a property is of one piece');
   assert.equal(mapLevelOf({ pieces: 0, prop: 'seed' }), 'map');
+  assert.equal(mapLevelOf({ pieces: 0, add: true }), 'add');
+  assert.equal(mapLevelOf({ pieces: 2, add: true }), 'piece', 'a piece selected leaves Add');
+});
+
+test('the Add tiles level is one step deeper than the map and a sibling of a piece', () => {
+  assert.equal(slideBetween('map', 'add'), 1);
+  assert.equal(slideBetween('add', 'map'), -1);
+  assert.equal(slideBetween('add', 'prop'), 1);
+  assert.equal(slideBetween('prop', 'add'), -1);
+  assert.equal(slideBetween('add', 'piece'), 0, 'the same depth: a swap');
 });
 
 test('a deeper level slides in from the right, a shallower one from the left, the same for every document', () => {

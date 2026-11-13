@@ -766,34 +766,35 @@ body.inventory #view, body.inventory #sash-side { display: none !important; }
 body.map #place { display: none; }
 #canvas.grab { cursor: grab; }
 
-/* ---- the catalog drawer along the bottom of the map (js/editor/scene-drawer.js) ---- */
-#drawer { position: absolute; left: 0; right: 0; bottom: calc(26px + var(--msgh)); z-index: 5; display: grid; grid-template-rows: auto minmax(0, 1fr); height: 236px; background: var(--bg); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px -18px rgba(0, 0, 0, .35); }
-#drawer[hidden] { display: none; }
-.dr-head { display: flex; align-items: center; gap: 10px; padding: 6px 12px; min-width: 0; border-bottom: 1px solid var(--line); }
-.dr-head b { font-weight: 650; }
-.dr-head select { width: auto; max-width: 160px; }
-.dr-head input[type="search"] { margin-left: auto; width: 170px; font: 13px var(--f-body); color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 3px 8px; }
-.dr-crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
-.dr-crumbs .sep { color: var(--muted); }
-.dr-crumbs .crumb { background: none; border: 0; padding: 2px 5px; color: var(--muted); font: 13px var(--f-body); cursor: pointer; border-radius: var(--r); white-space: nowrap; }
-.dr-crumbs .crumb:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.dr-strip { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px 12px; overflow-x: auto; overflow-y: hidden; }
-.dr-card, .dr-folder { flex: none; box-sizing: border-box; overflow: hidden; width: 176px; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); cursor: pointer; padding: 0 0 6px; }
-.dr-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; }
-.dr-card:hover, .dr-folder:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
-.dr-pic { width: 100%; aspect-ratio: 176 / 112; background: var(--plate, #D9E0EB); border-radius: calc(var(--r) - 1px) calc(var(--r) - 1px) 0 0; overflow: hidden; }
-.dr-pic img { width: 100%; height: 100%; display: block; }
-.dr-pic.bad { box-shadow: inset 0 0 0 2px var(--err); }
-.dr-row { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; padding: 0 8px; }
-.dr-row b { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dr-size { color: var(--muted); font-size: 12px; white-space: nowrap; }
-.dr-card .ipill { margin: 0 8px; justify-self: start; padding: 1px 7px; border-radius: 999px; font: 600 11px/1.5 var(--f-body); }
-.dr-card .ipill.have { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
-.dr-card .ipill.need { color: var(--muted); font-weight: 500; box-shadow: inset 0 0 0 1px var(--line-2); }
-.dr-folder { display: grid; align-content: center; gap: 2px; height: 140px; padding: 8px 12px; text-align: left; color: var(--ink); font: 13px var(--f-body); }
-.dr-folder b { font-weight: 650; }
-body.drawer #toast { bottom: 284px; }
-body.drawer #hint { display: none; }
+/* ---- the Add tiles level (js/view/map-panel.js AddView; docs/maps.html): the piece list above, the browser's folder level with pictures below ---- */
+#lens-add { container-type: size; }
+.addlvl { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.add-up { flex: 0 1 auto; max-height: 34%; min-height: 0; overflow: auto; padding: 2px 12px 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.add-up .mp-h { margin-top: 8px; }
+.add-fold { display: none; flex: none; padding: 7px 12px; border-bottom: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a short panel keeps one line of the list: what is on the map and what was just added */
+@container (max-height: 540px) { .add-up { display: none; } .add-fold { display: block; } }
+.add-low { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.add-head { border-bottom: 0; background: var(--panel); }
+.add-filter { flex: none; padding: 0 12px 8px; }
+.add-filter input { width: 100%; min-width: 0; }
+.add-body { position: relative; flex: 1; min-height: 0; overflow: clip; }
+.agrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 2px 12px 10px; }
+.arow { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; padding: 0 8px; }
+.arow b { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asize { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.apic { width: 100%; aspect-ratio: 176 / 124; background: var(--plate, #D9E0EB); border-radius: calc(var(--r) - 1px) calc(var(--r) - 1px) 0 0; overflow: hidden; }
+.apic img { width: 100%; height: 100%; display: block; }
+.apic.bad { box-shadow: inset 0 0 0 2px var(--err); }
+.acard .ipill { margin: 0 8px; justify-self: start; padding: 1px 7px; border-radius: 999px; font: 600 11px/1.5 var(--f-body); }
+.acard .ipill.have { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.acard .ipill.need { color: var(--muted); font-weight: 500; box-shadow: inset 0 0 0 1px var(--line-2); }
+/* the row of the tile just put on the map lights up and fades (two names, so a second tile of the same row lights it again) */
+@keyframes mp-just0 { from { box-shadow: 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 28%, var(--raised)); } to { box-shadow: 0 0 0 2px transparent; } }
+@keyframes mp-just1 { from { box-shadow: 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 28%, var(--raised)); } to { box-shadow: 0 0 0 2px transparent; } }
+.mp-group.just0 { animation: mp-just0 1.7s ease-out; }
+.mp-group.just1 { animation: mp-just1 1.7s ease-out; }
+@media (prefers-reduced-motion: reduce) { .mp-group.just0, .mp-group.just1 { animation: none; box-shadow: 0 0 0 2px var(--accent); } }
 
 /* ---- have and need on the map's pieces (js/editor/scene.js): over the view, never orange or red (those are overhang) ---- */
 #mpills { position: absolute; inset: 0 0 calc(26px + var(--msgh)) 0; overflow: hidden; pointer-events: none; z-index: 1; }

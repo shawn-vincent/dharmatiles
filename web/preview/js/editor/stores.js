@@ -17,7 +17,7 @@
 import { batch, computed, effect, signal, untracked } from '@preact/signals-core';
 import { showError } from '../problems.js';
 import { createLog } from '../messages.js';
-import { levelExists, parentLevel, whereIs } from '../folders.js';
+import { settledLevel, whereIs } from '../folders.js';
 
 // `report(what, err)` takes what a subscriber threw: the error panel by default.
 //
@@ -101,7 +101,9 @@ export const view = createStore({
   msel: [],            // the pieces selected on the map (their ids: editor/scene.js `selected()` reads the ones the map has now)
   mprop: null,         // the property open as a level on the selected piece: 'bottom' | 'seed' | 'print' (editor/scene-panel.js)
   mlist: {},           // how each map's list of pieces is sorted, filtered and searched, by the map's tile id: {sort, filter, query} (editor/scene-panel.js; sort and filter are kept in localStorage)
-  drawer: false,       // the catalog drawer along the bottom of the map is open
+  madd: false,         // the map's Add tiles level is open (editor/model.js `level`: it is the level only while no piece is selected)
+  addAt: null,         // the folder level the Add tiles level browses, {root, dir}: chosen, and kept for the session (null: where the map's first tile lives, else the library)
+  addQuery: '',        // the words filtering the folder the Add tiles level browses
   panel: false,        // the messages panel is open
   popover: null,       // the id of the open popover, if any
 });
@@ -230,10 +232,9 @@ view.derive('place', () => {
   const { placeAt: p, tileId } = view.get();
   const roots = server.get().roots;
   const inFolder = p.tile === tileId ? null : whereIs(roots, tile());
-  let l = levelNamed(inFolder ? inFolder.root : p.root, inFolder ? inFolder.dir : p.dir);
   const { tiles, folders } = server.get();
-  while (l.root != null && !levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) { const up = parentLevel(l); l = levelNamed(up.root, up.dir); }
-  return l;
+  const l = settledLevel({ roots, tiles, folders }, { root: inFolder ? inFolder.root : p.root, dir: inFolder ? inFolder.dir : p.dir });
+  return levelNamed(l.root, l.dir);
 });
 
 // The sidebar's page: the one chosen, except that with no tile shown the tile browser is the page.  Worked out, so nothing has

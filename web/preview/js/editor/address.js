@@ -15,7 +15,7 @@
 import { effect, signal, untracked } from '@preact/signals-core';
 import { OWNED, buildHash, levelParams, parseHash, stepsHistory } from '../nav.js';
 import { placeParams } from '../folders.js';
-import { selected as mapSelected, mprop, scene as mapScene } from './model.js';
+import { level as mapLevel, selected as mapSelected, mprop, scene as mapScene } from './model.js';
 import { isMapView, isPlates, server, tile, view } from './stores.js';
 
 /** True while a level the address asked for is being taken: the page is part way to it, and writes nothing meanwhile. */
@@ -33,7 +33,7 @@ export function pairsNow() {
   const map = isMapView();
   if (map && !mapScene.value) return null;
   const pieces = map ? mapSelected.value.map((p) => p.id) : null;
-  return { tile: t.path, ...levelParams({ sel: v.sel, control: v.control, face: v.face, pieces, prop: pieces?.length === 1 ? mprop.value : null }) };
+  return { tile: t.path, ...levelParams({ sel: v.sel, control: v.control, face: v.face, pieces, prop: pieces?.length === 1 ? mprop.value : null, add: map && mapLevel.value === 'add' }) };
 }
 
 /** Write `pairs` over the address, keeping what it holds that is not the address's (the theme, the paint). */

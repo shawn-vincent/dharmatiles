@@ -15,7 +15,8 @@ import * as M from '../map-model.js';
 import { listFrom } from '../map-list.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
 import { pill as invPill, systemName } from '../inventory.js';
-import { levelOf, placesOf, whereIs, writable } from '../folders.js';
+import { levelOf, placesOf, settledLevel, whereIs, writable } from '../folders.js';
+import { mapLevelOf } from '../nav.js';
 import { token } from '../tokens.js';
 import { defaultFilters } from '../inventory.js';
 import { docs, planOf } from './docs.js';
@@ -40,8 +41,8 @@ export const marks = computed(() => M.marks(pieces.value));
 export const mapList = computed(() => listFrom(view.get().mlist[tileNow.value?.id ?? '']));
 /** The property open on the selected piece, if one is. */
 export const mprop = computed(() => view.get().mprop);
-/** The level the map's panel is on: 'map', 'piece' or 'prop'. */
-export const level = computed(() => (mprop.value && selected.value.length === 1 ? 'prop' : selected.value.length ? 'piece' : 'map'));
+/** The level the map is at: 'map', 'add', 'piece' or 'prop' (nav.js `mapLevelOf`). */
+export const level = computed(() => mapLevelOf({ pieces: selected.value.length, prop: mprop.value, add: view.get().madd }));
 export const inventory = computed(() => server.get().inventory);
 /** May the map not be changed here (a library file, or one the program says is read only)? */
 export const readOnly = computed(() => {
@@ -64,7 +65,7 @@ export const contextLines = () => {
 };
 
 /** What the map's panel (js/view/map-panel.js) reads: one object of signals. */
-export const mapPanel = { on: mapOn, tile: tileNow, scene, pieces, selected, marks, list: mapList, mprop, level, inventory, readOnly, waiting };
+// (the map's panel model, `mapPanel`, is after the Add tiles level's: it reads that)
 
 // ---- the plates' panel ---------------------------------------------------------------------------------------------
 
@@ -105,22 +106,76 @@ export const platesPanel = {
 // ---- the folder levels ---------------------------------------------------------------------------------------------
 
 /** What the browser's levels draw (js/view/places-panel.js): the level `view.place` is, what the program lists there, and the filter's words. */
+const isDtile = (t) => /\.dtile$/i.test(t.path);
+
+/**
+ * What a folder level draws (js/view/places-panel.js), for the browser's page and for the Add tiles level's pane alike: the one
+ * walk of the places and folders.  `keep` says which tiles are listed; `extra` is what only one of them has.
+ */
+function folderData(level, query, system, keep, extra) {
+  const { roots, tiles, folders, home, inventory } = server.get();
+  const r = roots[level.root];
+  return {
+    roots, tiles, folders, level, query, places: placesOf(roots), home,
+    // have and need pills: what the inventory says of a tile for the target system (the chip in the title bar)
+    pill: (t) => invPill(inventory, t.path, system), system, inventory,
+    view: level.root == null ? null : levelOf({ roots, tiles: tiles.filter(keep), folders, root: level.root, dir: level.dir, query }),
+    writable: !!r && writable(r) && !query.trim(),
+    ...extra,
+  };
+}
+
 export const browse = {
   ready: computed(() => server.get().ready),
-  data: computed(() => {
-    const { roots, tiles, folders, home, inventory, system } = server.get();
-    const level = view.get().place;
-    const query = view.get().query;
-    const r = roots[level.root];
-    return {
-      roots, tiles, folders, level, query, places: placesOf(roots), openTile: view.get().tileId, home,
-      // have and need pills: what the inventory says of a tile for the target system (the chip in the title bar)
-      pill: (t) => invPill(inventory, t.path, system), system, inventory,
-      view: level.root == null ? null : levelOf({ roots, tiles, folders, root: level.root, dir: level.dir, query }),
-      writable: !!r && writable(r) && !query.trim(),
-    };
-  }),
+  data: computed(() => folderData(view.get().place, view.get().query, server.get().system, () => true, { openTile: view.get().tileId })),
 };
+
+// ---- the Add tiles level ------------------------------------------------------------------------------------------
+
+/** The place and folder the Add tiles level opens at the first time: where the map's first tile lives, else the library. */
+function addStart() {
+  const { roots, tiles } = server.get();
+  const lib = roots.findIndex((r) => r.role === 'library');
+  const first = tiles.find((t) => t.id === scene.value?.pieces?.[0]?.tileId);
+  const at = first && whereIs(roots, first);
+  return at || { root: lib >= 0 ? lib : 0, dir: '' };
+}
+/** The folder the Add tiles level browses: the one chosen (kept for the session), else where it starts, settled among what the program lists now. */
+export const addLevel = computed(() => {
+  const { roots, tiles, folders } = server.get();
+  return settledLevel({ roots, tiles, folders }, view.get().addAt ?? addStart());
+});
+
+/** What the Add tiles level's pane draws: the browser's own folder level in its add mode (tiles as pictures), or null when no map is the view. */
+export const addData = computed(() => {
+  if (!mapOn.value) return null;
+  const system = scene.value?.system ?? 'db';
+  return folderData(addLevel.value, view.get().addQuery, system, isDtile, {
+    add: true, writable: false, openTile: null, plate: token('--plate') || '#D9E0EB',
+    places: placesOf(server.get().roots).filter((r) => r.kind !== 'files'),
+  });
+});
+// ---- a tile put on the map -----------------------------------------------------------------------------------------
+
+const FRESH_MS = 1800;
+const addedNow = signal(/** @type {{doc: string | null, tileId: string, name: string, n: number} | null} */ (null));
+const freshNow = signal(false);
+let freshTimer = 0;
+/** The tile `t` was just put on the map: its row lights up for a moment (the Add tiles level's list, and its one line when folded). */
+export function flashAdded(t) {
+  addedNow.value = { doc: tileNow.value?.id ?? null, tileId: t.id, name: stem(t).replace(/\\.dtile$/i, ''), n: (addedNow.peek()?.n ?? 0) + 1 };
+  freshNow.value = true;
+  clearTimeout(freshTimer);
+  freshTimer = setTimeout(() => { freshNow.value = false; }, FRESH_MS);
+}
+
+/** What the map's levels (js/view/map-panel.js) read: one object of signals. */
+export const mapPanel = {
+  on: mapOn, tile: tileNow, scene, pieces, selected, marks, list: mapList, mprop, level, inventory, readOnly, waiting,
+  // the tile last put on the map (a row of the list lights up for a moment), and the Add tiles level's folder browser
+  added: computed(() => (addedNow.value?.doc === tileNow.value?.id ? addedNow.value : null)), fresh: freshNow, add: addData,
+};
+
 
 // ---- the inventory --------------------------------------------------------------------------------------------------
 
@@ -175,33 +230,4 @@ export const inventoryPanel = {
   system: haveBlockModel.system,
   tiles: computed(() => server.get().tiles),
   lists: computed(() => server.get().tiles.filter((x) => /\.dmap$/i.test(x.path))),
-};
-
-// ---- the catalog drawer ---------------------------------------------------------------------------------------------
-
-/** What the user chose in the drawer: the folder level it stands at (null: where the map's first tile lives, else the library) and the filter's words. */
-export const drawerUi = signal({ level: /** @type {{root: number, dir: string} | null} */ (null), query: '' });
-const isDtile = (t) => /\.dtile$/i.test(t.path);
-
-/** The place and folder the drawer opens at: where the map's first tile lives, else the library. */
-function drawerStart() {
-  const { roots, tiles } = server.get();
-  const lib = roots.findIndex((r) => r.role === 'library');
-  const first = tiles.find((t) => t.id === scene.value?.pieces?.[0]?.tileId);
-  const at = first && whereIs(roots, first);
-  return at || { root: lib >= 0 ? lib : 0, dir: '' };
-}
-
-/** What the drawer draws, or null when it is not shown (the drawer is open and a map is the view). */
-export const drawerPanel = {
-  data: computed(() => {
-    if (!(view.get().drawer && mapOn.value)) return null;
-    const { roots, tiles, folders } = server.get();
-    const ui = drawerUi.value;
-    const level = ui.level ?? drawerStart();
-    return {
-      level, query: ui.query, places: placesOf(roots).filter((r) => r.kind !== 'files'), sys: scene.value?.system ?? 'db', plate: token('--plate') || '#D9E0EB',
-      lv: levelOf({ roots, tiles: tiles.filter(isDtile), folders, root: level.root, dir: level.dir, query: ui.query }),
-    };
-  }),
 };

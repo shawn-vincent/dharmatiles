@@ -22,7 +22,7 @@
 // views for it); a level added later is a row of `LEVELS`, a section of the page and a view.
 
 import {
-  LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, mapLevelOf, moveRow, orderStack, parseHash, placeOf, sameLevel,
+  LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf, sameLevel,
   sizeWords, slideBetween, standing, systemName, tileLevelOf, up as levelUp,
 } from '../nav.js';
 import { effect } from '@preact/signals-core';
@@ -45,6 +45,8 @@ import { label as pieceLabel } from '../map-model.js';
 import { contextLines as inventoryLines } from './inventory.js';
 
 const SLIDE_MS = 200;
+/** What a level's rows are, for the arrow keys and for where the keyboard lands: the tile's rows, the map's pieces, the Add level's pictures and folders. */
+const ROWS = '.orow, .mp-group, .acard';
 const EASE = 'cubic-bezier(.2, .7, .2, 1)';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -71,8 +73,8 @@ function shellLevel() {
   if (isInventory(t)) return null;
   if (isPlates(t)) {
     if (!isMapView()) return null;
-    const id = mapLevelOf({ pieces: mapSelected.value.length, prop: mapLevel.value === 'prop' ? mapProp.value : null });
-    return { id, key: id === 'map' ? 'map' : `${id}:${mapSelected.value.map((p) => p.id).join(',')}${id === 'prop' ? `/${mapProp.value}` : ''}` };
+    const id = mapLevel.value;
+    return { id, key: id === 'map' || id === 'add' ? id : `${id}:${mapSelected.value.map((p) => p.id).join(',')}${id === 'prop' ? `/${mapProp.value}` : ''}` };
   }
   const { sel, control } = view.get();
   return { id: tileLevelOf(sel, control), key: levelKey(sel, control) };
@@ -86,9 +88,10 @@ export function goUp() {
   if (view.get().face !== 'tile') return false;
   if (isMapView()) {
     // a map's levels are the same path: a property to its pieces, the pieces to the map
-    const { mprop, msel } = view.get();
-    if (mprop) { leftMap = { msel, mprop }; view.set({ mprop: null }); return true; }
-    if (msel.length) { leftMap = { msel, mprop: null }; view.set({ msel: [] }); return true; }
+    const { mprop, msel, madd } = view.get();
+    if (mprop) { leftMap = { msel, mprop, add: false }; view.set({ mprop: null }); return true; }
+    if (msel.length) { leftMap = { msel, mprop: null, add: false }; view.set({ msel: [] }); return true; }
+    if (madd) { leftMap = { msel: [], mprop: null, add: true }; view.set({ madd: false }); return true; }
     return false;
   }
   const next = levelUp(levelNow(), tileSel());
@@ -107,6 +110,7 @@ export function goForward() {
     const have = new Set(mapScene.value?.pieces.map((p) => p.id));
     const ids = to.msel.filter((i) => have.has(i));
     const here = mapLevel.value;
+    if (to.add) { if (here !== 'map') return false; view.set({ madd: true }); return true; }
     if (to.mprop && here === 'piece' && ids.length === 1 && mapSelected.value[0]?.id === ids[0]) view.set({ mprop: to.mprop });
     else if (!to.mprop && here === 'map' && ids.length) view.set({ msel: ids });
     else return false;
@@ -127,7 +131,7 @@ export function goForward() {
 export function goDepth(d) {
   view.set({ face: 'tile' });
   if (isMapView()) {
-    if (d === 0) view.set({ msel: [], mprop: null }); else if (d === 1) view.set({ mprop: null });
+    if (d === 0) view.set({ msel: [], mprop: null, madd: false }); else if (d === 1) view.set({ mprop: null });
     return;
   }
   const { sel } = view.get();
@@ -195,8 +199,9 @@ const PROPS = { bottom: 'Bottom', seed: 'Seed', print: 'Print' };
 function trailNow() {
   if (isMapView()) {
     const ps = mapSelected.value;
-    const prop = mapLevel.value === 'prop' ? mapProp.value : null;
-    return { depth: LEVELS[mapLevelOf({ pieces: ps.length, prop })].depth, what: ps.length > 1 ? `${ps.length} pieces` : ps[0] ? pieceLabel(ps[0]) : '', control: PROPS[prop] ?? prop ?? '' };
+    const id = mapLevel.value;
+    const prop = id === 'prop' ? mapProp.value : null;
+    return { depth: LEVELS[id].depth, what: id === 'add' ? 'Add tiles' : ps.length > 1 ? `${ps.length} pieces` : ps[0] ? pieceLabel(ps[0]) : '', control: PROPS[prop] ?? prop ?? '' };
   }
   const { sel, control } = view.get();
   return { depth: depthOf(sel, control), what: thingName(), control: control?.name ?? '' };
@@ -264,7 +269,7 @@ function renderContext() {
 /** Put the keyboard in level `id`: its first row (the tile's rows, the map's), else the level itself. */
 function focusLevel(id) {
   const pane = paneEl(id);
-  const first = pane.querySelector('.orow, .mp-group');
+  const first = pane.querySelector(ROWS);
   (first || pane).focus({ preventScroll: true });
 }
 
@@ -336,7 +341,7 @@ function render() {
 }
 /** Back up at the top of a document: the row the keyboard came from (the entry's, the piece's), when the shell still has it. */
 function returnRow(id) {
-  const rows = [...paneEl(id).querySelectorAll('.orow, .mp-group')];
+  const rows = [...paneEl(id).querySelectorAll(ROWS)];
   if (isMapView()) {
     const first = leftMap?.msel[0];
     return first ? rows.find((r) => r.dataset.ids?.split(',').includes(first)) : null;
@@ -365,7 +370,7 @@ function takePieces(want) {
   const have = new Set(mapScene.value.pieces.map((p) => p.id));
   const ids = want.pieces.filter((i) => have.has(i));
   if (ids.length < want.pieces.length) toast(ids.length ? 'Some of those pieces are not on the map now' : 'The map has no such piece now');
-  view.set({ face: want.face, msel: ids, mprop: ids.length === 1 && want.prop ? want.prop : null });
+  view.set({ face: want.face, msel: ids, mprop: ids.length === 1 && want.prop ? want.prop : null, madd: !!want.add && !ids.length });
 }
 function tryPending() {
   if (!pending) return;
@@ -442,9 +447,9 @@ function onKey(e) {
     return;
   }
   // the rows of a level: the tile's, the map's
-  const row = e.target.closest?.('.lvl .orow, .lvl .mp-group');
+  const row = e.target.closest?.(ROWS.split(', ').map((r) => `.lvl ${r}`).join(', '));
   if (row && !e.metaKey && !e.ctrlKey && !e.altKey && ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
-    const rows = [...row.closest('.lvl').querySelectorAll('.orow, .mp-group')];
+    const rows = [...row.closest('.lvl').querySelectorAll(ROWS)];
     const to = rows[moveRow(rows.indexOf(row), e.key, rows.length)];
     e.preventDefault();
     to?.focus();
@@ -452,7 +457,7 @@ function onKey(e) {
   }
   if (!typing(e) && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === 'ArrowDown' && e.target.classList?.contains('lvl')) {
     e.preventDefault();
-    e.target.querySelector('.orow, .mp-group')?.focus();
+    e.target.querySelector(ROWS)?.focus();
   }
 }
 
@@ -470,7 +475,7 @@ function rowBlur(e) { if (e.target.closest?.('.orow') && e.target.closest('.orow
 export function init() {
   pending = null;
   const first = levelOfHash(location.hash);
-  const hasLevel = first.sel.kind !== 'tile' || first.face === 'source' || first.pieces;
+  const hasLevel = first.sel.kind !== 'tile' || first.face === 'source' || first.pieces || first.add;
   if (hasLevel) pending = first;
   hold();
   started = true;

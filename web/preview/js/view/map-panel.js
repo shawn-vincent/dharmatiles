@@ -15,6 +15,11 @@
 
 import * as M from '../map-model.js';
 import { FILTERS, SORTS, sectionsOf } from '../map-list.js';
+import { parentLevel } from '../folders.js';
+import { crumbsFor } from '../nav.js';
+import { pinEnd } from '../crumbs.js';
+import { Crumbs } from './crumbs.js';
+import { Levels } from './places-panel.js';
 import { haveLine, systemName, tileHave } from '../inventory.js';
 import { Field } from './field.js';
 import { html, useEffect, useRef } from './html.js';
@@ -51,9 +56,10 @@ const RowPills = ({ row }) => html`<span class="mp-pills">
  * The map's pieces by tile, in the sections placed, not placed and left off (map-list.js), under the sort, the filter
  * and the search the model holds for this map.  A row lights its pieces in the view while the pointer is on it
  * (`act.hover`), selects them when pressed, and is marked, and brought into view in the list, while one of its pieces
- * is selected: so it reads the selection the same wherever the selection was made.
+ * is selected: so it reads the selection the same wherever the selection was made.  `compact` is the Add tiles level's list: the
+ * rows alone (no sort, filter or search), the row of the tile just put on the map lit for a moment and kept in view.
  */
-function PieceList({ m, act }) {
+function PieceList({ m, act, compact = false }) {
   const ro = m.readOnly.value;
   const ps = m.pieces.value;
   const how = m.list.value;
@@ -61,6 +67,8 @@ function PieceList({ m, act }) {
   const picked = new Set(m.selected.value.map((p) => p.id));
   const box = useRef(/** @type {any} */ (null));
   const key = [...picked].join(',');
+  const added = compact ? m.added.value : null;
+  const fresh = !!added && m.fresh.value;
   // bring the first marked row into view inside the list itself, never moving the panel around it
   useEffect(() => {
     const el = box.current, row = el?.querySelector('.mp-group.on');
@@ -69,20 +77,25 @@ function PieceList({ m, act }) {
     if (top < el.scrollTop) el.scrollTop = top;
     else if (top + row.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = top + row.offsetHeight - el.clientHeight;
   }, [key]);
+  // the row of a tile just put down is brought into view in the list above the folders
+  useEffect(() => { if (fresh) box.current?.querySelector('.mp-group.just0, .mp-group.just1')?.scrollIntoView({ block: 'nearest' }); }, [fresh, added?.n]);
   const Row = (row) => {
     const on = row.ids.some((id) => picked.has(id));
-    return html`<button type="button" class=${`mp-group${on ? ' on' : ''}`} key=${row.key} aria-pressed=${String(on)} title=${`Select the ${plural(row.pieces.length, 'piece')} of ${row.name}`}
+    const hot = fresh && row.pieces.some((p) => p.tileId === added.tileId);
+    return html`<button type="button" class=${`mp-group${on ? ' on' : ''}${hot ? ` just${added.n % 2}` : ''}`} key=${row.key} aria-pressed=${String(on)} title=${`Select the ${plural(row.pieces.length, 'piece')} of ${row.name}`}
       data-ids=${row.ids.join(',')} onClick=${() => act.select(row.ids)} onPointerEnter=${() => act.hover(row.ids)} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover(row.ids)} onBlur=${() => act.hover([])}>
       <b>${row.name}</b><span class="mp-n">${`× ${row.count}`}</span><${RowPills} row=${row} /></button>`;
   };
   const Head = ({ text, n, note }) => html`<h4 class="mp-h" title=${note}>${text}<span class="mp-n">${n}</span></h4>`;
-  return html`<${Section} title=${ps.length ? 'Pieces' : 'No pieces yet'} >
-    ${ps.length ? null : html`<p class="note">Open the catalog and put tiles on the map. Each is a piece with a place, a turn and a seed; nothing prints until you ask for the plates.</p>`}
+  const Wrap = compact ? ({ children }) => html`<div class="mp-compact"><h4 class="mp-h">${ps.length ? 'On the map' : 'Nothing on the map yet'}<span class="mp-n">${ps.length ? plural(ps.filter((p) => p.at).length, 'piece') : ''}</span></h4>${children}</div>`
+    : ({ children }) => html`<${Section} title=${ps.length ? 'Pieces' : 'No pieces yet'}>${children}<//>`;
+  return html`<${Wrap}>
+    ${ps.length ? null : html`<p class="note">${compact ? 'Press a tile below to put it on the map.' : 'Press Add tiles and put tiles on the map.'} Each is a piece with a place, a turn and a seed; nothing prints until you ask for the plates.</p>`}
     ${ps.length ? html`
-      <${Seg} label="Sort" options=${SORTS} current=${how.sort} on=${(v) => act.list({ sort: v })} />
+      ${compact ? null : html`<${Seg} label="Sort" options=${SORTS} current=${how.sort} on=${(v) => act.list({ sort: v })} />
       <${Seg} label="Show" options=${FILTERS} current=${how.filter} on=${(v) => act.list({ filter: v })} />
       <div class="pl-field"><span class="pl-lab">Find</span>
-        <${Field} type="search" commit="input" placeholder="Part of a tile’s name" spellcheck=${false} aria-label="Find a tile on the map by name" value=${how.query} onCommit=${(v) => act.list({ query: v })} /></div>
+        <${Field} type="search" commit="input" placeholder="Part of a tile’s name" spellcheck=${false} aria-label="Find a tile on the map by name" value=${how.query} onCommit=${(v) => act.list({ query: v })} /></div>`}
       <div class="mp-list" ref=${box}>
         ${secs.shown ? null : html`<p class="note">No piece matches.</p>`}
         ${secs.placed.length ? html`<${Head} text="Placed" n=${secs.placed.reduce((n, r) => n + r.count, 0)} />${secs.placed.map((r) => Row(r))}` : null}
@@ -105,7 +118,7 @@ function MapView({ m, act }) {
     <${Section} title="On the map">
       <p class="inv-sum"><b>${sc?.shelfExists ? `${sc.have} in inventory` : 'No inventory yet'}</b>${` · ${sc?.toPrint ?? 0} to print`}</p>
       <div class="mp-row">
-        <${Button} text="Add tiles" run=${act.toggleDrawer} title="The catalog: drag a tile onto the map, or press one to put it down" disabled=${ro} />
+        <${Button} text="Add tiles" run=${act.openAdd} title="Choose tiles from your folders and the library: press one to put it on the map, or drag it to where it should stand" disabled=${ro} />
         <${Button} text="Print what’s missing" run=${() => act.chooseMode('plates')} cls="btn on" title="The plates for this map: only the pieces your inventory lacks" />
       </div>
     <//>
@@ -206,9 +219,38 @@ function PropView({ m, act, p, kind }) {
   return html`<${Section} title="Print"><//>`;
 }
 
+/**
+ * The Add tiles level: above, the piece list, compact (the row of a tile just put down lights up; a row leaves Add for that piece's level),
+ * and below, the panel's own folder browser in its add mode, with the path it is at in its own header (not in the trail above the panel).
+ * On a short panel the list folds to one line (the style sheet does it by the panel's height; both are in the page).
+ */
+function AddView({ m, act }) {
+  const a = m.add.value;
+  const placed = m.pieces.value.filter((p) => p.at).length;
+  const added = m.added.value;
+  const crumbs = useRef(/** @type {HTMLElement | null} */ (null));
+  useEffect(() => { if (crumbs.current) pinEnd(crumbs.current); });
+  if (!a) return null;
+  const r = a.roots[a.level.root];
+  const trail = crumbsFor({ place: r ? { root: a.level.root, label: r.label, dir: a.level.dir } : null });
+  return html`<div class="addlvl">
+    <div class="add-up"><${PieceList} m=${m} act=${act} compact=${true} /></div>
+    <div class="add-fold" aria-live="polite">${`${placed} on the map`}${added ? ` · ${added.name} ${m.fresh.value ? 'just added' : 'added last'}` : ''}</div>
+    <div class="add-low">
+      <div class="crumbbar add-head">
+        <button type="button" class="up" title="Up a folder" aria-label="Up a folder" disabled=${!parentLevel(a.level)} onClick=${act.addUp}><span aria-hidden="true">‹</span></button>
+        <div class="cr" ref=${crumbs}><nav class="crumbs" aria-label="The folder the tiles are chosen from"><${Crumbs} crumbs=${trail} go=${(c) => act.addGo(c.place)} /></nav></div>
+      </div>
+      ${a.level.root == null ? null : html`<div class="add-filter"><${Field} type="search" commit="input" placeholder="Filter tiles" spellcheck=${false} aria-label="Filter the tiles of this place" value=${a.query} onCommit=${act.addFilter} /></div>`}
+      <div class="add-body"><${Levels} id="add-folder" d=${a} on=${act.addOn} scrolls=${act.addScrolls} /></div>
+    </div>
+  </div>`;
+}
+
 /** What every level of the map draws inside its section: nothing when it is not the map's turn, the wait while the scene has not come, else the level. */
-function Body({ m, children }) {
+function Body({ m, children, bare = false }) {
   if (!m.tile.value || !m.on.value) return null;
+  if (bare) return !m.scene.value ? html`<div class="body"><div class="empty">${m.waiting.value}</div></div>` : children;
   return html`<div class="body">
       ${!m.scene.value
         ? html`<div class="empty">${m.waiting.value}</div>`
@@ -223,6 +265,11 @@ export const MapLevel = ({ m, act }) => html`<${Body} m=${m}><${MapView} m=${m} 
 export function PieceLevel({ m, act }) {
   const sel = held(m.selected.value.length ? m.selected.value : null);
   return html`<${Body} m=${m}>${sel ? html`<${PieceView} m=${m} act=${act} sel=${sel} />` : null}<//>`;
+}
+
+/** The Add tiles level: nothing to add to on a map that cannot be changed here. */
+export function AddLevel({ m, act }) {
+  return html`<${Body} m=${m} bare=${true}>${m.readOnly.value ? html`<div class="body"><p class="note">This file cannot be changed here, so no tile can be added to it.</p></div>` : html`<${AddView} m=${m} act=${act} />`}<//>`;
 }
 
 /** The property level: the property open on the selected piece, or the last one while the level slides out. */

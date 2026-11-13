@@ -5,6 +5,10 @@
 // tile row can be dragged onto a folder row or a folder crumb to move it there.  `ContextLines` and `FolderActions`
 // are the strip under the crumbs and the buttons above the list.
 //
+// The same list is the Add tiles level's pane (docs/maps.html) in its add mode (`d.add`): the folders are the same rows, the
+// tiles are pictures in a two-column grid (`AddCard`), pressed to put the tile on the map or dragged to where it should
+// stand.  There is one walk of the places and folders; the add mode only draws the tiles another way.
+//
 // These are functions of the model (js/editor/model.js `browse`) and of `on`, what a row or a button does
 // (editor/places.js).  Nothing is stored here but how far each level was scrolled and the drag in progress.  What a
 // level lists is js/folders.js.
@@ -46,6 +50,39 @@ function SizeThumb({ t }) {
     ${grid ? html`<svg viewBox=${`0 0 ${bw} ${bh}`}>${cols.map((x) => html`<line x1=${x} x2=${x} y1="0" y2=${bh} />`)}${rows.map((y) => html`<line y1=${y} y2=${y} x1="0" x2=${bw} />`)}</svg>` : null}</span>`;
 }
 
+/**
+ * A tile's picture: the tile's own (`on.picture` answers its url) once its card is near the visible part of the list, else the empty
+ * plate.  The list scrolls down, so the margin is above and below.
+ */
+function Pic({ t, plate, on }) {
+  const box = useRef(/** @type {HTMLElement | null} */ (null));
+  const [url, setUrl] = useState(/** @type {string | null} */ (null));
+  const [bad, setBad] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return undefined;
+    let live = true;
+    const seen = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      seen.disconnect();
+      on.picture(t, plate).then((u) => { if (live && u) setUrl(u); }).catch((e) => { if (live) setBad(true); on.pictureFailed(e); });
+    }, { root: el.closest('.flvl'), rootMargin: '300px 0px 300px 0px' });
+    seen.observe(el);
+    return () => { live = false; seen.disconnect(); };
+  }, [t.id, t.meshVersion, plate]);
+  return html`<div class=${`apic${bad ? ' bad' : ''}`} ref=${box} data-id=${t.id} data-key=${String(t.meshVersion ?? 0)}>${url ? html`<img alt="" src=${url} draggable=${false} />` : null}</div>`;
+}
+
+/** A tile of the add mode: its picture, its name and size, and what you have of it.  Pressed it goes on the map; dragged it is let go where it should stand. */
+function AddCard({ t, d, on }) {
+  const pill = d.pill?.(t);
+  return html`<div class="acard" role="button" tabindex="0" draggable=${true} data-id=${t.id} title=${`${stemOf(t.path)}\nPress to put it on the map; drag it to choose where`}
+    onDragStart=${(e) => on.dragTile(e, t)} onClick=${() => on.tile(t.id)} onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); on.tile(t.id); } }}>
+    <${Pic} t=${t} plate=${d.plate} on=${on} />
+    <span class="arow"><b>${stemOf(t.path)}</b><span class="asize">${sizeLine(t)}</span></span>
+    ${pill ? html`<span class=${`ipill ${pill.kind}`} title=${pill.title}>${pill.text}</span>` : null}</div>`;
+}
+
 const dotClass = (t) => {
   const over = t.record && (t.record.audit.overhangMm2 > 0 || t.record.audit.bandMm2 > 0);
   return `dot ${t.status}${over && t.status === 'ready' ? ' over' : ''}`;
@@ -84,13 +121,15 @@ function FolderLevel({ d, on }) {
   if (!v) return html`<p class="fnote">This place is not there.</p>`;
   if (!v.folders.length && !v.items.length) {
     if (searching) return html`<p class="fnote">${`No tile here matches “${d.query.trim()}”.`}</p>`;
+    if (d.add) return html`<p class="fnote">No tiles in this folder.</p>`;
     if (can) return html`<p class="fnote">Nothing here yet. Make a tile or a folder with the buttons above, or save a <code>.dtile</code> here and it shows up.</p>`;
     return html`<p class="fnote">No tiles.</p>`;
   }
   return html`
     ${v.folders.length ? html`<${Label} title="Folders" />${v.folders.map((f) => html`<${Row} key=${`f${f.dir}`} kind="folder" id=${f.dir} name=${f.name} menuTitle=${can ? 'rename, trash' : null} on=${on} drop=${{ root: d.level.root, dir: f.dir }} onOpen=${() => on.folder(f.dir)}>
       <${Glyph} name="folder" /><${Text} label=${f.name} sub=${[plural(f.tiles, 'tile'), f.folders ? plural(f.folders, 'folder') : ''].filter(Boolean).join(' · ')} /><span class="chev">›</span><//>`)}` : null}
-    ${v.items.length ? html`<${Label} title=${searching ? 'Tiles' : 'Tiles here'} hint=${searching ? `${v.items.length} found` : null} />${v.items.map(({ tile: t, where }) => {
+    ${v.items.length && d.add ? html`<${Label} title=${searching ? 'Tiles' : 'Tiles here'} hint=${searching ? `${v.items.length} found` : 'press one to put it on the map'} /><div class="agrid">${v.items.map(({ tile: t }) => html`<${AddCard} key=${`t${t.id}`} t=${t} d=${d} on=${on} />`)}</div>` : null}
+    ${v.items.length && !d.add ? html`<${Label} title=${searching ? 'Tiles' : 'Tiles here'} hint=${searching ? `${v.items.length} found` : null} />${v.items.map(({ tile: t, where }) => {
       const sub = [sizeLine(t), searching && where ? where : ''].filter(Boolean).join(' · ');
       const isInventory = /\.dinv$/i.test(t.path);
       const pill = /\.dtile$/i.test(t.path) ? d.pill?.(t) : null;
@@ -230,7 +269,7 @@ export function FolderList({ d, on, ghost = false }) {
  * the left.  The level it replaces stays one more moment as a ghost going the other way.  How far each level was
  * scrolled is remembered, and given back when it is shown again.
  */
-export function Levels({ d, on, scrolls, arrived }) {
+export function Levels({ d, on, scrolls, arrived, id = 'folder' }) {
   const key = keyOf(d.level);
   const last = useRef({ key, depth: depthOf(d.level), d, ghost: null });
   const cur = useRef(/** @type {HTMLElement | null} */ (null));
@@ -259,7 +298,7 @@ export function Levels({ d, on, scrolls, arrived }) {
     const timer = setTimeout(done, SLIDE_MS + 100);
     return () => clearTimeout(timer);
   }, [key]);
-  return html`<div id="folder" class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1" ref=${cur} onScroll=${(e) => scrolls.set(key, e.currentTarget.scrollTop)}><${FolderList} d=${d} on=${on} /></div>
+  return html`<div id=${id} class="flvl" role="listbox" aria-label="Places and folders" tabindex="-1" ref=${cur} onScroll=${(e) => scrolls.set(key, e.currentTarget.scrollTop)}><${FolderList} d=${d} on=${on} /></div>
     ${ghost ? html`<div class="flvl ghost" ref=${old} inert=${true}><${FolderList} d=${ghost.d} on=${on} ghost=${true} /></div>` : null}`;
 }
 

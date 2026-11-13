@@ -292,11 +292,6 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/editor/scene-drag.js"),
     ),
     (
-        "/js/editor/scene-drawer.js",
-        "text/javascript; charset=utf-8",
-        include_bytes!("../../../../web/preview/js/editor/scene-drawer.js"),
-    ),
-    (
         "/js/editor/scene-thumbs.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/editor/scene-thumbs.js"),
@@ -660,11 +655,6 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "/js/view/messages-panel.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/view/messages-panel.js"),
-    ),
-    (
-        "/js/view/drawer.js",
-        "text/javascript; charset=utf-8",
-        include_bytes!("../../../../web/preview/js/view/drawer.js"),
     ),
     (
         "/js/view/view-controls.js",

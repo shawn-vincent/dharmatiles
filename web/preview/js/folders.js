@@ -148,6 +148,13 @@ export function levelExists({ roots, tiles, folders = [], root, dir = '' }) {
   return !dir || folderPaths(r, root, tiles, folders).has(dir);
 }
 
+/** The level `level` stands for among what the program lists now: itself, else the nearest of its parents that is there (a place taken off, a folder trashed). */
+export function settledLevel({ roots, tiles, folders = [] }, level) {
+  let l = level;
+  while (l.root != null && !levelExists({ roots, tiles, folders, root: l.root, dir: l.dir })) l = parentLevel(l);
+  return l;
+}
+
 /** The folder one level up from `{root, dir}`: its parent folder, else the place, else Places (null). */
 export function parentLevel({ root, dir = '' }) {
   if (root == null) return null;

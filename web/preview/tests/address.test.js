@@ -47,3 +47,18 @@ test('one rule says when the address takes a step of history', () => {
   assert.equal(stepsHistory(tile({ pieces: 'p1' }), tile({ pieces: 'p1', prop: 'seed' })), true);
   assert.equal(addressLevel(tile({ pieces: 'p1', prop: 'seed' })), 'pieces/seed');
 });
+
+test('the Add tiles level is a level of the map\'s trail with its own address', () => {
+  assert.deepEqual(levelParams({ sel: tileSel, control: null, face: 'tile', pieces: [], add: true }), { add: '1' });
+  assert.deepEqual(levelParams({ sel: tileSel, control: null, face: 'tile', pieces: ['p2'], add: true }), { pieces: 'p2' }, 'a piece selected is the piece\'s level');
+  const h = buildHash({ tile: '/x.dmap', ...levelParams({ sel: tileSel, control: null, face: 'tile', pieces: [], add: true }) });
+  assert.equal(h, '#tile=%2Fx.dmap&add=1');
+  assert.equal(levelOfHash(h).add, true);
+  assert.equal(levelOfHash('#tile=x&pieces=p2&add=1').add, undefined);
+  assert.equal(addressLevel({ tile: '/x.dmap', add: '1' }), 'add');
+  const tile = (extra = {}) => ({ tile: '/a.dmap', ...extra });
+  assert.equal(stepsHistory(tile(), tile({ add: '1' })), true);
+  assert.equal(stepsHistory(tile({ add: '1' }), tile({ pieces: 'p1' })), true);
+  const place = { root: 0, label: 'My tiles', dir: '' };
+  assert.deepEqual(crumbsFor({ place, tileName: 'first-plate.dmap', depth: 1, what: 'Add tiles' }).slice(-2).map((c) => [c.label, c.current]), [['first-plate.dmap', false], ['Add tiles', true]]);
+});

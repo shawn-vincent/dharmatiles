@@ -37,6 +37,7 @@ export const LEVELS = {
   entry: { depth: 1, doc: 'tile' },
   control: { depth: 2, doc: 'tile' },
   map: { depth: 0, doc: 'map' },
+  add: { depth: 1, doc: 'map' },
   piece: { depth: 1, doc: 'map' },
   prop: { depth: 2, doc: 'map' },
 };
@@ -44,8 +45,8 @@ export const LEVELS = {
 /** The level of a tile at selection `sel` with `control` open. */
 export const tileLevelOf = (sel, control = null) => ['tile', 'entry', 'control'][depthOf(sel, control)];
 
-/** The level of a map with `pieces` selected (a count) and a property open on them (`prop`). */
-export const mapLevelOf = ({ pieces = 0, prop = null }) => (prop && pieces === 1 ? 'prop' : pieces ? 'piece' : 'map');
+/** The level of a map with `pieces` selected (a count), a property open on them (`prop`), and the places to add tiles open (`add`: only while no piece is selected). */
+export const mapLevelOf = ({ pieces = 0, prop = null, add = false }) => (prop && pieces === 1 ? 'prop' : pieces ? 'piece' : add ? 'add' : 'map');
 
 /**
  * Which way the panel slides from level `from` to level `to`: 1 a deeper level comes in from the right, -1 a shallower one comes in
@@ -199,14 +200,14 @@ export function selOfAt(at) {
 
 /**
  * The address as the part of the page's URL hash it owns: `at`, `piece`, `control`, `group`, `face` for a tile, and
- * `pieces` (the ids, comma by comma) and `prop` for a map's levels.  (A folder level's, `place` and `dir`, is js/folders.js.)
+ * `pieces` (the ids, comma by comma), `prop` and `add` (the places to add tiles) for a map's levels.  (A folder level's, `place` and `dir`, is js/folders.js.)
  */
-export function levelParams({ sel, control, face, pieces = null, prop = null }) {
+export function levelParams({ sel, control, face, pieces = null, prop = null, add = false }) {
   const p = {};
   if (pieces?.length) {
     p.pieces = pieces.join(',');
     if (prop) p.prop = prop;
-  }
+  } else if (add) p.add = '1';
   const at = atOf(sel);
   if (at) {
     p.at = at;
@@ -231,17 +232,18 @@ export function parseHash(hash) {
 
 /** Pairs as a hash; `tile` first, then `at` and the rest in a fixed order, then anything else kept (theme, paint). */
 export function buildHash(pairs) {
-  const order = ['tile', 'place', 'dir', 'at', 'piece', 'control', 'group', 'pieces', 'prop', 'face'];
+  const order = ['tile', 'place', 'dir', 'at', 'piece', 'control', 'group', 'pieces', 'prop', 'add', 'face'];
   const keys = [...order.filter((k) => pairs[k] != null), ...Object.keys(pairs).filter((k) => !order.includes(k) && pairs[k] != null)];
   return `#${keys.map((k) => (k === 'tile' ? `tile=${encodeURIComponent(pairs[k])}` : `${k}=${slashy(String(pairs[k]))}`)).join('&')}`;
 }
 
 /** The pairs of the hash that the address owns: what is written over, and nothing else (the theme and the like stay). */
-export const OWNED = ['tile', 'place', 'dir', 'at', 'piece', 'control', 'group', 'pieces', 'prop', 'face'];
+export const OWNED = ['tile', 'place', 'dir', 'at', 'piece', 'control', 'group', 'pieces', 'prop', 'add', 'face'];
 
 /** The key of the level an address (its pairs) is at: a new key is a new level, the same key another piece of the same thing. */
 export function addressLevel(p) {
   if (p.pieces) return `pieces/${p.prop || ''}`;
+  if (p.add) return 'add';
   return `${p.at || ''}|${p.control || ''}|${p.group || ''}`;
 }
 
@@ -260,7 +262,7 @@ export function stepsHistory(cur, next) {
   return false;
 }
 
-/** The level a hash asks for: {sel, control, face} (sel the tile when it names none), and for a map `pieces` (ids) and `prop`. */
+/** The level a hash asks for: {sel, control, face} (sel the tile when it names none), and for a map `pieces` (ids) and `prop`, or `add`. */
 export function levelOfHash(hash) {
   const h = parseHash(hash);
   const sel = selOfAt(h.at);
@@ -271,7 +273,7 @@ export function levelOfHash(hash) {
   if (pieces.length) {
     out.pieces = pieces;
     if (['bottom', 'seed', 'print'].includes(h.prop)) out.prop = h.prop;
-  }
+  } else if (h.add === '1') out.add = true;
   return out;
 }
 

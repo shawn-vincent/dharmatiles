@@ -11,6 +11,7 @@ import { piecesOf } from '../doc-views.js';
 import { toast } from './app.js';
 import { docs, planOf, undoToast } from './docs.js';
 import { isMapView, server, tile, view } from './stores.js';
+import { flashAdded } from './model.js';
 import { pieceAt, sceneNow, selected, select } from './scene.js';
 import { steps as stepsOf } from '../steps.js';
 
@@ -172,13 +173,13 @@ export function variants(scope) {
 }
 
 /**
- * A tile from the catalog goes on the map: at `want` (squares of its own system, from a drop) or the nearest free
+ * A tile from the Add tiles level goes on the map: at `want` (squares of its own system, from a drop) or the nearest free
  * place to the map's corner (the program settles the place).  It gets a seed you do not own, unless you own none of it
  * and the map does not use it: then the tile's own seed is already new (and is not written).
  */
 export async function addTile(t, want = null) {
   if (!isMapView()) return null;
-  return change((state) => {
+  const done = await change((state) => {
     if (!sceneIn(state)) return null;
     return {
       label: 'Could not add the tile',
@@ -186,6 +187,9 @@ export async function addTile(t, want = null) {
       steps: [stepsOf.mapsAdd({ tile: t.id, near: want ?? { x: 0, y: 0 }, rot: 0, seedWord: 'if-needed' })],
     };
   });
+  // the piece's row in the Add tiles level's list lights up
+  if (done) flashAdded(t);
+  return done;
 }
 
 /** Take the selected piece's tile into Tile mode, with the map as the place Back returns to. */

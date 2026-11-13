@@ -208,3 +208,8 @@ dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
+/* A picture card: a tile (or any thing with a picture) to press or drag, a picture over its name and size.  The preview's
+   Add tiles level lays them in a two-column grid (style.css). */
+.acard { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-content: start; overflow: hidden; padding-bottom: 7px; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: 13px var(--f-body); }
+.acard:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.acard:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

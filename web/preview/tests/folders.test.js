@@ -185,3 +185,15 @@ test('a renamed folder takes the folders below it, and the one you are in, with 
   assert.equal(renamedDir('dungeon2', 'dungeon', 'keep'), 'dungeon2');
   assert.equal(renamedDir('other', 'dungeon', 'keep'), 'other');
 });
+
+test('a level that is gone settles on its nearest parent that is there: the one rule for the browser and the Add tiles pane', async () => {
+  const { settledLevel } = await import('../js/folders.js');
+  const roots = [{ kind: 'dir', path: '/h', label: 'My tiles', writable: true }];
+  const tiles = [{ id: 'a', root: 0, path: '/h/dungeon/a.dtile' }];
+  const state = { roots, tiles, folders: [] };
+  assert.deepEqual(settledLevel(state, { root: 0, dir: 'dungeon' }), { root: 0, dir: 'dungeon' });
+  assert.deepEqual(settledLevel(state, { root: 0, dir: 'dungeon/gone/deeper' }), { root: 0, dir: 'dungeon' });
+  assert.deepEqual(settledLevel(state, { root: 0, dir: 'nope' }), { root: 0, dir: '' });
+  assert.deepEqual(settledLevel(state, { root: 5, dir: '' }), { root: null, dir: '' });
+  assert.deepEqual(settledLevel(state, { root: null, dir: '' }), { root: null, dir: '' });
+});
