@@ -650,7 +650,7 @@ fn rebuild_plates(
                 t.files = files.clone();
                 t.errors.clear();
                 t.shown = running.then(|| {
-                    json!({"kind": "preview", "checked": false, "note": note.unwrap_or("low meshes, not yet checked")})
+                    json!({"kind": "preview", "checked": false, "note": note.unwrap_or("draft meshes, not yet checked")})
                 });
             }),
             Err(e) => {
@@ -687,7 +687,7 @@ fn rebuild_plates(
                 layout.plates.len(),
                 if layout.plates.len() == 1 { "" } else { "s" },
                 if low > 0 {
-                    format!(": low meshes for {low} tile{}, not yet checked", if low == 1 { "" } else { "s" })
+                    format!(": draft meshes for {low} tile{}, not yet checked", if low == 1 { "" } else { "s" })
                 } else {
                     String::new()
                 },
@@ -791,7 +791,7 @@ fn rebuild_plates(
                     view + 1,
                     t0.elapsed().as_secs_f64(),
                     if moved {
-                        "; the pieces cover a little more than the low meshes did, so the plates were laid out again"
+                        "; the pieces cover a little more than the draft meshes did, so the plates were laid out again"
                     } else {
                         ""
                     }

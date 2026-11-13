@@ -20,7 +20,6 @@ import { showWorst } from './selection.js';
 import { doc, entrySel, isMapView, log, progressOf, server, tile, view } from './stores.js';
 import { sceneNow, sceneStore, statusLines } from './scene.js';
 import { docs } from './docs.js';
-import { targetWords } from './target.js';
 
 const tileId = () => tile()?.id ?? view.get().tileId ?? '';
 const viewOf = () => log.view(tileId());
@@ -60,14 +59,15 @@ function showBar() {
   const platesOnly = (t?.errors ?? []).every((e) => /^dt::(slots|plates|inventory|printer)$/.test(e.code));
   const calm = map && (s.tone === 'ok' || s.tone === 'note' || (s.tone === 'bad' && platesOnly));
   $('sb-verdict').textContent = calm ? map.verdict : s.verdict;
-  $('sb-counts').textContent = map ? [s.counts, map.counts].filter(Boolean).join(' · ') : s.counts;
+  // "draft · not yet checked" once, whoever knows it: the tile's shown build or the map's pieces
+  const draft = s.unchecked || map?.notChecked ? 'draft · not yet checked' : '';
+  $('sb-counts').textContent = [draft, s.counts, map?.counts].filter(Boolean).join(' · ');
   // a map whose plates cannot be laid out is not a map in error: its dot is the notes' yellow, or green
   const tone = calm && s.tone === 'bad' ? (map.notes ? 'note' : 'ok') : s.tone;
   $('sb-dot').className = tone;
   $('statusbar').dataset.tone = tone;
   $('sb-bar').style.width = s.progress == null ? '0' : `${Math.round(s.progress * 100)}%`;
   $('sb-bar').hidden = s.progress == null;
-  $('sb-target').textContent = targetWords();
   const w = saveWords();
   $('sb-saved').textContent = w && w.text !== 'saved' ? w.text : '';
   $('sb-saved').classList.toggle('bad', !!w?.bad);

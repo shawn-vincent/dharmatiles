@@ -206,9 +206,8 @@ export function statusOf(view, { t = null, live = true, p = null } = {}) {
     const words = p ? jobWords(p, t.name) : null;
     const stage = words ? `${pct}% · ${words.short}` : 'starting';
     const what = words?.verb === 'loading' ? 'loading' : t.shown ? 'rebuilding' : 'building';
-    // a low build on show (nothing earlier of the tile was kept) has not been through the gate
-    const low = t.shown?.checked === false ? ' · low · not yet checked' : '';
-    return { verdict: `${what} ${stage}${low}`, tone: 'busy', counts, progress: p ? p.fraction : 0 };
+    // a draft on show (nothing earlier of the tile was kept) has not been through the gate: `unchecked`, said once by the status line
+    return { verdict: `${what} ${stage}`, tone: 'busy', counts, progress: p ? p.fraction : 0, unchecked: t.shown?.checked === false };
   }
   if (t.status === 'idle') return { verdict: 'not built yet', tone: 'idle', counts, progress: null };
   const fails = view.record?.gate?.severity === 'error';

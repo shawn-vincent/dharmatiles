@@ -87,7 +87,8 @@
 </div>
 <dl class="defs">
   <dt>.btn</dt><dd>An action. <code>aria-pressed="true"</code> fills it with the theme accent.</dd>
-  <dt>.seg</dt><dd>One choice from a row: the preview's views and its My tiles / Library / Tests switch.</dd>
+  <dt>.seg</dt><dd>One choice from a row: the preview's views and its My tiles / Library / Tests switch. A track wider than its buttons shares the room out between them (one rule), so a segmented control never ends short of its track.</dd>
+  <dt>input, select</dt><dd>Every text-like input and every select takes the control style (a 1 px line, the theme radius, the body face), chosen by what the one rule leaves out, never by a <code>type</code> it names: an input with no <code>type</code>, or a new one, cannot fall back to the browser&rsquo;s own. A test fails on a bare one.</dd>
   <dt>.switch</dt><dd>On or off, with its keyboard key beside it when it has one.</dd>
   <dt>☀ / ☾</dt><dd>Light or dark. It follows the system until it is used, then remembers the choice (<code>dt-theme</code> in the browser).</dd>
   <dt>.scrolls</dt><dd>A scrolling panel in the preview's chrome (never the 3D view): a soft shadow, <code>--scroll-shadow</code>, at each edge that has more content beyond it, gone when scrolled to that edge. <code>js/scroll-shadows.js</code> sets the edge classes.</dd>

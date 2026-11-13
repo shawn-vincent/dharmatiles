@@ -176,20 +176,19 @@ export function crumbsFor({ place = null, tileName = null, depth = 0, what = '',
 
 /**
  * The strip under the crumbs: up to two short lines about what the level sits in, never the
- * parent's own panel.  `tile` is `{name, size, seed, system, entries, lines, regions}`; `entry` is
+ * parent's own panel.  `tile` is `{entries, lines, regions}` (the name is the crumb's, the size and seed the tile level's rows, the target the title bar's chip: each fact has one home); `entry` is
  * `{standing: {n, of}, place}` for a stack entry, or `{note}` for a line or a region; `value` is
  * the control's current value at depth 2.
  */
 export function contextFor({ depth, tile, entry = null, thing = '', control = null, value = '' }) {
   const t = tile || {};
-  const tileLine = [t.size && sizeWords(t.size), t.seed != null && `seed ${t.seed}`, t.system].filter(Boolean).join(' · ');
   if (depth === 0) {
     const n = (k, one, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
     const holds = [n(t.entries ?? 0, 'entry', 'entries'), t.lines ? n(t.lines, 'line') : '', t.regions ? n(t.regions, 'region') : ''].filter(Boolean).join(' · ');
-    return [holds, [t.system, t.printer].filter(Boolean).join(' · ')].filter(Boolean);
+    return [holds].filter(Boolean);
   }
   const where = entry?.standing ? `${ordinal(entry.standing.n)} of ${entry.standing.of} in the stack${entry.place ? ` · ${entry.place}` : ''}` : entry?.note || '';
-  if (depth === 1) return [[t.name, tileLine].filter(Boolean).join(' · '), where].filter(Boolean);
+  if (depth === 1) return [where].filter(Boolean);
   return [[thing, where].filter(Boolean).join(' · '), control ? `${control} = ${value || 'not set'}` : ''].filter(Boolean);
 }
 

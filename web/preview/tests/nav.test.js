@@ -107,12 +107,13 @@ test('on a folder level the last folder is the current crumb, and Places alone i
 });
 
 test('the strip says what a level sits in, never the parent\'s own panel', () => {
-  const tile = { name: 'combo', size: '"1x1"', seed: '62', system: 'DungeonBlocks', printer: 'default', entries: 5, lines: 2, regions: 1 };
-  assert.deepEqual(contextFor({ depth: 0, tile }), ['5 entries · 2 lines · 1 region', 'DungeonBlocks · default']);
-  assert.deepEqual(contextFor({ depth: 0, tile: { ...tile, entries: 1, lines: 0, regions: 0 } }), ['1 entry', 'DungeonBlocks · default']);
+  // each fact has one home: the name is the crumb's, size and seed the tile level's rows, the target the title bar's chip
+  const tile = { entries: 5, lines: 2, regions: 1 };
+  assert.deepEqual(contextFor({ depth: 0, tile }), ['5 entries · 2 lines · 1 region']);
+  assert.deepEqual(contextFor({ depth: 0, tile: { ...tile, entries: 1, lines: 0, regions: 0 } }), ['1 entry']);
   assert.deepEqual(contextFor({ depth: 1, tile, entry: { standing: { n: 3, of: 5 }, place: 'at=bank' } }),
-    ['combo · 1×1 · seed 62 · DungeonBlocks', '3rd of 5 in the stack · at=bank']);
-  assert.deepEqual(contextFor({ depth: 1, tile, entry: { note: 'line shore' } }), ['combo · 1×1 · seed 62 · DungeonBlocks', 'line shore']);
+    ['3rd of 5 in the stack · at=bank']);
+  assert.deepEqual(contextFor({ depth: 1, tile, entry: { note: 'line shore' } }), ['line shore']);
   assert.deepEqual(contextFor({ depth: 2, tile, entry: { standing: { n: 2, of: 5 }, place: '' }, thing: 'grass', control: 'length', value: '3dmm .. 6dmm' }),
     ['grass · 2nd of 5 in the stack', 'length = 3dmm .. 6dmm']);
   assert.deepEqual(contextFor({ depth: 2, tile, entry: null, thing: 'grass', control: 'length' }), ['grass', 'length = not set']);

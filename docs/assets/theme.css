@@ -146,7 +146,8 @@
 
 /* segmented control: a row of choices, one chosen */
 .seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: calc(var(--r) + 2px); flex-wrap: wrap; }
-.seg > button { font: 500 13px/1 var(--f-body); color: var(--muted); background: transparent; border: 0; border-radius: var(--r); padding: 6px 10px; cursor: pointer; white-space: nowrap; transition: color .15s var(--ease), background-color .15s var(--ease); }
+.seg > button { font: 500 13px/1 var(--f-body); color: var(--muted); background: transparent; border: 0; border-radius: var(--r); padding: 6px 10px; flex: 1 1 auto; text-align: center; cursor: pointer; white-space: nowrap; transition: color .15s var(--ease), background-color .15s var(--ease); }
+/* one rule: a track wider than its buttons (a stretched grid cell, width: 100%) shares the room out; a track that hugs them is unchanged */
 .seg > button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .seg > button[aria-pressed="true"], .seg > button.on { background: var(--accent); color: var(--on-accent); }
 .seg > button .n { opacity: .7; font-size: 11px; margin-left: 3px; font-variant-numeric: tabular-nums; }
@@ -167,12 +168,15 @@
 
 kbd { font: 500 10.5px/1 var(--f-code); color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--r); padding: 2px 4px; background: var(--bg); }
 
-input[type="search"], input[type="text"], .field {
+/* every text-like input and every select takes the control style; a missing or new `type` cannot leave one to the browser.
+   :where keeps the specificity at an element's, so a class (.pin, .edit, .word-select) still sets its own size. */
+input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"])), select:where(:not([multiple])), .field {
   font: 400 13.5px/1.2 var(--f-body); color: var(--ink); background: var(--bg);
   border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; width: 100%;
 }
-input[type="search"]::placeholder { color: var(--muted); }
-input[type="search"]:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+input[type="number"] { font-family: var(--f-code); }
+input::placeholder { color: var(--muted); }
+input:where(:not([type="checkbox"], [type="radio"], [type="range"])):focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 input[type="range"] { accent-color: var(--accent); }
 
 /* dialogs: native modal semantics, in the same quiet material */

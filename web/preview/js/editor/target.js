@@ -32,13 +32,6 @@ export function documentPrinter() {
   return printerOf(docs.get(t.id), server.get().printers, { map: isMapView() });
 }
 
-/** The status line's words for the target: the document's printer on a list or a map, else system and printer. */
-export function targetWords() {
-  const d = documentPrinter();
-  const { system, printer } = server.get();
-  return d ? `${d.label} · this ${d.what}` : `${SYSTEMS[system] || system} · ${printer}`;
-}
-
 /** Show the target: the chip and the card's words (bound to the model, redone when it changes) and the printer chooser. */
 function bind() {
   effect(() => {

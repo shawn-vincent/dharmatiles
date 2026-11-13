@@ -56,7 +56,7 @@ const Plates = ({ m, p, act }) => {
     })}</div>
     ${p.groupingCost ? html`<p class="note warn">${`Grouping by filament takes ${plural(p.groupingCost, 'more plate')} than packing by size. `}<button type="button" class="linkish" onClick=${() => act.set('group', 'size')}>Pack by size only</button></p>` : null}
     <p class=${`note${low ? ' warn' : ' ok'}`}>${low
-      ? `${plural(low, 'tile')} shown as low meshes, not yet checked: full builds start for the plate in view; the rest build when you export. The plates are laid out again by what the full builds cover.`
+      ? `${plural(low, 'tile')} shown as draft meshes, not yet checked: full builds start for the plate in view; the rest build when you export. The plates are laid out again by what the full builds cover.`
       : 'Every piece is a full build, checked by the printability gate.'}</p>
   <//>`;
 };

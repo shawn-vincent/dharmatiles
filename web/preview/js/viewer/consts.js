@@ -14,7 +14,7 @@ export const VIEWS = [
   ['back', 'Back', 0, 90, false],
   ['left', 'Left', 0, 180, false],
   ['low', 'Low', 14, -150, false],
-  ['close', 'Close', 38, -125, true],
+  ['close', 'Close-up', 38, -125, true],
   ['under', 'Under', -60, -120, false],
 ];
 

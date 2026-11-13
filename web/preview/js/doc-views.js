@@ -3,8 +3,6 @@
 // for, from the state it is given, and kept by nothing; the identity-keyed memo below only saves repeating the
 // same work on the same objects.  No DOM, no stores: tests/documents.test.js compares each with a fresh working-out.
 
-import * as M from './map-model.js';
-
 const SYSTEMS = { db: 'DungeonBlocks', ol: 'OpenLOCK' };
 
 /** The key of the geometry a piece is drawn from: its tile, seed, system and printer, and the tile's build. */
@@ -42,11 +40,8 @@ export function targetWordsOf(doc, { system, printer }) {
   return doc ? `${doc.label} · this ${doc.what}` : `${SYSTEMS[system] || system} · ${printer}`;
 }
 
-/** The title bar's chip for a map: `3 in inventory · 11 to print`. */
-export const chipOf = (scene) => M.totalsText(scene);
-
-/** The status line's verdict on a map: how many pieces, and what they come to. */
+/** The status line's verdict on a map: how many pieces (what they come to in print is the panel's to say). */
 export const verdictOf = (scene) => {
   const placed = scene?.placed ?? 0;
-  return `${placed} piece${placed === 1 ? '' : 's'} · ${M.totalsText(scene)}`;
+  return `${placed} piece${placed === 1 ? '' : 's'}`;
 };

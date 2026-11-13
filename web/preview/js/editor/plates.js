@@ -13,7 +13,6 @@ import { PlatesPanel } from '../view/plates-panel.js';
 import { $, host, toast } from './app.js';
 import { docs, undoToast } from './docs.js';
 import { chooserFor } from './printer-chooser.js';
-import { plateTotals } from '../inventory.js';
 import { say, today } from './inventory.js';
 import { removePiece, setCount } from './lists.js';
 import { isInventory, isMapView, isPlates, server, stem, tile, view } from './stores.js';
@@ -27,14 +26,13 @@ const mm = (n) => `${Number(n).toFixed(1).replace(/\.0$/, '')}`;
 
 let lastList = null, lastTile = null; // the print list and the tile last shown, for the title bar's switch
 
-/** The strip under the crumbs: the printer, and what is laid out. */
+/** The strip under the crumbs: what is laid out, and the bed (the printer's name is the title bar's chip's). */
 export function contextLines() {
   const p = plan.value, t = tile();
   if (!p) return [t?.status === 'building' ? 'Laying out the plates…' : 'A print list that does not plan yet: mend it, or choose a printer here.'];
   if (!p.planned) return ['This list does not plan yet.', p.label ? `For the ${p.label}` : 'Choose a printer'];
   const n = p.layout.length;
-  const { held } = plateTotals(p);
-  return [`${plural(p.layout.reduce((a, x) => a + x.pieces.length, 0), 'piece')} on ${plural(n, 'plate')}${held ? ` · ${held} in inventory` : ''}`, `${p.label} · ${mm(p.bed[0])} × ${mm(p.bed[1])} mm · ${p.mode === 'single' ? 'single colour' : 'multicolour'}`];
+  return [`${plural(p.layout.reduce((a, x) => a + x.pieces.length, 0), 'piece')} on ${plural(n, 'plate')}`, `${mm(p.bed[0])} × ${mm(p.bed[1])} mm · ${p.mode === 'single' ? 'single colour' : 'multicolour'}`];
 }
 
 const ui = () => platesUi.value.value;

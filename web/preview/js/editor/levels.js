@@ -23,7 +23,7 @@
 
 import {
   LEVELS, caretLineFor, contextFor, crumbsFor, depthOf, folderDepth, levelKey, levelOfHash, moveRow, orderStack, parseHash, placeOf, sameLevel,
-  sizeWords, slideBetween, slideDir, standing, systemName, tileLevelOf, trailDepth, up as levelUp,
+  slideBetween, slideDir, standing, tileLevelOf, trailDepth, up as levelUp,
 } from '../nav.js';
 import { effect } from '@preact/signals-core';
 import { afterSlide, finishSlide, slide } from '../slide.js';
@@ -241,9 +241,7 @@ function renderContext() {
   const map = doc.get().map;
   const items = orderStack(stackItems());
   const own = map?.tile;
-  const written = (name) => own?.controls?.find((c) => c.name === name)?.text.replace(/"/g, '');
   const tileInfo = {
-    name: t?.name, size: sizeWords(written('size') ?? ''), seed: written('seed'), system: systemName(server.get().system), printer: server.get().printer,
     entries: items.length, lines: map?.lines?.length ?? 0, regions: map?.regions?.length ?? 0,
   };
   let entry = null, value = '';

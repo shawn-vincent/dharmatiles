@@ -8,9 +8,7 @@ import { failed, showError } from '../problems.js';
 import { html, render } from '../view/html.js';
 import { ExportWhy } from '../view/title-bar.js';
 import { $, host } from './app.js';
-import { dirty, doc, isInventory, isMapView, isPlates, renameable, server, stem, tile } from './stores.js';
-import { chip as mapChip } from './scene.js';
-import { planOf } from './docs.js';
+import { dirty, doc, isInventory, isPlates, renameable, server, stem, tile } from './stores.js';
 import { targetLabel } from './target.js';
 
 // ---- export: the same build as `dharmatiles build`, written to out/ ----------
@@ -53,12 +51,12 @@ function showExport() {
   $('export-reveal').hidden = !files;
 }
 
-/** The tile's name and size in the crumb and the title; the verdict, the progress and the record are the status line's and the messages panel's (panel.js). */
+/** The tile's name in the crumb and the title (its size is the tile level's row); the verdict, the progress and the record are the status line's and the messages panel's (panel.js). */
 function showTitle() {
   const t = tile();
   $('empty').hidden = !!t;
   if (!t) {
-    $('tilename').textContent = ''; $('tileplan').textContent = '';
+    $('tilename').textContent = '';
     $('forward').hidden = true;
     document.title = 'dharmatiles';
     return;
@@ -68,8 +66,6 @@ function showTitle() {
   $('forward').hidden = false; $('forward-name').textContent = stem(t);
   $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile; double-click or F2 to rename` : `${t.path}\nClick for the tile`;
   document.title = `${stem(t)} · dharmatiles`;
-  const p = planOf(t);
-  $('tileplan').textContent = isInventory(t) ? 'what you have printed' : isPlates(t) ? (isMapView() ? mapChip() : p?.plates?.label ?? '') : p ? `${p.cols}×${p.rows} · ${p.squareMm} mm squares` : '';
 }
 
 /** Wire this part of the page (once, at load). */

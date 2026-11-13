@@ -117,7 +117,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #keys .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 24px; }
 #keys dl { grid-template-columns: auto 1fr; font-size: 13px; }
 #keys dt { white-space: nowrap; } #keys dd { text-align: left; color: var(--ink); }
-#layout-seg { width: 100%; } #layout-seg > button { flex: 1; }
+#layout-seg { width: 100%; }
 
 /* ---- the title bar ---- */
 #title { grid-area: title; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--line); position: relative; z-index: 6; background: var(--bg); min-width: 0; }
@@ -133,7 +133,6 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #savestate button:hover { text-decoration: underline; }
 #savestate.bad { color: var(--ink); }
 #rochip { flex: none; margin-left: 6px; padding: 1px 8px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--muted); font-size: 11.5px; line-height: 1.5; cursor: help; }
-#tileplan { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #history-controls { display: flex; align-items: center; gap: 5px; flex: none; }
 .history-split { position: relative; display: inline-flex; }
 .history-split > button { height: 30px; color: var(--muted); background: var(--raised); border: 1px solid var(--line); cursor: pointer; }
@@ -166,7 +165,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #export-card, #target-card { display: flex; flex-direction: column; gap: 10px; }
 #export-card[hidden], #target-card[hidden] { display: none; }
 #export-card .cap, #target-card .cap { color: var(--muted); font: 600 10.5px/1 var(--f-body); letter-spacing: .09em; text-transform: uppercase; }
-#export-card .seg, #target-card .seg { width: 100%; } #export-card .seg > button, #target-card .seg > button { flex: 1; }
+#export-card .seg, #target-card .seg { width: 100%; }
 #export-target { margin: 0; color: var(--muted); font-size: 12.5px; }
 /* the build target: one chip in the title bar, base system and printer */
 #target { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--raised); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 12.5px; white-space: nowrap; color: var(--ink); }
@@ -293,15 +292,14 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .lvlbox .empty { margin: auto; max-width: 22ch; padding: 28px 18px; color: var(--muted); text-align: center; line-height: 1.55; }
 .lvlbox .empty b { display: block; margin-bottom: 5px; color: var(--ink); font: 700 20px/1.1 var(--f-display); }
 /* a sheet that goes on below the pane says so, as the tile list does with its shadow */
-.lvlbox .body.sh-b::after { content: "more below ↓"; position: sticky; bottom: -12px; display: block; width: max-content; margin: 6px auto -4px; padding: 1px 10px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); color: var(--muted); font-size: 11px; pointer-events: none; }
 .lvlbox .grp { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line); }
 .lvlbox .grp .x { padding: 0 2px; font-size: 16px; }
 .lvlbox .add { margin-top: 10px; }
-.lvlbox .row { display: grid; grid-template-columns: 78px minmax(0, 1fr) 14px auto; align-items: start; min-height: 30px; gap: 6px; }
+.lvlbox .row { display: grid; grid-template-columns: 78px minmax(0, 1fr) 14px auto; align-items: baseline; min-height: 30px; gap: 6px; }
 .lvlbox .row .x { grid-column: 3; } .lvlbox .row .chev { grid-column: 4; }
-.lvlbox .row .nm { padding-top: 4px; font-size: 13px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lvlbox .row .nm { font-size: 13px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lvlbox .row.faint .nm, .lvlbox .row.faint .val { opacity: .55; }
-.lvlbox .cell { min-width: 0; min-height: 28px; display: flex; align-items: flex-start; gap: 4px; }
+.lvlbox .cell { min-width: 0; min-height: 28px; display: flex; align-items: baseline; gap: 4px; }
 .lvlbox .val { font: 13px var(--f-code); padding: 2px 6px; border-radius: var(--r); cursor: text; white-space: normal; overflow-wrap: anywhere; }
 .lvlbox .val:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .lvlbox .val .q { display: none; }
@@ -317,7 +315,7 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .lvlbox .word-select:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent); outline-offset: 0; }
 .lvlbox .word-select:disabled { cursor: default; opacity: .7; }
 .lvlbox button:disabled { cursor: default; opacity: .7; }
-.lvlbox .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px 0 0; font-size: 15px; line-height: 1; }
+.lvlbox .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 15px; line-height: 1; }
 .lvlbox .x:hover { color: var(--ink); }
 .lvlbox .note { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
 .lvlbox .linkish, #partbar .back { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
@@ -374,14 +372,14 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 .fam-water { --fam: var(--water); } .fam-base { --fam: var(--line-2); }
 
 /* ---- the record card ---- */
-dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0; font-size: 13px; }
+dl { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 5px 12px; margin: 0; font-size: 13px; }
 dt { color: var(--muted); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); } dd.ok { color: var(--ok); }
 #legend { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); font-size: 12.5px; } #legend li { display: flex; gap: 8px; align-items: center; margin: 5px 0; }
 .sw { width: 12px; height: 12px; border-radius: 2px; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18); }
 
 /* ---- smaller screens: the panes narrow, then flow under the view ---- */
-@media (max-width: 1200px) { #tileplan, .history-label { display: none; } }
+@media (max-width: 1200px) { .history-label { display: none; } }
 @media (max-width: 760px) { #target #target-printer, #target .dot { display: none; } }
 @media (max-width: 900px) {
   body { overflow: auto; }
@@ -475,8 +473,6 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 #sb-saved.bad { color: var(--ink); }
 #sb-saved:empty { display: none; }
 #statusbar .grow { flex: 1; }
-#sb-target { white-space: nowrap; }
-@media (max-width: 760px) { #sb-target { display: none; } }
 
 #msgpanel { position: absolute; left: 0; right: 0; bottom: 26px; z-index: 6; display: flex; flex-direction: column; height: min(340px, 56%); background: var(--bg); border-top: 1px solid var(--line-2); }
 #msgpanel[hidden] { display: none; }
@@ -557,11 +553,20 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 .orow .nm { font-size: 13.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orow .sub { color: var(--muted); font: 400 11px var(--f-code); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orow .no { flex: none; width: 14px; text-align: right; color: var(--muted); font: 600 11px var(--f-code); }
+/* a stack row's number, swatch, name and chevron share the name's first line (baseline); the padding keeps the row at 46 px, its ⋯ is on that line too */
+.orow:has(> .no) { align-items: baseline; padding-block: 11.5px; }
+.orow:has(> .no):has(.sub) { padding-block: 4.5px; }
+.orwrap:has(> .orow > .no) > .omore { top: 12px; transform: none; }
+.orwrap:has(> .orow:has(> .no):has(.sub)) > .omore { top: 4px; }
+.orow:has(> .no) .chev { position: relative; top: 2px; } /* the glyph is drawn high in its box */
+.orow:has(> .no) .badge { align-self: flex-start; margin-top: 5.5px; }
+.orow:has(> .no) :is(.no, .nm, .chev) { line-height: 20px; }
+.orow:has(> .no) .sub { line-height: 14px; }
+.orow:has(> .no) .gl { align-self: flex-start; margin-top: 3.5px; }
 .orow .gl { flex: none; width: 13px; height: 13px; border-radius: 3.5px; background: var(--fam, var(--line-2)); }
 .orow .gl.line { background: none; border-radius: 0; height: 0; width: 15px; border-top: 2px solid var(--water); transform: rotate(-24deg); }
 .orow .gl.region { background: color-mix(in srgb, var(--moss) 28%, transparent); border: 1.5px solid var(--moss); border-radius: 4px; }
 .orow .chev, .lvlbox .chev { flex: none; color: var(--muted); font-size: 18px; line-height: 1; width: 14px; text-align: center; background: none; border: 0; padding: 0; cursor: pointer; }
-.lvlbox .row .chev { margin-top: 4px; height: 20px; }
 .lvlbox .chev:hover, .orow:hover .chev { color: var(--accent); }
 .fam-surface { --fam: var(--earth); } .fam-plant { --fam: var(--moss); } .fam-thing { --fam: var(--stone); }
 .orow .badge { flex: none; min-width: 9px; height: 9px; border-radius: 99px; background: var(--caution); box-shadow: 0 0 0 2px var(--panel); color: #1A1714; font: 700 10px/9px var(--f-body); text-align: center; }

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDocuments } from '../js/documents.js';
 import { createHistory } from '../js/doc-history.js';
-import { chipOf, piecesOf, printerOf, selectedOf, verdictOf } from '../js/doc-views.js';
+import { piecesOf, printerOf, selectedOf, verdictOf } from '../js/doc-views.js';
 
 // ---- a fake program: one map, its revisions, its answers and its event stream ---------------------------------
 
@@ -89,7 +89,6 @@ function views(state, selection = []) {
     pieces: ps.map((p) => [p.id, p.rot, p.at?.[0]]),
     selected: selectedOf(selection, ps).map((p) => p.id),
     printer: printerOf(state, PRINTERS, { map: true }),
-    chip: chipOf(state?.plan?.scene ?? null),
     verdict: verdictOf(state?.plan?.scene ?? null),
   };
 }

@@ -108,7 +108,7 @@ pub fn write_set(
             return Err(Diag::plain(
                 "dt::plates",
                 format!(
-                    "{} was not built in full and is not checked: plates are never made from a low build",
+                    "{} was not built in full and is not checked: plates are never made from a draft build",
                     k.name
                 ),
             ));

@@ -99,7 +99,7 @@ plates printer="bambu/x1c-ams" mode="multicolour" group="filament" gap="3mm" mar
 <tr><td><code>--format 3mf</code></td><td>One plain 3MF per plate: the objects and a build item for each copy, painted in multicolour, with no Bambu files.</td></tr>
 </tbody></table></div>
 <p>Files go to <code>out/plates/&lt;list&gt;/</code>, with <code>&lt;list&gt;.plates.json</code> beside them: every plate, its pieces and where each stands.</p>
-<p><strong>Only full builds are written.</strong> Every distinct piece is built in full, through the union and the printability gate, from the cache when there is one (the first export of a new list builds; the next is fast). A low or super-low build is never exported. A piece that fails the gate is written and named, and the command exits 3, as <code>build</code> does.</p>
+<p><strong>Only full builds are written.</strong> Every distinct piece is built in full, through the union and the printability gate, from the cache when there is one (the first export of a new list builds; the next is fast). A draft or distant (super-low) build is never exported. A piece that fails the gate is written and named, and the command exits 3, as <code>build</code> does.</p>
 
 <h2 id="command">The command</h2>
 <pre><code>dharmatiles plates my-list.dmap                       # the list's printer: the project or the STLs
@@ -122,11 +122,11 @@ dharmatiles plates my-list.dmap --format 3mf --out ~/prints --json</code></pre>
 <li><strong>Inventory.</strong> <em>N in inventory · M to print</em>, a switch for <em>Only what I don't have</em> or <em>Everything</em> (it writes the <code>inventory</code> word of the <code>plates</code> line), and each piece against the shelf, with <em>have, single colour</em> in caution yellow where you own the other colour mode. <strong>After the print</strong> lists a plate's pieces, all ticked good: untick the failures and one press adds them to the inventory.</li>
 <li><strong>Printer, print mode, spacing.</strong> Brand, then model, with a switch for the AMS on a Bambu printer; single or multicolour and the grouping, with the filament check; the gap, the margin and turns. Each change rewrites the <code>plates</code> line in the file and nothing else, and the plates are laid out again.</li>
 </ul>
-<p><strong>Low first, then full.</strong> A tile with no full build kept shows its <em>low</em> build, marked <em>not yet checked</em> in the status line and the messages. Opening a list starts the full builds of the pieces on the plate in view, the others build when you export. When they land, the plates are laid out again by what the full builds really cover (a note says when that moved a piece) and the view swaps to them. A plate drawn from low meshes is never exported.</p>
+<p><strong>Draft first, then full.</strong> A tile with no full build kept shows its <em>draft</em> build, marked <em>not yet checked</em> in the status line and the messages. Opening a list starts the full builds of the pieces on the plate in view, the others build when you export. When they land, the plates are laid out again by what the full builds really cover (a note says when that moved a piece) and the view swaps to them. A plate drawn from low meshes is never exported.</p>
 
 <h2 id="rules">Rules</h2>
 <ul>
-<li>A plate is laid out from the real footprint of the full build: a layout from low builds is the view's estimate, redone when the full builds land.</li>
+<li>A plate is laid out from the real footprint of the full build: a layout from draft builds is the view's estimate, redone when the full builds land.</li>
 <li>The printer's filament slots are checked before any build, and again from the builds. The check before a build is an upper bound read from the stack and the elements' own words: a tree with <code>leaves bare</code> is wood only, with no leaf filament.</li>
 <li>Only a full, gate-checked build is written; a failing piece is named, never hidden.</li>
 <li>Single colour carries no per-triangle paint.</li>

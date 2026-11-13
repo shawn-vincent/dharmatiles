@@ -59,8 +59,8 @@ export const contextLines = () => {
   const placed = ps.filter((p) => p.at).length;
   const tray = ps.length - placed;
   return [
-    `${plural(placed, 'piece')} on the map${tray ? ` · ${tray} in the tray` : ''} · ${M.totalsText(sc)}`,
-    sc ? `${systemName(sc.system)} · ${sc.printer}${sc.grid ? ` · ${sc.grid.cols} × ${sc.grid.rows} squares` : ''}` : 'Reading the map…',
+    `${plural(placed, 'piece')} on the map${tray ? ` · ${tray} in the tray` : ''}`,
+    sc ? `${systemName(sc.system)}${sc.grid ? ` · ${sc.grid.cols} × ${sc.grid.rows} squares` : ''}` : 'Reading the map…',
   ];
 };
 

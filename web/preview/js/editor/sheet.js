@@ -21,7 +21,6 @@ import { setCloud, doc, elementNamed, entrySel, isEntry, isMark, itemOf, log, ma
 import { closeControl, openControl, showSourceAt } from './levels.js';
 import { setSel } from './selection.js';
 import { clauseGroups, clauseMenu, combineNote, regionKind } from './region-sheet.js';
-import { startRename } from './tiles.js';
 import { haveBlock, isTileDoc } from './inventory.js';
 import { canonOf, tileHave } from '../inventory.js';
 import { token } from '../tokens.js';
@@ -121,12 +120,9 @@ function tileModel() {
       ? about && tileEdit({ op: 'remove', at: about.at }, 'Took out the description')
       : about ? null : tileEdit({ op: 'insert', place: 'tile', node: `about ${kdlString(String(value))}` }, 'Described the tile')),
   });
-  const actions = doc.get().writable ? [
-    { label: 'Rename', title: 'Rename the tile’s file (F2)', run: () => startRename() },
-  ] : [];
   // under the tile's own controls: what the inventory says of it and "I have this", then what it holds
   const tail = html`${isTileDoc(t) ? html`${haveBlock(t)}<${ListBlock} t=${t} lists=${lists()} addTo=${addTo} />` : null}${tileContents()}`;
-  return { title: stem(t), kind: 'tile', href: node.href, groups, actions, tail, slim: true, seedStrip: seedStrip(t, own) };
+  return { title: stem(t), kind: 'tile', href: node.href, groups, tail, slim: true, seedStrip: seedStrip(t, own) };
 }
 
 /** A run of written text (a line's points, a region's lines) as a sheet setting. */

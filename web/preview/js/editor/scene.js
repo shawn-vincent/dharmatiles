@@ -7,7 +7,7 @@
 // for what you select, chosen by how large the piece is on screen and held under a triangle budget, so a
 // table of forty pieces moves smoothly and nothing waits for a build.  Full is asked for only when close, for
 // every piece that fits the budget together, and never blocks: the lower tier stays on screen until it lands.  What is not full is
-// marked `low · not yet checked` in the status line, as the plates mark theirs.
+// marked `draft · not yet checked` in the status line, as the plates mark theirs.
 //
 // The pieces of the map are one selection (`view.msel`, piece ids); editing them is scene-edit.js, the
 // panel is scene-panel.js.  Mode (Tile, Map, Plates) is the title bar's switch: a document with placed
@@ -22,7 +22,7 @@ import * as M from '../map-model.js';
 import { pillsWanted } from '../map-list.js';
 import { $, host, viewer } from './app.js';
 import { frameBox } from './framing.js';
-import { chipOf, verdictOf } from '../doc-views.js';
+import { verdictOf } from '../doc-views.js';
 import { createTiers } from '../tiers.js';
 import { createStore, log, server, tile, tileById, view } from './stores.js';
 import { docs } from './docs.js';
@@ -255,22 +255,17 @@ function cameraMoved() {
   evaluate(false);
 }
 
-// ---- the status line and the chip ---------------------------------------------------------------------
+// ---- the status line ---------------------------------------------------------------------
 
 /** What the status line says of the map: `{verdict, counts}`. */
 export function statusLines() {
   const { counts } = sceneStore.get();
   const verdict = verdictOf(sceneNow());
   const notFull = counts.low + counts['super-low'] + counts.none;
-  const parts = [];
-  if (notFull) parts.push('low · not yet checked');
-  const tiers = [counts.full && `${counts.full} full`, counts.low && `${counts.low} low`, counts['super-low'] && `${counts['super-low']} distant`].filter(Boolean).join(' · ');
+  const tiers = [counts.full && `${counts.full} full`, counts.low && `${counts.low} ${counts.low === 1 ? 'draft' : 'drafts'}`, counts['super-low'] && `${counts['super-low']} distant`].filter(Boolean).join(' · ');
   const notes = (log.view(tile()?.id ?? '').counts?.notes ?? 0);
-  return { verdict, counts: [...parts, tiers].filter(Boolean).join(' · '), notChecked: notFull > 0, notes };
+  return { verdict, counts: tiers, notChecked: notFull > 0, notes };
 }
-
-/** The title bar's chip: `3 in inventory · 11 to print`. */
-export const chip = () => chipOf(sceneNow());
 
 // ---- pills on the pieces -------------------------------------------------------------------------------
 
