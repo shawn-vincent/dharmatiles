@@ -194,6 +194,16 @@ fn a_bambu_project_holds_every_plate_its_instances_and_its_paint() {
     let cfg: serde_json::Value =
         serde_json::from_str(&text(&z, "Metadata/project_settings.config")).unwrap();
     assert_eq!(cfg["filament_colour"].as_array().unwrap().len(), 1);
+    // ...in the single-colour grey, never a material's colour (it printed in earth's brown)
+    let [r, g, b] = Palette::default().single().map(crate::threemf::byte);
+    assert_eq!(
+        cfg["filament_colour"][0].as_str().unwrap(),
+        format!("#{r:02X}{g:02X}{b:02X}")
+    );
+    let [er, eg, eb] = Palette::default()
+        .colour(Material::Earth)
+        .map(crate::threemf::byte);
+    assert_ne!((r, g, b), (er, eg, eb), "single colour is not earth's");
 }
 
 #[test]

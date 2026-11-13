@@ -82,6 +82,15 @@ fn hex(h: &str) -> Option<[f64; 3]> {
 }
 
 impl Palette {
+    /// The colour of a single-colour print: one filament for the whole tile,
+    /// the neutral grey of the connector (which has no filament of its own in
+    /// multicolour, where it prints in earth's).  The one place single colour
+    /// gets its colour.
+    #[must_use]
+    pub fn single(&self) -> [f64; 3] {
+        self.colour(Material::Connector)
+    }
+
     /// The colour of `m`.
     #[must_use]
     pub fn colour(&self, m: Material) -> [f64; 3] {

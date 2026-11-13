@@ -365,18 +365,21 @@ pub fn bambu_plates(
         ));
     }
     let used = used_of(set);
+    // single colour has no materials to slot: one filament, the palette's single-colour grey
     let fil = if set.multicolour {
         filaments(&used)
     } else {
-        vec![Material::Earth]
+        Vec::new()
     };
-    let slots: Vec<String> = fil
-        .iter()
-        .map(|m| {
-            let [r, g, b] = palette.colour(*m).map(byte);
-            format!("#{r:02X}{g:02X}{b:02X}")
-        })
-        .collect();
+    let hex = |[r, g, b]: [f64; 3]| {
+        let [r, g, b] = [r, g, b].map(byte);
+        format!("#{r:02X}{g:02X}{b:02X}")
+    };
+    let slots: Vec<String> = if set.multicolour {
+        fil.iter().map(|m| hex(palette.colour(*m))).collect()
+    } else {
+        vec![hex(palette.single())]
+    };
     let paint = codes(&used, &fil);
     let config = settings(template, &slots)?;
     const NS: &str = "xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\" xmlns:BambuStudio=\"http://schemas.bambulab.com/package/2021\" xmlns:p=\"http://schemas.microsoft.com/3dmanufacturing/production/2015/06\" requiredextensions=\"p\"";
