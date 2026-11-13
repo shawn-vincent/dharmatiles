@@ -20,6 +20,7 @@ function checkWith(edit) {
   try {
     cpSync(join(root, 'js'), join(dir, 'js'), { recursive: true });
     cpSync(join(root, 'tsconfig.json'), join(dir, 'tsconfig.json'));
+    cpSync(join(root, 'vendor'), join(dir, 'vendor'), { recursive: true });
     const file = join(dir, 'js', 'api.d.ts');
     writeFileSync(file, edit(readFileSync(file, 'utf8')));
     const r = spawnSync(tsc, ['-p', dir], { encoding: 'utf8' });

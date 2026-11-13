@@ -13,16 +13,7 @@ import * as M from '../map-model.js';
 import { haveLine, systemName, tileHave } from '../inventory.js';
 import { Field } from './field.js';
 import { html } from './html.js';
-
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
-const Button = ({ text, run, title, cls = 'btn', disabled = false }) => html`<button type="button" class=${cls} title=${title} disabled=${disabled} onClick=${run}>${text}</button>`;
-
-const Section = ({ title, children }) => html`<section class="pl-sec">${title ? html`<h3>${title}</h3>` : null}${children}</section>`;
-
-/** A row of buttons, one pressed: `options` are [value, text, title]. */
-const Seg = ({ label, options, current, on, disabled }) => html`<div class="pl-field"><span class="pl-lab">${label}</span>
-  <div class="seg" role="group" aria-label=${label}>${options.map(([v, text, title]) => html`<button type="button" key=${v} aria-pressed=${String(v === current)} title=${title} disabled=${!!disabled} onClick=${() => { if (v !== current) on(v); }}>${text}</button>`)}</div></div>`;
+import { Button, Section, Seg, plural } from './widgets.js';
 
 /** The have or to-print pill of a piece (caution yellow where only the other colour mode is on the shelf). */
 export const Pill = ({ state }) => {

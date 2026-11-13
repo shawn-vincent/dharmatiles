@@ -571,6 +571,16 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/view/map-panel.js"),
     ),
+    (
+        "/js/view/widgets.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/widgets.js"),
+    ),
+    (
+        "/js/view/printer-chooser.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/printer-chooser.js"),
+    ),
 ];
 
 /// The file served at `path`.

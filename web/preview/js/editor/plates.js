@@ -10,7 +10,8 @@ import { failed, showError } from '../problems.js';
 import { $, host, toast } from './app.js';
 import { docs, planOf, undoToast } from './docs.js';
 import { seg } from './controls.js';
-import { printerChooser } from './printer-chooser.js';
+import { render as renderInto } from '../view/html.js';
+import { chooserFor } from './printer-chooser.js';
 import { exists, plateTotals, systemName, wantLine } from '../inventory.js';
 import { say, today } from './inventory.js';
 import { removePiece, setCount } from './lists.js';
@@ -65,7 +66,7 @@ async function show(plate) {
   } catch (e) { showError('Could not show that plate', e); }
 }
 
-let chooser = null, chooserSig = null;
+const chooserHost = el('div'); // the chooser is drawn into this one element, kept between draws, so a search or an import stays open
 
 function printerSection(p, ro) {
   const sec = el('section', 'pl-sec');
@@ -75,12 +76,8 @@ function printerSection(p, ro) {
   // the same chooser as the title bar's: kept while the list is unchanged, so a search or an import stays open
   // the printer the document names now (its own word, from its scene), the plan's only until that is there
   const current = docs.scene(tile().id)?.printer ?? p.printer;
-  const sig = JSON.stringify([printers, current, ro]);
-  if (sig !== chooserSig || !chooser) {
-    chooserSig = sig;
-    chooser = printerChooser({ printers, current, onPick: (name) => set('printer', name), needBed: true, disabled: ro, key: 'plates' });
-  }
-  sec.append(chooser);
+  renderInto(chooserFor({ printers, current, onPick: (name) => set('printer', name), needBed: true, disabled: ro, skey: 'plates' }), chooserHost);
+  sec.append(chooserHost);
   if (p.bed) sec.append(el('p', 'note', `${mm(p.bed[0])} × ${mm(p.bed[1])} mm bed${p.excluded?.length ? `, ${plural(p.excluded.length, 'zone')} kept clear` : ''} · ${plural(p.slots, 'filament slot')}`));
   if (p.verify) sec.append(el('p', 'note verify', `Not yet checked against the maker: ${p.verify}`));
   return sec;
