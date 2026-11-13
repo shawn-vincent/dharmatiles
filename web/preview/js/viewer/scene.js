@@ -9,7 +9,8 @@
 // so a geometry has no per-piece attribute.
 
 import * as THREE from 'three';
-import { FRAG, PICK_FRAG } from './consts.js';
+import { FRAG, PICK_FRAG, reduceMotion } from './consts.js';
+import { ALL, CROSSFADE_MS, intervals, newFade, running, swap } from './crossfade.js';
 
 const VERT_S = `
 attribute vec3 paint; uniform vec2 uWho;
@@ -19,6 +20,25 @@ void main() {
   vN = mat3(modelMatrix) * normal; vC = paint; vP = w.xyz; vWho = uWho;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
+// The scene's fragment shader is the tile's with a dither in front: a mesh draws only the pixels whose dither
+// value (an 8 by 8 Bayer pattern in screen space) is in its interval uXf = [lo, hi), so the meshes of a crossfade
+// share the pixels exactly (crossfade.js); at rest the interval is [0, 2) and nothing is discarded.
+const DITHER = `
+uniform vec2 uXf;
+float bayer(vec2 p) {
+  vec2 q = floor(p);
+  float v = 0.0;
+  for (int i = 0; i < 3; i++) {
+    vec2 b = mod(q, 2.0);
+    v = v * 4.0 + b.x * 2.0 + b.y * 3.0 - 4.0 * b.x * b.y;
+    q = floor(q / 2.0);
+  }
+  return (v + 0.5) / 64.0;
+}
+void main() {
+  float d = bayer(gl_FragCoord.xy);
+  if (d < uXf.x || d >= uXf.y) discard;`;
+const FRAG_S = FRAG.replace('void main() {', DITHER);
 const MASK_S = 'void main() { gl_FragColor = vec4(1.0); }';
 const grey = (n) => new Uint8Array(n).fill(168);
 
@@ -37,6 +57,9 @@ export const sceneMethods = {
     this.tileHighlight = null;      // the tile's selection and hover, held while the map is on show
     this.sceneBox = null;           // {lo, hi}: the map's box, from the description (describe)
     this.sceneGridSpec = null;      // {sq, w, h, cx, cy}
+    this.sceneHeld = new Set();     // geometries dropped while a crossfade still draws them
+    this.crossfadeMs = CROSSFADE_MS;
+    this.crossfadeRaf = 0;
     this.sceneUniforms = {
       uCam: this.uniforms.uCam, uDir: this.uniforms.uDir, uOrtho: this.uniforms.uOrtho, uL1: this.uniforms.uL1, uL2: this.uniforms.uL2, uAccent: this.uniforms.uAccent,
       uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) },
@@ -100,7 +123,7 @@ export const sceneMethods = {
     g.setAttribute('normal', new THREE.BufferAttribute(payload.normals, 3));
     const painted = new THREE.BufferAttribute(payload.painted, 3, true);
     const clean = new THREE.BufferAttribute(payload.clean, 3, true);
-    const entry = { geometry: g, painted, clean, triangles: payload.triangles, grey: null, meta: payload.meta };
+    const entry = { geometry: g, painted, clean, triangles: payload.triangles, grey: null, meta: payload.meta, held: 0, dropped: false };
     g.setAttribute('paint', this.scenePaint(entry));
     this.sceneGeoms.set(gid, entry);
     // pieces that use it now
@@ -111,7 +134,14 @@ export const sceneMethods = {
     const e = this.sceneGeoms.get(gid);
     if (!e) return;
     this.sceneGeoms.delete(gid);
-    e.geometry.dispose();
+    // a crossfade still draws it: it goes when the last one lets it go
+    if (e.held > 0) { e.dropped = true; this.sceneHeld.add(e); } else e.geometry.dispose();
+  },
+
+  /** A crossfade is done with a geometry: it is freed if it was dropped meanwhile. */
+  releaseSceneEntry(e) {
+    e.held--;
+    if (e.held === 0 && e.dropped) { this.sceneHeld.delete(e); e.geometry.dispose(); }
   },
 
   /** The paint to show for a geometry, as `currentPaint` does for the tile's mesh. */
@@ -131,7 +161,7 @@ export const sceneMethods = {
 
   /** Paint or overhang was switched: every geometry follows. */
   refreshScenePaint() {
-    for (const e of this.sceneGeoms.values()) e.geometry.setAttribute('paint', this.scenePaint(e));
+    for (const e of [...this.sceneGeoms.values(), ...this.sceneHeld]) e.geometry.setAttribute('paint', this.scenePaint(e));
   },
 
   /**
@@ -207,6 +237,90 @@ export const sceneMethods = {
     if (!e) return;
     for (const m of [p.render, p.pick, p.mask, ...p.ghosts]) m.geometry = e.geometry;
     p.gid = gid;
+    p.entry = e;
+  },
+
+  /**
+   * A piece that shows a mesh changes to another: the old one stays drawn, under the new, while the dither hands
+   * its pixels over (crossfade.js).  Reduced motion, or nothing shown before, swaps at once.
+   */
+  swapGeometry(p, gid) {
+    const from = p.shown && p.entry && p.entry.geometry === p.render.geometry ? p.entry : null;
+    this.useGeometry(p, gid);
+    if (!from || p.entry === from || reduceMotion()) { this.clearFade(p); return; }
+    // the outgoing mesh draws in every pass the piece does, with the piece's own `uWho` and role
+    const o = { ...this.sceneLayer(from.geometry, p.who, p.role, { value: new THREE.Vector2(0, ALL) }), entry: from };
+    o.xf = o.render.material.uniforms.uXf;
+    for (const m of [o.render, ...o.ghosts]) m.matrix.copy(p.render.matrix);
+    from.held++;
+    this.sceneGroup.add(o.render, ...o.ghosts);
+    p.outs.unshift(o);
+    this.showPiece(p);
+    swap(p.fade, performance.now(), from, p.entry);
+    this.trimOuts(p);
+    this.crossfadeTick();
+  },
+
+  /**
+   * One layer of a piece: its own mesh and the fade's four passes (the tile's: the selection first, then the rest),
+   * the model matrix put in; they share one dither interval `xf`, so the layer is dithered in every pass it draws.
+   */
+  sceneLayer(geometry, who, role, xf) {
+    const mk = (uniforms, uWho, extra = {}) => {
+      const m = new THREE.Mesh(geometry, new THREE.ShaderMaterial({ uniforms: { ...uniforms, uWho, uXf: xf }, vertexShader: VERT_S, fragmentShader: FRAG_S, side: THREE.DoubleSide, ...extra }));
+      m.frustumCulled = false; m.matrixAutoUpdate = false;
+      return m;
+    };
+    const render = mk(this.sceneUniforms, who);
+    const ghosts = [[this.lit, true], [this.lit, false], [this.ghost, true], [this.ghost, false]].map(([pair, depth], k) => {
+      const m = mk(pair.u, role, depth ? { colorWrite: false } : { transparent: true, depthWrite: false });
+      m.renderOrder = 1 + k;
+      return m;
+    });
+    for (const m of [render, ...ghosts]) m.visible = false;
+    return { render, ghosts };
+  },
+
+  /** The outgoing meshes a piece holds are as many as its layers less the newest. */
+  trimOuts(p) {
+    while (p.outs.length > p.fade.layers.length - 1 && p.outs.length > 0) this.dropOut(p.outs.pop());
+  },
+
+  dropOut(o) {
+    this.sceneGroup.remove(o.render, ...o.ghosts);
+    for (const m of [o.render, ...o.ghosts]) m.material.dispose();
+    this.releaseSceneEntry(o.entry);
+  },
+
+  /** Take a piece's crossfade away at once. */
+  clearFade(p) {
+    for (const o of p.outs) this.dropOut(o);
+    p.outs.length = 0;
+    p.fade.layers.length = 0;
+    p.xf.value.set(0, ALL);
+  },
+
+  /** Whether any piece is mid-crossfade. */
+  sceneFading() { for (const p of this.scenePieces.values()) if (running(p.fade)) return true; return false; },
+
+  /** Step every crossfade to now; keep stepping, a frame at a time, only while one runs. */
+  crossfadeTick() {
+    if (this.crossfadeRaf) return;
+    const step = (now) => {
+      this.crossfadeRaf = 0;
+      let on = false;
+      for (const p of this.scenePieces.values()) {
+        if (!p.fade.layers.length) continue;
+        const iv = intervals(p.fade, now, this.crossfadeMs);
+        this.trimOuts(p);
+        p.xf.value.set(iv[0][0], iv[0][1]);
+        p.outs.forEach((o, i) => o.xf.value.set(iv[i + 1][0], iv[i + 1][1]));
+        if (running(p.fade)) on = true; else p.fade.layers.length = 0;
+      }
+      this.draw();
+      if (on) this.crossfadeRaf = requestAnimationFrame(step);
+    };
+    this.crossfadeRaf = requestAnimationFrame(step);
   },
 
   /**
@@ -217,6 +331,7 @@ export const sceneMethods = {
     const keep = new Set(list.map((p) => p.index));
     for (const [i, p] of this.scenePieces) {
       if (keep.has(i)) continue;
+      this.clearFade(p);
       this.sceneGroup.remove(p.render, ...p.ghosts); this.scenePickGroup.remove(p.pick); this.sceneMaskGroup.remove(p.mask);
       for (const m of [p.render, p.pick, p.mask, ...p.ghosts]) m.material.dispose();
       this.scenePieces.delete(i);
@@ -225,39 +340,34 @@ export const sceneMethods = {
       let p = this.scenePieces.get(index);
       if (!p) {
         const who = { value: new THREE.Vector2(index + 1, 0) };
-        const mk = (frag, extra = {}) => new THREE.ShaderMaterial({ uniforms: { ...extra, uWho: who }, vertexShader: VERT_S, fragmentShader: frag, side: THREE.DoubleSide });
+        const mk = (frag) => new THREE.ShaderMaterial({ uniforms: { uWho: who }, vertexShader: VERT_S, fragmentShader: frag, side: THREE.DoubleSide });
         const empty = new THREE.BufferGeometry();
-        // the fade's passes, the tile's (viewer.js: the selection first, then the rest) with the model matrix put in; a
-        // piece's role in the fade rides in its own `uWho`: 1 selected, 2 under the pointer, 3 the rest (setSceneHighlight)
+        // a piece's role in the fade rides in its own `uWho`: 1 selected, 2 under the pointer, 3 the rest (setSceneHighlight)
         const role = { value: new THREE.Vector2(3, 0) };
-        const ghosts = [[this.lit, true], [this.lit, false], [this.ghost, true], [this.ghost, false]].map(([pair, depth], k) => {
-          const m = new THREE.Mesh(empty, new THREE.ShaderMaterial({
-            uniforms: { ...pair.u, uWho: role }, vertexShader: VERT_S, fragmentShader: FRAG, side: THREE.DoubleSide,
-            ...(depth ? { colorWrite: false } : { transparent: true, depthWrite: false }),
-          }));
-          m.renderOrder = 1 + k;
-          return m;
-        });
+        const xf = { value: new THREE.Vector2(0, ALL) }; // the crossfade's share of the dither (crossfade.js)
+        const { render, ghosts } = this.sceneLayer(empty, who, role, xf);
         p = {
-          gid: null, shown: false, role,
-          render: new THREE.Mesh(empty, mk(FRAG, this.sceneUniforms)),
+          gid: null, shown: false, role, who, xf, entry: null,
+          fade: newFade(),    // the crossfade's layers, newest first: the piece's own meshes, then `outs`
+          outs: [],           // the meshes on their way out: {render, ghosts, xf, entry}
+          render, ghosts,
           pick: new THREE.Mesh(empty, mk(PICK_FRAG)),
           mask: new THREE.Mesh(empty, mk(MASK_S)),
-          ghosts,
         };
-        for (const m of [p.render, p.pick, p.mask, ...ghosts]) { m.frustumCulled = false; m.matrixAutoUpdate = false; }
+        for (const m of [p.pick, p.mask]) { m.frustumCulled = false; m.matrixAutoUpdate = false; }
         p.mask.visible = this.sceneSel.has(index);
         p.role.value.x = this.roleOf(index);
         this.sceneGroup.add(p.render, ...ghosts); this.scenePickGroup.add(p.pick); this.sceneMaskGroup.add(p.mask);
         this.scenePieces.set(index, p);
       }
-      for (const m of [p.render, p.pick, p.mask, ...p.ghosts]) m.matrix.fromArray(matrix);
+      for (const m of [p.render, p.pick, p.mask, ...p.ghosts, ...p.outs.flatMap((o) => [o.render, ...o.ghosts])]) m.matrix.fromArray(matrix);
       const shown = gid != null && this.sceneGeoms.has(gid);
+      const wasShown = p.shown;
       p.shown = shown;
       this.showPiece(p);
       p.mask.visible = shown && this.sceneSel.has(index);
-      if (shown && p.gid !== gid) this.useGeometry(p, gid);
-      else if (!shown) p.gid = gid;
+      if (shown && p.gid !== gid) { if (wasShown) this.swapGeometry(p, gid); else { this.clearFade(p); this.useGeometry(p, gid); } }
+      else if (!shown) { this.clearFade(p); p.gid = gid; }
     }
     this.draw();
   },
@@ -270,6 +380,10 @@ export const sceneMethods = {
     p.render.visible = p.shown && !this.sceneFaded;
     for (const g of p.ghosts) g.visible = p.shown && this.sceneFaded;
     p.pick.visible = p.shown;
+    for (const o of p.outs) {
+      o.render.visible = p.shown && !this.sceneFaded;
+      for (const g of o.ghosts) g.visible = p.shown && this.sceneFaded;
+    }
   },
 
   /** The fade says whether the pieces are drawn as themselves or through its passes (fade.js `showFade`). */

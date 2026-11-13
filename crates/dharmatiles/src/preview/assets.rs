@@ -322,6 +322,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/viewer/consts.js"),
     ),
     (
+        "/js/viewer/crossfade.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/viewer/crossfade.js"),
+    ),
+    (
         "/js/viewer/fade.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/viewer/fade.js"),
