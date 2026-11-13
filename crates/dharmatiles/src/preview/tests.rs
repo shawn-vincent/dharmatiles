@@ -116,6 +116,44 @@ fn mesh_url(r: &Running) -> String {
     )
 }
 
+fn token_of(r: &Running) -> String {
+    let t: Value = serde_json::from_slice(&get(r, "/api/session").1).unwrap();
+    t["token"].as_str().unwrap().to_owned()
+}
+
+/// The page's post of the tiers it wants: the keys of the ones asked, in order.
+fn want_tiers(r: &Running, token: &str, scope: &str, wants: &[Value]) -> Vec<String> {
+    let body = serde_json::json!({"scope": scope, "wants": wants}).to_string();
+    let (head, v) = post(r, "/api/tiers/want", Some(token), None, &body);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    v["keys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|k| k.as_str().unwrap().to_owned())
+        .collect()
+}
+
+/// The result of a wanted tier once it is built (what the stream announces; the test polls): head and body.
+fn wait_tier(r: &Running, key: &str, doc_rev: Option<u64>) -> (String, Vec<u8>) {
+    let t0 = Instant::now();
+    let url = match doc_rev {
+        Some(n) => format!("/api/tiers/result?key={key}&docRev={n}"),
+        None => format!("/api/tiers/result?key={key}"),
+    };
+    loop {
+        let (head, body) = get(r, &url);
+        if !head.starts_with("HTTP/1.1 404") {
+            return (head, body);
+        }
+        assert!(
+            t0.elapsed() < Duration::from_secs(120),
+            "the tier was never built"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Wait until the server has no work left (queued, running or changed on disk and not yet picked up), for as long
 /// as it takes: the way to know that nothing more will happen, in place of a sleep.
 fn wait_idle(r: &Running) {
@@ -2758,25 +2796,38 @@ fn a_mesh_is_fetched_by_the_revision_of_the_document_and_another_is_refused() {
             .0
             .starts_with("HTTP/1.1 200")
     );
-    // a tier is asked for at a revision too: a tile that has moved on says which it is at
+    // a tier is wanted, built on the lane and fetched by key and revision: the result of the revision the tile is at
+    let token = token_of(&r);
+    let keys = want_tiers(
+        &r,
+        &token,
+        "t",
+        &[serde_json::json!({"tile": id, "tier": "super-low"})],
+    );
+    let (head, body) = wait_tier(&r, &keys[0], None);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    // and the payload says which revision it is of
+    let jl = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
+    let meta: Value = serde_json::from_slice(&body[8..8 + jl]).unwrap();
+    assert_eq!(meta["docRev"].as_u64(), Some(now));
+    assert!(
+        get(
+            &r,
+            &format!("/api/tiers/result?key={}&docRev={now}", keys[0])
+        )
+        .0
+        .starts_with("HTTP/1.1 200")
+    );
+    // a result of another revision is refused with the one it is of, never served as if it were
     let (head, body) = get(
         &r,
-        &format!("/api/tiles/{id}/tier?tier=super-low&docRev={rev}"),
+        &format!("/api/tiers/result?key={}&docRev={rev}", keys[0]),
     );
     assert!(head.starts_with("HTTP/1.1 409"), "{head}");
     assert_eq!(
         serde_json::from_slice::<Value>(&body).unwrap()["docRev"].as_u64(),
         Some(now)
     );
-    let (head, body) = get(
-        &r,
-        &format!("/api/tiles/{id}/tier?tier=super-low&docRev={now}"),
-    );
-    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
-    // and the payload says which revision it is of
-    let jl = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
-    let meta: Value = serde_json::from_slice(&body[8..8 + jl]).unwrap();
-    assert_eq!(meta["docRev"].as_u64(), Some(now));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -2855,4 +2906,57 @@ fn a_job_that_panics_on_a_lane_is_raised_again_in_its_request() {
         Ok(7)
     ));
     stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn an_edit_is_answered_while_the_tier_lane_is_full_and_a_withdrawn_want_is_cancelled() {
+    let r = start(&[FLAT], false);
+    let id = id0(&r);
+    let token = token_of(&r);
+    // thirty pieces of one tile, each a seed of its own: far more than the lane (two at a time) can build at once
+    let many: Vec<Value> = (1..=30)
+        .map(|s| serde_json::json!({"tile": id, "tier": "low", "seed": s}))
+        .collect();
+    let t0 = Instant::now();
+    let keys = want_tiers(&r, &token, "map", &many);
+    assert!(
+        t0.elapsed() < Duration::from_secs(2),
+        "posting what is wanted waits for nothing"
+    );
+    assert_eq!(keys.len(), 30);
+    // the lane is full: an edit is answered at once, not after the builds
+    let t1 = Instant::now();
+    let (head, v) = post(
+        &r,
+        "/api/names",
+        Some(&token),
+        None,
+        &serde_json::json!({"text": "tile {}"}).to_string(),
+    );
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    assert!(
+        t1.elapsed() < Duration::from_secs(1),
+        "the edit waited {:?} behind the builds",
+        t1.elapsed()
+    );
+    // the page lets go of all but the first: the rest is withdrawn, so the lane has little left to do
+    want_tiers(&r, &token, "map", &many[..1]);
+    wait_idle(&r);
+    let built = (1..=30)
+        .filter(|s| {
+            get(&r, &format!("/api/tiers/result?key={}", keys[*s - 1]))
+                .0
+                .starts_with("HTTP/1.1 200")
+        })
+        .count();
+    assert!(
+        built < 30,
+        "{built} of 30 were built although all but one were withdrawn at once"
+    );
+    assert!(
+        get(&r, &format!("/api/tiers/result?key={}", keys[0]))
+            .0
+            .starts_with("HTTP/1.1 200"),
+        "what stayed wanted was built"
+    );
 }

@@ -204,7 +204,16 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         }
         // `?tier=low` or `?tier=super-low`: the tile's mesh at that tier, from the
         // cache or built, for a map that draws by distance.  Never checked.
-        ("GET", _, Some((id, "tier"))) => shared.tier_mesh(id, &|k| req.param(k)),
+        ("GET", "/api/tiers/result", _) => {
+            let Some(key) = req.param("key") else {
+                return fail::refused("400 Bad Request", "give the key of the tier").into();
+            };
+            let asked = req.param("docRev").and_then(|s| s.parse::<u64>().ok());
+            match shared.tier_result(key, asked) {
+                Ok(m) => bytes(m, "that tier is not built (yet)"),
+                Err(now) => super::stale_mesh(now).into(),
+            }
+        }
         ("GET", _, Some((id, "sketch"))) => bytes(
             req.param("id")
                 .and_then(|k| k.parse().ok())

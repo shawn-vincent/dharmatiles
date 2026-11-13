@@ -21,6 +21,7 @@ import { FOV } from '../viewer/consts.js';
 import * as M from '../map-model.js';
 import { $, host, pickView, viewer } from './app.js';
 import { piecesOf, selectedOf, chipOf, verdictOf } from '../doc-views.js';
+import { createTiers } from '../tiers.js';
 import { createStore, isPlates, log, server, tile, tileById, view } from './stores.js';
 import { docs } from './docs.js';
 import { applyMode, chooseMode, init as initMode, setChosen } from './mode.js';
@@ -36,6 +37,7 @@ let mounted = false;          // the scene is in the view
 let mountedPath = null;
 let lastSig = '';
 let evalTimer = 0;
+const tierSet = createTiers({ host, scope: 'map' }); // what the map wants of the program: one set, posted whole
 let inflight = 0;              // tier requests the program has not answered: it queues them (its tier lane), the page does not
 const shown = new Map();      // piece id -> {gid, tileId}: what it was last drawn with, kept until its new mesh comes
 /** Pieces being dragged: id -> [x, y] mm, shown there until the change is written. */
@@ -145,6 +147,7 @@ function release(ps) {
   const stale = new Set(M.staleKeys(geoms.keys(), ps));
   if (!stale.size) return;
   for (const g of stale) {
+    for (const tier of M.TIERS) tierSet.drop(`${g}|${tier}`); // withdrawn: the program cancels what nobody wants
     for (const tier of geoms.get(g).tiers.keys()) viewer.dropSceneGeometry(gidOf(g, tier));
     geoms.delete(g);
   }
@@ -171,14 +174,13 @@ async function run({ p, tier, gkey }) {
   const e = geoms.get(gkey);
   if (!e) return; // let go of while it waited
   try {
-    const docRev = tileById(p.tileId)?.docRev;
-    const buf = await host.fetchTier(p.tileId, { tier, docRev, seed: p.seed ?? undefined, system: p.system, printer: sceneNow()?.printer });
-    if (!buf) { e.asked.delete(tier); return; } // the tile is at another revision: asked again with the next look
-    const payload = parsePayload(buf);
+    const got = await tierSet.want(`${gkey}|${tier}`, { tile: p.tileId, tier, seed: p.seed ?? undefined, system: p.system, printer: sceneNow()?.printer });
+    if (!got) { e.asked.delete(tier); return; } // withdrawn, or the program's is of another revision: asked again with the next look
+    const payload = parsePayload(got.buf);
     // the tile moved on while it came (another build, another map, another revision of its document): what came is not kept
     if (geoms.get(gkey) !== e) return;
-    if (docRev != null && payload.meta.docRev !== docRev) { e.asked.delete(tier); return; }
-    if (tileById(p.tileId)?.docRev !== docRev) { e.asked.delete(tier); return; }
+    const known = tileById(p.tileId)?.docRev;
+    if (payload.meta.docRev !== got.docRev || (known != null && known !== got.docRev)) { e.asked.delete(tier); return; }
     e.tiers.set(tier, { tris: payload.triangles, checked: payload.meta.checked !== false, failures: payload.meta.failures ?? [] });
     viewer.setSceneGeometry(gidOf(gkey, tier), payload);
     evaluate(true);

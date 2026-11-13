@@ -79,7 +79,7 @@ pub(super) enum Interrupted {
     Panicked(Box<dyn std::any::Any + Send>),
 }
 
-type SideRun = Box<dyn FnOnce(&Shared, &Arc<AtomicBool>) + Send>;
+pub(super) type SideRun = Box<dyn FnOnce(&Shared, &Arc<AtomicBool>) + Send>;
 
 /// A job for a side lane, waiting.
 pub(super) struct Side {
@@ -270,6 +270,13 @@ impl Shared {
             // Allowed (you cancelled): the requester may have gone already
             let _ = tx.send(answer);
         });
+        self.submit_lane(lane, key, rev, tile, run);
+        rx.recv().unwrap_or(Err(Interrupted::Superseded))
+    }
+
+    /// Queue `run` on `lane` and go on: nothing waits for it (its own code says what it made).  The same rule as
+    /// [`Shared::on_lane`] for a job of the same key at an older revision.
+    pub(super) fn submit_lane(&self, lane: Lane, key: String, rev: u64, tile: &str, run: SideRun) {
         {
             let mut q = lock(&self.queue);
             // a waiting job of the same thing at an older revision is dropped: its requester finds its sender gone
@@ -290,7 +297,17 @@ impl Shared {
             });
         }
         self.queue_cv.notify_all();
-        rx.recv().unwrap_or(Err(Interrupted::Superseded))
+    }
+
+    /// Nobody wants `key` on `lane` any more: a waiting job is dropped, a running one is told to stop.
+    pub(super) fn cancel_lane(&self, lane: Lane, key: &str) {
+        let mut q = lock(&self.queue);
+        q.side.retain(|s| !(s.lane == lane && s.key == key));
+        for r in &q.side_running {
+            if r.lane == lane && r.key == key {
+                r.cancel.store(true, Ordering::Relaxed);
+            }
+        }
     }
 
     /// The next job for a side lane, when fewer than the lane's limit are running; with nothing to do it waits a

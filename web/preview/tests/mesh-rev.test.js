@@ -28,12 +28,12 @@ test('the mesh is asked for by revision, and the revision it is of is the only o
   assert.equal(await host.fetchMesh('t1', 6), null);
 });
 
-test('a tier is asked for at the revision the page knows, and a tile at another says so', async () => {
+test('a built tier is fetched by the revision the program announced, and one of another revision is null', async () => {
   const asked = fakeProgram(2);
   const host = browserHost();
-  assert.equal(await host.fetchTier('t1', { tier: 'low', docRev: 1 }), null);
-  assert.match(asked[0], /tier\?tier=low&docRev=1$/);
-  assert.equal((await host.fetchTier('t1', { tier: 'low', docRev: 2 })).byteLength, 3);
+  assert.equal(await host.tierResult('t1|low|-|-|-', 1), null);
+  assert.match(asked[0], /\/api\/tiers\/result\?key=t1%7Clow%7C-%7C-%7C-&docRev=1$/);
+  assert.equal((await host.tierResult('t1|low|-|-|-', 2)).byteLength, 3);
 });
 
 test('the page shows a tile\'s mesh only where it asks by the summary\'s revision (no call without one)', async () => {

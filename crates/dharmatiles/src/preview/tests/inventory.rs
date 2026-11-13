@@ -718,13 +718,19 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     );
     // a tile of the map is served at a tier, as the map builds it (its own seed here)
     let id = h.id("glade.dtile");
-    let (head, body) = get(
-        &h.r,
-        &format!("/api/tiles/{id}/tier?tier=super-low&seed=9&system=db"),
+    let (head, v) = h.call(
+        "/api/tiers/want",
+        serde_json::json!({"scope": "t", "wants": [{"tile": id, "tier": "super-low", "seed": 9, "system": "db"}]}),
     );
+    assert!(head.starts_with("HTTP/1.1 200"), "{head} {v}");
+    let key = v["keys"][0].as_str().unwrap().to_owned();
+    let (head, body) = wait_tier(&h.r, &key, None);
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert_eq!(&body[..4], b"DTM1");
-    let (head, _) = get(&h.r, &format!("/api/tiles/{id}/tier?tier=low&system=xx"));
+    let (head, _) = h.call(
+        "/api/tiers/want",
+        serde_json::json!({"scope": "t", "wants": [{"tile": id, "tier": "low", "system": "xx"}]}),
+    );
     assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     // add: a new piece with its own id, in the answer's scene at once
     let b = h.edit(

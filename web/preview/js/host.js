@@ -156,9 +156,10 @@ export function browserHost() {
      *   onSnapshot: (s: Snapshot) => void, onTile: (t: TileSummary) => void,
      *   onProgress: (id: string, p: import('./api').Progress) => void,
      *   onMessage: (m: any) => void, onState: (s: 'live' | 'offline') => void,
+     *   onTier?: (m: { key: string, docRev: number, error?: string | null }) => void,
      * }} handlers
      */
-    connect({ onSnapshot, onTile, onProgress, onMessage, onState }) {
+    connect({ onSnapshot, onTile, onProgress, onMessage, onState, onTier }) {
       /** @type {string | null} */
       let epoch = null;
       /** @type {number | null} */
@@ -168,12 +169,13 @@ export function browserHost() {
         const es = new EventSource(`/api/events${q}`);
         es.onmessage = (e) => {
           const m = JSON.parse(e.data);
-          if (m.type !== 'progress' && m.type !== 'message' && m.rev != null) rev = m.rev;
+          if (m.type !== 'progress' && m.type !== 'message' && m.type !== 'tier' && m.rev != null) rev = m.rev;
           if (m.type === 'snapshot') { epoch = m.epoch; onState('live'); onSnapshot(m); }
           else if (m.type === 'resumed') onState('live');
           else if (m.type === 'tile') onTile(m.tile);
           else if (m.type === 'progress') onProgress(m.id, m.progress);
           else if (m.type === 'message') onMessage(m.message);
+          else if (m.type === 'tier') onTier?.(m);
         };
         es.onerror = () => { es.close(); token = null; onState('offline'); setTimeout(open, 1000); };
       };
@@ -191,22 +193,21 @@ export function browserHost() {
       return r.arrayBuffer();
     },
     /**
-     * A tile's mesh at a tier (`super-low`, `low`, `full`) for a map's piece: from the cache or built, not
-     * checked unless full; a piece as the map builds it (its seed, its system, the map's printer).
-     * `docRev`, when the page knows the revision of the tile's document, is asked for: the program answers 409 (null here)
-     * for a tile that is at another, and the payload's header says which revision it is of.
-     * @param {string} id @param {{tier: string, docRev?: number | null, seed?: number | null, system?: string, printer?: string}} q
-     * @returns {Promise<ArrayBuffer | null>}
+     * The tiers the page wants (`super-low`, `low`, `full` of a tile as a map's piece builds it), the whole set of a
+     * scope: each post replaces the last, and the program cancels what is no longer wanted (js/tiers.js).  Answers
+     * the program's key for each, in order.
+     * @param {Req<'POST /api/tiers/want'>} body
      */
-    async fetchTier(id, { tier, docRev, seed, system, printer }) {
-      const q = new URLSearchParams({ tier });
-      if (docRev != null) q.set('docRev', String(docRev));
-      if (seed != null) q.set('seed', String(seed));
-      if (system) q.set('system', system);
-      if (printer) q.set('printer', printer);
-      const r = await netFetch(tile(id, `tier?${q}`), { cache: 'no-store' });
-      if (r.status === 409) return null;
-      if (!r.ok) throw await replyError(r, `the ${tier} mesh`);
+    tiersWant: (body) => call('POST /api/tiers/want', body),
+    /**
+     * A built tier, by the key the program announced and the revision it said: null when what it holds is of another
+     * revision (never that one).
+     * @param {string} key @param {number} docRev @returns {Promise<ArrayBuffer | null>}
+     */
+    async tierResult(key, docRev) {
+      const r = await netFetch(`/api/tiers/result?${new URLSearchParams({ key, docRev: String(docRev) })}`, { cache: 'no-store' });
+      if (r.status === 409 || r.status === 404) return null;
+      if (!r.ok) throw await replyError(r, 'the tier');
       return r.arrayBuffer();
     },
     /** One stage's sketch while it builds (null once the build has moved on). @param {string} id @param {number} sketch */

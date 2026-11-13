@@ -88,6 +88,7 @@ pub(crate) mod roots;
 mod scene;
 mod server;
 mod stack;
+mod tiers;
 mod worker;
 
 pub use places::Picker;
@@ -125,20 +126,6 @@ const LOG: usize = 1024;
 /// `resume_unwind` avoids printing an alarming panic for an expected abort.
 #[derive(Debug)]
 struct Superseded;
-
-/// What a request gets for a job that ran on a lane: its answer; a 409 when it was superseded; a panic raised again, to be
-/// answered as any panic in a route is.
-fn lane_reply(r: Result<route::Reply, queue::Interrupted>) -> route::Reply {
-    match r {
-        Ok(reply) => reply,
-        Err(queue::Interrupted::Superseded) => fail::refused(
-            "409 Conflict",
-            "a request for a newer revision of this took its place",
-        )
-        .into(),
-        Err(queue::Interrupted::Panicked(p)) => std::panic::resume_unwind(p),
-    }
-}
 
 /// A mesh of another revision of the document than the one asked for: 409 with the revision it is of.
 fn stale_mesh(rev: u64) -> (&'static str, Value) {
@@ -387,6 +374,8 @@ pub struct Shared {
     /// The inventory as the last snapshot told it (text), so a change made
     /// outside the program (the file edited by hand) is told too.
     inventory_seen: Mutex<String>,
+    /// The tiers the page wants of a map's pieces, what is building and what is built ([`tiers`]).
+    tier_book: Mutex<tiers::TierBook>,
     /// The owner of each document file: its revision and its lock ([`docs`]).
     docs: docs::Docs,
 }
@@ -487,6 +476,7 @@ impl Shared {
             build_caches: Mutex::new(VecDeque::new()),
             store: None,
             inventory_seen: Mutex::new(String::new()),
+            tier_book: Mutex::new(tiers::TierBook::default()),
             docs: docs::Docs::default(),
         };
         me.rescan();
@@ -1048,117 +1038,6 @@ impl Shared {
             return 0;
         }
         self.docs.read(path).map_or(0, |(_, r)| r)
-    }
-
-    /// The tile's mesh at a lower tier (`low` or `super-low`), the page's
-    /// payload: read from the cache or built there.  Not yet checked: the
-    /// header says so (`checked: false`, `tier`).
-    ///
-    /// `?seed=N&system=db|ol&printer=NAME` build a piece of a map as the map
-    /// places it (the tile's own seed, the target's system and printer where
-    /// none is given); `?tier=full` is the checked build, kept beside the
-    /// others, thinned to [`MAP_FULL_TRIANGLES`] for the page.  A map's piece
-    /// is sent without the stack and the clouds: only what is drawn.
-    fn tier_mesh<'a>(&self, id: &str, param: &dyn Fn(&str) -> Option<&'a str>) -> route::Reply {
-        let tier = match param("tier") {
-            Some("low") => dt_eval::Tier::Low,
-            Some("super-low") => dt_eval::Tier::SuperLow,
-            Some("full") => dt_eval::Tier::Full,
-            _ => {
-                return fail::refused(
-                    "400 Bad Request",
-                    "give ?tier=low, ?tier=super-low or ?tier=full",
-                )
-                .into();
-            }
-        };
-        let Some(path) = lock(&self.tiles)
-            .iter()
-            .find(|t| t.id == id)
-            .map(|t| t.path.clone())
-        else {
-            return fail::refused("404 Not Found", "no such tile").into();
-        };
-        // the revision the tile's document is at now; a page that asked for another is told this one
-        let rev = self.rev_of(&path);
-        if let Some(asked) = param("docRev") {
-            match asked.parse::<u64>() {
-                Ok(n) if n == rev => {}
-                Ok(_) => return stale_mesh(rev).into(),
-                Err(_) => {
-                    return fail::refused("400 Bad Request", "docRev is a whole number").into();
-                }
-            }
-        }
-        let mut opts = self.options();
-        match param("system") {
-            None => {}
-            Some(s @ ("db" | "ol")) => opts.system = s.to_owned(),
-            Some(_) => return fail::refused("400 Bad Request", "the system is db or ol").into(),
-        }
-        if let Some(s) = param("seed") {
-            match s.parse::<u64>() {
-                Ok(n) => opts.seed = Some(n),
-                Err(_) => {
-                    return fail::refused("400 Bad Request", "the seed is a whole number").into();
-                }
-            }
-        }
-        if let Some(p) = param("printer")
-            && p != opts.printer.name
-            && let Err(e) = opts.use_printer(p, self.home.as_deref())
-        {
-            return fail::refused(
-                "400 Bad Request",
-                e.first().map_or_else(String::new, |d| d.message.clone()),
-            )
-            .into();
-        }
-        // on a lane of its own, two at a time; a request for a newer revision of this piece cancels it
-        let key = format!(
-            "tier|{id}|{}|{:?}|{}|{}",
-            tier.name(),
-            opts.seed,
-            opts.system,
-            opts.printer.name
-        );
-        let job = self.on_lane(queue::Lane::Tier, key, rev, id, move |shared, cancel| {
-            let progress = dt_eval::Progress::new(Arc::new(queue::Cancelled(Arc::clone(cancel))));
-            let built = dt_eval::build_tier(
-                &dt_eval::Files,
-                &path,
-                &opts,
-                tier,
-                &progress,
-                None,
-                shared.store.as_deref(),
-            )
-            .map(|b| {
-                if tier == dt_eval::Tier::Full {
-                    dt_eval::tiers::thin_built(b, MAP_FULL_TRIANGLES)
-                } else {
-                    b
-                }
-            });
-            Ok(match built {
-                Err(errs) => fail::refused(
-                    "422 Unprocessable Entity",
-                    errs.iter()
-                        .map(|d| d.message.clone())
-                        .collect::<Vec<_>>()
-                        .join("; "),
-                ),
-                Ok(b) => match payload::for_map(&b, tier.name(), rev, &opts, &shared.palette()) {
-                    Ok(bytes) => return Ok(route::Reply::Bytes(Arc::new(bytes))),
-                    Err(e) => fail::failure(
-                        "500 Internal Server Error",
-                        format!("cannot prepare the {} view: {e}", tier.name()),
-                    ),
-                },
-            }
-            .into())
-        });
-        lane_reply(job)
     }
 
     fn sketch_mesh(&self, id: &str, sketch: u64) -> Option<Arc<Vec<u8>>> {

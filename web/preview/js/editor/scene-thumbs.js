@@ -9,6 +9,9 @@ import { parsePayload } from '../payload.js';
 import { FOV, FRAG, VERT, dirv } from '../viewer/consts.js';
 import { host } from './app.js';
 import { tileById } from './stores.js';
+import { createTiers } from '../tiers.js';
+
+const tierSet = createTiers({ host, scope: 'pictures' });
 
 const W = 176, H = 124;
 const pictures = new Map(); // key -> Promise<string | null>
@@ -73,8 +76,10 @@ export function pictureOf(id, key, plate) {
   const k = `${id}|${key}|${plate}`;
   if (!pictures.has(k)) {
     const job = chain.then(async () => {
-      const buf = await host.fetchTier(id, { tier: 'super-low', docRev: tileById(id)?.docRev });
-      return buf ? draw(buf, plate) : null; // the tile is at another revision: no picture, asked again at the next look
+      const got = await tierSet.want(k, { tile: id, tier: 'super-low' });
+      const known = tileById(id)?.docRev;
+      // the program's is of another revision than the tile's (or the want was withdrawn): no picture, asked again at the next look
+      return got && (known == null || known === got.docRev) ? draw(got.buf, plate) : null;
     });
     // one failure does not stop the pictures after it
     chain = job.then(() => undefined, () => undefined);

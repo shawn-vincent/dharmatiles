@@ -464,6 +464,20 @@ type TextRes = { file: string, text: string, writable: boolean,
  */
 docRev: number, };
 
+type TierWant = { tile: string, 
+/**
+ * `super-low`, `low` or `full`.
+ */
+tier: string, seed?: number | null, system?: string | null, printer?: string | null, };
+
+type TiersWantReq = { 
+/**
+ * Whose wants these are (a map, the picture shelf): a post replaces the last of the same scope.
+ */
+scope: string, wants: Array<TierWant>, };
+
+type TiersWantRes = { keys: Array<string>, };
+
 type TileMoveReq = { root: number, dir: string, };
 
 type TileSummary = { id: string, path: string, name: string, 
@@ -521,6 +535,7 @@ export interface Calls {
   "POST /api/folders/rename": { req: FolderNamedReq; res: FolderDone };
   "POST /api/folders/trash": { req: FolderReq; res: Trashed };
   "POST /api/trash/undo": { req: TrashUndoReq; res: Restored };
+  "POST /api/tiers/want": { req: TiersWantReq; res: TiersWantRes };
   "POST /api/printers/scan": { req: PrintersScanReq; res: PrintersScanRes };
   "POST /api/printers/import": { req: PrintersImportReq; res: PrintersImportRes };
   "POST /api/plates/show": { req: PlatesShowReq; res: Done };

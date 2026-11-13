@@ -3,6 +3,7 @@
 // store and nowhere else.  Everything on the page that depends on the
 // server's word subscribes to that store; this part knows no other.
 
+import { tierReady, tiersReconnected } from '../tiers.js';
 import { setEnvironment, showError } from '../problems.js';
 import { ServerError } from '../server-error.js';
 import { setUnits } from '../value.js';
@@ -82,10 +83,12 @@ export function init() {
     onState: (s) => {
       const live = s === 'live';
       server.set({ live, ever: server.get().ever || live });
+      if (live) tiersReconnected(); // what was announced while the stream was away is asked for again
     },
     onSnapshot: (m) => applySnapshot(m, true),
     onProgress: (id, p) => server.set({ progress: { ...server.get().progress, [id]: p } }),
     onMessage: (m) => log.apply(m),
+    onTier: tierReady,
     onTile: (t) => {
       reportFailure(t);
       followBuild(t);

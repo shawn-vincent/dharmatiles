@@ -7,7 +7,7 @@
 use super::api::{Reply, TileRef, calls, reply, request};
 use super::edit::{self, DraftReq};
 use super::route::{self, tile_route};
-use super::{Shared, fail, inventory, lists, lock, maps, offers, places, plates, printers};
+use super::{Shared, fail, inventory, lists, lock, maps, offers, places, plates, printers, tiers};
 
 calls! {
     post {
@@ -24,6 +24,7 @@ calls! {
         "/api/folders/rename" => places::rename_folder : places::FolderNamedReq => places::FolderDone;
         "/api/folders/trash" => places::trash_folder : places::FolderReq => places::Trashed;
         "/api/trash/undo" => places::undo_trash : places::TrashUndoReq => places::Restored;
+        "/api/tiers/want" => tiers::want : tiers::TiersWantReq => tiers::TiersWantRes;
         "/api/printers/scan" => printers::scan : printers::PrintersScanReq => printers::PrintersScanRes;
         "/api/printers/import" => printers::import : printers::PrintersImportReq => printers::PrintersImportRes;
         "/api/plates/show" => plates::show : plates::PlatesShowReq => edit::Done;
