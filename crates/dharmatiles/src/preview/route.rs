@@ -47,6 +47,13 @@ pub struct TextRes {
     pub doc_rev: u64,
 }
 
+/// `GET /api/test-idle`: how much work is not finished (0: idle).
+#[cfg(any(test, feature = "test-routes"))]
+#[derive(Serialize)]
+pub struct TestIdle {
+    pub pending: usize,
+}
+
 /// `POST /api/tiles/ID/build`: asked for.
 #[derive(Serialize)]
 pub struct Accepted {}
@@ -147,6 +154,12 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         }),
         #[cfg(any(test, feature = "test-routes"))]
         ("GET", "/api/test-panic", _) => panic!("a test panic in a route"),
+        #[cfg(any(test, feature = "test-routes"))]
+        #[cfg(any(test, feature = "test-routes"))]
+        ("GET", "/api/test-idle", _) => ok(&TestIdle {
+            pending: shared.pending(),
+        })
+        .into(),
         #[cfg(any(test, feature = "test-routes"))]
         ("GET", "/api/test-failure", _) => {
             let e = fail::Layered::demo();

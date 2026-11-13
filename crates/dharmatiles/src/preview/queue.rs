@@ -155,6 +155,23 @@ impl Shared {
         tiles.iter().find(|t| t.changed()).map(|t| t.id.clone())
     }
 
+    /// How much work the server has not finished: drafts and full builds waiting or running, tiles asked for, and tiles
+    /// building or whose files changed and have not been picked up.  0 is idle.  A test that wants "nothing more will
+    /// happen" waits for this (`GET /api/test-idle`), never for a fixed time.
+    #[cfg(any(test, feature = "test-routes"))]
+    pub(super) fn pending(&self) -> usize {
+        let q = lock(&self.queue);
+        let queued =
+            q.drafts.len() + q.wanted.len() + usize::from(q.full.is_some()) + q.drafting.len();
+        drop(q);
+        let tiles = lock(&self.tiles);
+        queued
+            + tiles
+                .iter()
+                .filter(|t| t.status == State::Building || t.changed())
+                .count()
+    }
+
     /// A lane is done with `job`.
     pub(super) fn finish(&self, job: &Job) {
         let mut q = lock(&self.queue);

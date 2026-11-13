@@ -106,6 +106,23 @@ fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Valu
     }
 }
 
+/// Wait until the server has no work left (queued, running or changed on disk and not yet picked up), for as long
+/// as it takes: the way to know that nothing more will happen, in place of a sleep.
+fn wait_idle(r: &Running) {
+    let t0 = Instant::now();
+    let mut quiet = 0;
+    loop {
+        let v: Value = serde_json::from_slice(&get(r, "/api/test-idle").1).unwrap();
+        // idle twice running: a worker between taking a job and marking it is not idle
+        quiet = if v["pending"] == 0 { quiet + 1 } else { 0 };
+        if quiet >= 2 {
+            return;
+        }
+        assert!(t0.elapsed() < Duration::from_secs(120), "never idle: {v}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 const FLAT: &str = "lib:tests/ground/1x1-flat.dtile";
 
 #[test]
@@ -266,7 +283,7 @@ fn sse_starts_with_a_snapshot_then_streams_changes() {
 #[test]
 fn a_library_tile_is_built_only_when_asked() {
     let r = start(&[FLAT], false);
-    std::thread::sleep(Duration::from_millis(600));
+    wait_idle(&r); // the worker has had its look and found nothing it is to build
     assert_eq!(tiles(&r)["tiles"][0]["status"], "idle");
     // the build call is a POST like the rest: no token, a wrong one or a foreign page is refused
     let path = format!("/api/tiles/{}/build", id0(&r));
@@ -304,7 +321,7 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
     wait_for(&r, "first build", |t| t["status"] == "ready");
 
     // a mistake: the error names the file and its line, the old mesh stays
-    std::thread::sleep(Duration::from_millis(50));
+    wait_idle(&r); // the build is over, so the file's new time is a change the worker has not seen
     let line = text
         .lines()
         .position(|l| l.contains("dirt top=\"$dirtEdgeHeight\""))
