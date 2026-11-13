@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BUDGET, atWord, bounds, chooseTiers, footprint, bottomWords, matrixOf, overlaps, marks, snapSquares, staleKeys, tierCounts, toWorld, totalsText, turned, wantedTier,
+  BUDGET, DOWN, GUESS, STICKY, UP, atWord, bounds, chooseTiers, footprint, bottomWords, matrixOf, overlaps, marks, snapSquares, staleKeys, planTiers, tierCounts, toWorld, totalsText, turned, wantedTier,
 } from '../js/map-model.js';
 
 const piece = (over = {}) => ({
@@ -68,25 +68,126 @@ test('the shelf\'s word on each piece is the program\'s, and the totals say its 
   assert.equal(totalsText(null), '0 to print');
 });
 
-test('a piece is drawn at the tier its size wants, held under the budget by lowering the smallest first', () => {
+const ALL = new Set(['super-low', 'low', 'full']);
+const cost = (n) => () => (t) => ({ 'super-low': 10_000, low: 50_000, full: n }[t]);
+const costs = (n, k) => Array.from({ length: k }, cost(n));
+
+test('a piece wants the tier its size says, from the tier it wanted before: up at one size, down at a lower', () => {
   assert.equal(wantedTier(30), 'super-low');
-  assert.equal(wantedTier(120), 'low');
+  assert.equal(wantedTier(60), 'low');
   assert.equal(wantedTier(400), 'full');
-  assert.equal(wantedTier(30, true), 'low');
-  const tris = (n) => (t) => ({ 'super-low': 10_000, low: 50_000, full: n }[t]);
-  const all = new Set(['super-low', 'low', 'full']);
-  // two full pieces of 400k fit, a third does not: the smallest drops to low
-  const r = chooseTiers(['full', 'full', 'full'], [900, 800, 600], [all, all, all], [tris(400_000), tris(400_000), tris(400_000)]);
-  assert.deepEqual(r.tiers, ['full', 'full', 'low']);
-  assert.ok(r.total <= BUDGET);
-  // only what is loaded can be drawn
+  assert.equal(wantedTier(30, null, true), 'low');
+  // between the two sizes it stays where it was
+  const mid = (UP.full + DOWN.full) / 2;
+  assert.equal(wantedTier(mid, 'low'), 'low');
+  assert.equal(wantedTier(mid, 'full'), 'full');
+  assert.equal(wantedTier(UP.full, 'low'), 'full');
+  assert.equal(wantedTier(DOWN.full - 0.1, 'full'), 'low');
+  assert.equal(wantedTier((UP.low + DOWN.low) / 2, 'super-low'), 'super-low');
+  assert.equal(wantedTier((UP.low + DOWN.low) / 2, 'low'), 'low');
+  assert.equal(wantedTier(DOWN.low - 0.1, 'low'), 'super-low');
+  // a piece that was full and is far away goes down through low in one look
+  assert.equal(wantedTier(10, 'full'), 'super-low');
+});
+
+test('a camera that jitters by 3% changes no piece\'s tier unless it crosses a margin', () => {
+  // the margins are wider than a 3% wobble each way (both ratios are over 1.06)
+  assert.ok(UP.full / DOWN.full > 1.06 && UP.low / DOWN.low > 1.06);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+  for (const base of [20, 31, 35, 41, 60, 92, 100, 110, 119, 121, 300, 800]) {
+    for (const was of ['super-low', 'low', 'full']) {
+      // settle on the base size first: this is the tier the piece holds there
+      const settled = wantedTier(base, was);
+      let t = settled;
+      for (let k = 0; k < 400; k++) {
+        t = wantedTier(base * (1 + 0.03 * rnd()), t);
+        // the tier can only differ from the settled one if a jittered size reached a threshold the other side
+        const up = base * 1.03, down = base * 0.97;
+        const crossed = (settled === 'super-low' && up >= UP.low) || (settled === 'low' && (up >= UP.full || down < DOWN.low)) || (settled === 'full' && down < DOWN.full);
+        if (!crossed) assert.equal(t, settled, `base ${base} was ${was}`);
+      }
+    }
+  }
+});
+
+test('equal neighbours give the same answer whatever order the list is in, and a tie goes to the nearer, then the id', () => {
+  const ids = ['a', 'b', 'c', 'd'];
+  const run = (order) => {
+    const o = order.map((k) => ids[k]);
+    const r = chooseTiers({
+      want: o.map(() => 'full'), px: o.map(() => 200), have: o.map(() => ALL), tris: costs(400_000, 4),
+      current: o.map(() => null), dist: o.map((id) => (id === 'd' ? 100 : 500)), ids: o, budget: 900_000,
+    });
+    return Object.fromEntries(o.map((id, i) => [id, r.tiers[i]]));
+  };
+  const first = run([0, 1, 2, 3]);
+  // 900k holds two fulls of 400k with the rest low: the nearer (d), then the lowest id (a)
+  assert.deepEqual(first, { a: 'full', b: 'low', c: 'low', d: 'full' });
+  for (const order of [[3, 2, 1, 0], [1, 3, 0, 2], [2, 0, 3, 1], [0, 3, 1, 2]]) assert.deepEqual(run(order), first);
+});
+
+test('a piece that holds full keeps it against a piece that is not clearly bigger; a clearly bigger one takes it', () => {
+  const input = (pxB) => ({
+    want: ['full', 'full'], px: [200, pxB], have: [ALL, ALL], tris: costs(600_000, 2),
+    current: ['full', 'low'], dist: [500, 500], ids: ['a', 'b'], budget: 700_000,
+  });
+  assert.deepEqual(chooseTiers(input(205)).tiers, ['full', 'low']);
+  assert.deepEqual(chooseTiers(input(200 * STICKY - 1)).tiers, ['full', 'low']);
+  assert.deepEqual(chooseTiers(input(200 * STICKY + 1)).tiers, ['low', 'full']);
+});
+
+test('a mesh arriving does not demote a full piece of equal size', () => {
+  // b's full has just landed; a has been full a while: the room is a's
+  const r = chooseTiers({
+    want: ['full', 'full'], px: [200, 200], have: [ALL, ALL], tris: costs(600_000, 2),
+    current: ['full', 'full'], dist: [900, 100], ids: ['a', 'b'], budget: 700_000,
+  });
+  assert.deepEqual(r.tiers.slice().sort(), ['full', 'low']);
+  // and the one that holds it by being first does not change with the next look at the same sizes
+  const again = chooseTiers({
+    want: ['full', 'full'], px: [200, 200], have: [ALL, ALL], tris: costs(600_000, 2),
+    current: r.tiers, dist: [900, 100], ids: ['a', 'b'], budget: 700_000,
+  });
+  assert.deepEqual(again.tiers, r.tiers);
+});
+
+test('the near pieces are all full at the budget, fetched together, nearest first', () => {
+  const k = 12;
+  const px = Array.from({ length: k }, (_, i) => 400 - i * 25); // 400 ... 125
+  const want = px.map((v) => wantedTier(v));
+  const ids = px.map((_, i) => `p${i}`);
+  const tris = Array.from({ length: k }, () => (t) => GUESS[t]);
+  const nearFull = want.filter((w) => w === 'full').length;
+  assert.ok(nearFull >= 5, 'the sizes make several pieces want full');
+  const plan = planTiers({ want, px, have: px.map(() => new Set(['super-low'])), tris, current: px.map(() => null), dist: px.map((_, i) => 100 + i), ids });
+  // everything the budget holds is asked for at once: not one at a time
+  const asked = plan.fetch.filter(([, t]) => t === 'full').map(([i]) => i);
+  assert.equal(asked.length, plan.intended.filter((t) => t === 'full').length, 'all that the budget holds in full');
+  assert.ok(plan.intended.reduce((n, t) => n + GUESS[t], 0) <= BUDGET);
+  assert.ok(asked.length >= 2, 'more than one is asked for at once');
+  assert.deepEqual(asked, asked.slice().sort((a, b) => a - b), 'nearest first');
+  assert.deepEqual(asked, Array.from({ length: asked.length }, (_, i) => i), 'the biggest on screen');
+  // with them loaded they are drawn full, inside the budget
+  const done = planTiers({ want, px, have: px.map((_, i) => (asked.includes(i) ? ALL : new Set(['super-low', 'low']))), tris, current: px.map((_, i) => (asked.includes(i) ? 'full' : 'low')), dist: px.map((_, i) => 100 + i), ids });
+  assert.deepEqual(done.tiers.filter((t) => t === 'full').length, asked.length);
+  assert.ok(done.total <= BUDGET);
+});
+
+test('only what is loaded can be drawn, and a budget the loaded tiers cannot meet is the best that can be done', () => {
   const some = new Set(['super-low']);
-  const q = chooseTiers(['full', 'low', 'super-low'], [900, 300, 50], [some, all, new Set()], [tris(1), tris(1), tris(1)]);
+  const q = chooseTiers({ want: ['full', 'low', 'super-low'], px: [900, 300, 50], have: [some, ALL, new Set()], tris: costs(1, 3) });
   assert.deepEqual(q.tiers, ['super-low', 'low', null]);
   assert.deepEqual(tierCounts(q.tiers), { full: 0, low: 1, 'super-low': 1, none: 1 });
-  // a budget that cannot be met by the loaded tiers is the best that can be done
-  const z = chooseTiers(['full'], [900], [new Set(['full'])], [tris(2_000_000)]);
+  const z = chooseTiers({ want: ['full'], px: [900], have: [new Set(['full'])], tris: costs(2_000_000, 1) });
   assert.deepEqual(z.tiers, ['full']);
+  // the smallest on screen is lowered first
+  const r = chooseTiers({ want: ['full', 'full', 'full'], px: [900, 800, 600], have: [ALL, ALL, ALL], tris: costs(400_000, 3), budget: 900_000 });
+  assert.deepEqual(r.tiers, ['full', 'full', 'low']);
+  assert.ok(r.total <= BUDGET);
+  // a full is lowered before a low is: lowering a low saves little
+  const f = chooseTiers({ want: ['full', 'low', 'low'], px: [900, 100, 90], have: [ALL, ALL, ALL], tris: costs(400_000, 3), budget: 300_000 });
+  assert.deepEqual(f.tiers, ['low', 'low', 'low']);
 });
 
 test('words for a piece’s level and its turn', () => {

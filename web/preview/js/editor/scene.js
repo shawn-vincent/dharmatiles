@@ -5,8 +5,8 @@
 // document's state, js/documents.js); this module draws it.  A piece is its tile's mesh at one of three tiers (the program's
 // `/api/tiles/ID/tier`, from its cache or built): super-low far away, low in the middle, full close up and
 // for what you select, chosen by how large the piece is on screen and held under a triangle budget, so a
-// table of forty pieces moves smoothly and nothing waits for a build.  Full is asked for only when close,
-// one at a time, and never blocks: the lower tier stays on screen until it lands.  What is not full is
+// table of forty pieces moves smoothly and nothing waits for a build.  Full is asked for only when close, for
+// every piece that fits the budget together, and never blocks: the lower tier stays on screen until it lands.  What is not full is
 // marked `low · not yet checked` in the status line, as the plates mark theirs.
 //
 // The pieces of the map are one selection (`view.msel`, piece ids); editing them is scene-edit.js, the
@@ -40,6 +40,8 @@ let lastSig = '';
 let evalTimer = 0;
 const tierSet = createTiers({ host, scope: 'map' }); // what the map wants of the program: one set, posted whole
 let inflight = 0;              // tier requests the program has not answered: it queues them (its tier lane), the page does not
+const wasWanted = new Map();  // piece id -> the tier it wanted at the last look: the margin of wantedTier is measured from it
+const shownTier = new Map();  // piece id -> the tier it is drawn at, for the budget's stickiness
 const shown = new Map();      // piece id -> {gid, tileId}: what it was last drawn with, kept until its new mesh comes
 /** Pieces being dragged: id -> [x, y] mm, shown there until the change is written. */
 export const live = new Map();
@@ -161,6 +163,13 @@ async function run({ p, tier, gkey }) {
 
 const sizeOf = (p) => Math.max(...p.size);
 
+/** A piece's distance from the eye, mm (0 for an orthographic camera, which has none): what breaks a tie between equal sizes. */
+function eyeDistance(p) {
+  if (viewer.isOrtho) return 0;
+  const c = M.toWorld(p, p.size[0] / 2, p.size[1] / 2, 6);
+  return viewer.camera.position.distanceTo(new THREE.Vector3(c[0], c[1], c[2]));
+}
+
 /** A piece's size on screen, CSS pixels, by its longer side at its distance; 0 when it is out of the view. */
 function screenSize(p) {
   const c = M.toWorld(p, p.size[0] / 2, p.size[1] / 2, 6);
@@ -187,8 +196,8 @@ function boxPayload(w, d, h) {
 
 /**
  * Work out which tier each piece is drawn at and put the pieces in the view.  `now`: at once (a mesh came,
- * the scene changed); else after the camera has rested a moment.  Asks for the full builds of what is close,
- * one at a time.
+ * the scene changed); else after the camera has rested a moment.  Asks for what the pieces that fit
+ * the budget lack, all together.
  */
 export function evaluate(now = false) {
   clearTimeout(evalTimer);
@@ -197,10 +206,16 @@ export function evaluate(now = false) {
   const ps = pieces().filter((p) => p.at);
   const sel = new Set(view.get().msel);
   const px = ps.map(screenSize);
-  const want = ps.map((p, i) => M.wantedTier(px[i], sel.has(p.id)));
+  // a piece without a mesh yet has nothing to choose; the rest want by size, from what they wanted last time
+  const want = ps.map((p, i) => (p.gkey ? M.wantedTier(px[i], wasWanted.get(p.id) ?? null, sel.has(p.id)) : 'super-low'));
+  wasWanted.clear();
+  ps.forEach((p, i) => wasWanted.set(p.id, want[i]));
   const have = ps.map((p) => new Set(p.gkey ? [...(geoms.get(p.gkey)?.tiers.keys() ?? [])] : []));
-  const tris = ps.map((p) => (tier) => geoms.get(p.gkey)?.tiers.get(tier)?.tris ?? M.GUESS[tier]);
-  const { tiers, total } = M.chooseTiers(want, px, have, tris);
+  const tris = ps.map((p) => (tier) => (p.gkey ? geoms.get(p.gkey)?.tiers.get(tier)?.tris ?? M.GUESS[tier] : 0));
+  // the tier a piece holds: the one it shows, or the full it has asked for, so a build on its way counts as held
+  const current = ps.map((p) => (p.gkey && (shownTier.get(p.id) === 'full' || geoms.get(p.gkey)?.asked.has('full')) ? 'full' : shownTier.get(p.id) ?? null));
+  const { tiers, total, intended, fetch } = M.planTiers({ want, px, have, tris, current, dist: ps.map(eyeDistance), ids: ps.map((p) => p.id) });
+  ps.forEach((p, i) => shownTier.set(p.id, tiers[i]));
   const list = ps.map((p, i) => {
     const t = tiers[i];
     let gid = null;
@@ -218,11 +233,12 @@ export function evaluate(now = false) {
   // what is drawn that is not the checked build, and what a close piece still wants in full
   const counts = M.tierCounts(tiers);
   sceneStore.set({ counts, triangles: total });
-  const order = ps.map((_, i) => i).filter((i) => want[i] === 'full' && tiers[i] !== 'full' && ps[i].gkey).sort((a, b) => px[b] - px[a]);
-  // the budget decides what is shown, not what is fetched: only the nearest one is asked for at a time
-  if (order.length && total < M.BUDGET) ensure(ps[order[0]], 'full');
-  for (const i of ps.map((_, k) => k)) {
-    if (want[i] === 'low' && !have[i].has('low') && ps[i].gkey) ensure(ps[i], 'low');
+  // ask for everything the pieces that fit the budget lack, together: the program queues them, nearest first,
+  // and cancels a build the camera has moved away from (what is withdrawn from the set)
+  for (const [i, tier] of fetch) if (ps[i].gkey) ensure(ps[i], tier);
+  const wanted = new Set(ps.map((p, i) => `${p.gkey}|${intended[i]}`)); // pieces of one tile at one seed share a mesh
+  for (const [g, e] of geoms) {
+    for (const tier of ['low', 'full']) if (e.asked.has(tier) && !e.tiers.has(tier) && !wanted.has(`${g}|${tier}`)) tierSet.drop(`${g}|${tier}`);
   }
   viewer.setSceneHighlight(slotsOf([...sel]), hovered);
   viewer.placeGround();

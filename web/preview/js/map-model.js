@@ -86,11 +86,27 @@ export function totalsText(scene) {
 // ---- detail by distance ---------------------------------------------------------------------------------
 
 export const TIERS = ['super-low', 'low', 'full'];
-/** The triangles the map draws, in all (the plates' budget, about). */
-export const BUDGET = 900_000;
-/** A piece smaller than LOW_PX on screen (its longer side, CSS px) is drawn super-low; under FULL_PX, low; else full. */
-export const LOW_PX = 48, FULL_PX = 260;
-/** What a tier costs before it is known, triangles (the program's budgets: super-low 12 000, low about 60 000). */
+/**
+ * The triangles the map draws, in all: sixteen full tiles (a 4 x 4 map close up is all full).  From
+ * measurements of 13 Nov 2026, library tiles at one seed from the program's tier lane: a super-low mesh is 4 000 to
+ * 12 000 triangles, low 12 000 to 38 000, full from 224 000, 330 000 on average over the 20 pieces of the first plate.  The page, in Chrome on an M2 Max (Apple GPU,
+ * 1147 x 650), drew 20 full pieces, 6.6 million triangles, in 4.6 ms a frame (0.7 ms a million), with 640 MB of
+ * page heap for the meshes (30 MB a full): the limit is memory, not drawing, so 5.5 million holds sixteen fulls at
+ * about 4 ms a frame and 500 MB.
+ */
+export const BUDGET = 5_500_000;
+/**
+ * A piece's size on screen (its longer side, CSS px) moves it up a tier at UP and down again only under DOWN: the
+ * margin between them is what keeps a camera's small movement from changing any tier (wantedTier).
+ * `UP.low` is the size where super-low gives way to low; `UP.full` where low gives way to full.
+ */
+export const UP = { low: 40, full: 120 };
+export const DOWN = { low: 30, full: 90 };
+/** A piece that has (or has asked for) full keeps it against a piece that is not over its own size times this. */
+export const STICKY = 1.25;
+/** What a tier costs before it is known, triangles: the middle of what was measured. */
+export const GUESS = { 'super-low': 8_000, low: 25_000, full: 330_000 };
+
 /**
  * The geometry keys held that no piece of the scene uses: what the page lets go of when a scene arrives
  * (a piece moved to another seed, tile build or printer, or left the map, leaves its old mesh behind).
@@ -101,48 +117,71 @@ export function staleKeys(held, pieces) {
   return [...held].filter((k) => !used.has(k));
 }
 
-export const GUESS = { 'super-low': 12_000, low: 60_000, full: 350_000 };
-
-/** The tier a piece of `px` pixels wants: its own size, never more than `cap`. */
-export function wantedTier(px, selected = false) {
-  if (px >= FULL_PX) return 'full';
-  if (px >= LOW_PX || selected) return 'low';
-  return 'super-low';
+/**
+ * The tier a piece of `px` pixels wants, given the tier it wanted last time (`was`, null for a piece new to the
+ * view).  A function of the two alone: from `was` it goes up past UP and down under DOWN, so between the two
+ * it stays where it was, and a size that jitters inside the margin never changes the answer.  A selected piece
+ * wants at least low.
+ */
+export function wantedTier(px, was = null, selected = false) {
+  let t = was ? Math.max(0, TIERS.indexOf(was)) : 0;
+  while (t < 2 && px >= (t === 0 ? UP.low : UP.full)) t += 1;
+  while (t > 0 && px < (t === 2 ? DOWN.full : DOWN.low)) t -= 1;
+  return TIERS[Math.max(t, selected ? 1 : 0)];
 }
 
 /**
- * Which tier each piece is drawn at.  `want[i]` is the tier piece i would like by its size, `px[i]` its size on
- * screen, `have[i]` the tiers loaded for it (a Set), `tris[i]` a function tier -> triangles (the loaded mesh's, or
- * a guess).  A piece is drawn at the best tier it has that is not above what it wants; the whole is held under
- * `budget` triangles by lowering the smallest-on-screen first (full to low, then low to super-low), as far as
- * the loaded tiers allow.  Returns the tier to draw for each piece (null: nothing loaded yet) and the total.
+ * Which tier each piece is drawn at, as one input object: `want[i]` the tier piece i would like by its size,
+ * `px[i]` its size on screen, `have[i]` the tiers loaded for it (a Set), `tris[i]` a function tier -> triangles
+ * (the loaded mesh's, or a guess), `current[i]` the tier it holds now (shown, or asked for and on its way; null for
+ * none), `dist[i]` its distance from the eye and `ids[i]` its id.  A piece is drawn at the best tier it has that is
+ * not above what it wants; the whole is held under `budget` triangles by lowering the least deserving first (full to
+ * low, then low to super-low), as far as the loaded tiers allow.
+ *
+ * Who deserves most is a total order that does not depend on the order of the list: by size on screen, a piece that
+ * holds full counting STICKY times its size (so another takes its room only by being clearly bigger), then by the
+ * nearer, then by id.  Returns the tier to draw for each piece (null: nothing loaded yet) and the total.
  */
-export function chooseTiers(want, px, have, tris, budget = BUDGET) {
+export function chooseTiers({ want, px, have, tris, current = [], dist = [], ids = [], budget = BUDGET }) {
   const best = (i, cap) => {
     for (let t = cap; t >= 0; t--) if (have[i].has(TIERS[t])) return t;
     return -1;
   };
-  const cap = want.map((w) => TIERS.indexOf(w));
-  const pick = cap.map((c, i) => best(i, c));
+  const pick = want.map((w, i) => best(i, TIERS.indexOf(w)));
   const cost = (i) => (pick[i] < 0 ? 0 : tris[i](TIERS[pick[i]]));
-  let total = pick.reduce((n, _, i) => n + cost(i), 0);
-  // lower the smallest on screen first
-  const order = pick.map((_, i) => i).sort((a, b) => px[a] - px[b]);
-  while (total > budget) {
-    let moved = false;
-    for (const i of order) {
-      if (pick[i] <= 0) continue;
-      const lower = best(i, pick[i] - 1);
-      if (lower === pick[i] || lower < 0) continue;
+  let total = pick.reduce((n, _, k) => n + cost(k), 0);
+  const eff = (i) => px[i] * (current[i] === 'full' ? STICKY : 1);
+  const id = (i) => String(ids[i] ?? i);
+  const lowestFirst = pick.map((_, i) => i).sort((a, b) =>
+    eff(a) - eff(b) || (dist[b] ?? 0) - (dist[a] ?? 0) || id(b).localeCompare(id(a)) || b - a);
+  // the fulls go first (to low), the least deserving of them first; only when that is not enough, the lows (to super-low)
+  for (const level of [2, 1]) {
+    for (const i of lowestFirst) {
+      if (total <= budget) break;
+      if (pick[i] !== level) continue;
+      const lower = best(i, level - 1);
+      if (lower < 0) continue;
       total -= cost(i);
       pick[i] = lower;
       total += cost(i);
-      moved = true;
-      if (total <= budget) break;
     }
-    if (!moved) break;
   }
   return { tiers: pick.map((t) => (t < 0 ? null : TIERS[t])), total };
+}
+
+/**
+ * What to draw and what to ask for.  `tiers` is chooseTiers over what is loaded; `intended` is the same as if
+ * everything wanted had arrived, so the pieces that will fit the budget are the ones fetched, all together:
+ * `fetch` lists `[i, tier]` of each piece's intended tier that is not loaded, most deserving first.
+ */
+export function planTiers(input) {
+  const shown = chooseTiers(input);
+  const intended = chooseTiers({ ...input, have: input.have.map(() => new Set(TIERS)) });
+  const id = (i) => String(input.ids?.[i] ?? i);
+  const fetch = [];
+  intended.tiers.forEach((t, i) => { if (t && !input.have[i].has(t)) fetch.push([i, t]); });
+  fetch.sort(([a], [b]) => input.px[b] - input.px[a] || (input.dist?.[a] ?? 0) - (input.dist?.[b] ?? 0) || id(a).localeCompare(id(b)));
+  return { tiers: shown.tiers, total: shown.total, intended: intended.tiers, fetch };
 }
 
 /** How many pieces are drawn at each tier, and how many have nothing yet: `{full, low, 'super-low', none}`. */
