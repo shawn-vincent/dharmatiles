@@ -136,6 +136,7 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
         const plan = build(held.get(id) ?? null);
         if (!plan?.steps?.length) return null;
         let first = null, last = null;
+        const answers = [];
         for (const step of plan.steps) {
           const body = typeof step.body === 'function' ? step.body(held.get(id)) : step.body;
           if (body === null) break; // the step found nothing to do in the state it was given
@@ -143,12 +144,13 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
           if (!b) break;
           first ??= b;
           last = b;
+          answers.push(b);
         }
         if (!last) return null;
         const entry = { label: plan.label, before: first.before, after: last.text, docRev: last.docRev };
         history.push(id, entry);
         notify(id);
-        return { last, entry, note: plan.note };
+        return { last, entry, note: typeof plan.note === 'function' ? plan.note(answers) : plan.note };
       });
     },
 

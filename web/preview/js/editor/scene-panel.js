@@ -258,7 +258,7 @@ function propLevel(body, ro) {
     s.append(own);
   } else if (kind === 'seed') {
     s.append(el('p', 'note', 'A seed is a variant of the tile. Pick one you own to make this piece the same as one you have; otherwise it is a new print.'));
-    const mine = M.ownedSeeds(server.get().inventory, p);
+    const mine = p.ownedSeeds ?? [];
     const chips = el('div', 'mp-chips');
     for (const o of mine) {
       const c = el('button', `mp-chip${o.seed === p.seedUsed ? ' on' : ''}`, `${o.seed}${o.have > 1 ? ` ×${o.have}` : ''}`);

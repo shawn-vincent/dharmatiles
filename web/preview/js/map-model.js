@@ -59,35 +59,6 @@ export function snapSquares(p, xMm, yMm) {
   return { x: Math.round(xMm / p.sq), y: Math.round(yMm / p.sq) };
 }
 
-/** Where the piece's footprint would stand with its north-west corner at `sq` squares, as a box. */
-const boxAt = (p, x, y, rot = p.rot) => footprint({ ...p, at: [x * p.sq, y * p.sq], rot });
-
-/**
- * The free place nearest to `want` (squares of the piece, as {x, y}), for the piece turned `rot`: a place where
- * its footprint overlaps no other placed piece standing at the same bottom.  Searched in rings out from the wish;
- * the answer says how far it had to move.  `others` are the pieces in the way (not the piece itself).
- */
-export function nearestFree(others, p, want, rot = p.rot) {
-  const clash = (x, y) => {
-    const b = boxAt(p, x, y, rot);
-    return others.some((o) => o.at && Math.abs((o.bottomMm || 0) - (p.bottomMm || 0)) < 0.5 && overlaps(b, footprint(o)));
-  };
-  if (!clash(want.x, want.y)) return { ...want, moved: 0 };
-  for (let r = 1; r <= 40; r++) {
-    let best = null;
-    for (let dx = -r; dx <= r; dx++) {
-      for (let dy = -r; dy <= r; dy++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        if (clash(want.x + dx, want.y + dy)) continue;
-        const d = Math.hypot(dx, dy);
-        if (!best || d < best.d) best = { x: want.x + dx, y: want.y + dy, d };
-      }
-    }
-    if (best) return { x: best.x, y: best.y, moved: best.d };
-  }
-  return { ...want, moved: -1 };
-}
-
 /** Which of a piece's sides are against another piece: not used to refuse, only to read. */
 export const bounds = (pieces) => {
   const placed = pieces.filter((p) => p.at);
@@ -97,31 +68,6 @@ export const bounds = (pieces) => {
   const hi = [Math.max(...f.map((b) => b[2])), Math.max(...f.map((b) => b[3]))];
   return { lo, hi };
 };
-
-// ---- seeds ---------------------------------------------------------------------------------------------
-
-/**
- * A seed for a new piece or a new variant: one you do not own (of that tile, system and colour mode), that no
- * piece of the map already uses and that is not the tile's own.  `owned` and `used` are Sets of numbers; `rng`
- * gives 0 up to 1 (Math.random; a fixed one in the tests).
- */
-export function freshSeed(owned, used, own, rng = Math.random) {
-  for (let i = 0; i < 1000; i++) {
-    const s = 1 + Math.floor(rng() * 99998);
-    if (!owned.has(s) && !used.has(s) && s !== own) return s;
-  }
-  throw new Error('no free seed in a thousand tries');
-}
-
-/** The seeds you own of a piece's tile in its system and colour mode: [{seed, have}]. */
-export function ownedSeeds(inv, p) {
-  const by = new Map();
-  for (const q of inv?.pieces || []) {
-    if (q.tile !== p.canon || q.system !== p.system || q.colour !== p.colour || !(q.have > 0)) continue;
-    by.set(q.seed, (by.get(q.seed) || 0) + q.have);
-  }
-  return [...by].map(([seed, have]) => ({ seed, have })).sort((a, b) => a.seed - b.seed);
-}
 
 // ---- the inventory on the map ---------------------------------------------------------------------------
 

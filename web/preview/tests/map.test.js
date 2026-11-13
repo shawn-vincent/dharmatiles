@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BUDGET, atWord, bounds, chooseTiers, footprint, freshSeed, bottomWords, matrixOf, nearestFree, overlaps, ownedSeeds, marks, snapSquares, staleKeys, tierCounts, toWorld, totalsText, turned, wantedTier,
+  BUDGET, atWord, bounds, chooseTiers, footprint, bottomWords, matrixOf, overlaps, marks, snapSquares, staleKeys, tierCounts, toWorld, totalsText, turned, wantedTier,
 } from '../js/map-model.js';
 
 const piece = (over = {}) => ({
@@ -54,53 +54,10 @@ test('a place snaps to the whole squares of the piece’s own system', () => {
   assert.equal(atWord(2.5, 0), '(2.5sq, 0sq)');
 });
 
-test('the nearest free place is the wish when it is free, else the nearest square that is', () => {
-  const a = piece({ index: 0, at: [0, 0] });
-  const b = piece({ index: 1, at: [0, 0] });
-  assert.deepEqual(nearestFree([a], b, { x: 3, y: 0 }), { x: 3, y: 0, moved: 0 });
-  const r = nearestFree([a], b, { x: 0, y: 0 });
-  assert.ok(r.moved === 1 && !overlaps(footprint({ ...b, at: [r.x * 35, r.y * 35] }), footprint(a)));
-  // a piece at another height is not in the way: it floats over
-  const high = piece({ index: 2, at: [0, 0], bottomMm: 33 });
-  assert.equal(nearestFree([a], high, { x: 0, y: 0 }).moved, 0);
-  // turned, a 2x1 stands 1x2: the free place is searched for the turned footprint
-  const long = piece({ index: 3, size: [70, 35], at: [0, 0] });
-  const wall = piece({ index: 4, at: [35, 0] });
-  const turnedFree = nearestFree([wall], { ...long, rot: 90 }, { x: 0, y: 0 }, 90);
-  assert.equal(turnedFree.moved, 0);
-});
-
 test('bounds covers the placed pieces only', () => {
   assert.equal(bounds([piece({ at: null })]), null);
   const b = bounds([piece({ at: [0, 0] }), piece({ index: 1, at: [70, 35], size: [70, 35] })]);
   assert.deepEqual(b, { lo: [0, 0], hi: [140, 70] });
-});
-
-test('a fresh seed is one you do not own, no piece uses and the tile does not have', () => {
-  const owned = new Set([1, 2, 3]), used = new Set([4]);
-  let n = 0;
-  const seq = [0.00001, 0.00002, 0.00003, 0.00004, 0.00005, 0.5];
-  const s = freshSeed(owned, used, 5, () => seq[n++]);
-  assert.ok(![1, 2, 3, 4, 5].includes(s));
-  assert.ok(n >= 6);
-  assert.throws(() => freshSeed(new Set([1]), new Set(), 0, () => 0), /no free seed/);
-});
-
-const inv = {
-  exists: true,
-  pieces: [
-    { tile: 'lib:tiles/ground/1x1-grass', seed: 97, system: 'db', colour: 'multi', have: 2 },
-    { tile: 'lib:tiles/ground/1x1-grass', seed: 12, system: 'db', colour: 'multi', have: 1 },
-    { tile: 'lib:tiles/ground/1x1-grass', seed: 5, system: 'ol', colour: 'multi', have: 4 },
-    { tile: 'lib:tiles/ground/1x1-grass', seed: 8, system: 'db', colour: 'single', have: 1 },
-    { tile: 'lib:tiles/ground/1x1-grass', seed: 31, system: 'db', colour: 'multi', have: 0 },
-  ],
-};
-
-test('the seeds you own are of that tile, system and colour mode', () => {
-  assert.deepEqual(ownedSeeds(inv, piece()), [{ seed: 12, have: 1 }, { seed: 97, have: 2 }]);
-  assert.deepEqual(ownedSeeds(inv, piece({ system: 'ol' })), [{ seed: 5, have: 4 }]);
-  assert.deepEqual(ownedSeeds(inv, piece({ colour: 'single' })), [{ seed: 8, have: 1 }]);
 });
 
 test('the shelf\'s word on each piece is the program\'s, and the totals say its numbers', () => {

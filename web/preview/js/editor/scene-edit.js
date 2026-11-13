@@ -6,8 +6,6 @@
 // page held when it was made.  The change joins the one history (title bar Undo and Redo, ⌘Z), and the toast's
 // Undo is that history's, offered only while the change is still the last.
 
-import { canonOf } from '../inventory.js';
-import { sizeSquares } from '../folders.js';
 import * as M from '../map-model.js';
 import { piecesOf } from '../doc-views.js';
 import { toast } from './app.js';
@@ -56,62 +54,47 @@ export const setPiece = (id, set, note) => change((state) => {
   return { label: 'Could not change the piece', note: note ?? `Changed ${p.name}`, steps: [batch([{ id, set }])] };
 });
 
-/** Turn pieces a quarter (`dir` 1 clockwise, -1 counter-clockwise), each to the nearest free place its new footprint fits. */
+/**
+ * Turn pieces a quarter (`dir` 1 clockwise, -1 counter-clockwise).  One piece goes to the nearest free place its new
+ * footprint fits, which the program settles in the write; several turn where they stand.
+ */
 export function turn(ids, dir) {
   return change((state) => {
-    const ps = lookup(state, ids);
-    const mine = new Set(ps.map((p) => p.id));
-    const others = piecesIn(state).filter((q) => q.at && !mine.has(q.id));
-    const edits = [];
-    let moved = 0;
-    for (const p of ps) {
-      if (!p.at) continue;
+    const ps = lookup(state, ids).filter((p) => p.at);
+    const edits = ps.map((p) => {
       const rot = M.turned(p.rot, dir);
       const sq = M.snapSquares(p, p.at[0], p.at[1]);
-      const free = ps.length === 1 ? M.nearestFree(others, p, sq, rot) : { ...sq, moved: 0 };
-      if (free.moved > 0) moved += 1;
-      edits.push({ id: p.id, set: { rot, at: M.atWord(free.x, free.y) } });
-    }
+      return { id: p.id, set: ps.length === 1 ? { rot, near: sq } : { rot, at: M.atWord(sq.x, sq.y) } };
+    });
     if (!edits.length) return null;
     const what = ps.length === 1 ? `Turned ${ps[0].name}` : asNote('Turned', ps.length);
-    return { label: 'Could not turn the piece', note: moved ? `${what}; it moved to the nearest free place` : what, steps: [batch(edits)] };
+    return { label: 'Could not turn the piece', note: (a) => (a[0]?.shifted ? `${what}; it moved to the nearest free place` : what), steps: [batch(edits)] };
   });
 }
 
-/** Put pieces down at places (squares of each piece), `moves`: [{id, x, y, rot?}]; a place taken is the nearest free one. */
+/** Put pieces down at places (squares of each piece), `moves`: [{id, x, y, rot?}]; one piece's place taken is the nearest free one (the program settles it). */
 export function moveTo(moves, note) {
   return change((state) => {
     const ps = piecesIn(state);
     const ms = moves.map((m) => ({ ...m, p: ps.find((q) => q.id === m.id) })).filter((m) => m.p);
-    const stay = ps.filter((q) => q.at && !ms.some((m) => m.id === q.id));
-    const edits = [];
-    let shifted = 0;
-    for (const m of ms) {
-      const rot = m.rot ?? m.p.rot;
-      const free = ms.length === 1 ? M.nearestFree(stay, m.p, { x: m.x, y: m.y }, rot) : { x: m.x, y: m.y, moved: 0 };
-      if (free.moved > 0) shifted += 1;
-      if (free.moved < 0) { toast('There is no free place for that piece on the map'); return null; }
-      edits.push({ id: m.id, set: { at: M.atWord(free.x, free.y), ...(m.rot != null ? { rot: m.rot } : {}) } });
-    }
+    const edits = ms.map((m) => ({
+      id: m.id,
+      set: { ...(ms.length === 1 ? { near: { x: m.x, y: m.y } } : { at: M.atWord(m.x, m.y) }), ...(m.rot != null ? { rot: m.rot } : {}) },
+    }));
     if (!edits.length) return null;
     const what = note ?? (ms.length === 1 ? `Moved ${ms[0].p.name}` : asNote('Moved', ms.length));
-    return { label: 'Could not move the piece', note: shifted ? `${what} to the nearest free place` : what, steps: [batch(edits)] };
+    return { label: 'Could not move the piece', note: (a) => (a[0]?.shifted ? `${what} to the nearest free place` : what), steps: [batch(edits)] };
   });
 }
 
-/** A copy of each piece, put next to it in the nearest free place; it starts with the same seed. */
+/** A copy of each piece, put next to it in the nearest free place (settled by the program, each after the last); it starts with the same seed. */
 export function duplicate(ids) {
   return change((state) => {
-    const ps = lookup(state, ids);
-    let taken = piecesIn(state).filter((q) => q.at);
-    const steps = [];
-    for (const p of ps) {
-      if (!p.at) continue;
+    const ps = lookup(state, ids).filter((p) => p.at);
+    const steps = ps.map((p) => {
       const sq = M.snapSquares(p, p.at[0], p.at[1]);
-      const free = M.nearestFree(taken, p, { x: sq.x + Math.round(p.size[0] / p.sq), y: sq.y });
-      taken = [...taken, { ...p, at: [free.x * p.sq, free.y * p.sq] }];
-      steps.push(stepsOf.mapsDup({ id: p.id, at: M.atWord(free.x, free.y) }));
-    }
+      return stepsOf.mapsDup({ id: p.id, near: { x: sq.x + Math.round(p.size[0] / p.sq), y: sq.y } });
+    });
     if (!steps.length) return null;
     return { label: 'Could not duplicate the piece', note: ps.length === 1 ? `Copied ${ps[0].name}` : asNote('Copied', ps.length), steps };
   });
@@ -135,39 +118,26 @@ export function remove(ids) {
  * Tray pieces (no place yet) go on the map at the nearest free places to the corner: one copy, or `all` of a
  * line's copies.  A line with one copy is given its place; from a line with several, each copy placed is a new
  * piece line with a seed of its own (one you do not own, not on the map), and the tray line's count goes down.
- * One change, one Undo.
+ * The program settles every place and seed in its own write.  One change, one Undo.
  */
 export function place(id, all = false) {
   return change((state) => {
     const [p] = lookup(state, [id]);
     if (!p) return null;
     const n = all ? p.count : 1;
-    let taken = piecesIn(state).filter((q) => q.at);
-    const spot = () => {
-      const f = M.nearestFree(taken, p, { x: 0, y: 0 });
-      taken = [...taken, { ...p, at: [f.x * p.sq, f.y * p.sq] }];
-      return f;
-    };
+    const corner = { x: 0, y: 0 };
     if (p.count <= 1) {
-      const f = spot();
-      return { label: 'Could not place the piece', note: `Placed ${p.name}`, steps: [batch([{ id, set: { at: M.atWord(f.x, f.y), rot: p.rot ?? 0 } }])] };
+      return { label: 'Could not place the piece', note: `Placed ${p.name}`, steps: [stepsOf.mapsSet({ id, set: { near: corner, rot: p.rot ?? 0 } })] };
     }
-    const steps = [];
     const left = p.count - n;
     // the tray line keeps the copies not placed; when none are left it becomes the last one placed, so its seed stays
-    steps.push(stepsOf.listsCount({ id, count: Math.max(left, 1) }));
-    const got = new Set();
+    /** @type {any[]} */
+    const steps = [stepsOf.listsCount({ id, count: Math.max(left, 1) })];
     const sys = sceneIn(state)?.system;
     for (let k = 0; k < (left > 0 ? n : n - 1); k++) {
-      const f = spot();
-      const seed = newSeedFor(state, p, got);
-      got.add(seed);
-      steps.push(stepsOf.mapsAdd({ tile: p.tileId, at: M.atWord(f.x, f.y), rot: 0, seed, ...(p.system && p.system !== sys ? { system: p.system } : {}) }));
+      steps.push(stepsOf.mapsAdd({ tile: p.tileId, near: corner, rot: 0, seedWord: 'fresh', ...(p.system && p.system !== sys ? { system: p.system } : {}) }));
     }
-    if (left === 0) {
-      const f = spot();
-      steps.push(stepsOf.mapsSet({ id, set: { at: M.atWord(f.x, f.y), rot: p.rot ?? 0 } }));
-    }
+    if (left === 0) steps.push(stepsOf.mapsSet({ id, set: { near: corner, rot: p.rot ?? 0 } }));
     return { label: 'Could not place the piece', note: n === 1 ? `Placed ${p.name}` : `Placed ${n} × ${p.name}, each with a seed of its own`, steps };
   });
 }
@@ -175,16 +145,6 @@ export function place(id, all = false) {
 const sceneIn = (state) => state?.plan?.scene ?? null;
 
 // ---- seeds and variants -----------------------------------------------------------------------------
-
-/** The seeds on the map for a piece's tile in its system. */
-const usedSeeds = (state, p) => new Set(piecesIn(state).filter((q) => q.canon === p.canon && q.system === p.system).map((q) => q.seedUsed));
-
-/** A seed for a new piece of `p`'s tile: one you do not own, that the map does not use and that is not the tile's own. */
-export function newSeedFor(state, p, extraUsed = new Set()) {
-  const owned = new Set(M.ownedSeeds(server.get().inventory, p).map((s) => s.seed));
-  const used = new Set([...usedSeeds(state, p), ...extraUsed]);
-  return M.freshSeed(owned, used, p.seedUsed);
-}
 
 /**
  * New variants: which pieces (`scope`): `piece` (the selected ones), `tile` (every piece of the selected tiles),
@@ -204,15 +164,8 @@ export function variants(scope) {
     } else who = all;
     who = who.filter((p) => p.print !== 'skip' || scope !== 'missing');
     if (!who.length) { toast(scope === 'missing' ? 'Every piece on the map is on your shelf: nothing to change' : 'No pieces to change'); return null; }
-    const fresh = new Map(); // tile+system -> seeds handed out now
-    const edits = who.map((p) => {
-      const k = `${p.canon}|${p.system}`;
-      const got = fresh.get(k) ?? new Set();
-      const seed = newSeedFor(state, p, got);
-      got.add(seed);
-      fresh.set(k, got);
-      return { id: p.id, set: { seed } };
-    });
+    // a seed nobody owns, that the map does not use and no other piece of this change has: the program settles each in its write
+    const edits = who.map((p) => ({ id: p.id, set: { freshSeed: true } }));
     const note = scope === 'piece' ? `New variant of ${who[0].name}` : scope === 'tile' ? `New variants of ${plural(who.length, 'piece')} of ${who[0].name}` : scope === 'missing' ? `New seed for ${plural(who.length, 'piece')} you don't have` : `New variants of ${plural(who.length, 'piece')}`;
     return { label: 'Could not make the variants', note, steps: [batch(edits)] };
   });
@@ -220,34 +173,17 @@ export function variants(scope) {
 
 /**
  * A tile from the catalog goes on the map: at `want` (squares of its own system, from a drop) or the nearest free
- * place to the map's corner.  It gets a seed you do not own, unless you own none of it and the map does not
- * use it: then the tile's own seed is already new (and is not written).
+ * place to the map's corner (the program settles the place).  It gets a seed you do not own, unless you own none of it
+ * and the map does not use it: then the tile's own seed is already new (and is not written).
  */
 export async function addTile(t, want = null) {
   if (!isMapView()) return null;
   return change((state) => {
-    const sc = sceneIn(state);
-    if (!sc) return null;
-    const system = sc.system;
-    const sq = system === 'ol' ? 25.4 : 35;
-    const [cols, rows] = sizeSquares(t) ?? [1, 1];
-    const inv = server.get().inventory;
-    const canon = canonOf(t.path, inv?.home);
-    const probe = { canon, system, colour: sc.colour, size: [cols * sq, rows * sq], sq, at: null, rot: 0, bottomMm: 0, seedUsed: -1 };
-    const placed = piecesIn(state).filter((q) => q.at);
-    const free = M.nearestFree(placed, probe, want ?? { x: 0, y: 0 });
-    if (free.moved < 0) { toast('There is no free place for that tile on the map'); return null; }
-    const owned = M.ownedSeeds(inv, probe);
-    const onMap = placed.find((q) => q.canon === canon && q.system === system);
-    let seed = null;
-    if (owned.length || onMap) {
-      const used = new Set(placed.filter((q) => q.canon === canon && q.system === system).map((q) => q.seedUsed));
-      seed = M.freshSeed(new Set(owned.map((o) => o.seed)), used, onMap?.seedUsed ?? -1);
-    }
+    if (!sceneIn(state)) return null;
     return {
       label: 'Could not add the tile',
-      note: `Put ${t.name} on the map${seed != null ? ` (seed ${seed}, one you do not have)` : ''}`,
-      steps: [stepsOf.mapsAdd({ tile: t.id, at: M.atWord(free.x, free.y), rot: 0, ...(seed != null ? { seed } : {}) })],
+      note: (a) => `Put ${t.name} on the map${a[0]?.seed != null ? ` (seed ${a[0].seed}, one you do not have)` : ''}`,
+      steps: [stepsOf.mapsAdd({ tile: t.id, near: want ?? { x: 0, y: 0 }, rot: 0, seedWord: 'if-needed' })],
     };
   });
 }

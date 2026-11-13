@@ -82,6 +82,7 @@ mod messages;
 mod offers;
 pub mod payload;
 pub(crate) mod places;
+mod placing;
 mod plates;
 mod printers;
 pub(crate) mod roots;

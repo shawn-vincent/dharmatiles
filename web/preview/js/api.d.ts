@@ -194,11 +194,27 @@ type ListsRemoveReq = { list: string, id: string, docRev: number, };
 
 type ListsRestoreReq = { list: string, text: string, docRev: number, };
 
-type MapsAddReq = { list: string, tile: string, at: string, rot?: number | null, seed?: number | null, system?: string | null, docRev: number, };
+type MapsAddReq = { list: string, tile: string, 
+/**
+ * The place, as written; or `near`.
+ */
+at?: string | null, 
+/**
+ * The nearest free square to this point (squares of the piece's system), settled in the write.
+ */
+near?: Near | null, rot?: number | null, seed?: number | null, 
+/**
+ * A seed to give it, settled in the write, when `seed` is not given.
+ */
+seedWord?: SeedWord | null, system?: string | null, docRev: number, };
 
 type MapsBatchReq = { list: string, edits: Array<PieceEdit>, docRev: number, };
 
 type MapsBatched = { changed: number, 
+/**
+ * How many pieces went to another square than the one wished.
+ */
+shifted: number, 
 /**
  * The list's id.
  */
@@ -208,13 +224,21 @@ list: string, path: string, before: string | null, text: string, docRev: number,
  */
 note: string | null, };
 
-type MapsDupReq = { list: string, id: string, at: string, docRev: number, };
+type MapsDupReq = { list: string, id: string, at?: string | null, near?: Near | null, docRev: number, };
 
 type MapsListReq = { list: string, docRev: number, };
 
 type MapsPieceReq = { list: string, id: string, docRev: number, };
 
 type MapsPieced = { id: string, 
+/**
+ * The piece went to another square than the one wished (the nearest free one).
+ */
+shifted: number, 
+/**
+ * The seed it was given (settled in the write), when it was asked for one.
+ */
+seed: number | null, 
 /**
  * The list's id.
  */
@@ -243,6 +267,8 @@ unexpected: boolean, };
 type NamesReq = { text: string, };
 
 type NamesRes = { ok: boolean, message: string | null, defs: Array<string>, regions: Array<string>, lines: Array<string>, points: Array<string>, };
+
+type Near = { x: number, y: number, };
 
 type NewReq = { name?: string | null, 
 /**
@@ -278,6 +304,8 @@ at: number, file?: string | null, };
 
 type OffersRes = { ok: boolean, at: number | null, offers: Array<Offer>, why: string | null, errors: Array<Mistake> | null, };
 
+type OwnedSeed = { seed: number, have: number, };
+
 type PageMessageReq = { tile?: string | null, what?: string | null, text: string, help?: string | null, causes?: JsonValue | null, backtrace?: string | null, };
 
 type PieceEdit = { id: string, set: PieceWords, };
@@ -287,6 +315,14 @@ type PieceWords = {
  * Where, as written: `(2sq, 1sq)`.
  */
 at?: string | null, 
+/**
+ * Instead of `at`: the nearest free square to this point, settled by the program in the write.
+ */
+near?: Near | null, 
+/**
+ * Instead of `seed`: a seed nobody owns, that the map does not use and no other piece of this edit has.
+ */
+freshSeed?: boolean | null, 
 /**
  * Quarter turns clockwise, in degrees: 0, 90, 180, 270.
  */
@@ -444,7 +480,13 @@ size: [number, number], at: [number, number] | null, rot: number | null, bottomM
 /**
  * What the shelf says of the piece (none for a piece with a mistake).
  */
-shelf: ShelfMark | null, };
+shelf: ShelfMark | null, 
+/**
+ * The seeds you own of this piece's tile in its system and colour mode, and how many of each.
+ */
+ownedSeeds: Array<OwnedSeed>, };
+
+type SeedWord = "fresh" | "if-needed";
 
 type SessionRes = { token: string, };
 

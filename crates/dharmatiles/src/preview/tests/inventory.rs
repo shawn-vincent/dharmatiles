@@ -969,3 +969,118 @@ fn the_scene_says_which_pieces_the_shelf_leaves_off_and_how_many_print() {
     // a piece left off by its own word is neither
     assert_eq!(sc["pieces"][0]["shelf"]["text"], "have");
 }
+
+/// The place of every piece of the scene in the answer of an edit.
+fn spots(v: &Value) -> Vec<(String, f64, f64)> {
+    v["scene"]["pieces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|p| {
+            let at = p["at"].as_array()?;
+            Some((
+                p["id"].as_str().unwrap().to_owned(),
+                at[0].as_f64()?,
+                at[1].as_f64()?,
+            ))
+        })
+        .collect()
+}
+
+#[test]
+fn two_edits_asking_for_the_same_square_end_on_two_squares_and_each_says_where_it_went() {
+    let h = start_home("near", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
+    let list = h.id("town.dmap");
+    let tile = h.id("glade.dtile");
+    h.wait("town.dmap", "the scene", |t| {
+        t["plan"]["scene"]["pieces"]
+            .as_array()
+            .is_some_and(|p| p.len() == 3)
+    });
+    let rev = h.rev(&list);
+    // both are made against the same revision and both ask for the nearest free square to (10, 10)
+    let asks = |h: &Home, rev: u64| {
+        h.call(
+            "/api/maps/add",
+            serde_json::json!({"list": list, "tile": tile, "near": {"x": 10.0, "y": 10.0}, "rot": 0, "docRev": rev}),
+        )
+    };
+    let (a, b) = std::thread::scope(|s| {
+        let x = s.spawn(|| asks(&h, rev));
+        let y = s.spawn(|| asks(&h, rev));
+        (x.join().unwrap(), y.join().unwrap())
+    });
+    // one is made; the other, made against a revision that has gone, is refused with the revision now, and asks again
+    let (won, lost) = if a.0.starts_with("HTTP/1.1 200") {
+        (a, b)
+    } else {
+        (b, a)
+    };
+    assert!(won.0.starts_with("HTTP/1.1 200"), "{} {}", won.0, won.1);
+    assert!(lost.0.starts_with("HTTP/1.1 409"), "{} {}", lost.0, lost.1);
+    let again = asks(&h, lost.1["docRev"].as_u64().unwrap());
+    assert!(
+        again.0.starts_with("HTTP/1.1 200"),
+        "{} {}",
+        again.0,
+        again.1
+    );
+    // the first got the square asked for; the second, made against a map with that square taken, another, and says so
+    assert_eq!(won.1["shifted"], 0);
+    assert_eq!(again.1["shifted"], 1, "{}", again.1);
+    let first = spots(&won.1)
+        .into_iter()
+        .find(|(id, ..)| *id == won.1["id"].as_str().unwrap())
+        .unwrap();
+    let second = spots(&again.1)
+        .into_iter()
+        .find(|(id, ..)| *id == again.1["id"].as_str().unwrap())
+        .unwrap();
+    assert_eq!((first.1, first.2), (350.0, 350.0));
+    assert_ne!(
+        (first.1, first.2),
+        (second.1, second.2),
+        "two pieces on one square"
+    );
+}
+
+#[test]
+fn fresh_seeds_are_not_owned_not_on_the_map_and_not_repeated_within_an_edit() {
+    let h = start_home("fresh", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
+    let list = h.id("town.dmap");
+    h.wait("town.dmap", "the scene", |t| {
+        t["plan"]["scene"]["pieces"]
+            .as_array()
+            .is_some_and(|p| p.len() == 3)
+    });
+    // one good print of seed 5 is on the shelf: a fresh seed is not that one, nor 9 (p2), in any piece of one batch
+    h.ok(
+        "/api/inventory/have",
+        serde_json::json!({"tile": h.id("glade.dtile"), "colour": "single", "on": "2026-11-12"}),
+    );
+    let b = h.edit(
+        "/api/maps/batch",
+        serde_json::json!({"list": list, "edits": [{"id": "p1", "set": {"freshSeed": true}}, {"id": "p3", "set": {"freshSeed": true}}]}),
+    );
+    let seeds: Vec<u64> = ["p1", "p3"]
+        .iter()
+        .map(|id| {
+            b["scene"]["pieces"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["id"] == *id)
+                .unwrap()["seedUsed"]
+                .as_u64()
+                .unwrap()
+        })
+        .collect();
+    assert_ne!(seeds[0], seeds[1], "a seed repeated within an edit");
+    assert!(seeds.iter().all(|s| ![5, 9].contains(s)), "{seeds:?}");
+    // both an `at` and a `near`, or a seed and a fresh one, is a mistake
+    let (head, _) = h.edit_call(
+        "/api/maps/set",
+        serde_json::json!({"list": list, "id": "p1", "set": {"at": "(1sq, 1sq)", "near": {"x": 1.0, "y": 1.0}}}),
+    );
+    assert!(head.starts_with("HTTP/1.1 400"), "{head}");
+}

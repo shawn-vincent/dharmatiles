@@ -112,6 +112,16 @@ pub struct ScenePiece {
     pub error: Option<String>,
     /// What the shelf says of the piece (none for a piece with a mistake).
     pub shelf: Option<ShelfMark>,
+    /// The seeds you own of this piece's tile in its system and colour mode, and how many of each.
+    pub owned_seeds: Vec<OwnedSeed>,
+}
+
+/// A seed you own of a tile, and how many prints of it.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct OwnedSeed {
+    pub seed: u64,
+    pub have: u32,
 }
 
 /// What the inventory says of a piece: `have` (a print you own is this piece), `need` (it prints), `other` (you own
@@ -327,6 +337,27 @@ fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, u
     let mut left: BTreeMap<Identity, u32> = BTreeMap::new();
     let (mut have, mut to_print) = (0, 0);
     for p in pieces.iter_mut().filter(|p| p.error.is_none()) {
+        if let Some(l) = &loaded {
+            let mut by: BTreeMap<u64, u32> = BTreeMap::new();
+            let colour = if p.colour == "multi" {
+                Colour::Multi
+            } else {
+                Colour::Single
+            };
+            for q in l.inventory.pieces() {
+                if q.have > 0
+                    && q.id.tile == p.canon
+                    && q.id.system == p.system
+                    && q.id.colour == colour
+                {
+                    *by.entry(q.id.seed).or_insert(0) += q.have;
+                }
+            }
+            p.owned_seeds = by
+                .into_iter()
+                .map(|(seed, have)| OwnedSeed { seed, have })
+                .collect();
+        }
         let id = Identity {
             tile: p.canon.clone(),
             seed: p.seed_used,
@@ -507,6 +538,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
                 .any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
             error: error.clone(),
             shelf: None,
+            owned_seeds: Vec::new(),
         });
         pieces.push(PieceInfo {
             index,
