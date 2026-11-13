@@ -2,8 +2,8 @@
 // whatever you chose last is used for the map and for the tile editor.  The tiles stand on a ground that runs
 // out to a horizon and has a world round it, never in a sky.
 //
-//   wilderness  a mottled green ground with a faint grid (soil seen from below), a horizon of distant blue-grey
-//               mountains under a clear sky shading from pale at the horizon to deep blue overhead
+//   wilderness  a mottled green ground with a faint grid (soil seen from below), a horizon of two ranges of blue-grey
+//               mountains under a clear sky (no pale far range: it read as cloud) shading from pale at the horizon to deep blue overhead
 //   cavern      dark rock floor and walls all round, a warm light over the tiles
 //   table       a wooden tabletop under the tiles, a dim room beyond its edge
 //   plain       nothing: the plate colour and the grid, as the tile view has always looked
@@ -60,11 +60,9 @@ vec3 wild(vec3 d) {
   float t = clamp(el / 1.5708, 0.0, 1.0);
   vec3 col = mix(uHaze, band, smoothstep(0.0, 0.22, t));
   col = mix(col, zenith, smoothstep(0.18, 0.9, t));
-  vec3 far = mix(vec3(0.64, 0.73, 0.83), vec3(0.2, 0.26, 0.4), uNight);
   vec3 mid = mix(vec3(0.52, 0.62, 0.73), vec3(0.15, 0.2, 0.32), uNight);
   vec3 near = mix(vec3(0.4, 0.5, 0.61), vec3(0.1, 0.14, 0.24), uNight);
-  col = ridge(col, th, el, 0.06, 0.17, 2.1, 3.0, far, 1.0);
-  col = ridge(col, th, el, 0.03, 0.13, 3.0, 11.0, mid, 0.5);
+  col = ridge(col, th, el, 0.03, 0.13, 3.0, 11.0, mid, 0.0);
   col = ridge(col, th, el, 0.01, 0.09, 4.3, 23.0, near, 0.0);
   return below(col, el);
 }
