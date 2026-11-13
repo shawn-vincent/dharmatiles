@@ -125,53 +125,16 @@ export function ownedSeeds(inv, p) {
 
 // ---- the inventory on the map ---------------------------------------------------------------------------
 
-/**
- * What the shelf says of each piece: `Map(index -> {state, text})`; state `have` (a print you own is this
- * piece), `need` (it prints), `other` (you own it in the other colour mode: it still prints), `skip`
- * (print=skip).  Copies of one piece share what you own: the first ones, in the order written, are the ones you
- * have.  With no inventory nothing is had and every piece prints.
- */
-export function pills(pieces, inv) {
-  const owned = new Map();
-  const other = new Map();
-  const key = (q, colour = q.colour) => `${q.canon ?? q.tile}|${q.seedUsed ?? q.seed}|${q.system}|${colour}`;
-  for (const q of inv?.pieces || []) {
-    if (!(q.have > 0)) continue;
-    owned.set(`${q.tile}|${q.seed}|${q.system}|${q.colour}`, (owned.get(`${q.tile}|${q.seed}|${q.system}|${q.colour}`) || 0) + q.have);
-    const o = `${q.tile}|${q.seed}|${q.system}|${q.colour === 'multi' ? 'single' : 'multi'}`;
-    other.set(o, (other.get(o) || 0) + q.have);
-  }
-  const out = new Map();
-  for (const p of pieces) {
-    if (p.error) continue;
-    if (p.print === 'skip') { out.set(p.id, { state: 'skip', text: 'left off' }); continue; }
-    const k = key(p);
-    const n = owned.get(k) || 0;
-    if (p.print !== 'always' && inv?.exists && n > 0) {
-      owned.set(k, n - 1);
-      out.set(p.id, { state: 'have', text: 'have' });
-    } else if (inv?.exists && !n && (other.get(k) || 0) > 0) {
-      out.set(p.id, { state: 'other', text: 'to print' });
-    } else out.set(p.id, { state: 'need', text: 'to print' });
-  }
-  return out;
-}
+// What the shelf says of each piece, and how many pieces print, is the program's word (`piece.shelf`,
+// `scene.have`, `scene.toPrint`: crates/dharmatiles/src/preview/scene.rs `mark_shelf`); the page draws it.
 
-/** `{have, toPrint}`: the pieces the inventory leaves off and the pieces that print. */
-export function totals(pieces, inv) {
-  const m = pills(pieces, inv);
-  let have = 0, toPrint = 0;
-  for (const v of m.values()) {
-    if (v.state === 'have') have += 1;
-    else if (v.state !== 'skip') toPrint += 1;
-  }
-  return { have, toPrint };
-}
+/** `Map(id -> {state, text})` of what the program says of each piece with a word: have, need, other or skip. */
+export const marks = (pieces) => new Map(pieces.filter((p) => p.shelf).map((p) => [p.id, p.shelf]));
 
-/** `3 in inventory · 11 to print`, or `11 to print` where there is no inventory. */
-export function totalsText(pieces, inv) {
-  const { have, toPrint } = totals(pieces, inv);
-  return inv?.exists ? `${have} in inventory · ${toPrint} to print` : `${toPrint} to print`;
+/** `3 in inventory · 11 to print`, or `11 to print` where there is no inventory: the program's numbers, said. */
+export function totalsText(scene) {
+  const toPrint = scene?.toPrint ?? 0;
+  return scene?.shelfExists ? `${scene.have} in inventory · ${toPrint} to print` : `${toPrint} to print`;
 }
 
 // ---- detail by distance ---------------------------------------------------------------------------------

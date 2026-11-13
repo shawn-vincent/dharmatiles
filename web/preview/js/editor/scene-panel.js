@@ -40,7 +40,7 @@ export function contextLines() {
   const placed = ps.filter((p) => p.at).length;
   const tray = ps.length - placed;
   return [
-    `${plural(placed, 'piece')} on the map${tray ? ` · ${tray} in the tray` : ''} · ${M.totalsText(ps, server.get().inventory)}`,
+    `${plural(placed, 'piece')} on the map${tray ? ` · ${tray} in the tray` : ''} · ${M.totalsText(sc)}`,
     sc ? `${systemName(sc.system)} · ${sc.printer}${sc.grid ? ` · ${sc.grid.cols} × ${sc.grid.rows} squares` : ''}` : 'Reading the map…',
   ];
 }
@@ -98,12 +98,11 @@ function groups(ps) {
 
 function mapLevel(body, ro) {
   const ps = pieces();
-  const inv = server.get().inventory;
-  const states = M.pills(ps, inv);
+  const sc = sceneNow();
+  const states = M.marks(ps);
   const sum = section('On the map');
   const line = el('p', 'inv-sum');
-  const { have, toPrint } = M.totals(ps, inv);
-  line.append(el('b', null, exists(inv) ? `${have} in inventory` : 'No inventory yet'), document.createTextNode(` · ${toPrint} to print`));
+  line.append(el('b', null, sc?.shelfExists ? `${sc.have} in inventory` : 'No inventory yet'), document.createTextNode(` · ${sc?.toPrint ?? 0} to print`));
   sum.append(line);
   const row = el('div', 'mp-row');
   row.append(
@@ -159,7 +158,7 @@ function mapLevel(body, ro) {
 function pieceLevel(body, ro) {
   const sel = selected();
   const inv = server.get().inventory;
-  const states = M.pills(pieces(), inv);
+  const states = M.marks(pieces());
   const p = sel[0];
   const many = sel.length > 1;
   const sc = sceneNow();

@@ -15,7 +15,7 @@ const PRINTERS = [{ name: 'default', label: 'Default' }, { name: 'bambu/x1c', la
 function fakeProgram(id, pieces) {
   const p = { id, rev: 1, pieces: structuredClone(pieces), printer: 'default', seq: 0, refused: 0 };
   p.sceneOf = () => ({
-    docRev: p.rev, map: true, printer: p.printer, system: 'db', colour: 'single',
+    docRev: p.rev, map: true, placed: p.pieces.length, printer: p.printer, system: 'db', colour: 'single',
     pieces: p.pieces.map((q) => ({ id: q.id, name: q.id, tileId: 't1', seed: null, system: 'db', canon: 'lib:t', seedUsed: 1, colour: 'single', print: 'missing', at: [q.x * 35, 0], rot: q.rot, size: [35, 35], sq: 35, bottomMm: 0, count: 1, error: null })),
   });
   p.platesOf = () => ({ printer: p.printer, label: PRINTERS.find((x) => x.name === p.printer).label, pieces: p.pieces.length, rev: p.rev });
@@ -89,8 +89,8 @@ function views(state, selection = []) {
     pieces: ps.map((p) => [p.id, p.rot, p.at?.[0]]),
     selected: selectedOf(selection, ps).map((p) => p.id),
     printer: printerOf(state, PRINTERS, { map: true }),
-    chip: chipOf(ps, null),
-    verdict: verdictOf(ps, null),
+    chip: chipOf(state?.plan?.scene ?? null),
+    verdict: verdictOf(state?.plan?.scene ?? null),
   };
 }
 

@@ -276,7 +276,7 @@ function cameraMoved() {
 /** What the status line says of the map: `{verdict, counts}`. */
 export function statusLines() {
   const { counts } = sceneStore.get();
-  const verdict = verdictOf(pieces(), server.get().inventory);
+  const verdict = verdictOf(sceneNow());
   const notFull = counts.low + counts['super-low'] + counts.none;
   const parts = [];
   if (notFull) parts.push('low · not yet checked');
@@ -286,7 +286,7 @@ export function statusLines() {
 }
 
 /** The title bar's chip: `3 in inventory · 11 to print`. */
-export const chip = () => chipOf(pieces(), server.get().inventory);
+export const chip = () => chipOf(sceneNow());
 
 // ---- pills on the pieces -------------------------------------------------------------------------------
 
@@ -298,7 +298,7 @@ function drawTags() {
   const box = $('mpills');
   if (!mounted || !pillsOn) { if (box.childElementCount) { box.replaceChildren(); tags.clear(); } return; }
   const ps = pieces().filter((p) => p.at && !p.error);
-  const states = M.pills(ps, server.get().inventory);
+  const states = M.marks(ps);
   const live2 = new Set();
   for (const p of ps) {
     const st = states.get(p.id);

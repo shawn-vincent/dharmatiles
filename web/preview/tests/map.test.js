@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BUDGET, atWord, bounds, chooseTiers, footprint, freshSeed, bottomWords, matrixOf, nearestFree, overlaps, ownedSeeds, pills, snapSquares, staleKeys, tierCounts, toWorld, totals, totalsText, turned, wantedTier,
+  BUDGET, atWord, bounds, chooseTiers, footprint, freshSeed, bottomWords, matrixOf, nearestFree, overlaps, ownedSeeds, marks, snapSquares, staleKeys, tierCounts, toWorld, totalsText, turned, wantedTier,
 } from '../js/map-model.js';
 
 const piece = (over = {}) => ({
@@ -103,25 +103,12 @@ test('the seeds you own are of that tile, system and colour mode', () => {
   assert.deepEqual(ownedSeeds(inv, piece({ colour: 'single' })), [{ seed: 8, have: 1 }]);
 });
 
-test('copies of one piece share what you own, and each state is said', () => {
-  const ps = [
-    piece({ id: 'p0' }), piece({ id: 'p1' }), piece({ id: 'p2' }),
-    piece({ id: 'p3', seedUsed: 8 }), piece({ id: 'p4', seedUsed: 44 }), piece({ id: 'p5', print: 'skip' }), piece({ id: 'p6', print: 'always' }),
-    piece({ id: 'p7', error: 'no such tile' }),
-  ];
-  const m = pills(ps, inv);
-  assert.deepEqual(['p0', 'p1', 'p2'].map((i) => m.get(i).state), ['have', 'have', 'need']);
-  // single colour owned, multicolour wanted: it prints, and says so
-  assert.equal(m.get('p3').state, 'other');
-  assert.equal(m.get('p4').state, 'need');
-  assert.equal(m.get('p5').state, 'skip');
-  // print=always prints whatever you have
-  assert.equal(m.get('p6').state, 'need');
-  assert.equal(m.has('p7'), false);
-  assert.deepEqual(totals(ps, inv), { have: 2, toPrint: 4 });
-  assert.equal(totalsText(ps, inv), '2 in inventory · 4 to print');
-  assert.equal(totalsText(ps, { exists: false }), '6 to print');
-  assert.equal(totalsText([], null), '0 to print');
+test('the shelf\'s word on each piece is the program\'s, and the totals say its numbers', () => {
+  const ps = [{ id: 'a', shelf: { state: 'have', text: 'have' } }, { id: 'b', shelf: { state: 'need', text: 'to print' } }, { id: 'c' }];
+  assert.deepEqual([...marks(ps).keys()], ['a', 'b']);
+  assert.equal(totalsText({ shelfExists: true, have: 2, toPrint: 4 }), '2 in inventory · 4 to print');
+  assert.equal(totalsText({ shelfExists: false, have: 0, toPrint: 6 }), '6 to print');
+  assert.equal(totalsText(null), '0 to print');
 });
 
 test('a piece is drawn at the tier its size wants, held under the budget by lowering the smallest first', () => {

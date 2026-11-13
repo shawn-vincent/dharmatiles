@@ -925,3 +925,47 @@ fn the_first_edit_of_a_file_without_ids_writes_ids_on_every_piece_and_says_so_on
     );
     assert!(b.get("note").is_none_or(Value::is_null), "{b}");
 }
+
+#[test]
+fn the_scene_says_which_pieces_the_shelf_leaves_off_and_how_many_print() {
+    let h = start_home("shelf", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
+    // no inventory: nothing is had, every piece prints
+    let t = h.wait("town.dmap", "the scene", |t| {
+        t["plan"]["scene"]["pieces"]
+            .as_array()
+            .is_some_and(|p| p.len() == 3)
+    });
+    let sc = &t["plan"]["scene"];
+    assert_eq!(sc["shelfExists"], false);
+    assert_eq!(
+        (sc["have"].as_u64(), sc["toPrint"].as_u64()),
+        (Some(0), Some(3))
+    );
+    assert_eq!(sc["pieces"][0]["shelf"]["state"], "need");
+    // one good print of the tile's own seed: the first piece of that seed in the order written is the one you have
+    h.ok(
+        "/api/inventory/have",
+        serde_json::json!({"tile": h.id("glade.dtile"), "colour": "single", "on": "2026-11-12"}),
+    );
+    let t = h.wait("town.dmap", "the shelf", |t| {
+        t["plan"]["scene"]["shelfExists"] == true
+    });
+    let sc = &t["plan"]["scene"];
+    let state = |i: usize| {
+        sc["pieces"][i]["shelf"]["state"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(
+        (state(0), state(1), state(2)),
+        ("have".to_owned(), "need".to_owned(), "need".to_owned()),
+        "{sc}"
+    );
+    assert_eq!(
+        (sc["have"].as_u64(), sc["toPrint"].as_u64()),
+        (Some(1), Some(2))
+    );
+    // a piece left off by its own word is neither
+    assert_eq!(sc["pieces"][0]["shelf"]["text"], "have");
+}

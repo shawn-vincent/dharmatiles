@@ -200,8 +200,7 @@ export function variants(scope) {
     if (scope === 'piece') who = sel;
     else if (scope === 'tile') who = all.filter((p) => sel.some((s) => s.canon === p.canon));
     else if (scope === 'missing') {
-      const m = M.pills(ps, server.get().inventory);
-      who = all.filter((p) => ['need', 'other'].includes(m.get(p.id)?.state));
+      who = all.filter((p) => ['need', 'other'].includes(p.shelf?.state));
     } else who = all;
     who = who.filter((p) => p.print !== 'skip' || scope !== 'missing');
     if (!who.length) { toast(scope === 'missing' ? 'Every piece on the map is on your shelf: nothing to change' : 'No pieces to change'); return null; }

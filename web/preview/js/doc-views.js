@@ -43,10 +43,10 @@ export function targetWordsOf(doc, { system, printer }) {
 }
 
 /** The title bar's chip for a map: `3 in inventory · 11 to print`. */
-export const chipOf = (pieces, inventory) => M.totalsText(pieces, inventory);
+export const chipOf = (scene) => M.totalsText(scene);
 
 /** The status line's verdict on a map: how many pieces, and what they come to. */
-export const verdictOf = (pieces, inventory) => {
-  const placed = pieces.filter((p) => p.at);
-  return `${placed.length} piece${placed.length === 1 ? '' : 's'} · ${M.totalsText(pieces, inventory)}`;
+export const verdictOf = (scene) => {
+  const placed = scene?.placed ?? 0;
+  return `${placed} piece${placed === 1 ? '' : 's'} · ${M.totalsText(scene)}`;
 };

@@ -404,6 +404,14 @@ placed: number,
  */
 bounds: [number, number, number, number] | null, heights: Array<HeightName>, 
 /**
+ * An inventory exists, so the shelf's word on each piece means something.
+ */
+shelfExists: boolean, 
+/**
+ * The pieces the inventory leaves off (`shelf.state` is `have`) and the pieces that print.
+ */
+have: number, toPrint: number, 
+/**
  * `single` or `multi`.
  */
 colour: string, system: string, printer: string, };
@@ -432,9 +440,15 @@ sq: number,
 /**
  * Width and depth, mm.
  */
-size: [number, number], at: [number, number] | null, rot: number | null, bottomMm: number, bottom: string | null, print: string, count: number, pinned: boolean, error: string | null, };
+size: [number, number], at: [number, number] | null, rot: number | null, bottomMm: number, bottom: string | null, print: string, count: number, pinned: boolean, error: string | null, 
+/**
+ * What the shelf says of the piece (none for a piece with a mistake).
+ */
+shelf: ShelfMark | null, };
 
 type SessionRes = { token: string, };
+
+type ShelfMark = { state: string, text: string, };
 
 type SketchRef = { id: number, rough: boolean, };
 

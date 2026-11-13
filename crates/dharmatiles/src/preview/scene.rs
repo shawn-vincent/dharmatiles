@@ -41,6 +41,11 @@ pub struct SceneJson {
     /// `[x0, y0, x1, y1]` of the placed pieces, mm, y down.
     pub bounds: Option<[f64; 4]>,
     pub heights: Vec<HeightName>,
+    /// An inventory exists, so the shelf's word on each piece means something.
+    pub shelf_exists: bool,
+    /// The pieces the inventory leaves off (`shelf.state` is `have`) and the pieces that print.
+    pub have: usize,
+    pub to_print: usize,
     /// `single` or `multi`.
     pub colour: String,
     pub system: String,
@@ -105,6 +110,18 @@ pub struct ScenePiece {
     pub count: u32,
     pub pinned: bool,
     pub error: Option<String>,
+    /// What the shelf says of the piece (none for a piece with a mistake).
+    pub shelf: Option<ShelfMark>,
+}
+
+/// What the inventory says of a piece: `have` (a print you own is this piece), `need` (it prints), `other` (you own
+/// it in the other colour mode: it still prints), `skip` (`print=skip`).
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfMark {
+    pub state: String,
+    pub text: String,
 }
 
 /// A note about the scene for the message stream: said where it was found.
@@ -297,6 +314,56 @@ fn colour_of(list: &PrintList, printer: &str, home: Option<&Path>) -> &'static s
     dt_eval::plates::colour_of(mode).word()
 }
 
+/// Say what the shelf holds of each piece, in the order written: copies of one piece share what you own, so the first
+/// ones are the ones you have.  With no inventory nothing is had and every piece prints.  Gives whether an inventory
+/// exists, how many pieces it leaves off and how many print.
+///
+/// An inventory that does not read counts as none here: the snapshot says what is wrong with it.
+fn mark_shelf(pieces: &mut [ScenePiece], home: Option<&Path>) -> (bool, usize, usize) {
+    use dt_doc::inventory::{Colour, Identity, Shelf};
+    let loaded = home.and_then(|h| dt_eval::inventory::load(h).ok().flatten());
+    let shelf = loaded.as_ref().map(|l| Shelf::of(&l.inventory));
+    let exists = shelf.is_some();
+    let mut left: BTreeMap<Identity, u32> = BTreeMap::new();
+    let (mut have, mut to_print) = (0, 0);
+    for p in pieces.iter_mut().filter(|p| p.error.is_none()) {
+        let id = Identity {
+            tile: p.canon.clone(),
+            seed: p.seed_used,
+            system: p.system.clone(),
+            colour: if p.colour == "multi" {
+                Colour::Multi
+            } else {
+                Colour::Single
+            },
+        };
+        let mark = |state: &str, text: &str| ShelfMark {
+            state: state.to_owned(),
+            text: text.to_owned(),
+        };
+        if p.print == "skip" {
+            p.shelf = Some(mark("skip", "left off"));
+            continue;
+        }
+        let n = *left
+            .entry(id.clone())
+            .or_insert_with(|| shelf.as_ref().map_or(0, |s| s.have(&id)));
+        let other = shelf.as_ref().map_or(0, |s| s.other_colour(&id));
+        if p.print != "always" && exists && n > 0 {
+            left.insert(id, n - 1);
+            p.shelf = Some(mark("have", "have"));
+            have += 1;
+        } else if exists && n == 0 && other > 0 {
+            p.shelf = Some(mark("other", "to print"));
+            to_print += 1;
+        } else {
+            p.shelf = Some(mark("need", "to print"));
+            to_print += 1;
+        }
+    }
+    (exists, have, to_print)
+}
+
 /// Read a map: its pieces' tiles, places and heights.  No tile is built.
 pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> Scene {
     let base = shared.options();
@@ -439,6 +506,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
                 .iter()
                 .any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
             error: error.clone(),
+            shelf: None,
         });
         pieces.push(PieceInfo {
             index,
@@ -458,7 +526,11 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         rows: g.rows,
     });
     let bounds = (placed > 0).then(|| [lo[0], lo[1], hi[0], hi[1]]);
+    let (shelf_exists, have, to_print) = mark_shelf(&mut out, home);
     let json = SceneJson {
+        shelf_exists,
+        have,
+        to_print,
         doc_rev: rev,
         map: is_map(list),
         grid,
