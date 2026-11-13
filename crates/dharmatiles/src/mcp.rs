@@ -62,6 +62,26 @@ fn is_json(ctype: &str) -> bool {
         .is_some_and(|t| t.trim().eq_ignore_ascii_case("application/json"))
 }
 
+/// After an answer given before the request was read to its end (a refusal):
+/// say no more, then read and drop what the client is still sending, so the
+/// close does not reset the connection and lose the answer on its way.
+fn finish_early(conn: &mut std::net::TcpStream) {
+    use std::io::Read;
+    // best effort: the answer is already written; a client that has gone needs nothing more
+    if conn.shutdown(std::net::Shutdown::Write).is_err() {
+        return;
+    }
+    if conn
+        .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+        .is_err()
+    {
+        return;
+    }
+    let max = u64::try_from(crate::preview::http::MAX_BODY).unwrap_or(u64::MAX);
+    // what is read is thrown away; a read error only ends the draining
+    if std::io::copy(&mut conn.take(max), &mut std::io::sink()).is_err() {}
+}
+
 fn http_one(mut conn: std::net::TcpStream) {
     use std::io::Read;
     let reply = |conn: &mut std::net::TcpStream, status: &str, body: &str| {
@@ -81,6 +101,7 @@ fn http_one(mut conn: std::net::TcpStream) {
             "400 Bad Request",
             &error(&Value::Null, -32600, &why).to_string(),
         );
+        finish_early(conn);
     };
     let clone = match conn.try_clone() {
         Ok(c) => c,
@@ -128,6 +149,7 @@ fn http_one(mut conn: std::net::TcpStream) {
     let refuse_as = |conn: &mut std::net::TcpStream, status: &str, why: &str| {
         eprintln!("error: dharmatiles mcp: refused: {why}");
         reply(conn, status, &error(&Value::Null, -32600, why).to_string());
+        finish_early(conn);
     };
     let refuse = |conn: &mut std::net::TcpStream, why: &str| refuse_as(conn, "403 Forbidden", why);
     if !crate::preview::http::loopback(&host) {
@@ -162,6 +184,7 @@ fn http_one(mut conn: std::net::TcpStream) {
     }
     if !first.starts_with("POST /mcp") {
         reply(&mut conn, "404 Not Found", "{}");
+        finish_early(&mut conn);
         return;
     }
     let mut body = vec![0u8; len];
@@ -460,6 +483,8 @@ mod tests {
         write!(c, "{head}\r\n{body}").unwrap();
         let mut all = String::new();
         c.read_to_string(&mut all).unwrap();
+        // a client that has its answer goes, as a real one does
+        drop(c);
         server.join().unwrap();
         all
     }
