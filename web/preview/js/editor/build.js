@@ -1,3 +1,4 @@
+// @ts-check
 // The build as it goes: the last mesh fades and each stage's sketch stands in
 // until the finished mesh lands, and the camera follows what is known of the
 // tile's size meanwhile.  Follows the server store (the tile's status and
@@ -53,7 +54,7 @@ function showBuild() {
   // that restarted or a request lost while it was down
   if (t.status === 'idle' && live && asked !== `${t.id}|${epoch}`) { asked = `${t.id}|${epoch}`; host.build(t.id); }
   const shown = shownVersion(t);
-  const current = t.status === 'ready' && t.mesh_version === shown;
+  const current = t.status === 'ready' && t.meshVersion === shown;
   // what is shown is not the tile as it is: a build is on its way, or the server is away
   viewer.setStale(shown != null && (!live || (!view.get().draft && !current)));
   syncSketches(t);
@@ -61,7 +62,7 @@ function showBuild() {
 
 async function syncSketches(t) {
   // a finished mesh on its way: the sketches stay until it lands
-  if (t.status === 'ready' && t.mesh_version != null && shownVersion(t) !== t.mesh_version) return;
+  if (t.status === 'ready' && t.meshVersion != null && shownVersion(t) !== t.meshVersion) return;
   const gen = ++sketchGen, { epoch } = server.get();
   const list = view.get().draft ? [] : (t.sketches || []);
   const key = (k) => `${epoch}:${k.id}`;
@@ -105,7 +106,7 @@ export function followBuild() {
   if (!following || !t || following.id !== t.id) return;
   // a map frames its own pieces (the scene's box), never the plan's size (a print list's plan is the printer's bed)
   if (viewer.sceneOn) return;
-  const [w, h] = t.plan?.size_mm || [35, 35];
+  const [w, h] = t.plan?.sizeMm || [35, 35];
   const b = { lo: [0, 0, 0], hi: [w, h, 8] };
   for (const k of viewer.sketchBounds?.() || []) {
     for (let a = 0; a < 3; a++) { b.lo[a] = Math.min(b.lo[a], k.lo[a]); b.hi[a] = Math.max(b.hi[a], k.hi[a]); }

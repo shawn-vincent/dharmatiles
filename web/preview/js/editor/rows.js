@@ -1,3 +1,4 @@
+// @ts-check
 // Edits made from the structure (docs/preview.html, "The panel"): what a row of the tile
 // level does to the source.  Add an entry at a place in the stack (what can stand there is the
 // program's answer: the plan's), hide, delete and rename a row, move a stack row to another
@@ -36,7 +37,7 @@ function refused(what, r) {
 export async function setControl(at, name, value) {
   if (!doc.get().writable) return makeMine({ run: () => setControl(at, name, value) });
   if (!spansUsable()) return;
-  const r = await host.edit({ text: doc.get().text, at, name, value });
+  const r = await host.edit({ op: 'set', text: doc.get().text, at, name, value });
   if (r.status !== 200) { refused(`Could not change ${name}`, r); return; }
   edited(r.body.text, 'lens', `Changed ${name}`);
   return true;
@@ -155,10 +156,11 @@ export function stepEntry(from, dir) {
 async function insertEntry(place, offer) {
   if (!doc.get().writable) return makeMine({ run: () => insertEntry(place, offer) });
   if (!spansUsable()) return;
+  /** @type {import('../api').EditReq} */
   const body = place.place === 'before'
-    ? { op: 'insert', place: 'before', at: place.at, node: offer.node }
-    : { op: 'insert', place: 'stack', node: offer.node };
-  const r = await host.edit({ text: doc.get().text, ...body });
+    ? { op: 'insert', place: 'before', at: place.at, node: offer.node, text: doc.get().text }
+    : { op: 'insert', place: 'stack', node: offer.node, text: doc.get().text };
+  const r = await host.edit(body);
   if (r.status !== 200) { refused(`Could not add ${offer.name}`, r); return; }
   doc.set({ selectAt: r.body.at });
   edited(r.body.text, 'lens', `Added ${offer.name}`, byteToIndex(r.body.text, r.body.at));

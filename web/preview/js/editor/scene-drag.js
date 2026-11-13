@@ -36,7 +36,7 @@ function onDown(e) {
   // what is picked up now, as it stands now: the drag follows these ids and puts them down by id
   const ps = pieces().filter((p) => sel.includes(p.id) && p.at);
   if (!ps.length) return;
-  const z = ps[0].bottom_mm || 0;
+  const z = ps[0].bottomMm || 0;
   const pt = mapPoint(e, z);
   if (!pt) return;
   // the orbit does not take this press: the controls are off until it is let go

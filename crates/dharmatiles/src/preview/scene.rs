@@ -20,9 +20,92 @@ use std::path::Path;
 
 use dt_doc::map::{PrintList, parse_height};
 use dt_eval::{Diag, Files, Options, Tier};
-use serde_json::{Value, json};
+use serde::Serialize;
 
 use super::{Shared, lock};
+
+/// A map as the page reads it (`scene`): pieces, grid, bounds, heights.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct SceneJson {
+    /// The revision of the file this is the reading of.
+    pub doc_rev: u64,
+    /// A map (placed pieces or a grid) rather than a print list.
+    pub map: bool,
+    pub grid: Option<SceneGrid>,
+    pub about: Option<String>,
+    pub pieces: Vec<ScenePiece>,
+    /// How many pieces are placed.
+    pub placed: usize,
+    /// `[x0, y0, x1, y1]` of the placed pieces, mm, y down.
+    pub bounds: Option<[f64; 4]>,
+    pub heights: Vec<HeightName>,
+    /// `single` or `multi`.
+    pub colour: String,
+    pub system: String,
+    pub printer: String,
+}
+
+impl SceneJson {
+    /// The scene as JSON, for the places that carry it inside another document.
+    #[allow(clippy::expect_used)]
+    pub(super) fn value(&self) -> serde_json::Value {
+        serde_json::to_value(self).expect("a scene is plain data")
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct SceneGrid {
+    pub cols: u32,
+    pub rows: u32,
+}
+
+/// A standard or the map's own height name, in dmm.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct HeightName {
+    pub name: String,
+    pub dmm: f64,
+    pub own: bool,
+}
+
+/// One piece of a map.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct ScenePiece {
+    /// The id the piece has, or the one the first edit of the file will write on it.
+    pub id: String,
+    /// Whether the file has written it yet.
+    pub written: bool,
+    /// The tile as the piece names it.
+    pub tile: String,
+    pub canon: String,
+    pub name: String,
+    /// The listed tile's id, when the tile is listed.
+    pub tile_id: Option<String>,
+    pub path: String,
+    pub seed: Option<u64>,
+    pub seed_used: u64,
+    pub system: String,
+    pub colour: String,
+    pub cols: u32,
+    pub rows: u32,
+    /// One square, mm.
+    pub sq: f64,
+    /// Width and depth, mm.
+    pub size: [f64; 2],
+    pub at: Option<[f64; 2]>,
+    pub rot: Option<i64>,
+    pub bottom_mm: f64,
+    pub bottom: Option<String>,
+    pub print: String,
+    pub count: u32,
+    pub pinned: bool,
+    pub error: Option<String>,
+}
 
 /// A note about the scene for the message stream: said where it was found.
 #[derive(Clone, Debug)]
@@ -111,7 +194,7 @@ pub(super) struct PieceInfo {
 
 /// What a map says: for the page, and what the program goes on to do.
 pub(super) struct Scene {
-    pub json: Value,
+    pub json: SceneJson,
     pub pieces: Vec<PieceInfo>,
     /// Mistakes in a piece's own words (a height that names nothing), at their text.
     pub diags: Vec<Diag>,
@@ -182,18 +265,20 @@ fn names_of(list: &PrintList) -> BTreeMap<String, String> {
 }
 
 /// The standard height names with their value in dmm, for the page's chooser.
-fn height_names(list: &PrintList) -> Value {
+fn height_names(list: &PrintList) -> Vec<HeightName> {
     let names = names_of(list);
     let own: Vec<&str> = list.lets.iter().map(|l| l.name.value.as_str()).collect();
-    Value::Array(
-        names
-            .keys()
-            .filter_map(|k| {
-                let v = name_mm(k, &names, dt_doc::schema::SQUARE_MM, 0).ok()?;
-                Some(json!({"name": k, "dmm": v, "own": own.contains(&k.as_str())}))
+    names
+        .keys()
+        .filter_map(|k| {
+            let v = name_mm(k, &names, dt_doc::schema::SQUARE_MM, 0).ok()?;
+            Some(HeightName {
+                name: k.clone(),
+                dmm: v,
+                own: own.contains(&k.as_str()),
             })
-            .collect(),
-    )
+        })
+        .collect()
 }
 
 /// The mode a list's plates would be in, as `single` or `multi` (the
@@ -326,29 +411,35 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             .trim_end_matches(".dtile")
             .to_owned();
         let listed = tiles.contains(&tpath);
-        out.push(json!({
-            // the id the piece has, or the one the first edit of the file will write on it
-            "id": ids[index],
-            "written": p.id.is_some(),
-            "tile": p.tile.value,
-            "canon": canon,
-            "name": name,
-            "tile_id": listed.then(|| super::tile_id(&tpath)),
-            "path": tpath,
-            "seed": seed,
-            "seed_used": seed_used,
-            "system": system,
-            "colour": colour,
-            "cols": cols, "rows": rows, "sq": sq, "size": [w, d],
-            "at": at.map(|a| [a.x, a.y]),
-            "rot": p.rot.as_ref().map(|r| r.value),
-            "bottom_mm": bottom_mm,
-            "bottom": p.bottom.as_ref().map(|h| h.value.clone()),
-            "print": p.print.word(),
-            "count": p.count.value,
-            "pinned": list.plates.pins.iter().any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
-            "error": error,
-        }));
+        out.push(ScenePiece {
+            id: ids[index].clone(),
+            written: p.id.is_some(),
+            tile: p.tile.value.clone(),
+            canon,
+            name: name.clone(),
+            tile_id: listed.then(|| super::tile_id(&tpath)),
+            path: tpath.clone(),
+            seed,
+            seed_used,
+            system: system.clone(),
+            colour: colour.to_owned(),
+            cols,
+            rows,
+            sq,
+            size: [w, d],
+            at: at.map(|a| [a.x, a.y]),
+            rot: p.rot.as_ref().map(|r| r.value),
+            bottom_mm,
+            bottom: p.bottom.as_ref().map(|h| h.value.clone()),
+            print: p.print.word().to_owned(),
+            count: p.count.value,
+            pinned: list
+                .plates
+                .pins
+                .iter()
+                .any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),
+            error: error.clone(),
+        });
         pieces.push(PieceInfo {
             index,
             id: Some(ids[index].clone()),
@@ -362,25 +453,24 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         });
     }
     let placed = pieces.iter().filter(|p| p.at.is_some()).count();
-    let grid = list.grid.map(|g| json!({"cols": g.cols, "rows": g.rows}));
-    let bounds = if placed > 0 {
-        json!([lo[0], lo[1], hi[0], hi[1]])
-    } else {
-        Value::Null
-    };
-    let json = json!({
-        "docRev": rev,
-        "map": is_map(list),
-        "grid": grid,
-        "about": list.about,
-        "pieces": out,
-        "placed": placed,
-        "bounds": bounds,
-        "heights": height_names(list),
-        "colour": colour,
-        "system": default_system,
-        "printer": printer,
+    let grid = list.grid.map(|g| SceneGrid {
+        cols: g.cols,
+        rows: g.rows,
     });
+    let bounds = (placed > 0).then(|| [lo[0], lo[1], hi[0], hi[1]]);
+    let json = SceneJson {
+        doc_rev: rev,
+        map: is_map(list),
+        grid,
+        about: list.about.clone(),
+        pieces: out,
+        placed,
+        bounds,
+        heights: height_names(list),
+        colour: colour.to_owned(),
+        system: default_system,
+        printer: printer.clone(),
+    };
     Scene {
         json,
         pieces,

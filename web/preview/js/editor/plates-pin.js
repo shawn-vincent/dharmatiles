@@ -1,3 +1,4 @@
+// @ts-check
 // Pinning a piece on a plate (docs/maps.html, "Pins"): in the plates' view, looking down on the bed, press a
 // piece and drag it; where you let go it is pinned there.  A pin is a line in the map's `plates` block (the
 // piece's id, its plate and where it stands on the bed); the packer keeps a pinned piece where it was dropped and
@@ -7,6 +8,7 @@
 import { $, toast, viewer } from './app.js';
 import { docs, planOf, undoToast } from './docs.js';
 import { isPlatesView, tile, view } from './stores.js';
+import { steps } from '../steps.js';
 
 const plan = () => planOf(tile())?.plates ?? null;
 const topDown = () => viewer.camera.position.clone().sub(viewer.controls.target).normalize().z > 0.93;
@@ -24,13 +26,13 @@ async function change(label, note, step) {
 }
 
 /** Pin the piece (by id) at `x`, `y` (the footprint's north-west corner from the bed's, mm) on plate `plate` (from 1). */
-export const pin = (id, plate, x, y, turn, name) => change('Could not pin the piece', `Pinned ${name} on plate ${plate}`, { name: 'mapsPin', body: { id, plate, x, y, turn } });
+export const pin = (id, plate, x, y, turn, name) => change('Could not pin the piece', `Pinned ${name} on plate ${plate}`, steps.mapsPin({ id, plate, x, y, turn }));
 
 /** Take the pin of a piece away. */
-export const unpin = (id, name) => change('Could not take the pin away', `Took the pin off ${name}`, { name: 'mapsUnpin', body: { id } });
+export const unpin = (id, name) => change('Could not take the pin away', `Took the pin off ${name}`, steps.mapsUnpin({ id }));
 
 /** Take every pin away. */
-export const unpinAll = () => change('Could not take the pins away', 'Took every pin away', { name: 'mapsUnpinAll', body: {} });
+export const unpinAll = () => change('Could not take the pins away', 'Took every pin away', steps.mapsUnpinAll({}));
 
 let drag = null;
 

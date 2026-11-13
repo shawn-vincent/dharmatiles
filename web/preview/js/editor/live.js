@@ -1,3 +1,4 @@
+// @ts-check
 // Live updates: the event stream from the server, written into the server
 // store and nowhere else.  Everything on the page that depends on the
 // server's word subscribes to that store; this part knows no other.
@@ -30,7 +31,7 @@ const reported = new Set();
 function reportFailure(t) {
   const f = t.failure;
   if (!f) return;
-  const key = `${t.id}:${f.context?.at_ms}`;
+  const key = `${t.id}:${f.context?.atMs}`;
   if (reported.has(key)) return;
   reported.add(key);
   showError(`The build of ${t.name} failed`, new Error(`The build of ${t.name} failed`, { cause: new ServerError(f) }));
@@ -61,7 +62,7 @@ export function applySnapshot(m, fromStream = false) {
   m.tiles.forEach(followBuild);
   server.set({
     tiles: m.tiles.map(serverTile), progress: progressOf(m.tiles), roots: m.roots || [], folders: m.folders || [], home: m.home ?? null,
-    system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhang_deg, steepestDeg: m.steepest_deg ?? m.overhang_deg + 10,
+    system: m.system, printer: m.printer || 'default', printers: m.printers || [], overhangDeg: m.overhangDeg, steepestDeg: m.steepestDeg ?? m.overhangDeg + 10,
     inventory: m.inventory ?? null, epoch: m.epoch, ready: true,
   });
 }

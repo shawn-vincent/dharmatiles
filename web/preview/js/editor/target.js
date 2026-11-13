@@ -1,3 +1,4 @@
+// @ts-check
 // The build target: the base system and the printer profile every build is
 // for, as one chip in the title bar.  The server keeps the choice (in the
 // user's home, so the next run starts on it) and builds again for it; this
@@ -13,6 +14,7 @@ import { $, host, toast } from './app.js';
 import { docs, undoToast } from './docs.js';
 import { printerChooser } from './printer-chooser.js';
 import { isMapView, isPlates, server, tile, view } from './stores.js';
+import { steps } from '../steps.js';
 
 const SYSTEMS = { db: 'DungeonBlocks', ol: 'OpenLOCK' };
 
@@ -68,7 +70,7 @@ function render() {
 async function chooseFor(id, name) {
   // a change to the document, like any other: against the revision held, one step of the history; the answer's
   // scene names the new printer, and the chip and the status line read it there at once
-  const r = await docs.edit(id, () => ({ label: 'Could not change the printer', note: `Printer: ${name}`, steps: [{ name: 'platesSet', body: { key: 'printer', value: name } }] }));
+  const r = await docs.edit(id, () => ({ label: 'Could not change the printer', note: `Printer: ${name}`, steps: [steps.platesSet({ key: 'printer', value: name })] }));
   if (r) toast(r.note, () => undoToast(id, r.entry));
 }
 

@@ -42,7 +42,7 @@ function draw(buffer, plate) {
   const mesh = new THREE.Mesh(g, material);
   mesh.frustumCulled = false;
   scene.add(mesh);
-  const lo = p.meta.tile_lo, hi = p.meta.tile_hi;
+  const lo = p.meta.tileLo, hi = p.meta.tileHi;
   const centre = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (Math.max(lo[2], -1) + hi[2]) / 2);
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - Math.max(lo[2], -1));
   const [elev, azim] = [40, -120];

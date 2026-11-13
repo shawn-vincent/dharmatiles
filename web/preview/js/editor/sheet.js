@@ -1,3 +1,4 @@
+// @ts-check
 // The property sheet (the lens): the controls of the selection, and edits
 // made there.
 
@@ -52,6 +53,7 @@ const lens = new Lens($('lens'), {
   detail: (c) => isEntry(view.get().sel) && (c.ranges || c.unit === 'height'),
   openControl: (group, name) => openControl(group, name),
 });
+/** @type {any} */
 const tileLens = new Lens($('lens-tile'), sheetApi);
 tileLens.emptyTitle = 'No tile'; tileLens.emptyText = 'Choose a tile to see what it holds.';
 // the tile node's own controls: shown when nothing is selected, so the sheet is never empty.
@@ -72,7 +74,7 @@ function tileContents() {
       editable: editable() && !!map && doc.get().tileId === view.get().tileId,
     },
     {
-      open: (kind, id) => setSel(kind === 'entry' ? entrySel(id) : markSel(kind, id), { from: 'view' }),
+      open: (kind, id) => setSel(kind === 'entry' ? entrySel(id) : markSel(kind, id), /** @type {any} */ ({ from: 'view' })),
       hover,
       menu: openRowMenu,
       act: rowAction,
@@ -150,12 +152,12 @@ function markModel(kind, m) {
     controls = [nameRow];
     if (rk !== 'places') {
       controls.push(...node.controls.filter((c) => c.name !== 'name').map((c) => (c.name === 'boundedBy' ? { ...c, words: lines } : c)));
-      for (const [n, run] of [['boundedBy', sh.bounded_by], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
+      for (const [n, run] of [['boundedBy', sh.boundedBy], ['fill', sh.fill]]) { const w = runWritten(n, run); if (w) written.push(w); }
     }
     set = (name, value) => {
       if (name === 'name') return renameMark('region', m.name, value);
       if (name === 'boundedBy') {
-        const run = sh.bounded_by;
+        const run = sh.boundedBy;
         if (!value.length) { doc.set({ note: 'a region needs at least one line' }); return null; }
         if (!run?.span) return null;
         return replaceBytes(run.span[0], run.span[1], value.join(' '), true);
@@ -223,7 +225,7 @@ function renderTile() {
   const t = tileModel();
   // a row the arrow keys are on keeps the focus when the rows are drawn again (a message came, a value changed);
   // after a move the keyboard follows the row to where it went (its key may have changed with its place)
-  const was = document.activeElement?.closest?.('#lens-tile .orow');
+  const was = /** @type {HTMLElement | null} */ (document.activeElement?.closest?.('#lens-tile .orow'));
   const wasAt = was ? { kind: was.dataset.kind, id: was.dataset.id } : null;
   const moved = takeFocusIndex();
   if (t) tileLens.show(t); else tileLens.hide();
@@ -255,7 +257,7 @@ function renderProperty(model) {
   const c = g?.schema?.controls?.find((x) => x.name === control.name);
   if (!c) { closeControl(); return; }
   // a value is being typed: the page is not redrawn under it (it is drawn again once the edit is written)
-  const field = document.activeElement;
+  const field = /** @type {HTMLElement} */ (document.activeElement);
   if (root.contains(field) && field.tagName === 'INPUT' && field.dataset.dirty) return;
   const held = root.contains(field) && field.tagName === 'INPUT'; // the field kept the keyboard through its own edit
   const element = g.schema?.name;

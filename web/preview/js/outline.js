@@ -28,7 +28,7 @@ export function regionSummary(m) {
   const sh = m.sheet;
   if (!sh) return 'region';
   const parts = [];
-  if (sh.bounded_by?.text) parts.push(`bounded by ${sh.bounded_by.text}`);
+  if (sh.boundedBy?.text) parts.push(`bounded by ${sh.boundedBy.text}`);
   for (const c of sh.clauses || []) parts.push(clauseTitle(c));
   return parts.join('; ') || 'region';
 }

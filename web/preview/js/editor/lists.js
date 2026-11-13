@@ -1,3 +1,4 @@
+// @ts-check
 // Starting and filling a print list from the editor (docs/plates.html, "In the editor").
 //
 //   * New print list: a button in a folder you own; it asks a name and writes `<name>.dmap`, an empty map laid out
@@ -16,6 +17,7 @@ import { nameField } from './rows.js';
 import { say } from './inventory.js';
 import { docs, undoToast } from './docs.js';
 import { server, view } from './stores.js';
+import { steps } from '../steps.js';
 
 const el = (tag, cls, text) => {
   const x = document.createElement(tag);
@@ -38,8 +40,7 @@ async function openId(id, mode = null) {
 async function call(label, run) {
   try {
     const r = await run();
-    if (r.status !== 200) { failed(label, r); return null; }
-    if (r.body.ok === false) { say(r.body, label); return null; }
+    if (r.status !== 200) { if (!failed(label, r)) say(r, label); return null; }
     return r.body;
   } catch (e) { showError(label, e); return null; }
 }
@@ -103,12 +104,12 @@ export function newList(root, dir, anchor, where, map = false) {
 
 /** Set a piece (by id) of the list `listId` to `count` copies. */
 export async function setCount(listId, id, count) {
-  const r = await docs.edit(listId, () => ({ label: 'Could not change the count', note: `Now ${count}`, steps: [{ name: 'listsCount', body: { id, count } }] }));
+  const r = await docs.edit(listId, () => ({ label: 'Could not change the count', note: `Now ${count}`, steps: [steps.listsCount({ id, count })] }));
   if (r) toast(r.note, () => undoToast(listId, r.entry));
 }
 
 /** Take a piece (by id) out of the list `listId`. */
 export async function removePiece(listId, id, name) {
-  const r = await docs.edit(listId, () => ({ label: 'Could not take the piece out', note: `Took ${name} out of the list`, steps: [{ name: 'listsRemove', body: { id } }] }));
+  const r = await docs.edit(listId, () => ({ label: 'Could not take the piece out', note: `Took ${name} out of the list`, steps: [steps.listsRemove({ id })] }));
   if (r) toast(r.note, () => undoToast(listId, r.entry));
 }

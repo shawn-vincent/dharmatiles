@@ -1,3 +1,4 @@
+// @ts-check
 // The plates view: a print list (`.dmap`) opens on the printer's bed.  The 3D view shows one plate
 // (the program lays it out and builds its meshes: low at first, then full, said in the message stream
 // and the status line); this panel holds the settings that decide the layout, the plates with what is on
@@ -16,6 +17,7 @@ import { removePiece, setCount } from './lists.js';
 import { isInventory, isMapView, isPlates, server, stem, tile, view } from './stores.js';
 import { chooseMode, setChosen } from './scene.js';
 import { unpin, unpinAll } from './plates-pin.js';
+import { steps } from '../steps.js';
 
 const el = (tag, cls, text) => {
   const x = document.createElement(tag);
@@ -49,7 +51,7 @@ async function set(key, value) {
   const t = tile();
   if (!t) return;
   try {
-    const r = await docs.edit(t.id, () => ({ label: `Could not change ${key}`, note: `Set ${key}`, steps: [{ name: 'platesSet', body: { key, value } }] }));
+    const r = await docs.edit(t.id, () => ({ label: `Could not change ${key}`, note: `Set ${key}`, steps: [steps.platesSet({ key, value })] }));
     if (r) { exporting.files = null; toast(r.note, () => undoToast(t.id, r.entry)); }
   } catch (e) { showError(`Could not change ${key}`, e); }
 }
@@ -91,7 +93,7 @@ function modeSection(p, ro) {
   if (p.mode === 'multicolour') {
     sec.append(seg('Group', [['filament', 'By filament', 'Pieces that share filaments go together, then large to small'], ['size', 'By size', 'Large to small, whatever the filaments']], p.group, (v) => set('group', v), ro));
   }
-  const sc = p.slot_check;
+  const sc = p.slotCheck;
   if (p.mode === 'multicolour' && sc) {
     sec.append(el('p', `note ${sc.ok ? 'ok' : 'bad'}`, sc.ok ? `The most any piece needs is ${plural(sc.need, 'filament')}; the printer has ${sc.have}.` : `A piece needs ${sc.need} filaments; the printer has ${sc.have}. Print in single colour or choose a printer with more.`));
   }
@@ -125,7 +127,7 @@ function platesSection(p) {
   sec.append(el('h3', null, 'Plates'));
   const inv = server.get().inventory;
   const totals = plateTotals(p);
-  if (exists(inv) && p.check_inventory !== false) {
+  if (exists(inv) && p.checkInventory !== false) {
     const line = el('p', 'inv-sum');
     line.append(el('b', null, `${totals.held} in inventory`), document.createTextNode(` · ${totals.toPrint} to print`));
     line.title = 'Pieces your inventory already holds are left off the plates; the switch under Inventory prints them anyway';
@@ -147,8 +149,8 @@ function platesSection(p) {
     list.append(b);
   }
   sec.append(list);
-  if (p.grouping_cost) {
-    const n = el('p', 'note warn', `Grouping by filament takes ${plural(p.grouping_cost, 'more plate')} than packing by size. `);
+  if (p.groupingCost) {
+    const n = el('p', 'note warn', `Grouping by filament takes ${plural(p.groupingCost, 'more plate')} than packing by size. `);
     const go = el('button', 'linkish', 'Pack by size only');
     go.type = 'button'; go.onclick = () => set('group', 'size');
     n.append(go);
@@ -223,7 +225,7 @@ function inventorySection(p, ro) {
   const inv = server.get().inventory;
   const sec = el('section', 'pl-sec pl-inv');
   sec.append(el('h3', null, 'Inventory'));
-  const check = p.check_inventory !== false;
+  const check = p.checkInventory !== false;
   sec.append(seg('Print', [['check', 'Only what I don’t have', 'The count, less what your inventory holds of that exact piece (tile, seed, system, colour mode)'], ['ignore', 'Everything', 'Every piece the list names, whatever you have']], check ? 'check' : 'ignore', (v) => set('inventory', v), ro));
   if (!exists(inv)) {
     sec.append(el('p', 'note', 'No inventory yet, so every piece prints. The sheet after a print, or I have this on a tile, makes it.'));
@@ -240,11 +242,11 @@ function inventorySection(p, ro) {
       const w = wantLine(k, mode);
       const r = el('div', `pl-kind${w.caution ? ' caution' : ''}`);
       r.append(el('b', null, name), el('span', 'pl-kw', k.want > k.count ? `${k.want} wanted` : `${k.want}`), el('span', 'pl-kt', w.text));
-      if (k.system) r.title = `${systemName(k.system)}, seed ${k.seed_used}`;
+      if (k.system) r.title = `${systemName(k.system)}, seed ${k.seedUsed}`;
       if (w.caution) r.title = `${r.title || ''}${r.title ? '. ' : ''}You have this tile and seed in the other colour mode; it prints unless you leave it off (print=skip) or switch the mode`;
       rows.append(r);
     };
-    for (const k of p.kinds) if (k.have > 0 || k.other_colour > 0) row(k.name, k, p.mode);
+    for (const k of p.kinds) if (k.have > 0 || k.otherColour > 0) row(k.name, k, p.mode);
     for (const h of p.held ?? []) {
       const r = el('div', 'pl-kind');
       r.append(el('b', null, h.name), el('span', 'pl-kw', `${h.have}`), el('span', 'pl-kt', `have ${h.have} · none to print`));
@@ -278,9 +280,9 @@ function afterSection(p) {
     const row = el('label', `pl-piece${after.bad.has(i) ? ' bad' : ''}`);
     const box = el('input');
     box.type = 'checkbox'; box.checked = !after.bad.has(i);
-    box.setAttribute('aria-label', `${q.name}, seed ${k?.seed_used}: good`);
+    box.setAttribute('aria-label', `${q.name}, seed ${k?.seedUsed}: good`);
     box.onchange = () => { if (box.checked) after.bad.delete(i); else after.bad.add(i); redraw(); };
-    row.append(box, el('b', null, q.name), el('span', 'pl-seed', `seed ${k?.seed_used ?? '?'}`), el('span', 'pl-res', after.bad.has(i) ? 'failed' : 'good'));
+    row.append(box, el('b', null, q.name), el('span', 'pl-seed', `seed ${k?.seedUsed ?? '?'}`), el('span', 'pl-res', after.bad.has(i) ? 'failed' : 'good'));
     sheet.append(row);
   });
   sec.append(sheet);
@@ -303,8 +305,7 @@ async function recordPlate() {
   after.busy = true; redraw();
   try {
     const r = await host.inventoryRecord({ list: t.id, plate: after.plate, failed: [...after.bad], on: today() });
-    if (r.status !== 200) failed('Could not add the plate to the inventory', r);
-    else if (r.body.ok === false) say(r.body, 'Could not add the plate to the inventory');
+    if (r.status !== 200) { if (!failed('Could not add the plate to the inventory', r)) say(r, 'Could not add the plate to the inventory'); }
     else {
       toast(`Added ${plural(r.body.lines.length, 'piece')} to your inventory`);
       after.open = false; after.bad.clear();
@@ -322,7 +323,7 @@ function exportSection(p, ro) {
   const t = tile();
   const b = el('button', 'btn on', exporting.busy && exporting.id === t?.id ? 'Exporting…' : bambu ? 'Export Bambu project' : `Export ${plural(p.layout.length, 'STL')}`);
   b.type = 'button';
-  b.disabled = exporting.busy || !p.planned || (p.mode === 'multicolour' && !p.slot_check?.ok);
+  b.disabled = exporting.busy || !p.planned || (p.mode === 'multicolour' && !p.slotCheck?.ok);
   b.title = bambu ? 'One Bambu Studio project holding every plate' : 'One file per plate: every slicer reads an STL';
   b.onclick = doExport;
   sec.append(b);
@@ -349,7 +350,6 @@ async function doExport() {
   try {
     const r = await host.platesExport(t.id);
     if (r.status !== 200) { exporting.error = r.body?.error || `could not export (${r.status})`; if (r.status !== 0) failed(`Could not export ${stem(t)}`, r); }
-    else if (!r.body.ok) exporting.error = r.body.errors?.[0]?.message || 'the export failed';
     else { exporting.files = r.body.files; exporting.failures = r.body.failures ?? []; after.open = true; after.plate = (plan()?.view ?? 0) + 1; after.bad.clear(); }
   } catch (e) { exporting.error = 'the export failed'; showError(`Could not export ${stem(t)}`, e); }
   exporting.busy = false;

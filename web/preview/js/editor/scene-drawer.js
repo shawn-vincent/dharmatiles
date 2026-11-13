@@ -32,7 +32,7 @@ const isTile = (t) => /\.dtile$/i.test(t.path);
 function startLevel() {
   const { roots, tiles } = server.get();
   const lib = roots.findIndex((r) => r.role === 'library');
-  const first = tiles.find((t) => t.id === sceneNow()?.pieces?.[0]?.tile_id);
+  const first = tiles.find((t) => t.id === sceneNow()?.pieces?.[0]?.tileId);
   const at = first && whereIs(roots, first);
   if (at) return at;
   return { root: lib >= 0 ? lib : 0, dir: '' };
@@ -76,7 +76,7 @@ function card(t, sys) {
   c.title = `${t.path.replace(/^lib:/, '')}\nPress to put it on the map; drag it to choose where`;
   const pic = el('div', 'dr-pic');
   pic.dataset.id = t.id;
-  pic.dataset.key = String(t.mesh_version ?? 0);
+  pic.dataset.key = String(t.meshVersion ?? 0);
   c.append(pic);
   const row = el('div', 'dr-row');
   row.append(el('b', null, stemOf(t.path)), el('span', 'dr-size', sizeLine(t)));

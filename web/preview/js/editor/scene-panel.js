@@ -171,7 +171,7 @@ function pieceLevel(body, ro) {
     title.append(pill(states.get(p.id)?.state ?? 'need'));
   }
   top.append(title);
-  if (!many) top.append(el('p', 'note', `${p.cols}×${p.rows} · ${systemName(p.system)} · seed ${p.seed_used}${p.seed == null ? ' (the tile’s own)' : ''}`));
+  if (!many) top.append(el('p', 'note', `${p.cols}×${p.rows} · ${systemName(p.system)} · seed ${p.seedUsed}${p.seed == null ? ' (the tile’s own)' : ''}`));
   if (!many && p.error) top.append(el('p', 'note bad', p.error));
   if (!many && p.pinned) top.append(el('p', 'note', 'Pinned on a plate: the packer keeps it where it was dropped.'));
   body.append(top);
@@ -201,7 +201,7 @@ function pieceLevel(body, ro) {
     props.append(lv);
     const sd = el('button', 'mp-prop');
     sd.type = 'button';
-    sd.append(el('span', 'pl-lab', 'Seed'), el('span', 'mp-val', String(p.seed_used)), el('span', 'mp-go', '›'));
+    sd.append(el('span', 'pl-lab', 'Seed'), el('span', 'mp-val', String(p.seedUsed)), el('span', 'mp-go', '›'));
     sd.title = 'Which variant of the tile: a new one, or one you already have';
     sd.onclick = () => view.set({ mprop: 'seed' });
     props.append(sd);
@@ -225,7 +225,7 @@ function pieceLevel(body, ro) {
     button('Duplicate', () => E.duplicate(sel.map((q) => q.id)), { disabled: ro, title: 'A copy next to it, with the same seed (D)' }),
     button('Remove', () => E.remove(sel.map((q) => q.id)), { cls: 'btn danger', disabled: ro, title: 'Take it off the map (Backspace)' }),
   );
-  if (!many) ar.prepend(button('Open tile', () => E.openTile(p.id), { cls: 'btn on', disabled: !p.tile_id, title: 'The tile itself, in the tile editor: the map is one click back' }));
+  if (!many) ar.prepend(button('Open tile', () => E.openTile(p.id), { cls: 'btn on', disabled: !p.tileId, title: 'The tile itself, in the tile editor: the map is one click back' }));
   acts.append(ar);
   body.append(acts);
 }
@@ -262,10 +262,10 @@ function propLevel(body, ro) {
     const mine = M.ownedSeeds(server.get().inventory, p);
     const chips = el('div', 'mp-chips');
     for (const o of mine) {
-      const c = el('button', `mp-chip${o.seed === p.seed_used ? ' on' : ''}`, `${o.seed}${o.have > 1 ? ` ×${o.have}` : ''}`);
+      const c = el('button', `mp-chip${o.seed === p.seedUsed ? ' on' : ''}`, `${o.seed}${o.have > 1 ? ` ×${o.have}` : ''}`);
       c.type = 'button';
       c.title = `Same as the ${o.have} you have: this piece is on your shelf`;
-      c.setAttribute('aria-pressed', String(o.seed === p.seed_used));
+      c.setAttribute('aria-pressed', String(o.seed === p.seedUsed));
       c.disabled = ro;
       c.onclick = () => E.setPiece(p.id, { seed: o.seed }, `${p.name}: seed ${o.seed}, same as one you have`);
       chips.append(c);
@@ -277,7 +277,7 @@ function propLevel(body, ro) {
     const row = el('div', 'pl-field');
     row.append(el('span', 'pl-lab', 'Seed'));
     const i = el('input');
-    i.type = 'number'; i.min = '0'; i.step = '1'; i.value = String(p.seed_used); i.disabled = ro;
+    i.type = 'number'; i.min = '0'; i.step = '1'; i.value = String(p.seedUsed); i.disabled = ro;
     i.setAttribute('aria-label', 'Seed');
     i.onkeydown = (e) => { if (e.key === 'Enter' && i.value !== '') E.setPiece(p.id, { seed: Number(i.value) }, `${p.name}: seed ${i.value}`); };
     row.append(i);

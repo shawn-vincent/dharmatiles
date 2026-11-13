@@ -1,3 +1,4 @@
+// @ts-check
 // The document: the text pane, its steps in the one history (editor/docs.js), checking,
 // saving and loading the text, drafts while a value is dragged, and completion.  It keeps the doc
 // store (the text and what is known of it) and follows the view store for
@@ -333,7 +334,7 @@ export async function loadText(file) {
   if (dirty() && texts.file !== want && !(await canLeave())) return false;
   // unsaved changes to this file stay; a new build of the same file brings nothing new
   if (dirty() && texts.file === want && doc.get().tileId === t.id) return true;
-  const key = [t.id, want, t.mesh_version, t.status, t.errors.length].join('|');
+  const key = [t.id, want, t.meshVersion, t.status, t.errors.length].join('|');
   if (loadKey === key) return loading ?? true;
   loadKey = key;
   const token = ++loadToken;
@@ -480,7 +481,7 @@ function renderComp() {
     const d = document.createElement('div');
     d.className = `it fam-${it.family || 'doc'}${i === comp.i ? ' on' : ''}`;
     d.setAttribute('role', 'option');
-    d.setAttribute('aria-selected', i === comp.i);
+    d.setAttribute('aria-selected', String(i === comp.i));
     d.innerHTML = '<i class="sw"></i><span class="nm"></span><span class="ds"></span>';
     d.querySelector('.nm').textContent = it.label;
     d.querySelector('.ds').textContent = it.about || it.kind;
@@ -541,7 +542,7 @@ export function init() {
   });
   // one undo for the whole page: typing and changes made in the view
   addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.target.tagName !== 'INPUT' && (e.key === 'z' || e.key === 'Z' || e.key === 'y')) {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && /** @type {HTMLElement} */ (e.target).tagName !== 'INPUT' && (e.key === 'z' || e.key === 'Z' || e.key === 'y')) {
       e.preventDefault();
       undo(e.key === 'y' || e.shiftKey ? 1 : -1);
     }

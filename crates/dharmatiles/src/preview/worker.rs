@@ -116,14 +116,16 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
     let plan_stack: std::cell::RefCell<Vec<Value>> = std::cell::RefCell::new(Vec::new());
     let finish_with =
         |rec: Recording, errs: &[Diag], failure: Option<fail::ServerError>, scope: Scope| {
-            let errors = errors_json(errs);
-            let failure = failure.map(|f| f.json());
+            let errors = super::api::mistakes(errs);
+            let failure = failure.map(|f| f.detail());
             // said before the tile is: the page sees what this report cleared while the build still shows as running
             shared.report(id, scope, |name| {
                 let mut found = messages::of_errors(errs, scope, id, name, &plan_stack.borrow());
                 if let Some(f) = &failure {
                     for m in found.iter_mut().filter(|m| m.kind == Kind::Server) {
-                        m.data = messages::of_server_error(f, (id, name), "server").data;
+                        m.data =
+                            messages::of_server_error(&fail::to_value(f), (id, name), "server")
+                                .data;
                     }
                 }
                 found
@@ -475,7 +477,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         });
         shared.update(id, |t| {
             t.status = State::Failed;
-            t.errors = errors_json(&[Diag::plain("dt::source", msg)]);
+            t.errors = super::api::mistakes(&[Diag::plain("dt::source", msg)]);
             t.files = files.clone();
         });
     };
@@ -661,8 +663,8 @@ fn lane(shared: &Arc<Shared>, eager: bool, stop: &AtomicBool) {
                         t.status = State::Failed;
                         t.progress = None;
                         t.sketches.clear();
-                        t.errors = errors_json(&[d]);
-                        t.failure = Some(failure.json());
+                        t.errors = super::api::mistakes(&[d]);
+                        t.failure = Some(failure.detail());
                     });
                 }
             }

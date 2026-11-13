@@ -228,6 +228,20 @@ export function dismiss(entry) {
 }
 
 /**
+ * What a reply that is not a success says, in words, for where it was asked: a
+ * document's first mistake with its help (a 422's `errors`), else the program's
+ * message.  The one way the page reads a refusal.
+ */
+export function whyOf(r) {
+  const e = r?.body?.errors?.[0];
+  if (e) return `${e.message}${e.help ? `. ${e.help}` : ''}`;
+  const se = r?.error;
+  if (se?.message) return se.help ? `${se.message}. ${se.help}` : se.message;
+  const b = r?.body?.error;
+  return typeof b === 'string' ? b : b?.message || 'that could not be done';
+}
+
+/**
  * A reply from `host` ({status, body, error}) that is an internal failure
  * goes to the panel, and `failed` is true then: the program's 5xx, or a
  * refusal that gives no reason (the page asked something the program does not

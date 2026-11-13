@@ -1,7 +1,5 @@
 //! The roots the preview lists tiles from: files, folders, the library.
 
-use super::*;
-
 /// Folders a scan never enters (besides hidden ones): build output.
 pub(super) const SKIP_DIRS: [&str; 3] = ["out", "target", "node_modules"];
 
@@ -95,17 +93,21 @@ impl Root {
         }
     }
 
-    pub(super) fn json(&self, index: usize) -> Value {
+    pub(super) fn json(&self, index: usize) -> super::api::RootJson {
         let (kind, path) = match &self.kind {
-            RootKind::Files => ("files", Value::Null),
-            RootKind::Dir(d) => ("dir", json!(d.to_string_lossy())),
-            RootKind::Library(p) => ("library", json!(format!("lib:{p}"))),
+            RootKind::Files => ("files", None),
+            RootKind::Dir(d) => ("dir", Some(d.to_string_lossy().into_owned())),
+            RootKind::Library(p) => ("library", Some(format!("lib:{p}"))),
         };
-        json!({
-            "index": index, "label": self.label, "kind": kind, "path": path,
-            "role": self.role.as_str(), "writable": self.writable(),
-            "exists": self.dir().is_none_or(std::path::Path::is_dir),
-        })
+        super::api::RootJson {
+            index,
+            label: self.label.clone(),
+            kind: kind.to_owned(),
+            path,
+            role: self.role.as_str().to_owned(),
+            writable: self.writable(),
+            exists: self.dir().is_none_or(std::path::Path::is_dir),
+        }
     }
 
     /// Every folder under this place, as paths below it (`a`, `a/b`), sorted:

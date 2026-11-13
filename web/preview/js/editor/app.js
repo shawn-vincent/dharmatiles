@@ -1,3 +1,4 @@
+// @ts-check
 // The editor's core: the host, the 3D view, and the little every part shares
 // (the stores themselves are in stores.js).
 
@@ -5,8 +6,10 @@ import { browserHost } from '../host.js';
 import { Viewer } from '../viewer.js';
 import { view } from './stores.js';
 
+/** An element of the page by its id (the page's own markup: not checked here). @param {string} id @returns {any} */
 export const $ = (id) => document.getElementById(id);
 export const host = browserHost();
+/** The one viewer (its methods come from mixins, so its class is not checked here). @type {any} */
 export const viewer = new Viewer($('canvas'));
 
 let toastTimer = 0;

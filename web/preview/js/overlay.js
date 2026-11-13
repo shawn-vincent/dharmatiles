@@ -211,7 +211,7 @@ export class Overlay {
   /** The ground's height at (x, y) mm. */
   heightAt(x, y) {
     const H = this.heights;
-    if (!H) return (this.viewer.plan?.datum_z ?? 0) + 3.4;
+    if (!H) return (this.viewer.plan?.datumZ ?? 0) + 3.4;
     const i = Math.min(H.nx - 1, Math.max(0, Math.floor((x / H.w) * H.nx)));
     const j = Math.min(H.ny - 1, Math.max(0, Math.floor((y / H.h) * H.ny)));
     return H.z[j * H.nx + i];
@@ -225,7 +225,7 @@ export class Overlay {
 
   /** Where point `q` in squares falls on the canvas at level zero, where regions lie. */
   atZero(q) {
-    return this.viewer.project([q[0] * this.sq, q[1] * this.sq, this.viewer.plan?.datum_z ?? 0]);
+    return this.viewer.project([q[0] * this.sq, q[1] * this.sq, this.viewer.plan?.datumZ ?? 0]);
   }
 
   /**
@@ -235,7 +235,7 @@ export class Overlay {
    */
   drawRegions(scene) {
     const m = this.map, v = this.viewer;
-    const z = v.plan?.datum_z ?? 0;
+    const z = v.plan?.datumZ ?? 0;
     const want = [];
     if (m && scene.show !== false) {
       for (const r of m.regions) {

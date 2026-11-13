@@ -13,17 +13,49 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::Value;
 
+use super::api::ok;
 use super::http::{Request, loopback};
-use super::{Shared, assets, edit, fail};
+use super::{Shared, assets, calls, fail};
+
+/// `GET /api/session`: this run's token, which every `POST` must carry.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct SessionRes {
+    pub token: String,
+}
+
+/// `GET /api/about`: the program's version and the tile formats it reads.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct AboutRes {
+    pub version: String,
+    pub formats: String,
+}
+
+/// `GET /api/tiles/ID/text`: a document's text for the text pane.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct TextRes {
+    pub file: String,
+    pub text: String,
+    pub writable: bool,
+    /// The revision of the file the text is of; 0 for a library file.
+    pub doc_rev: u64,
+}
+
+/// `POST /api/tiles/ID/build`: asked for.
+#[derive(Serialize)]
+pub struct Accepted {}
 
 /// What to send back.
 pub(super) enum Reply {
     Json(&'static str, Value),
     /// A mesh buffer (a tile's, a sketch's or a draft's), 200.
     Bytes(Arc<Vec<u8>>),
-    Text(&'static str, &'static str),
     /// A body made now, with its content type (the messages as text).
     Body(&'static str, &'static str, String),
     Asset(&'static str, Cow<'static, [u8]>),
@@ -77,7 +109,11 @@ fn dev_asset(path: &str) -> Option<(&'static str, Vec<u8>)> {
 /// The reply to one request.
 pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
     if !loopback(&req.host) {
-        return Reply::Text("403 Forbidden", "loopback only");
+        return fail::refused(
+            "403 Forbidden",
+            "the editor answers the loopback address only",
+        )
+        .into();
     }
     let tile = tile_route(&req.path);
     // every POST: this run's token, from a loopback page (the build call too:
@@ -88,14 +124,21 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             .as_deref()
             .is_none_or(super::http::loopback_origin);
         if !origin_ok || req.token.as_deref() != Some(shared.token.as_str()) {
-            return Reply::Text("403 Forbidden", "not this page");
+            return fail::refused(
+                "403 Forbidden",
+                "this call is not from the page this program served (the session token or the origin is wrong)",
+            )
+            .into();
         }
         if !matches!(tile, Some((_, "build"))) {
-            return edit::post(shared, &req.path, &req.body);
+            return calls::dispatch(shared, &req.path, &req.body);
         }
     }
-    let bytes = |b: Option<Arc<Vec<u8>>>, missing: &'static str| {
-        b.map_or(Reply::Text("404 Not Found", missing), Reply::Bytes)
+    let bytes = |b: Option<Arc<Vec<u8>>>, missing: &'static str| -> Reply {
+        b.map_or_else(
+            || fail::refused("404 Not Found", missing).into(),
+            Reply::Bytes,
+        )
     };
     match (req.method.as_str(), req.path.as_str(), tile) {
         ("GET", "/api/events", _) => Reply::Events(Resume {
@@ -117,18 +160,22 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         ("GET", "/api/messages", _) => {
             super::messages::read(shared, &|k| req.param(k).map(str::to_owned))
         }
-        ("GET", "/api/session", _) => Reply::Json(OK, json!({ "token": shared.token })),
-        ("GET", "/api/about", _) => Reply::Json(
-            OK,
-            json!({ "version": env!("DT_ENGINE_VERSION"), "formats": dt_doc::header::formats() }),
-        ),
+        ("GET", "/api/session", _) => ok(&SessionRes {
+            token: shared.token.clone(),
+        })
+        .into(),
+        ("GET", "/api/about", _) => ok(&AboutRes {
+            version: env!("DT_ENGINE_VERSION").to_owned(),
+            formats: dt_doc::header::formats(),
+        })
+        .into(),
         ("GET", "/api/elements", _) => Reply::Json(OK, crate::elements::all_json()),
         ("GET", "/api/language", _) => Reply::Json(OK, crate::elements::language_json()),
         ("GET", "/api/weightings", _) => {
             let (status, body) = crate::weightings::answer(&|k| req.param(k).map(str::to_owned));
             Reply::Json(status, body)
         }
-        ("GET", "/api/tiles", _) => Reply::Json(OK, shared.snapshot()),
+        ("GET", "/api/tiles", _) => ok(&shared.snapshot()).into(),
         ("GET", _, Some((id, "mesh"))) => bytes(shared.mesh(id), "no mesh yet"),
         // `?tier=low` or `?tier=super-low`: the tile's mesh at that tier, from the
         // cache or built, for a map that draws by distance.  Never checked.
@@ -140,8 +187,8 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             "no such sketch",
         ),
         ("GET", _, Some((id, "text"))) => match shared.text(id, req.param("file")) {
-            Ok(Some(v)) => Reply::Json(OK, v),
-            Ok(None) => Reply::Text("404 Not Found", "no such file"),
+            Ok(Some(v)) => ok(&v).into(),
+            Ok(None) => fail::refused("404 Not Found", "no such file").into(),
             Err(e) => {
                 let (status, body) = fail::failure(
                     "500 Internal Server Error",
@@ -155,21 +202,19 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             if let Some(on) = req.param("debug") {
                 shared.set_marks(id, on == "1");
             }
-            let known = shared.want(id);
-            let status = if known {
-                "202 Accepted"
+            if shared.want(id) {
+                Reply::Json("202 Accepted", super::api::ok(&Accepted {}).1)
             } else {
-                "404 Not Found"
-            };
-            Reply::Json(status, json!({"ok": known}))
+                fail::refused("404 Not Found", "no such tile").into()
+            }
         }
         ("GET", p, _) => match dev_asset(p) {
             Some((ctype, body)) => Reply::Asset(ctype, Cow::Owned(body)),
             None => match assets::find(p) {
                 Some((ctype, body)) => Reply::Asset(ctype, Cow::Borrowed(body)),
-                None => Reply::Text("404 Not Found", "not found"),
+                None => fail::refused("404 Not Found", "not found").into(),
             },
         },
-        _ => Reply::Text("405 Method Not Allowed", "no such call"),
+        _ => fail::refused("405 Method Not Allowed", "no such call").into(),
     }
 }

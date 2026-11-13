@@ -1,3 +1,4 @@
+// @ts-check
 // Export: the same build as `dharmatiles build`, written to out/.
 
 import { failed, showError } from '../problems.js';
@@ -64,7 +65,7 @@ function renderTitle() {
   $('tilebtn').title = renameable(t) ? `${t.path}\nClick for the tile; double-click or F2 to rename` : `${t.path}\nClick for the tile`;
   document.title = `${stem(t)} · dharmatiles`;
   const p = planOf(t);
-  $('tileplan').textContent = isInventory(t) ? 'what you have printed' : isPlates(t) ? (isMapView() ? mapChip() : p?.plates?.label ?? '') : p ? `${p.cols}×${p.rows} · ${p.square_mm} mm squares` : '';
+  $('tileplan').textContent = isInventory(t) ? 'what you have printed' : isPlates(t) ? (isMapView() ? mapChip() : p?.plates?.label ?? '') : p ? `${p.cols}×${p.rows} · ${p.squareMm} mm squares` : '';
 }
 
 /** Wire this part of the page (once, at load). */
@@ -99,9 +100,11 @@ export function init() {
         exporting.error = r.body?.error || `could not export (${r.status})`;
         if (r.status !== 0) failed(`Could not export ${stem(t)}`, r);
       }
-      else if (!r.body.ok) exporting.error = r.body.errors?.[0]?.message || (r.body.failures?.length ? `Fails the gate: ${r.body.failures[0]}` : 'the build failed');
-      else exporting.files = r.body.files || [];
-      if (r.status === 200 && r.body.files && !r.body.ok) exporting.files = r.body.files;
+      else if ('files' in r.body) {
+        // written; a tile that fails the printability gate is written too, and says so
+        if (!r.body.ok) exporting.error = r.body.failures.length ? `Fails the gate: ${r.body.failures[0]}` : 'the build failed';
+        exporting.files = r.body.files;
+      }
     } catch (e) {
       exporting.error = 'the export failed';
       showError(`Could not export ${stem(t)}`, e);

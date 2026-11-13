@@ -1,0 +1,49 @@
+// The contract between the server and the page is checked by `tsc` (npm test runs it first): the page's
+// request layer and the files that call it are checked against js/api.d.ts, which a Rust test keeps equal to
+// the server's request and response types.  This test shows the check bites: with a field renamed in the
+// contract, as a rename in Rust would after the file is regenerated, `tsc` fails in the page's own code.
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const tsc = join(root, 'node_modules', '.bin', 'tsc');
+
+/** The page's js tree with `edit` applied to the contract, checked: {status, out}. */
+function checkWith(edit) {
+  const dir = mkdtempSync(join(tmpdir(), 'dt-contract-'));
+  try {
+    cpSync(join(root, 'js'), join(dir, 'js'), { recursive: true });
+    cpSync(join(root, 'tsconfig.json'), join(dir, 'tsconfig.json'));
+    const file = join(dir, 'js', 'api.d.ts');
+    writeFileSync(file, edit(readFileSync(file, 'utf8')));
+    const r = spawnSync(tsc, ['-p', dir], { encoding: 'utf8' });
+    return { status: r.status, out: `${r.stdout}${r.stderr}` };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('the page checks clean against the contract as it is', () => {
+  const r = checkWith((t) => t);
+  assert.equal(r.status, 0, r.out);
+});
+
+test('a field renamed in the contract fails in the page, in the code that used it', () => {
+  // the revision an edit names: every map edit, print list edit and save says it
+  const r = checkWith((t) => t.replaceAll('docRev: number', 'revision: number'));
+  assert.notEqual(r.status, 0, 'tsc passed although the contract no longer has docRev');
+  assert.match(r.out, /docRev/);
+  assert.match(r.out, /js\/(editor\/)?[a-z-]+\.js/, r.out);
+});
+
+test('a route that is not in the contract cannot be called', () => {
+  const r = checkWith((t) => t.replace('"POST /api/maps/set"', '"POST /api/maps/changed"'));
+  assert.notEqual(r.status, 0);
+  assert.match(r.out, /host\.js/);
+});

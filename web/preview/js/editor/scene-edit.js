@@ -1,3 +1,4 @@
+// @ts-check
 // Changing a map (docs/maps.html): placing, moving, turning, raising, duplicating and removing pieces, new
 // variants, and a piece's words.  Every one is an action on the map's document (js/documents.js): its `build`
 // runs when the action's turn comes, looks the pieces up by id in the state it is given, and answers the calls
@@ -13,6 +14,7 @@ import { toast } from './app.js';
 import { docs, planOf, undoToast } from './docs.js';
 import { isMapView, server, tile, view } from './stores.js';
 import { pieceAt, sceneNow, selected, select } from './scene.js';
+import { steps as stepsOf } from '../steps.js';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const listId = () => tile()?.id;
@@ -39,7 +41,7 @@ async function change(build) {
   return r.last;
 }
 
-const batch = (edits) => ({ name: 'mapsBatch', body: { edits } });
+const batch = (edits) => stepsOf.mapsBatch({ edits });
 
 /** Set words of the pieces named in `edits` (each `{id, set}`) in one change; `note` says what was done. */
 export function setWords(label, note, edits) {
@@ -108,7 +110,7 @@ export function duplicate(ids) {
       const sq = M.snapSquares(p, p.at[0], p.at[1]);
       const free = M.nearestFree(taken, p, { x: sq.x + Math.round(p.size[0] / p.sq), y: sq.y });
       taken = [...taken, { ...p, at: [free.x * p.sq, free.y * p.sq] }];
-      steps.push({ name: 'mapsDup', body: { id: p.id, at: M.atWord(free.x, free.y) } });
+      steps.push(stepsOf.mapsDup({ id: p.id, at: M.atWord(free.x, free.y) }));
     }
     if (!steps.length) return null;
     return { label: 'Could not duplicate the piece', note: ps.length === 1 ? `Copied ${ps[0].name}` : asNote('Copied', ps.length), steps };
@@ -124,7 +126,7 @@ export function remove(ids) {
     return {
       label: 'Could not take the piece out',
       note: ps.length === 1 ? `Took ${ps[0].name} out` : asNote('Took out', ps.length),
-      steps: ps.map((p) => ({ name: 'mapsRemove', body: { id: p.id } })),
+      steps: ps.map((p) => stepsOf.mapsRemove({ id: p.id })),
     };
   });
 }
@@ -153,18 +155,18 @@ export function place(id, all = false) {
     const steps = [];
     const left = p.count - n;
     // the tray line keeps the copies not placed; when none are left it becomes the last one placed, so its seed stays
-    steps.push({ name: 'listsCount', body: { id, count: Math.max(left, 1) } });
+    steps.push(stepsOf.listsCount({ id, count: Math.max(left, 1) }));
     const got = new Set();
     const sys = sceneIn(state)?.system;
     for (let k = 0; k < (left > 0 ? n : n - 1); k++) {
       const f = spot();
       const seed = newSeedFor(state, p, got);
       got.add(seed);
-      steps.push({ name: 'mapsAdd', body: { tile: p.tile_id, at: M.atWord(f.x, f.y), rot: 0, seed, ...(p.system && p.system !== sys ? { system: p.system } : {}) } });
+      steps.push(stepsOf.mapsAdd({ tile: p.tileId, at: M.atWord(f.x, f.y), rot: 0, seed, ...(p.system && p.system !== sys ? { system: p.system } : {}) }));
     }
     if (left === 0) {
       const f = spot();
-      steps.push({ name: 'mapsSet', body: { id, set: { at: M.atWord(f.x, f.y), rot: p.rot ?? 0 } } });
+      steps.push(stepsOf.mapsSet({ id, set: { at: M.atWord(f.x, f.y), rot: p.rot ?? 0 } }));
     }
     return { label: 'Could not place the piece', note: n === 1 ? `Placed ${p.name}` : `Placed ${n} × ${p.name}, each with a seed of its own`, steps };
   });
@@ -175,13 +177,13 @@ const sceneIn = (state) => state?.plan?.scene ?? null;
 // ---- seeds and variants -----------------------------------------------------------------------------
 
 /** The seeds on the map for a piece's tile in its system. */
-const usedSeeds = (state, p) => new Set(piecesIn(state).filter((q) => q.canon === p.canon && q.system === p.system).map((q) => q.seed_used));
+const usedSeeds = (state, p) => new Set(piecesIn(state).filter((q) => q.canon === p.canon && q.system === p.system).map((q) => q.seedUsed));
 
 /** A seed for a new piece of `p`'s tile: one you do not own, that the map does not use and that is not the tile's own. */
 export function newSeedFor(state, p, extraUsed = new Set()) {
   const owned = new Set(M.ownedSeeds(server.get().inventory, p).map((s) => s.seed));
   const used = new Set([...usedSeeds(state, p), ...extraUsed]);
-  return M.freshSeed(owned, used, p.seed_used);
+  return M.freshSeed(owned, used, p.seedUsed);
 }
 
 /**
@@ -232,7 +234,7 @@ export async function addTile(t, want = null) {
     const [cols, rows] = sizeSquares(t) ?? [1, 1];
     const inv = server.get().inventory;
     const canon = canonOf(t.path, inv?.home);
-    const probe = { canon, system, colour: sc.colour, size: [cols * sq, rows * sq], sq, at: null, rot: 0, bottom_mm: 0, seed_used: -1 };
+    const probe = { canon, system, colour: sc.colour, size: [cols * sq, rows * sq], sq, at: null, rot: 0, bottomMm: 0, seedUsed: -1 };
     const placed = piecesIn(state).filter((q) => q.at);
     const free = M.nearestFree(placed, probe, want ?? { x: 0, y: 0 });
     if (free.moved < 0) { toast('There is no free place for that tile on the map'); return null; }
@@ -240,13 +242,13 @@ export async function addTile(t, want = null) {
     const onMap = placed.find((q) => q.canon === canon && q.system === system);
     let seed = null;
     if (owned.length || onMap) {
-      const used = new Set(placed.filter((q) => q.canon === canon && q.system === system).map((q) => q.seed_used));
-      seed = M.freshSeed(new Set(owned.map((o) => o.seed)), used, onMap?.seed_used ?? -1);
+      const used = new Set(placed.filter((q) => q.canon === canon && q.system === system).map((q) => q.seedUsed));
+      seed = M.freshSeed(new Set(owned.map((o) => o.seed)), used, onMap?.seedUsed ?? -1);
     }
     return {
       label: 'Could not add the tile',
       note: `Put ${t.name} on the map${seed != null ? ` (seed ${seed}, one you do not have)` : ''}`,
-      steps: [{ name: 'mapsAdd', body: { tile: t.id, at: M.atWord(free.x, free.y), rot: 0, ...(seed != null ? { seed } : {}) } }],
+      steps: [stepsOf.mapsAdd({ tile: t.id, at: M.atWord(free.x, free.y), rot: 0, ...(seed != null ? { seed } : {}) })],
     };
   });
 }
@@ -254,9 +256,9 @@ export async function addTile(t, want = null) {
 /** Take the selected piece's tile into Tile mode, with the map as the place Back returns to. */
 export async function openTile(id) {
   const p = pieceAt(id);
-  if (!p?.tile_id) return;
+  if (!p?.tileId) return;
   const { select: open } = await import('./open.js');
-  if ((await open(p.tile_id)) !== false) view.set({ page: 'edit' });
+  if ((await open(p.tileId)) !== false) view.set({ page: 'edit' });
 }
 
 /** May the map be changed here (a file of yours, not the library's)? */

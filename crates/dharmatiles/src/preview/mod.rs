@@ -69,6 +69,8 @@ impl State {
         }
     }
 }
+pub(crate) mod api;
+mod calls;
 mod docs;
 mod edit;
 pub(crate) mod fail;
@@ -106,8 +108,8 @@ use dt_eval::progress::{StageInfo, Status, Timings, Tracker, plan_stages};
 use dt_eval::{Diag, Options};
 use serde_json::{Value, json};
 
+use crate::tile_json;
 use crate::watch::{Recording, mtime};
-use crate::{errors_json, tile_json};
 
 /// How often the worker looks for work.
 const POLL: Duration = Duration::from_millis(150);
@@ -156,14 +158,14 @@ pub struct Slot {
     scene_notes: Vec<scene::Note>,
     plan: Option<Value>,
     record: Option<Value>,
-    errors: Vec<Value>,
+    errors: Vec<api::Mistake>,
     /// A build that panicked or could not be encoded, as the page gets it
     /// ([`fail::ServerError`]); the page shows it in the error panel.
-    failure: Option<Value>,
+    failure: Option<api::ErrorDetail>,
     mesh: Option<Arc<Vec<u8>>>,
     mesh_version: u64,
     /// The build's progress (a `progress` event's body) while building.
-    progress: Option<Value>,
+    progress: Option<api::Progress>,
     /// Files the last build read, with their times.
     files: BTreeMap<String, Option<SystemTime>>,
     /// Built for a target that is not the chosen one any more.
@@ -229,25 +231,32 @@ impl Slot {
         }
     }
 
-    fn summary(&self) -> Value {
-        json!({
-            "id": self.id,
-            "path": self.path,
-            "name": self.name,
-            "root": self.root,
-            "group": self.group,
-            "size": self.size,
-            "status": self.status.as_str(),
-            "plan": self.plan,
-            "record": self.record,
-            "errors": self.errors,
-            "failure": self.failure,
-            "progress": self.progress,
-            "mesh_version": self.mesh.as_ref().map(|_| self.mesh_version),
-            "mesh_bytes": self.mesh.as_ref().map(|m| m.len()),
-            "sketches": self.sketches.iter().map(|k| json!({"id": k.id, "rough": k.rough})).collect::<Vec<_>>(),
-            "shown": self.shown,
-        })
+    fn summary(&self) -> api::TileSummary {
+        api::TileSummary {
+            id: self.id.clone(),
+            path: self.path.clone(),
+            name: self.name.clone(),
+            root: self.root,
+            group: self.group.clone(),
+            size: self.size.clone(),
+            status: self.status.as_str().to_owned(),
+            plan: self.plan.as_ref().map(api::camel_keys),
+            record: self.record.as_ref().map(api::camel_keys),
+            errors: self.errors.clone(),
+            failure: self.failure.clone(),
+            progress: self.progress.clone(),
+            mesh_version: self.mesh.as_ref().map(|_| self.mesh_version),
+            mesh_bytes: self.mesh.as_ref().map(|m| m.len()),
+            sketches: self
+                .sketches
+                .iter()
+                .map(|k| api::SketchRef {
+                    id: k.id,
+                    rough: k.rough,
+                })
+                .collect(),
+            shown: self.shown.clone(),
+        }
     }
 
     fn changed(&self) -> bool {
@@ -274,8 +283,14 @@ struct Events {
 }
 
 impl Events {
-    fn send(&mut self, msg: &Value) {
-        let msg = msg.to_string();
+    fn send<T: serde::Serialize>(&mut self, msg: &T) {
+        let msg = match serde_json::to_string(msg) {
+            Ok(m) => m,
+            Err(e) => {
+                tell!("error: preview: an event could not be written: {e}");
+                return;
+            }
+        };
         self.clients.retain(|tx| tx.send(msg.clone()).is_ok());
     }
 
@@ -607,8 +622,8 @@ impl Shared {
 
     /// What is wrong with the palette, as the page's unexpected problem
     /// (empty when nothing is): the tile is shown in the default paint.
-    fn palette_problem(&self) -> Vec<Value> {
-        errors_json(&self.palette_diags())
+    fn palette_problem(&self) -> Vec<api::Mistake> {
+        api::mistakes(&self.palette_diags())
     }
 
     /// [`Shared::palette_problem`] as diagnostics.
@@ -639,11 +654,15 @@ impl Shared {
     /// A tile's progress: remembered for a browser that connects later,
     /// and sent now.  The tracker calls this about ten times a second.
     fn progress(&self, id: &str, status: &Status) {
-        let body = json!({
-            "fraction": status.fraction, "label": status.label, "key": status.key,
-            "count": status.count, "elapsed_s": status.elapsed_s,
-            "eta_s": status.eta_s, "estimate_s": status.estimate_s,
-        });
+        let body = api::Progress {
+            fraction: status.fraction,
+            label: status.label.clone(),
+            key: status.key.clone(),
+            count: status.count.clone(),
+            elapsed_s: status.elapsed_s,
+            eta_s: Some(status.eta_s),
+            estimate_s: Some(status.estimate_s),
+        };
         let mut tiles = lock(&self.tiles);
         if let Some(slot) = tiles.iter_mut().find(|t| t.id == id) {
             slot.progress = Some(body.clone());
@@ -716,28 +735,48 @@ impl Shared {
     }
 
     /// Every tile's state: the `/api/tiles` body and the first event.
-    fn snapshot_of(&self, tiles: &[Slot], rev: u64) -> Value {
+    fn snapshot_of(&self, tiles: &[Slot], rev: u64) -> api::Snapshot {
         let target = self.options();
-        json!({
-            "type": "snapshot",
-            "rev": rev,
-            "epoch": self.epoch,
-            "system": target.system,
-            "printer": target.printer.name,
-            "printers": plates::printers_json(self.home.as_deref()),
-            "overhang_deg": target.printer.overhang_deg,
-            "steepest_deg": target.printer.steepest_deg,
-            "roots": lock(&self.roots).iter().enumerate().map(|(i, r)| r.json(i)).collect::<Vec<_>>(),
-            "folders": lock(&self.folders).iter()
-                .flat_map(|(r, v)| v.iter().map(move |p| json!({"root": r, "path": p})))
-                .collect::<Vec<_>>(),
-            "home": std::env::var("HOME").ok(),
-            "inventory": inventory::snapshot(self.home.as_deref()),
-            "tiles": tiles.iter().map(Slot::summary).collect::<Vec<_>>(),
-        })
+        api::Snapshot {
+            kind: "snapshot".to_owned(),
+            rev,
+            epoch: self.epoch.clone(),
+            system: target.system,
+            printer: target.printer.name.clone(),
+            printers: plates::printers_json(self.home.as_deref())
+                .iter()
+                .map(api::camel_keys)
+                .collect(),
+            overhang_deg: target.printer.overhang_deg,
+            steepest_deg: target.printer.steepest_deg,
+            roots: lock(&self.roots)
+                .iter()
+                .enumerate()
+                .map(|(i, r)| r.json(i))
+                .collect(),
+            folders: lock(&self.folders)
+                .iter()
+                .flat_map(|(r, v)| {
+                    v.iter().map(move |p| api::FolderJson {
+                        root: *r,
+                        path: p.clone(),
+                    })
+                })
+                .collect(),
+            home: std::env::var("HOME").ok(),
+            inventory: api::camel_keys(&inventory::snapshot(self.home.as_deref())),
+            tiles: tiles.iter().map(Slot::summary).collect(),
+        }
     }
 
-    fn snapshot(&self) -> Value {
+    /// The snapshot as JSON, the way a test reads it.
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used)]
+    fn snapshot_json(&self) -> Value {
+        serde_json::to_value(self.snapshot()).unwrap()
+    }
+
+    fn snapshot(&self) -> api::Snapshot {
         let tiles = lock(&self.tiles);
         let rev = lock(&self.events).rev;
         self.snapshot_of(&tiles, rev)
@@ -854,7 +893,7 @@ impl Shared {
 
     /// The tile `id` as the page reads it, for a call that makes or moves
     /// one (the reply carries it, so the page need not wait for an event).
-    fn summary(&self, id: &str) -> Option<Value> {
+    fn summary(&self, id: &str) -> Option<api::TileSummary> {
         lock(&self.tiles)
             .iter()
             .find(|t| t.id == id)
@@ -904,7 +943,13 @@ impl Shared {
         }
         if !resumed {
             let rev = ev.rev;
-            let _ = tx.send(self.snapshot_of(&tiles, rev).to_string());
+            match serde_json::to_string(&self.snapshot_of(&tiles, rev)) {
+                Ok(s) => {
+                    // a page that went away between its connection and its snapshot
+                    let _ = tx.send(s);
+                }
+                Err(e) => tell!("error: preview: the snapshot could not be written: {e}"),
+            }
         }
         // every kept message follows, so a page that came (or came back) has the whole record
         for m in ev.messages.all() {
@@ -921,7 +966,7 @@ impl Shared {
     ///
     /// # Errors
     /// The file is one the tile has, but it could not be read.
-    fn text(&self, id: &str, file: Option<&str>) -> Result<Option<Value>, String> {
+    fn text(&self, id: &str, file: Option<&str>) -> Result<Option<route::TextRes>, String> {
         let path = {
             let tiles = lock(&self.tiles);
             let Some(t) = tiles.iter().find(|t| t.id == id) else {
@@ -946,9 +991,12 @@ impl Shared {
         };
         let writable = !path.starts_with(dt_eval::LIB)
             && std::fs::metadata(&path).is_ok_and(|m| !m.permissions().readonly());
-        Ok(Some(
-            serde_json::json!({ "file": path, "text": text, "writable": writable, "docRev": doc_rev }),
-        ))
+        Ok(Some(route::TextRes {
+            file: path,
+            text,
+            writable,
+            doc_rev,
+        }))
     }
 
     fn mesh(&self, id: &str) -> Option<Arc<Vec<u8>>> {
@@ -982,7 +1030,7 @@ impl Shared {
             .find(|t| t.id == id)
             .map(|t| t.path.clone())
         else {
-            return route::Reply::Text("404 Not Found", "no such tile");
+            return fail::refused("404 Not Found", "no such tile").into();
         };
         let mut opts = self.options();
         match param("system") {

@@ -11,10 +11,50 @@
 use dt_doc::elements::ELEMENTS;
 use dt_elements::{Child, Plan};
 use dt_eval::plan::{Refusal, schedule};
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 
+use super::api::{Mistake, Out, TileRef};
 use super::edit::{Overlay, bad};
 use super::*;
+
+/// `/api/tiles/ID/offers`.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct OffersReq {
+    pub text: String,
+    /// The place in the stack: 0 is the top.
+    pub at: usize,
+    pub file: Option<String>,
+}
+
+/// One thing the Add menu may offer.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Offer {
+    pub name: String,
+    pub family: String,
+    pub about: String,
+    /// The line of KDL it would write.
+    pub node: String,
+    /// Whether the plan lets it stand there.
+    pub ok: bool,
+    /// When it does not, why.
+    pub why: Option<String>,
+}
+
+/// What may be offered; `ok` false (with `why` and the `errors`) when the
+/// tile has a mistake and there is no plan to ask.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct OffersRes {
+    pub ok: bool,
+    pub at: Option<usize>,
+    pub offers: Vec<Offer>,
+    pub why: Option<String>,
+    pub errors: Option<Vec<Mistake>>,
+}
 
 /// A thing to offer: its name, what it writes into the stack and whether a
 /// tile may hold more than one.
@@ -119,33 +159,31 @@ fn why(r: &Refusal, k: usize, names: &[String]) -> String {
 }
 
 /// The offers at place `at`.
-pub(super) fn offers(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, Value) {
-    let Some(text) = v["text"].as_str() else {
-        return bad("give the text");
-    };
-    let Some(at) = v["at"].as_u64().and_then(|a| usize::try_from(a).ok()) else {
-        return bad("give the place in the stack: 0 is the top");
-    };
-    let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
+pub(super) fn offers(shared: &Shared, t: &TileRef, v: OffersReq) -> Out<OffersRes> {
+    let (tile, file) = (t.path.as_str(), t.file(v.file.as_deref())?);
+    let src = Overlay(BTreeMap::from([(file, v.text)]));
     let opts = shared.options();
     let checked = match dt_eval::check(&src, tile, &opts) {
         Ok(c) => c,
         Err(errs) => {
             // a tile with a mistake has no plan to ask: the mistake is what to fix first
             let first = errs.first().map_or_else(String::new, |e| e.message.clone());
-            return (
-                "200 OK",
-                json!({ "ok": false, "why": first, "errors": errors_json(&errs) }),
-            );
+            return Ok(OffersRes {
+                ok: false,
+                at: None,
+                offers: Vec::new(),
+                why: Some(first),
+                errors: Some(super::api::mistakes(&errs)),
+            });
         }
     };
     let Some(t) = &checked.tile else {
-        return bad("this file has no tile");
+        return Err(bad("this file has no tile"));
     };
     let plans = checked.plans();
     // the entries of the stack, then the connector when the tile has a base
     let entries = t.stack.len();
-    let k = at.min(entries);
+    let k = v.at.min(entries);
     let names: Vec<String> = t.stack.iter().map(|e| e.what.value.clone()).collect();
     let lines: Vec<&String> = t.lines.keys().collect();
     let mut out = Vec::new();
@@ -158,17 +196,30 @@ pub(super) fn offers(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'s
                 schedule(&with).map(|_| ()).map_err(|r| why(&r, k, &names))
             }
         };
-        out.push(json!({
-            "name": c.name, "family": c.family, "about": c.about, "node": c.node,
-            "ok": verdict.is_ok(), "why": verdict.err(),
-        }));
+        out.push(Offer {
+            name: c.name.to_string(),
+            family: c.family.to_string(),
+            about: c.about.to_string(),
+            node: c.node.to_string(),
+            ok: verdict.is_ok(),
+            why: verdict.err(),
+        });
     }
     // the base is the connector the build target picks; a tile has one
-    out.push(json!({
-        "name": "base", "family": "base",
-        "about": "the connector under zero: the build target picks DungeonBlocks or OpenLOCK",
-        "node": "base", "ok": !t.has_base,
-        "why": t.has_base.then_some("the tile already has a base"),
-    }));
-    ("200 OK", json!({ "ok": true, "at": k, "offers": out }))
+    out.push(Offer {
+        name: "base".to_owned(),
+        family: "base".to_owned(),
+        about: "the connector under zero: the build target picks DungeonBlocks or OpenLOCK"
+            .to_owned(),
+        node: "base".to_owned(),
+        ok: !t.has_base,
+        why: t.has_base.then(|| "the tile already has a base".to_owned()),
+    });
+    Ok(OffersRes {
+        ok: true,
+        at: Some(k),
+        offers: out,
+        why: None,
+        errors: None,
+    })
 }

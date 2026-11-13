@@ -82,7 +82,6 @@ impl Home {
     fn ok(&self, route: &str, body: Value) -> Value {
         let (head, v) = self.call(route, body);
         assert!(head.starts_with("HTTP/1.1 200"), "{route}: {head} {v}");
-        assert_eq!(v["ok"], true, "{route}: {v}");
         v
     }
 
@@ -183,7 +182,7 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
         (Some(5), Some(1))
     );
     assert_eq!(inv["pieces"][0]["edited"], false);
-    assert_eq!(inv["last_colour"], "multi", "the colour the log last used");
+    assert_eq!(inv["lastColour"], "multi", "the colour the log last used");
     // the file is a tile of My tiles now, opened as an inventory
     let t = h.wait("inventory.dinv", "the inventory document", |t| {
         t["status"] == "ready" && t["plan"]["kind"] == "inventory"
@@ -218,7 +217,7 @@ fn i_have_this_makes_the_file_and_the_snapshot_and_the_pills_follow() {
         serde_json::json!({"tile": h.id("glade.dtile"), "colour": "multi"}),
     );
     assert!(
-        head.starts_with("HTTP/1.1 200") && v["ok"] == false,
+        head.starts_with("HTTP/1.1 422") && v["errors"].is_array(),
         "{head} {v}"
     );
     assert!(
@@ -244,7 +243,7 @@ fn the_sheet_after_a_print_adds_the_plate_good_and_failed_and_the_plates_shrink(
     let p = &t["plan"]["plates"];
     assert_eq!(p["kinds"][0]["count"], 3);
     assert_eq!(p["kinds"][0]["canon"], "home:glade");
-    assert_eq!(p["kinds"][0]["seed_used"], 5);
+    assert_eq!(p["kinds"][0]["seedUsed"], 5);
     assert_eq!(p["layout"][0]["pieces"].as_array().unwrap().len(), 3);
     // all three come off plate 1, the second one failed
     let v = h.ok("/api/inventory/record", serde_json::json!({"list": h.id("kit.dmap"), "plate": 1, "failed": [1], "on": "2026-11-13"}));
@@ -284,12 +283,12 @@ fn the_sheet_after_a_print_adds_the_plate_good_and_failed_and_the_plates_shrink(
     // the switch: everything prints again, written in the list's plates line
     h.edit(
         "/api/plates/set",
-        serde_json::json!({"tile": h.id("kit.dmap"), "key": "inventory", "value": "ignore"}),
+        serde_json::json!({"list": h.id("kit.dmap"), "key": "inventory", "value": "ignore"}),
     );
     let t = h.wait("kit.dmap", "every piece", |t| {
         t["status"] == "ready" && t["plan"]["plates"]["kinds"][0]["count"] == 3
     });
-    assert_eq!(t["plan"]["plates"]["check_inventory"], false);
+    assert_eq!(t["plan"]["plates"]["checkInventory"], false);
     let kit = std::fs::read_to_string(h.dir.join("kit.dmap")).unwrap();
     assert!(
         kit.contains("inventory=ignore") || kit.contains("inventory=\"ignore\""),
@@ -630,7 +629,10 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
         "/api/lists/add",
         serde_json::json!({"tile": h.id("glade.dtile"), "list": list}),
     );
-    assert!(head.starts_with("HTTP/1.1 200") && v["ok"] == false, "{v}");
+    assert!(
+        head.starts_with("HTTP/1.1 422") && v["errors"].is_array(),
+        "{head} {v}"
+    );
     assert_eq!(
         std::fs::read_to_string(h.dir.join("Crossing.dmap")).unwrap(),
         "dharmatiles version=1\nmap {\n piece\n}\n"
@@ -698,9 +700,9 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     assert_eq!(sc["pieces"][1]["rot"], 90);
     assert_eq!(sc["pieces"][1]["seed"], 9);
     // 4 dmm + 1 mm on DungeonBlocks, and a standard name: 33.1 dmm
-    assert!((sc["pieces"][1]["bottom_mm"].as_f64().unwrap() - 5.0).abs() < 1e-9);
-    assert!((sc["pieces"][2]["bottom_mm"].as_f64().unwrap() - 33.1).abs() < 1e-9);
-    assert_eq!(sc["pieces"][0]["seed_used"], 5, "the tile's own seed");
+    assert!((sc["pieces"][1]["bottomMm"].as_f64().unwrap() - 5.0).abs() < 1e-9);
+    assert!((sc["pieces"][2]["bottomMm"].as_f64().unwrap() - 33.1).abs() < 1e-9);
+    assert_eq!(sc["pieces"][0]["seedUsed"], 5, "the tile's own seed");
     assert!(
         sc["heights"]
             .as_array()
@@ -781,7 +783,7 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
         serde_json::json!({"list": list, "id": "p2", "set": {"rot": 45}}),
     );
     assert!(
-        head.starts_with("HTTP/1.1 200") && v["ok"] == false,
+        head.starts_with("HTTP/1.1 422") && v["errors"].is_array(),
         "{head} {v}"
     );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), was);

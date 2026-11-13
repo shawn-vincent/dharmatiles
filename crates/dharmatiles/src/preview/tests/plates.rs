@@ -21,11 +21,11 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
     // the SV06's 220 mm bed holds 5 x 5 squares: 25 and 15
     let p = &t["plan"]["plates"];
     assert_eq!(t["plan"]["kind"], "plates");
-    assert_eq!(t["plan"]["size_mm"], serde_json::json!([220.0, 220.0]));
+    assert_eq!(t["plan"]["sizeMm"], serde_json::json!([220.0, 220.0]));
     assert_eq!(p["layout"][0]["pieces"].as_array().unwrap().len(), 25);
     assert_eq!(p["layout"][1]["pieces"].as_array().unwrap().len(), 15);
     assert_eq!(p["mode"], "single");
-    assert_eq!(p["slot_check"]["ok"], true);
+    assert_eq!(p["slotCheck"]["ok"], true);
     assert_eq!(p["format"], "stl", "the SV06 is not a Bambu machine");
     assert!(
         p["printers"].as_array().unwrap().len() > 25,
@@ -44,7 +44,7 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
     let token = token["token"].as_str().unwrap().to_owned();
     let served: Value =
         serde_json::from_slice(&get(&r, &format!("/api/tiles/{}/text", id0(&r))).1).unwrap();
-    let body = serde_json::json!({ "tile": id0(&r), "key": "gap", "value": "10mm", "docRev": served["docRev"] })
+    let body = serde_json::json!({ "list": id0(&r), "key": "gap", "value": "10mm", "docRev": served["docRev"] })
         .to_string();
     assert!(
         post(&r, "/api/plates/set", None, None, &body)
@@ -82,13 +82,13 @@ fn a_print_list_opens_on_its_plates_and_its_settings_rewrite_its_file() {
         ("bed", "1x1mm", "not a setting"),
         ("mode", "rainbow", "not a mode"),
     ] {
-        let bad = serde_json::json!({ "tile": id0(&r), "key": key, "value": value }).to_string();
+        let bad = serde_json::json!({ "list": id0(&r), "key": key, "value": value }).to_string();
         let (head, _) = post(&r, "/api/plates/set", Some(&token), None, &bad);
         assert!(head.starts_with("HTTP/1.1 400"), "{why}: {head}");
     }
     assert!(!std::fs::read_to_string(&file).unwrap().contains("rainbow"));
     // the plate in view
-    let show = serde_json::json!({ "tile": id0(&r), "plate": 1 }).to_string();
+    let show = serde_json::json!({ "list": id0(&r), "plate": 1 }).to_string();
     assert!(
         post(&r, "/api/plates/show", Some(&token), None, &show)
             .0

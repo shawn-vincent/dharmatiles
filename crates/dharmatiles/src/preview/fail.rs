@@ -22,7 +22,9 @@ use std::panic::PanicHookInfo;
 use std::sync::{Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::{Value, json};
+use serde_json::Value;
+
+use super::api::{ErrorBody, ErrorContext, ErrorDetail, Mistake};
 
 /// How the page should put an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -286,28 +288,45 @@ impl ServerError {
         self
     }
 
+    /// The error as the contract's [`ErrorDetail`].
+    #[must_use]
+    pub fn detail(&self) -> ErrorDetail {
+        ErrorDetail {
+            kind: self.kind.as_str().to_owned(),
+            message: self.message.clone(),
+            help: self.help.clone(),
+            causes: self.causes.clone(),
+            backtrace: self.backtrace.clone(),
+            context: ErrorContext {
+                route: self.doing.route.clone(),
+                tile: self.doing.tile.clone(),
+                version: env!("DT_ENGINE_VERSION").to_owned(),
+                at_ms: self.at_ms,
+            },
+        }
+    }
+
     /// The error as JSON, the body of `{"error": ...}`.
     #[must_use]
     pub fn json(&self) -> Value {
-        json!({
-            "kind": self.kind.as_str(),
-            "message": self.message,
-            "help": self.help,
-            "causes": self.causes,
-            "backtrace": self.backtrace,
-            "context": {
-                "route": self.doing.route,
-                "tile": self.doing.tile,
-                "version": env!("DT_ENGINE_VERSION"),
-                "at_ms": self.at_ms,
-            },
-        })
+        to_value(&self.detail())
     }
 
     /// The reply: the status and `{"error": ...}`.
     #[must_use]
     pub fn reply(&self) -> (&'static str, Value) {
-        (self.status, json!({ "error": self.json() }))
+        self.reply_with(|_| {})
+    }
+
+    /// The reply, with what else the refusal says set on the body by `f`.
+    #[must_use]
+    pub fn reply_with(&self, f: impl FnOnce(&mut ErrorBody)) -> (&'static str, Value) {
+        let mut body = ErrorBody {
+            error: self.detail(),
+            ..ErrorBody::default()
+        };
+        f(&mut body);
+        (self.status, to_value(&body))
     }
 
     /// The line for the server's log.
@@ -332,19 +351,34 @@ pub fn refused(status: &'static str, message: impl Into<String>) -> (&'static st
     ServerError::refused(status, message).reply()
 }
 
-/// A refusal that also says something besides: `extra`'s keys sit beside
-/// `error` in the body (the text a conflicting save lost to).
+/// A refusal that also says something besides: `f` sets it on the body
+/// beside `error` (the text a conflicting save lost to).
 #[must_use]
 pub fn refused_with(
     status: &'static str,
     message: impl Into<String>,
-    extra: Value,
+    f: impl FnOnce(&mut ErrorBody),
 ) -> (&'static str, Value) {
-    let (status, mut body) = ServerError::refused(status, message).reply();
-    if let (Some(b), Value::Object(x)) = (body.as_object_mut(), extra) {
-        b.extend(x);
-    }
-    (status, body)
+    ServerError::refused(status, message).reply_with(f)
+}
+
+/// A document that does not read: 422, its mistakes each at its place, and
+/// the first one's words as the message.
+#[must_use]
+pub fn mistakes(errs: &[dt_eval::Diag]) -> (&'static str, Value) {
+    let list: Vec<Mistake> = errs.iter().map(Mistake::from).collect();
+    let message = errs.first().map_or_else(
+        || "the document does not read".to_owned(),
+        |d| d.message.clone(),
+    );
+    ServerError::refused("422 Unprocessable Entity", message).reply_with(|b| b.errors = Some(list))
+}
+
+/// A body made by the contract's types.  A value that cannot be written is
+/// a bug, said as one (never an empty body).
+#[allow(clippy::expect_used)]
+pub(super) fn to_value<T: serde::Serialize>(t: &T) -> Value {
+    serde_json::to_value(t).expect("an error body is plain data")
 }
 
 /// Something the program could not do: the status, the words.
@@ -437,14 +471,14 @@ mod tests {
         assert_eq!(body["error"]["kind"], "failure");
         assert_eq!(
             body["error"]["causes"],
-            json!([
+            serde_json::json!([
                 "could not save the tile",
                 "the folder is read-only",
                 "permission denied (os error 13)"
             ])
         );
         assert!(!body["error"]["backtrace"].as_str().unwrap().is_empty());
-        let (_, body) = refused_with("409 Conflict", "no", json!({ "text": "t" }));
+        let (_, body) = refused_with("409 Conflict", "no", |b| b.text = Some("t".to_owned()));
         assert_eq!(body["error"]["kind"], "refused");
         assert_eq!(body["text"], "t");
     }

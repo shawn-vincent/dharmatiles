@@ -1,3 +1,4 @@
+// @ts-check
 // The status line and the messages panel: two views of the one stream of
 // messages (js/messages.js).  The status line is 26 px under the view: the
 // verdict (worst first), the counts, what the text's save is doing and the
@@ -84,10 +85,10 @@ function numbers(gate, t) {
   const used = (area, budget) => (budget == null ? `${fmt(area)} mm²` : `${fmt(area)} / ${fmt(budget)} mm²`);
   pair(dl, 'Triangles', Number(a.triangles).toLocaleString());
   pair(dl, 'Watertight', a.watertight ? 'Yes' : 'No', a.watertight ? 'ok' : 'bad');
-  pair(dl, `Band ${overhangDeg}–${steepestDeg}°`, used(a.band_mm2, a.band_budget_mm2), a.band_mm2 > (a.band_budget_mm2 ?? 0) ? 'bad' : a.band_mm2 > 0 ? 'warn' : 'ok');
-  pair(dl, `Past ${steepestDeg}°`, used(a.overhang_mm2, a.overhang_budget_mm2), a.overhang_mm2 > (a.overhang_budget_mm2 ?? 0) ? 'bad' : a.overhang_mm2 > 0 ? 'warn' : 'ok');
+  pair(dl, `Band ${overhangDeg}–${steepestDeg}°`, used(a.bandMm2, a.bandBudgetMm2), a.bandMm2 > (a.bandBudgetMm2 ?? 0) ? 'bad' : a.bandMm2 > 0 ? 'warn' : 'ok');
+  pair(dl, `Past ${steepestDeg}°`, used(a.overhangMm2, a.overhangBudgetMm2), a.overhangMm2 > (a.overhangBudgetMm2 ?? 0) ? 'bad' : a.overhangMm2 > 0 ? 'warn' : 'ok');
   pair(dl, 'Dropped bodies', a.dropped, a.dropped ? 'bad' : '');
-  pair(dl, 'Voids filled', a.voids_filled);
+  pair(dl, 'Voids filled', a.voidsFilled);
   pair(dl, 'Holes', a.holes, a.holes ? 'bad' : '');
   if (t?.record?.record?.seed != null) pair(dl, 'Seed', t.record.record.seed);
   return dl;
@@ -111,7 +112,7 @@ function tickRunning() {
   if (!box || !t) return;
   const p = progressOf(t.id);
   const stage = !p ? 'starting' : !p.count ? p.label : p.count[2] === 0 ? `${p.label}: ${p.count[0]}` : `${p.label}: ${p.count[0]} ${p.count[1]}/${p.count[2]}`;
-  box.querySelector('.sub').textContent = p ? `${stage} · ${secs(p.elapsed_s)} of ~${secs(p.estimate_s)}` : 'starting';
+  box.querySelector('.sub').textContent = p ? `${stage} · ${secs(p.elapsedS)} of ~${secs(p.estimateS)}` : 'starting';
   box.querySelector('.rbar i').style.width = `${p ? Math.floor(p.fraction * 100) : 0}%`;
 }
 
@@ -182,10 +183,10 @@ function renderFilters(v) {
   const seg = $('msg-filters');
   seg.replaceChildren();
   const all = v.rows;
-  for (const [id, label, keep] of FILTERS) {
+  for (const [id, label, keep] of /** @type {[string, string, (m: any) => boolean][]} */ (FILTERS)) {
     const n = id === 'all' ? all.length : all.filter((r) => keep(r.m)).length;
     const b = el('button', filter === id ? 'on' : '');
-    b.type = 'button'; b.dataset.filter = id; b.setAttribute('aria-pressed', filter === id);
+    b.type = 'button'; b.dataset.filter = id; b.setAttribute('aria-pressed', String(filter === id));
     b.append(label);
     if (n) b.append(' ', el('span', 'n', n));
     b.onclick = () => { filter = id; renderPanel(); };

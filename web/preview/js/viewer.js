@@ -193,7 +193,7 @@ export class Viewer {
     const bed = this.payload?.meta?.bed;
     if (bed) return { lo: [0, 0, 0], hi: [bed[0], bed[1], Math.max(this.payload.meta.hi[2], 1)] };
     if (this.payload) return { lo: this.payload.meta.lo, hi: this.payload.meta.hi };
-    if (this.plan) return { lo: [0, 0, 0], hi: [...this.plan.size_mm, 1] };
+    if (this.plan) return { lo: [0, 0, 0], hi: [...this.plan.sizeMm, 1] };
     return null;
   }
 
@@ -236,7 +236,7 @@ export class Viewer {
         return { p: [lo[0] + (qx / 4095) * (hi[0] - lo[0]), lo[1] + (qy / 4095) * (hi[1] - lo[1]), lo[2] + (d / 255) * (hi[2] - lo[2])], onTile: true };
       }
     }
-    const z = planeZ ?? this.plan?.datum_z ?? this.payload?.meta.lo[2] ?? 0;
+    const z = planeZ ?? this.plan?.datumZ ?? this.payload?.meta.lo[2] ?? 0;
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, 1 - (y / h) * 2), this.camera);

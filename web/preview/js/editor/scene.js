@@ -37,7 +37,7 @@ let mountedPath = null;
 let lastSig = '';
 let evalTimer = 0;
 const lanes = { fast: 0, full: 0 };
-const shown = new Map();      // piece id -> {gid, tile_id}: what it was last drawn with, kept until its new mesh comes
+const shown = new Map();      // piece id -> {gid, tileId}: what it was last drawn with, kept until its new mesh comes
 /** Pieces being dragged: id -> [x, y] mm, shown there until the change is written. */
 export const live = new Map();
 const queue = [];
@@ -66,7 +66,7 @@ function frameBox(ps, scene) {
     lo = [Math.min(lo[0], 0), Math.min(lo[1], 0)]; hi = [Math.max(hi[0], scene.grid.cols * sq), Math.max(hi[1], scene.grid.rows * sq)];
   }
   if (!b && !scene.grid) { lo = [0, 0]; hi = [140, 140]; }
-  const top = Math.max(0, ...ps.filter((p) => p.at).map((p) => (p.bottom_mm || 0))) + 14;
+  const top = Math.max(0, ...ps.filter((p) => p.at).map((p) => (p.bottomMm || 0))) + 14;
   return { lo: [lo[0], -hi[1], -7], hi: [hi[0], -lo[1], top] };
 }
 
@@ -183,7 +183,7 @@ async function run({ p, tier, gkey }) {
   const e = geoms.get(gkey);
   if (!e) return; // let go of while it waited
   try {
-    const buf = await host.fetchTier(p.tile_id, { tier, seed: p.seed ?? undefined, system: p.system, printer: sceneNow()?.printer });
+    const buf = await host.fetchTier(p.tileId, { tier, seed: p.seed ?? undefined, system: p.system, printer: sceneNow()?.printer });
     const payload = parsePayload(buf);
     // the tile moved on while it came (another build, another map): what came is not kept
     if (geoms.get(gkey) !== e) return;
@@ -243,8 +243,8 @@ export function evaluate(now = false) {
   const list = ps.map((p, i) => {
     const t = tiers[i];
     let gid = null;
-    if (p.gkey && t) { gid = gidOf(p.gkey, t); shown.set(p.id, { gid, tile_id: p.tile_id }); }
-    else if (shown.get(p.id)?.tile_id === p.tile_id && viewer.sceneGeoms.has(shown.get(p.id).gid)) gid = shown.get(p.id).gid; // a new variant: the old one stays until it swaps in
+    if (p.gkey && t) { gid = gidOf(p.gkey, t); shown.set(p.id, { gid, tileId: p.tileId }); }
+    else if (shown.get(p.id)?.tileId === p.tileId && viewer.sceneGeoms.has(shown.get(p.id).gid)) gid = shown.get(p.id).gid; // a new variant: the old one stays until it swaps in
     else {
       gid = `box|${p.size[0]}|${p.size[1]}`;
       if (!viewer.sceneGeoms.has(gid)) viewer.setSceneGeometry(gid, boxPayload(p.size[0], p.size[1], 8));

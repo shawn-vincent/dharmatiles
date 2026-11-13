@@ -82,7 +82,7 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
   async function call(id, label, name, body) {
     const s = held.get(id);
     const r = await send(name, { ...body, list: id, docRev: s?.docRev });
-    if (r.status === 200 && r.body?.ok !== false) {
+    if (r.status === 200) {
       if (r.body?.docRev != null) receive({ id, docRev: r.body.docRev, scene: r.body.scene ?? undefined });
       if (r.body?.note) say.note(r.body.note);
       return r.body;
@@ -151,7 +151,7 @@ export function createDocuments({ send, report = {}, derive = () => {}, history 
         if (!entry) return false;
         const label = dir < 0 ? 'Could not undo' : 'Could not redo';
         const r = await send('listsRestore', { list: id, text: dir < 0 ? entry.before : entry.after, docRev: history.head(id) });
-        if (r.status === 200 && r.body?.ok !== false) {
+        if (r.status === 200) {
           receive({ id, docRev: r.body.docRev, scene: r.body.scene ?? undefined });
           history.moved(id, dir, r.body.docRev);
           notify(id);

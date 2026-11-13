@@ -22,7 +22,7 @@ export function clauseTitle(c) {
 export function regionKind(sh) {
   const clauses = sh?.clauses || [];
   if (!clauses.length) return 'bucket';
-  return sh.bounded_by || sh.fill ? 'mixed' : 'places';
+  return sh.boundedBy || sh.fill ? 'mixed' : 'places';
 }
 
 /** How the clauses combine, in plain words. */
@@ -88,7 +88,7 @@ export function clauseGroups(m, sh, map, as, row) {
 export function clauseMenu(m, sh, map) {
   const other = (map?.regions || []).find((r) => r.name !== m.name);
   const line = (map?.lines || [])[0];
-  const written = !!sh?.bounded_by?.span;
+  const written = !!sh?.boundedBy?.span;
   return [
     { kind: 'within', label: 'within', title: 'Add everything within a distance of a place (a disc round a point, a strip beside a line, a ring round a region)', node: 'within 6 of=center' },
     other

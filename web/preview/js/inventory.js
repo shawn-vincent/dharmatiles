@@ -85,14 +85,14 @@ export function pill(inv, path, system) {
 
 /**
  * What one tile of a print list says against the shelf (the plates panel): the kind the plan sent
- * (`{want, have, count, other_colour}`) as `{kind, text}`: `have 2 · 1 to print`, or the caution
+ * (`{want, have, count, otherColour}`) as `{kind, text}`: `have 2 · 1 to print`, or the caution
  * `have, single colour` where the shelf holds only the other colour mode.
  */
 export function wantLine(k, mode) {
   const parts = [];
   if (k.have > 0) parts.push(`have ${k.have}`);
   parts.push(`${k.count} to print`);
-  const other = k.other_colour > 0 && k.have === 0;
+  const other = k.otherColour > 0 && k.have === 0;
   if (other) parts.unshift(`have, ${mode === 'multicolour' ? 'single colour' : 'multicolour'}`);
   return { caution: other, text: parts.join(' · ') };
 }

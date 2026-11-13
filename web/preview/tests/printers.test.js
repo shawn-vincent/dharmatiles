@@ -9,7 +9,7 @@ const LIST = [
   P('bambu/x1c-ams', 'Bambu Lab', 'X1 Carbon + AMS', { slots: 4 }),
   P('bambu/h2d', 'Bambu Lab', 'H2D', { verify: 'sources disagree' }),
   P('sovol/sv06', 'Sovol', 'SV06'),
-  P('bambu-lab/p1p', 'Bambu Lab', 'P1P', { mine: true, from_slicer: 'Bambu Studio 2.9.1: P1P' }),
+  P('bambu-lab/p1p', 'Bambu Lab', 'P1P', { mine: true, fromSlicer: 'Bambu Studio 2.9.1: P1P' }),
 ];
 
 test('groups: yours first, then brands in order, floors-only last', () => {

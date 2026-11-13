@@ -1,3 +1,4 @@
+// @ts-check
 // The page's documents (js/documents.js) wired to this page: the host's calls, the toasts, and the one thing
 // the page derives from a document before anyone is told (the mode a .dmap is shown in).
 //
@@ -12,19 +13,20 @@ import { say } from './inventory.js';
 import { derivedMode } from './mode.js';
 import { isPlates } from './stores.js';
 
-const send = (name, body) => {
-  const call = host[name];
-  if (typeof call !== 'function') throw new Error(`the host has no call ${name}`);
-  return call(body);
+/** The calls a document's steps name (js/steps.js), each made with the list and the revision the document supplies. */
+const calls = {
+  listsCount: host.listsCount, listsRemove: host.listsRemove, listsRestore: host.listsRestore,
+  mapsAdd: host.mapsAdd, mapsSet: host.mapsSet, mapsBatch: host.mapsBatch, mapsDup: host.mapsDup, mapsRemove: host.mapsRemove,
+  mapsPin: host.mapsPin, mapsUnpin: host.mapsUnpin, mapsUnpinAll: host.mapsUnpinAll, platesSet: host.platesSet,
 };
+const send = (name, body) => calls[name](body);
 
 const report = {
   /** The file moved on under an edit: the refusal, in words, where the user is looking. */
   refusal: (label, r) => toast(`${label}: ${r.body?.error ?? 'the file changed'}`, null, { ms: 9000 }),
   failure: (label, r) => {
     if (r.status === 0) return; // the editor is disconnected: the chip says so, and nothing was written
-    if (r.status === 200) { say(r.body, label); return; } // a mistake in the document, at its text
-    if (!failed(label, r)) toast(`${label}: ${r.body?.error ?? 'refused'}`, null, { ms: 9000 });
+    if (!failed(label, r)) say(r, label); // a mistake in the document (422), at its text, or the program's refusal in words
   },
   note: (text) => toast(text, null, { ms: 7000 }),
 };

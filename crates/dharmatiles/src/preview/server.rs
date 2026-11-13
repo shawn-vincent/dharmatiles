@@ -54,7 +54,6 @@ fn one(mut conn: TcpStream, shared: &Shared) {
             body.to_string().as_bytes(),
         ),
         Reply::Bytes(b) => respond(&mut conn, "200 OK", "application/octet-stream", &b),
-        Reply::Text(status, body) => respond(&mut conn, status, "text/plain", body.as_bytes()),
         Reply::Body(status, ctype, body) => respond(&mut conn, status, ctype, body.as_bytes()),
         Reply::Asset(ctype, body) => respond(&mut conn, "200 OK", ctype, &body),
         Reply::Events(from) => events(conn, shared, &from),
@@ -92,13 +91,6 @@ pub(super) fn answer(shared: &Shared, req: &Request) -> Reply {
                 req.method,
                 req.path,
                 body["error"]["message"].as_str().unwrap_or("no message")
-            );
-        }
-        Reply::Text(status, body) if status.starts_with('5') => {
-            tell!(
-                "error: preview: {} {}: {status}: {body}",
-                req.method,
-                req.path
             );
         }
         _ => {}

@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::cli::PrintersAction;
@@ -67,13 +68,40 @@ pub(crate) fn candidate_json(c: &Candidate, home: Option<&Path>) -> Value {
     })
 }
 
-pub(crate) fn scan_json(s: &Scan, home: Option<&Path>) -> Value {
-    json!({
-        "slicer": s.install.slicer.word(), "title": s.install.slicer.title(),
-        "version": s.install.version, "label": s.install.label(),
-        "models": s.candidates.iter().map(|c| candidate_json(c, home)).collect::<Vec<_>>(),
-        "problems": s.problems,
-    })
+/// What a scan of one slicer found: what `--json` prints and the page reads.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub(crate) struct ScanJson {
+    pub slicer: String,
+    pub title: String,
+    pub version: String,
+    pub label: String,
+    pub models: Vec<Value>,
+    /// What could not be read, each in words.
+    pub problems: Vec<String>,
+}
+
+impl ScanJson {
+    /// As JSON, for `--json`.
+    #[allow(clippy::expect_used)]
+    pub(crate) fn value(&self) -> Value {
+        serde_json::to_value(self).expect("a scan is plain data")
+    }
+}
+
+pub(crate) fn scan_json(s: &Scan, home: Option<&Path>) -> ScanJson {
+    ScanJson {
+        slicer: s.install.slicer.word().to_owned(),
+        title: s.install.slicer.title().to_owned(),
+        version: s.install.version.clone(),
+        label: s.install.label(),
+        models: s
+            .candidates
+            .iter()
+            .map(|c| candidate_json(c, home))
+            .collect(),
+        problems: s.problems.clone(),
+    }
 }
 
 fn size_words(c: &Candidate) -> String {
@@ -182,7 +210,7 @@ fn import(
     let writing = !list && (all || !models.is_empty());
     if !writing {
         if json {
-            say!("{}", scan_json(&scan, Some(&home)));
+            say!("{}", scan_json(&scan, Some(&home)).value());
         } else {
             say!("{}: {} models", install.label(), scan.candidates.len());
             for c in &scan.candidates {

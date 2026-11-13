@@ -1,3 +1,4 @@
+// @ts-check
 // The folder levels of the panel (docs/preview.html, "Places and folders"): the levels above the
 // tile.  Places at the top (My tiles, folders you added, the library, the tests), a place opens to
 // a folder level (its subfolders, then its tiles), a subfolder is another level.  Where you are
@@ -20,7 +21,7 @@ import { openMenu } from '../menu.js';
 import { buildHash, crumbsFor, moveRow, parseHash } from '../nav.js';
 import { copiedNote } from '../mine.js';
 import { pill as invPill, systemName } from '../inventory.js';
-import { failed } from '../problems.js';
+import { failed, whyOf } from '../problems.js';
 import { $, host, toast } from './app.js';
 import { canLeave } from './document.js';
 import { applySnapshot } from './live.js';
@@ -59,8 +60,7 @@ const el = (tag, cls, text) => {
 
 /** A reply that was not a success, shown where it was asked for: the program's words in a toast (an internal failure goes to the error panel). */
 function refusal(what, r) {
-  const why = typeof r.body?.error === 'string' ? r.body.error : r.body?.error?.message || 'that could not be done';
-  if (!failed(what, r)) toast(`${what}: ${why}`, null, { ms: 9000 });
+  if (!failed(what, r)) toast(`${what}: ${whyOf(r)}`, null, { ms: 9000 });
 }
 
 /** The program's answer to a call that changed the list: its list is taken at once. */
@@ -142,7 +142,7 @@ function dataNow() {
 }
 
 function signature(d) {
-  const t = (x) => [x.id, x.path, x.size, x.plan?.cols, x.plan?.rows, x.status, !!x.record && (x.record.audit.overhang_mm2 > 0 || x.record.audit.band_mm2 > 0)];
+  const t = (x) => [x.id, x.path, x.size, x.plan?.cols, x.plan?.rows, x.status, !!x.record && (x.record.audit.overhangMm2 > 0 || x.record.audit.bandMm2 > 0)];
   return JSON.stringify([
     d.level, d.query, d.openTile, d.writable, d.roots.map((r) => [r.label, r.exists, r.role, r.path]),
     d.level.root == null ? d.places.map((r) => d.tiles.filter((x) => x.root === r.index).length) : [d.view && d.view.folders, d.view && d.view.items.map((i) => [...t(i.tile), i.where, d.pill(i.tile)?.text, d.pill(i.tile)?.title])],
@@ -246,7 +246,7 @@ function render() {
   const sig = signature(d);
   if (drawn && drawn.key === key && drawn.sig === sig) { syncAddress(); return; }
   if ($('folder').querySelector('.flist.dragging')) { dirty = true; return; }
-  const was = $('browser').contains(document.activeElement) ? document.activeElement.closest?.('.orow') : null;
+  const was = /** @type {HTMLElement | null} */ ($('browser').contains(document.activeElement) ? document.activeElement.closest?.('.orow') : null);
   const keep = was ? { kind: was.dataset.kind, id: was.dataset.id } : null;
   const depth = depthOfLevel(level);
   if (drawn && drawn.key !== key) scrolls.set(drawn.key, $('folder').scrollTop);
@@ -407,7 +407,7 @@ async function addPlace(anchor) {
   try { r = await host.addPlace(); } finally { anchor.removeAttribute('aria-busy'); }
   if (r.status !== 200) { refusal('Could not add the folder', r); return; }
   // the user closed the chooser: nothing was asked for, so nothing is said
-  if (r.body.cancelled) return;
+  if ('cancelled' in r.body) return;
   take(r);
   goTo({ root: r.body.root, dir: '' });
   toast(`Added ${r.body.label} to Places. The folder itself is untouched.`, null, { ms: 6000 });

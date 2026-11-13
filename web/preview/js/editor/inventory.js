@@ -1,3 +1,4 @@
+// @ts-check
 // The inventory in the editor (docs/inventory.html): what you have printed, as a log of lines in `inventory.dinv`
 // beside your tiles.  Three parts of the page speak of it:
 //
@@ -12,7 +13,7 @@
 // of the log, never an edit of an earlier line.  The model is js/inventory.js, and the sheet after a print is in
 // plates.js.
 
-import { failed, showError } from '../problems.js';
+import { failed, showError, whyOf } from '../problems.js';
 import { $, host, toast } from './app.js';
 import {
   SYSTEMS, canonOf, colourName, defaultFilters, exists, groups, haveLine, nameOf, numbered, relinkCandidates, systemName, tileHave, totalsLine,
@@ -36,7 +37,7 @@ export function lastColour() {
     const c = localStorage.getItem('dt-inventory-colour');
     if (c === 'single' || c === 'multi') return c;
   } catch { /* private mode, or nothing kept: the log's own last colour answers */ }
-  return server.get().inventory?.last_colour || 'single';
+  return server.get().inventory?.lastColour || 'single';
 }
 function rememberColour(c) {
   try { localStorage.setItem('dt-inventory-colour', c); } catch { /* private mode: the log's last colour answers next time */ }
@@ -48,10 +49,9 @@ export function today() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** What the program refused, in words: its first message and the help that goes with it. */
-export function say(body, what) {
-  const e = body?.errors?.[0];
-  toast(`${what}: ${e ? `${e.message}${e.help ? `. ${e.help}` : ''}` : 'that could not be done'}`, null, { ms: 9000 });
+/** What the program refused, in words (see `whyOf`), as a toast where it was asked. */
+export function say(r, what) {
+  toast(`${what}: ${whyOf(r)}`, null, { ms: 9000 });
 }
 
 // ---- the tile level ------------------------------------------------------------------------------------
@@ -94,8 +94,7 @@ async function haveThis(t, colour, button) {
   button.disabled = true;
   try {
     const r = await host.inventoryHave({ tile: t.id, colour, on: today() });
-    if (r.status !== 200) { failed('Could not add to the inventory', r); return; }
-    if (!r.body.ok) { say(r.body, 'Could not add to the inventory'); return; }
+    if (r.status !== 200) { if (!failed('Could not add to the inventory', r)) say(r, 'Could not add to the inventory'); return; }
     pickedColour = null;
     rememberColour(colour);
     toast(`Added ${t.name} to your inventory (${colourName(colour)})`);
@@ -145,8 +144,7 @@ function filterBar(f) {
 async function act(label, run) {
   try {
     const r = await run();
-    if (r.status !== 200) { failed(label, r); return null; }
-    if (r.body.ok === false) { say(r.body, label); return null; }
+    if (r.status !== 200) { if (!failed(label, r)) say(r, label); return null; }
     return r.body;
   } catch (e) { showError(label, e); return null; }
 }

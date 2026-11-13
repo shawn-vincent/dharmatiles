@@ -1,7 +1,7 @@
 // The server's error as the page holds it.  `dharmatiles preview` answers
 // every failure with one shape (crates/dharmatiles/src/preview/fail.rs):
 //
-//   {"error": {kind, message, help, causes, backtrace, context: {route, tile, version, at_ms}}}
+//   {"error": {kind, message, help, causes, backtrace, context: {route, tile, version, atMs}}}
 //
 //   kind  'refused'  the request was wrong; shown where it was made
 //         'failure'  the program tried and could not; the message is the headline

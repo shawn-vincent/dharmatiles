@@ -1,61 +1,21 @@
+// @ts-check
 // The browser host: how the page talks to `dharmatiles preview`.
 // A desktop app supplies another object with the same methods; only this
 // file knows the server's routes.  A tile is named by its id (the server's,
 // never a position in a list).
 //
-//   connect({onSnapshot, onTile, onProgress, onMessage, onState})  start listening; onState('live' | 'offline'); onMessage(m) for each message of the stream
-//   messagesText(id) -> string              the tile's open messages as text, the program's one renderer (Copy all)
-//   reportMessage(body)                     a failure of the page's own, to join the stream: {tile?, what, text, help?, causes?, backtrace?}
-//   fetchMesh(id) -> ArrayBuffer            the tile's binary mesh
-//   fetchSketch(id, sketch) -> ArrayBuffer  one stage's sketch while it builds (null once the build has moved on)
-//   fetchTier(id, {tier, seed?, system?, printer?}) -> ArrayBuffer   a tile's mesh at a tier (`super-low`, `low`, `full`) for a map's piece: from the cache or built, not checked unless full; a piece as the map builds it (its seed, its system, the map's printer)
-//   build(id, {debug?})                     build a tile not built yet; `debug` says whether the debug layer is on for it (its marks are collected only then)
-//   text(id, file?) -> {file, text, writable, docRev}   (docRev: the revision of the file the text is of; 0 for a library file)
-//   elements() -> [element]                 the element schema
-//   language() -> {docs, nodes, units, functions, names}   the tile's nodes with their controls, and the language's words
-//   names(text) -> {ok, defs, regions, lines, points}      the names the text makes, by the program's parser
+// The contract is `js/api.d.ts`, generated from the server's Rust types
+// (crates/dharmatiles/src/preview/api.rs, calls.rs): every call's request and
+// answer.  Each method here takes its call's request type and answers its
+// answer type, and `tsc` (npm test) checks this file, and the files that call
+// it, against that file, so a field the server renames fails here and where it
+// was used.  There is no other description of a route: no body is built by hand
+// outside these methods.
 //
-// The editor's calls, each -> {status, body} (status 0 when disconnected):
-//   weightings(query)                       the weighting functions over a range, or one value, with the program's curves (a read; no token)
-//   check(id, {text, file?})                what the text would build
-//   offers(id, {text, at, file?})            what the Add menu may offer at place `at` of the stack: {ok, offers: [{name, family, about, node, ok, why}]}
-//   checkValue(element, control, typed)  what the reader refuses in a typed value: {message, label, help} (message null when it takes it)
-//   draft(id, {text, file?, debug?})        a quick build of the text (with the debug layer's marks when `debug`): {status, buffer} (the mesh), 409 when a newer draft took its place
-//   save(id, {text, docRev, file?})         write the text to its file, if the file is still at docRev (else 409 with its text and docRev); answers the new docRev
-//   rename(id, name)                        rename a tile's file: the new tile's {path, id}
-//   mine(id)                                copy a library tile to My tiles: {path, id}
-//   deleteTile(id)                          delete a tile's file from a folder the preview lists (Undo of that copy)
-//   newTile(name, size, into?)              a new tile in My tiles (or in the folder `into` {root, dir}): {path, id}
-//   addPlace()                              show the program's folder chooser; the folder chosen is a place from now on: {added, root, label, snapshot}, or {cancelled: true}
-//   removePlace(root)                       take an added place off the list (its folder is left alone)
-//   newFolder(root, dir, name) / renameFolder(root, dir, name) / trashFolder(root, dir)   a folder of place `root`, named by its path below it
-//   moveTile(id, {root, dir})               a tile into a folder   duplicateTile(id)   a copy beside it   trashTile(id)   to the Trash
-//   undoTrash(n)                            put back what a trash answered `undo: n` for
-//   (each of these answers with the new list, `snapshot`, to take at once)
-//   edit(body)                              a text edit (a control set, a node inserted or removed)
-//   setTarget({system?, printer?})          choose the build target (base system, printer profile) for every build
-//   exportTile(id, body)                    write STL / 3MF ({where: true} asks where it would go)
-//   reveal(path)                            show a written file in the file manager
-//   platesShow(id, plate)                   the plate of a print list the view shows (from 0)
-//   platesSet({list, key, value, docRev})   set a word of the list's `plates` line (printer, mode, group, gap, margin, turn); value null removes it
-//   platesExport(id)                        build every piece in full and write the plates: {ok, files, format, plates, failures}
-//   listsNew({name, root?, dir?})           a new print list (.dmap) in My tiles or a folder of a place: {path, id, tile}
-//   listsAdd({tile, list?, seed?, system?}) one more copy of a tile in a list (a new list when none is named): {ok, list, path, count, made, before, text, docRev, note?}
-//   listsCount({list, id, count, docRev})   a piece's copies; listsRemove({list, id, docRev}) takes the piece out
-//   listsRestore({list, text, docRev})      Undo or Redo: a text written back, if the file is still at docRev
-//   mapsAdd({list, tile, at, rot?, seed?, system?, docRev})   a new placed piece (at is `(2sq, 1sq)`): {ok, list, before, text, docRev, id, scene}
-//   mapsSet({list, id, set, docRev})        words of one piece (at, rot, bottom, seed, print, system; null takes one off)
-//   mapsBatch({list, edits: [{id, set}], docRev})  the same for several pieces in one change
-//   mapsDup({list, id, at, docRev}) / mapsRemove({list, id, docRev})   a copy of a piece at a place / a piece taken out (and its pin)
-//   mapsPin({list, id, plate, x, y, turn, docRev}) / mapsUnpin({list, id, docRev}) / mapsUnpinAll({list, docRev})   a piece kept where it was dropped on a plate
-//     (every one answers with `before` and `text` for Undo and Redo, `docRev`: the revision the file has now, and `scene`: the map
-//     as it now reads; a file that has moved on since `docRev` is a 409 with its `text`, `docRev` and `scene`; the first edit of a file
-//     whose pieces have no ids writes ids on all of them and says so in `note`)
-//   inventoryHave(body)                     one good print of a tile: {tile, colour, system?, seed?, count?, on?}; {ok, lines} (docs/inventory.html)
-//   inventoryRecord(body)                   the sheet after a print: {list, plate, failed: [n…], on?}
-//   inventoryGone(body)                     one of a piece lost: {tile, seed, system, colour, note?, on?}
-//   inventoryRelink(body)                   a tile has another path: {from, to (a tile's id), on?}
-//   inventoryReprint(body)                  a piece, with its recorded seed, into a print list: {tile, seed, system, colour, list?}
+// A call answers {status, body}, and for a failure the program's ServerError as
+// `error` (body.error holds its words, beside what the refusal also says: the
+// text a 409 lost to, the mistakes of a 422).  Status 0 is a lost connection.
+// The reads answer their data or throw.
 //
 // The event stream: a snapshot, then one event per change, each with a
 // revision.  When the stream drops it is opened again with the epoch (which
@@ -64,20 +24,41 @@
 
 import { serverErrorOf } from './server-error.js';
 
+/** @typedef {import('./api').Calls} Calls */
+/** @typedef {import('./api').Reads} Reads */
+/** @template {keyof import('./api').Calls} R @typedef {import('./api').Req<R>} Req */
+/** @template {keyof import('./api').Calls} R @typedef {import('./api').Res<R>} Res */
+/** @typedef {import('./api').Snapshot} Snapshot */
+/** @typedef {import('./api').TileSummary} TileSummary */
+
+/**
+ * What a call answers: the status, and the body (the answer, or for a failure
+ * what the refusal says, with its words as `error`).
+ * @template T
+ * @typedef {{
+ *   status: number,
+ *   body: T & { error?: string, text?: string, errors?: import('./api').Mistake[], superseded?: boolean },
+ *   error?: import('./server-error.js').ServerError,
+ * }} Reply
+ */
+
 // fetch rejects with a TypeError when it cannot reach the program (down, or
 // the connection dropped): that is a lost connection, shown by the chip, and
 // the page repeats what it needs on reconnect.  Only that rejection, from
 // fetch itself, is made an `Offline`; any other error, a TypeError from the
 // page's own code included, is a failure and goes to the error panel.
 export class Offline extends Error {
+  /** @param {unknown} cause */
   constructor(cause) {
     super('the editor is disconnected', { cause });
     this.name = 'Offline';
   }
 }
+/** @param {unknown} e */
 export const isOffline = (e) => e instanceof Offline;
 const offline = isOffline;
 /** `fetch`, whose network failure is an `Offline` and nothing else is. */
+/** @type {typeof fetch} */
 async function netFetch(...args) {
   try {
     return await fetch(...args);
@@ -90,18 +71,19 @@ async function netFetch(...args) {
 // What a failed reply says, as the page's own error for what it was doing
 // (`what`), holding the program's ServerError as its cause: one error with
 // both stacks.  A reply that is not the program's JSON has its words only.
+/** @param {Response} r @param {string} what */
 const replyError = async (r, what) => {
   const raw = await r.text();
   let body = null;
   try { body = JSON.parse(raw); } catch { /* not JSON: serverErrorOf makes the error from the words */ }
   const se = serverErrorOf(r.status, body, raw);
-  return new Error(`${what}: ${se.message}`, { cause: se });
+  return new Error(`${what}: ${se?.message}`, { cause: se });
 };
 
-// One reply to an editor call: {status, body}, and for a failure the
-// program's ServerError as `error` (with body.error its words, for the
-// places that say them beside what was asked).  Only a success may be
-// something other than JSON.
+// One reply to a call: {status, body}, and for a failure the program's
+// ServerError as `error` (with body.error its words, for the places that say
+// them beside what was asked).  Only a success may be something other than JSON.
+/** @param {Response} r @param {string} path @returns {Promise<Reply<any>>} */
 const reply = async (r, path) => {
   const raw = await r.text();
   let body = null;
@@ -113,35 +95,47 @@ const reply = async (r, path) => {
   return { status: r.status, body: { ...(body && typeof body === 'object' ? body : {}), error: error.message }, error };
 };
 
+/** The URL of a call: `/api/tiles/:id/save` with the tile's id put in. */
+const urlOf = (/** @type {string} */ route, /** @type {string | undefined} */ id) => {
+  const path = route.slice(route.indexOf(' ') + 1);
+  return id === undefined ? path : path.replace(':id', encodeURIComponent(id));
+};
+
 export function browserHost() {
+  /** @type {string | null} */
   let token = null;
   const session = async () => {
     if (!token) {
       const r = await netFetch('/api/session', { cache: 'no-store' });
       if (!r.ok) throw await replyError(r, 'session');
-      token = (await r.json()).token;
+      token = /** @type {import('./api').SessionRes} */ (await r.json()).token;
     }
     return token;
   };
-  // One editor call: JSON in, {status, body} out (or, for a draft, the
-  // bytes), with the session token.  A reply that is not JSON has its words
-  // as the body's error.  Only a lost connection is status 0.
-  const call = async (path, body, bytes = false) => {
+  /**
+   * One call of the editor: JSON in, {status, body} out, with the session token.
+   * A reply that is not JSON has its words as the body's error.  Only a lost
+   * connection is status 0.
+   * @template {keyof Calls} R
+   * @param {R} route @param {Req<R>} body @param {string} [id] the tile, for a call under `/api/tiles/:id/`
+   * @returns {Promise<Reply<Res<R>>>}
+   */
+  const call = async (route, body, id) => {
+    const path = urlOf(route, id);
     try {
       const r = await netFetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-DT-Token': await session() },
         body: JSON.stringify(body),
       });
-      if (bytes && r.ok) return { status: r.status, buffer: await r.arrayBuffer() };
       return await reply(r, path);
     } catch (e) {
-      if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
+      if (offline(e)) return /** @type {any} */ ({ status: 0, body: { error: 'the editor is disconnected' } });
       throw e;
     }
   };
-  // One read of the program with a query: {status, body}, as a call is.
-  const read = async (path, query) => {
+  /** One read of the program with a query: {status, body}, as a call is. */
+  const read = async (/** @type {string} */ path, /** @type {Record<string, string>} */ query) => {
     try {
       const r = await netFetch(`${path}?${new URLSearchParams(query)}`, { cache: 'no-store' });
       return await reply(r, path);
@@ -150,14 +144,25 @@ export function browserHost() {
       throw e;
     }
   };
+  /** @param {string} id @param {string} what */
   const tile = (id, what) => `/api/tiles/${encodeURIComponent(id)}/${what}`;
   return {
     // One loop: the stream is live once its first message is in; when it
     // drops or is refused, it is closed and opened again a second later, for
     // as long as the page is open.  The server back may be a new one, with a
     // new token: it is fetched afresh.
+    /**
+     * @param {{
+     *   onSnapshot: (s: Snapshot) => void, onTile: (t: TileSummary) => void,
+     *   onProgress: (id: string, p: import('./api').Progress) => void,
+     *   onMessage: (m: any) => void, onState: (s: 'live' | 'offline') => void,
+     * }} handlers
+     */
     connect({ onSnapshot, onTile, onProgress, onMessage, onState }) {
-      let epoch = null, rev = null;
+      /** @type {string | null} */
+      let epoch = null;
+      /** @type {number | null} */
+      let rev = null;
       const open = () => {
         const q = epoch != null && rev != null ? `?epoch=${epoch}&since=${rev}` : '';
         const es = new EventSource(`/api/events${q}`);
@@ -174,11 +179,18 @@ export function browserHost() {
       };
       open();
     },
+    /** @param {string} id @returns {Promise<ArrayBuffer>} the tile's binary mesh */
     async fetchMesh(id) {
       const r = await netFetch(tile(id, 'mesh'), { cache: 'no-store' });
       if (!r.ok) throw await replyError(r, 'mesh');
       return r.arrayBuffer();
     },
+    /**
+     * A tile's mesh at a tier (`super-low`, `low`, `full`) for a map's piece: from the cache or built, not
+     * checked unless full; a piece as the map builds it (its seed, its system, the map's printer).
+     * @param {string} id @param {{tier: string, seed?: number | null, system?: string, printer?: string}} q
+     * @returns {Promise<ArrayBuffer>}
+     */
     async fetchTier(id, { tier, seed, system, printer }) {
       const q = new URLSearchParams({ tier });
       if (seed != null) q.set('seed', String(seed));
@@ -188,12 +200,17 @@ export function browserHost() {
       if (!r.ok) throw await replyError(r, `the ${tier} mesh`);
       return r.arrayBuffer();
     },
+    /** One stage's sketch while it builds (null once the build has moved on). @param {string} id @param {number} sketch */
     async fetchSketch(id, sketch) {
       const r = await netFetch(tile(id, `sketch?id=${sketch}`), { cache: 'no-store' });
       if (r.status === 404) return null; // the build moved on: its sketches are gone
       if (!r.ok) throw await replyError(r, 'sketch');
       return r.arrayBuffer();
     },
+    /**
+     * Build a tile not built yet; `debug` says whether the debug layer is on for it (its marks are collected only then).
+     * @param {string} id @param {{debug?: boolean}} [opts]
+     */
     async build(id, { debug } = {}) {
       let r;
       const q = typeof debug === 'boolean' ? `?debug=${debug ? 1 : 0}` : '';
@@ -203,6 +220,7 @@ export function browserHost() {
       }
       if (r.status >= 500) throw await replyError(r, 'build');
     },
+    /** The text of a document of a tile, with its revision (null: no such tile or file any more). @param {string} id @param {string} [file] @returns {Promise<import('./api').TextRes | null>} */
     async text(id, file) {
       const q = file ? `?file=${encodeURIComponent(file)}` : '';
       const r = await netFetch(tile(id, `text${q}`), { cache: 'no-store' });
@@ -210,73 +228,144 @@ export function browserHost() {
       if (!r.ok) throw await replyError(r, 'text');
       return r.json();
     },
+    /** @returns {Promise<import('./api').AboutRes>} */
     async about() {
       const r = await netFetch('/api/about', { cache: 'no-store' });
       if (!r.ok) throw await replyError(r, 'about');
       return r.json();
     },
+    /** The element schema. */
     async elements() {
       const r = await netFetch('/api/elements', { cache: 'force-cache' });
       if (!r.ok) throw await replyError(r, 'elements');
       return r.json();
     },
+    /** The tile's nodes with their controls, and the language's words. */
     async language() {
       const r = await netFetch('/api/language', { cache: 'force-cache' });
       if (!r.ok) throw await replyError(r, 'language');
       return r.json();
     },
-    names: (text) => call('/api/names', { text }),
-    check: (id, body) => call(tile(id, 'check'), body),
-    offers: (id, body) => call(tile(id, 'offers'), body),
+    /** The names the text makes, by the program's parser. @param {string} text */
+    names: (text) => call('POST /api/names', { text }),
+    /** What the text would build. @param {string} id @param {Req<'POST /api/tiles/:id/check'>} body */
+    check: (id, body) => call('POST /api/tiles/:id/check', body, id),
+    /** What the Add menu may offer at a place of the stack. @param {string} id @param {Req<'POST /api/tiles/:id/offers'>} body */
+    offers: (id, body) => call('POST /api/tiles/:id/offers', body, id),
+    /** The weighting functions over a range, or one value, with the program's curves (a read; no token). @param {Record<string, string>} query */
     weightings: (query) => read('/api/weightings', query),
-    checkValue: (element, control, typed) => call('/api/check-value', { element, control, typed }),
-    draft: (id, body) => call(tile(id, 'draft'), body, true),
-    save: (id, body) => call(tile(id, 'save'), body),
-    rename: (id, name) => call(tile(id, 'rename'), { name }),
-    mine: (id) => call(tile(id, 'mine'), {}),
-    deleteTile: (id) => call(tile(id, 'delete'), {}),
-    reportMessage: (body) => call('/api/messages', body),
+    /** What the reader refuses in a typed value. @param {string} element @param {string} control @param {string} typed */
+    checkValue: (element, control, typed) => call('POST /api/check-value', { element, control, typed }),
+    /**
+     * A quick build of the text (with the debug layer's marks when `debug`): {status, buffer} (the mesh),
+     * 409 when a newer draft took its place.
+     * @param {string} id @param {Req<'POST /api/tiles/:id/draft'>} body
+     * @returns {Promise<{status: number, buffer: ArrayBuffer} | Reply<{}>>}
+     */
+    async draft(id, body) {
+      const path = urlOf('POST /api/tiles/:id/draft', id);
+      try {
+        const r = await netFetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-DT-Token': await session() },
+          body: JSON.stringify(body),
+        });
+        if (r.ok) return { status: r.status, buffer: await r.arrayBuffer() };
+        return await reply(r, path);
+      } catch (e) {
+        if (offline(e)) return { status: 0, body: { error: 'the editor is disconnected' } };
+        throw e;
+      }
+    },
+    /** Write the text to its file, if the file is still at `docRev` (else 409 with its text and docRev). @param {string} id @param {Req<'POST /api/tiles/:id/save'>} body */
+    save: (id, body) => call('POST /api/tiles/:id/save', body, id),
+    /** Rename a tile's file. @param {string} id @param {string} name */
+    rename: (id, name) => call('POST /api/tiles/:id/rename', { name }, id),
+    /** Copy a library tile to My tiles. @param {string} id */
+    mine: (id) => call('POST /api/tiles/:id/mine', {}, id),
+    /** Delete a tile's file from a folder the preview lists (Undo of that copy). @param {string} id */
+    deleteTile: (id) => call('POST /api/tiles/:id/delete', {}, id),
+    /** A failure of the page's own, to join the stream. @param {Req<'POST /api/messages'>} body */
+    reportMessage: (body) => call('POST /api/messages', body),
+    /** The tile's open messages as text, the program's one renderer (Copy all). @param {string} id */
     async messagesText(id) {
       const r = await netFetch(`/api/messages?${new URLSearchParams({ tile: id, state: 'open', format: 'text' })}`, { cache: 'no-store' });
       if (!r.ok) throw await replyError(r, 'messages');
       return r.text();
     },
-    newTile: (name, size, into) => call('/api/new', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
-    addPlace: () => call('/api/places/add', {}),
-    removePlace: (root) => call('/api/places/remove', { root }),
-    newFolder: (root, dir, name) => call('/api/folders/new', { root, dir, name }),
-    renameFolder: (root, dir, name) => call('/api/folders/rename', { root, dir, name }),
-    trashFolder: (root, dir) => call('/api/folders/trash', { root, dir }),
-    moveTile: (id, into) => call(tile(id, 'move'), { root: into.root, dir: into.dir }),
-    duplicateTile: (id) => call(tile(id, 'duplicate'), {}),
-    trashTile: (id) => call(tile(id, 'trash'), {}),
-    undoTrash: (undo) => call('/api/trash/undo', { undo }),
-    edit: (body) => call('/api/edit', body),
-    setTarget: (body) => call('/api/target', body),
-    printersScan: (slicer) => call('/api/printers/scan', slicer ? { slicer } : {}),
-    printersImport: (body) => call('/api/printers/import', body),
-    exportTile: (id, body) => call(tile(id, 'export'), body),
-    reveal: (path) => call('/api/reveal', { path }),
-    platesShow: (id, plate) => call('/api/plates/show', { tile: id, plate }),
-    platesSet: ({ list, key, value, docRev }) => call('/api/plates/set', { tile: list, key, value, docRev }),
-    platesExport: (id) => call('/api/plates/export', { tile: id }),
-    listsNew: (body) => call('/api/lists/new', body),
-    listsAdd: (body) => call('/api/lists/add', body),
-    listsCount: (body) => call('/api/lists/count', body),
-    listsRemove: (body) => call('/api/lists/remove', body),
-    listsRestore: (body) => call('/api/lists/restore', body),
-    mapsAdd: (body) => call('/api/maps/add', body),
-    mapsSet: (body) => call('/api/maps/set', body),
-    mapsBatch: (body) => call('/api/maps/batch', body),
-    mapsDup: (body) => call('/api/maps/dup', body),
-    mapsRemove: (body) => call('/api/maps/remove', body),
-    mapsPin: (body) => call('/api/maps/pin', body),
-    mapsUnpin: (body) => call('/api/maps/unpin', body),
-    mapsUnpinAll: (body) => call('/api/maps/unpin-all', body),
-    inventoryHave: (body) => call('/api/inventory/have', body),
-    inventoryRecord: (body) => call('/api/inventory/record', body),
-    inventoryGone: (body) => call('/api/inventory/gone', body),
-    inventoryRelink: (body) => call('/api/inventory/relink', body),
-    inventoryReprint: (body) => call('/api/inventory/reprint', body),
+    /** A new tile in My tiles (or in the folder `into`). @param {string} name @param {string} size @param {{root: number, dir: string}} [into] */
+    newTile: (name, size, into) => call('POST /api/new', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
+    /** Show the program's folder chooser; the folder chosen is a place from now on. */
+    addPlace: () => call('POST /api/places/add', {}),
+    /** Take an added place off the list (its folder is left alone). @param {number} root */
+    removePlace: (root) => call('POST /api/places/remove', { root }),
+    /** A folder of place `root`, named by its path below it. @param {number} root @param {string} dir @param {string} name */
+    newFolder: (root, dir, name) => call('POST /api/folders/new', { root, dir, name }),
+    /** @param {number} root @param {string} dir @param {string} name */
+    renameFolder: (root, dir, name) => call('POST /api/folders/rename', { root, dir, name }),
+    /** @param {number} root @param {string} dir */
+    trashFolder: (root, dir) => call('POST /api/folders/trash', { root, dir }),
+    /** A tile into a folder. @param {string} id @param {{root: number, dir: string}} into */
+    moveTile: (id, into) => call('POST /api/tiles/:id/move', { root: into.root, dir: into.dir }, id),
+    /** A copy beside the tile. @param {string} id */
+    duplicateTile: (id) => call('POST /api/tiles/:id/duplicate', {}, id),
+    /** To the Trash. @param {string} id */
+    trashTile: (id) => call('POST /api/tiles/:id/trash', {}, id),
+    /** Put back what a trash answered `undo: n` for. @param {number} undo */
+    undoTrash: (undo) => call('POST /api/trash/undo', { undo }),
+    /** A text edit (a control set, a node inserted or removed). @param {Req<'POST /api/edit'>} body */
+    edit: (body) => call('POST /api/edit', body),
+    /** Choose the build target (base system, printer profile) for every build. @param {Req<'POST /api/target'>} body */
+    setTarget: (body) => call('POST /api/target', body),
+    /** What the installed slicers have (none named), or one slicer's models. @param {string} [slicer] */
+    printersScan: (slicer) => call('POST /api/printers/scan', slicer ? { slicer } : {}),
+    /** @param {Req<'POST /api/printers/import'>} body */
+    printersImport: (body) => call('POST /api/printers/import', body),
+    /** Write STL / 3MF ({where: true} asks where it would go). @param {string} id @param {Req<'POST /api/tiles/:id/export'>} body */
+    exportTile: (id, body) => call('POST /api/tiles/:id/export', body, id),
+    /** Show a written file in the file manager. @param {string} path */
+    reveal: (path) => call('POST /api/reveal', { path }),
+    /** The plate of a print list the view shows (from 0). @param {string} list @param {number} plate */
+    platesShow: (list, plate) => call('POST /api/plates/show', { list, plate }),
+    /** Set a word of the list's `plates` line; value null removes it. @param {Req<'POST /api/plates/set'>} body */
+    platesSet: (body) => call('POST /api/plates/set', body),
+    /** Build every piece in full and write the plates. @param {string} list */
+    platesExport: (list) => call('POST /api/plates/export', { list }),
+    /** @param {Req<'POST /api/lists/new'>} body */
+    listsNew: (body) => call('POST /api/lists/new', body),
+    /** One more copy of a tile in a list (a new list when none is named). @param {Req<'POST /api/lists/add'>} body */
+    listsAdd: (body) => call('POST /api/lists/add', body),
+    /** @param {Req<'POST /api/lists/count'>} body */
+    listsCount: (body) => call('POST /api/lists/count', body),
+    /** @param {Req<'POST /api/lists/remove'>} body */
+    listsRemove: (body) => call('POST /api/lists/remove', body),
+    /** Undo or Redo: a text written back, if the file is still at docRev. @param {Req<'POST /api/lists/restore'>} body */
+    listsRestore: (body) => call('POST /api/lists/restore', body),
+    /** @param {Req<'POST /api/maps/add'>} body */
+    mapsAdd: (body) => call('POST /api/maps/add', body),
+    /** @param {Req<'POST /api/maps/set'>} body */
+    mapsSet: (body) => call('POST /api/maps/set', body),
+    /** @param {Req<'POST /api/maps/batch'>} body */
+    mapsBatch: (body) => call('POST /api/maps/batch', body),
+    /** @param {Req<'POST /api/maps/dup'>} body */
+    mapsDup: (body) => call('POST /api/maps/dup', body),
+    /** @param {Req<'POST /api/maps/remove'>} body */
+    mapsRemove: (body) => call('POST /api/maps/remove', body),
+    /** @param {Req<'POST /api/maps/pin'>} body */
+    mapsPin: (body) => call('POST /api/maps/pin', body),
+    /** @param {Req<'POST /api/maps/unpin'>} body */
+    mapsUnpin: (body) => call('POST /api/maps/unpin', body),
+    /** @param {Req<'POST /api/maps/unpin-all'>} body */
+    mapsUnpinAll: (body) => call('POST /api/maps/unpin-all', body),
+    /** One good print of a tile. @param {Req<'POST /api/inventory/have'>} body */
+    inventoryHave: (body) => call('POST /api/inventory/have', body),
+    /** The sheet after a print. @param {Req<'POST /api/inventory/record'>} body */
+    inventoryRecord: (body) => call('POST /api/inventory/record', body),
+    /** One of a piece lost. @param {Req<'POST /api/inventory/gone'>} body */
+    inventoryGone: (body) => call('POST /api/inventory/gone', body),
+    /** A tile has another path. @param {Req<'POST /api/inventory/relink'>} body */
+    inventoryRelink: (body) => call('POST /api/inventory/relink', body),
+    /** A piece, with its recorded seed, into a print list. @param {Req<'POST /api/inventory/reprint'>} body */
+    inventoryReprint: (body) => call('POST /api/inventory/reprint', body),
   };
 }

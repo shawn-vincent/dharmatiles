@@ -27,11 +27,141 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
+use super::api::{Out, Reply, Snapshot, TileSummary};
 use super::edit::bad;
 use super::roots::kind_of;
 use super::*;
 
-type Reply = (&'static str, Value);
+// ---- the calls' types ------------------------------------------------------------------
+
+/// A call with nothing to say besides which tile it is for.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(type = "Record<string, never>"))]
+#[serde(deny_unknown_fields)]
+pub struct Nothing {}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct PlacesRemoveReq {
+    /// The place, by its index in `roots`.
+    pub root: usize,
+}
+
+/// What `places/add` answers: the place added, or that the chooser was closed.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(untagged)]
+pub enum PlacesAddRes {
+    Cancelled { cancelled: bool },
+    Added(Box<PlaceAdded>),
+}
+
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct PlaceAdded {
+    pub added: bool,
+    pub root: usize,
+    pub label: String,
+    pub path: String,
+    pub snapshot: Snapshot,
+}
+
+/// A change to the places or their folders: the list as it now is.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Changed {
+    pub snapshot: Snapshot,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct FolderReq {
+    pub root: usize,
+    /// The folder, by its path below the place (`""` is the place).
+    pub dir: String,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct FolderNamedReq {
+    pub root: usize,
+    pub dir: String,
+    pub name: String,
+}
+
+/// A folder made or renamed: its path below the place.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct FolderDone {
+    pub snapshot: Snapshot,
+    pub dir: String,
+}
+
+/// Something moved to the Trash: what it was and the number its Undo goes by.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Trashed {
+    pub snapshot: Snapshot,
+    pub dir: Option<String>,
+    pub path: Option<String>,
+    pub undo: usize,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct TrashUndoReq {
+    pub undo: usize,
+}
+
+/// A tile (or folder) put back, with the list.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Restored {
+    pub path: String,
+    pub id: Option<String>,
+    pub tile: Option<TileSummary>,
+    pub snapshot: Snapshot,
+}
+
+/// A file that appeared or moved: where, and which tile it is.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Listed {
+    pub path: String,
+    pub id: Option<String>,
+    pub tile: Option<TileSummary>,
+}
+
+/// [`Listed`], with the list as it now is.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct ListedIn {
+    pub path: String,
+    pub id: Option<String>,
+    pub tile: Option<TileSummary>,
+    pub snapshot: Snapshot,
+}
+
+/// A tile moved into a folder.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct TileMoveReq {
+    pub root: usize,
+    pub dir: String,
+}
 
 // ---- the settings ------------------------------------------------------------------
 
@@ -285,10 +415,7 @@ fn really_inside(path: &Path, base: &Path) -> bool {
 }
 
 /// Place `root` as a folder place the user owns: its index checked, its folder on disk.
-fn place(shared: &Shared, root: &Value) -> Result<(usize, PathBuf), Reply> {
-    let Some(i) = root.as_u64().and_then(|i| usize::try_from(i).ok()) else {
-        return Err(bad("name the place by its number"));
-    };
+fn place(shared: &Shared, i: usize) -> Result<(usize, PathBuf), Reply> {
     let roots = shared.roots();
     let Some(r) = roots.get(i) else {
         return Err(refuse("404 Not Found", "no such place"));
@@ -307,9 +434,9 @@ fn place(shared: &Shared, root: &Value) -> Result<(usize, PathBuf), Reply> {
 
 /// Folder `dir` below place `root`: `(place index, the place's folder, the folder)`.  `must_exist`
 /// is for a folder acted on; a destination is the same.  The real path is checked to stay inside.
-fn folder(shared: &Shared, root: &Value, dir: &Value) -> Result<(usize, PathBuf, PathBuf), Reply> {
+fn folder(shared: &Shared, root: usize, dir: &str) -> Result<(usize, PathBuf, PathBuf), Reply> {
     let (i, base) = place(shared, root)?;
-    let names = components(dir.as_str().ok_or_else(|| bad("give the folder"))?)?;
+    let names = components(dir)?;
     let full = names.iter().fold(base.clone(), |p, n| p.join(n));
     if !full.is_dir() {
         return Err(refuse("404 Not Found", "no such folder"));
@@ -362,8 +489,8 @@ pub(super) fn owned_tile(shared: &Shared, tile: &str, what: &str) -> Result<Path
 
 /// One name of a file or folder from the page: one line of at most 80 characters, with what a
 /// file name cannot hold turned into `-`, and no leading dot.
-fn leaf_name(v: &Value, what: &str) -> Result<String, Reply> {
-    let name = v["name"].as_str().unwrap_or("").trim();
+fn leaf_name(name: &str, what: &str) -> Result<String, Reply> {
+    let name = name.trim();
     if name.chars().count() > 80 || name.contains(['\n', '\r']) {
         return Err(bad(format!(
             "a {what} name is one line of at most 80 characters"
@@ -403,29 +530,29 @@ pub(super) fn announce(shared: &Shared) {
 }
 
 /// `POST /api/places/add`: show the chooser; the folder chosen is a place from now on.
-pub(super) fn add_place(shared: &Shared) -> Reply {
+pub(super) fn add_place(shared: &Shared, _: Nothing) -> Out<PlacesAddRes> {
     let Some(settings) = shared.settings.clone() else {
-        return fail::failure(
+        return Err(fail::failure(
             "500 Internal Server Error",
             "no settings folder is set, so an added folder could not be kept",
-        );
+        ));
     };
     let picked = match shared.picker.choose() {
         Ok(Some(p)) => p,
         // the user closed the chooser: nothing to report, and nothing changes
-        Ok(None) => return ("200 OK", json!({ "cancelled": true })),
-        Err(e) => return fail::failure("500 Internal Server Error", e),
+        Ok(None) => return Ok(PlacesAddRes::Cancelled { cancelled: true }),
+        Err(e) => return Err(fail::failure("500 Internal Server Error", e)),
     };
     let _one_at_a_time = lock(&shared.gate);
     let real = match std::fs::canonicalize(&picked) {
         Ok(r) if r.is_dir() => r,
         Ok(r) => {
-            return refuse(
+            return Err(refuse(
                 "400 Bad Request",
                 format!("{} is not a folder", r.display()),
-            );
+            ));
         }
-        Err(e) => return io_failure("read", &picked, &e),
+        Err(e) => return Err(io_failure("read", &picked, &e)),
     };
     // a place may not lie in, or hold, another folder (a tile would be listed twice), nor touch the library
     let mut others: Vec<(String, PathBuf)> = shared
@@ -439,28 +566,28 @@ pub(super) fn add_place(shared: &Shared) -> Reply {
     for (label, d) in others {
         let other = std::fs::canonicalize(&d).unwrap_or(d);
         if real.starts_with(&other) {
-            return refuse(
+            return Err(refuse(
                 "409 Conflict",
                 format!("{} is already in {label}", real.display()),
-            );
+            ));
         }
         if other.starts_with(&real) {
-            return refuse(
+            return Err(refuse(
                 "409 Conflict",
                 format!(
                     "{} holds {label}: add a folder that does not",
                     real.display()
                 ),
-            );
+            ));
         }
     }
     let mut kept = match load_places(&settings) {
         Ok(k) => k,
-        Err(e) => return fail::failure("500 Internal Server Error", e),
+        Err(e) => return Err(fail::failure("500 Internal Server Error", e)),
     };
     kept.push(real.clone());
     if let Err(e) = save_places(&settings, &kept) {
-        return fail::failure("500 Internal Server Error", e);
+        return Err(fail::failure("500 Internal Server Error", e));
     }
     let root = Root::new(&label_of(&real), RootKind::Dir(real.clone())).with_role(Role::Added);
     let (index, label) = {
@@ -470,33 +597,34 @@ pub(super) fn add_place(shared: &Shared) -> Reply {
     };
     shared.rescan_held();
     announce(shared);
-    (
-        "200 OK",
-        json!({ "added": true, "root": index, "label": label, "path": real.to_string_lossy(), "snapshot": shared.snapshot() }),
-    )
+    Ok(PlacesAddRes::Added(Box::new(PlaceAdded {
+        added: true,
+        root: index,
+        label,
+        path: real.to_string_lossy().into_owned(),
+        snapshot: shared.snapshot(),
+    })))
 }
 
 /// `POST /api/places/remove` `{root}`: an added place leaves the list; its folder is left as it is.
-pub(super) fn remove_place(shared: &Shared, v: &Value) -> Reply {
+pub(super) fn remove_place(shared: &Shared, req: PlacesRemoveReq) -> Out<Changed> {
     let Some(settings) = shared.settings.clone() else {
-        return fail::failure(
+        return Err(fail::failure(
             "500 Internal Server Error",
             "no settings folder is set, so the change could not be kept",
-        );
+        ));
     };
     let _one_at_a_time = lock(&shared.gate);
-    let Some(i) = v["root"].as_u64().and_then(|i| usize::try_from(i).ok()) else {
-        return bad("name the place by its number");
-    };
+    let i = req.root;
     let roots = shared.roots();
     let Some(r) = roots.get(i) else {
-        return refuse("404 Not Found", "no such place");
+        return Err(refuse("404 Not Found", "no such place"));
     };
     if r.role != Role::Added {
-        return refuse(
+        return Err(refuse(
             "403 Forbidden",
             format!("{} is not a folder you added: it stays", r.label),
-        );
+        ));
     }
     let kept: Vec<PathBuf> = roots
         .iter()
@@ -505,7 +633,7 @@ pub(super) fn remove_place(shared: &Shared, v: &Value) -> Reply {
         .filter_map(|(_, r)| r.dir().map(Path::to_path_buf))
         .collect();
     if let Err(e) = save_places(&settings, &kept) {
-        return fail::failure("500 Internal Server Error", e);
+        return Err(fail::failure("500 Internal Server Error", e));
     }
     let gone: Vec<TileId> = {
         let mut tiles = lock(&shared.tiles);
@@ -534,48 +662,40 @@ pub(super) fn remove_place(shared: &Shared, v: &Value) -> Reply {
         lock(&shared.events).messages.forget(id);
     }
     announce(shared);
-    (
-        "200 OK",
-        json!({ "ok": true, "snapshot": shared.snapshot() }),
-    )
+    Ok(Changed {
+        snapshot: shared.snapshot(),
+    })
 }
 
 // ---- folders ------------------------------------------------------------------------------------
 
 /// A folder made, renamed or trashed is in the list at once: the answer says so.
-fn folder_done(shared: &Shared, extra: Value) -> Reply {
+fn rescanned(shared: &Shared) -> Snapshot {
     shared.rescan();
-    let mut body = json!({ "ok": true, "snapshot": shared.snapshot() });
-    if let (Some(b), Value::Object(x)) = (body.as_object_mut(), extra) {
-        b.extend(x);
-    }
-    ("200 OK", body)
+    shared.snapshot()
 }
 
 /// `POST /api/folders/new` `{root, dir, name}`.
-pub(super) fn new_folder(shared: &Shared, v: &Value) -> Reply {
-    let (_, _, parent) = match folder(shared, &v["root"], &v["dir"]) {
-        Ok(f) => f,
-        Err(e) => return e,
-    };
-    let name = match leaf_name(v, "folder") {
-        Ok(n) => n,
-        Err(e) => return e,
-    };
+pub(super) fn new_folder(shared: &Shared, req: FolderNamedReq) -> Out<FolderDone> {
+    let (_, _, parent) = folder(shared, req.root, &req.dir)?;
+    let name = leaf_name(&req.name, "folder")?;
     let to = parent.join(&name);
     // `create_dir` never goes over what is there
     match std::fs::create_dir(&to) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return refuse(
+            return Err(refuse(
                 "409 Conflict",
                 format!("“{name}” is already in this folder"),
-            );
+            ));
         }
-        Err(e) => return io_failure("make", &to, &e),
+        Err(e) => return Err(io_failure("make", &to, &e)),
     }
-    let rel = join_rel(v["dir"].as_str().unwrap_or(""), &name);
-    folder_done(shared, json!({ "dir": rel }))
+    let dir = join_rel(&req.dir, &name);
+    Ok(FolderDone {
+        snapshot: rescanned(shared),
+        dir,
+    })
 }
 
 fn join_rel(dir: &str, name: &str) -> String {
@@ -587,43 +707,39 @@ fn join_rel(dir: &str, name: &str) -> String {
 }
 
 /// `POST /api/folders/rename` `{root, dir, name}`: `dir` (not the place itself) gets a new last name.
-pub(super) fn rename_folder(shared: &Shared, v: &Value) -> Reply {
-    let (_, base, from) = match folder(shared, &v["root"], &v["dir"]) {
-        Ok(f) => f,
-        Err(e) => return e,
-    };
+pub(super) fn rename_folder(shared: &Shared, req: FolderNamedReq) -> Out<FolderDone> {
+    let (_, base, from) = folder(shared, req.root, &req.dir)?;
     if from == base {
-        return bad("a place is not renamed here: only a folder in it");
+        return Err(bad("a place is not renamed here: only a folder in it"));
     }
-    let name = match leaf_name(v, "folder") {
-        Ok(n) => n,
-        Err(e) => return e,
-    };
+    let name = leaf_name(&req.name, "folder")?;
     let Some(parent) = from.parent() else {
-        return bad("the folder has no parent");
+        return Err(bad("the folder has no parent"));
     };
     let to = parent.join(&name);
     if to != from && std::fs::symlink_metadata(&to).is_ok() {
         // a change of case only, on a disk that ignores case, is the same folder
         let same = matches!((std::fs::canonicalize(&from), std::fs::canonicalize(&to)), (Ok(a), Ok(b)) if a == b);
         if !same {
-            return refuse(
+            return Err(refuse(
                 "409 Conflict",
                 format!("“{name}” is already in this folder"),
-            );
+            ));
         }
     }
     if let Err(e) = std::fs::rename(&from, &to) {
-        return io_failure("rename", &from, &e);
+        return Err(io_failure("rename", &from, &e));
     }
     // the prints of the tiles in it follow them
     super::inventory::note_folder_rename(shared, &from, &to);
-    let dir = v["dir"].as_str().unwrap_or("");
-    let rel = match dir.rsplit_once('/') {
+    let dir = match req.dir.rsplit_once('/') {
         Some((up, _)) => join_rel(up, &name),
         None => name,
     };
-    folder_done(shared, json!({ "dir": rel }))
+    Ok(FolderDone {
+        snapshot: rescanned(shared),
+        dir,
+    })
 }
 
 /// Move `from` into the Trash under a name that is free there; where it went.
@@ -673,55 +789,54 @@ fn into_trash(shared: &Shared, from: &Path) -> Result<PathBuf, Reply> {
 }
 
 /// Trash `from` and answer with the number its Undo goes by.
-fn trashed(shared: &Shared, from: &Path, extra: Value) -> Reply {
-    let to = match into_trash(shared, from) {
-        Ok(t) => t,
-        Err(e) => return e,
-    };
+fn trashed(
+    shared: &Shared,
+    from: &Path,
+    dir: Option<String>,
+    path: Option<String>,
+) -> Out<Trashed> {
+    let to = into_trash(shared, from)?;
     let undo = {
         let mut kept = lock(&shared.trashed);
         kept.push((from.to_path_buf(), to));
         kept.len() - 1
     };
-    let mut extra = extra;
-    if let Some(o) = extra.as_object_mut() {
-        o.insert("undo".to_owned(), json!(undo));
-    }
-    folder_done(shared, extra)
+    Ok(Trashed {
+        snapshot: rescanned(shared),
+        dir,
+        path,
+        undo,
+    })
 }
 
 /// `POST /api/folders/trash` `{root, dir}`.
-pub(super) fn trash_folder(shared: &Shared, v: &Value) -> Reply {
-    let (_, base, from) = match folder(shared, &v["root"], &v["dir"]) {
-        Ok(f) => f,
-        Err(e) => return e,
-    };
+pub(super) fn trash_folder(shared: &Shared, req: FolderReq) -> Out<Trashed> {
+    let (_, base, from) = folder(shared, req.root, &req.dir)?;
     if from == base {
-        return bad("a place is taken off the list, not trashed: only a folder in it is");
+        return Err(bad(
+            "a place is taken off the list, not trashed: only a folder in it is",
+        ));
     }
-    trashed(shared, &from, json!({ "dir": v["dir"] }))
+    trashed(shared, &from, Some(req.dir), None)
 }
 
 /// `POST /api/tiles/ID/trash`.
-pub(super) fn trash_tile(shared: &Shared, tile: &str) -> Reply {
-    let (_, path) = match tile_file(shared, tile, "moved to the Trash") {
-        Ok(f) => f,
-        Err(e) => return e,
-    };
+pub(super) fn trash_tile(shared: &Shared, tile: &super::api::TileRef, _: Nothing) -> Out<Trashed> {
+    let (_, path) = tile_file(shared, &tile.path, "moved to the Trash")?;
     if !path.is_file() {
-        return refuse("404 Not Found", "the tile's file is not there");
+        return Err(refuse("404 Not Found", "the tile's file is not there"));
     }
-    trashed(shared, &path, json!({ "path": tile }))
+    trashed(shared, &path, None, Some(tile.path.clone()))
 }
 
 /// `POST /api/trash/undo` `{undo}`: what was trashed goes back where it was, when that place is free.
-pub(super) fn undo_trash(shared: &Shared, v: &Value) -> Reply {
-    let Some(n) = v["undo"].as_u64().and_then(|n| usize::try_from(n).ok()) else {
-        return bad("give the number the Trash answered");
-    };
-    let entry = lock(&shared.trashed).get(n).cloned();
+pub(super) fn undo_trash(shared: &Shared, req: TrashUndoReq) -> Out<Restored> {
+    let entry = lock(&shared.trashed).get(req.undo).cloned();
     let Some((from, to)) = entry else {
-        return refuse("404 Not Found", "nothing was trashed under that number");
+        return Err(refuse(
+            "404 Not Found",
+            "nothing was trashed under that number",
+        ));
     };
     // the place it came from must still be one the user owns
     let roots = shared.roots();
@@ -732,40 +847,44 @@ pub(super) fn undo_trash(shared: &Shared, v: &Value) -> Reply {
             })
     });
     if !inside {
-        return refuse(
+        return Err(refuse(
             "409 Conflict",
             "the folder it came from is not there any more: take it out of the Trash yourself",
-        );
+        ));
     }
     if std::fs::symlink_metadata(&from).is_ok() {
-        return refuse(
+        return Err(refuse(
             "409 Conflict",
             format!("{} is there again: it is left in the Trash", from.display()),
-        );
+        ));
     }
     if let Err(e) = std::fs::rename(&to, &from) {
-        return io_failure("put back", &to, &e);
+        return Err(io_failure("put back", &to, &e));
     }
     let path = from.to_string_lossy().into_owned();
     let is_tile = from.is_file();
     shared.rescan();
     let id = tile_id(&path);
     let tile = if is_tile { shared.summary(&id) } else { None };
-    (
-        "200 OK",
-        json!({ "ok": true, "path": path, "id": tile.as_ref().map(|_| id), "tile": tile, "snapshot": shared.snapshot() }),
-    )
+    Ok(Restored {
+        path,
+        id: tile.as_ref().map(|_| id),
+        tile,
+        snapshot: shared.snapshot(),
+    })
 }
 
 // ---- tiles ----------------------------------------------------------------------------------------
 
 /// A file appears at `dest`: listed, its build asked for, and its state answered with the list.
-fn listed_with_snapshot(shared: &Shared, dest: &Path) -> Reply {
-    let (status, mut body) = super::edit::listed(shared, dest);
-    if let Some(b) = body.as_object_mut() {
-        b.insert("snapshot".to_owned(), shared.snapshot());
+fn listed_with_snapshot(shared: &Shared, dest: &Path) -> ListedIn {
+    let l = super::edit::listed(shared, dest);
+    ListedIn {
+        path: l.path,
+        id: l.id,
+        tile: l.tile,
+        snapshot: shared.snapshot(),
     }
-    (status, body)
 }
 
 /// Put `from` at `to` without ever going over a file there: a link first (which refuses a name
@@ -812,65 +931,57 @@ pub(super) fn move_no_clobber(from: &Path, to: &Path, clash: &str) -> Result<(),
 }
 
 /// `POST /api/tiles/ID/move` `{root, dir}`: the tile's file goes into that folder, under the same name.
-pub(super) fn move_tile(shared: &Shared, tile: &str, v: &Value) -> Reply {
-    let (_, from) = match tile_file(shared, tile, "moved") {
-        Ok(f) => f,
-        Err(e) => return e,
-    };
-    let (_, _, dest_dir) = match folder(shared, &v["root"], &v["dir"]) {
-        Ok(f) => f,
-        Err(e) => return e,
-    };
+pub(super) fn move_tile(
+    shared: &Shared,
+    tile: &super::api::TileRef,
+    req: TileMoveReq,
+) -> Out<ListedIn> {
+    let (_, from) = tile_file(shared, &tile.path, "moved")?;
+    let (_, _, dest_dir) = folder(shared, req.root, &req.dir)?;
     let Some(name) = from.file_name() else {
-        return bad("the tile has no name");
+        return Err(bad("the tile has no name"));
     };
     let to = dest_dir.join(name);
     if to == from {
-        return listed_with_snapshot(shared, &to);
+        return Ok(listed_with_snapshot(shared, &to));
     }
     let clash = format!(
         "a tile called “{}” is already in that folder",
         from.file_stem()
             .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
     );
-    match move_no_clobber(&from, &to, &clash) {
-        Ok(()) => {
-            // its prints in the inventory follow it
-            super::inventory::note_rename(shared, &from, &to);
-            listed_with_snapshot(shared, &to)
-        }
-        Err(e) => e,
-    }
+    move_no_clobber(&from, &to, &clash)?;
+    // its prints in the inventory follow it
+    super::inventory::note_rename(shared, &from, &to);
+    Ok(listed_with_snapshot(shared, &to))
 }
 
 /// `POST /api/tiles/ID/duplicate`: a copy beside the tile, “Name copy”, never over a file.
-pub(super) fn duplicate_tile(shared: &Shared, tile: &str) -> Reply {
-    let (_, from) = match tile_file(shared, tile, "copied") {
-        Ok(f) => f,
-        Err(e) => return e,
-    };
-    let text = match std::fs::read(&from) {
-        Ok(t) => t,
-        Err(e) => return io_failure("read", &from, &e),
-    };
+pub(super) fn duplicate_tile(
+    shared: &Shared,
+    tile: &super::api::TileRef,
+    _: Nothing,
+) -> Out<ListedIn> {
+    let (_, from) = tile_file(shared, &tile.path, "copied")?;
+    let text = std::fs::read(&from).map_err(|e| io_failure("read", &from, &e))?;
     let Some(dir) = from.parent() else {
-        return bad("the tile has no folder");
+        return Err(bad("the tile has no folder"));
     };
     let stem = from
         .file_stem()
         .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-    match super::edit::write_new_bytes(dir, &format!("{stem} copy"), &text) {
-        Ok(dest) => listed_with_snapshot(shared, &dest),
-        Err(e) => e,
-    }
+    let dest = super::edit::write_new_bytes(dir, &format!("{stem} copy"), &text)?;
+    Ok(listed_with_snapshot(shared, &dest))
 }
 
-/// Where a new tile goes: folder `dir` of place `root` when both are given, else My tiles.
-pub(super) fn new_tile_dir(shared: &Shared, v: &Value) -> Option<Result<PathBuf, Reply>> {
-    if v["root"].is_null() {
-        return None;
-    }
-    Some(folder(shared, &v["root"], &v["dir"]).map(|(_, _, f)| f))
+/// Where a new tile goes: folder `dir` of place `root` when `root` is given, else My tiles.
+pub(super) fn new_tile_dir(
+    shared: &Shared,
+    root: Option<usize>,
+    dir: Option<&str>,
+) -> Option<Result<PathBuf, Reply>> {
+    let root = root?;
+    Some(folder(shared, root, dir.unwrap_or("")).map(|(_, _, f)| f))
 }
 
 #[cfg(test)]

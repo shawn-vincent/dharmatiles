@@ -212,10 +212,10 @@ export const layersMethods = {
     const b = this.bounds();
     // a map's grid is the map's: its squares over its extent, at the map's ground
     const sg = this.sceneOn ? this.sceneGridSpec : null;
-    const sq = sg ? sg.sq : this.plan?.square_mm;
+    const sq = sg ? sg.sq : this.plan?.squareMm;
     if (!b || !sq) return;
-    const [w, h] = sg ? [sg.w, sg.h] : this.plan.size_mm;
-    const z = (sg ? sg.z : (this.plan.datum_z ?? b.lo[2])) - GRID_BELOW_MM;
+    const [w, h] = sg ? [sg.w, sg.h] : this.plan.sizeMm;
+    const z = (sg ? sg.z : (this.plan.datumZ ?? b.lo[2])) - GRID_BELOW_MM;
     const reach = Math.max(w, h) * 6;
     const mat = new THREE.ShaderMaterial({
       uniforms: {
@@ -252,7 +252,7 @@ export const layersMethods = {
     if (!bed) return;
     const group = new THREE.Group();
     const ink = this.gridInk?.clone() ?? new THREE.Color(0.17, 0.2, 0.25);
-    const z = (this.plan?.datum_z ?? 0) - GRID_BELOW_MM * 0.5;
+    const z = (this.plan?.datumZ ?? 0) - GRID_BELOW_MM * 0.5;
     const rect = (x0, y0, x1, y1, fill, px, alpha) => {
       // the edge, drawn a few pixels wide whatever the zoom
       const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];

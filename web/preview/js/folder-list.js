@@ -59,7 +59,7 @@ function sizeThumb(t) {
 }
 
 const dotClass = (t) => {
-  const over = t.record && (t.record.audit.overhang_mm2 > 0 || t.record.audit.band_mm2 > 0);
+  const over = t.record && (t.record.audit.overhangMm2 > 0 || t.record.audit.bandMm2 > 0);
   return `dot ${t.status}${over && t.status === 'ready' ? ' over' : ''}`;
 };
 

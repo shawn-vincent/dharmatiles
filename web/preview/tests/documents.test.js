@@ -16,7 +16,7 @@ function fakeProgram(id, pieces) {
   const p = { id, rev: 1, pieces: structuredClone(pieces), printer: 'default', seq: 0, refused: 0 };
   p.sceneOf = () => ({
     docRev: p.rev, map: true, printer: p.printer, system: 'db', colour: 'single',
-    pieces: p.pieces.map((q) => ({ id: q.id, name: q.id, tile_id: 't1', seed: null, system: 'db', canon: 'lib:t', seed_used: 1, colour: 'single', print: 'missing', at: [q.x * 35, 0], rot: q.rot, size: [35, 35], sq: 35, bottom_mm: 0, count: 1, error: null })),
+    pieces: p.pieces.map((q) => ({ id: q.id, name: q.id, tileId: 't1', seed: null, system: 'db', canon: 'lib:t', seedUsed: 1, colour: 'single', print: 'missing', at: [q.x * 35, 0], rot: q.rot, size: [35, 35], sq: 35, bottomMm: 0, count: 1, error: null })),
   });
   p.platesOf = () => ({ printer: p.printer, label: PRINTERS.find((x) => x.name === p.printer).label, pieces: p.pieces.length, rev: p.rev });
   p.text = () => JSON.stringify({ printer: p.printer, pieces: p.pieces });
@@ -83,7 +83,7 @@ function world(seed) {
 
 /** Everything the page draws of the map, worked out from a document state and nothing else. */
 function views(state, selection = []) {
-  const tiles = [{ id: 't1', mesh_version: 1 }];
+  const tiles = [{ id: 't1', meshVersion: 1 }];
   const ps = piecesOf(state?.plan?.scene ?? null, tiles);
   return {
     pieces: ps.map((p) => [p.id, p.rot, p.at?.[0]]),

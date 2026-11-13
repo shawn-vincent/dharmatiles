@@ -20,12 +20,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use serde_json::{Value, json};
-
+use super::api::Reply;
 use super::{fail, lock};
-
-/// A reply that is not a success: the status and the body.
-pub(super) type Reply = (&'static str, Value);
 
 /// The documents the editor has read or written.
 #[derive(Default)]
@@ -64,8 +60,6 @@ pub(super) struct Edited {
     pub after: String,
     /// The revision the file has now.
     pub rev: u64,
-    /// What the edit's own function added to its answer.
-    pub extra: Value,
 }
 
 impl Docs {
@@ -103,12 +97,12 @@ impl Docs {
     /// # Errors
     /// The reply to send: the file cannot be read or written, the revision
     /// is stale, or `f` refused.
-    pub(super) fn edit(
+    pub(super) fn edit<X>(
         &self,
         path: &str,
         expect: Option<u64>,
-        f: impl FnOnce(&str) -> Result<(String, Value), Reply>,
-    ) -> Result<Edited, Reply> {
+        f: impl FnOnce(&str) -> Result<(String, X), Reply>,
+    ) -> Result<(Edited, X), Reply> {
         let doc = self.doc(path);
         let mut st = lock(&doc.state);
         let before = std::fs::read_to_string(path).map_err(|e| read_failed(path, &e))?;
@@ -131,12 +125,14 @@ impl Docs {
             st.hash = Some(dt_eval::doc::text_hash(&after));
             st.rev += 1;
         }
-        Ok(Edited {
-            before,
-            after,
-            rev: st.rev,
+        Ok((
+            Edited {
+                before,
+                after,
+                rev: st.rev,
+            },
             extra,
-        })
+        ))
     }
 }
 
@@ -145,7 +141,10 @@ pub(super) fn stale(now: &str, rev: u64) -> Reply {
     fail::refused_with(
         "409 Conflict",
         "The file changed since this edit was made (in another tab or your text editor); the edit would lose that change.",
-        json!({ "text": now, "docRev": rev }),
+        |b| {
+            b.text = Some(now.to_owned());
+            b.doc_rev = Some(rev);
+        },
     )
 }
 
@@ -155,19 +154,6 @@ pub(super) fn read_failed(path: &str, e: &std::io::Error) -> Reply {
         format!("cannot read {path}: {e}"),
         e,
     )
-}
-
-/// The revision an edit says it was made against: a call from the page names it.
-///
-/// # Errors
-/// The call did not say (a 400).
-pub(super) fn expected(v: &Value) -> Result<u64, Reply> {
-    v["docRev"].as_u64().ok_or_else(|| {
-        fail::refused(
-            "400 Bad Request",
-            "give the docRev the edit was made against",
-        )
-    })
 }
 
 #[cfg(test)]
@@ -193,7 +179,7 @@ mod tests {
                 let (docs, path) = (Arc::clone(&docs), path.clone());
                 std::thread::spawn(move || {
                     for _ in 0..25 {
-                        docs.edit(&path, None, |t| Ok((format!("{t}x"), json!({}))))
+                        docs.edit(&path, None, |t| Ok((format!("{t}x"), ())))
                             .unwrap();
                     }
                 })
@@ -219,12 +205,14 @@ mod tests {
         // the same text again is the same revision; an edit that changes nothing is not one
         assert_eq!(docs.read(&path).unwrap().1, rev);
         let same = docs
-            .edit(&path, Some(rev), |t| Ok((t.to_owned(), json!({}))))
-            .unwrap();
+            .edit(&path, Some(rev), |t| Ok((t.to_owned(), ())))
+            .unwrap()
+            .0;
         assert_eq!(same.rev, rev);
         let made = docs
-            .edit(&path, Some(rev), |_| Ok(("b".to_owned(), json!({}))))
-            .unwrap();
+            .edit(&path, Some(rev), |_| Ok(("b".to_owned(), ())))
+            .unwrap()
+            .0;
         assert_eq!(made.rev, rev + 1);
         // another program writes the file: the next look at it is a later revision
         std::fs::write(&path, "c").unwrap();
@@ -232,7 +220,7 @@ mod tests {
         assert_eq!((text.as_str(), now), ("c", rev + 2));
         // an edit made against what the page last saw is refused, with the file as it is, and writes nothing
         let (status, body) = docs
-            .edit(&path, Some(made.rev), |_| Ok(("d".to_owned(), json!({}))))
+            .edit(&path, Some(made.rev), |_| Ok(("d".to_owned(), ())))
             .err()
             .unwrap();
         assert_eq!(status, "409 Conflict");
@@ -244,7 +232,7 @@ mod tests {
         // a change nobody has read yet is still a revision when an edit finds it
         std::fs::write(&path, "e").unwrap();
         assert!(
-            docs.edit(&path, Some(rev + 2), |_| Ok(("f".to_owned(), json!({}))))
+            docs.edit(&path, Some(rev + 2), |_| Ok(("f".to_owned(), ())))
                 .is_err()
         );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "e");

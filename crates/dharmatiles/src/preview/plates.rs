@@ -20,13 +20,65 @@ use dt_doc::map::Mode;
 use dt_eval::plates::{self, Boxes, Context, Layout, Overrides, Plan};
 use dt_eval::{Built, Diag, Files, Tier};
 use dt_kit::{Material, TriMesh};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use super::api::{Out, Reply};
+use super::edit::Done;
+use super::lists::ListEdited;
 use super::messages::Scope;
 use super::scene::{self, Note, Scene};
 use super::{Shared, State, edit, fail, lock, messages, payload};
 use crate::message::{Kind, Message, Severity};
-use crate::{errors_json, plates as cli};
+use crate::plates as cli;
+
+// ---- the calls' types ------------------------------------------------------------------
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct PlatesShowReq {
+    /// The print list's id.
+    pub list: String,
+    /// The plate in view, from 0.
+    pub plate: usize,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct PlatesSetReq {
+    pub list: String,
+    /// `printer`, `mode`, `group`, `gap`, `margin`, `turn`, `system` or `inventory`.
+    pub key: String,
+    /// The word; null takes it off.
+    pub value: Option<String>,
+    pub doc_rev: u64,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct PlatesExportReq {
+    pub list: String,
+}
+
+/// The plates written.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct PlatesExported {
+    pub files: Vec<String>,
+    pub format: String,
+    /// The pieces that fail the printability gate, by tile.
+    pub failures: Vec<String>,
+    pub plates: usize,
+    pub total_s: f64,
+    pub out: String,
+}
 
 /// Is this document a print list?
 pub(super) fn is_plates(path: &str) -> bool {
@@ -196,7 +248,7 @@ pub(super) fn pieces_json(list: &dt_doc::map::PrintList) -> Value {
 /// (`default`, `fine`) is only floors: it builds tiles but cannot hold plates.
 /// A profile that does not read is still listed, with what is wrong with it,
 /// so it is never missing without a word.
-pub(super) fn printers_json(home: Option<&Path>) -> Value {
+pub(super) fn printers_json(home: Option<&Path>) -> Vec<Value> {
     let mut out = Vec::new();
     for (name, kind) in dt_eval::printer_names(home) {
         let mine = kind == dt_eval::ProfileKind::Mine;
@@ -213,7 +265,7 @@ pub(super) fn printers_json(home: Option<&Path>) -> Value {
             })),
         }
     }
-    Value::Array(out)
+    out
 }
 
 /// What the page's panel reads: the settings, the pieces and the plates.
@@ -268,7 +320,7 @@ fn plates_json(
     });
     j["writable"] = json!(writable);
     j["format"] = json!(plates::export::Format::for_printer(&s.machine).word());
-    j["printers"] = printers_json(home);
+    j["printers"] = json!(printers_json(home));
     j["planned"] = json!(true);
     j
 }
@@ -365,7 +417,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
                 loose["writable"] = json!(true);
                 json!({"kind": "plates", "size_mm": [0, 0], "writable": true, "plates": loose})
             });
-            plan["scene"] = sc.json.clone();
+            plan["scene"] = sc.json.value();
             plan["docRev"] = json!(rev);
             t.plan = Some(plan);
         });
@@ -386,12 +438,12 @@ fn rebuild_plates(
     scene: Option<&Scene>,
 ) {
     let t0 = Instant::now();
-    let scene_json = scene.map(|s| s.json.clone());
+    let scene_json = scene.map(|s| s.json.value());
     let kept: Vec<Note> = scene.map_or_else(Vec::new, |s| s.notes.clone());
     shared.update(id, |t| t.scene_notes = kept);
     let no_notes = (Vec::new(), Vec::new());
     let (notes, diags) = scene.map_or(no_notes, |s| (s.notes.clone(), s.diags.clone()));
-    let is_map = scene.is_some_and(|s| s.json["map"].as_bool() == Some(true));
+    let is_map = scene.is_some_and(|s| s.json.map);
     let mut files = BTreeMap::from([(path.to_owned(), crate::watch::mtime(path))]);
     // the inventory decides what prints: the list is laid out again when it changes
     if let Some(h) = shared.home.as_deref() {
@@ -437,7 +489,11 @@ fn rebuild_plates(
             t.status = if calm { State::Ready } else { State::Failed };
             t.progress = None;
             t.shown = None;
-            t.errors = if calm { Vec::new() } else { errors_json(&errs) };
+            t.errors = if calm {
+                Vec::new()
+            } else {
+                super::api::mistakes(&errs)
+            };
             t.files = files.clone();
             t.mesh = None;
             t.plan = Some(json!({
@@ -656,12 +712,15 @@ fn rebuild_plates(
     let mut failing: Vec<(usize, Vec<String>)> = Vec::new();
     for (n, &k) in todo.iter().enumerate() {
         shared.update(id, |t| {
-            t.progress = Some(json!({
-                "fraction": n as f64 / todo.len() as f64,
-                "label": format!("building {} in full", plan.kinds[k].name),
-                "key": "plates", "count": [format!("{} of {}", n + 1, todo.len()), "", 0],
-                "elapsed_s": t0.elapsed().as_secs_f64(), "eta_s": null, "estimate_s": null,
-            }));
+            t.progress = Some(super::api::Progress {
+                fraction: n as f64 / todo.len() as f64,
+                label: format!("building {} in full", plan.kinds[k].name),
+                key: "plates".to_owned(),
+                count: Some((format!("{} of {}", n + 1, todo.len()), 0, 0)),
+                elapsed_s: t0.elapsed().as_secs_f64(),
+                eta_s: None,
+                estimate_s: None,
+            });
         });
         match shown(shared, &plan, k, true) {
             Ok(p) => {
@@ -761,10 +820,7 @@ fn bad(msg: &str) -> (&'static str, Value) {
     fail::refused("400 Bad Request", msg)
 }
 
-fn slot_of(shared: &Shared, v: &Value) -> Result<(String, String), (&'static str, Value)> {
-    let Some(id) = v["tile"].as_str() else {
-        return Err(bad("give the tile"));
-    };
+fn slot_of(shared: &Shared, id: &str) -> Result<(String, String), Reply> {
     lock(&shared.tiles)
         .iter()
         .find(|t| t.id == id && is_plates(&t.path))
@@ -772,20 +828,14 @@ fn slot_of(shared: &Shared, v: &Value) -> Result<(String, String), (&'static str
         .ok_or_else(|| fail::refused("404 Not Found", "no such print list"))
 }
 
-/// `/api/plates/show` `{tile, plate}`: the plate in view.
-pub(super) fn show(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (id, _) = match slot_of(shared, v) {
-        Ok(x) => x,
-        Err(e) => return e,
-    };
-    let Some(plate) = v["plate"].as_u64().and_then(|p| usize::try_from(p).ok()) else {
-        return bad("give the plate");
-    };
+/// `/api/plates/show` `{list, plate}`: the plate in view.
+pub(super) fn show(shared: &Shared, v: PlatesShowReq) -> Out<Done> {
+    let (id, _) = slot_of(shared, &v.list)?;
     if let Some(t) = lock(&shared.tiles).iter_mut().find(|t| t.id == id) {
-        t.plate = plate;
+        t.plate = v.plate;
     }
     again(shared, &id);
-    ("200 OK", json!({"ok": true}))
+    Ok(Done {})
 }
 
 /// Build the list again: its plate in view or its file changed.
@@ -836,16 +886,13 @@ fn with_word(path: &str, text: &str, key: &str, value: Option<&str>) -> Result<S
     Ok(doc.to_string())
 }
 
-/// `/api/plates/set` `{tile, key, value, docRev}`: change a word of the `plates` line
+/// `/api/plates/set` `{list, key, value, docRev}`: change a word of the `plates` line
 /// (the printer, the mode, the grouping, the gap, the margin, turns, the
 /// system); the file is the document, so it is rewritten and the list builds
 /// again.  A value of null removes the word.
-pub(super) fn set(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (id, path) = match slot_of(shared, v) {
-        Ok(x) => x,
-        Err(e) => return e,
-    };
-    let key = v["key"].as_str().unwrap_or("");
+pub(super) fn set(shared: &Shared, v: PlatesSetReq) -> Out<ListEdited> {
+    let (id, path) = slot_of(shared, &v.list)?;
+    let key = v.key.as_str();
     if ![
         "printer",
         "mode",
@@ -858,9 +905,9 @@ pub(super) fn set(shared: &Shared, v: &Value) -> (&'static str, Value) {
     ]
     .contains(&key)
     {
-        return bad("that is not a setting of the plates line");
+        return Err(bad("that is not a setting of the plates line"));
     }
-    let value = v["value"].as_str();
+    let value = v.value.as_deref();
     // check the word the way the file would be read, before writing
     let probe = format!(
         "dharmatiles version=1\nmap {{\n piece \"x\"\n}}\nplates {key}=\"{}\"\n",
@@ -870,49 +917,42 @@ pub(super) fn set(shared: &Shared, v: &Value) -> (&'static str, Value) {
         && let Err(e) = dt_doc::map::decode("plates", &probe)
         && e.iter().any(|d| d.code != "dt::unknown-node")
     {
-        return bad(&e[0].message);
+        return Err(bad(&e[0].message));
     }
-    let rev = match super::docs::expected(v) {
-        Ok(r) => r,
-        Err(e) => return e,
-    };
-    let r = shared.docs.edit(&path, Some(rev), |text| {
+    let r = shared.docs.edit(&path, Some(v.doc_rev), |text| {
         with_word(&path, text, key, value)
-            .map(|t| (t, json!({})))
+            .map(|t| (t, ()))
             .map_err(|e| fail::failure("500 Internal Server Error", e))
     });
     match r {
-        Ok(e) => {
+        Ok((e, ())) => {
             if key == "printer" {
                 // another bed: back to the first plate (the printer itself is the document's word,
                 // which the answer's scene carries: the chip and the status line read it there)
                 shared.update(&id, |t| t.plate = 0);
             }
             again(shared, &id);
-            super::lists::done(shared, &path, &e)
+            Ok(super::lists::done(shared, &path, &e, None))
         }
-        Err(e) => super::lists::with_current(shared, &path, e),
+        Err(e) => Err(super::lists::with_current(shared, &path, e)),
     }
 }
 
 /// `/api/plates/export` `{tile}`: build every piece in full, lay the plates
 /// out by what they cover and write the files.  This runs the whole build:
 /// the page waits, the stream says what is happening.
-pub(super) fn export(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (id, path) = match slot_of(shared, v) {
-        Ok(x) => x,
-        Err(e) => return e,
-    };
+pub(super) fn export(shared: &Shared, v: PlatesExportReq) -> Out<PlatesExported> {
+    let (id, path) = slot_of(shared, &v.list)?;
     let t0 = Instant::now();
     let report_err = |errs: &[Diag]| {
         say(shared, &id, Scope::Export, |name| {
             messages::of_errors(errs, Scope::Export, &id, name, &[])
         });
-        ("200 OK", json!({"ok": false, "errors": errors_json(errs)}))
+        fail::mistakes(errs)
     };
     let (_, plan) = match plan_for(shared, &path, &Overrides::default()) {
         Ok(x) => x,
-        Err(b) => return report_err(&b.1),
+        Err(b) => return Err(report_err(&b.1)),
     };
     let s = &plan.settings;
     let fmt = plates::export::Format::for_printer(&s.machine);
@@ -920,21 +960,20 @@ pub(super) fn export(shared: &Shared, v: &Value) -> (&'static str, Value) {
         match cli::template_for(&s.machine, None, shared.home.as_deref()) {
             Ok(Some(t)) => Some(t),
             Ok(None) => {
-                return report_err(&[Diag::plain(
+                return Err(report_err(&[Diag::plain(
                     "dt::plates",
                     "a Bambu Studio project needs a template for the printer's settings",
                 )
-                .help("save any project from Bambu Studio for this printer as bambu.3mf in your tiles folder")]);
+                .help("save any project from Bambu Studio for this printer as bambu.3mf in your tiles folder")]));
             }
-            Err(e) => return report_err(&[Diag::plain("dt::plates", e)]),
+            Err(e) => return Err(report_err(&[Diag::plain("dt::plates", e)])),
         }
     } else {
         None
     };
-    let palette = match shared.palette_checked() {
-        Ok(p) => p,
-        Err(e) => return fail::failure("500 Internal Server Error", e),
-    };
+    let palette = shared
+        .palette_checked()
+        .map_err(|e| fail::failure("500 Internal Server Error", e))?;
     let base = shared.options();
     let builds = match cli::build_all(
         &plan,
@@ -943,25 +982,28 @@ pub(super) fn export(shared: &Shared, v: &Value) -> (&'static str, Value) {
         shared.store.as_deref(),
         &mut |n, of, name| {
             shared.update(&id, |t| {
-                t.progress = Some(json!({
-                    "fraction": (n - 1) as f64 / of as f64,
-                    "label": format!("building {name} in full for the export"),
-                    "key": "plates", "count": [format!("{n} of {of}"), "", 0],
-                    "elapsed_s": t0.elapsed().as_secs_f64(), "eta_s": null, "estimate_s": null,
-                }));
+                t.progress = Some(super::api::Progress {
+                    fraction: (n - 1) as f64 / of as f64,
+                    label: format!("building {name} in full for the export"),
+                    key: "plates".to_owned(),
+                    count: Some((format!("{n} of {of}"), 0, 0)),
+                    elapsed_s: t0.elapsed().as_secs_f64(),
+                    eta_s: None,
+                    estimate_s: None,
+                });
             });
         },
     ) {
         Ok(b) => b,
         Err(e) => {
             shared.update(&id, |t| t.progress = None);
-            return report_err(&e);
+            return Err(report_err(&e));
         }
     };
     shared.update(&id, |t| t.progress = None);
     let layout = match cli::layout_of(&plan, &builds) {
         Ok(l) => l,
-        Err(e) => return report_err(&e),
+        Err(e) => return Err(report_err(&e)),
     };
     let b0 = &builds.built[0];
     let record = dt_kit::BuildRecord {
@@ -983,27 +1025,26 @@ pub(super) fn export(shared: &Shared, v: &Value) -> (&'static str, Value) {
         &record,
     ) {
         Ok(f) => f,
-        Err(e) => return report_err(&[e]),
+        Err(e) => return Err(report_err(&[e])),
     };
-    let out = match edit::export_dir(&path) {
-        Ok(o) => o.join("plates").join(&plan.title),
-        Err(e) => return fail::failure("500 Internal Server Error", e),
-    };
-    if let Err(e) = std::fs::create_dir_all(&out) {
-        return fail::failure(
+    let out = edit::export_dir(&path)
+        .map(|o| o.join("plates").join(&plan.title))
+        .map_err(|e| fail::failure("500 Internal Server Error", e))?;
+    std::fs::create_dir_all(&out).map_err(|e| {
+        fail::failure(
             "500 Internal Server Error",
             format!("cannot create {}: {e}", out.display()),
-        );
-    }
+        )
+    })?;
     let mut written = Vec::new();
     for (name, bytes) in &files {
         let p = out.join(name);
-        if let Err(e) = dt_eval::atomic::write_atomic(&p, bytes) {
-            return fail::failure(
+        dt_eval::atomic::write_atomic(&p, bytes).map_err(|e| {
+            fail::failure(
                 "500 Internal Server Error",
                 format!("cannot write {}: {e}", p.display()),
-            );
-        }
+            )
+        })?;
         written.push(p.display().to_string());
     }
     let failing: Vec<String> = builds
@@ -1056,12 +1097,12 @@ pub(super) fn export(shared: &Shared, v: &Value) -> (&'static str, Value) {
     });
     // the pieces are full builds now: the view may show them
     again(shared, &id);
-    (
-        "200 OK",
-        json!({
-            "ok": true, "files": written, "format": fmt.word(), "failures": failing,
-            "plates": layout.plates.len(), "total_s": t0.elapsed().as_secs_f64(),
-            "out": out.display().to_string(),
-        }),
-    )
+    Ok(PlatesExported {
+        files: written,
+        format: fmt.word().to_owned(),
+        failures: failing,
+        plates: layout.plates.len(),
+        total_s: t0.elapsed().as_secs_f64(),
+        out: out.display().to_string(),
+    })
 }

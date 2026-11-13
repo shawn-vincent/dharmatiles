@@ -170,13 +170,13 @@ export const sceneMethods = {
       const { lo, hi } = this.payload.meta;
       z = lo[2];
       box = { lo, hi };
-      sq = this.plan?.square_mm ?? 35;
-      const [w, h] = this.plan?.size_mm ?? [hi[0] - lo[0], hi[1] - lo[1]];
+      sq = this.plan?.squareMm ?? 35;
+      const [w, h] = this.plan?.sizeMm ?? [hi[0] - lo[0], hi[1] - lo[1]];
       rects.push([0, 0, w, h]);
-    } else if (this.plan?.size_mm) {
-      const [w, h] = this.plan.size_mm;
+    } else if (this.plan?.sizeMm) {
+      const [w, h] = this.plan.sizeMm;
       box = { lo: [0, 0, 0], hi: [w, h, 1] };
-      sq = this.plan.square_mm ?? 35;
+      sq = this.plan.squareMm ?? 35;
       z = -7;
     }
     if (!box) return;

@@ -64,15 +64,15 @@ test('the pills: have, need, none without an inventory, edited since printing in
 });
 
 test('a multicolour piece wanted where only single colour is owned reads have, single colour', () => {
-  const w = wantLine({ want: 2, have: 0, count: 2, other_colour: 1 }, 'multicolour');
+  const w = wantLine({ want: 2, have: 0, count: 2, otherColour: 1 }, 'multicolour');
   assert.equal(w.caution, true);
   assert.match(w.text, /^have, single colour · 2 to print$/);
-  const plain = wantLine({ want: 3, have: 2, count: 1, other_colour: 0 }, 'multicolour');
+  const plain = wantLine({ want: 3, have: 2, count: 1, otherColour: 0 }, 'multicolour');
   assert.equal(plain.caution, false);
   assert.equal(plain.text, 'have 2 · 1 to print');
-  assert.equal(wantLine({ want: 1, have: 0, count: 1, other_colour: 1 }, 'single').text, 'have, multicolour · 1 to print');
+  assert.equal(wantLine({ want: 1, have: 0, count: 1, otherColour: 1 }, 'single').text, 'have, multicolour · 1 to print');
   // owning the exact piece is not a caution
-  assert.equal(wantLine({ want: 1, have: 1, count: 0, other_colour: 1 }, 'multicolour').caution, false);
+  assert.equal(wantLine({ want: 1, have: 1, count: 0, otherColour: 1 }, 'multicolour').caution, false);
 });
 
 test('the plates say how many are in the inventory and how many print', () => {

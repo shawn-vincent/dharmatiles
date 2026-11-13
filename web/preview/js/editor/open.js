@@ -1,3 +1,4 @@
+// @ts-check
 // Opening a tile: choosing it, and keeping the 3D view on it: its plan, its
 // mesh (or a draft in its place), its camera.  Follows the server store (the
 // tile's builds) and the view store (which tile).
@@ -46,7 +47,7 @@ function reset(t) {
   if (!t) return;
   history.replaceState(null, '', `#tile=${encodeURIComponent(t.path)}`);
   // no mesh to frame yet and no view of yours kept: follow the build
-  if (t.mesh_version == null && !cameras.get(t.path)) beginFollow(t.id);
+  if (t.meshVersion == null && !cameras.get(t.path)) beginFollow(t.id);
   if (planOf(t)) viewer.setPlan(planOf(t));
   followBuild();
 }
@@ -86,12 +87,12 @@ function follow() {
   if (planChanged(planOf(t))) { viewer.setPlan(planOf(t)); followBuild(); }
   const shown = view.get().shown;
   // a map draws its pieces, not the plates' mesh: that comes when the plates are shown
-  if (!isMapView() && t.mesh_version != null && !(shown && shown.id === t.id && shown.epoch === epoch && shown.version === t.mesh_version)) loadMesh(t);
+  if (!isMapView() && t.meshVersion != null && !(shown && shown.id === t.id && shown.epoch === epoch && shown.version === t.meshVersion)) loadMesh(t);
 }
 
 let loadToken = 0;
 async function loadMesh(t) {
-  const token = ++loadToken, { epoch } = server.get(), version = t.mesh_version;
+  const token = ++loadToken, { epoch } = server.get(), version = t.meshVersion;
   try {
     const buf = await host.fetchMesh(t.id);
     if (token !== loadToken || t.id !== view.get().tileId) return;

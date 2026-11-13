@@ -206,9 +206,9 @@ fn builds_a_tile_and_serves_its_mesh() {
     let r = start(&[FLAT], true);
     let t = wait_for(&r, "ready", |t| t["status"] == "ready");
     assert_eq!(t["plan"]["cols"], 1);
-    assert!((t["plan"]["square_mm"].as_f64().unwrap() - 35.0).abs() < 1e-9);
+    assert!((t["plan"]["squareMm"].as_f64().unwrap() - 35.0).abs() < 1e-9);
     assert_eq!(t["record"]["audit"]["watertight"], true);
-    assert_eq!(t["mesh_version"], 1);
+    assert_eq!(t["meshVersion"], 1);
     let (head, body) = get(&r, &format!("/api/tiles/{}/mesh", id0(&r)));
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert_eq!(&body[..4], payload::MAGIC);
@@ -224,7 +224,7 @@ fn builds_a_tile_and_serves_its_mesh() {
         body.len(),
         (8 + jl + n * (36 + 36 + 9 + 9 + 2 + 2)).next_multiple_of(4)
     );
-    assert_eq!(h["overhang_deg"], 55.0);
+    assert_eq!(h["overhangDeg"], 55.0);
     assert!(
         get(&r, "/api/tiles/ffffffffffffffff/mesh")
             .0
@@ -315,7 +315,7 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
     let e = &t["errors"][0];
     assert_eq!(e["file"], path.as_str());
     assert_eq!(e["line"].as_u64(), Some(line as u64), "{e}");
-    assert_eq!(t["mesh_version"], 1, "the last good mesh is kept");
+    assert_eq!(t["meshVersion"], 1, "the last good mesh is kept");
     assert!(
         get(&r, &format!("/api/tiles/{}/mesh", id0(&r)))
             .0
@@ -325,7 +325,7 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
     // fixed: rebuilt in place, a new mesh version
     std::fs::write(&doc, text.replace("seed=1", "seed=2")).unwrap();
     let t = wait_for(&r, "rebuild", |t| {
-        t["status"] == "ready" && t["mesh_version"] == 2
+        t["status"] == "ready" && t["meshVersion"] == 2
     });
     assert!(t["errors"].as_array().unwrap().is_empty());
     drop(r);
@@ -339,7 +339,7 @@ fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
         "1x1-grass"
     );
     assert_eq!(Slot::new("my/tiles/a.dtile").name, "a");
-    let _ = Shared::new(&[]).snapshot();
+    let _ = Shared::new(&[]).snapshot_json();
 }
 
 #[test]
@@ -359,7 +359,7 @@ fn a_build_pushes_progress_events_that_never_go_back() {
         if v["type"] == "progress" {
             let p = &v["progress"];
             assert!(
-                p["label"].is_string() && p["eta_s"].as_f64().unwrap() >= 0.0,
+                p["label"].is_string() && p["etaS"].as_f64().unwrap() >= 0.0,
                 "{p}"
             );
             fractions.push(p["fraction"].as_f64().unwrap());
@@ -427,7 +427,7 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
     ];
     let shared = Shared::with_roots(roots, &[], &Options::default());
     let listed = |s: &Shared| -> Vec<(String, Value, Value)> {
-        let v = s.snapshot();
+        let v = s.snapshot_json();
         v["tiles"]
             .as_array()
             .unwrap()
@@ -449,7 +449,7 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
             ("b".to_owned(), "ponds".into(), "idle".into())
         ]
     );
-    let snap = shared.snapshot();
+    let snap = shared.snapshot_json();
     assert_eq!(snap["roots"][0]["kind"], "dir");
     assert_eq!(snap["roots"][1]["kind"], "library");
     assert!(
@@ -467,7 +467,7 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
 
     // a new tile joins; a deleted one leaves the list altogether
     let id_of = |s: &Shared, name: &str| {
-        s.snapshot()["tiles"]
+        s.snapshot_json()["tiles"]
             .as_array()
             .unwrap()
             .iter()
@@ -627,7 +627,8 @@ fn the_editor_checks_edits_and_saves_only_with_the_token() {
     assert!(v["errors"][0]["line"].is_number(), "{v}");
     // edit: a control written on the line, the rest kept
     let e =
-        serde_json::json!({ "text": text, "at": at, "name": "wear", "value": "worn" }).to_string();
+        serde_json::json!({ "op": "set", "text": text, "at": at, "name": "wear", "value": "worn" })
+            .to_string();
     let (h, v) = post(&r, "/api/edit", Some(&token), None, &e);
     assert!(h.starts_with("HTTP/1.1 200"), "{h} {v}");
     let edited = v["text"].as_str().unwrap().to_owned();
@@ -846,7 +847,7 @@ fn a_draft_is_a_request_answered_with_its_mesh() {
     assert_eq!(&mesh[..4], payload::MAGIC);
     let tile = &tiles(&r)["tiles"][0];
     assert_eq!(
-        tile["mesh_version"],
+        tile["meshVersion"],
         Value::Null,
         "a draft is not the tile's build"
     );
@@ -945,14 +946,14 @@ fn routes_answer_without_a_socket() {
             &shared,
             &http::Request::build("GET", &format!("/api/tiles/{id}/mesh"), None, b"")
         ),
-        Reply::Text("404 Not Found", _)
+        Reply::Json("404 Not Found", _)
     ));
     assert!(matches!(
         route(
             &shared,
             &http::Request::build("POST", &format!("/api/tiles/{id}/check"), None, b"{}")
         ),
-        Reply::Text("403 Forbidden", _)
+        Reply::Json("403 Forbidden", _)
     ));
     let t = shared.token.clone();
     let (s, _) = json(route(
@@ -1256,7 +1257,7 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     let s = usize::try_from(line["through"]["span"][0].as_u64().unwrap()).unwrap();
     assert!(text[s..].starts_with("\"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\" }"));
     let region = &v["map"]["regions"][1]["sheet"];
-    assert_eq!(region["bounded_by"]["text"], "shore");
+    assert_eq!(region["boundedBy"]["text"], "shore");
     assert_eq!(region["fill"]["text"], "\"(0.5sq, 0.25sq)\"");
     let v = call(
         "/api/edit",
@@ -1421,7 +1422,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
     let shared = Shared::with_roots(roots, &[], &Options::default()).with_home(dir.clone());
     // the page is told the printers there are: the library's and yours
-    let snap = shared.snapshot();
+    let snap = shared.snapshot_json();
     let names: Vec<(&str, bool)> = snap["printers"]
         .as_array()
         .unwrap()
@@ -1433,7 +1434,7 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
     assert!(names.contains(&("mine", true)), "{names:?}");
     assert_eq!(snap["printer"], "default");
     // one tile has been built
-    let id = shared.snapshot()["tiles"].as_array().map(|t| t.len());
+    let id = shared.snapshot_json()["tiles"].as_array().map(|t| t.len());
     assert_eq!(id, Some(0));
     {
         let mut tiles = lock(&shared.tiles);
@@ -1442,12 +1443,12 @@ fn the_chosen_target_is_remembered_and_every_built_tile_is_built_again() {
         tiles.push(t);
     }
     assert!(shared.set_target(None, Some("mine")).is_ok());
-    let snap = shared.snapshot();
+    let snap = shared.snapshot_json();
     assert_eq!(snap["printer"], "mine");
     assert_eq!(snap["system"], "db");
     // the gate's angles are the chosen printer's
-    assert!((snap["overhang_deg"].as_f64().unwrap() - 50.0).abs() < 1e-9);
-    assert!((snap["steepest_deg"].as_f64().unwrap() - 62.0).abs() < 1e-9);
+    assert!((snap["overhangDeg"].as_f64().unwrap() - 50.0).abs() < 1e-9);
+    assert!((snap["steepestDeg"].as_f64().unwrap() - 62.0).abs() < 1e-9);
     // the built tile is stale: it builds again for the new target
     assert!(lock(&shared.tiles).iter().all(|t| t.stale && t.changed()));
     assert_eq!(shared.options().target(), "db-mine");
@@ -1912,7 +1913,7 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
     let at = FORMAT_1.find("rock").unwrap();
     let v = call(
         "/api/edit",
-        serde_json::json!({ "text": FORMAT_1, "at": at, "name": "size", "value": "9dmm" }),
+        serde_json::json!({ "op": "set", "text": FORMAT_1, "at": at, "name": "size", "value": "9dmm" }),
     );
     let edited = v["text"].as_str().unwrap();
     assert!(edited.contains("size=\"9dmm\""), "{v}");

@@ -97,13 +97,13 @@ const crag = {
 
 test('a region of places shows each clause and how they combine', () => {
   assert.equal(regionKind(crag), 'places');
-  assert.equal(regionKind({ bounded_by: { text: 'shore' }, fill: { text: '"1,1"' }, clauses: [] }), 'bucket');
-  assert.equal(regionKind({ bounded_by: { text: 'shore' }, clauses: crag.clauses }), 'mixed');
+  assert.equal(regionKind({ boundedBy: { text: 'shore' }, fill: { text: '"1,1"' }, clauses: [] }), 'bucket');
+  assert.equal(regionKind({ boundedBy: { text: 'shore' }, clauses: crag.clauses }), 'mixed');
   assert.equal(clauseTitle(crag.clauses[0]), 'within 8–14 mm of westEdge');
   assert.equal(clauseTitle(crag.clauses[1]), 'except pool');
   assert.match(combineNote(crag), /added together.*then the except regions taken away/);
   assert.match(combineNote({ clauses: [crag.clauses[1]] }), /^The whole tile, less the regions it excepts/);
-  assert.match(combineNote({ bounded_by: { text: 'a' }, clauses: [] }), /enclose/);
+  assert.match(combineNote({ boundedBy: { text: 'a' }, clauses: [] }), /enclose/);
   const asW = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: c.span });
   const row = (node, name) => ({ name, unit: node === 'within' && name === 'distance' ? 'mm' : 'word', required: true });
   const groups = clauseGroups({ name: 'crag' }, crag, { places, regions: [{ name: 'crag' }, { name: 'pool' }] }, asW, row);
@@ -125,7 +125,7 @@ test('a flat band has no curtain', () => {
 
 test('the add-clause menu offers within, except and boundedBy, and says why one cannot be written', () => {
   const map2 = { lines: [{ name: 'shore' }], regions: [{ name: 'pool' }, { name: 'crag' }] };
-  const bucket = { bounded_by: { span: [1, 2] }, fill: { span: [3, 4] }, clauses: [] };
+  const bucket = { boundedBy: { span: [1, 2] }, fill: { span: [3, 4] }, clauses: [] };
   const menu = clauseMenu({ name: 'pool' }, bucket, map2);
   assert.deepEqual(menu.map((c) => c.kind), ['within', 'except', 'boundedBy']);
   assert.equal(menu[0].node, 'within 6 of=center');

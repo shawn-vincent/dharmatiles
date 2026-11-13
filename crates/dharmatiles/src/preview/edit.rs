@@ -57,11 +57,317 @@ use std::hash::{BuildHasher, Hasher};
 use std::path::{Path, PathBuf};
 
 use dt_eval::Source;
+use serde::{Deserialize, Serialize};
 
+use super::api::{Json, Mistake, Out, Reply, TileRef};
+use super::places::{Listed, Nothing};
 use super::queue::Outcome;
 use super::roots::personal_home;
-use super::route::{Reply, tile_route};
 use super::*;
+
+// ---- the calls' types ------------------------------------------------------------------
+
+/// A control's or argument's value: a number, a string or a switch.
+#[derive(Deserialize, Clone)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(untagged)]
+pub enum Scalar {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Str(String),
+}
+
+impl Scalar {
+    fn kdl(&self) -> kdl::KdlValue {
+        match self {
+            Self::Bool(b) => kdl::KdlValue::Bool(*b),
+            Self::Int(i) => kdl::KdlValue::Integer(i128::from(*i)),
+            Self::Float(x) => kdl::KdlValue::Float(*x),
+            Self::Str(s) => kdl::KdlValue::String(s.clone()),
+        }
+    }
+}
+
+/// Where a new node goes.
+#[derive(Deserialize, Clone, Copy)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(rename_all = "kebab-case")]
+pub enum InsertPlace {
+    /// At the end of the stack (the default).
+    Stack,
+    /// In the `tile` node, before the stack.
+    Tile,
+    /// On a line of its own above the node at `at`.
+    Before,
+    /// As the last child of the node at `at`.
+    In,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(rename_all = "kebab-case")]
+pub enum MarkKind {
+    Line,
+    Region,
+}
+
+/// `/api/edit`: a text edit, one kind by `op`.  Nothing is written to disk.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(tag = "op", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum EditReq {
+    /// A control set on the node at byte `at` (`value` null or left out takes it out).
+    Set {
+        text: String,
+        at: usize,
+        name: String,
+        value: Option<Scalar>,
+    },
+    /// A new node.
+    Insert {
+        text: String,
+        node: String,
+        place: Option<InsertPlace>,
+        at: Option<usize>,
+    },
+    /// A node moved whole to stand before its sibling at `before`, or last.
+    Move {
+        text: String,
+        at: usize,
+        before: Option<usize>,
+    },
+    Remove {
+        text: String,
+        at: usize,
+    },
+    /// A node's children of those names out.
+    RemoveChildren {
+        text: String,
+        at: usize,
+        names: Vec<String>,
+    },
+    /// A line or region renamed, with what names it.
+    Rename {
+        text: String,
+        mark: MarkKind,
+        old: String,
+        new: String,
+    },
+    /// A node's positional argument replaced.
+    Arg {
+        text: String,
+        at: usize,
+        index: usize,
+        value: Scalar,
+    },
+}
+
+/// The text after an edit, and (for an insert or a move) the byte the node now starts at.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct EditRes {
+    pub text: String,
+    pub at: Option<usize>,
+}
+
+/// What is read of a document: the check's (and the lists') verdict.  A
+/// document that does not read is an answer here, not a failure: the text pane
+/// shows its mistakes as you type.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct CheckRes {
+    pub ok: bool,
+    pub errors: Vec<Mistake>,
+    pub stack: Option<Vec<Json>>,
+    pub map: Option<Json>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct TextReq {
+    pub text: String,
+    /// A file the tile uses, instead of its own document.
+    pub file: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SaveReq {
+    pub text: String,
+    /// The revision of the file the text was made from.
+    pub doc_rev: u64,
+    pub file: Option<String>,
+}
+
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct SaveRes {
+    pub doc_rev: u64,
+}
+
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct Deleted {
+    pub path: String,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct RenameReq {
+    pub name: String,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct NewReq {
+    pub name: Option<String>,
+    /// Squares across and up, like `2x1`.
+    pub size: Option<String>,
+    /// The folder place and the folder in it, when not My tiles.
+    pub root: Option<usize>,
+    pub dir: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct NamesReq {
+    pub text: String,
+}
+
+/// The names a text makes; `ok` false (and `message`) when it does not parse: its
+/// mistakes are the check's to show, and the page keeps the names it had.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct NamesRes {
+    pub ok: bool,
+    pub message: Option<String>,
+    pub defs: Vec<String>,
+    pub regions: Vec<String>,
+    pub lines: Vec<String>,
+    pub points: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct CheckValueReq {
+    pub element: String,
+    pub control: String,
+    pub typed: String,
+}
+
+/// What the reader refuses in a typed value (`message` null when it takes it).
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct CheckValueRes {
+    pub message: Option<String>,
+    pub label: Option<String>,
+    pub help: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct TargetReq {
+    pub system: Option<String>,
+    pub printer: Option<String>,
+}
+
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct TargetRes {
+    pub system: String,
+    pub printer: String,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct RevealReq {
+    pub path: String,
+}
+
+/// A call that has nothing to give back but that it was done.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(type = "Record<string, never>"))]
+pub struct Done {}
+
+/// `/api/messages`: the page reports a failure of its own.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct PageMessageReq {
+    pub tile: Option<String>,
+    pub what: Option<String>,
+    pub text: String,
+    pub help: Option<String>,
+    pub causes: Option<Json>,
+    pub backtrace: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct DraftReq {
+    pub text: String,
+    pub file: Option<String>,
+    pub debug: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct ExportReq {
+    /// Also write the painted 3MF.
+    pub threemf: Option<bool>,
+    /// Only say where the files would go.
+    #[serde(rename = "where")]
+    pub ask_where: Option<bool>,
+}
+
+/// An export: where it would go, or what it wrote.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(untagged)]
+pub enum ExportRes {
+    Where { out: String, shown: String },
+    Built(ExportBuilt),
+}
+
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct ExportBuilt {
+    pub path: String,
+    /// Whether the build passed the printability gate.
+    pub ok: bool,
+    pub failures: Vec<String>,
+    pub files: Vec<String>,
+    /// The build's record as `dharmatiles build --json` prints it.
+    pub build: Json,
+}
 
 /// 128 random bits, hex: the run's token.
 pub(super) fn token() -> String {
@@ -91,156 +397,86 @@ impl Source for Overlay {
     }
 }
 
-pub(super) fn bad(msg: impl Into<String>) -> (&'static str, Value) {
+pub(super) fn bad(msg: impl Into<String>) -> Reply {
     fail::refused("400 Bad Request", msg.into())
 }
 
-/// Route one editor call.
-pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> Reply {
-    let Ok(v) = serde_json::from_slice::<Value>(body) else {
-        return bad("the body is not JSON").into();
-    };
-    if path == "/api/edit" {
-        return edit(&v).into();
-    }
-    if path == "/api/names" {
-        return names(&v).into();
-    }
-    if path == "/api/check-value" {
-        return check_value(shared, &v).into();
-    }
-    if path == "/api/new" {
-        return new_tile(shared, &v).into();
-    }
-    match path {
-        "/api/places/add" => return places::add_place(shared).into(),
-        "/api/places/remove" => return places::remove_place(shared, &v).into(),
-        "/api/folders/new" => return places::new_folder(shared, &v).into(),
-        "/api/folders/rename" => return places::rename_folder(shared, &v).into(),
-        "/api/folders/trash" => return places::trash_folder(shared, &v).into(),
-        "/api/trash/undo" => return places::undo_trash(shared, &v).into(),
-        "/api/printers/scan" => return super::printers::scan(&v).into(),
-        "/api/printers/import" => return super::printers::import(shared, &v).into(),
-        "/api/plates/show" => return super::plates::show(shared, &v).into(),
-        "/api/plates/set" => return super::plates::set(shared, &v).into(),
-        "/api/plates/export" => return super::plates::export(shared, &v).into(),
-        "/api/inventory/have" => return super::inventory::have(shared, &v).into(),
-        "/api/inventory/record" => return super::inventory::record(shared, &v).into(),
-        "/api/inventory/gone" => return super::inventory::gone(shared, &v).into(),
-        "/api/inventory/relink" => return super::inventory::relink(shared, &v).into(),
-        "/api/inventory/reprint" => return super::inventory::reprint(shared, &v).into(),
-        "/api/lists/new" => return super::lists::new_list(shared, &v).into(),
-        "/api/lists/add" => return super::lists::add(shared, &v).into(),
-        "/api/lists/count" => return super::lists::set_count(shared, &v).into(),
-        "/api/lists/remove" => return super::lists::remove(shared, &v).into(),
-        "/api/lists/restore" => return super::lists::restore(shared, &v).into(),
-        "/api/maps/add" => return super::maps::add(shared, &v).into(),
-        "/api/maps/set" => return super::maps::set(shared, &v).into(),
-        "/api/maps/batch" => return super::maps::batch(shared, &v).into(),
-        "/api/maps/dup" => return super::maps::dup(shared, &v).into(),
-        "/api/maps/remove" => return super::maps::remove(shared, &v).into(),
-        "/api/maps/pin" => return super::maps::pin(shared, &v).into(),
-        "/api/maps/unpin" => return super::maps::unpin(shared, &v).into(),
-        "/api/maps/unpin-all" => return super::maps::unpin_all(shared, &v).into(),
-        _ => {}
-    }
-    if path == "/api/reveal" {
-        return reveal(&v).into();
-    }
-    if path == "/api/target" {
-        return target(shared, &v).into();
-    }
-    if path == "/api/messages" {
-        return page_message(shared, &v).into();
-    }
-    let Some((id, what)) = tile_route(path) else {
-        return fail::refused("404 Not Found", "no such call").into();
-    };
-    let Some((tile, files)) = lock(&shared.tiles)
-        .iter()
-        .find(|t| t.id == id)
-        .map(|t| (t.path.clone(), t.files.clone()))
-    else {
-        return fail::refused("404 Not Found", "no such tile").into();
-    };
-    // only the tile's document, or a file its last build read
-    let file = match v["file"].as_str() {
-        None => tile.clone(),
-        Some(f) if f == tile || files.contains_key(f) => f.to_owned(),
-        Some(_) => {
-            return fail::refused("403 Forbidden", "not a file of this tile").into();
-        }
-    };
-    match what {
-        "check" => check(shared, &tile, &file, &v).into(),
-        "save" => save(shared, &file, &v).into(),
-        "mine" => mine(shared, &tile, &files).into(),
-        "delete" => delete(shared, &tile).into(),
-        "rename" => rename(shared, &tile, &v).into(),
-        "move" => places::move_tile(shared, &tile, &v).into(),
-        "duplicate" => places::duplicate_tile(shared, &tile).into(),
-        "trash" => places::trash_tile(shared, &tile).into(),
-        "export" => export(shared, &tile, &v).into(),
-        "draft" => draft(shared, id, &tile, &file, &v),
-        "offers" => offers::offers(shared, &tile, &file, &v).into(),
-        _ => fail::refused("404 Not Found", "no such call").into(),
-    }
+/// Route one editor call: see [`super::calls`].
+#[cfg(test)]
+pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> super::route::Reply {
+    super::calls::dispatch(shared, path, body)
 }
 
 /// `/api/messages` `{tile?, what, text, help?, causes?, backtrace?}`: the page
 /// reports a failure of its own, so it joins the stream (kind `server`, origin
 /// `page`) beside the program's, where an assistant reads it too.
-fn page_message(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let Some(text) = v["text"].as_str() else {
-        return bad("give the text");
-    };
-    let tile = v["tile"].as_str().unwrap_or("");
+pub(super) fn page_message(shared: &Shared, v: PageMessageReq) -> Out<Done> {
+    let tile = v.tile.as_deref().unwrap_or("");
     let name = shared.name_of(tile).unwrap_or_default();
-    let error = json!({
-        "kind": "bug", "message": text, "help": v["help"], "causes": v["causes"],
-        "backtrace": v["backtrace"],
-        "context": {"route": v["what"], "version": env!("DT_ENGINE_VERSION")},
-    });
-    shared.say(messages::of_server_error(&error, (tile, &name), "page"));
-    ("200 OK", json!({ "ok": true }))
+    let error = api::ErrorDetail {
+        kind: "bug".to_owned(),
+        message: v.text,
+        help: v.help,
+        causes: v
+            .causes
+            .as_ref()
+            .and_then(Value::as_array)
+            .map_or_else(Vec::new, |a| {
+                a.iter()
+                    .filter_map(|c| c.as_str().map(str::to_owned))
+                    .collect()
+            }),
+        backtrace: v.backtrace.unwrap_or_default(),
+        context: api::ErrorContext {
+            route: v.what,
+            tile: None,
+            version: env!("DT_ENGINE_VERSION").to_owned(),
+            at_ms: 0,
+        },
+    };
+    shared.say(messages::of_server_error(
+        &fail::to_value(&error),
+        (tile, &name),
+        "page",
+    ));
+    Ok(Done {})
 }
 
 /// Choose the build target: `system` (`db` or `ol`) and/or `printer` (a
 /// profile's name), for every build from now on; the tiles built so far
 /// are built again.
-fn target(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    match shared.set_target(v["system"].as_str(), v["printer"].as_str()) {
-        Ok(()) => {
-            let o = shared.options();
-            (
-                "200 OK",
-                json!({ "ok": true, "system": o.system, "printer": o.printer.name }),
-            )
-        }
-        Err(e) => bad(&e),
-    }
+pub(super) fn target(shared: &Shared, v: TargetReq) -> Out<TargetRes> {
+    shared
+        .set_target(v.system.as_deref(), v.printer.as_deref())
+        .map_err(bad)?;
+    let o = shared.options();
+    Ok(TargetRes {
+        system: o.system,
+        printer: o.printer.name,
+    })
 }
 
 /// A draft: queued ahead of the full builds and waited for, so the reply is
 /// the mesh itself.  `debug: true` asks for the debug layer's marks too.
-fn draft(shared: &Shared, id: &str, tile: &str, file: &str, v: &Value) -> Reply {
-    let Some(text) = v["text"].as_str() else {
-        return bad("give the text").into();
+pub(super) fn draft(shared: &Shared, tile: &TileRef, v: DraftReq) -> super::route::Reply {
+    let file = match tile.file(v.file.as_deref()) {
+        Ok(f) => f,
+        Err(e) => return e.into(),
     };
     match shared
-        .submit_draft(id, tile, file, text, v["debug"].as_bool() == Some(true))
+        .submit_draft(&tile.id, &tile.path, &file, &v.text, v.debug == Some(true))
         .recv_timeout(Duration::from_secs(120))
     {
-        Ok(Outcome::Mesh(mesh)) => Reply::Bytes(mesh),
+        Ok(Outcome::Mesh(mesh)) => super::route::Reply::Bytes(mesh),
         Ok(Outcome::Mistake) => {
             fail::refused("422 Unprocessable Entity", "the text has a mistake").into()
         }
-        Ok(Outcome::Superseded) => fail::refused_with(
-            "409 Conflict",
-            "a newer draft took its place",
-            json!({ "superseded": true }),
-        )
-        .into(),
+        Ok(Outcome::Superseded) => {
+            fail::refused_with("409 Conflict", "a newer draft took its place", |b| {
+                b.superseded = Some(true)
+            })
+            .into()
+        }
         Ok(Outcome::Failed(e)) => e.reply().into(),
         Err(e) => fail::failure_from(
             "500 Internal Server Error",
@@ -274,9 +510,8 @@ fn file_stem(name: &str) -> String {
     }
 }
 
-/// A tile name from the page: one line of at most 80 characters.
-pub(super) fn tile_name(v: &Value) -> Result<String, (&'static str, Value)> {
-    let name = v["name"].as_str().unwrap_or("").trim();
+pub(super) fn tile_name(name: Option<&str>) -> Result<String, Reply> {
+    let name = name.unwrap_or("").trim();
     if name.chars().count() > 80 || name.contains(['\n', '\r']) {
         return Err(bad("a tile name is one line of at most 80 characters"));
     }
@@ -341,10 +576,7 @@ pub(super) fn write_new_ext(
     Err(fail::failure("500 Internal Server Error", "no free name"))
 }
 
-/// After a file appears or moves: list it, start its build, say where and
-/// which tile it is (with its state, so the page can show it before the
-/// event that lists it arrives).
-pub(super) fn listed(shared: &Shared, dest: &Path) -> (&'static str, Value) {
+pub(super) fn listed(shared: &Shared, dest: &Path) -> Listed {
     shared.rescan();
     let path = dest.to_string_lossy().into_owned();
     let id = tile_id(&path);
@@ -352,10 +584,11 @@ pub(super) fn listed(shared: &Shared, dest: &Path) -> (&'static str, Value) {
     if tile.is_some() {
         shared.want(&id);
     }
-    (
-        "200 OK",
-        json!({ "path": path, "id": tile.as_ref().map(|_| id), "tile": tile }),
-    )
+    Listed {
+        path,
+        id: tile.as_ref().map(|_| id),
+        tile,
+    }
 }
 
 pub(super) fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
@@ -384,32 +617,26 @@ pub(super) fn home(shared: &Shared) -> Result<PathBuf, (&'static str, Value)> {
 /// to the new name is made first (which fails if the name is taken), then
 /// the old name removed.  Only a change of case, on a disk that ignores
 /// case, renames in place.
-fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
-    let from = match places::owned_tile(shared, tile, "renamed") {
-        Ok(p) => p,
-        Err(e) => return e,
-    };
-    let stem = match tile_name(v) {
-        Ok(s) => s,
-        Err(e) => return e,
-    };
+pub(super) fn rename(shared: &Shared, tile: &TileRef, v: RenameReq) -> Out<Listed> {
+    let from = places::owned_tile(shared, &tile.path, "renamed")?;
+    let stem = tile_name(Some(&v.name))?;
     let Some(dir) = from.parent() else {
-        return bad("the tile has no folder");
+        return Err(bad("the tile has no folder"));
     };
     let to = dir.join(format!("{stem}.dtile"));
     if to == from {
-        return listed(shared, &to);
+        return Ok(listed(shared, &to));
     }
     match std::fs::hard_link(&from, &to) {
         Ok(()) => {
             if let Err(e) = std::fs::remove_file(&from) {
                 // best-effort cleanup of the new link; the failure to remove the old name is what is reported
                 let _ = std::fs::remove_file(&to);
-                return fail::failure_from(
+                return Err(fail::failure_from(
                     "500 Internal Server Error",
                     format!("cannot rename {}: {e}", from.display()),
                     &e,
-                );
+                ));
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -418,274 +645,228 @@ fn rename(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
                 (Ok(a), Ok(b)) if a == b
             );
             if !same {
-                return fail::refused(
+                return Err(fail::refused(
                     "409 Conflict",
                     format!("a tile called “{stem}” is already in this folder"),
-                );
+                ));
             }
             if let Err(e) = std::fs::rename(&from, &to) {
-                return fail::failure_from(
+                return Err(fail::failure_from(
                     "500 Internal Server Error",
                     format!("cannot rename {}: {e}", from.display()),
                     &e,
-                );
+                ));
             }
         }
         Err(e) => {
-            return fail::failure_from(
+            return Err(fail::failure_from(
                 "500 Internal Server Error",
                 format!("cannot rename {}: {e}", from.display()),
                 &e,
-            );
+            ));
         }
     }
     // its prints in the inventory follow it
     super::inventory::note_rename(shared, &from, &to);
-    listed(shared, &to)
+    Ok(listed(shared, &to))
 }
 
 /// Delete a tile's file from a folder the preview lists: what the editor's
 /// Undo does to the copy it made of a library tile.  Never the library, never
 /// a file outside the folders, never anything but a tile document.
-fn delete(shared: &Shared, tile: &str) -> (&'static str, Value) {
-    let path = match places::owned_tile(shared, tile, "deleted") {
-        Ok(p) => p,
-        Err(e) => return e,
-    };
-    if let Err(e) = std::fs::remove_file(&path) {
-        return fail::failure_from(
+pub(super) fn delete(shared: &Shared, tile: &TileRef, _: Nothing) -> Out<Deleted> {
+    let path = places::owned_tile(shared, &tile.path, "deleted")?;
+    std::fs::remove_file(&path).map_err(|e| {
+        fail::failure_from(
             "500 Internal Server Error",
             format!("cannot delete {}: {e}", path.display()),
             &e,
-        );
-    }
+        )
+    })?;
     shared.rescan();
-    ("200 OK", json!({ "ok": true, "path": tile }))
+    Ok(Deleted {
+        path: tile.path.clone(),
+    })
 }
 
 /// Make a small, valid tile in My tiles and return its slot. Starting from a
 /// printable flat square gives the editor something real to select and change;
 /// every later gesture remains ordinary `.dtile` text.
-fn new_tile(shared: &Shared, v: &Value) -> (&'static str, Value) {
+pub(super) fn new_tile(shared: &Shared, v: NewReq) -> Out<Listed> {
     // squares across, then up, as the size picker offers: 1 to 8 each way
-    let size = v["size"].as_str().unwrap_or("1x1").trim();
+    let size = v.size.as_deref().unwrap_or("1x1").trim();
     let valid = size.split_once('x').is_some_and(|(c, r)| {
         let ok =
             |n: &str| n.parse::<u32>().is_ok_and(|n| (1..=8).contains(&n)) && !n.starts_with('0');
         ok(c) && ok(r)
     });
     if !valid {
-        return bad("size must be squares across and up, like 2x1 (1 to 8 each way)");
+        return Err(bad(
+            "size must be squares across and up, like 2x1 (1 to 8 each way)",
+        ));
     }
-    let stem = match tile_name(v) {
-        Ok(s) => s,
-        Err(e) => return e,
-    };
+    let stem = tile_name(v.name.as_deref())?;
     // a new document is written in the current format, with its header
     let version = dt_doc::header::stamp(env!("DT_ENGINE_VERSION"));
     let text = format!(
         "dharmatiles version=\"{version}\"\n\ntile size=\"{size}\" seed=1 {{\n    about \"A new tile.\"\n    stack {{\n        base\n        dirt\n    }}\n}}\n"
     );
     // in a folder of a place (the page's folder level), else in My tiles
-    let into = match places::new_tile_dir(shared, v) {
-        Some(Ok(dir)) => Ok(dir),
-        Some(Err(e)) => Err(e),
-        None => home(shared),
+    let into = match places::new_tile_dir(shared, v.root, v.dir.as_deref()) {
+        Some(r) => r?,
+        None => home(shared)?,
     };
-    match into.and_then(|h| write_new(&h, &stem, &text)) {
-        Ok(dest) => listed(shared, &dest),
-        Err(e) => e,
-    }
-}
-
-/// A KDL value from JSON: whole numbers stay whole.
-fn kdl_value(v: &Value) -> Option<kdl::KdlValue> {
-    Some(match v {
-        Value::Bool(b) => kdl::KdlValue::Bool(*b),
-        Value::Number(n) => match n.as_i64() {
-            Some(i) => kdl::KdlValue::Integer(i128::from(i)),
-            None => kdl::KdlValue::Float(n.as_f64()?),
-        },
-        Value::String(s) => kdl::KdlValue::String(s.clone()),
-        _ => return None,
-    })
+    let dest = write_new(&into, &stem, &text)?;
+    Ok(listed(shared, &dest))
 }
 
 /// `/api/names` `{text}`: the names the text makes (definitions, regions,
 /// lines, points), by the parser, for completion between checks.  A text
 /// that does not parse says so (`{ok: false, message}`): its mistakes are
 /// the check's to show, and the page keeps the names it had.
-fn names(v: &Value) -> (&'static str, Value) {
-    let Some(text) = v["text"].as_str() else {
-        return bad("give the text");
-    };
-    match dt_doc::edit::names_in(text) {
-        Ok(n) => (
-            "200 OK",
-            json!({
-                "ok": true,
-                "defs": n.defs, "regions": n.regions, "lines": n.lines, "points": n.points,
-            }),
-        ),
-        Err(e) => ("200 OK", json!({ "ok": false, "message": e.to_string() })),
-    }
+pub(super) fn names(_: &Shared, v: NamesReq) -> Out<NamesRes> {
+    Ok(match dt_doc::edit::names_in(&v.text) {
+        Ok(n) => NamesRes {
+            ok: true,
+            message: None,
+            defs: n.defs,
+            regions: n.regions,
+            lines: n.lines,
+            points: n.points,
+        },
+        Err(e) => NamesRes {
+            ok: false,
+            message: Some(e.to_string()),
+            defs: Vec::new(),
+            regions: Vec::new(),
+            lines: Vec::new(),
+            points: Vec::new(),
+        },
+    })
 }
 
 /// `/api/check-value`: the reader's check of one typed value.
-fn check_value(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(element), Some(control), Some(typed)) = (
-        v["element"].as_str(),
-        v["control"].as_str(),
-        v["typed"].as_str(),
-    ) else {
-        return bad("give the element, the control and what was typed");
-    };
+pub(super) fn check_value(shared: &Shared, v: CheckValueReq) -> Out<CheckValueRes> {
     // a control the schema does not know (the tile's own, a line's) has
     // nothing to check against here
     // a value is read with units, as the reader reads one
     let opts = shared.options();
+    let (element, control, typed) = (&v.element, &v.control, &v.typed);
     let flaw = dt_doc::schema::element(element)
         .and_then(|e| e.control(control))
         .and_then(|c| dt_doc::decode::check_text_in(c, element, typed, opts.units()));
     // the reader's check first; then the weighting's numbers against their
     // limits, which the reader only meets when the value is lowered
-    let body = match flaw {
-        Some(r) => json!({ "message": r.message, "label": r.label, "help": r.help }),
-        None => match dt_eval::weighting_flaw_in(typed, opts.units()) {
-            Some(w) => json!({ "message": w.message, "label": "here", "help": w.help }),
-            None => json!({ "message": null }),
+    Ok(match flaw {
+        Some(r) => CheckValueRes {
+            message: Some(r.message),
+            label: Some(r.label.to_owned()),
+            help: r.help,
         },
-    };
-    ("200 OK", body)
+        None => match dt_eval::weighting_flaw_in(typed, opts.units()) {
+            Some(w) => CheckValueRes {
+                message: Some(w.message),
+                label: Some("here".to_owned()),
+                help: w.help,
+            },
+            None => CheckValueRes {
+                message: None,
+                label: None,
+                help: None,
+            },
+        },
+    })
 }
 
-fn edit(v: &Value) -> (&'static str, Value) {
-    let Some(text) = v["text"].as_str() else {
-        return bad("give the text");
-    };
-    let at = v["at"].as_u64().and_then(|a| usize::try_from(a).ok());
+pub(super) fn edit(_: &Shared, v: EditReq) -> Out<EditRes> {
     let done = |r: Result<(String, usize), dt_doc::edit::EditError>| match r {
-        Ok((t, at)) => ("200 OK", json!({ "text": t, "at": at })),
-        Err(e) => fail::refused("422 Unprocessable Entity", e.to_string()),
+        Ok((text, at)) => Ok(EditRes { text, at: Some(at) }),
+        Err(e) => Err(fail::refused("422 Unprocessable Entity", e.to_string())),
     };
-    match v["op"].as_str() {
-        // a new node: {op: insert, place: stack|tile, node}
-        Some("insert") => {
-            let Some(node) = v["node"].as_str() else {
-                return bad("give the node to insert");
-            };
+    let text_only = |r: Result<String, dt_doc::edit::EditError>| match r {
+        Ok(text) => Ok(EditRes { text, at: None }),
+        Err(e) => Err(fail::refused("422 Unprocessable Entity", e.to_string())),
+    };
+    match v {
+        EditReq::Insert {
+            text,
+            node,
+            place,
+            at,
+        } => match place.unwrap_or(InsertPlace::Stack) {
             // as the last child of the node at `at`: a clause of a region
-            if v["place"].as_str() == Some("in") {
-                let Some(at) = at else {
-                    return bad("give the byte of the node to write into");
-                };
-                return done(dt_doc::edit::insert_child_at(text, at, node));
+            InsertPlace::In => {
+                let at = at.ok_or_else(|| bad("give the byte of the node to write into"))?;
+                done(dt_doc::edit::insert_child_at(&text, at, &node))
             }
-            let place = match v["place"].as_str() {
-                Some("tile") => dt_doc::edit::Place::Tile,
-                Some("before") => {
-                    let Some(at) = at else {
-                        return bad("give the byte of the node to write above");
-                    };
-                    dt_doc::edit::Place::Before(at)
-                }
-                _ => dt_doc::edit::Place::Stack,
-            };
-            return done(dt_doc::edit::insert_node(text, place, node));
+            InsertPlace::Before => {
+                let at = at.ok_or_else(|| bad("give the byte of the node to write above"))?;
+                done(dt_doc::edit::insert_node(
+                    &text,
+                    dt_doc::edit::Place::Before(at),
+                    &node,
+                ))
+            }
+            InsertPlace::Tile => done(dt_doc::edit::insert_node(
+                &text,
+                dt_doc::edit::Place::Tile,
+                &node,
+            )),
+            InsertPlace::Stack => done(dt_doc::edit::insert_node(
+                &text,
+                dt_doc::edit::Place::Stack,
+                &node,
+            )),
+        },
+        EditReq::Move { text, at, before } => done(dt_doc::edit::move_node(&text, at, before)),
+        EditReq::Remove { text, at } => {
+            done(dt_doc::edit::remove_node_at(&text, at).map(|t| (t, at)))
         }
-        // a node moved among its siblings: {op: move, at, before?}
-        Some("move") => {
-            let Some(at) = at else {
-                return bad("give the node's byte");
-            };
-            let before = match &v["before"] {
-                Value::Null => None,
-                b => match b.as_u64().and_then(|b| usize::try_from(b).ok()) {
-                    Some(b) => Some(b),
-                    None => return bad("before is the byte of a sibling, or left out"),
-                },
-            };
-            return done(dt_doc::edit::move_node(text, at, before));
-        }
-        // a node out: {op: remove, at}
-        Some("remove") => {
-            let Some(at) = at else {
-                return bad("give the node's byte");
-            };
-            return done(dt_doc::edit::remove_node_at(text, at).map(|t| (t, at)));
-        }
-        // a node's children of those names out: {op: remove-children, at, names}
-        Some("remove-children") => {
-            let Some(at) = at else {
-                return bad("give the node's byte");
-            };
-            let names: Vec<&str> = v["names"]
-                .as_array()
-                .map(|a| a.iter().filter_map(Value::as_str).collect())
-                .unwrap_or_default();
+        EditReq::RemoveChildren { text, at, names } => {
             if names.is_empty() {
-                return bad("give the names of the children to take out");
+                return Err(bad("give the names of the children to take out"));
             }
-            return done(dt_doc::edit::remove_children_at(text, at, &names).map(|t| (t, at)));
+            let names: Vec<&str> = names.iter().map(String::as_str).collect();
+            done(dt_doc::edit::remove_children_at(&text, at, &names).map(|t| (t, at)))
         }
-        // a line or region renamed, with what names it: {op: rename, mark, old, new}
-        Some("rename") => {
-            let mark = match v["mark"].as_str() {
-                Some("line") => dt_doc::edit::Mark::Line,
-                Some("region") => dt_doc::edit::Mark::Region,
-                _ => return bad("give mark: line or region"),
+        EditReq::Rename {
+            text,
+            mark,
+            old,
+            new,
+        } => {
+            let mark = match mark {
+                MarkKind::Line => dt_doc::edit::Mark::Line,
+                MarkKind::Region => dt_doc::edit::Mark::Region,
             };
-            let (Some(old), Some(new)) = (v["old"].as_str(), v["new"].as_str()) else {
-                return bad("give old and new");
-            };
-            return done(dt_doc::edit::rename_mark(text, mark, old, new.trim()).map(|t| (t, 0)));
+            done(dt_doc::edit::rename_mark(&text, mark, &old, new.trim()).map(|t| (t, 0)))
         }
-        // a node's positional argument replaced: {op: arg, at, index, value}
-        Some("arg") => {
-            let (Some(at), Some(index)) = (at, v["index"].as_u64()) else {
-                return bad("give the node's byte and the argument's index");
-            };
-            let Some(k) = kdl_value(&v["value"]) else {
-                return bad("a value is a number, a string or a switch");
-            };
-            let Ok(index) = usize::try_from(index) else {
-                return bad("give the argument's index");
-            };
-            return done(dt_doc::edit::set_arg_at(text, at, index, k).map(|t| (t, at)));
-        }
-        Some("set") | None => {}
-        Some(op) => return bad(format!("no edit called `{op}`")),
-    }
-    let (Some(text), Some(at), Some(name)) = (
-        v["text"].as_str(),
-        v["at"].as_u64().and_then(|a| usize::try_from(a).ok()),
-        v["name"].as_str(),
-    ) else {
-        return bad("give text, at and name");
-    };
-    let out = if v["value"].is_null() {
-        dt_doc::edit::remove_control_at(text, at, name)
-    } else {
-        match kdl_value(&v["value"]) {
-            Some(k) => dt_doc::edit::set_control_at(text, at, name, k),
-            None => return bad("a value is a number, a string or a switch"),
-        }
-    };
-    match out {
-        Ok(t) => ("200 OK", json!({ "text": t })),
-        Err(e) => fail::refused("422 Unprocessable Entity", e.to_string()),
+        EditReq::Arg {
+            text,
+            at,
+            index,
+            value,
+        } => done(dt_doc::edit::set_arg_at(&text, at, index, value.kdl()).map(|t| (t, at))),
+        EditReq::Set {
+            text,
+            at,
+            name,
+            value,
+        } => text_only(match value {
+            None => dt_doc::edit::remove_control_at(&text, at, &name),
+            Some(k) => dt_doc::edit::set_control_at(&text, at, &name, k.kdl()),
+        }),
     }
 }
 
-fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, Value) {
-    let Some(text) = v["text"].as_str() else {
-        return bad("give the text");
-    };
+pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
+    let file = t.file(v.file.as_deref())?;
+    let (tile, file, text) = (t.path.as_str(), file.as_str(), v.text);
     // a print list or the inventory is read by its own decoder: its mistakes, at their text
     if file == tile && (super::plates::is_plates(tile) || super::inventory::is_inventory(tile)) {
-        return super::lists::check_text(shared, tile, text);
+        return Ok(super::lists::check_text(shared, tile, &text));
     }
-    let src = Overlay(BTreeMap::from([(file.to_owned(), text.to_owned())]));
+    let src = Overlay(BTreeMap::from([(file.to_owned(), text)]));
     let opts = shared.options();
     let id = tile_id(tile);
     // what this check found is said in the stream too: its mistakes, and the notes that were never shown
@@ -694,51 +875,50 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
             messages::of_errors(errs, scope, &id, name, &[])
         });
     };
+    let unread = |errs: &[dt_eval::Diag]| CheckRes {
+        ok: false,
+        errors: api::mistakes(errs),
+        stack: None,
+        map: None,
+    };
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
             let stack = match c.tile.as_ref().map(|t| stack::items(t, &opts.system)) {
                 Some(Err(e)) => {
-                    return fail::failure(
+                    return Err(fail::failure(
                         "500 Internal Server Error",
                         format!("cannot describe the stack of {tile}: {e}"),
-                    );
+                    ));
                 }
                 Some(Ok(items)) => Some(items),
                 None => None,
             };
-            let own = match src.read(tile) {
-                Ok(t) => t,
-                Err(e) => {
-                    return fail::failure(
-                        "500 Internal Server Error",
-                        format!("cannot read {tile}: {e}"),
-                    );
-                }
-            };
+            let own = src.read(tile).map_err(|e| {
+                fail::failure(
+                    "500 Internal Server Error",
+                    format!("cannot read {tile}: {e}"),
+                )
+            })?;
             let map = match map::json(&c, &own, opts.units()) {
                 Ok(m) => m,
                 Err(errs) => {
                     said(messages::Scope::Check, &errs);
-                    return (
-                        "200 OK",
-                        json!({ "ok": false, "errors": errors_json(&errs) }),
-                    );
+                    return Ok(unread(&errs));
                 }
             };
             shared.report(&id, messages::Scope::Check, |name| {
                 messages::of_check(&c, &id, name, stack.as_deref().unwrap_or(&[]))
             });
-            (
-                "200 OK",
-                json!({ "ok": true, "errors": [], "stack": stack, "map": map }),
-            )
+            Ok(CheckRes {
+                ok: true,
+                errors: Vec::new(),
+                stack: stack.map(|s| s.iter().map(api::camel_keys).collect()),
+                map: Some(api::camel_keys(&map)),
+            })
         }
         Err(errs) => {
             said(messages::Scope::Check, &errs);
-            (
-                "200 OK",
-                json!({ "ok": false, "errors": errors_json(&errs) }),
-            )
+            Ok(unread(&errs))
         }
     }
 }
@@ -752,27 +932,18 @@ pub(super) fn writable(file: &str) -> bool {
 /// `/api/tiles/ID/save` `{text, docRev, file?}`: the text written, if the file is
 /// still at the revision the page edited it from (else a 409 with the file's
 /// current text and revision).  Answers the revision the file has now.
-fn save(shared: &Shared, file: &str, v: &Value) -> (&'static str, Value) {
-    let Some(text) = v["text"].as_str() else {
-        return bad("give the text");
-    };
-    let rev = match super::docs::expected(v) {
-        Ok(r) => r,
-        Err(e) => return e,
-    };
-    if !writable(file) {
-        return fail::refused(
+pub(super) fn save(shared: &Shared, t: &TileRef, v: SaveReq) -> Out<SaveRes> {
+    let file = t.file(v.file.as_deref())?;
+    if !writable(&file) {
+        return Err(fail::refused(
             "403 Forbidden",
             "this file is read only: a library tile is copied into My tiles when it is first changed",
-        );
+        ));
     }
-    match shared
+    let (e, ()) = shared
         .docs
-        .edit(file, Some(rev), |_| Ok((text.to_owned(), json!({}))))
-    {
-        Ok(e) => ("200 OK", json!({ "ok": true, "docRev": e.rev })),
-        Err(e) => e,
-    }
+        .edit(&file, Some(v.doc_rev), |_| Ok((v.text, ())))?;
+    Ok(SaveRes { doc_rev: e.rev })
 }
 
 /// `use "parts/grass"` in a library tile names a library file; in a copy
@@ -805,16 +976,16 @@ fn pin_uses(text: &str, files: &BTreeMap<String, Option<SystemTime>>) -> String 
     out
 }
 
-fn mine(
-    shared: &Shared,
-    tile: &str,
-    files: &BTreeMap<String, Option<SystemTime>>,
-) -> (&'static str, Value) {
+pub(super) fn mine(shared: &Shared, t: &TileRef, _: Nothing) -> Out<Listed> {
+    let (tile, files) = (t.path.as_str(), &t.files);
     if !tile.starts_with(dt_eval::LIB) {
-        return bad("only a library tile is copied");
+        return Err(bad("only a library tile is copied"));
     }
     let Ok(text) = dt_eval::Files.read(tile) else {
-        return fail::refused("404 Not Found", format!("cannot read {tile}"));
+        return Err(fail::refused(
+            "404 Not Found",
+            format!("cannot read {tile}"),
+        ));
     };
     let stem = tile
         .rsplit('/')
@@ -822,31 +993,24 @@ fn mine(
         .unwrap_or("tile")
         .trim_end_matches(".dtile")
         .to_owned();
-    match home(shared).and_then(|h| write_new(&h, &stem, &pin_uses(&text, files))) {
-        Ok(dest) => listed(shared, &dest),
-        Err(e) => e,
-    }
+    let dest = write_new(&home(shared)?, &stem, &pin_uses(&text, files))?;
+    Ok(listed(shared, &dest))
 }
 
 /// Export: the same build as `dharmatiles build` (the saved file, through
 /// the gate), written to [`export_dir`].  With `where`, only says where.
 /// It builds for the target the page chose (the title bar's chip);
 /// `threemf` adds the painted 3MF.
-fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
-    let threemf = v["threemf"].as_bool().unwrap_or(false);
+pub(super) fn export(shared: &Shared, t: &TileRef, v: ExportReq) -> Out<ExportRes> {
+    let tile = t.path.as_str();
+    let threemf = v.threemf.unwrap_or(false);
     let template = if threemf {
-        match crate::bambu::template(None) {
-            Ok(t) => t,
-            Err(e) => return fail::failure("500 Internal Server Error", e),
-        }
+        crate::bambu::template(None).map_err(|e| fail::failure("500 Internal Server Error", e))?
     } else {
         None
     };
-    let out = match export_dir(tile) {
-        Ok(o) => o,
-        Err(e) => return fail::failure("500 Internal Server Error", e),
-    };
-    if v["where"].as_bool() == Some(true) {
+    let out = export_dir(tile).map_err(|e| fail::failure("500 Internal Server Error", e))?;
+    if v.ask_where == Some(true) {
         // shown with ~ for the home folder
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let shown = home
@@ -856,15 +1020,14 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
                 || out.display().to_string(),
                 |r| format!("~/{}", r.display()),
             );
-        return (
-            "200 OK",
-            json!({ "out": out.display().to_string(), "shown": shown }),
-        );
+        return Ok(ExportRes::Where {
+            out: out.display().to_string(),
+            shown,
+        });
     }
-    let palette = match shared.palette_checked() {
-        Ok(p) => p,
-        Err(e) => return fail::failure("500 Internal Server Error", e),
-    };
+    let palette = shared
+        .palette_checked()
+        .map_err(|e| fail::failure("500 Internal Server Error", e))?;
     let extras = crate::build::Extras {
         progress: false,
         tile_no: None,
@@ -893,10 +1056,7 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
             shared.report(&id, messages::Scope::Export, |name| {
                 messages::of_errors(&errs, messages::Scope::Export, &id, name, &[])
             });
-            return (
-                "200 OK",
-                json!({ "path": tile, "ok": false, "errors": crate::build::errors_json(&errs) }),
-            );
+            return Err(fail::mistakes(&errs));
         }
     };
     // a file of yours goes to out/<target>/<name>-<target>.stl, not under
@@ -909,20 +1069,21 @@ fn export(shared: &Shared, tile: &str, v: &Value) -> (&'static str, Value) {
     }
     let built_s = t0.elapsed().as_secs_f64();
     let failures = b.audit.failures(&opts.printer);
-    match crate::build::write(&b, &failures, built_s, &out, extras) {
-        Ok(files) => {
-            let mut r = crate::build::tile_json(&b, &failures, built_s);
-            r["failures"] = json!(failures);
-            let written: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-            r["files"] = json!(written);
-            let id = tile_id(tile);
-            shared.report(&id, messages::Scope::Export, |name| {
-                vec![messages::of_export(&r, &written, &id, name)]
-            });
-            ("200 OK", r)
-        }
-        Err(e) => fail::failure("500 Internal Server Error", e),
-    }
+    let files = crate::build::write(&b, &failures, built_s, &out, extras)
+        .map_err(|e| fail::failure("500 Internal Server Error", e))?;
+    let record = crate::build::tile_json(&b, &failures, built_s);
+    let written: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+    let id = tile_id(tile);
+    shared.report(&id, messages::Scope::Export, |name| {
+        vec![messages::of_export(&record, &written, &id, name)]
+    });
+    Ok(ExportRes::Built(ExportBuilt {
+        path: tile.to_owned(),
+        ok: failures.is_empty(),
+        failures,
+        files: written,
+        build: record,
+    }))
 }
 
 /// Where `tile` exports to: never the library.  A library tile (`lib:`,
@@ -966,13 +1127,11 @@ pub(super) fn export_dir(tile: &str) -> Result<PathBuf, String> {
 
 /// Show a written file in the Finder (macOS `open -R`; elsewhere the
 /// folder is opened).  Only an STL or 3MF that exists.
-fn reveal(v: &Value) -> (&'static str, Value) {
-    let Some(p) = v["path"].as_str().map(PathBuf::from) else {
-        return bad("give the path");
-    };
+pub(super) fn reveal(_: &Shared, v: RevealReq) -> Out<Done> {
+    let p = PathBuf::from(&v.path);
     let kind = p.extension().and_then(|e| e.to_str()).unwrap_or("");
     if !matches!(kind, "stl" | "3mf") || !p.is_file() {
-        return bad("only a written STL or 3MF");
+        return Err(bad("only a written STL or 3MF"));
     }
     let r = if cfg!(target_os = "macos") {
         std::process::Command::new("open")
@@ -989,10 +1148,8 @@ fn reveal(v: &Value) -> (&'static str, Value) {
         .arg(dir)
         .status()
     };
-    match r {
-        Ok(_) => ("200 OK", json!({ "ok": true })),
-        Err(e) => fail::failure("500 Internal Server Error", e.to_string()),
-    }
+    r.map_err(|e| fail::failure("500 Internal Server Error", e.to_string()))?;
+    Ok(Done {})
 }
 
 #[cfg(test)]
@@ -1012,6 +1169,31 @@ mod tests {
         );
     }
 
+    fn new_named(shared: &Shared, name: &str) -> Listed {
+        new_tile(
+            shared,
+            NewReq {
+                name: Some(name.to_owned()),
+                size: None,
+                root: None,
+                dir: None,
+            },
+        )
+        .unwrap()
+    }
+
+    fn tile_of(path: &str) -> TileRef {
+        TileRef {
+            id: tile_id(path),
+            path: path.to_owned(),
+            files: BTreeMap::new(),
+        }
+    }
+
+    fn status(r: Out<impl Sized>) -> &'static str {
+        r.map_or_else(|e| e.0, |_| "200 OK")
+    }
+
     #[test]
     fn a_new_tile_is_safe_named_valid_and_listed() {
         let dir = std::env::temp_dir().join(format!("dt-new-{}", std::process::id()));
@@ -1019,18 +1201,23 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
         let shared = Shared::with_roots(roots, &[], &dt_eval::Options::default());
-        let (status, made) = new_tile(
+        let made = new_tile(
             &shared,
-            &json!({ "name": "Shore / first try", "size": "2x1" }),
-        );
-        assert_eq!(status, "200 OK");
-        let path = made["path"].as_str().unwrap();
+            NewReq {
+                name: Some("Shore / first try".to_owned()),
+                size: Some("2x1".to_owned()),
+                root: None,
+                dir: None,
+            },
+        )
+        .unwrap();
+        let path = made.path.as_str();
         assert!(path.ends_with("Shore - first try.dtile"), "{path}");
         let text = std::fs::read_to_string(path).unwrap();
         assert!(text.contains("tile size=\"2x1\""));
         assert!(text.contains("base\n        dirt\n"));
         dt_eval::check(&dt_eval::Files, path, &Options::default()).unwrap();
-        assert!(made["id"].is_string());
+        assert!(made.id.is_some());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1041,18 +1228,21 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
         let shared = Shared::with_roots(roots, &[], &dt_eval::Options::default());
-        let pond = new_tile(&shared, &json!({ "name": "Pond" })).1;
-        let pond = pond["path"].as_str().unwrap().to_owned();
-        let (status, _) = delete(&shared, "lib:tests/ground/1x1-flat.dtile");
-        assert_eq!(status, "400 Bad Request");
+        let pond = new_named(&shared, "Pond").path;
+        let r = delete(
+            &shared,
+            &tile_of("lib:tests/ground/1x1-flat.dtile"),
+            Nothing {},
+        );
+        assert_eq!(status(r), "400 Bad Request");
         let outside = std::env::temp_dir().join(format!("dt-outside-{}.dtile", std::process::id()));
         std::fs::write(&outside, "x").unwrap();
-        let (status, _) = delete(&shared, &outside.to_string_lossy());
-        assert_eq!(status, "400 Bad Request");
+        let r = delete(&shared, &tile_of(&outside.to_string_lossy()), Nothing {});
+        assert_eq!(status(r), "400 Bad Request");
         assert!(outside.exists());
         let _ = std::fs::remove_file(&outside);
-        let (status, _) = delete(&shared, &pond);
-        assert_eq!(status, "200 OK");
+        let r = delete(&shared, &tile_of(&pond), Nothing {});
+        assert_eq!(status(r), "200 OK");
         assert!(!Path::new(&pond).exists());
         assert!(
             shared.summary(&tile_id(&pond)).is_none(),
@@ -1068,28 +1258,26 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let roots = vec![Root::new("My tiles", RootKind::Dir(dir.clone()))];
         let shared = Shared::with_roots(roots, &[], &dt_eval::Options::default());
-        let pond = new_tile(&shared, &json!({ "name": "Pond" })).1;
-        let marsh = new_tile(&shared, &json!({ "name": "Marsh" })).1;
-        let pond = pond["path"].as_str().unwrap().to_owned();
-        let marsh = marsh["path"].as_str().unwrap().to_owned();
+        let pond = new_named(&shared, "Pond").path;
+        let marsh = new_named(&shared, "Marsh").path;
+        let name = |n: &str| RenameReq { name: n.to_owned() };
 
-        let (status, moved) = rename(&shared, &pond, &json!({ "name": "Still lake" }));
-        assert_eq!(status, "200 OK", "{moved}");
-        let lake = moved["path"].as_str().unwrap().to_owned();
+        let moved = rename(&shared, &tile_of(&pond), name("Still lake")).unwrap();
+        let lake = moved.path.clone();
         assert!(lake.ends_with("Still lake.dtile"), "{lake}");
         assert!(!Path::new(&pond).exists());
-        assert!(moved["id"].is_string());
+        assert!(moved.id.is_some());
 
-        let (status, _) = rename(&shared, &marsh, &json!({ "name": "Still lake" }));
-        assert_eq!(status, "409 Conflict");
+        let r = rename(&shared, &tile_of(&marsh), name("Still lake"));
+        assert_eq!(status(r), "409 Conflict");
         assert!(Path::new(&marsh).exists());
 
-        let (status, _) = rename(
+        let r = rename(
             &shared,
-            "lib:tests/ground/1x1-flat.dtile",
-            &json!({ "name": "x" }),
+            &tile_of("lib:tests/ground/1x1-flat.dtile"),
+            name("x"),
         );
-        assert_eq!(status, "400 Bad Request");
+        assert_eq!(status(r), "400 Bad Request");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

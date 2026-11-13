@@ -391,14 +391,13 @@ pub(crate) fn is_document_error(code: &str) -> bool {
     !matches!(code, "dt::panic" | "dt::source" | "dt::write" | "dt::build")
 }
 
+#[allow(clippy::expect_used)]
 pub(crate) fn errors_json(errs: &[Diag]) -> Vec<Value> {
     errs.iter()
         .map(|d| {
-            let (file, line, column) = d.location().map_or(
-                (Value::Null, Value::Null, Value::Null),
-                |(f, l, c)| (json!(f), json!(l), json!(c)),
-            );
-            json!({"code": d.code, "message": d.message, "file": file, "line": line, "column": column, "help": d.help, "unexpected": !is_document_error(d.code)})
+            // the preview contract's type: one shape for a mistake, wherever it is said
+            serde_json::to_value(crate::preview::api::Mistake::from(d))
+                .expect("a mistake is plain data")
         })
         .collect()
 }

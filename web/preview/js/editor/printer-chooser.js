@@ -1,3 +1,4 @@
+// @ts-check
 // The printer chooser: brand → model with a search, an AMS switch for a model that has an AMS
 // variant, your own profiles in their own group, `verify` profiles marked unchecked, and an
 // import from the slicers installed here.  One widget for every place a printer is chosen: the
@@ -25,7 +26,7 @@ function askSlicers(done) {
   asking = true;
   host.printersScan().then((r) => {
     // no slicer, or a server that cannot say: the chooser simply has no import entry
-    slicers = r.status === 200 ? r.body.slicers || [] : [];
+    slicers = r.status === 200 && 'slicers' in r.body ? r.body.slicers : [];
     for (const f of waiting) f();
   }).catch((e) => { slicers = []; failed('Could not look for slicers', { status: 0, body: { error: String(e?.message || e) } }); })
     .finally(() => { asking = false; });
@@ -38,6 +39,7 @@ function askSlicers(done) {
 export function printerChooser({ printers, current, onPick, needBed = false, disabled = false, key = 'pc' }) {
   const root = el('div', 'pc');
   let mode = 'pick';
+  /** @type {{slicer: string, label: string, title?: string, models: any[] | null, problems: string[], chosen: Set<string>, query: string, busy: boolean, note: string} | null} */
   let importing = null; // {slicer, label, models, problems, chosen:Set, query, busy}
 
   const draw = () => { root.replaceChildren(mode === 'pick' ? pick() : importView()); };
@@ -69,7 +71,7 @@ export function printerChooser({ printers, current, onPick, needBed = false, dis
       const top = el('span', 'pc-top');
       top.append(el('span', 'pc-name', m.title));
       if (m.p.verify) { const v = el('span', 'verify', 'unchecked'); v.title = `Not yet checked against the maker: ${m.p.verify}`; top.append(v); }
-      if (m.p.from_slicer) { const v = el('span', 'own', 'imported'); v.title = `From ${m.p.from_slicer}`; top.append(v); }
+      if (m.p.fromSlicer) { const v = el('span', 'own', 'imported'); v.title = `From ${m.p.fromSlicer}`; top.append(v); }
       b.append(top, el('span', 'pc-meta', m.p.broken ? `does not read: ${m.p.broken}` : `${sizeWords(m.p)}${m.ams ? ' · AMS available' : ''}`));
       // choosing a model keeps the AMS switch where it was, when the new model has one
       b.onclick = () => onPick(sel.ams && m.ams ? m.ams.name : m.name);
@@ -122,6 +124,7 @@ export function printerChooser({ printers, current, onPick, needBed = false, dis
     try {
       const r = await host.printersScan(s.slicer);
       if (r.status !== 200) { failed(`Could not read ${s.title}`, r); mode = 'pick'; draw(); return; }
+      if (!('models' in r.body)) throw new Error('the scan of a slicer answered no models');
       importing.models = r.body.models; importing.problems = r.body.problems; importing.label = r.body.label;
       draw();
     } catch (e) { failed(`Could not read ${s.title}`, { status: 0, body: { error: String(e?.message || e) } }); mode = 'pick'; draw(); }

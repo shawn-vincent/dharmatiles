@@ -5,8 +5,8 @@ import {
 } from '../js/map-model.js';
 
 const piece = (over = {}) => ({
-  id: 'p1', name: 'grass', canon: 'lib:tiles/ground/1x1-grass', seed_used: 97, system: 'db', colour: 'multi', print: 'missing',
-  size: [35, 35], sq: 35, at: [0, 0], rot: 0, bottom_mm: 0, ...over,
+  id: 'p1', name: 'grass', canon: 'lib:tiles/ground/1x1-grass', seedUsed: 97, system: 'db', colour: 'multi', print: 'missing',
+  size: [35, 35], sq: 35, at: [0, 0], rot: 0, bottomMm: 0, ...over,
 });
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
 
@@ -41,7 +41,7 @@ test('turning goes clockwise about the footprint, and a quarter turn swaps its s
 });
 
 test('a raised piece is lifted by its bottom, and a turn leaves the bottom alone', () => {
-  const p = piece({ bottom_mm: 33.1, rot: 270 });
+  const p = piece({ bottomMm: 33.1, rot: 270 });
   near(toWorld(p, 5, 5, 4)[2], 37.1);
   near(matrixOf(p)[14], 33.1);
 });
@@ -61,7 +61,7 @@ test('the nearest free place is the wish when it is free, else the nearest squar
   const r = nearestFree([a], b, { x: 0, y: 0 });
   assert.ok(r.moved === 1 && !overlaps(footprint({ ...b, at: [r.x * 35, r.y * 35] }), footprint(a)));
   // a piece at another height is not in the way: it floats over
-  const high = piece({ index: 2, at: [0, 0], bottom_mm: 33 });
+  const high = piece({ index: 2, at: [0, 0], bottomMm: 33 });
   assert.equal(nearestFree([a], high, { x: 0, y: 0 }).moved, 0);
   // turned, a 2x1 stands 1x2: the free place is searched for the turned footprint
   const long = piece({ index: 3, size: [70, 35], at: [0, 0] });
@@ -106,7 +106,7 @@ test('the seeds you own are of that tile, system and colour mode', () => {
 test('copies of one piece share what you own, and each state is said', () => {
   const ps = [
     piece({ id: 'p0' }), piece({ id: 'p1' }), piece({ id: 'p2' }),
-    piece({ id: 'p3', seed_used: 8 }), piece({ id: 'p4', seed_used: 44 }), piece({ id: 'p5', print: 'skip' }), piece({ id: 'p6', print: 'always' }),
+    piece({ id: 'p3', seedUsed: 8 }), piece({ id: 'p4', seedUsed: 44 }), piece({ id: 'p5', print: 'skip' }), piece({ id: 'p6', print: 'always' }),
     piece({ id: 'p7', error: 'no such tile' }),
   ];
   const m = pills(ps, inv);

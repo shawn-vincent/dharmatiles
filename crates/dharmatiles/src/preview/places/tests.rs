@@ -47,8 +47,60 @@ fn refused(r: &Reply, status: &str) {
     );
 }
 
+/// A call as the page makes it: a JSON body to the typed route, and its reply.
+fn call(shared: &Shared, path: &str, v: &Value) -> Reply {
+    match super::super::edit::post(shared, path, v.to_string().as_bytes()) {
+        super::super::route::Reply::Json(status, body) => (status, body),
+        _ => panic!("not a JSON reply"),
+    }
+}
+
+fn snap_json(shared: &Shared) -> Value {
+    serde_json::to_value(shared.snapshot()).unwrap()
+}
+
+fn add_place(shared: &Shared) -> Reply {
+    call(shared, "/api/places/add", &json!({}))
+}
+fn remove_place(shared: &Shared, v: &Value) -> Reply {
+    call(shared, "/api/places/remove", v)
+}
+fn new_folder(shared: &Shared, v: &Value) -> Reply {
+    call(shared, "/api/folders/new", v)
+}
+fn rename_folder(shared: &Shared, v: &Value) -> Reply {
+    call(shared, "/api/folders/rename", v)
+}
+fn trash_folder(shared: &Shared, v: &Value) -> Reply {
+    call(shared, "/api/folders/trash", v)
+}
+fn undo_trash(shared: &Shared, v: &Value) -> Reply {
+    call(shared, "/api/trash/undo", v)
+}
+
+/// A call under a tile that need not be listed: the handler, given the path.
+fn tile_ref(path: &str) -> super::super::api::TileRef {
+    super::super::api::TileRef {
+        id: tile_id(path),
+        path: path.to_owned(),
+        files: BTreeMap::new(),
+    }
+}
+fn trash_tile(shared: &Shared, path: &str) -> Reply {
+    super::super::api::reply(super::trash_tile(shared, &tile_ref(path), Nothing {}))
+}
+fn duplicate_tile(shared: &Shared, path: &str) -> Reply {
+    super::super::api::reply(super::duplicate_tile(shared, &tile_ref(path), Nothing {}))
+}
+fn move_tile(shared: &Shared, path: &str, v: &Value) -> Reply {
+    match serde_json::from_value::<TileMoveReq>(v.clone()) {
+        Ok(req) => super::super::api::reply(super::move_tile(shared, &tile_ref(path), req)),
+        Err(e) => super::super::fail::refused("400 Bad Request", e.to_string()),
+    }
+}
+
 fn listed_names(shared: &Shared, root: usize) -> Vec<String> {
-    let mut v: Vec<String> = shared.snapshot()["tiles"]
+    let mut v: Vec<String> = snap_json(shared)["tiles"]
         .as_array()
         .unwrap()
         .iter()
@@ -60,7 +112,7 @@ fn listed_names(shared: &Shared, root: usize) -> Vec<String> {
 }
 
 fn folders_of(shared: &Shared, root: usize) -> Vec<String> {
-    shared.snapshot()["folders"]
+    snap_json(shared)["folders"]
         .as_array()
         .unwrap()
         .iter()
@@ -123,7 +175,7 @@ fn the_chooser_adds_a_place_that_is_kept_and_a_cancel_changes_nothing() {
     assert_eq!(body["added"], true);
     let i = usize::try_from(body["root"].as_u64().unwrap()).unwrap();
     assert_eq!(body["label"], "Dungeon dressing");
-    let snap = shared.snapshot();
+    let snap = snap_json(&shared);
     assert_eq!(snap["roots"][i]["role"], "added");
     assert_eq!(snap["roots"][i]["writable"], true);
     assert_eq!(folders_of(&shared, i), vec!["sub".to_owned()]);
@@ -511,7 +563,7 @@ fn the_folder_calls_are_routed_and_need_the_token() {
     let req = super::super::http::Request::build("POST", "/api/places/add", None, b"{}");
     assert!(matches!(
         super::super::route::route(&shared, &req),
-        super::super::route::Reply::Text("403 Forbidden", _)
+        super::super::route::Reply::Json("403 Forbidden", _)
     ));
 }
 

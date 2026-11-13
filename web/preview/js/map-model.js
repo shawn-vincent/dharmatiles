@@ -4,7 +4,7 @@
 // The model and nothing else (no DOM, no three.js), so it is tested alone (tests/map.test.js).
 //
 // The program's numbers (preview/scene.rs): a piece has `at` [x, y] (mm across and down from the map's
-// north-west corner), `rot` (0, 90, 180, 270 clockwise), `bottom_mm` (the height above the map's ground of its tile's zero: the tile's own ground level, so at 0 its connector hangs below the map's ground), `size` [w, d] (its
+// north-west corner), `rot` (0, 90, 180, 270 clockwise), `bottomMm` (the height above the map's ground of its tile's zero: the tile's own ground level, so at 0 its connector hangs below the map's ground), `size` [w, d] (its
 // tile's squares in mm, before it is turned) and `sq` (its own system's square, mm).  The tile's mesh is in
 // the tile's frame: x east, y north from its south-west corner.  The map's world frame, the one the view
 // draws, has x east and y north from the map's north-west corner: y is minus the document's "down".
@@ -29,7 +29,7 @@ export function matrixOf(p) {
   const tx = cw - (c * w) / 2 - (s * d) / 2;
   const ty = -cd + (s * w) / 2 - (c * d) / 2;
   // rows: [c s 0 tx] [-s c 0 ty] [0 0 1 z]
-  return [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, tx, ty, p.bottom_mm || 0, 1];
+  return [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, tx, ty, p.bottomMm || 0, 1];
 }
 
 /** A point of the tile's frame as the map's world point [x, y, z] (y up). */
@@ -41,7 +41,7 @@ export function toWorld(p, x, y, z = 0) {
 /** The box a placed piece fills in the world: its footprint, from `below` mm under its bottom (the tile's connector hangs below the tile's zero) to `top` mm over it. */
 export function worldBox(p, top = 8, below = 0) {
   const f = footprint(p);
-  const z0 = p.bottom_mm || 0;
+  const z0 = p.bottomMm || 0;
   return { lo: [f[0], -f[3], z0 - below], hi: [f[2], -f[1], z0 + top] };
 }
 
@@ -70,7 +70,7 @@ const boxAt = (p, x, y, rot = p.rot) => footprint({ ...p, at: [x * p.sq, y * p.s
 export function nearestFree(others, p, want, rot = p.rot) {
   const clash = (x, y) => {
     const b = boxAt(p, x, y, rot);
-    return others.some((o) => o.at && Math.abs((o.bottom_mm || 0) - (p.bottom_mm || 0)) < 0.5 && overlaps(b, footprint(o)));
+    return others.some((o) => o.at && Math.abs((o.bottomMm || 0) - (p.bottomMm || 0)) < 0.5 && overlaps(b, footprint(o)));
   };
   if (!clash(want.x, want.y)) return { ...want, moved: 0 };
   for (let r = 1; r <= 40; r++) {
@@ -134,7 +134,7 @@ export function ownedSeeds(inv, p) {
 export function pills(pieces, inv) {
   const owned = new Map();
   const other = new Map();
-  const key = (q, colour = q.colour) => `${q.canon ?? q.tile}|${q.seed_used ?? q.seed}|${q.system}|${colour}`;
+  const key = (q, colour = q.colour) => `${q.canon ?? q.tile}|${q.seedUsed ?? q.seed}|${q.system}|${colour}`;
   for (const q of inv?.pieces || []) {
     if (!(q.have > 0)) continue;
     owned.set(`${q.tile}|${q.seed}|${q.system}|${q.colour}`, (owned.get(`${q.tile}|${q.seed}|${q.system}|${q.colour}`) || 0) + q.have);

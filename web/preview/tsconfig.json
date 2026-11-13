@@ -1,0 +1,28 @@
+{
+  "//": "The page is checked against the server's contract (js/api.d.ts, generated from the Rust types). A file is checked when it says `// @ts-check` at the top; the files that talk to the server all do. `npm test` runs this before the page's tests.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [],
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": false
+  },
+  "include": [
+    "js/**/*.js",
+    "js/**/*.d.ts"
+  ],
+  "exclude": [
+    "js/vendor",
+    "node_modules"
+  ]
+}

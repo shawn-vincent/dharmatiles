@@ -1,3 +1,4 @@
+// @ts-check
 // What is done to a tile from the page: a new tile (the size picker), renaming one, and
 // making a library tile your own.  The list of tiles, and the folders they are in, are the
 // panel's folder levels (places.js).
@@ -181,7 +182,8 @@ export function init() {
   };
   $('tilebtn').ondblclick = (e) => { e.preventDefault(); startRename(); };
   addEventListener('keydown', (e) => {
-    const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+    const at = /** @type {HTMLElement} */ (e.target);
+    const typing = at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable;
     if (e.key === 'F2' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); startRename(); }
   });
 }

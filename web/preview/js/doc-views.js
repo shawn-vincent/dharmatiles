@@ -9,8 +9,8 @@ const SYSTEMS = { db: 'DungeonBlocks', ol: 'OpenLOCK' };
 
 /** The key of the geometry a piece is drawn from: its tile, seed, system and printer, and the tile's build. */
 const gkeyOf = (p, scene, tiles) => {
-  const t = tiles.find((x) => x.id === p.tile_id);
-  return `${p.tile_id}|${p.seed ?? ''}|${p.system}|${scene.printer}|${t?.mesh_version ?? 0}`;
+  const t = tiles.find((x) => x.id === p.tileId);
+  return `${p.tileId}|${p.seed ?? ''}|${p.system}|${scene.printer}|${t?.meshVersion ?? 0}`;
 };
 
 let memo = { scene: null, tiles: null, out: [] };
@@ -18,7 +18,7 @@ let memo = { scene: null, tiles: null, out: [] };
 export function piecesOf(scene, tiles) {
   if (!scene) return [];
   if (memo.scene === scene && memo.tiles === tiles) return memo.out;
-  const out = scene.pieces.map((p) => ({ ...p, rot: p.rot ?? 0, gkey: p.tile_id && !p.error ? gkeyOf(p, scene, tiles) : null }));
+  const out = scene.pieces.map((p) => ({ ...p, rot: p.rot ?? 0, gkey: p.tileId && !p.error ? gkeyOf(p, scene, tiles) : null }));
   memo = { scene, tiles, out };
   return out;
 }

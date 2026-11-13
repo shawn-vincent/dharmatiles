@@ -28,8 +28,10 @@ libm.workspace = true
 rayon.workspace = true
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 serde_json.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
+ts-rs.workspace = true
 # Test builds only: the DT_TEST_PANIC crash switch the exit-code tests drive.
 dt-eval = { workspace = true, features = ["test-panic"] }
 

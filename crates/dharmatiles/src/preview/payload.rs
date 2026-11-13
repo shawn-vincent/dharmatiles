@@ -87,6 +87,7 @@ pub fn encode_traced(
     pieces: &[u16],
     meta: &Value,
 ) -> Result<Vec<u8>, String> {
+    let meta = &super::api::camel_keys(meta);
     let n = mesh.triangles.len();
     for (what, len, may_be_empty) in [
         ("painted colours", painted.len(), false),

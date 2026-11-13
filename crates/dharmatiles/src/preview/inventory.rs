@@ -22,12 +22,146 @@ use std::sync::Arc;
 use dt_doc::inventory::{self as doc, Colour, Identity};
 use dt_eval::Diag;
 use dt_eval::inventory as disk;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use super::api::{Out, Reply};
 use super::messages::Scope;
 use super::{Shared, State, fail, lock, messages};
 use crate::errors_json;
 use crate::message::{Kind, Message, Severity};
+
+// ---- the calls' types ------------------------------------------------------------------
+
+/// The colour mode a print was made in.
+#[derive(Deserialize, Clone, Copy)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(rename_all = "lowercase")]
+pub enum ColourWord {
+    Single,
+    Multi,
+}
+
+impl From<ColourWord> for Colour {
+    fn from(c: ColourWord) -> Self {
+        match c {
+            ColourWord::Single => Self::Single,
+            ColourWord::Multi => Self::Multi,
+        }
+    }
+}
+
+/// The base system a tile was built for.
+#[derive(Deserialize, Clone, Copy)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(rename_all = "lowercase")]
+pub enum SystemWord {
+    Db,
+    Ol,
+}
+
+impl SystemWord {
+    fn word(self) -> &'static str {
+        match self {
+            Self::Db => "db",
+            Self::Ol => "ol",
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct InventoryHaveReq {
+    pub tile: String,
+    pub colour: ColourWord,
+    pub system: Option<SystemWord>,
+    pub seed: Option<u64>,
+    pub count: Option<u64>,
+    /// The date, like 2026-11-09 (today when left out).
+    pub on: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct InventoryRecordReq {
+    pub list: String,
+    /// The plate, from 1.
+    pub plate: usize,
+    /// The pieces that failed, by their place in the plate's list.
+    pub failed: Option<Vec<usize>>,
+    pub on: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct InventoryGoneReq {
+    pub tile: String,
+    pub seed: u64,
+    pub system: SystemWord,
+    pub colour: ColourWord,
+    pub note: Option<String>,
+    pub on: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct InventoryRelinkReq {
+    /// The old path, as the log has it.
+    pub from: String,
+    /// The id of the listed tile it is now.
+    pub to: String,
+    pub on: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct InventoryReprintReq {
+    pub tile: String,
+    pub seed: u64,
+    pub system: SystemWord,
+    pub colour: ColourWord,
+    /// The print list's id; none makes a new list.
+    pub list: Option<String>,
+    /// The revision of the list the caller last saw, when it has the list open.
+    pub doc_rev: Option<u64>,
+}
+
+/// Lines added to the inventory.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct InventoryWrote {
+    pub lines: Vec<String>,
+    pub file: String,
+}
+
+/// A piece put in a print list again.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryReprinted {
+    /// The list's path.
+    pub list: String,
+    pub id: String,
+    pub made: bool,
+    pub warning: Option<String>,
+    pub always: bool,
+    pub before: Option<String>,
+    pub text: String,
+    pub doc_rev: u64,
+    pub note: Option<String>,
+}
 
 /// Is this document an inventory?
 pub(super) fn is_inventory(path: &str) -> bool {
@@ -98,7 +232,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
             t.status = State::Failed;
             t.progress = None;
             t.shown = None;
-            t.errors = errors_json(&errs);
+            t.errors = super::api::mistakes(&errs);
             t.files = files.clone();
             t.mesh = None;
             t.plan = Some(skeleton(
@@ -151,11 +285,11 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
 
 // ---- the calls ------------------------------------------------------------------------------
 
-fn bad(msg: &str) -> (&'static str, Value) {
+fn bad(msg: &str) -> Reply {
     fail::refused("400 Bad Request", msg)
 }
 
-fn home_of(shared: &Shared) -> Result<&Path, (&'static str, Value)> {
+fn home_of(shared: &Shared) -> Result<&Path, Reply> {
     shared.home.as_deref().ok_or_else(|| {
         fail::failure(
             "500 Internal Server Error",
@@ -164,9 +298,8 @@ fn home_of(shared: &Shared) -> Result<&Path, (&'static str, Value)> {
     })
 }
 
-/// A date the page sent, or today.
-fn date_of(v: &Value) -> Result<String, (&'static str, Value)> {
-    match v["on"].as_str() {
+fn date_of(on: Option<&str>) -> Result<String, Reply> {
+    match on {
         None => Ok(disk::today()),
         Some(d) => {
             let probe = format!(
@@ -180,19 +313,8 @@ fn date_of(v: &Value) -> Result<String, (&'static str, Value)> {
     }
 }
 
-fn system_of(shared: &Shared, v: &Value) -> Result<String, (&'static str, Value)> {
-    match v["system"].as_str() {
-        None => Ok(shared.options().system),
-        Some(s @ ("db" | "ol")) => Ok(s.to_owned()),
-        Some(_) => Err(bad("the system is db or ol")),
-    }
-}
-
-fn colour_of(v: &Value) -> Result<Colour, (&'static str, Value)> {
-    v["colour"]
-        .as_str()
-        .and_then(Colour::from_word)
-        .ok_or_else(|| bad("the colour mode is single or multi"))
+fn system_of(shared: &Shared, system: Option<SystemWord>) -> String {
+    system.map_or_else(|| shared.options().system, |s| s.word().to_owned())
 }
 
 /// Tell every listener the inventory (and so the list) changed.
@@ -204,11 +326,8 @@ fn announce(shared: &Shared) {
 
 /// Add `lines` to the log, tell the page, and say what happened in the
 /// stream.  `about` is the tile the message is filed under.
-fn write(shared: &Shared, about: &str, lines: &[String], said: &str) -> (&'static str, Value) {
-    let home = match home_of(shared) {
-        Ok(h) => h,
-        Err(e) => return e,
-    };
+fn write(shared: &Shared, about: &str, lines: &[String], said: &str) -> Out<InventoryWrote> {
+    let home = home_of(shared)?;
     match disk::append(home, lines) {
         Ok(path) => {
             announce(shared);
@@ -232,10 +351,10 @@ fn write(shared: &Shared, about: &str, lines: &[String], said: &str) -> (&'stati
                 )
                 .data(json!({"lines": lines, "file": path.display().to_string()})),
             );
-            (
-                "200 OK",
-                json!({"ok": true, "lines": lines, "file": path.display().to_string()}),
-            )
+            Ok(InventoryWrote {
+                lines: lines.to_vec(),
+                file: path.display().to_string(),
+            })
         }
         Err(errs) => {
             shared.say(
@@ -252,7 +371,7 @@ fn write(shared: &Shared, about: &str, lines: &[String], said: &str) -> (&'stati
                 )
                 .code("dt::inventory"),
             );
-            ("200 OK", json!({"ok": false, "errors": errors_json(&errs)}))
+            Err(fail::mistakes(&errs))
         }
     }
 }
@@ -271,27 +390,20 @@ fn plural(n: usize, one: &str) -> String {
 /// `/api/inventory/have` `{tile, colour, system?, seed?, count?, on?}`: one
 /// good print (or `count`) of the tile, at the tile's own seed unless one is
 /// given.  Works without any export.
-pub(super) fn have(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let Some(id) = v["tile"].as_str() else {
-        return bad("give the tile");
-    };
+pub(super) fn have(shared: &Shared, v: InventoryHaveReq) -> Out<InventoryWrote> {
+    let id = v.tile.as_str();
     let Some(path) = slot_path(shared, id)
         .filter(|p| !is_inventory(p) && !p.ends_with(".dmap") && !p.ends_with(".stl"))
     else {
-        return fail::refused("404 Not Found", "no such tile");
+        return Err(fail::refused("404 Not Found", "no such tile"));
     };
-    let (system, colour, on) = match (system_of(shared, v), colour_of(v), date_of(v)) {
-        (Ok(s), Ok(c), Ok(d)) => (s, c, d),
-        (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => return e,
-    };
-    let seed = v["seed"].as_u64();
-    let count = v["count"].as_u64().unwrap_or(1).clamp(1, 100) as usize;
-    let named = match disk::name_tile(&path, None, shared.home.as_deref(), &system, seed) {
-        Ok(n) => n,
-        Err(e) => {
-            return ("200 OK", json!({"ok": false, "errors": errors_json(&e)}));
-        }
-    };
+    let system = system_of(shared, v.system);
+    let colour: Colour = v.colour.into();
+    let on = date_of(v.on.as_deref())?;
+    let seed = v.seed;
+    let count = v.count.unwrap_or(1).clamp(1, 100) as usize;
+    let named = disk::name_tile(&path, None, shared.home.as_deref(), &system, seed)
+        .map_err(|e| fail::mistakes(&e))?;
     let ident = Identity {
         tile: named.canon.clone(),
         seed: named.seed,
@@ -333,17 +445,15 @@ pub(super) fn have(shared: &Shared, v: &Value) -> (&'static str, Value) {
 /// are added as `failed`.  The tile, seed, system and colour mode are the
 /// plan's, the date is the page's, the hash is the tile's document now, and
 /// `from` names the list and plate.
-pub(super) fn record(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let Some(id) = v["list"].as_str() else {
-        return bad("give the list");
-    };
+pub(super) fn record(shared: &Shared, v: InventoryRecordReq) -> Out<InventoryWrote> {
+    let id = v.list.as_str();
     let (path, plan) = {
         let tiles = lock(&shared.tiles);
         let Some(t) = tiles
             .iter()
             .find(|t| t.id == id && super::plates::is_plates(&t.path))
         else {
-            return fail::refused("404 Not Found", "no such print list");
+            return Err(fail::refused("404 Not Found", "no such print list"));
         };
         (t.path.clone(), t.plan.clone())
     };
@@ -352,36 +462,25 @@ pub(super) fn record(shared: &Shared, v: &Value) -> (&'static str, Value) {
         .map(|p| &p["plates"])
         .filter(|p| p["planned"] == json!(true))
     else {
-        return bad("this list does not plan yet, so there are no plates to record");
+        return Err(bad(
+            "this list does not plan yet, so there are no plates to record",
+        ));
     };
-    let Some(plate) = v["plate"]
-        .as_u64()
-        .and_then(|n| usize::try_from(n).ok())
-        .filter(|n| *n >= 1)
-    else {
-        return bad("give the plate (from 1)");
-    };
+    if v.plate < 1 {
+        return Err(bad("give the plate (from 1)"));
+    }
+    let plate = v.plate;
     let Some(pieces) = p["layout"]
         .get(plate - 1)
         .and_then(|pl| pl["pieces"].as_array())
     else {
-        return bad("the list has no such plate");
+        return Err(bad("the list has no such plate"));
     };
-    let failed: Vec<usize> = v["failed"]
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|n| n.as_u64().and_then(|n| usize::try_from(n).ok()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let failed: Vec<usize> = v.failed.unwrap_or_default();
     if failed.iter().any(|n| *n >= pieces.len()) {
-        return bad("a failed piece is not on the plate");
+        return Err(bad("a failed piece is not on the plate"));
     }
-    let on = match date_of(v) {
-        Ok(d) => d,
-        Err(e) => return e,
-    };
+    let on = date_of(v.on.as_deref())?;
     let colour = if p["mode"] == json!("multicolour") {
         Colour::Multi
     } else {
@@ -397,14 +496,14 @@ pub(super) fn record(shared: &Shared, v: &Value) -> (&'static str, Value) {
             .as_u64()
             .and_then(|k| p["kinds"].get(usize::try_from(k).unwrap_or(usize::MAX)))
         else {
-            return bad("a piece names no tile");
+            return Err(bad("a piece names no tile"));
         };
         let (Some(tile), Some(seed), Some(system)) = (
             k["canon"].as_str(),
             k["seed_used"].as_u64(),
             k["system"].as_str(),
         ) else {
-            return bad("the plan is missing a piece's tile, seed or system");
+            return Err(bad("the plan is missing a piece's tile, seed or system"));
         };
         let ident = Identity {
             tile: tile.to_owned(),
@@ -441,40 +540,29 @@ pub(super) fn record(shared: &Shared, v: &Value) -> (&'static str, Value) {
 
 /// `/api/inventory/gone` `{tile, seed, system, colour, note?, on?}`: one of
 /// the piece is lost or broken.
-pub(super) fn gone(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(tile), Some(seed), Some(system)) =
-        (v["tile"].as_str(), v["seed"].as_u64(), v["system"].as_str())
-    else {
-        return bad("give the tile, seed and system");
-    };
-    let (colour, on) = match (colour_of(v), date_of(v)) {
-        (Ok(c), Ok(d)) => (c, d),
-        (Err(e), _) | (_, Err(e)) => return e,
-    };
-    let home = match home_of(shared) {
-        Ok(h) => h,
-        Err(e) => return e,
-    };
+pub(super) fn gone(shared: &Shared, v: InventoryGoneReq) -> Out<InventoryWrote> {
+    let on = date_of(v.on.as_deref())?;
+    let home = home_of(shared)?;
     let ident = Identity {
-        tile: tile.to_owned(),
-        seed,
-        system: system.to_owned(),
-        colour,
+        tile: v.tile.clone(),
+        seed: v.seed,
+        system: v.system.word().to_owned(),
+        colour: v.colour.into(),
     };
     match disk::load(home) {
         Ok(Some(l)) if l.inventory.have(&ident) > 0 => {}
         Ok(_) => {
-            return fail::refused(
+            return Err(fail::refused(
                 "409 Conflict",
                 "you have none of that piece on the shelf to take away",
-            );
+            ));
         }
-        Err(e) => return ("200 OK", json!({"ok": false, "errors": errors_json(&e)})),
+        Err(e) => return Err(fail::mistakes(&e)),
     }
     let line = doc::gone_line(
         &ident,
         &on,
-        v["note"].as_str().filter(|n| !n.trim().is_empty()),
+        v.note.as_deref().filter(|n| !n.trim().is_empty()),
     );
     let about = super::tile_id(&disk::path_in(home).to_string_lossy());
     write(
@@ -483,33 +571,30 @@ pub(super) fn gone(shared: &Shared, v: &Value) -> (&'static str, Value) {
         &[line],
         &format!(
             "Marked one {} gone",
-            tile.rsplit('/').next().unwrap_or(tile)
+            v.tile.rsplit('/').next().unwrap_or(&v.tile)
         ),
     )
 }
 
 /// `/api/inventory/relink` `{from, to, on?}`: a tile has another path now.
 /// `to` is the id of a listed tile.
-pub(super) fn relink(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(from), Some(to_id)) = (v["from"].as_str(), v["to"].as_str()) else {
-        return bad("give the old path and the tile it is now");
-    };
-    let on = match date_of(v) {
-        Ok(d) => d,
-        Err(e) => return e,
-    };
-    let Some(path) = slot_path(shared, to_id) else {
-        return fail::refused("404 Not Found", "no such tile");
+pub(super) fn relink(shared: &Shared, v: InventoryRelinkReq) -> Out<InventoryWrote> {
+    let from = v.from.as_str();
+    let on = date_of(v.on.as_deref())?;
+    let Some(path) = slot_path(shared, &v.to) else {
+        return Err(fail::refused("404 Not Found", "no such tile"));
     };
     let to = disk::canonical(&path, shared.home.as_deref());
-    let home = match home_of(shared) {
-        Ok(h) => h,
-        Err(e) => return e,
-    };
+    let home = home_of(shared)?;
     match disk::load(home) {
         Ok(Some(l)) if l.inventory.pieces().iter().any(|p| p.id.tile == from) => {}
-        Ok(_) => return fail::refused("409 Conflict", "the inventory has nothing for that path"),
-        Err(e) => return ("200 OK", json!({"ok": false, "errors": errors_json(&e)})),
+        Ok(_) => {
+            return Err(fail::refused(
+                "409 Conflict",
+                "the inventory has nothing for that path",
+            ));
+        }
+        Err(e) => return Err(fail::mistakes(&e)),
     }
     let about = super::tile_id(&disk::path_in(home).to_string_lossy());
     write(
@@ -629,25 +714,15 @@ fn say_problem(shared: &Shared, text: &str) {
     );
 }
 
-/// `/api/inventory/reprint` `{tile, seed, system, colour, list?}`: the piece,
+/// `/api/inventory/reprint` `{tile, seed, system, colour, list?, docRev?}`: the piece,
 /// with its recorded seed, goes into the print list `list` (a listed `.dmap`)
 /// or into a new one beside your tiles.  A piece you still have is added with
 /// `print=always`; one you do not is a plain piece, which prints because the
 /// inventory lacks it.
-pub(super) fn reprint(shared: &Shared, v: &Value) -> (&'static str, Value) {
-    let (Some(tile), Some(seed), Some(system)) =
-        (v["tile"].as_str(), v["seed"].as_u64(), v["system"].as_str())
-    else {
-        return bad("give the tile, seed and system");
-    };
-    let colour = match colour_of(v) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-    let home = match home_of(shared) {
-        Ok(h) => h,
-        Err(e) => return e,
-    };
+pub(super) fn reprint(shared: &Shared, v: InventoryReprintReq) -> Out<InventoryReprinted> {
+    let (tile, seed, system) = (v.tile.as_str(), v.seed, v.system.word());
+    let colour: Colour = v.colour.into();
+    let home = home_of(shared)?;
     let have = match disk::load(home) {
         Ok(Some(l)) => l.inventory.have(&Identity {
             tile: tile.to_owned(),
@@ -656,14 +731,14 @@ pub(super) fn reprint(shared: &Shared, v: &Value) -> (&'static str, Value) {
             colour,
         }),
         Ok(None) => 0,
-        Err(e) => return ("200 OK", json!({"ok": false, "errors": errors_json(&e)})),
+        Err(e) => return Err(fail::mistakes(&e)),
     };
     let mode = match colour {
         Colour::Single => dt_doc::map::Mode::Single,
         Colour::Multi => dt_doc::map::Mode::Multicolour,
     };
     // a list laid out in another colour mode is warned about, not refused
-    let list = v["list"].as_str();
+    let list = v.list.as_deref();
     let warning = list
         .and_then(|id| slot_path(shared, id))
         .and_then(|path| std::fs::read_to_string(&path).ok().map(|t| (path, t)))
@@ -681,18 +756,22 @@ pub(super) fn reprint(shared: &Shared, v: &Value) -> (&'static str, Value) {
         system: Some(system),
         always: have > 0,
     };
-    let put = match super::lists::put(shared, &want, list, Some(mode)) {
-        Ok(p) => p,
-        Err(e) => return e,
-    };
+    let put = super::lists::put(shared, &want, list, v.doc_rev, Some(mode))?;
     shared.rescan();
     super::places::announce(shared);
     let id = super::tile_id(&put.path.to_string_lossy());
     if put.made {
         shared.want(&id);
     }
-    (
-        "200 OK",
-        json!({"ok": true, "list": put.path.display().to_string(), "id": id, "made": put.made, "warning": warning, "always": have > 0, "before": put.before, "text": put.after, "docRev": put.rev, "note": put.note}),
-    )
+    Ok(InventoryReprinted {
+        list: put.path.display().to_string(),
+        id,
+        made: put.made,
+        warning,
+        always: have > 0,
+        before: put.before,
+        text: put.after,
+        doc_rev: put.rev,
+        note: put.note.map(str::to_owned),
+    })
 }

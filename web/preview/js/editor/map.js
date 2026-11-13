@@ -1,3 +1,4 @@
+// @ts-check
 // The map over the view, the bar and its tools.
 
 import { valueOf } from '../lens.js';
@@ -22,7 +23,7 @@ const cssVar = token; // cached: read once per theme, not once per entry per fra
 /** The ground's heights, from the surfaces the build made (what each is, from the mesh's own stack). */
 function surfaceHeights(p) {
   const stack = meshStack(p);
-  overlay.setHeights(p, (e) => elementNamed(stack[e]?.element)?.body === true, tile()?.plan?.size_mm || p.meta.footprint);
+  overlay.setHeights(p, (e) => elementNamed(stack[e]?.element)?.body === true, tile()?.plan?.sizeMm || p.meta.footprint);
 }
 
 /** Each region's tint: the colour of the last thing laid in it. */
@@ -68,7 +69,7 @@ function handles() {
 
 function drawOverlay() {
   const t = tile(), d = doc.get();
-  overlay.setMap(d.tileId === view.get().tileId ? d.map : null, t?.plan?.square_mm);
+  overlay.setMap(d.tileId === view.get().tileId ? d.map : null, t?.plan?.squareMm);
   const { sel: s, hov: h } = view.get();
   overlay.draw({
     tints: tints(),
@@ -84,6 +85,7 @@ function drawOverlay() {
 }
 
 /** Write a new node from a gesture in the view, then select it. */
+/** @param {any} place @param {any} node @param {{select?: any}} [opts] */
 async function insertNode(place, node, { select: sel } = {}) {
   const t = tile();
   if (!t) return;
@@ -107,7 +109,7 @@ export function init() {
   tools = new Tools($('canvas'), viewer, overlay, { bar: $('place'), input: $('place-in'), list: $('place-list'), chip: $('tool') }, {
     elements: () => server.get().elements,
     defs: () => doc.get().names?.defs ?? [],
-    sq: () => tile()?.plan?.square_mm || 35,
+    sq: () => tile()?.plan?.squareMm || 35,
     size: () => [tile()?.plan?.cols || 1, tile()?.plan?.rows || 1],
     map: () => doc.get().map,
     writable: () => doc.get().writable,
@@ -127,7 +129,8 @@ export function init() {
   view.subscribe(['shown', 'draft'], () => { if (viewer.payload) surfaceHeights(viewer.payload); });
   // while a tool is placing, Esc, Enter and Backspace are its (before the page's own keys)
   addEventListener('keydown', (e) => {
-    const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+    const at = /** @type {HTMLElement} */ (e.target);
+    const typing = at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable;
     if (!typing && tools.key(e)) e.preventDefault();
   }, true);
 }
