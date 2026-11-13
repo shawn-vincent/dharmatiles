@@ -76,7 +76,7 @@ export const view = createStore({
   page: 'browse',      // the sidebar's page: the tile browser, or the editor ('edit')
   dmode: null,         // a .dmap's mode: 'map' or 'plates' (null: not a .dmap, or its plan has not come)
   msel: [],            // the pieces selected on the map (indices into the map's pieces)
-  mprop: null,         // the property open as a level on the selected piece: 'height' | 'seed' | 'print' (editor/scene-panel.js)
+  mprop: null,         // the property open as a level on the selected piece: 'bottom' | 'seed' | 'print' (editor/scene-panel.js)
   drawer: false,       // the catalog drawer along the bottom of the map is open
   panel: false,        // the messages panel is open
   popover: null,       // the id of the open popover, if any

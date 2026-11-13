@@ -10,7 +10,7 @@
 // Drawn first, in its own pass with its own camera (the viewer's pose, a far clip that reaches the horizon), so
 // the tile view's near and far planes are not stretched by a ground that has no end; then the depth is cleared
 // and the pieces are drawn over it.  Everything is procedural (shaders): no pictures, nothing to load.  The sky
-// is a dome that follows the camera, the ground a plane at the lowest underside with a haze that matches the
+// is a dome that follows the camera, the ground a plane at the map's zero (the tile's lowest point on a tile) with a haze that matches the
 // dome's horizon, and each piece casts a soft contact shadow on it.
 
 import * as THREE from 'three';

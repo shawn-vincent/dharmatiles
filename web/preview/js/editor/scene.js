@@ -1,7 +1,7 @@
 // The map in the 3D view (docs/maps.html): a `.dmap` with placed pieces opens as a map, and the view shows
 // every piece's tile at its place, turned and raised, on the ground of the chosen backdrop.
 //
-// The program says what the map is (the scene: each piece's tile, seed, system, place, turn and height, in
+// The program says what the map is (the scene: each piece's tile, seed, system, place, turn and bottom, in
 // `tile.plan.scene`); this module draws it.  A piece is its tile's mesh at one of three tiers (the program's
 // `/api/tiles/ID/tier`, from its cache or built): super-low far away, low in the middle, full close up and
 // for what you select, chosen by how large the piece is on screen and held under a triangle budget, so a
@@ -114,7 +114,7 @@ function frameBox(ps, scene) {
     lo = [Math.min(lo[0], 0), Math.min(lo[1], 0)]; hi = [Math.max(hi[0], scene.grid.cols * sq), Math.max(hi[1], scene.grid.rows * sq)];
   }
   if (!b && !scene.grid) { lo = [0, 0]; hi = [140, 140]; }
-  const top = Math.max(0, ...ps.filter((p) => p.at).map((p) => (p.height_mm || 0))) + 14;
+  const top = Math.max(0, ...ps.filter((p) => p.at).map((p) => (p.bottom_mm || 0))) + 14;
   return { lo: [lo[0], -hi[1], -7], hi: [hi[0], -lo[1], top] };
 }
 
@@ -139,7 +139,7 @@ function sync() {
   const box = frameBox(ps, sc);
   viewer.setSceneBox(box);
   const sq = ps.find((p) => p.sq)?.sq ?? 35;
-  viewer.setSceneGrid({ sq, w: Math.max(box.hi[0] - box.lo[0], sq), h: Math.max(box.hi[1] - box.lo[1], sq), cx: (box.lo[0] + box.hi[0]) / 2, cy: (box.lo[1] + box.hi[1]) / 2, z: -7 });
+  viewer.setSceneGrid({ sq, w: Math.max(box.hi[0] - box.lo[0], sq), h: Math.max(box.hi[1] - box.lo[1], sq), cx: (box.lo[0] + box.hi[0]) / 2, cy: (box.lo[1] + box.hi[1]) / 2, z: 0 });
   request(ps);
   evaluate(true);
 }
@@ -182,7 +182,7 @@ function frameFor(name) {
   if (!mounted || name !== 'close') return null;
   const p = selected()[0] ?? pieces().find((q) => q.at);
   if (!p?.at) return null;
-  return { ...M.worldBox(p, 14), fit: true };
+  return { ...M.worldBox(p, 14, 7), fit: true };
 }
 
 // ---- the tiers ----------------------------------------------------------------------------------------

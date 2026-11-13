@@ -14,8 +14,10 @@
 //! A print list is a map whose pieces have no place yet.  A piece with `at`
 //! is placed on the map: `at="(2sq, 1sq)"` is across and down from the map's
 //! north-west corner (in squares of the piece's own system, or `mm`), `rot` is
-//! 0, 90, 180 or 270 clockwise, `height` is the height of its underside (a
-//! `$` name or a length), and a placed piece is one piece (no `count`).  The
+//! 0, 90, 180 or 270 clockwise, `bottom` is the height above the map's ground
+//! of the tile's zero (ground level on the tile; a `$` name or a length, 0 by
+//! default, so the connector is under the ground), and a placed piece is one
+//! piece (no `count`).  The
 //! map may say `grid cols=8 rows=5` and `let $plinth "20dmm"` (a name for
 //! heights).  The `plates` line names the printer profile, the base system,
 //! the print mode and the spacing, every word of it optional, and may hold
@@ -294,8 +296,8 @@ pub struct Piece {
     pub place: Option<At>,
     /// Its turn on the map, as written.
     pub rot: Option<Spanned<i64>>,
-    /// Its height on the map, as written.
-    pub height: Option<Spanned<String>>,
+    /// The height above the map's ground of the tile's zero, as written.
+    pub bottom: Option<Spanned<String>>,
     /// The whole node.
     pub span: SourceSpan,
 }
@@ -442,7 +444,7 @@ const PLATES_KEYS: [&str; 8] = [
     "inventory",
 ];
 const PIECE_KEYS: [&str; 8] = [
-    "count", "seed", "system", "print", "at", "rot", "height", "id",
+    "count", "seed", "system", "print", "at", "rot", "bottom", "id",
 ];
 
 impl Reader {
@@ -583,7 +585,7 @@ impl Reader {
             at: None,
             place: None,
             rot: None,
-            height: None,
+            bottom: None,
             span: n.span(),
         };
         for e in n.entries() {
@@ -644,8 +646,20 @@ impl Reader {
                     }
                 }
                 "height" => {
-                    p.height = self.string("height", e);
-                    if let Some(h) = &p.height
+                    self.err(
+                        "dt::map",
+                        k.span(),
+                        "a piece has no `height`",
+                        "renamed",
+                    )
+                    .help = Some(
+                        "`height` is now `bottom`: the height of the tile's zero (ground level) above the map's ground"
+                            .to_owned(),
+                    );
+                }
+                "bottom" => {
+                    p.bottom = self.string("bottom", e);
+                    if let Some(h) = &p.bottom
                         && let Err(m) = parse_height(&h.value)
                     {
                         self.err("dt::map", h.span, m, "not a height").help = Some(
@@ -1331,7 +1345,7 @@ pub fn add_pieces(text: &str, lines: &[String]) -> Result<String, Vec<DocError>>
 /// A value a piece's property is set to.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Prop {
-    /// A quoted string (`at`, `height`, `system`, `print`).
+    /// A quoted string (`at`, `bottom`, `system`, `print`).
     Str(String),
     /// A whole number (`rot`, `seed`).
     Int(i64),

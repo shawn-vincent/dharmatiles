@@ -22,6 +22,9 @@ void main() {
 const MASK_S = 'void main() { gl_FragColor = vec4(1.0); }';
 const grey = (n) => new Uint8Array(n).fill(168);
 
+/** The map's ground, just under z = 0 so a tile's own surface at zero does not fight it. */
+const GROUND_MASK_Z = -0.05;
+
 export const sceneMethods = {
   initScene() {
     this.sceneOn = false;
@@ -41,6 +44,17 @@ export const sceneMethods = {
     };
     this.sceneSel = new Set();
     this.sceneHov = -1;
+    // The map's ground hides what is below it: a plane at the ground, front side up, drawn first into depth only
+    // (the backdrop is its own pass), so a camera that orbits underneath still sees everything.
+    this.groundMask = new THREE.Mesh(
+      new THREE.PlaneGeometry(2e5, 2e5),
+      new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, side: THREE.FrontSide }),
+    );
+    this.groundMask.renderOrder = -1;
+    this.groundMask.frustumCulled = false;
+    this.groundMask.position.z = GROUND_MASK_Z;
+    this.groundMask.visible = false;
+    this.sceneGroup.add(this.groundMask);
     this.scene.add(this.sceneGroup);
     this.pickScene.add(this.scenePickGroup);
     this.maskScene.add(this.sceneMaskGroup);
@@ -124,23 +138,17 @@ export const sceneMethods = {
   setBackdropNight(n) { this.backdrop.setNight(n); this.draw(); },
 
   /**
-   * The ground under what is shown: at the lowest underside (a tile's base hangs below zero), with a soft shadow
-   * round each footprint.  The map's pieces, or the tile (or the plate's bed, where there is no backdrop).
+   * The ground under what is shown, with a soft shadow round each footprint.  The map's ground is at z = 0 and
+   * hides what is below it (a tile's connector at bottom 0); the tile's own is at its lowest point, so its
+   * connector shows while it is edited; a plate keeps the bed.
    */
   placeGround() {
+    this.groundMask.visible = this.sceneOn && this.backdrop.on();
     if (!this.backdrop.on()) return;
     let z = 0, box = null, sq = 35;
     const rects = [];
     if (this.sceneOn) {
-      z = Infinity;
-      for (const [i, p] of this.scenePieces) {
-        const e = p.gid ? this.sceneGeoms.get(p.gid) : null;
-        const lo = e?.meta?.tile_lo?.[2] ?? -7;
-        const m = p.render.matrix.elements;
-        z = Math.min(z, m[14] + (p.gid?.startsWith('box') ? 0 : lo));
-        void i;
-      }
-      if (!Number.isFinite(z)) z = -7;
+      z = 0;
       box = this.sceneBox;
       sq = this.sceneGridSpec?.sq ?? 35;
       for (const p of this.scenePieces.values()) {
@@ -171,7 +179,7 @@ export const sceneMethods = {
       z = -7;
     }
     if (!box) return;
-    this.backdrop.setGround(box, sq, z - 0.05);
+    this.backdrop.setGround(box, sq, this.sceneOn ? GROUND_MASK_Z : z - 0.05);
     this.backdrop.setRects(rects);
   },
 

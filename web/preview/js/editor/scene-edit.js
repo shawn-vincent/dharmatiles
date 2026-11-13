@@ -239,7 +239,7 @@ export async function addTile(t, want = null) {
   const [cols, rows] = sizeSquares(t) ?? [1, 1];
   const inv = server.get().inventory;
   const canon = canonOf(t.path, inv?.home);
-  const probe = { canon, system, colour: sc.colour, size: [cols * sq, rows * sq], sq, at: null, rot: 0, height_mm: 0, seed_used: -1 };
+  const probe = { canon, system, colour: sc.colour, size: [cols * sq, rows * sq], sq, at: null, rot: 0, bottom_mm: 0, seed_used: -1 };
   const placed = pieces().filter((q) => q.at);
   const free = M.nearestFree(placed, probe, want ?? { x: 0, y: 0 });
   if (free.moved < 0) { toast('There is no free place for that tile on the map'); return null; }

@@ -210,7 +210,7 @@ export const layersMethods = {
   buildGrid() {
     if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); this.grid.material.dispose(); this.grid = null; }
     const b = this.bounds();
-    // a map's grid is the map's: its squares over its extent, at the lowest underside
+    // a map's grid is the map's: its squares over its extent, at the map's ground
     const sg = this.sceneOn ? this.sceneGridSpec : null;
     const sq = sg ? sg.sq : this.plan?.square_mm;
     if (!b || !sq) return;

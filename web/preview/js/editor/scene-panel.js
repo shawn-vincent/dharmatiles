@@ -194,9 +194,9 @@ function pieceLevel(body, ro) {
   if (!many) {
     const lv = el('button', 'mp-prop');
     lv.type = 'button';
-    lv.append(el('span', 'pl-lab', 'Level'), el('span', 'mp-val', M.heightWords(p, sc?.heights)), el('span', 'mp-go', '›'));
-    lv.title = 'The height of this piece’s underside: a name from the standard heights, or a length';
-    lv.onclick = () => view.set({ mprop: 'height' });
+    lv.append(el('span', 'pl-lab', 'Bottom'), el('span', 'mp-val', M.bottomWords(p, sc?.heights)), el('span', 'mp-go', '›'));
+    lv.title = 'How high the tile’s zero (its ground level) stands above the map’s ground: a name from the standard heights, or a length. The connector hangs below it.';
+    lv.onclick = () => view.set({ mprop: 'bottom' });
     props.append(lv);
     const sd = el('button', 'mp-prop');
     sd.type = 'button';
@@ -233,27 +233,27 @@ function propLevel(body, ro) {
   const p = selected()[0];
   const sc = sceneNow();
   const kind = view.get().mprop;
-  const s = section(kind === 'height' ? 'Level' : kind === 'seed' ? 'Seed' : 'Print');
-  if (kind === 'height') {
-    s.append(el('p', 'note', 'The height of the piece’s underside, from the ground. A raised piece floats at its level; a riser under it comes later.'));
+  const s = section(kind === 'bottom' ? 'Bottom' : kind === 'seed' ? 'Seed' : 'Print');
+  if (kind === 'bottom') {
+    s.append(el('p', 'note', 'How high the tile’s zero (its ground level) stands above the map’s ground. At zero the connector is under the ground; a raised piece hangs its connector in the air, and a riser under it comes later.'));
     const choose = (name, text, sub) => {
-      const on = (p.height ?? null) === name;
+      const on = (p.bottom ?? null) === name;
       const b = el('button', `mp-choice${on ? ' on' : ''}`);
       b.type = 'button';
       b.append(el('b', null, text), el('span', 'mp-sub', sub));
       b.setAttribute('aria-pressed', String(on));
       b.disabled = ro;
-      b.onclick = () => E.setPiece(p, { height: name }, `${p.name}: ${text}`);
+      b.onclick = () => E.setPiece(p, { bottom: name }, `${p.name}: ${text}`);
       s.append(b);
     };
-    choose(null, 'On the ground', 'zero');
+    choose(null, 'Ground level', 'zero');
     for (const n of (sc?.heights ?? []).filter((h) => /Height$/.test(h.name))) choose(`$${n.name}`, `$${n.name}`, `${Number(n.dmm.toFixed(2))} dmm`);
     const own = el('div', 'pl-field');
     own.append(el('span', 'pl-lab', 'A length'));
     const i = el('input');
-    i.type = 'text'; i.placeholder = '20dmm'; i.spellcheck = false; i.value = p.height && !p.height.startsWith('$') ? p.height : ''; i.disabled = ro;
-    i.setAttribute('aria-label', 'A height as a length with units');
-    i.onkeydown = (e) => { if (e.key === 'Enter' && i.value.trim()) E.setPiece(p, { height: i.value.trim() }, `${p.name}: ${i.value.trim()}`); };
+    i.type = 'text'; i.placeholder = '20dmm'; i.spellcheck = false; i.value = p.bottom && !p.bottom.startsWith('$') ? p.bottom : ''; i.disabled = ro;
+    i.setAttribute('aria-label', 'A bottom as a length with units');
+    i.onkeydown = (e) => { if (e.key === 'Enter' && i.value.trim()) E.setPiece(p, { bottom: i.value.trim() }, `${p.name}: ${i.value.trim()}`); };
     own.append(i);
     s.append(own);
   } else if (kind === 'seed') {
@@ -303,7 +303,7 @@ function crumbsFor(level, t) {
     const p = sel[0];
     out.push({ label: sel.length > 1 ? `${sel.length} pieces` : (p.id ? `${p.name} · ${p.id}` : p.name), go: () => view.set({ mprop: null }) });
   }
-  if (level === 'prop') out.push({ label: { height: 'Level', seed: 'Seed', print: 'Print' }[view.get().mprop] ?? 'Property' });
+  if (level === 'prop') out.push({ label: { bottom: 'Bottom', seed: 'Seed', print: 'Print' }[view.get().mprop] ?? 'Property' });
   return out;
 }
 

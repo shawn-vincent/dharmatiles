@@ -16,7 +16,7 @@
   <p class="lede">A map is the table as it will be: tiles placed on a grid of squares, turned and raised, seen whole in the editor's 3D view before anything prints. It is the same <code>.dmap</code> document as a <a href="plates.html">print list</a>; a print list is a map whose pieces have no place yet.</p>
   <div class="facts">
     <div><div class="k">Document</div><div class="v"><code>.dmap</code>, KDL v2</div></div>
-    <div><div class="k">A piece has</div><div class="v"><code>at</code>, <code>rot</code>, <code>height</code>, <code>seed</code></div></div>
+    <div><div class="k">A piece has</div><div class="v"><code>at</code>, <code>rot</code>, <code>bottom</code>, <code>seed</code></div></div>
     <div><div class="k">In the editor</div><div class="v">Map beside Tile and Plates</div></div>
     <div><div class="k">Plates read it</div><div class="v">Print what’s missing</div></div>
   </div>
@@ -24,7 +24,7 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#file">The file</a></li>
   <li><a href="#placing">Placing pieces</a></li>
-  <li><a href="#heights">Heights</a></li>
+  <li><a href="#bottom">Bottom</a></li>
   <li><a href="#editor">In the editor</a></li>
   <li><a href="#backdrop">The backdrop</a></li>
   <li><a href="#detail">Detail by distance</a></li>
@@ -37,7 +37,7 @@
 <article class="doc">
 
 <h2 id="file">The file</h2>
-<p>The map follows the tile language's habits: lengths carry units, points read across and down from the north-west corner, and everything you can see on screen is written in the source. The editor writes <code>at</code> and <code>rot</code> on every placed piece, and <code>height</code>, <code>seed</code> and <code>print</code> only when they are not the default.</p>
+<p>The map follows the tile language's habits: lengths carry units, points read across and down from the north-west corner, and everything you can see on screen is written in the source. The editor writes <code>at</code> and <code>rot</code> on every placed piece, and <code>bottom</code>, <code>seed</code> and <code>print</code> only when they are not the default.</p>
 <pre><code>dharmatiles version="1.0.0"
 
 map {
@@ -48,8 +48,9 @@ map {
     piece p1 "lib:tiles/ground/2x2-glade"               at="(0sq, 0sq)" rot=0
     piece p2 "lib:tiles/water/1x1-water-corridor+grass" at="(2sq, 1sq)" rot=90 seed=3
     piece p3 "lib:tiles/walls/1x1-wall-stone"           at="(4sq, 1sq)" rot=180
-    piece p4 "lib:tiles/cliffs/2x1-cliff"               at="(4sq, 0sq)" rot=0 height="$wallHeight"
-    piece p7 "lib:tiles/walls/1x1-wall-stone"           at="(5sq, 1sq)" rot=0 height="$plinth + 2mm"
+    piece p4 "lib:tiles/cliffs/2x1-cliff"               at="(4sq, 0sq)" rot=0 bottom="$wallHeight"
+    piece p7 "lib:tiles/walls/1x1-wall-stone"           at="(5sq, 1sq)" rot=0 bottom="$plinth + 2mm"
+    piece p8 "lib:tiles/ground/1x1-grass"               at="(6sq, 1sq)" rot=0 bottom="50mm"
     piece p5 "home:meadows/glade"                       at="(0sq, 2sq)" rot=0 print=skip
     piece p6 "lib:tiles/ground/1x1-grass"                                    // no at: in the tray
 }
@@ -63,7 +64,7 @@ plates printer="bambu/x1c-ams" {
 <tr><td><code>piece p1 "…"</code></td><td>A piece. The optional name after <code>piece</code> is its id: what a pin calls it by. The editor gives one to each piece it places (<code>p1</code>, <code>p2</code>, the first not used). Ids are each piece's own.</td></tr>
 <tr><td><code>at="(2sq, 1sq)"</code></td><td>Where the piece's north-west corner stands, across and then down from the map's north-west corner. <code>sq</code> is a square of the piece's own system (35 mm on DungeonBlocks, 25.4 on OpenLOCK); <code>mm</code> is millimetres. A piece with no <code>at</code> is in the tray: it prints, and is not drawn.</td></tr>
 <tr><td><code>rot=90</code></td><td>0, 90, 180 or 270 degrees clockwise, seen from above, about the middle of the footprint. A <code>2x1</code> turned a quarter is <code>1x2</code>, and <code>at</code> is still the corner of what it covers now.</td></tr>
-<tr><td><code>height="$wallHeight"</code></td><td>The height of the piece's underside: a <code>$</code> name from <code>library/parts/heights.dtile</code> or the map's own <code>let</code>, or a length with units, or a sum of them (<code>$plinth + 2mm</code>). See <a href="#heights">Heights</a>.</td></tr>
+<tr><td><code>bottom="$wallHeight"</code></td><td>How high the tile's zero (its ground level) stands above the map's ground, 0 by default: a <code>$</code> name from <code>library/parts/heights.dtile</code> or the map's own <code>let</code>, or a length with units, or a sum of them (<code>$plinth + 2mm</code>). See <a href="#bottom">Bottom</a>.</td></tr>
 <tr><td><code>seed=3</code></td><td>Which variant of the tile. Left off, the piece has the tile's own seed.</td></tr>
 <tr><td><code>system="ol"</code></td><td>The piece is built for that base system, in place of the <code>plates</code> line's. A map may mix them.</td></tr>
 <tr><td><code>print=skip</code></td><td><code>missing</code> (the default), <code>always</code> or <code>skip</code>, as in a <a href="plates.html">print list</a>. A skipped piece stays on the map and is left off the plates.</td></tr>
@@ -72,18 +73,18 @@ plates printer="bambu/x1c-ams" {
 <tr><td><code>let $plinth "20dmm"</code></td><td>A name for a height, visible to every piece of the map as the standard ones are.</td></tr>
 <tr><td><code>pin p4 plate=1 at="(0mm, 120mm)" turn=90</code></td><td>Inside the <code>plates</code> line. See <a href="#pins">Pins on the plates</a>.</td></tr>
 </tbody></table></div>
-<p>A mistake is shown at its text with a hint, as in any document: a place that is not a pair of lengths, a <code>rot</code> that is not a quarter turn, a height that names nothing, two pieces with one id, a pin for a piece that is not there. A map holds one <code>map</code> and at most one <code>plates</code> line.</p>
+<p>A mistake is shown at its text with a hint, as in any document: a place that is not a pair of lengths, a <code>rot</code> that is not a quarter turn, a bottom that names nothing (or the old word <code>height</code>, which says it is now <code>bottom</code>), two pieces with one id, a pin for a piece that is not there. A map holds one <code>map</code> and at most one <code>plates</code> line.</p>
 
 <h2 id="placing">Placing pieces</h2>
 <ul>
 <li><strong>Everything snaps to squares.</strong> A piece is a rectangle of whole squares (1×1, 2×1, 2×2, 3×3 in the library) and stands on the whole squares of <em>its own</em> system. An OpenLOCK piece on a DungeonBlocks map sits on a finer lattice; each piece is placed in the squares of its own base, and the ground is zero for both, so <code>z = 0</code> lines up across systems and the connectors hang below it.</li>
-<li><strong>A place that is taken is the nearest free one.</strong> Moving, turning, duplicating and putting a tile down never leave a piece on another at the same height; the toast says <em>moved to the nearest free place</em> when it had to. A piece at another height floats over the one below.</li>
+<li><strong>A place that is taken is the nearest free one.</strong> Moving, turning, duplicating and putting a tile down never leave a piece on another at the same bottom; the toast says <em>moved to the nearest free place</em> when it had to. A piece at another bottom floats over the one below.</li>
 <li><strong>Turning is 90 degrees.</strong> A turn that would collide looks for the nearest free place and says so.</li>
 <li><strong>Duplicate</strong> puts the copy next to the original, with the same seed: the same piece until you make it a variant.</li>
 </ul>
 
-<h2 id="heights">Heights</h2>
-<p>A piece's <code>height</code> is an ordinary height, written the way a tile writes one, and it is the height of the piece's <strong>underside</strong> (the top of whatever would stand under it). A piece at <code>height="$wallHeight"</code> floats 33.1 dmm up. The names are the ones every tile sees, <code>$groundHeight</code> 5, <code>$floorHeight</code> 7.4, <code>$shortWallHeight</code> 16.55, <code>$wallHeight</code> 33.1 and <code>$tallWallHeight</code> 72.3 (dmm), plus any <code>let</code> of the map. <code>dmm</code> scales with the system; <code>mm</code> does not. A name that varies across a tile (<code>$waterEdgeHeight</code>) is refused: a piece's height is one length.</p>
+<h2 id="bottom">Bottom</h2>
+<p>A piece's <code>bottom</code> is an ordinary height, written the way a tile writes one, and it is where the tile's <strong>zero</strong> stands above the map's ground. Zero, the default, puts the tile's ground level on the map's ground, and the connector (which hangs below a tile's zero) is <strong>under the ground</strong>. A piece at <code>bottom="$wallHeight"</code> stands with its zero 33.1 dmm up, and <code>bottom="50mm"</code> 50 mm up, its connector hanging in the air under it. The names are the ones every tile sees, <code>$groundHeight</code> 5, <code>$floorHeight</code> 7.4, <code>$shortWallHeight</code> 16.55, <code>$wallHeight</code> 33.1 and <code>$tallWallHeight</code> 72.3 (dmm), plus any <code>let</code> of the map. <code>dmm</code> scales with the system; <code>mm</code> does not. A name that varies across a tile (<code>$waterEdgeHeight</code>) is refused: a piece's bottom is one length.</p>
 <p>Risers are later: they will be generated pieces in their own right, through the same build, cache and plates path as any tile. Until then a raised piece is drawn at its level with nothing under it, and the plates do not print one.</p>
 
 <h2 id="editor">In the editor</h2>
@@ -92,7 +93,7 @@ plates printer="bambu/x1c-ams" {
 <li><strong>The view</strong> is the same 3D view as the tile's: orbit, pan and zoom as always, with Iso, Top, Low and Close as presets (Close frames the selected piece). Press a piece to select it, Shift-press to add or take one away; the selection is outlined.</li>
 <li><strong>The map</strong> level says <em>N in inventory · M to print</em>, has <strong>Add tiles</strong> (the catalog drawer) and <strong>Print what's missing</strong>, lists the pieces by tile with their pills, lists the tray, and has the <a href="#variants">variants</a> for the whole board.</li>
 <li><strong>One piece</strong> shows its place, turn (⟲ ⟳), level, seed and print setting, the variants, <strong>Open tile</strong> (the tile editor, with the map one click back on the title bar's Map), <strong>Duplicate</strong> and <strong>Remove</strong>. With several selected the panel acts on all of them.</li>
-<li><strong>A property</strong> is a level of its own: <em>Level</em> lists the height names and takes a length; <em>Seed</em> shows the seeds you own as chips, takes a number and has <em>New variant</em>.</li>
+<li><strong>A property</strong> is a level of its own: <em>Bottom</em> lists the height names and takes a length; <em>Seed</em> shows the seeds you own as chips, takes a number and has <em>New variant</em>.</li>
 <li><strong>The catalog drawer</strong> is the folder level with pictures, along the bottom of the view: the same places and folders as the panel's, a card for each tile with its picture (the real tile, from its super-low mesh, seen from above at an angle on the plate colour), its size and <em>have</em> or <em>need</em>. Press a card to put the tile on the map at the nearest free place; drag it to choose where. <strong>New map</strong> in a folder you own starts an empty map with a grid.</li>
 <li><strong>Moving.</strong> Look down on the map (Top) and drag a piece: it follows the pointer at its level and snaps to its own squares; the selection moves together. In the other views a drag orbits, and a press still selects. <kbd>R</kbd> turns the selection (<kbd>⇧R</kbd> the other way), <kbd>D</kbd> duplicates it, <kbd>⌫</kbd> removes it, <kbd>Esc</kbd> lets go of it, <kbd>⌘Z</kbd> takes the last change back.</li>
 </ul>
@@ -106,7 +107,7 @@ plates printer="bambu/x1c-ams" {
 <li><strong>Table</strong>: a wooden tabletop under the tiles, a dim room beyond its edge.</li>
 <li><strong>Plain</strong>: the plate colour and the grid, as the tile view has always looked.</li>
 </ul>
-<p>The ground is at the lowest underside, and each piece casts a soft shadow on it. The plates keep the printer's bed whatever you chose. Desert, Jungle, Swamp and Town come later.</p>
+<p>The map's ground is at zero, and whatever of a piece is below it (the connector at a bottom of 0) is hidden by it, seen from above, from the side and from underneath alike. Each piece casts a soft shadow on it. The plates keep the printer's bed whatever you chose. Desert, Jungle, Swamp and Town come later.</p>
 
 <h2 id="detail">Detail by distance</h2>
 <p>Every piece is the real mesh of its tile, so a table of forty pieces is drawn from three tiers (see <a href="preview.html#cache">the cache</a>): <em>super-low</em> (about 12 000 triangles) far away, <em>low</em> (about 15 000 to 100 000) in the middle, and <em>full</em> close up and for what you look at. The tier is chosen by the piece's size on screen (under about 50 pixels, super-low; under about 260, low; else full), and the map as a whole is held under 900 000 triangles by lowering the pieces that are smallest on screen first. Twelve copies of one tile at one seed are one mesh.</p>
@@ -126,7 +127,7 @@ plates printer="bambu/x1c-ams" {
 <p>The title bar's chip and the status line say <em>3 in inventory · 11 to print</em>. <strong>Print what's missing</strong> goes to Plates for this map, which lays out only the pieces the inventory lacks. Everything on your shelf says so rather than lay out nothing, and the map stays as it was.</p>
 
 <h2 id="crowns">A crown over a taller neighbour</h2>
-<p>A tree's crown reaches past its square. When a piece's crown reaches over a neighbour that stands taller than the crown's underside, the stream carries a caution note, <em>The crown of 1x1-grass-tree (p2) reaches over 1x1-wall-stone (p3), which stands 2 mm up into it</em>, found from the pieces' real shapes (their low builds, kept in the cache), not from their squares. It is a note, never a refusal: nothing is forbidden, the real shapes just meet there.</p>
+<p>A tree's crown reaches past its square. When a piece's crown reaches over a neighbour that stands taller than the crown's lowest point, the stream carries a caution note, <em>The crown of 1x1-grass-tree (p2) reaches over 1x1-wall-stone (p3), which stands 2 mm up into it</em>, found from the pieces' real shapes (their low builds, kept in the cache), not from their squares. It is a note, never a refusal: nothing is forbidden, the real shapes just meet there.</p>
 
 <h2 id="pins">Pins on the plates</h2>
 <p>Plates are computed from the pieces, the printer and the settings, so nothing about them is stored, except what you override by hand. Looking down on a plate in the plates view, press a piece and drag it: where you let go it is <strong>pinned</strong>. A pin is a line inside the <code>plates</code> line, naming the piece by its id (the editor gives it one), its plate and where its footprint's north-west corner stands, across and down from the bed's north-west corner; <code>turn=90</code> if it is turned a quarter.</p>
@@ -147,7 +148,7 @@ plates printer="bambu/x1c-ams" {
 <li>A map says what the scene is; the inventory says what you own; the plates say how it prints on your printer today. Personal state stays out of maps.</li>
 <li>The backdrop is a preference of the viewer, never of a document.</li>
 <li>Every piece snaps to the squares of its own system, and the ground, <code>z = 0</code>, is the same for every system.</li>
-<li>A height is the height of a piece's underside.</li>
+<li>A piece's <code>bottom</code> is the height of its tile's zero above the map's ground; at 0 the connector is under the ground.</li>
 <li>Nothing is forbidden by the shapes of the pieces: a crown over a taller neighbour is a note.</li>
 <li>Only a full build is checked, and only a full build is printed. Every other tier says so.</li>
 <li>A new piece, and a new variant, gets a seed you do not own; the same as one you have is an explicit choice.</li>

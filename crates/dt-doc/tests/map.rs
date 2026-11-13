@@ -11,7 +11,7 @@ map {
     piece "lib:tiles/ground/1x1-grass" count=8
     piece p2 "lib:tiles/water/1x1-water-corridor+grass" count=4 seed=12 system="ol"
     piece "home:meadows/glade" print=skip
-    piece "lib:tiles/walls/1x1-wall-stone" at="(4sq, 1sq)" rot=90 height="20dmm"
+    piece "lib:tiles/walls/1x1-wall-stone" at="(4sq, 1sq)" rot=90 bottom="20dmm"
 }
 plates printer="bambu/x1c-ams" system="db" mode="multicolour" group="filament" gap="3mm" margin="5mm" turn="allowed"
 "#;
@@ -91,8 +91,13 @@ fn mistakes_are_shown_at_their_text_with_a_hint() {
     assert!(m.contains("unit"), "{m}");
     let (m, _) = one("map {\n piece \"a\" at=\"(2sq, 1sq)\" count=2\n}");
     assert!(m.contains("one piece"), "{m}");
-    let (m, _) = one("map {\n piece \"a\" height=\"20\"\n}");
+    let (m, _) = one("map {\n piece \"a\" bottom=\"20\"\n}");
     assert!(m.contains("unit"), "{m}");
+    let (m, h) = one("map {\n piece \"a\" height=\"20dmm\"\n}");
+    assert!(
+        m.contains("no `height`") && h.contains("`height` is now `bottom`"),
+        "{m} {h}"
+    );
     let (m, _) = one("map {\n let plinth \"20dmm\"\n}");
     assert!(m.contains("not a name"), "{m}");
     let (m, h) = one("map {\n piece \"a\"\n}\nplates printr=\"x\"");
@@ -200,8 +205,8 @@ map {
 
     piece p1 "lib:tiles/ground/2x2-glade" at="(0sq, 0sq)" rot=0
     piece p2 "lib:tiles/water/1x1-water-corridor+grass" at="(2sq, 1sq)" rot=90 seed=3
-    piece p3 "lib:tiles/cliffs/2x1-cliff" at="(4sq, 0sq)" rot=0 height="$wallHeight"
-    piece p4 "lib:tiles/walls/1x1-wall-stone" at="(5sq, 1sq)" rot=0 height="$plinth + 2mm" // raised
+    piece p3 "lib:tiles/cliffs/2x1-cliff" at="(4sq, 0sq)" rot=0 bottom="$wallHeight"
+    piece p4 "lib:tiles/walls/1x1-wall-stone" at="(5sq, 1sq)" rot=0 bottom="$plinth + 2mm" // raised
     piece "lib:tiles/ground/1x1-grass" count=2
 }
 plates printer="bambu/x1c-ams" {
@@ -306,7 +311,7 @@ fn a_map_editor_writes_places_and_keeps_every_other_byte() {
     let l = decode("t.dmap", &t).unwrap();
     assert_eq!(l.pieces.len(), 6);
     assert_eq!(l.pieces[3].id.as_ref().unwrap().value, "p9");
-    assert_eq!(l.pieces[3].height.as_ref().unwrap().value, "$wallHeight");
+    assert_eq!(l.pieces[3].bottom.as_ref().unwrap().value, "$wallHeight");
     assert_eq!(l.pieces[2].place.unwrap().x, Len::Sq(4.0));
     // a piece with no id is given one
     let (t, id) = ensure_id(MAP, 4).unwrap();

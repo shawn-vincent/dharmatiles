@@ -593,14 +593,14 @@ fn a_print_list_is_started_filled_edited_and_checked_from_the_editor() {
     assert_eq!(c["ok"], true, "{c}");
 }
 
-const TOWN: &str = "dharmatiles version=1\nmap {\n    grid cols=4 rows=3\n    let $step \"4dmm\"\n    piece p1 \"home:glade\" at=\"(0sq, 0sq)\" rot=0\n    piece p2 \"home:glade\" at=\"(1sq, 0sq)\" rot=90 seed=9 height=\"$step + 1mm\"\n    piece p3 \"home:glade\" at=\"(2sq, 1sq)\" rot=0 height=\"$wallHeight\"\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n";
+const TOWN: &str = "dharmatiles version=1\nmap {\n    grid cols=4 rows=3\n    let $step \"4dmm\"\n    piece p1 \"home:glade\" at=\"(0sq, 0sq)\" rot=0\n    piece p2 \"home:glade\" at=\"(1sq, 0sq)\" rot=90 seed=9 bottom=\"$step + 1mm\"\n    piece p3 \"home:glade\" at=\"(2sq, 1sq)\" rot=0 bottom=\"$wallHeight\"\n}\nplates printer=\"sovol/sv06\" mode=\"single\"\n";
 
 #[test]
 fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     let h = start_home("maps", &[("glade.dtile", GLADE), ("town.dmap", TOWN)]);
     let list = h.id("town.dmap");
     let file = h.dir.join("town.dmap");
-    // opened, a map is a scene before anything is laid out: each piece's place in mm, its height by name
+    // opened, a map is a scene before anything is laid out: each piece's place in mm, its bottom by name
     let t = h.wait("town.dmap", "the scene", |t| {
         t["plan"]["scene"]["pieces"]
             .as_array()
@@ -613,8 +613,8 @@ fn a_map_is_read_edited_pinned_and_given_to_the_page_as_a_scene() {
     assert_eq!(sc["pieces"][1]["rot"], 90);
     assert_eq!(sc["pieces"][1]["seed"], 9);
     // 4 dmm + 1 mm on DungeonBlocks, and a standard name: 33.1 dmm
-    assert!((sc["pieces"][1]["height_mm"].as_f64().unwrap() - 5.0).abs() < 1e-9);
-    assert!((sc["pieces"][2]["height_mm"].as_f64().unwrap() - 33.1).abs() < 1e-9);
+    assert!((sc["pieces"][1]["bottom_mm"].as_f64().unwrap() - 5.0).abs() < 1e-9);
+    assert!((sc["pieces"][2]["bottom_mm"].as_f64().unwrap() - 33.1).abs() < 1e-9);
     assert_eq!(sc["pieces"][0]["seed_used"], 5, "the tile's own seed");
     assert!(
         sc["heights"]

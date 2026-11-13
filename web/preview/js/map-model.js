@@ -4,7 +4,7 @@
 // The model and nothing else (no DOM, no three.js), so it is tested alone (tests/map.test.js).
 //
 // The program's numbers (preview/scene.rs): a piece has `at` [x, y] (mm across and down from the map's
-// north-west corner), `rot` (0, 90, 180, 270 clockwise), `height_mm` (its underside), `size` [w, d] (its
+// north-west corner), `rot` (0, 90, 180, 270 clockwise), `bottom_mm` (the height above the map's ground of its tile's zero: the tile's own ground level, so at 0 its connector hangs below the map's ground), `size` [w, d] (its
 // tile's squares in mm, before it is turned) and `sq` (its own system's square, mm).  The tile's mesh is in
 // the tile's frame: x east, y north from its south-west corner.  The map's world frame, the one the view
 // draws, has x east and y north from the map's north-west corner: y is minus the document's "down".
@@ -19,7 +19,7 @@ export function footprint(p) {
   return [p.at[0], p.at[1], p.at[0] + w, p.at[1] + d];
 }
 
-/** The 4 x 4 matrix (column-major, three.js's) that puts a piece's tile mesh where the piece stands, raised by its height. */
+/** The 4 x 4 matrix (column-major, three.js's) that puts a piece's tile mesh where the piece stands, raised by its bottom (the tile's zero stands there; the connector is below it). */
 export function matrixOf(p) {
   const f = footprint(p);
   const th = (norm(p.rot) * Math.PI) / 180;
@@ -29,7 +29,7 @@ export function matrixOf(p) {
   const tx = cw - (c * w) / 2 - (s * d) / 2;
   const ty = -cd + (s * w) / 2 - (c * d) / 2;
   // rows: [c s 0 tx] [-s c 0 ty] [0 0 1 z]
-  return [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, tx, ty, p.height_mm || 0, 1];
+  return [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, tx, ty, p.bottom_mm || 0, 1];
 }
 
 /** A point of the tile's frame as the map's world point [x, y, z] (y up). */
@@ -38,11 +38,11 @@ export function toWorld(p, x, y, z = 0) {
   return [m[0] * x + m[4] * y + m[12], m[1] * x + m[5] * y + m[13], z + m[14]];
 }
 
-/** The box a placed piece fills in the world: its footprint, from its underside to `top` (its tile's height, mm). */
-export function worldBox(p, top = 8) {
+/** The box a placed piece fills in the world: its footprint, from `below` mm under its bottom (the tile's connector hangs below the tile's zero) to `top` mm over it. */
+export function worldBox(p, top = 8, below = 0) {
   const f = footprint(p);
-  const z0 = p.height_mm || 0;
-  return { lo: [f[0], -f[3], z0], hi: [f[2], -f[1], z0 + top] };
+  const z0 = p.bottom_mm || 0;
+  return { lo: [f[0], -f[3], z0 - below], hi: [f[2], -f[1], z0 + top] };
 }
 
 /** Do two footprints overlap by more than a hair? */
@@ -64,13 +64,13 @@ const boxAt = (p, x, y, rot = p.rot) => footprint({ ...p, at: [x * p.sq, y * p.s
 
 /**
  * The free place nearest to `want` (squares of the piece, as {x, y}), for the piece turned `rot`: a place where
- * its footprint overlaps no other placed piece standing at the same height.  Searched in rings out from the wish;
+ * its footprint overlaps no other placed piece standing at the same bottom.  Searched in rings out from the wish;
  * the answer says how far it had to move.  `others` are the pieces in the way (not the piece itself).
  */
 export function nearestFree(others, p, want, rot = p.rot) {
   const clash = (x, y) => {
     const b = boxAt(p, x, y, rot);
-    return others.some((o) => o.at && Math.abs((o.height_mm || 0) - (p.height_mm || 0)) < 0.5 && overlaps(b, footprint(o)));
+    return others.some((o) => o.at && Math.abs((o.bottom_mm || 0) - (p.bottom_mm || 0)) < 0.5 && overlaps(b, footprint(o)));
   };
   if (!clash(want.x, want.y)) return { ...want, moved: 0 };
   for (let r = 1; r <= 40; r++) {
@@ -240,11 +240,11 @@ export const pxOfOrtho = (mm, half, h) => (mm * h) / (2 * half);
 
 // ---- a piece's words -------------------------------------------------------------------------------------
 
-/** The words the panel says of a piece's level: a `$` name's own text or the length as written. */
-export const heightWords = (p, names = []) => {
-  if (!p.height) return 'on the ground';
-  const n = names.find((x) => `$${x.name}` === p.height);
-  return n ? `${p.height} · ${Number(n.dmm.toFixed(1))} dmm` : p.height;
+/** The words the panel says of a piece's bottom (where its tile's zero stands): a `$` name's own text or the length as written. */
+export const bottomWords = (p, names = []) => {
+  if (!p.bottom) return 'ground level';
+  const n = names.find((x) => `$${x.name}` === p.bottom);
+  return n ? `${p.bottom} · ${Number(n.dmm.toFixed(1))} dmm` : p.bottom;
 };
 
 /** A piece's label: its tile's name, and its id when it has one. */

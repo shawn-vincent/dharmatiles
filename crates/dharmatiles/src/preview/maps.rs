@@ -13,7 +13,7 @@
 //!   piece, with its own id.
 //! - `/api/maps/set` `{list, index, set}` and `/api/maps/batch` `{list, edits:
 //!   [{index, set}]}`: words of one piece, or of several in one change (`at`,
-//!   `rot`, `height`, `seed`, `print`, `system`; null takes a word off).
+//!   `rot`, `bottom`, `seed`, `print`, `system`; null takes a word off).
 //! - `/api/maps/dup` `{list, index, at}`, `/api/maps/remove` `{list, index}`.
 //! - `/api/maps/pin` `{list, index, plate, x, y, turn}`, `/api/maps/unpin`
 //!   `{list, index}`, `/api/maps/unpin-all` `{list}`.
@@ -85,10 +85,10 @@ fn at_of(v: &Value) -> Result<At, String> {
     dt_doc::map::parse_at(s)
 }
 
-/// The words a call may set on a piece, from `{at, rot, height, seed, print, system}`.
+/// The words a call may set on a piece, from `{at, rot, bottom, seed, print, system}`.
 fn props_of(set: &Value) -> Result<Vec<(&'static str, Option<Prop>)>, String> {
     let mut out = Vec::new();
-    for k in ["at", "rot", "height", "seed", "print", "system"] {
+    for k in ["at", "rot", "bottom", "seed", "print", "system"] {
         let Some(v) = set.get(k) else { continue };
         let prop = match (k, v) {
             (_, Value::Null) => None,

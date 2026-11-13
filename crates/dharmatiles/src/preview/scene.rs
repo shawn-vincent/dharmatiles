@@ -2,7 +2,7 @@
 //!
 //! Opening a map reads its pieces (no geometry): each tile's size, the seed it
 //! is built with, where it stands, how it is turned and how high its
-//! underside is.  The page asks for each piece's mesh at the tier it wants
+//! tile's zero stands above the ground (`bottom`).  The page asks for each piece's mesh at the tier it wants
 //! (`/api/tiles/ID/tier`, from the cache or built), places it with the
 //! numbers here, and draws the whole.  A crown over a taller neighbour is a
 //! note, found from the pieces' real shapes (their low builds), never a
@@ -43,7 +43,7 @@ pub(crate) struct Placement {
     pub d: f64,
     /// Clockwise quarter turns: 0, 1, 2 or 3.
     pub turns: u8,
-    /// The height of its underside, mm.
+    /// The height above the map's ground of the tile's zero, mm.
     pub z: f64,
 }
 
@@ -167,7 +167,7 @@ fn name_mm(
         ));
     };
     let h = parse_height(text).map_err(|e| {
-        format!("`${name}` is `{text}`, which varies across a tile; a piece's height is one length ({e})")
+        format!("`${name}` is `{text}`, which varies across a tile; a piece's bottom is one length ({e})")
     })?;
     h.mm(sq, &|n| name_mm(n, names, sq, depth + 1))
 }
@@ -288,17 +288,17 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             }
         };
         let (w, d) = (f64::from(cols) * sq, f64::from(rows) * sq);
-        let height_mm = match &p.height {
+        let bottom_mm = match &p.bottom {
             None => Ok(0.0),
             Some(h) => {
                 parse_height(&h.value).and_then(|ht| ht.mm(sq, &|n| name_mm(n, &names, sq, 0)))
             }
         };
-        let height_mm = height_mm.unwrap_or_else(|e| {
-            if let Some(h) = &p.height {
+        let bottom_mm = bottom_mm.unwrap_or_else(|e| {
+            if let Some(h) = &p.bottom {
                 diags.push(
-                    Diag::at(&list.src, h.span, "dt::map", e.clone(), "this height").help(
-                        "a height is a `$` name from the standard heights or the map's own `let`, or a length like `20dmm`",
+                    Diag::at(&list.src, h.span, "dt::map", e.clone(), "this bottom").help(
+                        "`bottom` is a `$` name from the standard heights or the map's own `let`, or a length like `20dmm`",
                     ),
                 );
             }
@@ -310,7 +310,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             w,
             d,
             turns: u8::try_from(p.rot.as_ref().map_or(0, |r| r.value) / 90).unwrap_or(0),
-            z: height_mm,
+            z: bottom_mm,
         });
         if let Some(pl) = &at {
             let f = pl.footprint();
@@ -340,8 +340,8 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
             "cols": cols, "rows": rows, "sq": sq, "size": [w, d],
             "at": at.map(|a| [a.x, a.y]),
             "rot": p.rot.as_ref().map(|r| r.value),
-            "height_mm": height_mm,
-            "height": p.height.as_ref().map(|h| h.value.clone()),
+            "bottom_mm": bottom_mm,
+            "bottom": p.bottom.as_ref().map(|h| h.value.clone()),
             "print": p.print.word(),
             "count": p.count.value,
             "pinned": list.plates.pins.iter().any(|q| p.id.as_ref().is_some_and(|i| i.value == q.id.value)),

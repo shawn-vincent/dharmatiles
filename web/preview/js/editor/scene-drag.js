@@ -35,7 +35,7 @@ function onDown(e) {
   if (!view.get().msel.includes(hit)) select([hit]);
   const ps = sel.map((i) => pieces().find((p) => p.index === i)).filter((p) => p?.at);
   if (!ps.length) return;
-  const z = ps[0].height_mm || 0;
+  const z = ps[0].bottom_mm || 0;
   const pt = mapPoint(e, z);
   if (!pt) return;
   // the orbit does not take this press: the controls are off until it is let go

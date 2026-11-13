@@ -44,7 +44,7 @@
 //   listsCount({list, index, count})        a piece's copies; listsRemove({list, index}) takes the piece out; both answer with `before`
 //   listsRestore({list, text})              Undo: the text a change replaced, written back
 //   mapsAdd({list, tile, at, rot?, seed?, system?})   a new placed piece (at is `(2sq, 1sq)`): {ok, list, before, id, index, scene}
-//   mapsSet({list, index, set})             words of one piece (at, rot, height, seed, print, system; null takes one off)
+//   mapsSet({list, index, set})             words of one piece (at, rot, bottom, seed, print, system; null takes one off)
 //   mapsBatch({list, edits: [{index, set}]})  the same for several pieces in one change
 //   mapsDup({list, index, at}) / mapsRemove({list, index})   a copy of a piece at a place / a piece taken out (and its pin)
 //   mapsPin({list, index, plate, x, y, turn}) / mapsUnpin({list, index}) / mapsUnpinAll({list})   a piece kept where it was dropped on a plate
