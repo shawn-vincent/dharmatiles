@@ -53,7 +53,11 @@ vec3 ridge(vec3 col, float th, float el, float base, float amp, float k, float o
     if (r3 < 0.22) continue;                                   // a saddle: no peak in this cell
     float dx = (th - (i + 0.2 + 0.6 * r1) * cell) / (cell * (0.6 + 0.6 * r2));
     float a = dx < 0.0 ? -dx * (0.75 + 0.5 * r1) : dx * (1.25 - 0.5 * r1);   // one side steeper than the other
-    h = max(h, base + peak * (0.4 + 0.6 * r3) * pow(max(1.0 - a, 0.0), 1.35));
+    // an organic profile, not a triangle: smoothstep rounds the summit and flares the foot, and a slow wander of the
+    // outline (two octaves, gentle) breaks the straight sides without making the skyline busy
+    float s = max(1.0 - a, 0.0), shape = s * s * (3.0 - 2.0 * s);
+    shape *= 1.0 + 0.22 * (vnoise(vec2(th * 9.0 * n / 13.0, id * 3.1 + off)) - 0.5) + 0.08 * (vnoise(vec2(th * 31.0, id + off)) - 0.5);
+    h = max(h, base + peak * (0.4 + 0.6 * r3) * shape);
   }
   float inside = 1.0 - smoothstep(0.0, 0.0012, el - h);
   float up = clamp(el / max(h, 1e-4), 0.0, 1.0);
@@ -72,8 +76,8 @@ vec3 wild(vec3 d) {
   col = mix(col, zenith, smoothstep(0.18, 0.9, t));
   vec3 mid = mix(vec3(0.52, 0.62, 0.73), vec3(0.15, 0.2, 0.32), uNight);
   vec3 near = mix(vec3(0.4, 0.5, 0.61), vec3(0.1, 0.14, 0.24), uNight);
-  col = ridge(col, th, el, 0.03, 0.09, 3.0, 11.0, 13.0, 0.19, mid);   // the far range: tall single peaks over long runs
-  col = ridge(col, th, el, 0.01, 0.06, 4.3, 23.0, 19.0, 0.07, near);  // the near range: lower, rounder hills in front
+  col = ridge(col, th, el, 0.03, 0.09, 3.0, 11.0, 13.0, 0.14, mid);   // the far range: tall single peaks over long runs
+  col = ridge(col, th, el, 0.01, 0.06, 4.3, 23.0, 19.0, 0.055, near);  // the near range: lower, rounder hills in front
   return below(col, el);
 }
 vec3 cave(vec3 d) {
