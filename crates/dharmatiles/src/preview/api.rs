@@ -476,6 +476,7 @@ pub(super) fn extra_types(all: &mut Collect, routes: &mut String) {
     all.add::<super::resources::ResourceEvent>();
     all.add::<StreamEvent>();
     all.add::<crate::message::MessagesRes>();
+    all.add::<crate::report::Report>();
     all.add::<crate::message::GateData>();
     all.add::<crate::message::BuildData>();
     all.add::<crate::message::ServerData>();

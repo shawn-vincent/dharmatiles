@@ -157,6 +157,13 @@
   <li>A new code is one entry in the registry and one marker on the section that explains it.</li>
 </ul>
 
+<h2 id="report">Report this defect</h2>
+<ul class="rules">
+  <li>A message that means the program went wrong (a failure or bug of its own, a printability-gate failure, a diagnostic the registry calls a failure) says so on the wire, <code>reportable</code>, made once (<code>Message::reportable</code>); a mistake in a document never is. The editor shows <em>Report this defect</em> beside Copy on exactly those rows.</li>
+  <li>The report is made by the program, once (<code>crates/dharmatiles/src/report.rs</code>): the title is the code and the first line of the message, the labels are <code>defect</code> and the code&rsquo;s own, and the body is the text Copy gives (<code>Message::text</code>), then the environment, then the tile&rsquo;s source unless <em>Leave my tile&rsquo;s source out</em> is ticked. The editor asks for it (<code>GET /api/messages/report?seq=N</code>), shows it, and opens GitHub&rsquo;s new-issue form filled in; it never files anything itself.</li>
+  <li>An address past about 8&nbsp;KB carries a short body that says to paste the report. The whole report goes to the clipboard first, and if the clipboard refuses, the preview says so. The command line prints <code>report: &lt;address&gt;</code> after a panic, and, when the address is shortened, writes the whole report to a file in the temporary folder and prints its path.</li>
+</ul>
+
 <h2 id="silence">The few allowed silences</h2>
 <p>An error may go unshown only when it changes nothing you make or see, and the code says why in a comment where it is ignored:</p>
 <ul class="rules">

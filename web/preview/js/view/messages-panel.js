@@ -7,7 +7,8 @@
 
 import { FILTERS, buildOf, explainHref, filterRows, firstError, gateOf, gateRows, gaugeOf, jobWords, serverOf } from '../messages.js';
 import { CopyButton } from './copy-button.js';
-import { html, useEffect } from './html.js';
+import { html, useEffect, useState } from './html.js';
+import { ReportButton, ReportPane, canReport } from './report-button.js';
 import { Icon } from './icons.js';
 
 const secs = (s) => (s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
@@ -95,6 +96,7 @@ function Row({ row, m, act }) {
   const { m: msg, dim } = row;
   const t = m.tile.value;
   const lit = m.lit.value === msg.seq;
+  const [reporting, setReporting] = useState(false);
   useEffect(() => {
     if (!lit) return undefined;
     const timer = setTimeout(() => m.clearLit(msg.seq), 1600);
@@ -105,16 +107,18 @@ function Row({ row, m, act }) {
   const here = msg.span ? `${msg.span.file.split('/').slice(-1)[0]}:${msg.span.line}:${msg.span.col}` : null;
   // the sentence first; the code, a name for looking up, last and quiet.  A row with a place goes to it when clicked.
   return html`<div class=${`msg ${msg.severity}${dim ? ' dim' : ''}${lit ? ' lit' : ''}${line ? ' goes' : ''}`} data-seq=${msg.seq} ref=${(el) => { if (el && lit) el.scrollIntoView({ block: 'nearest' }); }}
-      title=${line ? 'Show the line in the source' : undefined} role=${line ? 'button' : undefined} tabIndex=${line ? 0 : undefined} onKeyDown=${line ? (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) line(); } : undefined} onClick=${line ? (e) => { if (!e.target.closest('.acts')) line(); } : undefined}>
+      title=${line ? 'Show the line in the source' : undefined} role=${line ? 'button' : undefined} tabIndex=${line ? 0 : undefined} onKeyDown=${line ? (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) line(); } : undefined} onClick=${line ? (e) => { if (!e.target.closest('.acts') && !e.target.closest('.report-pane')) line(); } : undefined}>
     <i class=${`dot ${msg.severity}`}></i>
     <div class="body"><div class="head"><span class="text">${serverOf(msg)?.origin === 'page' ? 'The page: ' : ''}${tickWords(msg.text)}</span></div>
       ${msg.help ? html`<div class="help">${tickWords(msg.help)}</div>` : null}
-      <div class="where">${here ? html`<span title=${msg.span.file}>${here}</span>` : null}${msg.code ? html`<code class="code">${msg.code}</code>` : null}</div></div>
+      <div class="where">${here ? html`<span title=${msg.span.file}>${here}</span>` : null}${msg.code ? html`<code class="code">${msg.code}</code>` : null}</div>
+      ${reporting ? html`<${ReportPane} msg=${msg} act=${act} close=${() => setReporting(false)} />` : null}</div>
     <div class="acts">
       ${msg.fix ? html`<button type="button" class="btn primary fix" title="Make this change in the source" onClick=${() => act.applyFix(msg)}>${msg.fix.label}</button>` : null}
       ${explain(msg.code)}
       ${msg.node && t ? html`<button type="button" class="btn" title="Select the stack entry this is about" onClick=${() => act.showNode(msg.node)}>Show on tile</button>` : null}
       <${CopyButton} text=${() => act.details(msg, source)} title="Copy details: the code, where it is, its source line and this environment" />
+      ${canReport(msg) ? html`<${ReportButton} open=${reporting} toggle=${() => setReporting(!reporting)} />` : null}
       ${msg.kind === 'server' ? html`<button type="button" class="btn icon" title="Put this away" aria-label="Put this message away" onClick=${() => act.dismiss(msg.seq)}><${Icon} name="x" size=${14} /></button>` : null}
     </div></div>`;
 }

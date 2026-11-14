@@ -11,6 +11,7 @@
 import { computed, effect, signal, untracked } from '@preact/signals-core';
 import { setReporter, serverErrorIn } from '../problems.js';
 import { detailsText, fitMsgHeight, statusOf } from '../messages.js';
+import { environmentText } from '../problems.js';
 import { html, render } from '../view/html.js';
 import { CopyAll, ErrorCard, MessageFilters, MessagesBody } from '../view/messages-panel.js';
 import { paintStatusLine } from '../view/status-line.js';
@@ -88,6 +89,9 @@ const act = {
   // the program's own text of the message (the one renderer, as Copy all), then this page's environment; a message of the
   // page's own that the program could not be told (seq below zero) has only the page's words
   details: (/** @type {any} */ m, /** @type {string | null} */ source) => detailsText(m, host, { source }),
+  // Report this defect: the program makes the report (its one text of the message, then this page's environment, then the source)
+  report: (/** @type {number} */ seq, /** @type {boolean} */ leaveSourceOut) => host.messageReport(seq, { env: environmentText(), leaveSourceOut }),
+  openIssue: (/** @type {string} */ url) => { window.open(url, '_blank', 'noopener'); },
   canShowWorst: () => !!viewer.worstFlagged(),
   underside: () => (viewer.payload ? undersidePlan(viewer.payload) : null),
   showWorst,

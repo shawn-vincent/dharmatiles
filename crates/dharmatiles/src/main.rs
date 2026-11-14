@@ -63,6 +63,7 @@ mod poster;
 mod preview;
 mod printers;
 mod progress;
+mod report;
 mod slicers;
 mod watch;
 
@@ -96,8 +97,9 @@ fn install_panic_hook() {
         tell!("this is a bug in dharmatiles, not in your tile: {msg}{at}");
         // the preview's server picks this up where it catches the panic, to
         // send the page the message, the place and this stack
-        preview::fail::record(info);
+        let panic = preview::fail::record(info);
         default(info);
+        report::tell_panic(&panic);
     }));
 }
 

@@ -66,10 +66,10 @@ thread_local! {
 static LAST_PANIC: Mutex<Option<Panic>> = Mutex::new(None);
 
 #[derive(Debug, Clone)]
-struct Panic {
-    message: String,
-    location: String,
-    backtrace: String,
+pub(crate) struct Panic {
+    pub(crate) message: String,
+    pub(crate) location: String,
+    pub(crate) backtrace: String,
 }
 
 /// Run `f` as the answer to `route` (and `tile`), so every error made inside
@@ -88,7 +88,7 @@ pub fn answering<T>(route: String, tile: Option<String>, f: impl FnOnce() -> T) 
 
 /// Called from the panic hook: keep the panic's message, place and the stack
 /// as it is now.
-pub fn record(info: &PanicHookInfo<'_>) {
+pub fn record(info: &PanicHookInfo<'_>) -> Panic {
     let message = info
         .payload()
         .downcast_ref::<&str>()
@@ -105,7 +105,8 @@ pub fn record(info: &PanicHookInfo<'_>) {
         backtrace: panic_trace(),
     };
     *LAST_PANIC.lock().unwrap_or_else(PoisonError::into_inner) = Some(p.clone());
-    PANIC.with(|c| *c.borrow_mut() = Some(p));
+    PANIC.with(|c| *c.borrow_mut() = Some(p.clone()));
+    p
 }
 
 /// Make panics recorded even where `main`'s hook is not installed (the

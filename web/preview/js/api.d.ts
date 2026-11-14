@@ -338,7 +338,12 @@ doing: string | null,
 /**
  * The line of the file the span is on.
  */
-source: string | null, data: JsonValue, state: MessageState, };
+source: string | null, data: JsonValue, state: MessageState, 
+/**
+ * The program went wrong (a bug or failure of its own, a gate failure): the editor offers Report this defect.
+ * Never true for a mistake in the document.
+ */
+reportable: boolean, };
 
 type MessageState = "open" | "cleared";
 
@@ -506,6 +511,16 @@ what: string, fraction: number, label: string, key: string,
 count: [string, number, number] | null, elapsedS: number, etaS: number | null, estimateS: number | null, };
 
 type RenameReq = { name: string, };
+
+type Report = { url: string, title: string, labels: Array<string>, 
+/**
+ * The whole report: what the preview shows, and what goes to the clipboard when the URL is shortened.
+ */
+body: string, 
+/**
+ * The URL carries a short body; the whole is in `body`.
+ */
+truncated: boolean, };
 
 type ResourceEvent = { 
 /**

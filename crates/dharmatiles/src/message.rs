@@ -231,6 +231,9 @@ pub struct MessageJson {
     pub source: Option<String>,
     pub data: Value,
     pub state: MessageState,
+    /// The program went wrong (a bug or failure of its own, a gate failure): the editor offers Report this defect.
+    /// Never true for a mistake in the document.
+    pub reportable: bool,
 }
 
 /// `GET /api/messages` as JSON.
@@ -459,6 +462,26 @@ impl Message {
             } else {
                 MessageState::Cleared
             },
+            reportable: self.reportable(),
+        }
+    }
+
+    /// Did the program go wrong, rather than the maker?  A failure or bug of its own (kind `server`), a gate failure (the
+    /// geometry is the program's), or a diagnostic the registry calls a failure or the build marked unexpected.  A mistake
+    /// in the document, a note and the records are never a defect.
+    pub(crate) fn reportable(&self) -> bool {
+        match self.kind {
+            Kind::Server => true,
+            Kind::Gate => self.severity == Severity::Error,
+            Kind::Error => {
+                self.data["unexpected"].as_bool() == Some(true)
+                    || self
+                        .code
+                        .as_deref()
+                        .and_then(dt_lang::codes::lookup)
+                        .is_some_and(|c| c.kind == dt_lang::codes::Kind::Failure)
+            }
+            _ => false,
         }
     }
 
@@ -884,6 +907,7 @@ mod tests {
                 "help",
                 "kind",
                 "node",
+                "reportable",
                 "scope",
                 "seq",
                 "severity",

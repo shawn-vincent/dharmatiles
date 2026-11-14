@@ -358,6 +358,13 @@ export function browserHost(requests = createRequests()) {
       if (!r.ok) throw await replyError(r, 'messages');
       return r.text();
     },
+    /** The filled-in new-issue form for a message that means the program went wrong, made by the program from the message's own text (Report this defect). @param {number} seq @param {{ env: string, leaveSourceOut: boolean }} o @returns {Promise<import('./api').Report>} */
+    async messageReport(seq, { env, leaveSourceOut }) {
+      const q = new URLSearchParams({ seq: String(seq), env, ...(leaveSourceOut ? { source: '0' } : {}) });
+      const r = await netFetch(`/api/messages/report?${q}`, { cache: 'no-store' });
+      if (!r.ok) throw await replyError(r, 'report');
+      return r.json();
+    },
     /** A new tile in My tiles (or in the folder `into`). @param {string} name @param {string} size @param {{root: number, dir: string}} [into] */
     newTile: (name, size, into) => call('POST /api/new', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
     /** Show the program's folder chooser; the folder chosen is a place from now on. */

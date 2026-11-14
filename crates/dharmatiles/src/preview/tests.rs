@@ -2234,6 +2234,47 @@ fn a_failure_of_the_server_and_one_the_page_reports_are_messages_too() {
     assert_eq!(found[1]["data"]["origin"], "page");
     assert_eq!(found[1]["text"], "x is not a function");
     assert_eq!(found[1]["data"]["route"], "The page hit a script error");
+    // Report this defect: the program's own failures are reportable, with the one text as the body and no source for a
+    // message about no tile; a mistake in a document is not
+    assert_eq!(found[0]["reportable"], true);
+    let (h, body) = get(
+        &r,
+        &format!(
+            "/api/messages/report?seq={}&env=Environment%0A%20%20page%20x",
+            found[0]["seq"]
+        ),
+    );
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    let rep: Value = serde_json::from_slice(&body).unwrap();
+    assert!(
+        rep["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("https://github.com/shawn-vincent/dharmatiles/issues/new?title="),
+        "{rep}"
+    );
+    assert_eq!(rep["labels"][0], "defect");
+    assert_eq!(rep["truncated"], false);
+    let (_, text) = get(
+        &r,
+        &format!("/api/messages?seq={}&format=text", found[0]["seq"]),
+    );
+    let text = String::from_utf8(text).unwrap();
+    let body = rep["body"].as_str().unwrap();
+    assert!(body.starts_with(text.trim_end()), "{body}");
+    assert!(body.contains("page x"), "{body}");
+    let (h, _) = get(&r, "/api/messages/report?seq=999999");
+    assert!(h.starts_with("HTTP/1.1 404"), "{h}");
+}
+
+#[test]
+fn a_mistake_in_the_document_has_no_report() {
+    let (r, _, token) = editable("note-report", STEEP);
+    check_text(&r, &token, STEEP);
+    let found = messages(&r, &format!("tile={}&kind=note", id0(&r)));
+    assert_eq!(found[0]["reportable"], false, "{found:?}");
+    let (h, _) = get(&r, &format!("/api/messages/report?seq={}", found[0]["seq"]));
+    assert!(h.starts_with("HTTP/1.1 400"), "{h}");
 }
 
 #[test]

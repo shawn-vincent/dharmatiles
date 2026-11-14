@@ -318,3 +318,49 @@ pub(super) fn read(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> R
         .into(),
     }
 }
+
+/// `GET /api/messages/report?seq=N[&source=0][&env=TEXT]`: the filled-in new-issue form for a message that means the
+/// program went wrong, as `{url, title, labels, body, truncated}` (the one producer, [`crate::report`]).  `env` is the
+/// page's own environment text; without it the program says its own.  A document mistake gets none: 400.
+pub(super) fn report(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> Reply {
+    let Some(seq) = param("seq").and_then(|s| s.parse::<u64>().ok()) else {
+        return super::fail::refused("400 Bad Request", "report needs seq=N, a message's number")
+            .into();
+    };
+    let ev = lock(&shared.events);
+    let Some(m) = ev.messages.all().iter().find(|m| m.seq == seq).cloned() else {
+        return super::fail::refused("404 Not Found", format!("no message {seq}")).into();
+    };
+    drop(ev);
+    if !m.reportable() {
+        return super::fail::refused(
+            "400 Bad Request",
+            "this message is about your tile, not a defect in the program: there is nothing to report",
+        )
+        .into();
+    }
+    let source = if param("source").as_deref() == Some("0") {
+        None
+    } else {
+        match shared.text(&m.tile, None) {
+            Ok(t) => t.map(|t| t.text),
+            Err(e) => {
+                return super::fail::failure(
+                    "500 Internal Server Error",
+                    format!("the tile's source could not be read for the report: {e}"),
+                )
+                .into();
+            }
+        }
+    };
+    let env = param("env").unwrap_or_else(crate::report::environment);
+    let r = crate::report::of(&m, &env, source.as_deref());
+    match serde_json::to_value(&r) {
+        Ok(v) => Reply::Json("200 OK", v),
+        Err(e) => super::fail::failure(
+            "500 Internal Server Error",
+            format!("the report could not be written: {e}"),
+        )
+        .into(),
+    }
+}

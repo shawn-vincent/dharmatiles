@@ -170,6 +170,9 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
             );
             Reply::Json(status, body)
         }
+        ("GET", "/api/messages/report", _) => {
+            super::messages::report(shared, &|k| req.param(k).map(str::to_owned))
+        }
         ("GET", "/api/messages", _) => {
             super::messages::read(shared, &|k| req.param(k).map(str::to_owned))
         }
