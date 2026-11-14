@@ -804,6 +804,8 @@ body.plates #place { display: none; }
 /* the inventory's own view: full width, no model */
 body.inventory #app { grid-template-columns: minmax(0, 1fr) 0 0 !important; grid-template-areas: "title title title" "side side side" !important; }
 body.inventory #view, body.inventory #sash-side { display: none !important; }
+/* the inventory is the whole window: its track takes the width, not the side panel's remembered one (--sidew) */
+body.inventory #track { width: 100%; }
 #inventorypanel .lvlbox .body { max-width: 920px; width: 100%; margin: 0 auto; }
 #inventorypanel .lvlbox .lt { padding-inline: max(12px, calc((100% - 920px) / 2 + 12px)); }
 .inv-face { margin-left: auto; }
@@ -825,7 +827,8 @@ body.inventory #view, body.inventory #sash-side { display: none !important; }
 .inv-badge { position: absolute; right: 6px; top: 6px; padding: 1px 6px; border-radius: var(--r-mark); background: var(--ink); color: var(--bg); font: 700 var(--fs-s)/1.4 var(--f-body); }
 .inv-meta { display: grid; gap: 1px; padding: 5px 8px 3px; min-width: 0; align-content: start; }
 .inv-meta b { font-weight: 650; font-size: var(--fs-m); }
-.inv-sub { color: var(--muted); font-size: var(--fs-s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the colour and the date wrap rather than clip: "printed 9 Nov" is what the card is for */
+.inv-sub { color: var(--muted); font-size: var(--fs-s); overflow-wrap: anywhere; }
 .inv-card .inv-acts { padding: 2px 8px 7px; }
 .inv-reprint-row { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .inv-wrap { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
