@@ -5,7 +5,7 @@
 // editor/panel.js from the messages stream, the tile, the progress and the document) and of `act`, what the buttons do.
 // Which filter is on and which message a mark in the source pointed to are the model's.
 
-import { FILTERS, buildOf, filterRows, firstError, gateOf, gateRows, gaugeOf, jobWords, serverOf } from '../messages.js';
+import { FILTERS, buildOf, explainHref, filterRows, firstError, gateOf, gateRows, gaugeOf, jobWords, serverOf } from '../messages.js';
 import { CopyButton } from './copy-button.js';
 import { html, useEffect } from './html.js';
 import { Icon } from './icons.js';
@@ -85,6 +85,12 @@ function tickWords(text) {
   return String(text).split(/`([^`]+)`/).map((part, i) => (i % 2 ? html`<code class="w">${part}</code>` : part));
 }
 
+/** The Explain link of a message with a `dt::` code: the code's error page, from the docs served with the program. */
+function explain(/** @type {string | null | undefined} */ code) {
+  const href = explainHref(code);
+  return href ? html`<a class="btn explain" href=${href} target="_blank" rel="noopener" title="What this error means, and the rule behind it">Explain</a>` : null;
+}
+
 function Row({ row, m, act }) {
   const { m: msg, dim } = row;
   const t = m.tile.value;
@@ -106,6 +112,7 @@ function Row({ row, m, act }) {
       <div class="where">${here ? html`<span title=${msg.span.file}>${here}</span>` : null}${msg.code ? html`<code class="code">${msg.code}</code>` : null}</div></div>
     <div class="acts">
       ${msg.fix ? html`<button type="button" class="btn primary fix" title="Make this change in the source" onClick=${() => act.applyFix(msg)}>${msg.fix.label}</button>` : null}
+      ${explain(msg.code)}
       ${msg.node && t ? html`<button type="button" class="btn" title="Select the stack entry this is about" onClick=${() => act.showNode(msg.node)}>Show on tile</button>` : null}
       <${CopyButton} text=${() => act.details(msg, source)} title="Copy details: the code, where it is, its source line and this environment" />
       ${msg.kind === 'server' ? html`<button type="button" class="btn icon" title="Put this away" aria-label="Put this message away" onClick=${() => act.dismiss(msg.seq)}><${Icon} name="x" size=${14} /></button>` : null}
@@ -145,7 +152,7 @@ export function ErrorCard({ m, act }) {
   return html`<div class="doc-error" role="alert"><div class="de-title">Nothing built</div>
     <div class="de-text">${tickWords(first.text)}${first.span?.line ? html` <span class="de-at">${`(line ${first.span.line})`}</span>` : null}</div>
     ${first.help ? html`<div class="de-help">${tickWords(first.help)}</div>` : null}
-    <div class="de-acts">${first.fix ? html`<button type="button" class="btn primary fix" onClick=${() => act.applyFix(first)}>${first.fix.label}</button>` : null}${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${() => act.openPanel()}>All messages</button></div></div>`;
+    <div class="de-acts">${first.fix ? html`<button type="button" class="btn primary fix" onClick=${() => act.applyFix(first)}>${first.fix.label}</button>` : null}${explain(first?.code)}${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${() => act.openPanel()}>All messages</button></div></div>`;
 }
 
 /**
@@ -157,5 +164,5 @@ export function Unread({ name, first, go, openPanel }) {
   return html`<div class="empty unread" role="alert"><b>${name ? `${name} could not be read` : 'This tile could not be read'}</b>
     ${first ? html`<div class="de-text">${first.code ? html`<code>${first.code}</code> ` : null}${tickWords(first.text)}${first.span?.line ? html` <span class="de-at">${`(line ${first.span.line})`}</span>` : null}</div>
       ${first.help ? html`<div class="de-help">${tickWords(first.help)}</div>` : null}` : html`<div class="de-text">The program gave no reason: see the messages.</div>`}
-    <div class="de-acts">${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${openPanel}>All messages</button></div></div>`;
+    <div class="de-acts">${explain(first?.code)}${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${openPanel}>All messages</button></div></div>`;
 }

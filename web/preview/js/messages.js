@@ -33,6 +33,15 @@ export const buildOf = (m) => (m?.kind === 'build' && m.code == null ? /** @type
 /** @param {MessageJson} m @returns {ServerData | null} */
 export const serverOf = (m) => (m.kind === 'server' ? /** @type {ServerData} */ (m.data) : null);
 
+/**
+ * Where a message's code is explained: the copy of its error page that the program serves from the docs it was installed with
+ * (`/docs/e/CODE.html`, so it matches the installed program and needs no network), or null for a message with no `dt::` code.
+ * The code's own page links on to the rule.
+ * @param {string | null | undefined} code
+ * @returns {string | null}
+ */
+export const explainHref = (code) => (code && /^dt::[a-z0-9-]+$/.test(code) ? `/docs/e/${code.slice(4)}.html` : null);
+
 /** Is this a problem (something to fix or look at), rather than a record of what happened? */
 /** @param {MessageJson} m */
 export const isProblem = (m) => m.severity === 'error' || m.severity === 'warning' || m.severity === 'note';

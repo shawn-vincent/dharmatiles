@@ -603,3 +603,41 @@ fn a_low_tier_never_writes_an_stl_or_a_3mf() {
         .unwrap();
     assert!(!refused.status.success());
 }
+
+#[test]
+fn every_error_says_where_it_is_explained() {
+    let d = scratch("explain");
+    let doc = d.join("t.dtile");
+    std::fs::write(
+        &doc,
+        "dharmatiles version=1\ntile size=\"1x1\" {\n    stack { dirtt }\n}\n",
+    )
+    .unwrap();
+    let o = exe().arg("check").arg(&doc).output().unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("dt::unknown-element"), "{err}");
+    assert!(err.contains("explain: https://"), "{err}");
+    assert!(err.contains("/e/unknown-element"), "{err}");
+    assert!(
+        err.contains("dharmatiles explain dt::unknown-element"),
+        "{err}"
+    );
+}
+
+#[test]
+fn explain_prints_the_summary_from_the_local_error_page() {
+    let o = exe().args(["explain", "dt::type"]).output().unwrap();
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        o.status.success(),
+        "{out}{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(out.starts_with("dt::type\n"), "{out}");
+    assert!(out.contains("Kinds do not agree"), "{out}");
+    assert!(out.contains("/e/type"), "{out}");
+    // a word that is not a code is refused, in words
+    let o = exe().args(["explain", "dt::nope"]).output().unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("not a code"));
+}

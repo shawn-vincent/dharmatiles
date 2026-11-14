@@ -209,6 +209,27 @@ fn serves_the_viewer_and_its_vendored_three() {
     assert!(get(&r, "/nope").0.starts_with("HTTP/1.1 404"));
 }
 
+#[test]
+fn serves_the_docs_an_explain_link_opens() {
+    let r = start(&[], false);
+    let (head, body) = get(&r, "/docs/e/type.html");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(head.contains("text/html"), "{head}");
+    assert!(String::from_utf8_lossy(&body).contains("dt::type"));
+    // the page's own style and the folder's index come from the same place
+    assert!(get(&r, "/docs/assets/site.css").0.contains("text/css"));
+    assert!(get(&r, "/docs/").0.starts_with("HTTP/1.1 200"));
+    // nothing outside the docs folder, however the path is spelt
+    for p in [
+        "/docs/../Cargo.toml",
+        "/docs/e/../../Cargo.toml",
+        "/docs/%2e%2e/Cargo.toml",
+        "/docs/e/nope.html",
+    ] {
+        assert!(get(&r, p).0.starts_with("HTTP/1.1 404"), "{p}");
+    }
+}
+
 /// Every script the page can import is served: a module missing from the
 /// table would only fail in the browser.
 #[test]

@@ -238,6 +238,8 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
                 fail::refused("404 Not Found", "no such tile").into()
             }
         }
+        // the docs from the folder they are installed in: the editor's Explain opens the copy that matches the program
+        ("GET", p, _) if p.starts_with("/docs/") => super::local_docs::serve(p),
         ("GET", p, _) => match dev_asset(p) {
             Some((ctype, body)) => Reply::Asset(ctype, Cow::Owned(body)),
             None => match assets::find(p) {
