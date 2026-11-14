@@ -1,9 +1,9 @@
 # The documentation site: how it is built and published to GitHub Pages.
 #
-# NOT ENABLED.  This file is the decided publishing setup (the Living Field Guide, "Where the engine file lives"),
-# written ahead of switching it on.  Nothing here runs until Actions is enabled for the repository and Pages is set
-# to "GitHub Actions" as its source (today the site is served straight from docs/ on main).  CI stays off for the
-# workspace tests (rust.yml is disabled and left alone); this workflow is only the site.
+# Live: Pages takes its source from this workflow (switched 14 Nov 2026).  Nothing else publishes the site, so the
+# live site changes only on a release tag or a run by hand ("Run workflow" on the Actions tab, or
+# `gh workflow run site.yml`).  CI stays off for the workspace tests (rust.yml is disabled and left alone); this
+# workflow is only the site.
 #
 # What it does, on a release tag (v1.4.0) or by hand:
 #   module   the engine as WebAssembly (the WASM toolchain, `cargo xtask wasm`)           cached by the engine's sources
