@@ -355,9 +355,7 @@ impl<'k> Decoder<'k> {
                 crate::header::NODE => {}
                 "printer" => doc.printer = self.printer(n),
                 other => {
-                    let first = crate::elements::camel_of(other)
-                        .map(|new| format!("control names are camelCase: write `{new}`"))
-                        .or_else(|| crate::elements::renamed(other).map(str::to_owned));
+                    let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(
                         other,
                         ["use", "define", "tile", "printer", "let", "defaults"],
@@ -369,7 +367,7 @@ impl<'k> Decoder<'k> {
                         format!("unknown top-level node `{other}`"),
                         "not use, define, tile, printer, let, override or defaults",
                     )
-                    .advise(span, first, near, || {
+                    .advise_old(span, other, first, near, || {
                         schema::element(other)
                             .map(|_| "elements go inside a tile's `stack { … }`".to_owned())
                     });
@@ -878,9 +876,7 @@ impl<'k> Decoder<'k> {
                 "width" => &mut line.width,
                 "wobble" => &mut line.wobble,
                 other => {
-                    let first = crate::elements::camel_of(other)
-                        .map(|new| format!("control names are camelCase: write `{new}`"))
-                        .or_else(|| crate::elements::renamed(other).map(str::to_owned));
+                    let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(other, ["width", "wobble", "closed", "through"]);
                     this.err(
                         "dt::unknown-control",
@@ -888,7 +884,7 @@ impl<'k> Decoder<'k> {
                         format!("a line has no `{other}`"),
                         "unknown",
                     )
-                    .advise(kspan, first, near, || None);
+                    .advise_old(kspan, other, first, near, || None);
                     return;
                 }
             };
@@ -1107,9 +1103,7 @@ impl<'k> Decoder<'k> {
                     }
                 }
                 other => {
-                    let first = crate::elements::camel_of(other)
-                        .map(|new| format!("control names are camelCase: write `{new}`"))
-                        .or_else(|| crate::elements::renamed(other).map(str::to_owned));
+                    let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(other, ["boundedBy", "fill", "within", "except"]);
                     self.err(
                         "dt::unknown-node",
@@ -1117,7 +1111,7 @@ impl<'k> Decoder<'k> {
                         format!("a region has no `{other}`"),
                         "unknown",
                     )
-                    .advise(c.name().span(), first, near, || None);
+                    .advise_old(c.name().span(), other, first, near, || None);
                 }
             }
         }

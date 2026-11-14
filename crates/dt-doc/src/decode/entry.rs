@@ -686,9 +686,7 @@ impl Decoder<'_> {
                 span: name.span(),
             };
             let Some(sub) = k.and_then(|k| k.subs.iter().find(|s| s.name == sk.value)) else {
-                let first = crate::elements::camel_of(&sk.value)
-                    .map(|new| format!("control names are camelCase: write `{new}`"))
-                    .or_else(|| renamed(&sk.value).map(str::to_owned));
+                let first = renamed(&sk.value).map(str::to_owned);
                 let names: Vec<&str> =
                     k.map_or_else(Vec::new, |k| k.subs.iter().map(|s| s.name).collect());
                 let near = did_you_mean(&sk.value, names.iter().copied());
@@ -698,7 +696,7 @@ impl Decoder<'_> {
                     format!("`{owner} {}` has no `{}`", key.value, sk.value),
                     "unknown",
                 )
-                .advise(sk.span, first, near, || match k {
+                .advise_old(sk.span, &sk.value, first, near, || match k {
                     Some(k) if !k.subs.is_empty() => {
                         Some(format!("`{}` takes: {}", k.name, names.join(", ")))
                     }
@@ -795,8 +793,6 @@ impl Decoder<'_> {
             Some("a flower's measure is its `size`, the width across the petals (twice the old radius): write `flower size=…`".to_owned())
         } else if name == "debug" {
             Some("debug switches are not tile controls; `dharmatiles build --show attractors` shows them".to_owned())
-        } else if let Some(new) = crate::elements::camel_of(name) {
-            Some(format!("control names are camelCase: write `{new}`"))
         } else if let Some(h) = renamed(name) {
             Some(h.to_owned())
         } else if let Some(g) = controls
@@ -833,7 +829,7 @@ impl Decoder<'_> {
             format!("`{owner}` has no {what} `{name}`"),
             format!("unknown {what}"),
         )
-        .advise(key.span, help, near.as_deref(), || takes);
+        .advise_old(key.span, name, help, near.as_deref(), || takes);
     }
 
     /// Checks across one entry's place words, controls and children.
@@ -935,6 +931,8 @@ impl Decoder<'_> {
         };
     }
 
+    // The advice below stays text: "how many" is a choice (`count` or `perSquare`), so no one edit mends it and no fix is made
+    // (a fix is only made where the edit is unambiguous: `DocError::advise_old`, `suggest`).
     fn check_scatter(&mut self, entry: &Entry) {
         let span = entry.what.span;
         let count = entry.control("count");

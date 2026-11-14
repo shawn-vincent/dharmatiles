@@ -48,6 +48,24 @@ pub fn locate(text: &str, outer: SourceSpan, word: &str) -> SourceSpan {
 /// `span` of `text`.  A word written in quotes in the source is replaced in quotes.
 #[must_use]
 pub fn suggest(text: &str, span: SourceSpan, word: &str) -> (String, Fix) {
+    mend(text, span, word, did_you_mean_help(word))
+}
+
+/// The words of the advice for a control written with its old spelling (`per_square`): the one place they are written.
+/// Made with [`mend_camel`], so the advice carries the edit it describes.
+#[must_use]
+pub fn camel_help(new: &str) -> String {
+    format!("control names are camelCase: write `{new}`")
+}
+
+/// The fix for an old spelling of a control: the camelCase word written over it, with [`camel_help`] as the help.
+#[must_use]
+pub fn mend_camel(text: &str, span: SourceSpan, new: &str) -> (String, Fix) {
+    mend(text, span, new, camel_help(new))
+}
+
+/// The one function that builds a fix: `word` written over the text at `span` of `text`, with `help` saying so.
+fn mend(text: &str, span: SourceSpan, word: &str, help: String) -> (String, Fix) {
     let (offset, len) = (span.offset().min(text.len()), span.len());
     let old = text
         .get(offset..(offset + len).min(text.len()))
@@ -59,7 +77,7 @@ pub fn suggest(text: &str, span: SourceSpan, word: &str) -> (String, Fix) {
         word.to_owned()
     };
     (
-        did_you_mean_help(word),
+        help,
         Fix {
             offset,
             len,
@@ -118,6 +136,25 @@ impl DocError {
         let (help, fix) = suggest(self.src.inner(), span, word);
         self.help = Some(help);
         self.fix = Some(Box::new(fix));
+    }
+
+    /// A control written with its old spelling (`old`) at `span`: the camelCase word is written over it, help and fix
+    /// together ([`mend_camel`]); anything else is [`DocError::advise`].
+    pub fn advise_old(
+        &mut self,
+        span: SourceSpan,
+        old: &str,
+        first: Option<String>,
+        near: Option<&str>,
+        last: impl FnOnce() -> Option<String>,
+    ) {
+        if let Some(new) = crate::elements::camel_of(old) {
+            let (help, fix) = mend_camel(self.src.inner(), span, new);
+            self.help = Some(help);
+            self.fix = Some(Box::new(fix));
+        } else {
+            self.advise(span, first, near, last);
+        }
     }
 
     /// Suggest `near` for the text at `span` when there is a near word, else say `otherwise`.
