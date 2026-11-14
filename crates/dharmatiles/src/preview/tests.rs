@@ -1436,7 +1436,10 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     assert_eq!(clauses.len(), 2, "{crag}");
     assert_eq!(clauses[0]["kind"], "within");
     assert_eq!(clauses[0]["distance"]["text"], "\"[8dmm .. 14dmm]\"");
-    assert_eq!(clauses[0]["range"], serde_json::json!([8.0, 14.0]));
+    assert!(
+        clauses[0]["printed"].is_null(),
+        "printed as written on DungeonBlocks: {crag}"
+    );
     assert_eq!(clauses[0]["of"]["text"], "westEdge");
     let sp = |c: &Value, k: &str| {
         let s = c[k]["span"].as_array().unwrap();
@@ -1495,6 +1498,26 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     );
     let t = v["text"].as_str().unwrap();
     assert!(t.contains("of=eastEdge; within \"6dmm\" of=knoll"), "{t}");
+    // OpenLOCK: the program says what each distance prints (the page writes no unit word of its own)
+    call("/api/target", serde_json::json!({ "system": "ol" }));
+    let v = call(
+        &format!("/api/tiles/{}/check", id0(&r)),
+        serde_json::json!({ "text": text }),
+    );
+    let crag = v["map"]["regions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["name"] == "crag")
+        .unwrap()
+        .clone();
+    let clauses = crag["sheet"]["clauses"].as_array().unwrap();
+    assert_eq!(
+        clauses[0]["printed"],
+        serde_json::json!(["5.81", "10.16"]),
+        "{crag}"
+    );
+    assert_eq!(clauses[1]["printed"], serde_json::json!(["4.35"]), "{crag}");
 }
 
 #[test]

@@ -3,19 +3,21 @@
 // bucket), plus each `within` clause, less what it `except`s.  Pure: the sheet
 // (sheet.js) adds the writers.
 
-/** A written distance as the sheet reads it: `8-14 mm`, `6.5 mm`, or the expression as written. */
-export function describeDistance(distance, mm, range) {
-  const num = (n) => String(Number(n.toFixed(2)));
-  if (range) return `${num(range[0])}–${num(range[1])} mm`;
+/**
+ * A written distance as the sheet reads it: the value as written (`7dmm`, `[8dmm .. 14dmm]`, `shoreMm * 2`), and where the
+ * program says it prints differently on this target (`printed`: its ends, mm, from `/api/tiles/ID/check`; null where it
+ * prints as written) `7dmm (prints 5.08 mm)`.  The page writes no unit word of its own: a bare number stays bare.
+ */
+export function describeDistance(distance, printed) {
   const text = String(distance?.text ?? '').replace(/^"|"$/g, '');
-  if (/^-?\d+(\.\d+)?$/.test(text)) return `${text} mm`;
-  return mm == null ? text : `${text} (${num(mm)} mm)`;
+  if (!printed?.length) return text;
+  return `${text} (prints ${printed.join('–')} mm)`;
 }
 
 /** The one-line heading of a clause: `within 8-14 mm of westEdge`, `except crag`. */
 export function clauseTitle(c) {
   if (c.kind === 'except') return `except ${c.regions?.text || '…'}`;
-  return `within ${describeDistance(c.distance, c.mm, c.range)} of ${c.of?.text || '…'}`;
+  return `within ${describeDistance(c.distance, c.printed)} of ${c.of?.text || '…'}`;
 }
 
 /** Which kind of region the source makes: `bucket` (lines and fill points), `places` (within and except only), or `mixed`. */

@@ -135,11 +135,17 @@ fn unquoted(t: &str) -> String {
 
 /// What a region's body writes, clause by clause in the order written: its
 /// `within` clauses (the distance and the place, each with its span) and
-/// its `except` clauses (the regions, as one run).  `parsed` are the
-/// checked region's own `within`s, in the same order, for their numbers.
-fn clauses(text: &str, node: &kdl::KdlNode, parsed: &[dt_eval::Within]) -> Vec<Value> {
+/// its `except` clauses (the regions, as one run).  Each `within` carries
+/// what its distance prints on this target (`printed`, from
+/// [`dt_doc::printed::printed_size`], the one place that works it out; null
+/// where it prints as written): the page writes no unit word of its own.
+fn clauses(
+    text: &str,
+    node: &kdl::KdlNode,
+    units: dt_doc::units::Units,
+    consts: &dt_doc::consts::ConstTable,
+) -> Vec<Value> {
     let mut out = Vec::new();
-    let mut k = 0;
     for c in node
         .children()
         .map(kdl::KdlDocument::nodes)
@@ -158,15 +164,20 @@ fn clauses(text: &str, node: &kdl::KdlNode, parsed: &[dt_eval::Within]) -> Vec<V
                     .iter()
                     .find(|e| e.name().is_some_and(|n| n.value() == "of"))
                     .map(|e| entry_value(text, e));
-                let p = parsed.get(k);
-                k += 1;
+                let printed = dist.as_ref().and_then(|(t, _)| {
+                    dt_doc::printed::printed_size(
+                        dt_doc::schema::Axis::Dmm,
+                        &unquoted(t),
+                        units,
+                        Some(consts),
+                    )
+                });
                 out.push(json!({
                     "kind": "within",
                     "at": at,
                     "distance": dist.map(|(t, s)| json!({ "text": t, "span": s })),
                     "of": of.map(|(t, s)| json!({ "text": unquoted(&t), "written": t, "span": s })),
-                    "mm": p.map(|p| p.mm),
-                    "range": p.and_then(|p| p.range),
+                    "printed": printed.map(|p| p.ends),
                 }));
             }
             "except" => out.push(json!({ "kind": "except", "at": at, "regions": run_of(text, c) })),
@@ -422,7 +433,7 @@ pub(super) fn json(
                     "at": g.name().span().offset(),
                     "bounded_by": args_of(text, g, "boundedBy"),
                     "fill": args_of(text, g, "fill"),
-                    "clauses": clauses(text, g, &r.within),
+                    "clauses": clauses(text, g, units, &t.heights.consts),
                 })),
                 "refs": region_refs(t, r, rd),
             })

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { regionTriangles } from '../js/overlay.js';
 
@@ -81,16 +82,29 @@ test('what a region is made from is drawn: lines as ribbons, a region faint insi
   assert.ok(items[0].dz < items[1].dz, 'the fill lies under its outline');
 });
 
-test('a distance reads as the source says it', () => {
-  assert.equal(describeDistance({ text: '"[8 .. 14]"' }, 11, [8, 14]), '8–14 mm');
-  assert.equal(describeDistance({ text: '6.5' }, 6.5, null), '6.5 mm');
-  assert.equal(describeDistance({ text: '"shoreMm * 2"' }, 7, null), 'shoreMm * 2 (7 mm)');
+test('a distance reads as the source says it, with the program\'s printed size only where it differs', () => {
+  // DungeonBlocks: printed as written, the program sends none, and the page adds no unit word
+  assert.equal(describeDistance({ text: '"[8dmm .. 14dmm]"' }, null), '[8dmm .. 14dmm]');
+  assert.equal(describeDistance({ text: '"7dmm"' }, null), '7dmm');
+  assert.equal(describeDistance({ text: '6.5' }, null), '6.5', 'a bare number gets no mm from the page');
+  // OpenLOCK: the program's answer is shown beside what is written
+  assert.equal(describeDistance({ text: '"7dmm"' }, ['5.08']), '7dmm (prints 5.08 mm)');
+  assert.equal(describeDistance({ text: '"[8dmm .. 14dmm]"' }, ['5.81', '10.16']), '[8dmm .. 14dmm] (prints 5.81–10.16 mm)');
+});
+
+test('the clause line says no unit of its own: nothing in region-sheet.js writes mm or works out a size', () => {
+  const src = readFileSync(new URL('../js/editor/region-sheet.js', import.meta.url), 'utf8')
+    .split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  // the one `mm` the page writes follows the program's printed answer, in "(prints 5.08 mm)"
+  assert.equal((src.match(/\bmm\b/g) || []).length, 1);
+  assert.match(src, /\(prints \$\{printed\.join\('–'\)\} mm\)/);
+  assert.doesNotMatch(src, /\.mm\b|\.range\b|toFixed/, 'no number of mm is worked out here');
 });
 
 const places = [{ name: 'northEdge', kind: 'edge' }, { name: 'shore', kind: 'line' }, { name: 'crag', kind: 'region' }, { name: 'apron', kind: 'region' }, { name: 'center', kind: 'point' }];
 const crag = {
   clauses: [
-    { kind: 'within', at: 10, distance: { text: '"[8 .. 14]"', span: [20, 10] }, of: { text: 'westEdge', written: 'westEdge', span: [34, 8] }, mm: 11, range: [8, 14] },
+    { kind: 'within', at: 10, distance: { text: '"[8dmm .. 14dmm]"', span: [20, 10] }, of: { text: 'westEdge', written: 'westEdge', span: [34, 8] }, printed: null },
     { kind: 'except', at: 50, regions: { text: 'pool', span: [57, 4] } },
   ],
 };
@@ -99,7 +113,7 @@ test('a region of places shows each clause and how they combine', () => {
   assert.equal(regionKind(crag), 'places');
   assert.equal(regionKind({ boundedBy: { text: 'shore' }, fill: { text: '"1,1"' }, clauses: [] }), 'bucket');
   assert.equal(regionKind({ boundedBy: { text: 'shore' }, clauses: crag.clauses }), 'mixed');
-  assert.equal(clauseTitle(crag.clauses[0]), 'within 8–14 mm of westEdge');
+  assert.equal(clauseTitle(crag.clauses[0]), 'within [8dmm .. 14dmm] of westEdge');
   assert.equal(clauseTitle(crag.clauses[1]), 'except pool');
   assert.match(combineNote(crag), /added together.*then the except regions taken away/);
   assert.match(combineNote({ clauses: [crag.clauses[1]] }), /^The whole tile, less the regions it excepts/);
@@ -109,7 +123,7 @@ test('a region of places shows each clause and how they combine', () => {
   const groups = clauseGroups({ name: 'crag' }, crag, { places, regions: [{ name: 'crag' }, { name: 'pool' }] }, asW, row);
   assert.equal(groups.length, 2);
   assert.deepEqual(groups[0].controls.map((c) => c.name), ['distance', 'of']);
-  assert.deepEqual(groups[0].written.map((w) => w.text), ['distance="[8 .. 14]"', 'of=westEdge']);
+  assert.deepEqual(groups[0].written.map((w) => w.text), ['distance="[8dmm .. 14dmm]"', 'of=westEdge']);
   // the place is a choice among the tile's places, not the region itself, and keeps what is written
   assert.deepEqual(groups[0].controls[1].words.map((w) => w.word), ['westEdge', 'northEdge', 'shore', 'apron', 'center']);
   assert.deepEqual(groups[1].controls[0].words.map((w) => w.word), ['pool']);
