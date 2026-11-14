@@ -7,10 +7,12 @@
 //! * the error page `docs/e/type.html` for every code: what happened, the message as the program prints it (the
 //!   program run on the registry's broken document), what to do, the rule quoted from its section and linked at its
 //!   anchor, the broken document beside its fix with the change marked, and the codes the same section explains;
-//! * the table of every code on `docs/errors.html`.
+//! * the table of every code on `docs/errors.html`;
+//! * a link to its error page on every `<code>dt::…</code>` a docs page mentions (the changelog, which is history,
+//!   aside), so a code is never named on the site without its page a click away.
 //!
-//! and checks that nothing dangles: a code with no explaining section (or two), a marker for a code that does not
-//! exist, an error page or anchor that is missing or stale.  `cargo xtask docs` writes them; `--check` fails.
+//! and checks that nothing dangles: a code with no explaining section (or two), a marker or a mention naming a code
+//! that does not exist, an error page, anchor or link that is missing or stale.  `cargo xtask docs` writes them; `--check` fails.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -35,7 +37,8 @@ struct Rule {
     /// The rule in the section's own words: the first paragraph or list under a marked heading, or the marked
     /// element's text; HTML with only paragraphs, lists and `<code>` kept.
     quote: Option<String>,
-    /// The marked element, the same for every code one marker (or one section) explains.
+    /// The section the marker is in (its nearest heading, or the marker's own when it is one): the codes that share
+    /// it are listed together on their pages.
     place: String,
 }
 
@@ -59,6 +62,12 @@ pub fn run(root: &Path, check: bool, bin: &Path) -> Result<(), String> {
         let text =
             std::fs::read_to_string(&page).map_err(|e| format!("{}: {e}", page.display()))?;
         let (text, found) = anchor(&rel, &text, &mut problems);
+        let text = if rel == "changelog.html" {
+            text
+        } else {
+            let up = "../".repeat(rel.matches('/').count());
+            link_codes(&rel, &text, &format!("{up}e/"), &mut problems)
+        };
         for (code, rule) in found {
             rules.entry(code).or_default().push(rule);
         }
@@ -234,6 +243,11 @@ fn anchor(rel: &str, text: &str, problems: &mut Vec<String>) -> (String, Vec<(St
             .and_then(|h| tag_text(&text[tag_start..], &format!("<{h}"), &format!("</{h}>")))
             .map(|t| plain(&t));
         let quote = quote(text, tag, tag_end, section.is_some());
+        let heading = ["<h2", "<h3", "<h4"]
+            .iter()
+            .filter_map(|h| text[..=tag_start].rfind(h))
+            .max()
+            .unwrap_or(0);
         for id in &ids {
             found.push((
                 (*id).to_owned(),
@@ -242,7 +256,7 @@ fn anchor(rel: &str, text: &str, problems: &mut Vec<String>) -> (String, Vec<(St
                     title: title.clone(),
                     section: section.clone(),
                     quote: quote.clone(),
-                    place: format!("{rel}@{tag_start}"),
+                    place: format!("{rel}@{heading}"),
                 },
             ));
         }
@@ -265,6 +279,54 @@ fn anchor(rel: &str, text: &str, problems: &mut Vec<String>) -> (String, Vec<(St
     }
     out.push_str(&text[pos..]);
     (out, found)
+}
+
+/// `text` with every bare `<code>dt::…</code>` made a link to its error page (`prefix` is the way to `docs/e/` from
+/// the page).  A mention already in a link, or in a `<pre>`, is left as it is; any mention naming a code the registry
+/// does not have is a problem.
+fn link_codes(rel: &str, text: &str, prefix: &str, problems: &mut Vec<String>) -> String {
+    const OPEN: &str = "<code>dt::";
+    let mut out = String::with_capacity(text.len() + 1024);
+    let mut rest = text;
+    while let Some(at) = rest.find(OPEN) {
+        let name_start = at + OPEN.len();
+        let Some(len) = rest[name_start..].find("</code>") else {
+            break;
+        };
+        let name = &rest[name_start..name_start + len];
+        let whole = name_start + len + "</code>".len();
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
+            out.push_str(&rest[..whole]);
+            rest = &rest[whole..];
+            continue;
+        }
+        let id = format!("dt::{name}");
+        if codes::lookup(&id).is_none() {
+            problems.push(format!(
+                "{rel}: mentions {id}, which is not in the registry"
+            ));
+        }
+        out.push_str(&rest[..at]);
+        let inside = |open: &str, close: &str| {
+            out.rfind(open)
+                .is_some_and(|o| out.rfind(close).is_none_or(|c| c < o))
+        };
+        if inside("<a ", "</a>") || inside("<pre", "</pre>") {
+            out.push_str(&rest[at..whole]);
+        } else {
+            let _ = write!(
+                out,
+                "<a class=\"codelink\" href=\"{prefix}{name}.html\"><code>{id}</code></a>"
+            );
+        }
+        rest = &rest[whole..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// The rule in its section's words: under a marked heading its first paragraph or list (before the next heading);
@@ -406,6 +468,14 @@ fn mark_line(x: &str, y: &str) -> (String, String) {
         && xc[xc.len() - 1 - suf] == yc[yc.len() - 1 - suf]
     {
         suf += 1;
+    }
+    // widen the change to whole words (`2sq` against `0.5sq`, not `2` against `0.5`), so the eye finds a token
+    let word = |c: char| c.is_alphanumeric() || matches!(c, '.' | '_' | '%' | '$');
+    while pre > 0 && word(xc[pre - 1]) {
+        pre -= 1;
+    }
+    while suf > 0 && word(xc[xc.len() - suf]) {
+        suf -= 1;
     }
     let part = |c: &[char], class: &str| {
         let s: String = c[pre..c.len() - suf].iter().collect();
@@ -569,7 +639,15 @@ fn error_page(nav: &str, c: &Code, rule: &Rule, said: Option<&str>, related: &[&
         "</div>\n<section>\n<h2 id=\"rule\">The rule</h2>\n{}<p class=\"cp-in\"><a href=\"{link}\">Read it in context: {place}</a></p>\n</section>\n</div>\n",
         rule.quote
             .as_ref()
-            .map(|q| format!("<blockquote class=\"rule\">{q}</blockquote>\n"))
+            .map(|q| format!(
+                "<blockquote class=\"rule\">{}</blockquote>\n",
+                link_codes(
+                    id,
+                    q,
+                    "",
+                    &mut Vec::new() /* its mentions were checked on its own page */
+                )
+            ))
             .unwrap_or_default()
     );
     s.push_str("<footer class=\"cp-foot\">\n");

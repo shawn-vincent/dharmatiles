@@ -13,7 +13,7 @@
 <header class="hero">
   <div class="eyebrow">Reference · errors</div>
   <h1>Error codes</h1>
-  <p class="lede">Every message the program prints carries a code, such as <code>dt::type</code>, and an address that lands on its own page here: what happened, what to do, a broken document and its fix, and a link on to the rule in the guide.</p>
+  <p class="lede">Every message the program prints carries a code, such as <a class="codelink" href="e/type.html"><code>dt::type</code></a>, and an address that lands on its own page here: what happened, what to do, a broken document and its fix, and a link on to the rule in the guide.</p>
 </header>
 <div class="margin">
 <nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
@@ -119,41 +119,41 @@
 </tbody></table></div>
 <!-- /gen:codes -->
 
-<h2 id="controls-and-lines" data-explains="dt::choice dt::duplicate dt::expert dt::missing-name dt::unknown-node"><!--gen:anchors--><span id="dt-choice"></span><span id="dt-duplicate"></span><span id="dt-expert"></span><span id="dt-missing-name"></span><span id="dt-unknown-node"></span><!--/gen:anchors-->Controls and lines</h2>
+<h2 id="controls-and-lines">Controls and lines</h2>
 <p>The mistakes in how a line is written, before what it says is checked.</p>
 <dl class="defs">
-  <dt><code>dt::choice</code></dt><dd>A control that takes one of a few words (<code>clods some</code>, <code>leaves bare</code>) was given a word it does not have. The message lists the words the control takes.</dd>
-  <dt><code>dt::duplicate</code></dt><dd>A control is written twice on one line, <code>top</code> set twice for example. One of them would win without a word, so the document is refused: keep one.</dd>
-  <dt><code>dt::expert</code></dt><dd>Some controls are an element&rsquo;s inner workings, kept for the library&rsquo;s own tiles. A tile may not write them; the element&rsquo;s page lists the controls a tile may.</dd>
-  <dt><code>dt::missing-name</code></dt><dd><code>let</code>, <code>point</code>, <code>line</code>, <code>region</code>, <code>define</code> and <code>param</code> each need a name straight after the keyword.</dd>
-  <dt><code>dt::unknown-node</code></dt><dd>A line this kind of document does not hold at this place: a plates line holds <code>pin</code> lines and nothing else, a tile holds the nodes of <a href="language.html#document">section 1</a>. The message says what is allowed there.</dd>
+  <dt><a class="codelink" href="e/choice.html"><code>dt::choice</code></a></dt><dd data-explains="dt::choice"><!--gen:anchors--><span id="dt-choice"></span><!--/gen:anchors-->A control that takes one of a few words (<code>clods some</code>, <code>leaves bare</code>) was given a word it does not have. The message lists the words the control takes.</dd>
+  <dt><a class="codelink" href="e/duplicate.html"><code>dt::duplicate</code></a></dt><dd data-explains="dt::duplicate"><!--gen:anchors--><span id="dt-duplicate"></span><!--/gen:anchors-->A control is written twice on one line, <code>top</code> set twice for example. One of them would win without a word, so the document is refused: keep one.</dd>
+  <dt><a class="codelink" href="e/expert.html"><code>dt::expert</code></a></dt><dd data-explains="dt::expert"><!--gen:anchors--><span id="dt-expert"></span><!--/gen:anchors-->Some controls are an element&rsquo;s inner workings, kept for the library&rsquo;s own tiles. A tile may not write them; the element&rsquo;s page lists the controls a tile may.</dd>
+  <dt><a class="codelink" href="e/missing-name.html"><code>dt::missing-name</code></a></dt><dd data-explains="dt::missing-name"><!--gen:anchors--><span id="dt-missing-name"></span><!--/gen:anchors--><code>let</code>, <code>point</code>, <code>line</code>, <code>region</code>, <code>define</code> and <code>param</code> each need a name straight after the keyword.</dd>
+  <dt><a class="codelink" href="e/unknown-node.html"><code>dt::unknown-node</code></a></dt><dd data-explains="dt::unknown-node"><!--gen:anchors--><span id="dt-unknown-node"></span><!--/gen:anchors-->A line this kind of document does not hold at this place: a plates line holds <code>pin</code> lines and nothing else, a tile holds the nodes of <a href="language.html#document">section 1</a>. The message says what is allowed there.</dd>
 </dl>
 
-<h2 id="definitions" data-explains="dt::loop dt::nesting dt::too-many dt::not-yet dt::element dt::no-tile"><!--gen:anchors--><span id="dt-loop"></span><span id="dt-nesting"></span><span id="dt-too-many"></span><span id="dt-not-yet"></span><span id="dt-element"></span><span id="dt-no-tile"></span><!--/gen:anchors-->Definitions and expansion</h2>
+<h2 id="definitions">Definitions and expansion</h2>
 <p>Mistakes found when the program reads a whole tile, its parts and its definitions together.</p>
 <dl class="defs">
-  <dt><code>dt::loop</code></dt><dd>Definitions call each other, or themselves, more deeply than the program follows. A definition may build on others, never round to itself.</dd>
-  <dt><code>dt::nesting</code></dt><dd>An entry was written inside one that does not take it. A <code>pin</code> goes inside a body, a thing inside a <code>scatter</code>; terrain goes in the stack.</dd>
-  <dt><code>dt::too-many</code></dt><dd>The stack expands to more than 10 000 entries once every definition is called and every scatter is counted. Scatter fewer things, or call a definition fewer times.</dd>
-  <dt><code>dt::not-yet</code></dt><dd>The word is in the language&rsquo;s plan and is not built. The message says what to write instead.</dd>
-  <dt><code>dt::element</code></dt><dd>An element looked at its controls together and refused them, for a reason the message gives. The element&rsquo;s page has its rules.</dd>
-  <dt><code>dt::no-tile</code></dt><dd><code>build</code> was asked for a file with no tile in it: a parts file, a printer profile or a level file. These are only checked.</dd>
+  <dt><a class="codelink" href="e/loop.html"><code>dt::loop</code></a></dt><dd data-explains="dt::loop"><!--gen:anchors--><span id="dt-loop"></span><!--/gen:anchors-->Definitions call each other, or themselves, more deeply than the program follows. A definition may build on others, never round to itself.</dd>
+  <dt><a class="codelink" href="e/nesting.html"><code>dt::nesting</code></a></dt><dd data-explains="dt::nesting"><!--gen:anchors--><span id="dt-nesting"></span><!--/gen:anchors-->An entry was written inside one that does not take it. A <code>pin</code> goes inside a body, a thing inside a <code>scatter</code>; terrain goes in the stack.</dd>
+  <dt><a class="codelink" href="e/too-many.html"><code>dt::too-many</code></a></dt><dd data-explains="dt::too-many"><!--gen:anchors--><span id="dt-too-many"></span><!--/gen:anchors-->The stack expands to more than 10 000 entries once every definition is called and every scatter is counted. Scatter fewer things, or call a definition fewer times.</dd>
+  <dt><a class="codelink" href="e/not-yet.html"><code>dt::not-yet</code></a></dt><dd data-explains="dt::not-yet"><!--gen:anchors--><span id="dt-not-yet"></span><!--/gen:anchors-->The word is in the language&rsquo;s plan and is not built. The message says what to write instead.</dd>
+  <dt><a class="codelink" href="e/element.html"><code>dt::element</code></a></dt><dd data-explains="dt::element"><!--gen:anchors--><span id="dt-element"></span><!--/gen:anchors-->An element looked at its controls together and refused them, for a reason the message gives. The element&rsquo;s page has its rules.</dd>
+  <dt><a class="codelink" href="e/no-tile.html"><code>dt::no-tile</code></a></dt><dd data-explains="dt::no-tile"><!--gen:anchors--><span id="dt-no-tile"></span><!--/gen:anchors--><code>build</code> was asked for a file with no tile in it: a parts file, a printer profile or a level file. These are only checked.</dd>
 </dl>
 
-<h2 id="program" data-explains="dt::build dt::panic dt::payload dt::internal dt::bug"><!--gen:anchors--><span id="dt-build"></span><span id="dt-panic"></span><span id="dt-payload"></span><span id="dt-internal"></span><span id="dt-bug"></span><!--/gen:anchors-->When the program fails</h2>
+<h2 id="program">When the program fails</h2>
 <p>These are not mistakes in a document. The program shows them loudly, with what it knows, and a report of one is welcome (<a href="standards/errors.html">Errors</a> says why they are kept apart from document mistakes).</p>
 <dl class="defs">
-  <dt><code>dt::build</code></dt><dd>A build failed inside the program, not in the document. The message holds the cause.</dd>
-  <dt><code>dt::panic</code></dt><dd>The program stopped on a bug of its own while building. The message says what it was doing.</dd>
-  <dt><code>dt::payload</code></dt><dd>The editor&rsquo;s page sent something the program could not read. Reloading the page is the first thing to try.</dd>
-  <dt><code>dt::internal</code></dt><dd>The program reached a state that the language&rsquo;s own tables rule out, such as a body that has no body. It is a bug in the program.</dd>
-  <dt><code>dt::bug</code></dt><dd>An element reached a case it does not build. It is a bug in the program, and the message names the element.</dd>
+  <dt><a class="codelink" href="e/build.html"><code>dt::build</code></a></dt><dd data-explains="dt::build"><!--gen:anchors--><span id="dt-build"></span><!--/gen:anchors-->A build failed inside the program, not in the document. The message holds the cause.</dd>
+  <dt><a class="codelink" href="e/panic.html"><code>dt::panic</code></a></dt><dd data-explains="dt::panic"><!--gen:anchors--><span id="dt-panic"></span><!--/gen:anchors-->The program stopped on a bug of its own while building. The message says what it was doing.</dd>
+  <dt><a class="codelink" href="e/payload.html"><code>dt::payload</code></a></dt><dd data-explains="dt::payload"><!--gen:anchors--><span id="dt-payload"></span><!--/gen:anchors-->The editor&rsquo;s page sent something the program could not read. Reloading the page is the first thing to try.</dd>
+  <dt><a class="codelink" href="e/internal.html"><code>dt::internal</code></a></dt><dd data-explains="dt::internal"><!--gen:anchors--><span id="dt-internal"></span><!--/gen:anchors-->The program reached a state that the language&rsquo;s own tables rule out, such as a body that has no body. It is a bug in the program.</dd>
+  <dt><a class="codelink" href="e/bug.html"><code>dt::bug</code></a></dt><dd data-explains="dt::bug"><!--gen:anchors--><span id="dt-bug"></span><!--/gen:anchors-->An element reached a case it does not build. It is a bug in the program, and the message names the element.</dd>
 </dl>
 
-<h2 id="files" data-explains="dt::source dt::write"><!--gen:anchors--><span id="dt-source"></span><span id="dt-write"></span><!--/gen:anchors-->Files</h2>
+<h2 id="files">Files</h2>
 <dl class="defs">
-  <dt><code>dt::source</code></dt><dd>A file could not be read: it is not there, or the program may not read it. The message has the path and the system&rsquo;s reason.</dd>
-  <dt><code>dt::write</code></dt><dd>A file could not be written: the folder is missing, or the program may not write there. The message has the path and the reason.</dd>
+  <dt><a class="codelink" href="e/source.html"><code>dt::source</code></a></dt><dd data-explains="dt::source"><!--gen:anchors--><span id="dt-source"></span><!--/gen:anchors-->A file could not be read: it is not there, or the program may not read it. The message has the path and the system&rsquo;s reason.</dd>
+  <dt><a class="codelink" href="e/write.html"><code>dt::write</code></a></dt><dd data-explains="dt::write"><!--gen:anchors--><span id="dt-write"></span><!--/gen:anchors-->A file could not be written: the folder is missing, or the program may not write there. The message has the path and the reason.</dd>
 </dl>
 
 </article>

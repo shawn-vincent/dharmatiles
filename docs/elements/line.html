@@ -33,7 +33,7 @@
 line trail width="9dmm" wobble="3dmm" { through south "(0.65sq, 1sq)" north }
 line ring closed=#true wobble="2dmm" { through "(0.3sq, 0.7sq)" "(0.7sq, 0.7sq)" "(0.5sq, 0.3sq)" }
 line stream { through westCenter eastCenter }       // the built-in points, by name</code></pre>
-<p>A line with a <code>width</code> is a strip: everything within half the width of it, wobble included. <code>dirt at=trail</code>, <code>grass at=trail</code> and <code>cliff at=trail</code> fill the strip like a region, and <code>scatter at=trail</code> spreads within half the width either side unless it writes its own <code>reach</code>. A wall follows the line itself, so a width does not widen it. A surface along a line with no width, or along a tile edge (which has none), is <code>dt::type</code>; for an edge write <code>region rim { within "6dmm" of=northEdge }</code> and <code>at=rim</code>. See <code>demo/line-width.dtile</code>.</p>
+<p>A line with a <code>width</code> is a strip: everything within half the width of it, wobble included. <code>dirt at=trail</code>, <code>grass at=trail</code> and <code>cliff at=trail</code> fill the strip like a region, and <code>scatter at=trail</code> spreads within half the width either side unless it writes its own <code>reach</code>. A wall follows the line itself, so a width does not widen it. A surface along a line with no width, or along a tile edge (which has none), is <a class="codelink" href="../e/type.html"><code>dt::type</code></a>; for an edge write <code>region rim { within "6dmm" of=northEdge }</code> and <code>at=rim</code>. See <code>demo/line-width.dtile</code>.</p>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>

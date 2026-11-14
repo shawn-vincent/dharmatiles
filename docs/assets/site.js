@@ -47,8 +47,9 @@ addEventListener("DOMContentLoaded", () => {
 });
 
 // .dtile examples, coloured the same everywhere: node names, properties,
-// strings, numbers, comments.  Blocks that already carry markup, and shell
-// commands, are left as they are.
+// strings, numbers, comments.  A block may carry <mark> spans (an error page's
+// broken document and its fix, the change marked): the colours are laid under
+// them.  Blocks with any other markup, and shell commands, are left as they are.
 addEventListener('DOMContentLoaded', () => {
   const esc = (t) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const shell = /^\s*(\$|cargo |git |cd |\.\/|dharmatiles (?!version=)|brew |python|cp |mkdir |export |ls )/;
@@ -57,34 +58,72 @@ addEventListener('DOMContentLoaded', () => {
   // stays a string.  Only strings that are values: an `about` text is left alone.
   const value = /\$[A-Za-z_]|\d(?:%|sq|dmm|mm|in|layer|deg|rad)\b/;
   const inner = /(\$[A-Za-z_]\w*)|(-?\b\d+(?:\.\d+)?(?:%|(?:sq|dmm|mm|in|layer|deg|rad)\b))/g;
-  const hlString = (str) => {
-    if (!value.test(str)) return `<span class="hl-s">${esc(str)}</span>`;
-    let o = '', at = 0;
+  // the coloured pieces of a text, in order: [text, class or '']
+  const hlString = (str, out) => {
+    if (!value.test(str)) { out.push([str, 'hl-s']); return; }
+    let at = 0;
     for (const m of str.matchAll(inner)) {
-      if (m.index > at) o += `<span class="hl-s">${esc(str.slice(at, m.index))}</span>`;
-      o += `<span class="${m[1] ? 'hl-n' : 'hl-v'}">${esc(m[0])}</span>`;
+      if (m.index > at) out.push([str.slice(at, m.index), 'hl-s']);
+      out.push([m[0], m[1] ? 'hl-n' : 'hl-v']);
       at = m.index + m[0].length;
     }
-    return o + (at < str.length ? `<span class="hl-s">${esc(str.slice(at))}</span>` : '');
+    if (at < str.length) out.push([str.slice(at), 'hl-s']);
   };
   const tok = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*")|(\b[A-Za-z][\w+-]*(?==))|((?:^|(?<=[{;]))[ \t]*[A-Za-z][\w+-]*)|(-?\b\d+(?:\.\d+)?\b)/gm;
-  for (const code of document.querySelectorAll('pre > code')) {
-    if (code.children.length || code.closest('.no-hl')) continue;
-    const text = code.textContent;
-    const first = text.split('\n').find((l) => l.trim()) || '';
-    if (shell.test(first) || !/[{}=]/.test(text)) continue;
-    let out = '', last = 0;
+  const pieces = (text) => {
+    const out = [];
+    let last = 0;
     text.replace(tok, (m, com, str, prop, node, num, at) => {
-      out += esc(text.slice(last, at));
-      if (com) out += `<span class="hl-c">${esc(com)}</span>`;
-      else if (str) out += hlString(str);
-      else if (prop) out += `<span class="hl-p">${esc(prop)}</span>`;
-      else if (node) { const ws = node.match(/^[ \t]*/)[0]; out += `${ws}<span class="hl-n">${esc(node.slice(ws.length))}</span>`; }
-      else out += `<span class="hl-v">${esc(num)}</span>`;
+      out.push([text.slice(last, at), '']);
+      if (com) out.push([com, 'hl-c']);
+      else if (str) hlString(str, out);
+      else if (prop) out.push([prop, 'hl-p']);
+      else if (node) { const ws = node.match(/^[ \t]*/)[0]; out.push([ws, ''], [node.slice(ws.length), 'hl-n']); }
+      else out.push([num, 'hl-v']);
       last = at + m.length;
       return m;
     });
-    code.innerHTML = out + esc(text.slice(last));
+    out.push([text.slice(last), '']);
+    return out.filter(([t]) => t);
+  };
+  for (const code of document.querySelectorAll('pre > code')) {
+    if (code.closest('.no-hl')) continue;
+    if ([...code.children].some((c) => c.tagName !== 'MARK' || c.children.length)) continue;
+    const text = code.textContent;
+    const first = text.split('\n').find((l) => l.trim()) || '';
+    if (shell.test(first) || !/[{}=]/.test(text)) continue;
+    // the marks, by where they fall in the text
+    const marks = [];
+    let at = 0;
+    for (const n of code.childNodes) {
+      const len = n.textContent.length;
+      if (n.nodeType === 1) marks.push({ from: at, to: at + len, cls: n.className });
+      at += len;
+    }
+    // cut the coloured pieces where a mark starts or ends, and open and shut the marks between them
+    const cuts = [...new Set(marks.flatMap((m) => [m.from, m.to]))].sort((a, b) => a - b);
+    let html = '', pos = 0, open = null;
+    const shut = () => { if (open) { html += '</mark>'; open = null; } };
+    const markAt = (p) => marks.find((m) => m.from <= p && p < m.to) || null;
+    const empties = (p) => marks.filter((m) => m.from === p && m.to === p).forEach((m) => { shut(); html += `<mark class="${m.cls}"></mark>`; });
+    for (const [t, cls] of pieces(text)) {
+      let from = 0;
+      while (from < t.length) {
+        const p = pos + from;
+        empties(p);
+        const next = cuts.find((c) => c > p);
+        const to = Math.min(t.length, next === undefined ? t.length : next - pos);
+        const m = markAt(p);
+        if (m !== open) { shut(); if (m) { html += `<mark class="${m.cls}">`; open = m; } }
+        const part = esc(t.slice(from, to));
+        html += cls ? `<span class="${cls}">${part}</span>` : part;
+        from = to;
+      }
+      pos += t.length;
+    }
+    shut();
+    empties(pos);
+    code.innerHTML = html;
     code.parentElement.classList.add('dtile');
   }
 });

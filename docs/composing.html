@@ -124,7 +124,7 @@ tile size="2x2" seed=1 {
 <p>The full printing rules are on the <a href="standards/printing.html">printing</a> page.</p>
 
 <h2 id="how">How it is made</h2>
-<p>The program plans the stack by what each element reads and writes, in the order it is listed: surfaces first, then the lift, then solids, with what grows round solids listed after them. It refuses (<code>dt::order</code>) what the listed order cannot satisfy, never reorders it.</p>
+<p>The program plans the stack by what each element reads and writes, in the order it is listed: surfaces first, then the lift, then solids, with what grows round solids listed after them. It refuses (<a class="codelink" href="e/order.html"><code>dt::order</code></a>) what the listed order cannot satisfy, never reorders it.</p>
 <ol>
   <li><strong>Surfaces.</strong> Dirt is the ground; floors (flagstones, planks) are laid on it. A later land body is the higher of what is below it and its own top.</li>
   <li><strong>Solids.</strong> Rocks, trees, walls and cliffs claim their footprints and are bedded into the ground, kept inside the tile and clear of each other.</li>

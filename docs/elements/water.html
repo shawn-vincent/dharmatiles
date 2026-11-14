@@ -87,7 +87,7 @@ tile size="1x1" seed=97 {
         grass at=bank                                                 // after the water: it sees the shore
     }
 }</code></pre>
-<p>Each rock or reed listed before the water sends its own chop and wake, and the water goes round it; the water fills over it to its level, so a low rock may only just show. A rock listed after the water stands in it without rings. A <code>dirt</code> or <code>ground</code> listed after the water lies over it: where its top is higher than the water the earth shows (a spit, an island), where it is lower the water stays. A <code>tree</code>, <code>grass</code> or <code>wall</code> listed above the ground it stands on is refused (<code>dt::order</code>), as for any element.</p>
+<p>Each rock or reed listed before the water sends its own chop and wake, and the water goes round it; the water fills over it to its level, so a low rock may only just show. A rock listed after the water stands in it without rings. A <code>dirt</code> or <code>ground</code> listed after the water lies over it: where its top is higher than the water the earth shows (a spit, an island), where it is lower the water stays. A <code>tree</code>, <code>grass</code> or <code>wall</code> listed above the ground it stands on is refused (<a class="codelink" href="../e/order.html"><code>dt::order</code></a>), as for any element.</p>
 <p>The waves come from what is around the water: the land sends swells, each rock or reed listed before the water sends chop. They are drawn inside the water's band, scaled to fit it, so a narrower <code>top</code> gives shorter ripples and a single height a still pond.</p>
 
 <h2 id="spec">Reference</h2>

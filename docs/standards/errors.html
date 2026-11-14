@@ -43,7 +43,7 @@
 <thead><tr><th></th><th>Expected: your document or your input</th><th>Unexpected: the program</th></tr></thead>
 <tbody>
 <tr><td>What it is</td><td>Something you wrote or did that the program checks for and refuses</td><td>Something broke: a bug, a panic, a file the program could not read or write, a kernel that failed</td></tr>
-<tr><td>Examples</td><td>An unknown control (<code>dt::unknown-control</code>), a value out of range, a read nothing in the stack writes, a tile that fails the printability gate, an old spelling the language no longer reads</td><td>A panic in an element, a Manifold failure, an I/O error writing an STL, a malformed reply from the preview's server, a build worker that died</td></tr>
+<tr><td>Examples</td><td>An unknown control (<a class="codelink" href="../e/unknown-control.html"><code>dt::unknown-control</code></a>), a value out of range, a read nothing in the stack writes, a tile that fails the printability gate, an old spelling the language no longer reads</td><td>A panic in an element, a Manifold failure, an I/O error writing an STL, a malformed reply from the preview's server, a build worker that died</td></tr>
 <tr><td>Who fixes it</td><td>You, by editing the tile</td><td>A developer</td></tr>
 <tr><td>How it is shown</td><td>A diagnostic with its code, the place in the file, and a help line saying what to write instead; in the preview, beside the line and in the error panel</td><td>Prominently and plainly: what failed, the error's own words, and the details (the chain of causes, the panic message and location) available to copy</td></tr>
 <tr><td>Exit code</td><td>1 when the document is refused; 3 when the tile builds but fails the printability gate</td><td>1 for a failure that is not a bug (a file that cannot be read or written); 101 for a bug (a panic); never a 0</td></tr>
@@ -53,7 +53,7 @@
 <h2 id="tell">Telling them apart</h2>
 <p>An error is <b>expected</b> only when all four hold:</p>
 <ol>
-  <li>The program checks for it explicitly, and it has a name: a <code>dt::</code> diagnostic code, or a gate verdict.</li>
+  <li>The program checks for it explicitly, and it has a name: a <a class="codelink" href="../e/.html"><code>dt::</code></a> diagnostic code, or a gate verdict.</li>
   <li>You can fix it yourself by changing the document or what you typed.</li>
   <li>Nothing is broken: the program did exactly what it should.</li>
   <li>The message says what to do: a help line, a suggestion, or the numbers that failed.</li>
@@ -91,7 +91,7 @@
 <h2 id="rust">In the Rust code</h2>
 <ul class="rules">
   <li>Return <code>Result</code> and use <code>?</code>. Add context where it helps (which tile, which element, which file) rather than replacing the error.</li>
-  <li>Document errors are <code>miette</code> diagnostics with a <code>dt::</code> code, the span, and a help line. A new refusal gets a new code, not a reused vague one.</li>
+  <li>Document errors are <code>miette</code> diagnostics with a <a class="codelink" href="../e/.html"><code>dt::</code></a> code, the span, and a help line. A new refusal gets a new code, not a reused vague one.</li>
   <li>No <code>let _ =</code>, <code>.ok()</code>, <code>unwrap_or_default()</code> or <code>unwrap_or(…)</code> on a result that can fail for real. Writing into a <code>String</code> cannot fail, so <code>let _ = write!(s, …)</code> there is fine.</li>
   <li><code>unwrap</code> and <code>expect</code> only for what cannot happen; an <code>expect</code> message says why it cannot. Anything a document or a file can cause is a <code>Result</code>.</li>
   <li>A panic is a bug. It is never part of the plan, and a caught panic is still reported, saying it is a bug in dharmatiles, with its message and where it happened.</li>
@@ -113,7 +113,7 @@
 </table></div>
 <p>A panic caught round a route, a build or a draft is a <code>bug</code> with the panic's message, its place and its stack. A build that panics or cannot be encoded also puts the same structure in the tile's <code>failure</code> in the event stream, and a draft puts it in its reply. A mistake in the tile's text and a gate verdict are not failures and keep their own shapes.</p>
 <p><b>In the page</b>, <code>host.js</code> turns a reply that is not a success into a <code>ServerError</code> (<code>web/preview/js/server-error.js</code>) holding those fields. The error for what the page was doing has it as its <code>cause</code>, so one error carries both stacks. A reply without the structure (a plain-text refusal) becomes one with its words and no backtrace. Everything then goes through <code>showError(what, err)</code>: script errors, unhandled rejections, a store subscriber that throws, a failed reply, a build that failed.</p>
-<p><b>On the screen</b>, one row in the messages panel (the failure is a <code>server</code> <a href="#stream">message</a>) says it plainly. A <code>failure</code> or a <code>refused</code> shows its own message (and help) as the headline. A <code>bug</code>, and anything the page threw itself (a <code>TypeError</code>, a reply it could not read), shows <em>Something went wrong inside dharmatiles</em> with what was being done, and the words under it. Only a bug takes the interface's danger red (<code>--err</code>); a failure or a refusal is a plain note. The entry opens into the chain, each level indented and in monospace: the page's error and its JavaScript stack, then the server's error with its causes and backtrace, long traces scrolling. Every entry copies: a tile's own errors (a <code>dt::</code> diagnostic, or <code>dt::build</code>, a bug met building the tile) have a copy icon giving the code, place, words and help, the source lines round it and the environment. <em>Copy details</em> on a failure copies a plain-text report:</p>
+<p><b>On the screen</b>, one row in the messages panel (the failure is a <code>server</code> <a href="#stream">message</a>) says it plainly. A <code>failure</code> or a <code>refused</code> shows its own message (and help) as the headline. A <code>bug</code>, and anything the page threw itself (a <code>TypeError</code>, a reply it could not read), shows <em>Something went wrong inside dharmatiles</em> with what was being done, and the words under it. Only a bug takes the interface's danger red (<code>--err</code>); a failure or a refusal is a plain note. The entry opens into the chain, each level indented and in monospace: the page's error and its JavaScript stack, then the server's error with its causes and backtrace, long traces scrolling. Every entry copies: a tile's own errors (a <a class="codelink" href="../e/.html"><code>dt::</code></a> diagnostic, or <a class="codelink" href="../e/build.html"><code>dt::build</code></a>, a bug met building the tile) have a copy icon giving the code, place, words and help, the source lines round it and the environment. <em>Copy details</em> on a failure copies a plain-text report:</p>
 <ul class="rules">
   <li>what was being done, what the panel said, and the kind;</li>
   <li>the environment: the dharmatiles version (the full build string), the build target system and printer, the tile and file, the browser, platform, screen and window size, the time (ISO) and the page address;</li>
@@ -127,10 +127,10 @@
 <thead><tr><th>Field</th><th>What it holds</th></tr></thead>
 <tbody>
 <tr><td><code>seq</code>, <code>t</code></td><td>The order in the stream (it also resumes it) and the time, ISO, UTC.</td></tr>
-<tr><td><code>kind</code></td><td>A closed list: <code>progress</code> (a build is under way; never kept once it ends), <code>check</code>, <code>build</code>, <code>gate</code>, <code>error</code> (a mistake in the tile), <code>note</code> (<code>dt::steep</code>, <code>dt::edge</code>), <code>export</code>, <code>server</code> (a failure of the program's own, or the page's).</td></tr>
+<tr><td><code>kind</code></td><td>A closed list: <code>progress</code> (a build is under way; never kept once it ends), <code>check</code>, <code>build</code>, <code>gate</code>, <code>error</code> (a mistake in the tile), <code>note</code> (<a class="codelink" href="../e/steep.html"><code>dt::steep</code></a>, <a class="codelink" href="../e/edge.html"><code>dt::edge</code></a>), <code>export</code>, <code>server</code> (a failure of the program's own, or the page's).</td></tr>
 <tr><td><code>severity</code></td><td><code>error</code>, <code>warning</code>, <code>note</code>, <code>info</code>.</td></tr>
 <tr><td><code>scope</code></td><td>What reports it, and so what clears it: <code>check</code>, <code>build</code>, <code>export</code>, <code>server</code>.</td></tr>
-<tr><td><code>code</code>, <code>text</code>, <code>help</code></td><td>The diagnostic's code (<code>dt::look</code>), the words and what to do. The text is the program's, never reworded by a surface.</td></tr>
+<tr><td><code>code</code>, <code>text</code>, <code>help</code></td><td>The diagnostic's code (<a class="codelink" href="../e/look.html"><code>dt::look</code></a>), the words and what to do. The text is the program's, never reworded by a surface.</td></tr>
 <tr><td><code>tile</code>, <code>tile_name</code>, <code>node</code>, <code>span</code></td><td>The tile (its id), the stack entry it is about (the entry's key, the id the page and the view share), and the place in a file: <code>{file, line, col, offset, len}</code>.</td></tr>
 <tr><td><code>data</code></td><td>Numbers and detail: a build's seconds and triangles, the gate's areas against their budgets, a failure's causes and backtrace.</td></tr>
 <tr><td><code>state</code></td><td><code>open</code>, until a later check or build of the same <code>scope</code> for the same tile no longer reports it; then <code>cleared</code>. A message said again keeps its place and its time.</td></tr>
@@ -150,7 +150,7 @@
 
 <h2 id="address">Every error has an address</h2>
 <ul class="rules">
-  <li>A diagnostic code (<code>dt::type</code>) is made once, in the registry (<code>dt-lang/src/codes.rs</code>), and every error, note and message takes it from there by its constant. A code written as a string anywhere else fails a test, so a code the program prints is always one the docs know.</li>
+  <li>A diagnostic code (<a class="codelink" href="../e/type.html"><code>dt::type</code></a>) is made once, in the registry (<code>dt-lang/src/codes.rs</code>), and every error, note and message takes it from there by its constant. A code written as a string anywhere else fails a test, so a code the program prints is always one the docs know.</li>
   <li>Every code has a page, <code>e/&lt;code&gt;.html</code>, written by <code>cargo xtask docs</code> from the registry and from the section that explains it: what happened, what to do, a broken document and its fix, and the link on to the rule. The registry says that a code exists; a <code>data-explains</code> marker on the explaining section says where it is explained, and that is the only place that is written. <code>docs --check</code> fails when a code has no explaining section, when a marker names no code, and when a page or anchor is missing or stale. The list of codes and the pages that explain the program&rsquo;s own failures are <a href="../errors.html">Error codes</a>.</li>
   <li>Every error a terminal prints says where it is explained: <code>explain: &lt;address&gt;</code>, then <code>dharmatiles explain dt::&hellip;</code>, which prints the page&rsquo;s summary from the local copy of the docs. The address is the site&rsquo;s, derived from the repository address in <code>Cargo.toml</code>; it is never typed.</li>
   <li>The editor&rsquo;s messages with a code carry an <em>Explain</em> link, which opens the page served by the program from the docs it was installed with, so it matches the program and needs no network.</li>
@@ -186,7 +186,7 @@
 
 <h2 id="tests">Tests</h2>
 <ul class="rules">
-  <li>Every <code>dt::</code> refusal has a test that a document triggers it, with its code.</li>
+  <li>Every <a class="codelink" href="../e/.html"><code>dt::</code></a> refusal has a test that a document triggers it, with its code.</li>
   <li>The preview's server has tests that a document error comes back as data and an internal failure as an error status in the one error shape: its kind, causes and a backtrace, and for a caught panic the panic's own stack.</li>
   <li>The page has tests that a failed reply becomes a nested <code>ServerError</code>, and that the copied report holds both stacks and the environment.</li>
   <li>A panic anywhere in a test run is a failure, never retried away. An intermittent crash is a bug to find (the Manifold level-set fix is the model: reproduce, find the cause, prove the fix).</li>

@@ -291,9 +291,12 @@ blockquote.rule p { margin: 0; }
 .cp-pair figcaption { font-size: 13.5px; color: var(--muted); margin: 0 0 6px; }
 .cp-pair pre { margin: 0; }
 .cp-pair .broken pre { border-left-color: var(--err); }
-pre mark { color: inherit; border-radius: 3px; padding: 0 1px; }
-pre mark.del { background: color-mix(in srgb, var(--err) 26%, transparent); }
-pre mark.ins { background: color-mix(in srgb, var(--ok) 30%, transparent); }
+/* the change between a broken document and its fix: a tint and a solid underline in the danger red (what the
+   program refused) or the ok green (what it reads), strong enough to find at a glance in either theme */
+pre mark { color: var(--ink); border-radius: 3px 3px 0 0; padding: 1px 2px 0; margin: 0 -1px; font-weight: 600; }
+pre mark [class^="hl-"] { color: inherit; font-style: normal; } /* the change reads in plain ink, the most contrast either theme has */
+pre mark.del { background: color-mix(in srgb, var(--err) 38%, var(--code-bg)); box-shadow: inset 0 -2px 0 var(--err); }
+pre mark.ins { background: color-mix(in srgb, var(--ok) 38%, var(--code-bg)); box-shadow: inset 0 -2px 0 var(--ok); }
 pre mark.at { display: inline-block; width: 2px; height: 1.1em; vertical-align: text-bottom; padding: 0; }
 pre mark.del.at { background: var(--err); } pre mark.ins.at { background: var(--ok); }
 .cp-foot { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 28px; }
@@ -303,3 +306,7 @@ pre mark.del.at { background: var(--err); } pre mark.ins.at { background: var(--
 }
 blockquote.rule ul, blockquote.rule ol { margin: 0; padding-left: 1.2em; }
 blockquote.rule li { margin: 0 0 4px; }
+/* a code named on any page links to its error page (written by `cargo xtask docs`) */
+a.codelink { text-decoration: none; }
+a.codelink code { color: var(--accent); }
+a.codelink:hover code { color: var(--accent-hi); text-decoration: underline; text-underline-offset: 3px; }
