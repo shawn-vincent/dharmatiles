@@ -32,7 +32,7 @@ pub enum Key<'a> {
 }
 
 /// Why an edit could not be made.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum EditError {
     /// The text is not valid KDL v2.
     Parse(String),
@@ -46,6 +46,11 @@ pub enum EditError {
     BadName(String),
     /// The edit cannot be made on text written this way, and what to change.
     Cannot(String),
+    /// No piece of a print list has this id.
+    NoPiece(String),
+    /// The text does not read as the document it should be: its own mistakes,
+    /// so nothing is ever edited in a file that is not understood.
+    Unread(Vec<crate::error::DocError>),
 }
 
 impl std::fmt::Display for EditError {
@@ -56,6 +61,11 @@ impl std::fmt::Display for EditError {
             EditError::NoEntry(s) => write!(f, "the node has no `{s}`"),
             EditError::Exists(s) => write!(f, "`{s}` is already written"),
             EditError::BadName(s) | EditError::Cannot(s) => f.write_str(s),
+            EditError::NoPiece(id) => write!(f, "the list has no piece {id}"),
+            EditError::Unread(e) => f.write_str(
+                e.first()
+                    .map_or("the document does not read", |d| d.message.as_str()),
+            ),
         }
     }
 }
@@ -460,14 +470,14 @@ mod tests {
     fn insert_goes_on_the_line() {
         let out = insert_property(SRC, &["thing"], "c", 3).unwrap();
         assert_eq!(out, SRC.replace("b=\"x\" {", "b=\"x\" c=3 {"));
-        assert_eq!(
+        assert!(matches!(
             insert_property(SRC, &["thing"], "a", 3),
-            Err(EditError::Exists("a".to_owned()))
-        );
-        assert_eq!(
+            Err(EditError::Exists(n)) if n == "a"
+        ));
+        assert!(matches!(
             insert_property(SRC, &["thing"], "kid", 3),
-            Err(EditError::Exists("kid".to_owned()))
-        );
+            Err(EditError::Exists(n)) if n == "kid"
+        ));
     }
 
     #[test]

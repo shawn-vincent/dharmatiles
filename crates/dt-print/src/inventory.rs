@@ -158,7 +158,17 @@ pub fn append(home: &Path, lines: &[String]) -> Result<PathBuf, Vec<Diag>> {
     let path = path_in(home);
     let text = match load(home)? {
         Some(l) => {
-            doc::append(&l.text, lines).map_err(|e| e.iter().map(Diag::from).collect::<Vec<_>>())?
+            match dt_doc::ops::apply(
+                dt_doc::ops::Kind::Inventory,
+                &l.text,
+                &dt_doc::ops::Op::Append(lines),
+            ) {
+                Ok(d) => d.text,
+                Err(dt_doc::edit::EditError::Unread(e)) => {
+                    return Err(e.iter().map(Diag::from).collect::<Vec<_>>());
+                }
+                Err(e) => return Err(vec![Diag::plain("dt::inventory", e.to_string())]),
+            }
         }
         None => {
             std::fs::create_dir_all(home).map_err(|e| {

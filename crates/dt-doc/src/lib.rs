@@ -14,7 +14,8 @@
 //! - [`header`] reads the `dharmatiles version=…` first line, which names a
 //!   document's format.
 //! - [`edit`] changes, inserts and removes controls without disturbing
-//!   anything else in the file.
+//!   anything else in a `.dtile`; [`ops`] makes the edits of a print list
+//!   and an inventory, by piece id, with the same error type.
 //!
 //! - [`lower`] turns a written value into the numbers and odds a build draws from.
 //!
@@ -35,6 +36,7 @@ pub mod known;
 pub mod lower;
 pub mod map;
 pub mod model;
+pub mod ops;
 pub mod paths;
 pub mod place;
 pub mod printed;

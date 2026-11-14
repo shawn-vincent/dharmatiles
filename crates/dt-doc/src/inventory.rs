@@ -853,14 +853,3 @@ pub(crate) fn insert_in_block(text: &str, span: SourceSpan, lines: &[String]) ->
         format!("{} {{\n{add}}}{}", &text[..at], &text[at..])
     }
 }
-
-/// `text` (an inventory that reads) with `lines` added at the end of its log,
-/// every other byte as it was.
-///
-/// # Errors
-/// The text does not read as an inventory: its mistakes, so a line is never
-/// added to a file that is not understood.
-pub fn append(text: &str, lines: &[String]) -> Result<String, Vec<DocError>> {
-    let inv = decode(FILE, text)?;
-    Ok(insert_in_block(text, inv.span, lines))
-}

@@ -30,7 +30,9 @@
 
 use std::path::PathBuf;
 
+use dt_doc::edit::EditError;
 use dt_doc::map::{DEFAULT_PRINTER, Mode, Want};
+use dt_doc::ops::{Kind, Op, apply};
 use dt_eval::Diag;
 use serde::{Deserialize, Serialize};
 
@@ -135,6 +137,15 @@ pub struct ListsRestoreReq {
 
 pub(super) fn bad(msg: &str) -> Reply {
     fail::refused("400 Bad Request", msg)
+}
+
+/// An edit that could not be made, as the call answers it: a document that
+/// does not read answers with its own mistakes, anything else in words.
+pub(super) fn edit_err(e: EditError) -> Reply {
+    match e {
+        EditError::Unread(d) => diags(&d),
+        e => bad(&e.to_string()),
+    }
 }
 
 pub(super) fn diags(e: &[dt_doc::DocError]) -> Reply {
@@ -250,7 +261,8 @@ pub(super) fn edit_list<X>(
     let mut gave_note = None;
     let r = shared.docs.edit(&path, Some(rev), |text| {
         dt_doc::map::decode(&path, text).map_err(|e| diags(&e))?;
-        let (named, gave) = dt_doc::map::give_ids(text).map_err(|m| bad(&m))?;
+        let named = apply(Kind::Map, text, &Op::GiveIds).map_err(edit_err)?;
+        let (named, gave) = (named.text, named.gave_ids);
         let list = dt_doc::map::decode(&path, &named).map_err(|e| diags(&e))?;
         let (new, extra) = f(&named, &list).map_err(|m| bad(&m))?;
         dt_doc::map::decode(&path, &new).map_err(|e| diags(&e))?;
@@ -349,9 +361,9 @@ pub(super) fn put(
         let (e, ()) = shared.docs.edit(&path, rev, |text| {
             let l = dt_doc::map::decode(&path, text).map_err(|e| diags(&e))?;
             gave = l.pieces.iter().any(|p| p.id.is_none());
-            let (new, n) = dt_doc::map::add_or_bump(text, want).map_err(|e| diags(&e))?;
-            count = n;
-            Ok((new, ()))
+            let done = apply(Kind::Map, text, &Op::AddOrBump(want)).map_err(edit_err)?;
+            count = done.count.unwrap_or(1);
+            Ok((done.text, ()))
         })?;
         changed(shared, &path);
         return Ok(Put {
@@ -440,7 +452,16 @@ pub(super) fn add(shared: &Shared, v: ListsAddReq) -> Out<ListsAddRes> {
 /// `/api/lists/count`.
 pub(super) fn set_count(shared: &Shared, v: ListsCountReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |t, _| {
-        dt_doc::map::set_count(t, &v.id, v.count).map(|t| (t, ()))
+        apply(
+            Kind::Map,
+            t,
+            &Op::SetCount {
+                id: &v.id,
+                count: v.count,
+            },
+        )
+        .map(|d| (d.text, ()))
+        .map_err(|e| e.to_string())
     })?;
     Ok(e)
 }
@@ -448,7 +469,9 @@ pub(super) fn set_count(shared: &Shared, v: ListsCountReq) -> Out<ListEdited> {
 /// `/api/lists/remove`.
 pub(super) fn remove(shared: &Shared, v: ListsRemoveReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |t, _| {
-        dt_doc::map::remove_piece(t, &v.id).map(|t| (t, ()))
+        apply(Kind::Map, t, &Op::Remove { id: &v.id })
+            .map(|d| (d.text, ()))
+            .map_err(|e| e.to_string())
     })?;
     Ok(e)
 }

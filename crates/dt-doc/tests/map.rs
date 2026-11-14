@@ -143,9 +143,79 @@ fn the_header_is_checked_as_in_every_document() {
     assert_eq!(e[0].code, "dt::syntax");
 }
 
+/// The edits of a print list as the tests say them: each one an [`Op`] through
+/// the one engine.
+mod edits {
+    use dt_doc::edit::EditError;
+    use dt_doc::map::{At, Want};
+    pub use dt_doc::ops::Prop;
+    use dt_doc::ops::{Kind, Op, apply};
+
+    fn run(text: &str, op: &Op) -> Result<dt_doc::ops::Done, EditError> {
+        apply(Kind::Map, text, op)
+    }
+
+    pub fn add_or_bump(text: &str, want: &Want) -> Result<(String, u32), EditError> {
+        let d = run(text, &Op::AddOrBump(want))?;
+        Ok((d.text, d.count.unwrap_or(0)))
+    }
+    pub fn give_ids(text: &str) -> Result<(String, bool), EditError> {
+        run(text, &Op::GiveIds).map(|d| (d.text, d.gave_ids))
+    }
+    pub fn set_count(text: &str, id: &str, count: u32) -> Result<String, EditError> {
+        run(text, &Op::SetCount { id, count }).map(|d| d.text)
+    }
+    pub fn remove_piece(text: &str, id: &str) -> Result<String, EditError> {
+        run(text, &Op::Remove { id }).map(|d| d.text)
+    }
+    pub fn add_pieces(text: &str, lines: &[String]) -> Result<String, EditError> {
+        run(text, &Op::Append(lines)).map(|d| d.text)
+    }
+    pub fn set_piece(
+        text: &str,
+        id: &str,
+        edits: &[(&str, Option<Prop>)],
+    ) -> Result<String, EditError> {
+        run(text, &Op::SetPiece { id, edits }).map(|d| d.text)
+    }
+    pub fn duplicate_piece(
+        text: &str,
+        id: &str,
+        new_id: &str,
+        at: At,
+    ) -> Result<String, EditError> {
+        run(text, &Op::Duplicate { id, new_id, at }).map(|d| d.text)
+    }
+    pub fn set_pin(
+        text: &str,
+        id: &str,
+        plate: u32,
+        at: At,
+        turn: bool,
+    ) -> Result<String, EditError> {
+        run(
+            text,
+            &Op::Pin {
+                id,
+                plate,
+                at,
+                turn,
+            },
+        )
+        .map(|d| d.text)
+    }
+    pub fn clear_pin(text: &str, id: &str) -> Result<String, EditError> {
+        run(text, &Op::Unpin { id }).map(|d| d.text)
+    }
+    pub fn clear_pins(text: &str) -> Result<String, EditError> {
+        run(text, &Op::UnpinAll).map(|d| d.text)
+    }
+}
+
 #[test]
 fn a_piece_is_added_counted_and_taken_out_keeping_every_other_byte() {
-    use dt_doc::map::{Want, add_or_bump, give_ids, piece_ids, remove_piece, set_count};
+    use dt_doc::map::{Want, piece_ids};
+    use edits::{add_or_bump, give_ids, remove_piece, set_count};
     let text = "dharmatiles version=1\n// kept\nmap {\n    piece \"lib:tiles/ground/1x1-grass\" count=2 // two\n    piece \"home:glade\" seed=7\n}\nplates printer=\"sovol/sv06\"\n";
     let want = |tile, seed| Want {
         tile,
@@ -177,7 +247,7 @@ fn a_piece_is_added_counted_and_taken_out_keeping_every_other_byte() {
     let empty = "dharmatiles version=1\nmap {\n}\n";
     let (t, _) = add_or_bump(empty, &want("home:a", None)).unwrap();
     assert_eq!(decode("l", &t).unwrap().pieces.len(), 1);
-    // count and removal, by id: a piece with no id is not addressable until the ids are written
+    // count and removal, by id: the ids are written first, so an unnamed piece is addressable
     let (named, gave) = give_ids(text).unwrap();
     assert!(gave && give_ids(&named).unwrap() == (named.clone(), false));
     assert!(
@@ -186,7 +256,11 @@ fn a_piece_is_added_counted_and_taken_out_keeping_every_other_byte() {
     );
     let ids = piece_ids(&decode("l", text).unwrap());
     assert_eq!(ids, ["p1", "p2"]);
-    assert!(set_count(text, "p2", 4).is_err());
+    assert!(
+        set_count(text, "p2", 4)
+            .unwrap()
+            .contains("piece p2 \"home:glade\" seed=7 count=4")
+    );
     let t = set_count(&named, "p2", 4).unwrap();
     assert!(t.contains("seed=7") && t.contains("count=4"), "{t}");
     assert!(set_count(&named, "p1", 0).is_err() && set_count(&named, "p5", 2).is_err());
@@ -270,9 +344,9 @@ fn a_map_reads_its_grid_names_places_heights_and_pins() {
 
 #[test]
 fn a_map_editor_writes_places_and_keeps_every_other_byte() {
-    use dt_doc::map::{
-        At, Len, Prop, clear_pin, clear_pins, duplicate_piece, give_ids, next_id, piece_ids,
-        placed_line, set_piece, set_pin,
+    use dt_doc::map::{At, Len, next_id, piece_ids, placed_line};
+    use edits::{
+        Prop, add_pieces, clear_pin, clear_pins, duplicate_piece, give_ids, set_piece, set_pin,
     };
     let at = |x, y| At {
         x: Len::Sq(x),
@@ -313,7 +387,7 @@ fn a_map_editor_writes_places_and_keeps_every_other_byte() {
         line,
         r#"piece p5 "lib:tiles/ground/1x1-grass" at="(1sq, 3.5sq)" rot=0 seed=12 system=ol"#
     );
-    let t = dt_doc::map::add_pieces(MAP, &[line]).unwrap();
+    let t = add_pieces(MAP, &[line]).unwrap();
     let l = decode("t.dmap", &t).unwrap();
     assert_eq!(l.pieces.len(), 6);
     assert_eq!(l.pieces[5].place.unwrap().y, Len::Sq(3.5));

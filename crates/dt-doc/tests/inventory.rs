@@ -3,7 +3,7 @@
 #![allow(clippy::unwrap_used)]
 
 use dt_doc::inventory::{
-    Colour, Entry, Identity, Shelf, append, decode, gone_line, new_text, print_line, renamed_line,
+    Colour, Entry, Identity, Shelf, decode, gone_line, new_text, print_line, renamed_line,
 };
 
 const LOG: &str = r#"dharmatiles version="1.0.0"
@@ -193,6 +193,16 @@ fn a_line_is_read_back_as_written_even_with_odd_text() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+/// The log's one edit, through the one engine.
+fn append(text: &str, lines: &[String]) -> Result<String, dt_doc::edit::EditError> {
+    dt_doc::ops::apply(
+        dt_doc::ops::Kind::Inventory,
+        text,
+        &dt_doc::ops::Op::Append(lines),
+    )
+    .map(|d| d.text)
 }
 
 #[test]

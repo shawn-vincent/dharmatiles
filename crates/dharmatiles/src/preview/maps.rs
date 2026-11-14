@@ -20,7 +20,8 @@
 //! - `/api/maps/pin` `{list, id, plate, x, y, turn, docRev}`, `/api/maps/unpin`
 //!   `{list, id, docRev}`, `/api/maps/unpin-all` `{list, docRev}`.
 
-use dt_doc::map::{At, Prop, decode};
+use dt_doc::map::{At, decode};
+use dt_doc::ops::{Kind, Op, Prop, apply};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::api::Out;
@@ -208,11 +209,6 @@ pub(super) fn scene_value(shared: &Shared, path: &str, text: &str, rev: u64) -> 
     serde_json::to_value(scene_of(shared, path, text, rev)).unwrap_or(serde_json::Value::Null)
 }
 
-fn first_message(e: &[dt_doc::DocError]) -> String {
-    e.first()
-        .map_or_else(|| "the map does not read".to_owned(), |d| d.message.clone())
-}
-
 /// The words a call may set on a piece.
 fn props_of(set: &PieceWords) -> Result<Vec<(&'static str, Option<Prop>)>, String> {
     let mut out = Vec::new();
@@ -370,8 +366,8 @@ pub(super) fn add(shared: &Shared, v: MapsAddReq) -> Out<MapsPieced> {
         };
         seed_given = seed;
         let line = dt_doc::map::placed_line(&id, &canon, at, rot, seed, system);
-        let new = dt_doc::map::add_pieces(text, &[line]).map_err(|e| first_message(&e))?;
-        Ok((new, id))
+        let new = apply(Kind::Map, text, &Op::Append(&[line])).map_err(|e| e.to_string())?;
+        Ok((new.text, id))
     })?;
     Ok(MapsPieced {
         edited,
@@ -422,7 +418,9 @@ fn batch_edit(
                 }
                 None => props_of(set)?,
             };
-            t = dt_doc::map::set_piece(&t, id, &words)?;
+            t = apply(Kind::Map, &t, &Op::SetPiece { id, edits: &words })
+                .map_err(|e| e.to_string())?
+                .text;
         }
         shifted = rs.as_ref().map_or(0, |r| r.shifted);
         Ok((t, ()))
@@ -461,7 +459,17 @@ pub(super) fn dup(shared: &Shared, v: MapsDupReq) -> Out<MapsPieced> {
             }
             (None, None) => return Err("no place".to_owned()),
         };
-        let t = dt_doc::map::duplicate_piece(text, &v.id, &id, at)?;
+        let t = apply(
+            Kind::Map,
+            text,
+            &Op::Duplicate {
+                id: &v.id,
+                new_id: &id,
+                at,
+            },
+        )
+        .map_err(|e| e.to_string())?
+        .text;
         // a copy starts with the original's seed: the same piece until it is made a variant
         Ok((t, id))
     })?;
@@ -476,8 +484,9 @@ pub(super) fn dup(shared: &Shared, v: MapsDupReq) -> Out<MapsPieced> {
 /// `/api/maps/remove`: the piece, and the pin it had.
 pub(super) fn remove(shared: &Shared, v: MapsPieceReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |text, _| {
-        let t = dt_doc::map::clear_pin(text, &v.id).map_err(|e| first_message(&e))?;
-        dt_doc::map::remove_piece(&t, &v.id).map(|t| (t, ()))
+        apply(Kind::Map, text, &Op::Remove { id: &v.id })
+            .map(|d| (d.text, ()))
+            .map_err(|e| e.to_string())
     })?;
     Ok(e)
 }
@@ -496,8 +505,18 @@ pub(super) fn pin(shared: &Shared, v: MapsPinReq) -> Out<MapsPieced> {
             x: dt_doc::map::Len::Mm((v.x * 10.0).round() / 10.0),
             y: dt_doc::map::Len::Mm((v.y * 10.0).round() / 10.0),
         };
-        let t =
-            dt_doc::map::set_pin(text, &v.id, v.plate, at, turn).map_err(|e| first_message(&e))?;
+        let t = apply(
+            Kind::Map,
+            text,
+            &Op::Pin {
+                id: &v.id,
+                plate: v.plate,
+                at,
+                turn,
+            },
+        )
+        .map_err(|e| e.to_string())?
+        .text;
         Ok((t, v.id.clone()))
     })?;
     Ok(MapsPieced {
@@ -511,9 +530,9 @@ pub(super) fn pin(shared: &Shared, v: MapsPinReq) -> Out<MapsPieced> {
 /// `/api/maps/unpin`.
 pub(super) fn unpin(shared: &Shared, v: MapsPieceReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |text, _| {
-        dt_doc::map::clear_pin(text, &v.id)
-            .map(|t| (t, ()))
-            .map_err(|e| first_message(&e))
+        apply(Kind::Map, text, &Op::Unpin { id: &v.id })
+            .map(|d| (d.text, ()))
+            .map_err(|e| e.to_string())
     })?;
     Ok(e)
 }
@@ -521,9 +540,9 @@ pub(super) fn unpin(shared: &Shared, v: MapsPieceReq) -> Out<ListEdited> {
 /// `/api/maps/unpin-all`.
 pub(super) fn unpin_all(shared: &Shared, v: MapsListReq) -> Out<ListEdited> {
     let (e, ()) = edit_list(shared, &v.list, v.doc_rev, |text, _| {
-        dt_doc::map::clear_pins(text)
-            .map(|t| (t, ()))
-            .map_err(|e| first_message(&e))
+        apply(Kind::Map, text, &Op::UnpinAll)
+            .map(|d| (d.text, ()))
+            .map_err(|e| e.to_string())
     })?;
     Ok(e)
 }
