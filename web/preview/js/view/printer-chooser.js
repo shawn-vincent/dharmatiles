@@ -39,7 +39,7 @@ function Bed({ p, square }) {
   return html`<svg class="pc-bed" width=${w} height=${h} viewBox=${`0 0 ${w} ${h}`} aria-hidden="true"><rect class="bedrect" x=".5" y=".5" width=${w - 1} height=${h - 1} rx="2" />${cells}</svg>`;
 }
 
-function Pick({ printers, current, onPick, needBed, disabled, skey, scan, begin, say, square = 35 }) {
+function Pick({ printers, current, onPick, needBed, disabled, skey, scan, begin, say, square }) {
   const [query, setQuery] = useState(searches.get(skey) || '');
   const list = useRef(/** @type {HTMLElement | null} */ (null));
   useEffect(() => { askSlicers(scan, say); }, []);

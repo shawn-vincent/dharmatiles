@@ -223,7 +223,9 @@ export class Viewer {
   /** The camera, after something it depends on changed: the framing says what to do. */
   refit(resized = false) {
     const d = this.desc;
-    const step = { desc: d, box: d ? this.frameBox() : null, finished: this.finished(), flying: !!this.tween, resized, camera: () => this.getCamera() };
+    const box = d ? this.frameBox() : null;
+    if (d && !box) return;
+    const step = { desc: d, box, finished: this.finished(), flying: !!this.tween, resized, camera: () => this.getCamera() };
     const a = this.fr.step(step);
     if (a.do === 'restore') this.restoreCamera(a.camera);
     else if (a.do === 'frame') {
@@ -260,7 +262,9 @@ export class Viewer {
   frameBox() {
     if (this.desc.kind === 'map') return this.desc.box;
     if (this.payload) return this.bounds();
-    const [w, h] = this.plan?.sizeMm || [35, 35];
+    // no plan, no footprint: nothing to frame yet (the program has not said how big the tile is)
+    if (!this.plan?.sizeMm) return null;
+    const [w, h] = this.plan.sizeMm;
     const b = { lo: [0, 0, 0], hi: [w, h, 8] };
     for (const k of this.sketchBounds()) {
       for (let a = 0; a < 3; a++) { b.lo[a] = Math.min(b.lo[a], k.lo[a]); b.hi[a] = Math.max(b.hi[a], k.hi[a]); }

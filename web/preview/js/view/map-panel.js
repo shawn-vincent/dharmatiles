@@ -121,7 +121,8 @@ export function MapPlan({ m, act }) {
   if (!ps.length) return null;
   const marks = m.marks.value;
   const picked = new Set(m.selected.value.map((p) => p.id));
-  const sq = sc?.squareMm ?? 35;
+  const sq = sc?.squareMm;
+  if (!(sq > 0)) return null;
   const b = sc?.bounds;
   const x0 = Math.min(0, b?.[0] ?? 0), y0 = Math.min(0, b?.[1] ?? 0);
   const x1 = Math.max((sc?.grid?.cols ?? 0) * sq, b?.[2] ?? 0), y1 = Math.max((sc?.grid?.rows ?? 0) * sq, b?.[3] ?? 0);

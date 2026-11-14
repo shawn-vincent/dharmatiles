@@ -20,8 +20,9 @@ import { view } from './stores.js';
 export function frameBox(ps, scene) {
   const b = M.bounds(ps);
   let lo = b ? [...b.lo] : [0, 0], hi = b ? [...b.hi] : [0, 0];
-  if (scene.grid) {
-    const sq = ps.find((p) => p.sq)?.sq ?? 35;
+  // the grid's squares are the program's size; a scene that has not said it has no grid to frame
+  if (scene.grid && scene.squareMm > 0) {
+    const sq = scene.squareMm;
     lo = [Math.min(lo[0], 0), Math.min(lo[1], 0)]; hi = [Math.max(hi[0], scene.grid.cols * sq), Math.max(hi[1], scene.grid.rows * sq)];
   }
   if (!b && !scene.grid) { lo = [0, 0]; hi = [140, 140]; }

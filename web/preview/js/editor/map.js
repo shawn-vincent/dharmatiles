@@ -109,7 +109,7 @@ export function init() {
   tools = new Tools($('canvas'), viewer, overlay, { bar: $('place'), input: $('place-in'), list: $('place-list'), chip: $('tool') }, {
     elements: () => server.get().elements,
     defs: () => doc.get().names?.defs ?? [],
-    sq: () => tile()?.plan?.squareMm || 35,
+    sq: () => tile()?.plan?.squareMm,
     size: () => [tile()?.plan?.cols || 1, tile()?.plan?.rows || 1],
     map: () => doc.get().map,
     writable: () => doc.get().writable,

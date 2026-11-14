@@ -74,7 +74,8 @@ function sync() {
   const ps = pieces();
   release(ps);
   const box = frameBox(ps, sc);
-  const sq = ps.find((p) => p.sq)?.sq ?? 35;
+  const sq = sc.squareMm;
+  if (!(sq > 0)) return;
   viewer.setSceneGrid({ sq, w: Math.max(box.hi[0] - box.lo[0], sq), h: Math.max(box.hi[1] - box.lo[1], sq), cx: (box.lo[0] + box.hi[0]) / 2, cy: (box.lo[1] + box.hi[1]) / 2, z: 0 });
   request(ps);
   evaluate(true);

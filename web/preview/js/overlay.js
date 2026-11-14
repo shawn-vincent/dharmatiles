@@ -12,7 +12,7 @@ import { token } from './tokens.js';
  * A region's lattice cells as flat triangles (x, y in mm, z 0: the caller sets the height): one quad per run of set nodes in a row, clipped to the tile.
  * Returns a Float32Array of 9 numbers per triangle; `sq` is mm per square.
  */
-export function regionTriangles(r, m, sq = m.sq ?? 35) {
+export function regionTriangles(r, m, sq) {
   const out = [];
   const step = 1 / m.cells;
   for (let j = 0; j < r.ny; j++) {
@@ -55,7 +55,7 @@ export function ribbonTriangles(pts, sq, half = 0.7, closed = false, curtain = t
 }
 
 /** The outline of a region's lattice cells as ribbons (mm; not along the tile's own border). */
-export function outlineTriangles(r, m, sq = m.sq ?? 35, half = 0.5) {
+export function outlineTriangles(r, m, sq, half = 0.5) {
   const step = 1 / m.cells, segs = [];
   const set = (i, j) => i >= 0 && j >= 0 && i < r.nx && j < r.ny && r.bits[j * r.nx + i] === '1';
   const clampX = (v) => Math.min(m.cols, Math.max(0, v)), clampY = (v) => Math.min(m.rows, Math.max(0, v));
@@ -163,12 +163,17 @@ export class Overlay {
     this.viewer = viewer;
     this.ctx = canvas.getContext('2d');
     this.map = null;
-    this.sq = 35;
+    /** mm per square, the program's (null until a map is set with it: nothing is drawn). */
+    this.sq = null;
     this.heights = null;
     this.scene = {};
   }
 
-  setMap(map, squareMm) { this.map = map; if (squareMm) this.sq = squareMm; }
+  /** The map to draw, at the program's square size; without the size there is nothing to draw it at, so no map. */
+  setMap(map, squareMm) {
+    this.sq = squareMm > 0 ? squareMm : null;
+    this.map = this.sq ? map : null;
+  }
 
   /**
    * A height for every mm of the tile from the triangles `isSurface(entry)`

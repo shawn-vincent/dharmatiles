@@ -188,12 +188,12 @@ export const sceneMethods = {
     this.groundMask.visible = false;
     this.groundOn = false;
     if (!this.backdrop.on()) return;
-    let z = 0, box = null, sq = 35;
+    let z = 0, box = null, sq = null;
     const rects = [];
     if (this.sceneOn) {
       z = 0;
       box = this.sceneBox;
-      sq = this.sceneGridSpec?.sq ?? 35;
+      sq = this.sceneGridSpec?.sq;
       for (const p of this.scenePieces.values()) {
         if (!p.shown) continue;
         const g = p.render.geometry;
@@ -212,16 +212,17 @@ export const sceneMethods = {
       const { lo, hi } = this.payload.meta;
       z = lo[2];
       box = { lo, hi };
-      sq = this.plan?.squareMm ?? 35;
+      sq = this.plan?.squareMm;
       const [w, h] = this.plan?.sizeMm ?? [hi[0] - lo[0], hi[1] - lo[1]];
       rects.push([0, 0, w, h]);
     } else if (this.plan?.sizeMm) {
       const [w, h] = this.plan.sizeMm;
       box = { lo: [0, 0, 0], hi: [w, h, 1] };
-      sq = this.plan.squareMm ?? 35;
+      sq = this.plan.squareMm;
       z = -7;
     }
-    if (!box) return;
+    // the ground is ruled at the program's square size; without it there is no ground to draw
+    if (!box || !(sq > 0)) return;
     const gz = this.sceneOn ? GROUND_MASK_Z : z - 0.05;
     this.groundMask.position.z = gz;
     this.groundMask.visible = true;
