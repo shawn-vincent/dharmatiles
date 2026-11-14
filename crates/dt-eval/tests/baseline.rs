@@ -140,22 +140,68 @@ fn row(path: &str) -> String {
 }
 
 /// The five repair counts of `path` built on `seed`, in the order of
-/// [`REPAIRS`].
-fn repairs_on(path: &str, seed: u64) -> [u64; 5] {
+/// [`REPAIRS`], or why it did not build.
+fn repairs_on(path: &str, seed: u64) -> Result<[u64; 5], String> {
     let opts = Options {
         seed: Some(seed),
         ..Options::default()
     };
-    let b = build(&Library, path, &opts).unwrap_or_else(|e| panic!("{path} on seed {seed}: {e:?}"));
+    let b = build(&Library, path, &opts).map_err(|e| format!("on seed {seed}: {e:?}"))?;
     let a = &b.audit;
-    [
+    Ok([
         a.voids.len(),
         a.pinches_moved,
         a.slivers.len(),
         a.collapsed,
         a.dropped.len(),
     ]
-    .map(|n| n as u64)
+    .map(|n| n as u64))
+}
+
+/// What one of the sweep's builds gave.
+enum Done {
+    /// A tile's row on its written seed.
+    Row(Vec<String>),
+    /// Its repair counts on an extra seed.
+    Repairs(Result<[u64; 5], String>),
+}
+
+/// How many builds the sweep runs at once: enough to keep the machine busy, few enough that the biggest
+/// builds (near 8.5 GB each at their peak) fit in memory together.
+const WORKERS: usize = 3;
+
+/// `work` on each job, in the order given, on [`WORKERS`] threads; each build still spreads over the whole
+/// machine inside. Each result comes back with its job.
+fn in_parallel<T: Send>(order: &[usize], work: impl Fn(usize) -> T + Sync) -> Vec<(usize, T)> {
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let out = std::sync::Mutex::new(Vec::with_capacity(order.len()));
+    std::thread::scope(|s| {
+        for _ in 0..WORKERS {
+            s.spawn(|| {
+                loop {
+                    let k = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(&j) = order.get(k) else { break };
+                    let r = work(j);
+                    out.lock().expect("a sweep worker panicked").push((j, r));
+                }
+            });
+        }
+    });
+    out.into_inner().expect("a sweep worker panicked")
+}
+
+/// Each tile's build time on the file, to start the longest first; none for a tile not on it.
+fn last_secs() -> BTreeMap<String, f64> {
+    let Ok(text) = std::fs::read_to_string(Path::new(FILE)) else {
+        return BTreeMap::new(); // no file yet: any order
+    };
+    text.lines()
+        .skip(2)
+        .filter_map(|l| {
+            let f: Vec<String> = l.split('\t').map(str::to_owned).collect();
+            (f.len() == FIELDS).then(|| (f[0].clone(), secs(&f)))
+        })
+        .collect()
 }
 
 /// A measured row (12 fields and the time) with a tile's budgets put in.
@@ -205,22 +251,45 @@ fn the_library_builds_as_the_baseline_says() {
         );
         eprintln!("{} library tiles use {}", tiles.len(), names.join(" or "));
     }
-    let measured: Vec<Vec<String>> = tiles
-        .iter()
-        .map(|p| row(p).split('\t').map(str::to_owned).collect())
+    // every build the sweep makes, a tile on its written seed or an extra one, runs on a few workers at once:
+    // one build keeps about half the machine busy, so three together finish in about half the time (measured
+    // 14 Nov 2026: six tiles 41 s together, 90 s one by one); the biggest builds peak near 8.5 GB each
+    let jobs: Vec<(usize, Option<u64>)> = (0..tiles.len())
+        .flat_map(|t| std::iter::once((t, None)).chain(EXTRA_SEEDS.map(|s| (t, Some(s)))))
         .collect();
-    // each tile's repair counts: the worst over the written seed and the extra ones
+    let took = last_secs();
+    let mut order: Vec<usize> = (0..jobs.len()).collect();
+    // the longest tiles first, so the last to finish are short
+    order.sort_by(|&a, &b| {
+        let t = |j: usize| took.get(&tiles[jobs[j].0]).copied().unwrap_or(f64::MAX);
+        t(b).total_cmp(&t(a))
+    });
+    let done = in_parallel(&order, |j| match jobs[j] {
+        (t, None) => Done::Row(row(&tiles[t]).split('\t').map(str::to_owned).collect()),
+        (t, Some(seed)) => Done::Repairs(repairs_on(&tiles[t], seed)),
+    });
+    let mut measured: Vec<Vec<String>> = vec![Vec::new(); tiles.len()];
+    let mut extra: Vec<Vec<Result<[u64; 5], String>>> = vec![Vec::new(); tiles.len()];
+    for (j, d) in done {
+        match d {
+            Done::Row(r) => measured[jobs[j].0] = r,
+            Done::Repairs(r) => extra[jobs[j].0].push(r),
+        }
+    }
+    // each tile's repair counts: the worst over the written seed and the extra ones (a tile refused on its own
+    // seed has none, whatever the extra seeds did)
     let worst: Vec<Option<[u64; 5]>> = measured
         .iter()
-        .map(|m| {
+        .zip(&extra)
+        .map(|(m, more)| {
             let mut w = [0; 5];
             for (k, (_, at, _)) in REPAIRS.iter().enumerate() {
                 w[k] = count(m, *at)?;
             }
-            for seed in EXTRA_SEEDS {
-                let on = repairs_on(&m[0], seed);
+            for on in more {
+                let on = on.as_ref().unwrap_or_else(|e| panic!("{}: {e}", m[0]));
                 for (a, b) in w.iter_mut().zip(on) {
-                    *a = (*a).max(b);
+                    *a = (*a).max(*b);
                 }
             }
             Some(w)

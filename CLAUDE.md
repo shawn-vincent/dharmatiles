@@ -33,7 +33,7 @@ cargo xtask sheet <tile|name> [--seeds …] [--system ol]  # contact sheet: four
 cargo xtask pictures [group …]              # rebuild the element pages' pictures from docs/elements/demo/
 cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the element schema; write the #dt-<code> anchors (from data-explains markers) and docs/e/<code>.html error pages; --check also fails on a code with no explaining section, a marker naming no code, or a stale page
 cargo xtask release 0.10.0 "<summary>"      # fold docs/changelog.d/ into a numbered changelog entry, bump Cargo.toml, check, commit, tag v0.10.0, push
-cargo xtask check [--full] [--plan]         # the checks this branch's changes can fail, chosen from its diff against main (merge on this); --full is everything, before a push
+cargo xtask check [--full] [--plan]         # the checks this branch's changes can fail, chosen from its diff against main (merge on this): an element or geometry change is held by the test tiles' goldens, not the library; --full is everything, the whole-library sweep included, before a push
 cargo xtask sweep [grass|lib:tiles/… …]     # the baseline for the tiles that use those elements (all when none named); a heavy job
 cargo xtask heavy <command …>               # run a machine-loading command once no other heavy job runs in any worktree (sweep, sheet, pictures, wasm take the same lock)
 cargo xtask regen                           # write every generated file again (page contract, docs): after a rebase stops on one, take either side, then this

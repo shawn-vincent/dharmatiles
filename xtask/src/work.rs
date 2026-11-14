@@ -197,22 +197,6 @@ fn packages(root: &Path) -> Result<BTreeMap<String, (String, Vec<String>)>, Stri
     Ok(map)
 }
 
-/// The elements whose code is in a `dt-elements/src` file or folder: a
-/// change there sweeps the tiles that use them. A file not named here (the
-/// shared helpers) sweeps the whole library.
-const ELEMENT_FILES: &[(&str, &[&str])] = &[
-    ("cliff", &["cliff"]),
-    ("dirt.rs", &["dirt"]),
-    ("floor.rs", &["floor"]),
-    ("flowers.rs", &["flower"]),
-    ("grass", &["grass"]),
-    ("reeds.rs", &["reeds"]),
-    ("rock.rs", &["rock", "stone", "boulder", "pebble"]),
-    ("tree", &["tree"]),
-    ("wall", &["wall"]),
-    ("water.rs", &["water"]),
-];
-
 /// What a change runs.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Plan {
@@ -225,33 +209,12 @@ struct Plan {
     page: bool,
     /// `cargo xtask docs --check`.
     docs: bool,
-    /// The sweep: `None` none, `Some(empty)` the whole library, else the
-    /// elements and tiles named.
+    /// The sweep: `None` none, `Some(empty)` the whole library (`--full`), else
+    /// the library tiles changed. A change to an element or the geometry is held
+    /// by the test tiles' goldens (every stage's hash, the repair counts and the
+    /// gate, in dt-eval's tests); the whole library is swept before a push.
     sweep: Option<BTreeSet<String>>,
 }
-
-impl Plan {
-    fn sweep_all(&mut self) {
-        self.sweep = Some(BTreeSet::new());
-    }
-    fn sweep_some(&mut self, what: impl IntoIterator<Item = String>) {
-        match &mut self.sweep {
-            Some(s) if s.is_empty() => {} // already the whole library
-            Some(s) => s.extend(what),
-            None => self.sweep = Some(what.into_iter().collect()),
-        }
-    }
-}
-
-/// Folders whose change can move any tile's geometry: the whole library is swept.
-const GEOMETRY: &[&str] = &[
-    "crates/dt-geom/",
-    "crates/dt-kit/",
-    "crates/dt-value/",
-    "crates/dt-par/",
-    "third_party/",
-    "library/parts/",
-];
 
 fn plan(files: &[String], pkgs: &BTreeMap<String, (String, Vec<String>)>) -> Plan {
     let mut p = Plan::default();
@@ -264,7 +227,6 @@ fn plan(files: &[String], pkgs: &BTreeMap<String, (String, Vec<String>)>) -> Pla
         if f == "Cargo.lock" || f == "Cargo.toml" || f.starts_with("rust-toolchain") {
             // the compiler or a dependency: everything
             touched.extend(pkgs.keys().cloned());
-            p.sweep_all();
             p.page = true;
             p.docs = true;
         }
@@ -273,18 +235,10 @@ fn plan(files: &[String], pkgs: &BTreeMap<String, (String, Vec<String>)>) -> Pla
                 touched.insert(name.clone());
             }
         }
-        if GEOMETRY.iter().any(|g| f.starts_with(g)) {
-            p.sweep_all();
-        }
-        if let Some(rest) = f.strip_prefix("crates/dt-elements/src/") {
-            let head = rest.split('/').next().unwrap_or(rest);
-            match ELEMENT_FILES.iter().find(|(file, _)| *file == head) {
-                Some((_, names)) => p.sweep_some(names.iter().map(|n| (*n).to_owned())),
-                None => p.sweep_all(),
-            }
-        }
         if f.starts_with("library/tiles/") && f.ends_with(".dtile") {
-            p.sweep_some([format!("lib:{}", &f["library/".len()..])]);
+            p.sweep
+                .get_or_insert_with(BTreeSet::new)
+                .insert(format!("lib:{}", &f["library/".len()..]));
         }
         if f.starts_with("library/") {
             // the test tiles and the goldens, the library's decoding
@@ -366,6 +320,7 @@ pub fn check(root: &Path, args: &[String]) -> Result<(), String> {
         p.tests = pkgs.keys().cloned().collect();
         p.page = true;
         p.docs = true;
+        p.sweep = Some(BTreeSet::new());
     }
     println!(
         "{} files changed against main{}",
@@ -529,26 +484,29 @@ mod tests {
     }
 
     #[test]
-    fn an_element_sweeps_its_tiles_and_tests_what_depends_on_it() {
-        let p = plan(&files(&["crates/dt-elements/src/grass/blade.rs"]), &pkgs());
-        assert_eq!(p.sweep, Some(set(&["grass"])));
-        assert_eq!(p.tests, set(&["dt-elements", "dt-eval", "dharmatiles"]));
-        assert!(p.rust && p.docs && !p.page);
-        // a shared helper of the elements: the whole library
-        let p = plan(&files(&["crates/dt-elements/src/lib.rs"]), &pkgs());
-        assert_eq!(p.sweep, Some(set(&[])));
+    fn an_element_runs_the_tests_of_what_depends_on_it_and_no_sweep() {
+        for f in [
+            "crates/dt-elements/src/grass/blade.rs",
+            "crates/dt-elements/src/lib.rs",
+        ] {
+            let p = plan(&files(&[f]), &pkgs());
+            assert_eq!(p.sweep, None, "{f}: the test tiles' goldens hold it");
+            assert_eq!(p.tests, set(&["dt-elements", "dt-eval", "dharmatiles"]));
+            assert!(p.rust && p.docs && !p.page);
+        }
     }
 
     #[test]
-    fn geometry_and_dependencies_sweep_the_whole_library() {
-        for f in [
-            "crates/dt-geom/src/stack.rs",
-            "Cargo.lock",
-            "third_party/obvhs/src/lib.rs",
-        ] {
-            let p = plan(&files(&[f, "crates/dt-elements/src/water.rs"]), &pkgs());
-            assert_eq!(p.sweep, Some(set(&[])), "{f}");
-        }
+    fn geometry_and_dependencies_test_everything_that_reads_them() {
+        let p = plan(&files(&["crates/dt-geom/src/stack.rs"]), &pkgs());
+        assert_eq!(
+            p.tests,
+            set(&["dt-geom", "dt-elements", "dt-eval", "dharmatiles"])
+        );
+        assert_eq!(p.sweep, None);
+        let p = plan(&files(&["Cargo.lock"]), &pkgs());
+        assert_eq!(p.tests.len(), pkgs().len());
+        assert!(p.page && p.docs && p.sweep.is_none());
     }
 
     #[test]

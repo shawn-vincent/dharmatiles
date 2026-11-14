@@ -125,6 +125,26 @@ pub fn observed(path: &str) -> &'static Observed {
     slot(&MEMO, path).get_or_init(|| Box::leak(Box::new(observe(path))))
 }
 
+/// Build every one of `paths` that is not built yet, several side by side: each build keeps its own pool of two
+/// threads (the proof that threads change nothing), so one at a time leaves most of the machine idle. A test that
+/// reads many tiles calls this first; the builds are the same, only sooner.
+pub fn prebuild(paths: &[&str]) {
+    /// Builds at once: six two-thread pools fill twelve cores.
+    const AT_ONCE: usize = 6;
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|s| {
+        for _ in 0..AT_ONCE {
+            s.spawn(|| {
+                while let Some(p) =
+                    paths.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+                {
+                    observed(p);
+                }
+            });
+        }
+    });
+}
+
 /// The tile's observed build.
 pub fn built(path: &str) -> &'static Built {
     &observed(path).built

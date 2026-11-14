@@ -1,5 +1,6 @@
 //! Golden summaries per tile: stage
-//! hashes, triangle count, volume, overhang mm² and see-through holes,
+//! hashes, triangle count, volume, the repair counts, overhang and band mm²,
+//! see-through holes and the gate's verdict,
 //! as insta snapshots; `cargo insta review` shows what changed.
 //!
 //! Each golden tile is built once for the whole binary (see `memo`: two
@@ -19,7 +20,7 @@
 use dt_eval::{Built, Library, Options, build};
 use dt_print::{VIEWS, render};
 
-use super::memo::{built, hashes};
+use super::memo::{built, hashes, prebuild};
 
 const TILES: &[&str] = &[
     "lib:tests/ground/1x1-flat.dtile",
@@ -71,6 +72,18 @@ fn the_shape_tiles_pass_the_gate() {
     }
 }
 
+/// The gate's verdict on DungeonBlocks: `pass`, or each failure. With the repair counts above it, this is what
+/// the library sweep holds every library tile to, held here for the test tiles on every test run (the check
+/// a change to an element runs; the library sweep runs before a push).
+fn gate(b: &Built) -> String {
+    let fails = b.audit.failures(&Options::default().printer);
+    if fails.is_empty() {
+        "pass".to_owned()
+    } else {
+        fails.join("; ")
+    }
+}
+
 /// Metrics that every platform must agree on.
 fn metrics(b: &Built) -> String {
     let a = &b.audit;
@@ -82,7 +95,7 @@ fn metrics(b: &Built) -> String {
         (600, 475),
     );
     format!(
-        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\nvoids_filled: {}\npinches_moved: {}\nslivers: {}\ncollapsed: {}\noverhang_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\n",
+        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\nvoids_filled: {}\npinches_moved: {}\nslivers: {}\ncollapsed: {}\noverhang_mm2: {:.3}\nband_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\ngate: {}\n",
         a.triangles,
         a.volume_mm3,
         a.watertight,
@@ -93,13 +106,16 @@ fn metrics(b: &Built) -> String {
         a.slivers.len(),
         a.collapsed,
         a.overhang_mm2,
+        a.band_mm2,
         a.holes,
         img.red_pixels(),
+        gate(b),
     )
 }
 
 #[test]
 fn golden_metrics() {
+    prebuild(TILES);
     for path in TILES {
         let b = built(path);
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
@@ -110,6 +126,7 @@ fn golden_metrics() {
 #[test]
 #[cfg(not(windows))]
 fn golden_hashes() {
+    prebuild(TILES);
     for path in TILES {
         let b = built(path);
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
@@ -139,6 +156,7 @@ pub const OBSERVED: &[&str] = &[
 #[test]
 #[cfg(not(windows))]
 fn observers_change_nothing() {
+    prebuild(OBSERVED);
     for path in OBSERVED {
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
         insta::assert_snapshot!(format!("{name}-hashes"), hashes(built(path)));

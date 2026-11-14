@@ -1,5 +1,5 @@
 ---
-source: crates/dt-eval/tests/golden.rs
+source: crates/dt-eval/tests/tiles/golden.rs
 expression: metrics(b)
 ---
 triangles: 332558
@@ -12,5 +12,7 @@ pinches_moved: 94
 slivers: 0
 collapsed: 0
 overhang_mm2: 99.507
+band_mm2: 192.057
 holes: 0
 render_red_pixels: 0
+gate: 99.51 mm² of overhang (over 65°; budget 6.09 mm²); 192.06 mm² in the band (55–65°; budget 6.09 mm²)

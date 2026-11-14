@@ -25,9 +25,10 @@ commands:
            scans (dt-lang's tests, the changelog's waiting changes); fmt and
            clippy for Rust; the tests of each changed package and of every
            package that depends on it; npm test for the page; docs --check;
-           the sweep of the tiles an element or library change can move (the
-           whole library for geometry, a dependency or the compiler). --full
-           runs every check and the whole test suite: before a push;
+           the sweep of each library tile changed (an element or geometry
+           change is held by the test tiles' goldens: stage hashes, repair
+           counts, the gate). --full runs every check, the whole test suite
+           and the whole-library sweep: before a push;
            --plan prints the checks without running them
   sweep [element|lib:tile …]
            the library baseline (crates/dt-eval/tests/baseline.rs) for the
