@@ -69,8 +69,21 @@ window.__q = (s) => document.querySelector(s);
 window.__all = (s) => [...document.querySelectorAll(s)];
 window.__text = (s, re) => __all(s).find((e) => re.test(e.textContent.trim()));
 window.__row = (name) => __all('.orow').find((e) => e.querySelector('.nm')?.textContent.trim() === name);
+// the part of an element that is in view: cut to every scrolling ancestor and to the window, so a long list's callout stops at the panel's edge
+window.__vis = (e) => {
+  let r = e.getBoundingClientRect();
+  let l = r.left, t = r.top, rt = r.right, b = r.bottom;
+  for (let a = e.parentElement; a; a = a.parentElement) {
+    const o = getComputedStyle(a);
+    if (o.overflowX === 'visible' && o.overflowY === 'visible') continue;
+    const c = a.getBoundingClientRect();
+    l = Math.max(l, c.left); t = Math.max(t, c.top); rt = Math.min(rt, c.right); b = Math.min(b, c.bottom);
+  }
+  l = Math.max(l, 0); t = Math.max(t, 0); rt = Math.min(rt, innerWidth); b = Math.min(b, innerHeight);
+  return { left: l, top: t, right: rt, bottom: b, width: rt - l, height: b - t };
+};
 window.__R = (...els) => {
-  const rs = els.flat().filter(Boolean).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+  const rs = els.flat().filter(Boolean).map(__vis).filter((r) => r.width > 0 && r.height > 0);
   if (!rs.length) return null;
   const x = Math.min(...rs.map((r) => r.left)), y = Math.min(...rs.map((r) => r.top));
   const x2 = Math.max(...rs.map((r) => r.right)), y2 = Math.max(...rs.map((r) => r.bottom));
@@ -172,7 +185,7 @@ const ANCHORS = {
     filters: `__R(__q('#lens-inventory .inv-filters'))`,
     totals: `__R(__q('#lens-inventory .inv-totals'))`,
     pieces: `__R(__all('#lens-inventory .inv-group'))`,
-    actions: `__R(__all('#lens-inventory .inv-acts'))`,
+    actions: `__R(__q('#lens-inventory .inv-acts'))`,
   },
 };
 
