@@ -17,6 +17,7 @@ import { reveal } from '../slide.js';
 import { $, host, viewer } from './app.js';
 import { applyFix, openFile, saveWords, texts } from './document.js';
 import { showSourceLine } from './levels.js';
+import { undersidePlan } from '../payload.js';
 import { showWorst } from './selection.js';
 import { doc, entrySel, isMapView, log, progressOf, server, tile, view } from './stores.js';
 import { sceneNow, sceneStore, statusLines } from './scene.js';
@@ -87,6 +88,7 @@ const act = {
   dismiss: (/** @type {number} */ seq) => log.dismiss(seq),
   details: (/** @type {any} */ m, /** @type {string | null} */ source) => detailsFor(m, { source }),
   canShowWorst: () => !!viewer.worstFlagged(),
+  underside: () => (viewer.payload ? undersidePlan(viewer.payload) : null),
   showWorst,
   applyFix: (/** @type {any} */ m) => applyFix(m.fix, m.span?.file ?? null),
   allText: async () => (await host.messagesText(tile()?.id ?? '')) || 'No messages.',

@@ -71,17 +71,48 @@ export function ownerVertices(entry, piece) {
 }
 
 /**
+ * The triangles the gate painted: `{t, red}`, red past the steepest angle and orange in the band.  The one reading of the
+ * painted mesh against its clean twin: the worst face and the underside plan both come from here.
+ */
+export function* flaggedTriangles(payload) {
+  const p = payload.painted, c = payload.clean;
+  for (let t = 0; t < payload.triangles; t++) {
+    const k = 9 * t;
+    if (p[k] === c[k] && p[k + 1] === c[k + 1] && p[k + 2] === c[k + 2]) continue;
+    yield { t, red: p[k] > 180 && p[k + 1] < 90 && p[k + 2] < 90 };
+  }
+}
+
+/**
+ * Where the overhang is, seen from below: the flagged triangles' footprints as two paths (red, orange) in mm, over the tile's
+ * outline.  Seen from below the tile is turned over about its y axis, so x runs the other way (`hi.x - x`).  The plan is of the
+ * program's own flags (the gate's painted faces), never a second classification; the areas are the gate's to give.  Null when
+ * the mesh has no flagged face or no tile outline.
+ * @returns {{ width: number, height: number, red: string, orange: string, reds: number, oranges: number } | null}
+ */
+export function undersidePlan(payload) {
+  const lo = payload.meta?.lo, hi = payload.meta?.hi; // the mesh's own box, in the header of every mesh
+  if (!lo || !hi) return null;
+  const q = payload.positions;
+  const r = (n) => Math.round(n * 100) / 100;
+  const out = { width: hi[0] - lo[0], height: hi[1] - lo[1], red: '', orange: '', reds: 0, oranges: 0 };
+  for (const { t, red } of flaggedTriangles(payload)) {
+    const k = 9 * t;
+    let d = '';
+    for (let v = 0; v < 3; v++) d += `${v ? 'L' : 'M'}${r(hi[0] - q[k + 3 * v])} ${r(hi[1] - q[k + 3 * v + 1])}`;
+    if (red) { out.red += `${d}Z`; out.reds += 1; } else { out.orange += `${d}Z`; out.oranges += 1; }
+  }
+  return out.reds + out.oranges ? out : null;
+}
+
+/**
  * The largest face painted by the gate, red before orange. Returns its owner
  * and bounds so the editor can explain a verdict by taking the user there.
  */
 export function worstFlagged(payload) {
   let best = null;
-  for (let t = 0; t < payload.triangles; t++) {
+  for (const { t, red } of flaggedTriangles(payload)) {
     const k = 9 * t;
-    const p = payload.painted, c = payload.clean;
-    const changed = p[k] !== c[k] || p[k + 1] !== c[k + 1] || p[k + 2] !== c[k + 2];
-    if (!changed) continue;
-    const red = p[k] > 180 && p[k + 1] < 90 && p[k + 2] < 90;
     const priority = red ? 2 : 1;
     const q = payload.positions;
     const ax = q[k + 3] - q[k], ay = q[k + 4] - q[k + 1], az = q[k + 5] - q[k + 2];

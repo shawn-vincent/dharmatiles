@@ -37,6 +37,20 @@ function Gauge({ label, g }) {
     <span class="g-num">${`${g.used.toFixed(2)} of ${g.budget.toFixed(2)} mm²`}</span></div>`;
 }
 
+/**
+ * Where the overhang is: the tile from below, the faces the gate painted in the colours they have on the model (`--over` past the
+ * steepest angle, `--band` in the band).  `plan` is the viewer's own mesh read once (`undersidePlan`, payload.js): the page draws
+ * the program's flags, it does not classify.  Seen from below, so x runs the other way.
+ */
+function Underside({ plan, angles }) {
+  const { overhangDeg, steepestDeg } = angles;
+  const w = plan.width, h = plan.height;
+  return html`<figure class="underside"><svg viewBox=${`0 0 ${w} ${h}`} role="img" aria-label=${`The underside of the tile: where the faces past ${steepestDeg} degrees and in the ${overhangDeg} to ${steepestDeg} degree band are`}>
+      <rect class="u-bed" x="0" y="0" width=${w} height=${h} />
+      ${plan.orange ? html`<path class="u-band" d=${plan.orange} />` : null}${plan.red ? html`<path class="u-over" d=${plan.red} />` : null}</svg>
+    <figcaption><b>Underside</b>, from below<br /><i class="sw over"></i>past ${steepestDeg}° <i class="sw band"></i>${overhangDeg} to ${steepestDeg}°</figcaption></figure>`;
+}
+
 /** The gate's verdict: the two budgets that decide as bars, everything else in one Details line. */
 function Numbers({ gate, m, t }) {
   const a = gateOf(gate);
@@ -55,13 +69,15 @@ function Record({ rec, m, act }) {
   // "Built in 2.1 s · passes the printability gate": the numbers below, and each reason the gate fails on its own line
   const verdict = gate?.text.split(':')[0].replace(/^(Passes|Fails)/, (w) => w.toLowerCase());
   const target = buildOf(rec.build)?.target ? ` · for ${buildOf(rec.build)?.target}` : '';
-  void m.shown.value; // the worst face is known once the mesh is
+  void m.shown.value; // the worst face and the underside are known once the mesh is
+  const plan = gate ? act.underside() : null;
   return html`<div class=${`msg rec${rec.dim ? ' dim' : ''}`}><i class=${`dot ${fails ? 'bad' : 'ok'}`}></i><div class="body">
     <div class="line">${`${[rec.build?.text, verdict].filter(Boolean).join(' · ')}${target}`}</div>
     ${(gateOf(gate)?.failures ?? []).map((f, i) => html`<div class="fail" key=${i}>${f}</div>`)}
     ${gate ? html`<${Numbers} gate=${gate} m=${m} t=${t} />` : null}
     <div class="acts">${gate && act.canShowWorst() ? html`<button type="button" class="btn" title="Take the camera to the largest face the gate painted" onClick=${act.showWorst}>Show worst face</button>` : null}
-      <${CopyButton} text=${() => `${rec.build?.text ?? ''}\n${gate?.text ?? ''}\n${JSON.stringify(gateOf(gate) ?? {}, null, 2)}`} title="Copy the record" /></div></div></div>`;
+      <${CopyButton} text=${() => `${rec.build?.text ?? ''}\n${gate?.text ?? ''}\n${JSON.stringify(gateOf(gate) ?? {}, null, 2)}`} title="Copy the record" /></div></div>
+    ${plan ? html`<${Underside} plan=${plan} angles=${m.angles.value} />` : null}</div>`;
 }
 
 /** The program's `quoted` words as the page's own mono words, never with the backticks. @param {string} text */

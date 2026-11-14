@@ -564,6 +564,15 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 #msg-body .rbar { height: 4px; margin-top: 6px; border-radius: var(--r-mark); background: var(--line); overflow: hidden; max-width: 320px; }
 #msg-body .rbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
 #msg-body .gauges { display: grid; gap: 4px; margin-top: 6px; max-width: 520px; }
+#msg-body .underside { margin: 0; flex: none; display: grid; gap: 3px; width: 136px; }
+#msg-body .underside svg { display: block; width: 100%; max-height: 118px; background: var(--plate); border: 1px solid var(--line-2); border-radius: var(--r); }
+#msg-body .underside .u-bed { fill: var(--plate-hi); }
+#msg-body .underside .u-band { fill: var(--band); stroke: var(--band); stroke-width: .35; stroke-linejoin: round; }
+#msg-body .underside .u-over { fill: var(--over); stroke: var(--over); stroke-width: .35; stroke-linejoin: round; }
+#msg-body .underside figcaption { color: var(--muted); font-size: var(--fs-s); line-height: var(--lh-s); }
+#msg-body .underside .sw { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: baseline; }
+#msg-body .underside .sw.over { background: var(--over); }
+#msg-body .underside .sw.band { background: var(--band); margin-left: 4px; }
 #msg-body .gauge { display: grid; grid-template-columns: 112px minmax(80px, 1fr) auto; align-items: center; gap: 10px; font-size: var(--fs-s); }
 #msg-body .g-bar { height: 12px; border-radius: var(--r); background: color-mix(in srgb, var(--ink) 9%, transparent); overflow: hidden; }
 #msg-body .g-bar i { display: flex; align-items: center; justify-content: flex-end; height: 100%; min-width: 2px; background: var(--ok); border-radius: var(--r); }
