@@ -25,7 +25,7 @@ dharmatiles                                                 # no command = previ
 
 cargo test --release --workspace            # all tests (insta golden hashes included), under 5 minutes
 cargo test --release -p dt-eval --test openlock -- --ignored   # release check: every library tile through the gate on both systems
-cargo test --release -p dt-eval --test baseline -- --ignored   # every library tile on DungeonBlocks against tests/baseline/library-db.tsv (hash, triangles, repairs, overhang); DT_BASELINE=write rewrites it
+cargo test --release -p dt-eval --test baseline -- --ignored   # every library tile on DungeonBlocks against tests/baseline/library-db.tsv (hash, triangles, repairs, overhang, and each tile's repair budget: a repair count above its `max_*` fails, and a rewrite can only lower a budget); DT_BASELINE=write rewrites it
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
 cargo xtask sheet <tile|name> [--seeds …] [--system ol]  # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
@@ -52,7 +52,7 @@ CI is off. Run the tests locally on this Mac only; do not wait on or re-enable G
 
 ## Architecture
 
-Nine crates under `crates/`:
+Twelve crates under `crates/`:
 
 | Crate | Role |
 |---|---|
@@ -63,8 +63,10 @@ Nine crates under `crates/`:
 | `dt-elements` | The built-in elements, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `flower`, `scatter`), `water`, `grass`, `reeds`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
 | `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the element schema (`elements.rs`: controls, and each element's body, footprint, family and cost), one expression evaluator (`Expr::eval` over an algebra), the edits: `edit` for a `.dtile` (by path or offset), `ops` for a print list and an inventory (`Op` through one `apply`, by piece id, one `EditError`). |
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each element reads and writes), builds it into a `Scene`, audits, and returns the build. Printer profiles (the gate's floors and the machine) are read here, since a build's gate needs them. Library tiles are bundled from `library/`. |
+| `dt-par` | Parallel iteration for the engine: rayon everywhere but the browser, where the same calls run in order. |
 | `dt-store` | The disk cache of builds: a finished `Built` kept under a SHA-256 key (the `sha2` crate, over `dt-eval`'s canonical form of everything the build read), and the stored build calls (`build_stored`, `build_tier`) that read it. It sits above `dt-eval`, which knows nothing of it. |
 | `dt-print` | A built tile on its way to a printer, above the engine: print lists, plates and the packer, the inventory, binary STL, 3MF and Bambu Studio projects, and the CPU renderer that draws `build --png` and the contact sheets (its only readers are those outputs). |
+| `dt-web` | The browser build (`cargo xtask wasm`): the language crates and the engine on `wasm32-unknown-unknown`, left out of a plain `cargo build`. |
 | `dharmatiles` | The CLI. |
 
 Also: `xtask/` (`docs`, `pictures`, `release`, `sheet`), `library/` (`.dtile` documents: `tiles/`, `parts/`, `printers/`, `palettes/`), `web/preview/` (the preview's page), `docs/` (the site, HTML), `extras/` (Python, not part of the program).
