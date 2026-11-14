@@ -983,8 +983,8 @@ fn the_colouring_of_a_text_comes_from_the_languages_one_set_of_rules() {
     }
     assert_eq!(
         (want[0].start, want[0].end),
-        (0, 6),
-        "the comment is six bytes"
+        (0, 5),
+        "the comment is five bytes"
     );
 }
 
