@@ -579,6 +579,33 @@ struct BuildMeta {
     stage_secs: Vec<(String, f64)>,
 }
 
+/// How finely a build is made, the program's own tiers ([`Options::draft`], [`Options::low`]): `full` is what the printer is
+/// given, `draft` the editor's view while a value is dragged (coarse cells, no union, no gate), `low` the browsing tier (grass
+/// as a carpet, rocks as hulls).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Tier {
+    Full,
+    Draft,
+    Low,
+}
+
+impl Tier {
+    /// The tier a page names.
+    ///
+    /// # Errors
+    /// A word that is no tier.
+    pub fn named(word: &str) -> Result<Self, JsError> {
+        match word {
+            "full" => Ok(Self::Full),
+            "draft" => Ok(Self::Draft),
+            "low" => Ok(Self::Low),
+            other => Err(JsError::new(&format!(
+                "unknown detail `{other}` (full, draft or low)"
+            ))),
+        }
+    }
+}
+
 /// One build, as the program does it: the text of a document, a build
 /// target, a seed (negative keeps the tile's own) and cells per square (0
 /// keeps the build's finest).  The one function the browser and the native
@@ -591,9 +618,12 @@ pub fn build_with(
     system: &str,
     seed: i64,
     cells: u32,
+    tier: Tier,
     progress: &dt_eval::Progress,
 ) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
     let mut opts = Options::in_source(source)?;
+    opts.draft = tier == Tier::Draft;
+    opts.low = tier == Tier::Low;
     system.clone_into(&mut opts.system);
     opts.seed = u64::try_from(seed).ok();
     opts.cells = (cells > 0).then_some(cells);
@@ -692,8 +722,15 @@ fn stl_hash(bytes: &[u8]) -> (String, usize) {
 /// # Errors
 /// An unknown target, or the library was never set.
 #[wasm_bindgen]
-pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Tile, JsError> {
+pub fn build_tile(
+    text: &str,
+    system: &str,
+    seed: i32,
+    cells: u32,
+    tier: &str,
+) -> Result<Tile, JsError> {
     units_for(system)?;
+    let tier = Tier::named(tier)?;
     LIBRARY.with(|lib| {
         let lib = lib.borrow();
         if !lib.contains_key(HEIGHTS) {
@@ -710,6 +747,7 @@ pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Til
             system,
             i64::from(seed),
             cells,
+            tier,
             &ticks(stage_total(&source, system)),
         ) {
             Ok(b) => b,
@@ -795,7 +833,11 @@ pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Til
         };
         Ok(Tile {
             meta: json(&meta)?,
-            stl: if cells == 0 { stl_file } else { Vec::new() },
+            stl: if tier == Tier::Full && cells == 0 {
+                stl_file
+            } else {
+                Vec::new()
+            },
             positions,
             colours,
         })
@@ -974,7 +1016,15 @@ mod tests {
             library: &lib,
             text: &text,
         };
-        let (built, opts) = build_with(&source, &system, seed, cells, &dt_eval::Progress::none()).unwrap();
+        let (built, opts) = build_with(
+            &source,
+            &system,
+            seed,
+            cells,
+            Tier::Full,
+            &dt_eval::Progress::none(),
+        )
+        .unwrap();
         let (hash, bytes) = stl_sha256(&built);
         println!(
             "PARITY {tile} {system} seed={seed} cells={cells}: sha256={hash} bytes={bytes} triangles={} failures={:?} secs={:.2}",

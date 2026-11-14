@@ -16,10 +16,10 @@ import { MessagesBody } from './shared/view/messages-panel.js';
 import { html, render } from './shared/view/html.js';
 import { detailsFor, setExplainBase, statusOf, countsText } from './shared/messages.js';
 import { drawn, marksOf, markAtOffset, parsePins, sourceRange } from './shared/overlay-marks.js';
-import { markAtPoint, regionAtTile, renderMarks } from './shared/overlay-render.js';
+import { markAtPoint, renderMarks } from './shared/overlay-render.js';
 import { heightAtGrid, heightGrid } from './shared/overlay-geometry.js';
 import { fixedText, byteToIndex } from './shared/spans.js';
-import { DRAFT_CELLS } from './engine.js';
+import { DRAFT_CELLS, DRAFT_TIER } from './engine.js';
 import { CardLog } from './site-log.js';
 import { SourcePane } from './source-pane.js';
 import { findControl, parseControls, rangeOf, readValue, writeValue } from './controls.js';
@@ -89,7 +89,7 @@ export class Card {
     const grid = host.querySelector('.dtx-grid') ?? host.appendChild(el('div', 'dtx-grid'));
     this.view = grid.querySelector('.dtx-view') ?? grid.appendChild(el('figure', 'dtx-view'));
     this.poster = this.view.querySelector('.dtx-poster');
-    this.hint?.remove();
+    host.querySelector('.dtx-wake')?.remove();
     this.gl = el('canvas', 'dtx-gl', { 'aria-label': 'The tile, in 3D: drag to turn it', role: 'img', tabindex: '0' });
     this.ov = el('canvas', 'dtx-ov', { 'aria-hidden': 'true' });
     this.badge = el('div', 'dtx-badge', { role: 'status' });
@@ -98,7 +98,9 @@ export class Card {
     const side = el('div', 'dtx-side');
     // the toggles: what to show on the tile
     const tg = el('div', 'dtx-toggles', { role: 'group', 'aria-label': 'Show on the tile' });
-    tg.append(el('span', 'dtx-label')).textContent = 'Show on the tile';
+    const lab = el('span', 'dtx-label');
+    lab.textContent = 'Show on the tile';
+    tg.append(lab);
     this.toggleButtons = new Map();
     for (const [name, label] of TOGGLES) {
       const b = el('button', 'btn sm', { type: 'button', 'aria-pressed': String(this.moment.toggles.has(name)) });
@@ -131,7 +133,7 @@ export class Card {
 
     // the status line, and the messages it folds
     this.sl = buildStatusLine({ onToggle: () => this.#fold(!this.model.open.value), controls: `${this.id}-msgs` });
-    this.msgs = el('div', 'dtx-msgs', { id: `${this.id}-msgs`, role: 'region', 'aria-label': 'Messages' });
+    this.msgs = el('div', 'dtx-msgs msglist', { id: `${this.id}-msgs`, role: 'region', 'aria-label': 'Messages' });
     this.msgs.hidden = true;
     this.model = this.#model();
     render(html`<${MessagesBody} m=${this.model} act=${this.#act()} />`, this.msgs);
@@ -282,10 +284,8 @@ export class Card {
       const r = this.gl.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
       const o = { map: this.map, sq: this.checked?.square_mm ?? 35, drawn: this.drawnNow ?? [], project: this.#projector(), zAt: this.#zAt };
-      let hit = markAtPoint(o, x, y);
-      // a region is pointed at by the tile under the pointer: its cells at level zero
-      if (!hit && this.viewer) hit = null;
-      this.moment.hover = hit;
+      // a shown point or line under the pointer lights its source (a region is lit from the source or its toggle)
+      this.moment.hover = markAtPoint(o, x, y);
       this.#paint();
     };
     this.gl.addEventListener('pointermove', over);
@@ -293,11 +293,13 @@ export class Card {
     this.gl.addEventListener('pointerdown', () => this.handle.focus());
     this.pane.area.addEventListener('focus', () => this.handle.focus());
     this.host.addEventListener('pointerdown', () => this.handle.focus(), true);
-    void regionAtTile;
   }
 
   #showMesh(positions, colours, footprint) {
     if (!this.viewer) {
+      // the canvas is shown before its context is made: a context made on a hidden canvas has nothing to draw into
+      this.host.dataset.view = 'live';
+      this.#resize();
       this.viewer = new LiteViewer(this.gl, () => this.#paint());
       holders.push(this);
       while (holders.length > MAX_CONTEXTS) holders.shift()?.sleep();
@@ -332,7 +334,7 @@ export class Card {
     this.status = 'building';
     this.log.begin();
     this.tileState.value = { ...this.tileState.value, status: 'building' };
-    this.handle.edit({ text: this.text, system: this.system, seed: -1, cells: DRAFT_CELLS, version: this.version });
+    this.handle.edit({ text: this.text, system: this.system, seed: -1, cells: DRAFT_CELLS, tier: DRAFT_TIER, version: this.version });
     this.#touch();
   }
 
@@ -373,10 +375,12 @@ export class Card {
     switch (ev.type) {
       case 'queued':
         if (ev.version !== this.version) return;
+        this.buildKind = ev.kind;
         this.status = 'queued';
         this.queuedBehind = ev.behind;
         break;
       case 'started':
+        this.buildKind = ev.kind;
         this.status = 'building';
         this.progress = null;
         break;
@@ -523,8 +527,7 @@ export class Card {
     this.host.dataset.state = this.status;
     const busy = this.status === 'building' || this.status === 'queued';
     this.badge.dataset.kind = this.status;
-    this.badge.textContent = this.status === 'queued' ? words.verdict : this.status === 'building' ? (words.verdict.replace(/^(re)?building /, 'Building at draft detail ')) : '';
+    this.badge.textContent = this.status === 'queued' ? words.verdict : this.status === 'building' ? words.verdict.replace(/^(re)?building /, `Building at ${this.buildKind === 'full' ? 'full' : 'draft'} detail `) : '';
     this.view.dataset.busy = String(busy);
-    this.fullBtn.disabled = this.status === 'building' && this.progress != null && false;
   }
 }

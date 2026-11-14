@@ -53,6 +53,8 @@ test('offsets count bytes in the map and code units in a text area', () => {
   // the quote after the accent is at code unit 1, byte 2: the point
   assert.equal(markAtOffset(marks, text, 2), 'point:x#0');
   assert.deepEqual(sourceRange(marks[1], text), [1, 6]);
+  // a node's span ends with its newline: the range lit does not
+  assert.deepEqual(sourceRange({ span: [0, 7] }, 'ab { }\nrest'), [0, 6]);
 });
 
 test('a mark is off, shown by its toggle or its lit parent, and lit when pinned, hovered or under the caret', () => {

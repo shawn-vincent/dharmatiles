@@ -6,6 +6,10 @@
 <title>region</title>
 <link rel="stylesheet" href="../assets/site.css">
 <script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../assets/live/vendor/preact.mjs","preact/hooks":"../assets/live/vendor/preact-hooks.mjs","htm":"../assets/live/vendor/htm.mjs","@preact/signals":"../assets/live/vendor/preact-signals.mjs","@preact/signals-core":"../assets/live/vendor/preact-signals-core.mjs","three":"../assets/live/vendor/three.module.min.js","three/orbit":"../assets/live/vendor/OrbitControls.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
@@ -36,6 +40,46 @@ stack {
     water                                     // fills its area up to its top
     grass at=bank                             // and where a coat grows, off the wet ground
 }</code></pre>
+<h2 id="try">Try it</h2>
+<dt-example src="examples/units/units.dtile" controls="wobble:0..14" overlay="regions">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/d06e2e114ace421a520b9ba3351bed1f.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// Lengths carry a unit: `dmm` is a design millimetre at the 35 mm square (it prints smaller on
+// OpenLOCK), `sq` is a square.  The wobble is 6dmm, and the band round the line is 7dmm.
+tile size=&quot;1x1&quot; seed=4 {
+    line stream wobble=&quot;6dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
+    region band { within &quot;7dmm&quot; of=stream }
+    stack {
+        base
+        dirt
+        grass at=band
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A region needs no fill point when it is a band: <code>within "7dmm" of=stream</code> is everything within 7 design millimetres of the line, and the grass follows it.</figcaption>
+</dt-example>
+<dt-example src="examples/lines/shore.dtile" overlay="regions" highlight="region bank">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/1a9ab71921e6752122c141cdf6d953b6.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A line with a wobble: the shore of a pond.  The line goes through two points and may wander
+// up to 5dmm off the straight path between them; the seed decides how.
+tile size=&quot;1x1&quot; seed=97 {
+    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 0.62sq)&quot; &quot;(1sq, 0.58sq)&quot; }
+    region pool { boundedBy shore; fill &quot;(0.5sq, 0.85sq)&quot; }
+    region bank { boundedBy shore; fill &quot;(0.5sq, 0.2sq)&quot; }
+    stack {
+        base
+        dirt
+        grass at=bank
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>Two regions, one line: <code>boundedBy shore</code> says which side of it each fill point is on.</figcaption>
+</dt-example>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>

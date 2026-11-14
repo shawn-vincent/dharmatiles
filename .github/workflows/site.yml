@@ -7,7 +7,7 @@
 #
 # What it does, on a release tag (v1.4.0) or by hand:
 #   module   the engine as WebAssembly (the WASM toolchain, `cargo xtask wasm`)           cached by the engine's sources
-#   posters  the pictures of the examples                                                a placeholder until phase 2
+#   posters  the pictures of the examples, named by build key (`cargo xtask examples`)      skipped when it has one
 #   pages    the committed docs/, checked with `cargo xtask docs --check`
 #   deploy   needs all three, checks they come from one commit, and publishes (actions/deploy-pages)
 # and, on a pull request, one quick job: `cargo xtask docs --check`, which fails on a code with no explaining
@@ -132,8 +132,10 @@ jobs:
           path: out/site-module
           if-no-files-found: error
 
-  # A placeholder until phase 2: the posters (a picture of every example) are cached by build key and an unchanged
-  # example is skipped.  The job exists now so deploy already waits for it and checks its commit.
+  # The posters: a picture of every example (docs/examples/), named by the build's cache key, which is the name the
+  # committed pages already carry (`cargo xtask docs --check` holds that).  An example that has its picture already, from
+  # the cache of an earlier run, is skipped: its name is the key of everything its build reads.  Pages are not
+  # generated here; the posters are the one generated part.
   posters:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -143,9 +145,29 @@ jobs:
       - uses: actions/checkout@v4
       - id: sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - run: |
-          mkdir -p out/site-posters
-          echo "${{ steps.sha.outputs.sha }}" > out/site-posters/COMMIT
+      - run: rustup toolchain install
+      # the same native build folder as the pages job: `cargo xtask examples` runs the program
+      - name: The native build, from the last run
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: native-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            native-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            native-${{ runner.os }}-
+      - name: The posters made by earlier runs
+        uses: actions/cache@v4
+        with:
+          path: out/site-posters
+          key: posters-${{ github.sha }}
+          restore-keys: posters-
+      - run: cmake --version
+      - run: cargo xtask examples --out out/site-posters
+      - run: echo "${{ steps.sha.outputs.sha }}" > out/site-posters/COMMIT
       - uses: actions/upload-artifact@v4
         with:
           name: posters
@@ -220,7 +242,7 @@ jobs:
           set -e
           mkdir site
           cp -R parts/pages/. site/
-          # where the page reads the engine and the posters from is settled with the live cards (phase 2)
+          # the cards read the engine from engine/ and the posters from posters/, beside the pages
           mkdir -p site/engine site/posters
           cp -R parts/module/. site/engine/
           cp -R parts/posters/. site/posters/

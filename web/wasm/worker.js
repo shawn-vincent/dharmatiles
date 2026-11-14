@@ -20,7 +20,7 @@ self.onmessage = async (ev) => {
     } else if (m.type === "build") {
       if (!ready) throw new Error("the worker was asked to build before it was ready");
       const t0 = performance.now();
-      const tile = engine.build_tile(m.text, m.system, m.seed, m.cells);
+      const tile = engine.build_tile(m.text, m.system, m.seed, m.cells, m.tier ?? "full");
       const ms = performance.now() - t0;
       const meta = JSON.parse(tile.meta);
       const positions = tile.positions, colours = tile.colours;

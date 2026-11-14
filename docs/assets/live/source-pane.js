@@ -3,8 +3,6 @@
 // span, and the pinned one.  The editor's source is CodeMirror (web/preview/js/text.js, 360 KB); a card has a few lines, so it
 // keeps the text area and its own mirror.  Offsets are UTF-16 code units, as the text area counts them.
 
-import { markAtOffset } from './shared/overlay-marks.js';
-
 export class SourcePane {
   /**
    * @param {HTMLElement} host where the pane goes
@@ -24,7 +22,7 @@ export class SourcePane {
     this.area.setAttribute('autocomplete', 'off');
     this.area.setAttribute('aria-label', label);
     this.area.value = text;
-    this.area.rows = Math.min(24, text.split('\n').length + 1);
+    this.area.rows = Math.min(24, text.split("\n").length);
     host.append(this.mirror, this.area);
     /** @type {{ from: number, to: number, cls: string }[]} */
     this.ranges = [];
@@ -116,5 +114,3 @@ export class SourcePane {
     this.#sync();
   }
 }
-
-export { markAtOffset };

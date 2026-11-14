@@ -121,7 +121,11 @@ export function markAtOffset(marks, text, offset) {
 export function sourceRange(mark, text) {
   if (!mark?.span) return null;
   const [from, len] = mark.span;
-  return [byteToIndex(text, from), byteToIndex(text, from + len)];
+  const a = byteToIndex(text, from);
+  let b = byteToIndex(text, from + len);
+  // a node's span takes in the newline that ends it: that is not a place to light
+  while (b > a && /\s/.test(text[b - 1])) b--;
+  return [a, b];
 }
 
 /**

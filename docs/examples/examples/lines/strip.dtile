@@ -1,0 +1,14 @@
+dharmatiles version="1.0.0"
+
+// A line with a width is a strip.  `verge` is 24dmm wide and the grass that follows it covers the
+// strip; `trail` is narrower, and the pebbles scatter within half its width either side.
+tile size="1x1" seed=5 {
+    line verge width="24dmm" wobble="3dmm" { through southCenter "(0.45sq, 0.5sq)" northCenter }
+    line trail width="10dmm" wobble="3dmm" { through southCenter "(0.45sq, 0.5sq)" northCenter }
+    stack {
+        base
+        dirt
+        grass at=verge
+        scatter at=trail perSquare=60 { pebble }
+    }
+}

@@ -72,11 +72,15 @@ fn local_page(id: &str) -> Result<Page, String> {
             )
         })
     };
-    Ok(Page {
+    let page = Page {
         summary: part("summary")?,
         help: part("help")?,
-        path,
-    })
+        // the folder may be written with `..` in it (DT_DOCS, or the program beside its docs): say where the file really is
+        path: path
+            .canonicalize()
+            .map_err(|e| format!("cannot resolve {}: {e}", path.display()))?,
+    };
+    Ok(page)
 }
 
 /// The text of the first paragraph marked `data-part="part"` (as the generator writes an error page), tags removed

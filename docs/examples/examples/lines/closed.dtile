@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// A closed line is a loop, and its inside is a region once it has a fill point.
+tile size="1x1" seed=21 {
+    line ring closed=#true wobble="3dmm" { through "(0.3sq, 0.7sq)" "(0.7sq, 0.7sq)" "(0.5sq, 0.28sq)" }
+    region pond { boundedBy ring; fill "(0.5sq, 0.55sq)" }
+    stack {
+        base
+        dirt
+        grass
+        scatter at=pond count=3 { rock size="4dmm .. 7dmm" }
+    }
+}

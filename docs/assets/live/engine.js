@@ -11,7 +11,13 @@
 
 import { Queue } from './queue.js';
 
-/** Cells per square of a draft build while a card is edited.  Chosen by measuring (docs: the engine's times on a phone). */
+/**
+ * What a card builds while it is edited, chosen by measuring (shore, strip and pond examples, one tile each): the program's `low`
+ * tier at 24 cells a square takes 0.17 to 0.35 s and draws 7 000 to 15 000 triangles; its `draft` tier takes 1.0 to 2.3 s and
+ * draws 400 000 to 900 000, and a full build 4.8 to 10 s.  Cells hardly matter to the other tiers (each draft cell count was
+ * within 15 % of the others), so the page chooses the tier, not the cells.
+ */
+export const DRAFT_TIER = "low";
 export const DRAFT_CELLS = 24;
 /** Results kept for the visit: sliding back to a value is instant. */
 const KEEP = 24;
@@ -89,7 +95,7 @@ export class Engine {
     this.cards.set(id, onEvent);
     return {
       edit: (/** @type {any} */ job) => this.#submit(id, { ...job, kind: 'edit', steps: ['check', 'build'] }),
-      full: (/** @type {any} */ job) => this.#submit(id, { ...job, kind: 'full', steps: ['build'], cells: 0 }),
+      full: (/** @type {any} */ job) => this.#submit(id, { ...job, kind: "full", steps: ["build"], cells: 0, tier: "full" }),
       focus: () => this.#focus(id),
       forget: () => { this.cards.delete(id); this.queue.drop(id, 'edit'); this.queue.drop(id, 'full'); },
     };
@@ -97,7 +103,7 @@ export class Engine {
 
   #emit(card, ev) { this.cards.get(card)?.(ev); }
 
-  static key(job) { return `${job.kind}|${job.system}|${job.seed}|${job.cells ?? ''}|${job.text}`; }
+  static key(job) { return `${job.kind}|${job.tier}|${job.system}|${job.seed}|${job.cells ?? ''}|${job.text}`; }
 
   #remember(key, value) {
     this.cache.delete(key);
@@ -145,17 +151,23 @@ export class Engine {
   }
 
   async #run(card, job) {
+    // the worker is taken from this moment, whether or not the engine is up yet: nothing else may start meanwhile
+    const id = ++this.serial;
+    const r = { id, card, job, timer: null };
+    this.running = r;
+    this.#emit(card, { type: 'started', version: job.version, kind: job.kind });
     try {
       await this.start();
     } catch (e) {
+      this.running = null;
       this.#emit(card, { type: 'failed', version: job.version, kind: job.kind, message: `The engine did not start: ${e.message}`, stack: e.stack ?? '' });
       this.started = null;
       return;
     }
-    const id = ++this.serial;
-    this.running = { id, card, job, timer: setTimeout(() => this.#failRunning(`The build took longer than ${Math.round(RUNAWAY_MS / 60000)} minutes and was stopped`, ''), RUNAWAY_MS) };
-    this.#emit(card, { type: 'started', version: job.version, kind: job.kind });
-    this.worker.postMessage({ type: 'job', id, steps: job.steps, text: job.text, system: job.system, seed: job.seed, cells: job.cells });
+    // the build may have been stopped (and the worker replaced) while the engine was starting
+    if (this.running !== r) return;
+    r.timer = setTimeout(() => this.#failRunning(`The build took longer than ${Math.round(RUNAWAY_MS / 60000)} minutes and was stopped`, ''), RUNAWAY_MS);
+    this.worker.postMessage({ type: "job", id, steps: job.steps, text: job.text, system: job.system, seed: job.seed, cells: job.cells, tier: job.tier });
   }
 
   /** Take what the worker said.  A message of a job that was stopped is not its card's any more. */

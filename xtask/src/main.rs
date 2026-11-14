@@ -6,6 +6,7 @@ use std::process::{Command, ExitCode};
 mod codes;
 mod docs;
 mod image;
+mod live;
 mod pictures;
 mod release;
 mod shots;
@@ -27,6 +28,9 @@ commands:
            rebuild the docs' element pictures from docs/elements/demo/
            into docs/elements/img/ (groups: line, region, use, define,
            stack, walls, floors, meadow; all when none is named)
+  examples [--out DIR]
+           make the poster of every example under docs/examples/ (docs/posters/KEY.jpg, KEY the build key; kept when
+           there): the tile's top view cropped to its footprint; posters are not committed, the site's posters job makes them
   shots [--dev] [--only <name> …]
            redraw the editor's pictures for the docs: runs the editor on a
            free port over a scratch home (out/shots/: none of your tiles,
@@ -64,6 +68,7 @@ fn main() -> ExitCode {
         Some("sheet") => sheet(&args[1..]),
         Some("pictures") => pictures::run(&root(), &args[1..]),
         Some("docs") => docs::run(&root(), args.iter().any(|a| a == "--check")),
+        Some("examples") => live::posters(&root(), &args[1..]),
         Some("shots") => shots::run(&root(), &args[1..]),
         Some("wasm") => wasm::run_wasm(&root(), &args[1..]),
         Some("release") => release::run_release(&root(), &args[1..]),

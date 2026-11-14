@@ -347,6 +347,16 @@ pub(crate) enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// What the docs site needs of its examples: each file's poster key, and with `--out` the poster's picture
+    /// (a chore of the repository, run by `cargo xtask docs` and `cargo xtask examples`).
+    #[command(hide = true)]
+    Poster {
+        /// The example documents.
+        files: Vec<PathBuf>,
+        /// Write each tile's top view as `KEY.png` here (skipped when it is there).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     /// Serve the Model Context Protocol on stdio (check, build, preview and
     /// audit tiles for an agent).
     Mcp {

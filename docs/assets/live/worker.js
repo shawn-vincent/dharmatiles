@@ -45,7 +45,7 @@ self.onmessage = async (ev) => {
     }
     if (m.steps.includes('build')) {
       const t0 = performance.now();
-      const tile = engine.build_tile(m.text, m.system, m.seed, m.cells);
+      const tile = engine.build_tile(m.text, m.system, m.seed, m.cells, m.tier);
       const ms = performance.now() - t0;
       const meta = JSON.parse(tile.meta);
       const positions = tile.positions, colours = tile.colours, stl = tile.stl;

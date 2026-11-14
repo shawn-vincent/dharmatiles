@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// The playground's starting tile: change anything.  Download STL builds what the printer is given.
+tile size="1x1" seed=11 {
+    line path width="9dmm" wobble="3dmm" { through westCenter "(0.5sq, 0.55sq)" eastCenter }
+    stack {
+        base
+        dirt
+        grass
+        scatter at=path perSquare=40 { pebble }
+        scatter count=3 { rock size="4dmm .. 8dmm" }
+    }
+}

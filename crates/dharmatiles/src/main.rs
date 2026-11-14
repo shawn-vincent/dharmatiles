@@ -58,6 +58,7 @@ mod library;
 mod mcp;
 mod message;
 mod plates;
+mod poster;
 mod preview;
 mod printers;
 mod progress;
@@ -296,6 +297,7 @@ fn main() -> ExitCode {
         Command::Inventory { action, json } => inventory::run(action, json),
         Command::Elements { name, json } => elements::run(name.as_deref(), json),
         Command::Explain { code } => explain::run(&code),
+        Command::Poster { files, out } => poster::run(&files, out.as_deref()),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
         Command::Audit {
             path,

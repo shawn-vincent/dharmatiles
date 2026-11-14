@@ -250,3 +250,124 @@ dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 
 .seed-card .now { position: absolute; right: 5px; top: 5px; padding: 0 5px; border-radius: var(--r-mark); background: var(--accent); color: var(--on-accent); font: 600 var(--fs-s)/var(--lh-s) var(--f-body); }
 .seed-card .own { position: absolute; left: 5px; top: 5px; width: var(--mark); height: var(--mark); border-radius: var(--r-mark); background: var(--ok); box-shadow: 0 0 0 1.5px var(--raised); }
 .seed-strip-acts { display: flex; gap: 8px; margin-bottom: 8px; }
+
+/* ---- the status line, one component: the editor's bottom bar and the site's cards (js/view/status-line.js) ---- */
+.statusline { position: relative; display: flex; align-items: center; min-height: 28px; background: var(--bg); border-top: 1px solid var(--line); font-size: var(--fs-s); color: var(--muted); font-variant-numeric: tabular-nums; }
+.statusline .sl-bar { position: absolute; left: 0; top: -1px; height: 2px; width: 0; background: var(--accent); transition: width .12s linear; }
+.statusline .sl-main { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; background: none; border: 0; color: var(--ink); cursor: pointer; font: inherit; text-align: left; flex-wrap: wrap; }
+.statusline .sl-main:hover, .statusline .sl-main[aria-expanded="true"] { background: var(--panel); }
+.statusline .sl-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.statusline .sl-counts { color: var(--muted); }
+.statusline[data-tone="idle"] .dot { background: transparent; border: 1.5px dashed var(--muted); }
+
+/* ---- the messages list, one component: the editor's panel and the cards' strip (js/view/messages-panel.js) ---- */
+.msglist .msg { display: flex; align-items: flex-start; gap: 10px; padding: 7px 12px 7px 14px; border-left: 3px solid transparent; transition: opacity .15s var(--ease), background-color .3s; }
+.msglist .msg + .msg { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.msglist .msg.error { border-left-color: var(--err); }
+.msglist .msg.note, .msglist .msg.warning { border-left-color: var(--caution); }
+.msglist .msg .dot { margin-top: 5px; }
+.msglist .msg .body { flex: 1; min-width: 0; }
+.msglist .msg .head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.msglist .msg .code { font: var(--fs-s) var(--f-code); color: var(--muted); white-space: nowrap; }
+.msglist .msg .text { overflow-wrap: anywhere; font-size: var(--fs-m); line-height: 1.4; }
+.msglist .msg .help { color: var(--muted); font-size: var(--fs-s); margin-top: 1px; }
+.msglist .msg .where { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted); font: var(--fs-s) var(--f-code); margin-top: 2px; }
+.msglist .msg .where:empty { display: none; }
+.msglist .msg .w { font: var(--fs-s) var(--f-code); background: color-mix(in srgb, var(--ink) 8%, transparent); border-radius: var(--r); padding: 0 3px; }
+.msglist .msg.goes { cursor: pointer; }
+.msglist .msg.goes:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.msglist .msg .acts { flex: none; display: flex; gap: 6px; align-items: center; }
+.msglist .msg .acts .btn { height: var(--h-sm); padding: 0 8px; font-size: var(--fs-s); }
+.msglist .msg .acts .btn.icon { width: var(--h-sm); height: var(--h-sm); padding: 0; }
+.msglist .msg.dim { opacity: .5; }
+.msglist .msg.lit { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.msglist .msg.rec .line, .msglist .msg.run .line { font-weight: 600; }
+.msglist .msg .sub { color: var(--muted); font-size: var(--fs-s); }
+.msglist .rbar { height: 4px; margin-top: 6px; border-radius: var(--r-mark); background: var(--line); overflow: hidden; max-width: 320px; }
+.msglist .rbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
+.msglist .gauges { display: grid; gap: 4px; margin-top: 6px; max-width: 520px; }
+.msglist .underside { margin: 0; flex: none; display: grid; gap: 3px; width: 136px; }
+.msglist .underside svg { display: block; width: 100%; max-height: 118px; background: var(--plate); border: 1px solid var(--line-2); border-radius: var(--r); }
+.msglist .underside .u-bed { fill: var(--plate-hi); }
+.msglist .underside .u-band { fill: var(--band); stroke: var(--band); stroke-width: .35; stroke-linejoin: round; }
+.msglist .underside .u-over { fill: var(--over); stroke: var(--over); stroke-width: .35; stroke-linejoin: round; }
+.msglist .underside figcaption { color: var(--muted); font-size: var(--fs-s); line-height: var(--lh-s); }
+.msglist .underside .sw { display: inline-block; width: 8px; height: 8px; margin-right: 3px; vertical-align: baseline; }
+.msglist .underside .sw.over { background: var(--over); }
+.msglist .underside .sw.band { background: var(--band); margin-left: 4px; }
+.msglist .gauge { display: grid; grid-template-columns: 112px minmax(80px, 1fr) auto; align-items: center; gap: 10px; font-size: var(--fs-s); }
+.msglist .g-bar { height: 12px; border-radius: var(--r); background: color-mix(in srgb, var(--ink) 9%, transparent); overflow: hidden; }
+.msglist .g-bar i { display: flex; align-items: center; justify-content: flex-end; height: 100%; min-width: 2px; background: var(--ok); border-radius: var(--r); }
+.msglist .gauge.warn .g-bar i { background: var(--band); }
+.msglist .gauge.bad .g-bar i { background: var(--over); }
+.msglist .g-bar b { padding: 0 5px; color: #fff; font-weight: 600; font-size: var(--fs-s); line-height: 12px; }
+.msglist .gauge.ok .g-bar i { width: 0 !important; min-width: 0; }
+.msglist .g-num { font-variant-numeric: tabular-nums; color: var(--muted); }
+.msglist .gauge.bad .g-num { color: var(--over); font-weight: 600; }
+.msglist .gate-details { margin-top: 5px; font-size: var(--fs-s); }
+.msglist .gate-details > summary { cursor: pointer; color: var(--muted); }
+.msglist .nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 1px 18px; margin-top: 5px; font-size: var(--fs-s); }
+.msglist .nums dt { white-space: nowrap; }
+.msglist .nums .pair { display: flex; justify-content: space-between; gap: 10px; }
+.msglist .fail { color: var(--ink); font-size: var(--fs-s); margin-top: 2px; }
+.msglist .fail::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: var(--r-mark); background: var(--over); }
+.msglist .nums dd { text-align: left; }
+.msglist .nums dd.bad { color: var(--over); font-weight: 600; }
+.msglist .nums dd.warn { color: var(--band); }
+.msglist .from-last { padding: 8px 14px 3px; }
+.msglist .cleared { padding: 6px 14px; color: var(--muted); font-size: var(--fs-s); cursor: default; }
+.msglist .cleared::before { content: "✓ "; }
+.msglist .empty-msg { padding: 18px 14px; color: var(--muted); }
+
+/* ---- <dt-example>: a live example on a page (docs/assets/live/).  Complete with no script: the poster and the source are plain markup ---- */
+dt-example { display: block; margin: 20px 0 26px; }
+dt-example figcaption { margin-top: 8px; color: var(--muted); font-size: var(--fs-m); line-height: var(--lh-m); }
+.dtx-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (min-width: 760px) { .dtx-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); } }
+.dtx-view { position: relative; margin: 0; width: 100%; max-width: 100%; background: var(--plate); border: 1px solid color-mix(in srgb, var(--plate-ink) 30%, var(--plate)); border-radius: var(--r); overflow: hidden; touch-action: pan-y; }
+.dtx-poster { display: block; width: 100%; height: 100%; object-fit: contain; }
+.dtx-gl, .dtx-ov { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; display: none; background: none; border-radius: 0; }
+.dtx-ov { pointer-events: none; }
+dt-example[data-view="live"] .dtx-gl, dt-example[data-view="live"] .dtx-ov, dt-example[data-state="queued"] .dtx-ov, dt-example:not([data-state="cold"]) .dtx-ov { display: block; }
+dt-example[data-view="live"] .dtx-poster { visibility: hidden; }
+dt-example[data-state="cold"] .dtx-view { cursor: pointer; }
+.dtx-wake { position: absolute; right: 8px; bottom: 8px; }
+.dtx-gl { touch-action: none; }
+/* a card on a phone: the thumb scrolls the page until it asks to turn the tile */
+.dtx-view[data-busy="true"] .dtx-gl, .dtx-view[data-busy="true"] .dtx-poster { opacity: .82; }
+dt-example[data-state="queued"] .dtx-view { --queued: 1; }
+.dtx-badge { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: var(--r); background: var(--bg); color: var(--ink); font-size: var(--fs-s); line-height: var(--lh-s); border: 1px solid var(--line-2); pointer-events: none; }
+.dtx-badge:empty { display: none; }
+.dtx-badge[data-kind="queued"] { border-style: dashed; color: var(--muted); }
+.dtx-badge[data-kind="building"]::before { content: ""; display: inline-block; width: var(--mark); height: var(--mark); margin-right: 6px; border-radius: var(--r-mark); background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+.dtx-nothing { display: grid; place-items: center; min-height: 140px; background: var(--chip-bg, var(--plate)); }
+.dtx-nobuild { display: grid; gap: 4px; padding: 16px; text-align: center; color: var(--plate-ink); }
+.dtx-nobuild b { font: 700 var(--fs-l)/var(--lh-l) var(--f-display); letter-spacing: .02em; }
+.dtx-nobuild span { font-size: var(--fs-m); }
+.dtx-code, .dtx-area, .dtx-mirror { margin: 0; font: 13px/19px var(--f-code); tab-size: 4; white-space: pre; }
+.dtx-code { padding: 10px 12px; overflow-x: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); max-width: 100%; box-sizing: border-box; }
+.dtx-code code { font: inherit; background: none; padding: 0; }
+.dtx-side { display: grid; gap: 10px; min-width: 0; }
+.dtx-toggles { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dtx-label { color: var(--muted); font-size: var(--fs-s); margin-right: 4px; }
+.dtx-controls:empty { display: none; }
+.dtx-control { display: grid; grid-template-columns: 5.5em minmax(60px, 1fr) 4.5em auto; gap: 10px; align-items: center; font-size: var(--fs-m); }
+.dtx-control input[type="range"] { width: 100%; min-width: 0; accent-color: var(--accent); }
+.dtx-control output { font: var(--fs-s) var(--f-code); color: var(--muted); }
+.dtx-control.missing { color: var(--muted); font-size: var(--fs-s); }
+.dtx-cname { font-family: var(--f-code); font-size: var(--fs-s); }
+.dtx-source { position: relative; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); }
+.dtx-source:focus-within { border-color: var(--accent); }
+.dtx-mirror, .dtx-area { box-sizing: border-box; width: 100%; padding: 10px 12px; border: 0; overflow: auto; }
+.dtx-mirror { position: absolute; inset: 0; color: transparent; pointer-events: none; overflow: hidden; }
+.dtx-area { position: relative; display: block; resize: none; background: transparent; color: var(--ink); outline: none; min-height: 6em; }
+.dtx-mirror .m-err { text-decoration: underline wavy var(--err); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.dtx-mirror .m-note { text-decoration: underline wavy var(--caution); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.dtx-mirror .m-lit { background: color-mix(in srgb, var(--accent) 24%, transparent); border-radius: 2px; }
+.dtx-mirror .m-pin { background: color-mix(in srgb, var(--accent) 34%, transparent); border-radius: 2px; }
+.dtx-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.dtx-actions a.btn { text-decoration: none; }
+.dtx-msgs { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); padding: 4px 0; }
+.dtx-side .statusline { border: 1px solid var(--line); border-radius: var(--r); }
+.dtx-fail { padding: 8px 12px; border: 1px solid var(--err); border-radius: var(--r); color: var(--ink); background: color-mix(in srgb, var(--err) 8%, var(--bg)); }
+@media (prefers-reduced-motion: reduce) { .dtx-badge[data-kind="building"]::before { animation: none; } }

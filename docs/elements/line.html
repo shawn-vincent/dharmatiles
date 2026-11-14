@@ -6,6 +6,10 @@
 <title>line</title>
 <link rel="stylesheet" href="../assets/site.css">
 <script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../assets/live/vendor/preact.mjs","preact/hooks":"../assets/live/vendor/preact-hooks.mjs","htm":"../assets/live/vendor/htm.mjs","@preact/signals":"../assets/live/vendor/preact-signals.mjs","@preact/signals-core":"../assets/live/vendor/preact-signals-core.mjs","three":"../assets/live/vendor/three.module.min.js","three/orbit":"../assets/live/vendor/OrbitControls.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
@@ -37,6 +41,123 @@ line spur { through "(0sq, 1sq/3)" "(0.5sq, 0.7sq)" heading="30deg" pull=0.6 "(1
 line run curve=straight ends=free { through "(0.1sq, 0.6sq)" "(0.9sq, 0.4sq)" }                // straight runs, ends free</code></pre>
 <p>A line is one smooth curve through its points, square to the tile side at an end that is on a side and along the bisector at an end that is on a corner; <code>curve=straight</code> draws straight runs instead. A point on a tile side is on a seam. See the <a href="../language.html#line-curve">curve</a> and <a href="../language.html#line-seams">seams</a> in the language guide.</p>
 <p>A line with a <code>width</code> is a strip: everything within half the width of it, wobble included. <code>dirt at=trail</code>, <code>grass at=trail</code> and <code>cliff at=trail</code> fill the strip like a region, and <code>scatter at=trail</code> spreads within half the width either side unless it writes its own <code>reach</code>. A wall follows the line itself, so a width does not widen it. A surface along a line with no width, or along a tile edge (which has none), is <a class="codelink" href="../e/type.html"><code>dt::type</code></a>; for an edge write <code>region rim { within "6dmm" of=northEdge }</code> and <code>at=rim</code>. See <code>demo/line-width.dtile</code>.</p>
+<h2 id="try">Try it</h2>
+<dt-example src="examples/lines/shore.dtile" controls="wobble, seed" overlay="lines points" highlight="line shore">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/1a9ab71921e6752122c141cdf6d953b6.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A line with a wobble: the shore of a pond.  The line goes through two points and may wander
+// up to 5dmm off the straight path between them; the seed decides how.
+tile size=&quot;1x1&quot; seed=97 {
+    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 0.62sq)&quot; &quot;(1sq, 0.58sq)&quot; }
+    region pool { boundedBy shore; fill &quot;(0.5sq, 0.85sq)&quot; }
+    region bank { boundedBy shore; fill &quot;(0.5sq, 0.2sq)&quot; }
+    stack {
+        base
+        dirt
+        grass at=bank
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A shore through two points, wandering up to <code>5dmm</code> off the straight path between them. Drag <em>wobble</em>, or roll the seed: the points stay where they are written.</figcaption>
+</dt-example>
+<dt-example src="examples/lines/points.dtile" overlay="points" highlight="point 2">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/2b331046356f606a1bdcd9e3417c32c1.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A line is the points it goes through, in order.  This one has three, and no wobble, so it
+// runs straight from point to point; the lawn is the region above it.
+tile size=&quot;1x1&quot; seed=3 {
+    line border { through &quot;(0sq, 0.7sq)&quot; &quot;(0.5sq, 0.4sq)&quot; &quot;(1sq, 0.65sq)&quot; }
+    region lawn { boundedBy border; fill &quot;(0.5sq, 0.1sq)&quot; }
+    stack {
+        base
+        dirt
+        grass at=lawn
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A line is the points it goes through, in order. This one has three and no wobble, so it runs straight between them.</figcaption>
+</dt-example>
+<dt-example src="examples/lines/wobble.dtile" controls="wobble:0..14, seed" overlay="lines">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/e0e1d1844bc16e549ff2b8f5229b35c6.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// The same kind of line with a larger wobble.  Change the seed: the points stay where they are
+// written, and the line wanders differently.
+tile size=&quot;1x1&quot; seed=12 {
+    line border wobble=&quot;9dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(0.5sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
+    region lawn { boundedBy border; fill &quot;(0.5sq, 0.1sq)&quot; }
+    stack {
+        base
+        dirt
+        grass at=lawn
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>The same line with a bigger wobble; the seed decides which way it wanders.</figcaption>
+</dt-example>
+<dt-example src="examples/lines/strip.dtile" controls="width:4..30" overlay="lines">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/8d74faead71a8102bdf3ae11310e8f2d.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A line with a width is a strip.  `verge` is 24dmm wide and the grass that follows it covers the
+// strip; `trail` is narrower, and the pebbles scatter within half its width either side.
+tile size=&quot;1x1&quot; seed=5 {
+    line verge width=&quot;24dmm&quot; wobble=&quot;3dmm&quot; { through southCenter &quot;(0.45sq, 0.5sq)&quot; northCenter }
+    line trail width=&quot;10dmm&quot; wobble=&quot;3dmm&quot; { through southCenter &quot;(0.45sq, 0.5sq)&quot; northCenter }
+    stack {
+        base
+        dirt
+        grass at=verge
+        scatter at=trail perSquare=60 { pebble }
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A line with a width is a strip; the grass fills the strip and the pebbles scatter within half the trail's width.</figcaption>
+</dt-example>
+<dt-example src="examples/lines/closed.dtile" overlay="lines regions">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/fa85e158ba196f9960bbaeed94e7d914.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A closed line is a loop, and its inside is a region once it has a fill point.
+tile size=&quot;1x1&quot; seed=21 {
+    line ring closed=#true wobble=&quot;3dmm&quot; { through &quot;(0.3sq, 0.7sq)&quot; &quot;(0.7sq, 0.7sq)&quot; &quot;(0.5sq, 0.28sq)&quot; }
+    region pond { boundedBy ring; fill &quot;(0.5sq, 0.55sq)&quot; }
+    stack {
+        base
+        dirt
+        grass
+        scatter at=pond count=3 { rock size=&quot;4dmm .. 7dmm&quot; }
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A closed line is a loop, and its inside is a region.</figcaption>
+</dt-example>
+<dt-example src="examples/values/point-range.dtile" controls="seed" overlay="points">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/9c38b11c5be12c72978434b66a743a0a.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A point written as a range is drawn once from the seed: where the line leaves the tile's west
+// edge is anywhere from 0.45sq to 0.8sq down, and it is a different place for another seed.
+tile size=&quot;1x1&quot; seed=18 {
+    line shore wobble=&quot;3dmm&quot; { through &quot;(0sq, 0.45sq .. 0.8sq)&quot; &quot;(1sq, 0.6sq)&quot; }
+    region bank { boundedBy shore; fill &quot;(0.5sq, 0.1sq)&quot; }
+    stack {
+        base
+        dirt
+        grass at=bank
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A point written as a range is drawn once from the seed: roll it and the west end of the line moves.</figcaption>
+</dt-example>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>

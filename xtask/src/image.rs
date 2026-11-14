@@ -145,6 +145,20 @@ impl Rgb {
         out
     }
 
+    /// The part of the picture inside the box (pixel corners, both included).
+    pub fn crop(&self, x0: f64, y0: f64, x1: f64, y1: f64) -> Self {
+        let (x0, y0) = (x0.max(0.0) as usize, y0.max(0.0) as usize);
+        let (x1, y1) = ((x1 as usize + 1).min(self.w), (y1 as usize + 1).min(self.h));
+        let mut out = Self::new(x1 - x0, y1 - y0, [0; 3]);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let i = ((y - y0) * out.w + (x - x0)) * 3;
+                out.px[i..i + 3].copy_from_slice(&self.get(x, y));
+            }
+        }
+        out
+    }
+
     /// The tile's box in a top view: everything that is not the plate.
     pub fn footprint(&self) -> Option<(f64, f64, f64, f64)> {
         let (mut x0, mut y0, mut x1, mut y1) = (usize::MAX, usize::MAX, 0, 0);

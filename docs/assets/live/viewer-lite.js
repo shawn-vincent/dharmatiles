@@ -7,7 +7,7 @@
 // back (`release`) when another card takes the view; the others show their poster.
 
 import * as THREE from 'three';
-import { OrbitControls } from '../vendor/OrbitControls.js';
+import { OrbitControls } from './vendor/OrbitControls.js';
 
 /** The plate the tile is shown on (theme.css `--plate`), as the program's own pictures have it. */
 const PLATE = 0xd9e0eb;
@@ -17,7 +17,7 @@ export class LiteViewer {
   constructor(canvas, onChange) {
     this.canvas = canvas;
     this.onChange = onChange;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setClearColor(PLATE, 1);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(30, 1, 1, 3000);

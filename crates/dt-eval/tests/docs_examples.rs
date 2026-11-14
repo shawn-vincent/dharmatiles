@@ -47,9 +47,12 @@ fn cards() -> Vec<(String, String, Option<String>)> {
         let mut rest = text.as_str();
         while let Some(at) = rest.find("<dt-example") {
             let tail = &rest[at..];
-            let end = tail.find('>').unwrap_or_else(|| panic!("{name}: a <dt-example> tag never ends"));
+            let end = tail
+                .find('>')
+                .unwrap_or_else(|| panic!("{name}: a <dt-example> tag never ends"));
             let tag = &tail[..end];
-            let src = attr(tag, "src").unwrap_or_else(|| panic!("{name}: a <dt-example> has no src"));
+            let src =
+                attr(tag, "src").unwrap_or_else(|| panic!("{name}: a <dt-example> has no src"));
             out.push((src, name.clone(), attr(tag, "expect-error")));
             rest = &tail[end..];
         }
@@ -60,18 +63,28 @@ fn cards() -> Vec<(String, String, Option<String>)> {
 #[test]
 fn every_card_builds_or_gives_the_code_it_says() {
     let cards = cards();
-    assert!(cards.len() >= 8, "the docs have only {} examples", cards.len());
+    assert!(
+        cards.len() >= 8,
+        "the docs have only {} examples",
+        cards.len()
+    );
     // one file, one expectation: two cards on the same file must agree
     let mut expect: BTreeMap<String, (Option<String>, String)> = BTreeMap::new();
     for (src, page, code) in &cards {
         if let Some((prev, on)) = expect.get(src) {
-            assert_eq!(prev, code, "{src} is a card on {on} and on {page} with different expect-error");
+            assert_eq!(
+                prev, code,
+                "{src} is a card on {on} and on {page} with different expect-error"
+            );
         }
         expect.insert(src.clone(), (code.clone(), page.clone()));
     }
     let mut wrong = Vec::new();
     for (src, (code, page)) in &expect {
-        assert!(src.starts_with("examples/") && src.ends_with(".dtile"), "{page}: {src} is not an examples/*.dtile");
+        assert!(
+            src.starts_with("examples/") && src.ends_with(".dtile"),
+            "{page}: {src} is not an examples/*.dtile"
+        );
         let path = root().join(src);
         assert!(path.is_file(), "{page}: {src} does not exist");
         let path = path.display().to_string();
@@ -79,9 +92,19 @@ fn every_card_builds_or_gives_the_code_it_says() {
         opts.draft = true;
         let built = build(&Files, &path, &opts);
         match (code, built) {
-            (None, Ok(b)) => assert!(b.export.mesh.triangles.len() > 100, "{src} built an empty tile"),
-            (None, Err(errs)) => wrong.push(format!("{src} (on {page}) does not build: {:?}", errs.iter().map(|e| (e.code, &e.message)).collect::<Vec<_>>())),
-            (Some(code), Ok(_)) => wrong.push(format!("{src} (on {page}) built, but the card says it gives {code}")),
+            (None, Ok(b)) => assert!(
+                b.export.mesh.triangles.len() > 100,
+                "{src} built an empty tile"
+            ),
+            (None, Err(errs)) => wrong.push(format!(
+                "{src} (on {page}) does not build: {:?}",
+                errs.iter()
+                    .map(|e| (e.code, &e.message))
+                    .collect::<Vec<_>>()
+            )),
+            (Some(code), Ok(_)) => wrong.push(format!(
+                "{src} (on {page}) built, but the card says it gives {code}"
+            )),
             (Some(code), Err(errs)) => {
                 let got: Vec<&str> = errs.iter().map(|e| e.code).collect();
                 // the check alone gives the same mistakes: the page shows them before it builds
@@ -105,12 +128,22 @@ fn every_example_file_is_used_by_a_card_and_none_is_a_library_tile() {
     files_under(&root().join("examples"), "dtile", &mut files);
     assert!(files.len() >= 8, "only {} example files", files.len());
     for f in files {
-        let rel = f.strip_prefix(root()).unwrap().to_string_lossy().replace('\\', "/");
-        assert!(used.contains(&rel), "{rel} is used by no card: add one or delete the file");
+        let rel = f
+            .strip_prefix(root())
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        assert!(
+            used.contains(&rel),
+            "{rel} is used by no card: add one or delete the file"
+        );
     }
     // the library lists its tiles from library/tiles and library/tests: nothing under docs/ may be reachable from it
     let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
     let mut tiles = Vec::new();
     files_under(&lib, "dtile", &mut tiles);
-    assert!(tiles.iter().all(|t| !t.starts_with(root())), "an example is inside the library");
+    assert!(
+        tiles.iter().all(|t| !t.starts_with(root())),
+        "an example is inside the library"
+    );
 }

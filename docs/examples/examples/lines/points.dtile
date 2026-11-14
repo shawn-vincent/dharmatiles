@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// A line is the points it goes through, in order.  This one has three, and no wobble, so it
+// runs straight from point to point; the lawn is the region above it.
+tile size="1x1" seed=3 {
+    line border { through "(0sq, 0.7sq)" "(0.5sq, 0.4sq)" "(1sq, 0.65sq)" }
+    region lawn { boundedBy border; fill "(0.5sq, 0.1sq)" }
+    stack {
+        base
+        dirt
+        grass at=lawn
+    }
+}

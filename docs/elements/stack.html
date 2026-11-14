@@ -6,6 +6,10 @@
 <title>stack</title>
 <link rel="stylesheet" href="../assets/site.css">
 <script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../assets/live/vendor/preact.mjs","preact/hooks":"../assets/live/vendor/preact-hooks.mjs","htm":"../assets/live/vendor/htm.mjs","@preact/signals":"../assets/live/vendor/preact-signals.mjs","@preact/signals-core":"../assets/live/vendor/preact-signals-core.mjs","three":"../assets/live/vendor/three.module.min.js","three/orbit":"../assets/live/vendor/OrbitControls.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
@@ -40,6 +44,47 @@
     scatter at="foot(cliff)" perSquare=55 reach="4dmm" { stone }
     grass                    // listed last: it grows round the cliff and the stones
 }</code></pre>
+<h2 id="try">Try it</h2>
+<dt-example src="examples/stack/order.dtile" controls="seed">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/682f5ff446dac2b598e240fc0de28f35.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// The stack is built in the order it is written: the grass is listed after the rocks, so it
+// grows round them.  Move the scatter below the grass and see the difference.
+tile size=&quot;1x1&quot; seed=9 {
+    stack {
+        base
+        dirt
+        scatter count=4 { rock size=&quot;6dmm .. 10dmm&quot; }
+        grass
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>The stack is built in the order it is written: the grass comes after the rocks, so it grows round them. Move the <code>scatter</code> line below <code>grass</code> and look again.</figcaption>
+</dt-example>
+<dt-example src="examples/stack/pond.dtile" controls="wobble, seed" overlay="regions">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/442c7c952ca06a0404f5a5fad5f3a7b5.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A stack of surfaces and what stands on them: dirt, rocks in the pool, water filling over what
+// is under it, then grass on the bank.
+tile size=&quot;1x1&quot; seed=97 {
+    line shore wobble=&quot;5dmm&quot; { through &quot;(0sq, 0.62sq)&quot; &quot;(1sq, 0.58sq)&quot; }
+    region pool { boundedBy shore; fill &quot;(0.5sq, 0.75sq)&quot; }
+    region bank { boundedBy shore; fill &quot;(0.5sq, 0.25sq)&quot; }
+    region shoreBand { within &quot;7dmm&quot; of=shore }
+    stack {
+        dirt { pin top=&quot;[$waterBedHeight .. $groundHeight + 1dmm]&quot; at=shoreBand; pin top=&quot;$waterBedHeight&quot; at=pool }
+        scatter at=pool count=2 { rock size=&quot;6dmm .. 10dmm&quot; }
+        water
+        grass at=bank
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>Dirt, rocks in the pool, water filling over what is under it, then grass on the bank. Each line stands on what the lines above it made.</figcaption>
+</dt-example>
 <h2 id="reference">Reference</h2>
 <p>Every entry in a stack takes these, whatever it is:</p>
 <div class="tbl"><table>
