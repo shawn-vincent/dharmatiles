@@ -19,6 +19,7 @@ dharmatiles build --all [--system ol] [--printer fine]       # every library til
 dharmatiles check my-tile.dtile [--system ol] [--printer NAME] [--seed N]   # read and plan only, for one build target
 dharmatiles inventory [list|have <tile>|gone <tile>|relink <old> <new>]   # what you have printed: inventory.dinv in My tiles, a log; plates print only what it lacks (plates --all ignores it)
 dharmatiles elements [name]                                # the elements and their controls
+dharmatiles explain dt::type                               # what an error code means, from the local copy of its docs/e/ page (every error prints this command and its online address)
 dharmatiles watch my-tile.dtile                              # rebuild on every save
 dharmatiles preview my-tile.dtile --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl
 dharmatiles                                                 # no command = preview --open: browse My tiles ($DT_HOME, else ~/dharmatiles) and the Library; folders as args work too
@@ -30,7 +31,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
 cargo xtask sheet <tile|name> [--seeds …] [--system ol]  # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
 cargo xtask pictures [group …]              # rebuild the element pages' pictures from docs/elements/demo/
-cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the element schema
+cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the element schema; write the #dt-<code> anchors (from data-explains markers) and docs/e/<code>.html error pages; --check also fails on a code with no explaining section, a marker naming no code, or a stale page
 cargo xtask release 0.10.0 "<summary>"      # number the changelog's Unreleased entry, bump Cargo.toml, check, commit, tag v0.10.0, push
 ```
 
@@ -56,8 +57,8 @@ Twelve crates under `crates/`:
 
 | Crate | Role |
 |---|---|
-| `dt-lang` | The language's word tables, no dependencies: functions and their arities, weightings, coordinates, unit words, `$` names, land slope and water settle. Read by the decoder, completion, the docs generator, the elements and the page (via `/api/language`). |
-| `dt-value` | What a document's numbers draw from, no geometry and no dependencies but `libm`: keyed seeds and the seeded stream (`Seed`, `Rng`), and weighted ranges (`Weighting`, `Dist`, `Draw`: a range's odds, one draw, any width). `dt-geom` and `dt-kit` read it; it reads neither. |
+| `dt-lang` | The language's word tables, no dependencies: functions and their arities, weightings, coordinates, unit words, `$` names, land slope and water settle, and the registry of diagnostic codes (`codes.rs`: every `dt::…` code, once). Read by the decoder, completion, the docs generator, the elements and the page (via `/api/language`). |
+| `dt-value` | What a document's numbers draw from, no geometry and no dependencies but `libm` and `dt-lang` (for the diagnostic codes): keyed seeds and the seeded stream (`Seed`, `Rng`), and weighted ranges (`Weighting`, `Dist`, `Draw`: a range's odds, one draw, any width). `dt-geom` and `dt-kit` read it; it reads neither. |
 | `dt-geom` | Kernels: mesh backend (Manifold via `manifold-csg`), rays (obvhs), the terrain's stack mesher (`stack`, built on the adaptive lift), keyed noise, grids, distance transform, adaptive lift, convex hulls. No element knowledge. |
 | `dt-kit` | The vocabulary elements are written in: `Scene` of tagged solids, `Field` and its morphology, `scatter`, `loft`, `extrude`, `carve`, `union`, forms (level sets, hulls, relief), graphs (trees), `stand`, rays, the audit gate (`audit`), the build record, and the painter (`Palette`, `paint_mesh`: a colour for every face, which the editor and the browser show). Printing is not here. |
 | `dt-elements` | The built-in elements, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `flower`, `scatter`), `water`, `grass`, `reeds`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
@@ -103,7 +104,7 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 ## Standing rules
 
 - **Overhang is red.** 55 degrees is every element's target. 55-65 degrees is the band, painted orange, allowed up to 0.1% of the downward-facing area; over 65 is red, allowed up to another 0.1%; more fails. Both angles are the printer profile's `overhang` and `steepest` (library/printers/default.dtile). The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
-- **Errors: nothing swallowed, nothing hidden.** Expected errors (a document mistake: a `dt::` diagnostic with span and help, or a gate verdict) are shown where the user made them; unexpected ones (panics, I/O, kernel failures, server errors) travel up with `?` to a boundary (CLI main, preview route, build worker, page handler) and are shown loudly, never only logged. No `let _ =`/`.ok()`/`unwrap_or_default()` on real failures, no fallback that silently changes output. The few allowed silences (localStorage, best-effort cleanup, user cancel, offline retry) carry a comment. See `docs/standards/errors.html`.
+- **Errors: nothing swallowed, nothing hidden.** Expected errors (a document mistake: a `dt::` diagnostic with span and help, or a gate verdict) are shown where the user made them; unexpected ones (panics, I/O, kernel failures, server errors) travel up with `?` to a boundary (CLI main, preview route, build worker, page handler) and are shown loudly, never only logged. No `let _ =`/`.ok()`/`unwrap_or_default()` on real failures, no fallback that silently changes output. The few allowed silences (localStorage, best-effort cleanup, user cancel, offline retry) carry a comment. Every diagnostic code is made once, in `dt-lang/src/codes.rs`, and used by its constant (a test fails on a `"dt::…"` literal anywhere else); a new code needs a registry entry and a `data-explains` marker on the docs section that explains it (`cargo xtask docs` then writes its `e/<code>.html` page and anchor). See `docs/standards/errors.html`.
 - **KDL is v2 only.**
 - **One visual system.** The docs site and the preview share `docs/assets/theme.css` (tokens, self-hosted fonts, lotus, controls); the preview serves it from inside the program. New colours, fonts or controls go there, never into one page or the preview alone. On a model red and orange mean overhang (`--over`, `--band`); the interface's danger red (`--err`) marks errors and destructive actions, a separate token; tiles are shown on the plate (#D9E0EB). See `docs/standards/visual-system.html`.
 - **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images.

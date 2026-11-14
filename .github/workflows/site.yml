@@ -1,0 +1,184 @@
+# The documentation site: how it is built and published to GitHub Pages.
+#
+# NOT ENABLED.  This file is the decided publishing setup (the Living Field Guide, "Where the engine file lives"),
+# written ahead of switching it on.  Nothing here runs until Actions is enabled for the repository and Pages is set
+# to "GitHub Actions" as its source (today the site is served straight from docs/ on main).  CI stays off for the
+# workspace tests (rust.yml is disabled and left alone); this workflow is only the site.
+#
+# What it does, on a release tag (v1.4.0) or by hand:
+#   module   the engine as WebAssembly (the WASM toolchain, `cargo xtask wasm`)           cached by the engine's sources
+#   posters  the pictures of the examples                                                a placeholder until phase 2
+#   pages    `cargo xtask docs`: the controls tables, anchors and error pages, checked
+#   deploy   needs all three, checks they come from one commit, and publishes (actions/deploy-pages)
+# and, on a pull request, one quick job: `cargo xtask docs --check`, which fails on a code with no explaining
+# section, a marker naming no code, or a stale error page or anchor.
+#
+# The engine module (about 3.4 MB) changes with every engine change, so it is never committed: the repository stays
+# text only, and a prose fix reuses the last module from the cache.
+
+name: site
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "crates/dt-lang/src/codes.rs"
+      - "xtask/**"
+      - ".github/workflows/site.yml"
+
+concurrency:
+  group: site-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The quick check on a pull request: nothing is built for the page, nothing is published.
+  docs-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # `docs` runs the program for the element schema, so it builds Manifold's C++ (cmake and a C++ compiler)
+      - run: cmake --version
+      - run: cargo xtask docs --check
+
+  module:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    env:
+      # the engine's sources: what decides whether the cached module and toolchain are still right
+      ENGINE_KEY: ${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'crates/dt-lang/**', 'crates/dt-value/**', 'crates/dt-doc/**', 'crates/dt-geom/**', 'crates/dt-kit/**', 'crates/dt-elements/**', 'crates/dt-eval/**', 'crates/dt-par/**', 'crates/dt-web/**', 'third_party/**', 'library/**', 'web/wasm/**', 'xtask/src/wasm.rs') }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: The module, if this engine has one already
+        id: cached
+        uses: actions/cache@v4
+        with:
+          path: out/site-module
+          key: module-${{ env.ENGINE_KEY }}
+      - name: The WASM toolchain
+        if: steps.cached.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain install
+          rustup target add wasm32-unknown-unknown
+          sudo apt-get update
+          sudo apt-get install -y cmake clang lld binaryen
+      - name: The Rust build cache, keyed by the engine's sources
+        if: steps.cached.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm-${{ env.ENGINE_KEY }}
+      - name: wasm-bindgen, at the version Cargo.lock holds
+        if: steps.cached.outputs.cache-hit != 'true'
+        run: |
+          V=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[^0-9.]/, ""); print; exit }' Cargo.lock)
+          test -n "$V" || { echo "no wasm-bindgen in Cargo.lock"; exit 1; }
+          cargo install wasm-bindgen-cli --version "$V" --locked
+      - name: cargo xtask wasm
+        if: steps.cached.outputs.cache-hit != 'true'
+        run: cargo xtask wasm out/site-module
+      - run: echo "${{ steps.sha.outputs.sha }}" > out/site-module/COMMIT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module
+          path: out/site-module
+          if-no-files-found: error
+
+  # A placeholder until phase 2: the posters (a picture of every example) are cached by build key and an unchanged
+  # example is skipped.  The job exists now so deploy already waits for it and checks its commit.
+  posters:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - run: |
+          mkdir -p out/site-posters
+          echo "${{ steps.sha.outputs.sha }}" > out/site-posters/COMMIT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: posters
+          path: out/site-posters
+          if-no-files-found: error
+
+  pages:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cmake --version
+      # writes the controls tables, anchors and error pages, then checks that nothing dangles
+      - run: cargo xtask docs
+      - run: cargo xtask docs --check
+      - run: |
+          mkdir -p out/site-pages
+          cp -R docs/. out/site-pages/
+          echo "${{ steps.sha.outputs.sha }}" > out/site-pages/COMMIT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages
+          path: out/site-pages
+          if-no-files-found: error
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: [module, posters, pages]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: The three parts come from one commit
+        run: |
+          set -e
+          echo "run:     ${{ github.sha }}"
+          echo "module:  ${{ needs.module.outputs.sha }}"
+          echo "posters: ${{ needs.posters.outputs.sha }}"
+          echo "pages:   ${{ needs.pages.outputs.sha }}"
+          for s in "${{ needs.module.outputs.sha }}" "${{ needs.posters.outputs.sha }}" "${{ needs.pages.outputs.sha }}"; do
+            test "$s" = "${{ github.sha }}" || { echo "the module, posters and pages are not from one commit"; exit 1; }
+          done
+      - uses: actions/download-artifact@v4
+        with:
+          path: parts
+      - name: Put the site together
+        run: |
+          set -e
+          mkdir site
+          cp -R parts/pages/. site/
+          # where the page reads the engine and the posters from is settled with the live cards (phase 2)
+          mkdir -p site/engine site/posters
+          cp -R parts/module/. site/engine/
+          cp -R parts/posters/. site/posters/
+          for part in pages module posters; do
+            test "$(cat parts/$part/COMMIT)" = "${{ github.sha }}" || { echo "the $part artifact is from another commit"; exit 1; }
+          done
+          rm site/COMMIT site/engine/COMMIT site/posters/COMMIT
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
