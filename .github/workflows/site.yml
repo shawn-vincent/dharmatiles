@@ -74,9 +74,15 @@ jobs:
           rustup toolchain install
           rustup target add wasm32-unknown-unknown
           sudo apt-get update
-          # Manifold's C++ for wasm needs an LLVM with wasm32 support and libc++ headers (the build looks in
-          # /usr/lib/llvm-<n>/bin); Ubuntu 24.04's own is 18
-          sudo apt-get install -y cmake clang-18 lld-18 libc++-18-dev libc++abi-18-dev binaryen
+          # Manifold's C++ for wasm needs a recent LLVM with wasm32 support and its libc++ headers (the build
+          # looks in /usr/lib/llvm-<n>/bin, 22 down to 18).  Ubuntu's own LLVM 18 has the headers but they do not
+          # compile for wasm32 through the shim, so LLVM 22 comes from LLVM's own apt repository (apt.llvm.org);
+          # on the Mac it is Homebrew's llvm.
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh 22
+          sudo apt-get install -y cmake libc++-22-dev libc++abi-22-dev binaryen
+          /usr/lib/llvm-22/bin/clang++ --version
+          test -d /usr/lib/llvm-22/include/c++/v1
       - name: The Rust build cache, keyed by the engine's sources
         if: steps.cached.outputs.cache-hit != 'true'
         uses: Swatinem/rust-cache@v2
