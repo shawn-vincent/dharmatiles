@@ -4,8 +4,8 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=67 {
     about "A channel from the west edge opening into broad water to the east."
-    line shore-south wobble="1.5dmm" { through "(0sq, 0.57sq)" "(0.6sq, 1sq)" }
-    line shore-north wobble="1.5dmm" { through "(0sq, 0.43sq)" "(0.6sq, 0sq)" }
+    line shore-south wobble="1.5dmm" { through "(0sq, 2sq/3)" "(0.5sq, 1sq)" }
+    line shore-north wobble="1.5dmm" { through "(0sq, 1sq/3)" "(0.5sq, 0sq)" }
     region channel { boundedBy shore-north shore-south; fill "(0.75sq, 0.5sq)" }
     region bank { boundedBy shore-north shore-south; fill "(0.08sq, 0.92sq)"; fill "(0.08sq, 0.08sq)" }
     region shoreBand { within "7dmm" of=shore-south; within "7dmm" of=shore-north }

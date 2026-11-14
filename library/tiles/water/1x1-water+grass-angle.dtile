@@ -4,7 +4,7 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=61 {
     about "A shallow pool tucked into the south-west corner of a meadow bank."
-    line shore wobble="2.5dmm" { through "(0sq, 0.6sq)" "(0.4sq, 1sq)" }
+    line shore wobble="2.5dmm" { through "(0sq, 0.5sq)" "(0.5sq, 1sq)" }
     region pool { boundedBy shore; fill "(0.1sq, 0.9sq)" }
     region bank { boundedBy shore; fill "(0.75sq, 0.25sq)" }
     region shoreBand { within "7dmm" of=shore }

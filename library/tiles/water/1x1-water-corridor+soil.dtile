@@ -4,8 +4,8 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=53 {
     about "A channel of water west to east between two dirt banks."
-    line shore-north wobble="1.5dmm" { through "(0sq, 0.43sq)" "(1sq, 0.43sq)" }
-    line shore-south wobble="1.5dmm" { through "(0sq, 0.57sq)" "(1sq, 0.57sq)" }
+    line shore-north wobble="1.5dmm" { through "(0sq, 1sq/3)" "(1sq, 1sq/3)" }
+    line shore-south wobble="1.5dmm" { through "(0sq, 2sq/3)" "(1sq, 2sq/3)" }
     region channel { boundedBy shore-north shore-south; fill "(0.5sq, 0.5sq)" }
     region bank { boundedBy shore-north shore-south; fill "(0.5sq, 0.15sq)"; fill "(0.5sq, 0.85sq)" }
     region shoreBand { within "7dmm" of=shore-north; within "7dmm" of=shore-south }

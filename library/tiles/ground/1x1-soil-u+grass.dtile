@@ -2,7 +2,7 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=102 {
     about "A U of bare dirt cut in from the east edge through a meadow."
-    line margin wobble="1.6dmm" { through "(1sq, 0.67sq)" "(0.56sq, 0.8sq)" "(0.28sq, 0.62sq)" "(0.34sq, 0.38sq)" "(0.58sq, 0.2sq)" "(1sq, 0.33sq)" }
+    line margin wobble="1.6dmm" { through "(1sq, 2sq/3)" "(0.56sq, 0.8sq)" "(0.28sq, 0.62sq)" "(0.34sq, 0.38sq)" "(0.58sq, 0.2sq)" "(1sq, 1sq/3)" }
     region path { boundedBy margin; fill "(0.85sq, 0.5sq)" }
     region meadow { boundedBy margin; fill "(0.2sq, 0.5sq)" }
     stack {

@@ -7,7 +7,7 @@ dharmatiles version="1.0.0"
 tile size="1x1" seed=33 {
     about "A pond whose water top is a cloud: bell(-0.8dmm .. 0.8dmm) about the calm level."
 
-    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    line shore wobble="5dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
     region pool { boundedBy shore; fill "(0.5sq, 0.8sq)" }
     region shoreBand { within "5dmm" of=shore }
 

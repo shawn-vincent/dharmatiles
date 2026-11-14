@@ -3,7 +3,7 @@ dharmatiles version="1.0.0"
 tile size="2x2" seed=1 {
     about "Water by a bank, with a rock in it: a test tile."
     line shore wobble="4dmm" {
-        through "(0.486sq, 2sq)" "(0.486sq, 0sq)"
+        through "(0.5sq, 2sq)" "(0.5sq, 0sq)"
     }
     region bank {
         boundedBy shore

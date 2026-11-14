@@ -6,7 +6,7 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=54 {
     about "A cove of water cut in from the east edge through dirt."
-    line shore wobble="1.5dmm" { through "(1sq, 0.57sq)" "(0.62sq, 0.7sq)" "(0.38sq, 0.57sq)" "(0.44sq, 0.43sq)" "(0.64sq, 0.3sq)" "(1sq, 0.43sq)" }
+    line shore wobble="1.5dmm" { through "(1sq, 2sq/3)" "(0.62sq, 0.7sq)" "(0.38sq, 0.57sq)" "(0.44sq, 0.43sq)" "(0.64sq, 0.3sq)" "(1sq, 1sq/3)" }
     region cove { boundedBy shore; fill "(0.85sq, 0.5sq)" }
     region bank { boundedBy shore; fill "(0.2sq, 0.5sq)" }
     region shoreBand { within "7dmm" of=shore }

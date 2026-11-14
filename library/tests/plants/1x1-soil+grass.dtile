@@ -5,7 +5,7 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=42 {
     about "Grass on the left half, bare dirt on the right, with an organic margin."
-    line margin wobble="5dmm" { through "(0.48sq, 0sq)" "(0.52sq, 1sq)" }
+    line margin wobble="5dmm" { through "(0.5sq, 0sq)" "(0.5sq, 1sq)" }
     region meadow { boundedBy margin; fill "(0.25sq, 0.5sq)" }
     region path { boundedBy margin; fill "(0.75sq, 0.5sq)" }
     stack {

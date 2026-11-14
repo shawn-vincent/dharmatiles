@@ -4,10 +4,10 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=57 {
     about "Water crossing four ways through dirt."
-    line shore-sw { through "(0sq, 0.57sq)" "(0.43sq, 1sq)" }
-    line shore-nw { through "(0sq, 0.43sq)" "(0.43sq, 0sq)" }
-    line shore-ne { through "(0.57sq, 0sq)" "(1sq, 0.43sq)" }
-    line shore-se { through "(1sq, 0.57sq)" "(0.57sq, 1sq)" }
+    line shore-sw { through "(0sq, 2sq/3)" "(1sq/3, 1sq)" }
+    line shore-nw { through "(0sq, 1sq/3)" "(1sq/3, 0sq)" }
+    line shore-ne { through "(2sq/3, 0sq)" "(1sq, 1sq/3)" }
+    line shore-se { through "(1sq, 2sq/3)" "(2sq/3, 1sq)" }
     region channel { boundedBy shore-sw shore-nw shore-ne shore-se; fill "(0.5sq, 0.5sq)" }
     region bank { boundedBy shore-sw shore-nw shore-ne shore-se; fill "(0.08sq, 0.92sq)"; fill "(0.08sq, 0.08sq)"; fill "(0.92sq, 0.08sq)"; fill "(0.92sq, 0.92sq)" }
     region shoreBand { within "7dmm" of=shore-sw; within "7dmm" of=shore-nw; within "7dmm" of=shore-ne; within "7dmm" of=shore-se }

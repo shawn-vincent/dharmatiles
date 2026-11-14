@@ -2,10 +2,10 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=105 {
     about "A dirt path crossing four ways through a meadow."
-    line southwest-margin wobble="2.2dmm" { through "(0sq, 0.67sq)" "(0.33sq, 1sq)" }
-    line northwest-margin wobble="2.2dmm" { through "(0sq, 0.33sq)" "(0.33sq, 0sq)" }
-    line northeast-margin wobble="2.2dmm" { through "(0.67sq, 0sq)" "(1sq, 0.33sq)" }
-    line southeast-margin wobble="2.2dmm" { through "(1sq, 0.67sq)" "(0.67sq, 1sq)" }
+    line southwest-margin wobble="2.2dmm" { through "(0sq, 2sq/3)" "(1sq/3, 1sq)" }
+    line northwest-margin wobble="2.2dmm" { through "(0sq, 1sq/3)" "(1sq/3, 0sq)" }
+    line northeast-margin wobble="2.2dmm" { through "(2sq/3, 0sq)" "(1sq, 1sq/3)" }
+    line southeast-margin wobble="2.2dmm" { through "(1sq, 2sq/3)" "(2sq/3, 1sq)" }
     region path { boundedBy southwest-margin northwest-margin northeast-margin southeast-margin; fill "(0.5sq, 0.5sq)" }
     region meadow { boundedBy southwest-margin northwest-margin northeast-margin southeast-margin; fill "(0.08sq, 0.92sq)"; fill "(0.08sq, 0.08sq)"; fill "(0.92sq, 0.08sq)"; fill "(0.92sq, 0.92sq)" }
     stack {

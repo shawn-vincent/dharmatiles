@@ -11,7 +11,7 @@ tile size="1x1" seed=42 {
     let knollTop "$groundHeight + [1.5dmm .. 2dmm]"
 
     point knoll "(0.7sq, 0.5sq)"
-    line margin wobble="5dmm" { through "(0.48sq, 0sq)" "(0.52sq, 1sq)" }
+    line margin wobble="5dmm" { through "(0.5sq, 0sq)" "(0.5sq, 1sq)" }
     region meadow { boundedBy margin; fill "(0.25sq, 0.5sq)" }
 
     stack {

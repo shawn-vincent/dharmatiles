@@ -7,7 +7,7 @@ dharmatiles version="1.0.0"
 tile size="1x1" seed=50 {
     about "Water in the lower half, a dirt bank in the upper, with a wandering shore: the heights language, migrated by hand."
 
-    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    line shore wobble="5dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
     region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
     region shoreBand { within "5dmm" of=shore }
 

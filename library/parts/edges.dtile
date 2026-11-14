@@ -16,3 +16,23 @@ defaults {
     planks top="$floorHeight"                         { pin top="$floorEdgeHeight" at=edges }
     water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" { pin top="$waterEdgeHeight" at=edges }
 }
+
+// The seams: where a line may cross the outline of a tile. Each is a share of a
+// square's side, measured from the square's own corner (from the west on a
+// north or south side, from the north on a west or east side), with a word for
+// each side: `nnw` is a third along the north side, `n` halfway, `nne` two
+// thirds; south, west and east follow. The tile's own four corners are seams
+// too, with words of their own that never take a number. The point partway
+// along a side where two squares meet is not a seam. Every square edge on the
+// outline has the same seams, so two tiles whose lines meet at a seam meet at
+// one place. On a side longer than one square a word takes the square, counted
+// from the west or the north from 1, quoted: `"nnw(2)"`; on a one-square side
+// it stands alone. A fraction is exact: write `1sq/3`, not 0.33. The positions
+// must be the same turned a quarter, which maps a position t to 1 - t: each
+// seam needs its mirror.
+seams {
+    seam "1/3" north=nnw south=ssw west=wnw east=ene
+    seam "1/2" north=n south=s west=w east=e
+    seam "2/3" north=nne south=sse west=wsw east=ese
+    corner north-west=nw north-east=ne south-east=se south-west=sw
+}

@@ -2,8 +2,8 @@ dharmatiles version="1.0.0"
 
 tile size="1x1" seed=106 {
     about "A dirt path from the west edge opening into broad dirt to the east."
-    line south-margin wobble="2.5dmm" { through "(0sq, 0.67sq)" "(0.5sq, 1sq)" }
-    line north-margin wobble="2.5dmm" { through "(0sq, 0.33sq)" "(0.5sq, 0sq)" }
+    line south-margin wobble="2.5dmm" { through "(0sq, 2sq/3)" "(0.5sq, 1sq)" }
+    line north-margin wobble="2.5dmm" { through "(0sq, 1sq/3)" "(0.5sq, 0sq)" }
     region path { boundedBy north-margin south-margin; fill "(0.75sq, 0.5sq)" }
     region meadow { boundedBy north-margin south-margin; fill "(0.08sq, 0.92sq)"; fill "(0.08sq, 0.08sq)" }
     stack {
