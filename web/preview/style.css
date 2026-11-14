@@ -465,6 +465,16 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
   #title .wordmark .txt { display: none; }
   .history-label { display: none; }
 }
+/* a phone: the title bar is two rows (what you are making and how far back you can go, then the target and the buttons), not one
+   row that runs off the screen or lets the mode buttons stack over the view */
+@media (max-width: 560px) {
+  #app { grid-template-rows: auto 62vh auto; }
+  #title { flex-wrap: wrap; row-gap: 4px; padding-block: 6px; min-height: 48px; }
+  #title .seg, #title .seg > button { white-space: nowrap; flex-wrap: nowrap; }
+  #title #savestate:empty { display: none; }
+  #title .grow { flex: 0 0 100%; height: 0; }   /* the line break: the target and the buttons start the second row */
+  #title #target { margin-right: auto; }
+}
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 /* the map overlay and the bar (stage 4: place and draw) */
