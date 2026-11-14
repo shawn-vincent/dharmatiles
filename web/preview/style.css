@@ -638,6 +638,12 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 .orow .tx { min-width: 0; flex: 1; display: grid; gap: 1px; }
 .orow .nm { font-size: var(--fs-m); font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orow .sub { color: var(--muted); font: 400 var(--fs-s)/var(--lh-s) var(--f-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the stack row's thickness bar: its height band on one scale for the whole stack (view/outline.js), the tile's zero a tick */
+.orow .trow { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.orow .tbar { position: relative; flex: 1; height: 6px; border-radius: var(--r-mark); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.orow .tbar b { position: absolute; top: 0; bottom: 0; border-radius: var(--r-mark); background: var(--fam, var(--stone)); }
+.orow .tbar .z { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
+.orow .trange { flex: none; color: var(--muted); font: 400 var(--fs-s)/1 var(--f-code); white-space: nowrap; }
 .orow .no { flex: none; width: 14px; text-align: right; color: var(--muted); font: 600 var(--fs-s) var(--f-code); }
 /* a stack row's number, swatch, name and chevron share the name's first line (baseline); the padding keeps the row at 46 px, its ⋯ is on that line too */
 .orow:has(> .no) { align-items: baseline; padding-block: 11.5px; }
@@ -729,8 +735,14 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 .pl-sec .note.bad { color: var(--err); }
 .pl-sec .note.warn { color: var(--ink); }
 .pl-sec .note.verify { font-style: italic; }
-.pl-plates { display: grid; gap: 6px; }
-.pl-plate { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px; text-align: left; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: var(--fs-m) var(--f-body); }
+.pl-plates { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+/* a plate as a small picture of its bed (view/plates-panel.js Bed): one scale, every piece its own top-down picture */
+.pl-bed { grid-column: 1 / -1; position: relative; display: block; width: 100%; margin-bottom: 4px; background: var(--plate); border: 1px solid var(--plate-ink); border-radius: var(--r-mark); overflow: hidden; }
+.pl-bp { position: absolute; display: block; box-sizing: border-box; background: var(--plate-hi); border: 1px solid color-mix(in srgb, var(--plate-ink) 40%, transparent); overflow: hidden; }
+.pl-bp.pin { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.pl-bimg { position: absolute; left: 50%; top: 50%; display: block; }
+.pl-bimg .pl-bpic { width: 100%; height: 100%; aspect-ratio: auto; }
+.pl-plate { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px; align-content: start; text-align: left; padding: 8px; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); color: var(--ink); cursor: pointer; font: var(--fs-m) var(--f-body); }
 .pl-plate:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .pl-plate.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
 .pl-plate b { font-weight: 650; }
@@ -803,6 +815,19 @@ body.inventory #view, body.inventory #sash-side { display: none !important; }
 .inv-head b { font-size: var(--fs-m); font-weight: 650; }
 .inv-tag { color: var(--muted); font-size: var(--fs-s); white-space: nowrap; }
 .inv-tag.edited { color: var(--ink); padding-left: 7px; box-shadow: inset 3px 0 0 var(--caution); margin-left: auto; }
+/* the shelf: a tile's prints as a grid of cards, each its picture (view/inventory-panel.js PieceCard) */
+.inv-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; padding: 8px 10px 10px; }
+.inv-card { display: grid; grid-template-rows: auto 1fr auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); overflow: hidden; min-width: 0; }
+.inv-card.off { color: var(--muted); }
+.inv-card.off .inv-pic { opacity: .5; }
+.inv-shot { position: relative; }
+.inv-shot .inv-pic { width: 100%; aspect-ratio: 176 / 124; }
+.inv-badge { position: absolute; right: 6px; top: 6px; padding: 1px 6px; border-radius: var(--r-mark); background: var(--ink); color: var(--bg); font: 700 var(--fs-s)/1.4 var(--f-body); }
+.inv-meta { display: grid; gap: 1px; padding: 5px 8px 3px; min-width: 0; align-content: start; }
+.inv-meta b { font-weight: 650; font-size: var(--fs-m); }
+.inv-sub { color: var(--muted); font-size: var(--fs-s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-card .inv-acts { padding: 2px 8px 7px; }
+.inv-reprint-row { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .inv-wrap { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
 .inv-wrap:first-of-type { border-top: 0; }
 .inv-piece { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 10px; font-size: var(--fs-m); }
@@ -822,6 +847,30 @@ body.inventory #view, body.inventory #sash-side { display: none !important; }
 @media (max-width: 700px) { .inv-piece { grid-template-columns: 1fr; } }
 
 /* ---- the map's panel (js/editor/scene-panel.js; docs/maps.html): the map, one piece, a property ---- */
+/* the map as a plan (view/map-panel.js MapPlan): the squares on the plate, each piece its own top-down picture */
+.mplan-wrap { display: flex; gap: 14px; align-items: flex-start; margin: 4px 0 10px; }
+.mplan { position: relative; flex: 0 1 220px; min-width: 0; max-height: 300px; background: var(--plate); border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+.mplan-grid { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mplan-grid path { fill: none; stroke: color-mix(in srgb, var(--plate-ink) 22%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.mplan-p { position: absolute; display: block; padding: 0; margin: 0; border: 1px solid color-mix(in srgb, var(--plate-ink) 45%, transparent); background: var(--plate-hi); cursor: pointer; overflow: hidden; border-radius: var(--r-mark); box-sizing: border-box; }
+.mplan-p:hover, .mplan-p:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: -1px; z-index: 1; }
+.mplan-p.on { outline: 2px solid var(--accent); outline-offset: -1px; z-index: 2; }
+.mplan-img { position: absolute; left: 50%; top: 50%; display: block; }
+.mplan-img .mplan-pic { width: 100%; height: 100%; aspect-ratio: auto; }
+.mplan-p.skip { border-style: dashed; }
+.mplan-p.skip .mplan-img { opacity: .38; }
+.mplan-mark { position: absolute; left: 3px; top: 3px; width: 11px; height: 11px; display: none; box-shadow: 0 0 0 1px rgb(255 255 255 / .95); border-radius: var(--r-mark); }
+.mplan-p.have .mplan-mark { display: block; background: var(--ok); }
+.mplan-p.other .mplan-mark { display: block; background: var(--caution); }
+.mplan-key { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: var(--fs-m); min-width: 0; }
+.mplan-key li { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+.mplan-key .mplan-n { color: var(--ink); margin-bottom: 3px; }
+.mplan-sw { flex: none; width: 10px; height: 10px; border-radius: var(--r-mark); box-sizing: border-box; }
+.mplan-sw.have { background: var(--ok); }
+.mplan-sw.other { background: var(--caution); }
+.mplan-sw.need { background: var(--plate); box-shadow: inset 0 0 0 1px var(--line-2); }
+.mplan-sw.skip { border: 1.5px dashed var(--line-2); }
+@media (max-width: 460px) { .mplan-wrap { flex-direction: column; } .mplan { flex-basis: auto; width: min(100%, 240px); } }
 .mp-row { display: flex; gap: 8px; margin: 8px 0 2px; }
 .mp-row.wrap { flex-wrap: wrap; }
 .mp-row .btn { white-space: nowrap; }

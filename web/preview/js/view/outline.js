@@ -22,6 +22,32 @@ import { html, useEffect, useRef } from './html.js';
 import { Icon } from './icons.js';
 import { plural } from './widgets.js';
 
+/**
+ * The thickness bars (docs/preview.html): each stack row's height band on one scale, the tile's zero a tick, the span from
+ * the lowest to the highest the entry's geometry reaches as the program measured it in the build (`bands`: key ->
+ * [lo, hi], printed mm).  Returns `{lo, hi}` of the shared axis, or null while no entry has one (nothing built yet).
+ */
+export function axisOf(items, bands) {
+  let lo = 0, hi = 0, any = false;
+  for (const it of items) {
+    const b = bands?.get?.(it.key);
+    if (!b) continue;
+    any = true; lo = Math.min(lo, b[0]); hi = Math.max(hi, b[1]);
+  }
+  return any && hi > lo ? { lo, hi } : null;
+}
+
+/** A height in printed mm, as short as it reads: `3.4`, `-5.7`, `0`. */
+export const mmWord = (v) => String(Number(v.toFixed(1)) || 0);
+
+const Bar = ({ band, axis }) => {
+  const span = axis.hi - axis.lo;
+  const left = ((band[0] - axis.lo) / span) * 100;
+  const width = Math.max(((band[1] - band[0]) / span) * 100, 1.5);
+  const zero = ((0 - axis.lo) / span) * 100;
+  return html`<span class="tbar" title=${`Printed height ${mmWord(band[0])} to ${mmWord(band[1])} mm from the tile’s zero`} aria-hidden="true"><i class="z" style=${`left:${zero}%`}></i><b style=${`left:${left}%;width:${width}%`}></b></span>`;
+};
+
 /** What a region says of itself in a few words: what bounds it, or its clauses. */
 export function regionSummary(m) {
   const sh = m.sheet;
@@ -72,7 +98,7 @@ function LineThumb({ m, cols, rows }) {
 
 // ---- the rows ---------------------------------------------------------------------------
 
-const Text = ({ label, sub }) => html`<span class="tx"><span class="nm">${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}</span>`;
+const Text = ({ label, sub, bar = null, range = null }) => html`<span class="tx"><span class="nm">${label}</span>${sub ? html`<span class="sub">${sub}</span>` : null}${bar ? html`<span class="trow">${bar}<span class="trange">${range}</span></span>` : null}</span>`;
 const Section = ({ title, hint }) => html`<div class="cap olab"><span>${title}</span>${hint ? html`<small>${hint}</small>` : null}</div>`;
 
 /** A row and its ⋯ button, side by side (a button cannot hold a button). */
@@ -221,6 +247,7 @@ export function Outline({ data, on }) {
   });
   if (dragging.value && held.current) return held.current;
   const items = data.stack || [];
+  const axis = axisOf(items, data.bands);
   const shaped = [...(data.lines || []).map((m) => ['line', m]), ...(data.regions || []).map((m) => ['region', m])];
   const vnode = html`<div class="outline" role="listbox" aria-label="What the tile holds" ref=${root} onKeyDown=${(e) => onRowKey(e, on)}>
     <${Section} title="Stack" hint="top of the tile first" />
@@ -230,8 +257,9 @@ export function Outline({ data, on }) {
       const badge = badgeOf(data.badges?.get?.(it.key));
       const id = idOf(it.key);
       const sub = [id ? it.what : it.what && it.what !== it.label ? it.what : '', placeOf(it)].filter(Boolean).join(' · ');
+      const band = data.bands?.get?.(it.key);
       return html`<${Wrap} key=${it.key} kind="entry" id=${it.key} name=${id ?? it.label} editable=${editable} on=${on} cls=${`fam-${it.family || 'thing'}`} index=${String(i)}>
-        <span class="no">${String(i + 1)}</span><i class="gl"></i><${Text} label=${id ?? it.label} sub=${sub} />
+        <span class="no">${String(i + 1)}</span><i class="gl"></i><${Text} label=${id ?? it.label} sub=${sub} bar=${band && axis ? html`<${Bar} band=${band} axis=${axis} />` : null} range=${band ? `${mmWord(band[0])} to ${mmWord(band[1])} mm` : null} />
         ${badge ? html`<span class=${`badge ${badge.tone}`} title=${badge.title} role="img" aria-label=${badge.n === 1 ? (badge.tone === 'error' ? 'a mistake' : 'a note') : `${badge.n} messages`}>${badge.n > 1 ? String(badge.n) : ''}</span>` : null}<span class="chev"><${Icon} name="chevron-right" size=${14} /></span><//>`;
     })}
     ${shaped.length || editable ? html`<${Section} title="Shape" hint="lines and regions" />

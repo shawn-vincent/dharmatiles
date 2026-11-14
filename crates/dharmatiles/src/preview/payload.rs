@@ -234,9 +234,23 @@ pub fn for_map(
 
 /// The stack a build was made from, as the mesh header carries it: for each
 /// entry its place (the number the mesh's triangles carry), its key (its id,
-/// which survives edits to the text), its words and its element.
+/// which survives edits to the text), its words and its element, and `z`: the
+/// lowest and highest height its triangles reach, mm, from the tile's zero
+/// (`null` for an entry that made no triangle).  One reading of the mesh the
+/// build made, so the page draws the thickness of each entry from here and
+/// works nothing out of the mesh itself.
 #[must_use]
 pub fn stack_json(b: &Built) -> Value {
+    let mut z: Vec<Option<[f64; 2]>> = vec![None; b.stack.len()];
+    for (t, &e) in b.export.mesh.triangles.iter().zip(&b.entries) {
+        let Some(slot) = z.get_mut(usize::from(e)) else {
+            continue; // NO_ENTRY, or an entry the stack does not have
+        };
+        for &v in t {
+            let h = b.export.mesh.positions[v as usize][2];
+            *slot = Some(slot.map_or([h, h], |[lo, hi]| [lo.min(h), hi.max(h)]));
+        }
+    }
     Value::Array(
         b.stack
             .iter()
@@ -244,7 +258,7 @@ pub fn stack_json(b: &Built) -> Value {
             .map(|(index, n)| {
                 json!({
                     "index": index, "key": n.id.as_str(), "label": n.label,
-                    "element": n.element, "what": n.what,
+                    "element": n.element, "what": n.what, "z": z[index],
                 })
             })
             .collect(),

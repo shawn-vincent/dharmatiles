@@ -92,6 +92,7 @@ export const view = createStore({
   pick: null,          // {name, animate}: a preset asked for (a fresh object each time, so asking again counts); `mode` is the preset in force
   // activeView (the preset the camera is still on, null once the user's own view holds) is derived, in editor/framing.js, from what the viewer says
   pieces: new Map(),   // entry key -> how many pieces its geometry has (from the mesh shown)
+  bands: new Map(),    // entry key -> [lo, hi], the height its geometry reaches, printed mm from the tile's zero (from the mesh shown: payload.js `bandsByKey`)
   shown: null,         // {id, epoch, version}: the build's mesh the view holds
   draft: null,         // {tileId, payload}: a draft shown in its place
   source: null,        // the id of the source document the text pane should show (`tile#file`, see `sourceId`); null: the tile's own

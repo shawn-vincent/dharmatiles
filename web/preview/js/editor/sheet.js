@@ -117,7 +117,7 @@ function tileContents() {
   const t = tile(), map = doc.get().map;
   const stack = orderStack(stackItems()).map((it) => ({ ...it, family: elementNamed(it.what)?.family }));
   const data = {
-    lines: map?.lines, regions: map?.regions, stack, badges: t ? log.byNode(t.id) : new Map(),
+    lines: map?.lines, regions: map?.regions, stack, bands: view.get().bands, badges: t ? log.byNode(t.id) : new Map(),
     cols: map?.cols ?? t?.plan?.cols ?? 1, rows: map?.rows ?? t?.plan?.rows ?? 1,
     // rows can be changed when the document is the tile's own and has been checked (an unchecked one has no spans to address)
     editable: editable() && !!map && doc.get().tileId === view.get().tileId,

@@ -3,7 +3,7 @@
 // mesh (or a draft in its place), its camera.  Follows the server store (the
 // tile's builds) and the view store (which tile).
 
-import { meshIndex, parsePayload, piecesByKey } from '../payload.js';
+import { bandsByKey, meshIndex, parsePayload, piecesByKey } from '../payload.js';
 import { isOffline } from '../host.js';
 import { showError } from '../problems.js';
 import { host, viewer } from './app.js';
@@ -31,7 +31,7 @@ export async function select(id, guarded = false) {
 
 /** The view starts afresh on the tile now shown (or on none; the address follows it: address.js): what the viewer held goes with the description (editor/framing.js). */
 function reset() {
-  view.set({ shown: null, draft: null });
+  view.set({ shown: null, draft: null, bands: new Map() });
 }
 
 /**
@@ -81,7 +81,7 @@ async function loadMesh(t) {
     const p = parsePayload(buf);
     viewer.setMesh(p); // the new mesh swaps in place: the viewer decides whether its camera moves
     supersedeDrafts();
-    view.set({ pieces: piecesByKey(p), shown: { id: t.id, epoch, version }, draft: null });
+    view.set({ pieces: piecesByKey(p), bands: bandsByKey(p), shown: { id: t.id, epoch, version }, draft: null });
     // a selection that neither the text nor the new build has goes
     const sel = view.get().sel;
     if (isEntry(sel) && stackIndex(sel.id) < 0 && meshIndex(p, sel.id) < 0) view.set({ sel: null });
@@ -95,7 +95,7 @@ function showDraft() {
   const d = view.get().draft;
   if (!d || d.tileId !== view.get().tileId) return;
   viewer.setMesh(d.payload);
-  view.set({ pieces: piecesByKey(d.payload) });
+  view.set({ pieces: piecesByKey(d.payload), bands: bandsByKey(d.payload) });
 }
 
 /** Wire this part of the page (once, at load). */

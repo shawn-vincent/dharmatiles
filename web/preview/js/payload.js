@@ -32,6 +32,17 @@ export const entryKey = (payload, index) => meshEntry(payload, index)?.key ?? nu
 /** The mesh's entry number for `key`, or -1 when the mesh has no such entry. */
 export const meshIndex = (payload, key) => (key == null ? -1 : meshStack(payload).findIndex((e) => e.key === key));
 
+/**
+ * The height each entry's geometry reaches, by key: `Map(key -> [lo, hi])`, printed mm from the tile's zero.  The program
+ * measured it in the mesh it built (`stack_json`, payload.rs); an entry that made no triangle has none.  Nothing is worked
+ * out here.
+ */
+export function bandsByKey(payload) {
+  const bands = new Map();
+  for (const e of meshStack(payload)) if (Array.isArray(e.z)) bands.set(e.key, /** @type {[number, number]} */ (e.z));
+  return bands;
+}
+
 /** How many pieces each entry's geometry has, by key: `Map(key -> n)`. */
 export function piecesByKey(payload) {
   const pieces = new Map();
