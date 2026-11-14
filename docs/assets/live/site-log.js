@@ -5,7 +5,7 @@
 //
 // A check replaces the last check's messages: what it no longer reports is cleared, never left to go stale.
 
-import { createLog } from './shared/messages.js';
+import { createLog } from '../../editor/js/messages.js';
 
 const FILE = 'tile.dtile';
 

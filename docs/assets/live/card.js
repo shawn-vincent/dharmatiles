@@ -7,18 +7,18 @@
 //                overlay-geometry.js; the same geometry the editor draws into its 3D view
 //   the map      dt_eval::map, the program's one producer, through the worker's `check_tile`
 //
-// The editor's files are mirrored into assets/live/shared/ by `cargo xtask docs` (which fails when a mirror is stale), so the
-// site reads the code the program ships, and there is no second copy to drift.
+// The editor's files are read from `<site>/editor/js` and `<site>/editor/vendor`, one URL for web/preview/js and vendor that every place serving
+// the site provides (the deploy job, the program's docs route), so the site reads the code the program ships: there is no copy.
 
 import { signal, computed } from '@preact/signals-core';
-import { buildStatusLine, paintStatusLine } from './shared/view/status-line.js';
-import { MessagesBody } from './shared/view/messages-panel.js';
-import { html, render } from './shared/view/html.js';
-import { detailsFor, setExplainBase, statusOf, countsText } from './shared/messages.js';
-import { drawn, marksOf, markAtOffset, parsePins, sourceRange } from './shared/overlay-marks.js';
-import { markAtPoint, renderMarks } from './shared/overlay-render.js';
-import { heightAtGrid, heightGrid } from './shared/overlay-geometry.js';
-import { fixedText, byteToIndex } from './shared/spans.js';
+import { buildStatusLine, paintStatusLine } from '../../editor/js/view/status-line.js';
+import { MessagesBody } from '../../editor/js/view/messages-panel.js';
+import { html, render } from '../../editor/js/view/html.js';
+import { detailsFor, setExplainBase, statusOf, countsText } from '../../editor/js/messages.js';
+import { drawn, marksOf, markAtOffset, parsePins, sourceRange } from '../../editor/js/overlay-marks.js';
+import { markAtPoint, renderMarks } from '../../editor/js/overlay-render.js';
+import { heightAtGrid, heightGrid } from '../../editor/js/overlay-geometry.js';
+import { fixedText, byteToIndex } from '../../editor/js/spans.js';
 import { DRAFT_CELLS, DRAFT_TIER } from './engine.js';
 import { CardLog } from './site-log.js';
 import { SourcePane } from './source-pane.js';
@@ -90,6 +90,8 @@ export class Card {
     this.view = grid.querySelector('.dtx-view') ?? grid.appendChild(el('figure', 'dtx-view'));
     this.poster = this.view.querySelector('.dtx-poster');
     host.querySelector('.dtx-wake')?.remove();
+    // the card draws its own marks now: the ones on the poster are put away
+    host.querySelector('.dtx-pre')?.remove();
     this.gl = el('canvas', 'dtx-gl', { 'aria-label': 'The tile, in 3D: drag to turn it', role: 'img', tabindex: '0' });
     this.ov = el('canvas', 'dtx-ov', { 'aria-hidden': 'true' });
     this.badge = el('div', 'dtx-badge', { role: 'status' });

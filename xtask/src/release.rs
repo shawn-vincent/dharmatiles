@@ -268,10 +268,11 @@ pub fn run_release(root: &Path, args: &[String]) -> Result<(), String> {
     write(&manifest_path, &manifest)?;
     write(&changelog_path, &changelog)?;
     cargo(root, &["build", "--release"])?; // Cargo.lock takes the version
-    git(
-        root,
-        &["add", "Cargo.toml", "Cargo.lock", "docs/changelog.html"],
-    )?;
+    // the examples' posters are named by the build key, which names the engine by its version: the new version
+    // renames every poster, so the cards the pages carry are written again, and checked, before they are committed
+    crate::docs::run(root, false)?;
+    crate::docs::run(root, true)?;
+    git(root, &["add", "Cargo.toml", "Cargo.lock", "docs"])?;
     git(root, &["commit", "-q", "-m", &v.to_string()])?;
     git(
         root,

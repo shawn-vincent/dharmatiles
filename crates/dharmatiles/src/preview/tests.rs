@@ -219,8 +219,27 @@ fn serves_the_docs_an_explain_link_opens() {
     // the page's own style and the folder's index come from the same place
     assert!(get(&r, "/docs/assets/site.css").0.contains("text/css"));
     assert!(get(&r, "/docs/").0.starts_with("HTTP/1.1 200"));
+    // the editor's scripts and libraries are where the site's pages import them from, the files the editor itself is served
+    for p in [
+        "/docs/editor/js/messages.js",
+        "/docs/editor/vendor/three.module.min.js",
+        "/docs/editor/vendor/OrbitControls.js",
+    ] {
+        let (head, body) = get(&r, p);
+        assert!(
+            head.starts_with("HTTP/1.1 200") && head.contains("javascript"),
+            "{p}: {head}"
+        );
+        assert_eq!(
+            body,
+            get(&r, p.strip_prefix("/docs/editor").unwrap()).1,
+            "{p}"
+        );
+    }
     // nothing outside the docs folder, however the path is spelt
     for p in [
+        "/docs/editor/js/../../Cargo.toml",
+        "/docs/editor/nope.js",
         "/docs/../Cargo.toml",
         "/docs/e/../../Cargo.toml",
         "/docs/%2e%2e/Cargo.toml",

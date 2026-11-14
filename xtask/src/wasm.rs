@@ -6,7 +6,7 @@
 //! (`--target web`), shrinks it with `wasm-opt` when that is installed, and
 //! writes the bundle: the `.wasm`, its JS glue, `library.json` (the library's
 //! parts, printers and tiles, `lib:` path to text, which the page hands to the
-//! module), the page `web/wasm/index.html` and its build worker `worker.js`.
+//! module), the page `web/wasm/index.html` and its build worker `worker.js`, and `theme.css` with its fonts (the page's one stylesheet).
 //!
 //! Compiling Manifold for wasm needs cmake, git and an LLVM clang with
 //! `wasm-ld` (`brew install llvm lld cmake`); their Homebrew folders are put
@@ -133,6 +133,22 @@ pub fn run_wasm(root: &Path, args: &[String]) -> Result<(), String> {
         let from = root.join("web/wasm").join(page);
         fs::copy(&from, out.join(page))
             .map_err(|e| format!("cannot copy {}: {e}", from.display()))?;
+    }
+
+    // the page reads the one visual system, `theme.css` and its fonts, from the docs: the bundle holds them beside it, not a copy in the page
+    let assets = root.join("docs/assets");
+    fs::copy(assets.join("theme.css"), out.join("theme.css"))
+        .map_err(|e| format!("cannot copy theme.css: {e}"))?;
+    let fonts = out.join("fonts");
+    fs::create_dir_all(&fonts).map_err(|e| format!("cannot make {}: {e}", fonts.display()))?;
+    for e in
+        fs::read_dir(assets.join("fonts")).map_err(|e| format!("cannot read the fonts: {e}"))?
+    {
+        let from = e.map_err(|e| e.to_string())?.path();
+        if let Some(name) = from.file_name() {
+            fs::copy(&from, fonts.join(name))
+                .map_err(|e| format!("cannot copy {}: {e}", from.display()))?;
+        }
     }
 
     for f in [

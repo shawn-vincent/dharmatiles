@@ -16,9 +16,8 @@
 //! examples` makes them here); the markup naming them is, and `docs --check` fails when it is stale.
 //!
 //! It also writes, on every page that has a card, the head block that loads the card element and the import map its modules
-//! use, and mirrors the editor's modules a card reads (`web/preview/js` into `docs/assets/live/shared/`, the vendored libraries
-//! into `docs/assets/live/vendor/`): the site is a folder of files, and these are the editor's own, copied by a program that
-//! checks them, never by hand.
+//! use.  The editor's own modules and vendored libraries are not copied: the cards import them at `<site>/editor/js` and `<site>/editor/vendor`,
+//! which each place that serves the site provides from `web/preview` (the deploy job, the program's docs route).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -29,21 +28,14 @@ const CLOSE: &str = "<!-- /gen:example -->";
 const HEAD_OPEN: &str = "<!-- gen:live-head -->";
 const HEAD_CLOSE: &str = "<!-- /gen:live-head -->";
 
-/// The vendored libraries a card's modules name, as the import map says them: (specifier, file in `web/preview/vendor`).
-const VENDOR: [(&str, &str); 7] = [
+/// The vendored libraries a card's modules name, as the import map says them: (specifier, file in `web/preview/vendor`, served at `<site>/editor/vendor`).
+const VENDOR: [(&str, &str); 6] = [
     ("preact", "preact.mjs"),
     ("preact/hooks", "preact-hooks.mjs"),
     ("htm", "htm.mjs"),
     ("@preact/signals", "preact-signals.mjs"),
     ("@preact/signals-core", "preact-signals-core.mjs"),
     ("three", "three.module.min.js"),
-    ("three/orbit", "OrbitControls.js"),
-];
-const LICENSES: [&str; 4] = [
-    "LICENSE-three",
-    "LICENSE-preact",
-    "LICENSE-preact-signals",
-    "LICENSE-htm",
 ];
 
 fn read(p: &Path) -> Result<String, String> {
@@ -134,7 +126,9 @@ fn block(root: &Path, card: &Card, key: &str, rel: &str) -> Result<String, Strin
     let ratio = format!("aspect-ratio: {} / {}", size.0, size.1);
     let view = match (&card.expect, key.strip_prefix("error:")) {
         (Some(code), Some(got)) if code == got => format!(
-            "<figure class=\"dtx-view dtx-nothing\" style=\"{ratio}\"><div class=\"dtx-nobuild\"><b>Nothing builds</b><span>this source gives <code>{}</code></span></div></figure>",
+            "<figure class=\"dtx-view dtx-nothing\" style=\"{ratio}\"><div class=\"dtx-nobuild\"><b>Nothing builds</b><span>this source gives <a class=\"codelink\" href=\"{rel}e/{}.html\"><code>{}</code></a></span></div></figure>",
+            // written as `codes.rs`'s linking writes a mention, so the two generators leave each other's output alone
+            esc(code.strip_prefix("dt::").unwrap_or(code)),
             esc(code)
         ),
         (Some(code), got) => {
@@ -227,7 +221,7 @@ fn head_block(text: &str, rel: &str, wanted: bool) -> Result<String, String> {
     }
     let map: Vec<String> = VENDOR
         .iter()
-        .map(|(spec, file)| format!("\"{spec}\":\"{rel}assets/live/vendor/{file}\""))
+        .map(|(spec, file)| format!("\"{spec}\":\"{rel}editor/vendor/{file}\""))
         .collect();
     let block = format!(
         "{HEAD_OPEN}\n<script type=\"importmap\">{{\"imports\":{{{}}}}}</script>\n<script type=\"module\" src=\"{rel}assets/live/dt-example.js\"></script>\n{HEAD_CLOSE}\n",
@@ -240,149 +234,7 @@ fn head_block(text: &str, rel: &str, wanted: bool) -> Result<String, String> {
     Ok(text)
 }
 
-/// Every file the cards' modules read from the editor, and where each is mirrored: (source, mirror).
-fn mirror_plan(root: &Path) -> Result<BTreeMap<PathBuf, PathBuf>, String> {
-    let live = root.join("docs/assets/live");
-    let js = root.join("web/preview/js");
-    let mut seeds = Vec::new();
-    for f in std::fs::read_dir(&live).map_err(|e| e.to_string())? {
-        let p = f.map_err(|e| e.to_string())?.path();
-        if p.extension().is_some_and(|x| x == "js") {
-            for spec in imports(&read(&p)?) {
-                if let Some(rel) = spec.strip_prefix("./shared/") {
-                    seeds.push(js.join(rel));
-                }
-            }
-        }
-    }
-    let mut plan = BTreeMap::new();
-    let mut todo = seeds;
-    while let Some(f) = todo.pop() {
-        if plan.contains_key(&f) {
-            continue;
-        }
-        let rel = f
-            .strip_prefix(&js)
-            .map_err(|_| format!("{} is not under web/preview/js", f.display()))?;
-        for spec in imports(&read(&f)?) {
-            if spec.starts_with('.') {
-                let dir = f.parent().ok_or("a module with no folder")?;
-                let t = normalize(&dir.join(&spec));
-                if !t.starts_with(&js) {
-                    return Err(format!(
-                        "{} imports {spec}, outside web/preview/js",
-                        f.display()
-                    ));
-                }
-                todo.push(t);
-            }
-        }
-        plan.insert(f.clone(), live.join("shared").join(rel));
-    }
-    for (_, file) in VENDOR {
-        plan.insert(
-            root.join("web/preview/vendor").join(file),
-            live.join("vendor").join(file),
-        );
-    }
-    for l in LICENSES {
-        plan.insert(
-            root.join("web/preview/vendor").join(l),
-            live.join("vendor").join(l),
-        );
-    }
-    Ok(plan)
-}
-
-fn normalize(p: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for c in p.components() {
-        match c {
-            std::path::Component::ParentDir => {
-                out.pop();
-            }
-            std::path::Component::CurDir => {}
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-/// The specifiers a module imports (`import … from 'x'`, `import 'x'`, `export … from 'x'`), comments aside.
-fn imports(text: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in text.lines() {
-        let t = line.trim_start();
-        if t.starts_with("//") || t.starts_with('*') {
-            continue;
-        }
-        let relevant =
-            t.starts_with("import ") || t.starts_with("export ") || t.starts_with("} from");
-        if !relevant {
-            continue;
-        }
-        if let Some(i) = t
-            .rfind(" from ")
-            .map(|i| i + 6)
-            .or_else(|| t.starts_with("import '").then_some(7))
-        {
-            let q = t[i..].trim_start();
-            if let Some(quote) = q.chars().next().filter(|c| *c == '\'' || *c == '"')
-                && let Some(end) = q[1..].find(quote)
-            {
-                out.push(q[1..=end].to_owned());
-            }
-        }
-    }
-    out
-}
-
-/// Copy the mirrors (or, with `check`, say which are stale).
-fn mirror(root: &Path, check: bool, stale: &mut Vec<String>) -> Result<(), String> {
-    let plan = mirror_plan(root)?;
-    let live = root.join("docs/assets/live");
-    let mut wanted: BTreeSet<PathBuf> = BTreeSet::new();
-    for (from, to) in &plan {
-        wanted.insert(to.clone());
-        let src = std::fs::read(from).map_err(|e| format!("{}: {e}", from.display()))?;
-        if std::fs::read(to).ok().as_deref() == Some(&src) {
-            continue;
-        }
-        if check {
-            stale.push(to.display().to_string());
-        } else {
-            if let Some(d) = to.parent() {
-                std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
-            }
-            std::fs::write(to, src).map_err(|e| format!("{}: {e}", to.display()))?;
-            println!("docs: wrote {}", to.display());
-        }
-    }
-    // a mirror of something no card reads any more
-    for sub in ["shared", "vendor"] {
-        let dir = live.join(sub);
-        if !dir.is_dir() {
-            continue;
-        }
-        let mut all = Vec::new();
-        for ext in ["js", "mjs"] {
-            files_under(&dir, ext, &mut all)?;
-        }
-        for f in all {
-            if !wanted.contains(&f) {
-                if check {
-                    stale.push(format!("{} (nothing reads it)", f.display()));
-                } else {
-                    std::fs::remove_file(&f).map_err(|e| e.to_string())?;
-                    println!("docs: removed {}", f.display());
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-/// `cargo xtask docs`'s part: the cards' markup, the head blocks and the mirrors.
+/// `cargo xtask docs`'s part: the cards' markup, the head blocks.
 pub fn run(root: &Path, check: bool) -> Result<(), String> {
     let docs = root.join("docs");
     let mut pages = Vec::new();
@@ -416,7 +268,6 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
             }
         }
     }
-    mirror(root, check, &mut stale)?;
     if stale.is_empty() {
         Ok(())
     } else {
@@ -451,7 +302,11 @@ pub fn posters(root: &Path, args: &[String]) -> Result<(), String> {
     let keyed = keys(root, &files)?;
     let todo: Vec<&String> = keyed
         .iter()
-        .filter(|(_, k)| !k.starts_with("error:") && !out.join(format!("{k}.jpg")).is_file())
+        .filter(|(_, k)| {
+            !k.starts_with("error:")
+                && !(out.join(format!("{k}.jpg")).is_file()
+                    && out.join(format!("{k}.map.json")).is_file())
+        })
         .map(|(f, _)| f)
         .collect();
     if todo.is_empty() {
@@ -469,8 +324,17 @@ pub fn posters(root: &Path, args: &[String]) -> Result<(), String> {
             .stdout(std::process::Stdio::null()),
     )?;
     for (f, k) in &keyed {
+        if k.starts_with("error:") {
+            continue;
+        }
+        // the map beside the poster, by the same key
+        let map = out.join(format!("{k}.map.json"));
+        if !map.is_file() {
+            std::fs::copy(tmp.join(format!("{k}.map.json")), &map)
+                .map_err(|e| format!("{f}: no map was made: {e}"))?;
+        }
         let jpg = out.join(format!("{k}.jpg"));
-        if k.starts_with("error:") || jpg.is_file() {
+        if jpg.is_file() {
             continue;
         }
         let png = tmp.join(format!("{k}.png"));

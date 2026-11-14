@@ -38,6 +38,22 @@ class DtExample extends HTMLElement {
       view.append(b);
       view.addEventListener('pointerdown', () => this.wake());
     }
+    // marks the page picks are on the picture from the start, drawn from the map beside the poster, when it comes into view
+    if (view && (this.hasAttribute('overlay') || this.hasAttribute('highlight')) && this.querySelector('.dtx-poster')) {
+      const io = new IntersectionObserver((seen) => {
+        if (!seen.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        import('./poster-overlay.js').then((m) => m.drawOnPoster(this)).catch((e) => {
+          // loud, in the card: a poster that should carry marks and does not is a defect
+          const p = document.createElement('p');
+          p.className = 'dtx-fail';
+          p.setAttribute('role', 'alert');
+          p.textContent = `The marks on this picture could not be drawn: ${e.message}`;
+          this.prepend(p);
+        });
+      });
+      io.observe(this);
+    }
     // a card with no picture (an example that must fail) wakes from its source
     code?.addEventListener('pointerup', () => { if (getSelection()?.isCollapsed) this.wake(); });
     code?.setAttribute('tabindex', '0');

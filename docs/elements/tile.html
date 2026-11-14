@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="../assets/site.css">
 <script src="../assets/site.js"></script>
 <!-- gen:live-head -->
-<script type="importmap">{"imports":{"preact":"../assets/live/vendor/preact.mjs","preact/hooks":"../assets/live/vendor/preact-hooks.mjs","htm":"../assets/live/vendor/htm.mjs","@preact/signals":"../assets/live/vendor/preact-signals.mjs","@preact/signals-core":"../assets/live/vendor/preact-signals-core.mjs","three":"../assets/live/vendor/three.module.min.js","three/orbit":"../assets/live/vendor/OrbitControls.js"}}</script>
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
 <script type="module" src="../assets/live/dt-example.js"></script>
 <!-- /gen:live-head -->
 </head>
@@ -84,7 +84,7 @@ tile size=&quot;1x1&quot; seed=7 {
 </dt-example>
 <dt-example src="examples/units/no-unit.dtile" expect-error="dt::unit">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view dtx-nothing" style="aspect-ratio: 1 / 1"><div class="dtx-nobuild"><b>Nothing builds</b><span>this source gives <code>dt::unit</code></span></div></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view dtx-nothing" style="aspect-ratio: 1 / 1"><div class="dtx-nobuild"><b>Nothing builds</b><span>this source gives <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a></span></div></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
 // A bare number is not a length: the wobble needs a unit, so this tile does not build.
 tile size=&quot;1x1&quot; seed=4 {

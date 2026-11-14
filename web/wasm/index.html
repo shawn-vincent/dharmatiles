@@ -1,51 +1,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>dharmatiles in the browser</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="theme.css">
 <style>
-/* tokens copied from docs/assets/theme.css: Lichen & Linen by day, Moonpool at night */
-:root {
-  --f-display: "Big Shoulders Display", "Arial Narrow", sans-serif-condensed, Impact, sans-serif;
-  --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
-  --f-code: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
-  --r: 5px; --r-lg: 10px;
-  --fs-s: 12px; --lh-s: 16px; --fs-m: 14px; --lh-m: 20px; --fs-l: 17px; --lh-l: 24px; --fs-xl: 28px;
-  --plate: #D9E0EB; --plate-hi: #EBEFF5; --plate-ink: #2B3340;
-  --caution: #E2C21C;
-  --bg: #F3F2EC; --panel: #E6EAE1; --raised: #FCFCF8; --line: #C9D1C8; --line-2: #AEBBB0;
-  --ink: #1D2922; --muted: #657168;
-  --accent: #287B62; --accent-hi: #1F654F; --on-accent: #F5FFF9;
-  --water: #337F8A; --earth: #987563;
-  --ok: #397A55; --err: #B83B2E;
-  --code-bg: #E6EAE1;
-  --shadow: 0 1px 2px rgb(29 41 34 / .06), 0 12px 30px -18px rgb(40 51 45 / .3);
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --r: 4px; --r-lg: 8px;
-  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
-  --ink: #EAF7F5; --muted: #91A9AD;
-  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
-  --water: #83A8FF; --earth: #C08A73;
-  --ok: #50B780; --err: #F06A5C;
-  --code-bg: #061015;
-  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 28px -10px rgb(0 0 0 / .6);
-  color-scheme: dark;
-} }
-:root[data-theme="dark"] {
-  --r: 4px; --r-lg: 8px;
-  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
-  --ink: #EAF7F5; --muted: #91A9AD;
-  --accent: #38C9B3; --accent-hi: #6EE0CD; --on-accent: #051513;
-  --water: #83A8FF; --earth: #C08A73;
-  --ok: #50B780; --err: #F06A5C;
-  --code-bg: #061015;
-  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 10px 28px -10px rgb(0 0 0 / .6);
-  color-scheme: dark;
-}
-
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--fs-m)/var(--lh-m) var(--f-body); padding-inline: 16px; }
 .wrap { max-width: 1400px; margin: 0 auto; padding-block: 16px 40px; }

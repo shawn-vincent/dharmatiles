@@ -206,6 +206,10 @@ jobs:
       - run: |
           mkdir -p out/site-pages
           cp -R docs/. out/site-pages/
+          # the editor's own scripts and libraries, at the one address the cards import them from: the site keeps no copy of them
+          mkdir -p out/site-pages/editor
+          cp -R web/preview/js out/site-pages/editor/js
+          cp -R web/preview/vendor out/site-pages/editor/vendor
           echo "${{ steps.sha.outputs.sha }}" > out/site-pages/COMMIT
       - uses: actions/upload-artifact@v4
         with:

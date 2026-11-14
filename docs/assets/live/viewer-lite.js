@@ -7,7 +7,7 @@
 // back (`release`) when another card takes the view; the others show their poster.
 
 import * as THREE from 'three';
-import { OrbitControls } from './vendor/OrbitControls.js';
+import { OrbitControls } from '../../editor/vendor/OrbitControls.js';
 
 /** The plate the tile is shown on (theme.css `--plate`), as the program's own pictures have it. */
 const PLATE = 0xd9e0eb;

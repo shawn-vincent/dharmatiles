@@ -14,6 +14,17 @@ pub(super) fn serve(path: &str) -> Reply {
         return fail::refused("404 Not Found", "not found").into();
     };
     let rel = rel.split(['?', '#']).next().unwrap_or("");
+    // the editor's own scripts and libraries, at the address the site's pages import them from (`<site>/editor/js`, `/editor/vendor`):
+    // the files the program embeds for its editor, so the cards on a page run the same code and there is no second copy of it
+    if let Some(file) = rel.strip_prefix("editor/")
+        && (file.starts_with("js/") || file.starts_with("vendor/"))
+        && !file.contains("..")
+    {
+        return match super::assets::find(&format!("/{file}")) {
+            Some((ctype, body)) => Reply::Asset(ctype, Cow::Borrowed(body)),
+            None => fail::refused("404 Not Found", "not found").into(),
+        };
+    }
     let Some(dir) = dt_eval::source::docs_dir() else {
         return fail::failure(
             "404 Not Found",
@@ -57,6 +68,8 @@ fn content_type(file: &Path) -> &'static str {
         Some("jpg" | "jpeg") => "image/jpeg",
         Some("webp") => "image/webp",
         Some("woff2") => "font/woff2",
+        // the engine module: the browser compiles it as it arrives only when it is told it is WebAssembly
+        Some("wasm") => "application/wasm",
         _ => "application/octet-stream",
     }
 }

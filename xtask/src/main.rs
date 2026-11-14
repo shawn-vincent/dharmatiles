@@ -52,7 +52,8 @@ commands:
            number a release: the changelog's Unreleased entry becomes
            <version>, dated today and led by <summary>; Cargo.toml's
            version is bumped; fmt, clippy, docs --check and the tests run
-           (--no-tests skips the tests); then one commit, the tag
+           (--no-tests skips the tests); the docs are written again for the
+           new version (the examples' poster names carry it); then one commit, the tag
            v<version>, and a push of both (--no-push keeps them local)
   wasm <out-dir> | --check
            build the browser bundle of the language crates (dt-web) into

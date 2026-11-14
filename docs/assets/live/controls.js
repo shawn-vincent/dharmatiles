@@ -4,7 +4,7 @@
 // source survive and the marks in it stay true.  Typing in the source moves the slider, because the slider reads its value from
 // the same span after every check.  Pure: no DOM.
 
-import { byteToIndex } from './shared/spans.js';
+import { byteToIndex } from '../../editor/js/spans.js';
 
 /** What a slider covers when the page does not say (`controls="wobble:0..12"`): [min, max, step]. */
 const RANGES = { wobble: [0, 12, 0.5], width: [2, 30, 1], seed: [1, 999, 1] };

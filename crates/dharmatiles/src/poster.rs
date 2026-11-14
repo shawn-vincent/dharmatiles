@@ -57,16 +57,48 @@ pub(crate) fn run(files: &[PathBuf], out: Option<&Path>) -> u8 {
         };
         say!("{path}\t{key}");
         let Some(dir) = out else { continue };
+        // the map of the tile (what the overlay draws), named by the same key: the page draws its marks over the poster
+        // before the engine has woken
+        let map = dir.join(format!("{key}.map.json"));
         let png = dir.join(format!("{key}.png"));
-        if png.is_file() {
-            continue;
-        }
-        if let Err(e) = write_png(&path, &opts, &png) {
+        let made = write_map(&path, &opts, &map).and_then(|()| {
+            if png.is_file() {
+                Ok(())
+            } else {
+                write_png(&path, &opts, &png)
+            }
+        });
+        if let Err(e) = made {
             tell!("error: {path}: {e}");
             code = ERROR;
         }
     }
     code
+}
+
+fn write_map(path: &str, opts: &dt_eval::Options, to: &Path) -> Result<(), String> {
+    if to.is_file() {
+        return Ok(());
+    }
+    let text = Files.read(path)?;
+    let checked = check(&Files, path, opts).map_err(|errs| {
+        errs.iter()
+            .map(|d| format!("{}: {}", d.code, d.message))
+            .collect::<Vec<_>>()
+            .join("; ")
+    })?;
+    let map = dt_eval::map::json(&checked, &text, opts.units()).map_err(|errs| {
+        errs.iter()
+            .map(|d| format!("{}: {}", d.code, d.message))
+            .collect::<Vec<_>>()
+            .join("; ")
+    })?;
+    if let Some(dir) = to.parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    }
+    let json = serde_json::to_string(&map).map_err(|e| e.to_string())?;
+    std::fs::write(to, json).map_err(|e| format!("cannot write {}: {e}", to.display()))
 }
 
 fn write_png(path: &str, opts: &dt_eval::Options, png: &Path) -> Result<(), String> {
