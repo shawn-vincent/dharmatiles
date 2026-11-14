@@ -36,6 +36,13 @@ const FACE_GRAIN_MM: f64 = 0.25;
 const FACE_GRAIN_LEN_MM: f64 = 1.0;
 const FIT_GAP_MM: f64 = 0.02;
 const TEX_EDGE_MM: f64 = 0.25;
+/// The kernel's tolerance on a refined stone, mm: refining the stone leaves
+/// needle fans (edges of a micron or less), and where those meet another
+/// stone's near-coincident face a union makes micron slivers that the gate
+/// must push apart. The refined stone is rebuilt at this tolerance, which
+/// collapses every edge shorter than it (far under the grain and under a
+/// float32 step at the tile's size), before the grain moves a vertex.
+pub const GRAIN_TOLERANCE_MM: f64 = 0.002;
 const SHARP_EDGE_DEG: f64 = 18.0;
 const EDGE_KEEP_MM: f64 = 0.5;
 const TEX_BASE_FADE_MM: f64 = 0.8;
@@ -520,6 +527,8 @@ pub fn grain(
         }
     }
     let (p, t) = rock.refined(TEX_EDGE_MM);
+    // the refinement's needle fans collapsed before the grain moves anything
+    let (p, t) = dt_kit::welded(&rock.rebuilt_at(p, t, GRAIN_TOLERANCE_MM)?.mesh());
     // angle-weighted vertex normals, smoothed 4x
     let mut n = vec![[0.0; 3]; p.len()];
     for tr in &t {
@@ -1103,5 +1112,43 @@ mod tests {
             let (o, _) = run(beds);
             assert!(o < 0.05, "{beds:?}: {o}");
         }
+    }
+
+    /// A grained stone has no needle: no edge of its surface is shorter than
+    /// the grain tolerance, though refining a box leaves fans of them.
+    #[test]
+    fn a_grained_stone_has_no_needle_edges() {
+        // a faceted stone: the hull of scattered points, many thin facets
+        let pts: Vec<V> = (0..60)
+            .map(|i| {
+                let f = f64::from(i);
+                let (a, b) = (
+                    (f * 2.399_963).rem_euclid(std::f64::consts::TAU),
+                    (f * 0.618_034).fract(),
+                );
+                let (r, z) = (6.0 + 0.4 * (f * 1.7).sin(), 3.0 + 18.0 * b);
+                [16.0 + r * a.cos(), 13.0 + 0.5 * r * a.sin(), z]
+            })
+            .collect();
+        let rock = dt_kit::hull(&pts).unwrap();
+        let slot = {
+            let mut sc =
+                dt_kit::Scene::new(dt_kit::Frame::dungeonblocks(1, 1), dt_kit::Seed::new(1));
+            sc.slots(1, dt_kit::Material::Rock).unwrap().get(0)
+        };
+        let piece = Piece::new(slot, &rock).unwrap();
+        let g = grain(&piece, 7, 3.0, None).unwrap();
+        let (p, t) = dt_kit::welded(&g.mesh());
+        let mut shortest = f64::INFINITY;
+        for tr in &t {
+            for k in 0..3 {
+                let d = norm(sub(p[tr[k] as usize], p[tr[(k + 1) % 3] as usize]));
+                shortest = shortest.min(d);
+            }
+        }
+        assert!(
+            shortest >= 0.5 * GRAIN_TOLERANCE_MM,
+            "shortest edge {shortest} mm"
+        );
     }
 }
