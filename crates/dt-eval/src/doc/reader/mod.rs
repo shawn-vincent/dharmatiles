@@ -715,6 +715,7 @@ impl Reader<'_> {
                             "within a millimetre of the side",
                         )
                         .suggest(span, &written(to))
+                        .moving((to[0] - p[0]).hypot(to[1] - p[1]))
                         .also(Some("a line that reaches a side ends exactly on it, so it meets the next tile's")),
                     );
                     return;
@@ -737,6 +738,7 @@ impl Reader<'_> {
                                 .word_for(&pl, at, cols, rows)
                                 .unwrap_or_else(|| written(to)),
                         )
+                        .moving((at - pl.at).abs())
                         .also(Some(&format!(
                             "the nearest seam of this square's edge is {}; `seams=free` on the tile lets its lines cross anywhere",
                             share(at)
@@ -758,7 +760,12 @@ impl Reader<'_> {
                             "a point on a tile side is one place: a range on it would draw a different place for each seed",
                             "a range on a side",
                         )
-                        .help("write the place alone, a seam such as `n` (halfway along the north side), so it meets the next tile's"),
+                        // the range's middle, one place; a middle that is no seam is the next check's `dt::seam`, with its own fix
+                        .suggest(
+                            span,
+                            &written([f64::midpoint(dx.lo(), dx.hi()), f64::midpoint(dy.lo(), dy.hi())]),
+                        )
+                        .also(Some("a point on a side is written as the one place (a seam such as `n`, halfway along the north side), so it meets the next tile's")),
                     );
                 }
             }

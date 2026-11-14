@@ -83,6 +83,8 @@ pub struct WordError {
     pub help: Option<String>,
     /// A near word to offer as a fix.
     pub near: Option<String>,
+    /// The word whose writing mends it, when `help` names it exactly (`nw` for `nw(2)`): the help and a fix.
+    pub mend: Option<String>,
 }
 
 fn side_index(side: Edge) -> usize {
@@ -262,6 +264,7 @@ impl SeamTable {
                     message: format!("`{name}` is a corner of the tile and takes no number"),
                     help: Some(format!("write `{name}`")),
                     near: None,
+                    mend: Some(name.to_owned()),
                 }),
             });
         }
@@ -278,6 +281,7 @@ impl SeamTable {
                 message: format!("`{name}` is not a place on a tile's side"),
                 help: None,
                 near: Some(near.to_owned()),
+                mend: None,
             }));
         };
         let n = squares_along(side, cols, rows);
@@ -293,6 +297,7 @@ impl SeamTable {
                         self.numbered(name, side, cols, rows).join(", ")
                     )),
                     near: None,
+                    mend: None,
                 }));
             }
             (Some(k), _) if (1..=n).contains(&k) => k,
@@ -310,6 +315,7 @@ impl SeamTable {
                         )
                     }),
                     near: None,
+                    mend: (n == 1).then(|| name.to_owned()),
                 }));
             }
         };

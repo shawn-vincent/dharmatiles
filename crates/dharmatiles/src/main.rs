@@ -53,6 +53,7 @@ mod check;
 mod cli;
 mod elements;
 mod explain;
+mod fix;
 mod inventory;
 mod library;
 mod mcp;
@@ -134,6 +135,18 @@ fn main() -> ExitCode {
             };
             check::check(&paths, &opts, json, explain)
         }
+        Command::Fix {
+            paths,
+            write,
+            system,
+            printer,
+        } => match options(&system, &printer, None) {
+            Ok(opts) => fix::fix(&paths, &opts, write),
+            Err(e) => {
+                tell!("error: {e}");
+                return ExitCode::from(ERROR);
+            }
+        },
         Command::Build {
             paths,
             all,

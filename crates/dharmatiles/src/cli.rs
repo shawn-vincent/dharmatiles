@@ -334,6 +334,22 @@ pub(crate) enum Command {
         #[arg(long)]
         explain: bool,
     },
+    /// Mend what the program can mend in your tiles: a point off a seam moved onto the nearest, a misspelt word
+    /// written right, each mistake that carries a fix.  Shows the change; `--write` makes it.
+    Fix {
+        /// Tile documents, or folders of them.
+        #[arg(required = true)]
+        paths: Vec<String>,
+        /// Write the fixed files (without it, only show what would change).
+        #[arg(long)]
+        write: bool,
+        /// Base system, as for `check`: sizes in millimetres depend on it.
+        #[arg(long, default_value = "db")]
+        system: String,
+        /// Printer profile, as for `check`.
+        #[arg(long, default_value = "default")]
+        printer: String,
+    },
     /// Say what an error code means, from the local copy of its error page: `explain dt::type`.
     Explain {
         /// The code an error printed, such as `dt::type` (or just `type`).

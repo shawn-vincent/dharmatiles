@@ -10,7 +10,7 @@ pub type Src = Arc<NamedSource<String>>;
 
 /// An edit that mends a mistake: the text at `[offset, offset + len)` is written as `replacement`.  Made only by
 /// [`suggest`], together with the help that says the same thing, so the words and the button cannot differ.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Fix {
     /// Byte offset of the text to replace.
     pub offset: usize,
@@ -22,6 +22,18 @@ pub struct Fix {
     pub replacement: String,
     /// The button's words: `Change to dirt`.
     pub label: String,
+    /// How far the fix moves a point, in squares, when it moves one (a seam fix): `fix` shows it in millimetres on the
+    /// build target's square.  Set by [`Fix::moving`], where the diagnostic knows both places.
+    pub moved: Option<f64>,
+}
+
+impl Fix {
+    /// The same fix, saying it moves a point `squares` squares.
+    #[must_use]
+    pub fn moving(mut self, squares: f64) -> Self {
+        self.moved = Some(squares);
+        self
+    }
 }
 
 /// The words of a suggestion, `did you mean `dirt`?`: the one place they are written.  A suggestion with a text to mend
@@ -64,6 +76,13 @@ pub fn mend_camel(text: &str, span: SourceSpan, new: &str) -> (String, Fix) {
     mend(text, span, new, camel_help(new))
 }
 
+/// A fix that writes `word` over the text at `span` of `text`, with `help` saying so in its own words (where the
+/// words are not `did you mean`, as `write `nw``): the help and the fix from one place, as [`suggest`] is.
+#[must_use]
+pub fn mend_with(text: &str, span: SourceSpan, word: &str, help: String) -> (String, Fix) {
+    mend(text, span, word, help)
+}
+
 /// The one function that builds a fix: `word` written over the text at `span` of `text`, with `help` saying so.
 fn mend(text: &str, span: SourceSpan, word: &str, help: String) -> (String, Fix) {
     let (offset, len) = (span.offset().min(text.len()), span.len());
@@ -84,6 +103,7 @@ fn mend(text: &str, span: SourceSpan, word: &str, help: String) -> (String, Fix)
             was: old.to_owned(),
             replacement,
             label: format!("Change to {word}"),
+            moved: None,
         },
     )
 }
@@ -134,6 +154,13 @@ impl DocError {
     /// Suggest `word` for the text at `span`: the help and the fix, from one place.
     pub fn suggest(&mut self, span: SourceSpan, word: &str) {
         let (help, fix) = suggest(self.src.inner(), span, word);
+        self.help = Some(help);
+        self.fix = Some(Box::new(fix));
+    }
+
+    /// `word` written over the text at `span`, with `help` as the advice: the help and the fix together.
+    pub fn mend(&mut self, span: SourceSpan, word: &str, help: String) {
+        let (help, fix) = mend_with(self.src.inner(), span, word, help);
         self.help = Some(help);
         self.fix = Some(Box::new(fix));
     }

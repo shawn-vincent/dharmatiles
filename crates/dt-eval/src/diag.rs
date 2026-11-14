@@ -74,6 +74,23 @@ impl Diag {
         self
     }
 
+    /// `word` written over the text at `span` with `help` as the advice (see [`dt_doc::error::mend_with`]).
+    #[must_use]
+    pub fn mend(mut self, span: SourceSpan, word: &str, help: impl Into<String>) -> Self {
+        let text = self.at.as_ref().map_or("", |(s, _)| s.inner().as_str());
+        let (help, fix) = dt_doc::error::mend_with(text, span, word, help.into());
+        self.help = Some(help);
+        self.fix = Some(Box::new(fix));
+        self
+    }
+
+    /// Say that the fix this problem carries moves a point `squares` squares.
+    #[must_use]
+    pub fn moving(mut self, squares: f64) -> Self {
+        self.fix = self.fix.map(|f| Box::new(f.moving(squares)));
+        self
+    }
+
     /// Say more after the help already there (a suggestion, then why).
     #[must_use]
     pub fn also(mut self, more: Option<&str>) -> Self {

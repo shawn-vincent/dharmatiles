@@ -1596,9 +1596,10 @@ impl<'k> Decoder<'k> {
                         w.message,
                         "not a place on a side",
                     );
-                    match w.near {
-                        Some(near) => d.suggest(span, &near),
-                        None => d.help = w.help,
+                    match (w.near, w.mend, w.help) {
+                        (Some(near), _, _) => d.suggest(span, &near),
+                        (None, Some(word), Some(help)) => d.mend(span, &word, help),
+                        (None, _, help) => d.help = help,
                     }
                     None
                 }

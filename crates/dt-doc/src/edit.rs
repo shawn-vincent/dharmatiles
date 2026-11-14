@@ -1070,6 +1070,100 @@ pub fn rename_mark(text: &str, mark: Mark, old: &str, new: &str) -> Result<Strin
     Ok(out)
 }
 
+/// What [`apply_fixes`] did.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Mended {
+    /// The text with the fixes laid in.
+    pub text: String,
+    /// The fixes that were made, in the order of the text.
+    pub applied: Vec<crate::error::Fix>,
+    /// How many were left for another round: fixes whose text overlaps one made (the next check says them again if
+    /// they still hold).
+    pub deferred: usize,
+}
+
+/// Lay the program's fixes into `text`, the text they were made for: each writes its replacement over its bytes, and
+/// only where the text still reads what the fix saw (`was`).  The one place a fix is applied in Rust; the editor's
+/// page lays the same fix in the same way.  A fix that overlaps one already made waits (`deferred`), and the same
+/// fix twice is made once.
+///
+/// # Errors
+/// A fix whose place no longer reads what it was made for, or lies outside the text.
+pub fn apply_fixes(text: &str, fixes: &[crate::error::Fix]) -> Result<Mended, EditError> {
+    let mut order: Vec<&crate::error::Fix> = fixes.iter().collect();
+    order.sort_by_key(|f| (f.offset, f.len));
+    order.dedup_by(|a, b| a.offset == b.offset && a.len == b.len && a.replacement == b.replacement);
+    let (mut applied, mut deferred) = (Vec::new(), 0);
+    let mut end = 0;
+    for f in order {
+        let there = text.get(f.offset..f.offset + f.len);
+        if there != Some(f.was.as_str()) {
+            return Err(EditError::Cannot(format!(
+                "the text at byte {} no longer reads `{}`: the fix `{}` was made for another text",
+                f.offset, f.was, f.label
+            )));
+        }
+        if f.offset < end || (f.len == 0 && f.offset == end && !applied.is_empty()) {
+            deferred += 1;
+            continue;
+        }
+        end = f.offset + f.len;
+        applied.push(f.clone());
+    }
+    let mut out = text.to_owned();
+    for f in applied.iter().rev() {
+        out.replace_range(f.offset..f.offset + f.len, &f.replacement);
+    }
+    Ok(Mended {
+        text: out,
+        applied,
+        deferred,
+    })
+}
+
+#[cfg(test)]
+mod fix_tests {
+    use super::*;
+    use crate::error::Fix;
+
+    fn fix(text: &str, was: &str, with: &str) -> Fix {
+        Fix {
+            offset: text.find(was).unwrap(),
+            len: was.len(),
+            was: was.into(),
+            replacement: with.into(),
+            label: format!("Change to {with}"),
+            moved: None,
+        }
+    }
+
+    #[test]
+    fn fixes_are_laid_in_from_the_end_and_only_where_the_text_matches() {
+        let t = "a bb ccc";
+        let m = apply_fixes(t, &[fix(t, "ccc", "z"), fix(t, "bb", "yyyy")]).unwrap();
+        assert_eq!(m.text, "a yyyy z");
+        assert_eq!(m.applied.len(), 2);
+        let stale = Fix {
+            offset: 2,
+            len: 2,
+            was: "xx".into(),
+            ..fix(t, "bb", "q")
+        };
+        assert!(apply_fixes(t, &[stale]).is_err());
+    }
+
+    #[test]
+    fn overlapping_fixes_wait_and_a_repeat_is_made_once() {
+        let t = "abcdef";
+        let m = apply_fixes(
+            t,
+            &[fix(t, "abc", "1"), fix(t, "abc", "1"), fix(t, "bcd", "2")],
+        )
+        .unwrap();
+        assert_eq!((m.text.as_str(), m.deferred), ("1def", 1));
+    }
+}
+
 #[cfg(test)]
 mod place_tests {
     use super::*;
