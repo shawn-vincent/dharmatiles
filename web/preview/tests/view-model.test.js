@@ -173,6 +173,32 @@ test('leaving the field without committing drops what was typed', async () => {
   view.set({ msel: [], mprop: null });
 });
 
+test('a piece\'s Seed level shows the same seed strip as the tile level: five candidates, the current first, one write when one is chosen', async () => {
+  const acts = [];
+  const act = new Proxy({}, { get: (_t, name) => (...args) => acts.push([name, ...args]) });
+  const asked = [];
+  // the model's own strip, with a pictures service that only counts what is asked (the real one asks the program)
+  const strip = (p) => ({ svc: { picture: async (s) => { asked.push(s); return null; }, release() {} }, spec: { tile: 't1' }, current: p.seedUsed, owned: new Set([p.seedUsed]), onError: (e) => { throw e; } });
+  render(html`<${MapPanel} m=${{ ...model.mapPanel, seedStrip: strip }} act=${act} />`, root);
+  view.set({ msel: ['p1'], mprop: 'seed' });
+  await settle();
+  assert.equal(propBox().querySelectorAll('.seed-card').length, 0, 'nothing is built until the dice is pressed');
+  propBox().querySelector('.dice').dispatchEvent({ type: 'click' });
+  await settle();
+  const cards = propBox().querySelectorAll('.seed-card');
+  assert.equal(cards.length, 5);
+  const now = model.pieces.value.find((p) => p.id === 'p1').seedUsed;
+  assert.match(cards[0].textContent, new RegExp(`${now}now`));
+  assert.equal(propBox().querySelectorAll('.own').length, 1, 'the seed you own is marked');
+  assert.equal(asked.length, 5);
+  const picked = Number(cards[3].textContent.match(/\d+/)[0]);
+  cards[3].dispatchEvent({ type: 'click' });
+  await settle();
+  assert.deepEqual(acts.at(-1).slice(0, 3), ['setPiece', 'p1', { seed: picked }]);
+  assert.equal(propBox().querySelectorAll('.seed-card').length, 0, 'the strip closes');
+  view.set({ msel: [], mprop: null });
+});
+
 test('a panel keeps no second copy of what it shows: no signature, no hand-made DOM, no stored view', () => {
   for (const f of ['../js/view/map-panel.js', '../js/view/field.js', '../js/editor/scene-panel.js', '../js/editor/model.js']) {
     const src = fs.readFileSync(new URL(f, import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');

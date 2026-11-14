@@ -622,6 +622,11 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/view/sheet.js"),
     ),
     (
+        "/js/view/seed-strip.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/view/seed-strip.js"),
+    ),
+    (
         "/js/view/outline.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/view/outline.js"),

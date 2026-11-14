@@ -16,7 +16,7 @@ import { listFrom } from '../map-list.js';
 import { piecesOf, selectedOf } from '../doc-views.js';
 import { canonOf, pill as invPill, systemName } from '../inventory.js';
 import { showError } from '../problems.js';
-import { thumbs } from './scene-thumbs.js';
+import { seedStripOf, thumbs } from './scene-thumbs.js';
 import { levelOf, placesOf, settledLevel, whereIs, writable } from '../folders.js';
 import { ADD_PANES, mapLevelOf } from '../nav.js';
 import { token } from '../tokens.js';
@@ -202,6 +202,8 @@ export const mapPanel = {
   on: mapOn, tile: tileNow, scene, pieces, selected, marks, list: mapList, mprop, level, inventory, readOnly, waiting,
   // the tile last put on the map (a row of the list lights up for a moment), and the Add tiles level's folder browser
   added: computed(() => (addedNow.value?.doc === tileNow.value?.id ? addedNow.value : null)), fresh: freshNow, add: addData,
+  /** The seed strip of a piece (view/seed-strip.js): its tile at the piece's system, the seed it has now, the seeds you own of it; null for a piece with no tile. */
+  seedStrip: (/** @type {any} */ p) => (p.tileId ? seedStripOf({ tile: p.tileId, system: p.system, current: p.seedUsed, owned: (p.ownedSeeds ?? []).map((/** @type {any} */ o) => o.seed) }) : null),
 };
 
 

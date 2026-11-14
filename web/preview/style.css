@@ -706,6 +706,8 @@ dd.bad { color: var(--over); font-weight: 600; } dd.warn { color: var(--band); }
 .pl-sec { padding: 10px 0 12px; border-bottom: 1px solid var(--line); }
 .pl-sec:last-child { border-bottom: 0; }
 .pl-sec h3 { margin: 0 0 8px; }
+.seed-in { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.seed-in > :first-child { flex: 1; min-width: 0; }
 .pl-field { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 30px; margin: 3px 0; }
 .pl-lab { color: var(--muted); font-size: var(--fs-s); }
 

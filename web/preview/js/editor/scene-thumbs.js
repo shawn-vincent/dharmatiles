@@ -8,8 +8,10 @@ import * as THREE from 'three';
 import { parsePayload } from '../payload.js';
 import { FOV, FRAG, VERT, dirv } from '../viewer/consts.js';
 import { host } from './app.js';
-import { tileById } from './stores.js';
+import { server, tileById } from './stores.js';
 import { createThumbs } from '../thumbs.js';
+import { showError } from '../problems.js';
+import { token } from '../tokens.js';
 
 const W = 176, H = 124;
 let gl = null;
@@ -93,6 +95,23 @@ export const thumbs = createThumbs({
   draw: (buf, spec) => draw(buf, spec.plate ?? '#D9E0EB', spec.w ?? W, spec.h ?? H, spec.view ?? null),
   valid: (spec, got) => { const known = tileById(spec.tile)?.docRev; return known == null || known === got.docRev; },
 });
+
+/**
+ * What the seed strip (view/seed-strip.js) needs, for the tile's seed row and a map piece's Seed level alike: the picture's spec (the
+ * tile, the system it is built for, the build target's printer), the seed the tile has now (null: its own default), the pictures
+ * service, and the seeds you own of it in that system.  Choosing a candidate is the caller's own edit of the seed.
+ * @param {{ tile: string, system: string, current: number | null, owned: number[] }} o
+ */
+export function seedStripOf({ tile, system, current, owned }) {
+  return {
+    svc: thumbs,
+    // read when the strip is drawn, not when the model is made: the theme's plate is asked of the page then
+    get spec() { return { tile, rev: String(tileById(tile)?.docRev ?? 0), system, printer: server.get().printer, plate: token('--plate') || '#D9E0EB', w: W, h: H }; },
+    current,
+    owned: new Set(owned),
+    onError: (/** @type {Error} */ e) => showError('Could not draw a candidate seed', e),
+  };
+}
 
 /**
  * A picture of tile `id` (a data URL), or null when it could not be made (the reason is shown where it is

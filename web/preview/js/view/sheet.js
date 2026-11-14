@@ -22,7 +22,7 @@ import { html, render, useEffect, useRef, useState } from './html.js';
 import { Icon } from './icons.js';
 import { SizeGridBox, parseSize } from './size-grid.js';
 import { ValuePopBox } from './value-pop.js';
-import { Thumb } from '../thumbs.js';
+import { SeedDice, SeedStrip, candidates, newSeed } from './seed-strip.js';
 
 const STEP = { dmm: 0.1, level: 0.1, degrees: 1, percent: 1, count: 1, 'per square': 0.05, number: 0.05 };
 const PX = { count: 10, degrees: 3, percent: 3 }; // pixels a step takes; 4 otherwise
@@ -301,36 +301,9 @@ function ValueCell({ g, c, s, v, inh, ro, api, put, roll, printed }) {
       ${pre ? html`<span class="q">${pre}</span>` : null}${parts.map((p, i) => (p.num != null
         ? html`<span class=${`num${drag.current?.k === p.k ? ' active' : ''}`} key=${i} ...${ro ? {} : scrub(p)}>${none && (live?.[p.k] ?? p.num) === '0' ? 'none' : (live?.[p.k] ?? p.num)}</span>`
         : tidy && i === 2 ? between(p.text) : i > 0 && parts[i - 1].num != null ? afterNumber(p.text) : p.text))}${post ? html`<span class="q">${post}</span>` : null}${!shownRaw ? html`<span class=${inh ? 'absent' : 'unit lost'}>${inh ? inh.text : `no default for ${c.name}`}</span>` : null}</span>`}
-    ${dice ? html`<button type="button" class="dice" title=${roll ? 'Show five arrangements to choose from' : 'Roll a new seed: another arrangement'} aria-label=${roll ? 'Show five seeds' : 'Roll a new seed'} onClick=${roll ?? (() => put(g, c.name, newSeed()))}><${Icon} name="dice" size=${16} /></button>` : null}
+    ${dice ? html`<${SeedDice} roll=${roll} onRoll=${() => put(g, c.name, newSeed())} />` : null}
     ${unit ? html`<span class="unit">${unit}</span>` : null}
     ${printed ? html`<${PrintedSize} g=${g} c=${c} s=${s} v=${v} ro=${ro} body=${unquote(shownRaw)} printed=${printed} api=${api} put=${put} />` : null}`;
-}
-
-// ---- the seed strip -------------------------------------------------------------------------------------------
-
-const newSeed = () => 1 + Math.floor(Math.random() * 9999);
-
-/** Five seeds to look at: the one the tile has now first (`null`: its own default), then four new ones. @param {number | null} current */
-const candidates = (current) => {
-  const seeds = [current];
-  while (seeds.length < 5) { const x = newSeed(); if (!seeds.includes(x)) seeds.push(x); }
-  return seeds;
-};
-
-/**
- * What the dice shows (docs/preview.html, "The seed"): five small pictures of the tile, each built low at its seed by the
- * program on demand (js/thumbs.js), the current one first.  A square marks a seed you own.  Choosing one writes the
- * seed, one step of history; choosing the current one writes nothing.  `s` is the model's `seedStrip`.
- */
-export function SeedStrip({ s, seeds, ro, onPick, onMore, onClose }) {
-  return html`<div class="seed-strip" role="group" aria-label="Seeds to choose from">${seeds.map((seed) => {
-    const now = seed === s.current;
-    return html`<button type="button" key=${seed ?? 'own'} class=${`seed-card${now ? ' on' : ''}`} disabled=${ro && !now} aria-pressed=${String(now)}
-      title=${now ? 'The seed the tile has now' : `Use seed ${seed}`} onClick=${() => onPick(seed)}>
-      <${Thumb} svc=${s.svc} spec=${{ ...s.spec, seed: seed ?? undefined }} onError=${s.onError} />
-      <b>${seed ?? 'default'}</b>${now ? html`<span class="now">now</span>` : null}${seed != null && s.owned.has(seed) ? html`<i class="own" title="You have printed this one"></i>` : null}</button>`;
-  })}</div>
-  <div class="seed-strip-acts"><button type="button" class="btn" onClick=${onMore}>Roll again</button><button type="button" class="btn" onClick=${onClose}>Close</button></div>`;
 }
 
 // ---- the entries that keep their own seed ---------------------------------------------------------------------

@@ -27,7 +27,7 @@ import { showLine } from './panel.js';
 import { haveBlock, isTileDoc } from './inventory.js';
 import { canonOf, tileHave } from '../inventory.js';
 import { token } from '../tokens.js';
-import { thumbs } from './scene-thumbs.js';
+import { seedStripOf } from './scene-thumbs.js';
 import { addTo, lists } from './lists.js';
 
 // ---- what edits do -----------------------------------------------------------------------------------------
@@ -81,22 +81,15 @@ const tileRows = (names) => ({ controls: names.map((n) => nodeControl('tile', n)
 const asWritten = (c) => ({ name: c.name, text: `${c.name}=${c.text}`, span: [c.span[0] - c.name.length - 1, c.span[1] + c.name.length + 1] });
 
 /**
- * What the seed row's dice needs to show five candidates (view/sheet.js `SeedStrip`): the picture's spec (the tile, the
- * build target), the seed the tile has now (null: its own default), the pictures service, and the seeds you own of it in
- * the build target's system.  Choosing a candidate is the row's own edit of the seed: one step of history.
+ * What the seed row's dice needs to show five candidates (view/seed-strip.js `SeedStrip`, the model `seedStripOf` makes for a map
+ * piece too).  Choosing a candidate is the row's own edit of the seed: one step of history.
  */
 function seedStrip(/** @type {any} */ t, /** @type {any} */ own) {
   const written = own.controls.find((/** @type {any} */ c) => c.name === 'seed');
   const n = written ? Number(String(written.text).replace(/"/g, '')) : NaN;
   const inv = server.get().inventory;
   const have = tileHave(inv, canonOf(t.path, inv?.home), server.get().system);
-  return {
-    svc: thumbs,
-    spec: { tile: t.id, rev: String(t.docRev ?? 0), system: server.get().system, printer: server.get().printer, plate: token('--plate') || '#D9E0EB', w: 176, h: 124 },
-    current: Number.isFinite(n) ? n : null,
-    owned: new Set(have.seeds.map((/** @type {any} */ x) => x.seed)),
-    onError: (/** @type {Error} */ e) => showError('Could not draw a candidate seed', e),
-  };
+  return seedStripOf({ tile: t.id, system: server.get().system, current: Number.isFinite(n) ? n : null, owned: have.seeds.map((/** @type {any} */ x) => x.seed) });
 }
 
 /** What a row of the tile level does. */

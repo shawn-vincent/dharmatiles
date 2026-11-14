@@ -19,8 +19,9 @@ import { FolderList } from './places-panel.js';
 import { haveLine, systemName, tileHave } from '../inventory.js';
 import { Field } from './field.js';
 import { Thumb } from '../thumbs.js';
-import { html, useEffect, useRef } from './html.js';
+import { html, useEffect, useRef, useState } from './html.js';
 import { Icon } from './icons.js';
+import { SeedDice, SeedStrip, candidates } from './seed-strip.js';
 import { Button, Section, Seg, plural } from './widgets.js';
 
 /** The last non-empty value of `v`: a level leaving the screen keeps what it showed while it slides out. */
@@ -226,6 +227,20 @@ function PieceView({ m, act, sel }) {
     <//>`;
 }
 
+/** A piece's seed: the field, the dice and the strip of five candidates the tile level's seed row draws (view/seed-strip.js). */
+function PieceSeed({ p, ro, act, strip }) {
+  const [seeds, setSeeds] = useState(/** @type {(number | null)[] | null} */ (null));
+  // a strip is of one piece: another piece starts with it closed
+  useEffect(() => setSeeds(null), [p.id]);
+  return html`<div class="pl-field"><span class="pl-lab">Seed</span>
+      <span class="seed-in"><${Field} type="number" min="0" step="1" disabled=${ro} aria-label="Seed" value=${String(p.seedUsed)}
+        onCommit=${(v) => { if (v !== '') act.setPiece(p.id, { seed: Number(v) }, `${p.name}: seed ${v}`); }} />
+      ${strip && !ro ? html`<${SeedDice} roll=${() => setSeeds(seeds ? null : candidates(strip.current))} />` : null}</span></div>
+    ${strip && seeds ? html`<${SeedStrip} s=${strip} seeds=${seeds} ro=${ro}
+      onPick=${(/** @type {number | null} */ x) => { setSeeds(null); if (x !== strip.current && x != null) act.setPiece(p.id, { seed: x }, `${p.name}: seed ${x}`); }}
+      onMore=${() => setSeeds(candidates(strip.current))} onClose=${() => setSeeds(null)} />` : null}`;
+}
+
 function PropView({ m, act, p, kind }) {
   const ro = m.readOnly.value;
   const sc = m.scene.value;
@@ -248,6 +263,7 @@ function PropView({ m, act, p, kind }) {
   if (kind === 'seed') {
     const mine = p.ownedSeeds ?? [];
     const h = inv ? tileHave(inv, p.canon, p.system) : null;
+    const strip = m.seedStrip(p);
     return html`<${Section} title="Seed">
       <p class="note">A seed is a variant of the tile. Pick one you own to make this piece the same as one you have; otherwise it is a new print.</p>
       ${mine.length
@@ -255,9 +271,7 @@ function PropView({ m, act, p, kind }) {
           <div class="mp-chips">${mine.map((o) => html`<button type="button" key=${o.seed} class=${`mp-chip${o.seed === p.seedUsed ? ' on' : ''}`} title=${`Same as the ${o.have} you have: this piece is on your shelf`} aria-pressed=${String(o.seed === p.seedUsed)} disabled=${ro}
             onClick=${() => act.setPiece(p.id, { seed: o.seed }, `${p.name}: seed ${o.seed}, same as one you have`)}>${`${o.seed}${o.have > 1 ? ` ×${o.have}` : ''}`}</button>`)}</div>`
         : html`<p class="note">You own none of this tile in this system and colour mode.</p>`}
-      <div class="pl-field"><span class="pl-lab">Seed</span>
-        <${Field} type="number" min="0" step="1" disabled=${ro} aria-label="Seed" value=${String(p.seedUsed)}
-          onCommit=${(v) => { if (v !== '') act.setPiece(p.id, { seed: Number(v) }, `${p.name}: seed ${v}`); }} /></div>
+      <${PieceSeed} p=${p} ro=${ro} act=${act} strip=${strip} />
       <div class="mp-row wrap">
         <${Button} text="New variant" run=${() => act.variants('piece')} disabled=${ro} />
         <${Button} text="The tile’s own seed" run=${() => act.setPiece(p.id, { seed: null }, `${p.name}: the tile’s own seed`)} disabled=${ro || p.seed == null} />
