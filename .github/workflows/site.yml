@@ -74,7 +74,9 @@ jobs:
           rustup toolchain install
           rustup target add wasm32-unknown-unknown
           sudo apt-get update
-          sudo apt-get install -y cmake clang lld binaryen
+          # Manifold's C++ for wasm needs an LLVM with wasm32 support and libc++ headers (the build looks in
+          # /usr/lib/llvm-<n>/bin); Ubuntu 24.04's own is 18
+          sudo apt-get install -y cmake clang-18 lld-18 libc++-18-dev libc++abi-18-dev binaryen
       - name: The Rust build cache, keyed by the engine's sources
         if: steps.cached.outputs.cache-hit != 'true'
         uses: Swatinem/rust-cache@v2
