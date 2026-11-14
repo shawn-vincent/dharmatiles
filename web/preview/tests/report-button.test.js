@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { computed, signal } from '@preact/signals-core';
-import { install, settle } from './dom.js';
+import { install, rendered, until } from './dom.js';
 
 const root = install();
 const { render, html } = await import('../js/view/html.js');
@@ -44,25 +44,26 @@ test('only a message that means the program went wrong gets the button', async (
   assert.equal(canReport(message({ seq: -1 })), false, 'a message of the page\'s own has no number to ask the program about');
   const { m, act } = world(message(), mistake());
   render(html`<${MessagesBody} m=${m} act=${act} />`, root);
-  await settle();
+  await until(() => buttons().length > 0, 'the Report this defect button');
+  await rendered(); // the mistake's row is drawn with it: both are one render
   assert.equal(buttons().length, 1, 'one button, on the bug and not on the mistake');
 });
 
 test('the preview shows the report, the checkbox leaves the source out, and the button opens the issue', async () => {
   const { m, act, asked, opened } = world(message());
   render(html`<${MessagesBody} m=${m} act=${act} />`, root);
-  await settle();
+  await until(() => buttons().length === 1, 'the Report this defect button');
   buttons()[0].dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => root.querySelector('.report-body'), 'the report in the preview');
   assert.deepEqual(asked, [[4, false]]);
   assert.ok(root.querySelector('.report-body').textContent.includes('the kernel gave up'));
   const box = root.querySelectorAll('input')[0];
   box.checked = true;
   box.dispatchEvent({ type: 'change', currentTarget: box, target: box });
-  await settle();
+  await until(() => asked.length === 2, 'the report asked for again without the source');
   assert.deepEqual(asked.at(-1), [4, true], 'asked again without the source');
   root.querySelectorAll('button').find((b) => b.textContent === 'Open GitHub issue').dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => opened.length === 1, 'the issue opened');
   assert.deepEqual(opened, ['https://github.com/x/issues/new?title=t']);
 });
 
@@ -73,18 +74,16 @@ test('a shortened address copies the whole report first, and a refused clipboard
   const w = world(message());
   render(null, root); // the last test's row, and its open preview, are gone
   render(html`<${MessagesBody} m=${w.m} act=${w.act} />`, root);
-  await settle();
+  await until(() => buttons().length === 1, 'the Report this defect button');
   buttons()[0].dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => root.querySelector('.report-body'), 'the report in the preview');
   root.querySelectorAll('button').find((b) => b.textContent === 'Open GitHub issue').dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => w.opened.length === 1, 'the issue opened');
   assert.deepEqual(wrote, ['the kernel gave up\n\nEnvironment']);
-  assert.equal(w.opened.length, 1);
   assert.ok(root.textContent.includes('on your clipboard'));
 
   Object.defineProperty(globalThis, 'navigator', { value: { clipboard: { writeText: async () => { throw new Error('denied'); } } }, configurable: true });
   root.querySelectorAll('button').find((b) => b.textContent === 'Open GitHub issue').dispatchEvent({ type: 'click' });
-  await settle();
-  assert.ok(root.textContent.includes('Could not copy the report (denied)'), 'the refusal is said');
+  await until(() => root.textContent.includes('Could not copy the report (denied)'), 'the refusal said');
   globalThis.__truncated = false;
 });
