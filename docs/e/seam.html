@@ -17,17 +17,17 @@
 </header>
 <section class="said" aria-labelledby="said">
 <h2 id="said">What the program says</h2>
-<pre class="said no-hl"><code>dt::seam
+<pre class="said no-hl"><code><span class="a-31">dt::seam</span>
 
-  × column 1, row 1, west side, at 0.4 is not a seam
-   ╭─[example.dtile:3:25]
- 2 │ tile size=&quot;1x1&quot; {
- 3 │     line edge { through &quot;(0sq, 0.4sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-   ·                         ───────┬──────
-   ·                                ╰── not on a seam
- 4 │     stack { dirt }
+  <span class="a-31">×</span> column 1, row 1, west side, at 0.4 is not a seam
+   ╭─[<span class="a-36 a-b a-u">example.dtile:3:25</span>]
+ <span class="a-d">2</span> │ <span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+ <span class="a-d">3</span> │     <span class="tk-node">line</span> edge <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0.4sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+   · <span class="a-35 a-b">                        ───────┬──────</span>
+   ·                                <span class="a-35 a-b">╰── </span><span class="a-35 a-b">not on a seam</span>
+ <span class="a-d">4</span> │     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
    ╰────
-  help: did you mean `wnw`? the nearest seam of this square's edge is 1/3;
+<span class="a-36">  help: </span>did you mean `wnw`? the nearest seam of this square's edge is 1/3;
         `seams=free` on the tile lets its lines cross anywhere
         explain: https://shawn-vincent.github.io/dharmatiles/e/seam
         offline: dharmatiles explain dt::seam</code></pre>
@@ -42,17 +42,17 @@
 <h2 id="example">Broken, then fixed</h2>
 <div class="cp-pair">
 <figure class="broken"><figcaption>Gives <code>dt::seam</code></figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    line edge { through &quot;(0sq, <mark class="del">0.4sq</mark>)&quot; &quot;(1sq, 0.5sq)&quot; }
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> edge <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><mark class="del"><span class="tk-number">0.4sq</span></mark><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 <figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    line edge { through &quot;(0sq, <mark class="ins">0.5sq</mark>)&quot; &quot;(1sq, 0.5sq)&quot; }
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> edge <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><mark class="ins"><span class="tk-number">0.5sq</span></mark><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 </div>
 </section>
 </div>

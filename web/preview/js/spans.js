@@ -20,6 +20,25 @@ export function byteToIndex(text, b) {
   return text.length;
 }
 
+/**
+ * `byteToIndex` for many bytes of one text (a colouring is thousands): the same answers, from one pass.
+ * @param {string} text @returns {(b: number) => number}
+ */
+export function byteIndexer(text) {
+  if (!/[^\x00-\x7f]/.test(text)) return (b) => b;
+  const at = [];
+  let bytes = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.codePointAt(i) ?? 0;
+    const n = c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+    for (let k = 0; k < n; k++) at[bytes + k] = i;
+    bytes += n;
+    if (c >= 0x10000) i++;
+  }
+  at[bytes] = text.length;
+  return (b) => at[b] ?? text.length;
+}
+
 /** `d` is the doc store's state; `tileId` the tile shown. True when its spans describe its text exactly. */
 export function spansFresh(d, tileId) {
   return d.text != null && d.checked === d.text && d.ok === true

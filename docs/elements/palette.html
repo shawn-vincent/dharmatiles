@@ -23,13 +23,13 @@
 </div>
 <article class="doc">
 <h2 id="use" data-explains="dt::palette"><!--gen:anchors--><span id="dt-palette"></span><!--/gen:anchors-->Writing it</h2>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/palettes/default.dtile
-earth "#87553b"
-rock  "#8892a6"
-ramp earth "#381f16" "#5f3526" "#87553b" "#ae8063" "#cfab8c"
-ramp water "#0f2e45" "#17607a@0.45" "#2fa0a0@0.72" "#8cdcc8@0.9" "#e0f5ee@1.04"</code></pre>
+<span class="tk-comment">// library/palettes/default.dtile</span>
+<span class="tk-node">earth</span> <span class="tk-string">"#87553b"</span>
+<span class="tk-node">rock</span>  <span class="tk-string">"#8892a6"</span>
+<span class="tk-node">ramp</span> earth <span class="tk-string">"#381f16"</span> <span class="tk-string">"#5f3526"</span> <span class="tk-string">"#87553b"</span> <span class="tk-string">"#ae8063"</span> <span class="tk-string">"#cfab8c"</span>
+<span class="tk-node">ramp</span> water <span class="tk-string">"#0f2e45"</span> <span class="tk-string">"#17607a@0.45"</span> <span class="tk-string">"#2fa0a0@0.72"</span> <span class="tk-string">"#8cdcc8@0.9"</span> <span class="tk-string">"#e0f5ee@1.04"</span></code></pre>
 <pre><code>dharmatiles build my-tile.dtile --3mf --palette my-palette.dtile
 dharmatiles preview my-tile.dtile --palette my-palette.dtile   # saving it repaints</code></pre>
 <h2 id="reference">Reference</h2>

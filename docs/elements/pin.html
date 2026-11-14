@@ -24,13 +24,13 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>dirt {
-    slope "30deg"
-    pin top="$dirtEdgeHeight" at=edges               // exact at every rim
-    pin knollTop top="$groundHeight + 4dmm" at=knoll // a point
-    pin top="[$waterBedHeight .. $groundHeight + 1dmm]" at=banks   // anywhere from the bed to the land
-    pin top="[$waterBedHeight .. $waterBedHeight + 0.3dmm]" at=bed // later, so it wins inside the bed
-}</code></pre>
+<pre><code><span class="tk-node">dirt</span> <span class="tk-punct">{</span>
+    <span class="tk-node">slope</span> <span class="tk-string">"</span><span class="tk-number">30deg</span><span class="tk-string">"</span>
+    <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges               <span class="tk-comment">// exact at every rim</span>
+    <span class="tk-node">pin</span> knollTop <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">4dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>knoll <span class="tk-comment">// a point</span>
+    <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> .. </span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">1dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>banks   <span class="tk-comment">// anywhere from the bed to the land</span>
+    <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> .. </span><span class="tk-name">$waterBedHeight</span><span class="tk-string"> + </span><span class="tk-number">0.3dmm</span><span class="tk-string">]"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>bed <span class="tk-comment">// later, so it wins inside the bed</span>
+<span class="tk-punct">}</span></code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>What it does</th></tr></thead>

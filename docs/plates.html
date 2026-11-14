@@ -52,17 +52,17 @@
 
 <h2 id="list">The print list</h2>
 <p>A print list is a short KDL v2 document with the extension <code>.dmap</code>, kept in your tiles folder like a tile. It lists pieces, and a <code>plates</code> line says what they are laid out for.</p>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-map {
-    about "A stream crossing, a ruined wall to the north."
-    piece "lib:tiles/ground/1x1-grass"               count=8
-    piece "lib:tiles/water/1x1-water-corridor+grass" count=4 seed=12
-    piece "lib:tiles/walls/1x1-wall-stone"           count=6
-    piece "home:meadows/glade"                       system="ol"
-}
+<span class="tk-node">map</span> <span class="tk-punct">{</span>
+    <span class="tk-node">about</span> <span class="tk-string">"A stream crossing, a ruined wall to the north."</span>
+    <span class="tk-node">piece</span> <span class="tk-string">"lib:tiles/ground/1x1-grass"</span>               <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">8</span>
+    <span class="tk-node">piece</span> <span class="tk-string">"lib:tiles/water/1x1-water-corridor+grass"</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">4</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">12</span>
+    <span class="tk-node">piece</span> <span class="tk-string">"lib:tiles/walls/1x1-wall-stone"</span>           <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">6</span>
+    <span class="tk-node">piece</span> <span class="tk-string">"home:meadows/glade"</span>                       <span class="tk-property">system</span><span class="tk-punct">=</span><span class="tk-string">"ol"</span>
+<span class="tk-punct">}</span>
 
-plates printer="bambu/x1c-ams" mode="multicolour" group="filament" gap="3mm" margin="5mm"</code></pre>
+<span class="tk-node">plates</span> <span class="tk-property">printer</span><span class="tk-punct">=</span><span class="tk-string">"bambu/x1c-ams"</span> <span class="tk-property">mode</span><span class="tk-punct">=</span><span class="tk-string">"multicolour"</span> <span class="tk-property">group</span><span class="tk-punct">=</span><span class="tk-string">"filament"</span> <span class="tk-property">gap</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3mm</span><span class="tk-string">"</span> <span class="tk-property">margin</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5mm</span><span class="tk-string">"</span></code></pre>
 <p>A <code>piece</code> names a tile by its path, <code>.dtile</code> left off: <code>lib:</code> is the library, <code>home:</code> your tiles folder, anything else is beside the list. Two pieces of the same tile, seed and system are one piece with their counts added.</p>
 <div class="tbl"><table>
 <thead><tr><th>On a piece</th><th>Means</th></tr></thead>

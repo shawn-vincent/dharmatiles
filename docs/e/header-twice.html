@@ -17,17 +17,17 @@
 </header>
 <section class="said" aria-labelledby="said">
 <h2 id="said">What the program says</h2>
-<pre class="said no-hl"><code>dt::header-twice
+<pre class="said no-hl"><code><span class="a-31">dt::header-twice</span>
 
-  × a document has one header line
-   ╭─[example.dtile:2:1]
- 1 │ dharmatiles version=&quot;1.0.0&quot;
- 2 │ dharmatiles version=1
-   · ─────┬─────
-   ·      ╰── a second one
- 3 │ tile size=&quot;1x1&quot; {
+  <span class="a-31">×</span> a document has one header line
+   ╭─[<span class="a-36 a-b a-u">example.dtile:2:1</span>]
+ <span class="a-d">1</span> │ <span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+ <span class="a-d">2</span> │ <span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-number">1</span>
+   · <span class="a-35 a-b">─────┬─────</span>
+   ·      <span class="a-35 a-b">╰── </span><span class="a-35 a-b">a second one</span>
+ <span class="a-d">3</span> │ <span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
    ╰────
-  help: keep `dharmatiles version=…` once, as the first node of the file
+<span class="a-36">  help: </span>keep `dharmatiles version=…` once, as the first node of the file
         explain: https://shawn-vincent.github.io/dharmatiles/e/header-twice
         offline: dharmatiles explain dt::header-twice</code></pre>
 </section>
@@ -41,16 +41,16 @@
 <h2 id="example">Broken, then fixed</h2>
 <div class="cp-pair">
 <figure class="broken"><figcaption>Gives <code>dt::header-twice</code></figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-<mark class="del">dharmatiles version=1</mark>
-tile size=&quot;1x1&quot; {
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<mark class="del"><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-number">1</span></mark>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 <figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 </div>
 </section>
 </div>

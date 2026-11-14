@@ -24,16 +24,16 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/printers/default.dtile
-printer default {
-    line     "0.45mm"   // one extruded line: the thinnest wall that prints
-    layer    "0.2mm"    // one layer
-    overhang "55deg"    // what every element aims for, from vertical
-    steepest "65deg"    // small patches up to here (0.2 mm layer: 0.43 mm step, under a line)
-    gap      "0.2mm"    // the narrowest gap that stays open
-}</code></pre>
+<span class="tk-comment">// library/printers/default.dtile</span>
+<span class="tk-node">printer</span> default <span class="tk-punct">{</span>
+    <span class="tk-node">line</span>     <span class="tk-string">"</span><span class="tk-number">0.45mm</span><span class="tk-string">"</span>   <span class="tk-comment">// one extruded line: the thinnest wall that prints</span>
+    <span class="tk-node">layer</span>    <span class="tk-string">"</span><span class="tk-number">0.2mm</span><span class="tk-string">"</span>    <span class="tk-comment">// one layer</span>
+    <span class="tk-node">overhang</span> <span class="tk-string">"</span><span class="tk-number">55deg</span><span class="tk-string">"</span>    <span class="tk-comment">// what every element aims for, from vertical</span>
+    <span class="tk-node">steepest</span> <span class="tk-string">"</span><span class="tk-number">65deg</span><span class="tk-string">"</span>    <span class="tk-comment">// small patches up to here (0.2 mm layer: 0.43 mm step, under a line)</span>
+    <span class="tk-node">gap</span>      <span class="tk-string">"</span><span class="tk-number">0.2mm</span><span class="tk-string">"</span>    <span class="tk-comment">// the narrowest gap that stays open</span>
+<span class="tk-punct">}</span></code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>Means</th></tr></thead>

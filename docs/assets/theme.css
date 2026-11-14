@@ -383,3 +383,14 @@ dt-example[data-state="queued"] .dtx-view { --queued: 1; }
 .dtx-side .statusline { border: 1px solid var(--line); border-radius: var(--r); }
 .dtx-fail { padding: 8px 12px; border: 1px solid var(--err); border-radius: var(--r); color: var(--ink); background: color-mix(in srgb, var(--err) 8%, var(--bg)); }
 @media (prefers-reduced-motion: reduce) { .dtx-badge[data-kind="building"]::before { animation: none; } }
+
+/* A document's colours: one mapping of the tile language's token classes (dt-lang's highlighter, `Class::css`) to
+   the theme, for the editor's source pane and the site's code blocks alike.  The terminal's is `Class::look`, beside
+   the classes in crates/dt-lang/src/highlight.rs. */
+.tk-node { color: var(--accent); font-weight: 600; }
+.tk-property { color: var(--water); }
+.tk-string { color: var(--moss); }
+.tk-number, .tk-keyword { color: var(--bloom); }
+.tk-name, .tk-function { color: var(--accent); }
+.tk-comment { color: var(--muted); font-style: italic; }
+.tk-punct { color: var(--stone); }

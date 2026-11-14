@@ -149,10 +149,11 @@ fn block(root: &Path, card: &Card, key: &str, rel: &str) -> Result<String, Strin
             800 * size.1 / size.0
         ),
     };
-    Ok(format!(
+    // the source coloured as every code block of the site is (`highlight.rs`), so the two generators leave each other's output alone
+    Ok(crate::highlight::pre_blocks(&format!(
         "{OPEN}\n<div class=\"dtx-grid\">{view}<pre class=\"dtx-code\"><code>{}</code></pre></div>\n{CLOSE}",
         esc(&source)
-    ))
+    )))
 }
 
 /// A page with its cards' markup written; `cards` collects what the page holds.

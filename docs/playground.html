@@ -22,19 +22,19 @@
 <article class="doc">
 <dt-example src="examples/playground.dtile" playground overlay="lines points" controls="seed">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="./posters/63c3ee356799b5e6249b76593ac655de.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="./posters/63c3ee356799b5e6249b76593ac655de.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// The playground's starting tile: change anything.  Download STL builds what the printer is given.
-tile size=&quot;1x1&quot; seed=11 {
-    line path width=&quot;9dmm&quot; wobble=&quot;3dmm&quot; { through westCenter &quot;(0.5sq, 0.55sq)&quot; eastCenter }
-    stack {
-        base
-        dirt
-        grass
-        scatter at=path perSquare=40 { pebble }
-        scatter count=3 { rock size=&quot;4dmm .. 8dmm&quot; }
-    }
-}
+<span class="tk-comment">// The playground's starting tile: change anything.  Download STL builds what the printer is given.</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">11</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> path <span class="tk-property">width</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> westCenter <span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.55sq</span><span class="tk-string">)"</span> eastCenter <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">grass</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">at</span><span class="tk-punct">=</span>path <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">40</span> <span class="tk-punct">{</span> <span class="tk-node">pebble</span> <span class="tk-punct">}</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">count</span><span class="tk-punct">=</span><span class="tk-number">3</span> <span class="tk-punct">{</span> <span class="tk-node">rock</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4dmm</span><span class="tk-string"> .. </span><span class="tk-number">8dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 </code></pre></div>
 <!-- /gen:example -->
 <figcaption>A source opened from an example's <em>Open in editor</em> comes here; this page keeps no copy of it.</figcaption>

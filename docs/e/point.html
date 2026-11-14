@@ -17,17 +17,17 @@
 </header>
 <section class="said" aria-labelledby="said">
 <h2 id="said">What the program says</h2>
-<pre class="said no-hl"><code>dt::point
+<pre class="said no-hl"><code><span class="a-31">dt::point</span>
 
-  × `(2sq, 0.5sq)` is off the tile
-   ╭─[example.dtile:3:13]
- 2 │ tile size=&quot;1x1&quot; {
- 3 │     point p &quot;(2sq, 0.5sq)&quot;
-   ·             ───────┬──────
-   ·                    ╰── outside the tile
- 4 │     stack { dirt }
+  <span class="a-31">×</span> `(2sq, 0.5sq)` is off the tile
+   ╭─[<span class="a-36 a-b a-u">example.dtile:3:13</span>]
+ <span class="a-d">2</span> │ <span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+ <span class="a-d">3</span> │     <span class="tk-node">point</span> p <span class="tk-string">"(</span><span class="tk-number">2sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+   · <span class="a-35 a-b">            ───────┬──────</span>
+   ·                    <span class="a-35 a-b">╰── </span><span class="a-35 a-b">outside the tile</span>
+ <span class="a-d">4</span> │     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
    ╰────
-  help: this tile is 1x1 squares: across runs 0 to 1, down from the north 0 to
+<span class="a-36">  help: </span>this tile is 1x1 squares: across runs 0 to 1, down from the north 0 to
         1
         explain: https://shawn-vincent.github.io/dharmatiles/e/point
         offline: dharmatiles explain dt::point</code></pre>
@@ -42,17 +42,17 @@
 <h2 id="example">Broken, then fixed</h2>
 <div class="cp-pair">
 <figure class="broken"><figcaption>Gives <code>dt::point</code></figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    point p &quot;(<mark class="del">2sq</mark>, 0.5sq)&quot;
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">point</span> p <span class="tk-string">"(</span><mark class="del"><span class="tk-number">2sq</span></mark><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 <figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    point p &quot;(<mark class="ins">0.5sq</mark>, 0.5sq)&quot;
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">point</span> p <span class="tk-string">"(</span><mark class="ins"><span class="tk-number">0.5sq</span></mark><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 </div>
 </section>
 </div>

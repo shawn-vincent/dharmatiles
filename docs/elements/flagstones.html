@@ -25,19 +25,19 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size="1x1" seed=72 {
-    stack {
-        base
-        dirt
-        flagstones texture=chipped
-        wall at="north" style=cut-stone   // stands on the slabs
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">72</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">flagstones</span> <span class="tk-property">texture</span><span class="tk-punct">=</span>chipped
+        <span class="tk-node">wall</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"north"</span> <span class="tk-property">style</span><span class="tk-punct">=</span>cut-stone   <span class="tk-comment">// stands on the slabs</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>A <a href="wall.html"><code>wall</code></a> on a floor seats on the pavement; its top stays at the wall-top level. The dirt under the slabs is what shows through a missing slab.</p>
 <p>A wide band heaves the floor. Here sixteen slabs each take a height and a tilt in a band <code>3dmm</code> wide, and the slabs on the edge stay at the edge height:</p>
-<pre><code>flagstones slabs=4 top="[$floorHeight - 1.5dmm .. $floorHeight + 1.5dmm]"</code></pre>
+<pre><code><span class="tk-node">flagstones</span> <span class="tk-property">slabs</span><span class="tk-punct">=</span><span class="tk-number">4</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$floorHeight</span><span class="tk-string"> - </span><span class="tk-number">1.5dmm</span><span class="tk-string"> .. </span><span class="tk-name">$floorHeight</span><span class="tk-string"> + </span><span class="tk-number">1.5dmm</span><span class="tk-string">]"</span></code></pre>
 <figure class="shot"><img src="img/el-flagstones-heaved.jpg" alt="A floor of sixteen slabs at different heights and tilts"><figcaption><a href="demo/flagstones-heaved.dtile"><code>demo/flagstones-heaved.dtile</code></a>.</figcaption></figure>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference flagstones -->

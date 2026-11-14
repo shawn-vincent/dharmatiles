@@ -208,12 +208,6 @@ nav.top .theme { margin-left: auto; }
   nav.top a[aria-current="page"]:not(.brand)::after { bottom: -9px; }
 }
 @media (max-width: 760px) { h2 { margin-top: 56px; } }
-/* .dtile examples (coloured by site.js) */
-pre .hl-n { color: var(--accent); font-weight: 600; }
-pre .hl-p { color: var(--water); }
-pre .hl-s { color: var(--moss); }
-pre .hl-v { color: var(--earth); }
-pre .hl-c { color: var(--muted); font-style: italic; }
 /* a link that is code: the box carries the colour, no underline through it */
 a:has(> code:only-child) { text-decoration: none; }
 a > code { color: var(--accent); transition: background-color .15s var(--ease); }
@@ -281,6 +275,11 @@ article.doc figure.shot ol.key { columns: 1; }
 .codepage .lede { font-size: 18px; max-width: 60ch; }
 .codepage pre.said { max-width: min(88ch, 100%); border-left-color: var(--err); margin: 0; }
 .codepage.note pre.said { border-left-color: var(--accent); }
+/* what the terminal draws for itself (the message, the gutter, the labels), read back from its ANSI colours by
+   `cargo xtask docs`; the document's own colours in the snippet come back as the tk- classes of theme.css */
+.a-31 { color: var(--err); } .a-32 { color: var(--moss); } .a-33 { color: var(--earth); } .a-34 { color: var(--water); }
+.a-35 { color: var(--bloom); } .a-36, .a-96 { color: var(--accent); } .a-90 { color: var(--stone); }
+.a-b { font-weight: 600; } .a-d { opacity: .7; } .a-i { font-style: italic; } .a-u { text-decoration: underline; }
 .cp-grid, .cp-pair { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 48px; }
 .cp-grid p { max-width: none; }
 blockquote.rule { margin: 0 0 10px; padding: 2px 0 2px 16px; border-left: 3px solid var(--line-2); }
@@ -294,7 +293,7 @@ blockquote.rule p { margin: 0; }
 /* the change between a broken document and its fix: a tint and a solid underline in the danger red (what the
    program refused) or the ok green (what it reads), strong enough to find at a glance in either theme */
 pre mark { color: var(--ink); border-radius: 3px 3px 0 0; padding: 1px 2px 0; margin: 0 -1px; font-weight: 600; }
-pre mark [class^="hl-"] { color: inherit; font-style: normal; } /* the change reads in plain ink, the most contrast either theme has */
+pre mark [class^="tk-"], pre mark [class^="a-"] { color: inherit; font-style: normal; } /* the change reads in plain ink, the most contrast either theme has */
 pre mark.del { background: color-mix(in srgb, var(--err) 38%, var(--code-bg)); box-shadow: inset 0 -2px 0 var(--err); }
 pre mark.ins { background: color-mix(in srgb, var(--ok) 38%, var(--code-bg)); box-shadow: inset 0 -2px 0 var(--ok); }
 pre mark.at { display: inline-block; width: 2px; height: 1.1em; vertical-align: text-bottom; padding: 0; }

@@ -52,36 +52,36 @@ td code{white-space:nowrap}
 <tr><td><code>line</code>, <code>layer</code>, <code>overhang</code>, <code>steepest</code>, <code>gap</code></td><td><code>"0.45mm"</code> …</td><td>The printability floors (see <a href="standards/printing.html#profile">Printing</a>). A profile with a bed or a <code>from</code> may leave them out.</td></tr>
 </tbody></table></div>
 <p>Lengths carry their unit, <code>mm</code>. A mistake is shown at its text: a bed with no unit, a zone that has no area, a <code>slots</code> that is not a whole number.</p>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-printer x1c {
-    brand   "Bambu Lab"
-    model   "X1 Carbon"
-    bed     "256x256mm"
-    height  "256mm"
-    nozzle  "0.4mm"
-    slots   1
-}
+<span class="tk-node">printer</span> x1c <span class="tk-punct">{</span>
+    <span class="tk-node">brand</span>   <span class="tk-string">"Bambu Lab"</span>
+    <span class="tk-node">model</span>   <span class="tk-string">"X1 Carbon"</span>
+    <span class="tk-node">bed</span>     <span class="tk-string">"256x256mm"</span>
+    <span class="tk-node">height</span>  <span class="tk-string">"</span><span class="tk-number">256mm</span><span class="tk-string">"</span>
+    <span class="tk-node">nozzle</span>  <span class="tk-string">"</span><span class="tk-number">0.4mm</span><span class="tk-string">"</span>
+    <span class="tk-node">slots</span>   <span class="tk-number">1</span>
+<span class="tk-punct">}</span>
 
-// x1c-ams.dtile: the same machine with an AMS
-printer x1c-ams {
-    from    "lib:printers/bambu/x1c"
-    model   "X1 Carbon + AMS"
-    slots   4
-}</code></pre>
+<span class="tk-comment">// x1c-ams.dtile: the same machine with an AMS</span>
+<span class="tk-node">printer</span> x1c-ams <span class="tk-punct">{</span>
+    <span class="tk-node">from</span>    <span class="tk-string">"lib:printers/bambu/x1c"</span>
+    <span class="tk-node">model</span>   <span class="tk-string">"X1 Carbon + AMS"</span>
+    <span class="tk-node">slots</span>   <span class="tk-number">4</span>
+<span class="tk-punct">}</span></code></pre>
 
 <h2 id="own" data-explains="dt::printer"><!--gen:anchors--><span id="dt-printer"></span><!--/gen:anchors-->Your own</h2>
 <p>Put a file in <code>printers/</code> beside your tiles (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>): <code>printers/shed-voron.dtile</code> is <code>shed-voron</code>, and <code>printers/mine/ender.dtile</code> is <code>mine/ender</code>. A profile of yours with the name of a library one replaces it. It may start from a library one:</p>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-printer shed-voron {
-    from    "lib:printers/voron/2-4-300"
-    bed     "296x296mm"           // what you measured
-    slots   1
-    excluded {
-        zone "(0mm, 0mm) (30mm, 10mm)"
-    }
-}</code></pre>
+<span class="tk-node">printer</span> shed-voron <span class="tk-punct">{</span>
+    <span class="tk-node">from</span>    <span class="tk-string">"lib:printers/voron/2-4-300"</span>
+    <span class="tk-node">bed</span>     <span class="tk-string">"296x296mm"</span>           <span class="tk-comment">// what you measured</span>
+    <span class="tk-node">slots</span>   <span class="tk-number">1</span>
+    <span class="tk-node">excluded</span> <span class="tk-punct">{</span>
+        <span class="tk-node">zone</span> <span class="tk-string">"(</span><span class="tk-number">0mm</span><span class="tk-string">, </span><span class="tk-number">0mm</span><span class="tk-string">) (</span><span class="tk-number">30mm</span><span class="tk-string">, </span><span class="tk-number">10mm</span><span class="tk-string">)"</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 
 <h2 id="import">Importing from a slicer</h2>
 <p>If a slicer is installed here, the chooser ends with <em>Import from Bambu Studio&hellip;</em> (and one entry for each of the others found). It lists every model the slicer knows, with a search; tick the ones you want and press <em>Import</em>. Each becomes a profile of yours, <code>printers/&lt;brand&gt;/&lt;model&gt;.dtile</code>, marked <code>from-slicer</code>. The command line does the same:</p>

@@ -67,6 +67,13 @@ export const texts = new TextPane($('code'), {
     return compKey(e);
   },
   onHistory: (step) => undo(step),
+  // the colours are the program's (one set of rules for the editor, the terminal and the site)
+  tokens: async (text) => {
+    const r = await host.tokens(text);
+    if (r.status === 0) return null; // the program is away, or a newer reading took its place: the marks it had stay
+    if (failed('Could not colour the text', r)) return null;
+    return r.body;
+  },
 });
 // the selection part adds onCaretLine and onHoverLine to texts.cb
 

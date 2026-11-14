@@ -80,32 +80,32 @@
 </div>
 <h2 id="use">Using it in a tile</h2>
 <p>A wall must have <code>at=</code> a line: a tile edge, an edge path (two edges make a corner), or a drawn <a href="line.html">line</a>:</p>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-use "parts/grass" lawn
+<span class="tk-node">use</span> <span class="tk-string">"parts/grass"</span> lawn
 
-tile size="1x1" seed=62 {
-    stack {
-        base
-        dirt
-        wall at="north west" style=cut-stone {
-            height full                 // up to the wall-top level, $wallHeight
-            thickness "7dmm"
-        }
-        lawn                            // grows up to the wall's foot
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">62</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">wall</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"north west"</span> <span class="tk-property">style</span><span class="tk-punct">=</span>cut-stone <span class="tk-punct">{</span>
+            <span class="tk-node">height</span> full                 <span class="tk-comment">// up to the wall-top level, $wallHeight</span>
+            <span class="tk-node">thickness</span> <span class="tk-string">"</span><span class="tk-number">7dmm</span><span class="tk-string">"</span>
+        <span class="tk-punct">}</span>
+        <span class="tk-node">lawn</span>                            <span class="tk-comment">// grows up to the wall's foot</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>The styles: <code>style=cut-stone</code> (the default), <code>fieldstone</code> (drystone, no mortar), <code>brick</code> and <code>regular-brick</code>. Each sets its own stone sizes and finish; <code>stones</code>, <code>joints</code> and <code>edges</code> adjust them:</p>
-<pre><code>wall at=north style=fieldstone {
-    stones height="2.2dmm .. 5.2dmm" length="5dmm .. 16dmm" texture=worn
-    coping on-edge                      // what tops a drystone wall
-}</code></pre>
+<pre><code><span class="tk-node">wall</span> <span class="tk-property">at</span><span class="tk-punct">=</span>north <span class="tk-property">style</span><span class="tk-punct">=</span>fieldstone <span class="tk-punct">{</span>
+    <span class="tk-node">stones</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2.2dmm</span><span class="tk-string"> .. </span><span class="tk-number">5.2dmm</span><span class="tk-string">"</span> <span class="tk-property">length</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string"> .. </span><span class="tk-number">16dmm</span><span class="tk-string">"</span> <span class="tk-property">texture</span><span class="tk-punct">=</span>worn
+    <span class="tk-node">coping</span> on-edge                      <span class="tk-comment">// what tops a drystone wall</span>
+<span class="tk-punct">}</span></code></pre>
 <p>Along a drawn line, <code>side=left</code>, <code>right</code> or <code>centre</code> says which side of the line the wall stands, as you walk it: <code>left</code> puts the body to the left of the direction the line is drawn, with the line as its outer face; <code>right</code> puts it to the right; <code>centre</code> (the default) centres it on the line. The wall follows the line as the tile has it, wobble included, so a new tile seed moves the wall with the line.</p>
-<pre><code>line lane wobble="6dmm" { through "(0sq, 1.5sq)" "(0.85sq, 1.22sq)" "(1.35sq, 0.62sq)" "(2sq, 0.5sq)" }
-stack {
-    dirt
-    wall at=lane side=left style=cut-stone
-}</code></pre>
+<pre><code><span class="tk-node">line</span> lane <span class="tk-property">wobble</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">6dmm</span><span class="tk-string">"</span> <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">1.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">0.85sq</span><span class="tk-string">, </span><span class="tk-number">1.22sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1.35sq</span><span class="tk-string">, </span><span class="tk-number">0.62sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">2sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+<span class="tk-node">stack</span> <span class="tk-punct">{</span>
+    <span class="tk-node">dirt</span>
+    <span class="tk-node">wall</span> <span class="tk-property">at</span><span class="tk-punct">=</span>lane <span class="tk-property">side</span><span class="tk-punct">=</span>left <span class="tk-property">style</span><span class="tk-punct">=</span>cut-stone
+<span class="tk-punct">}</span></code></pre>
 <p>The line is cut into straight runs that stray no more than <code>0.35dmm</code> from it, and a run turns at each vertex. A left turn of exactly a right angle is a corner like an edge path's, the two runs taking turns passing through it. Any other turn is a bend: the two runs overlap, the one on the outside of the turn running on past the vertex so its face is whole. A wall turns at most 150 degrees at one point. The free ends of an open line are textured ends; a line that returns to its first point makes a ring. A line that meets a tile edge ends flush with it when it meets it square, and otherwise runs on past it and is cut at the tile edge. Library: <a href="../../library/tiles/walls/2x2-wall-curve.dtile"><code>lib:tiles/walls/2x2-wall-curve.dtile</code></a>. Give a wall a <code>seed=</code> of its own to pin its look while the rest of the tile changes; the library walls do not, so they follow the tile seed.</p>
 
 <h2 id="spec">Reference</h2>

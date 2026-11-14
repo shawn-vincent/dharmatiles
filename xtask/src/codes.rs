@@ -71,7 +71,8 @@ pub fn run(root: &Path, check: bool, bin: &Path) -> Result<(), String> {
         for (code, rule) in found {
             rules.entry(code).or_default().push(rule);
         }
-        files.insert(page, text);
+        // every code block coloured by the language's one set of rules (nothing is coloured in the browser)
+        files.insert(page, crate::highlight::pre_blocks(&text));
     }
 
     for (code, rs) in &rules {
@@ -129,7 +130,7 @@ pub fn run(root: &Path, check: bool, bin: &Path) -> Result<(), String> {
             };
             files.insert(
                 e_dir.join(format!("{}.html", codes::slug(c.id))),
-                error_page(&nav, c, rule, said.as_deref(), &related),
+                crate::highlight::pre_blocks(&error_page(&nav, c, rule, said.as_ref(), &related)),
             );
         }
     }
@@ -387,14 +388,21 @@ fn kept(html: &str) -> String {
 
 /// What the program prints for `broken`: `dharmatiles check example.dtile`, run where the file is, so the message
 /// names it as a reader's own would.  The program must refuse it; a clean read is an error here.
-fn message(bin: &Path, scratch: &Path, id: &str, broken: &str) -> Result<String, String> {
+fn message(
+    bin: &Path,
+    scratch: &Path,
+    id: &str,
+    broken: &str,
+) -> Result<crate::highlight::Said, String> {
     let file = scratch.join("example.dtile");
     std::fs::write(&file, broken).map_err(|e| format!("{}: {e}", file.display()))?;
     let out = Command::new(bin)
         .current_dir(scratch)
         .args(["check", "example.dtile"])
-        .env("NO_COLOR", "1")
-        .env_remove("CLICOLOR_FORCE")
+        // in the terminal's own colours, which the page reads back into the document's classes
+        .env_remove("NO_COLOR")
+        .env_remove("NO_GRAPHICS")
+        .env("FORCE_COLOR", "1")
         .env("COLUMNS", "80")
         .output()
         .map_err(|e| format!("{}: {e}", bin.display()))?;
@@ -405,18 +413,14 @@ fn message(bin: &Path, scratch: &Path, id: &str, broken: &str) -> Result<String,
     }
     let mut said = String::from_utf8_lossy(&out.stderr).into_owned();
     said.push_str(&String::from_utf8_lossy(&out.stdout));
-    if !said.contains(id) {
+    let said = crate::highlight::ansi(&said).map_err(|e| format!("{id}: {e}"))?;
+    if !said.plain.contains(id) {
         return Err(format!(
-            "{id}: the program's message for the broken example does not name it:\n{said}"
+            "{id}: the program's message for the broken example does not name it:\n{}",
+            said.plain
         ));
     }
-    Ok(said
-        .lines()
-        .map(str::trim_end)
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim_matches('\n')
-        .to_owned())
+    Ok(said)
 }
 
 /// `broken` and `fixed` as HTML, each with what the other does not have marked: a line changed in place has only
@@ -591,7 +595,13 @@ fn sentence(s: &str) -> String {
 
 /// The error page of one code: the code and what happened; the message as printed; what to do beside the rule;
 /// the broken document beside its fix; and the codes the same section explains.
-fn error_page(nav: &str, c: &Code, rule: &Rule, said: Option<&str>, related: &[&str]) -> String {
+fn error_page(
+    nav: &str,
+    c: &Code,
+    rule: &Rule,
+    said: Option<&crate::highlight::Said>,
+    related: &[&str],
+) -> String {
     let id = c.id;
     let kind = kind_class(c.kind);
     let mut s = String::new();
@@ -611,7 +621,7 @@ fn error_page(nav: &str, c: &Code, rule: &Rule, said: Option<&str>, related: &[&
             s,
             "<section class=\"said\" aria-labelledby=\"said\">\n<h2 id=\"said\">What the program says</h2>\n\
 <pre class=\"said no-hl\"><code>{}</code></pre>\n</section>\n",
-            escape(said)
+            said.html
         );
     }
     let link = format!("../{}#{}", rule.page, codes::anchor(id));

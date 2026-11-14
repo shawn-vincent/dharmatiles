@@ -17,17 +17,17 @@
 </header>
 <section class="said" aria-labelledby="said">
 <h2 id="said">What the program says</h2>
-<pre class="said no-hl"><code>dt::near-edge
+<pre class="said no-hl"><code><span class="a-31">dt::near-edge</span>
 
-  × this point is close to a side of the tile but not on it
-   ╭─[example.dtile:3:25]
- 2 │ tile size=&quot;1x1&quot; {
- 3 │     line edge { through &quot;(0.02sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-   ·                         ────────┬────────
-   ·                                 ╰── within a millimetre of the side
- 4 │     stack { dirt }
+  <span class="a-31">×</span> this point is close to a side of the tile but not on it
+   ╭─[<span class="a-36 a-b a-u">example.dtile:3:25</span>]
+ <span class="a-d">2</span> │ <span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+ <span class="a-d">3</span> │     <span class="tk-node">line</span> edge <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><span class="tk-number">0.02sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+   · <span class="a-35 a-b">                        ────────┬────────</span>
+   ·                                 <span class="a-35 a-b">╰── </span><span class="a-35 a-b">within a millimetre of the side</span>
+ <span class="a-d">4</span> │     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
    ╰────
-  help: did you mean `(0sq, 0.5sq)`? a line that reaches a side ends exactly
+<span class="a-36">  help: </span>did you mean `(0sq, 0.5sq)`? a line that reaches a side ends exactly
         on it, so it meets the next tile's
         explain: https://shawn-vincent.github.io/dharmatiles/e/near-edge
         offline: dharmatiles explain dt::near-edge</code></pre>
@@ -42,17 +42,17 @@
 <h2 id="example">Broken, then fixed</h2>
 <div class="cp-pair">
 <figure class="broken"><figcaption>Gives <code>dt::near-edge</code></figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    line edge { through &quot;(<mark class="del">0.02sq</mark>, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> edge <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><mark class="del"><span class="tk-number">0.02sq</span></mark><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 <figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    line edge { through &quot;(<mark class="ins">0sq</mark>, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">line</span> edge <span class="tk-punct">{</span> <span class="tk-node">through</span> <span class="tk-string">"(</span><mark class="ins"><span class="tk-number">0sq</span></mark><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-string">"(</span><span class="tk-number">1sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-punct">}</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 </div>
 </section>
 </div>

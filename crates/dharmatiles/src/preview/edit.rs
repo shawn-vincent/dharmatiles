@@ -294,6 +294,25 @@ pub struct NamesRes {
     pub points: Vec<String>,
 }
 
+/// A text to colour.
+#[derive(Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(optional_fields = nullable))]
+#[serde(deny_unknown_fields)]
+pub struct TokensReq {
+    pub text: String,
+}
+
+/// How a text is coloured, by `dt_lang::highlight`'s one set of rules: `classes` are the CSS classes (`tk-node`,
+/// …), and `pieces` runs three numbers for each coloured piece: its first and last-plus-one UTF-8 byte in the
+/// text and its place in `classes`.  What no piece covers is plain.
+#[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct TokensRes {
+    pub classes: Vec<String>,
+    pub pieces: Vec<u32>,
+}
+
 #[derive(Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[cfg_attr(test, ts(optional_fields = nullable))]
@@ -833,6 +852,25 @@ pub(super) fn names(_: &Shared, v: NamesReq) -> Out<NamesRes> {
             lines: Vec::new(),
             points: Vec::new(),
         },
+    })
+}
+
+/// `/api/tokens` `{text}`: the text's colouring, for the editor's source pane.  Any text colours (a broken one as
+/// far as it reads); a text too long to number in 32 bits is the one failure.
+pub(super) fn tokens(_: &Shared, v: TokensReq) -> Out<TokensRes> {
+    let too_long = |_| bad("the text is too long to colour");
+    let mut pieces = Vec::new();
+    for p in dt_lang::highlight::tokens(&v.text) {
+        pieces.push(u32::try_from(p.start).map_err(too_long)?);
+        pieces.push(u32::try_from(p.end).map_err(too_long)?);
+        pieces.push(u32::try_from(p.class.index()).map_err(too_long)?);
+    }
+    Ok(TokensRes {
+        classes: dt_lang::highlight::CLASSES
+            .iter()
+            .map(|c| c.css().to_owned())
+            .collect(),
+        pieces,
     })
 }
 

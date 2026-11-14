@@ -285,11 +285,6 @@ body.resizing #canvas, body.resizing-rows #canvas { pointer-events: none; }
 #code .cm-tooltip { background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); }
 #code .cm-tooltip-lint { font: var(--fs-s)/1.45 var(--f-body); max-width: 360px; }
 #code .cm-diagnostic-error { border-left-color: var(--err); }
-.tk-n { color: var(--accent); font-weight: 600; }
-.tk-k { color: var(--water); }
-.tk-s { color: var(--moss); }
-.tk-v { color: var(--bloom); }
-.tk-c { color: var(--muted); }
 
 /* completion */
 #comp { position: fixed; z-index: 30; width: 340px; max-height: 260px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 4px; }

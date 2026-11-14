@@ -24,15 +24,15 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size="1x1" seed=31 {
-    let knollTop  "$groundHeight + 4dmm"            // a plain name, this tile's own
-    let hump      "$groundHeight + [1dmm .. 2dmm]"  // a range: a little rise, its height left free
-    let $treeLine "40dmm"                           // a $ name: in the context, read by what is called below
-    override $waterBedHeight "0.8dmm"               // deeper water, everywhere on this tile
-    stack { base; dirt { pin top="knollTop" at=center } }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">31</span> <span class="tk-punct">{</span>
+    <span class="tk-node">let</span> knollTop  <span class="tk-string">"</span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">4dmm</span><span class="tk-string">"</span>            <span class="tk-comment">// a plain name, this tile's own</span>
+    <span class="tk-node">let</span> hump      <span class="tk-string">"</span><span class="tk-name">$groundHeight</span><span class="tk-string"> + [</span><span class="tk-number">1dmm</span><span class="tk-string"> .. </span><span class="tk-number">2dmm</span><span class="tk-string">]"</span>  <span class="tk-comment">// a range: a little rise, its height left free</span>
+    <span class="tk-node">let</span> $treeLine <span class="tk-string">"</span><span class="tk-number">40dmm</span><span class="tk-string">"</span>                           <span class="tk-comment">// a $ name: in the context, read by what is called below</span>
+    <span class="tk-node">override</span> $waterBedHeight <span class="tk-string">"</span><span class="tk-number">0.8dmm</span><span class="tk-string">"</span>               <span class="tk-comment">// deeper water, everywhere on this tile</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">base</span><span class="tk-punct">;</span> <span class="tk-node">dirt</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"knollTop"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>center <span class="tk-punct">}</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>A value is an expression: numbers with their units, plain and <code>$</code> names, <code>$x</code> and <code>$y</code> (squares), <code>$bottom</code> (the surface under a body), <code>+ - * /</code>, a range in brackets <code>[a .. b]</code> anywhere, and the functions <code>sin cos</code> (of an angle), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Trigonometry is computed in the program, so a build gives the same bits on every machine.</p>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>

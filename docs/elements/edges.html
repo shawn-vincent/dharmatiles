@@ -24,13 +24,13 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/parts/edges.dtile
-defaults {
-    dirt  top="[$groundHeight .. $groundHeight + 1dmm]" { pin top="$dirtEdgeHeight" at=edges }
-    water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" { pin top="$waterEdgeHeight" at=edges }
-}</code></pre>
+<span class="tk-comment">// library/parts/edges.dtile</span>
+<span class="tk-node">defaults</span> <span class="tk-punct">{</span>
+    <span class="tk-node">dirt</span>  <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$groundHeight</span><span class="tk-string"> .. </span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">1dmm</span><span class="tk-string">]"</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges <span class="tk-punct">}</span>
+    <span class="tk-node">water</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"[</span><span class="tk-name">$waterSurfaceHeight</span><span class="tk-string"> - </span><span class="tk-number">1.9dmm</span><span class="tk-string"> .. </span><span class="tk-name">$waterSurfaceHeight</span><span class="tk-string"> + </span><span class="tk-number">3dmm</span><span class="tk-string">]"</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$waterEdgeHeight</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>edges <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Line</th><th>Means</th></tr></thead>

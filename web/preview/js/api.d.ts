@@ -774,6 +774,10 @@ docRev: number | null, meshBytes: number | null, sketches: Array<SketchRef>,
  */
 shown: JsonValue | null, };
 
+type TokensReq = { text: string, };
+
+type TokensRes = { classes: Array<string>, pieces: Array<number>, };
+
 type TrashUndoReq = { undo: number, };
 
 type Trashed = { 
@@ -792,6 +796,7 @@ kept: boolean, };
 export interface Calls {
   "POST /api/edit": { req: EditReq; res: EditRes };
   "POST /api/names": { req: NamesReq; res: NamesRes };
+  "POST /api/tokens": { req: TokensReq; res: TokensRes };
   "POST /api/check-value": { req: CheckValueReq; res: CheckValueRes };
   "POST /api/printed-set": { req: PrintedSetReq; res: PrintedSetRes };
   "POST /api/new": { req: NewReq; res: Listed };

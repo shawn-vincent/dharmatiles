@@ -25,22 +25,22 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-// library/parts/grass.dtile
-define lawn {
-    param length "3.5dmm .. 6.5dmm"   // blade length along the ground
-    param height "1.5dmm .. 2dmm"     // how tall a blade stands
-    param clearings 0                 // patches of bare earth per square
-    param cover "100%"                // share of the ground grassed over
-    stack {
-        grass length=length height=height clearings=clearings cover=cover
-    }
-}
+<span class="tk-comment">// library/parts/grass.dtile</span>
+<span class="tk-node">define</span> lawn <span class="tk-punct">{</span>
+    <span class="tk-node">param</span> length <span class="tk-string">"</span><span class="tk-number">3.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">6.5dmm</span><span class="tk-string">"</span>   <span class="tk-comment">// blade length along the ground</span>
+    <span class="tk-node">param</span> height <span class="tk-string">"</span><span class="tk-number">1.5dmm</span><span class="tk-string"> .. </span><span class="tk-number">2dmm</span><span class="tk-string">"</span>     <span class="tk-comment">// how tall a blade stands</span>
+    <span class="tk-node">param</span> clearings <span class="tk-number">0</span>                 <span class="tk-comment">// patches of bare earth per square</span>
+    <span class="tk-node">param</span> cover <span class="tk-string">"</span><span class="tk-number">100%</span><span class="tk-string">"</span>                <span class="tk-comment">// share of the ground grassed over</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">grass</span> <span class="tk-property">length</span><span class="tk-punct">=</span>length <span class="tk-property">height</span><span class="tk-punct">=</span>height <span class="tk-property">clearings</span><span class="tk-punct">=</span>clearings <span class="tk-property">cover</span><span class="tk-punct">=</span>cover
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span>
 
-define long-grass {                   // a definition can call another
-    stack { lawn length="5dmm .. 9dmm" height="2dmm .. 3dmm" }
-}</code></pre>
+<span class="tk-node">define</span> long-grass <span class="tk-punct">{</span>                   <span class="tk-comment">// a definition can call another</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">lawn</span> <span class="tk-property">length</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string"> .. </span><span class="tk-number">9dmm</span><span class="tk-string">"</span> <span class="tk-property">height</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">2dmm</span><span class="tk-string"> .. </span><span class="tk-number">3dmm</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>A tile then writes <code>use "parts/grass" lawn</code> and <code>lawn cover="80%"</code> in its stack.</p>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>

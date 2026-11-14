@@ -65,6 +65,7 @@ mod printers;
 mod progress;
 mod report;
 mod slicers;
+mod terminal;
 mod watch;
 
 pub(crate) use audit::{read_stl, stl_corner_round, stl_footprint};
@@ -105,6 +106,10 @@ fn install_panic_hook() {
 
 fn main() -> ExitCode {
     install_panic_hook();
+    if let Err(e) = terminal::install() {
+        tell!("this is a bug in dharmatiles: {e}");
+        return ExitCode::from(BUG);
+    }
     let cli = Cli::from_arg_matches(&Cli::command().version(cli::version_line()).get_matches())
         .unwrap_or_else(|e| e.exit());
     // the crash switch of the exit-code tests; nothing in a shipped build

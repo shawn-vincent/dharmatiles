@@ -6,7 +6,8 @@ import { browserHost } from '../js/host.js';
 import { kdlString, parseValue, unquote, valueOf, wordControlNeedsSelect } from '../js/lens.js';
 import { NO_ENTRY, ownerVertices, parsePayload, worstFlagged } from '../js/payload.js';
 import { snap } from '../js/place.js';
-import { indentFor, braceEnd } from '../js/text.js';
+import { indentFor, braceEnd, colourRanges } from '../js/text.js';
+import { byteIndexer, byteToIndex } from '../js/spans.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { PINNED_VIEWS, presetAt } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
@@ -435,4 +436,21 @@ test('unexpected failures are kept with what was being done, once each, and show
   } finally {
     console.error = log;
   }
+});
+
+test('the program\'s colouring is laid on by bytes: a reply for text with multi-byte letters lands on the right characters', () => {
+  const text = 'é "ü" 😀 5mm';
+  const bytes = (s) => new TextEncoder().encode(s).length;
+  const from = bytes('é '), to = bytes('é "ü"');
+  const marks = colourRanges(text, { classes: ['tk-comment', 'tk-string'], pieces: [from, to, 1, bytes('é "ü" 😀 '), bytes(text), 0] });
+  assert.deepEqual(marks.map((m) => [text.slice(m.from, m.to), m.cls]), [['"ü"', 'tk-string'], ['5mm', 'tk-comment']]);
+  assert.throws(() => colourRanges(text, { classes: ['tk-string'], pieces: [0, 1, 4] }), /did not list/);
+  // the one-pass indexer answers as the one-at-a-time one does, at every character boundary
+  const at = byteIndexer(text);
+  for (let i = 0; i <= text.length; i++) {
+    if (i > 0 && i < text.length && text.charCodeAt(i) >= 0xdc00 && text.charCodeAt(i) < 0xe000) continue; // inside a surrogate pair
+    const b = bytes(text.slice(0, i));
+    assert.equal(at(b), byteToIndex(text, b), `byte ${b}`);
+  }
+  assert.equal(byteIndexer('plain')(3), 3);
 });

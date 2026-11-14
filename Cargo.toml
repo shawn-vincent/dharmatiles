@@ -43,6 +43,7 @@ dt-print = { path = "crates/dt-print" }
 # KDL v2 only: `kdlv1`/`v1-fallback` stay off, and serde is not needed.
 kdl = { version = "6.7.1", default-features = false, features = ["span"] }
 miette = { version = "7.6.0", default-features = false }
+owo-colors = { version = "4.4.0", default-features = false }
 bytemuck = "1.23.0"
 glam = "0.34.2"
 obvhs = { version = "0.4.0", features = ["parallel"] }

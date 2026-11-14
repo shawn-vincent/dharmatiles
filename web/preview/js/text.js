@@ -13,12 +13,13 @@ import {
   rectangularSelection, crosshairCursor, dropCursor, Decoration, ViewPlugin,
   defaultKeymap, indentLess, indentMore, insertNewlineAndIndent,
   searchKeymap, highlightSelectionMatches, search,
-  StreamLanguage, HighlightStyle, syntaxHighlighting, bracketMatching, foldGutter, foldKeymap, foldService,
-  indentUnit, indentService, setDiagnostics, lintGutter, closeBrackets, closeBracketsKeymap, tags,
+  bracketMatching, foldGutter, foldKeymap, foldService,
+  indentUnit, indentService, setDiagnostics, lintGutter, closeBrackets, closeBracketsKeymap,
 } from '../vendor/codemirror.js';
 import { iconSvg } from './view/icons.js';
 
 // UTF-8 byte offset `b` in `text` as a string index (the server counts bytes): js/spans.js, where the spans are.
+import { byteIndexer } from './spans.js';
 export { byteToIndex } from './spans.js';
 
 /** The indentation for a new line at `pos`: the line above's, one level more after `{`, one less before `}`. */
@@ -53,34 +54,38 @@ export function braceEnd(text, from) {
   return null;
 }
 
-// KDL v2, enough to colour it: comments, strings, properties (`name=`),
-// keywords, numbers, node names (the first word of a node) and other words.
-const kdl = StreamLanguage.define({
-  name: 'kdl',
-  startState: () => ({ atNode: true }),
-  token(stream, st) {
-    if (stream.sol()) st.atNode = true;
-    if (stream.eatSpace()) return null;
-    if (stream.match(/^\/\/.*/)) return 'comment';
-    if (stream.match('/-')) { st.atNode = true; return 'comment'; }
-    if (stream.match(/^#?"(?:[^"\\]|\\.)*"?#?/)) { st.atNode = false; return 'string'; }
-    if (stream.match(/^[A-Za-z_][\w+\-.]*(?==)/)) { st.atNode = false; return 'propertyName'; }
-    if (stream.match(/^(#true|#false|#null|#inf|#-inf|#nan)/)) { st.atNode = false; return 'atom'; }
-    if (stream.match(/^-?\d+(?:\.\d+)?(?![\w.])/)) { st.atNode = false; return 'number'; }
-    if (stream.match(/^[A-Za-z_][\w+\-.]*/)) { const n = st.atNode; st.atNode = false; return n ? 'tagName' : null; }
-    if (stream.match(/^[{};]/)) { st.atNode = true; return 'brace'; }
-    stream.next();
-    return null;
+// Colour: the program's, not the page's.  The one set of rules for colouring a document is dt-lang's
+// (`dt_lang::highlight`), which the terminal's error snippets and the site's code blocks read too; this pane asks the
+// program for the pieces of the text (`/api/tokens`) and lays them on as marks.  Marks move with the text as it is
+// edited, so a keystroke never shows the line plain while the answer is on its way.  The classes (`tk-node`, …) are
+// coloured by docs/assets/theme.css, shared with the site.
+const setColour = StateEffect.define();
+const colour = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) if (e.is(setColour)) deco = e.value;
+    return deco;
   },
-  languageData: { commentTokens: { line: '//' } },
+  provide: (f) => EditorView.decorations.from(f),
 });
-const colours = HighlightStyle.define([
-  { tag: tags.comment, class: 'tk-c' },
-  { tag: tags.string, class: 'tk-s' },
-  { tag: tags.propertyName, class: 'tk-k' },
-  { tag: [tags.atom, tags.number], class: 'tk-v' },
-  { tag: tags.tagName, class: 'tk-n' },
-]);
+// the comment marker the toggle-comment command writes
+const language = EditorState.languageData.of(() => [{ commentTokens: { line: '//' } }]);
+
+/**
+ * The marks for a reply of `/api/tokens` to `text`: `pieces` are bytes (first, last + 1, class), in order and apart.
+ * @param {string} text @param {{ classes: string[], pieces: number[] }} res
+ */
+export function colourRanges(text, res) {
+  const at = byteIndexer(text);
+  const out = [];
+  for (let i = 0; i + 2 < res.pieces.length; i += 3) {
+    const cls = res.classes[res.pieces[i + 2]];
+    if (cls === undefined) throw new Error(`the program coloured with class ${res.pieces[i + 2]}, which it did not list`);
+    out.push({ from: at(res.pieces[i]), to: at(res.pieces[i + 1]), cls });
+  }
+  return out;
+}
 
 // soft wrap: a wrapped line's continuation sits one level under its own indentation
 const hanging = ViewPlugin.fromClass(class {
@@ -141,7 +146,8 @@ export class TextPane {
    * the caret moves to a line by a click or a key, onHoverLine(n|null),
    * onCaret() after any move of the caret or edit of the text, onEdit(text, kind) after the user changes the text, onReadOnly({from, to, insert}) when
    * they try to type or paste into a file they cannot write (the change they meant: `insert` over the selection), onKey(e) first, for
-   * completion (return true when it took the key), and onHistory(step).
+   * completion (return true when it took the key), onHistory(step), and `tokens(text)`: the program's colouring of a text
+   * (`{classes, pieces}` as `/api/tokens` answers, or null when there is none to lay on; a failure it has said itself).
    */
   constructor(code, cb) {
     this.code = code;
@@ -151,6 +157,7 @@ export class TextPane {
     this.writable = false;
     this.marks = {};
     this.hovered = null;
+    this.colourRev = 0;
     this.ro = new Compartment();
     const pane = this;
     const keyFirst = Prec.highest(EditorView.domEventHandlers({
@@ -180,7 +187,7 @@ export class TextPane {
           lineNumbers(), foldGutter({ markerDOM: (open) => { const el = document.createElement('span'); el.innerHTML = iconSvg(open ? 'chevron-down' : 'chevron-right', 14); return el; } }), lintGutter(), highlightActiveLineGutter(),
           highlightSpecialChars(), drawSelection(), dropCursor(), EditorState.allowMultipleSelections.of(true),
           rectangularSelection(), crosshairCursor(), bracketMatching(), closeBrackets(), highlightSelectionMatches(),
-          search({ top: true }), kdl, syntaxHighlighting(colours), folds,
+          search({ top: true }), language, colour, folds,
           indentUnit.of('    '), EditorState.tabSize.of(4),
           indentService.of((cx, pos) => indentFor(cx.state.doc.toString(), pos)),
           EditorView.lineWrapping, hanging, marks, keyFirst, keys,
@@ -206,6 +213,7 @@ export class TextPane {
     const quiet = u.transactions.some((tr) => tr.isUserEvent(QUIET));
     if (u.docChanged) {
       this.text = u.state.doc.toString();
+      this.recolour(this.text);
       if (!quiet) this.cb.onEdit?.(this.text, 'type');
     }
     if (u.selectionSet && !quiet && u.transactions.some((tr) => tr.isUserEvent('select'))) {
@@ -213,6 +221,19 @@ export class TextPane {
     }
     // the caret is somewhere else now, by a move or by typing: whatever follows the caret (a cloud) asks again
     if ((u.selectionSet || u.docChanged) && !quiet) this.cb.onCaret?.();
+  }
+
+  /**
+   * Ask the program how `text` is coloured and lay the answer on, unless the text has moved on (a newer question is
+   * on its way, and the marks already there have moved with the text meanwhile).
+   * @param {string} text
+   */
+  async recolour(text) {
+    const rev = ++this.colourRev;
+    const res = await this.cb.tokens(text); // null: nothing to lay on (the program is away, or a newer question took its place)
+    if (!res || rev !== this.colourRev) return;
+    const deco = Decoration.set(colourRanges(text, res).map((r) => Decoration.mark({ class: r.cls }).range(r.from, r.to)), true);
+    this.view.dispatch({ effects: setColour.of(deco), userEvent: QUIET });
   }
 
   /** Change the document from the page (not typing): only the changed middle, so folds and scroll stay. */

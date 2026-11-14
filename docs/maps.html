@@ -55,26 +55,26 @@
 
 <h2 id="file" data-explains="dt::map"><!--gen:anchors--><span id="dt-map"></span><!--/gen:anchors-->The file</h2>
 <p>The map follows the tile language's habits: lengths carry units, points read across and down from the north-west corner, and everything you can see on screen is written in the source. The editor writes <code>at</code> and <code>rot</code> on every placed piece, and <code>bottom</code>, <code>seed</code> and <code>print</code> only when they are not the default.</p>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-map {
-    about "A stream crossing, a ruined wall to the north."
-    grid cols=8 rows=5                         // squares
-    let $plinth "20dmm"                        // the map's own named height
+<span class="tk-node">map</span> <span class="tk-punct">{</span>
+    <span class="tk-node">about</span> <span class="tk-string">"A stream crossing, a ruined wall to the north."</span>
+    <span class="tk-node">grid</span> <span class="tk-property">cols</span><span class="tk-punct">=</span><span class="tk-number">8</span> <span class="tk-property">rows</span><span class="tk-punct">=</span><span class="tk-number">5</span>                         <span class="tk-comment">// squares</span>
+    <span class="tk-node">let</span> $plinth <span class="tk-string">"</span><span class="tk-number">20dmm</span><span class="tk-string">"</span>                        <span class="tk-comment">// the map's own named height</span>
 
-    piece p1 "lib:tiles/ground/2x2-glade"               at="(0sq, 0sq)" rot=0
-    piece p2 "lib:tiles/water/1x1-water-corridor+grass" at="(2sq, 1sq)" rot=90 seed=3
-    piece p3 "lib:tiles/walls/1x1-wall-stone"           at="(4sq, 1sq)" rot=180
-    piece p4 "lib:tiles/cliffs/2x1-cliff"               at="(4sq, 0sq)" rot=0 bottom="$wallHeight"
-    piece p7 "lib:tiles/walls/1x1-wall-stone"           at="(5sq, 1sq)" rot=0 bottom="$plinth + 2mm"
-    piece p8 "lib:tiles/ground/1x1-grass"               at="(6sq, 1sq)" rot=0 bottom="50mm"
-    piece p5 "home:meadows/glade"                       at="(0sq, 2sq)" rot=0 print=skip
-    piece p6 "lib:tiles/ground/1x1-grass"                                    // no at: in the tray
-}
+    <span class="tk-node">piece</span> p1 <span class="tk-string">"lib:tiles/ground/2x2-glade"</span>               <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">0sq</span><span class="tk-string">)"</span> <span class="tk-property">rot</span><span class="tk-punct">=</span><span class="tk-number">0</span>
+    <span class="tk-node">piece</span> p2 <span class="tk-string">"lib:tiles/water/1x1-water-corridor+grass"</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">2sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-property">rot</span><span class="tk-punct">=</span><span class="tk-number">90</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">3</span>
+    <span class="tk-node">piece</span> p3 <span class="tk-string">"lib:tiles/walls/1x1-wall-stone"</span>           <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">4sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-property">rot</span><span class="tk-punct">=</span><span class="tk-number">180</span>
+    <span class="tk-node">piece</span> p4 <span class="tk-string">"lib:tiles/cliffs/2x1-cliff"</span>               <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">4sq</span><span class="tk-string">, </span><span class="tk-number">0sq</span><span class="tk-string">)"</span> <span class="tk-property">rot</span><span class="tk-punct">=</span><span class="tk-number">0</span> <span class="tk-property">bottom</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$wallHeight</span><span class="tk-string">"</span>
+    <span class="tk-node">piece</span> p7 <span class="tk-string">"lib:tiles/walls/1x1-wall-stone"</span>           <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">5sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-property">rot</span><span class="tk-punct">=</span><span class="tk-number">0</span> <span class="tk-property">bottom</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$plinth</span><span class="tk-string"> + </span><span class="tk-number">2mm</span><span class="tk-string">"</span>
+    <span class="tk-node">piece</span> p8 <span class="tk-string">"lib:tiles/ground/1x1-grass"</span>               <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">6sq</span><span class="tk-string">, </span><span class="tk-number">1sq</span><span class="tk-string">)"</span> <span class="tk-property">rot</span><span class="tk-punct">=</span><span class="tk-number">0</span> <span class="tk-property">bottom</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">50mm</span><span class="tk-string">"</span>
+    <span class="tk-node">piece</span> p5 <span class="tk-string">"home:meadows/glade"</span>                       <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0sq</span><span class="tk-string">, </span><span class="tk-number">2sq</span><span class="tk-string">)"</span> <span class="tk-property">rot</span><span class="tk-punct">=</span><span class="tk-number">0</span> <span class="tk-property">print</span><span class="tk-punct">=</span>skip
+    <span class="tk-node">piece</span> p6 <span class="tk-string">"lib:tiles/ground/1x1-grass"</span>                                    <span class="tk-comment">// no at: in the tray</span>
+<span class="tk-punct">}</span>
 
-plates printer="bambu/x1c-ams" {
-    pin p4 plate=1 at="(0mm, 120mm)"            // dropped here on a plate: the packer keeps it
-}</code></pre>
+<span class="tk-node">plates</span> <span class="tk-property">printer</span><span class="tk-punct">=</span><span class="tk-string">"bambu/x1c-ams"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">pin</span> p4 <span class="tk-property">plate</span><span class="tk-punct">=</span><span class="tk-number">1</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0mm</span><span class="tk-string">, </span><span class="tk-number">120mm</span><span class="tk-string">)"</span>            <span class="tk-comment">// dropped here on a plate: the packer keeps it</span>
+<span class="tk-punct">}</span></code></pre>
 <div class="tbl"><table>
 <thead><tr><th>Word</th><th>Means</th></tr></thead>
 <tbody>
@@ -155,10 +155,10 @@ plates printer="bambu/x1c-ams" {
 
 <h2 id="pins">Pins on the plates</h2>
 <p>Plates are computed from the pieces, the printer and the settings, so nothing about them is stored, except what you override by hand. Looking down on a plate in the plates view, press a piece and drag it: where you let go it is <strong>pinned</strong>. A pin is a line inside the <code>plates</code> line, naming the piece by its id (the editor gives it one), its plate and where its footprint's north-west corner stands, across and down from the bed's north-west corner; <code>turn=90</code> if it is turned a quarter.</p>
-<pre><code>plates printer="bambu/x1c-ams" mode="multicolour" {
-    pin p4 plate=1 at="(0mm, 120mm)"
-    pin p7 plate=2 at="(3sq, 0sq)" turn=90
-}</code></pre>
+<pre><code><span class="tk-node">plates</span> <span class="tk-property">printer</span><span class="tk-punct">=</span><span class="tk-string">"bambu/x1c-ams"</span> <span class="tk-property">mode</span><span class="tk-punct">=</span><span class="tk-string">"multicolour"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">pin</span> p4 <span class="tk-property">plate</span><span class="tk-punct">=</span><span class="tk-number">1</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0mm</span><span class="tk-string">, </span><span class="tk-number">120mm</span><span class="tk-string">)"</span>
+    <span class="tk-node">pin</span> p7 <span class="tk-property">plate</span><span class="tk-punct">=</span><span class="tk-number">2</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">3sq</span><span class="tk-string">, </span><span class="tk-number">0sq</span><span class="tk-string">)"</span> <span class="tk-property">turn</span><span class="tk-punct">=</span><span class="tk-number">90</span>
+<span class="tk-punct">}</span></code></pre>
 <ul>
 <li>The packer puts pinned pieces down first, as they are, and packs the rest around them; a plate that holds a pin is not centred (that would move it).</li>
 <li>A pin that cannot hold (outside the margin, on an excluded zone, on another pin, or on a plate that would then need more filaments than the printer has) is said in the messages, and its piece is packed like the rest. A pin for a piece that does not print (<code>print=skip</code>, or one your inventory holds) is said and not used.</li>

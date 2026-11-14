@@ -17,17 +17,17 @@
 </header>
 <section class="said" aria-labelledby="said">
 <h2 id="said">What the program says</h2>
-<pre class="said no-hl"><code>dt::tile-name
+<pre class="said no-hl"><code><span class="a-31">dt::tile-name</span>
 
-  × a tile takes no name: its file name is its name
-   ╭─[example.dtile:2:6]
- 1 │ dharmatiles version=&quot;1.0.0&quot;
- 2 │ tile pond size=&quot;1x1&quot; {
-   ·      ──┬─
-   ·        ╰── remove this
- 3 │     stack { dirt }
+  <span class="a-31">×</span> a tile takes no name: its file name is its name
+   ╭─[<span class="a-36 a-b a-u">example.dtile:2:6</span>]
+ <span class="a-d">1</span> │ <span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+ <span class="a-d">2</span> │ <span class="tk-node">tile</span> pond <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+   · <span class="a-35 a-b">     ──┬─</span>
+   ·        <span class="a-35 a-b">╰── </span><span class="a-35 a-b">remove this</span>
+ <span class="a-d">3</span> │     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
    ╰────
-  help: write `tile size=&quot;2x1&quot; seed=1 { … }`; rename the file to rename the
+<span class="a-36">  help: </span>write `tile size="2x1" seed=1 { … }`; rename the file to rename the
         tile
         explain: https://shawn-vincent.github.io/dharmatiles/e/tile-name
         offline: dharmatiles explain dt::tile-name</code></pre>
@@ -42,15 +42,15 @@
 <h2 id="example">Broken, then fixed</h2>
 <div class="cp-pair">
 <figure class="broken"><figcaption>Gives <code>dt::tile-name</code></figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile <mark class="del">pond size</mark>=&quot;1x1&quot; {
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <mark class="del">pond <span class="tk-property">size</span></mark><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 <figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile <mark class="ins">size</mark>=&quot;1x1&quot; {
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <mark class="ins"><span class="tk-property">size</span></mark><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 </div>
 </section>
 </div>

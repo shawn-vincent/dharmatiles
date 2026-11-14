@@ -397,6 +397,7 @@ dependencies = [
  "kdl",
  "libm",
  "miette",
+ "owo-colors",
  "rayon",
  "serde",
  "serde_json",

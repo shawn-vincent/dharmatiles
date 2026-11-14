@@ -25,19 +25,19 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-use "parts/grass" lawn
+<span class="tk-node">use</span> <span class="tk-string">"parts/grass"</span> lawn
 
-tile size="1x1" seed=7 {
-    stack {
-        base
-        dirt
-        scatter perSquare=4 { flower size="4dmm .. 6dmm" petals=5 }   // many, each its own size
-        flower at="(0.5sq, 0.5sq)" size="5dmm"                        // or one, where you say
-        lawn
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">7</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">scatter</span> <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">4</span> <span class="tk-punct">{</span> <span class="tk-node">flower</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">4dmm</span><span class="tk-string"> .. </span><span class="tk-number">6dmm</span><span class="tk-string">"</span> <span class="tk-property">petals</span><span class="tk-punct">=</span><span class="tk-number">5</span> <span class="tk-punct">}</span>   <span class="tk-comment">// many, each its own size</span>
+        <span class="tk-node">flower</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-number">5dmm</span><span class="tk-string">"</span>                        <span class="tk-comment">// or one, where you say</span>
+        <span class="tk-node">lawn</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>A scatter may mix flowers with rocks and trees (<code>weight=</code> picks each one); the flowers are placed last, clear of the others. Flowers keep to dry ground, inside the scatter's region and clear of rocks, trees and walls; a flower given a point must stand clear of the tile edge by its reach.</p>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference flower -->

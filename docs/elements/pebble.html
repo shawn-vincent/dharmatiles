@@ -25,8 +25,8 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>pebble at="(0.5sq, 0.5sq)"                       // one, there
-dirt { scatter perSquare=40 { pebble } }</code></pre>
+<pre><code><span class="tk-node">pebble</span> <span class="tk-property">at</span><span class="tk-punct">=</span><span class="tk-string">"(</span><span class="tk-number">0.5sq</span><span class="tk-string">, </span><span class="tk-number">0.5sq</span><span class="tk-string">)"</span>                       <span class="tk-comment">// one, there</span>
+<span class="tk-node">dirt</span> <span class="tk-punct">{</span> <span class="tk-node">scatter</span> <span class="tk-property">perSquare</span><span class="tk-punct">=</span><span class="tk-number">40</span> <span class="tk-punct">{</span> <span class="tk-node">pebble</span> <span class="tk-punct">}</span> <span class="tk-punct">}</span></code></pre>
 <p>A thing is one of itself. Scattered inside dirt, pebbles lie half sunk in the soil. Many of them are a <a href="scatter.html"><code>scatter</code></a>.</p>
 <p>Like a <a href="rock.html#top"><code>rock</code></a>, a pebble takes a <code>top=</code>: a cloud worked out at its middle that its peak stands at (<code>pebble top="$bottom + [1dmm .. 3dmm]"</code>).</p>
 <h2 id="reference">Reference</h2>

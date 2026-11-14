@@ -6,6 +6,7 @@ use std::process::{Command, ExitCode};
 mod codes;
 mod docs;
 mod guide;
+mod highlight;
 mod image;
 mod live;
 mod nav;

@@ -24,9 +24,9 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>point knoll "(0.28sq, 0.28sq)"
-line path { through southCenter knoll northCenter }
-stack { base; dirt { pin top="$groundHeight + 4dmm" at=knoll } }</code></pre>
+<pre><code><span class="tk-node">point</span> knoll <span class="tk-string">"(</span><span class="tk-number">0.28sq</span><span class="tk-string">, </span><span class="tk-number">0.28sq</span><span class="tk-string">)"</span>
+<span class="tk-node">line</span> path <span class="tk-punct">{</span> <span class="tk-node">through</span> southCenter knoll northCenter <span class="tk-punct">}</span>
+<span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">base</span><span class="tk-punct">;</span> <span class="tk-node">dirt</span> <span class="tk-punct">{</span> <span class="tk-node">pin</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$groundHeight</span><span class="tk-string"> + </span><span class="tk-number">4dmm</span><span class="tk-string">"</span> <span class="tk-property">at</span><span class="tk-punct">=</span>knoll <span class="tk-punct">}</span> <span class="tk-punct">}</span></code></pre>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>What it does</th></tr></thead>

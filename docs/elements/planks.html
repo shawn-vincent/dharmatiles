@@ -25,15 +25,15 @@
 </div>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>dharmatiles version="1.0.0"
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
 
-tile size="1x1" seed=73 {
-    stack {
-        base
-        dirt
-        planks style=random texture=worn boards=8
-    }
-}</code></pre>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-property">seed</span><span class="tk-punct">=</span><span class="tk-number">73</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span>
+        <span class="tk-node">base</span>
+        <span class="tk-node">dirt</span>
+        <span class="tk-node">planks</span> <span class="tk-property">style</span><span class="tk-punct">=</span>random <span class="tk-property">texture</span><span class="tk-punct">=</span>worn <span class="tk-property">boards</span><span class="tk-punct">=</span><span class="tk-number">8</span>
+    <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre>
 <p>Boards run east to west, <code>boards</code> across a square. <code>style=even</code> cuts every board half a square long, each course set half a board on.</p>
 <figure class="shot"><img src="img/el-planks-close.jpg" alt="A close view of planks: grain lines and a check in the end grain"><figcaption>Close view: grain along the boards, a check at an end.</figcaption></figure>
 <h2 id="reference">Reference</h2>

@@ -17,30 +17,30 @@
 </header>
 <section class="said" aria-labelledby="said">
 <h2 id="said">What the program says</h2>
-<pre class="said no-hl"><code>dt::header-version
+<pre class="said no-hl"><code><span class="a-31">dt::header-version</span>
 
-  × the header line has no version
-   ╭─[example.dtile:1:1]
- 1 │ dharmatiles
-   · ─────┬─────
-   ·      ╰── needs `version=…`
- 2 │ tile size=&quot;1x1&quot; {
+  <span class="a-31">×</span> the header line has no version
+   ╭─[<span class="a-36 a-b a-u">example.dtile:1:1</span>]
+ <span class="a-d">1</span> │ <span class="tk-node">dharmatiles</span>
+   · <span class="a-35 a-b">─────┬─────</span>
+   ·      <span class="a-35 a-b">╰── </span><span class="a-35 a-b">needs `version=…`</span>
+ <span class="a-d">2</span> │ <span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
    ╰────
-  help: write `dharmatiles version=1` (a whole number), or quote a longer
-        version: `dharmatiles version=&quot;1.0&quot;`
+<span class="a-36">  help: </span>write `dharmatiles version=1` (a whole number), or quote a longer
+        version: `dharmatiles version="1.0"`
         explain: https://shawn-vincent.github.io/dharmatiles/e/header-version
         offline: dharmatiles explain dt::header-version
 
-dt::format-0
+<span class="a-31">dt::format-0</span>
 
-  × this tile is format 0, and this dharmatiles reads format 1
-   ╭─[example.dtile:1:1]
- 1 │ dharmatiles
-   · ─────┬─────
-   ·      ╰── no header: format 0
- 2 │ tile size=&quot;1x1&quot; {
+  <span class="a-31">×</span> this tile is format 0, and this dharmatiles reads format 1
+   ╭─[<span class="a-36 a-b a-u">example.dtile:1:1</span>]
+ <span class="a-d">1</span> │ <span class="tk-node">dharmatiles</span>
+   · <span class="a-35 a-b">─────┬─────</span>
+   ·      <span class="a-35 a-b">╰── </span><span class="a-35 a-b">no header: format 0</span>
+ <span class="a-d">2</span> │ <span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
    ╰────
-  help: release 1.0.0 (tag `v1.0.0`) carries a document to format 1 with
+<span class="a-36">  help: </span>release 1.0.0 (tag `v1.0.0`) carries a document to format 1 with
         `dharmatiles migrate FILE`: run that release once on the file, then
         use this one
         explain: https://shawn-vincent.github.io/dharmatiles/e/format-0
@@ -56,15 +56,15 @@ dt::format-0
 <h2 id="example">Broken, then fixed</h2>
 <div class="cp-pair">
 <figure class="broken"><figcaption>Gives <code>dt::header-version</code></figcaption>
-<pre><code><mark class="del">dharmatiles</mark>
-tile size=&quot;1x1&quot; {
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><mark class="del"><span class="tk-node">dharmatiles</span></mark>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 <figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
-<pre><code><mark class="ins">dharmatiles version=&quot;1.0.0&quot;</mark>
-tile size=&quot;1x1&quot; {
-    stack { dirt }
-}</code></pre></figure>
+<pre><code><mark class="ins"><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span></mark>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 </div>
 </section>
 </div>

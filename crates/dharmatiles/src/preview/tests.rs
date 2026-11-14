@@ -948,6 +948,47 @@ fn the_names_a_text_makes_come_from_the_parser() {
 }
 
 #[test]
+fn the_colouring_of_a_text_comes_from_the_languages_one_set_of_rules() {
+    let r = start(&[], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let t = token["token"].as_str().unwrap().to_owned();
+    // a broken text (an unterminated string) colours as far as it reads; the byte offsets count the é as two
+    let text = "// é\nrock size=\"8dmm\n";
+    let (h, v) = post(
+        &r,
+        "/api/tokens",
+        Some(&t),
+        None,
+        &serde_json::json!({ "text": text }).to_string(),
+    );
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    let want = dt_lang::highlight::tokens(text);
+    let classes: Vec<&str> = v["classes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_str().unwrap())
+        .collect();
+    assert_eq!(classes.len(), dt_lang::highlight::CLASSES.len());
+    let flat: Vec<u64> = v["pieces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_u64().unwrap())
+        .collect();
+    assert_eq!(flat.len(), want.len() * 3);
+    for (p, got) in want.iter().zip(flat.chunks(3)) {
+        assert_eq!((p.start as u64, p.end as u64), (got[0], got[1]));
+        assert_eq!(classes[usize::try_from(got[2]).unwrap()], p.class.css());
+    }
+    assert_eq!(
+        (want[0].start, want[0].end),
+        (0, 6),
+        "the comment is six bytes"
+    );
+}
+
+#[test]
 fn a_draft_is_a_request_answered_with_its_mesh() {
     let r = start(&[FLAT], false);
     let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();

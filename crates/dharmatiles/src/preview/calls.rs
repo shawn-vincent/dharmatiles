@@ -13,6 +13,7 @@ calls! {
     post {
         "/api/edit" => edit::edit : edit::EditReq => edit::EditRes;
         "/api/names" => edit::names : edit::NamesReq => edit::NamesRes;
+        "/api/tokens" => edit::tokens : edit::TokensReq => edit::TokensRes;
         "/api/check-value" => edit::check_value : edit::CheckValueReq => edit::CheckValueRes;
         "/api/printed-set" => edit::printed_set : edit::PrintedSetReq => edit::PrintedSetRes;
         "/api/new" => edit::new_tile : edit::NewReq => places::Listed;

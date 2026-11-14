@@ -17,17 +17,17 @@
 </header>
 <section class="said" aria-labelledby="said">
 <h2 id="said">What the program says</h2>
-<pre class="said no-hl"><code>dt::type
+<pre class="said no-hl"><code><span class="a-31">dt::type</span>
 
-  × `dirt top`: `($dirtEdgeHeight + 20%)` mixes a length and a plain number
-   ╭─[example.dtile:3:22]
- 2 │ tile size=&quot;1x1&quot; {
- 3 │     stack { dirt top=&quot;$dirtEdgeHeight + 20%&quot; }
-   ·                      ───────────┬───────────
-   ·                                 ╰── here
- 4 │ }
+  <span class="a-31">×</span> `dirt top`: `($dirtEdgeHeight + 20%)` mixes a length and a plain number
+   ╭─[<span class="a-36 a-b a-u">example.dtile:3:22</span>]
+ <span class="a-d">2</span> │ <span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+ <span class="a-d">3</span> │     <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string"> + </span><span class="tk-number">20%</span><span class="tk-string">"</span> <span class="tk-punct">}</span>
+   · <span class="a-35 a-b">                     ───────────┬───────────</span>
+   ·                                 <span class="a-35 a-b">╰── </span><span class="a-35 a-b">here</span>
+ <span class="a-d">4</span> │ <span class="tk-punct">}</span>
    ╰────
-  help: give the number its unit: `4dmm` or `4mm`; a plain number is a count
+<span class="a-36">  help: </span>give the number its unit: `4dmm` or `4mm`; a plain number is a count
         or a fraction, never a length
         explain: https://shawn-vincent.github.io/dharmatiles/e/type
         offline: dharmatiles explain dt::type</code></pre>
@@ -42,15 +42,15 @@
 <h2 id="example">Broken, then fixed</h2>
 <div class="cp-pair">
 <figure class="broken"><figcaption>Gives <code>dt::type</code></figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    stack { dirt top=&quot;$dirtEdgeHeight + <mark class="del">20%</mark>&quot; }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string"> + </span><mark class="del"><span class="tk-number">20%</span></mark><span class="tk-string">"</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 <figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
-<pre><code>dharmatiles version=&quot;1.0.0&quot;
-tile size=&quot;1x1&quot; {
-    stack { dirt top=&quot;$dirtEdgeHeight + <mark class="ins">2dmm</mark>&quot; }
-}</code></pre></figure>
+<pre><code><span class="tk-node">dharmatiles</span> <span class="tk-property">version</span><span class="tk-punct">=</span><span class="tk-string">"1.0.0"</span>
+<span class="tk-node">tile</span> <span class="tk-property">size</span><span class="tk-punct">=</span><span class="tk-string">"1x1"</span> <span class="tk-punct">{</span>
+    <span class="tk-node">stack</span> <span class="tk-punct">{</span> <span class="tk-node">dirt</span> <span class="tk-property">top</span><span class="tk-punct">=</span><span class="tk-string">"</span><span class="tk-name">$dirtEdgeHeight</span><span class="tk-string"> + </span><mark class="ins"><span class="tk-number">2dmm</span></mark><span class="tk-string">"</span> <span class="tk-punct">}</span>
+<span class="tk-punct">}</span></code></pre></figure>
 </div>
 </section>
 </div>

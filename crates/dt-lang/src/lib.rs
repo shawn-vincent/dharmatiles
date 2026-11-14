@@ -9,6 +9,7 @@
 //! server can all depend on it.
 
 pub mod codes;
+pub mod highlight;
 
 /// The land's steepest ease, degrees: what dirt's hills are made at, and what
 /// the solver eases a land body at unless the entry says `slope=`.

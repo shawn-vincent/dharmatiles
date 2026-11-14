@@ -113,6 +113,7 @@ const urlOf = (/** @type {string} */ route, /** @type {string | undefined} */ id
 /** @type {Record<string, (body: any, id?: string) => string>} */
 const LATEST = {
   'POST /api/names': () => 'names',
+  'POST /api/tokens': () => 'tokens',
   'POST /api/tiles/:id/check': (_b, id) => `check:${id}`,
   'POST /api/tiles/:id/offers': (_b, id) => `offers:${id}`,
   'POST /api/tiles/:id/draft': (_b, id) => `draft:${id}`,
@@ -314,6 +315,8 @@ export function browserHost(requests = createRequests()) {
     },
     /** The names the text makes, by the program's parser. @param {string} text */
     names: (text) => call('POST /api/names', { text }),
+    /** How the text is coloured, by the language's one set of rules (dt-lang's highlighter). @param {string} text */
+    tokens: (text) => call('POST /api/tokens', { text }),
     /** What the text would build. @param {string} id @param {Req<'POST /api/tiles/:id/check'>} body */
     check: (id, body) => call('POST /api/tiles/:id/check', body, id),
     /** What the Add menu may offer at a place of the stack. @param {string} id @param {Req<'POST /api/tiles/:id/offers'>} body */
