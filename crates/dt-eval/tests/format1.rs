@@ -129,7 +129,7 @@ fn override_of_a_name_no_caller_installed_suggests_the_near_one() {
         e[0].help
             .as_deref()
             .unwrap()
-            .contains("`override $groundHeight")
+            .contains("did you mean `$groundHeight`?")
     );
 }
 
