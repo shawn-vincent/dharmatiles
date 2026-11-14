@@ -619,7 +619,7 @@ fn a_scattered_thing_takes_no_place_word_of_its_own() {
 fn a_point_drawn_from_a_range_is_drawn_once_from_the_tile_seed() {
     let text = |seed: u32| {
         format!(
-            "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed={seed} {{\n line shore {{ through \"(0sq, 0.4sq .. 0.7sq)\" \"(bell(0.3sq .. 0.7sq), 0.4sq .. 0.6sq)\" \"(1sq, 0.4sq .. 0.7sq)\" }}\n region low {{ boundedBy shore; fill \"(0.4sq .. 0.6sq, 0.85sq .. 0.95sq)\" }}\n stack {{\n dirt top=\"8dmm\" {{\n pin top=\"5dmm\" at=low\n }}\n }}\n}}\n"
+            "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" seed={seed} {{\n line shore curve=straight {{ through \"(0sq, 0.5sq)\" \"(bell(0.3sq .. 0.7sq), 0.4sq .. 0.6sq)\" \"(1sq, 0.5sq)\" }}\n region low {{ boundedBy shore; fill \"(0.4sq .. 0.6sq, 0.85sq .. 0.95sq)\" }}\n stack {{\n dirt top=\"8dmm\" {{\n pin top=\"5dmm\" at=low\n }}\n }}\n}}\n"
         )
     };
     let check_of = |t: &str, seed: Option<u64>| {
@@ -632,7 +632,7 @@ fn a_point_drawn_from_a_range_is_drawn_once_from_the_tile_seed() {
     let shore = &t.lines["shore"];
     assert_eq!(shore.len(), 3);
     // each point lands inside its range, and a plain number stays put
-    assert!((0.3..=0.6).contains(&shore[0][1]) && shore[0][0] == 0.0);
+    assert_eq!((shore[0], shore[2]), ([0.0, 0.5], [1.0, 0.5]));
     assert!((0.3..=0.7).contains(&shore[1][0]) && (0.4..=0.6).contains(&shore[1][1]));
     assert!((0.05..=0.15).contains(&t.regions[0].fills[0][1]));
     // the same seed draws the same line; another seed, and `--seed`, draw again

@@ -304,6 +304,11 @@ impl Reader<'_> {
             let heights = self.load(HEIGHTS, None)?;
             known.add_consts(&heights.doc);
         }
+        if path != HEIGHTS && path != EDGES {
+            // and the edge contract's seams, whose words a point may be written with
+            let edges = self.load(EDGES, None)?;
+            known.add_seams(&edges.doc);
+        }
         let mut ok = true;
         self.loading.push(path.to_owned());
         for u in &uses {
@@ -424,6 +429,7 @@ impl Reader<'_> {
             lines: BTreeMap::new(),
             widths: BTreeMap::new(),
             drawn_lines: BTreeMap::new(),
+            controls: BTreeMap::new(),
             wobbles: BTreeMap::new(),
             regions: Vec::new(),
             heights: Heights::default(),
@@ -438,6 +444,20 @@ impl Reader<'_> {
         };
         let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
         self.dims = (cols, rows);
+        // where a line may cross a square's edge, from the edge contract; a
+        // tile that writes `seams=free` is not held to it
+        let seams = match self.load(EDGES, None) {
+            Some(f) if f.doc.seams.is_some() => f.doc.seams.clone().filter(|_| !header.seams_free),
+            Some(_) => {
+                self.errors.push(Diag::plain(
+                    "dt::seams",
+                    format!("the edge contract, {EDGES}, has no `seams` block: the places a line may cross a square's edge"),
+                ));
+                None
+            }
+            None => None,
+        };
+        let seams = seams.as_ref();
         self.points = BTreeMap::new();
         self.widths = BTreeMap::new();
         for n in dt_doc::place::BUILTIN_POINTS {
@@ -507,9 +527,14 @@ impl Reader<'_> {
                 }
             };
             let mut spots = Vec::new();
-            for p in &l.through {
+            let mut marks = Vec::new();
+            for (p, mark) in l.through.iter().zip(&l.marks) {
                 match spot(&p.value, cols, rows, &self.points) {
-                    Ok(sp) => spots.push(sp),
+                    Ok(sp) => {
+                        self.check_edge_point(src, p.span, &sp, (header.cols, header.rows), seams);
+                        spots.push(sp);
+                        marks.push(mark.clone());
+                    }
                     Err(r) => {
                         let mut d = Diag::at(src, p.span, r.code, r.message, "here");
                         d.help = r.help;
@@ -521,8 +546,13 @@ impl Reader<'_> {
                 spots,
                 closed: l.closed,
                 wobble,
+                marks,
+                curve: l.curve,
+                ends: l.ends,
+                tile: [cols, rows],
             };
-            let (base, pts) = line.lay(t.seed, &l.name.value);
+            let (knots, base, pts) = line.lay(t.seed, &l.name.value);
+            t.controls.insert(l.name.value.clone(), knots);
             if wobble > 0.0 {
                 t.wobbles.insert(l.name.value.clone(), (base, wobble));
             }
@@ -642,6 +672,96 @@ impl Reader<'_> {
         Some(t)
     }
 
+    /// A through point on, or just off, a side of the tile. A point within
+    /// 1 mm of a side but not on it is a slip (`dt::near-edge`); a range on a
+    /// side would draw a different place for each seed (`dt::edge-range`); a
+    /// point on a side that is not one of its square's seams is `dt::seam`
+    /// (when the tile holds to the seams).
+    fn check_edge_point(
+        &mut self,
+        src: &Src,
+        span: SourceSpan,
+        spot: &Spot,
+        (cols, rows): (u32, u32),
+        seams: Option<&dt_doc::seams::SeamTable>,
+    ) {
+        use dt_doc::seams::{NEAR_EDGE, ON_SEAM, say};
+        let (w, h) = (f64::from(cols), f64::from(rows));
+        // the point as the page writes it: across, and down from the north
+        let written = |p: [f64; 2]| format!("({}, {})", squares(p[0]), squares(h - p[1]));
+        let on = |v: f64, e: f64| (v - e).abs() < ON_SEAM;
+        match spot {
+            Spot::Fixed(p) => {
+                // within a millimetre of a side, but not on it
+                let snap = |v: f64, size: f64| -> f64 {
+                    let d = v.min(size - v);
+                    if d > ON_SEAM && d <= NEAR_EDGE {
+                        if v < size - v { 0.0 } else { size }
+                    } else {
+                        v
+                    }
+                };
+                let to = [snap(p[0], w), snap(p[1], h)];
+                if to.iter().zip(p).any(|(a, b)| (a - b).abs() > 0.0) && (0.0..=w).contains(&p[0]) && (0.0..=h).contains(&p[1]) {
+                    self.errors.push(
+                        Diag::at(
+                            src,
+                            span,
+                            "dt::near-edge",
+                            "this point is close to a side of the tile but not on it",
+                            "within a millimetre of the side",
+                        )
+                        .suggest(span, &written(to))
+                        .also(Some("a line that reaches a side ends exactly on it, so it meets the next tile's")),
+                    );
+                    return;
+                }
+                let Some(table) = seams else { return };
+                if let Some(off) = table.off_seam(*p, cols, rows) {
+                    let (pl, at) = (off.place, off.nearest);
+                    let to = dt_doc::seams::SeamTable::point_at(&pl, at, cols, rows);
+                    self.errors.push(
+                        Diag::at(
+                            src,
+                            span,
+                            "dt::seam",
+                            format!("{}, at {} is not a seam", say(&pl), number(pl.at)),
+                            "not on a seam",
+                        )
+                        .suggest(
+                            span,
+                            &table
+                                .word_for(&pl, at, cols, rows)
+                                .unwrap_or_else(|| written(to)),
+                        )
+                        .also(Some(&format!(
+                            "the nearest seam of this square's edge is {}; `seams=free` on the tile lets its lines cross anywhere",
+                            share(at)
+                        ))),
+                    );
+                }
+            }
+            Spot::Drawn([dx, dy]) => {
+                let at_side = |d: &dt_kit::Draw, e: f64| d.is_point() && on(d.lo(), e);
+                let ranged = |d: &dt_kit::Draw| !d.is_point();
+                if (ranged(dy) && (at_side(dx, 0.0) || at_side(dx, w)))
+                    || (ranged(dx) && (at_side(dy, 0.0) || at_side(dy, h)))
+                {
+                    self.errors.push(
+                        Diag::at(
+                            src,
+                            span,
+                            "dt::edge-range",
+                            "a point on a tile side is one place: a range on it would draw a different place for each seed",
+                            "a range on a side",
+                        )
+                        .help("write the place alone, a seam such as `n` (halfway along the north side), so it meets the next tile's"),
+                    );
+                }
+            }
+        }
+    }
+
     /// What the heights language wrote in the tile besides its entries: its
     /// constants, points and the library's defaults.
     fn heights(&mut self, def: &Definition, consts: ConstTable) -> Heights {
@@ -735,6 +855,41 @@ pub(super) fn pin_decl(p: &model::Pin, from: &Provenance) -> PinDecl {
         span: p.span,
         from: from.clone(),
     }
+}
+
+/// A length in squares as a document writes it: a third is exact (`1sq/3`),
+/// never 0.33; anything else a decimal.
+fn squares(v: f64) -> String {
+    let thirds = v * 3.0;
+    if (thirds - thirds.round()).abs() < 1e-9 {
+        #[allow(clippy::cast_possible_truncation)]
+        let n = thirds.round() as i64;
+        if n % 3 == 0 {
+            return format!("{}sq", n / 3);
+        }
+        return format!("{n}sq/3");
+    }
+    format!("{}sq", number(v))
+}
+
+/// A share of a square's edge as a person says it: thirds exactly.
+fn share(v: f64) -> String {
+    let thirds = v * 3.0;
+    if (thirds - thirds.round()).abs() < 1e-9 && (thirds.round() - 1.0).abs() < 0.5 + 1.0 {
+        #[allow(clippy::cast_possible_truncation)]
+        let n = thirds.round() as i64;
+        return match n {
+            0 | 3 => format!("{}", n / 3),
+            _ => format!("{n}/3"),
+        };
+    }
+    number(v)
+}
+
+/// A number as written in a document: no trailing zeros.
+fn number(v: f64) -> String {
+    let s = format!("{v:.6}");
+    s.trim_end_matches('0').trim_end_matches('.').to_owned()
 }
 
 /// A point in squares, if it is not drawn from a range.

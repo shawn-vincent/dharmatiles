@@ -44,6 +44,7 @@
 
 mod audit;
 mod band;
+pub mod curve;
 pub mod debug;
 mod entry;
 mod field;

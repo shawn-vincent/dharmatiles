@@ -58,6 +58,7 @@ pub struct Known {
     files: BTreeMap<String, BTreeMap<String, DefInfo>>,
     consts: Vec<Const>,
     units: Units,
+    seams: Option<crate::seams::SeamTable>,
 }
 
 impl Known {
@@ -101,6 +102,20 @@ impl Known {
                 self.consts.push(c.clone());
             }
         }
+    }
+
+    /// Make the edge contract's seams visible to every file: a point may then
+    /// be written as a seam word.
+    pub fn add_seams(&mut self, doc: &Document) {
+        if doc.seams.is_some() {
+            self.seams.clone_from(&doc.seams);
+        }
+    }
+
+    /// The seams of the edge contract, once it has been read.
+    #[must_use]
+    pub fn seams(&self) -> Option<&crate::seams::SeamTable> {
+        self.seams.as_ref()
     }
 
     /// The library's constants (`groundHeight` …), in the order written.

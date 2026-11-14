@@ -352,6 +352,9 @@ pub struct Tile {
     pub widths: BTreeMap<String, f64>,
     /// The lines with a point drawn from a range.
     pub drawn_lines: BTreeMap<String, DrawnLine>,
+    /// Each line's points as written or drawn, the knots its curve passes
+    /// through (a ring repeats its first): what the editor shows as handles.
+    pub controls: BTreeMap<String, Vec<[f64; 2]>>,
     /// The wobbled lines as drawn (points in squares) and their wobble,
     /// mm, so [`Tile::reseed`] can wobble them again.
     pub wobbles: BTreeMap<String, (Vec<[f64; 2]>, f64)>,
@@ -484,7 +487,8 @@ impl Tile {
                 .insert(name.clone(), wobbled(pts, *wobble, seed, name));
         }
         for (name, l) in &self.drawn_lines {
-            let (base, pts) = l.lay(seed, name);
+            let (knots, base, pts) = l.lay(seed, name);
+            self.controls.insert(name.clone(), knots);
             if l.wobble > 0.0 {
                 self.wobbles.insert(name.clone(), (base, l.wobble));
             }
@@ -507,6 +511,14 @@ pub struct DrawnLine {
     pub closed: bool,
     /// How far it wanders off its points, mm.
     pub wobble: f64,
+    /// What each point says of its direction, in step with `spots`.
+    pub marks: Vec<dt_doc::model::Mark>,
+    /// `curve=`: one smooth curve through the points, or straight runs.
+    pub curve: dt_doc::model::Curve,
+    /// `ends=`: square to a tile side, or free.
+    pub ends: dt_doc::model::Ends,
+    /// The tile's squares across and up: where its sides are.
+    pub tile: [f64; 2],
 }
 
 /// A point of a line: written, or drawn from the ranges it holds.
@@ -519,10 +531,12 @@ pub enum Spot {
 }
 
 impl DrawnLine {
-    /// The line for tile seed `seed`: its points as drawn (closed when it
-    /// is), and those wobbled.
-    pub(super) fn lay(&self, seed: u64, name: &str) -> (Vec<[f64; 2]>, Vec<[f64; 2]>) {
-        let mut pts: Vec<[f64; 2]> = self
+    /// The line for tile seed `seed`: its points as drawn (a ring repeats the
+    /// first), the curve through them, and that wobbled. This is the one place a line is
+    /// made, so every follower of it (a wall, a strip, a region, a scatter, a
+    /// cliff) reads the same curve.
+    pub(super) fn lay(&self, seed: u64, name: &str) -> Laid {
+        let pts: Vec<[f64; 2]> = self
             .spots
             .iter()
             .enumerate()
@@ -531,15 +545,72 @@ impl DrawnLine {
                 Spot::Drawn(d) => draw_spot(d, through_key(seed, name, i)),
             })
             .collect();
-        if self.closed && pts.len() > 1 {
-            pts.push(pts[0]);
+        let mut knots = pts.clone();
+        if self.closed && knots.len() > 1 {
+            knots.push(knots[0]);
         }
+        let pts = self.curve_through(&pts);
         let out = if self.wobble > 0.0 {
             wobbled(&pts, self.wobble, seed, name)
         } else {
             pts.clone()
         };
-        (pts, out)
+        (knots, pts, out)
+    }
+}
+
+/// A line laid: its knots, the curve through them, and that wobbled.
+pub(super) type Laid = (Vec<[f64; 2]>, Vec<[f64; 2]>, Vec<[f64; 2]>);
+
+impl DrawnLine {
+    /// The line through `pts` (closed when it is): the written points joined
+    /// by one smooth curve, or by straight runs for `curve=straight`.
+    fn curve_through(&self, pts: &[[f64; 2]]) -> Vec<[f64; 2]> {
+        use dt_doc::model::{Curve, Ends};
+        let closed = self.closed && pts.len() > 1;
+        if self.curve == Curve::Straight || pts.len() < 2 {
+            let mut out = pts.to_vec();
+            if closed {
+                out.push(pts[0]);
+            }
+            return out;
+        }
+        let knots: Vec<dt_kit::curve::Knot> = pts
+            .iter()
+            .enumerate()
+            .map(|(i, &at)| {
+                let m = self.marks.get(i);
+                dt_kit::curve::Knot {
+                    at,
+                    corner: m.is_some_and(|m| m.corner),
+                    // written in the page's frame (0 east, 90deg south)
+                    heading: m.and_then(|m| m.heading.as_ref()).map(|h| {
+                        [
+                            dt_doc::expr::cos_deg(h.value),
+                            -dt_doc::expr::sin_deg(h.value),
+                        ]
+                    }),
+                    pull: m.and_then(|m| m.pull).unwrap_or(1.0),
+                }
+            })
+            .collect();
+        // an end on a tile side leaves square to it; on a corner, along its
+        // bisector. The one place that decides it is `edge_heading`. An end
+        // that would leave back out of the tile is left free.
+        let end = |at: [f64; 2], neighbour: [f64; 2], sign: f64| {
+            if closed || self.ends == Ends::Free {
+                return None;
+            }
+            let h = dt_kit::curve::edge_heading(at, self.tile[0], self.tile[1])?;
+            let c = [neighbour[0] - at[0], neighbour[1] - at[1]];
+            // the chord back into the tile must head in, not along the side or out
+            (c[0] * h[0] + c[1] * h[1] > 1e-12).then_some([sign * h[0], sign * h[1]])
+        };
+        let n = pts.len();
+        // the last point's chord is taken back from it: it leaves by the way
+        // the line came, outward
+        let ends = [end(pts[0], pts[1], 1.0), end(pts[n - 1], pts[n - 2], -1.0)];
+        dt_kit::curve::spine(&knots, closed, ends, 0.25 / dt_kit::REFERENCE_SQUARE_MM)
     }
 }
 

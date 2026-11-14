@@ -23,7 +23,10 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
     let Some(name) = name else {
         if json {
             let elements: Vec<Value> = ELEMENTS.iter().map(summary_json).collect();
-            say!("{}", json!({"ok": true, "elements": elements}));
+            say!(
+                "{}",
+                json!({"ok": true, "elements": elements, "seams": seams_json()})
+            );
         } else {
             list();
         }
@@ -53,6 +56,23 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
         show(element);
     }
     OK
+}
+
+/// The seams of the edge contract, from the library on disk: what the
+/// tile-system page's table is made from. A contract that does not read is
+/// reported in the answer, never left out.
+fn seams_json() -> Value {
+    match dt_eval::doc::read(&dt_eval::Library, dt_eval::doc::EDGES) {
+        Ok(r) => match &r.file.doc.seams {
+            Some(table) => json!({
+                "ok": true,
+                "seams": table.seams.iter().map(|s| json!({"at": s.at, "north": s.words[0], "south": s.words[1], "west": s.words[2], "east": s.words[3]})).collect::<Vec<_>>(),
+                "corners": table.corners.iter().map(|(c, w)| json!({"corner": c.as_str(), "word": w})).collect::<Vec<_>>(),
+            }),
+            None => json!({"ok": false, "errors": ["the edge contract has no `seams` block"]}),
+        },
+        Err(es) => json!({"ok": false, "errors": errors_json(&es)}),
+    }
 }
 
 fn names() -> Vec<&'static str> {

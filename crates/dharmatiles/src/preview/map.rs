@@ -395,7 +395,7 @@ pub(super) fn json(
         .iter()
         .map(|(name, pts)| {
             let w = node.and_then(|n| written(n, "line", name, "through"));
-            let control = t.wobbles.get(name).map(|(p, _)| p).or(Some(pts));
+            let control = t.controls.get(name).or(Some(pts));
             json!({
                 "name": name,
                 "pts": pts,

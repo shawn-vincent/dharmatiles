@@ -8,7 +8,7 @@ mod common;
 use dt_eval::{Options, build};
 
 const TILE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
-    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    line shore wobble="5dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
     region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
     region bank { boundedBy shore; fill "(0.5sq, 0.25sq)" }
     region shoreBand { within "7dmm" of=shore }

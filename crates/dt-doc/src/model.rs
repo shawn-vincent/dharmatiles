@@ -43,6 +43,9 @@ pub struct Document {
     /// A `defaults { … }` block: the tops and pins every body of its
     /// element starts with (library/parts/edges.dtile).
     pub defaults: Vec<Entry>,
+    /// A `seams { … }` block: where a line may cross a square's edge
+    /// (library/parts/edges.dtile).
+    pub seams: Option<crate::seams::SeamTable>,
     /// The `dharmatiles version=…` header line, when the file has one
     /// (no header: refused, `dt::format-0`).
     pub header: Option<crate::header::Header>,
@@ -114,6 +117,8 @@ pub struct TileHeader {
     pub rows: u32,
     /// The tile seed, if written.
     pub seed: Option<i64>,
+    /// `seams=free`: its lines may cross an edge anywhere, not only at a seam.
+    pub seams_free: bool,
 }
 
 /// Whether a definition is a tile or a reusable part.
@@ -211,8 +216,46 @@ pub struct Line {
     pub wobble: Option<Spanned<Num>>,
     /// `closed=#true`: the last point joins the first.
     pub closed: bool,
+    /// What each point says of its direction, in step with `through`.
+    pub marks: Vec<Mark>,
+    /// `curve=`: one smooth curve through the points, or straight runs.
+    pub curve: Curve,
+    /// `ends=`: how its two ends leave: square to the tile's side, or free.
+    pub ends: Ends,
     /// The whole node.
     pub span: SourceSpan,
+}
+
+/// How a line runs between its points.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Curve {
+    /// One smooth curve through them (the default).
+    #[default]
+    Smooth,
+    /// Straight runs.
+    Straight,
+}
+
+/// How a line's ends leave the tile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Ends {
+    /// Square to the side, along the bisector at a corner (the default).
+    #[default]
+    Square,
+    /// Taking their direction from the neighbouring points.
+    Free,
+}
+
+/// What is written on a `through` point beyond its place.
+#[derive(Debug, Clone, Default)]
+pub struct Mark {
+    /// `corner=#true`: a sharp knee.
+    pub corner: bool,
+    /// `heading="30deg"`: the way the line goes through it, degrees, 0 east
+    /// and a quarter turn south (as `polar` reads), with where it was written.
+    pub heading: Option<Spanned<f64>>,
+    /// `pull=`: how far the handles reach, a share of the usual; `None` is 1.
+    pub pull: Option<f64>,
 }
 
 /// A region of a divided tile: the lines that bound it, and paint-bucket

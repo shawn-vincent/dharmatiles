@@ -84,6 +84,18 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
             }
         }
     }
+    // the tile-system page's seam table, from the edge contract
+    let page = root.join("docs/standards/tile-system.html");
+    let text = std::fs::read_to_string(&page).map_err(|e| format!("{}: {e}", page.display()))?;
+    let new = fill_seams(&text, &all["seams"])?;
+    if new != text {
+        if check {
+            stale.push(page.display().to_string());
+        } else {
+            std::fs::write(&page, new).map_err(|e| e.to_string())?;
+            println!("docs: wrote {}", page.display());
+        }
+    }
     if stale.is_empty() {
         Ok(())
     } else {
@@ -152,6 +164,73 @@ fn fill(text: &str, elements: &[Value], tiles: &[(String, String)]) -> Result<St
     }
     out.push_str(rest);
     Ok(out)
+}
+
+const SEAMS_OPEN: &str = "<!-- gen:seams -->";
+const SEAMS_CLOSE: &str = "<!-- /gen:seams -->";
+
+/// Fill the `gen:seams` block with the edge contract's seam table: one row
+/// for each seam, with how it reads on a square's north side.
+fn fill_seams(text: &str, seams: &Value) -> Result<String, String> {
+    let Some(i) = text.find(SEAMS_OPEN) else {
+        return Ok(text.to_owned());
+    };
+    let after = &text[i + SEAMS_OPEN.len()..];
+    let close = after
+        .find(SEAMS_CLOSE)
+        .ok_or_else(|| format!("gen:seams has no {SEAMS_CLOSE}"))?;
+    if seams["ok"].as_bool() != Some(true) {
+        return Err(format!("the edge contract's seams did not read: {seams}"));
+    }
+    let rows = seams["seams"]
+        .as_array()
+        .ok_or("no seams in the edge contract")?;
+    let corners = seams["corners"]
+        .as_array()
+        .ok_or("no corners in the edge contract")?;
+    let fractions = [
+        (1.0 / 3.0, "1/3", "a third"),
+        (0.5, "1/2", "half"),
+        (2.0 / 3.0, "2/3", "two thirds"),
+    ];
+    let mut s = String::new();
+    s.push_str(SEAMS_OPEN);
+    s.push_str("\n<div class=\"tbl\"><table>\n<thead><tr><th>Along a square&rsquo;s edge</th><th>north</th><th>south</th><th>west</th><th>east</th><th>As a point, on a north side</th></tr></thead>\n<tbody>\n");
+    for row in rows {
+        let at = row["at"].as_f64().ok_or("a seam has no position")?;
+        let (text, what) = fractions
+            .iter()
+            .find(|f| (f.0 - at).abs() < 1e-9)
+            .map(|f| (f.1, f.2))
+            .ok_or_else(|| {
+                format!("seam {at} has no fraction to show it by: add it to xtask/src/docs.rs")
+            })?;
+        let word = |k: &str| row[k].as_str().unwrap_or_default();
+        let _ = writeln!(
+            s,
+            "<tr><td>{text} ({what})</td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td><code>\"({text}sq, 0sq)\"</code></td></tr>",
+            word("north"),
+            word("south"),
+            word("west"),
+            word("east"),
+        );
+    }
+    s.push_str("</tbody></table></div>\n<p>The tile&rsquo;s own corners: ");
+    let words: Vec<String> = corners
+        .iter()
+        .map(|c| {
+            format!(
+                "<code>{}</code> ({})",
+                c["word"].as_str().unwrap_or_default(),
+                c["corner"].as_str().unwrap_or_default()
+            )
+        })
+        .collect();
+    s.push_str(&words.join(", "));
+    s.push_str(". They are always the tile&rsquo;s corners and take no number.</p>\n");
+    s.push_str(SEAMS_CLOSE);
+    let tail = &after[close + SEAMS_CLOSE.len()..];
+    Ok(format!("{}{s}{tail}", &text[..i]))
 }
 
 fn esc(s: &str) -> String {

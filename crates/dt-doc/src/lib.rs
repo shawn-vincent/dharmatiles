@@ -41,6 +41,7 @@ pub mod paths;
 pub mod place;
 pub mod printed;
 pub mod schema;
+pub mod seams;
 pub mod units;
 pub mod words;
 

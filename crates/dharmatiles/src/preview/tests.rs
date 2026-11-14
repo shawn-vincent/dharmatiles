@@ -1385,7 +1385,7 @@ fn lines_and_regions_carry_their_sheets_and_rename_with_their_references() {
     let dir = std::env::temp_dir().join(format!("dt-marks-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "dharmatiles version=1\ntile size=\"1x1\" seed=3 {\n    line shore wobble=\"5dmm\" { through \"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\" }\n    region pool { boundedBy shore; fill \"(0.5sq, 0.75sq)\" }\n    region bank { boundedBy shore; fill \"(0.5sq, 0.25sq)\" }\n    stack {\n        dirt at=bank\n        water\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"1x1\" seed=3 seams=free {\n    line shore wobble=\"5dmm\" { through \"(0sq, 0.62sq)\" \"(1sq, 0.58sq)\" }\n    region pool { boundedBy shore; fill \"(0.5sq, 0.75sq)\" }\n    region bank { boundedBy shore; fill \"(0.5sq, 0.25sq)\" }\n    stack {\n        dirt at=bank\n        water\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1432,7 +1432,7 @@ fn a_region_made_of_places_sends_its_clauses_and_what_it_refers_to() {
     let dir = std::env::temp_dir().join(format!("dt-clauses-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "dharmatiles version=1\ntile size=\"2x2\" seed=3 {\n    point knoll \"(0.5sq, 1.5sq)\"\n    line shore { through \"(0sq, 1.6sq)\" \"(2sq, 1.5sq)\" }\n    region crag { within \"[8dmm .. 14dmm]\" of=westEdge; within \"6dmm\" of=knoll }\n    region apron { within \"6.5dmm\" of=crag; except crag }\n    region pool { boundedBy shore; fill \"(0.5sq, 1.8sq)\" }\n    stack {\n        dirt\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"2x2\" seed=3 seams=free {\n    point knoll \"(0.5sq, 1.5sq)\"\n    line shore { through \"(0sq, 1.6sq)\" \"(2sq, 1.5sq)\" }\n    region crag { within \"[8dmm .. 14dmm]\" of=westEdge; within \"6dmm\" of=knoll }\n    region apron { within \"6.5dmm\" of=crag; except crag }\n    region pool { boundedBy shore; fill \"(0.5sq, 1.8sq)\" }\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);
@@ -1867,7 +1867,7 @@ fn the_map_marks_every_point_a_line_or_region_refers_to() {
 
 // ---- format 1 in the editor and the preview ----
 
-const FORMAT_1: &str = "dharmatiles version=1\ntile size=\"2x2\" seed=3 {\n    point knoll \"(0.5sq, 0.5sq)\"\n    line shore { through west \"(0, 0.38sq)\" knoll \"(1.5sq, 1.25sq)\" east }\n    region bay { boundedBy shore; fill \"(0.5sq, 1.6sq)\" }\n    stack {\n        base\n        dirt\n        rock at=\"(1.5sq, 0.5sq)\" size=\"8dmm\"\n    }\n}\n";
+const FORMAT_1: &str = "dharmatiles version=1\ntile size=\"2x2\" seed=3 seams=free {\n    point knoll \"(0.5sq, 0.5sq)\"\n    line shore { through west \"(0, 0.38sq)\" knoll \"(1.5sq, 1.25sq)\" east }\n    region bay { boundedBy shore; fill \"(0.5sq, 1.6sq)\" }\n    stack {\n        base\n        dirt\n        rock at=\"(1.5sq, 0.5sq)\" size=\"8dmm\"\n    }\n}\n";
 
 fn preview_opts() -> Options {
     Options {

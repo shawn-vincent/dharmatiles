@@ -22,8 +22,8 @@ use crate::error::{DocError, Src};
 use crate::expr;
 use crate::known::{DefInfo, Known};
 use crate::model::{
-    Base, DefKind, Definition, Document, Line, Param, Printer, Region, Source, Spanned, TileHeader,
-    Use, Within,
+    Base, Curve, DefKind, Definition, Document, Ends, Line, Param, Printer, Region, Source,
+    Spanned, TileHeader, Use, Within,
 };
 use crate::place::{Corner, Edge, Point};
 use crate::schema::{self, Axis, Control, Kind, MAX_SQUARES, did_you_mean};
@@ -256,6 +256,7 @@ impl<'k> Decoder<'k> {
             printer: None,
             consts: Vec::new(),
             defaults: Vec::new(),
+            seams: None,
             header: None,
         };
         for n in kdl.nodes() {
@@ -359,6 +360,7 @@ impl<'k> Decoder<'k> {
         for n in kdl.nodes() {
             match n.name().value() {
                 "use" | "define" | "tile" | "let" | "override" | "defaults" => {}
+                "seams" => doc.seams = self.seams(n),
                 // read and checked by `header`
                 crate::header::NODE => {}
                 "printer" => doc.printer = self.printer(n),
@@ -366,7 +368,9 @@ impl<'k> Decoder<'k> {
                     let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(
                         other,
-                        ["use", "define", "tile", "printer", "let", "defaults"],
+                        [
+                            "use", "define", "tile", "printer", "let", "defaults", "seams",
+                        ],
                     );
                     let span = n.name().span();
                     self.err(
@@ -738,11 +742,143 @@ impl<'k> Decoder<'k> {
             .or_else(|| self.imported.get(name).map(|(i, _)| i))
     }
 
+    /// The `seams { … }` block of the edge contract: each seam's position
+    /// along a square's side (a decimal or a fraction) and its word on each
+    /// side, and the words of the tile's corners. The positions must be closed
+    /// under the quarter turn.
+    fn seams(&mut self, n: &KdlNode) -> Option<crate::seams::SeamTable> {
+        use crate::seams::{Seam, SeamTable};
+        let mut table = SeamTable::default();
+        let mut used: Vec<String> = Vec::new();
+        let sides = ["north", "south", "west", "east"];
+        let corner_names = ["north-west", "north-east", "south-east", "south-west"];
+        let mut word = |this: &mut Self, e: &KdlEntry| -> Option<String> {
+            let w = e.value().as_string().map(str::to_owned);
+            match w {
+                Some(w)
+                    if !w.is_empty()
+                        && w.chars().all(|c| c.is_ascii_lowercase())
+                        && !used.contains(&w) =>
+                {
+                    used.push(w.clone());
+                    Some(w)
+                }
+                _ => {
+                    this.err(
+                        "dt::seams",
+                        value_span(e),
+                        "a seam word is lower-case letters, and each word is used once in the table",
+                        "not a word",
+                    );
+                    None
+                }
+            }
+        };
+        for c in n.iter_children() {
+            let es = c.entries();
+            match c.name().value() {
+                "seam" => {
+                    let at =
+                        es.first()
+                            .filter(|e| e.name().is_none())
+                            .and_then(|e| match e.value() {
+                                KdlValue::String(s) => match s.split_once('/') {
+                                    Some((a, b)) => a
+                                        .trim()
+                                        .parse::<f64>()
+                                        .ok()
+                                        .zip(b.trim().parse::<f64>().ok())
+                                        .map(|(a, b)| a / b),
+                                    None => s.trim().parse::<f64>().ok(),
+                                },
+                                KdlValue::Float(f) => Some(*f),
+                                #[allow(clippy::cast_precision_loss)]
+                                KdlValue::Integer(i) => Some(*i as f64),
+                                _ => None,
+                            });
+                    let mut words: [Option<String>; 4] = [None, None, None, None];
+                    for e in es.iter().filter(|e| e.name().is_some()) {
+                        if let Some(i) = e
+                            .name()
+                            .and_then(|k| sides.iter().position(|s| *s == k.value()))
+                        {
+                            words[i] = word(self, e);
+                        }
+                    }
+                    match (at, words) {
+                        (Some(at), [Some(a), Some(b), Some(c2), Some(d)])
+                            if at > 0.0
+                                && at < 1.0
+                                && !table.seams.iter().any(|s| (s.at - at).abs() < 1e-6) =>
+                        {
+                            table.seams.push(Seam {
+                                at,
+                                words: [a, b, c2, d],
+                            });
+                        }
+                        _ => {
+                            self.err(
+                                "dt::seams",
+                                c.span(),
+                                "a seam is `seam \"1/3\" north=nnw south=ssw west=wnw east=ene`: a new position between 0 and 1, and a word for each side",
+                                "not a seam",
+                            );
+                        }
+                    }
+                }
+                "corner" => {
+                    for e in es.iter().filter(|e| e.name().is_some()) {
+                        let corner = e
+                            .name()
+                            .and_then(|k| corner_names.iter().position(|s| *s == k.value()))
+                            .and_then(|i| Corner::parse(corner_names[i]));
+                        if let (Some(corner), Some(w)) = (corner, word(self, e)) {
+                            table.corners.push((corner, w));
+                        }
+                    }
+                }
+                other => {
+                    self.err(
+                        "dt::seams",
+                        c.name().span(),
+                        format!("a `seams` block holds `seam` and `corner`, not `{other}`"),
+                        "unknown",
+                    );
+                }
+            }
+        }
+        if table.corners.len() != 4 {
+            self.err(
+                "dt::seams",
+                n.span(),
+                "the seams need a word for each of the four corners",
+                "write `corner north-west=nw north-east=ne south-east=se south-west=sw`",
+            );
+        }
+        table.seams.sort_by(|a, b| a.at.total_cmp(&b.at));
+        if let Err(at) = table.closed() {
+            self.err(
+                "dt::seams",
+                n.span(),
+                format!(
+                    "the seams must be the same turned a quarter: {at} has no seam at {}",
+                    1.0 - at
+                ),
+                "not closed under turning",
+            )
+            .help = Some(
+                "a square turned a quarter swaps position t for 1 - t, so each seam needs its mirror".to_owned(),
+            );
+        }
+        Some(table)
+    }
+
     fn tile_header(&mut self, node: &KdlNode) -> TileHeader {
         let mut h = TileHeader {
             cols: 1,
             rows: 1,
             seed: None,
+            seams_free: false,
         };
         for (i, e) in node.entries().iter().enumerate() {
             let Some(key) = e.name() else {
@@ -810,9 +946,23 @@ impl<'k> Decoder<'k> {
                         self.err(dt_lang::codes::SEED, value_span(e), msg, label);
                     }
                 },
+                "seams" => match e.value().as_string() {
+                    Some("free") => h.seams_free = true,
+                    _ => {
+                        self.err(
+                            "dt::value",
+                            value_span(e),
+                            "a tile's `seams` is `free`, or left out",
+                            "not free",
+                        )
+                        .help = Some(
+                            "`seams=free` lets the tile's lines cross an edge anywhere".to_owned(),
+                        );
+                    }
+                },
                 other => {
                     let first = crate::elements::renamed(other).map(str::to_owned);
-                    let near = did_you_mean(other, ["size", "seed"]);
+                    let near = did_you_mean(other, ["size", "seed", "seams"]);
                     self.err(
                         dt_lang::codes::UNKNOWN_CONTROL,
                         key.span(),
@@ -892,15 +1042,50 @@ impl<'k> Decoder<'k> {
             width: None,
             wobble: None,
             closed: false,
+            marks: Vec::new(),
+            curve: Curve::default(),
+            ends: Ends::default(),
             span: n.span(),
         };
+        let mut word_set: [bool; 2] = [false, false];
         let mut set = |this: &mut Self, key: &str, kspan: SourceSpan, e: &KdlEntry| {
+            if key == "curve" || key == "ends" {
+                let k: &'static Control = if key == "curve" {
+                    &crate::elements::LINE_CURVE_STATIC
+                } else {
+                    &crate::elements::LINE_ENDS_STATIC
+                };
+                let i = usize::from(key == "ends");
+                if word_set[i] {
+                    this.err(
+                        "dt::duplicate",
+                        kspan,
+                        format!("`{key}` is set twice"),
+                        "again here",
+                    );
+                    return;
+                }
+                word_set[i] = true;
+                if let Some(v) = this.value(e, k, "line", key, ctx)
+                    && let crate::model::Value::Word(w) = v.value
+                {
+                    match w.word {
+                        "straight" => line.curve = Curve::Straight,
+                        "free" => line.ends = Ends::Free,
+                        _ => {}
+                    }
+                }
+                return;
+            }
             let slot = match key {
                 "width" => &mut line.width,
                 "wobble" => &mut line.wobble,
                 other => {
                     let first = crate::elements::renamed(other).map(str::to_owned);
-                    let near = did_you_mean(other, ["width", "wobble", "closed", "through"]);
+                    let near = did_you_mean(
+                        other,
+                        ["width", "wobble", "closed", "through", "curve", "ends"],
+                    );
                     this.err(
                         dt_lang::codes::UNKNOWN_CONTROL,
                         kspan,
@@ -963,22 +1148,16 @@ impl<'k> Decoder<'k> {
         }
         for c in n.iter_children() {
             if c.name().value() == "through" {
-                for e in c.entries() {
+                let points = c.entries().iter().filter(|e| e.name().is_none()).count();
+                let mut mark = crate::model::Mark::default();
+                for e in c.entries().iter().filter(|e| e.name().is_some()) {
+                    self.through_mark(e, points, &mut mark);
+                }
+                for e in c.entries().iter().filter(|e| e.name().is_none()) {
                     if let Some(p) = self.point(e, "through", ctx) {
                         line.through.push(p);
+                        line.marks.push(mark.clone());
                     }
-                }
-                if c.entries().len() < 2 {
-                    self.err(
-                        dt_lang::codes::LINE,
-                        c.span(),
-                        "a line passes through at least two points",
-                        format!("{} point(s)", c.entries().len()),
-                    )
-                    .help = Some(
-                        "write `through south \"(0.65sq, 0sq)\" north`: points, corners or edge middles"
-                        .to_owned(),
-                    );
                 }
             } else if let [e] = c.entries()
                 && c.name().value() == "closed"
@@ -997,10 +1176,22 @@ impl<'k> Decoder<'k> {
                 .advise(
                     c.name().span(),
                     None,
-                    did_you_mean(other, ["through", "width", "wobble"]),
+                    did_you_mean(other, ["through", "width", "wobble", "curve", "ends"]),
                     || None,
                 );
             }
+        }
+        if line.through.len() < 2 && n.iter_children().any(|c| c.name().value() == "through") {
+            self.err(
+                "dt::line",
+                line.name.span,
+                "a line passes through at least two points",
+                format!("{} point(s)", line.through.len()),
+            )
+            .help = Some(
+                "write `through south \"(0.65sq, 0sq)\" north`: points, corners or edge middles"
+                    .to_owned(),
+            );
         }
         line.closed = closed.unwrap_or(false);
         if line.closed
@@ -1025,6 +1216,124 @@ impl<'k> Decoder<'k> {
             .help = Some("write `line trail { through south \"(0.65sq, 0sq)\" north }`".to_owned());
         }
         Some(line)
+    }
+
+    /// One `corner=`, `heading=` or `pull=` on a `through` of `points` points.
+    fn through_mark(&mut self, e: &KdlEntry, points: usize, mark: &mut crate::model::Mark) {
+        let Some(key) = e.name() else { return };
+        let (kspan, span) = (key.span(), value_span(e));
+        if !matches!(key.value(), "corner" | "heading" | "pull") {
+            let near = did_you_mean(key.value(), ["corner", "heading", "pull"]);
+            self.err(
+                "dt::unknown-control",
+                kspan,
+                format!("a `through` has no `{}`", key.value()),
+                "unknown",
+            )
+            .advise(kspan, None, near, || {
+                Some(
+                    "a `through` takes points, and on one point `corner`, `heading` and `pull`"
+                        .to_owned(),
+                )
+            });
+            return;
+        }
+        if points != 1 {
+            self.err(
+                "dt::line",
+                kspan,
+                format!("`{}` goes on a `through` of one point", key.value()),
+                "not on several points",
+            )
+            .help = Some(
+                "give the point its own line: `through \"(0.5sq, 0.5sq)\" heading=\"30deg\"`"
+                    .to_owned(),
+            );
+            return;
+        }
+        match key.value() {
+            "corner" => match e.value() {
+                KdlValue::Bool(b) => mark.corner = *b,
+                _ => {
+                    self.err(
+                        "dt::value",
+                        span,
+                        "`corner` is #true or #false",
+                        "not a switch",
+                    );
+                }
+            },
+            "pull" => {
+                #[allow(clippy::cast_precision_loss)]
+                let v = match e.value() {
+                    KdlValue::Float(f) => Some(*f),
+                    KdlValue::Integer(i) => Some(*i as f64),
+                    _ => None,
+                };
+                match v {
+                    Some(v) if (0.0..=3.0).contains(&v) => mark.pull = Some(v),
+                    _ => {
+                        self.err(
+                            "dt::value",
+                            span,
+                            "`pull` is a number from 0 to 3, 1 by default",
+                            "out of range",
+                        );
+                    }
+                }
+            }
+            _ => {
+                if let Some(deg) = self.printer_angle(e) {
+                    mark.heading = Some(Spanned { value: deg, span });
+                }
+            }
+        }
+    }
+
+    /// An angle written as a string with its unit (`"30deg"`), degrees.
+    fn printer_angle(&mut self, e: &KdlEntry) -> Option<f64> {
+        use crate::units::{Base, Want, expect, lower};
+        let span = value_span(e);
+        let KdlValue::String(s) = e.value() else {
+            self.err(
+                "dt::unit",
+                span,
+                "`heading` is written with its unit",
+                "no unit",
+            )
+            .help = Some("write `heading=\"30deg\"`: 0deg is east, 90deg south".to_owned());
+            return None;
+        };
+        let at = self.inner_at(e, s);
+        let x = match expr::parse_units(s) {
+            Ok(x) => x,
+            Err(err) => {
+                self.err(
+                    err.code.unwrap_or("dt::value"),
+                    sub_span(span, at + err.start, at + err.end),
+                    format!("can't read `heading`: {}", err.message),
+                    "here",
+                )
+                .help = err.help;
+                return None;
+            }
+        };
+        let names = |_: &str| None;
+        match expect(&x, Want::Angle, &names, false)
+            .and_then(|_| lower(&x, Base::Mm, self.known.units(), None))
+        {
+            Ok(l) => match l.sample(&|_| None, 0.0) {
+                Ok(v) if v.is_finite() => Some(v),
+                _ => {
+                    self.err("dt::value", span, "`heading` is one angle", "here");
+                    None
+                }
+            },
+            Err(ke) => {
+                self.kind_error(&ke, span, "`heading`");
+                None
+            }
+        }
     }
 
     fn region(&mut self, n: &KdlNode, ctx: &Ctx) -> Option<Region> {
@@ -1257,6 +1566,32 @@ impl<'k> Decoder<'k> {
             )
             .help = Some("a point is a name from `point`, or \"(x, y)\" in squares".to_owned());
             return None;
+        }
+        // a seam word: `nnw`, `nnw(2)`, `nw`
+        if let (Some((cols, rows)), Some(table)) = (ctx.size, self.known.seams())
+            && let Some(read) = table.read(s, cols, rows)
+        {
+            return match read {
+                Ok(crate::seams::Word::Corner(c)) => Some(Spanned {
+                    value: Point::Corner(c),
+                    span,
+                }),
+                Ok(crate::seams::Word::At([x, y])) => Some(Spanned {
+                    value: Point::Pair {
+                        x: expr::Expr::num(x),
+                        y: expr::Expr::num(y),
+                    },
+                    span,
+                }),
+                Err(w) => {
+                    let d = self.err("dt::seam", span, w.message, "not a place on a side");
+                    match w.near {
+                        Some(near) => d.suggest(span, &near),
+                        None => d.help = w.help,
+                    }
+                    None
+                }
+            };
         }
         let p = {
             let at = self.inner_at(e, s);

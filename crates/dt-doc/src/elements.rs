@@ -132,6 +132,59 @@ const THING_TOP: Control = c(
 
 // ---- the tile's own nodes -----------------------------------------------
 
+static CURVES: &[Word] = &[
+    w("smooth", "one smooth curve through the points", &[]),
+    w("straight", "straight runs from point to point", &[]),
+];
+static LINE_ENDS: &[Word] = &[
+    w(
+        "square",
+        "an end on a tile side leaves square to it; on a tile corner, along its bisector",
+        &[],
+    ),
+    w(
+        "free",
+        "the ends take their direction from the neighbouring points",
+        &[],
+    ),
+];
+static SEAMS: &[Word] = &[w(
+    "free",
+    "its lines may cross an edge anywhere, not only at a seam",
+    &[],
+)];
+
+/// A line's `curve=`, the control the decoder reads it with.
+pub const LINE_CURVE: Control = c(
+    "curve",
+    Axis::Word,
+    "smooth: one smooth curve through the points, square to a tile side where it meets one; straight: straight runs",
+)
+.words(CURVES)
+.default("smooth");
+
+/// A line's `ends=`.
+pub const LINE_ENDS_CONTROL: Control = c(
+    "ends",
+    Axis::Word,
+    "square: an end on a tile side leaves square to it, on a corner along its bisector; free: the ends take their direction from the neighbouring points",
+)
+.words(LINE_ENDS)
+.default("square");
+
+pub static LINE_CURVE_STATIC: Control = LINE_CURVE;
+/// See [`LINE_CURVE_STATIC`].
+pub static LINE_ENDS_STATIC: Control = LINE_ENDS_CONTROL;
+
+/// A tile's `seams=`.
+pub const TILE_SEAMS: Control = c(
+    "seams",
+    Axis::Word,
+    "free: its lines may cross an edge anywhere, not only at a seam",
+)
+.words(SEAMS)
+.default("kept");
+
 const NAME: Control = c("name", Axis::Word, "what the tile calls it").required();
 
 /// The tile's own nodes, which the editor's sheet draws from the same shape
@@ -154,6 +207,7 @@ pub static NODES: &[Node] = &[
                 "the layout: another seed, another arrangement of the same tile",
             )
             .default("1"),
+            TILE_SEAMS,
             c(
                 "about",
                 Axis::Text,
@@ -169,6 +223,8 @@ pub static NODES: &[Node] = &[
         controls: &[
             NAME,
             c("wobble", Axis::Dmm, "how far the line may wander off its points").default("0"),
+            LINE_CURVE,
+            LINE_ENDS_CONTROL,
             c(
                 "width",
                 Axis::Dmm,
@@ -178,8 +234,29 @@ pub static NODES: &[Node] = &[
             c(
                 "through",
                 Axis::Raw,
-                "the points it runs through: \"(x, y)\" with units, from the north-west corner, corners, or edge middles (south, east, north, west); drag a number or click to type",
+                "the points it runs through: \"(x, y)\" with units, from the north-west corner, corners, edge middles (south, east, north, west), or a seam by name (\"c2r1-north-low\"); drag a number or click to type",
             )
+            .subs(&[
+                c(
+                    "corner",
+                    Axis::Bool,
+                    "a through of one point: a sharp knee here instead of a smooth bend",
+                )
+                .default("#false"),
+                c(
+                    "heading",
+                    Axis::Deg,
+                    "a through of one point: the way the line goes through it, 0deg east, 90deg south; an end's own direction is the tile side's normal",
+                )
+                .absent("the chord of its neighbours, or square to the side"),
+                c(
+                    "pull",
+                    Axis::Number,
+                    "a through of one point: how far the curve holds its direction here, as a share of the usual",
+                )
+                .over(0.0, 3.0)
+                .default("1"),
+            ])
             .required(),
         ],
     },

@@ -72,7 +72,7 @@ fn rows_and_columns_start_at_the_north_west() {
     let c = ok(&tile1(
         "2x1",
         r#"
-    line run { through "(0.25sq, 0.25sq)" "(1.75sq, 0.75sq)" }
+    line run curve=straight { through "(0.25sq, 0.25sq)" "(1.75sq, 0.75sq)" }
     region top { boundedBy run; fill "(0.5sq, 0.1sq)" }
     stack { base
  dirt }
@@ -85,7 +85,7 @@ fn rows_and_columns_start_at_the_north_west() {
     // named edges and corners mean what they did
     let c = ok(&tile1(
         "1x1",
-        "line run { through south \"(0.5sq, 0.5sq)\" north }\n stack { base\n dirt }",
+        "line run curve=straight { through south \"(0.5sq, 0.5sq)\" north }\n stack { base\n dirt }",
     ));
     assert_eq!(
         c.tile.as_ref().unwrap().lines["run"],
@@ -131,7 +131,7 @@ fn a_pond_written_as_its_mirror_builds_the_same_mesh() {
     // dyadic coordinates, so `rows - y` is exact
     same_mesh(
         r#"dharmatiles version="1.0.0"; tile size="1x1" seed=50 {
-    line shore wobble="5dmm" { through "(0sq, 0.625sq)" "(1sq, 0.5sq)" }
+    line shore wobble="5dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
     region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
     region shoreBand { within "5dmm" of=shore }
     stack {
@@ -148,7 +148,7 @@ fn a_pond_written_as_its_mirror_builds_the_same_mesh() {
         r#"
 dharmatiles version=1
 tile size="1x1" seed=50 {
-    line shore wobble="5dmm" { through "(0sq, 0.625sq)" "(1sq, 0.5sq)" }
+    line shore wobble="5dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
     region pool { boundedBy shore; fill "(0.5sq, 0.75sq)" }
     region shoreBand { within "5dmm" of=shore }
     stack {
