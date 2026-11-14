@@ -225,20 +225,17 @@ impl Decoder<'_> {
             }
             if !special && Self::name_dim(ctx, n).is_none() {
                 let names: Vec<&str> = ctx.consts.iter().map(|(k, _)| k.as_str()).collect();
-                let help = did_you_mean(n, names.iter().copied())
-                    .map(|m| format!("did you mean `{m}`?"))
-                    .unwrap_or_else(|| {
-                        format!(
-                            "declare it first: `let {n} 5`, or use one of the library's heights"
-                        )
-                    });
+                let near = did_you_mean(n, names.iter().copied());
+                let at = self.word_span(span, n);
                 self.err(
                     "dt::unknown-name",
                     span,
                     format!("no height called `{n}`"),
                     "unknown name",
                 )
-                .help = Some(help);
+                .suggest_or(at, near, || {
+                    format!("declare it first: `let {n} 5`, or use one of the library's heights")
+                });
                 return None;
             }
         }
@@ -452,21 +449,19 @@ impl Decoder<'_> {
             None => {
                 let mut names: Vec<&str> = ctx.places.iter().map(|(k, _)| k.as_str()).collect();
                 names.extend(Edge::ALL.iter().map(|e| e.as_str()));
-                let help = did_you_mean(t, names.iter().copied())
-                    .map(|m| format!("did you mean `{m}`?"))
-                    .unwrap_or_else(|| {
-                        format!(
-                            "declare it at the top of the tile (`point`, `line` or `region`), or write a point \"(x, y)\"; built in: {}",
-                            BUILTIN_POINTS.join(", ")
-                        )
-                    });
+                let near = did_you_mean(t, names.iter().copied());
                 self.err(
                     "dt::place",
                     span,
                     format!("no place is called `{t}`"),
                     "unknown place",
                 )
-                .help = Some(help);
+                .suggest_or(span, near, || {
+                    format!(
+                        "declare it at the top of the tile (`point`, `line` or `region`), or write a point \"(x, y)\"; built in: {}",
+                        BUILTIN_POINTS.join(", ")
+                    )
+                });
                 None
             }
         }
@@ -925,22 +920,22 @@ impl Decoder<'_> {
         if let Some(inner) = t.strip_prefix("foot(").and_then(|r| r.strip_suffix(')')) {
             let kind = inner.trim();
             if !crate::elements::TAGS.contains(&kind) {
+                let at = self.word_span(span, kind);
                 self.err(
                     "dt::unknown-name",
                     span,
                     format!("`{kind}` is not a kind of thing"),
                     "unknown kind",
                 )
-                .help = Some(
-                    did_you_mean(kind, crate::elements::TAGS.iter().copied()).map_or_else(
-                        || {
-                            format!(
-                                "things gather at the foot of: {}",
-                                crate::elements::TAGS.join(", ")
-                            )
-                        },
-                        |m| format!("did you mean `{m}`?"),
-                    ),
+                .suggest_or(
+                    at,
+                    did_you_mean(kind, crate::elements::TAGS.iter().copied()),
+                    || {
+                        format!(
+                            "things gather at the foot of: {}",
+                            crate::elements::TAGS.join(", ")
+                        )
+                    },
                 );
             } else if !can_foot {
                 self.place_refusal(entry, span, t, "the foot of a thing", can_line);

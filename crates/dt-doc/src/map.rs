@@ -503,17 +503,16 @@ impl Reader {
             });
         }
         let names: Vec<&str> = words.iter().map(|(w, _)| *w).collect();
-        let help = did_you_mean(s, names.iter().copied()).map_or_else(
-            || format!("`{key}` is {}", names.join(" or ")),
-            |d| format!("did you mean `{d}`?"),
-        );
+        let near = did_you_mean(s, names.iter().copied());
         self.err(
             "dt::map",
             value_span(e),
             format!("`{s}` is not a {key}"),
             "not that",
         )
-        .help = Some(help);
+        .suggest_or(value_span(e), near, || {
+            format!("`{key}` is {}", names.join(" or "))
+        });
         None
     }
 
@@ -687,10 +686,11 @@ impl Reader {
                         format!("a piece has no `{other}`"),
                         "unknown",
                     )
-                    .help = Some(did_you_mean(other, PIECE_KEYS).map_or_else(
+                    .suggest_or(
+                        k.span(),
+                        did_you_mean(other, PIECE_KEYS),
                         || format!("a piece takes: {}", PIECE_KEYS.join(", ")),
-                        |d| format!("did you mean `{d}`?"),
-                    ));
+                    );
                 }
             }
         }
@@ -978,10 +978,11 @@ impl Reader {
                         format!("the plates line has no `{other}`"),
                         "unknown",
                     )
-                    .help = Some(did_you_mean(other, PLATES_KEYS).map_or_else(
+                    .suggest_or(
+                        k.span(),
+                        did_you_mean(other, PLATES_KEYS),
                         || format!("the settings are: {}", PLATES_KEYS.join(", ")),
-                        |d| format!("did you mean `{d}`?"),
-                    ));
+                    );
                 }
             }
         }
@@ -1082,13 +1083,14 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
                     format!("unknown top-level node `{other}`"),
                     "not map or plates",
                 )
-                .help = Some(did_you_mean(other, ["map", "plates"]).map_or_else(
+                .suggest_or(
+                    n.name().span(),
+                    did_you_mean(other, ["map", "plates"]),
                     || {
                         "a print list is `map { piece … }` and an optional `plates …` line"
                             .to_owned()
                     },
-                    |d| format!("did you mean `{d}`?"),
-                ));
+                );
             }
         }
     }
@@ -1127,11 +1129,10 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
                 format!("no piece is called `{}`", pin.id.value),
                 "no such piece",
             )
-            .help = Some(
-                did_you_mean(&pin.id.value, seen.iter().copied()).map_or_else(
-                    || "a pin names a piece by its id (`piece p4 \"…\"`)".to_owned(),
-                    |d| format!("did you mean `{d}`?"),
-                ),
+            .suggest_or(
+                pin.id.span,
+                did_you_mean(&pin.id.value, seen.iter().copied()),
+                || "a pin names a piece by its id (`piece p4 \"…\"`)".to_owned(),
             );
         } else if pinned.contains(&pin.id.value.as_str()) {
             r.err(
@@ -1192,14 +1193,15 @@ fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
             "grid" => r.grid(c, list),
             "let" => r.let_(c, list),
             other => {
-                let help = did_you_mean(other, MAP_KEYS).map(|d| format!("did you mean `{d}`?"));
                 r.err(
                     "dt::unknown-node",
                     c.name().span(),
                     format!("a map holds `piece` lines, not `{other}`"),
                     "unknown",
                 )
-                .help = help.or_else(|| Some(format!("a map takes: {}", MAP_KEYS.join(", "))));
+                .suggest_or(c.name().span(), did_you_mean(other, MAP_KEYS), || {
+                    format!("a map takes: {}", MAP_KEYS.join(", "))
+                });
             }
         }
     }

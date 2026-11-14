@@ -96,6 +96,16 @@ where?: boolean | null, };
 
 type ExportRes = { out: string, shown: string, } | ExportBuilt;
 
+type FixJson = { offset: number, len: number, 
+/**
+ * The text there now: the page applies the fix only where it still reads this.
+ */
+was: string, replacement: string, 
+/**
+ * The button's words: `Change to dirt`.
+ */
+label: string, };
+
 type FolderDone = { 
 /**
  * The stream's revision once the change was told: the page has the change when its stream reaches it.
@@ -312,13 +322,21 @@ tile: string, tile_name: string,
 /**
  * The stack entry it is about (its key).
  */
-node: string | null, span: SpanJson | null, text: string, help: string | null, data: JsonValue, state: MessageState, };
+node: string | null, span: SpanJson | null, text: string, help: string | null, 
+/**
+ * An edit that mends it (a button in the page), when the program has one.
+ */
+fix: FixJson | null, data: JsonValue, state: MessageState, };
 
 type MessageState = "open" | "cleared";
 
 type MessagesRes = { epoch: string, messages: Array<MessageJson>, };
 
 type Mistake = { code: string, message: string, file: string | null, line: number | null, column: number | null, help: string | null, 
+/**
+ * An edit that mends it, when the program has one.
+ */
+fix: FixJson | null, 
 /**
  * A failure of the program, not of the document: shown as a bug.
  */

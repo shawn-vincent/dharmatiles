@@ -18,18 +18,8 @@ import {
 } from '../vendor/codemirror.js';
 import { iconSvg } from './view/icons.js';
 
-/** UTF-8 byte offset `b` in `text` as a string index (the server counts bytes). */
-export function byteToIndex(text, b) {
-  if (!/[^\x00-\x7f]/.test(text)) return b;
-  let bytes = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (bytes >= b) return i;
-    const c = text.codePointAt(i);
-    bytes += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
-    if (c >= 0x10000) i++;
-  }
-  return text.length;
-}
+// UTF-8 byte offset `b` in `text` as a string index (the server counts bytes): js/spans.js, where the spans are.
+export { byteToIndex } from './spans.js';
 
 /** The indentation for a new line at `pos`: the line above's, one level more after `{`, one less before `}`. */
 export function indentFor(text, pos) {
@@ -203,7 +193,7 @@ export class TextPane {
     this.watchMarks();
   }
 
-  /** A press on a mark in the gutter: `onMarkClick(line)`, which opens the message it points to. */
+  /** The button of a mark's fix, in the tooltip of the gutter's mark and of the underline: `onFix(fix, file)`.  A press on a mark in the gutter: `onMarkClick(line)`, which opens the message it points to. */
   watchMarks() {
     this.code.addEventListener('click', (e) => {
       if (!e.target.closest?.('.cm-lint-marker')) return;
@@ -310,7 +300,7 @@ export class TextPane {
     const { sel = null, hov = null, errs = [] } = this.marks;
     const doc = this.view.state.doc;
     const list = (errs || []).map((e) => (typeof e === 'number' ? { line: e } : e)).filter((e) => e.line >= 1 && e.line <= doc.lines);
-    const diags = list.map((e) => { const l = doc.line(e.line); return { from: l.from, to: l.to, severity: e.severity === 'warning' ? 'warning' : 'error', message: e.message || 'A mistake on this line', id: e.id }; });
+    const diags = list.map((e) => { const l = doc.line(e.line); return { from: l.from, to: l.to, severity: e.severity === 'warning' ? 'warning' : 'error', message: e.message || 'A mistake on this line', id: e.id, actions: e.fix ? [{ name: e.fix.label, apply: () => this.cb.onFix?.(e.fix, e.file ?? null) }] : undefined }; });
     const lines = (sev) => list.filter((e) => (e.severity === 'warning') === (sev === 'warning')).map((e) => e.line);
     this.view.dispatch(setDiagnostics(this.view.state, diags), { effects: setMarks.of({ sel, hov, errs: lines('error'), notes: lines('warning') }), userEvent: QUIET });
   }

@@ -127,6 +127,8 @@ pub struct Mistake {
     pub line: Option<usize>,
     pub column: Option<usize>,
     pub help: Option<String>,
+    /// An edit that mends it, when the program has one.
+    pub fix: Option<crate::message::FixJson>,
     /// A failure of the program, not of the document: shown as a bug.
     pub unexpected: bool,
 }
@@ -143,6 +145,7 @@ impl From<&dt_eval::Diag> for Mistake {
             line,
             column,
             help: d.help.clone(),
+            fix: d.fix.as_deref().map(crate::message::FixJson::from),
             unexpected: !crate::build::is_document_error(d.code),
         }
     }

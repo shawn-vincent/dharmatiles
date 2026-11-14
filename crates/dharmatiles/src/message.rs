@@ -137,8 +137,36 @@ pub(crate) struct Message {
     pub span: Option<Span>,
     pub text: String,
     pub help: Option<String>,
+    /// An edit that mends it, when the program has one.
+    pub fix: Option<FixJson>,
     pub data: Value,
     pub open: bool,
+}
+
+/// An edit that mends a mistake, on the wire: write `replacement` over the `len` bytes at `offset` of the file the message
+/// points into.  The one form of a fix, in a message and in a check's mistake alike.
+#[derive(Clone, PartialEq, Eq, Debug, serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct FixJson {
+    pub offset: usize,
+    pub len: usize,
+    /// The text there now: the page applies the fix only where it still reads this.
+    pub was: String,
+    pub replacement: String,
+    /// The button's words: `Change to dirt`.
+    pub label: String,
+}
+
+impl From<&dt_eval::Fix> for FixJson {
+    fn from(f: &dt_eval::Fix) -> Self {
+        Self {
+            offset: f.offset,
+            len: f.len,
+            was: f.was.clone(),
+            replacement: f.replacement.clone(),
+            label: f.label.clone(),
+        }
+    }
 }
 
 /// Where in a file a message points, on the wire.
@@ -186,6 +214,8 @@ pub struct MessageJson {
     pub span: Option<SpanJson>,
     pub text: String,
     pub help: Option<String>,
+    /// An edit that mends it (a button in the page), when the program has one.
+    pub fix: Option<FixJson>,
     pub data: Value,
     pub state: MessageState,
 }
@@ -279,6 +309,7 @@ impl Message {
             span: None,
             text: text.into(),
             help: None,
+            fix: None,
             data: json!({}),
             open: true,
         }
@@ -332,6 +363,7 @@ impl Message {
         let mut m = Self::new(kind, severity, scope, tile, name, d.message.clone())
             .code(d.code)
             .help(d.help.as_deref());
+        m.fix = d.fix.as_deref().map(FixJson::from);
         if let (Some((file, line, col)), Some((_, span))) = (d.location(), d.at.as_ref()) {
             m.node = node_at(stack, &file, span.offset());
             m.span = Some(Span {
@@ -361,6 +393,7 @@ impl Message {
             && self.span == o.span
             && self.text == o.text
             && self.help == o.help
+            && self.fix == o.fix
     }
 
     /// The stable JSON form, as its type (the contract's `MessageJson`).
@@ -384,6 +417,7 @@ impl Message {
             }),
             text: self.text.clone(),
             help: self.help.clone(),
+            fix: self.fix.clone(),
             data: self.data.clone(),
             state: if self.open {
                 MessageState::Open
@@ -719,7 +753,7 @@ mod tests {
 
     #[test]
     fn the_json_form_is_stable() {
-        let mut m = mistake("no such element").help(Some("did you mean dirt"));
+        let mut m = mistake("no such element").help(Some("try dirt"));
         m.seq = 3;
         m.at_ms = 0;
         let j = m.json();
@@ -729,6 +763,7 @@ mod tests {
             [
                 "code",
                 "data",
+                "fix",
                 "help",
                 "kind",
                 "node",

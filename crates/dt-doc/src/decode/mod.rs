@@ -176,10 +176,6 @@ pub(crate) fn spanned_name(node: &KdlNode) -> Spanned<String> {
     }
 }
 
-fn hint(s: Option<&str>) -> Option<String> {
-    s.map(|s| format!("did you mean `{s}`?"))
-}
-
 /// Names of local definitions a node's subtree refers to.
 fn refs(node: &KdlNode, names: &HashSet<String>, out: &mut Vec<String>) {
     for c in node.iter_children() {
@@ -222,6 +218,11 @@ impl<'k> Decoder<'k> {
 
     pub(crate) fn text(&self) -> &str {
         self.src.inner()
+    }
+
+    /// Where `word` first appears within `outer` (the whole of `outer` when it does not): the text a suggestion replaces.
+    pub(crate) fn word_span(&self, outer: SourceSpan, word: &str) -> SourceSpan {
+        crate::error::locate(self.text(), outer, word)
     }
 
     /// The node's first argument as a name (`define lawn`), or an error.
@@ -354,26 +355,24 @@ impl<'k> Decoder<'k> {
                 crate::header::NODE => {}
                 "printer" => doc.printer = self.printer(n),
                 other => {
-                    let help = crate::elements::camel_of(other)
+                    let first = crate::elements::camel_of(other)
                         .map(|new| format!("control names are camelCase: write `{new}`"))
-                        .or_else(|| crate::elements::renamed(other).map(str::to_owned))
-                        .or_else(|| {
-                            hint(did_you_mean(
-                                other,
-                                ["use", "define", "tile", "printer", "let", "defaults"],
-                            ))
-                        })
-                        .or_else(|| {
-                            schema::element(other)
-                                .map(|_| "elements go inside a tile's `stack { … }`".to_owned())
-                        });
+                        .or_else(|| crate::elements::renamed(other).map(str::to_owned));
+                    let near = did_you_mean(
+                        other,
+                        ["use", "define", "tile", "printer", "let", "defaults"],
+                    );
+                    let span = n.name().span();
                     self.err(
                         "dt::unknown-node",
-                        n.name().span(),
+                        span,
                         format!("unknown top-level node `{other}`"),
                         "not use, define, tile, printer, let, override or defaults",
                     )
-                    .help = help;
+                    .advise(span, first, near, || {
+                        schema::element(other)
+                            .map(|_| "elements go inside a tile's `stack { … }`".to_owned())
+                    });
                 }
             }
         }
@@ -481,17 +480,17 @@ impl<'k> Decoder<'k> {
         let key = u.key().to_owned();
         let Some(file) = self.known.file(&key) else {
             let keys: Vec<&str> = self.known.file_keys().collect();
-            let help = hint(did_you_mean(&key, keys.iter().copied())).unwrap_or_else(|| {
-                "the path is from the library root, without `.dtile`, as in `parts/grass`"
-                    .to_owned()
-            });
+            let near = did_you_mean(&key, keys.iter().copied());
             self.err(
                 "dt::use",
                 u.path.span,
                 format!("no file `{key}` is loaded"),
                 "not found",
             )
-            .help = Some(help);
+            .suggest_or(u.path.span, near, || {
+                "the path is from the library root, without `.dtile`, as in `parts/grass`"
+                    .to_owned()
+            });
             return;
         };
         if u.names.is_empty() {
@@ -514,23 +513,22 @@ impl<'k> Decoder<'k> {
                 self.imported
                     .insert(n.value.clone(), (info.clone(), key.clone()));
             } else {
-                let help = hint(did_you_mean(&n.value, file.keys().map(String::as_str)))
-                    .unwrap_or_else(|| {
-                        format!(
-                            "`{key}` defines: {}",
-                            file.keys()
-                                .map(String::as_str)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    });
+                let near = did_you_mean(&n.value, file.keys().map(String::as_str));
                 self.err(
                     "dt::use",
                     n.span,
                     format!("`{key}` has no definition `{}`", n.value),
                     "not in that file",
                 )
-                .help = Some(help);
+                .suggest_or(n.span, near, || {
+                    format!(
+                        "`{key}` defines: {}",
+                        file.keys()
+                            .map(String::as_str)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                });
             }
         }
     }
@@ -679,23 +677,21 @@ impl<'k> Decoder<'k> {
                     let words = [
                         "param", "about", "let", "override", "point", "line", "region", "stack",
                     ];
-                    let help = crate::elements::renamed(other)
-                        .map(str::to_owned)
-                        .or_else(|| hint(did_you_mean(other, words)))
-                        .or_else(|| {
-                            (schema::element(other).is_some() || self.is_definition(other))
-                                .then(|| format!("`{other}` goes inside `stack {{ … }}`"))
-                        });
+                    let first = crate::elements::renamed(other).map(str::to_owned);
+                    let near = did_you_mean(other, words);
+                    let inside = (schema::element(other).is_some() || self.is_definition(other))
+                        .then(|| format!("`{other}` goes inside `stack {{ … }}`"));
+                    let span = n.name().span();
                     self.err(
                         "dt::unknown-node",
-                        n.name().span(),
+                        span,
                         format!(
                             "unknown node `{other}` in a {}",
                             if is_tile { "tile" } else { "definition" }
                         ),
                         "not about, let, override, point, line, region or stack",
                     )
-                    .help = help;
+                    .advise(span, first, near, || inside);
                 }
             }
         }
@@ -794,16 +790,15 @@ impl<'k> Decoder<'k> {
                     }
                 },
                 other => {
-                    let help = crate::elements::renamed(other)
-                        .map(str::to_owned)
-                        .or_else(|| hint(did_you_mean(other, ["size", "seed"])));
+                    let first = crate::elements::renamed(other).map(str::to_owned);
+                    let near = did_you_mean(other, ["size", "seed"]);
                     self.err(
                         "dt::unknown-control",
                         key.span(),
                         format!("a tile has no `{other}`"),
                         "unknown",
                     )
-                    .help = help;
+                    .advise(key.span(), first, near, || None);
                 }
             }
         }
@@ -883,22 +878,17 @@ impl<'k> Decoder<'k> {
                 "width" => &mut line.width,
                 "wobble" => &mut line.wobble,
                 other => {
-                    let help = crate::elements::camel_of(other)
+                    let first = crate::elements::camel_of(other)
                         .map(|new| format!("control names are camelCase: write `{new}`"))
-                        .or_else(|| crate::elements::renamed(other).map(str::to_owned))
-                        .or_else(|| {
-                            hint(did_you_mean(
-                                other,
-                                ["width", "wobble", "closed", "through"],
-                            ))
-                        });
+                        .or_else(|| crate::elements::renamed(other).map(str::to_owned));
+                    let near = did_you_mean(other, ["width", "wobble", "closed", "through"]);
                     this.err(
                         "dt::unknown-control",
                         kspan,
                         format!("a line has no `{other}`"),
                         "unknown",
                     )
-                    .help = help;
+                    .advise(kspan, first, near, || None);
                     return;
                 }
             };
@@ -985,7 +975,12 @@ impl<'k> Decoder<'k> {
                     format!("a line has no `{other}`"),
                     "unknown",
                 )
-                .help = hint(did_you_mean(other, ["through", "width", "wobble"]));
+                .advise(
+                    c.name().span(),
+                    None,
+                    did_you_mean(other, ["through", "width", "wobble"]),
+                    || None,
+                );
             }
         }
         line.closed = closed.unwrap_or(false);
@@ -1041,18 +1036,16 @@ impl<'k> Decoder<'k> {
                                 });
                             }
                             Some(r) => {
-                                let help =
-                                    hint(did_you_mean(r, ctx.regions.iter().map(String::as_str)))
-                                        .unwrap_or_else(|| {
-                                            format!("declare it first: `region {r} {{ … }}`")
-                                        });
+                                let near = did_you_mean(r, ctx.regions.iter().map(String::as_str));
                                 self.err(
                                     "dt::unknown-name",
                                     span,
                                     format!("there is no region called `{r}`"),
                                     "not a region here",
                                 )
-                                .help = Some(help);
+                                .suggest_or(span, near, || {
+                                    format!("declare it first: `region {r} {{ … }}`")
+                                });
                             }
                             None => {
                                 self.err(
@@ -1080,18 +1073,16 @@ impl<'k> Decoder<'k> {
                                 });
                             }
                             Some(l) => {
-                                let help =
-                                    hint(did_you_mean(l, ctx.lines.iter().map(String::as_str)))
-                                        .unwrap_or_else(|| {
-                                            format!("draw it first: `line {l} {{ through … }}`")
-                                        });
+                                let near = did_you_mean(l, ctx.lines.iter().map(String::as_str));
                                 self.err(
                                     "dt::unknown-name",
                                     span,
                                     format!("there is no line called `{l}`"),
                                     "not a line here",
                                 )
-                                .help = Some(help);
+                                .suggest_or(span, near, || {
+                                    format!("draw it first: `line {l} {{ through … }}`")
+                                });
                             }
                             None => {
                                 self.err(
@@ -1116,22 +1107,17 @@ impl<'k> Decoder<'k> {
                     }
                 }
                 other => {
-                    let help = crate::elements::camel_of(other)
+                    let first = crate::elements::camel_of(other)
                         .map(|new| format!("control names are camelCase: write `{new}`"))
-                        .or_else(|| crate::elements::renamed(other).map(str::to_owned))
-                        .or_else(|| {
-                            hint(did_you_mean(
-                                other,
-                                ["boundedBy", "fill", "within", "except"],
-                            ))
-                        });
+                        .or_else(|| crate::elements::renamed(other).map(str::to_owned));
+                    let near = did_you_mean(other, ["boundedBy", "fill", "within", "except"]);
                     self.err(
                         "dt::unknown-node",
                         c.name().span(),
                         format!("a region has no `{other}`"),
                         "unknown",
                     )
-                    .help = help;
+                    .advise(c.name().span(), first, near, || None);
                 }
             }
         }
@@ -1343,17 +1329,17 @@ impl<'k> Decoder<'k> {
                     format!("a printer has no `{key}`"),
                     "unknown",
                 )
-                .help = hint(did_you_mean(
-                    key,
-                    KEYS.iter().chain(machine::KEYS.iter()).copied(),
-                ))
-                .or_else(|| {
-                    Some(format!(
-                        "a printer takes: {}; and for a machine: {}",
-                        KEYS.join(", "),
-                        machine::KEYS.join(", ")
-                    ))
-                });
+                .suggest_or(
+                    kspan,
+                    did_you_mean(key, KEYS.iter().chain(machine::KEYS.iter()).copied()),
+                    || {
+                        format!(
+                            "a printer takes: {}; and for a machine: {}",
+                            KEYS.join(", "),
+                            machine::KEYS.join(", ")
+                        )
+                    },
+                );
                 return;
             };
             let span = value_span(e);

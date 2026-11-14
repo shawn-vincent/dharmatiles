@@ -7,7 +7,7 @@ use std::sync::Arc;
 use dt_doc::DocError;
 use miette::{Diagnostic, LabeledSpan, SourceCode, SourceSpan};
 
-pub use dt_doc::error::Src;
+pub use dt_doc::error::{Fix, Src};
 
 /// One problem, pointing at the text that caused it.
 #[derive(Debug, Clone)]
@@ -20,6 +20,8 @@ pub struct Diag {
     pub label: String,
     /// What to do about it.
     pub help: Option<String>,
+    /// An edit that mends it (made with [`Diag::suggest`], together with the help); boxed so a diagnostic stays small.
+    pub fix: Option<Box<Fix>>,
     /// Where (absent for problems with no text, such as a missing file).
     pub at: Option<(Src, SourceSpan)>,
 }
@@ -38,6 +40,7 @@ impl Diag {
             message: message.into(),
             label: label.into(),
             help: None,
+            fix: None,
             at: Some((Arc::clone(src), span)),
         }
     }
@@ -49,6 +52,7 @@ impl Diag {
             message: message.into(),
             label: String::new(),
             help: None,
+            fix: None,
             at: None,
         }
     }
@@ -57,6 +61,28 @@ impl Diag {
     #[must_use]
     pub fn help(mut self, help: impl Into<String>) -> Self {
         self.help = Some(help.into());
+        self
+    }
+
+    /// Suggest `word` for the text at `span` of this problem's source: the help and the fix, from one place.
+    #[must_use]
+    pub fn suggest(mut self, span: SourceSpan, word: &str) -> Self {
+        let text = self.at.as_ref().map_or("", |(s, _)| s.inner().as_str());
+        let (help, fix) = dt_doc::error::suggest(text, span, word);
+        self.help = Some(help);
+        self.fix = Some(Box::new(fix));
+        self
+    }
+
+    /// Say more after the help already there (a suggestion, then why).
+    #[must_use]
+    pub fn also(mut self, more: Option<&str>) -> Self {
+        if let Some(more) = more {
+            self.help = Some(match self.help {
+                Some(h) => format!("{h} {more}"),
+                None => more.to_owned(),
+            });
+        }
         self
     }
 
@@ -83,8 +109,10 @@ impl Diag {
 impl From<&DocError> for Diag {
     /// A dt-doc error, at the text it was decoded from.
     fn from(e: &DocError) -> Self {
-        Self::at(e.src(), e.span, e.code, e.message.clone(), e.label.clone())
-            .maybe_help(e.help.clone())
+        let mut d = Self::at(e.src(), e.span, e.code, e.message.clone(), e.label.clone())
+            .maybe_help(e.help.clone());
+        d.fix.clone_from(&e.fix);
+        d
     }
 }
 

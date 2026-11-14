@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 pub use build::{Built, NO_ENTRY, build, build_cached, build_stored, build_tier, build_with};
 pub use cache::Cache;
 pub use check::{Checked, check};
-pub use diag::Diag;
+pub use diag::{Diag, Fix};
 pub use doc::{Region, Tile, Within};
 pub use dt_doc::lower::{RangeRefusal, Ranged, ranged, weighting_flaw_in};
 pub use dt_kit::Progress;

@@ -7,6 +7,30 @@
 
 export const STALE_NOTE = 'Finish the edit in the source first: the sheet and the map wait for a clean check of what is written.';
 
+/** The index in `text` of byte `b` (the program counts bytes of UTF-8; the page's strings count UTF-16 units). */
+export function byteToIndex(text, b) {
+  if (!/[^\x00-\x7f]/.test(text)) return b;
+  let bytes = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (bytes >= b) return i;
+    const c = text.codePointAt(i);
+    bytes += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+    if (c >= 0x10000) i++;
+  }
+  return text.length;
+}
+
+/**
+ * The text with the program's `fix` for a mistake laid into it (`{offset, len, was, replacement}`: bytes, as the program counts),
+ * or null when the text there is no longer what the fix was made for: a fix goes only into the text it was made for.
+ * The program makes the replacement and its words once (dt-doc's `suggest`); this only lays it into the text.
+ * @param {string} text @param {{ offset: number, len: number, was: string, replacement: string }} fix
+ */
+export function fixedText(text, fix) {
+  const from = byteToIndex(text, fix.offset), to = byteToIndex(text, fix.offset + fix.len);
+  return text.slice(from, to) === fix.was ? text.slice(0, from) + fix.replacement + text.slice(to) : null;
+}
+
 /** `d` is the doc store's state; `tileId` the tile shown. True when its spans describe its text exactly. */
 export function spansFresh(d, tileId) {
   return d.text != null && d.checked === d.text && d.ok === true

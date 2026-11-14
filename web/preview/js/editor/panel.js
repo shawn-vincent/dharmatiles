@@ -15,7 +15,7 @@ import { html, render } from '../view/html.js';
 import { CopyAll, ErrorCard, MessageFilters, MessagesBody } from '../view/messages-panel.js';
 import { reveal } from '../slide.js';
 import { $, host, viewer } from './app.js';
-import { openFile, saveWords, texts } from './document.js';
+import { applyFix, openFile, saveWords, texts } from './document.js';
 import { showSourceLine } from './levels.js';
 import { showWorst } from './selection.js';
 import { doc, entrySel, isMapView, log, progressOf, server, tile, view } from './stores.js';
@@ -88,6 +88,7 @@ const act = {
   details: (/** @type {any} */ m, /** @type {string | null} */ source) => detailsFor(m, { source }),
   canShowWorst: () => !!viewer.worstFlagged(),
   showWorst,
+  applyFix: (/** @type {any} */ m) => applyFix(m.fix, m.span?.file ?? null),
   allText: async () => (await host.messagesText(tile()?.id ?? '')) || 'No messages.',
 };
 
@@ -206,6 +207,7 @@ export function init() {
   effect(showBar);
   bindPanel();
   // a mark in the source's gutter points to its message: open the panel on it
+  texts.cb.onFix = (fix, file) => applyFix(fix, file);
   texts.cb.onMarkClick = (line) => {
     const id = tileId();
     const hit = log.inFile(id, texts.file).find((m) => m.span.line === line);

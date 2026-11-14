@@ -134,11 +134,11 @@ function markText() {
   // each points to its message), plus a mistake the check just found whose message has not arrived yet.
   const words = (m) => `${m.text}${m.help ? `. ${m.help[0].toUpperCase()}${m.help.slice(1)}` : ''}`;
   const errs = (tileId && texts.file ? log.inFile(tileId, texts.file) : []).filter((m) => m.span.line)
-    .map((m) => ({ line: m.span.line, message: words(m), severity: m.severity === 'error' ? 'error' : 'warning', id: m.seq }));
+    .map((m) => ({ line: m.span.line, message: words(m), severity: m.severity === 'error' ? 'error' : 'warning', id: m.seq, fix: m.fix ?? null, file: m.span.file }));
   const found = [...(live ? d.errors : []), ...(!dirty() ? t?.errors || [] : [])];
   for (const e of found) {
     if ((e.file && e.file !== texts.file) || !e.line || errs.some((k) => k.line === e.line && k.severity === 'error')) continue;
-    errs.push({ line: e.line, message: `${e.message}${e.help ? `. ${e.help}` : ''}`, severity: 'error' });
+    errs.push({ line: e.line, message: `${e.message}${e.help ? `. ${e.help}` : ''}`, severity: 'error', fix: e.fix ?? null, file: e.file ?? null });
   }
   texts.mark(sel?.kind === 'tile' ? null : linesOf(sel), linesOf(hov), errs);
 }

@@ -26,9 +26,10 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
         return OK;
     };
     let Some(element) = schema::element(name) else {
+        // a word typed on the command line: no document text to mend, so the words without a fix
         let hint = schema::did_you_mean(name, ELEMENTS.iter().map(|l| l.name)).map_or_else(
             || format!("the elements: {}", names().join(", ")),
-            |m| format!("did you mean `{m}`?"),
+            dt_doc::error::did_you_mean_help,
         );
         let e = Diag::plain(
             "dt::unknown-element",

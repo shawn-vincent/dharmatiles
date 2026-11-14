@@ -312,19 +312,18 @@ impl Decoder<'_> {
             }
             Some((n, _)) => {
                 let names: Vec<&str> = ctx.raw.iter().map(|(k, _)| k.as_str()).collect();
-                let help = crate::schema::did_you_mean(&n, names.iter().copied())
-                    .map(|m| format!("did you mean `{m}`?"))
-                    .unwrap_or_else(|| {
-                        "a point takes the tile's own `let`s (declared above it), units and numbers"
-                            .to_owned()
-                    });
+                let near = crate::schema::did_you_mean(&n, names.iter().copied());
+                let at = self.word_span(span, &n);
                 self.err(
                     "dt::unknown-name",
                     span,
                     format!("no `let` is called `{n}` here"),
                     "unknown name",
                 )
-                .help = Some(help);
+                .suggest_or(at, near, || {
+                    "a point takes the tile's own `let`s (declared above it), units and numbers"
+                        .to_owned()
+                });
                 None
             }
             None => Some(cur),

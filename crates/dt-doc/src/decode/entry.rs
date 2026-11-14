@@ -347,30 +347,29 @@ impl Decoder<'_> {
             return Some(Callee::Definition(what.value.clone()));
         }
         let name = what.value.as_str();
-        let help = if let Some(h) = renamed(name) {
-            h.to_owned()
-        } else if let Some(file) = self.known.file_defining(name) {
-            let file = file.to_owned();
-            match self.imported.values().any(|(_, f)| *f == file) {
-                true => format!("add it to the use line: `use \"{file}\" … {name}`"),
-                false => format!("it is in `{file}`: write `use \"{file}\" {name}` at the top"),
-            }
+        let first = if let Some(h) = renamed(name) {
+            Some(h.to_owned())
         } else {
-            let mut names: Vec<&str> = crate::elements::ELEMENTS.iter().map(|l| l.name).collect();
-            names.extend(self.local_names.iter().map(String::as_str));
-            names.extend(self.imported.keys().map(String::as_str));
-            did_you_mean(name, names.iter().copied()).map_or_else(
-                || "a definition from another file needs `use \"…\" name` at the top".to_owned(),
-                |s| format!("did you mean `{s}`?"),
-            )
+            self.known.file_defining(name).map(|file| {
+                match self.imported.values().any(|(_, f)| f.as_str() == file) {
+                    true => format!("add it to the use line: `use \"{file}\" … {name}`"),
+                    false => format!("it is in `{file}`: write `use \"{file}\" {name}` at the top"),
+                }
+            })
         };
+        let mut names: Vec<&str> = crate::elements::ELEMENTS.iter().map(|l| l.name).collect();
+        names.extend(self.local_names.iter().map(String::as_str));
+        names.extend(self.imported.keys().map(String::as_str));
+        let near = did_you_mean(name, names.iter().copied()).map(str::to_owned);
         self.err(
             "dt::unknown-element",
             what.span,
             format!("no element or definition is called `{name}`"),
             "unknown",
         )
-        .help = Some(help);
+        .advise(what.span, first, near.as_deref(), || {
+            Some("a definition from another file needs `use \"…\" name` at the top".to_owned())
+        });
         None
     }
 
@@ -546,10 +545,11 @@ impl Decoder<'_> {
                             format!("`side` can't be `{s}`"),
                             "not a side",
                         )
-                        .help = Some(did_you_mean(s, Side::WORDS).map_or_else(
+                        .suggest_or(
+                            span,
+                            did_you_mean(s, Side::WORDS),
                             || "`side` is left, right or centre, walking the line".to_owned(),
-                            |m| format!("did you mean `{m}`?"),
-                        ));
+                        );
                     }
                 }
             }
@@ -686,30 +686,27 @@ impl Decoder<'_> {
                 span: name.span(),
             };
             let Some(sub) = k.and_then(|k| k.subs.iter().find(|s| s.name == sk.value)) else {
-                let help = match k {
-                    _ if crate::elements::camel_of(&sk.value).is_some() => format!(
-                        "control names are camelCase: write `{}`",
-                        crate::elements::camel_of(&sk.value).unwrap_or_default()
-                    ),
-                    _ if renamed(&sk.value).is_some() => {
-                        renamed(&sk.value).unwrap_or_default().to_owned()
-                    }
-                    Some(k) if !k.subs.is_empty() => {
-                        let names: Vec<&str> = k.subs.iter().map(|s| s.name).collect();
-                        did_you_mean(&sk.value, names.iter().copied()).map_or_else(
-                            || format!("`{}` takes: {}", k.name, names.join(", ")),
-                            |m| format!("did you mean `{m}`?"),
-                        )
-                    }
-                    _ => format!("`{}` takes one value: `{} value`", key.value, key.value),
-                };
+                let first = crate::elements::camel_of(&sk.value)
+                    .map(|new| format!("control names are camelCase: write `{new}`"))
+                    .or_else(|| renamed(&sk.value).map(str::to_owned));
+                let names: Vec<&str> =
+                    k.map_or_else(Vec::new, |k| k.subs.iter().map(|s| s.name).collect());
+                let near = did_you_mean(&sk.value, names.iter().copied());
                 self.err(
                     "dt::unknown-control",
                     sk.span,
                     format!("`{owner} {}` has no `{}`", key.value, sk.value),
                     "unknown",
                 )
-                .help = Some(help);
+                .advise(sk.span, first, near, || match k {
+                    Some(k) if !k.subs.is_empty() => {
+                        Some(format!("`{}` takes: {}", k.name, names.join(", ")))
+                    }
+                    _ => Some(format!(
+                        "`{}` takes one value: `{} value`",
+                        key.value, key.value
+                    )),
+                });
                 continue;
             };
             if setting.subs.iter().any(|s| s.name.value == sk.value) {
@@ -786,6 +783,8 @@ impl Decoder<'_> {
                     .unwrap_or_default(),
             ),
         };
+        let mut near: Option<String> = None;
+        let mut takes: Option<String> = None;
         let help = if thing && SCATTER_ONLY.contains(&name) {
             Some(format!(
                 "a {owner} is one {owner}; how many and how spread is a scatter's job: `scatter {name}=… {{ {owner} }}`"
@@ -819,9 +818,9 @@ impl Decoder<'_> {
                 }
             }
             names.push("seed");
-            did_you_mean(name, names.iter().copied())
-                .map(|s| format!("did you mean `{s}`?"))
-                .or_else(|| Some(format!("`{owner}` takes: {}", names.join(", "))))
+            near = did_you_mean(name, names.iter().copied()).map(str::to_owned);
+            takes = Some(format!("`{owner}` takes: {}", names.join(", ")));
+            None
         };
         let what = if matches!(entry.callee, Callee::Definition(_)) {
             "parameter"
@@ -834,7 +833,7 @@ impl Decoder<'_> {
             format!("`{owner}` has no {what} `{name}`"),
             format!("unknown {what}"),
         )
-        .help = help;
+        .advise(key.span, help, near.as_deref(), || takes);
     }
 
     /// Checks across one entry's place words, controls and children.

@@ -662,3 +662,77 @@ fn a_drawn_point_off_the_tile_is_refused_where_it_is_written() {
     ));
     assert!(e[0].location().is_some(), "{e:?}");
 }
+
+// ---- fixes: a suggestion is a button, made with its help ----
+
+/// `text` with the diagnostic's fix applied, as the editor lays it in.
+fn mended(text: &str, d: &Diag) -> String {
+    let f = d.fix.as_ref().expect("the diagnostic carries a fix");
+    assert_eq!(
+        &text[f.offset..f.offset + f.len],
+        f.was,
+        "the fix is for the text it points at"
+    );
+    format!(
+        "{}{}{}",
+        &text[..f.offset],
+        f.replacement,
+        &text[f.offset + f.len..]
+    )
+}
+
+/// The same document, mended once, checks clean.
+fn mends(text: &str, expect: &str) {
+    let e = errors(text);
+    assert_eq!(e.len(), 1, "{e:?}");
+    let help = e[0].help.as_deref().unwrap();
+    let f = e[0].fix.as_ref().expect("a fix");
+    assert!(
+        help.starts_with(&format!("did you mean `{expect}`?")),
+        "{help}"
+    );
+    assert_eq!(f.label, format!("Change to {expect}"));
+    let next = mended(text, &e[0]);
+    assert!(
+        check(&mem(&[("t.dtile", &next)]), "t.dtile", &legacy()).is_ok(),
+        "{next}"
+    );
+}
+
+#[test]
+fn a_misspelt_element_carries_the_fix_that_mends_it() {
+    mends(
+        "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirtt\n    }\n}\n",
+        "dirt",
+    );
+}
+
+#[test]
+fn a_misspelt_region_and_a_misspelt_height_carry_fixes() {
+    mends(
+        "dharmatiles version=1\ntile size=\"1x1\" {\n  line across { through west east }\n  region a { boundedBy across; fill \"(0.5sq, 0.75sq)\" }\n  stack {\n    dirt at=b\n  }\n}\n",
+        "a",
+    );
+    mends(
+        "dharmatiles version=1\ntile size=\"1x1\" {\n  line s wobble=\"$grundHeight\" { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n  stack {\n    dirt\n  }\n}\n",
+        "$groundHeight",
+    );
+}
+
+#[test]
+fn a_quoted_word_stays_quoted_and_a_control_name_is_replaced_alone() {
+    // a word written in quotes is replaced in quotes
+    let (help, fix) = dt_doc::error::suggest("a=\"lfet\"", (2, 6).into(), "left");
+    assert_eq!(help, "did you mean `left`?");
+    assert_eq!(
+        (fix.replacement.as_str(), fix.was.as_str()),
+        ("\"left\"", "\"lfet\"")
+    );
+    let text = "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirt bumpSiez=30\n    }\n}\n";
+    let e = errors(text);
+    assert_eq!(e[0].code, "dt::unknown-control");
+    assert_eq!(
+        mended(text, &e[0]).lines().nth(3).unwrap(),
+        "        dirt bumpSize=30"
+    );
+}

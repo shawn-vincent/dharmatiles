@@ -89,6 +89,7 @@ function Row({ row, m, act }) {
       ${msg.help ? html`<div class="help">${tickWords(msg.help)}</div>` : null}
       <div class="where">${here ? html`<span title=${msg.span.file}>${here}</span>` : null}${msg.code ? html`<code class="code">${msg.code}</code>` : null}</div></div>
     <div class="acts">
+      ${msg.fix ? html`<button type="button" class="btn primary fix" title="Make this change in the source" onClick=${() => act.applyFix(msg)}>${msg.fix.label}</button>` : null}
       ${msg.node && t ? html`<button type="button" class="btn" title="Select the stack entry this is about" onClick=${() => act.showNode(msg.node)}>Show on tile</button>` : null}
       <${CopyButton} text=${() => act.details(msg, source)} title="Copy details: the code, where it is, its source line and this environment" />
       ${msg.kind === 'server' ? html`<button type="button" class="btn icon" title="Put this away" aria-label="Put this message away" onClick=${() => act.dismiss(msg.seq)}><${Icon} name="x" size=${14} /></button>` : null}
@@ -128,7 +129,7 @@ export function ErrorCard({ m, act }) {
   return html`<div class="doc-error" role="alert"><div class="de-title">Nothing built</div>
     <div class="de-text">${tickWords(first.text)}${first.span?.line ? html` <span class="de-at">${`(line ${first.span.line})`}</span>` : null}</div>
     ${first.help ? html`<div class="de-help">${tickWords(first.help)}</div>` : null}
-    <div class="de-acts">${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${() => act.openPanel()}>All messages</button></div></div>`;
+    <div class="de-acts">${first.fix ? html`<button type="button" class="btn primary fix" onClick=${() => act.applyFix(first)}>${first.fix.label}</button>` : null}${go ? html`<button type="button" class="btn" onClick=${go}>Go to line</button>` : null}<button type="button" class="btn" onClick=${() => act.openPanel()}>All messages</button></div></div>`;
 }
 
 /**

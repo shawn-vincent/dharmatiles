@@ -14,7 +14,7 @@ import { TextPane, byteToIndex } from '../text.js';
 import { patchOnCopy } from '../mine.js';
 import { isOffline } from '../host.js';
 import { createDrafter } from '../drafts.js';
-import { STALE_NOTE, spansFresh } from '../spans.js';
+import { STALE_NOTE, fixedText, spansFresh } from '../spans.js';
 import { failed, showError } from '../problems.js';
 import { $, host, makeMine, toast } from './app.js';
 import { dirty, doc, isPlates, server, sourceFile, sourceId, stem, tile, view } from './stores.js';
@@ -191,6 +191,22 @@ export function replaceBytes(start, len, text, end) {
   const next = t.slice(0, i) + text + t.slice(j);
   run.scrubText = end ? null : next;
   edited(next, end ? 'lens' : 'drag');
+  return true;
+}
+
+/**
+ * Mend a mistake with the program's own fix (a message's `fix`, from `file`): the text goes through `edited`, the document's one
+ * way in, as one step of the history named by the fix.  Only the text the fix was made for takes it: once the text has moved past
+ * the check, or the place no longer reads what the program saw, it waits for the next check and says so.
+ * @param {{ offset: number, len: number, was: string, replacement: string, label: string }} fix
+ * @param {string | null} file the file the mistake is in (null: the tile's own)
+ */
+export function applyFix(fix, file) {
+  if (!doc.get().writable) { makeMine({ run: () => applyFix(fix, file) }); return false; }
+  const d = doc.get();
+  const next = d.text != null && d.checked === d.text && (file == null || file === d.file) ? fixedText(d.text, fix) : null;
+  if (next == null) { toast('The text has changed since the program read it: the fix waits for the next check.'); return false; }
+  edited(next, 'lens', fix.label);
   return true;
 }
 

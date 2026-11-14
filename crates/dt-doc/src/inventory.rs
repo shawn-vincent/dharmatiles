@@ -365,12 +365,11 @@ impl Reader {
         if words.contains(&s.as_str()) {
             return Some(s.clone());
         }
-        let help = did_you_mean(s, words.iter().copied()).map_or_else(
-            || format!("`{key}` is {}", words.join(" or ")),
-            |d| format!("did you mean `{d}`?"),
-        );
+        let near = did_you_mean(s, words.iter().copied());
         self.err(value_span(e), format!("`{s}` is not a {key}"), "not that")
-            .help = Some(help);
+            .suggest_or(value_span(e), near, || {
+                format!("`{key}` is {}", words.join(" or "))
+            });
         None
     }
 
@@ -423,10 +422,9 @@ impl Reader {
                 other if keys.contains(&other) => rest.push((other.to_owned(), e.clone())),
                 other => {
                     self.err(k.span(), format!("`{node}` has no `{other}`"), "unknown")
-                        .help = Some(did_you_mean(other, keys.iter().copied()).map_or_else(
-                        || format!("`{node}` takes: {}", keys.join(", ")),
-                        |d| format!("did you mean `{d}`?"),
-                    ));
+                        .suggest_or(k.span(), did_you_mean(other, keys.iter().copied()), || {
+                            format!("`{node}` takes: {}", keys.join(", "))
+                        });
                 }
             }
         }
@@ -584,10 +582,11 @@ impl Reader {
                                     format!("`renamed` has no `{other}`"),
                                     "unknown",
                                 )
-                                .help = Some(did_you_mean(other, RENAMED_KEYS).map_or_else(
+                                .suggest_or(
+                                    k.span(),
+                                    did_you_mean(other, RENAMED_KEYS),
                                     || format!("`renamed` takes: {}", RENAMED_KEYS.join(", ")),
-                                    |d| format!("did you mean `{d}`?"),
-                                ));
+                                );
                             }
                         }
                     }
@@ -622,11 +621,17 @@ impl Reader {
                 })
             }
             other => {
-                self.err(n.name().span(), format!("an inventory holds `print`, `gone` and `renamed` lines, not `{other}`"), "unknown")
-                    .help = Some(did_you_mean(other, LINES).map_or_else(
-                    || "a line is `print \"lib:tiles/…\" seed=… system=… colour=… result=ok on=\"…\"`".to_owned(),
-                    |d| format!("did you mean `{d}`?"),
-                ));
+                self.err(
+                    n.name().span(),
+                    format!(
+                        "an inventory holds `print`, `gone` and `renamed` lines, not `{other}`"
+                    ),
+                    "unknown",
+                )
+                .suggest_or(n.name().span(), did_you_mean(other, LINES), || {
+                    "a line is `print \"lib:tiles/…\" seed=… system=… colour=… result=ok on=\"…\"`"
+                        .to_owned()
+                });
                 None
             }
         }
@@ -701,10 +706,11 @@ pub fn decode(name: &str, text: &str) -> Result<Inventory, Vec<DocError>> {
                     format!("unknown top-level node `{other}`"),
                     "not inventory",
                 )
-                .help = Some(did_you_mean(other, ["inventory"]).map_or_else(
+                .suggest_or(
+                    n.name().span(),
+                    did_you_mean(other, ["inventory"]),
                     || "an inventory is `inventory { print … }`".to_owned(),
-                    |d| format!("did you mean `{d}`?"),
-                ));
+                );
             }
         }
     }

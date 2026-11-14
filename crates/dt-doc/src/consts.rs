@@ -72,6 +72,8 @@ pub struct ScopeError {
     pub span: SourceSpan,
     /// What to do about it.
     pub help: Option<String>,
+    /// A near word for the name at `span` (a suggestion, with its fix, is made where the text is known).
+    pub near: Option<String>,
 }
 
 /// Why a formula cannot be read in a scope.
@@ -189,6 +191,7 @@ impl ConstTable {
                     help: Some(format!(
                         "`override {name} …` replaces it for this scope and everything called from it"
                     )),
+                    near: None,
                 }),
                 (ConstKind::Override, true) if !has => {
                     let names: Vec<&str> = t
@@ -197,20 +200,19 @@ impl ConstTable {
                         .map(|e| e.name.as_str())
                         .filter(|n| n.starts_with('$'))
                         .collect();
-                    let help = match crate::schema::did_you_mean(name, names.iter().copied()) {
-                        Some(m) => format!(
-                            "did you mean `override {m} …`? or `let {name} …` installs a new one"
-                        ),
-                        None => format!(
-                            "`let {name} …` installs a new `$` name; `override` replaces one a caller installed"
-                        ),
-                    };
+                    let near = crate::schema::did_you_mean(name, names.iter().copied());
                     errors.push(ScopeError {
                         code: "dt::name",
                         message: format!("no caller installed `{name}` to override"),
                         label: "not in the context",
                         span: c.name.span,
-                        help: Some(help),
+                        help: Some(match near {
+                            Some(_) => format!("or `let {name} …` installs a new one"),
+                            None => format!(
+                                "`let {name} …` installs a new `$` name; `override` replaces one a caller installed"
+                            ),
+                        }),
+                        near: near.map(str::to_owned),
                     });
                 }
                 (ConstKind::Override, true) => {

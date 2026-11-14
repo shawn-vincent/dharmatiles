@@ -337,20 +337,19 @@ fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usiz
     let name = e.area.as_ref()?;
     let found = tile.regions.iter().position(|r| r.name == name.value);
     if found.is_none() {
-        errors.push(
-            Diag::at(
+        errors.push({
+            let d = Diag::at(
                 &e.src,
                 name.span,
                 "dt::unknown-region",
                 format!("no region named `{}`", name.value),
                 "not a region",
-            )
-            .maybe_help(
-                did_you_mean(&name.value, tile.regions.iter().map(|r| r.name.as_str()))
-                    .map(|w| format!("did you mean `{w}`?"))
-                    .or_else(|| Some("without at=, an element covers the whole tile".into())),
-            ),
-        );
+            );
+            match did_you_mean(&name.value, tile.regions.iter().map(|r| r.name.as_str())) {
+                Some(w) => d.suggest(name.span, w),
+                None => d.help("without at=, an element covers the whole tile"),
+            }
+        });
     }
     found
 }

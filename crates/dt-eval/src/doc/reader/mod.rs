@@ -137,17 +137,21 @@ pub(super) fn not_yet(src: &Src, span: SourceSpan, what: &str) -> Diag {
 pub(super) fn read_flaw(src: &Src, span: SourceSpan, flaw: &dt_doc::consts::ReadFlaw) -> Diag {
     use dt_doc::consts::ReadFlaw;
     match flaw {
-        ReadFlaw::Unknown { name, near } => Diag::at(
-            src,
-            span,
-            "dt::unknown-name",
-            format!("nothing installed `{name}` where this is read"),
-            "not in the context",
-        )
-        .help(match near {
-            Some(n) => format!("did you mean `{n}`? a `$` name is read from the context of whoever calls, and the library installs its heights at the root"),
-            None => format!("a `$` name is read from the context of whoever calls: the library installs its heights at the root, and `let {name} …` in an enclosing block installs one of your own"),
-        }),
+        ReadFlaw::Unknown { name, near } => {
+            let d = Diag::at(
+                src,
+                span,
+                "dt::unknown-name",
+                format!("nothing installed `{name}` where this is read"),
+                "not in the context",
+            );
+            match near {
+                Some(n) => d
+                    .suggest(dt_doc::error::locate(src.inner(), span, name), n)
+                    .also(Some("a `$` name is read from the context of whoever calls, and the library installs its heights at the root")),
+                None => d.help(format!("a `$` name is read from the context of whoever calls: the library installs its heights at the root, and `let {name} …` in an enclosing block installs one of your own")),
+            }
+        }
         ReadFlaw::PerPoint { name } => Diag::at(
             src,
             span,
@@ -332,8 +336,12 @@ impl Reader<'_> {
     /// What went wrong entering a scope, each at its text in `src`.
     fn scope_errors(&mut self, src: &Src, errors: Vec<dt_doc::consts::ScopeError>) {
         for e in errors {
-            self.errors
-                .push(Diag::at(src, e.span, e.code, e.message, e.label).maybe_help(e.help));
+            let d = Diag::at(src, e.span, e.code, e.message, e.label);
+            self.errors.push(match e.near {
+                // the suggestion first, then what else the error has to say
+                Some(w) => d.suggest(e.span, &w).also(e.help.as_deref()),
+                None => d.maybe_help(e.help),
+            });
         }
     }
 

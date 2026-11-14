@@ -69,10 +69,11 @@ impl Decoder<'_> {
                         format!("`{s}` is not a kind of thing"),
                         "unknown kind",
                     )
-                    .help = Some(hint_or(
+                    .suggest_or(
+                        span,
                         did_you_mean(s, TAGS.iter().copied()),
-                        format!("things gather against: {}", TAGS.join(", ")),
-                    ));
+                        || format!("things gather against: {}", TAGS.join(", ")),
+                    );
                     return None;
                 }
                 Axis::Bool => {
@@ -147,10 +148,9 @@ impl Decoder<'_> {
             format!("`{owner} {name}` can't be `{s}`"),
             "not one of its words",
         )
-        .help = Some(hint_or(
-            did_you_mean(s, list.iter().copied()),
-            format!("`{name}` is one of: {}", list.join(", ")),
-        ));
+        .suggest_or(span, did_you_mean(s, list.iter().copied()), || {
+            format!("`{name}` is one of: {}", list.join(", "))
+        });
     }
 
     /// A number on `axis`: a KDL number, or a quoted expression, range or
@@ -345,28 +345,25 @@ impl Decoder<'_> {
                 "parameter"
             };
             let near = did_you_mean(n, cands.iter().copied());
-            let mut help = hint_or(
-                near,
-                k.map_or_else(|| format!("`{name}` is {kind}"), describe),
-            );
-            if lets && near.is_none() && !ctx.consts.is_empty() {
-                let list: Vec<&str> = ctx.consts.iter().map(|(l, _)| l.as_str()).collect();
-                help = format!(
-                    "{help}; heights: {}; a tile adds its own with `let name mm`",
-                    list.join(", ")
-                );
-            }
-            let text = &self.text()[inner.offset()..inner.offset() + inner.len()];
-            let at = text.find(n).map_or(inner, |i| {
-                miette::SourceSpan::new((inner.offset() + i).into(), n.len())
-            });
+            let at = self.word_span(inner, n);
             self.err(
                 "dt::unknown-name",
                 at,
                 format!("no {what} is called `{n}`"),
                 "unknown name",
             )
-            .help = Some(help);
+            .suggest_or(at, near, || {
+                let help = k.map_or_else(|| format!("`{name}` is {kind}"), describe);
+                if lets && !ctx.consts.is_empty() {
+                    let list: Vec<&str> = ctx.consts.iter().map(|(l, _)| l.as_str()).collect();
+                    format!(
+                        "{help}; heights: {}; a tile adds its own with `let name mm`",
+                        list.join(", ")
+                    )
+                } else {
+                    help
+                }
+            });
             return None;
         }
         let x = {
@@ -537,10 +534,6 @@ pub fn check_text_in(
 /// What the reader says of an annotation that is not a unit.
 const UNIT_HELP: &str =
     "units are not written; (mm)4.5 checks a size, and (h)1.2 is in wall tops of 33.1 mm";
-
-fn hint_or(m: Option<&str>, otherwise: String) -> String {
-    m.map_or(otherwise, |m| format!("did you mean `{m}`?"))
-}
 
 /// One line describing what a control takes, for help text.
 pub(crate) fn describe(k: &'static Control) -> String {
