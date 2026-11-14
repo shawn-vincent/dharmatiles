@@ -17,7 +17,7 @@ import { tileById, view } from './stores.js';
 
 /** What the panel's buttons do. */
 const act = {
-  select: (ids) => select(ids),
+  select: (ids, add) => select(ids, add),
   hover: (ids) => hoverPieces(ids),
   /** Change how this map's list is sorted, filtered or searched: view state, kept for the map (sort and filter) across visits. */
   list: (patch) => {

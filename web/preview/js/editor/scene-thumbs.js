@@ -27,12 +27,13 @@ function setup() {
   const material = new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide });
   const camera = new THREE.PerspectiveCamera(FOV, W / H, 1, 2000);
   camera.up.set(0, 0, 1);
-  return { renderer, canvas, u, material, camera, scene: new THREE.Scene() };
+  const top = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
+  return { renderer, canvas, u, material, camera, top, scene: new THREE.Scene() };
 }
 
-function draw(buffer, plate, w = W, h = H) {
+function draw(buffer, plate, w = W, h = H, view = null) {
   gl ??= setup();
-  const { renderer, canvas, u, material, camera, scene } = gl;
+  const { renderer, canvas, u, material, camera, top, scene } = gl;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   const p = parsePayload(buffer);
@@ -48,18 +49,34 @@ function draw(buffer, plate, w = W, h = H) {
   const centre = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (Math.max(lo[2], -1) + hi[2]) / 2);
   const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - Math.max(lo[2], -1));
   const [elev, azim] = [40, -120];
-  const dir = dirv(elev, azim).normalize();
-  const dist = (diag / (2 * Math.tan((FOV * Math.PI) / 360) * Math.min(1, w / h))) * 1.0;
-  camera.position.copy(centre).addScaledVector(dir, dist);
-  camera.near = dist / 50; camera.far = dist * 6;
-  camera.lookAt(centre);
-  camera.updateProjectionMatrix();
-  u.uCam.value.copy(camera.position);
-  u.uDir.value.copy(centre).sub(camera.position).normalize();
+  let cam = camera;
+  if (view === 'top') {
+    // straight down, north up, the tile's own footprint filling the picture (a plan's picture of it): an orthographic camera
+    const half = [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2];
+    cam = top;
+    cam.left = -half[0]; cam.right = half[0]; cam.top = half[1]; cam.bottom = -half[1];
+    cam.up.set(0, 1, 0);
+    cam.position.set(centre.x, centre.y, hi[2] + diag + 10);
+    cam.near = 1; cam.far = diag * 4 + 40;
+    cam.lookAt(centre.x, centre.y, 0);
+    cam.updateProjectionMatrix();
+    u.uOrtho.value = 1;
+    u.uDir.value.set(0, 0, -1);
+  } else {
+    const dir = dirv(elev, azim).normalize();
+    const dist = (diag / (2 * Math.tan((FOV * Math.PI) / 360) * Math.min(1, w / h))) * 1.0;
+    camera.position.copy(centre).addScaledVector(dir, dist);
+    camera.near = dist / 50; camera.far = dist * 6;
+    camera.lookAt(centre);
+    camera.updateProjectionMatrix();
+    u.uOrtho.value = 0;
+    u.uDir.value.copy(centre).sub(camera.position).normalize();
+  }
+  u.uCam.value.copy(cam.position);
   u.uL1.value.copy(dirv(18, azim - 20));
   u.uL2.value.copy(dirv(elev - 20, azim + 110));
   renderer.setClearColor(new THREE.Color(plate), 1);
-  renderer.render(scene, camera);
+  renderer.render(scene, cam);
   const url = canvas.toDataURL('image/png');
   scene.remove(mesh);
   g.dispose();
@@ -73,7 +90,7 @@ function draw(buffer, plate, w = W, h = H) {
  */
 export const thumbs = createThumbs({
   host,
-  draw: (buf, spec) => draw(buf, spec.plate ?? '#D9E0EB', spec.w ?? W, spec.h ?? H),
+  draw: (buf, spec) => draw(buf, spec.plate ?? '#D9E0EB', spec.w ?? W, spec.h ?? H, spec.view ?? null),
   valid: (spec, got) => { const known = tileById(spec.tile)?.docRev; return known == null || known === got.docRev; },
 });
 

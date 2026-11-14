@@ -32,13 +32,14 @@ export const LIMIT = 5;
  * @property {string} [printer]  a printer profile
  * @property {'super-low' | 'low'} [tier]  the build's resolution; `super-low` unless more is asked for
  * @property {string} [rev]      the version of the tile the picture is of: a changed tile is drawn again
+ * @property {'top'} [view]     looking straight down with north up and the tile filling the picture (a plan's picture: the map's squares, a plate's pieces); the default is the three-quarter view
  * @property {string} [plate]    the colour it is drawn on
  * @property {number} [w]        width in px
  * @property {number} [h]        height in px
  */
 
 /** The cache key of a picture: everything that makes it a different picture. @param {Spec} s */
-export const thumbKey = (s) => [s.tile, s.tier ?? 'super-low', s.seed ?? '-', s.rev ?? '-', s.system ?? '-', s.printer ?? '-', `${s.w ?? 0}x${s.h ?? 0}`, s.plate ?? '-'].join('|');
+export const thumbKey = (s) => [s.tile, s.tier ?? 'super-low', s.seed ?? '-', s.rev ?? '-', s.system ?? '-', s.printer ?? '-', s.view ?? '-', `${s.w ?? 0}x${s.h ?? 0}`, s.plate ?? '-'].join('|');
 
 /**
  * The service.

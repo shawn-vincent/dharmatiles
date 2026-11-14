@@ -23,7 +23,7 @@ import { token } from '../tokens.js';
 import { defaultFilters } from '../inventory.js';
 import { docs, planOf } from './docs.js';
 import './mode.js'; // `view.dmode` is derived there
-import { isInventory, isPlates, server, stem, tile, view } from './stores.js';
+import { isInventory, isPlates, server, stem, tile, tileById, view } from './stores.js';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -71,6 +71,27 @@ export const contextLines = () => {
 
 // ---- the plates' panel ---------------------------------------------------------------------------------------------
 
+/** A picture's px box for a footprint `w` by `d` mm: the longer side `long` px, the shape the tile's. */
+const pxBox = (/** @type {number} */ w, /** @type {number} */ d, /** @type {number} */ long) => { const k = long / Math.max(w, d); return { w: Math.round(w * k), h: Math.round(d * k) }; };
+
+/**
+ * A picture of a listed tile (js/thumbs.js, the one service the Add tiles grid and the seed strip use): the service, the spec
+ * and where a failure is shown.  `o`: the base `system`, a `seed` to build at (the file is not edited), the size in px, and
+ * `view: 'top'` for a plan's picture (north up, the tile filling it).  The printer is the build target's.
+ * @param {any} t the listed tile (server.get().tiles)
+ * @param {{ system?: string, seed?: number | null, w?: number, h?: number, view?: 'top' }} [o]
+ */
+export function pictureFor(t, o = {}) {
+  return {
+    svc: thumbs,
+    spec: { tile: t.id, rev: String(t.docRev ?? 0), system: o.system, printer: server.get().printer, plate: token('--plate') || '#D9E0EB', w: o.w ?? 88, h: o.h ?? 62, seed: o.seed ?? undefined, view: o.view },
+    onError: (/** @type {Error} */ e) => showError('Could not draw a picture of a tile', e),
+  };
+}
+
+/** The listed tile a tile's canonical name (js/inventory.js `canonOf`) is, or undefined. @param {string} canon */
+const tileOfCanon = (canon) => { const home = server.get().inventory?.home; return server.get().tiles.find((x) => canonOf(x.path, home) === canon); };
+
 /** The plates of the list shown, as the program last planned them (null while it has not). */
 export const plan = computed(() => (isPlates(tileNow.value) ? planOf(tileNow.value)?.plates ?? null : null));
 /** Is the plates' panel the one on show (a print list, not its map)? */
@@ -99,6 +120,8 @@ export const platesPanel = {
   ui: platesUi.value,
   inventory,
   printers: computed(() => server.get().printers),
+  /** The top-down picture of a kind of piece on a plate (null when its tile is not listed): `kind` is a plan's kind. */
+  picture: (/** @type {any} */ kind) => { const t = tileOfCanon(kind.canon); return t ? pictureFor(t, { system: kind.system, seed: kind.seed, ...pxBox(kind.size[0], kind.size[1], 72), view: 'top' }) : null; },
   // the printer the document names now (its own word, from its scene), the plan's only until that is there
   currentPrinter: computed(() => (tileNow.value && docs.scene(tileNow.value.id)?.printer) ?? plan.value?.printer),
   readOnly: computed(() => !(plan.value?.writable ?? planOf(tileNow.value)?.writable)),
@@ -174,6 +197,8 @@ export function flashAdded(t) {
 
 /** What the map's levels (js/view/map-panel.js) read: one object of signals. */
 export const mapPanel = {
+  /** The top-down picture of a placed piece, sized to its tile's own footprint (null when its tile is not listed). */
+  picture: (/** @type {any} */ p) => { const t = p.tileId ? tileById(p.tileId) : null; return t ? pictureFor(t, { system: p.system, seed: p.seed, ...pxBox(p.size[0], p.size[1], 88), view: 'top' }) : null; },
   on: mapOn, tile: tileNow, scene, pieces, selected, marks, list: mapList, mprop, level, inventory, readOnly, waiting,
   // the tile last put on the map (a row of the list lights up for a moment), and the Add tiles level's folder browser
   added: computed(() => (addedNow.value?.doc === tileNow.value?.id ? addedNow.value : null)), fresh: freshNow, add: addData,
@@ -233,10 +258,6 @@ export const inventoryPanel = {
   system: haveBlockModel.system,
   tiles: computed(() => server.get().tiles),
   /** The picture of a piece: the thumbnail service and the spec of its tile (null when the tile is not at its path any more). */
-  picture: (/** @type {string} */ canon, /** @type {string} */ system) => {
-    const home = server.get().inventory?.home;
-    const t = server.get().tiles.find((x) => canonOf(x.path, home) === canon);
-    return t ? { svc: thumbs, spec: { tile: t.id, rev: String(t.docRev ?? 0), system, printer: server.get().printer, plate: token('--plate') || '#D9E0EB', w: 88, h: 62 }, onError: (/** @type {Error} */ e) => showError('Could not draw the piece', e) } : null;
-  },
+  picture: (/** @type {string} */ canon, /** @type {string} */ system) => { const t = tileOfCanon(canon); return t ? pictureFor(t, { system }) : null; },
   lists: computed(() => server.get().tiles.filter((x) => /\.dmap$/i.test(x.path))),
 };

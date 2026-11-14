@@ -18,6 +18,7 @@ import { FILTERS, SORTS, sectionsOf } from '../map-list.js';
 import { FolderList } from './places-panel.js';
 import { haveLine, systemName, tileHave } from '../inventory.js';
 import { Field } from './field.js';
+import { Thumb } from '../thumbs.js';
 import { html, useEffect, useRef } from './html.js';
 import { Icon } from './icons.js';
 import { Button, Section, Seg, plural } from './widgets.js';
@@ -106,6 +107,55 @@ function PieceList({ m, act, compact = false }) {
   <//>`;
 }
 
+/**
+ * The map as a plan (docs/maps.html): its squares and every placed piece in its place and turn, each shown as the piece's own
+ * top-down picture (the program's super-low build of that tile and seed, through the page's one picture service), marked with
+ * what the shelf says of it (the program's word, `marks`), the selection outlined.  Pressing a piece selects it (⇧ adds),
+ * the pointer on one lights it in the view.  Everything here is the scene's own numbers: `scene.bounds`, `scene.grid`, each
+ * piece's `at`, `size` and `rot`; the page works out only where on the strip they fall.
+ */
+export function MapPlan({ m, act }) {
+  const sc = m.scene.value;
+  const ps = m.pieces.value.filter((p) => p.at);
+  if (!ps.length) return null;
+  const marks = m.marks.value;
+  const picked = new Set(m.selected.value.map((p) => p.id));
+  const sq = sc?.squareMm ?? 35;
+  const b = sc?.bounds;
+  const x0 = Math.min(0, b?.[0] ?? 0), y0 = Math.min(0, b?.[1] ?? 0);
+  const x1 = Math.max((sc?.grid?.cols ?? 0) * sq, b?.[2] ?? 0), y1 = Math.max((sc?.grid?.rows ?? 0) * sq, b?.[3] ?? 0);
+  const W = x1 - x0, H = y1 - y0;
+  const state = (p) => marks.get(p.id)?.state ?? 'need';
+  const n = (s) => ps.filter((p) => state(p) === s).length;
+  const lines = [];
+  for (let x = Math.ceil(x0 / sq) * sq; x <= x1 + 1e-6; x += sq) lines.push(`M${x - x0} 0V${H}`);
+  for (let y = Math.ceil(y0 / sq) * sq; y <= y1 + 1e-6; y += sq) lines.push(`M0 ${y - y0}H${W}`);
+  const word = { have: 'on your shelf', need: 'to print', other: 'have, other colour', skip: 'left off' };
+  const item = (s, text) => (n(s) ? html`<li><i class=${`mplan-sw ${s}`}></i>${`${n(s)} ${text}`}</li>` : null);
+  return html`<div class="mplan-wrap">
+    <div class="mplan" style=${`aspect-ratio: ${W} / ${H}`} role="group" aria-label="The map from above">
+      <svg class="mplan-grid" viewBox=${`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true"><path d=${lines.join('')} /></svg>
+      ${ps.map((p) => {
+        const s = state(p);
+        const turned = (((Math.round(p.rot || 0) % 360) + 360) % 360) % 180 === 90;
+        const [fw, fd] = turned ? [p.size[1], p.size[0]] : p.size;
+        const pic = m.picture ? m.picture(p) : null;
+        const at = (v, o, len) => `${((v - o) / len) * 100}%`;
+        const on = picked.has(p.id);
+        return html`<button type="button" key=${p.id} class=${`mplan-p ${s}${on ? ' on' : ''}`} aria-pressed=${String(on)}
+          style=${`left:${at(p.at[0], x0, W)};top:${at(p.at[1], y0, H)};width:${(fw / W) * 100}%;height:${(fd / H) * 100}%`}
+          title=${`${p.name}${p.id ? ` · ${p.id}` : ''} · ${M.placeWords(p)} · ${word[s] ?? s}`}
+          onClick=${(e) => act.select([p.id], e.shiftKey)} onPointerEnter=${() => act.hover([p.id])} onPointerLeave=${() => act.hover([])} onFocus=${() => act.hover([p.id])} onBlur=${() => act.hover([])}>
+          ${pic ? html`<span class="mplan-img" style=${`width:${(p.size[0] / fw) * 100}%;height:${(p.size[1] / fd) * 100}%;transform:translate(-50%,-50%) rotate(${p.rot || 0}deg)`}><${Thumb} svc=${pic.svc} spec=${pic.spec} className="mplan-pic" onError=${pic.onError} /></span>` : null}
+          <i class="mplan-mark"></i></button>`;
+      })}
+    </div>
+    <ul class="mplan-key">
+      <li class="mplan-n"><b>${plural(ps.length, 'piece')}</b>${' placed'}</li>
+      ${item('have', 'on your shelf')}${item('need', 'to print')}${item('other', 'other colour')}${item('skip', 'left off')}
+    </ul></div>`;
+}
+
 function MapView({ m, act }) {
   const ro = m.readOnly.value;
   const ps = m.pieces.value;
@@ -114,6 +164,7 @@ function MapView({ m, act }) {
   return html`
     <${Section} title="On the map">
       <p class="inv-sum"><b>${sc?.shelfExists ? `${sc.have} in inventory` : 'No inventory yet'}</b>${` · ${sc?.toPrint ?? 0} to print`}</p>
+      <${MapPlan} m=${m} act=${act} />
       <div class="mp-row">
         <${Button} text="Add tiles" run=${act.openAdd} title="Choose tiles from your folders and the library: press one to put it on the map, or drag it to where it should stand" disabled=${ro} />
         <${Button} text="Print what’s missing" run=${() => act.chooseMode('plates')} cls="btn on" title="The plates for this map: only the pieces your inventory lacks" />
