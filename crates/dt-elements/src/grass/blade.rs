@@ -308,21 +308,11 @@ pub fn mesh(
             tris.push([u(a + j), u(b + j1), u(a + j1)]);
         }
     }
-    // caps: a fan from the centroid
-    let cb = positions.len();
-    let c0 = centroid(&foot);
-    positions.push([c0[0], c0[1], floor]);
-    for j in 0..m {
-        tris.push([u(cb), u(j), u((j + 1) % m)]);
-    }
-    let ct = positions.len();
+    // caps: the first ring and the last, each a strip between the two sides
+    // of its stroke
     let last = (nr - 1) * m;
-    let c1 = centroid(&rings.last()?.0);
-    let ztop = positions[last..last + m].iter().map(|p| p[2]).sum::<f64>() / m as f64;
-    positions.push([c1[0], c1[1], ztop]);
-    for j in 0..m {
-        tris.push([u(ct), u(last + (j + 1) % m), u(last + j)]);
-    }
+    strip_cap(&mut tris, 0, m, false);
+    strip_cap(&mut tris, last, m, true);
     let mut mesh = TriMesh {
         positions,
         triangles: tris,
@@ -332,6 +322,36 @@ pub fn mesh(
         mesh.triangles.iter_mut().for_each(|t| t.swap(1, 2));
     }
     Some(mesh)
+}
+
+/// Triangles that close a ring of a stroke's outline (`m = 2 * STATIONS - 2`
+/// points from `base`: the tail tip, the left side to the front tip, the right
+/// side back) as a strip between its two sides, station against station. A
+/// fan from the centroid would fold over itself, and put triangles of both
+/// windings at one place, wherever the stroke bends round its own centre: the
+/// cap would cross itself and the union would have to resolve it.
+fn strip_cap(tris: &mut Vec<[u32; 3]>, base: usize, m: usize, reversed: bool) {
+    let stations = m / 2 + 1;
+    let at = |i: usize| u32::try_from(base + i).unwrap_or(u32::MAX);
+    // the left side's station i is point i; the right side's is point m - i
+    // (the two tips are shared)
+    let left = |i: usize| at(i);
+    let right = |i: usize| {
+        at(if i == 0 || i == stations - 1 {
+            i
+        } else {
+            m - i
+        })
+    };
+    let mut push = |a: u32, b: u32, c: u32| {
+        if a != b && b != c && a != c {
+            tris.push(if reversed { [a, c, b] } else { [a, b, c] });
+        }
+    };
+    for i in 0..stations - 1 {
+        push(left(i), left(i + 1), right(i + 1));
+        push(left(i), right(i + 1), right(i));
+    }
 }
 
 /// A closed mesh through `rings` (each a closed loop of the same length),
@@ -436,6 +456,46 @@ mod tests {
                 m.positions.len(),
                 m.triangles.len()
             );
+        }
+    }
+
+    /// The area of a triangle seen from above, signed by its winding.
+    fn plan_area(m: &TriMesh, t: &[u32; 3]) -> f64 {
+        let [a, b, c] = t.map(|i| m.positions[i as usize]);
+        0.5 * ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]))
+    }
+
+    /// A blade's two caps never fold over themselves, however it bends: every
+    /// triangle of each cap faces the same way. (A fan from the centroid of a
+    /// bent stroke leaves some of them turned over, which puts both windings
+    /// at one place for the union to resolve.)
+    #[test]
+    fn caps_do_not_fold_however_a_blade_bends() {
+        let ring = 2 * STATIONS - 2;
+        for bend in [0.0, 0.02, -0.03, 0.08, -0.12] {
+            let m = mesh(
+                &frond(6.0, 1.8, 1.1, bend),
+                &|_, _| 3.0,
+                &|_, _| 3.0,
+                [0.0; 3],
+            )
+            .unwrap();
+            let last = m.positions.len() - ring;
+            for (name, lo) in [("foot", 0), ("top", last)] {
+                let cap: Vec<f64> = m
+                    .triangles
+                    .iter()
+                    .filter(|t| t.iter().all(|&i| (lo..lo + ring).contains(&(i as usize))))
+                    .map(|t| plan_area(&m, t))
+                    .collect();
+                assert!(!cap.is_empty(), "bend {bend}: no {name} cap");
+                let up = cap.iter().filter(|a| **a > 0.0).count();
+                assert!(
+                    up == 0 || up == cap.len(),
+                    "bend {bend}: the {name} cap folds ({up} of {} face one way)",
+                    cap.len()
+                );
+            }
         }
     }
 }

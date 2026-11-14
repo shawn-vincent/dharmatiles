@@ -1,14 +1,14 @@
 ---
-source: crates/dt-eval/tests/golden.rs
+source: crates/dt-eval/tests/tiles/golden.rs
 expression: metrics(b)
 ---
-triangles: 650910
-volume_mm3: 64898.945
+triangles: 647154
+volume_mm3: 64898.950
 watertight: true
 bodies: 94
 dropped: 0
 voids_filled: 93
-pinches_moved: 672
+pinches_moved: 308
 slivers: 0
 collapsed: 0
 overhang_mm2: 0.000

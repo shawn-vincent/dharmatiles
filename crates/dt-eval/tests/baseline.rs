@@ -34,7 +34,14 @@
 //! overhang columns stay on the written seed.  The first rewrite under this
 //! measure set the budgets to the worst of four, which for most tiles is above
 //! what the single written seed had counted: that redefinition, approved by
-//! Shawn, is the one time a budget rose.  From then on the rules above hold.
+//! Shawn, is the one time a budget rose.  From then on the rules above hold,
+//! and a file that does not carry the line saying so is refused: there is no
+//! second way to start the budgets afresh.
+//!
+//! **Budgets raised by hand.**  2x2-glade's `max_collapsed` is 2, up from 0
+//! (Shawn, 14 Nov 2026): on seed 9002 three random grass blades meet within
+//! 1.8 micrometres, a placement coincidence the gate collapses, not a fault of
+//! the blades' caps.
 
 #![allow(clippy::unwrap_used)]
 
@@ -51,8 +58,10 @@ const EXTRA_SEEDS: [u64; 3] = [9001, 9002, 9003];
 
 const FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/baseline/library-db.tsv");
 /// The second line of the file, saying how its budgets were counted. A file
-/// without it holds budgets counted on one seed: a rewrite then sets every
-/// budget afresh to the worst of four (once), and the guard is back after.
+/// that has budgets but not this line is refused, with a rewrite or without
+/// (there is no way to start the budgets afresh: that was done once, when they
+/// became the worst of four seeds, and a budget is raised now only by editing
+/// the file by hand).
 const MEASURE: &str =
     "# budgets: the worst repair count of each tile on four seeds (its own and three more)";
 const HEADER: &str = "tile\thash\ttriangles\tvoids_filled\tpinches_moved\tslivers\tcollapsed\tdropped\toverhang_mm2\tband_mm2\tholes\tgate\tmax_voids\tmax_pinches\tmax_slivers\tmax_collapsed\tmax_dropped\tsecs";
@@ -178,11 +187,13 @@ fn the_library_builds_as_the_baseline_says() {
         let f: Vec<String> = l.split('\t').map(str::to_owned).collect();
         before.insert(f[0].clone(), f);
     }
-    // budgets counted another way than this one are not held to: a rewrite starts them afresh
-    let counted_now = old
-        .as_ref()
-        .is_some_and(|o| o.lines().nth(1) == Some(MEASURE));
-    let has_budgets = counted_now && before.values().all(|f| f.len() == FIELDS);
+    // a file that does not say how its budgets were counted is not read: there is no reset
+    assert!(
+        old.as_ref()
+            .is_none_or(|o| o.lines().nth(1) == Some(MEASURE)),
+        "{FILE} does not say how its budgets were counted (its second line is `{MEASURE}`): the budgets cannot be started afresh; restore the line, or edit a budget by hand where the diff shows it"
+    );
+    let has_budgets = before.values().all(|f| f.len() == FIELDS);
     let writing = std::env::var_os("DT_BASELINE").is_some_and(|v| v == "write");
 
     // the repair budget: a count above its budget fails, and a rewrite cannot raise one
@@ -191,9 +202,7 @@ fn the_library_builds_as_the_baseline_says() {
     let mut under = 0;
     for (m, w) in measured.iter().zip(&worst) {
         let name = &m[0];
-        let on_file = before
-            .get(name)
-            .filter(|f| f.len() == FIELDS && counted_now);
+        let on_file = before.get(name).filter(|f| f.len() == FIELDS);
         let mut budgets: [String; 5] = Default::default();
         for (k, (word, _, bat)) in REPAIRS.iter().enumerate() {
             let Some(n) = w.map(|w| w[k]) else { continue };

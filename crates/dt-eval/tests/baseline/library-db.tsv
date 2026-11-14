@@ -30,7 +30,7 @@ lib:tiles/ground/1x1-soil-corridor-x+grass.dtile	cefd1203c0554e0c	172690	9	52	0	
 lib:tiles/ground/1x1-soil-u+grass.dtile	50ff670dad7b7d6d	360640	57	308	0	0	0	0.000	0.000	0	pass	61	308	0	0	0	1.6
 lib:tiles/ground/1x1-soil.dtile	eb0d8e966dafd777	95726	0	0	0	0	0	0.000	0.000	0	pass	0	0	0	0	0	0.2
 lib:tiles/ground/2x1-tree-row.dtile	bc579149261072d5	1429812	160	1058	0	0	0	202.667	326.032	0	fail	196	1450	3	0	0	13.6
-lib:tiles/ground/2x2-glade.dtile	ca75d411f7753a42	1689138	269	3048	0	0	0	0.000	0.000	0	pass	322	4200	1	0	0	12.9
+lib:tiles/ground/2x2-glade.dtile	ca75d411f7753a42	1689138	269	3048	0	0	0	0.000	0.000	0	pass	322	4200	1	2	0	12.9
 lib:tiles/ground/2x2-grass-tree.dtile	9ad97a221419e065	1870496	260	2234	1	0	0	141.671	363.488	0	fail	304	2458	3	0	0	15.1
 lib:tiles/walls/1x1-wall-brick-corner.dtile	189d6ccd1952c7d7	1047914	56	608	0	0	0	0.138	0.000	0	pass	56	608	0	0	0	4.5
 lib:tiles/walls/1x1-wall-brick.dtile	c017e80e5301dbef	779306	68	342	0	0	0	0.000	0.000	0	pass	68	818	0	0	0	4.0
