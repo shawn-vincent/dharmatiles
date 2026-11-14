@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// A point written as a range is drawn once from the seed: where the line leaves the tile's west
+// edge is anywhere from 0.45sq to 0.8sq down, and it is a different place for another seed.
+tile size="1x1" seed=18 {
+    line shore wobble="3dmm" { through "(0sq, 0.45sq .. 0.8sq)" "(1sq, 0.6sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.1sq)" }
+    stack {
+        base
+        dirt
+        grass at=bank
+    }
+}

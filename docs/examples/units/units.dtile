@@ -1,0 +1,13 @@
+dharmatiles version="1.0.0"
+
+// Lengths carry a unit: `dmm` is a design millimetre at the 35 mm square (it prints smaller on
+// OpenLOCK), `sq` is a square.  The wobble is 6dmm, and the band round the line is 7dmm.
+tile size="1x1" seed=4 {
+    line stream wobble="6dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
+    region band { within "7dmm" of=stream }
+    stack {
+        base
+        dirt
+        grass at=band
+    }
+}

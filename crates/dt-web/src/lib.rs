@@ -163,6 +163,18 @@ struct Diagnostic {
     span16: [usize; 2],
     line: usize,
     col: usize,
+    /// An edit that mends it, when the program has one: write `replacement` over the `len` bytes at `offset`.
+    fix: Option<FixOut>,
+}
+
+/// A [`dt_eval::Fix`] on the wire, as the program's messages carry it.
+#[derive(Serialize)]
+struct FixOut {
+    offset: usize,
+    len: usize,
+    was: String,
+    replacement: String,
+    label: String,
 }
 
 fn diagnostic(e: &Diag) -> Diagnostic {
@@ -190,6 +202,13 @@ fn diagnostic(e: &Diag) -> Diagnostic {
         span16: [s16, e16 - s16],
         line,
         col,
+        fix: e.fix.as_deref().map(|f| FixOut {
+            offset: f.offset,
+            len: f.len,
+            was: f.was.clone(),
+            replacement: f.replacement.clone(),
+            label: f.label.clone(),
+        }),
     }
 }
 

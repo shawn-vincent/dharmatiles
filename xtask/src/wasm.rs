@@ -82,7 +82,9 @@ pub fn run_wasm(root: &Path, args: &[String]) -> Result<(), String> {
         .current_dir(root)
         .env("PATH", path_with_llvm()?)
         .args(["build", "--release", "--target", TARGET, "-p", "dt-web"]))?;
-    let built = root.join("target").join(TARGET).join("release/dt_web.wasm");
+    let target =
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
+    let built = target.join(TARGET).join("release/dt_web.wasm");
     run(Command::new("wasm-bindgen")
         .args(["--target", "web", "--no-typescript", "--out-name", "dt_web"])
         .arg("--out-dir")

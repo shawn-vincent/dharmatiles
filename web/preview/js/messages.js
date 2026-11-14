@@ -40,7 +40,13 @@ export const serverOf = (m) => (m.kind === 'server' ? /** @type {ServerData} */ 
  * @param {string | null | undefined} code
  * @returns {string | null}
  */
-export const explainHref = (code) => (code && /^dt::[a-z0-9-]+$/.test(code) ? `/docs/e/${code.slice(4)}.html` : null);
+export const explainHref = (code) => (code && /^dt::[a-z0-9-]+$/.test(code) ? `${explainBase}${code.slice(4)}.html` : null);
+
+// Where the error pages are from this page: the program serves them under /docs/e/; the site's cards are on pages inside the
+// docs folder itself, and say where its root is (`setExplainBase`).
+let explainBase = '/docs/e/';
+/** @param {string} base the folder of the error pages, ending in a slash */
+export function setExplainBase(base) { explainBase = base; }
 
 /** Is this a problem (something to fix or look at), rather than a record of what happened? */
 /** @param {MessageJson} m */
