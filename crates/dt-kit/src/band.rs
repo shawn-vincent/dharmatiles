@@ -94,10 +94,10 @@ impl Refusal {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
-            Self::Lattice | Self::Inverted { .. } | Self::Ease => "dt::bug",
-            Self::EmptyPlace { .. } => "dt::empty",
-            Self::Band { .. } => "dt::band",
-            Self::Thin { .. } => "dt::thin",
+            Self::Lattice | Self::Inverted { .. } | Self::Ease => dt_lang::codes::BUG,
+            Self::EmptyPlace { .. } => dt_lang::codes::EMPTY,
+            Self::Band { .. } => dt_lang::codes::BAND,
+            Self::Thin { .. } => dt_lang::codes::THIN,
         }
     }
 }
@@ -156,8 +156,8 @@ impl Lint {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
-            Self::Steep(_) => "dt::steep",
-            Self::Shadowed(_) => "dt::shadowed",
+            Self::Steep(_) => dt_lang::codes::STEEP,
+            Self::Shadowed(_) => dt_lang::codes::SHADOWED,
         }
     }
 }
@@ -1158,7 +1158,7 @@ mod tests {
         let [Lint::Steep(st)] = &ls[..] else {
             panic!("{ls:?}")
         };
-        assert_eq!(ls[0].code(), "dt::steep");
+        assert_eq!(ls[0].code(), dt_lang::codes::STEEP);
         assert!((st.deg - 45.0).abs() < 0.01, "{}", st.deg);
         assert!(near(st.from_mm, 12.5) && near(st.to_mm, 13.0) && near(st.run_mm, 0.5));
         assert_eq!(st.pins, [Some(0), Some(2)], "the knoll and the summit");
@@ -1255,7 +1255,7 @@ mod tests {
         assert!(
             lints(&s, &pins, 24.0)
                 .iter()
-                .all(|l| l.code() != "dt::shadowed")
+                .all(|l| l.code() != dt_lang::codes::SHADOWED)
         );
         // the other way round the bed wins the ford's crossing
         let pins = [pin(2, ford, 1.6, 1.6), pin(2, bed(0), 0.4, 0.7)];
@@ -1285,7 +1285,7 @@ mod tests {
                 covered_by: vec![1]
             })]
         );
-        assert_eq!(ls[0].code(), "dt::shadowed");
+        assert_eq!(ls[0].code(), dt_lang::codes::SHADOWED);
         // the later pin's band shows where the shadowed one would have
         assert!(near_iv(at(&s.band, 2, 33.0, 17.5), 0.4, 0.7));
         assert_eq!(s.lead[node(2, 33.0, 17.5)], Some(1));
@@ -1298,7 +1298,7 @@ mod tests {
         let empty = Pin::flat(Mask::new(own.lo().nx, own.lo().ny, false), STEP, 1.0, 1.0);
         let r = solve(&own, &[pin(1, rim(1), 3.4, 3.4), empty], Ease::Slope(24.0));
         assert_eq!(r, Err(Refusal::EmptyPlace { pin: 1 }));
-        assert_eq!(r.unwrap_err().code(), "dt::empty");
+        assert_eq!(r.unwrap_err().code(), dt_lang::codes::EMPTY);
         // another lattice, a bad slope
         let wide = flat(2, 5.0, 6.0);
         assert_eq!(
@@ -1336,7 +1336,7 @@ mod tests {
         };
         assert_eq!((at, value, lo, hi), ([4.0, 8.0], 6.3, 5.0, 6.0));
         assert!(near(by, 0.3));
-        assert_eq!(e.code(), "dt::band");
+        assert_eq!(e.code(), dt_lang::codes::BAND);
         assert!(e.to_string().contains("0.30 mm outside"), "{e}");
         assert!(own.check(&own.fit(&surface).field().clone(), 0.0).is_ok());
         // dt::thin: a layer on [1, 1.3] over a bottom [1, 1] with a 0.6 mm skin
@@ -1344,7 +1344,7 @@ mod tests {
         let bottom = flat(1, 1.0, 1.0);
         let region = mask(1, |x, y| x > 10.0 && x < 12.0 && y == 5.0);
         let e = top.thin(&bottom, &region, 0.6).unwrap_err();
-        assert_eq!(e.code(), "dt::thin");
+        assert_eq!(e.code(), dt_lang::codes::THIN);
         let Refusal::Thin {
             at,
             available,

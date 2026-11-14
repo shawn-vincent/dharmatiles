@@ -8,9 +8,9 @@ use dt_eval::solve::{SolveReport, SolvedTop};
 use dt_eval::unwritten::{Unwritten, library_name, unwritten};
 use serde_json::{Value, json};
 
-pub use crate::elements::DOCS;
+pub use crate::elements::docs;
 
-/// The page (under [`DOCS`]) that documents an element: every built-in
+/// The page (under [`docs`]) that documents an element: every built-in
 /// element has its own page under `elements/`.
 #[must_use]
 pub fn page(element: &str) -> String {
@@ -22,7 +22,7 @@ pub fn page(element: &str) -> String {
 }
 
 fn item(label: String, element: &str) -> Value {
-    json!({ "label": label, "element": element, "href": format!("{DOCS}{}", page(element)) })
+    json!({ "label": label, "element": element, "href": format!("{}{}", docs(), page(element)) })
 }
 
 /// The tile's stack as `{key, label, element, href, …}` items, in written
@@ -75,7 +75,7 @@ pub fn base(system: &str) -> Value {
     let (label, page) = dt_eval::doc::base_label(system);
     json!({
         "label": label, "element": "connector",
-        "href": format!("{DOCS}elements/{page}.html"),
+        "href": format!("{}elements/{page}.html", docs()),
     })
 }
 
@@ -484,7 +484,7 @@ mod tests {
         )
         .unwrap();
         for v in super::items(c.tile.as_ref().unwrap(), c.solved.as_ref(), "ol").unwrap() {
-            assert!(v["href"].as_str().unwrap().starts_with(super::DOCS));
+            assert!(v["href"].as_str().unwrap().starts_with(&super::docs()));
         }
     }
 }

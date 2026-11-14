@@ -133,7 +133,7 @@ pub fn load(home: &Path) -> Result<Option<Loaded>, Vec<Diag>> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => {
             return Err(vec![Diag::plain(
-                "dt::inventory",
+                dt_lang::codes::INVENTORY,
                 format!("cannot read {}: {e}", path.display()),
             )]);
         }
@@ -167,13 +167,13 @@ pub fn append(home: &Path, lines: &[String]) -> Result<PathBuf, Vec<Diag>> {
                 Err(dt_doc::edit::EditError::Unread(e)) => {
                     return Err(e.iter().map(Diag::from).collect::<Vec<_>>());
                 }
-                Err(e) => return Err(vec![Diag::plain("dt::inventory", e.to_string())]),
+                Err(e) => return Err(vec![Diag::plain(dt_lang::codes::INVENTORY, e.to_string())]),
             }
         }
         None => {
             std::fs::create_dir_all(home).map_err(|e| {
                 vec![Diag::plain(
-                    "dt::inventory",
+                    dt_lang::codes::INVENTORY,
                     format!("cannot make {}: {e}", home.display()),
                 )]
             })?;
@@ -182,7 +182,7 @@ pub fn append(home: &Path, lines: &[String]) -> Result<PathBuf, Vec<Diag>> {
     };
     dt_eval::atomic::write_atomic(&path, text).map_err(|e| {
         vec![Diag::plain(
-            "dt::inventory",
+            dt_lang::codes::INVENTORY,
             format!("cannot write {}: {e}", path.display()),
         )]
     })?;
@@ -213,10 +213,10 @@ pub fn name_tile(
     seed: Option<u64>,
 ) -> Result<Named, Vec<Diag>> {
     let path = crate::plates::tile_path(tile, dir, home)
-        .map_err(|e| vec![Diag::plain("dt::inventory", e)])?;
+        .map_err(|e| vec![Diag::plain(dt_lang::codes::INVENTORY, e)])?;
     let text = Files
         .read(&path)
-        .map_err(|e| vec![Diag::plain("dt::inventory", e)])?;
+        .map_err(|e| vec![Diag::plain(dt_lang::codes::INVENTORY, e)])?;
     let opts = dt_eval::Options {
         system: system.to_owned(),
         seed,
@@ -225,7 +225,7 @@ pub fn name_tile(
     let checked = dt_eval::check(&Files, &path, &opts)?;
     if checked.tile.is_none() {
         return Err(vec![Diag::plain(
-            "dt::inventory",
+            dt_lang::codes::INVENTORY,
             format!("`{tile}` is not a tile"),
         )]);
     }

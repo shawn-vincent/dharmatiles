@@ -243,7 +243,7 @@ pub fn build_cached(
     // the file as it is: its hash is the document's, whatever it is read as
     let text = sources
         .read(path)
-        .map_err(|e| vec![Diag::plain("dt::source", e)])?;
+        .map_err(|e| vec![Diag::plain(dt_lang::codes::SOURCE, e)])?;
     let c = check(sources, path, opts)?;
     build_checked(&c, path, &text, opts, progress, cache)
 }
@@ -265,7 +265,7 @@ pub fn build_checked(
 ) -> Result<Built, Vec<Diag>> {
     let Some(tile) = &c.tile else {
         return Err(vec![
-            Diag::plain("dt::no-tile", format!("`{path}` has no tile to build"))
+            Diag::plain(dt_lang::codes::NO_TILE, format!("`{path}` has no tile to build"))
                 .help("a tile document holds one `tile size=\"1x1\" { stack { … } }`; parts, printer and level files are only checked"),
         ]);
     };
@@ -279,7 +279,7 @@ pub fn build_checked(
 }
 
 fn build_error(e: String) -> Vec<Diag> {
-    vec![Diag::plain("dt::build", e)]
+    vec![Diag::plain(dt_lang::codes::BUILD, e)]
 }
 
 /// One stack entry (or the connector after the stack), as a build sees it.
@@ -668,7 +668,7 @@ impl<'a> Plan<'a> {
                                 Diag::at(
                                     &en.src,
                                     en.span,
-                                    e.code.unwrap_or("dt::build"),
+                                    e.code.unwrap_or(dt_lang::codes::BUILD),
                                     msg,
                                     "while building this",
                                 )

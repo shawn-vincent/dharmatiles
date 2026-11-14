@@ -16,7 +16,7 @@ pub(crate) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<Doc
         let err = match suspicious_token(text, from, to) {
             Some((at, word)) if matches!(word, "true" | "false" | "null") => DocError::new(
                 src,
-                "dt::syntax",
+                dt_lang::codes::SYNTAX,
                 SourceSpan::new(at.into(), word.len()),
                 format!("bare `{word}` is KDL v1; dharmatiles documents are KDL v2"),
                 "KDL v1 keyword",
@@ -26,7 +26,7 @@ pub(crate) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<Doc
                 let number = unit_suffix(word).unwrap_or(word);
                 DocError::new(
                     src,
-                    "dt::syntax",
+                    dt_lang::codes::SYNTAX,
                     SourceSpan::new(at.into(), word.len()),
                     format!("`{word}` has a unit written on it"),
                     "not a KDL number",
@@ -39,7 +39,7 @@ pub(crate) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<Doc
             }
             Some((at, word)) => DocError::new(
                 src,
-                "dt::syntax",
+                dt_lang::codes::SYNTAX,
                 SourceSpan::new(at.into(), word.len()),
                 format!("`{word}` must be quoted"),
                 "not a KDL number",
@@ -49,7 +49,7 @@ pub(crate) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<Doc
             ))),
             None => DocError::new(
                 src,
-                "dt::syntax",
+                dt_lang::codes::SYNTAX,
                 diag.span,
                 diag.message
                     .clone()

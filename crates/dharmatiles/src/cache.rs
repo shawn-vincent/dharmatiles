@@ -306,7 +306,7 @@ fn preview_one(
             );
             (
                 BUG,
-                json!({"path": path, "ok": false, "errors": [{"code": "dt::panic", "message": msg}]}),
+                json!({"path": path, "ok": false, "errors": [{"code": dt_lang::codes::PANIC, "message": msg}]}),
             )
         }
     }

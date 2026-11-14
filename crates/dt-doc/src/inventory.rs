@@ -337,8 +337,13 @@ impl Reader {
         msg: impl Into<String>,
         label: impl Into<String>,
     ) -> &mut DocError {
-        self.errors
-            .push(DocError::new(&self.src, "dt::inventory", span, msg, label));
+        self.errors.push(DocError::new(
+            &self.src,
+            dt_lang::codes::INVENTORY,
+            span,
+            msg,
+            label,
+        ));
         let n = self.errors.len() - 1;
         &mut self.errors[n]
     }
@@ -651,7 +656,10 @@ pub fn decode(name: &str, text: &str) -> Result<Inventory, Vec<DocError>> {
         Err(e) => return Err(syntax::syntax_errors(&src, text, &e)),
     };
     let (header, header_errors) = crate::header::read(&src, &kdl);
-    if header_errors.iter().any(|e| e.code == "dt::format-newer") {
+    if header_errors
+        .iter()
+        .any(|e| e.code == dt_lang::codes::FORMAT_NEWER)
+    {
         return Err(header_errors);
     }
     if header

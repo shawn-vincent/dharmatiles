@@ -53,7 +53,7 @@ fn a_huge_tile_is_refused_before_any_grid_is_made() {
         let e = errors(&format!(
             "dharmatiles version=1; tile size=\"{size}\" {{ stack {{ dirt }} }}\n"
         ));
-        assert_eq!(e[0].code, "dt::tile", "{size}");
+        assert_eq!(e[0].code, dt_lang::codes::TILE, "{size}");
         assert!(e[0].help.is_some());
     }
 }
@@ -63,7 +63,7 @@ fn a_fill_point_on_its_line_is_an_empty_region() {
     let e = errors(
         "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" {\n  line split { through west east }\n  region s { boundedBy split; fill \"(0.5sq, 0.5sq)\" }\n  stack { dirt at=s }\n}\n",
     );
-    assert_eq!(e[0].code, "dt::empty-region");
+    assert_eq!(e[0].code, dt_lang::codes::EMPTY_REGION);
     assert_eq!(e[0].location().unwrap().1, 3);
     assert!(e[0].help.as_deref().unwrap().contains("off the line"));
 }
@@ -84,7 +84,7 @@ fn a_tile_with_nothing_in_it_is_an_error() {
         "dharmatiles version=\"1.0.0\"; tile size=\"1x1\" { }\n",
     ] {
         let e = errors(text);
-        assert_eq!(e[0].code, "dt::empty", "{text}");
+        assert_eq!(e[0].code, dt_lang::codes::EMPTY, "{text}");
         assert_eq!(e[0].location().unwrap().1, 1);
     }
 }
@@ -104,7 +104,7 @@ fn definitions_that_multiply_stop_at_the_entry_cap() {
     text += "tile size=\"1x1\" { stack {\n  f6\n} }\n";
     let e = errors(&text);
     assert_eq!(e.len(), 1, "{e:?}");
-    assert_eq!(e[0].code, "dt::too-many");
+    assert_eq!(e[0].code, dt_lang::codes::TOO_MANY);
     assert_eq!(e[0].location().unwrap().1, 8);
 }
 

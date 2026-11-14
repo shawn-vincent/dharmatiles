@@ -45,27 +45,33 @@ fn lets_work_in_any_block_and_in_a_define() {
 
 #[test]
 fn words_and_names() {
-    assert_eq!(codes(&tile("let high 3\n stack { base }")), ["dt::name"]);
+    assert_eq!(
+        codes(&tile("let high 3\n stack { base }")),
+        [dt_lang::codes::NAME]
+    );
     assert_eq!(
         codes(&tile("let $high 3\n stack { base }")),
         Vec::<&str>::new()
     );
     assert_eq!(
         codes(&tile("override foot 3\n stack { base }")),
-        ["dt::name"]
+        [dt_lang::codes::NAME]
     );
-    assert_eq!(codes(&tile("let $x 3\n stack { base }")), ["dt::name"]);
+    assert_eq!(
+        codes(&tile("let $x 3\n stack { base }")),
+        [dt_lang::codes::NAME]
+    );
     assert_eq!(
         codes(&tile("let foot 3\n let foot 4\n stack { base }")),
-        ["dt::name"]
+        [dt_lang::codes::NAME]
     );
     assert_eq!(
         codes(&tile("stack { base\n dirt top=\"bottom + 1\" }")),
-        ["dt::name"]
+        [dt_lang::codes::NAME]
     );
     // `$d` is set by a body at each node, a plain fraction: not a height
     assert_eq!(
         codes(&tile("stack { base\n dirt top=\"$d\" }")),
-        ["dt::type"]
+        [dt_lang::codes::TYPE]
     );
 }

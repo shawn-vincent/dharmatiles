@@ -148,7 +148,7 @@ impl Decoder<'_> {
         let span = value_span(e);
         if let Some(t) = e.ty() {
             self.err(
-                "dt::unit",
+                dt_lang::codes::UNIT,
                 t.span(),
                 format!("`({})` is not written in format 1", t.value()),
                 "an annotation",
@@ -168,7 +168,7 @@ impl Decoder<'_> {
                             .to_owned()
                     });
                     self.err(
-                        err.code.unwrap_or("dt::value"),
+                        err.code.unwrap_or(dt_lang::codes::VALUE),
                         sub_span(span, at + err.start, at + err.end),
                         format!("can't read {what}: {}", err.message),
                         "here",
@@ -179,7 +179,7 @@ impl Decoder<'_> {
             },
             _ => {
                 self.err(
-                    "dt::value",
+                    dt_lang::codes::VALUE,
                     span,
                     format!("{what} is a number or an expression"),
                     "not a number",
@@ -195,7 +195,7 @@ impl Decoder<'_> {
         // cloud (a range with odds), and a thing's top a draw.
         if mode == Mode::Length && expr.weighted().is_some() {
             self.err(
-                "dt::weighting",
+                dt_lang::codes::WEIGHTING,
                 span,
                 "a weighted range does not go on a distance",
                 format!("{what} is a length, not a draw"),
@@ -210,7 +210,7 @@ impl Decoder<'_> {
             );
             if special && mode == Mode::Length {
                 self.err(
-                    "dt::type",
+                    dt_lang::codes::TYPE,
                     span,
                     format!("{what} is a length: `{n}` is not known here"),
                     "not a length",
@@ -228,7 +228,7 @@ impl Decoder<'_> {
                 let near = did_you_mean(n, names.iter().copied());
                 let at = self.word_span(span, n);
                 self.err(
-                    "dt::unknown-name",
+                    dt_lang::codes::UNKNOWN_NAME,
                     span,
                     format!("no height called `{n}`"),
                     "unknown name",
@@ -263,7 +263,7 @@ impl Decoder<'_> {
         let (lowered, kind) = self.check_lower(&expr, want, ctx, span, what)?;
         if kind == Kind::Point {
             self.err(
-                "dt::type",
+                dt_lang::codes::TYPE,
                 span,
                 format!("{what} is a number, and this is a point"),
                 "a point",
@@ -322,7 +322,7 @@ impl Decoder<'_> {
             if matches!(n, "x" | "y" | "bottom") {
                 ok = false;
                 self.err(
-                    "dt::name",
+                    dt_lang::codes::NAME,
                     at,
                     format!("`{n}` is written `${n}` in format 1"),
                     "a position or height the element sets",
@@ -346,7 +346,7 @@ impl Decoder<'_> {
         let span = value_span(e);
         let Some(s) = e.value().as_string() else {
             self.err(
-                "dt::place",
+                dt_lang::codes::PLACE,
                 span,
                 format!("`{what}` is a place: a name or \"(x, y)\""),
                 "not a place",
@@ -373,7 +373,7 @@ impl Decoder<'_> {
             if let place::Point::Framed(f) = p {
                 if what == "point" || what == "of" {
                     self.err(
-                        "dt::point",
+                        dt_lang::codes::POINT,
                         span,
                         format!(
                             "a `{what}` is worked out once, in the tile: this is in the frame of a region"
@@ -405,7 +405,7 @@ impl Decoder<'_> {
             };
             let Some((x, y)) = xy else {
                 self.err(
-                    "dt::place",
+                    dt_lang::codes::PLACE,
                     span,
                     format!("`{what}` is one point: two numbers, no range"),
                     "not a point",
@@ -422,7 +422,7 @@ impl Decoder<'_> {
                     ),
                 );
                 self.err(
-                    "dt::point",
+                    dt_lang::codes::POINT,
                     span,
                     format!("`{shown}` is off the tile"),
                     "outside the tile",
@@ -451,7 +451,7 @@ impl Decoder<'_> {
                 names.extend(Edge::ALL.iter().map(|e| e.as_str()));
                 let near = did_you_mean(t, names.iter().copied());
                 self.err(
-                    "dt::place",
+                    dt_lang::codes::PLACE,
                     span,
                     format!("no place is called `{t}`"),
                     "unknown place",
@@ -480,7 +480,7 @@ impl Decoder<'_> {
                 "a name is letters and digits, starting with a letter".to_owned()
             };
             self.err(
-                "dt::name",
+                dt_lang::codes::NAME,
                 name.span,
                 format!("`{n}` is not a name"),
                 "not camelCase",
@@ -490,7 +490,7 @@ impl Decoder<'_> {
         }
         if reserved(n) || schema::element(n).is_some() {
             self.err(
-                "dt::name",
+                dt_lang::codes::NAME,
                 name.span,
                 format!("`{n}` is already a word of the language"),
                 "taken",
@@ -508,7 +508,7 @@ impl Decoder<'_> {
         if let Some(rest) = n.strip_prefix('$') {
             if !is_ident(rest) {
                 self.err(
-                    "dt::name",
+                    dt_lang::codes::NAME,
                     name.span,
                     format!("`{n}` is not a name"),
                     "not a `$` name",
@@ -519,7 +519,7 @@ impl Decoder<'_> {
             }
             if crate::words::is_element_set(n) {
                 self.err(
-                    "dt::name",
+                    dt_lang::codes::NAME,
                     name.span,
                     format!("`{n}` is set by the element that builds, so it can't be declared"),
                     "set by an element",
@@ -533,7 +533,7 @@ impl Decoder<'_> {
         }
         if kind == ConstKind::Override {
             self.err(
-                "dt::name",
+                dt_lang::codes::NAME,
                 name.span,
                 format!("`override` replaces a `$` name, and `{n}` is a plain name"),
                 "a plain name",
@@ -553,7 +553,7 @@ impl Decoder<'_> {
                 "a name is letters and digits, starting with a letter".to_owned()
             };
             self.err(
-                "dt::name",
+                dt_lang::codes::NAME,
                 name.span,
                 format!("`{n}` is not a name"),
                 "not camelCase",
@@ -563,7 +563,7 @@ impl Decoder<'_> {
         }
         if crate::words::is_reserved(n) {
             self.err(
-                "dt::name",
+                dt_lang::codes::NAME,
                 name.span,
                 format!("`{n}` is a word of the language"),
                 crate::words::kind(n),
@@ -575,7 +575,7 @@ impl Decoder<'_> {
         }
         if reserved(n) || schema::element(n).is_some() {
             self.err(
-                "dt::name",
+                dt_lang::codes::NAME,
                 name.span,
                 format!("`{n}` is already a word of the language"),
                 "taken",
@@ -603,7 +603,7 @@ impl Decoder<'_> {
             [a, b] if a.name().is_none() && b.name().is_none() => (a, b),
             _ => {
                 self.err(
-                    "dt::value",
+                    dt_lang::codes::VALUE,
                     n.span(),
                     format!("`{kw}` is `{kw} name value`"),
                     "here",
@@ -614,7 +614,7 @@ impl Decoder<'_> {
         };
         let Some(s) = arg_str(name_e) else {
             self.err(
-                "dt::name",
+                dt_lang::codes::NAME,
                 name_e.span(),
                 format!("`{kw}` needs a name"),
                 "not a name",
@@ -634,7 +634,7 @@ impl Decoder<'_> {
             || (!name.value.starts_with('$') && taken.contains(&name.value))
         {
             self.err(
-                "dt::name",
+                dt_lang::codes::NAME,
                 name.span,
                 format!("`{}` is already declared", name.value),
                 "a second time",
@@ -671,7 +671,7 @@ impl Decoder<'_> {
             [a, b] if a.name().is_none() && b.name().is_none() => (a, b),
             _ => {
                 self.err(
-                    "dt::value",
+                    dt_lang::codes::VALUE,
                     n.span(),
                     "`point` is `point name \"(x, y)\"`",
                     "here",
@@ -701,7 +701,7 @@ impl Decoder<'_> {
             }),
             PlaceRef::Name(_) | PlaceRef::Framed(_) => {
                 self.err(
-                    "dt::place",
+                    dt_lang::codes::PLACE,
                     r.span,
                     "a point is written \"(x, y)\"",
                     "not a pair",
@@ -738,7 +738,7 @@ impl Decoder<'_> {
             };
             if let Some(why) = clash {
                 self.err(
-                    "dt::name",
+                    dt_lang::codes::NAME,
                     span,
                     format!("`{name}` is already declared"),
                     why,
@@ -836,7 +836,7 @@ impl Decoder<'_> {
                 }
                 if entry.top.is_some() {
                     self.err(
-                        "dt::duplicate",
+                        dt_lang::codes::DUPLICATE,
                         key.span,
                         "`top` is set twice",
                         "again here",
@@ -884,7 +884,7 @@ impl Decoder<'_> {
             || entry.place.along.is_some()
             || entry.place.against.is_some()
         {
-            self.err("dt::duplicate", key.span, "`at` is set twice", "again here")
+            self.err(dt_lang::codes::DUPLICATE, key.span, "`at` is set twice", "again here")
                 .help = Some(
                 "an entry has one place: build the one you mean with `within`, `except` and `boundedBy`"
                     .to_owned(),
@@ -906,7 +906,7 @@ impl Decoder<'_> {
                 entry.place.at = self.point(e, "at", ctx);
             } else {
                 self.err(
-                    "dt::place",
+                    dt_lang::codes::PLACE,
                     span,
                     "`at` is a place: a name, \"(x, y)\", an edge or `foot(cliff)`",
                     "not a place",
@@ -922,7 +922,7 @@ impl Decoder<'_> {
             if !crate::elements::TAGS.contains(&kind) {
                 let at = self.word_span(span, kind);
                 self.err(
-                    "dt::unknown-name",
+                    dt_lang::codes::UNKNOWN_NAME,
                     span,
                     format!("`{kind}` is not a kind of thing"),
                     "unknown kind",
@@ -979,7 +979,7 @@ impl Decoder<'_> {
             Err(err) => {
                 let at = self.inner_at(e, s);
                 self.err(
-                    "dt::place",
+                    dt_lang::codes::PLACE,
                     sub_span(span, at + err.start, at + err.end),
                     format!("can't read `at`: {}", err.message),
                     "here",
@@ -1119,7 +1119,7 @@ impl Decoder<'_> {
             )
         };
         self.err(
-            "dt::type",
+            dt_lang::codes::TYPE,
             span,
             format!("`{owner}` {takes}, and `{shown}` is {kind}"),
             "not a place it takes",
@@ -1133,7 +1133,12 @@ impl Decoder<'_> {
         match v {
             Some(d) if d > 0.0 && d < 90.0 => {
                 if entry.slope.is_some() {
-                    self.err("dt::duplicate", span, "`slope` is set twice", "again here");
+                    self.err(
+                        dt_lang::codes::DUPLICATE,
+                        span,
+                        "`slope` is set twice",
+                        "again here",
+                    );
                 } else {
                     entry.slope = Some(Spanned { value: d, span });
                 }
@@ -1141,7 +1146,7 @@ impl Decoder<'_> {
             None => {}
             _ => {
                 self.err(
-                    "dt::value",
+                    dt_lang::codes::VALUE,
                     span,
                     "a slope is an angle in degrees, above 0 and below 90",
                     "not an angle",
@@ -1161,7 +1166,7 @@ impl Decoder<'_> {
             KdlValue::Float(f) => f.to_string(),
             _ => {
                 self.err(
-                    "dt::value",
+                    dt_lang::codes::VALUE,
                     span,
                     "an angle is a number with its unit",
                     "not an angle",
@@ -1175,7 +1180,7 @@ impl Decoder<'_> {
             Ok(x) => x,
             Err(err) => {
                 self.err(
-                    err.code.unwrap_or("dt::value"),
+                    err.code.unwrap_or(dt_lang::codes::VALUE),
                     sub_span(span, at + err.start, at + err.end),
                     format!("can't read an angle: {}", err.message),
                     "here",
@@ -1207,8 +1212,13 @@ impl Decoder<'_> {
                         self.slope_value(entry, e);
                     }
                     _ => {
-                        self.err("dt::value", c.span(), "`slope` takes one angle", "here")
-                            .help = Some("write `slope 30`".to_owned());
+                        self.err(
+                            dt_lang::codes::VALUE,
+                            c.span(),
+                            "`slope` takes one angle",
+                            "here",
+                        )
+                        .help = Some("write `slope 30`".to_owned());
                     }
                 }
                 true
@@ -1216,7 +1226,7 @@ impl Decoder<'_> {
             "pin" => {
                 if class != Class::Body {
                     self.err(
-                        "dt::pin",
+                        dt_lang::codes::PIN,
                         c.name().span(),
                         format!("`{}` has no pins", entry.what.value),
                         "not a body",
@@ -1265,7 +1275,7 @@ impl Decoder<'_> {
                 Some("top") => {
                     if top.is_some() {
                         self.err(
-                            "dt::duplicate",
+                            dt_lang::codes::DUPLICATE,
                             e.span(),
                             "`top` is set twice",
                             "again here",
@@ -1280,7 +1290,12 @@ impl Decoder<'_> {
                 }
                 Some("at") => {
                     if at.is_some() {
-                        self.err("dt::duplicate", e.span(), "`at` is set twice", "again here");
+                        self.err(
+                            dt_lang::codes::DUPLICATE,
+                            e.span(),
+                            "`at` is set twice",
+                            "again here",
+                        );
                         ok = false;
                     } else {
                         match self.place_value(e, ctx, "at") {
@@ -1291,7 +1306,7 @@ impl Decoder<'_> {
                 }
                 _ => {
                     self.err(
-                        "dt::pin",
+                        dt_lang::codes::PIN,
                         e.span(),
                         "a pin is `pin name top=… at=…`",
                         "unexpected",
@@ -1302,7 +1317,7 @@ impl Decoder<'_> {
             }
         }
         if c.children().is_some() {
-            self.err("dt::pin", c.span(), "a pin has no block", "here");
+            self.err(dt_lang::codes::PIN, c.span(), "a pin has no block", "here");
             ok = false;
         }
         if !ok {
@@ -1322,7 +1337,7 @@ impl Decoder<'_> {
                     _ => "at=",
                 };
                 self.err(
-                    "dt::pin",
+                    dt_lang::codes::PIN,
                     c.span(),
                     format!("a pin needs {missing}"),
                     format!("no {missing}"),
@@ -1337,8 +1352,13 @@ impl Decoder<'_> {
     /// A `base` line in a stack.
     pub(crate) fn base_node(&mut self, n: &KdlNode, index: usize) -> Option<Base> {
         if !n.entries().is_empty() || n.children().is_some() {
-            self.err("dt::base", n.span(), "`base` takes no settings yet", "here")
-                .help = Some("write just `base`: the connector is the build target's".to_owned());
+            self.err(
+                dt_lang::codes::BASE,
+                n.span(),
+                "`base` takes no settings yet",
+                "here",
+            )
+            .help = Some("write just `base`: the connector is the build target's".to_owned());
         }
         Some(Base {
             index,
@@ -1353,7 +1373,7 @@ impl Decoder<'_> {
             && b.index != 0
         {
             self.err(
-                "dt::base-order",
+                dt_lang::codes::BASE_ORDER,
                 b.span,
                 "the base is the first line of the stack",
                 "not first",

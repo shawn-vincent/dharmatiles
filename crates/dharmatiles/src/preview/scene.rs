@@ -481,7 +481,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
                 diags.push(Diag::at(
                     &list.src,
                     p.tile.span,
-                    "dt::map",
+                    dt_lang::codes::MAP,
                     e.clone(),
                     "this tile",
                 ));
@@ -498,7 +498,7 @@ pub(super) fn read(shared: &Shared, path: &str, list: &PrintList, rev: u64) -> S
         let bottom_mm = bottom_mm.unwrap_or_else(|e| {
             if let Some(h) = &p.bottom {
                 diags.push(
-                    Diag::at(&list.src, h.span, "dt::map", e.clone(), "this bottom").help(
+                    Diag::at(&list.src, h.span, dt_lang::codes::MAP, e.clone(), "this bottom").help(
                         "`bottom` is a `$` name from the standard heights or the map's own `let`, or a length like `20dmm`",
                     ),
                 );
@@ -731,7 +731,7 @@ pub(super) fn crowns(shared: &Shared, scene: &Scene) -> Vec<Note> {
                         who(b),
                         top - crown_z
                     ),
-                    code: "dt::crown",
+                    code: dt_lang::codes::CROWN,
                     help: Some(
                         "Move one of them, or raise the crown's piece; nothing is refused, the real shapes just meet here"
                             .to_owned(),

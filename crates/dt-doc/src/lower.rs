@@ -86,7 +86,7 @@ impl Refused {
     /// A name with no value yet.
     pub fn value(message: impl Into<String>) -> Self {
         Self {
-            code: "dt::value",
+            code: dt_lang::codes::VALUE,
             message: message.into(),
             help: None,
             hard: false,
@@ -382,7 +382,7 @@ pub struct RangeRefusal {
 
 fn not_a_range(message: impl Into<String>, help: &str) -> RangeRefusal {
     RangeRefusal {
-        code: "dt::value".to_owned(),
+        code: dt_lang::codes::VALUE.to_owned(),
         message: message.into(),
         help: Some(help.to_owned()),
     }
@@ -467,10 +467,12 @@ pub fn weighting_flaw_in(src: &str, units: crate::units::Units) -> Option<RangeR
         return None;
     }
     let r = lower(&e, &Lets::default(), 0).err()?;
-    (r.hard && matches!(r.code, "dt::range" | "dt::weighting")).then(|| RangeRefusal {
-        code: r.code.to_owned(),
-        message: r.message,
-        help: r.help,
+    (r.hard && matches!(r.code, dt_lang::codes::RANGE | dt_lang::codes::WEIGHTING)).then(|| {
+        RangeRefusal {
+            code: r.code.to_owned(),
+            message: r.message,
+            help: r.help,
+        }
     })
 }
 
@@ -553,7 +555,7 @@ mod tests {
     fn a_strength_out_of_range_is_dt_range() {
         let l = lets(&[]);
         let e = lower(&parse_v2("low(1..6, -2)").unwrap(), &l, 0).unwrap_err();
-        assert_eq!(e.code, "dt::range");
+        assert_eq!(e.code, dt_lang::codes::RANGE);
         assert_eq!(e.message, "low's ratio must be above 0, not -2");
     }
 
@@ -577,9 +579,12 @@ mod tests {
         assert_eq!((r.function.as_str(), r.args), ("list", vec![4.0, 1.0, 3.0]));
         // out of limits: the same refusal a document gets
         let e = ranged("low(1..6, -2)").unwrap_err();
-        assert_eq!(e.code, "dt::range");
+        assert_eq!(e.code, dt_lang::codes::RANGE);
         assert_eq!(e.message, "low's ratio must be above 0, not -2");
-        assert_eq!(ranged("[1:4, 2:5, 2:1]").unwrap_err().code, "dt::weighting");
+        assert_eq!(
+            ranged("[1:4, 2:5, 2:1]").unwrap_err().code,
+            dt_lang::codes::WEIGHTING
+        );
         // not one range
         assert!(ranged("6").is_err());
         assert!(ranged("1..2 + 3..4").is_err());
@@ -591,9 +596,12 @@ mod tests {
         let flaw = |s: &str| weighting_flaw_in(s, crate::units::Units::default());
         assert!(flaw("low(1dmm..6dmm, 3)").is_none());
         let e = flaw("bell(1dmm..6dmm, 9)").unwrap();
-        assert_eq!(e.code, "dt::range");
+        assert_eq!(e.code, dt_lang::codes::RANGE);
         assert_eq!(e.message, "bell's spread must be from 0.05 to 1, not 9");
-        assert_eq!(flaw("[1dmm, 1dmm]").unwrap().code, "dt::weighting");
+        assert_eq!(
+            flaw("[1dmm, 1dmm]").unwrap().code,
+            dt_lang::codes::WEIGHTING
+        );
         // a plain number, a plain range, an unreadable value: the reader's to say
         assert!(flaw("6dmm").is_none());
         assert!(flaw("1dmm..6dmm").is_none());

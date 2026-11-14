@@ -330,7 +330,7 @@ mod tests {
             g: [0.0, 0.0],
         };
         let e = p.plane(&nodes, want).unwrap_err();
-        assert_eq!(e.code(), "dt::band");
+        assert_eq!(e.code(), dt_lang::codes::BAND);
     }
 
     #[test]

@@ -460,7 +460,7 @@ pub(crate) struct Flaw {
 impl From<String> for Flaw {
     fn from(message: String) -> Self {
         Self {
-            code: "dt::value",
+            code: dt_lang::codes::VALUE,
             message,
             help: None,
         }
@@ -471,7 +471,7 @@ impl Flaw {
     /// Arithmetic a cloud does not have (`dt::cloud`).
     fn cloud(message: String, help: &str) -> Self {
         Self {
-            code: "dt::cloud",
+            code: dt_lang::codes::CLOUD,
             message,
             help: Some(help.to_owned()),
         }
@@ -917,7 +917,7 @@ pub fn solve(
             errors.push(Diag::at(
                 &b.src,
                 b.what.span,
-                "dt::internal",
+                dt_lang::codes::INTERNAL,
                 format!("`{element}` is a body of the stack but the schema gives it no body"),
                 "here",
             ));
@@ -941,7 +941,13 @@ pub fn solve(
             Some(r) => match places.mask(&PlaceRef::Name(r.clone())) {
                 Ok(m) => m,
                 Err(msg) => {
-                    errors.push(Diag::at(&b.src, b.what.span, "dt::place", msg, "here"));
+                    errors.push(Diag::at(
+                        &b.src,
+                        b.what.span,
+                        dt_lang::codes::PLACE,
+                        msg,
+                        "here",
+                    ));
                     continue;
                 }
             },
@@ -956,7 +962,7 @@ pub fn solve(
                 Diag::at(
                     &tile.src,
                     b.span,
-                    "dt::missing-control",
+                    dt_lang::codes::MISSING_CONTROL,
                     format!("`{}` needs a `top=`", element),
                     "no top",
                 )
@@ -1004,7 +1010,13 @@ pub fn solve(
             let place = match places.mask(&p.at) {
                 Ok(m) => m,
                 Err(msg) => {
-                    errors.push(Diag::at(&p.from.src, p.at_span, "dt::place", msg, "here"));
+                    errors.push(Diag::at(
+                        &p.from.src,
+                        p.at_span,
+                        dt_lang::codes::PLACE,
+                        msg,
+                        "here",
+                    ));
                     ok = false;
                     continue;
                 }
@@ -1052,7 +1064,7 @@ pub fn solve(
                     Diag::at(
                         &p.from.src,
                         p.at_span,
-                        "dt::empty",
+                        dt_lang::codes::EMPTY,
                         format!("this pin's place `{}` covers nothing", p.at),
                         "no ground here",
                     )
@@ -1084,7 +1096,7 @@ pub fn solve(
                 Diag::at(
                     &tile.src,
                     b.span,
-                    "dt::thin",
+                    dt_lang::codes::THIN,
                     format!(
                         "the {} is at most {} thick at ({:.2}, {:.2}) mm, under the {} the printer's skin needs",
                         element,
@@ -1121,7 +1133,7 @@ pub fn solve(
                         Diag::at(
                             src,
                             span,
-                            "dt::steep",
+                            dt_lang::codes::STEEP,
                             format!(
                                 "the {} is forced to {:.1}°, steeper than its {:.0}° slope: {} up to {} over {}, between ({:.2}, {:.2}) and ({:.2}, {:.2}) mm ({} places)",
                                 element,
@@ -1154,7 +1166,7 @@ pub fn solve(
                         Diag::at(
                             &p.from.src,
                             p.span,
-                            "dt::shadowed",
+                            dt_lang::codes::SHADOWED,
                             format!(
                                 "this pin wins nowhere: later pins cover all of `{}` ({})",
                                 p.at,
@@ -1234,7 +1246,7 @@ pub fn solve(
                     Diag::at(
                         src,
                         span,
-                        "dt::edge",
+                        dt_lang::codes::EDGE,
                         format!(
                             "the {} meets the tile's edge at a height of its own, not the library's, along the {} (squares): it no longer butts a standard tile there",
                             element,
@@ -1342,9 +1354,10 @@ pub fn solve(
                     let help = "water is calmed to this constant; the library's heights part defines it, and a tile may `override` it with a plain number or length";
                     errors.push(match at {
                         Some((src, span)) => {
-                            Diag::at(src, span, "dt::calm", message, "this water").help(help)
+                            Diag::at(src, span, dt_lang::codes::CALM, message, "this water")
+                                .help(help)
                         }
-                        None => Diag::plain("dt::calm", message).help(help),
+                        None => Diag::plain(dt_lang::codes::CALM, message).help(help),
                     });
                     None
                 }

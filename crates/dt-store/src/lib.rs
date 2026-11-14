@@ -950,7 +950,7 @@ pub fn build_stored(
     let tracked = Tracked::new(sources);
     let text = tracked
         .read(path)
-        .map_err(|e| vec![Diag::plain("dt::source", e)])?;
+        .map_err(|e| vec![Diag::plain(dt_lang::codes::SOURCE, e)])?;
     let stored = Options {
         clouds: true,
         ..opts.clone()

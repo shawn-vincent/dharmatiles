@@ -542,7 +542,7 @@ impl Parser<'_> {
                         return self.juxtapose(Expr::Unit(u));
                     }
                     return Err(ExprError::coded(
-                        "dt::unit",
+                        dt_lang::codes::UNIT,
                         format!("`{n}` is a unit, and a unit follows a number"),
                         format!("write a number and its unit together: `8{n}`"),
                         at,
@@ -551,7 +551,7 @@ impl Parser<'_> {
                 Ok(Expr::Name(n))
             }
             Some(Tok::Percent) => ExprError::coded(
-                "dt::unit",
+                dt_lang::codes::UNIT,
                 "`%` on its own is a coordinate's unit".to_owned(),
                 "write a number before it for a fraction (`50%`), or `x($tile, %)` for a coordinate in percent".to_owned(),
                 self.here(),
@@ -633,7 +633,7 @@ impl Parser<'_> {
                 )
             };
             return Err(ExprError::coded(
-                "dt::unit",
+                dt_lang::codes::UNIT,
                 format!("`{n}` is not a unit"),
                 help,
                 at,
@@ -660,7 +660,7 @@ fn unknown_function(name: &str, (start, end): (usize, usize), v2: bool) -> ExprE
         format!("weightings are {weightings}: size=\"low(1dmm .. 6dmm, 4)\"")
     };
     ExprError::coded(
-        "dt::value",
+        dt_lang::codes::VALUE,
         format!("unknown function `{name}`"),
         help,
         (start, end),
@@ -743,7 +743,7 @@ impl Parser<'_> {
         let span = (from, self.prev_end());
         if x.is_range() || !x.names().is_empty() {
             return Err(ExprError::coded(
-                "dt::weighting",
+                dt_lang::codes::WEIGHTING,
                 format!("the numbers after the range in `{what}` are plain numbers"),
                 format!("write a number such as {what}(1..6, 2), not a range or a name"),
                 span,
@@ -751,7 +751,7 @@ impl Parser<'_> {
         }
         let v = x
             .sample(&|_| None, 0.0)
-            .map_err(|m| ExprError::coded("dt::weighting", m, String::new(), span))?;
+            .map_err(|m| ExprError::coded(dt_lang::codes::WEIGHTING, m, String::new(), span))?;
         Ok((v, span))
     }
 
@@ -771,7 +771,7 @@ impl Parser<'_> {
             .map_or(0, |(_, n)| *n);
         let wrap = |span: (usize, usize)| {
             ExprError::coded(
-                "dt::weighting",
+                dt_lang::codes::WEIGHTING,
                 "a weighting wraps a plain range".to_owned(),
                 format!(
                     "write {name}(1..6): the first thing in the call is a range, not a number or another weighting"
@@ -798,7 +798,7 @@ impl Parser<'_> {
             let (v, span) = self.plain_number(&name)?;
             if args.len() == want {
                 return Err(ExprError::coded(
-                    "dt::weighting",
+                    dt_lang::codes::WEIGHTING,
                     format!("`{name}` takes the range and {want} number(s) at most"),
                     "remove the last number".to_owned(),
                     span,
@@ -861,7 +861,7 @@ impl Parser<'_> {
             };
             let Some(n) = named else {
                 return Err(ExprError::coded(
-                    "dt::weighting",
+                    dt_lang::codes::WEIGHTING,
                     "a part of a mix is a weighting over the range".to_owned(),
                     "write mix(bell(1..6), 3, flat(1..6), 1): each part, then its weight"
                         .to_owned(),
@@ -870,7 +870,7 @@ impl Parser<'_> {
             };
             if n == "mix" {
                 return Err(ExprError::coded(
-                    "dt::weighting",
+                    dt_lang::codes::WEIGHTING,
                     "a mix does not hold another mix".to_owned(),
                     "weightings do not nest: write the parts side by side in one mix(…)".to_owned(),
                     (at.0, self.skip_part()),
@@ -891,7 +891,7 @@ impl Parser<'_> {
             match &range {
                 Some(first_range) if *first_range != *r => {
                     return Err(ExprError::coded(
-                        "dt::weighting",
+                        dt_lang::codes::WEIGHTING,
                         "the parts of a mix share one range".to_owned(),
                         format!(
                             "write {first_range} in every part, so the parts blend over the same values"
@@ -905,7 +905,7 @@ impl Parser<'_> {
             parts.push((name, args));
             if self.peek() != Some(&Tok::Comma) {
                 return Err(ExprError::coded(
-                    "dt::weighting",
+                    dt_lang::codes::WEIGHTING,
                     "each part of a mix has a weight after it".to_owned(),
                     "write mix(bell(1..6), 3, flat(1..6), 1)".to_owned(),
                     (at.0, end),
@@ -917,7 +917,7 @@ impl Parser<'_> {
                 (Some(Tok::Name(_)), Some((Tok::LParen, ..)))
             ) {
                 return Err(ExprError::coded(
-                    "dt::weighting",
+                    dt_lang::codes::WEIGHTING,
                     "each part of a mix has a weight after it".to_owned(),
                     "write mix(bell(1..6), 3, flat(1..6), 1)".to_owned(),
                     (at.0, self.skip_part()),
@@ -1905,7 +1905,7 @@ mod tests {
         assert!(close(e.sample(&env, 0.0).unwrap(), 3.0));
         assert!(parse_v2("sin(1, 2)").unwrap().sample(&none, 0.0).is_err());
         let err = parse_v2("tan(1)").unwrap_err();
-        assert_eq!(err.code, Some("dt::value"));
+        assert_eq!(err.code, Some(dt_lang::codes::VALUE));
         assert!(err.message.contains("unknown function `tan`"), "{err:?}");
         assert!(err.help.as_deref().unwrap().contains("sin, cos"), "{err:?}");
     }
@@ -1970,7 +1970,7 @@ mod tests {
             ("flat(1..6, 2)", true, "at most"),
         ] {
             let err = if v2 { parse_v2(src) } else { parse(src) }.unwrap_err();
-            assert_eq!(err.code, Some("dt::weighting"), "{src}: {err:?}");
+            assert_eq!(err.code, Some(dt_lang::codes::WEIGHTING), "{src}: {err:?}");
             assert!(err.message.contains(what), "{src}: {err:?}");
             assert!(err.help.is_some(), "{src}");
         }
@@ -1981,7 +1981,7 @@ mod tests {
                 parse("bel(1..6)")
             }
             .unwrap_err();
-            assert_eq!(err.code, Some("dt::value"));
+            assert_eq!(err.code, Some(dt_lang::codes::VALUE));
             assert!(err.message.contains("unknown function `bel`"));
             assert!(err.help.unwrap().contains(
                 "flat, low, high, bell, peak, ends, steps or mix, or a list like [1:4, 2:5]"
@@ -2143,7 +2143,7 @@ mod tests {
             ("low(1..6, 2, 3)", "at most"),
         ] {
             let err = parse(src).unwrap_err();
-            assert_eq!(err.code, Some("dt::weighting"), "{src}: {err:?}");
+            assert_eq!(err.code, Some(dt_lang::codes::WEIGHTING), "{src}: {err:?}");
             assert!(err.message.contains(what), "{src}: {err:?}");
             assert!(err.help.is_some(), "{src}");
         }

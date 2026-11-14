@@ -470,7 +470,7 @@ impl Reader {
             })
         } else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 value_span(e),
                 format!("`{key}` takes a quoted word"),
                 "not a string",
@@ -489,7 +489,7 @@ impl Reader {
     ) -> Option<Spanned<T>> {
         let KdlValue::String(s) = e.value() else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 value_span(e),
                 format!("`{key}` takes a word"),
                 "not a word",
@@ -505,7 +505,7 @@ impl Reader {
         let names: Vec<&str> = words.iter().map(|(w, _)| *w).collect();
         let near = did_you_mean(s, names.iter().copied());
         self.err(
-            "dt::map",
+            dt_lang::codes::MAP,
             value_span(e),
             format!("`{s}` is not a {key}"),
             "not that",
@@ -521,7 +521,7 @@ impl Reader {
         let span = value_span(e);
         let KdlValue::String(s) = e.value() else {
             self.err(
-                "dt::unit",
+                dt_lang::codes::UNIT,
                 span,
                 format!("`{key}` is written with its unit"),
                 "no unit",
@@ -539,7 +539,7 @@ impl Reader {
             }
             _ => {
                 self.err(
-                    "dt::unit",
+                    dt_lang::codes::UNIT,
                     span,
                     format!("`{key}` is a length from 0 to 100 mm, like `\"3mm\"`"),
                     "not that",
@@ -556,7 +556,7 @@ impl Reader {
             KdlValue::Integer(i) if (min..=max).contains(i) => Some(Spanned { value: *i, span }),
             _ => {
                 self.err(
-                    "dt::map",
+                    dt_lang::codes::MAP,
                     span,
                     format!("`{key}` is a whole number from {min} to {max}"),
                     "not that",
@@ -636,7 +636,7 @@ impl Reader {
                         match parse_at(&a.value) {
                             Ok(x) => p.place = Some(x),
                             Err(m) => {
-                                self.err("dt::map", a.span, m, "not a place").help = Some(
+                                self.err(dt_lang::codes::MAP, a.span, m, "not a place").help = Some(
                                     "a place is across and down from the map's north-west corner, like `at=\"(2sq, 1sq)\"`"
                                         .to_owned(),
                                 );
@@ -646,7 +646,7 @@ impl Reader {
                 }
                 "height" => {
                     self.err(
-                        "dt::map",
+                        dt_lang::codes::MAP,
                         k.span(),
                         "a piece has no `height`",
                         "renamed",
@@ -661,7 +661,7 @@ impl Reader {
                     if let Some(h) = &p.bottom
                         && let Err(m) = parse_height(&h.value)
                     {
-                        self.err("dt::map", h.span, m, "not a height").help = Some(
+                        self.err(dt_lang::codes::MAP, h.span, m, "not a height").help = Some(
                             "write a `$` name from the standard heights (`$wallHeight`) or a length (`20dmm`)"
                                 .to_owned(),
                         );
@@ -675,13 +675,18 @@ impl Reader {
                                 span: v.span,
                             });
                         } else {
-                            self.err("dt::map", v.span, "`rot` is 0, 90, 180 or 270", "not that");
+                            self.err(
+                                dt_lang::codes::MAP,
+                                v.span,
+                                "`rot` is 0, 90, 180 or 270",
+                                "not that",
+                            );
                         }
                     }
                 }
                 other => {
                     self.err(
-                        "dt::unknown-control",
+                        dt_lang::codes::UNKNOWN_CONTROL,
                         k.span(),
                         format!("a piece has no `{other}`"),
                         "unknown",
@@ -705,7 +710,7 @@ impl Reader {
             }
             _ => {
                 self.err(
-                    "dt::map",
+                    dt_lang::codes::MAP,
                     n.span(),
                     "a piece names its tile",
                     "needs `piece \"lib:tiles/ground/1x1-grass\"`",
@@ -717,7 +722,7 @@ impl Reader {
         }
         if let Some(c) = n.children() {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 c.span(),
                 "a piece has no children",
                 "nothing goes inside it",
@@ -725,7 +730,7 @@ impl Reader {
         }
         if p.place.is_some() && p.count.value != 1 {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 p.count.span,
                 "a placed piece is one piece",
                 "more than one",
@@ -741,7 +746,12 @@ impl Reader {
     /// `grid cols=8 rows=5`.
     fn grid(&mut self, n: &KdlNode, list: &mut PrintList) {
         if list.grid.is_some() {
-            self.err("dt::map", n.span(), "a map has one grid", "a second one");
+            self.err(
+                dt_lang::codes::MAP,
+                n.span(),
+                "a map has one grid",
+                "a second one",
+            );
             return;
         }
         let (mut cols, mut rows) = (None, None);
@@ -751,7 +761,7 @@ impl Reader {
                 Some("rows") => rows = self.whole("rows", e, 1, 200),
                 _ => {
                     self.err(
-                        "dt::map",
+                        dt_lang::codes::MAP,
                         e.span(),
                         "the grid takes `cols=` and `rows=`",
                         "not that",
@@ -768,7 +778,7 @@ impl Reader {
             });
         } else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 n.span(),
                 "the grid needs both `cols=` and `rows=`",
                 "incomplete",
@@ -782,7 +792,7 @@ impl Reader {
         let args: Vec<&KdlEntry> = n.entries().iter().filter(|e| e.name().is_none()).collect();
         let [name, expr] = args.as_slice() else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 n.span(),
                 "`let` takes a name and a height",
                 "needs `let $plinth \"20dmm\"`",
@@ -791,7 +801,7 @@ impl Reader {
         };
         let (Some(nm), Some(ex)) = (arg_str(name), arg_str(expr)) else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 n.span(),
                 "`let` takes a name and a quoted height",
                 "here",
@@ -803,7 +813,7 @@ impl Reader {
             .filter(|b| !b.is_empty() && b.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
         else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 value_span(name),
                 format!("`{nm}` is not a name"),
                 "a name starts with `$`",
@@ -812,7 +822,7 @@ impl Reader {
             return;
         };
         if let Err(m) = parse_height(ex) {
-            self.err("dt::map", value_span(expr), m, "not a height");
+            self.err(dt_lang::codes::MAP, value_span(expr), m, "not a height");
             return;
         }
         list.lets.push(Let {
@@ -832,7 +842,7 @@ impl Reader {
         let pos: Vec<&KdlEntry> = n.entries().iter().filter(|e| e.name().is_none()).collect();
         let [id] = pos.as_slice() else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 n.span(),
                 "a pin names its piece",
                 "needs `pin p4 plate=1 at=…`",
@@ -861,7 +871,7 @@ impl Reader {
                         match parse_at(&s.value) {
                             Ok(a) => at = Some((a, s.span)),
                             Err(m) => {
-                                self.err("dt::map", s.span, m, "not a place");
+                                self.err(dt_lang::codes::MAP, s.span, m, "not a place");
                             }
                         }
                     }
@@ -871,13 +881,13 @@ impl Reader {
                         if v.value % 90 == 0 {
                             turn = v.value % 180 != 0;
                         } else {
-                            self.err("dt::map", v.span, "`turn` is 0 or 90", "not that");
+                            self.err(dt_lang::codes::MAP, v.span, "`turn` is 0 or 90", "not that");
                         }
                     }
                 }
                 other => {
                     self.err(
-                        "dt::unknown-control",
+                        dt_lang::codes::UNKNOWN_CONTROL,
                         k.span(),
                         format!("a pin has no `{other}`"),
                         "unknown",
@@ -888,7 +898,7 @@ impl Reader {
         }
         let Some(plate) = plate else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 n.span(),
                 "a pin names its plate",
                 "needs `plate=1`",
@@ -908,7 +918,7 @@ impl Reader {
         let span = value_span(e);
         let Some(s) = arg_str(e) else {
             self.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 span,
                 "a tile is named by its path in quotes",
                 "not a path",
@@ -916,7 +926,12 @@ impl Reader {
             return None;
         };
         if s.trim().is_empty() {
-            self.err("dt::map", span, "this tile path is empty", "no path");
+            self.err(
+                dt_lang::codes::MAP,
+                span,
+                "this tile path is empty",
+                "no path",
+            );
             return None;
         }
         Some(Spanned {
@@ -930,7 +945,7 @@ impl Reader {
         for e in n.entries() {
             let Some(k) = e.name() else {
                 self.err(
-                    "dt::map",
+                    dt_lang::codes::MAP,
                     e.span(),
                     "the plates line takes `word=value` settings",
                     "write the setting's name first",
@@ -973,7 +988,7 @@ impl Reader {
                 }
                 other => {
                     self.err(
-                        "dt::unknown-control",
+                        dt_lang::codes::UNKNOWN_CONTROL,
                         k.span(),
                         format!("the plates line has no `{other}`"),
                         "unknown",
@@ -993,7 +1008,7 @@ impl Reader {
                 }
             } else {
                 self.err(
-                    "dt::unknown-node",
+                    dt_lang::codes::UNKNOWN_NODE,
                     c.name().span(),
                     format!(
                         "the plates line holds `pin` lines, not `{}`",
@@ -1019,7 +1034,10 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
         Err(e) => return Err(syntax::syntax_errors(&src, text, &e)),
     };
     let (header, header_errors) = crate::header::read(&src, &kdl);
-    if header_errors.iter().any(|e| e.code == "dt::format-newer") {
+    if header_errors
+        .iter()
+        .any(|e| e.code == dt_lang::codes::FORMAT_NEWER)
+    {
         return Err(header_errors);
     }
     if header
@@ -1051,7 +1069,7 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
                 maps += 1;
                 if maps > 1 {
                     r.err(
-                        "dt::map",
+                        dt_lang::codes::MAP,
                         n.name().span(),
                         "a file holds one map",
                         "a second one",
@@ -1066,7 +1084,7 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
                 plates += 1;
                 if plates > 1 {
                     r.err(
-                        "dt::map",
+                        dt_lang::codes::MAP,
                         n.name().span(),
                         "a list has one plates line",
                         "a second one",
@@ -1078,7 +1096,7 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
             }
             other => {
                 r.err(
-                    "dt::unknown-node",
+                    dt_lang::codes::UNKNOWN_NODE,
                     n.name().span(),
                     format!("unknown top-level node `{other}`"),
                     "not map or plates",
@@ -1099,8 +1117,13 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
             .nodes()
             .first()
             .map_or_else(|| SourceSpan::new(0.into(), 0), KdlNode::span);
-        r.err("dt::map", span, "this document has no `map`", "no map here")
-            .help = Some(
+        r.err(
+            dt_lang::codes::MAP,
+            span,
+            "this document has no `map`",
+            "no map here",
+        )
+        .help = Some(
             "a print list holds `map { piece \"lib:tiles/ground/1x1-grass\" count=4 }`".to_owned(),
         );
     }
@@ -1110,7 +1133,7 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
         if let Some(id) = &p.id {
             if seen.contains(&id.value.as_str()) {
                 r.err(
-                    "dt::map",
+                    dt_lang::codes::MAP,
                     id.span,
                     format!("two pieces are called `{}`", id.value),
                     "the same id",
@@ -1124,7 +1147,7 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
     for pin in &list.plates.pins {
         if !seen.contains(&pin.id.value.as_str()) {
             r.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 pin.id.span,
                 format!("no piece is called `{}`", pin.id.value),
                 "no such piece",
@@ -1136,7 +1159,7 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
             );
         } else if pinned.contains(&pin.id.value.as_str()) {
             r.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 pin.id.span,
                 format!("`{}` is pinned twice", pin.id.value),
                 "a second pin",
@@ -1145,7 +1168,7 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
         pinned.push(&pin.id.value);
         if pin.at.is_none() {
             r.err(
-                "dt::map",
+                dt_lang::codes::MAP,
                 pin.span,
                 "a pin says where: `at=`",
                 "needs `at=\"(0mm, 5mm)\"`",
@@ -1162,7 +1185,7 @@ pub fn decode(name: &str, text: &str) -> Result<PrintList, Vec<DocError>> {
 fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
     if let Some(e) = n.entries().first() {
         r.err(
-            "dt::map",
+            dt_lang::codes::MAP,
             e.span(),
             "`map` takes no arguments",
             "put the pieces inside",
@@ -1178,7 +1201,7 @@ fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
                     list.about = Some(s.to_owned());
                 } else {
                     r.err(
-                        "dt::map",
+                        dt_lang::codes::MAP,
                         c.span(),
                         "`about` takes one quoted sentence",
                         "here",
@@ -1194,7 +1217,7 @@ fn read_map(r: &mut Reader, n: &KdlNode, list: &mut PrintList) {
             "let" => r.let_(c, list),
             other => {
                 r.err(
-                    "dt::unknown-node",
+                    dt_lang::codes::UNKNOWN_NODE,
                     c.name().span(),
                     format!("a map holds `piece` lines, not `{other}`"),
                     "unknown",

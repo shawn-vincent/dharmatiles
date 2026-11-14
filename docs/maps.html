@@ -53,7 +53,7 @@
 </div>
 <article class="doc">
 
-<h2 id="file">The file</h2>
+<h2 id="file" data-explains="dt::map"><!--gen:anchors--><span id="dt-map"></span><!--/gen:anchors-->The file</h2>
 <p>The map follows the tile language's habits: lengths carry units, points read across and down from the north-west corner, and everything you can see on screen is written in the source. The editor writes <code>at</code> and <code>rot</code> on every placed piece, and <code>bottom</code>, <code>seed</code> and <code>print</code> only when they are not the default.</p>
 <pre><code>dharmatiles version="1.0.0"
 
@@ -150,7 +150,7 @@ plates printer="bambu/x1c-ams" {
 <p>The map reads the <a href="inventory.html">inventory</a> and never writes to it. The piece list says what the shelf says of each piece (see <a href="#piece-list">The piece list</a>); a switch in the <kbd>⋯</kbd> menu, off until you turn it on, also puts a pill over each placed piece in the view, which covers the tile. The words are the same: <em>have</em> where a print you own is that piece (tile, seed, system and colour mode; copies of one piece share what you own, in the order written), <em>to print</em> where it prints, <em>have, other colour</em> in the caution yellow where you own the tile and seed only in the other colour mode (it still prints), <em>left off</em> for <code>print=skip</code>. The colour mode is the map's: its <code>plates</code> line's <code>mode</code>, else multicolour for a printer with an AMS.</p>
 <p>The panel says <em>3 in inventory · 11 to print</em>, once. <strong>Print what's missing</strong> goes to Plates for this map, which lays out only the pieces the inventory lacks. Everything on your shelf says so rather than lay out nothing, and the map stays as it was.</p>
 
-<h2 id="crowns">A crown over a taller neighbour</h2>
+<h2 id="crowns" data-explains="dt::crown"><!--gen:anchors--><span id="dt-crown"></span><!--/gen:anchors-->A crown over a taller neighbour</h2>
 <p>A tree's crown reaches past its square. When a piece's crown reaches over a neighbour that stands taller than the crown's lowest point, the stream carries a caution note, <em>The crown of 1x1-grass-tree (p2) reaches over 1x1-wall-stone (p3), which stands 2 mm up into it</em>, found from the pieces' real shapes (their draft builds, kept in the cache), not from their squares. It is a note, never a refusal: nothing is forbidden, the real shapes just meet there.</p>
 
 <h2 id="pins">Pins on the plates</h2>

@@ -243,7 +243,10 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) => {
-            let d = Diag::plain("dt::inventory", format!("cannot read {path}: {e}"));
+            let d = Diag::plain(
+                dt_lang::codes::INVENTORY,
+                format!("cannot read {path}: {e}"),
+            );
             return fail_with(vec![d], "");
         }
     };
@@ -369,7 +372,7 @@ fn write(shared: &Shared, about: &str, lines: &[String], said: &str) -> Out<Inve
                         errs.first().map_or("", |d| d.message.as_str())
                     ),
                 )
-                .code("dt::inventory"),
+                .code(dt_lang::codes::INVENTORY),
             );
             Err(fail::mistakes(&errs))
         }
@@ -707,7 +710,7 @@ fn say_problem(shared: &Shared, text: &str) {
             "inventory",
             text,
         )
-        .code("dt::inventory")
+        .code(dt_lang::codes::INVENTORY)
         .help(Some(
             "mend inventory.dinv, then `dharmatiles inventory relink <old> <new>`",
         )),

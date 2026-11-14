@@ -71,6 +71,6 @@ fn a_tree_above_its_ground_is_refused_not_reordered() {
     let Err(e) = check(&mem(&text), "t.dtile", &Options::default()) else {
         panic!("a tree above its ground is refused");
     };
-    assert_eq!(e[0].code, "dt::order");
+    assert_eq!(e[0].code, dt_lang::codes::ORDER);
     assert!(e[0].help.as_deref().unwrap().contains("`dirt`"));
 }

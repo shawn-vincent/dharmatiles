@@ -17,7 +17,7 @@
 //!
 //! ```json
 //! {"seq": 412, "t": "2026-11-12T10:41:40.771Z", "kind": "error",
-//!  "severity": "error", "scope": "build", "code": "dt::look",
+//!  "severity": "error", "scope": "build", "code": dt_lang::codes::LOOK,
 //!  "tile": "ab6ca6099010d82a", "tile_name": "tree-err",
 //!  "node": "tile/tree/0",
 //!  "span": {"file": "tree-err.dtile", "line": 8, "col": 9, "offset": 112, "len": 62},
@@ -702,7 +702,8 @@ mod tests {
     use super::*;
 
     fn note(text: &str) -> Message {
-        Message::new(Kind::Note, Severity::Note, Scope::Check, "t1", "pond", text).code("dt::steep")
+        Message::new(Kind::Note, Severity::Note, Scope::Check, "t1", "pond", text)
+            .code(dt_lang::codes::STEEP)
     }
 
     fn mistake(text: &str) -> Message {
@@ -714,7 +715,7 @@ mod tests {
             "pond",
             text,
         )
-        .code("dt::unknown-element")
+        .code(dt_lang::codes::UNKNOWN_ELEMENT)
     }
 
     #[test]

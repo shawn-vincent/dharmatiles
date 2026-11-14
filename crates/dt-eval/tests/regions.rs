@@ -240,7 +240,7 @@ fn a_region_used_as_a_number_is_a_type_error() {
             "1x1",
             &format!("stack {{ base\n dirt top=\"{top}\" }}"),
         ));
-        assert_eq!(e[0].code, "dt::type", "{top}: {e:#?}");
+        assert_eq!(e[0].code, dt_lang::codes::TYPE, "{top}: {e:#?}");
         assert!(e[0].message.contains("region"), "{top}: {e:#?}");
     }
 }
@@ -350,7 +350,7 @@ fn the_reader_records_each_formula_with_the_thing_that_calls_it() {
 fn a_region_name_cannot_be_declared_and_d_and_a_are_fractions() {
     for line in ["let $tile 5", "override $region 5"] {
         let e = refused(&tile1("1x1", &format!("{line}\n stack {{ base\n dirt }}")));
-        assert_eq!(e[0].code, "dt::name", "{line}: {e:#?}");
+        assert_eq!(e[0].code, dt_lang::codes::NAME, "{line}: {e:#?}");
         assert!(
             e[0].message.contains("set by the element"),
             "{line}: {e:#?}"
@@ -358,7 +358,7 @@ fn a_region_name_cannot_be_declared_and_d_and_a_are_fractions() {
     }
     // `$d` and `$a` are set by a body now: a fraction, so not a height
     let e = refused(&tile1("1x1", "stack { base\n dirt top=\"$d\" }"));
-    assert_eq!(e[0].code, "dt::type", "{e:#?}");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE, "{e:#?}");
     ok(&tile1(
         "1x1",
         "stack { base\n dirt top=\"$groundHeight + 4dmm * $d\" }",
@@ -375,12 +375,12 @@ fn a_let_may_hold_a_region_and_is_a_type_error_where_a_number_is_read() {
         "1x1",
         "let $up \"parent($region)\"\n stack { base\n dirt top=\"$bottom + $up\" }",
     ));
-    assert_eq!(e[0].code, "dt::type", "{e:#?}");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE, "{e:#?}");
     let e = refused(&tile1(
         "1x1",
         "stack { base\n scatter count=2 { rock size=\"$region\" } }",
     ));
-    assert_eq!(e[0].code, "dt::type", "{e:#?}");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE, "{e:#?}");
 }
 
 #[test]
@@ -393,7 +393,7 @@ fn regions_that_name_each_other_are_an_error_at_the_region_whether_or_not_anythi
     let e = refused(&text);
     let d = e
         .iter()
-        .find(|d| d.code == "dt::region")
+        .find(|d| d.code == dt_lang::codes::REGION)
         .unwrap_or_else(|| panic!("no dt::region in {e:#?}"));
     assert!(d.at.is_some(), "{d:?}");
     assert!(d.message.contains("names itself"), "{d:?}");

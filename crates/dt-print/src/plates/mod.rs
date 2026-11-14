@@ -322,8 +322,14 @@ pub fn plan(
                 e = e
                     .into_iter()
                     .map(|d| {
-                        Diag::at(&list.src, p.span, "dt::printer", d.message, "this printer")
-                            .maybe_help(d.help)
+                        Diag::at(
+                            &list.src,
+                            p.span,
+                            dt_lang::codes::PRINTER,
+                            d.message,
+                            "this printer",
+                        )
+                        .maybe_help(d.help)
                     })
                     .collect();
             }
@@ -391,7 +397,13 @@ pub fn plan(
         let path = match tile_path(&p.tile.value, ctx.list_dir, ctx.home) {
             Ok(x) => x,
             Err(e) => {
-                errors.push(Diag::at(&list.src, p.tile.span, "dt::map", e, "this tile"));
+                errors.push(Diag::at(
+                    &list.src,
+                    p.tile.span,
+                    dt_lang::codes::MAP,
+                    e,
+                    "this tile",
+                ));
                 continue;
             }
         };
@@ -427,7 +439,7 @@ pub fn plan(
                     Diag::at(
                         &list.src,
                         p.tile.span,
-                        "dt::map",
+                        dt_lang::codes::MAP,
                         format!("`{}` does not check", p.tile.value),
                         "this tile",
                     )
@@ -441,7 +453,7 @@ pub fn plan(
             errors.push(Diag::at(
                 &list.src,
                 p.tile.span,
-                "dt::map",
+                dt_lang::codes::MAP,
                 format!("`{}` is not a tile", p.tile.value),
                 "no tile in it",
             ));
@@ -515,7 +527,7 @@ pub fn plan(
             Diag::at(
                 &list.src,
                 list.span,
-                "dt::map",
+                dt_lang::codes::MAP,
                 "there is nothing to print",
                 "no pieces",
             )
@@ -524,7 +536,7 @@ pub fn plan(
             Diag::at(
                 &list.src,
                 list.span,
-                "dt::inventory",
+                dt_lang::codes::INVENTORY,
                 "everything in this list is already in your inventory",
                 "all of it is on your shelf",
             )
@@ -554,9 +566,15 @@ pub fn plan(
                     "print in single colour (`mode=\"single\"`), or choose a printer with more slots".to_owned()
                 };
                 errors.push(match span {
-                    Some(s) => Diag::at(&list.src, s, "dt::slots", d, "needs too many filaments")
-                        .help(help),
-                    None => Diag::plain("dt::slots", d).help(help),
+                    Some(s) => Diag::at(
+                        &list.src,
+                        s,
+                        dt_lang::codes::SLOTS,
+                        d,
+                        "needs too many filaments",
+                    )
+                    .help(help),
+                    None => Diag::plain(dt_lang::codes::SLOTS, d).help(help),
                 });
             }
         }
@@ -741,7 +759,7 @@ pub fn layout(plan: &Plan, boxes: &[Boxes]) -> Result<Layout, Vec<Diag>> {
             if boxes[k].height > h + 1e-6 {
                 errors.push(
                     Diag::plain(
-                        "dt::plates",
+                        dt_lang::codes::PLATES,
                         format!(
                             "{} stands {:.1} mm tall and the {} prints up to {h} mm",
                             kind.name,
@@ -787,7 +805,7 @@ pub fn layout(plan: &Plan, boxes: &[Boxes]) -> Result<Layout, Vec<Diag>> {
         let s = boxes[k].size;
         errors.push(
             Diag::plain(
-                "dt::plates",
+                dt_lang::codes::PLATES,
                 format!(
                     "{} covers {:.1} x {:.1} mm and does not fit the {} x {} mm bed ({} mm margin, zones left out)",
                     plan.kinds[k].name, s[0], s[1], spec.bed[0], spec.bed[1], spec.margin
@@ -800,7 +818,7 @@ pub fn layout(plan: &Plan, boxes: &[Boxes]) -> Result<Layout, Vec<Diag>> {
         let (k, _) = who[id];
         errors.push(
             Diag::plain(
-                "dt::slots",
+                dt_lang::codes::SLOTS,
                 format!(
                     "{} needs {} filaments, this printer has {}",
                     plan.kinds[k].name,

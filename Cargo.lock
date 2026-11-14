@@ -515,6 +515,7 @@ dependencies = [
  "dt-eval",
  "dt-geom",
  "dt-kit",
+ "dt-lang",
  "flate2",
  "libm",
  "png",
@@ -528,6 +529,7 @@ dependencies = [
  "dt-elements",
  "dt-eval",
  "dt-kit",
+ "dt-lang",
  "dt-print",
  "sha2",
 ]
@@ -1834,6 +1836,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 name = "xtask"
 version = "1.0.0"
 dependencies = [
+ "dt-lang",
  "jpeg-encoder",
  "png",
  "serde_json",

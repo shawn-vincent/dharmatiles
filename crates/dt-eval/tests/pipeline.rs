@@ -85,7 +85,7 @@ fn a_plan_that_is_refused_is_refused_by_check_and_by_build_in_the_same_words() {
     let opts = draft();
     let c = check(&mem(&text), "t.dtile", &opts).err().unwrap();
     let b = build(&mem(&text), "t.dtile", &opts).err().unwrap();
-    assert_eq!(c[0].code, "dt::order", "{c:?}");
+    assert_eq!(c[0].code, dt_lang::codes::ORDER, "{c:?}");
     assert_eq!(
         (c[0].code, &c[0].message, &c[0].help),
         (b[0].code, &b[0].message, &b[0].help)
@@ -98,8 +98,11 @@ fn regions_that_name_each_other_are_a_mistake_at_the_region_not_an_empty_one() {
         "    region a { within \"4dmm\" of=b }\n    region b { within \"4dmm\" of=a }\n    stack {\n        base\n        dirt at=a\n    }",
     );
     let e = check(&mem(&text), "t.dtile", &draft()).err().unwrap();
-    assert!(e.iter().any(|d| d.code == "dt::region"), "{e:?}");
-    assert!(e.iter().all(|d| d.code != "dt::empty-region"), "{e:?}");
+    assert!(e.iter().any(|d| d.code == dt_lang::codes::REGION), "{e:?}");
+    assert!(
+        e.iter().all(|d| d.code != dt_lang::codes::EMPTY_REGION),
+        "{e:?}"
+    );
 }
 
 #[test]

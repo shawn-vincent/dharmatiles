@@ -651,7 +651,7 @@ impl Shared {
         match self.palette_checked() {
             Ok(_) => Vec::new(),
             Err(e) => vec![Diag::plain(
-                "dt::palette",
+                dt_lang::codes::PALETTE,
                 format!("{e}; the tile is shown in the default paint"),
             )],
         }

@@ -52,6 +52,7 @@ mod cache;
 mod check;
 mod cli;
 mod elements;
+mod explain;
 mod inventory;
 mod library;
 mod mcp;
@@ -294,6 +295,7 @@ fn main() -> ExitCode {
         Command::Printers { action } => printers::run(action),
         Command::Inventory { action, json } => inventory::run(action, json),
         Command::Elements { name, json } => elements::run(name.as_deref(), json),
+        Command::Explain { code } => explain::run(&code),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
         Command::Audit {
             path,

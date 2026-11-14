@@ -118,7 +118,7 @@ fn read_node(
         ok = false;
         errors.push(err(
             src,
-            "dt::header",
+            dt_lang::codes::HEADER,
             c.span(),
             "the header line has no children",
             "nothing goes inside it",
@@ -133,7 +133,7 @@ fn read_node(
                 ok = false;
                 errors.push(err(
                     src,
-                    "dt::header",
+                    dt_lang::codes::HEADER,
                     e.span(),
                     &format!("the header line has no `{other}`"),
                     "not a header property",
@@ -144,7 +144,7 @@ fn read_node(
                 ok = false;
                 errors.push(err(
                     src,
-                    "dt::header",
+                    dt_lang::codes::HEADER,
                     e.span(),
                     "the header line takes `version=…`, not a bare value",
                     "write `version=` before it",
@@ -157,7 +157,7 @@ fn read_node(
         if ok {
             errors.push(err(
                 src,
-                "dt::header-version",
+                dt_lang::codes::HEADER_VERSION,
                 n.name().span(),
                 "the header line has no version",
                 "needs `version=…`",
@@ -173,7 +173,7 @@ fn read_node(
         KdlValue::Float(_) => {
             errors.push(err(
                 src,
-                "dt::header-version",
+                dt_lang::codes::HEADER_VERSION,
                 span,
                 "a version with a decimal point must be quoted",
                 "read as a number, not a version",
@@ -184,7 +184,7 @@ fn read_node(
         _ => {
             errors.push(err(
                 src,
-                "dt::header-version",
+                dt_lang::codes::HEADER_VERSION,
                 span,
                 "the version must be a whole number or a quoted string",
                 "not a version",
@@ -196,7 +196,7 @@ fn read_node(
     let Some(format) = major else {
         errors.push(err(
             src,
-            "dt::header-version",
+            dt_lang::codes::HEADER_VERSION,
             span,
             &format!("`{text}` is not a version"),
             "expected major[.minor[.patch]][+build], like \"1.0.0+5.gf9481c8\"",
@@ -209,7 +209,7 @@ fn read_node(
         let help = "use a newer dharmatiles, or a copy of the file in the older format";
         errors.push(err(
             src,
-            "dt::format-newer",
+            dt_lang::codes::FORMAT_NEWER,
             span,
             &format!(
                 "this {} is format {format}; this dharmatiles reads up to {max}",
@@ -241,7 +241,7 @@ pub fn format_old(src: &Src, kdl: &KdlDocument, header: Option<&Header>) -> DocE
     let was = header.map_or(0, |h| h.format);
     err(
         src,
-        "dt::format-0",
+        dt_lang::codes::FORMAT_0,
         span,
         &format!(
             "this {} is format {was}, and this dharmatiles reads format {FORMAT}",
@@ -269,7 +269,7 @@ pub fn read(src: &Src, kdl: &KdlDocument) -> (Option<Header>, Vec<DocError>) {
         if seen {
             errors.push(err(
                 src,
-                "dt::header-twice",
+                dt_lang::codes::HEADER_TWICE,
                 n.name().span(),
                 "a document has one header line",
                 "a second one",
@@ -278,7 +278,7 @@ pub fn read(src: &Src, kdl: &KdlDocument) -> (Option<Header>, Vec<DocError>) {
         } else if i > 0 {
             errors.push(err(
                 src,
-                "dt::header-first",
+                dt_lang::codes::HEADER_FIRST,
                 n.name().span(),
                 "the header line must come first",
                 "not the first node",
@@ -346,27 +346,51 @@ mod tests {
 
     #[test]
     fn a_bad_header_is_refused_with_a_code() {
-        assert_eq!(code("dharmatiles version=\"2.0\"\n"), ["dt::format-newer"]);
-        assert_eq!(code("dharmatiles version=2\n"), ["dt::format-newer"]);
-        assert_eq!(code("dharmatiles\n"), ["dt::header-version"]);
-        assert_eq!(code("dharmatiles version=0.9\n"), ["dt::header-version"]);
-        assert_eq!(code("dharmatiles version=#true\n"), ["dt::header-version"]);
-        assert_eq!(code("dharmatiles version=\"x\"\n"), ["dt::header-version"]);
+        assert_eq!(
+            code("dharmatiles version=\"2.0\"\n"),
+            [dt_lang::codes::FORMAT_NEWER]
+        );
+        assert_eq!(
+            code("dharmatiles version=2\n"),
+            [dt_lang::codes::FORMAT_NEWER]
+        );
+        assert_eq!(code("dharmatiles\n"), [dt_lang::codes::HEADER_VERSION]);
+        assert_eq!(
+            code("dharmatiles version=0.9\n"),
+            [dt_lang::codes::HEADER_VERSION]
+        );
+        assert_eq!(
+            code("dharmatiles version=#true\n"),
+            [dt_lang::codes::HEADER_VERSION]
+        );
+        assert_eq!(
+            code("dharmatiles version=\"x\"\n"),
+            [dt_lang::codes::HEADER_VERSION]
+        );
         assert_eq!(
             code("dharmatiles version=\"1.2.3.4\"\n"),
-            ["dt::header-version"]
+            [dt_lang::codes::HEADER_VERSION]
         );
-        assert_eq!(code("dharmatiles version=\"0+\"\n"), ["dt::header-version"]);
-        assert_eq!(code("dharmatiles 0\n"), ["dt::header"]);
-        assert_eq!(code("dharmatiles version=0 extra=1\n"), ["dt::header"]);
-        assert_eq!(code("dharmatiles version=0 { x; }\n"), ["dt::header"]);
+        assert_eq!(
+            code("dharmatiles version=\"0+\"\n"),
+            [dt_lang::codes::HEADER_VERSION]
+        );
+        assert_eq!(code("dharmatiles 0\n"), [dt_lang::codes::HEADER]);
+        assert_eq!(
+            code("dharmatiles version=0 extra=1\n"),
+            [dt_lang::codes::HEADER]
+        );
+        assert_eq!(
+            code("dharmatiles version=0 { x; }\n"),
+            [dt_lang::codes::HEADER]
+        );
         assert_eq!(
             code("tile size=\"1x1\"\ndharmatiles version=0\n"),
-            ["dt::header-first"]
+            [dt_lang::codes::HEADER_FIRST]
         );
         assert_eq!(
             code("dharmatiles version=0\ndharmatiles version=0\n"),
-            ["dt::header-twice"]
+            [dt_lang::codes::HEADER_TWICE]
         );
     }
 
@@ -376,7 +400,7 @@ mod tests {
         assert_eq!(check_text("t", t).unwrap().unwrap().format, 1);
         assert_eq!(
             check_text("t", "dharmatiles version=2\n").unwrap_err()[0].code,
-            "dt::format-newer"
+            dt_lang::codes::FORMAT_NEWER
         );
     }
 

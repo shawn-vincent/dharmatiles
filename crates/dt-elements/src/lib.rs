@@ -200,7 +200,7 @@ pub struct Control {
 /// The code of a build-time refusal the tile can fix (a control's value or the
 /// entry's place cannot be built), as opposed to `dt::build`, a failure inside
 /// the program.
-pub const LOOK: &str = "dt::look";
+pub const LOOK: &str = dt_lang::codes::LOOK;
 
 /// An element refused its controls or failed to build.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -107,7 +107,7 @@ pub fn write_set(
     for (k, b) in plan.kinds.iter().zip(built) {
         if !b.checked {
             return Err(Diag::plain(
-                "dt::plates",
+                dt_lang::codes::PLATES,
                 format!(
                     "{} was not built in full and is not checked: plates are never made from a draft build",
                     k.name
@@ -137,14 +137,14 @@ pub fn write_set(
         Format::Bambu => {
             let t = template.ok_or_else(|| {
                 Diag::plain(
-                    "dt::plates",
+                    dt_lang::codes::PLATES,
                     "a Bambu Studio project needs a template for the printer's settings",
                 )
                 .help("save any project from Bambu Studio for this printer as bambu.3mf in your tiles folder (or name it with --bambu-template), or write one STL per plate with --format stl")
             })?;
             let bed = plan.settings.machine.bed_or_say()?;
             let bytes = crate::bambu_plates(&set, palette, t, bed)
-                .map_err(|e| Diag::plain("dt::plates", e))?;
+                .map_err(|e| Diag::plain(dt_lang::codes::PLATES, e))?;
             Ok(vec![(format!("{stem}.3mf"), bytes)])
         }
     }

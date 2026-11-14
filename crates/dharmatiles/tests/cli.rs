@@ -64,7 +64,7 @@ fn a_write_error_in_json_has_every_error_key() {
     assert_eq!(o.status.code(), Some(1));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     let e = &v["tiles"][0]["errors"][0];
-    assert_eq!(e["code"], "dt::write");
+    assert_eq!(e["code"], dt_lang::codes::WRITE);
     for k in ["code", "message", "file", "line", "column", "help"] {
         assert!(e.get(k).is_some(), "no `{k}` in {e}");
     }
@@ -78,7 +78,7 @@ fn a_missing_document_is_a_source_error() {
         .unwrap();
     assert_eq!(o.status.code(), Some(1));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(v["tiles"][0]["errors"][0]["code"], "dt::source");
+    assert_eq!(v["tiles"][0]["errors"][0]["code"], dt_lang::codes::SOURCE);
 }
 
 #[test]
@@ -212,7 +212,7 @@ fn an_unknown_look_is_an_error_with_a_hint() {
     assert_eq!(o.status.code(), Some(1));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["ok"], false);
-    assert_eq!(v["errors"][0]["code"], "dt::unknown-element");
+    assert_eq!(v["errors"][0]["code"], dt_lang::codes::UNKNOWN_ELEMENT);
 }
 
 #[test]

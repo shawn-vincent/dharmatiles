@@ -184,7 +184,7 @@ impl ConstTable {
             let has = t.index.contains_key(name);
             match (c.kind, name.starts_with('$')) {
                 (ConstKind::Let, true) if has => errors.push(ScopeError {
-                    code: "dt::name",
+                    code: dt_lang::codes::NAME,
                     message: format!("the context already has `{name}`"),
                     label: "already installed",
                     span: c.name.span,
@@ -202,7 +202,7 @@ impl ConstTable {
                         .collect();
                     let near = crate::schema::did_you_mean(name, names.iter().copied());
                     errors.push(ScopeError {
-                        code: "dt::name",
+                        code: dt_lang::codes::NAME,
                         message: format!("no caller installed `{name}` to override"),
                         label: "not in the context",
                         span: c.name.span,

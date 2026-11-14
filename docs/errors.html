@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Error codes</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="plates.html">Plates</a><a href="maps.html">Maps</a><a href="printers.html">Printers</a><a href="inventory.html">Inventory</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a><a href="roadmap.html">Roadmap</a><a href="changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Reference · errors</div>
+  <h1>Error codes</h1>
+  <p class="lede">Every message the program prints carries a code, such as <code>dt::type</code>, and an address that lands on its own page here: what happened, what to do, a broken document and its fix, and a link on to the rule in the guide.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+  <li><a href="#all">Every code</a></li>
+  <li><a href="#controls-and-lines">Controls and lines</a></li>
+  <li><a href="#definitions">Definitions and expansion</a></li>
+  <li><a href="#program">When the program fails</a></li>
+  <li><a href="#files">Files</a></li>
+</ol></details></nav>
+</div>
+<article class="doc">
+
+<h2 id="all">Every code</h2>
+<p>An error shows its code, then the address of its page (<code>explain: …/e/type</code>) and the command that prints the same words from your own copy of the docs (<code>dharmatiles explain dt::type</code>). In the editor, a message with a code has an <em>Explain</em> link that opens the copy served with the program. The table is written from the program&rsquo;s list of codes, so a new code appears here when it is added. The codes whose rule has no other home are explained below the table; the rest are explained in the section the code&rsquo;s own page links to.</p>
+<!-- gen:codes -->
+<div class="tbl"><table>
+<thead><tr><th>Code</th><th>Whose</th><th>What happened</th></tr></thead>
+<tbody>
+<tr><td><a href="e/format-0.html"><code>dt::format-0</code></a></td><td>a mistake in the document</td><td>A document with no header line is format 0, which this program does not read</td></tr>
+<tr><td><a href="e/format-newer.html"><code>dt::format-newer</code></a></td><td>a mistake in the document</td><td>The document is of a newer format than this program reads</td></tr>
+<tr><td><a href="e/header.html"><code>dt::header</code></a></td><td>a mistake in the document</td><td>The header line takes <code>version=</code> and nothing else</td></tr>
+<tr><td><a href="e/header-version.html"><code>dt::header-version</code></a></td><td>a mistake in the document</td><td>The header line has no version, or one that cannot be read</td></tr>
+<tr><td><a href="e/header-twice.html"><code>dt::header-twice</code></a></td><td>a mistake in the document</td><td>A document has one header line</td></tr>
+<tr><td><a href="e/header-first.html"><code>dt::header-first</code></a></td><td>a mistake in the document</td><td>The header line must be the first node of the file</td></tr>
+<tr><td><a href="e/syntax.html"><code>dt::syntax</code></a></td><td>a mistake in the document</td><td>Documents are KDL v2: a bare <code>true</code>, <code>false</code> or <code>null</code> is KDL v1</td></tr>
+<tr><td><a href="e/tile.html"><code>dt::tile</code></a></td><td>a mistake in the document</td><td>A file holds one tile</td></tr>
+<tr><td><a href="e/tile-name.html"><code>dt::tile-name</code></a></td><td>a mistake in the document</td><td>A tile takes no name: its file name is its name</td></tr>
+<tr><td><a href="e/about.html"><code>dt::about</code></a></td><td>a mistake in the document</td><td><code>about</code> takes one string</td></tr>
+<tr><td><a href="e/seed.html"><code>dt::seed</code></a></td><td>a mistake in the document</td><td>A tile's seed is a whole number from 0</td></tr>
+<tr><td><a href="e/stack.html"><code>dt::stack</code></a></td><td>a mistake in the document</td><td>A tile or a definition has one stack</td></tr>
+<tr><td><a href="e/param.html"><code>dt::param</code></a></td><td>a mistake in the document</td><td>A tile has no parameters: only a definition does</td></tr>
+<tr><td><a href="e/define.html"><code>dt::define</code></a></td><td>a mistake in the document</td><td><code>define</code> takes only a name</td></tr>
+<tr><td><a href="e/missing-name.html"><code>dt::missing-name</code></a></td><td>a mistake in the document</td><td>This node needs a name</td></tr>
+<tr><td><a href="e/line.html"><code>dt::line</code></a></td><td>a mistake in the document</td><td>That name is a tile edge or corner, so a line cannot take it</td></tr>
+<tr><td><a href="e/unknown-control.html"><code>dt::unknown-control</code></a></td><td>a mistake in the document</td><td>The element has no control by that name</td></tr>
+<tr><td><a href="e/unknown-element.html"><code>dt::unknown-element</code></a></td><td>a mistake in the document</td><td>No element or definition is called that</td></tr>
+<tr><td><a href="e/unknown-node.html"><code>dt::unknown-node</code></a></td><td>a mistake in the document</td><td>That line is not one this kind of document holds</td></tr>
+<tr><td><a href="e/missing-control.html"><code>dt::missing-control</code></a></td><td>a mistake in the document</td><td>A body needs a <code>top=</code> it has no default for</td></tr>
+<tr><td><a href="e/positional.html"><code>dt::positional</code></a></td><td>a mistake in the document</td><td>The element takes name=value controls, not a bare value</td></tr>
+<tr><td><a href="e/control-node.html"><code>dt::control-node</code></a></td><td>a mistake in the document</td><td>A control written as its own line has no block</td></tr>
+<tr><td><a href="e/group.html"><code>dt::group</code></a></td><td>a mistake in the document</td><td>That control is a group of controls, not a value</td></tr>
+<tr><td><a href="e/expert.html"><code>dt::expert</code></a></td><td>a mistake in the document</td><td>That control is an expert control, not for a tile</td></tr>
+<tr><td><a href="e/choice.html"><code>dt::choice</code></a></td><td>a mistake in the document</td><td>The control takes one of a few words, and this is not one</td></tr>
+<tr><td><a href="e/duplicate.html"><code>dt::duplicate</code></a></td><td>a mistake in the document</td><td>A control is set twice on one line</td></tr>
+<tr><td><a href="e/id.html"><code>dt::id</code></a></td><td>a mistake in the document</td><td>Another entry of that element already has that <code>id=</code></td></tr>
+<tr><td><a href="e/scatter.html"><code>dt::scatter</code></a></td><td>a mistake in the document</td><td>That element cannot be scattered</td></tr>
+<tr><td><a href="e/weight.html"><code>dt::weight</code></a></td><td>a mistake in the document</td><td><code>weight=</code> is a scatter child's share of the mix</td></tr>
+<tr><td><a href="e/percent.html"><code>dt::percent</code></a></td><td>a mistake in the document</td><td>The control is a share written as a percent, such as <code>20%</code></td></tr>
+<tr><td><a href="e/expr.html"><code>dt::expr</code></a></td><td>a mistake in the document</td><td>A formula in quotes could not be read</td></tr>
+<tr><td><a href="e/name.html"><code>dt::name</code></a></td><td>a mistake in the document</td><td>A plain name is declared twice or is a word of the language</td></tr>
+<tr><td><a href="e/unit.html"><code>dt::unit</code></a></td><td>a mistake in the document</td><td>A length or angle has no unit, or a unit that is not one</td></tr>
+<tr><td><a href="e/type.html"><code>dt::type</code></a></td><td>a mistake in the document</td><td>Kinds do not agree: a length mixed with a plain number, or a place of the wrong kind</td></tr>
+<tr><td><a href="e/value.html"><code>dt::value</code></a></td><td>a mistake in the document</td><td>A value cannot be read or is not allowed here</td></tr>
+<tr><td><a href="e/unknown-name.html"><code>dt::unknown-name</code></a></td><td>a mistake in the document</td><td>Nothing declares or sets that name</td></tr>
+<tr><td><a href="e/range.html"><code>dt::range</code></a></td><td>a mistake in the document</td><td>A number is outside the limits of its weighting</td></tr>
+<tr><td><a href="e/weighting.html"><code>dt::weighting</code></a></td><td>a mistake in the document</td><td>A weighting is written wrongly, or the control takes none</td></tr>
+<tr><td><a href="e/cloud.html"><code>dt::cloud</code></a></td><td>a mistake in the document</td><td>A top with odds (a cloud) is used in arithmetic it does not have</td></tr>
+<tr><td><a href="e/point.html"><code>dt::point</code></a></td><td>a mistake in the document</td><td>A point is outside the tile or the region it is written in</td></tr>
+<tr><td><a href="e/at.html"><code>dt::at</code></a></td><td>a mistake in the document</td><td>No point is called that</td></tr>
+<tr><td><a href="e/region.html"><code>dt::region</code></a></td><td>a mistake in the document</td><td>A region cannot be made: it names a place that is not there, or leads back to itself</td></tr>
+<tr><td><a href="e/unknown-region.html"><code>dt::unknown-region</code></a></td><td>a mistake in the document</td><td>No region has that name</td></tr>
+<tr><td><a href="e/empty-region.html"><code>dt::empty-region</code></a></td><td>a mistake in the document</td><td>A region covers nothing</td></tr>
+<tr><td><a href="e/place.html"><code>dt::place</code></a></td><td>a mistake in the document</td><td>That place is not one the element can use</td></tr>
+<tr><td><a href="e/base.html"><code>dt::base</code></a></td><td>a mistake in the document</td><td><code>base</code> takes no settings yet</td></tr>
+<tr><td><a href="e/base-order.html"><code>dt::base-order</code></a></td><td>a mistake in the document</td><td>The base is the first line of the stack, and there is one</td></tr>
+<tr><td><a href="e/order.html"><code>dt::order</code></a></td><td>a mistake in the document</td><td>The stack lists something before what it stands on</td></tr>
+<tr><td><a href="e/plan.html"><code>dt::plan</code></a></td><td>a mistake in the document</td><td>The stack asks for something the plan cannot give yet</td></tr>
+<tr><td><a href="e/pin.html"><code>dt::pin</code></a></td><td>a mistake in the document</td><td>A pin needs <code>top=</code> and <code>at=</code>, and belongs on a body</td></tr>
+<tr><td><a href="e/empty.html"><code>dt::empty</code></a></td><td>a mistake in the document</td><td>A pin's place covers nothing</td></tr>
+<tr><td><a href="e/thin.html"><code>dt::thin</code></a></td><td>a mistake in the document</td><td>A layer can never be as thick as the printer's skin</td></tr>
+<tr><td><a href="e/band.html"><code>dt::band</code></a></td><td>the program failed, not the document</td><td>A piece misses its band: a bug in the element, not in the document</td></tr>
+<tr><td><a href="e/calm.html"><code>dt::calm</code></a></td><td>a mistake in the document</td><td>The water's calm level cannot be read</td></tr>
+<tr><td><a href="e/steep.html"><code>dt::steep</code></a></td><td>a note: nothing is refused</td><td>Pins force the dirt past its slope</td></tr>
+<tr><td><a href="e/shadowed.html"><code>dt::shadowed</code></a></td><td>a note: nothing is refused</td><td>A pin wins nowhere because later pins cover all of its place</td></tr>
+<tr><td><a href="e/edge.html"><code>dt::edge</code></a></td><td>a note: nothing is refused</td><td>A body meets the tile's edge at a height of its own, so it no longer butts a standard tile</td></tr>
+<tr><td><a href="e/look.html"><code>dt::look</code></a></td><td>a mistake in the document</td><td>An element cannot build what a control or the place asks for</td></tr>
+<tr><td><a href="e/element.html"><code>dt::element</code></a></td><td>a mistake in the document</td><td>An element refused its controls</td></tr>
+<tr><td><a href="e/crown.html"><code>dt::crown</code></a></td><td>a note: nothing is refused</td><td>The crown of one piece reaches over a taller neighbour</td></tr>
+<tr><td><a href="e/use.html"><code>dt::use</code></a></td><td>a mistake in the document</td><td>Files use each other round to themselves</td></tr>
+<tr><td><a href="e/loop.html"><code>dt::loop</code></a></td><td>a mistake in the document</td><td>Definitions call each other too deeply</td></tr>
+<tr><td><a href="e/nesting.html"><code>dt::nesting</code></a></td><td>a mistake in the document</td><td>That entry cannot go inside this one</td></tr>
+<tr><td><a href="e/too-many.html"><code>dt::too-many</code></a></td><td>a mistake in the document</td><td>The stack expands to more entries than a tile may hold</td></tr>
+<tr><td><a href="e/not-yet.html"><code>dt::not-yet</code></a></td><td>a mistake in the document</td><td>That is not available yet</td></tr>
+<tr><td><a href="e/system.html"><code>dt::system</code></a></td><td>a mistake in the document</td><td>The build target is not one the program knows</td></tr>
+<tr><td><a href="e/printer.html"><code>dt::printer</code></a></td><td>a mistake in the document</td><td>A printer profile is not found or does not read</td></tr>
+<tr><td><a href="e/no-tile.html"><code>dt::no-tile</code></a></td><td>a mistake in the document</td><td>The file has no tile to build</td></tr>
+<tr><td><a href="e/palette.html"><code>dt::palette</code></a></td><td>a mistake in the document</td><td>The palette does not read, so the tile is shown in the default paint</td></tr>
+<tr><td><a href="e/map.html"><code>dt::map</code></a></td><td>a mistake in the document</td><td>A map or print list names a tile that cannot be read</td></tr>
+<tr><td><a href="e/plates.html"><code>dt::plates</code></a></td><td>a mistake in the document</td><td>Plates are not made from a draft build</td></tr>
+<tr><td><a href="e/slots.html"><code>dt::slots</code></a></td><td>a mistake in the document</td><td>A piece needs more filaments than the printer has slots</td></tr>
+<tr><td><a href="e/gate.html"><code>dt::gate</code></a></td><td>the program failed, not the document</td><td>A piece fails the printability gate</td></tr>
+<tr><td><a href="e/grouping.html"><code>dt::grouping</code></a></td><td>a note: nothing is refused</td><td>Grouping plates by filament set takes more plates than packing by size</td></tr>
+<tr><td><a href="e/verify.html"><code>dt::verify</code></a></td><td>a note: nothing is refused</td><td>A machine's numbers are not yet checked against the maker</td></tr>
+<tr><td><a href="e/inventory.html"><code>dt::inventory</code></a></td><td>the program failed, not the document</td><td>The inventory file cannot be read or written</td></tr>
+<tr><td><a href="e/view.html"><code>dt::view</code></a></td><td>the program failed, not the document</td><td>The view of a print list could not be prepared</td></tr>
+<tr><td><a href="e/source.html"><code>dt::source</code></a></td><td>the program failed, not the document</td><td>A file could not be read</td></tr>
+<tr><td><a href="e/write.html"><code>dt::write</code></a></td><td>the program failed, not the document</td><td>A file could not be written</td></tr>
+<tr><td><a href="e/build.html"><code>dt::build</code></a></td><td>the program failed, not the document</td><td>The build failed in the program, not in the document</td></tr>
+<tr><td><a href="e/panic.html"><code>dt::panic</code></a></td><td>the program failed, not the document</td><td>The program stopped on a bug of its own</td></tr>
+<tr><td><a href="e/payload.html"><code>dt::payload</code></a></td><td>the program failed, not the document</td><td>The page sent something the program could not read</td></tr>
+<tr><td><a href="e/internal.html"><code>dt::internal</code></a></td><td>the program failed, not the document</td><td>The program reached a state it should not</td></tr>
+<tr><td><a href="e/bug.html"><code>dt::bug</code></a></td><td>the program failed, not the document</td><td>An element reached a case it does not build: a bug in the program</td></tr>
+</tbody></table></div>
+<!-- /gen:codes -->
+
+<h2 id="controls-and-lines" data-explains="dt::choice dt::duplicate dt::expert dt::missing-name dt::unknown-node"><!--gen:anchors--><span id="dt-choice"></span><span id="dt-duplicate"></span><span id="dt-expert"></span><span id="dt-missing-name"></span><span id="dt-unknown-node"></span><!--/gen:anchors-->Controls and lines</h2>
+<p>The mistakes in how a line is written, before what it says is checked.</p>
+<dl class="defs">
+  <dt><code>dt::choice</code></dt><dd>A control that takes one of a few words (<code>clods some</code>, <code>leaves bare</code>) was given a word it does not have. The message lists the words the control takes.</dd>
+  <dt><code>dt::duplicate</code></dt><dd>A control is written twice on one line, <code>top</code> set twice for example. One of them would win without a word, so the document is refused: keep one.</dd>
+  <dt><code>dt::expert</code></dt><dd>Some controls are an element&rsquo;s inner workings, kept for the library&rsquo;s own tiles. A tile may not write them; the element&rsquo;s page lists the controls a tile may.</dd>
+  <dt><code>dt::missing-name</code></dt><dd><code>let</code>, <code>point</code>, <code>line</code>, <code>region</code>, <code>define</code> and <code>param</code> each need a name straight after the keyword.</dd>
+  <dt><code>dt::unknown-node</code></dt><dd>A line this kind of document does not hold at this place: a plates line holds <code>pin</code> lines and nothing else, a tile holds the nodes of <a href="language.html#document">section 1</a>. The message says what is allowed there.</dd>
+</dl>
+
+<h2 id="definitions" data-explains="dt::loop dt::nesting dt::too-many dt::not-yet dt::element dt::no-tile"><!--gen:anchors--><span id="dt-loop"></span><span id="dt-nesting"></span><span id="dt-too-many"></span><span id="dt-not-yet"></span><span id="dt-element"></span><span id="dt-no-tile"></span><!--/gen:anchors-->Definitions and expansion</h2>
+<p>Mistakes found when the program reads a whole tile, its parts and its definitions together.</p>
+<dl class="defs">
+  <dt><code>dt::loop</code></dt><dd>Definitions call each other, or themselves, more deeply than the program follows. A definition may build on others, never round to itself.</dd>
+  <dt><code>dt::nesting</code></dt><dd>An entry was written inside one that does not take it. A <code>pin</code> goes inside a body, a thing inside a <code>scatter</code>; terrain goes in the stack.</dd>
+  <dt><code>dt::too-many</code></dt><dd>The stack expands to more than 10 000 entries once every definition is called and every scatter is counted. Scatter fewer things, or call a definition fewer times.</dd>
+  <dt><code>dt::not-yet</code></dt><dd>The word is in the language&rsquo;s plan and is not built. The message says what to write instead.</dd>
+  <dt><code>dt::element</code></dt><dd>An element looked at its controls together and refused them, for a reason the message gives. The element&rsquo;s page has its rules.</dd>
+  <dt><code>dt::no-tile</code></dt><dd><code>build</code> was asked for a file with no tile in it: a parts file, a printer profile or a level file. These are only checked.</dd>
+</dl>
+
+<h2 id="program" data-explains="dt::build dt::panic dt::payload dt::internal dt::bug"><!--gen:anchors--><span id="dt-build"></span><span id="dt-panic"></span><span id="dt-payload"></span><span id="dt-internal"></span><span id="dt-bug"></span><!--/gen:anchors-->When the program fails</h2>
+<p>These are not mistakes in a document. The program shows them loudly, with what it knows, and a report of one is welcome (<a href="standards/errors.html">Errors</a> says why they are kept apart from document mistakes).</p>
+<dl class="defs">
+  <dt><code>dt::build</code></dt><dd>A build failed inside the program, not in the document. The message holds the cause.</dd>
+  <dt><code>dt::panic</code></dt><dd>The program stopped on a bug of its own while building. The message says what it was doing.</dd>
+  <dt><code>dt::payload</code></dt><dd>The editor&rsquo;s page sent something the program could not read. Reloading the page is the first thing to try.</dd>
+  <dt><code>dt::internal</code></dt><dd>The program reached a state that the language&rsquo;s own tables rule out, such as a body that has no body. It is a bug in the program.</dd>
+  <dt><code>dt::bug</code></dt><dd>An element reached a case it does not build. It is a bug in the program, and the message names the element.</dd>
+</dl>
+
+<h2 id="files" data-explains="dt::source dt::write"><!--gen:anchors--><span id="dt-source"></span><span id="dt-write"></span><!--/gen:anchors-->Files</h2>
+<dl class="defs">
+  <dt><code>dt::source</code></dt><dd>A file could not be read: it is not there, or the program may not read it. The message has the path and the system&rsquo;s reason.</dd>
+  <dt><code>dt::write</code></dt><dd>A file could not be written: the folder is missing, or the program may not write there. The message has the path and the reason.</dd>
+</dl>
+
+</article>
+</div>
+</body>
+</html>

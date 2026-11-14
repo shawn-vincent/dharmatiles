@@ -303,7 +303,7 @@ impl RegionTree {
         let first = nodes.len();
         for r in &tile.regions {
             let mask = places.region(r).map_err(|msg| {
-                Diag::at(&tile.src, r.span, "dt::region", msg, "this region").help(
+                Diag::at(&tile.src, r.span, dt_lang::codes::REGION, msg, "this region").help(
                     "a region is made of lines, fill points, `within` and `except` of other regions, none of which may lead back to it",
                 )
             })?;
@@ -637,7 +637,7 @@ impl RegionTree {
                     ),
                 ),
             };
-            out.push(Diag::at(r.src, at, "dt::region", message, label).help(help));
+            out.push(Diag::at(r.src, at, dt_lang::codes::REGION, message, label).help(help));
         }
         out
     }
@@ -668,8 +668,14 @@ impl RegionTree {
                         Ok(xy) => xy,
                         Err((msg, help)) => {
                             out.push(
-                                Diag::at(&p.from.src, p.at_span, "dt::point", msg, "here")
-                                    .help(help),
+                                Diag::at(
+                                    &p.from.src,
+                                    p.at_span,
+                                    dt_lang::codes::POINT,
+                                    msg,
+                                    "here",
+                                )
+                                .help(help),
                             );
                             continue;
                         }
@@ -681,7 +687,7 @@ impl RegionTree {
                         Diag::at(
                             &p.from.src,
                             p.at_span,
-                            "dt::point",
+                            dt_lang::codes::POINT,
                             format!("this point is outside the region it sits in, {here}"),
                             "outside its region",
                         )
@@ -782,7 +788,7 @@ impl RegionTree {
                     Diag::at(
                         r.src,
                         at,
-                        "dt::region",
+                        dt_lang::codes::REGION,
                         format!(
                             "`{what}` goes round a region, and `{}` has a hole",
                             self.nodes[id].label

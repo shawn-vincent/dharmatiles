@@ -89,7 +89,7 @@ pub fn printer_doc(sources: &dyn Source, path: &str) -> Result<dt_doc::model::Pr
     let r = read(sources, path)?;
     let Some(p) = r.file.doc.printer.clone() else {
         return Err(vec![
-            Diag::plain("dt::printer", format!("`{path}` has no `printer`"))
+            Diag::plain(dt_lang::codes::PRINTER, format!("`{path}` has no `printer`"))
                 .help("a printer file holds `printer name { line …; layer …; overhang …; steepest …; gap … }`, or a machine: `bed \"256x256mm\"` and the rest"),
         ]);
     };
@@ -113,7 +113,7 @@ pub(super) fn misplaced(src: &Src, span: SourceSpan, word: &str, on: &str) -> Di
     Diag::at(
         src,
         span,
-        "dt::place",
+        dt_lang::codes::PLACE,
         format!("`{word}` does not place `{on}`"),
         "not a place word for this",
     )
@@ -126,7 +126,7 @@ pub(super) fn not_yet(src: &Src, span: SourceSpan, what: &str) -> Diag {
     Diag::at(
         src,
         span,
-        "dt::not-yet",
+        dt_lang::codes::NOT_YET,
         format!("{what} not available yet"),
         "not built yet",
     )
@@ -141,7 +141,7 @@ pub(super) fn read_flaw(src: &Src, span: SourceSpan, flaw: &dt_doc::consts::Read
             let d = Diag::at(
                 src,
                 span,
-                "dt::unknown-name",
+                dt_lang::codes::UNKNOWN_NAME,
                 format!("nothing installed `{name}` where this is read"),
                 "not in the context",
             );
@@ -155,7 +155,7 @@ pub(super) fn read_flaw(src: &Src, span: SourceSpan, flaw: &dt_doc::consts::Read
         ReadFlaw::PerPoint { name } => Diag::at(
             src,
             span,
-            "dt::type",
+            dt_lang::codes::TYPE,
             format!("`{name}` is worked out at each point, and this is drawn once"),
             "a count or size is not per point",
         )
@@ -167,7 +167,7 @@ pub(super) fn read_flaw(src: &Src, span: SourceSpan, flaw: &dt_doc::consts::Read
         } => Diag::at(
             src,
             span,
-            "dt::unknown-name",
+            dt_lang::codes::UNKNOWN_NAME,
             format!("`{element}` does not set `{name}`"),
             "not set here",
         )
@@ -178,7 +178,7 @@ pub(super) fn read_flaw(src: &Src, span: SourceSpan, flaw: &dt_doc::consts::Read
         ReadFlaw::Loop => Diag::at(
             src,
             span,
-            "dt::value",
+            dt_lang::codes::VALUE,
             "names read each other in a loop",
             "a loop",
         )
@@ -263,7 +263,7 @@ impl Reader<'_> {
         };
         if self.loading.iter().any(|p| p == path) {
             self.errors.push(at(
-                "dt::use",
+                dt_lang::codes::USE,
                 format!("`{path}` uses itself, through {}", self.loading.join(" → ")),
                 "a loop of files",
                 Some("files may use each other, but never round to themselves".into()),
@@ -275,9 +275,9 @@ impl Reader<'_> {
             Err(e) => {
                 // the document asked for itself, or a file a `use` names
                 let code = if from.is_some() {
-                    "dt::use"
+                    dt_lang::codes::USE
                 } else {
-                    "dt::source"
+                    dt_lang::codes::SOURCE
                 };
                 self.errors.push(at(
                     code,
@@ -410,7 +410,7 @@ impl Reader<'_> {
                 self.errors.push(Diag::at(
                     src,
                     def.name.span,
-                    "dt::seed",
+                    dt_lang::codes::SEED,
                     format!("a tile seed is a whole number from 0, not {s}"),
                     "this tile",
                 ));
@@ -478,7 +478,7 @@ impl Reader<'_> {
                             |e| format!("a line's width is a length above 0, up to {MAX_LINE_WIDTH_MM} mm: {e}"),
                         );
                         self.errors
-                            .push(Diag::at(src, w.span, "dt::value", why, "here"));
+                            .push(Diag::at(src, w.span, dt_lang::codes::VALUE, why, "here"));
                     }
                 }
             }
@@ -502,7 +502,7 @@ impl Reader<'_> {
                         |e| format!("a line's wobble is a length from 0 to 35 mm: {e}"),
                     );
                     self.errors
-                        .push(Diag::at(src, w.span, "dt::value", why, "here"));
+                        .push(Diag::at(src, w.span, dt_lang::codes::VALUE, why, "here"));
                     0.0
                 }
             };
@@ -558,7 +558,7 @@ impl Reader<'_> {
                     let mut d = Diag::at(
                         src,
                         w.mm.span,
-                        "dt::weighting",
+                        dt_lang::codes::WEIGHTING,
                         format!("a weighted range does not go on a band: `{text}` in a distance"),
                         "within is a band, not a draw",
                     );
@@ -589,14 +589,14 @@ impl Reader<'_> {
                     Ok(_) => self.errors.push(Diag::at(
                         src,
                         w.mm.span,
-                        "dt::value",
+                        dt_lang::codes::VALUE,
                         "a distance is not negative",
                         "here",
                     )),
                     Err(msg) => self.errors.push(Diag::at(
                         src,
                         w.mm.span,
-                        "dt::value",
+                        dt_lang::codes::VALUE,
                         format!("can't work out this distance: {msg}"),
                         "here",
                     )),

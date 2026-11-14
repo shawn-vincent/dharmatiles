@@ -421,7 +421,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, path: &str) {
         Ok((t, r)) => (Ok(t), r),
         Err(e) => (
             Err(vec![Diag::plain(
-                "dt::source",
+                dt_lang::codes::SOURCE,
                 format!("cannot read {path}: {e}"),
             )]),
             0,
@@ -486,7 +486,7 @@ fn rebuild_plates(
     let fail_with = |list: Option<&dt_doc::map::PrintList>, errs: Vec<Diag>, scope: Scope| {
         // a map whose every piece is on your shelf has nothing to print: that is a fact about
         // the plates, not a mistake in the map
-        let calm = is_map && errs.len() == 1 && errs[0].code == "dt::inventory";
+        let calm = is_map && errs.len() == 1 && errs[0].code == dt_lang::codes::INVENTORY;
         say(shared, id, scope, |name| {
             if calm {
                 let mut out = scene_messages(&notes, &diags, id, name);
@@ -561,7 +561,7 @@ fn rebuild_plates(
                     name,
                     format!("The pin on {pin} is not used: {why}"),
                 )
-                .code("dt::pin"),
+                .code(dt_lang::codes::PIN),
             );
         }
         if let Some(v) = &s.machine.verify {
@@ -577,7 +577,7 @@ fn rebuild_plates(
                         s.machine.label()
                     ),
                 )
-                .code("dt::verify"),
+                .code(dt_lang::codes::VERIFY),
             );
         }
         out
@@ -655,7 +655,7 @@ fn rebuild_plates(
                 });
             }),
             Err(e) => {
-                let d = Diag::plain("dt::view", format!("cannot prepare the view of {path}: {e}"));
+                let d = Diag::plain(dt_lang::codes::VIEW, format!("cannot prepare the view of {path}: {e}"));
                 fail_with(Some(&list), vec![d], Scope::Build);
             }
         }
@@ -710,7 +710,7 @@ fn rebuild_plates(
                     name,
                     format!("The pin on {pin} could not hold: {why}; it is packed like the rest"),
                 )
-                .code("dt::pin"),
+                .code(dt_lang::codes::PIN),
             );
         }
         if let Some(n) = layout.grouping_cost {
@@ -726,7 +726,7 @@ fn rebuild_plates(
                         if n == 1 { "" } else { "s" }
                     ),
                 )
-                .code("dt::grouping")
+                .code(dt_lang::codes::GROUPING)
                 .help(Some("set group to size in the panel to pack by size only")),
             );
         }
@@ -812,7 +812,7 @@ fn rebuild_plates(
                             f.join("; ")
                         ),
                     )
-                    .code("dt::gate"),
+                    .code(dt_lang::codes::GATE),
                 );
             }
             out
@@ -942,7 +942,7 @@ pub(super) fn set(shared: &Shared, v: PlatesSetReq) -> Out<ListEdited> {
     );
     if value.is_some()
         && let Err(e) = dt_doc::map::decode("plates", &probe)
-        && e.iter().any(|d| d.code != "dt::unknown-node")
+        && e.iter().any(|d| d.code != dt_lang::codes::UNKNOWN_NODE)
     {
         return Err(bad(&e[0].message));
     }
@@ -1002,12 +1002,12 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
             Ok(Some(t)) => Some(t),
             Ok(None) => {
                 return Err(report_err(&[Diag::plain(
-                    "dt::plates",
+                    dt_lang::codes::PLATES,
                     "a Bambu Studio project needs a template for the printer's settings",
                 )
                 .help("save any project from Bambu Studio for this printer as bambu.3mf in your tiles folder")]));
             }
-            Err(e) => return Err(report_err(&[Diag::plain("dt::plates", e)])),
+            Err(e) => return Err(report_err(&[Diag::plain(dt_lang::codes::PLATES, e)])),
         }
     } else {
         None
@@ -1132,7 +1132,7 @@ fn export_now(shared: &Shared, id: &str, path: &str) -> Out<PlatesExported> {
                     name,
                     format!("{f}: the printability gate fails"),
                 )
-                .code("dt::gate"),
+                .code(dt_lang::codes::GATE),
             );
         }
         out

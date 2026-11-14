@@ -60,5 +60,8 @@ fn a_library_tile_with_its_header_taken_off_is_refused_as_format_0() {
     let text = std::fs::read_to_string(path).unwrap();
     let body = text.split_once('\n').unwrap().1;
     let (errs, shown) = common::fails(body);
-    assert!(errs.iter().any(|e| e.code == "dt::format-0"), "{shown}");
+    assert!(
+        errs.iter().any(|e| e.code == dt_lang::codes::FORMAT_0),
+        "{shown}"
+    );
 }

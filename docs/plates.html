@@ -90,11 +90,11 @@ plates printer="bambu/x1c-ams" mode="multicolour" group="filament" gap="3mm" mar
 </tbody></table></div>
 <p>A mistake is shown at its text, as in a tile: a setting that is not one (<code>did you mean printer?</code>), a number with no unit, a piece with no tile.</p>
 
-<h2 id="mode">Single colour or multicolour</h2>
+<h2 id="mode" data-explains="dt::slots"><!--gen:anchors--><span id="dt-slots"></span><!--/gen:anchors-->Single colour or multicolour</h2>
 <p><strong>Single colour</strong> writes every piece in one filament with no paint on any triangle, so it fits any printer. <strong>Multicolour</strong> keeps each material in its own filament, painted per triangle, the way the single-tile 3MF is.</p>
 <p>The printer's filament slots are checked <strong>before anything builds</strong>: from each tile's stack the most filaments a piece can need is worked out, and a list that asks for more than the printer holds stops with <em>1x1-grass-tree needs 5 filaments (earth, rock, grass, wood, leaf), this printer has 4</em>, naming the piece. A build then gives the real filaments, and the check is made again. A plate never needs more filaments than the printer has.</p>
 
-<h2 id="pack">How the plates are packed</h2>
+<h2 id="pack" data-explains="dt::grouping"><!--gen:anchors--><span id="dt-grouping"></span><!--/gen:anchors-->How the plates are packed</h2>
 <ul>
 <li><strong>By real footprint.</strong> A piece is the top-down box of the whole built mesh, not its 35 mm square: a tree's crown that hangs over the edge counts (the <code>1x1-grass-tree</code> crown reaches 9.4 mm past its square, so it takes a 44 by 44 mm box). Nothing hangs off the bed or over its neighbour.</li>
 <li><strong>Large to small, in a fixed order.</strong> Biggest footprint first, then the longer side, then the order written. Each piece goes in the first free spot reading from the front-left corner of the first plate that has one, and a new plate opens when none does. The same list always gives the same plates.</li>
@@ -105,7 +105,7 @@ plates printer="bambu/x1c-ams" mode="multicolour" group="filament" gap="3mm" mar
 </ul>
 <p>A 35 mm square needs 38 mm with its gap, so a 256 mm bed (the X1 Carbon) holds 6 &times; 6 squares and a 220 mm bed (the SV06) 5 &times; 5.</p>
 
-<h2 id="export">What is written</h2>
+<h2 id="export" data-explains="dt::plates dt::gate"><!--gen:anchors--><span id="dt-plates"></span><span id="dt-gate"></span><!--/gen:anchors-->What is written</h2>
 <div class="tbl"><table>
 <thead><tr><th>Printer</th><th>File</th></tr></thead>
 <tbody>
@@ -127,7 +127,7 @@ dharmatiles plates my-list.dmap --format 3mf --out ~/prints --json</code></pre>
 <h2 id="have">What you already have</h2>
 <p>By default a piece prints only what your <a href="inventory.html">inventory</a> lacks: five copies of a grass tile of which you have two print three. The plan says how many pieces it left off (<em>2 pieces are already in your inventory left off (3 to print)</em>), and a list whose every piece is already on your shelf says so rather than lay out nothing. <code>--all</code> (or <code>inventory="ignore"</code> on the <code>plates</code> line, or <code>print="always"</code> on a piece) prints every count. The colour mode is the list's <code>mode</code>: a multicolour piece wanted where you own it only in single colour is a different piece, and still prints. After you print, <a href="inventory.html#editor">the sheet after the print</a> adds the plate to the inventory and the next list shrinks.</p>
 
-<h2 id="editor">In the editor</h2>
+<h2 id="editor" data-explains="dt::view"><!--gen:anchors--><span id="dt-view"></span><!--/gen:anchors-->In the editor</h2>
 <p>Open a <code>.dmap</code> from a folder and the view shows the printer's bed as a translucent slab the pieces stand on (any excluded zones shaded on it) with the plate in view, and the panel changes to the plates' panel. The <em>Tile</em>, <em>Map</em> and <em>Plates</em> switch in the title bar names what you are working on: a document with placed pieces also opens as a <a href="maps.html">map</a>, and <em>Print what&rsquo;s missing</em> there comes to the same plates. Looking down on the bed (Top), drag a piece to <a href="maps.html#pins">pin</a> it where you drop it.</p>
 <p>The <em>Plates</em> section shows each plate as a small picture of its bed, all at one scale: every piece where the packer put it, turned as it is turned, as a picture of that tile from above (a pinned piece is outlined). Under each, the plate's number and piece count (and its filaments in multicolour); hover for what is on it. Press one to put that plate on the bed in the view.</p>
 <p><strong>Starting a list.</strong> In a folder you own, <em>New print list</em> (beside <em>New tile</em>) asks a name and writes <code>&lt;name&gt;.dmap</code>: an empty map and a <code>plates</code> line for the printer last chosen in the title bar, never over a file. It opens on its plates. <strong>Filling it:</strong> on a tile's level, <em>Add to print list</em> picks a list (or a new one) and adds one more copy; a tile row's menu has <em>Add to print list…</em> too. A piece already in the list at the same seed and system has its <code>count</code> raised instead of being repeated. In the plates' panel, <em>Pieces</em> lists the list's pieces with <kbd>−</kbd> and <kbd>+</kbd> for the count and <kbd>✕</kbd> to take one out. Each of these is an edit of the list's text and leaves the rest of the file as it was; the toast has <em>Undo</em>, which writes the earlier text back, and the plates are laid out again.</p>

@@ -39,7 +39,7 @@ impl Decoder<'_> {
             if let Some(w) = k.words.iter().find(|w| w.word == s) {
                 if e.ty().is_some() {
                     self.err(
-                        "dt::unit",
+                        dt_lang::codes::UNIT,
                         span,
                         format!("`{s}` is a word, so it takes no annotation"),
                         "annotated word",
@@ -64,7 +64,7 @@ impl Decoder<'_> {
                         });
                     }
                     self.err(
-                        "dt::unknown-name",
+                        dt_lang::codes::UNKNOWN_NAME,
                         span,
                         format!("`{s}` is not a kind of thing"),
                         "unknown kind",
@@ -78,7 +78,7 @@ impl Decoder<'_> {
                 }
                 Axis::Bool => {
                     self.err(
-                        "dt::value",
+                        dt_lang::codes::VALUE,
                         span,
                         format!("`{name}` is #true or #false"),
                         "a string",
@@ -97,7 +97,7 @@ impl Decoder<'_> {
                 });
             }
             self.err(
-                "dt::value",
+                dt_lang::codes::VALUE,
                 span,
                 format!("`{owner} {name}` is not a switch"),
                 "a switch",
@@ -124,7 +124,7 @@ impl Decoder<'_> {
             });
         }
         self.err(
-            "dt::value",
+            dt_lang::codes::VALUE,
             span,
             format!("`{owner} {name}` is {}", axis.describe()),
             "wrong kind of value",
@@ -143,7 +143,7 @@ impl Decoder<'_> {
     ) {
         let list: Vec<&str> = words.iter().map(|w| w.word).collect();
         self.err(
-            "dt::choice",
+            dt_lang::codes::CHOICE,
             span,
             format!("`{owner} {name}` can't be `{s}`"),
             "not one of its words",
@@ -177,7 +177,7 @@ impl Decoder<'_> {
         };
         if let Some(t) = e.ty() {
             self.err(
-                "dt::unit",
+                dt_lang::codes::UNIT,
                 t.span(),
                 format!("`({})` is not written in format 1", t.value()),
                 "an annotation",
@@ -194,7 +194,7 @@ impl Decoder<'_> {
                 Some(u) if axis == Axis::Dmm => Some(u),
                 Some(u) => {
                     self.err(
-                        "dt::unit",
+                        dt_lang::codes::UNIT,
                         span,
                         format!("`({})` doesn't fit `{owner} {name}`", u.as_str()),
                         format!("{name} is {kind}"),
@@ -206,7 +206,7 @@ impl Decoder<'_> {
                 }
                 None => {
                     self.err(
-                        "dt::unit",
+                        dt_lang::codes::UNIT,
                         t.span(),
                         format!("`({})` is not an annotation", t.value()),
                         "not (mm) or (h)",
@@ -219,7 +219,7 @@ impl Decoder<'_> {
         let (x, inner) = match e.value() {
             KdlValue::Null => {
                 self.err(
-                    "dt::value",
+                    dt_lang::codes::VALUE,
                     span,
                     format!("`{name}` can't be #null"),
                     "null",
@@ -229,7 +229,7 @@ impl Decoder<'_> {
             }
             KdlValue::Bool(_) => {
                 self.err(
-                    "dt::value",
+                    dt_lang::codes::VALUE,
                     span,
                     format!("`{owner} {name}` is {kind}"),
                     "a switch",
@@ -249,7 +249,7 @@ impl Decoder<'_> {
                             k.map_or_else(|| format!("`{name}` is {kind}"), describe)
                         });
                         self.err(
-                            err.code.unwrap_or("dt::expr"),
+                            err.code.unwrap_or(dt_lang::codes::EXPR),
                             sub_span(span, at + err.start, at + err.end),
                             format!("can't read `{owner} {name}`: {}", err.message),
                             "here",
@@ -290,7 +290,7 @@ impl Decoder<'_> {
 
                 if crate::words::REGION_NAMES.contains(&n) {
                     self.err(
-                        "dt::type",
+                        dt_lang::codes::TYPE,
                         at,
                         format!("`{n}` is a region, and `{owner} {name}` is a number"),
                         "a region is not a number",
@@ -303,7 +303,7 @@ impl Decoder<'_> {
                     || crate::words::RESERVED_POINT_NAMES.contains(&n)
                 {
                     self.err(
-                        "dt::type",
+                        dt_lang::codes::TYPE,
                         at,
                         format!("`{n}` is worked out at each point, and `{owner} {name}` is drawn once"),
                         "a size or count is not per point",
@@ -347,7 +347,7 @@ impl Decoder<'_> {
             let near = did_you_mean(n, cands.iter().copied());
             let at = self.word_span(inner, n);
             self.err(
-                "dt::unknown-name",
+                dt_lang::codes::UNKNOWN_NAME,
                 at,
                 format!("no {what} is called `{n}`"),
                 "unknown name",
@@ -374,7 +374,8 @@ impl Decoder<'_> {
         if x.names().is_empty()
             && let Some(r) = range_flaw(&x, unit, axis, k, (owner, name))
         {
-            self.err("dt::range", span, r.message, r.label).help = r.help;
+            self.err(dt_lang::codes::RANGE, span, r.message, r.label)
+                .help = r.help;
             return None;
         }
         Some(Spanned {
@@ -413,7 +414,12 @@ impl Decoder<'_> {
                 }
             }
             KdlValue::Null => {
-                self.err("dt::value", span, "a value can't be #null", "null");
+                self.err(
+                    dt_lang::codes::VALUE,
+                    span,
+                    "a value can't be #null",
+                    "null",
+                );
                 return None;
             }
         };
@@ -433,7 +439,7 @@ fn percent_flaw(
     // a share is a percent or a plain fraction; a percent is refused elsewhere
     if axis != Axis::Share && x.has_percent() {
         return Some((
-            "dt::percent",
+            dt_lang::codes::PERCENT,
             Refusal {
                 message: format!("`{owner} {name}` is {kind}, not a percent"),
                 label: "a percent",

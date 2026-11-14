@@ -136,7 +136,7 @@ impl Element for Scatter {
                 "a mix of things is not gathered at a foot",
                 "scatter rocks alone `at=foot(…)`, or scatter the mix `at=` a region or a line",
             );
-            e.code = Some("dt::scatter");
+            e.code = Some(dt_lang::codes::SCATTER);
             return Err(e);
         }
         let frame = *scene.frame();

@@ -96,7 +96,7 @@ fn rows_and_columns_start_at_the_north_west() {
         "1x1",
         "line run { through south \"(0.5sq, 1.5sq)\" }\n stack { base\n dirt }",
     ));
-    assert!(e.iter().any(|d| d.code == "dt::point"), "{e:#?}");
+    assert!(e.iter().any(|d| d.code == dt_lang::codes::POINT), "{e:#?}");
 }
 
 fn hashes(b: &Built) -> String {
@@ -335,7 +335,7 @@ fn a_region_with_a_hole_refuses_a_turn_and_nothing_else() {
         "2x2",
         &format!("{ring}\n stack {{ base\n dirt at=ring top=\"$groundHeight + 4dmm * $a\" }}"),
     ));
-    assert_eq!(e[0].code, "dt::region", "{e:#?}");
+    assert_eq!(e[0].code, dt_lang::codes::REGION, "{e:#?}");
     assert!(e[0].message.contains("has a hole"), "{e:#?}");
     // pointed at the formula's own `$a`
     let (src, span) = e[0].at.as_ref().unwrap();
@@ -350,7 +350,7 @@ fn a_region_with_a_hole_refuses_a_turn_and_nothing_else() {
             "{ring}\n let $turn \"a($region, %)\"\n stack {{ base\n dirt at=ring top=\"$groundHeight + 4dmm * $turn\" }}"
         ),
     ));
-    assert_eq!(e[0].code, "dt::region", "{e:#?}");
+    assert_eq!(e[0].code, dt_lang::codes::REGION, "{e:#?}");
     // the depth, the position, and the tile's own turn are fine
     ok(&tile1(
         "2x2",
@@ -420,7 +420,7 @@ fn an_element_reads_only_the_names_it_sets() {
         "1x1",
         "stack { base\n scatter count=2 { rock size=\"$d * 1dmm\" } }",
     ));
-    assert_eq!(e[0].code, "dt::type", "{e:#?}");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE, "{e:#?}");
 }
 
 // ---- points in a named region's frame ----
@@ -509,7 +509,7 @@ fn a_point_outside_the_region_it_sits_in_is_refused_at_check() {
     ] {
         let body = if at.contains("parent") { "nw" } else { "bank" };
         let e = refused(&banks(at, body));
-        assert_eq!(e[0].code, "dt::point", "{at}: {e:#?}");
+        assert_eq!(e[0].code, dt_lang::codes::POINT, "{at}: {e:#?}");
         assert!(e[0].message.contains("outside the region"), "{at}: {e:#?}");
         assert!(e[0].message.contains("`"), "{at}: {e:#?}");
     }
@@ -536,7 +536,7 @@ fn the_tile_has_no_parent_for_a_point_either() {
     ));
     assert!(
         e.iter()
-            .any(|d| d.code == "dt::point" && d.message.contains("no parent")),
+            .any(|d| d.code == dt_lang::codes::POINT && d.message.contains("no parent")),
         "{e:#?}"
     );
     let e = refused(&tile1(

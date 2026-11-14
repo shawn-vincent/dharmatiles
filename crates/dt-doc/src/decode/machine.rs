@@ -83,7 +83,7 @@ impl Decoder<'_> {
         let key = c.name().value();
         let [e] = c.entries() else {
             self.err(
-                "dt::printer",
+                dt_lang::codes::PRINTER,
                 c.span(),
                 format!("`{key}` takes one quoted value"),
                 "here",
@@ -93,7 +93,7 @@ impl Decoder<'_> {
         };
         let Some(text) = arg_str(e) else {
             self.err(
-                "dt::printer",
+                dt_lang::codes::PRINTER,
                 value_span(e),
                 format!("`{key}` takes a quoted value"),
                 "not a string",
@@ -105,7 +105,7 @@ impl Decoder<'_> {
         match read(text) {
             Ok(value) => Some(Spanned { value, span }),
             Err(m) => {
-                self.err("dt::printer", span, m, "not that");
+                self.err(dt_lang::codes::PRINTER, span, m, "not that");
                 None
             }
         }
@@ -152,7 +152,7 @@ impl Decoder<'_> {
             return true;
         }
         self.err(
-            "dt::printer",
+            dt_lang::codes::PRINTER,
             span,
             format!("{what} is a positive size under 2000 mm"),
             "not that",
@@ -163,7 +163,7 @@ impl Decoder<'_> {
     fn slots(&mut self, c: &KdlNode) -> Option<Spanned<u32>> {
         let [e] = c.entries() else {
             self.err(
-                "dt::printer",
+                dt_lang::codes::PRINTER,
                 c.span(),
                 "`slots` takes one whole number",
                 "here",
@@ -178,7 +178,7 @@ impl Decoder<'_> {
             }),
             _ => {
                 self.err(
-                    "dt::printer",
+                    dt_lang::codes::PRINTER,
                     span,
                     "`slots` is the number of filaments loaded at once, from 1 to 32",
                     "not that",
@@ -192,7 +192,7 @@ impl Decoder<'_> {
         if !c.entries().is_empty() {
             let span = c.entries().first().map_or(c.span(), KdlEntry::span);
             self.err(
-                "dt::printer",
+                dt_lang::codes::PRINTER,
                 span,
                 "`excluded` is a block of `zone` lines",
                 "put the zones inside",
@@ -202,7 +202,7 @@ impl Decoder<'_> {
         for z in c.iter_children() {
             if z.name().value() != "zone" {
                 self.err(
-                    "dt::unknown-control",
+                    dt_lang::codes::UNKNOWN_CONTROL,
                     z.name().span(),
                     format!("`excluded` holds `zone` lines, not `{}`", z.name().value()),
                     "unknown",

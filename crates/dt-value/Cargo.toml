@@ -11,8 +11,6 @@ publish.workspace = true
 # Seeded maths uses libm, never std's platform maths.
 [dependencies]
 libm.workspace = true
-
-[dev-dependencies]
 dt-lang.workspace = true
 
 [lints]

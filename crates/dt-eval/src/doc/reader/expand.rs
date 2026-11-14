@@ -47,7 +47,7 @@ impl Reader<'_> {
                         Diag::at(
                             &at,
                             span,
-                            "dt::too-many",
+                            dt_lang::codes::TOO_MANY,
                             format!("this expands to more than {MAX_ENTRIES} stack entries"),
                             "expands too far",
                         )
@@ -79,7 +79,7 @@ impl Reader<'_> {
                         self.errors.push(Diag::at(
                             src,
                             s.span,
-                            "dt::seed",
+                            dt_lang::codes::SEED,
                             "a seed is a whole number from 0",
                             "negative",
                         ));
@@ -130,7 +130,7 @@ impl Reader<'_> {
                             let mut d = Diag::at(
                                 src,
                                 e.what.span,
-                                "dt::missing-control",
+                                dt_lang::codes::MISSING_CONTROL,
                                 format!(
                                     "`{}` needs `{w}=`, and the definition call gives none",
                                     element.name
@@ -183,7 +183,8 @@ impl Reader<'_> {
                                 Err((msg, help)) => {
                                     ok = false;
                                     self.errors.push(
-                                        Diag::at(src, a.span, "dt::type", msg, "here").help(help),
+                                        Diag::at(src, a.span, dt_lang::codes::TYPE, msg, "here")
+                                            .help(help),
                                     );
                                 }
                             }
@@ -206,7 +207,11 @@ impl Reader<'_> {
                                     .get(n)
                                     .map(|q| fixed(((q[0], q[0]), (q[1], q[1]))))
                                     .ok_or_else(|| {
-                                        ("dt::at", format!("no point is called `{n}`"), None)
+                                        (
+                                            dt_lang::codes::AT,
+                                            format!("no point is called `{n}`"),
+                                            None,
+                                        )
                                     }),
                                 Point::Pair { x, y } => crate::lower::coordinate(x)
                                     .and_then(|x| Ok([x, crate::lower::coordinate(y)?]))
@@ -225,7 +230,7 @@ impl Reader<'_> {
                                 v => v
                                     .bounds(self.dims.0, self.dims.1)
                                     .map(fixed)
-                                    .map_err(|msg| ("dt::at", msg, None)),
+                                    .map_err(|msg| (dt_lang::codes::AT, msg, None)),
                             };
                             match drawn {
                                 Ok(d) => point = Some(d),
@@ -260,7 +265,7 @@ impl Reader<'_> {
                                 Diag::at(
                                     src,
                                     c.what.span,
-                                    "dt::nesting",
+                                    dt_lang::codes::NESTING,
                                     format!(
                                         "`{}` can't go inside `{}`",
                                         c.what.value, element.name
@@ -404,7 +409,7 @@ impl Reader<'_> {
                         self.errors.push(Diag::at(
                             src,
                             e.what.span,
-                            "dt::unknown-name",
+                            dt_lang::codes::UNKNOWN_NAME,
                             format!("cannot find the definition `{name}`"),
                             "not loaded",
                         ));
@@ -414,7 +419,7 @@ impl Reader<'_> {
                         self.errors.push(Diag::at(
                             src,
                             e.what.span,
-                            "dt::loop",
+                            dt_lang::codes::LOOP,
                             "definitions call each other too deeply",
                             "here",
                         ));
@@ -527,7 +532,7 @@ impl Reader<'_> {
                     Diag::at(
                         src,
                         c.what.span,
-                        "dt::nesting",
+                        dt_lang::codes::NESTING,
                         format!("`{}` can't be scattered", cl.name),
                         "not a thing",
                     )
@@ -540,7 +545,7 @@ impl Reader<'_> {
                     self.errors.push(Diag::at(
                         src,
                         c.what.span,
-                        "dt::unknown-name",
+                        dt_lang::codes::UNKNOWN_NAME,
                         format!("cannot find the definition `{name}`"),
                         "not loaded",
                     ));
@@ -553,7 +558,7 @@ impl Reader<'_> {
                             Diag::at(
                                 src,
                                 c.what.span,
-                                "dt::nesting",
+                                dt_lang::codes::NESTING,
                                 format!("`{name}` is not one thing, so a scatter cannot hold it"),
                                 "not one thing",
                             )

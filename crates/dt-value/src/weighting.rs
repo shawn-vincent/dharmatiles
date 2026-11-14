@@ -253,7 +253,7 @@ pub const SPREAD: (f64, f64) = (0.05, 1.0);
 
 fn bad(message: String, help: &str) -> WeightingError {
     WeightingError {
-        code: "dt::range",
+        code: dt_lang::codes::RANGE,
         message,
         help: help.to_owned(),
     }
@@ -261,7 +261,7 @@ fn bad(message: String, help: &str) -> WeightingError {
 
 fn misuse(message: String, help: String) -> WeightingError {
     WeightingError {
-        code: "dt::weighting",
+        code: dt_lang::codes::WEIGHTING,
         message,
         help,
     }
@@ -1761,7 +1761,7 @@ mod tests {
             vec![1.0, f64::NAN],
         ] {
             let e = Weighting::steps(&bad).unwrap_err();
-            assert_eq!(e.code, "dt::range", "{bad:?}");
+            assert_eq!(e.code, dt_lang::codes::RANGE, "{bad:?}");
             assert!(!e.help.is_empty());
         }
         assert!(Weighting::steps(&[1.0; MAX_BINS]).is_ok());
@@ -1799,7 +1799,7 @@ mod tests {
         }
         // a value written twice is dt::weighting, with the list to write
         let e = Dist::list(&[(1.0, Some(4.0)), (2.0, Some(5.0)), (2.0, Some(1.0))]).unwrap_err();
-        assert_eq!(e.code, "dt::weighting");
+        assert_eq!(e.code, dt_lang::codes::WEIGHTING);
         assert_eq!(e.message, "2 is listed twice in [1:4, 2:5, 2:1]");
         assert_eq!(
             e.help,
@@ -1812,7 +1812,11 @@ mod tests {
             vec![(f64::NAN, None)],
             vec![],
         ] {
-            assert_eq!(Dist::list(&bad).unwrap_err().code, "dt::range", "{bad:?}");
+            assert_eq!(
+                Dist::list(&bad).unwrap_err().code,
+                dt_lang::codes::RANGE,
+                "{bad:?}"
+            );
         }
         let many: Vec<(f64, Option<f64>)> = (0..64).map(|i| (f64::from(i), None)).collect();
         assert!(Dist::list(&many).is_ok());
@@ -1865,13 +1869,13 @@ mod tests {
             Weighting::mix(vec![(1.0, list), (1.0, Weighting::Flat)])
                 .unwrap_err()
                 .code,
-            "dt::weighting"
+            dt_lang::codes::WEIGHTING
         );
         assert_eq!(
             Weighting::mix(vec![(1.0, w.clone()), (1.0, Weighting::Flat)])
                 .unwrap_err()
                 .code,
-            "dt::weighting"
+            dt_lang::codes::WEIGHTING
         );
         // limits
         assert!(Weighting::mix(vec![(1.0, Weighting::Flat)]).is_err());

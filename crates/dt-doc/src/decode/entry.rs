@@ -59,7 +59,7 @@ impl Decoder<'_> {
     pub(crate) fn entries(&mut self, stack: &KdlNode, ctx: &Ctx, path: &[String]) -> Vec<Entry> {
         if let Some(e) = stack.entries().first() {
             self.err(
-                "dt::stack",
+                dt_lang::codes::STACK,
                 e.span(),
                 "`stack` takes no values",
                 "unexpected",
@@ -90,7 +90,7 @@ impl Decoder<'_> {
                 match self.base_node(n, out.len()) {
                     Some(b) if base.is_some() => {
                         self.err(
-                            "dt::base-order",
+                            dt_lang::codes::BASE_ORDER,
                             b.span,
                             "a stack has one base",
                             "a second base",
@@ -116,7 +116,7 @@ impl Decoder<'_> {
                     && o.place.id.as_ref().is_some_and(|i| i.value == id.value)
             }) {
                 self.err(
-                    "dt::id",
+                    dt_lang::codes::ID,
                     id.span,
                     format!(
                         "another `{}` here already has `id={}`",
@@ -182,7 +182,7 @@ impl Decoder<'_> {
                 )
             };
             self.err(
-                "dt::scatter",
+                dt_lang::codes::SCATTER,
                 entry.what.span,
                 format!("`{owner}` can't be scattered"),
                 "not a thing",
@@ -206,7 +206,7 @@ impl Decoder<'_> {
                 }
                 .or_else(|| Some("write `control=value`".to_owned()));
                 self.err(
-                    "dt::positional",
+                    dt_lang::codes::POSITIONAL,
                     e.span(),
                     format!("`{owner}` takes name=value controls"),
                     "no name",
@@ -256,7 +256,7 @@ impl Decoder<'_> {
                     c.entries().iter().filter(|e| e.name().is_some()).collect();
                 if let Some(kids) = c.children() {
                     self.err(
-                        "dt::control-node",
+                        dt_lang::codes::CONTROL_NODE,
                         kids.span(),
                         format!("`{}` has no block", key.value),
                         "here",
@@ -268,7 +268,7 @@ impl Decoder<'_> {
                 }
                 if args.len() > 1 {
                     self.err(
-                        "dt::control-node",
+                        dt_lang::codes::CONTROL_NODE,
                         args[1].span(),
                         format!("`{}` takes one value", key.value),
                         "a second value",
@@ -297,7 +297,7 @@ impl Decoder<'_> {
                     }
                     _ => {
                         self.err(
-                            "dt::control-node",
+                            dt_lang::codes::CONTROL_NODE,
                             c.span(),
                             format!("`{}` takes one value", key.value),
                             "here",
@@ -323,7 +323,7 @@ impl Decoder<'_> {
                     format!("list `{}` in the stack beside `{owner}`", key.value)
                 };
                 self.err(
-                    "dt::nesting",
+                    dt_lang::codes::NESTING,
                     key.span,
                     format!("`{}` can't go inside `{owner}`", key.value),
                     "not a control here",
@@ -362,7 +362,7 @@ impl Decoder<'_> {
         names.extend(self.imported.keys().map(String::as_str));
         let near = did_you_mean(name, names.iter().copied()).map(str::to_owned);
         self.err(
-            "dt::unknown-element",
+            dt_lang::codes::UNKNOWN_ELEMENT,
             what.span,
             format!("no element or definition is called `{name}`"),
             "unknown",
@@ -403,7 +403,7 @@ impl Decoder<'_> {
         let word = key.value.as_str();
         let dup = |this: &mut Self| {
             this.err(
-                "dt::duplicate",
+                dt_lang::codes::DUPLICATE,
                 key.span,
                 format!("`{word}` is set twice"),
                 "again here",
@@ -417,7 +417,7 @@ impl Decoder<'_> {
                     match super::seed_value(e) {
                         Ok(i) => entry.place.seed = Some(Spanned { value: i, span }),
                         Err((msg, label)) => {
-                            self.err("dt::seed", span, msg, label);
+                            self.err(dt_lang::codes::SEED, span, msg, label);
                         }
                     }
                 }
@@ -431,7 +431,7 @@ impl Decoder<'_> {
                             || s.bytes().all(|b| b.is_ascii_digit()) =>
                     {
                         self.err(
-                            "dt::id",
+                            dt_lang::codes::ID,
                             span,
                             format!("`id` is a plain name, not `{s}`"),
                             "not a plain name",
@@ -448,7 +448,7 @@ impl Decoder<'_> {
                         })
                     }
                     None => {
-                        self.err("dt::value", span, "`id` is a name", "not a name");
+                        self.err(dt_lang::codes::VALUE, span, "`id` is a name", "not a name");
                     }
                 }
                 return true;
@@ -456,7 +456,7 @@ impl Decoder<'_> {
             "weight" => {
                 if parent != Parent::Scatter {
                     self.err(
-                        "dt::weight",
+                        dt_lang::codes::WEIGHT,
                         key.span,
                         "`weight=` is a scatter child's share of the mix",
                         "not in a scatter",
@@ -474,12 +474,17 @@ impl Decoder<'_> {
                         if v > 0.0 {
                             entry.place.weight = Some(Spanned { value: v, span });
                         } else {
-                            self.err("dt::weight", span, "a weight is above zero", "not positive");
+                            self.err(
+                                dt_lang::codes::WEIGHT,
+                                span,
+                                "a weight is above zero",
+                                "not positive",
+                            );
                         }
                     }
                     _ => {
                         self.err(
-                            "dt::weight",
+                            dt_lang::codes::WEIGHT,
                             span,
                             "a weight is a plain number",
                             "not a number",
@@ -511,7 +516,7 @@ impl Decoder<'_> {
                 _ => format!("`{owner}` doesn't take `{word}=`"),
             };
             self.err(
-                "dt::place",
+                dt_lang::codes::PLACE,
                 key.span,
                 format!("`{owner}` doesn't take `{word}=`"),
                 "not a place word for this",
@@ -521,7 +526,7 @@ impl Decoder<'_> {
         }
         if parent == Parent::Scatter && pw == PlaceWord::At {
             self.err(
-                "dt::place",
+                dt_lang::codes::PLACE,
                 key.span,
                 format!("a scattered {owner} is placed by its scatter"),
                 "inside a scatter",
@@ -540,7 +545,7 @@ impl Decoder<'_> {
                     None => {
                         let s = arg_value_str(e).unwrap_or("");
                         self.err(
-                            "dt::choice",
+                            dt_lang::codes::CHOICE,
                             span,
                             format!("`side` can't be `{s}`"),
                             "not a side",
@@ -575,7 +580,7 @@ impl Decoder<'_> {
         let owner = entry.what.value.clone();
         if entry.controls.iter().any(|s| s.name.value == key.value) {
             self.err(
-                "dt::duplicate",
+                dt_lang::codes::DUPLICATE,
                 key.span,
                 format!("`{}` is set twice", key.value),
                 "again here",
@@ -597,7 +602,7 @@ impl Decoder<'_> {
             && !is_param
         {
             self.err(
-                "dt::expert",
+                dt_lang::codes::EXPERT,
                 key.span,
                 format!("`{owner} {}` is an expert control", k.name),
                 "not in a tile",
@@ -610,7 +615,7 @@ impl Decoder<'_> {
         }
         if form == Form::Property && k.is_some_and(Control::is_group) {
             self.err(
-                "dt::group",
+                dt_lang::codes::GROUP,
                 key.span,
                 format!("`{}` is a group of controls", key.value),
                 "a group",
@@ -634,7 +639,7 @@ impl Decoder<'_> {
         match (value, k) {
             (Some(e), Some(k)) if k.is_group() => {
                 self.err(
-                    "dt::group",
+                    dt_lang::codes::GROUP,
                     value_span(e),
                     format!("`{}` has no value of its own", k.name),
                     "a value",
@@ -691,7 +696,7 @@ impl Decoder<'_> {
                     k.map_or_else(Vec::new, |k| k.subs.iter().map(|s| s.name).collect());
                 let near = did_you_mean(&sk.value, names.iter().copied());
                 self.err(
-                    "dt::unknown-control",
+                    dt_lang::codes::UNKNOWN_CONTROL,
                     sk.span,
                     format!("`{owner} {}` has no `{}`", key.value, sk.value),
                     "unknown",
@@ -709,7 +714,7 @@ impl Decoder<'_> {
             };
             if setting.subs.iter().any(|s| s.name.value == sk.value) {
                 self.err(
-                    "dt::duplicate",
+                    dt_lang::codes::DUPLICATE,
                     sk.span,
                     format!("`{}` is set twice", sk.value),
                     "again here",
@@ -744,7 +749,7 @@ impl Decoder<'_> {
                 },
             );
             self.err(
-                "dt::control-node",
+                dt_lang::codes::CONTROL_NODE,
                 key.span,
                 format!("`{}` needs a value", key.value),
                 "empty",
@@ -756,7 +761,7 @@ impl Decoder<'_> {
             for r in k.subs.iter().filter(|s| s.required) {
                 if !setting.subs.iter().any(|s| s.name.value == r.name) {
                     self.err(
-                        "dt::missing-control",
+                        dt_lang::codes::MISSING_CONTROL,
                         key.span,
                         format!("`{} {}` needs `{}`", owner, k.name, r.name),
                         format!("no `{}`", r.name),
@@ -824,7 +829,7 @@ impl Decoder<'_> {
             "control"
         };
         self.err(
-            "dt::unknown-control",
+            dt_lang::codes::UNKNOWN_CONTROL,
             key.span,
             format!("`{owner}` has no {what} `{name}`"),
             format!("unknown {what}"),
@@ -853,7 +858,7 @@ impl Decoder<'_> {
                 };
                 if !has {
                     self.err(
-                        "dt::missing-control",
+                        dt_lang::codes::MISSING_CONTROL,
                         span,
                         format!("`{owner}` needs `{}=`", need.as_str()),
                         format!("this {owner} has no `{}=`", need.as_str()),
@@ -866,7 +871,7 @@ impl Decoder<'_> {
             for k in l.controls.iter().filter(|k| k.required) {
                 if entry.control(k.name).is_none() {
                     self.err(
-                        "dt::missing-control",
+                        dt_lang::codes::MISSING_CONTROL,
                         span,
                         format!("`{owner}` needs `{}`", k.name),
                         format!("no `{}`", k.name),
@@ -879,7 +884,7 @@ impl Decoder<'_> {
             && matches!(along.value, Along::Edges(_))
         {
             self.err(
-                "dt::place",
+                dt_lang::codes::PLACE,
                 side.span,
                 "`side=` is for drawn lines",
                 "along a tile edge",
@@ -890,8 +895,13 @@ impl Decoder<'_> {
         }
         if entry.place.side.is_some() && entry.place.along.is_none() {
             let s = entry.place.side.as_ref().map_or(span, |s| s.span);
-            self.err("dt::place", s, "`side=` needs `at=` a line", "no line")
-                .help = Some("write `at=trail side=left`".to_owned());
+            self.err(
+                dt_lang::codes::PLACE,
+                s,
+                "`side=` needs `at=` a line",
+                "no line",
+            )
+            .help = Some("write `at=trail side=left`".to_owned());
         }
         if let Callee::Definition(d) = &entry.callee
             && let Some(info) = self.def_info(d).cloned()
@@ -899,7 +909,7 @@ impl Decoder<'_> {
             for p in info.params.iter().filter(|p| !p.has_default) {
                 if entry.control(&p.name).is_none() {
                     self.err(
-                        "dt::missing-control",
+                        dt_lang::codes::MISSING_CONTROL,
                         span,
                         format!("`{owner}` needs `{}`", p.name),
                         format!("no `{}`", p.name),
@@ -939,12 +949,17 @@ impl Decoder<'_> {
         let per = entry.control("perSquare");
         match (count, per) {
             (None, None) => {
-                self.err("dt::scatter", span, "a scatter says how many", "no count")
-                    .help = Some("write `count=5` in total, or `perSquare=6`".to_owned());
+                self.err(
+                    dt_lang::codes::SCATTER,
+                    span,
+                    "a scatter says how many",
+                    "no count",
+                )
+                .help = Some("write `count=5` in total, or `perSquare=6`".to_owned());
             }
             (Some(_), Some(p)) => {
                 self.err(
-                    "dt::scatter",
+                    dt_lang::codes::SCATTER,
                     p.name.span,
                     "`count` and `perSquare` both say how many",
                     "a second count",
@@ -959,7 +974,7 @@ impl Decoder<'_> {
                     && n.expr.bounds(&|_| None) == Ok((1.0, 1.0))
                 {
                     self.err(
-                        "dt::scatter",
+                        dt_lang::codes::SCATTER,
                         *span,
                         "a scatter is for more than one",
                         "one",
@@ -977,7 +992,7 @@ impl Decoder<'_> {
             && entry.place.along.is_none()
         {
             self.err(
-                "dt::scatter",
+                dt_lang::codes::SCATTER,
                 s.name.span,
                 "`reach` is how far out from a line or a foot: the scatter is `at=` neither",
                 "no line or foot",
@@ -989,7 +1004,7 @@ impl Decoder<'_> {
         }
         if entry.children.is_empty() {
             self.err(
-                "dt::scatter",
+                dt_lang::codes::SCATTER,
                 span,
                 "a scatter's children say what it scatters",
                 "nothing to scatter",

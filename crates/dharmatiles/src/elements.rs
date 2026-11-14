@@ -11,8 +11,12 @@ use serde_json::{Map, Value, json};
 
 use crate::{ERROR, OK, errors_json, report};
 
-/// The documentation site (GitHub Pages, served from `docs/` on `main`).
-pub const DOCS: &str = "https://shawn-vincent.github.io/dharmatiles/";
+/// The documentation site with its trailing slash.  It is derived from the repository address in `Cargo.toml`
+/// ([`dt_lang::codes::site_base`]), the one place the address is written.
+#[must_use]
+pub fn docs() -> String {
+    format!("{}/", dt_lang::codes::site_base())
+}
 
 /// List every element, or one element's controls.
 pub fn run(name: Option<&str>, json: bool) -> u8 {
@@ -32,7 +36,7 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
             dt_doc::error::did_you_mean_help,
         );
         let e = Diag::plain(
-            "dt::unknown-element",
+            dt_lang::codes::UNKNOWN_ELEMENT,
             format!("no element is called `{name}`"),
         )
         .help(hint);
@@ -115,7 +119,7 @@ fn summary_json(l: &'static Element) -> Value {
         "name": l.name,
         "role": role(l.role),
         "about": l.about,
-        "href": format!("{DOCS}elements/{}.html", l.name),
+        "href": format!("{}elements/{}.html", docs(), l.name),
         "family": l.family.as_str(),
         "built": built(l).is_some(),
     })
@@ -231,7 +235,7 @@ fn node_json(n: &'static Node) -> Value {
     json!({
         "name": n.name,
         "about": n.about,
-        "href": format!("{DOCS}{}", n.doc),
+        "href": format!("{}{}", docs(), n.doc),
         "controls": n.controls.iter().map(|c| control_json(Taken::Always, c.name, c)).collect::<Vec<_>>(),
     })
 }
@@ -242,7 +246,7 @@ fn node_json(n: &'static Node) -> Value {
 pub(crate) fn language_json() -> Value {
     let names: Vec<&str> = [dt_lang::POINT_NAMES, dt_lang::REGION_NAMES].concat();
     json!({
-        "docs": DOCS,
+        "docs": docs(),
         "nodes": schema_nodes().iter().map(node_json).collect::<Vec<_>>(),
         "units": dt_lang::UNITS,
         // what each unit word means, for the tooltip on a written unit

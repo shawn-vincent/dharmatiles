@@ -285,7 +285,7 @@ fn two_ranges_are_two_rolls_with_or_without_odds() {
     // a cloud scaled by a range has no weighting: one roll is the factor
     let d = refused(
         &dirt("$groundHeight + low(0dmm .. 2dmm) * [1 .. 2]"),
-        "dt::cloud",
+        dt_lang::codes::CLOUD,
         "multiply a cloud by a number",
     );
     assert!(d.message.contains("multiplies a cloud"), "{}", d.message);
@@ -295,21 +295,21 @@ fn two_ranges_are_two_rolls_with_or_without_odds() {
 fn a_cloud_is_not_divided_into_or_folded() {
     let d = refused(
         &dirt("$groundHeight + 4dmm / low(1 .. 2)"),
-        "dt::cloud",
+        dt_lang::codes::CLOUD,
         "shifted",
     );
     assert!(d.message.contains("divides by a cloud"), "{}", d.message);
     for f in ["sin", "cos"] {
         let d = refused(
             &dirt(&format!("$groundHeight + 2dmm * {f}(low(0deg .. 90deg))")),
-            "dt::cloud",
+            dt_lang::codes::CLOUD,
             "inside the range",
         );
         assert!(d.message.contains("fold"), "{}", d.message);
     }
     refused(
         &dirt("$groundHeight + abs(low(-2dmm .. 2dmm))"),
-        "dt::cloud",
+        dt_lang::codes::CLOUD,
         "inside the range",
     );
 }
@@ -353,24 +353,24 @@ fn two_plain_ranges_span_their_sum_and_come_up_like_two_dice() {
 fn a_weighting_that_cannot_be_made_is_said_where_it_is_written() {
     refused(
         &dirt("$groundHeight + low(0dmm .. 4dmm, -2)"),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "1 is flat",
     );
     refused(
         &dirt("$groundHeight + bell(0dmm .. 4dmm, 2)"),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "share of the width",
     );
     // a cloud at the end of a range, and a range with odds already
     refused(
         &dirt("[$groundHeight .. $groundHeight + low(0dmm .. 4dmm)]"),
-        "dt::cloud",
+        dt_lang::codes::CLOUD,
         "around the whole range",
     );
     // a distance is not a cloud
     refused(
         "dharmatiles version=1\ntile size=\"1x1\" seed=7 {\n    line l { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n    region r { within \"low(2dmm .. 6dmm)\" of=l }\n    stack { base\n dirt at=r }\n}\n",
-        "dt::weighting",
+        dt_lang::codes::WEIGHTING,
         "write the range alone",
     );
 }

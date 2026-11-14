@@ -98,7 +98,7 @@ fn a_parent_the_tree_does_not_have_is_refused_before_any_build() {
         Ok(_) => panic!("a tree has no grandparent below the tile"),
         Err(e) => e,
     };
-    assert!(e.iter().any(|d| d.code == "dt::region"), "{e:?}");
+    assert!(e.iter().any(|d| d.code == dt_lang::codes::REGION), "{e:?}");
 }
 
 #[test]
@@ -131,6 +131,9 @@ fn a_top_the_crown_cannot_fit_is_the_tiles_to_fix() {
     let text = tile("(1sq, 1sq)", "$bottom + 20dmm").replace("14dmm", "19dmm");
     let opts = Options::default();
     let errs = build(&mem(&text), "t.dtile", &opts).err().expect("refused");
-    assert!(errs.iter().any(|d| d.code == "dt::look"), "{errs:#?}");
+    assert!(
+        errs.iter().any(|d| d.code == dt_lang::codes::LOOK),
+        "{errs:#?}"
+    );
     check(&mem(&text), "t.dtile", &opts).unwrap();
 }

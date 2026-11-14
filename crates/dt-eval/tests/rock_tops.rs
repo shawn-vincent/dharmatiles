@@ -161,5 +161,5 @@ fn a_clouds_arithmetic_rules_hold_on_a_rock() {
     let e = build(&mem(&text), "t.dtile", &Options::default())
         .err()
         .expect("a cloud divided into");
-    assert!(e.iter().any(|d| d.code == "dt::cloud"), "{e:?}");
+    assert!(e.iter().any(|d| d.code == dt_lang::codes::CLOUD), "{e:?}");
 }

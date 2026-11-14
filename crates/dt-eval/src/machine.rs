@@ -99,7 +99,7 @@ struct Loaded {
 fn load(name: &str, home: Option<&Path>, depth: u8) -> Result<Loaded, Vec<Diag>> {
     if !profile_name_ok(name) {
         return Err(vec![
-            Diag::plain("dt::printer", format!("`{name}` is not a printer name")).help(
+            Diag::plain(dt_lang::codes::PRINTER, format!("`{name}` is not a printer name")).help(
                 "a printer name is letters, digits, `-` and `_`, as `fine`, or brand and model, as `bambu/x1c`",
             ),
         ]);
@@ -114,8 +114,11 @@ fn load(name: &str, home: Option<&Path>, depth: u8) -> Result<Loaded, Vec<Diag>>
         } else {
             let have: Vec<String> = printer_names(home).into_iter().map(|(n, _)| n).collect();
             return Err(vec![
-                Diag::plain("dt::printer", format!("no printer profile `{name}`"))
-                    .help(format!("the profiles are: {}", have.join(", "))),
+                Diag::plain(
+                    dt_lang::codes::PRINTER,
+                    format!("no printer profile `{name}`"),
+                )
+                .help(format!("the profiles are: {}", have.join(", "))),
             ]);
         }
     };
@@ -149,8 +152,11 @@ fn load(name: &str, home: Option<&Path>, depth: u8) -> Result<Loaded, Vec<Diag>>
             .trim_end_matches(".dtile");
         if depth >= 4 || parent == name {
             return Err(vec![
-                Diag::plain("dt::printer", format!("`{name}` starts from itself"))
-                    .help("`from` names another profile, which may not lead back here"),
+                Diag::plain(
+                    dt_lang::codes::PRINTER,
+                    format!("`{name}` starts from itself"),
+                )
+                .help("`from` names another profile, which may not lead back here"),
             ]);
         }
         let base = load(parent, home, depth + 1)?;
@@ -267,7 +273,7 @@ impl Machine {
     pub fn bed_or_say(&self) -> Result<[f64; 2], Diag> {
         self.bed.ok_or_else(|| {
             Diag::plain(
-                "dt::printer",
+                dt_lang::codes::PRINTER,
                 format!("the printer profile `{}` has no bed", self.name),
             )
             .help("plates need a machine: add `bed \"256x256mm\"` to the profile, or pick one such as `bambu/x1c`")

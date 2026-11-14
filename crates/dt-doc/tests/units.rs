@@ -110,27 +110,27 @@ fn units_follow_numbers_and_bind_tighter_than_multiplication() {
 fn a_bare_number_where_a_length_or_an_angle_is_needed_is_an_error() {
     refused(
         &tile("stack { base\n scatter count=2 { rock size=\"8\" } }"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "8dmm or 8mm",
     );
     refused(
         &tile("stack { base\n scatter count=2 { rock size=8 } }"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "8dmm or 8mm",
     );
     refused(
         &tile("stack { base\n dirt maxSlope=35 }"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "35deg",
     );
     refused(
         &tile("stack { base\n dirt top=8 }"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "8dmm or 8mm",
     );
     refused(
         &tile("stack { base\n dirt top=\"$groundHeight + 4\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "4dmm",
     );
     // a bare zero is the same in every unit
@@ -165,34 +165,34 @@ fn units_and_kinds_in_control_values() {
     ok("dharmatiles version=1\ndefine oak { stack { tree { branch split=\"34deg\" } } }\n");
     refused(
         "dharmatiles version=1\ndefine oak { stack { tree { branch split=34 } } }\n",
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "34deg",
     );
     // a range of bare numbers
     refused(
         &tile("stack { base\n scatter count=2 { rock size=\"6..10\" } }"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "6dmm",
     );
     // a length where a count goes, and a count where a length goes
     refused(
         &tile("stack { base\n scatter count=\"3dmm\" { rock } }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "plain number",
     );
     refused(
         &tile("stack { base\n scatter count=2 { rock size=\"2mm * 3mm\" } }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "no area",
     );
     refused(
         &tile("stack { base\n scatter count=2 { rock size=\"1/2rad\" } }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "(1/2) rad",
     );
     refused(
         &tile("stack { base\n scatter count=2 { rock size=\"1e3\" } }"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "scientific notation",
     );
     // counts and shares stay plain
@@ -202,7 +202,7 @@ fn units_and_kinds_in_control_values() {
     // the old annotation is gone
     refused(
         &tile("stack { base\n scatter count=2 { rock size=(mm)\"8\" } }"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "not written in format 1",
     );
 }
@@ -222,27 +222,27 @@ fn heights_are_kind_checked_before_anything_is_built() {
     ));
     refused(
         &tile("stack { base\n dirt top=\"$groundHeight + 4dmm * cos(720 * $x)\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "takes an angle",
     );
     refused(
         &tile("stack { base\n dirt top=\"$bottom + 20%\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "mixes",
     );
     refused(
         &tile("stack { base\n dirt top=\"$groundHeight + $x\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "mixes a length and a plain",
     );
     refused(
         &tile("stack { base\n dirt top=\"2mm * 3mm\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "no area",
     );
     refused(
         &tile("stack { base\n dirt top=\"$region\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "region",
     );
     // a let keeps its kind
@@ -251,32 +251,36 @@ fn heights_are_kind_checked_before_anything_is_built() {
     ));
     refused(
         &tile("let w \"3dmm\"\n stack { base\n dirt top=\"$groundHeight + w * w\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "no area",
     );
     // coordinates take a region and a unit
     refused(
         &tile("stack { base\n dirt top=\"$groundHeight + 1dmm * x($tile)\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "takes 2 values",
     );
     refused(
         &tile("stack { base\n dirt top=\"$groundHeight + 1dmm * x($tile, deg)\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "counts in",
     );
     refused(
         &tile("stack { base\n dirt top=\"$groundHeight + 1dmm * a($tile, sq)\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "counts in",
     );
     refused(
         &tile("stack { base\n dirt top=\"$groundHeight + 1dmm * x(1, sq)\" }"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "region",
     );
     // a plain name is no word of the language
-    refused(&tile("let sq 3\n stack { base }"), "dt::name", "unit");
+    refused(
+        &tile("let sq 3\n stack { base }"),
+        dt_lang::codes::NAME,
+        "unit",
+    );
 }
 
 #[test]
@@ -298,61 +302,81 @@ fn a_point_is_written_in_parentheses_with_units() {
     ));
     ok(&line("\"polar($tile, 100%, 2 pi rad)\" south"));
     // a point without them is an error whose help shows the tuple
-    refused(&line("\"0.65,1\" south"), "dt::point", "(0.65sq, 1sq)");
-    refused(&line("\"0.65\" south"), "dt::point", "parentheses");
+    refused(
+        &line("\"0.65,1\" south"),
+        dt_lang::codes::POINT,
+        "(0.65sq, 1sq)",
+    );
+    refused(
+        &line("\"0.65\" south"),
+        dt_lang::codes::POINT,
+        "parentheses",
+    );
     // each half is a length
     refused(
         &line("\"(0.65, 1sq)\" south"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "0.65dmm or 0.65mm",
     );
-    refused(&line("\"(1sq)\" south"), "dt::point", "two halves");
+    refused(
+        &line("\"(1sq)\" south"),
+        dt_lang::codes::POINT,
+        "two halves",
+    );
     refused(
         &line("\"(1sq, 1sq, 1sq)\" south"),
-        "dt::point",
+        dt_lang::codes::POINT,
         "two halves",
     );
     // never a name an element sets
     refused(
         &line("\"($x, 0)\" south"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "worked out while an element builds",
     );
     refused(
         &line("\"(0, $bottom)\" south"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "once where it is written",
     );
     // the frame is always written, and a point lies on its tile
     refused(
         &line("\"point(50%, 0)\" south"),
-        "dt::point",
+        dt_lang::codes::POINT,
         "takes 3 values",
     );
     refused(
         &line("\"point(parent($region), 50%, 0)\" south"),
-        "dt::point",
+        dt_lang::codes::POINT,
         "no parent",
     );
     refused(
         &line("\"polar($tile, 40%, 90)\" south"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "90deg",
     );
     refused(
         &line("\"polar($tile, 40deg, 90deg)\" south"),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "plain number",
     );
-    refused(&line("\"(2sq, 0)\" south"), "dt::point", "off the tile");
-    refused(&line("\"(0, 2sq)\" south"), "dt::point", "off the tile");
+    refused(
+        &line("\"(2sq, 0)\" south"),
+        dt_lang::codes::POINT,
+        "off the tile",
+    );
+    refused(
+        &line("\"(0, 2sq)\" south"),
+        dt_lang::codes::POINT,
+        "off the tile",
+    );
     // a plain name is a `let` of the tile, in place
     ok(&tile(
         "let w \"0.25sq\"\n line run { through \"(w, 50%)\" \"(w + 0.5sq, 0)\" }\n stack { base }",
     ));
     refused(
         &tile("line run { through \"(w, 50%)\" south }\n stack { base }"),
-        "dt::unknown-name",
+        dt_lang::codes::UNKNOWN_NAME,
         "no `let` is called `w`",
     );
 }
@@ -364,7 +388,7 @@ fn fills_places_and_pins_take_points_too() {
     ));
     refused(
         &tile("point knoll \"0.25,0.75\"\n stack { base }"),
-        "dt::point",
+        dt_lang::codes::POINT,
         "(0.25sq, 0.75sq)",
     );
     // a tree stands at a point
@@ -373,7 +397,7 @@ fn fills_places_and_pins_take_points_too() {
     ));
     refused(
         &tile("stack { base\n dirt\n tree at=\"0.5,0.5\" top=\"$bottom + 35dmm\" }"),
-        "dt::point",
+        dt_lang::codes::POINT,
         "parentheses",
     );
     // a point in the frame of a named region is kept as written, and worked
@@ -392,17 +416,17 @@ fn fills_places_and_pins_take_points_too() {
     ok(&in_region("\"polar(parent($region), 40%, 90deg)\""));
     refused(
         &in_region("\"point(parent(parent($tile)), 50%, 50%)\""),
-        "dt::point",
+        dt_lang::codes::POINT,
         "no parent",
     );
     refused(
         &in_region("\"point(bank, 50%, 50%)\""),
-        "dt::point",
+        dt_lang::codes::POINT,
         "not a frame",
     );
     refused(
         &in_region("\"(50%, 50% * 1mm)\""),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "length by a length",
     );
 }
@@ -418,27 +442,27 @@ fn a_printer_and_a_slope_take_units() {
     ));
     refused(
         &printer("line 0.5\n layer 0.2\n overhang 55\n steepest 65\n gap 0.6"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "\"0.4mm\"",
     );
     refused(
         &printer(
             "line \"0.5mm\"\n layer \"0.2dmm\"\n overhang \"55deg\"\n steepest \"65deg\"\n gap \"0.6mm\"",
         ),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "not a unit of a printer",
     );
     refused(
         &printer(
             "line \"0.5mm\"\n layer \"0.2mm\"\n overhang \"55mm\"\n steepest \"65deg\"\n gap \"0.6mm\"",
         ),
-        "dt::type",
+        dt_lang::codes::TYPE,
         "angle",
     );
     ok(&tile("stack { base\n dirt {\n slope \"30deg\" } }"));
     refused(
         &tile("stack { base\n dirt {\n slope 30 } }"),
-        "dt::unit",
+        dt_lang::codes::UNIT,
         "30deg",
     );
 }
@@ -450,12 +474,12 @@ fn a_point_in_a_part_waits_for_the_call() {
     ok("dharmatiles version=1\ndefine knoll { stack { rock at=\"(50%, 50%)\" } }\n");
     refused(
         "dharmatiles version=1\ndefine knoll { stack { rock at=\"0.5,0.5\" } }\n",
-        "dt::point",
+        dt_lang::codes::POINT,
         "parentheses",
     );
     refused(
         "dharmatiles version=1\ndefine knoll { stack { rock at=\"point($tile, 50%, 1mm + 2sq * 3sq)\" } }\n",
-        "dt::type",
+        dt_lang::codes::TYPE,
         "length by a length",
     );
 }

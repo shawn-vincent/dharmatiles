@@ -85,7 +85,7 @@ fn a_band_that_jumps_across_a_slab_is_refused_as_a_bug() {
     let e = build(&mem(&text), "t.dtile", &Options::default())
         .err()
         .unwrap();
-    assert_eq!(e[0].code, "dt::band", "{e:#?}");
+    assert_eq!(e[0].code, dt_lang::codes::BAND, "{e:#?}");
 }
 
 #[test]

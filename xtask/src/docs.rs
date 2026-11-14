@@ -24,6 +24,7 @@ const SOURCE: &str = "https://github.com/shawn-vincent/dharmatiles/blob/main/";
 /// and fail if any page is stale.
 pub fn run(root: &Path, check: bool) -> Result<(), String> {
     crate::shots::check(root)?;
+    crate::codes::run(root, check)?;
     let bin = crate::program(root, true)?;
     let json = Command::new(&bin)
         .args(["elements", "--json"])

@@ -132,15 +132,15 @@ fn a_mistake_in_every_place_comes_together() {
 #[test]
 fn the_header_is_checked_as_in_every_document() {
     let e = decode("t.dmap", "map {\n piece \"a\"\n}\n").err().unwrap();
-    assert_eq!(e.last().unwrap().code, "dt::format-0");
+    assert_eq!(e.last().unwrap().code, dt_lang::codes::FORMAT_0);
     let e = decode("t.dmap", "dharmatiles version=2\nmap {\n piece \"a\"\n}\n")
         .err()
         .unwrap();
-    assert_eq!(e[0].code, "dt::format-newer");
+    assert_eq!(e[0].code, dt_lang::codes::FORMAT_NEWER);
     let e = decode("t.dmap", "dharmatiles version=1\nmap {{\n")
         .err()
         .unwrap();
-    assert_eq!(e[0].code, "dt::syntax");
+    assert_eq!(e[0].code, dt_lang::codes::SYNTAX);
 }
 
 /// The edits of a print list as the tests say them: each one an [`Op`] through

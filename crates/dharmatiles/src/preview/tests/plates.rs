@@ -118,7 +118,7 @@ fn a_print_list_that_does_not_plan_still_offers_its_printers() {
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], true);
     let t = wait_for(&r, "the refusal", |t| t["status"] == "failed");
-    assert_eq!(t["errors"][0]["code"], "dt::slots");
+    assert_eq!(t["errors"][0]["code"], dt_lang::codes::SLOTS);
     assert!(
         t["errors"][0]["message"]
             .as_str()

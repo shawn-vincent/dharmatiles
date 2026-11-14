@@ -207,10 +207,12 @@ impl Diagnostic for DocError {
         Some(Box::new(self.code))
     }
 
+    /// The help, then the explain lines: every error a terminal prints says where it is explained.
     fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
-        self.help
-            .as_ref()
-            .map(|h| Box::new(h) as Box<dyn fmt::Display + 'a>)
+        Some(Box::new(dt_lang::codes::help_with_explain(
+            self.help.as_deref(),
+            self.code,
+        )))
     }
 
     fn source_code(&self) -> Option<&dyn SourceCode> {

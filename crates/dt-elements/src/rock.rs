@@ -536,7 +536,7 @@ fn share(d: Draw) -> Result<Draw, LookError> {
             ),
             "write a percent such as \"30%\" or \"20%..50%\"".into(),
         );
-        e.code = Some("dt::percent");
+        e.code = Some(dt_lang::codes::PERCENT);
         return Err(e);
     }
     Ok(d)
@@ -1316,7 +1316,7 @@ mod tests {
         // 1 is 100%; 40 is not read as 40%
         assert!(Thing::new("rock", &[c(1.0)], 1.0).is_ok());
         let e = Thing::new("rock", &[c(40.0)], 1.0).unwrap_err();
-        assert_eq!(e.code, Some("dt::percent"));
+        assert_eq!(e.code, Some(dt_lang::codes::PERCENT));
         assert!(e.help.unwrap().contains("percent"));
     }
 

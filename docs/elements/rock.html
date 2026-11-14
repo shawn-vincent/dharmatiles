@@ -156,7 +156,7 @@ scatter count=8 { boulder top="$bottom + 3dmm + 6dmm * (1 - d(parent($region), %
   <li>Large stones carry engraved cracks a wash can pool in.</li>
   <li>Stones stand bedded in the dirt around them.</li>
   <li>A <code>top=</code> is read at each stone's middle; the stone keeps its width and facets and its peak stands at the roll, never wider above the ground than at it.</li>
-  <li><code>buried</code> is a share written as a percent, <code>buried="20%..50%"</code> (weighted forms too), from 0% to 100%; <code>%</code> is a plain fraction, so <code>buried=0.3</code> is the same 30% and <code>buried=30</code> is out of range; a length there is <code>dt::type</code>.</li>
+  <li data-explains="dt::percent"><!--gen:anchors--><span id="dt-percent"></span><!--/gen:anchors--><code>buried</code> is a share written as a percent, <code>buried="20%..50%"</code> (weighted forms too), from 0% to 100%; <code>%</code> is a plain fraction, so <code>buried=0.3</code> is the same 30% and <code>buried=30</code> is out of range; a length there is <code>dt::type</code>.</li>
   <li>A rock is seated on the land as it is laid, grain included: its foot is under the lowest land it can touch, so no gap shows under it (the build notes <code>seat_gap_max</code> and <code>seat_gap_stones</code> measure it).</li>
 </ul>
 

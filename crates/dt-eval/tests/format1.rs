@@ -111,7 +111,7 @@ fn an_override_may_read_the_value_it_replaces() {
 #[test]
 fn let_on_a_name_the_context_has_says_use_override() {
     let e = refused(&tile1("let $groundHeight 6\n stack { base\n dirt }"));
-    assert_eq!(codes(&e), ["dt::name"]);
+    assert_eq!(codes(&e), [dt_lang::codes::NAME]);
     assert!(e[0].message.contains("already has `$groundHeight`"));
     assert!(
         e[0].help
@@ -124,7 +124,7 @@ fn let_on_a_name_the_context_has_says_use_override() {
 #[test]
 fn override_of_a_name_no_caller_installed_suggests_the_near_one() {
     let e = refused(&tile1("override $groundHeigth 6\n stack { base\n dirt }"));
-    assert_eq!(codes(&e), ["dt::name"]);
+    assert_eq!(codes(&e), [dt_lang::codes::NAME]);
     assert!(
         e[0].help
             .as_deref()
@@ -139,7 +139,7 @@ fn a_block_scope_ends_with_its_block() {
     let e = refused(&tile1(
         "stack { base\n scatter count=2 { let $q \"3dmm\"\n rock size=\"$q\" }\n dirt top=\"$q\" }",
     ));
-    assert_eq!(codes(&e), ["dt::unknown-name"]);
+    assert_eq!(codes(&e), [dt_lang::codes::UNKNOWN_NAME]);
     assert!(e[0].message.contains("`$q`"));
     // and inside it works
     let c = ok(&tile1(
@@ -189,7 +189,7 @@ fn a_definition_reads_the_context_of_its_caller_and_check_says_where_it_is_missi
     )
     .err()
     .unwrap();
-    assert_eq!(codes(&e), ["dt::unknown-name"]);
+    assert_eq!(codes(&e), [dt_lang::codes::UNKNOWN_NAME]);
     assert!(e[0].message.contains("`$stoneSize`"), "{}", e[0].message);
 }
 
@@ -198,12 +198,12 @@ fn a_position_is_not_drawn_once_so_it_cannot_be_a_size() {
     let e = refused(&tile1(
         "stack { base\n scatter count=2 { rock size=\"$x\" } }",
     ));
-    assert_eq!(codes(&e), ["dt::type"]);
+    assert_eq!(codes(&e), [dt_lang::codes::TYPE]);
     // through a let, too: the rule follows the names a formula reads
     let e = refused(&tile1(
         "let $w \"$x * 1dmm + 4dmm\"\n stack { base\n scatter count=2 { rock size=\"$w\" } }",
     ));
-    assert_eq!(codes(&e), ["dt::type"]);
+    assert_eq!(codes(&e), [dt_lang::codes::TYPE]);
     // a library height that reads no position is a fine size
     ok(&tile1(
         "stack { base\n scatter count=2 { rock size=\"$groundHeight\" } }",
@@ -219,7 +219,7 @@ fn what_an_element_sets_cannot_be_declared() {
     for name in ["$x", "$y", "$bottom", "$d", "$a", "$region"] {
         for kw in ["let", "override"] {
             let e = refused(&tile1(&format!("{kw} {name} 3\n stack {{ base\n dirt }}")));
-            assert_eq!(codes(&e), ["dt::name"], "{kw} {name}");
+            assert_eq!(codes(&e), [dt_lang::codes::NAME], "{kw} {name}");
             assert!(e[0].message.contains(name), "{}", e[0].message);
         }
     }
@@ -228,8 +228,8 @@ fn what_an_element_sets_cannot_be_declared() {
 #[test]
 fn a_plain_position_says_to_write_the_dollar() {
     let e = refused(&tile1("stack { base\n dirt top=\"groundHeight + x\" }"));
-    assert!(codes(&e).contains(&"dt::name"), "{e:#?}");
-    let help = e.iter().find(|d| d.code == "dt::name").unwrap();
+    assert!(codes(&e).contains(&dt_lang::codes::NAME), "{e:#?}");
+    let help = e.iter().find(|d| d.code == dt_lang::codes::NAME).unwrap();
     assert!(help.help.as_deref().unwrap().contains("$x"));
 }
 
@@ -240,7 +240,7 @@ fn reserved_words_cannot_name_a_let() {
         "mm", "deg", "pi", "dmm",
     ] {
         let e = refused(&tile1(&format!("let {w} 3\n stack {{ base\n dirt }}")));
-        assert_eq!(codes(&e), ["dt::name"], "{w}");
+        assert_eq!(codes(&e), [dt_lang::codes::NAME], "{w}");
         assert!(e[0].message.contains(&format!("`{w}`")), "{}", e[0].message);
     }
     // `$` names are another namespace
@@ -269,7 +269,7 @@ fn a_param_hides_nothing_of_the_context() {
     )
     .err()
     .unwrap();
-    assert_eq!(codes(&e), ["dt::name"]);
+    assert_eq!(codes(&e), [dt_lang::codes::NAME]);
 }
 
 #[test]
@@ -284,7 +284,7 @@ fn a_part_of_format_0_is_refused_where_it_is_used_naming_the_release_that_migrat
             .collect(),
     );
     let e = check(&src, "t.dtile", &preview()).err().unwrap();
-    assert_eq!(codes(&e), ["dt::format-0"]);
+    assert_eq!(codes(&e), [dt_lang::codes::FORMAT_0]);
     assert!(e[0].help.as_deref().unwrap().contains("v1.0.0"));
 }
 
@@ -297,6 +297,6 @@ fn a_document_of_format_0_is_refused_naming_the_release_that_migrates() {
             .collect(),
     );
     let e = check(&src, "t.dtile", &preview()).err().unwrap();
-    assert_eq!(codes(&e), ["dt::format-0"]);
+    assert_eq!(codes(&e), [dt_lang::codes::FORMAT_0]);
     assert!(e[0].help.as_deref().unwrap().contains("v1.0.0"));
 }

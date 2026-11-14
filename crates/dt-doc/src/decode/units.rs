@@ -147,7 +147,7 @@ impl Decoder<'_> {
             let commas = crate::place::top_commas(body);
             let [comma] = commas[..] else {
                 self.err(
-                    "dt::point",
+                    dt_lang::codes::POINT,
                     inner(0, t.len()),
                     format!(
                         "a point has two halves, across and down: `{t}` has {}",
@@ -188,7 +188,7 @@ impl Decoder<'_> {
             _ => "write \"(0.65sq, 1sq)\": parentheses, across then down, each with its unit; or `point($tile, 50%, 0)`".to_owned(),
         };
         self.err(
-            "dt::point",
+            dt_lang::codes::POINT,
             inner(0, t.len()),
             format!("a point is written in parentheses: `{t}` has none"),
             "no parentheses",
@@ -204,7 +204,7 @@ impl Decoder<'_> {
             Ok(x) => x,
             Err(err) => {
                 self.err(
-                    err.code.unwrap_or("dt::point"),
+                    err.code.unwrap_or(dt_lang::codes::POINT),
                     sub_span(span, err.start, err.end),
                     format!("can't read this point: {}", err.message),
                     "here",
@@ -300,7 +300,7 @@ impl Decoder<'_> {
         match bad {
             Some((n, "dollar")) => {
                 self.err(
-                    "dt::type",
+                    dt_lang::codes::TYPE,
                     span,
                     format!("`{n}` is worked out while an element builds, and a point is worked out once where it is written"),
                     "not in a point",
@@ -315,7 +315,7 @@ impl Decoder<'_> {
                 let near = crate::schema::did_you_mean(&n, names.iter().copied());
                 let at = self.word_span(span, &n);
                 self.err(
-                    "dt::unknown-name",
+                    dt_lang::codes::UNKNOWN_NAME,
                     span,
                     format!("no `let` is called `{n}` here"),
                     "unknown name",
@@ -342,7 +342,7 @@ impl Decoder<'_> {
             Ok(x) => x,
             Err(err) => {
                 self.err(
-                    err.code.unwrap_or("dt::point"),
+                    err.code.unwrap_or(dt_lang::codes::POINT),
                     sub_span(span, err.start, err.end),
                     format!("can't read this point: {}", err.message),
                     "here",
@@ -352,7 +352,7 @@ impl Decoder<'_> {
             }
         };
         let Expr::Call { name, args } = &parsed else {
-            self.err("dt::point", span, "a point is one call", "here");
+            self.err(dt_lang::codes::POINT, span, "a point is one call", "here");
             return None;
         };
         if args.len() != 3 {
@@ -362,7 +362,7 @@ impl Decoder<'_> {
                 "`polar($tile, 40%, 90deg)`: the frame, how far out, the angle round"
             };
             self.err(
-                "dt::point",
+                dt_lang::codes::POINT,
                 span,
                 format!("`{name}` takes 3 values, not {}", args.len()),
                 "here",
@@ -398,7 +398,7 @@ impl Decoder<'_> {
                 Ok(v) if !l.is_range() => Some(v),
                 _ => {
                     this.err(
-                        "dt::point",
+                        dt_lang::codes::POINT,
                         span,
                         "`polar` is one place: its distance and angle are single values",
                         "not one value",
@@ -461,7 +461,7 @@ impl Decoder<'_> {
                     || (at_tile && matches!(inner, Expr::Name(n) if n == "$region"));
                 if tile_itself {
                     self.err(
-                        "dt::point",
+                        dt_lang::codes::POINT,
                         span,
                         "the frame is the tile here, and the tile has no parent",
                         "no parent",
@@ -483,7 +483,7 @@ impl Decoder<'_> {
 
     fn not_a_frame(&mut self, frame: &Expr, span: SourceSpan) -> Option<FrameKind> {
         self.err(
-            "dt::point",
+            dt_lang::codes::POINT,
             span,
             format!("`{frame}` is not a frame"),
             "not a frame",

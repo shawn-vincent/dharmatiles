@@ -1755,7 +1755,7 @@ fn a_panic_in_a_build_is_reported_and_the_server_keeps_serving() {
         let t = tile(name);
         assert_eq!(t["status"], "failed", "{name}");
         let e = &t["errors"][0];
-        assert_eq!(e["code"], "dt::panic");
+        assert_eq!(e["code"], dt_lang::codes::PANIC);
         assert_eq!(e["unexpected"], true);
         assert!(e["message"].as_str().unwrap().contains(words), "{e}");
         // the page also gets the structured failure, with the panic's stack
@@ -1911,7 +1911,7 @@ fn a_format_1_tile_opens_builds_and_shows_its_errors_in_the_editor() {
     let bad = FORMAT_1.replace("size=\"8dmm\"", "size=8");
     let v = call(&check, serde_json::json!({ "text": bad }));
     assert_eq!(v["ok"], false, "{v}");
-    assert_eq!(v["errors"][0]["code"], "dt::unit", "{v}");
+    assert_eq!(v["errors"][0]["code"], dt_lang::codes::UNIT, "{v}");
     assert!(
         v["errors"][0]["help"].as_str().unwrap().contains("dmm"),
         "{v}"
@@ -2028,7 +2028,7 @@ fn an_older_tile_is_refused_where_it_is_checked_with_help_to_migrate_it() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|e| e["code"] == "dt::format-0")
+        .find(|e| e["code"] == dt_lang::codes::FORMAT_0)
         .unwrap_or_else(|| panic!("{v}"));
     assert!(e["help"].as_str().unwrap().contains("v1.0.0"), "{e}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), old);
@@ -2080,7 +2080,7 @@ fn a_note_from_the_checker_reaches_the_stream_and_the_messages_route() {
     let found = messages(&r, &format!("tile={id}&kind=note"));
     assert_eq!(found.len(), 1, "{found:?}");
     let n = &found[0];
-    assert_eq!(n["code"], "dt::steep");
+    assert_eq!(n["code"], dt_lang::codes::STEEP);
     assert_eq!(n["severity"], "note");
     assert_eq!(n["scope"], "check");
     assert_eq!(n["state"], "open");
@@ -2106,7 +2106,7 @@ fn a_note_from_the_checker_reaches_the_stream_and_the_messages_route() {
             continue;
         };
         let v: Value = serde_json::from_str(data).unwrap();
-        if v["type"] == "message" && v["message"]["code"] == "dt::steep" {
+        if v["type"] == "message" && v["message"]["code"] == dt_lang::codes::STEEP {
             seen = Some(v["message"].clone());
             break;
         }
@@ -2213,7 +2213,7 @@ fn a_mistake_the_build_finds_is_a_message_at_its_entry_and_a_fixed_build_clears_
     wait_for(&r, "the failed build", |t| t["status"] == "failed");
     let errs = messages(&r, &format!("tile={id}&state=open&kind=error"));
     assert_eq!(errs.len(), 1, "{errs:?}");
-    assert_eq!(errs[0]["code"], "dt::look");
+    assert_eq!(errs[0]["code"], dt_lang::codes::LOOK);
     assert_eq!(errs[0]["scope"], "build");
     assert!(
         errs[0]["node"].as_str().is_some_and(|n| n.contains("tree")),

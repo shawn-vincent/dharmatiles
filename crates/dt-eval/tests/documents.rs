@@ -67,7 +67,7 @@ fn an_unknown_height_lists_the_heights() {
         e[0].help
     );
     let e = errors(&wobble("$lava"));
-    assert_eq!(e[0].code, "dt::unknown-name");
+    assert_eq!(e[0].code, dt_lang::codes::UNKNOWN_NAME);
     assert!(e[0].help.as_deref().unwrap().contains("heights"), "{e:?}");
 }
 
@@ -76,7 +76,7 @@ fn an_unknown_control_names_the_ones_there_are() {
     let e = errors(
         "dharmatiles version=1\ntile size=\"1x1\" {\n  stack {\n    dirt bump-siz=3\n  }\n}\n",
     );
-    assert_eq!(e[0].code, "dt::unknown-control");
+    assert_eq!(e[0].code, dt_lang::codes::UNKNOWN_CONTROL);
     assert_eq!(e[0].location().unwrap().1, 4);
     assert!(
         e[0].help.as_deref().unwrap().contains("bumpSize"),
@@ -94,7 +94,7 @@ fn a_control_not_built_yet_is_checked_but_not_built() {
     let Err(e) = build(&src, "t.dtile", &legacy()) else {
         panic!("built a control that is not built yet");
     };
-    assert_eq!(e[0].code, "dt::not-yet");
+    assert_eq!(e[0].code, dt_lang::codes::NOT_YET);
     assert!(e[0].message.contains("`wear`"), "{}", e[0].message);
     assert_eq!(e[0].location().unwrap().1, 3);
 }
@@ -142,7 +142,7 @@ fn a_parts_file_checks_but_does_not_build() {
     let Err(e) = build(&Library, "lib:parts/grass.dtile", &legacy()) else {
         panic!("built a parts file");
     };
-    assert_eq!(e[0].code, "dt::no-tile");
+    assert_eq!(e[0].code, dt_lang::codes::NO_TILE);
 }
 
 #[test]
@@ -294,7 +294,7 @@ fn an_unknown_region_is_refused() {
     let e = errors(
         "dharmatiles version=1\ntile size=\"1x1\" {\n  line across { through west east }\n  region a { boundedBy across; fill \"(0.5sq, 0.75sq)\" }\n  stack {\n    dirt at=b\n  }\n}\n",
     );
-    assert_eq!(e[0].code, "dt::place");
+    assert_eq!(e[0].code, dt_lang::codes::PLACE);
     assert_eq!(e[0].location().unwrap().1, 6);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `a`?"));
 }
@@ -353,7 +353,7 @@ fn a_scatter_of_trees_checks_and_a_tree_at_a_line_is_refused() {
     assert!(c.pending().is_empty(), "{:?}", c.pending());
     let text = on_a_line("tree at=road");
     let e = errors(&text);
-    assert_eq!(e[0].code, "dt::type", "{e:?}");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE, "{e:?}");
     assert!(
         e[0].help.as_deref().unwrap().contains("scatter at=<line>"),
         "{e:?}"
@@ -452,7 +452,7 @@ fn a_wall_in_a_definition_needs_its_place_from_the_call() {
     let e = errors(&without);
     assert!(
         e.iter()
-            .any(|d| d.code == "dt::missing-control" && rendered(d).contains("at=")),
+            .any(|d| d.code == dt_lang::codes::MISSING_CONTROL && rendered(d).contains("at=")),
         "{e:?}"
     );
     let with = format!(
@@ -537,7 +537,7 @@ fn a_surface_along_a_line_without_a_width_says_to_give_it_one() {
     let e = errors(&tile_with(
         "line trail { through southCenter northCenter }\n stack {\n base\n dirt\n grass at=trail\n }",
     ));
-    assert_eq!(e[0].code, "dt::type");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE);
     assert!(e[0].message.contains("no width"), "{}", e[0].message);
     assert!(e[0].help.as_deref().unwrap().contains("width="));
 }
@@ -545,7 +545,7 @@ fn a_surface_along_a_line_without_a_width_says_to_give_it_one() {
 #[test]
 fn a_surface_along_a_tile_edge_points_to_a_region() {
     let e = errors(&tile_with("stack {\n base\n dirt\n grass at=northEdge\n }"));
-    assert_eq!(e[0].code, "dt::type");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE);
     assert!(e[0].help.as_deref().unwrap().contains("within"));
 }
 
@@ -556,7 +556,7 @@ fn a_width_is_a_length_above_zero() {
             "line trail width=\"{w}\" {{ through southCenter northCenter }}\n stack {{\n dirt\n }}"
         )));
         assert!(
-            ["dt::value", "dt::range"].contains(&e[0].code),
+            [dt_lang::codes::VALUE, dt_lang::codes::RANGE].contains(&e[0].code),
             "{w}: {}",
             e[0].code
         );
@@ -612,7 +612,7 @@ fn a_scattered_thing_takes_no_place_word_of_its_own() {
     let e = errors(&tile_with(
         "stack {\n base\n dirt\n scatter count=3 { rock at=center }\n }",
     ));
-    assert!(e.iter().any(|d| d.code == "dt::place"), "{e:?}");
+    assert!(e.iter().any(|d| d.code == dt_lang::codes::PLACE), "{e:?}");
 }
 
 #[test]
@@ -732,7 +732,7 @@ fn a_quoted_word_stays_quoted_and_a_control_name_is_replaced_alone() {
     );
     let text = "dharmatiles version=1\ntile size=\"1x1\" {\n    stack {\n        dirt bumpSiez=30\n    }\n}\n";
     let e = errors(text);
-    assert_eq!(e[0].code, "dt::unknown-control");
+    assert_eq!(e[0].code, dt_lang::codes::UNKNOWN_CONTROL);
     assert_eq!(
         mended(text, &e[0]).lines().nth(3).unwrap(),
         "        dirt bumpSize=30"

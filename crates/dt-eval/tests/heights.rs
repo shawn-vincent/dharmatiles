@@ -108,14 +108,26 @@ fn a_steep_pin_is_noted_with_the_pins_that_cause_it() {
     let c = solved(&tile(
         "point summit \"(0.5sq, 0.5sq)\"\n stack { base\n dirt { pin top=\"$groundHeight + 9dmm\" at=summit } }",
     ));
-    assert!(codes(&c).contains(&"dt::steep"), "{:?}", c.notes());
-    let n = c.notes().iter().find(|d| d.code == "dt::steep").unwrap();
+    assert!(
+        codes(&c).contains(&dt_lang::codes::STEEP),
+        "{:?}",
+        c.notes()
+    );
+    let n = c
+        .notes()
+        .iter()
+        .find(|d| d.code == dt_lang::codes::STEEP)
+        .unwrap();
     assert!(n.message.contains("steeper than its 24"), "{}", n.message);
     // the same summit, allowed by a steeper slope on the body, is quiet
     let c = solved(&tile(
         "point summit \"(0.5sq, 0.5sq)\"\n stack { base\n dirt { slope \"60deg\"\n pin top=\"$groundHeight + 9dmm\" at=summit } }",
     ));
-    assert!(!codes(&c).contains(&"dt::steep"), "{:?}", c.notes());
+    assert!(
+        !codes(&c).contains(&dt_lang::codes::STEEP),
+        "{:?}",
+        c.notes()
+    );
 }
 
 #[test]
@@ -126,7 +138,7 @@ fn a_pin_covered_by_a_later_one_is_shadowed() {
     let n = c
         .notes()
         .iter()
-        .find(|d| d.code == "dt::shadowed")
+        .find(|d| d.code == dt_lang::codes::SHADOWED)
         .expect("a shadowed note");
     assert!(n.message.contains("wins nowhere"), "{}", n.message);
     assert!(n.message.contains("pin `b`"), "{}", n.message);
@@ -138,7 +150,11 @@ fn a_pin_that_covers_a_library_default_pin_says_nothing() {
     // tile overrides it, so there is no `dt::shadowed` note; the tile's own
     // covered pin still gets one (the test above)
     let c = solved(&tile("stack { base\n dirt { pin top=\"7dmm\" at=edges } }"));
-    assert!(!codes(&c).contains(&"dt::shadowed"), "{:?}", c.notes());
+    assert!(
+        !codes(&c).contains(&dt_lang::codes::SHADOWED),
+        "{:?}",
+        c.notes()
+    );
 }
 
 #[test]
@@ -147,7 +163,7 @@ fn a_pin_with_no_ground_is_refused() {
     let e = refused(&tile(
         "line wall { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n region nowhere { boundedBy wall; fill \"(0.5sq, 0.5sq)\" }\n stack { base\n dirt { pin top=\"7dmm\" at=nowhere } }",
     ));
-    assert_eq!(e[0].code, "dt::empty");
+    assert_eq!(e[0].code, dt_lang::codes::EMPTY);
     assert!(e[0].message.contains("covers nothing"), "{}", e[0].message);
 }
 
@@ -156,7 +172,7 @@ fn a_layer_that_can_never_be_thick_enough_is_refused() {
     let e = refused(&tile(
         "region r { within \"5dmm\" of=center }\n stack { base\n dirt top=\"5dmm\"\n dirt top=\"$bottom + [0dmm .. 0.3dmm]\" at=r }",
     ));
-    assert_eq!(e[0].code, "dt::thin");
+    assert_eq!(e[0].code, dt_lang::codes::THIN);
     assert!(e[0].message.contains("skin"), "{}", e[0].message);
 }
 
@@ -164,7 +180,7 @@ fn a_layer_that_can_never_be_thick_enough_is_refused() {
 fn a_cliff_written_at_a_tile_edge_is_refused_with_the_region_to_write() {
     // an edge has no width, so the cliff has no region of its own
     let e = refused(&tile("stack { base\n dirt\n cliff at=north }"));
-    assert_eq!(e[0].code, "dt::type", "{e:?}");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE, "{e:?}");
     assert!(e[0].help.as_deref().unwrap().contains("within"), "{e:?}");
 }
 
@@ -249,7 +265,7 @@ fn a_trees_top_is_its_height_a_flowers_waits_and_a_line_is_refused() {
     let e = refused(&tile(
         "line trail { through southCenter northCenter }\n stack { base\n dirt\n tree top=\"$bottom + [40dmm .. 45dmm]\" at=trail }",
     ));
-    assert_eq!(e[0].code, "dt::type", "{e:?}");
+    assert_eq!(e[0].code, dt_lang::codes::TYPE, "{e:?}");
 }
 
 #[test]
@@ -311,7 +327,9 @@ fn the_bands_tiles_check_and_solve() {
         assert!(c.solved.is_some(), "{name}");
         // pending: only what build does not do yet
         assert!(
-            c.pending().iter().all(|d| d.code == "dt::not-yet"),
+            c.pending()
+                .iter()
+                .all(|d| d.code == dt_lang::codes::NOT_YET),
             "{name}: {:?}",
             c.pending()
         );

@@ -8,6 +8,8 @@
 //! and check their table against this one), the elements and the editor's
 //! server can all depend on it.
 
+pub mod codes;
+
 /// The land's steepest ease, degrees: what dirt's hills are made at, and what
 /// the solver eases a land body at unless the entry says `slope=`.
 pub const LAND_SLOPE_DEG: f64 = 24.0;

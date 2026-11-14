@@ -165,7 +165,7 @@ fn a_ratio_out_of_range_is_dt_range() {
             "",
             "        dirt\n        rock size=\"low(6dmm .. 10dmm, -2)\"",
         ),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "0.25 leans high",
     );
     assert_eq!(d.message, "low's ratio must be above 0, not -2");
@@ -174,7 +174,7 @@ fn a_ratio_out_of_range_is_dt_range() {
             "",
             "        dirt\n        rock size=\"bell(6dmm .. 10dmm, 2)\"",
         ),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "share of the width",
     );
     refused(
@@ -182,7 +182,7 @@ fn a_ratio_out_of_range_is_dt_range() {
             "",
             "        dirt\n        rock size=\"peak(6dmm .. 10dmm, 0.5, 1.5)\"",
         ),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "low end",
     );
     // out of range through a let, where it is used
@@ -191,7 +191,7 @@ fn a_ratio_out_of_range_is_dt_range() {
             "    let s \"low([6dmm .. 10dmm], 0)\"",
             "        dirt\n        rock size=\"s\"",
         ),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "1 is flat",
     );
 }
@@ -209,7 +209,7 @@ fn a_weighting_wraps_a_plain_range() {
                 "",
                 &format!("        dirt\n        rock size=\"{}\"", units(size)),
             ),
-            "dt::weighting",
+            dt_lang::codes::WEIGHTING,
             "",
         );
     }
@@ -219,7 +219,7 @@ fn a_weighting_wraps_a_plain_range() {
 fn an_unknown_function_lists_the_functions() {
     refused(
         &tile("", "        dirt\n        rock size=\"bel(1dmm..6dmm)\""),
-        "dt::value",
+        dt_lang::codes::VALUE,
         "flat, low, high, bell, peak, ends, steps or mix, or a list like [1:4, 2:5]",
     );
 }
@@ -255,7 +255,7 @@ fn a_band_takes_a_weighting_as_a_cloud() {
             "    line l { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n    region r { within \"low([2dmm .. 6dmm])\" of=l }",
             "        dirt at=r",
         ),
-        "dt::weighting",
+        dt_lang::codes::WEIGHTING,
         "write the range alone",
     );
     assert_eq!(d.message, "a weighted range does not go on a distance");
@@ -274,7 +274,7 @@ fn a_weighted_range_of_no_width_is_a_note() {
     .unwrap();
     let n = c.notes();
     assert_eq!(n.len(), 1, "{n:?}");
-    assert_eq!(n[0].code, "dt::weighting");
+    assert_eq!(n[0].code, dt_lang::codes::WEIGHTING);
     assert!(n[0].message.contains("no width"), "{}", n[0].message);
 }
 
@@ -381,7 +381,7 @@ fn a_list_listing_a_value_twice_is_dt_weighting() {
             "",
             "        dirt\n        rock size=\"[6dmm:4, 8dmm:5, 8dmm:1]\"",
         ),
-        "dt::weighting",
+        dt_lang::codes::WEIGHTING,
         "give each value once, with its total weight: [6:4, 8:6]",
     );
     assert_eq!(d.message, "8 is listed twice in [6:4, 8:5, 8:1]");
@@ -439,7 +439,7 @@ fn the_new_functions_check_their_limits() {
             "share of the width",
         ),
     ] {
-        let d = refused(&rock(size), "dt::range", help);
+        let d = refused(&rock(size), dt_lang::codes::RANGE, help);
         assert_eq!(d.message, message, "{size}");
     }
     // the caps: 32 bins, 64 values, 16 parts
@@ -453,7 +453,7 @@ fn the_new_functions_check_their_limits() {
     );
     refused(
         &rock(&format!("steps(6..10, {})", many(33))),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "fewer, wider bins",
     );
     assert!(
@@ -478,7 +478,7 @@ fn the_new_functions_check_their_limits() {
                 .collect::<Vec<_>>()
                 .join(", ")
         )),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "steps(",
     );
     let parts = |n: usize| vec!["flat(6..10), 1"; n].join(", ");
@@ -492,7 +492,7 @@ fn the_new_functions_check_their_limits() {
     );
     refused(
         &rock(&format!("mix({})", parts(17))),
-        "dt::range",
+        dt_lang::codes::RANGE,
         "fewer parts",
     );
     // mix: the parts share one range, none nests, a part is a call
@@ -512,7 +512,7 @@ fn the_new_functions_check_their_limits() {
         ("mix(bell(6..10), flat(6..10))", "write mix(bell(1..6), 3"),
         ("low([6, 8])", "the first thing in the call is a range"),
     ] {
-        refused(&rock(size), "dt::weighting", what);
+        refused(&rock(size), dt_lang::codes::WEIGHTING, what);
     }
 }
 

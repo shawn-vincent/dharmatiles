@@ -176,7 +176,7 @@ impl Reader<'_> {
                             self.notes.push(Diag::at(
                                 &b.src,
                                 b.value.span,
-                                "dt::weighting",
+                                dt_lang::codes::WEIGHTING,
                                 note,
                                 "here",
                             ));
@@ -275,7 +275,13 @@ pub(super) fn checked(
         dt_elements::Value::Word(_) | dt_elements::Value::Formula(_) => return Ok(()),
     };
     c.check(owner, lo, hi, range).map_err(|r| {
-        let mut d = Diag::at(&b.src, b.value.span, "dt::range", r.message, r.label);
+        let mut d = Diag::at(
+            &b.src,
+            b.value.span,
+            dt_lang::codes::RANGE,
+            r.message,
+            r.label,
+        );
         d.help = r.help;
         Box::new(d)
     })

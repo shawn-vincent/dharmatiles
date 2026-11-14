@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 dt-eval.workspace = true
 dt-kit.workspace = true
+dt-lang.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]

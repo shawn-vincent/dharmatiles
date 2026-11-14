@@ -45,7 +45,10 @@ pub fn decode(name: &str, text: &str, known: &Known) -> Result<Document, Vec<Doc
     // the header line first: a format this program doesn't read stops here,
     // since the rest of the file may not mean what this decoder thinks
     let (header, header_errors) = crate::header::read(&src, &kdl);
-    if header_errors.iter().any(|e| e.code == "dt::format-newer") {
+    if header_errors
+        .iter()
+        .any(|e| e.code == dt_lang::codes::FORMAT_NEWER)
+    {
         return Err(header_errors);
     }
     // this decoder reads format 1 only
@@ -237,7 +240,7 @@ impl<'k> Decoder<'k> {
         }
         let kw = node.name().value().to_owned();
         self.err(
-            "dt::missing-name",
+            dt_lang::codes::MISSING_NAME,
             node.name().span(),
             format!("`{kw}` needs a name"),
             format!("this {what} has no name"),
@@ -344,8 +347,13 @@ impl<'k> Decoder<'k> {
                 .nth(1)
         {
             let span = second.name.span;
-            self.err("dt::tile", span, "a file holds one tile", "a second tile")
-                .help = Some("put each tile in its own file".to_owned());
+            self.err(
+                dt_lang::codes::TILE,
+                span,
+                "a file holds one tile",
+                "a second tile",
+            )
+            .help = Some("put each tile in its own file".to_owned());
         }
 
         for n in kdl.nodes() {
@@ -362,7 +370,7 @@ impl<'k> Decoder<'k> {
                     );
                     let span = n.name().span();
                     self.err(
-                        "dt::unknown-node",
+                        dt_lang::codes::UNKNOWN_NODE,
                         span,
                         format!("unknown top-level node `{other}`"),
                         "not use, define, tile, printer, let, override or defaults",
@@ -391,7 +399,7 @@ impl<'k> Decoder<'k> {
                 if let Some((_, n)) = defs.iter().find(|(j, _)| *j == i) {
                     let span = n.entries().first().map_or(n.span(), value_span);
                     self.err(
-                        "dt::loop",
+                        dt_lang::codes::LOOP,
                         span,
                         "this definition calls itself",
                         "part of a loop of definitions",
@@ -422,8 +430,13 @@ impl<'k> Decoder<'k> {
 
     pub(crate) fn use_line(&mut self, node: &KdlNode) -> Option<Use> {
         let Some(e) = node.entries().first().filter(|e| arg_str(e).is_some()) else {
-            self.err("dt::use", node.span(), "`use` needs a path", "no path")
-                .help = Some("write `use \"parts/grass\" lawn`".to_owned());
+            self.err(
+                dt_lang::codes::USE,
+                node.span(),
+                "`use` needs a path",
+                "no path",
+            )
+            .help = Some("write `use \"parts/grass\" lawn`".to_owned());
             return None;
         };
         let span = value_span(e);
@@ -434,7 +447,7 @@ impl<'k> Decoder<'k> {
         } else if trimmed.starts_with("./") || trimmed.starts_with("../") {
             Source::Project(trimmed.to_owned())
         } else if trimmed.contains(':') || trimmed.starts_with('/') || trimmed.is_empty() {
-            self.err("dt::use", span, "`use` takes a library or relative path", "not a path here")
+            self.err(dt_lang::codes::USE, span, "`use` takes a library or relative path", "not a path here")
                 .help = Some(
                 "`parts/grass` is the bundled library (`lib:parts/grass` says so explicitly); `./mine` is your project".to_owned(),
             );
@@ -451,7 +464,7 @@ impl<'k> Decoder<'k> {
                 }),
                 None => {
                     self.err(
-                        "dt::use",
+                        dt_lang::codes::USE,
                         n.span(),
                         "`use` lists the definitions it brings in, by name",
                         "not a name",
@@ -460,7 +473,12 @@ impl<'k> Decoder<'k> {
             }
         }
         if node.children().is_some() {
-            self.err("dt::use", node.span(), "`use` has no block", "here");
+            self.err(
+                dt_lang::codes::USE,
+                node.span(),
+                "`use` has no block",
+                "here",
+            );
         }
         Some(Use {
             path: Spanned {
@@ -480,7 +498,7 @@ impl<'k> Decoder<'k> {
             let keys: Vec<&str> = self.known.file_keys().collect();
             let near = did_you_mean(&key, keys.iter().copied());
             self.err(
-                "dt::use",
+                dt_lang::codes::USE,
                 u.path.span,
                 format!("no file `{key}` is loaded"),
                 "not found",
@@ -494,7 +512,7 @@ impl<'k> Decoder<'k> {
         if u.names.is_empty() {
             let all: Vec<&str> = file.keys().map(String::as_str).collect();
             self.err(
-                "dt::use",
+                dt_lang::codes::USE,
                 u.path.span,
                 "`use` names the definitions it brings in",
                 "no names",
@@ -513,7 +531,7 @@ impl<'k> Decoder<'k> {
             } else {
                 let near = did_you_mean(&n.value, file.keys().map(String::as_str));
                 self.err(
-                    "dt::use",
+                    dt_lang::codes::USE,
                     n.span,
                     format!("`{key}` has no definition `{}`", n.value),
                     "not in that file",
@@ -547,7 +565,7 @@ impl<'k> Decoder<'k> {
         } else {
             for e in node.entries().iter().skip(1) {
                 self.err(
-                    "dt::define",
+                    dt_lang::codes::DEFINE,
                     e.span(),
                     "`define` takes only a name",
                     "unexpected",
@@ -626,7 +644,7 @@ impl<'k> Decoder<'k> {
                 "param" if !is_tile => params.push(n),
                 "param" => {
                     self.err(
-                        "dt::param",
+                        dt_lang::codes::PARAM,
                         n.name().span(),
                         "a tile has no parameters",
                         "in a tile",
@@ -639,7 +657,12 @@ impl<'k> Decoder<'k> {
                 "about" => match n.entries().first().and_then(arg_str) {
                     Some(t) => def.about = Some(t.trim().to_owned()),
                     None => {
-                        self.err("dt::about", n.span(), "`about` takes one string", "here");
+                        self.err(
+                            dt_lang::codes::ABOUT,
+                            n.span(),
+                            "`about` takes one string",
+                            "here",
+                        );
                     }
                 },
                 "let" | "override" | "point" => {}
@@ -657,7 +680,7 @@ impl<'k> Decoder<'k> {
                     stacks += 1;
                     if stacks > 1 {
                         self.err(
-                            "dt::stack",
+                            dt_lang::codes::STACK,
                             n.name().span(),
                             "a definition has one stack",
                             "a second stack",
@@ -681,7 +704,7 @@ impl<'k> Decoder<'k> {
                         .then(|| format!("`{other}` goes inside `stack {{ … }}`"));
                     let span = n.name().span();
                     self.err(
-                        "dt::unknown-node",
+                        dt_lang::codes::UNKNOWN_NODE,
                         span,
                         format!(
                             "unknown node `{other}` in a {}",
@@ -725,7 +748,7 @@ impl<'k> Decoder<'k> {
             let Some(key) = e.name() else {
                 if i == 0 && arg_str(e).is_some() {
                     self.err(
-                        "dt::tile-name",
+                        dt_lang::codes::TILE_NAME,
                         e.span(),
                         "a tile takes no name: its file name is its name",
                         "remove this",
@@ -737,7 +760,7 @@ impl<'k> Decoder<'k> {
                     continue;
                 }
                 self.err(
-                    "dt::tile",
+                    dt_lang::codes::TILE,
                     e.span(),
                     "a tile takes `size=` and `seed=`",
                     "unexpected value",
@@ -756,7 +779,7 @@ impl<'k> Decoder<'k> {
                     match parsed {
                         Some((c, r)) if c > MAX_SQUARES || r > MAX_SQUARES => {
                             self.err(
-                                "dt::tile",
+                                dt_lang::codes::TILE,
                                 value_span(e),
                                 format!(
                                     "a tile is at most {MAX_SQUARES} squares each way, not {c}x{r}"
@@ -771,7 +794,7 @@ impl<'k> Decoder<'k> {
                         Some((c, r)) => (h.cols, h.rows) = (c, r),
                         None => {
                             self.err(
-                                "dt::tile",
+                                dt_lang::codes::TILE,
                                 value_span(e),
                                 "a tile's size is columns by rows of squares",
                                 "not a size",
@@ -784,14 +807,14 @@ impl<'k> Decoder<'k> {
                 "seed" => match seed_value(e) {
                     Ok(i) => h.seed = Some(i),
                     Err((msg, label)) => {
-                        self.err("dt::seed", value_span(e), msg, label);
+                        self.err(dt_lang::codes::SEED, value_span(e), msg, label);
                     }
                 },
                 other => {
                     let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(other, ["size", "seed"]);
                     self.err(
-                        "dt::unknown-control",
+                        dt_lang::codes::UNKNOWN_CONTROL,
                         key.span(),
                         format!("a tile has no `{other}`"),
                         "unknown",
@@ -807,7 +830,7 @@ impl<'k> Decoder<'k> {
         let name = self.name_arg(n, "parameter")?;
         if name.value.starts_with('$') {
             self.err(
-                    "dt::name",
+                    dt_lang::codes::NAME,
                     name.span,
                     format!("`{}` is a `$` name, and a parameter is a plain name", name.value),
                     "a context name",
@@ -817,7 +840,7 @@ impl<'k> Decoder<'k> {
         }
         if crate::words::is_reserved(&name.value) {
             self.err(
-                    "dt::name",
+                    dt_lang::codes::NAME,
                     name.span,
                     format!("`{}` is a word of the language", name.value),
                     crate::words::kind(&name.value),
@@ -836,7 +859,7 @@ impl<'k> Decoder<'k> {
             },
             _ => {
                 self.err(
-                    "dt::param",
+                    dt_lang::codes::PARAM,
                     n.span(),
                     "a parameter is `param name default`",
                     "here",
@@ -856,7 +879,7 @@ impl<'k> Decoder<'k> {
         let name = self.name_arg(n, "line")?;
         if Edge::parse(&name.value).is_some() || Corner::parse(&name.value).is_some() {
             self.err(
-                "dt::line",
+                dt_lang::codes::LINE,
                 name.span,
                 format!("`{}` is a tile edge or corner", name.value),
                 "taken by the tile",
@@ -879,7 +902,7 @@ impl<'k> Decoder<'k> {
                     let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(other, ["width", "wobble", "closed", "through"]);
                     this.err(
-                        "dt::unknown-control",
+                        dt_lang::codes::UNKNOWN_CONTROL,
                         kspan,
                         format!("a line has no `{other}`"),
                         "unknown",
@@ -890,7 +913,7 @@ impl<'k> Decoder<'k> {
             };
             if slot.is_some() {
                 this.err(
-                    "dt::duplicate",
+                    dt_lang::codes::DUPLICATE,
                     kspan,
                     format!("`{key}` is set twice"),
                     "again here",
@@ -904,7 +927,7 @@ impl<'k> Decoder<'k> {
         let mut set_closed = |this: &mut Self, kspan: SourceSpan, e: &KdlEntry| {
             if closed.is_some() {
                 this.err(
-                    "dt::duplicate",
+                    dt_lang::codes::DUPLICATE,
                     kspan,
                     "`closed` is set twice",
                     "again here",
@@ -915,7 +938,7 @@ impl<'k> Decoder<'k> {
                 KdlValue::Bool(b) => closed = Some(*b),
                 _ => {
                     this.err(
-                        "dt::value",
+                        dt_lang::codes::VALUE,
                         value_span(e),
                         "`closed` is #true or #false",
                         "not a switch",
@@ -930,7 +953,7 @@ impl<'k> Decoder<'k> {
                 Some(k) => set(self, k.value(), k.span(), e),
                 None => {
                     self.err(
-                        "dt::line",
+                        dt_lang::codes::LINE,
                         e.span(),
                         "a line takes name=value controls",
                         "no name",
@@ -947,7 +970,7 @@ impl<'k> Decoder<'k> {
                 }
                 if c.entries().len() < 2 {
                     self.err(
-                        "dt::line",
+                        dt_lang::codes::LINE,
                         c.span(),
                         "a line passes through at least two points",
                         format!("{} point(s)", c.entries().len()),
@@ -966,7 +989,7 @@ impl<'k> Decoder<'k> {
             } else {
                 let other = c.name().value();
                 self.err(
-                    "dt::unknown-node",
+                    dt_lang::codes::UNKNOWN_NODE,
                     c.name().span(),
                     format!("a line has no `{other}`"),
                     "unknown",
@@ -985,7 +1008,7 @@ impl<'k> Decoder<'k> {
             && n.iter_children().any(|c| c.name().value() == "through")
         {
             self.err(
-                "dt::line",
+                dt_lang::codes::LINE,
                 line.name.span,
                 "a closed line passes through at least three points",
                 format!("{} point(s)", line.through.len()),
@@ -994,7 +1017,7 @@ impl<'k> Decoder<'k> {
         }
         if line.through.is_empty() && !n.iter_children().any(|c| c.name().value() == "through") {
             self.err(
-                "dt::line",
+                dt_lang::codes::LINE,
                 line.name.span,
                 "a line needs `through`",
                 "no points",
@@ -1034,7 +1057,7 @@ impl<'k> Decoder<'k> {
                             Some(r) => {
                                 let near = did_you_mean(r, ctx.regions.iter().map(String::as_str));
                                 self.err(
-                                    "dt::unknown-name",
+                                    dt_lang::codes::UNKNOWN_NAME,
                                     span,
                                     format!("there is no region called `{r}`"),
                                     "not a region here",
@@ -1045,7 +1068,7 @@ impl<'k> Decoder<'k> {
                             }
                             None => {
                                 self.err(
-                                    "dt::region",
+                                    dt_lang::codes::REGION,
                                     span,
                                     "`except` names regions",
                                     "not a name",
@@ -1054,8 +1077,13 @@ impl<'k> Decoder<'k> {
                         }
                     }
                     if c.entries().is_empty() {
-                        self.err("dt::region", c.span(), "`except` takes regions", "none")
-                            .help = Some("write `except path`".to_owned());
+                        self.err(
+                            dt_lang::codes::REGION,
+                            c.span(),
+                            "`except` takes regions",
+                            "none",
+                        )
+                        .help = Some("write `except path`".to_owned());
                     }
                 }
                 "boundedBy" => {
@@ -1071,7 +1099,7 @@ impl<'k> Decoder<'k> {
                             Some(l) => {
                                 let near = did_you_mean(l, ctx.lines.iter().map(String::as_str));
                                 self.err(
-                                    "dt::unknown-name",
+                                    dt_lang::codes::UNKNOWN_NAME,
                                     span,
                                     format!("there is no line called `{l}`"),
                                     "not a line here",
@@ -1082,7 +1110,7 @@ impl<'k> Decoder<'k> {
                             }
                             None => {
                                 self.err(
-                                    "dt::region",
+                                    dt_lang::codes::REGION,
                                     span,
                                     "`boundedBy` names lines",
                                     "not a name",
@@ -1098,15 +1126,20 @@ impl<'k> Decoder<'k> {
                         }
                     }
                     if c.entries().is_empty() {
-                        self.err("dt::region", c.span(), "`fill` takes a point", "no point")
-                            .help = Some("write `fill \"(0.15sq, 0sq)\"`".to_owned());
+                        self.err(
+                            dt_lang::codes::REGION,
+                            c.span(),
+                            "`fill` takes a point",
+                            "no point",
+                        )
+                        .help = Some("write `fill \"(0.15sq, 0sq)\"`".to_owned());
                     }
                 }
                 other => {
                     let first = crate::elements::renamed(other).map(str::to_owned);
                     let near = did_you_mean(other, ["boundedBy", "fill", "within", "except"]);
                     self.err(
-                        "dt::unknown-node",
+                        dt_lang::codes::UNKNOWN_NODE,
                         c.name().span(),
                         format!("a region has no `{other}`"),
                         "unknown",
@@ -1121,7 +1154,7 @@ impl<'k> Decoder<'k> {
         let has = |w: &str| n.iter_children().any(|c| c.name().value() == w);
         if region.bounded_by.is_empty() && !has("boundedBy") && !shaped {
             self.err(
-                "dt::region",
+                dt_lang::codes::REGION,
                 region.name.span,
                 "a region divides the tile, so it needs lines",
                 "no `boundedBy`",
@@ -1133,7 +1166,7 @@ impl<'k> Decoder<'k> {
         }
         if region.fills.is_empty() && !has("fill") && (!shaped || has("boundedBy")) {
             self.err(
-                "dt::region",
+                dt_lang::codes::REGION,
                 region.name.span,
                 "a region needs at least one fill point",
                 "no fill",
@@ -1162,7 +1195,7 @@ impl<'k> Decoder<'k> {
                 }
                 _ => {
                     self.err(
-                        "dt::region",
+                        dt_lang::codes::REGION,
                         e.span(),
                         "`within` is a distance and `of=` a place",
                         "unexpected",
@@ -1176,7 +1209,7 @@ impl<'k> Decoder<'k> {
             (Some(mm), Some(of)) => Some(Within { mm, of }),
             _ => {
                 self.err(
-                    "dt::region",
+                    dt_lang::codes::REGION,
                     c.span(),
                     "`within` needs a distance and `of=`",
                     "incomplete",
@@ -1197,7 +1230,7 @@ impl<'k> Decoder<'k> {
         let span = value_span(e);
         let Some(s) = e.value().as_string() else {
             self.err(
-                "dt::point",
+                dt_lang::codes::POINT,
                 span,
                 format!("`{control}` is a point"),
                 "not a point",
@@ -1217,7 +1250,7 @@ impl<'k> Decoder<'k> {
                 });
             }
             self.err(
-                "dt::type",
+                dt_lang::codes::TYPE,
                 span,
                 format!("`{control}` is a point, and `{n}` is {}", k.describe()),
                 "not a point",
@@ -1241,7 +1274,7 @@ impl<'k> Decoder<'k> {
                     ),
                 );
                 self.err(
-                    "dt::point",
+                    dt_lang::codes::POINT,
                     span,
                     format!("`{shown}` is off the tile"),
                     "outside the tile",
@@ -1267,7 +1300,7 @@ impl<'k> Decoder<'k> {
         let span = value_span(e);
         let KdlValue::String(s) = e.value() else {
             self.err(
-                "dt::unit",
+                dt_lang::codes::UNIT,
                 span,
                 format!("`{key}` is written with its unit"),
                 "no unit",
@@ -1284,7 +1317,7 @@ impl<'k> Decoder<'k> {
             Ok(x) => x,
             Err(err) => {
                 self.err(
-                    err.code.unwrap_or("dt::printer"),
+                    err.code.unwrap_or(dt_lang::codes::PRINTER),
                     sub_span(span, at + err.start, at + err.end),
                     format!("can't read `{key}`: {}", err.message),
                     "here",
@@ -1318,7 +1351,7 @@ impl<'k> Decoder<'k> {
         let mut set = |this: &mut Self, key: &str, kspan: SourceSpan, e: &KdlEntry| {
             let Some(i) = KEYS.iter().position(|k| *k == key) else {
                 this.err(
-                    "dt::unknown-control",
+                    dt_lang::codes::UNKNOWN_CONTROL,
                     kspan,
                     format!("a printer has no `{key}`"),
                     "unknown",
@@ -1347,7 +1380,7 @@ impl<'k> Decoder<'k> {
                 Some(v) if v > 0.0 && v < max => vals[i] = Some(Spanned { value: v, span }),
                 _ => {
                     this.err(
-                        "dt::printer",
+                        dt_lang::codes::PRINTER,
                         span,
                         format!("`{key}` is a positive number below {max}"),
                         "not that",
@@ -1367,7 +1400,7 @@ impl<'k> Decoder<'k> {
                 set(self, c.name().value(), c.name().span(), e);
             } else {
                 self.err(
-                    "dt::printer",
+                    dt_lang::codes::PRINTER,
                     c.span(),
                     "a printer setting takes one number",
                     "here",
@@ -1394,7 +1427,7 @@ impl<'k> Decoder<'k> {
             .collect();
         if !missing.is_empty() {
             self.err(
-                "dt::printer",
+                dt_lang::codes::PRINTER,
                 name.span,
                 format!("this printer has no {}", missing.join(", ")),
                 "incomplete",
@@ -1417,7 +1450,7 @@ impl<'k> Decoder<'k> {
         };
         if steepest.value <= overhang.value {
             self.err(
-                "dt::printer",
+                dt_lang::codes::PRINTER,
                 steepest.span,
                 format!(
                     "`steepest` ({}°) must be past `overhang` ({}°)",
@@ -1431,7 +1464,7 @@ impl<'k> Decoder<'k> {
         let reach = (line.value / layer.value).atan().to_degrees();
         if steepest.value > reach {
             self.err(
-                "dt::printer",
+                dt_lang::codes::PRINTER,
                 steepest.span,
                 format!(
                     "at {}° a {} mm layer steps out {:.2} mm, more than one {} mm line, so it would not rest on the layer below",

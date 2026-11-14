@@ -59,7 +59,7 @@ pub(crate) fn build(
             tell!("error: {p}: the build panicked (a bug in dharmatiles, not in the tile): {msg}");
             (
                 BUG,
-                json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain("dt::panic", format!("the build panicked: {msg}"))])}),
+                json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain(dt_lang::codes::PANIC, format!("the build panicked: {msg}"))])}),
             )
         });
         if c != OK {
@@ -182,7 +182,7 @@ pub(crate) fn build_one(
             tell!("error: {p}: {e}");
             return (
                 ERROR,
-                json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain("dt::write", e)])}),
+                json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain(dt_lang::codes::WRITE, e)])}),
             );
         }
     };
@@ -393,7 +393,13 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
 /// than a failure of the program (a panic, an unreadable or unwritable file,
 /// a kernel that failed)?  The page shows the second kind as a bug.
 pub(crate) fn is_document_error(code: &str) -> bool {
-    !matches!(code, "dt::panic" | "dt::source" | "dt::write" | "dt::build")
+    !matches!(
+        code,
+        dt_lang::codes::PANIC
+            | dt_lang::codes::SOURCE
+            | dt_lang::codes::WRITE
+            | dt_lang::codes::BUILD
+    )
 }
 
 #[allow(clippy::expect_used)]

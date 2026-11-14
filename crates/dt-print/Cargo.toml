@@ -14,6 +14,7 @@ dt-geom.workspace = true
 dt-eval.workspace = true
 dt-elements.workspace = true
 dt-kit.workspace = true
+dt-lang.workspace = true
 libm.workspace = true
 png.workspace = true
 flate2.workspace = true

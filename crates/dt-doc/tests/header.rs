@@ -28,28 +28,37 @@ fn a_header_is_accepted_and_changes_nothing_else() {
 #[test]
 fn a_header_in_the_wrong_place_or_form_is_refused() {
     for (text, code) in [
-        (format!("{TILE}dharmatiles version=1\n"), "dt::header-first"),
+        (
+            format!("{TILE}dharmatiles version=1\n"),
+            dt_lang::codes::HEADER_FIRST,
+        ),
         (
             format!("dharmatiles version=1\ndharmatiles version=1\n{TILE}"),
-            "dt::header-twice",
+            dt_lang::codes::HEADER_TWICE,
         ),
-        (format!("dharmatiles\n{TILE}"), "dt::header-version"),
+        (
+            format!("dharmatiles\n{TILE}"),
+            dt_lang::codes::HEADER_VERSION,
+        ),
         (
             format!("dharmatiles version=1.0\n{TILE}"),
-            "dt::header-version",
+            dt_lang::codes::HEADER_VERSION,
         ),
         (
             format!("dharmatiles version=\"a\"\n{TILE}"),
-            "dt::header-version",
+            dt_lang::codes::HEADER_VERSION,
         ),
-        (format!("dharmatiles version=1 up=1\n{TILE}"), "dt::header"),
+        (
+            format!("dharmatiles version=1 up=1\n{TILE}"),
+            dt_lang::codes::HEADER,
+        ),
         (
             format!("dharmatiles version=1 {{ x; }}\n{TILE}"),
-            "dt::header",
+            dt_lang::codes::HEADER,
         ),
         (
             format!("dharmatiles version=\"3.0.1\"\n{TILE}"),
-            "dt::format-newer",
+            dt_lang::codes::FORMAT_NEWER,
         ),
     ] {
         let (errs, shown) = fails(&text);
@@ -81,7 +90,7 @@ fn the_decoder_refuses_format_0_and_names_the_release_that_migrates() {
         let (errs, shown) = fails(&text);
         let e = errs
             .iter()
-            .find(|e| e.code == "dt::format-0")
+            .find(|e| e.code == dt_lang::codes::FORMAT_0)
             .unwrap_or_else(|| panic!("no dt::format-0 for\n{text}\n{shown}"));
         let help = e.help.as_deref().unwrap();
         assert!(help.contains("v1.0.0"), "{help}");

@@ -64,7 +64,7 @@ impl dt_kit::Reporter for LatestBuild {
 fn panicked(what: &str, panic: &(dyn std::any::Any + Send)) -> (Diag, fail::ServerError) {
     let msg = panic_message(panic);
     tell!("error: the build of {what} panicked: {msg}");
-    let diag = Diag::plain("dt::panic", format!("the build panicked: {msg}")).help(
+    let diag = Diag::plain(dt_lang::codes::PANIC, format!("the build panicked: {msg}")).help(
         "this is a bug in dharmatiles, not in your tile: the terminal has the location; the tile builds again when it changes",
     );
     let doing = fail::Doing {
@@ -167,7 +167,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             let message = format!("cannot describe the stack: {e}");
             return finish_with(
                 rec,
-                &[Diag::plain("dt::stack", message.clone())],
+                &[Diag::plain(dt_lang::codes::STACK, message.clone())],
                 Some(build_failure(&path, message)),
                 Scope::Check,
             );
@@ -290,7 +290,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                     let message = format!("cannot prepare the view: {e}");
                     return finish_with(
                         rec,
-                        &[Diag::plain("dt::payload", message.clone())],
+                        &[Diag::plain(dt_lang::codes::PAYLOAD, message.clone())],
                         Some(build_failure(&path, message)),
                         Scope::Build,
                     );
@@ -479,7 +479,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
     let fail = |msg: String| {
         shared.report(id, Scope::Build, |name| {
             messages::of_errors(
-                &[Diag::plain("dt::source", msg.clone())],
+                &[Diag::plain(dt_lang::codes::SOURCE, msg.clone())],
                 Scope::Build,
                 id,
                 name,
@@ -488,7 +488,7 @@ pub(super) fn rebuild_stl(shared: &Shared, id: &str, opts: &Options, path: &str)
         });
         shared.update(id, |t| {
             t.status = State::Failed;
-            t.errors = super::api::mistakes(&[Diag::plain("dt::source", msg)]);
+            t.errors = super::api::mistakes(&[Diag::plain(dt_lang::codes::SOURCE, msg)]);
             t.files = files.clone();
         });
     };

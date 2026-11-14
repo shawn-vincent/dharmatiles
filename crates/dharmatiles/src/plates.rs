@@ -33,7 +33,7 @@ pub(crate) fn read_list(path: &Path) -> Result<PrintList, Vec<Diag>> {
 pub(crate) fn read_text(path: &Path) -> Result<String, Vec<Diag>> {
     std::fs::read_to_string(path).map_err(|e| {
         vec![Diag::plain(
-            "dt::source",
+            dt_lang::codes::SOURCE,
             format!("cannot read {}: {e}", path.display()),
         )]
     })
@@ -268,7 +268,7 @@ pub(crate) fn run(
         Ok(s) => s,
         Err(mut e) => {
             e.push(Diag::plain(
-                "dt::inventory",
+                dt_lang::codes::INVENTORY,
                 "this list prints only what your inventory lacks, and the inventory does not read",
             )
             .help("mend inventory.dinv, or lay the list out without it: --all"));
@@ -343,7 +343,7 @@ pub(crate) fn run(
         // before the builds, not after
         return fail(
             &[Diag::plain(
-                "dt::plates",
+                dt_lang::codes::PLATES,
                 "a Bambu Studio project needs a template for the printer's settings",
             )
             .help("save any project from Bambu Studio for this printer as bambu.3mf in your tiles folder (or name it with --bambu-template), or write one STL per plate with --format stl")],

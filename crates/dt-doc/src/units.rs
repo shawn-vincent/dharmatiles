@@ -103,7 +103,7 @@ pub struct KindError {
 
 fn err<T>(message: impl Into<String>, help: impl Into<Option<String>>) -> Result<T, KindError> {
     Err(KindError {
-        code: "dt::type",
+        code: dt_lang::codes::TYPE,
         message: message.into(),
         help: help.into(),
     })
@@ -114,7 +114,7 @@ fn unit_err<T>(
     help: impl Into<Option<String>>,
 ) -> Result<T, KindError> {
     err(message, help).map_err(|e: KindError| KindError {
-        code: "dt::unit",
+        code: dt_lang::codes::UNIT,
         ..e
     })
 }

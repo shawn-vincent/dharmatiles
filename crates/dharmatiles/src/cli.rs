@@ -334,6 +334,11 @@ pub(crate) enum Command {
         #[arg(long)]
         explain: bool,
     },
+    /// Say what an error code means, from the local copy of its error page: `explain dt::type`.
+    Explain {
+        /// The code an error printed, such as `dt::type` (or just `type`).
+        code: String,
+    },
     /// List the elements a stack can hold, or one element's controls.
     Elements {
         /// An element's name: list its controls with units, ranges and defaults.

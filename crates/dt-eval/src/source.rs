@@ -65,6 +65,29 @@ fn find_library() -> Option<PathBuf> {
     ok(&tree).then_some(tree)
 }
 
+/// The `docs/` folder (the site's pages, the error pages under `e/` among them): `$DT_DOCS`, else the copy
+/// installed beside the program (`docs/` next to it, or Homebrew's `../share/dharmatiles/docs`), else this source
+/// tree's `docs/`.  `None` when no docs are found.
+#[must_use]
+pub fn docs_dir() -> Option<PathBuf> {
+    let ok = |d: &Path| d.join("index.html").is_file();
+    if let Some(d) = std::env::var_os("DT_DOCS").map(PathBuf::from) {
+        return Some(d);
+    }
+    if let Some(bin) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+    {
+        for d in [bin.join("docs"), bin.join("../share/dharmatiles/docs")] {
+            if ok(&d) {
+                return Some(d);
+            }
+        }
+    }
+    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
+    ok(&tree).then_some(tree)
+}
+
 /// The disk file behind a `lib:` path, when the library is on disk.
 #[must_use]
 pub fn library_file(path: &str) -> Option<PathBuf> {

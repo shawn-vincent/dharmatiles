@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+mod codes;
 mod docs;
 mod image;
 mod pictures;
@@ -35,7 +36,11 @@ commands:
            Chrome (or set DT_CHROME) and Node 22+; commit the pictures
   docs [--check]
            fill each docs/elements/ page's generated reference block from
-           the element schema; --check changes nothing and fails if stale
+           the element schema, write the #dt-<code> anchors on the sections
+           that carry a data-explains marker and the error page docs/e/<code>.html
+           of every diagnostic code; --check changes nothing and fails if
+           stale, if a code has no explaining section, if a marker names no
+           code, or if an error page or anchor is missing
   release <version> "<summary>" [--no-tests] [--no-push]
            refuses a dirty working tree (commit first); unless --no-tests,
            also rebuilds tests/baseline/library-db.tsv and the element

@@ -314,7 +314,7 @@ fn the_same_piece_means_tile_seed_system_and_colour_mode() {
         single.is_err(),
         "everything is on the shelf: the plan says so rather than lay out nothing: {single:?}"
     );
-    assert_eq!(single.unwrap_err()[0].code, "dt::inventory");
+    assert_eq!(single.unwrap_err()[0].code, dt_lang::codes::INVENTORY);
 }
 
 #[test]
@@ -358,7 +358,7 @@ fn nothing_to_print_because_it_is_all_on_the_shelf_is_said_and_skip_still_skips(
         Some(&shelf),
     )
     .unwrap_err();
-    assert_eq!(e[0].code, "dt::inventory");
+    assert_eq!(e[0].code, dt_lang::codes::INVENTORY);
     assert!(e[0].message.contains("already in your inventory"), "{e:?}");
     assert!(e[0].help.as_deref().unwrap().contains("--all"));
     // one left over from the shelf, one still to print: the list plans, with the held piece named

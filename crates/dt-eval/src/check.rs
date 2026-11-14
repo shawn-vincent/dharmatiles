@@ -155,7 +155,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                     .control
                     .as_ref()
                     .and_then(|c| e.controls.iter().find(|s| &s.name == c));
-                let code = le.code.unwrap_or("dt::element");
+                let code = le.code.unwrap_or(dt_lang::codes::ELEMENT);
                 let d = match at {
                     Some(s) => Diag::at(&s.src, s.span, code, le.message, "here"),
                     None => Diag::at(&e.src, e.what.span, code, le.message, "here"),
@@ -171,7 +171,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             Diag::at(
                 &tile.src,
                 tile.span,
-                "dt::empty",
+                dt_lang::codes::EMPTY,
                 "the tile has nothing in its stack",
                 "nothing to build",
             )
@@ -220,7 +220,9 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                 elements.push(c);
                 areas.push(None);
             }
-            Err(le) => errors.push(Diag::plain("dt::system", le.message).maybe_help(le.help)),
+            Err(le) => {
+                errors.push(Diag::plain(dt_lang::codes::SYSTEM, le.message).maybe_help(le.help))
+            }
         }
     }
     // format 1: every thing's region, and what each formula can reach
@@ -264,13 +266,13 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                 format!("this reads every {kind}, and nothing in the tile makes one"),
                 *entry,
                 "remove the read, or add what it reads to the stack".to_owned(),
-                "dt::plan",
+                dt_lang::codes::PLAN,
             ),
             Refusal::SurfaceReadsSolid { entry } => (
                 "a surface cannot read solids yet".to_owned(),
                 *entry,
                 "remove the read, or add what it reads to the stack".to_owned(),
-                "dt::plan",
+                dt_lang::codes::PLAN,
             ),
             Refusal::Early {
                 entry,
@@ -297,7 +299,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                     format!("this {what}"),
                     *entry,
                     format!("{fix}; {} comes after it", named(*later)),
-                    "dt::order",
+                    dt_lang::codes::ORDER,
                 )
             }
         };
@@ -341,7 +343,7 @@ fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usiz
             let d = Diag::at(
                 &e.src,
                 name.span,
-                "dt::unknown-region",
+                dt_lang::codes::UNKNOWN_REGION,
                 format!("no region named `{}`", name.value),
                 "not a region",
             );
@@ -357,7 +359,7 @@ fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usiz
 /// A region that cannot be made (regions that name each other round a loop,
 /// a name that is no place), as an error where the region is written.
 fn region_diag(tile: &Tile, r: &doc::Region, msg: String) -> Diag {
-    Diag::at(&tile.src, r.span, "dt::region", msg, "this region").help(
+    Diag::at(&tile.src, r.span, dt_lang::codes::REGION, msg, "this region").help(
         "a region is made of lines, fill points, `within` and `except` of other regions, none of which may lead back to it",
     )
 }
@@ -379,7 +381,7 @@ fn empty_regions(tile: &Tile, masks: &[Mask], areas: &[Option<usize>]) -> Vec<Di
                 Diag::at(
                     &tile.src,
                     r.span,
-                    "dt::empty-region",
+                    dt_lang::codes::EMPTY_REGION,
                     format!("the region `{}` covers nothing", r.name),
                     "empty",
                 )

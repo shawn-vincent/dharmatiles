@@ -35,7 +35,7 @@ td code{white-space:nowrap}
 <p>A profile is named by its brand and model, <code>bambu/x1c</code>, or by a plain name, <code>fine</code>. <code>--printer bambu/x1c</code> builds for it (the output goes to <code>out/db-bambu-x1c/</code>: the slash becomes a dash), a print list names one in its <code>plates</code> block, and everywhere a printer is chosen, the title bar&rsquo;s target card and the plates panel, it is the same chooser: a search, then brand and model, with your own profiles in a group of their own, a profile marked <span class="verify">unchecked</span> where its numbers have a <code>verify</code> mark, and an <em>AMS</em> switch under a model that has an AMS profile (<code>x1c</code> and <code>x1c-ams</code> are one model and a switch, not two models). On a print list or a map the title bar&rsquo;s chip says the printer <em>the document</em> uses (&ldquo;Bambu Lab X1 Carbon &middot; this print list&rdquo;), which is the one its plates panel names; the target card then sets the printer tiles are built for. <code>default</code> and <code>fine</code> are the older floors-only profiles: they hold no bed, so they build tiles but cannot hold plates.</p>
 <p>A machine profile gives only its machine. The printability floors (line, layer, overhang, steepest, gap) are the <code>default</code> profile's unless the profile writes its own, so the gate judges a tile the same on every printer; <code>--printer bambu/x1c</code> builds byte for byte what the default does.</p>
 
-<h2 id="fields">What a profile holds</h2>
+<h2 id="fields" data-explains="dt::verify"><!--gen:anchors--><span id="dt-verify"></span><!--/gen:anchors-->What a profile holds</h2>
 <div class="tbl"><table>
 <thead><tr><th>Word</th><th>Written</th><th>Means</th></tr></thead>
 <tbody>
@@ -70,7 +70,7 @@ printer x1c-ams {
     slots   4
 }</code></pre>
 
-<h2 id="own">Your own</h2>
+<h2 id="own" data-explains="dt::printer"><!--gen:anchors--><span id="dt-printer"></span><!--/gen:anchors-->Your own</h2>
 <p>Put a file in <code>printers/</code> beside your tiles (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>): <code>printers/shed-voron.dtile</code> is <code>shed-voron</code>, and <code>printers/mine/ender.dtile</code> is <code>mine/ender</code>. A profile of yours with the name of a library one replaces it. It may start from a library one:</p>
 <pre><code>dharmatiles version="1.0.0"
 
