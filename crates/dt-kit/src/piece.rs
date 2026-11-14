@@ -177,25 +177,9 @@ impl Piece {
     /// # Errors
     /// [`KitError::Mesh`] if the surface is not a closed manifold.
     pub fn rebuilt(&self, pos: Vec<[f64; 3]>, tri: Vec<[u32; 3]>) -> Result<Self, KitError> {
-        self.rebuilt_at(pos, tri, 0.0)
-    }
-
-    /// As [`Piece::rebuilt`], with the kernel's tolerance set to `tolerance_mm`:
-    /// it collapses the edges shorter than that (the needle fans a refinement
-    /// leaves) so the piece enters a union without micron-scale slivers.
-    ///
-    /// # Errors
-    /// [`KitError::Mesh`] if the surface is not a closed manifold.
-    pub fn rebuilt_at(
-        &self,
-        pos: Vec<[f64; 3]>,
-        tri: Vec<[u32; 3]>,
-        tolerance_mm: f64,
-    ) -> Result<Self, KitError> {
         let m = TriMesh {
             positions: pos,
             triangles: tri,
-            tolerance: tolerance_mm,
             ..TriMesh::default()
         };
         let s = self.lift(&m)?;

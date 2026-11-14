@@ -36,13 +36,13 @@ const FACE_GRAIN_MM: f64 = 0.25;
 const FACE_GRAIN_LEN_MM: f64 = 1.0;
 const FIT_GAP_MM: f64 = 0.02;
 const TEX_EDGE_MM: f64 = 0.25;
-/// The kernel's tolerance on a refined stone, mm: refining the stone leaves
-/// needle fans (edges of a micron or less), and where those meet another
+/// An edge of a refined stone shorter than this, mm, is a needle: refining
+/// leaves fans of edges of a micron or less, and where those meet another
 /// stone's near-coincident face a union makes micron slivers that the gate
-/// must push apart. The refined stone is rebuilt at this tolerance, which
-/// collapses every edge shorter than it (far under the grain and under a
-/// float32 step at the tile's size), before the grain moves a vertex.
-pub const GRAIN_TOLERANCE_MM: f64 = 0.002;
+/// must push apart. [`collapse_short`] joins the ends of every such edge
+/// before the grain moves a vertex; the refinement's other vertices (flat on
+/// their faces, but the grain's to move) stay.
+const NEEDLE_MM: f64 = 0.002;
 const SHARP_EDGE_DEG: f64 = 18.0;
 const EDGE_KEEP_MM: f64 = 0.5;
 const TEX_BASE_FADE_MM: f64 = 0.8;
@@ -505,6 +505,62 @@ fn fit_tile(rock: Piece, form: &Form, setback: &[((usize, bool), f64)]) -> Piece
     if any { rock.transformed(&m) } else { rock }
 }
 
+/// The mesh with every edge shorter than `eps` collapsed: the ends of such
+/// an edge become one vertex at their mean, and a triangle left with two
+/// equal corners goes. Only the needles go: a vertex with no short edge keeps
+/// its place, so the refinement the grain needs stays.
+fn collapse_short(p: &[V], t: &[[u32; 3]], eps: f64) -> (Vec<V>, Vec<[u32; 3]>) {
+    fn find(par: &mut [u32], mut i: u32) -> u32 {
+        while par[i as usize] != i {
+            par[i as usize] = par[par[i as usize] as usize];
+            i = par[i as usize];
+        }
+        i
+    }
+    let mut par: Vec<u32> = (0..p.len() as u32).collect();
+    let mut any = false;
+    for tr in t {
+        for k in 0..3 {
+            let (a, b) = (tr[k], tr[(k + 1) % 3]);
+            if norm(sub(p[a as usize], p[b as usize])) < eps {
+                let (ra, rb) = (find(&mut par, a), find(&mut par, b));
+                if ra != rb {
+                    par[ra as usize] = rb;
+                }
+                any = true;
+            }
+        }
+    }
+    if !any {
+        return (p.to_vec(), t.to_vec());
+    }
+    let root: Vec<u32> = (0..p.len() as u32).map(|i| find(&mut par, i)).collect();
+    let mut sum = vec![[0.0; 3]; p.len()];
+    let mut cnt = vec![0.0; p.len()];
+    for (i, q) in p.iter().enumerate() {
+        let r = root[i] as usize;
+        for c in 0..3 {
+            sum[r][c] += q[c];
+        }
+        cnt[r] += 1.0;
+    }
+    let pos: Vec<V> = (0..p.len())
+        .map(|i| {
+            if root[i] as usize == i && cnt[i] > 1.0 {
+                sum[i].map(|x| x / cnt[i])
+            } else {
+                p[i]
+            }
+        })
+        .collect();
+    let tri: Vec<[u32; 3]> = t
+        .iter()
+        .map(|tr| tr.map(|i| root[i as usize]))
+        .filter(|tr| tr[0] != tr[1] && tr[1] != tr[2] && tr[2] != tr[0])
+        .collect();
+    (pos, tri)
+}
+
 /// The face grain: value-noise fBm FACE_GRAIN_MM deep, one field over the
 /// whole tile so it runs on across the joints.
 pub fn grain(
@@ -528,7 +584,7 @@ pub fn grain(
     }
     let (p, t) = rock.refined(TEX_EDGE_MM);
     // the refinement's needle fans collapsed before the grain moves anything
-    let (p, t) = dt_kit::welded(&rock.rebuilt_at(p, t, GRAIN_TOLERANCE_MM)?.mesh());
+    let (p, t) = collapse_short(&p, &t, std::env::var("GTOL").ok().and_then(|v| v.parse().ok()).unwrap_or(NEEDLE_MM));
     // angle-weighted vertex normals, smoothed 4x
     let mut n = vec![[0.0; 3]; p.len()];
     for tr in &t {
@@ -1147,7 +1203,7 @@ mod tests {
             }
         }
         assert!(
-            shortest >= 0.5 * GRAIN_TOLERANCE_MM,
+            shortest >= 0.5 * NEEDLE_MM,
             "shortest edge {shortest} mm"
         );
     }
