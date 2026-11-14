@@ -6,8 +6,10 @@
 //   progress {id, fraction, label} each stage of a build, from the program's own progress events
 //   checked  {id, result}          the check: mistakes, notes and the map (dt_eval::map, the program's one producer)
 //   built    {id, ...}             a mesh, painted, with the gate's findings (and the STL of a full build)
+//   fixed    {id, text}            the source with a mistake's fix laid in (dt_doc::ops Op::Fix, the program's one applier)
 //   error    {id, message, stack}  a trap or a throw, loud: the page shows it
 //
+// A fix is `{type: 'fix', id, text, fix}` (`fix` is the check's mistake's `fix`); it answers `fixed`, or `error`.
 // A job is `{id, steps: ['check', 'build'], text, system, seed, cells}`.  `cells` is cells per square: a number for a draft, 0
 // for the build's own finest, the detail the printer is given.
 import init, * as engine from '../../engine/dt_web.js';
@@ -31,6 +33,11 @@ self.onmessage = async (ev) => {
       engine.set_library(m.library);
       ready = true;
       self.postMessage({ type: 'ready' });
+      return;
+    }
+    if (m.type === 'fix') {
+      if (!ready) throw new Error('the worker was given a fix before it was ready');
+      self.postMessage({ type: 'fixed', id: m.id, text: engine.fix_tile(m.text, JSON.stringify(m.fix)) });
       return;
     }
     if (m.type !== 'job') throw new Error(`the worker was sent a "${m.type}" message it does not know`);

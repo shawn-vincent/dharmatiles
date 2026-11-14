@@ -457,6 +457,40 @@ pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
     })
 }
 
+/// Lay the program's fix for a mistake into `text`: `fix` is the JSON of a check's `errors[].fix`
+/// (`{offset, len, was, replacement, label}`), and the edit is [`dt_doc::ops::Op::Fix`], the one
+/// operation the program's editor and `dharmatiles fix` use.  Returns the new text.
+///
+/// # Errors
+/// The fix is not that JSON, or the text no longer reads what the fix was made for.
+#[wasm_bindgen]
+pub fn fix_tile(text: &str, fix: &str) -> Result<String, JsError> {
+    #[derive(serde::Deserialize)]
+    struct FixIn {
+        offset: usize,
+        len: usize,
+        was: String,
+        replacement: String,
+        label: String,
+    }
+    let f: FixIn = serde_json::from_str(fix).map_err(|e| {
+        JsError::new(&format!(
+            "the fix is not {{offset, len, was, replacement, label}}: {e}"
+        ))
+    })?;
+    let fixes = [dt_doc::error::Fix {
+        offset: f.offset,
+        len: f.len,
+        was: f.was,
+        replacement: f.replacement,
+        label: f.label,
+        moved: None,
+    }];
+    let done = dt_doc::ops::apply(dt_doc::ops::Kind::Tile, text, &dt_doc::ops::Op::Fix(&fixes))
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(done.text)
+}
+
 /// What a length prints on both targets, read against the library's heights:
 /// `7dmm`, `3sq`, `[1dmm .. 6dmm]`, `$groundHeight + 2dmm`.  JSON: the
 /// printed mm of each end for DungeonBlocks and OpenLOCK (empty where it

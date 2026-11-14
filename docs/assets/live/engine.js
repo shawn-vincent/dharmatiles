@@ -41,6 +41,8 @@ export class Engine {
     this.worker = null;
     this.started = null;
     this.moduleBytes = null;
+    /** @type {Map<string, {resolve: (text: string) => void, reject: (e: Error) => void}>} fixes asked of the worker, by id */
+    this.fixes = new Map();
   }
 
   /** Fetch the module quietly (no compile, no worker), so the first touch is quick.  Skipped on a metered link. */
@@ -75,6 +77,9 @@ export class Engine {
   /** A fresh worker from the already compiled module (tens of milliseconds: the engine's state is not kept). */
   #spawn() {
     this.worker?.terminate();
+    // a fix waiting on the worker that is stopped is lost with it: said, not left hanging
+    for (const f of this.fixes.values()) f.reject(new Error('the engine was restarted before the fix was made'));
+    this.fixes.clear();
     const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     this.worker = worker;
     return new Promise((resolve, reject) => {
@@ -87,6 +92,20 @@ export class Engine {
         this.#failRunning(err.message, '');
       };
       worker.postMessage({ type: 'init', module: this.module, library: this.library });
+    });
+  }
+
+  /**
+   * The source with a mistake's `fix` (from a `checked` result) laid in, by the program's own applier (dt_doc::ops Op::Fix, in the
+   * worker).  It waits behind a build the worker is running; rejects loudly when the text is not the one the fix was made for.
+   * @param {string} text @param {object} fix @returns {Promise<string>}
+   */
+  async fix(text, fix) {
+    await this.start();
+    const id = `fix-${++this.serial}`;
+    return new Promise((resolve, reject) => {
+      this.fixes.set(id, { resolve, reject });
+      this.worker.postMessage({ type: 'fix', id, text, fix });
     });
   }
 
@@ -172,6 +191,12 @@ export class Engine {
 
   /** Take what the worker said.  A message of a job that was stopped is not its card's any more. */
   #heard(m) {
+    const fix = this.fixes.get(m.id);
+    if (fix) {
+      this.fixes.delete(m.id);
+      if (m.type === 'fixed') fix.resolve(m.text); else fix.reject(new Error(m.message));
+      return;
+    }
     const r = this.running;
     if (!r || m.id !== r.id) return;
     const { card, job } = r;

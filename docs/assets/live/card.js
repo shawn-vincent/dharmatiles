@@ -18,7 +18,7 @@ import { detailsFor, setExplainBase, statusOf, countsText } from '../../editor/j
 import { drawn, marksOf, markAtOffset, parsePins, sourceRange } from '../../editor/js/overlay-marks.js';
 import { markAtPoint, renderMarks } from '../../editor/js/overlay-render.js';
 import { heightAtGrid, heightGrid } from '../../editor/js/overlay-geometry.js';
-import { fixedText, byteToIndex } from '../../editor/js/spans.js';
+import { byteToIndex } from '../../editor/js/spans.js';
 import { DRAFT_CELLS, DRAFT_TIER } from './engine.js';
 import { CardLog } from './site-log.js';
 import { SourcePane } from './source-pane.js';
@@ -191,10 +191,20 @@ export class Card {
     };
   }
 
-  /** The source with the program's fix laid in: the edit goes through the source like any other. */
-  #applyFix(m) {
-    const next = m.fix ? fixedText(this.text, m.fix) : null;
-    if (next == null) {
+  /** The source with the program's fix laid in, by the engine (`Op::Fix`): the edit goes through the source like any other. */
+  async #applyFix(m) {
+    if (!m.fix) return;
+    const was = this.text;
+    let next;
+    try {
+      next = await this.engine.fix(was, m.fix);
+    } catch (e) {
+      this.log.failed(`The fix could not be made: ${e.message}`, e.stack ?? '');
+      this.#touch();
+      return;
+    }
+    // the source was edited while the engine made the fix: the fix was for the text it read
+    if (this.text !== was) {
       this.log.failed('The source has changed since the program read it: the fix waits for the next check.', '');
       this.#touch();
       return;
