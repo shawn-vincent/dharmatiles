@@ -1005,8 +1005,8 @@ mod tests {
             "first-plate",
             "column 1, row 1, west side, at 0.62 is not a seam",
         )
-        .code("dt::seam")
-        .help(Some("did you mean `wsw`?"))
+        .code(dt_lang::codes::SEAM)
+        .help(Some("the nearest seam is `wsw`"))
         .about(
             "/home/me/My tiles/pool.dtile",
             "the super-low build of pool",
@@ -1020,12 +1020,13 @@ mod tests {
         });
         m.source = Some("    line shore".to_owned());
         let t = m.text();
+        let header = format!("{} first-plate pool.dtile:4:5", dt_lang::codes::SEAM);
         for want in [
-            "dt::seam first-plate pool.dtile:4:5",
+            header.as_str(),
             "file: /home/me/My tiles/pool.dtile",
             "seen from: first-plate",
             "doing: the super-low build of pool",
-            "help: did you mean `wsw`?",
+            "help: the nearest seam is `wsw`",
             "   4 |     line shore\n",
             "^^^",
             "kind: mistake (in the tile)",

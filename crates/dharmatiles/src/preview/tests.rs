@@ -3304,7 +3304,7 @@ fn a_listed_tile_with_a_document_mistake_reaches_every_picture_as_the_tiles_mist
         first["source"].as_str().unwrap().contains("through"),
         "{first}"
     );
-    assert!(first["help"].as_str().unwrap().contains("did you mean"));
+    assert!(first["help"].as_str().unwrap().contains("`wsw`"));
     // one message, as the same text the whole list is copied in
     let (head, text) = get(
         &r,
@@ -3313,12 +3313,12 @@ fn a_listed_tile_with_a_document_mistake_reaches_every_picture_as_the_tiles_mist
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     let text = String::from_utf8(text).unwrap();
     for want in [
-        "dt::seam",
+        dt_lang::codes::SEAM,
         "broken.dtile:4:",
         "file: ",
         "doing: ",
         "seen from: first-plate",
-        "help: did you mean",
+        "help: ",
         "  ^^^",
         "through",
         "kind: mistake",
