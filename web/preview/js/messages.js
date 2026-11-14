@@ -63,10 +63,10 @@ export const FILTERS = [
   ['build', 'Build', (m) => BUILD_KINDS.has(m.kind)],
 ];
 
-/** `1 error · 2 notes`: the counts as the status line says them ('' when there is nothing). */
-export function countsText({ errors, notes }) {
+/** `1 error · 1 warning · 2 notes`: the counts as the status line says them ('' when there is nothing). */
+export function countsText({ errors, warnings = 0, notes }) {
   const n = (k, one) => `${k} ${one}${k === 1 ? '' : 's'}`;
-  return [errors && n(errors, 'error'), notes && n(notes, 'note')].filter(Boolean).join(' · ');
+  return [errors && n(errors, 'error'), warnings && n(warnings, 'warning'), notes && n(notes, 'note')].filter(Boolean).join(' · ');
 }
 
 export function createLog() {
@@ -156,7 +156,8 @@ export function createLog() {
         cleared: run ? [] : last.get(tile) || [],
         counts: {
           errors: problems.filter((m) => m.severity === 'error').length,
-          notes: problems.filter((m) => m.severity !== 'error').length,
+          warnings: problems.filter((m) => m.severity === 'warning').length,
+          notes: problems.filter((m) => m.severity === 'note').length,
         },
       };
     },
@@ -254,7 +255,7 @@ export function statusOf(view, { t = null, live = true, p = null } = {}) {
   const secs = data?.build_s;
   const warn = view.counts.errors > 0;
   const took = data?.cache === 'hit' ? ' · cached' : secs != null ? ` · ${secs.toFixed(2)} s` : '';
-  return { verdict: `passes${took}`, tone: warn ? 'bad' : view.counts.notes ? 'note' : 'ok', counts, progress: null };
+  return { verdict: `passes${took}`, tone: warn ? 'bad' : (view.counts.notes || view.counts.warnings) ? 'note' : 'ok', counts, progress: null };
 }
 
 /** The error shape `tileErrorDetails` takes, from a message about the tile. */

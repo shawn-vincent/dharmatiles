@@ -13,6 +13,7 @@ import { setReporter, serverErrorIn } from '../problems.js';
 import { detailsFor, fitMsgHeight, statusOf } from '../messages.js';
 import { html, render } from '../view/html.js';
 import { CopyAll, ErrorCard, MessageFilters, MessagesBody } from '../view/messages-panel.js';
+import { paintStatusLine } from '../view/status-line.js';
 import { reveal } from '../slide.js';
 import { $, host, viewer } from './app.js';
 import { applyFix, openFile, saveWords, texts } from './document.js';
@@ -60,20 +61,18 @@ function showBar() {
   // the plates of a map may not lay out (a tile needs more filaments than the printer has): that is the plates' to say
   const platesOnly = (t?.errors ?? []).every((e) => /^dt::(slots|plates|inventory|printer)$/.test(e.code));
   const calm = map && (s.tone === 'ok' || s.tone === 'note' || (s.tone === 'bad' && platesOnly));
-  $('sb-verdict').textContent = calm ? map.verdict : s.verdict;
   // "draft · not yet checked" once, whoever knows it: the tile's shown build or the map's pieces
   const draft = s.unchecked || map?.notChecked ? 'draft · not yet checked' : '';
-  $('sb-counts').textContent = [draft, s.counts, map?.counts].filter(Boolean).join(' · ');
   // a map whose plates cannot be laid out is not a map in error: its dot is the notes' yellow, or green
   const tone = calm && s.tone === 'bad' ? (map.notes ? 'note' : 'ok') : s.tone;
-  $('sb-dot').className = `dot ${tone}`;
-  $('statusbar').dataset.tone = tone;
-  $('sb-bar').style.width = s.progress == null ? '0' : `${Math.round(s.progress * 100)}%`;
-  $('sb-bar').hidden = s.progress == null;
+  // the line itself is the shared component (view/status-line.js), the cards on the site use it too
+  paintStatusLine(
+    { root: $('statusbar'), main: $('sb-main'), dot: $('sb-dot'), verdict: $('sb-verdict'), counts: $('sb-counts'), bar: $('sb-bar') },
+    { verdict: calm ? map.verdict : s.verdict, counts: [draft, s.counts, map?.counts].filter(Boolean).join(' · '), tone, progress: s.progress, expanded: !!view.get().panel },
+  );
   const w = saveWords();
   $('sb-saved').textContent = w && w.text !== 'saved' ? w.text : '';
   $('sb-saved').classList.toggle('bad', !!w?.bad);
-  $('sb-main').setAttribute('aria-expanded', view.get().panel);
   $('statusbar').title = '';
 }
 

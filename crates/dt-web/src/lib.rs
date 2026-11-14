@@ -369,6 +369,75 @@ pub fn analyze(text: &str, system: &str) -> Result<String, JsError> {
     })
 }
 
+/// What a check of the page's document found, for the cards: its mistakes and
+/// notes (the same fields as [`analyze`]'s diagnostics, so the page draws one
+/// kind of message), the draft lattice's map (the editor's overlay JSON, from
+/// [`dt_eval::map::json`], the one producer the program's server uses too) and
+/// what one square is on the target.
+#[derive(Serialize)]
+struct Checked {
+    ok: bool,
+    errors: Vec<Diagnostic>,
+    notes: Vec<Diagnostic>,
+    /// The tile's map, or null when the document has no tile or did not read.
+    map: serde_json::Value,
+    /// One square's side on the target, mm.
+    square_mm: f64,
+}
+
+/// Check `text` for `system` and describe what the overlay draws: JSON
+/// ([`Checked`]).  A document with mistakes is not an error here: its
+/// mistakes are in `errors`.
+///
+/// # Errors
+/// An unknown target, or the library was never set.
+#[wasm_bindgen]
+pub fn check_tile(text: &str, system: &str) -> Result<String, JsError> {
+    let units = units_for(system)?;
+    LIBRARY.with(|lib| {
+        let lib = lib.borrow();
+        if !lib.contains_key(HEIGHTS) {
+            return Err(JsError::new(
+                "the library has no parts/heights.dtile: call set_library first",
+            ));
+        }
+        let source = Overlay {
+            library: &lib,
+            text,
+        };
+        let opts = options(&source, system)?;
+        let checked = match dt_eval::check(&source, MAIN, &opts) {
+            Ok(c) => c,
+            Err(ds) => {
+                return json(&Checked {
+                    ok: false,
+                    errors: ds.iter().map(diagnostic).collect(),
+                    notes: Vec::new(),
+                    map: serde_json::Value::Null,
+                    square_mm: units.square_mm,
+                });
+            }
+        };
+        let notes = checked.notes().iter().map(diagnostic).collect();
+        match dt_eval::map::json(&checked, text, units) {
+            Ok(map) => json(&Checked {
+                ok: true,
+                errors: Vec::new(),
+                notes,
+                map,
+                square_mm: units.square_mm,
+            }),
+            Err(ds) => json(&Checked {
+                ok: false,
+                errors: ds.iter().map(diagnostic).collect(),
+                notes,
+                map: serde_json::Value::Null,
+                square_mm: units.square_mm,
+            }),
+        }
+    })
+}
+
 /// What a length prints on both targets, read against the library's heights:
 /// `7dmm`, `3sq`, `[1dmm .. 6dmm]`, `$groundHeight + 2dmm`.  JSON: the
 /// printed mm of each end for DungeonBlocks and OpenLOCK (empty where it
@@ -420,6 +489,7 @@ pub fn printed(typed: &str) -> Result<String, JsError> {
 #[wasm_bindgen]
 pub struct Tile {
     meta: String,
+    stl: Vec<u8>,
     positions: Vec<f32>,
     colours: Vec<f32>,
 }
@@ -431,6 +501,14 @@ impl Tile {
     #[must_use]
     pub fn meta(&self) -> String {
         self.meta.clone()
+    }
+
+    /// The binary STL a printer is given: made for a full-detail build
+    /// (`cells` 0) and empty for a draft, which is never exported.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn stl(&self) -> Vec<u8> {
+        self.stl.clone()
     }
 
     /// Corner positions, mm, three floats each, three corners a triangle.
@@ -494,21 +572,94 @@ pub fn build_with(
     system: &str,
     seed: i64,
     cells: u32,
+    progress: &dt_eval::Progress,
 ) -> Result<(dt_eval::Built, Options), Vec<Diag>> {
     let mut opts = Options::in_source(source)?;
     system.clone_into(&mut opts.system);
     opts.seed = u64::try_from(seed).ok();
     opts.cells = (cells > 0).then_some(cells);
-    let built = dt_eval::build(source, MAIN, &opts)?;
+    let built = dt_eval::build_with(source, MAIN, &opts, progress)?;
     Ok((built, opts))
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    /// The page's worker hears each stage: `globalThis.dtProgress(fraction, label, done, total)`.
+    #[wasm_bindgen(js_namespace = globalThis, js_name = dtProgress)]
+    fn js_progress(fraction: f64, label: &str, done: u32, total: u32);
+}
+
+/// Nobody listens off the browser.
+#[cfg(not(target_arch = "wasm32"))]
+fn js_progress(_fraction: f64, _label: &str, _done: u32, _total: u32) {}
+
+/// How many stages a build of `source` will announce: its stack, the union and the audit.  A document that
+/// does not check builds nothing, and the build reports why, so the count only has to be a number.
+fn stage_total(source: &dyn Source, system: &str) -> usize {
+    let stack = options(source, system)
+        .ok()
+        .and_then(|o| dt_eval::check(source, MAIN, &o).ok())
+        .and_then(|c| c.tile.as_ref().map(|t| t.stack.len()));
+    stack.unwrap_or(1) + 2
+}
+
+/// Reports a build's stages to the page: the browser's third copy of the program's progress events.
+struct Ticks {
+    total: usize,
+    begun: std::sync::atomic::AtomicUsize,
+    label: std::sync::Mutex<String>,
+}
+
+impl dt_kit::Reporter for Ticks {
+    fn report(&self, event: &dt_kit::Event<'_>) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let total = self.total.max(1);
+        let at = |done: usize, part: f64, label: &str| {
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            let (f, d, t) = (
+                ((done as f64 + part) / total as f64).clamp(0.0, 0.99),
+                done as u32,
+                total as u32,
+            );
+            js_progress(f, label, d, t);
+        };
+        match event {
+            dt_kit::Event::Begin { label, .. } => {
+                let n = self.begun.fetch_add(1, Relaxed);
+                if let Ok(mut l) = self.label.lock() {
+                    (*label).clone_into(&mut l);
+                }
+                at(n, 0.0, label);
+            }
+            dt_kit::Event::Sub { fraction, .. } => {
+                let n = self.begun.load(Relaxed).saturating_sub(1);
+                let label = self.label.lock().map(|l| l.clone()).unwrap_or_default();
+                at(n, *fraction, &label);
+            }
+            dt_kit::Event::End { .. } => {}
+        }
+    }
+}
+
+fn ticks(total: usize) -> dt_eval::Progress {
+    dt_eval::Progress::new(std::sync::Arc::new(Ticks {
+        total,
+        begun: std::sync::atomic::AtomicUsize::new(0),
+        label: std::sync::Mutex::new(String::new()),
+    }))
 }
 
 /// The STL of a build, and the hash the parity check compares: SHA-256 of
 /// everything after the 80-byte header.
 #[must_use]
 pub fn stl_sha256(built: &dt_eval::Built) -> (String, usize) {
+    stl_hash(&dt_print::stl(&built.export.mesh, &built.record))
+}
+
+/// The hash of an STL file already made.
+fn stl_hash(bytes: &[u8]) -> (String, usize) {
     use sha2::{Digest, Sha256};
-    let bytes = dt_print::stl(&built.export.mesh, &built.record);
     let digest = Sha256::digest(&bytes[80..]);
     let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     (hex, bytes.len())
@@ -535,7 +686,13 @@ pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Til
             library: &lib,
             text,
         };
-        let (built, opts) = match build_with(&source, system, i64::from(seed), cells) {
+        let (built, opts) = match build_with(
+            &source,
+            system,
+            i64::from(seed),
+            cells,
+            &ticks(stage_total(&source, system)),
+        ) {
             Ok(b) => b,
             Err(ds) => {
                 let meta = BuildMeta {
@@ -563,6 +720,7 @@ pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Til
                 };
                 return Ok(Tile {
                     meta: json(&meta)?,
+                    stl: Vec::new(),
                     positions: Vec::new(),
                     colours: Vec::new(),
                 });
@@ -585,7 +743,8 @@ pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Til
             }
         }
         let failures = built.audit.failures(&opts.printer);
-        let (stl_sha256, stl_bytes) = stl_sha256(&built);
+        let stl_file = dt_print::stl(&built.export.mesh, &built.record);
+        let (stl_sha256, stl_bytes) = stl_hash(&stl_file);
         let a = &built.audit;
         let meta = BuildMeta {
             built: true,
@@ -617,6 +776,7 @@ pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Til
         };
         Ok(Tile {
             meta: json(&meta)?,
+            stl: if cells == 0 { stl_file } else { Vec::new() },
             positions,
             colours,
         })
@@ -795,7 +955,7 @@ mod tests {
             library: &lib,
             text: &text,
         };
-        let (built, opts) = build_with(&source, &system, seed, cells).unwrap();
+        let (built, opts) = build_with(&source, &system, seed, cells, &dt_eval::Progress::none()).unwrap();
         let (hash, bytes) = stl_sha256(&built);
         println!(
             "PARITY {tile} {system} seed={seed} cells={cells}: sha256={hash} bytes={bytes} triangles={} failures={:?} secs={:.2}",

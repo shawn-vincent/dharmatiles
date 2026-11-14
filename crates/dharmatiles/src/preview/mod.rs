@@ -76,7 +76,6 @@ pub(crate) mod fail;
 mod inventory;
 mod lists;
 mod local_docs;
-mod map;
 mod maps;
 mod messages;
 mod offers;

@@ -24,6 +24,7 @@ pub mod doc;
 pub mod hash;
 mod lower;
 pub mod machine;
+pub mod map;
 mod options;
 pub mod places;
 pub mod plan;

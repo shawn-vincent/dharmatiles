@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 /// Lattice nodes per square for the regions' areas: the draft build's
 /// lattice, so a region's edge on the map steps under a millimetre (0.7 mm
 /// on DungeonBlocks, 0.5 on OpenLOCK) and meets its lines.
-const CELLS: u32 = dt_eval::DRAFT_CELLS;
+const CELLS: u32 = crate::DRAFT_CELLS;
 
 /// How the map reads a written point: as the document's own `"(0.5sq, 25%)"`
 /// forms, which only the program's reader ([`dt_doc::decode::point_text`])
@@ -19,7 +19,7 @@ struct Reading {
 
 impl Reading {
     /// The point a text writes, if it writes one.
-    fn point(self, t: &dt_eval::Tile, text: &str) -> Option<dt_doc::place::Point> {
+    fn point(self, t: &crate::Tile, text: &str) -> Option<dt_doc::place::Point> {
         dt_doc::decode::point_text(text.trim(), (t.cols, t.rows), self.units).ok()
     }
 }
@@ -190,7 +190,7 @@ fn clauses(
 /// Where a place a region is made from lies: its name, what kind of place
 /// it is, and its geometry in squares (a line's points, a point; a region
 /// is found by name among the map's regions).
-fn place_ref(t: &dt_eval::Tile, name: &str, rd: Reading) -> Value {
+fn place_ref(t: &crate::Tile, name: &str, rd: Reading) -> Value {
     use dt_doc::place::{
         BUILTIN_LINES, BUILTIN_POINTS, BUILTIN_REGION, builtin_line, builtin_point,
     };
@@ -233,7 +233,7 @@ fn place_ref(t: &dt_eval::Tile, name: &str, rd: Reading) -> Value {
 /// A coordinate drawn from a range or written as an expression is placed
 /// where its range middles; a name nothing declares has no place.  The
 /// reading is the program's own ([`dt_doc::place::parse_point`]), not the page's.
-fn locate(t: &dt_eval::Tile, text: &str, rd: Reading) -> (&'static str, Option<[f64; 2]>) {
+fn locate(t: &crate::Tile, text: &str, rd: Reading) -> (&'static str, Option<[f64; 2]>) {
     use dt_doc::place::{BUILTIN_POINTS, Point, builtin_point};
     let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
     if let Some(p) = rd.point(t, text) {
@@ -263,7 +263,7 @@ fn locate(t: &dt_eval::Tile, text: &str, rd: Reading) -> (&'static str, Option<[
 /// written: the coordinates, or the point's name), where it is, and the
 /// written value's byte span.  `ranged` is true when it lies somewhere in a
 /// range, so `at` is only the middle of where it may land.
-fn marker(t: &dt_eval::Tile, text: &str, span: Option<[usize; 2]>, rd: Reading) -> Value {
+fn marker(t: &crate::Tile, text: &str, span: Option<[usize; 2]>, rd: Reading) -> Value {
     let (kind, at) = locate(t, text, rd);
     let ranged = rd.point(t, text).is_some_and(|p| p.is_range());
     json!({ "label": text.trim(), "kind": kind, "at": at, "span": span, "ranged": ranged })
@@ -272,7 +272,7 @@ fn marker(t: &dt_eval::Tile, text: &str, span: Option<[usize; 2]>, rd: Reading) 
 /// The `of` points of a region's `within` clauses: the ones written as a
 /// literal pair or as the name of a point (a line or region is drawn as
 /// itself, not as a point).
-fn within_markers(t: &dt_eval::Tile, node: &kdl::KdlNode, text: &str, rd: Reading) -> Vec<Value> {
+fn within_markers(t: &crate::Tile, node: &kdl::KdlNode, text: &str, rd: Reading) -> Vec<Value> {
     use dt_doc::place::{BUILTIN_POINTS, Point};
     node.children()
         .map(kdl::KdlDocument::nodes)
@@ -298,9 +298,9 @@ fn within_markers(t: &dt_eval::Tile, node: &kdl::KdlNode, text: &str, rd: Readin
 /// Every control point a region refers to: each `fill` point, then each
 /// `within … of=` centre that is a point.
 fn markers_of(
-    t: &dt_eval::Tile,
+    t: &crate::Tile,
     tile: Option<&kdl::KdlNode>,
-    r: &dt_eval::Region,
+    r: &crate::Region,
     fills: Option<&[Written]>,
     text: &str,
     rd: Reading,
@@ -318,7 +318,7 @@ fn markers_of(
 
 /// The places a region is made from, each once: the lines that bound it,
 /// the places its `within`s are round, the regions it excepts.
-fn region_refs(t: &dt_eval::Tile, r: &dt_eval::Region, rd: Reading) -> Vec<Value> {
+fn region_refs(t: &crate::Tile, r: &crate::Region, rd: Reading) -> Vec<Value> {
     let mut names: Vec<String> = r.bounded_by.iter().map(|b| b.value.clone()).collect();
     names.extend(r.within.iter().map(|w| w.of.to_string()));
     names.extend(r.except.iter().cloned());
@@ -329,7 +329,7 @@ fn region_refs(t: &dt_eval::Tile, r: &dt_eval::Region, rd: Reading) -> Vec<Value
 
 /// Every place a tile has, for a choice among them: the built-in edges and
 /// points, the tile's own points, lines and regions.
-fn places(t: &dt_eval::Tile) -> Vec<Value> {
+fn places(t: &crate::Tile) -> Vec<Value> {
     use dt_doc::place::{BUILTIN_LINES, BUILTIN_POINTS, BUILTIN_REGION};
     let mut out = Vec::new();
     let mut add = |name: &str, kind: &str| out.push(json!({ "name": name, "kind": kind }));
@@ -376,11 +376,11 @@ fn points(w: &[(String, [usize; 2])], at: Option<&Vec<[f64; 2]>>) -> Vec<Value> 
 
 /// The map of checked tile `c`, its spans from `text` (the tile's own
 /// document as checked).
-pub(super) fn json(
-    c: &dt_eval::Checked,
+pub fn json(
+    c: &crate::Checked,
     text: &str,
     units: dt_doc::units::Units,
-) -> Result<Value, Vec<dt_eval::Diag>> {
+) -> Result<Value, Vec<crate::Diag>> {
     let Some(t) = &c.tile else {
         return Ok(Value::Null);
     };
@@ -485,7 +485,7 @@ pub(super) fn json(
 /// The words a value is written from, for completion: the `$` names (what
 /// an element sets, the regions, the tile's heights), the units and the
 /// functions.
-fn language(t: &dt_eval::Tile) -> Value {
+fn language(t: &crate::Tile) -> Value {
     let mut names: Vec<String> = dt_lang::POINT_NAMES
         .iter()
         .chain(dt_lang::REGION_NAMES)

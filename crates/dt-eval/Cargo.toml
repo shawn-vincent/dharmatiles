@@ -24,6 +24,7 @@ dt-kit.workspace = true
 dt-elements.workspace = true
 kdl.workspace = true
 miette.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 # the golden tests draw the PNG renders (a dev-dependency cycle: dt-print builds on dt-eval)

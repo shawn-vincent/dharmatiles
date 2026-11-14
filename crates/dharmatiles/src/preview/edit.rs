@@ -1002,7 +1002,7 @@ pub(super) fn check(shared: &Shared, t: &TileRef, v: TextReq) -> Out<CheckRes> {
                     format!("cannot read {tile}: {e}"),
                 )
             })?;
-            let map = match map::json(&c, &own, opts.units()) {
+            let map = match dt_eval::map::json(&c, &own, opts.units()) {
                 Ok(m) => m,
                 Err(errs) => {
                     said(messages::Scope::Check, &errs);

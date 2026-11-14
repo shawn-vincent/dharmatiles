@@ -465,6 +465,7 @@ dependencies = [
  "kdl",
  "miette",
  "rayon",
+ "serde_json",
 ]
 
 [[package]]

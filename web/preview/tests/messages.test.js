@@ -22,9 +22,14 @@ test('open messages are rows, errors first and the newest first; the build\'s re
   assert.deepEqual(v.rows.map((r) => r.m.seq), [e2.seq, e1.seq, nt.seq]);
   assert.equal(v.record.build.seq, b.seq);
   assert.equal(v.record.gate.seq, g.seq);
-  assert.deepEqual(v.counts, { errors: 2, notes: 1 });
+  assert.deepEqual(v.counts, { errors: 2, warnings: 0, notes: 1 });
   assert.equal(countsText(v.counts), '2 errors · 1 note');
-  assert.equal(countsText({ errors: 0, notes: 0 }), '');
+  assert.equal(countsText({ errors: 0, warnings: 0, notes: 0 }), '');
+  // warnings are counted apart from notes
+  const w = createLog();
+  [msg({ severity: 'warning', kind: 'warning', code: 'dt::edge' }), msg({ severity: 'warning', kind: 'warning', code: 'dt::edge', text: 'again' }), note()].forEach((m) => w.apply(m));
+  assert.deepEqual(w.view('a').counts, { errors: 0, warnings: 2, notes: 1 });
+  assert.equal(countsText(w.view('a').counts), '2 warnings · 1 note');
   assert.equal(log.view('other').rows.length, 0, 'another tile\'s view has none of these');
 });
 
@@ -34,7 +39,7 @@ test('a cleared message leaves the rows', () => {
   log.apply(e);
   log.apply(cleared(e));
   assert.equal(log.view('a').rows.length, 0);
-  assert.deepEqual(log.view('a').counts, { errors: 0, notes: 0 });
+  assert.deepEqual(log.view('a').counts, { errors: 0, warnings: 0, notes: 0 });
 });
 
 test('while a build runs the last build\'s rows are dimmed; new ones are not; on finish they come back and what it cleared is one line', () => {
