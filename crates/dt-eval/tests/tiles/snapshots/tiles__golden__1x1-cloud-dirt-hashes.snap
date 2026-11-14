@@ -1,0 +1,10 @@
+---
+source: crates/dt-eval/tests/tiles/golden.rs
+expression: hashes(built(path))
+---
+e67f8108c6297d09  plan
+f06b949ce4629ae3  surface
+3e07980e4fdbe47b  terrain:tile/terrain
+f7653a612bb4f2ea  connector:tile/connector
+91b1bc5a5babadd1  union
+2b6dc2fcd435b0ac  export

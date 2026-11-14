@@ -4,10 +4,11 @@
 
 #![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
 
-mod common;
-
-use dt_eval::{Built, Library, Memory, Options, build, check};
+use dt_eval::{Built, Memory, Options, check};
 use dt_kit::Material;
+
+use super::common;
+use super::memo;
 
 fn mem(text: &str) -> Memory {
     common::memory(&[("t.dtile", text)])
@@ -56,8 +57,9 @@ fn mound(film: bool) -> String {
     )
 }
 
-fn built(text: &str) -> Built {
-    build(&mem(text), "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"))
+/// The tile written in `text`, built once however many tests ask.
+fn built(text: &str) -> &'static Built {
+    memo::from_text(text)
 }
 
 /// The highest vertex of the written mesh of `material` inside `disc`
@@ -86,9 +88,9 @@ fn every_stone_top_stands_in_its_band_and_the_pile_reaches_it() {
     // nothing passes the band's highest high (the build refuses a stone
     // over its own band: a bug in the body)
     assert!(
-        top_of(&b, Material::Rock, None) <= edge + 34.0 + 0.01,
+        top_of(b, Material::Rock, None) <= edge + 34.0 + 0.01,
         "{}",
-        top_of(&b, Material::Rock, None)
+        top_of(b, Material::Rock, None)
     );
     // and the stones reach each pin's band: the summit's, the middle's, the foot's
     for (centre, r, lo) in [
@@ -96,7 +98,7 @@ fn every_stone_top_stands_in_its_band_and_the_pile_reaches_it() {
         ([0.5 * 35.0, 0.5 * 35.0], 6.5, 19.0),
         ([0.47 * 35.0, 0.53 * 35.0], 9.0, 10.0),
     ] {
-        let top = top_of(&b, Material::Rock, Some((centre, r)));
+        let top = top_of(b, Material::Rock, Some((centre, r)));
         assert!(
             top >= edge + lo - 0.3,
             "disc at {centre:?}: {top} under {lo}"
@@ -216,12 +218,11 @@ fn dirt_vertices(b: &Built) -> Vec<[f64; 3]> {
         .collect()
 }
 
-#[test]
-fn dirt_follows_a_stones_top_as_a_layer_of_its_band() {
-    // the dirt is its band over the stone under it; the grain's pits may take
-    // it under the band's low, never under the stone's top by more than a
-    // pit's depth, and its grain never stands more than a clod over the high
-    for seed in [2, 5, 9] {
+/// The dirt is its band over the stone under it; the grain's pits may take
+/// it under the band's low, never under the stone's top by more than a
+/// pit's depth, and its grain never stands more than a clod over the high.
+fn dirt_follows_a_stones_top(seeds: &[u32]) {
+    for &seed in seeds {
         let name = format!("table seed {seed}");
         let (bare, dirt) = (
             built(&table(false, seed, "")),
@@ -254,6 +255,17 @@ fn dirt_follows_a_stones_top_as_a_layer_of_its_band() {
 }
 
 #[test]
+fn dirt_follows_a_stones_top_as_a_layer_of_its_band() {
+    dirt_follows_a_stones_top(&[2]);
+}
+
+#[test]
+#[ignore = "the slow sweep: the same at seeds 5 and 9 (seed 2 runs by default)"]
+fn dirt_follows_a_stones_top_as_a_layer_of_its_band_at_more_seeds() {
+    dirt_follows_a_stones_top(&[5, 9]);
+}
+
+#[test]
 fn dirt_is_absent_where_the_surface_under_it_is_steeper_than_max_slope() {
     // a pile of broken stones: their grain and tilts are steeper than 35
     // degrees at the scale dirt reads the slope, so dirt keeps to the flat
@@ -262,8 +274,8 @@ fn dirt_is_absent_where_the_surface_under_it_is_steeper_than_max_slope() {
     // in `dirt.rs` hold the angle itself
     let tile = |extra: &str| tall(true).replace("at=crag\n", &format!("at=crag {extra}\n"));
     let (default, steepest) = (
-        dirt_vertices(&built(&tile(""))).len(),
-        dirt_vertices(&built(&tile("maxSlope=\"85deg\""))).len(),
+        dirt_vertices(built(&tile(""))).len(),
+        dirt_vertices(built(&tile("maxSlope=\"85deg\""))).len(),
     );
     assert!(
         default * 4 < steepest * 3,
@@ -336,11 +348,11 @@ fn the_tiles_outer_sides_carry_grain_all_the_way_up() {
         "lib:tests/cliffs/1x1-cliff-columns.dtile",
         "lib:tests/cliffs/1x1-cliff-corner.dtile",
     ] {
-        let b = build(&Library, path, &Options::default()).unwrap();
+        let b = memo::built(path);
         // the crag stands on the north (and west) sides; every side, the
         // foot of the stones included, is grained like the top
         for (axis, high) in [(0, false), (0, true), (1, false), (1, true)] {
-            let (share, flat, total, spread) = side_grain(&b, axis, high, 9.0);
+            let (share, flat, total, spread) = side_grain(b, axis, high, 9.0);
             // a face on the plane has every vertex within FLAT_MM of it, so
             // its depths spread by at most FLAT_MM / 2; grain spreads them by
             // more than twice that (0.2 to 0.3 mm in the library's cliffs)
@@ -385,15 +397,10 @@ fn a_band_that_holds_a_stone_down_does_not_stack_it_on_itself() {
     // over two of them is held to the lower one's high, and the stack once
     // placed that same stone again and again at its site (dozens of
     // coincident solids, a union that never finished)
-    let b = build(
-        &Library,
-        "lib:tests/cliffs/1x1-cliff-spire.dtile",
-        &Options::default(),
-    )
-    .unwrap();
+    let b = memo::built("lib:tests/cliffs/1x1-cliff-spire.dtile");
     assert!(b.audit.failures(&Options::default().printer).is_empty());
     // the property: no stone is the same solid as another (the build drops
     // repeats as a guard and counts them)
-    assert_eq!(note(&b, "cliff_repeated_stones"), 0.0);
-    assert!(note(&b, "cliff_stones") > 0.0);
+    assert_eq!(note(b, "cliff_repeated_stones"), 0.0);
+    assert!(note(b, "cliff_stones") > 0.0);
 }

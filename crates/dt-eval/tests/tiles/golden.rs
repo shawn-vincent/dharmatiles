@@ -2,10 +2,12 @@
 //! hashes, triangle count, volume, overhang mm² and see-through holes,
 //! as insta snapshots; `cargo insta review` shows what changed.
 //!
-//! Each golden tile is built once on the whole machine, all of them at
-//! once, and the tests share the builds. Determinism: every tile is built
-//! again on two threads and every stage hash must agree; the hash
-//! snapshot is shared by macOS and Linux; Windows checks the metrics
+//! Each golden tile is built once for the whole binary (see `memo`: two
+//! threads, every observer on), and the tests share the build.
+//! Determinism: the hash snapshots were recorded from plain builds on the
+//! whole machine, so the observed build matching them is the proof that
+//! threads, progress, sketching and the debug layer change nothing; the
+//! hash snapshot is shared by macOS and Linux; Windows checks the metrics
 //! snapshot and the render gate only.
 
 #![allow(
@@ -14,12 +16,10 @@
     clippy::cast_precision_loss
 )]
 
-use std::collections::HashMap;
-use std::sync::LazyLock;
-
 use dt_eval::{Built, Library, Options, build};
 use dt_print::{VIEWS, render};
-use rayon::prelude::*;
+
+use super::memo::{built, hashes};
 
 const TILES: &[&str] = &[
     "lib:tests/ground/1x1-flat.dtile",
@@ -71,43 +71,6 @@ fn the_shape_tiles_pass_the_gate() {
     }
 }
 
-fn build_at(path: &str, threads: usize) -> Built {
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .build()
-        .unwrap();
-    pool.install(|| build(&Library, path, &Options::default()))
-        .unwrap_or_else(|e| panic!("{path}: {e:?}"))
-}
-
-/// Every golden tile, built once on the whole machine, all at once; every
-/// test here reads these.
-static BUILT: LazyLock<HashMap<&'static str, Built>> = LazyLock::new(|| {
-    TILES
-        .par_iter()
-        .map(|&p| {
-            (
-                p,
-                build(&Library, p, &Options::default()).unwrap_or_else(|e| panic!("{p}: {e:?}")),
-            )
-        })
-        .collect()
-});
-
-fn built(path: &str) -> &'static Built {
-    BUILT
-        .get(path)
-        .unwrap_or_else(|| panic!("{path} is not a golden tile"))
-}
-
-fn hashes(b: &Built) -> String {
-    b.report
-        .stages
-        .iter()
-        .map(|s| format!("{:016x}  {}\n", s.hash, s.name))
-        .collect()
-}
-
 /// Metrics that every platform must agree on.
 fn metrics(b: &Built) -> String {
     let a = &b.audit;
@@ -135,23 +98,6 @@ fn metrics(b: &Built) -> String {
     )
 }
 
-/// Every leaf solid takes a slot reserved in sequence, so a build is the
-/// same whatever the threads: each golden tile on two threads, all at once,
-/// against its build on the whole machine.
-#[test]
-fn stage_hashes_agree_whatever_the_threads() {
-    // the shared builds first, on this thread: a pool worker must never
-    // wait on them while they wait on the pool
-    LazyLock::force(&BUILT);
-    TILES.par_iter().for_each(|path| {
-        assert_eq!(
-            hashes(&build_at(path, 2)),
-            hashes(built(path)),
-            "{path}: 2 threads against all"
-        );
-    });
-}
-
 #[test]
 fn golden_metrics() {
     for path in TILES {
@@ -168,6 +114,34 @@ fn golden_hashes() {
         let b = built(path);
         let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
         insta::assert_snapshot!(format!("{name}-hashes"), hashes(b));
+    }
+}
+
+/// The other tiles the test binary builds and reads, which no golden
+/// snapshot holds the metrics of: only their stage hashes are kept, so that
+/// their observed builds are held to a plain one the same way.
+pub const OBSERVED: &[&str] = &[
+    "lib:tests/walls/1x1-wall-cut-stone.dtile",
+    "lib:tests/cliffs/1x1-cliff-mound.dtile",
+    "lib:tests/ground/1x1-cloud-dirt.dtile",
+    "lib:tests/ground/1x1-cloud-pinned.dtile",
+    "lib:tests/water/1x1-cloud-water.dtile",
+    "lib:tests/rocks/2x2-rock-clouds.dtile",
+    "lib:tests/plants/2x2-grove.dtile",
+    "lib:tests/water/1x1-water+grass.dtile",
+    "lib:tests/walls/1x1-wall-stone+grass.dtile",
+    "lib:tests/walls/1x1-wall-brick-corner+grass.dtile",
+];
+
+/// Threads, progress, sketching and the debug layer change no hash: the
+/// observed builds of the tiles outside the golden list against hashes
+/// recorded from plain builds (`golden_hashes` does it for the rest).
+#[test]
+#[cfg(not(windows))]
+fn observers_change_nothing() {
+    for path in OBSERVED {
+        let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
+        insta::assert_snapshot!(format!("{name}-hashes"), hashes(built(path)));
     }
 }
 

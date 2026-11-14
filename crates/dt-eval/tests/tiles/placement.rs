@@ -13,33 +13,35 @@
 
 #![allow(clippy::unwrap_used, clippy::print_stderr)]
 
-use dt_eval::{Built, Library, Options, build};
+use dt_eval::{Built, Options};
 
-/// The library tiles and test tiles that place something, one square each
-/// or a little more, so that the sweep stays short.
+use super::memo::{built, made};
+
+/// The test tiles that place something, one square each or a little more,
+/// so that the sweep stays short.
 const PLACING: &[&str] = &[
     "lib:tests/rocks/1x1-rock-tops.dtile",
     "lib:tests/plants/1x1-tree.dtile",
     "lib:tests/plants/1x1-grass-flowers.dtile",
     "lib:tests/plants/2x2-meadow.dtile",
-    "lib:tiles/ground/1x1-grass-tree.dtile",
-    "lib:tiles/ground/1x1-grass-flowers.dtile",
-    "lib:tiles/water/1x1-water+grass-tree.dtile",
-    "lib:tiles/cliffs/1x1-cliff.dtile",
+    "lib:tests/water/1x1-water+grass.dtile",
+    "lib:tests/cliffs/1x1-cliff-mound.dtile",
 ];
 
-fn made(path: &str, f: impl FnOnce(&mut Options)) -> Built {
+/// The tile built with `f` applied to the default options, once per `key`
+/// (the observed build serves the default ones).
+fn with(path: &str, key: &str, f: impl FnOnce(&mut Options)) -> &'static Built {
     let mut opts = Options::default();
     f(&mut opts);
-    build(&Library, path, &opts).unwrap_or_else(|e| panic!("{path}: {e:?}"))
+    made(path, &opts, key)
 }
 
 #[test]
 fn a_low_build_places_everything_where_the_full_build_does() {
     let mut anything = 0;
     for path in PLACING {
-        let full = made(path, |_| {});
-        let low = made(path, |o| o.low = true);
+        let full = built(path);
+        let low = with(path, "low", |o| o.low = true);
         let of = |b: &Built, grass: bool| -> Vec<dt_kit::Placement> {
             b.report
                 .placed
@@ -50,14 +52,14 @@ fn a_low_build_places_everything_where_the_full_build_does() {
         };
         // rocks, trees, flowers: to the last bit
         assert_eq!(
-            of(&full, false),
-            of(&low, false),
+            of(full, false),
+            of(low, false),
             "{path}: the low build moved something"
         );
         // a grass clearing is placed round the footprints of the rocks and
         // trunks as drawn, and a low rock is its hull: the same clearings, a
         // little apart
-        let (a, b) = (of(&full, true), of(&low, true));
+        let (a, b) = (of(full, true), of(low, true));
         assert_eq!(a.len(), b.len(), "{path}: clearings");
         for (p, q) in a.iter().zip(&b) {
             let d = (p.at[0] - q.at[0]).hypot(p.at[1] - q.at[1]);
@@ -71,7 +73,7 @@ fn a_low_build_places_everything_where_the_full_build_does() {
 #[test]
 fn placements_are_recorded_for_every_placing_element() {
     let kinds = |path: &str| -> Vec<&'static str> {
-        let mut k: Vec<&'static str> = made(path, |_| {})
+        let mut k: Vec<&'static str> = built(path)
             .report
             .placed
             .iter()
@@ -88,25 +90,36 @@ fn placements_are_recorded_for_every_placing_element() {
 }
 
 /// What a coarser lattice leaves where it is: the rocks and flowers a tile
-/// scatters over its whole area stand at the same coordinates at 32, 48 and
-/// 128 cells.  (Trees do not: see [`placement_by_cells`].)
-#[test]
-fn rocks_and_flowers_stand_where_they_did_at_other_cells() {
+/// scatters over its whole area stand at the same coordinates at 32 cells
+/// (the coarsest, and the quickest build; 48 and 128 are in
+/// [`rocks_and_flowers_stand_where_they_did_at_more_cells`]).  (Trees do
+/// not: see [`placement_by_cells`].)
+fn stand_where_they_did(cells: &[u32]) {
     for path in [
         "lib:tests/rocks/1x1-rock-tops.dtile",
         "lib:tests/plants/1x1-grass-flowers.dtile",
-        "lib:tiles/ground/1x1-grass-flowers.dtile",
     ] {
-        let full = made(path, |_| {});
+        let full = built(path);
         assert!(!full.report.placed.is_empty(), "{path}");
-        for cells in [32, 48, 128] {
-            let other = made(path, |o| o.cells = Some(cells));
+        for &cells in cells {
+            let other = with(path, &format!("cells {cells}"), |o| o.cells = Some(cells));
             assert_eq!(
                 full.report.placed, other.report.placed,
                 "{path} at {cells} cells"
             );
         }
     }
+}
+
+#[test]
+fn rocks_and_flowers_stand_where_they_did_at_other_cells() {
+    stand_where_they_did(&[32]);
+}
+
+#[test]
+#[ignore = "the slow sweep: the same as the fast test at 48 and 128 cells (one representative, 32, runs by default)"]
+fn rocks_and_flowers_stand_where_they_did_at_more_cells() {
+    stand_where_they_did(&[48, 128]);
 }
 
 /// How far each placement of a build at `cells` is from the full build's,
@@ -127,15 +140,15 @@ fn drift(full: &Built, other: &Built) -> (usize, usize, f64) {
 
 /// Not a check: what placement does when the lattice is made coarser, which
 /// is why the tiers keep the full one.  `cargo test --release -p dt-eval
-/// --test placement placement_by_cells -- --ignored --nocapture`.
+/// --test tiles placement_by_cells -- --ignored --nocapture`.
 #[test]
 #[ignore = "a measurement: prints how far each placement moves with cells per square"]
 fn placement_by_cells() {
     for path in PLACING {
-        let full = made(path, |_| {});
+        let full = built(path);
         for cells in [32, 48, 128] {
-            let other = made(path, |o| o.cells = Some(cells));
-            let (n, m, worst) = drift(&full, &other);
+            let other = with(path, &format!("cells {cells}"), |o| o.cells = Some(cells));
+            let (n, m, worst) = drift(full, other);
             eprintln!(
                 "{path}: at {cells} cells {m} placed against {n}, the farthest moved {worst:.2} mm"
             );

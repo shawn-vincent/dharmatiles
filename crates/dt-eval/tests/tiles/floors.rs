@@ -7,9 +7,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use dt_eval::{Built, Memory, Options, build};
 
-use dt_eval::{Built, Library, Memory, Options, build};
+use super::common;
+use super::memo;
 
 fn mem(text: &str) -> Memory {
     common::memory(&[("t.dtile", text)])
@@ -103,7 +104,7 @@ fn the_library_floors_pass_the_gate() {
         "lib:tests/floors/1x1-planks.dtile",
         "lib:tests/floors/1x1-flagstones-heaved.dtile",
     ] {
-        let b = build(&Library, path, &Options::default()).unwrap();
+        let b = memo::built(path);
         assert!(
             b.audit.failures(&Options::default().printer).is_empty(),
             "{path}"

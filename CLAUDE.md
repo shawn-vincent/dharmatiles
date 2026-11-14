@@ -76,7 +76,7 @@ Also: `xtask/` (`docs`, `pictures`, `release`, `sheet`), `library/` (`.dtile` do
 
 `document -> dt-doc (decode, check against the element schema) -> dt-eval::check (plan) -> build each element into the Scene, in the order the stack is written -> union -> audit -> STL`. Stack order is build order: grass sees the rocks listed before it, water fills over what is under it. An element says what it writes in `Element::plan` (a surface, a fill, a laid layer or a solid); the plan refuses a stack whose entries need something nothing earlier made.
 
-Every leaf solid takes a slot reserved in sequence, so its source id (and so the material of every output triangle, and every hash) is fixed by index whatever thread builds it. Builds are identical whatever the threads; the golden tests check it by building each golden tile again on two threads (`crates/dt-eval/tests/golden.rs`, insta snapshots in `crates/dt-eval/tests/snapshots/`).
+Every leaf solid takes a slot reserved in sequence, so its source id (and so the material of every output triangle, and every hash) is fixed by index whatever thread builds it. Builds are identical whatever the threads; the `tiles` test binary builds each test tile once, on two threads with progress, sketches and the debug layer listening (`crates/dt-eval/tests/tiles/memo.rs`), and holds its stage hashes to insta snapshots recorded from plain builds (`crates/dt-eval/tests/tiles/golden.rs`, snapshots in `crates/dt-eval/tests/tiles/snapshots/`): a match is the proof that threads and observers change nothing. A test that builds a `lib:tests/` tile at its default options reads `memo`'s build, never builds it again.
 
 ### Tile documents
 

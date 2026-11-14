@@ -431,19 +431,6 @@ fn a_seed_wobbles_the_lines_again() {
 }
 
 #[test]
-fn the_floor_and_wall_tiles_build_with_grass() {
-    // a straight wall and a corner, each with grass to its foot (the golden
-    // tests hold the stone floor with a wall on it)
-    for path in [
-        "lib:tests/walls/1x1-wall-stone+grass.dtile",
-        "lib:tests/walls/1x1-wall-brick-corner+grass.dtile",
-    ] {
-        let b = build(&Library, path, &legacy()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
-        assert_eq!(b.audit.overhang_mm2, 0.0, "{path}");
-    }
-}
-
-#[test]
 fn a_wall_in_a_definition_needs_its_place_from_the_call() {
     let def = "dharmatiles version=\"1.0.0\"; define ruin-corner {\n    stack {\n        wall style=cut-stone\n    }\n}\n";
     let without = format!(

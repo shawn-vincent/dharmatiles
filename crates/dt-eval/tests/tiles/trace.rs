@@ -4,11 +4,12 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
-
 use std::collections::BTreeMap;
 
 use dt_eval::{NO_ENTRY, Options, build};
+
+use super::common;
+use super::memo;
 
 const TILE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
     line shore wobble="5dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
@@ -59,21 +60,18 @@ fn every_triangle_has_its_entry() {
 
 #[test]
 fn a_draft_is_quick_and_still_traced() {
-    let full = Options::default();
     let draft = Options {
         draft: true,
         ..Options::default()
     };
     {
         let tile = "lib:tests/water/1x1-water+grass.dtile";
-        let t0 = std::time::Instant::now();
-        let f = dt_eval::build(&dt_eval::Library, tile, &full).unwrap();
-        let tf = t0.elapsed().as_secs_f64();
+        let f = memo::built(tile);
         let t0 = std::time::Instant::now();
         let d = dt_eval::build(&dt_eval::Library, tile, &draft).unwrap();
         let td = t0.elapsed().as_secs_f64();
         eprintln!(
-            "{tile}: full {tf:.2} s, {} triangles; draft {td:.2} s, {} triangles",
+            "{tile}: {} triangles; draft {td:.2} s, {} triangles",
             f.materials.len(),
             d.materials.len()
         );

@@ -5,30 +5,14 @@
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 
-use std::path::PathBuf;
+use dt_eval::{Built, Options};
 
-use dt_eval::{Built, Memory, Options, build};
+use super::memo;
 
-fn library_tile(rel: &str) -> (Memory, String) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../library/tests")
-        .join(rel);
-    let text = std::fs::read_to_string(&path).unwrap();
-    let name = "t.dtile".to_owned();
-    (Memory([(name.clone(), text)].into_iter().collect()), name)
-}
-
-fn built(rel: &str, debug: bool) -> Built {
-    let (m, name) = library_tile(rel);
-    build(
-        &m,
-        &name,
-        &Options {
-            clouds: debug,
-            ..Options::default()
-        },
-    )
-    .unwrap_or_else(|e| panic!("{rel}: {e:#?}"))
+/// The tile `rel` of `library/tests/`, built once with the debug layer and
+/// the clouds on (and every other observer: see `memo`).
+fn built(rel: &str) -> &'static Built {
+    memo::built(&format!("lib:tests/{rel}"))
 }
 
 fn sheet<'a>(b: &'a Built, class: &str) -> &'a dt_kit::debug::Sheet {
@@ -39,27 +23,11 @@ fn sheet<'a>(b: &'a Built, class: &str) -> &'a dt_kit::debug::Sheet {
         .unwrap_or_else(|| panic!("no {class} sheet"))
 }
 
-/// The layer on changes no hash, no stage and no triangle.
-fn same_built(rel: &str) {
-    let (off, on) = (built(rel, false), built(rel, true));
-    assert!(
-        off.report.clouds.is_none(),
-        "{rel}: nothing collected with it off"
-    );
-    assert_eq!(
-        off.export.mesh.content_hash(),
-        on.export.mesh.content_hash(),
-        "{rel}"
-    );
-    let h = |b: &Built| b.report.stages.iter().map(|s| s.hash).collect::<Vec<_>>();
-    assert_eq!(h(&off), h(&on), "{rel}");
-}
-
 #[test]
 fn a_dirt_cloud_draws_two_sheets_shaded_by_its_odds() {
     // low(0 .. 3dmm): the low end comes up far more often than the high
-    let b = built("ground/1x1-cloud-dirt.dtile", true);
-    let (lo, hi) = (sheet(&b, "band-lo"), sheet(&b, "band-hi"));
+    let b = built("ground/1x1-cloud-dirt.dtile");
+    let (lo, hi) = (sheet(b, "band-lo"), sheet(b, "band-hi"));
     for s in [lo, hi] {
         assert_eq!(s.shade.len(), s.z.z.len(), "a shade per node");
         assert!(s.shade.iter().all(|v| (0.0..=1.0).contains(v)));
@@ -85,10 +53,10 @@ fn a_dirt_cloud_draws_two_sheets_shaded_by_its_odds() {
 
 #[test]
 fn a_pinned_cloud_and_a_water_cloud_draw_their_sheets() {
-    let pinned = built("ground/1x1-cloud-pinned.dtile", true);
-    assert!(sheet(&pinned, "band-lo").owner.contains("dirt"));
-    assert!(sheet(&pinned, "band-hi").owner.contains("dirt"));
-    let water = built("water/1x1-cloud-water.dtile", true);
+    let pinned = built("ground/1x1-cloud-pinned.dtile");
+    assert!(sheet(pinned, "band-lo").owner.contains("dirt"));
+    assert!(sheet(pinned, "band-hi").owner.contains("dirt"));
+    let water = built("water/1x1-cloud-water.dtile");
     let hi = water
         .report
         .clouds
@@ -125,7 +93,7 @@ fn a_flat_cloud_shades_at_half() {
 
 #[test]
 fn a_rock_cloud_draws_a_span_for_every_topped_stone() {
-    let b = built("rocks/2x2-rock-clouds.dtile", true);
+    let b = built("rocks/2x2-rock-clouds.dtile");
     let d = b.report.clouds.as_ref().unwrap();
     let stones: Vec<_> = d
         .columns
@@ -149,7 +117,7 @@ fn a_rock_cloud_draws_a_span_for_every_topped_stone() {
 
 #[test]
 fn a_grove_draws_a_span_for_every_branch_tip() {
-    let b = built("plants/2x2-grove.dtile", true);
+    let b = built("plants/2x2-grove.dtile");
     let d = b.report.clouds.as_ref().unwrap();
     let tips: Vec<_> = d
         .columns
@@ -165,17 +133,42 @@ fn a_grove_draws_a_span_for_every_branch_tip() {
     }
 }
 
+/// With the layer off nothing is collected (any build shows it; a draft is
+/// the quickest).
 #[test]
-fn clouds_are_drawn_the_same_every_time_and_change_nothing_built() {
+fn with_the_layer_off_nothing_is_collected() {
+    let draft = Options {
+        draft: true,
+        ..Options::default()
+    };
+    let b = memo::made("lib:tests/ground/1x1-cloud-dirt.dtile", &draft, "draft");
+    assert!(b.report.clouds.is_none());
+    assert!(b.report.debug.is_none());
+}
+
+/// What is drawn is the same every time, whatever the threads: each tile's
+/// clouds from the shared build (two threads) against another on the whole
+/// machine.  That the layer changes no hash, no stage and no triangle (the
+/// grove's included) is held by the golden hashes, which were recorded
+/// without it (`golden::observers_change_nothing`).
+#[test]
+fn clouds_are_drawn_the_same_every_time() {
+    let clouds_only = Options {
+        clouds: true,
+        ..Options::default()
+    };
     for rel in [
         "ground/1x1-cloud-dirt.dtile",
         "ground/1x1-cloud-pinned.dtile",
         "water/1x1-cloud-water.dtile",
         "rocks/2x2-rock-clouds.dtile",
     ] {
-        same_built(rel);
-        let (a, b) = (built(rel, true), built(rel, true));
-        let (da, db) = (a.report.clouds.unwrap(), b.report.clouds.unwrap());
+        let path = format!("lib:tests/{rel}");
+        let (a, b) = (built(rel), memo::made(&path, &clouds_only, "clouds"));
+        let (da, db) = (
+            a.report.clouds.as_ref().unwrap(),
+            b.report.clouds.as_ref().unwrap(),
+        );
         assert_eq!(da.sheets.len(), db.sheets.len(), "{rel}");
         for (x, y) in da.sheets.iter().zip(&db.sheets) {
             assert_eq!((&x.z.z, &x.shade), (&y.z.z, &y.shade), "{rel}");
@@ -190,21 +183,15 @@ fn clouds_are_drawn_the_same_every_time_and_change_nothing_built() {
 }
 
 #[test]
-fn the_grove_builds_the_same_with_the_layer_on() {
-    same_built("plants/2x2-grove.dtile");
-}
-
-#[test]
 fn debug_marks_never_reach_the_export() {
-    let b = built("rocks/2x2-rock-clouds.dtile", true);
+    let b = built("rocks/2x2-rock-clouds.dtile");
     assert!(!b.report.clouds.as_ref().unwrap().columns.is_empty());
-    // the printed mesh is the solids' union: the same triangles with the
-    // layer off (checked above by hash); and the gate saw no extra part
-    let off = built("rocks/2x2-rock-clouds.dtile", false);
-    assert_eq!(
-        b.export.mesh.triangles.len(),
-        off.export.mesh.triangles.len()
-    );
+    // the printed mesh is the solids' union, the same with the layer off
+    // (the golden hashes), and the gate saw no extra part
     let p = Options::default().printer;
-    assert_eq!(b.audit.failures(&p), off.audit.failures(&p));
+    assert!(
+        b.audit.failures(&p).is_empty(),
+        "{:?}",
+        b.audit.failures(&p)
+    );
 }

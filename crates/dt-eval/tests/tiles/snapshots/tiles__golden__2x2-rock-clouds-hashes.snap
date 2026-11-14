@@ -1,0 +1,22 @@
+---
+source: crates/dt-eval/tests/tiles/golden.rs
+expression: hashes(built(path))
+---
+4cb9b472f975d51a  plan
+811456fdbba1aa24  surface
+73b59921c420a471  terrain:tile/terrain
+01788ccf342a1557  rock:tile/scatter/0
+7a505d58c1aa4930  rock:tile/scatter/0
+af7a9aecfab31b4e  rock:tile/scatter/0
+fb9cc248d42e9ee6  rock:tile/scatter/0
+4b72f672b50182fd  rock:tile/scatter/0
+42b9e475722d1eb7  rock:tile/scatter/0
+fbac8e818ffd6e28  rock:tile/scatter/0
+176290760902603d  rock:tile/scatter/0
+8ca572815c28f768  rock:tile/scatter/0
+87785503f4888f7c  rock:tile/scatter/0
+65584fcb2834fabf  rock:tile/scatter/0
+5533ae63f1c820bc  rock:tile/scatter/0
+bd4e8354cae9053e  connector:tile/connector
+912bc6e96f9949c7  union
+706a537385ba56fc  export

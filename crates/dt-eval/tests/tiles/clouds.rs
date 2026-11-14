@@ -420,21 +420,12 @@ const CLOUD_TILES: &[&str] = &[
     "lib:tests/water/1x1-cloud-water.dtile",
 ];
 
+/// Their hashes on any threads are held by `golden::observers_change_nothing`.
 #[test]
-fn the_cloud_tiles_pass_the_gate_and_build_alike_on_any_threads() {
+fn the_cloud_tiles_pass_the_gate() {
     let printer = Options::default().printer;
     for path in CLOUD_TILES {
-        let build_on = |threads: usize| {
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build()
-                .unwrap()
-                .install(|| build(&Library, path, &Options::default()))
-                .unwrap_or_else(|e| panic!("{path}: {e:?}"))
-        };
-        let one = build_on(1);
-        let four = build_on(4);
-        let a = &one.audit;
+        let a = &super::memo::built(path).audit;
         assert!(
             a.failures(&printer).is_empty(),
             "{path}: {:?}",
@@ -442,14 +433,6 @@ fn the_cloud_tiles_pass_the_gate_and_build_alike_on_any_threads() {
         );
         assert!(a.watertight, "{path}");
         assert!(a.dropped.is_empty(), "{path}: {:?}", a.dropped);
-        let hashes = |b: &dt_eval::Built| -> Vec<(String, u64)> {
-            b.report
-                .stages
-                .iter()
-                .map(|s| (s.name.clone(), s.hash))
-                .collect()
-        };
-        assert_eq!(hashes(&one), hashes(&four), "{path}: threads move the hash");
     }
 }
 
