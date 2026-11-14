@@ -5,11 +5,12 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use crate::common;
 
 use std::fmt::Write as _;
 
-use dt_eval::{Checked, Diag, Library, Memory, Options, build, check};
+use crate::memo;
+use dt_eval::{Checked, Diag, Library, Memory, Options, check};
 
 /// These tests write their documents in format 1 and read them from memory.
 fn legacy() -> Options {
@@ -246,7 +247,7 @@ fn a_dirts_top_and_pins_build() {
     let text = tile("stack { base\n dirt top=\"6dmm\" { pin top=\"4dmm\" at=center } }");
     let c = solved(&text);
     assert!(c.pending().is_empty(), "{:?}", c.pending());
-    assert!(build(&mem(&text), "t.dtile", &legacy()).is_ok());
+    assert!(memo::build(&mem(&text), "t.dtile", &legacy()).is_ok());
 }
 
 #[test]
@@ -355,7 +356,8 @@ fn the_stream_banks_fall_from_the_land_to_the_bed() {
 
 /// The height a built tile's one tree came to, mm.
 fn tree_height(text: &str) -> f64 {
-    let b = build(&mem(text), "t.dtile", &legacy()).unwrap_or_else(|e| panic!("{text}\n{e:#?}"));
+    let b =
+        memo::build(&mem(text), "t.dtile", &legacy()).unwrap_or_else(|e| panic!("{text}\n{e:#?}"));
     b.report
         .notes
         .iter()
@@ -379,7 +381,7 @@ fn a_trees_top_over_its_foot_or_above_zero_is_its_height() {
     assert!((above - over).abs() < 0.3, "{above} vs {over}");
     assert!(taller > over + 10.0, "{taller} vs {over}");
     // a top that leaves the tree too short where it stands is refused there
-    let e = match build(&mem(&tree("$groundHeight + 10dmm")), "t.dtile", &legacy()) {
+    let e = match memo::build(&mem(&tree("$groundHeight + 10dmm")), "t.dtile", &legacy()) {
         Ok(_) => panic!("a 10 mm tree built"),
         Err(e) => e,
     };
@@ -402,7 +404,7 @@ fn a_body_inside_a_definition_checks_and_builds() {
     let solved = c.solved.as_ref().unwrap();
     assert_eq!(solved.bodies.len(), 1);
     assert!(solved.bodies[0].written);
-    let built = build(&Library, path, &o).unwrap_or_else(|e| panic!("{e:#?}"));
+    let built = memo::build(&Library, path, &o).unwrap_or_else(|e| panic!("{e:#?}"));
     assert!(
         built.audit.failures(&o.printer).is_empty(),
         "{:?}",

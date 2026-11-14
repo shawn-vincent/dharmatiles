@@ -35,6 +35,7 @@ serde.workspace = true
 
 [dev-dependencies]
 ts-rs.workspace = true
+dt-testkit.workspace = true
 # Test builds only: the DT_TEST_PANIC crash switch the exit-code tests drive.
 dt-eval = { workspace = true, features = ["test-panic"] }
 

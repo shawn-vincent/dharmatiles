@@ -4,7 +4,7 @@
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 
-mod common;
+use crate::common;
 
 use dt_eval::{Diag, Library, Options, Tile, check};
 

@@ -9,7 +9,8 @@
 
 #![allow(clippy::unwrap_used)]
 
-use dt_eval::{Diag, Library, Memory, Options, build, check};
+use crate::memo;
+use dt_eval::{Diag, Library, Memory, Options, check};
 use dt_kit::Weighting;
 
 fn mem(text: &str) -> Memory {
@@ -388,7 +389,7 @@ fn hash(text: &str) -> Vec<(String, u64)> {
         draft: true,
         ..Options::default()
     };
-    let b = build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
+    let b = memo::build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
     b.report
         .stages
         .iter()
@@ -443,7 +444,7 @@ fn the_cloud_tiles_build_for_openlock_too() {
         ..Options::default()
     };
     for path in CLOUD_TILES {
-        let b = build(&Library, path, &opts).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+        let b = memo::build(&Library, path, &opts).unwrap_or_else(|e| panic!("{path}: {e:?}"));
         let f = b.audit.failures(&opts.printer);
         assert!(f.is_empty(), "{path}: {f:?}");
     }

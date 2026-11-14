@@ -4,8 +4,9 @@
 
 #![allow(clippy::unwrap_used)]
 
+use crate::memo;
 use dt_eval::plan::Step;
-use dt_eval::{Memory, Options, build, check};
+use dt_eval::{Memory, Options, check};
 
 fn mem(text: &str) -> Memory {
     Memory([("t.dtile".to_owned(), text.to_owned())].into())
@@ -59,7 +60,7 @@ fn check_plans_the_stack_in_the_order_it_is_written_and_build_builds_that_plan()
     assert!(lift < first_rock, "{:?}", c.steps);
 
     // build agrees with check about the stack it built, and the gate holds
-    let b = build(&mem(&text), "t.dtile", &opts).unwrap();
+    let b = memo::build(&mem(&text), "t.dtile", &opts).unwrap();
     assert_eq!(
         b.report
             .stack
@@ -84,7 +85,7 @@ fn a_plan_that_is_refused_is_refused_by_check_and_by_build_in_the_same_words() {
     );
     let opts = draft();
     let c = check(&mem(&text), "t.dtile", &opts).err().unwrap();
-    let b = build(&mem(&text), "t.dtile", &opts).err().unwrap();
+    let b = memo::build(&mem(&text), "t.dtile", &opts).err().unwrap();
     assert_eq!(c[0].code, dt_lang::codes::ORDER, "{c:?}");
     assert_eq!(
         (c[0].code, &c[0].message, &c[0].help),
@@ -122,7 +123,9 @@ fn a_region_is_made_once_and_every_stage_sees_the_same_one() {
             .any(|n| n.label == "pool" && n.mask.as_ref().is_some_and(|m| m.count() > 0)),
         "the pool covers ground"
     );
-    let a = build(&mem(&text), "t.dtile", &opts).unwrap();
-    let b = build(&mem(&text), "t.dtile", &opts).unwrap();
+    // fresh: the test builds the same text twice to compare the two meshes; a memo would hand back one
+    let a = dt_eval::build(&mem(&text), "t.dtile", &opts).unwrap();
+    // fresh: the second of the two builds compared
+    let b = dt_eval::build(&mem(&text), "t.dtile", &opts).unwrap();
     assert_eq!(a.export.mesh.content_hash(), b.export.mesh.content_hash());
 }

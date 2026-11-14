@@ -25,8 +25,8 @@ dharmatiles preview my-tile.dtile --open                     # live painted 3D v
 dharmatiles                                                 # no command = preview --open: browse My tiles ($DT_HOME, else ~/dharmatiles) and the Library; folders as args work too
 
 cargo test --release --workspace            # all tests (insta golden hashes included), under 5 minutes
-cargo test --release -p dt-eval --test openlock -- --ignored   # release check: every library tile through the gate on both systems
-cargo test --release -p dt-eval --test baseline -- --ignored   # every library tile on DungeonBlocks against tests/baseline/library-db.tsv (hash, triangles, repairs, overhang, and each tile's repair budget, held to the worst of four seeds: a repair count above its `max_*` fails, and a rewrite can only lower a budget); DT_BASELINE=write rewrites it; about 18 minutes
+cargo test --release -p dt-eval --test tiles -- --ignored every_library_tile_passes   # release check: every library tile through the gate on both systems (name both tests in one command and the DungeonBlocks builds are made once for the two)
+cargo test --release -p dt-eval --test tiles -- --ignored the_library_builds_as_the_baseline_says   # every library tile on DungeonBlocks against tests/baseline/library-db.tsv (hash, triangles, repairs, overhang, and each tile's repair budget, held to the worst of four seeds: a repair count above its `max_*` fails, and a rewrite can only lower a budget); DT_BASELINE=write rewrites it; about 18 minutes
 cargo clippy --release --workspace --all-targets -- -D warnings   # release, like the tests: one build of Manifold and the engine (dev builds both again, about 3 minutes cold)
 cargo fmt --check
 cargo xtask sheet <tile|name> [--seeds …] [--system ol]  # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
@@ -57,7 +57,7 @@ CI is off. Run the tests locally on this Mac only; do not wait on or re-enable G
 
 ## Architecture
 
-Twelve crates under `crates/`:
+Thirteen crates under `crates/`:
 
 | Crate | Role |
 |---|---|
@@ -71,6 +71,7 @@ Twelve crates under `crates/`:
 | `dt-par` | Parallel iteration for the engine: rayon everywhere but the browser, where the same calls run in order. |
 | `dt-store` | The disk cache of builds: a finished `Built` kept under a SHA-256 key (the `sha2` crate, over `dt-eval`'s canonical form of everything the build read), and the stored build calls (`build_stored`, `build_tier`) that read it. It sits above `dt-eval`, which knows nothing of it. |
 | `dt-print` | A built tile on its way to a printer, above the engine: print lists, plates and the packer, the inventory, binary STL, 3MF and Bambu Studio projects, and the CPU renderer that draws `build --png` and the contact sheets (its only readers are those outputs). |
+| `dt-testkit` | What the tests share, a dev-dependency only (the program does not carry it): `build`, one build of a document kept for everything the build reads (the source's content, the path, every field of `Options`), so a test run never builds the same tile twice. dt-eval's, dt-store's and dharmatiles' tests use it. |
 | `dt-web` | The browser build (`cargo xtask wasm`): the language crates and the engine on `wasm32-unknown-unknown`, left out of a plain `cargo build`. |
 | `dharmatiles` | The CLI. |
 
@@ -117,5 +118,6 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 - **Pronouns:** use they/them for Shawn.
 - **Contact sheets:** make one with `cargo xtask sheet` and look at it yourself at full resolution before calling an element done. Element pictures come from `cargo xtask pictures`; look at them too.
 - **Keep the loop fast.** Budgets: a warm build under 1 minute, `cargo xtask check` under 2, a cold build under 5, `cargo xtask check --full` (before a push or a release) about 10. `check` times itself against its budget, logs every run to `dt-times.tsv` in the git common folder and prints OVER BUDGET when past it. When a cycle is over budget, the next task, straight after the current one and ahead of the queue, is to make it fast again; say so on the Bench. Fix the waste where it is made, never by skipping a check or loosening the gate.
+- **A test never builds what a test already built.** dt-eval's integration tests are one binary (`crates/dt-eval/tests/tiles/`, a module for each file) and build only through `memo::build`, which keeps one build for everything it reads (the source's content, the path, every field of `Options`); `memo_only` fails a build that skips it unless a `// fresh: why` comment says the test must build again (the cache, thread counts, a build compared with itself). dt-store's and dharmatiles' tests use the same memo (`dt-testkit`) where a test is not about the build or the store itself.
 - **Builds are heavy; the machine has 12 cores.** At most two agents at once, each with a task that lands in under about 45 minutes. Sweeps, contact sheets, pictures and the browser engine go through the heavy-job lock (`cargo xtask sweep`, `sheet`, `pictures`, `wasm`, or `cargo xtask heavy <command>`), so two never overlap. Merge on `cargo xtask check`; run `cargo xtask check --full` once before a push.
 - Before asking Shawn a design question, read `docs/standards/rules.html`, the element page's Rules, the language guide's rules and the other `docs/standards/` pages. Many answers are settled (for example the edge level is 3.4 mm). Older reasoning is in the tag `before-rust-only` (`docs/rust/plan.html` there has the dated decisions log).

@@ -4,9 +4,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use crate::common;
 
-use dt_eval::{Diag, Memory, Options, build, check};
+use crate::memo;
+use dt_eval::{Diag, Memory, Options, check};
 
 /// These tests write their documents in format 1 and read them from memory.
 fn legacy() -> Options {
@@ -93,7 +94,7 @@ fn hash_of(text: &str, low: bool) -> Vec<(String, u64)> {
         low,
         ..legacy()
     };
-    let b = build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
+    let b = memo::build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
     b.report
         .stages
         .iter()

@@ -7,8 +7,8 @@
 //! so each time is its own):
 //!
 //! ```text
-//! cargo test --release -p dt-eval --test baseline -- --ignored --nocapture
-//! DT_BASELINE=write cargo test --release -p dt-eval --test baseline -- --ignored   # rewrite it
+//! cargo test --release -p dt-eval --test tiles -- --ignored the_library_builds_as_the_baseline_says --nocapture
+//! DT_BASELINE=write cargo test --release -p dt-eval --test tiles -- --ignored the_library_builds_as_the_baseline_says   # rewrite it
 //! ```
 //!
 //! Every measured column must match the file exactly (a step that is meant
@@ -51,9 +51,9 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
-use std::time::Instant;
 
-use dt_eval::{Library, Options, build, check};
+use crate::memo;
+use dt_eval::{Library, Options, check};
 
 /// The three seeds a tile is built on besides the one it writes, to count its
 /// repairs: the only place they are set.
@@ -114,12 +114,13 @@ fn uses(path: &str) -> Vec<String> {
 /// One tile's measured row, without budgets; the last column is the build time.
 fn row(path: &str) -> String {
     let opts = Options::default();
-    let t0 = Instant::now();
-    let b = match build(&Library, path, &opts) {
+    // the memo's build: the release check that passes every library tile through the gate asks for the same
+    // one, so the library is built once; the seconds are those of the build, whoever asked first
+    let (b, secs) = memo::timed(&Library, path, &opts);
+    let b = match b {
         Ok(b) => b,
         Err(e) => return format!("{path}\trefused: {}\t\t\t\t\t\t\t\t\t\t\t", e.len()),
     };
-    let secs = t0.elapsed().as_secs_f64();
     let a = &b.audit;
     let gate = a.failures(&opts.printer);
     // the output hash: the audited mesh as written
@@ -146,7 +147,10 @@ fn repairs_on(path: &str, seed: u64) -> Result<[u64; 5], String> {
         seed: Some(seed),
         ..Options::default()
     };
-    let b = build(&Library, path, &opts).map_err(|e| format!("on seed {seed}: {e:?}"))?;
+    // Each extra seed is read once, for its repair counts; kept, three more copies of the library (several GB)
+    // would stand for the whole run.
+    // fresh: built once and dropped, so the memo does not keep it
+    let b = dt_eval::build(&Library, path, &opts).map_err(|e| format!("on seed {seed}: {e:?}"))?;
     let a = &b.audit;
     Ok([
         a.voids.len(),

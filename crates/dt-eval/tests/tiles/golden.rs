@@ -17,7 +17,8 @@
     clippy::cast_precision_loss
 )]
 
-use dt_eval::{Built, Library, Options, build};
+use crate::memo;
+use dt_eval::{Built, Library, Options};
 use dt_print::{VIEWS, render};
 
 use super::memo::{built, hashes, prebuild};
@@ -206,18 +207,18 @@ fn no_base_line_means_no_base() {
             system: system.to_owned(),
             ..Options::default()
         };
-        let none = build(&Library, "lib:tests/ground/1x1-no-base.dtile", &opts).unwrap();
+        let none = memo::build(&Library, "lib:tests/ground/1x1-no-base.dtile", &opts).unwrap();
         assert!(none.audit.failures(&opts.printer).is_empty(), "{system}");
         assert!(none.audit.watertight && none.audit.holes == 0);
-        assert!(min_z(&none).abs() < 1e-6, "{system}: flat from zero");
+        assert!(min_z(none).abs() < 1e-6, "{system}: flat from zero");
         assert!(
             none.materials
                 .iter()
                 .all(|m| *m != dt_kit::Material::Connector),
             "{system}: a connector part"
         );
-        let some = build(&Library, "lib:tests/ground/1x1-flat.dtile", &opts).unwrap();
-        assert!(min_z(&some) < -6.9, "{system}: the base is under zero");
+        let some = memo::build(&Library, "lib:tests/ground/1x1-flat.dtile", &opts).unwrap();
+        assert!(min_z(some) < -6.9, "{system}: the base is under zero");
         assert!(some.audit.failures(&opts.printer).is_empty(), "{system}");
     }
 }

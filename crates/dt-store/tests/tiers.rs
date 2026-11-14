@@ -76,7 +76,7 @@ fn temp(name: &str) -> std::path::PathBuf {
     d
 }
 
-const GRASS: &str = "lib:tiles/ground/1x1-soil+grass.dtile";
+const GRASS: &str = "lib:tests/plants/1x1-soil+grass.dtile";
 
 #[test]
 fn only_a_full_build_is_checked_and_a_low_one_is_lighter() {

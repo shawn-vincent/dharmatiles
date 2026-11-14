@@ -17,6 +17,7 @@ sha2.workspace = true
 [dev-dependencies]
 dt-print.workspace = true
 dt-elements.workspace = true
+dt-testkit.workspace = true
 
 [lints]
 workspace = true

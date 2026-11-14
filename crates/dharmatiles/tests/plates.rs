@@ -19,9 +19,13 @@ fn scratch(name: &str) -> PathBuf {
 /// The program with a cache and a home of this run's own.
 fn exe(d: &Path) -> Command {
     let mut c = Command::new(EXE);
-    c.env("DT_CACHE", d.join("cache"))
-        .env("DT_HOME", d.join("home"))
-        .env("DT_SETTINGS", d.join("settings"));
+    // one build cache for the whole run (these tests are not about the cache): a tile is built once
+    c.env(
+        "DT_CACHE",
+        std::env::temp_dir().join(format!("dt-plates-cache-{}", std::process::id())),
+    )
+    .env("DT_HOME", d.join("home"))
+    .env("DT_SETTINGS", d.join("settings"));
     c
 }
 

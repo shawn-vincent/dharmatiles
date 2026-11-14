@@ -5,11 +5,12 @@
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 
-mod common;
+use crate::common;
 
+use crate::memo;
 use dt_eval::coords::Coords;
 use dt_eval::regions::{Kind, RegionTree};
-use dt_eval::{Built, Checked, Diag, Memory, Options, build, check};
+use dt_eval::{Built, Checked, Diag, Memory, Options, check};
 
 fn preview() -> Options {
     Options {
@@ -107,15 +108,15 @@ fn hashes(b: &Built) -> String {
         .collect()
 }
 
-fn built(text: &str, opts: &Options) -> Built {
-    build(&mem(text), "t.dtile", opts).unwrap_or_else(|e| panic!("{text}\n{e:#?}"))
+fn built(text: &str, opts: &Options) -> &'static Built {
+    memo::build(&mem(text), "t.dtile", opts).unwrap_or_else(|e| panic!("{text}\n{e:#?}"))
 }
 
 /// The same tile written two ways, the second its mirror (`y` flipped,
 /// every size in `dmm`), must build the same mesh: the frame and `dmm` are
 /// exact.
 fn same_mesh(zero: &str, one: &str) {
-    let a = build(
+    let a = memo::build(
         &common::memory(&[("t.dtile", zero)]),
         "t.dtile",
         &Options::default(),
@@ -123,7 +124,7 @@ fn same_mesh(zero: &str, one: &str) {
     .unwrap_or_else(|e| panic!("{zero}\n{e:#?}"));
     let b = built(one, &preview());
     assert!(!a.report.stages.is_empty());
-    assert_eq!(hashes(&a), hashes(&b), "{zero}\n{one}");
+    assert_eq!(hashes(a), hashes(b), "{zero}\n{one}");
 }
 
 #[test]

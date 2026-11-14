@@ -7,7 +7,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use dt_eval::{Built, Memory, Options, build};
+use dt_eval::{Built, Memory, Options};
 
 use super::common;
 use super::memo;
@@ -22,9 +22,9 @@ fn tile(stack: &str) -> String {
     )
 }
 
-fn built(stack: &str) -> Built {
+fn built(stack: &str) -> &'static Built {
     let text = tile(stack);
-    build(&mem(&text), "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"))
+    memo::build(&mem(&text), "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"))
 }
 
 /// The highest vertex of the written mesh above the base, over the whole
@@ -55,13 +55,9 @@ fn a_single_height_is_a_flat_floor_flush_at_the_edge() {
         assert_eq!(b.audit.overhang_mm2, 0.0, "{stack}");
         // nothing over floorEdgeHeight anywhere, edge or not: the grain is
         // set in, never raised
-        assert!(
-            tops(&b, false) <= 7.4 + 1e-5,
-            "{stack}: {}",
-            tops(&b, false)
-        );
+        assert!(tops(b, false) <= 7.4 + 1e-5, "{stack}: {}", tops(b, false));
         // and the edge reaches it, to within the grain's depth: the faces at the plane keep their relief
-        assert!(tops(&b, true) >= 7.4 - under, "{stack}: {}", tops(&b, true));
+        assert!(tops(b, true) >= 7.4 - under, "{stack}: {}", tops(b, true));
     }
 }
 
@@ -73,17 +69,17 @@ fn a_wide_band_is_a_heaved_floor_held_flush_at_the_edge() {
     assert!(b.audit.watertight);
     assert_eq!(b.audit.overhang_mm2, 0.0);
     // the slabs inside rise over the edge height, the band's top is never passed
-    assert!(tops(&b, false) > 7.4 + 0.3, "{}", tops(&b, false));
-    assert!(tops(&b, false) <= 7.4 + 1.5 + 1e-5, "{}", tops(&b, false));
+    assert!(tops(b, false) > 7.4 + 0.3, "{}", tops(b, false));
+    assert!(tops(b, false) <= 7.4 + 1.5 + 1e-5, "{}", tops(b, false));
     // the edge pin holds the slabs on the edge at floorEdgeHeight
-    assert!(tops(&b, true) <= 7.4 + 1e-5, "{}", tops(&b, true));
+    assert!(tops(b, true) <= 7.4 + 1e-5, "{}", tops(b, true));
 }
 
 #[test]
 fn a_band_that_jumps_across_a_slab_is_refused_as_a_bug() {
     // one slab over the whole tile, a pin 9 mm high at its middle
     let text = tile("base\n dirt\n flagstones { pin top=\"9dmm\" at=mid }");
-    let e = build(&mem(&text), "t.dtile", &Options::default())
+    let e = memo::build(&mem(&text), "t.dtile", &Options::default())
         .err()
         .unwrap();
     assert_eq!(e[0].code, dt_lang::codes::BAND, "{e:#?}");
@@ -94,7 +90,7 @@ fn a_floor_with_no_land_stands_on_the_base() {
     let b = built("base\n planks");
     assert!(b.audit.watertight);
     assert!(b.audit.failures(&Options::default().printer).is_empty());
-    assert!(tops(&b, false) <= 7.4 + 1e-5);
+    assert!(tops(b, false) <= 7.4 + 1e-5);
 }
 
 #[test]

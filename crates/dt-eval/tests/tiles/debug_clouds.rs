@@ -141,7 +141,12 @@ fn with_the_layer_off_nothing_is_collected() {
         draft: true,
         ..Options::default()
     };
-    let b = memo::made("lib:tests/ground/1x1-cloud-dirt.dtile", &draft, "draft");
+    let b = memo::build(
+        &dt_eval::Library,
+        "lib:tests/ground/1x1-cloud-dirt.dtile",
+        &draft,
+    )
+    .unwrap();
     assert!(b.report.clouds.is_none());
     assert!(b.report.debug.is_none());
 }
@@ -164,7 +169,10 @@ fn clouds_are_drawn_the_same_every_time() {
         "rocks/2x2-rock-clouds.dtile",
     ] {
         let path = format!("lib:tests/{rel}");
-        let (a, b) = (built(rel), memo::made(&path, &clouds_only, "clouds"));
+        let (a, b) = (
+            built(rel),
+            memo::build(&dt_eval::Library, &path, &clouds_only).unwrap(),
+        );
         let (da, db) = (
             a.report.clouds.as_ref().unwrap(),
             b.report.clouds.as_ref().unwrap(),

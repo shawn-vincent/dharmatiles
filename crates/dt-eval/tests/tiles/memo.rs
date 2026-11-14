@@ -10,17 +10,20 @@
 //! the rest), so a match proves that threads, progress, sketching and the
 //! debug layer leave every hash where it was.
 //!
-//! A test that needs other options (another tier, cells, system or seed)
-//! builds that itself; [`made`] memoises such a build by its options.
+//! A test that wants any other build (another tier, cells, system or seed, or
+//! a document written in the test) asks [`build`], which keeps one build for
+//! everything it reads, whatever the test, so no tile is built twice with the
+//! same inputs.
 
 #![allow(clippy::unwrap_used)]
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use dt_eval::progress::{Status, Timings, Tracker, plan_stages};
 use dt_eval::{Built, Library, Memory, Options, Progress, build_with, check};
 use dt_kit::{Event, Material, Reporter, TriMesh};
+use dt_testkit::{Slot, slot};
 
 /// A tile's build and what its observers saw.
 pub struct Observed {
@@ -104,20 +107,6 @@ fn observe(path: &str) -> Observed {
     }
 }
 
-type Slot<T> = Arc<OnceLock<&'static T>>;
-
-/// The slot for `key`, made on first ask; the map's lock is held only for
-/// that, so builds of different tiles run side by side and the tests that
-/// want the same one wait for it.
-fn slot<T>(map: &Mutex<BTreeMap<String, Slot<T>>>, key: &str) -> Slot<T> {
-    Arc::clone(
-        map.lock()
-            .unwrap()
-            .entry(key.to_owned())
-            .or_insert_with(|| Arc::new(OnceLock::new())),
-    )
-}
-
 /// The tile, built once with every observer on.  Never call this from a
 /// rayon worker: the build runs on its own pool and the caller waits on it.
 pub fn observed(path: &str) -> &'static Observed {
@@ -150,28 +139,15 @@ pub fn built(path: &str) -> &'static Built {
     &observed(path).built
 }
 
-/// A build with `opts` the observed one does not have (another tier, cells,
-/// system or seed), made once per tile and options.
-pub fn made(path: &str, opts: &Options, key: &str) -> &'static Built {
-    static MEMO: Mutex<BTreeMap<String, Slot<Built>>> = Mutex::new(BTreeMap::new());
-    slot(&MEMO, &format!("{path} {key}")).get_or_init(|| {
-        Box::leak(Box::new(
-            dt_eval::build(&Library, path, opts).unwrap_or_else(|e| panic!("{path}: {e:?}")),
-        ))
-    })
-}
+/// The memo's one general entry, shared with the other crates' tests: see
+/// `dt_testkit`.
+pub use dt_testkit::{build, timed};
 
 /// The tile written in `text`, built with the default options once however
 /// many tests ask.
 pub fn from_text(text: &str) -> &'static Built {
-    static MEMO: Mutex<BTreeMap<String, Slot<Built>>> = Mutex::new(BTreeMap::new());
-    slot(&MEMO, text).get_or_init(|| {
-        let src = Memory(BTreeMap::from([("t.dtile".to_owned(), text.to_owned())]));
-        Box::leak(Box::new(
-            dt_eval::build(&src, "t.dtile", &Options::default())
-                .unwrap_or_else(|e| panic!("{e:#?}")),
-        ))
-    })
+    let src = Memory(BTreeMap::from([("t.dtile".to_owned(), text.to_owned())]));
+    build(&src, "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"))
 }
 
 /// A build's stage names and hashes.

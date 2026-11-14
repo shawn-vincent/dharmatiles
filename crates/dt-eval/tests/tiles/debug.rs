@@ -3,9 +3,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use crate::common;
 
-use dt_eval::{Options, build};
+use crate::memo;
+use dt_eval::Options;
 
 const TILE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
     line shore wobble="5dmm" { through "(0sq, 0.5sq)" "(1sq, 0.5sq)" }
@@ -26,8 +27,8 @@ const TILE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
 #[test]
 fn the_debug_layer_changes_nothing_built() {
     let m = common::memory(&[("probe.dtile", TILE)]);
-    let off = build(&m, "probe.dtile", &Options::default()).unwrap();
-    let on = build(
+    let off = memo::build(&m, "probe.dtile", &Options::default()).unwrap();
+    let on = memo::build(
         &m,
         "probe.dtile",
         &Options {
@@ -49,7 +50,7 @@ fn the_debug_layer_changes_nothing_built() {
             .map(|s| (s.name.clone(), s.hash))
             .collect::<Vec<_>>()
     };
-    assert_eq!(hashes(&off), hashes(&on));
+    assert_eq!(hashes(off), hashes(on));
 
     let d = on.report.debug.as_ref().unwrap();
     let class = |c: &str| d.dots.iter().filter(|p| p.class == c).count();

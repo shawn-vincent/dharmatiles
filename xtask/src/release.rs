@@ -274,9 +274,10 @@ fn rebuilt_matches_committed(root: &Path) -> Result<(), String> {
         "-p",
         "dt-eval",
         "--test",
-        "baseline",
+        "tiles",
         "--",
         "--ignored",
+        crate::work::BASELINE_TEST,
     ]))?;
     crate::pictures::run(root, &[])?;
     let changed = git(root, &["status", "--porcelain"])?;

@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use dt_eval::{NO_ENTRY, Options, build};
+use dt_eval::{NO_ENTRY, Options};
 
 use super::common;
 use super::memo;
@@ -29,7 +29,7 @@ const TILE: &str = r#"dharmatiles version="1.0.0"; tile size="1x1" seed=97 {
 
 #[test]
 fn every_triangle_has_its_entry() {
-    let b = build(
+    let b = memo::build(
         &common::memory(&[("probe.dtile", TILE)]),
         "probe.dtile",
         &Options::default(),
@@ -67,9 +67,8 @@ fn a_draft_is_quick_and_still_traced() {
     {
         let tile = "lib:tests/water/1x1-water+grass.dtile";
         let f = memo::built(tile);
-        let t0 = std::time::Instant::now();
-        let d = dt_eval::build(&dt_eval::Library, tile, &draft).unwrap();
-        let td = t0.elapsed().as_secs_f64();
+        let (d, td) = memo::timed(&dt_eval::Library, tile, &draft);
+        let d = d.unwrap();
         eprintln!(
             "{tile}: {} triangles; draft {td:.2} s, {} triangles",
             f.materials.len(),

@@ -3,7 +3,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use crate::common;
 
 use dt_eval::{Memory, Options, check};
 

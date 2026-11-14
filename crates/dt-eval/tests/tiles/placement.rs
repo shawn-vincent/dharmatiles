@@ -15,7 +15,7 @@
 
 use dt_eval::{Built, Options};
 
-use super::memo::{built, made};
+use super::memo::{self, built};
 
 /// The test tiles that place something, one square each or a little more,
 /// so that the sweep stays short.
@@ -28,12 +28,12 @@ const PLACING: &[&str] = &[
     "lib:tests/cliffs/1x1-cliff-mound.dtile",
 ];
 
-/// The tile built with `f` applied to the default options, once per `key`
-/// (the observed build serves the default ones).
-fn with(path: &str, key: &str, f: impl FnOnce(&mut Options)) -> &'static Built {
+/// The tile built with `f` applied to the default options, once per options
+/// (the memo keeps it).
+fn with(path: &str, f: impl FnOnce(&mut Options)) -> &'static Built {
     let mut opts = Options::default();
     f(&mut opts);
-    made(path, &opts, key)
+    memo::build(&dt_eval::Library, path, &opts).unwrap()
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn a_low_build_places_everything_where_the_full_build_does() {
     let mut anything = 0;
     for path in PLACING {
         let full = built(path);
-        let low = with(path, "low", |o| o.low = true);
+        let low = with(path, |o| o.low = true);
         let of = |b: &Built, grass: bool| -> Vec<dt_kit::Placement> {
             b.report
                 .placed
@@ -102,7 +102,7 @@ fn stand_where_they_did(cells: &[u32]) {
         let full = built(path);
         assert!(!full.report.placed.is_empty(), "{path}");
         for &cells in cells {
-            let other = with(path, &format!("cells {cells}"), |o| o.cells = Some(cells));
+            let other = with(path, |o| o.cells = Some(cells));
             assert_eq!(
                 full.report.placed, other.report.placed,
                 "{path} at {cells} cells"
@@ -147,7 +147,7 @@ fn placement_by_cells() {
     for path in PLACING {
         let full = built(path);
         for cells in [32, 48, 128] {
-            let other = with(path, &format!("cells {cells}"), |o| o.cells = Some(cells));
+            let other = with(path, |o| o.cells = Some(cells));
             let (n, m, worst) = drift(full, other);
             eprintln!(
                 "{path}: at {cells} cells {m} placed against {n}, the farthest moved {worst:.2} mm"

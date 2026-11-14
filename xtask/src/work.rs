@@ -72,6 +72,9 @@ pub fn heavy(root: &Path, args: &[String]) -> Result<(), String> {
     run(Command::new(cmd).args(rest))
 }
 
+/// The library baseline's test, in dt-eval's one `tiles` test binary (it runs only when `--ignored` asks).
+pub const BASELINE_TEST: &str = "the_library_builds_as_the_baseline_says";
+
 /// `cargo xtask sweep [element|lib:tile …]`.
 pub fn sweep(root: &Path, only: &[String]) -> Result<(), String> {
     heavy_lock(root)?;
@@ -82,9 +85,10 @@ pub fn sweep(root: &Path, only: &[String]) -> Result<(), String> {
         "-p",
         "dt-eval",
         "--test",
-        "baseline",
+        "tiles",
         "--",
         "--ignored",
+        BASELINE_TEST,
     ]);
     if !only.is_empty() {
         c.env("DT_BASELINE_ONLY", only.join(","));

@@ -1,5 +1,5 @@
 ---
-source: crates/dt-eval/tests/heights.rs
+source: crates/dt-eval/tests/tiles/heights.rs
 expression: summary(&c)
 ---
 cells per square: 234

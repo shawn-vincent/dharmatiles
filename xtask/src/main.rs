@@ -31,7 +31,7 @@ commands:
            and the whole-library sweep: before a push;
            --plan prints the checks without running them
   sweep [element|lib:tile …]
-           the library baseline (crates/dt-eval/tests/baseline.rs) for the
+           the library baseline (crates/dt-eval/tests/tiles/baseline.rs) for the
            tiles that use those elements, or those tiles; the whole library
            when none is named. A heavy job
   heavy <command …>

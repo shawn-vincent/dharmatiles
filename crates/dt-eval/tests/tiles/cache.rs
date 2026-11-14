@@ -6,7 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use dt_eval::{Built, Cache, Library, Memory, Options, Progress, Source, build, build_cached};
+use crate::memo;
+use dt_eval::{Built, Cache, Diag, Library, Memory, Options, Progress, Source, build_cached};
 
 fn fingerprint(b: &Built) -> (Vec<(String, u64)>, u64) {
     (
@@ -17,6 +18,13 @@ fn fingerprint(b: &Built) -> (Vec<(String, u64)>, u64) {
             .collect(),
         b.export.mesh.content_hash(),
     )
+}
+
+/// `path` built through `cache`.  The cache is what this file tests, so these
+/// are the builds the memo must not serve.
+fn through(src: &Memory, path: &str, opts: &Options, cache: &Cache) -> Result<Built, Vec<Diag>> {
+    // fresh: a build through the Cache is the thing under test; a memo would hide what the Cache reused
+    build_cached(src, path, opts, &Progress::none(), Some(cache))
 }
 
 /// Drafts of the low tier: the cache keeps those steps as it keeps a full
@@ -39,20 +47,20 @@ fn edit(tile: &str, from: &str, to: &str, opts: &Options) -> usize {
     let path = "mem/tile.dtile";
     let src = |t: &str| Memory(BTreeMap::from([(path.to_owned(), t.to_owned())]));
     let cache = Cache::new();
-    let first = build_cached(&src(&text), path, opts, &Progress::none(), Some(&cache)).unwrap();
+    let first = through(&src(&text), path, opts, &cache).unwrap();
     assert_eq!(first.report.reused, 0, "an empty cache gives nothing");
     assert!(!cache.is_empty());
     let steps = cache.len();
     // the same text again: every step comes from the cache
-    let again = build_cached(&src(&text), path, opts, &Progress::none(), Some(&cache)).unwrap();
+    let again = through(&src(&text), path, opts, &cache).unwrap();
     assert_eq!(again.report.reused, steps);
     assert_eq!(fingerprint(&again), fingerprint(&first));
     let edited = text.replace(from, to);
-    let cached = build_cached(&src(&edited), path, opts, &Progress::none(), Some(&cache)).unwrap();
-    let plain = build(&src(&edited), path, opts).unwrap();
+    let cached = through(&src(&edited), path, opts, &cache).unwrap();
+    let plain = memo::build(&src(&edited), path, opts).unwrap();
     assert_eq!(
         fingerprint(&cached),
-        fingerprint(&plain),
+        fingerprint(plain),
         "{tile}: `{to}` from the cache differs from a fresh build"
     );
     assert_eq!(cache.len(), steps);
@@ -133,10 +141,10 @@ fn editing_a_region_a_trees_top_reads_rebuilds_the_tree() {
     let cache = Cache::new();
     let before = tile("22dmm");
     let after = tile("30dmm");
-    build_cached(&src(&before), path, &opts, &Progress::none(), Some(&cache)).unwrap();
-    let cached = build_cached(&src(&after), path, &opts, &Progress::none(), Some(&cache)).unwrap();
-    let plain = build(&src(&after), path, &opts).unwrap();
-    let old = build(&src(&before), path, &opts).unwrap();
+    through(&src(&before), path, &opts, &cache).unwrap();
+    let cached = through(&src(&after), path, &opts, &cache).unwrap();
+    let plain = memo::build(&src(&after), path, &opts).unwrap();
+    let old = memo::build(&src(&before), path, &opts).unwrap();
     assert_ne!(
         old.export.mesh.content_hash(),
         plain.export.mesh.content_hash(),
@@ -144,7 +152,7 @@ fn editing_a_region_a_trees_top_reads_rebuilds_the_tree() {
     );
     assert_eq!(
         fingerprint(&cached),
-        fingerprint(&plain),
+        fingerprint(plain),
         "the cache served trees built for the old region"
     );
 }
@@ -174,10 +182,10 @@ fn editing_a_region_a_rocks_top_reads_rebuilds_the_rock() {
     let cache = Cache::new();
     let before = tile("10dmm");
     let after = tile("14dmm");
-    build_cached(&src(&before), path, &opts, &Progress::none(), Some(&cache)).unwrap();
-    let cached = build_cached(&src(&after), path, &opts, &Progress::none(), Some(&cache)).unwrap();
-    let plain = build(&src(&after), path, &opts).unwrap();
-    let old = build(&src(&before), path, &opts).unwrap();
+    through(&src(&before), path, &opts, &cache).unwrap();
+    let cached = through(&src(&after), path, &opts, &cache).unwrap();
+    let plain = memo::build(&src(&after), path, &opts).unwrap();
+    let old = memo::build(&src(&before), path, &opts).unwrap();
     assert_ne!(
         old.export.mesh.content_hash(),
         plain.export.mesh.content_hash(),
@@ -185,7 +193,7 @@ fn editing_a_region_a_rocks_top_reads_rebuilds_the_rock() {
     );
     assert_eq!(
         fingerprint(&cached),
-        fingerprint(&plain),
+        fingerprint(plain),
         "the cache served rocks built for the old region"
     );
 }
@@ -211,14 +219,14 @@ fn the_debug_layer_is_not_in_the_key_but_a_scene_without_it_is_not_given_to_a_bu
         ..plain.clone()
     };
     let cache = Cache::new();
-    let none = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
+    let none = through(&src, path, &plain, &cache).unwrap();
     assert!(none.report.debug.is_none() && none.report.clouds.is_none());
     let steps = cache.len();
     // the same build again: every step kept
-    let again = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
+    let again = through(&src, path, &plain, &cache).unwrap();
     assert_eq!(again.report.reused, steps);
     // asking for the layer: the scenes kept have none, so none is given, and the marks are there
-    let with = build_cached(&src, path, &layer, &Progress::none(), Some(&cache)).unwrap();
+    let with = through(&src, path, &layer, &cache).unwrap();
     assert_eq!(
         with.report.reused, 0,
         "a scene without the marks cannot give them"
@@ -235,14 +243,14 @@ fn the_debug_layer_is_not_in_the_key_but_a_scene_without_it_is_not_given_to_a_bu
         "nothing built differs"
     );
     // the layer off again: the scenes that have it serve every step
-    let off = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
+    let off = through(&src, path, &plain, &cache).unwrap();
     assert_eq!(
         off.report.reused, steps,
         "toggling the layer off rebuilds nothing"
     );
     assert!(off.report.debug.is_none() && off.report.clouds.is_none());
     // and on again, from the same scenes
-    let on = build_cached(&src, path, &layer, &Progress::none(), Some(&cache)).unwrap();
+    let on = through(&src, path, &layer, &cache).unwrap();
     assert_eq!(on.report.reused, steps, "the scenes still have the marks");
     assert!(on.report.debug.as_ref().is_some_and(|d| !d.dots.is_empty()));
 }

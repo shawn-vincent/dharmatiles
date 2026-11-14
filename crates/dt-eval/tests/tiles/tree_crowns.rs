@@ -6,7 +6,8 @@
 
 #![allow(clippy::unwrap_used)]
 
-use dt_eval::{Memory, Options, build, check};
+use crate::memo;
+use dt_eval::{Memory, Options, check};
 
 fn mem(text: &str) -> Memory {
     Memory(
@@ -26,7 +27,7 @@ fn tile(at: &str, top: &str) -> String {
 /// What the tree came to under `opts`: its height over its foot, mm, from
 /// the build record.
 fn height_with(text: &str, opts: &Options) -> f64 {
-    match build(&mem(text), "t.dtile", opts) {
+    match memo::build(&mem(text), "t.dtile", opts) {
         Ok(b) => b
             .report
             .notes
@@ -127,7 +128,7 @@ fn a_parent_the_tree_does_not_have_is_refused_before_any_build() {
 fn a_top_that_leaves_no_room_for_the_crown_is_refused_where_it_is_low() {
     // 14dmm of trunk and a top at 22dmm: the tips stand under the clumps
     let text = tile("(1sq, 1sq)", "$bottom + 22dmm");
-    let e = build(&mem(&text), "t.dtile", &Options::default())
+    let e = memo::build(&mem(&text), "t.dtile", &Options::default())
         .err()
         .expect("no room for a crown");
     assert!(format!("{e:?}").contains("no room"), "{e:?}");
@@ -152,7 +153,9 @@ fn a_top_the_crown_cannot_fit_is_the_tiles_to_fix() {
     // the tree, not dt::build (a bug)
     let text = tile("(1sq, 1sq)", "$bottom + 20dmm").replace("14dmm", "19dmm");
     let opts = Options::default();
-    let errs = build(&mem(&text), "t.dtile", &opts).err().expect("refused");
+    let errs = memo::build(&mem(&text), "t.dtile", &opts)
+        .err()
+        .expect("refused");
     assert!(
         errs.iter().any(|d| d.code == dt_lang::codes::LOOK),
         "{errs:#?}"

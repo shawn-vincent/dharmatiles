@@ -4,9 +4,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use crate::common;
 
-use dt_eval::{Diag, Library, Memory, Options, build, check};
+use crate::memo;
+use dt_eval::{Diag, Library, Memory, Options, check};
 
 /// These tests write their documents in format 1 and read them from memory.
 fn legacy() -> Options {
@@ -91,7 +92,7 @@ fn a_control_not_built_yet_is_checked_but_not_built() {
     let src = mem(&[("t.dtile", text)]);
     let c = check(&src, "t.dtile", &legacy()).unwrap();
     assert_eq!(c.pending().len(), 1); // `wear`
-    let Err(e) = build(&src, "t.dtile", &legacy()) else {
+    let Err(e) = memo::build(&src, "t.dtile", &legacy()) else {
         panic!("built a control that is not built yet");
     };
     assert_eq!(e[0].code, dt_lang::codes::NOT_YET);
@@ -139,7 +140,7 @@ fn a_parts_file_checks_but_does_not_build() {
     let c = check(&Library, "lib:parts/grass.dtile", &legacy()).unwrap();
     assert!(c.tile.is_none());
     assert_eq!(c.file.doc.definitions.len(), 2);
-    let Err(e) = build(&Library, "lib:parts/grass.dtile", &legacy()) else {
+    let Err(e) = memo::build(&Library, "lib:parts/grass.dtile", &legacy()) else {
         panic!("built a parts file");
     };
     assert_eq!(e[0].code, dt_lang::codes::NO_TILE);
@@ -228,7 +229,7 @@ fn imports_inline_definitions_and_lets_resolve() {
     let t = c.tile.unwrap();
     assert_eq!(t.stack.len(), 2);
     assert_eq!(t.stack[1].src.name(), "parts/flats.dtile");
-    let b = build(&src, "tiles/t.dtile", &legacy()).unwrap();
+    let b = memo::build(&src, "tiles/t.dtile", &legacy()).unwrap();
     assert!(b.materials.contains(&dt_kit::Material::Rock));
 }
 
@@ -248,7 +249,7 @@ fn a_line_and_two_regions_make_a_step() {
 }
 "#,
     )]);
-    let b = build(&src, "t.dtile", &legacy()).unwrap();
+    let b = memo::build(&src, "t.dtile", &legacy()).unwrap();
     assert!(
         b.audit.failures(&legacy().printer).is_empty(),
         "{:?}",
@@ -311,7 +312,7 @@ fn a_rock_placed_past_the_edge_is_refused() {
 }
 "#,
     )]);
-    let Err(e) = build(&src, "t.dtile", &legacy()) else {
+    let Err(e) = memo::build(&src, "t.dtile", &legacy()) else {
         panic!("built a rock standing past the tile's edge");
     };
     assert!(
@@ -341,7 +342,7 @@ fn a_scatter_at_a_line_builds_for_rocks_and_flowers() {
         ),
     ] {
         let src = mem(&[("t.dtile", &on_a_line(body))]);
-        let b = build(&src, "t.dtile", &legacy()).unwrap();
+        let b = memo::build(&src, "t.dtile", &legacy()).unwrap();
         assert!(b.materials.contains(&material), "{body}");
     }
 }
@@ -368,10 +369,12 @@ fn a_mixed_scatter_builds_and_is_deterministic() {
         "scatter at=road count=8 reach=\"3dmm\" { rock size=\"4dmm .. 6dmm\" weight=2; flower }",
     ] {
         let src = mem(&[("t.dtile", &on_a_line(body))]);
-        let a = build(&src, "t.dtile", &legacy()).unwrap();
+        // fresh: built twice to prove the same text builds the same tile; a memo would hand back one
+        let a = dt_eval::build(&src, "t.dtile", &legacy()).unwrap();
         assert!(a.materials.contains(&dt_kit::Material::Rock), "{body}");
         assert!(a.materials.contains(&dt_kit::Material::Flower), "{body}");
-        let b = build(&src, "t.dtile", &legacy()).unwrap();
+        // fresh: the second of the two builds compared
+        let b = dt_eval::build(&src, "t.dtile", &legacy()).unwrap();
         assert_eq!(a.materials, b.materials, "{body}");
         assert_eq!(
             format!("{:?}", a.report.stages),
@@ -399,7 +402,7 @@ fn water_alone_builds_a_tile() {
 }
 "#,
     )]);
-    let b = build(&src, "t.dtile", &legacy()).unwrap();
+    let b = memo::build(&src, "t.dtile", &legacy()).unwrap();
     assert!(b.materials.contains(&dt_kit::Material::Water));
 }
 
@@ -422,9 +425,17 @@ fn a_seed_wobbles_the_lines_again() {
             seed: Some(seed),
             ..legacy()
         };
-        build(&src, "t.dtile", &o).unwrap().report.stages
+        memo::build(&src, "t.dtile", &o)
+            .unwrap()
+            .report
+            .stages
+            .clone()
     };
-    let plain = build(&src, "t.dtile", &legacy()).unwrap().report.stages;
+    let plain = memo::build(&src, "t.dtile", &legacy())
+        .unwrap()
+        .report
+        .stages
+        .clone();
     // the tile's own seed again changes nothing; another moves the line
     assert_eq!(hash(3), plain);
     assert_ne!(hash(4), plain);
@@ -506,15 +517,16 @@ fn a_lines_width_makes_a_strip_that_a_surface_follows() {
     let src = mem(&[("t.dtile", text.as_str())]);
     let c = check(&src, "t.dtile", &legacy()).unwrap();
     assert!(c.pending().is_empty(), "{:?}", c.pending());
-    let b = build(&src, "t.dtile", &legacy()).unwrap();
+    let b = memo::build(&src, "t.dtile", &legacy()).unwrap();
     assert!(b.materials.contains(&dt_kit::Material::Grass));
     // a wider strip is another tile
     let wide = text.replace("width=\"12dmm\"", "width=\"24dmm\"");
     let hash = |t: &str| {
-        build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
+        memo::build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
             .unwrap()
             .report
             .stages
+            .clone()
     };
     assert_ne!(hash(&text), hash(&wide));
 }
@@ -558,10 +570,11 @@ fn a_scatter_along_a_line_reaches_half_its_width_unless_told() {
         ))
     };
     let hash = |t: &str| {
-        build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
+        memo::build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
             .unwrap()
             .report
             .stages
+            .clone()
     };
     // reach=\"10dmm\" is half the width: the same tile
     assert_eq!(hash(&t("")), hash(&t("reach=\"10dmm\"")));
@@ -579,7 +592,7 @@ fn a_scatter_holds_a_definition_of_one_thing() {
             .replacen("dharmatiles version=\"1.0.0\"; ", "", 1)
         )
     };
-    let build_of = |t: &str| build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy());
+    let build_of = |t: &str| memo::build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy());
     let c = check(
         &mem(&[("t.dtile", text("5dmm").as_str())]),
         "t.dtile",
@@ -641,7 +654,7 @@ fn a_point_drawn_from_a_range_is_drawn_once_from_the_tile_seed() {
         check_of(&text(4), None).tile.unwrap().regions[0].fills
     );
     // and it builds
-    build(&mem(&[("t.dtile", text(3).as_str())]), "t.dtile", &legacy()).unwrap();
+    memo::build(&mem(&[("t.dtile", text(3).as_str())]), "t.dtile", &legacy()).unwrap();
 }
 
 #[test]

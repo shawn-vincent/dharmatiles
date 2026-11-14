@@ -629,9 +629,10 @@ mod tests {
         for tile in [
             "lib:tests/plants/1x1-tree.dtile",
             "lib:tests/plants/1x1-soil+grass.dtile",
-            "lib:tiles/walls/1x1-wall-stone.dtile",
+            "lib:tests/walls/1x1-wall-fieldstone.dtile",
         ] {
-            let b = dt_eval::build(&dt_eval::Library, tile, &dt_eval::Options::default()).unwrap();
+            let b =
+                dt_testkit::build(&dt_eval::Library, tile, &dt_eval::Options::default()).unwrap();
             let (painted, clean) = b.colours_pair(&pal);
             assert_eq!(painted, b.colours_with(&pal, true), "{tile}: painted");
             assert_eq!(clean, b.colours_with(&pal, false), "{tile}: clean");
@@ -640,7 +641,7 @@ mod tests {
                 b.audit.band.iter().any(|&o| o),
             );
             eprintln!("{tile}: overhang {over}, band {band}");
-            let bytes = from_built(&b, 55.0, &pal).unwrap();
+            let bytes = from_built(b, 55.0, &pal).unwrap();
             let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
             let want = encode_in_order(
                 &b.export.mesh,
@@ -670,7 +671,7 @@ mod tests {
             return;
         };
         let opts = dt_eval::Options::default();
-        let b = dt_eval::build(&dt_eval::Library, &tile, &opts).unwrap();
+        let b = dt_eval::build(&dt_eval::Library, &tile, &opts).unwrap(); // a timing run: it builds to time the encoding
         let pal = dt_kit::Palette::default();
         let t = std::time::Instant::now();
         let bytes = from_built(&b, 55.0, &pal).unwrap();
@@ -702,8 +703,8 @@ mod tests {
         let text = "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=21 {\n stack {\n  base\n  dirt top=\"$dirtEdgeHeight\"\n  scatter count=3 { rock size=\"9dmm .. 12dmm\" }\n }\n}\n";
         let m = dt_eval::Memory([("t.dtile".to_owned(), text.to_owned())].into());
         let opts = dt_eval::Options::default();
-        let b = dt_eval::build(&m, "t.dtile", &opts).unwrap();
-        let bytes = from_built(&b, 55.0, &dt_kit::Palette::default()).unwrap();
+        let b = dt_testkit::build(&m, "t.dtile", &opts).unwrap();
+        let bytes = from_built(b, 55.0, &dt_kit::Palette::default()).unwrap();
         let jl = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
         let h: Value = serde_json::from_slice(&bytes[8..8 + jl]).unwrap();
         let stack = h["stack"].as_array().unwrap();
@@ -740,10 +741,10 @@ mod tests {
             clouds: true,
             ..dt_eval::Options::default()
         };
-        let b = dt_eval::build(&m, "t.dtile", &opts).unwrap();
+        let b = dt_testkit::build(&m, "t.dtile", &opts).unwrap();
         // the clouds travel apart from the debug layer's marks, which were not asked for
-        assert!(debug_json(&b).is_null());
-        let d = clouds_json(&b);
+        assert!(debug_json(b).is_null());
+        let d = clouds_json(b);
         let sheets = d["sheets"].as_array().unwrap();
         assert!(sheets.iter().any(|s| s["class"] == "band-hi"));
         for s in sheets {
@@ -762,7 +763,7 @@ mod tests {
             stones.len()
         );
         // off: nothing at all
-        let off = dt_eval::build(&m, "t.dtile", &dt_eval::Options::default()).unwrap();
-        assert!(clouds_json(&off).is_null() && debug_json(&off).is_null());
+        let off = dt_testkit::build(&m, "t.dtile", &dt_eval::Options::default()).unwrap();
+        assert!(clouds_json(off).is_null() && debug_json(off).is_null());
     }
 }

@@ -7,12 +7,13 @@
 //! order solids are built in).
 //!
 //! Every library tile on both systems is a release check, not a test run:
-//! `cargo test --release -p dt-eval --test openlock -- --ignored`
+//! `cargo test --release -p dt-eval --test tiles -- --ignored every_library_tile_passes`
 //! (or `dharmatiles build --all --system ol`).
 
 #![allow(clippy::unwrap_used)]
 
-use dt_eval::{Library, Options, build, check};
+use crate::memo;
+use dt_eval::{Library, Options, check};
 use dt_kit::Frame;
 use rayon::prelude::*;
 
@@ -42,7 +43,7 @@ fn on(system: &str) -> Options {
 /// the photocopy of its DungeonBlocks plan.
 fn passes(path: &str, system: &str) {
     let opts = on(system);
-    let b = build(&Library, path, &opts).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+    let b = memo::build(&Library, path, &opts).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     let a = &b.audit;
     let fails = a.failures(&opts.printer);
     assert!(fails.is_empty(), "{path} ({system}): {fails:?}");

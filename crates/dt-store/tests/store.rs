@@ -10,10 +10,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use dt_eval::CacheState;
-use dt_eval::{Built, Library, Memory, Options, Progress, Source, build};
+use dt_eval::{Built, Library, Memory, Options, Progress, Source};
 use dt_kit::debug::Collect;
 use dt_store::Tier;
 use dt_store::{Store, build_stored};
+use dt_testkit as memo;
 
 fn temp(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("dt-store-{}-{name}", std::process::id()));
@@ -81,15 +82,15 @@ fn a_hit_is_the_same_bytes_as_a_fresh_build() {
     let dir = temp("hit");
     let store = Store::new(&dir, "test-engine");
     let opts = Options::default();
-    let fresh = build(&Library, FLAT, &opts).unwrap();
+    let fresh = memo::build(&Library, FLAT, &opts).unwrap();
     let first = stored(&store, &Library, FLAT, &opts);
     assert_eq!(first.report.cache.state, CacheState::Miss);
     assert!(first.report.cache.problems.is_empty());
-    same(&first, &fresh);
+    same(&first, fresh);
     let second = stored(&store, &Library, FLAT, &opts);
     assert_eq!(second.report.cache.state, CacheState::Hit);
     assert_eq!(second.report.cache.made_by.as_deref(), Some("test-engine"));
-    same(&second, &fresh);
+    same(&second, fresh);
     assert_eq!(
         second.report.stage_secs, first.report.stage_secs,
         "a hit keeps the times it was made in"
@@ -132,17 +133,17 @@ fn clouds_marks_surface_and_stack_come_back_exactly() {
         clouds: true,
         ..Options::default()
     };
-    let fresh = build(&m, "probe.dtile", &opts).unwrap();
+    let fresh = memo::build(&m, "probe.dtile", &opts).unwrap();
     assert!(
         fresh.report.debug.is_some()
             && fresh.report.clouds.is_some()
             && fresh.report.surface.is_some()
     );
     let first = stored(&store, &m, "probe.dtile", &opts);
-    same(&first, &fresh);
+    same(&first, fresh);
     let again = stored(&store, &m, "probe.dtile", &opts);
     assert_eq!(again.report.cache.state, CacheState::Hit);
-    same(&again, &fresh);
+    same(&again, fresh);
     // what was not asked for is left off, as a fresh build leaves it
     let plain = Options::default();
     let bare = stored(&store, &m, "probe.dtile", &plain);
@@ -320,7 +321,7 @@ fn a_damaged_entry_is_reported_removed_and_built_again() {
     let dir = temp("damaged");
     let store = Store::new(&dir, "test-engine");
     let opts = Options::default();
-    let fresh = build(&Library, FLAT, &opts).unwrap();
+    let fresh = memo::build(&Library, FLAT, &opts).unwrap();
     stored(&store, &Library, FLAT, &opts);
     let list = store.list().unwrap();
     assert_eq!(list.len(), 1);
@@ -344,23 +345,23 @@ fn a_damaged_entry_is_reported_removed_and_built_again() {
         again.report.cache.problems
     );
     // the build that replaced it is real
-    same(&again, &fresh);
+    same(&again, fresh);
     // and the replacement is whole
     let third = stored(&store, &Library, FLAT, &opts);
     assert_eq!(third.report.cache.state, CacheState::Hit);
     assert!(third.report.cache.problems.is_empty());
-    same(&third, &fresh);
+    same(&third, fresh);
     // a truncated entry
     let bytes = std::fs::read(file).unwrap();
     std::fs::write(file, &bytes[..bytes.len() / 3]).unwrap();
     let fourth = stored(&store, &Library, FLAT, &opts);
     assert_eq!(fourth.report.cache.problems.len(), 1);
-    same(&fourth, &fresh);
+    same(&fourth, fresh);
     // one that is not an entry at all
     std::fs::write(file, b"not a cache entry").unwrap();
     let fifth = stored(&store, &Library, FLAT, &opts);
     assert_eq!(fifth.report.cache.problems.len(), 1);
-    same(&fifth, &fresh);
+    same(&fifth, fresh);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -371,7 +372,7 @@ fn a_cache_that_cannot_be_written_is_told_and_the_build_stands() {
     std::fs::write(&dir, b"in the way").unwrap();
     let store = Store::new(&dir, "test-engine");
     let opts = Options::default();
-    let fresh = build(&Library, FLAT, &opts).unwrap();
+    let fresh = memo::build(&Library, FLAT, &opts).unwrap();
     let b = stored(&store, &Library, FLAT, &opts);
     assert_eq!(b.report.cache.state, CacheState::Miss);
     assert_eq!(
@@ -385,7 +386,7 @@ fn a_cache_that_cannot_be_written_is_told_and_the_build_stands() {
         "{:?}",
         b.report.cache.problems
     );
-    same(&b, &fresh);
+    same(&b, fresh);
     std::fs::remove_file(&dir).unwrap();
 }
 
@@ -454,7 +455,7 @@ fn writers_in_a_crowd_leave_whole_entries() {
     let dir = temp("crowd");
     let store = Store::new(&dir, "test-engine");
     let opts = Options::default();
-    let fresh = build(&Library, FLAT, &opts).unwrap();
+    let fresh = memo::build(&Library, FLAT, &opts).unwrap();
     // eight threads each build and keep the same key, and read it back
     let built: Vec<Built> = std::thread::scope(|s| {
         let hs: Vec<_> = (0..8)
@@ -468,11 +469,11 @@ fn writers_in_a_crowd_leave_whole_entries() {
             "{:?}",
             b.report.cache.problems
         );
-        same(b, &fresh);
+        same(b, fresh);
     }
     let after = stored(&store, &Library, FLAT, &opts);
     assert_eq!(after.report.cache.state, CacheState::Hit);
-    same(&after, &fresh);
+    same(&after, fresh);
     let st = store.stats().unwrap();
     assert_eq!(st.entries, 1, "one key, one entry");
     assert_eq!(st.strays, 0);

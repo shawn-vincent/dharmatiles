@@ -40,6 +40,8 @@ dt-elements = { path = "crates/dt-elements", default-features = false }
 dt-eval = { path = "crates/dt-eval", default-features = false }
 dt-store = { path = "crates/dt-store" }
 dt-print = { path = "crates/dt-print" }
+# Dev-dependency only: the one build memo the tests share.
+dt-testkit = { path = "crates/dt-testkit" }
 # KDL v2 only: `kdlv1`/`v1-fallback` stay off, and serde is not needed.
 kdl = { version = "6.7.1", default-features = false, features = ["span"] }
 miette = { version = "7.6.0", default-features = false }

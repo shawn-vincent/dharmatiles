@@ -1,5 +1,5 @@
 ---
-source: crates/dt-eval/tests/order.rs
+source: crates/dt-eval/tests/tiles/order.rs
 expression: text
 ---
 lib:tests/cliffs/1x1-cliff-canyon.dtile: [Entry(0), Entry(1), Entry(2), Entry(3), Lift, Entry(4), Entry(5), Entry(6)]

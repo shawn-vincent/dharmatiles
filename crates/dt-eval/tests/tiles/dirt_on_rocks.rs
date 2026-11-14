@@ -3,14 +3,15 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use crate::common;
 
-use dt_eval::{Built, Options, build};
+use crate::memo;
+use dt_eval::{Built, Options};
 use dt_kit::Material;
 
-fn built(text: &str) -> Built {
+fn built(text: &str) -> &'static Built {
     let mem = common::memory(&[("t.dtile", text)]);
-    build(&mem, "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"))
+    memo::build(&mem, "t.dtile", &Options::default()).unwrap_or_else(|e| panic!("{e:#?}"))
 }
 
 /// A rock in the middle of the tile, a dirt over it listed `after` the rock
@@ -58,7 +59,7 @@ const GROUND_MM: f64 = 6.5;
 #[test]
 fn dirt_lies_on_a_big_flat_topped_rock() {
     let b = built(&tile("shape=flat size=\"20dmm\"", true, ""));
-    let (earth, rock) = tops(&b, 5.0);
+    let (earth, rock) = tops(b, 5.0);
     assert!(rock > GROUND_MM, "the rock stands up: {rock}");
     assert!(
         earth > rock && earth < rock + 2.5,
@@ -69,7 +70,7 @@ fn dirt_lies_on_a_big_flat_topped_rock() {
 #[test]
 fn dirt_skips_a_rock_steeper_than_max_slope() {
     let b = built(&tile("shape=rounded size=\"14dmm\"", true, ""));
-    let (earth, rock) = tops(&b, 5.0);
+    let (earth, rock) = tops(b, 5.0);
     assert!(rock > GROUND_MM, "the rock stands up: {rock}");
     assert!(earth < GROUND_MM, "no dirt on a dome: earth {earth}");
     // a steeper limit lets it on
@@ -78,7 +79,7 @@ fn dirt_skips_a_rock_steeper_than_max_slope() {
         true,
         "maxSlope=\"85deg\"",
     ));
-    let (earth, _) = tops(&b, 5.0);
+    let (earth, _) = tops(b, 5.0);
     assert!(
         earth > GROUND_MM,
         "maxSlope=\"85deg\" holds dirt on it: {earth}"
@@ -88,7 +89,7 @@ fn dirt_skips_a_rock_steeper_than_max_slope() {
 #[test]
 fn dirt_listed_before_the_rock_is_as_it_was() {
     let b = built(&tile("shape=flat size=\"20dmm\"", false, ""));
-    let (earth, rock) = tops(&b, 5.0);
+    let (earth, rock) = tops(b, 5.0);
     assert!(rock > GROUND_MM, "the rock stands up: {rock}");
     assert!(
         earth < GROUND_MM,
@@ -132,11 +133,11 @@ fn dirt_banks_up_to_the_foot_of_a_flat_rock() {
     // 1.5 mm round the stone would leave it level with the ground.
     let with = built(&tile("shape=flat size=\"20dmm\"", true, ""));
     let without = built(&tile("shape=flat size=\"20dmm\"", false, ""));
-    let (z_with, n_with) = earth_beside_rock(&with, 0.2, 0.9);
+    let (z_with, n_with) = earth_beside_rock(with, 0.2, 0.9);
     assert!(n_with > 50, "earth stands beside the stone: {n_with}");
     // the rock listed after the dirt is bedded in it, so compare with the
     // same ring of the tile whose second dirt lies elsewhere
-    let (z_without, _) = earth_beside_rock(&without, 0.2, 0.9);
+    let (z_without, _) = earth_beside_rock(without, 0.2, 0.9);
     eprintln!("beside the foot: {z_with} with dirt, {z_without} without");
     assert!(
         z_with > z_without + 0.4,

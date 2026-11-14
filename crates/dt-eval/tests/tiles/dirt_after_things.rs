@@ -4,10 +4,11 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use crate::common;
 
+use crate::memo;
 use dt_eval::plan::Step;
-use dt_eval::{Built, Memory, Options, build, check};
+use dt_eval::{Built, Memory, Options, check};
 use dt_kit::Material;
 
 fn mem(text: &str) -> Memory {
@@ -57,11 +58,11 @@ fn a_dirt_after_a_tree_is_built_after_it_and_banks_on_the_trunk() {
             Step::Entry(3)
         ]
     );
-    let with = build(&mem(&after), "t.dtile", &Options::default()).unwrap();
+    let with = memo::build(&mem(&after), "t.dtile", &Options::default()).unwrap();
     let before = tile(&format!("        dirt clods=none\n        {TREE}"));
-    let without = build(&mem(&before), "t.dtile", &Options::default()).unwrap();
+    let without = memo::build(&mem(&before), "t.dtile", &Options::default()).unwrap();
     // beside the trunk the second dirt lies about a millimetre higher
-    let (a, b) = (earth_top(&with, 6.0), earth_top(&without, 6.0));
+    let (a, b) = (earth_top(with, 6.0), earth_top(without, 6.0));
     assert!(a > b + 0.6, "dirt banks on the trunk: {a} against {b}");
 }
 

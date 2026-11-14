@@ -4,7 +4,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-mod common;
+use crate::common;
 
 use dt_eval::regions::{Kind, RegionTree};
 use dt_eval::{Checked, Diag, Memory, Options, check};

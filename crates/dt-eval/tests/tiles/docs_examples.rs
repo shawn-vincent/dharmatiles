@@ -11,7 +11,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use dt_eval::{Files, Options, build, check};
+use crate::memo;
+use dt_eval::{Files, Options, check};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs")
@@ -90,7 +91,7 @@ fn every_card_builds_or_gives_the_code_it_says() {
         let path = path.display().to_string();
         let mut opts = Options::in_source(&Files).unwrap();
         opts.low = true;
-        let built = build(&Files, &path, &opts);
+        let built = memo::build(&Files, &path, &opts);
         match (code, built) {
             (None, Ok(b)) => assert!(
                 b.export.mesh.triangles.len() > 100,

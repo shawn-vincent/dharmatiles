@@ -394,6 +394,7 @@ dependencies = [
  "dt-lang",
  "dt-print",
  "dt-store",
+ "dt-testkit",
  "kdl",
  "libm",
  "miette",
@@ -461,6 +462,7 @@ dependencies = [
  "dt-kit",
  "dt-lang",
  "dt-print",
+ "dt-testkit",
  "dt-value",
  "insta",
  "kdl",
@@ -533,7 +535,15 @@ dependencies = [
  "dt-kit",
  "dt-lang",
  "dt-print",
+ "dt-testkit",
  "sha2",
+]
+
+[[package]]
+name = "dt-testkit"
+version = "1.0.0"
+dependencies = [
+ "dt-eval",
 ]
 
 [[package]]

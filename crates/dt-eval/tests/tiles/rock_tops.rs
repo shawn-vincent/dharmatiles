@@ -5,7 +5,8 @@
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 
-use dt_eval::{Built, Memory, Options, build, check};
+use crate::memo;
+use dt_eval::{Built, Memory, Options, check};
 
 fn mem(text: &str) -> Memory {
     Memory(
@@ -22,18 +23,20 @@ fn tile(body: &str) -> String {
     )
 }
 
-fn built(text: &str, threads: Option<usize>) -> Built {
+fn built(text: &str, threads: Option<usize>) -> &'static Built {
     let opts = Options::default();
-    let run = || build(&mem(text), "t.dtile", &opts);
     let r = match threads {
         Some(n) => rayon::ThreadPoolBuilder::new()
             .num_threads(n)
             .build()
             .unwrap()
-            .install(run),
-        None => run(),
+            // fresh: built on a pool of `n` threads, to compare with another count; a memo hides which pool built
+            .install(|| dt_eval::build(&mem(text), "t.dtile", &opts))
+            .map(|b| &*Box::leak(Box::new(b)))
+            .map_err(|e| format!("{e:#?}")),
+        None => memo::build(&mem(text), "t.dtile", &opts).map_err(|e| format!("{e:#?}")),
     };
-    r.unwrap_or_else(|e| panic!("{text}\n{e:#?}"))
+    r.unwrap_or_else(|e| panic!("{text}\n{e}"))
 }
 
 /// The highest point of the mesh, mm.
@@ -77,14 +80,9 @@ fn a_rock_peak_stands_at_its_top() {
         &tile("rock at=\"(0.5sq, 0.5sq)\" size=\"10dmm\" top=\"$bottom + 4dmm\""),
         None,
     );
-    assert!(
-        peak(&flat) > peak(&low) + 3.0,
-        "{} {}",
-        peak(&flat),
-        peak(&low)
-    );
+    assert!(peak(flat) > peak(low) + 3.0, "{} {}", peak(flat), peak(low));
     let plain = built(&tile("rock at=\"(0.5sq, 0.5sq)\" size=\"10dmm\""), None);
-    assert_ne!(hashes(&plain), hashes(&flat));
+    assert_ne!(hashes(plain), hashes(flat));
     assert!(
         flat.report
             .notes
@@ -109,7 +107,7 @@ fn a_cloud_rolls_inside_its_range() {
         &tile("rock at=\"(0.5sq, 0.5sq)\" size=\"10dmm\" top=\"$bottom + [4dmm .. 9dmm]\""),
         None,
     );
-    assert!(peak(&mid) >= peak(&lo) - 1e-6 && peak(&mid) <= peak(&hi) + 1e-6);
+    assert!(peak(mid) >= peak(lo) - 1e-6 && peak(mid) <= peak(hi) + 1e-6);
 }
 
 #[test]
@@ -118,9 +116,9 @@ fn rolls_are_deterministic_and_the_same_on_any_thread_count() {
     let a = built(&text, Some(1));
     let b = built(&text, Some(4));
     let c = built(&text, None);
-    assert_eq!(hashes(&a), hashes(&b));
-    assert_eq!(hashes(&a), hashes(&c));
-    assert_eq!(peak(&a), peak(&b));
+    assert_eq!(hashes(a), hashes(b));
+    assert_eq!(hashes(a), hashes(c));
+    assert_eq!(peak(a), peak(b));
 }
 
 #[test]
@@ -129,14 +127,14 @@ fn rocks_without_a_top_are_untouched_by_the_ones_with() {
     // a scatter of plain rocks builds the same twice and differs from topped
     let plain = tile("scatter count=4 { rock }");
     let topped = tile("scatter count=4 { rock top=\"$bottom + 6dmm\" }");
-    assert_eq!(hashes(&built(&plain, None)), hashes(&built(&plain, None)));
-    assert_ne!(hashes(&built(&plain, None)), hashes(&built(&topped, None)));
+    assert_eq!(hashes(built(&plain, None)), hashes(built(&plain, None)));
+    assert_ne!(hashes(built(&plain, None)), hashes(built(&topped, None)));
 }
 
 #[test]
 fn a_top_under_the_foot_is_refused_with_its_place() {
     let text = tile("rock at=\"(0.5sq, 0.5sq)\" top=\"$bottom - 3dmm\"");
-    let e = build(&mem(&text), "t.dtile", &Options::default())
+    let e = memo::build(&mem(&text), "t.dtile", &Options::default())
         .err()
         .expect("under the foot");
     let msg = format!("{e:?}");
@@ -158,7 +156,7 @@ fn what_a_rock_does_not_set_is_refused() {
 fn a_clouds_arithmetic_rules_hold_on_a_rock() {
     // dividing by a cloud is refused, as on any top
     let text = tile("rock at=\"(0.5sq, 0.5sq)\" top=\"$bottom + 4dmm / high(1 .. 5)\"");
-    let e = build(&mem(&text), "t.dtile", &Options::default())
+    let e = memo::build(&mem(&text), "t.dtile", &Options::default())
         .err()
         .expect("a cloud divided into");
     assert!(e.iter().any(|d| d.code == dt_lang::codes::CLOUD), "{e:?}");
