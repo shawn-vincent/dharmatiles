@@ -26,7 +26,6 @@
 <li><a href="#document">A tile document is one <code>tile</code> after a header</a></li>
 <li><a href="#header">A document starts with a header line</a></li>
 <li><a href="#smallest">The smallest tile is a size and a stack</a></li>
-<li><a href="#syntax">A document is KDL v2, checked against the tile language</a></li>
 <li><a href="#words">The guide uses a few words in one way</a></li>
 <li><a href="#errors-explained">Errors this page explains</a></li>
 <li><a href="#next">Next</a></li>
@@ -36,16 +35,20 @@
 <ol class="guide-pages">
 <li><a href="../language.html">The map</a></li>
 <li><a href="tile.html" aria-current="page">The tile document</a></li>
+<li><a href="syntax.html">Syntax</a></li>
 <li><a href="squares.html">Squares, cells and points</a></li>
 <li><a href="lines.html">Lines</a></li>
+<li><a href="seams.html">Seams</a></li>
 <li><a href="regions.html">Regions</a></li>
 <li><a href="stack.html">The stack</a></li>
 <li><a href="placement.html">Placement and scatter</a></li>
 <li><a href="values.html">Values and ranges</a></li>
 <li><a href="weightings.html">Weighted ranges</a></li>
 <li><a href="units.html">Units and kinds</a></li>
+<li><a href="kinds.html">Kinds</a></li>
 <li><a href="names.html">Names</a></li>
 <li><a href="heights.html">Heights</a></li>
+<li><a href="defaults.html">Defaults and the edge contract</a></li>
 <li><a href="clouds.html">Clouds</a></li>
 <li><a href="seeds.html">Seeds</a></li>
 <li><a href="parts.html">Parts</a></li>
@@ -109,21 +112,6 @@ tile size=&quot;1x1&quot; {
 <p>Its stack starts with <code>base</code>, the connector; a stack with no <code>base</code> line has no base, and prints flat on the bed from zero. <code>dharmatiles build lib:tests/ground/1x1-flat.dtile</code> builds it for DungeonBlocks, the default system.</p>
 </section>
 <section class="rule">
-<h3 id="syntax" data-explains="dt::syntax dt::positional dt::control-node"><!--gen:anchors--><span id="dt-syntax"></span><span id="dt-positional"></span><span id="dt-control-node"></span><!--/gen:anchors-->A document is KDL v2, checked against the tile language</h3>
-<p>Documents are KDL v2, a small, readable configuration language, checked by the program against the tile language, so every error message is written for you, at the line it is about.</p>
-<div class="tbl"><table>
-<thead><tr><th>Rule</th><th>Example</th><th>Notes</th></tr></thead>
-<tbody>
-<tr><td>A node is a name, then values and properties, then an optional block.</td><td><code>rock size="8dmm" shape=flat { … }</code></td><td>Properties are <code>key=value</code>; a block is <code>{ … }</code>.</td></tr>
-<tr><td>A control may go on the line or as a child line.</td><td><code>cliff height="35dmm"</code> or <code>cliff { height "35dmm" }</code></td><td>Both decode the same. Edits keep whichever form is written; new controls go on the line.</td></tr>
-<tr><td>Anything with a unit, a range, a <code>$</code>, a percent or a point is quoted.</td><td><code>size="1dmm .. 6dmm"</code>, <code>cover="85%"</code>, <code>at="(0.65sq, 0.5sq)"</code>, <code>top="$groundHeight"</code></td><td>KDL numbers can't contain letters, <code>..</code>, <code>%</code>, <code>$</code> or <code>,</code>. A forgotten quote gets an error that says what to write. A bare number is for counts, densities and fractions (<code>count=3</code>, <code>perSquare=45</code>).</td></tr>
-<tr><td>Switches are <code>#true</code> and <code>#false</code>.</td><td>—</td><td>Bare <code>true</code> is KDL v1 and an error. Few controls are switches: most take a word (<code>clods some</code>, <code>leaves bare</code>).</td></tr>
-<tr><td><code>//</code> comments a line; <code>/-</code> switches off the next node.</td><td><code>/- tree</code></td><td></td></tr>
-<tr><td><code>"""</code> opens a multi-line string.</td><td><code>about """ … """</code></td><td></td></tr>
-<tr><td>Several nodes on one line are separated by <code>;</code>.</td><td><code>region verge { boundedBy trail; fill "(0.15sq, 0.5sq)" }</code></td><td></td></tr>
-</tbody></table></div>
-</section>
-<section class="rule">
 <h3 id="words">The guide uses a few words in one way</h3>
 <dl class="defs">
   <dt>element</dt><dd>Anything a document can write: the document's own (<code>tile</code>, <code>line</code>, <code>region</code>, <code>stack</code>, …) and the built-in terrain (<code>dirt</code>, <code>grass</code>, <code>rock</code>, <code>tree</code>, <code>wall</code>, <code>cliff</code>, …), plus <code>scatter</code>. Each has a page in the <a href="../elements/index.html">elements reference</a>.</dd>
@@ -148,15 +136,12 @@ tile size=&quot;1x1&quot; {
 <li><a class="codelink" href="../e/header-version.html"><code>dt::header-version</code></a> The header line has no version, or one that cannot be read <a class="cp-in" href="#header">The rule</a></li>
 <li><a class="codelink" href="../e/header-twice.html"><code>dt::header-twice</code></a> A document has one header line <a class="cp-in" href="#header">The rule</a></li>
 <li><a class="codelink" href="../e/header-first.html"><code>dt::header-first</code></a> The header line must be the first node of the file <a class="cp-in" href="#header">The rule</a></li>
-<li><a class="codelink" href="../e/syntax.html"><code>dt::syntax</code></a> Documents are KDL v2: a bare <code>true</code>, <code>false</code> or <code>null</code> is KDL v1 <a class="cp-in" href="#syntax">The rule</a></li>
-<li><a class="codelink" href="../e/positional.html"><code>dt::positional</code></a> The element takes name=value controls, not a bare value <a class="cp-in" href="#syntax">The rule</a></li>
-<li><a class="codelink" href="../e/control-node.html"><code>dt::control-node</code></a> A control written as its own line has no block <a class="cp-in" href="#syntax">The rule</a></li>
 <li><a class="codelink" href="../e/group.html"><code>dt::group</code></a> That control is a group of controls, not a value</li></ul>
 <!-- /gen:explains -->
 </section>
 <section id="next" class="next">
 <h2>Next</h2>
-<p>Next: <a href="squares.html">squares, cells and points</a>, where a tile gets its size and a position is written.</p>
+<p>Next: <a href="syntax.html">syntax</a>, the shape of a document.</p>
 </section>
 </article>
 </div>

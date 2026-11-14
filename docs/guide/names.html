@@ -36,16 +36,20 @@
 <ol class="guide-pages">
 <li><a href="../language.html">The map</a></li>
 <li><a href="tile.html">The tile document</a></li>
+<li><a href="syntax.html">Syntax</a></li>
 <li><a href="squares.html">Squares, cells and points</a></li>
 <li><a href="lines.html">Lines</a></li>
+<li><a href="seams.html">Seams</a></li>
 <li><a href="regions.html">Regions</a></li>
 <li><a href="stack.html">The stack</a></li>
 <li><a href="placement.html">Placement and scatter</a></li>
 <li><a href="values.html">Values and ranges</a></li>
 <li><a href="weightings.html">Weighted ranges</a></li>
 <li><a href="units.html">Units and kinds</a></li>
+<li><a href="kinds.html">Kinds</a></li>
 <li><a href="names.html" aria-current="page">Names</a></li>
 <li><a href="heights.html">Heights</a></li>
+<li><a href="defaults.html">Defaults and the edge contract</a></li>
 <li><a href="clouds.html">Clouds</a></li>
 <li><a href="seeds.html">Seeds</a></li>
 <li><a href="parts.html">Parts</a></li>
@@ -62,16 +66,16 @@
 <h2>The result</h2>
 <dt-example src="examples/guide/names.dtile" overlay="regions">
 <!-- gen:example -->
-<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/2151c530d6114933fbe36c9c32637a38.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 2"><img class="dtx-poster" src="../posters/619d385d0e5a6ac3290b195e3cc9ccbd.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
 
-tile size=&quot;1x1&quot; seed=31 {
+tile size=&quot;2x2&quot; seed=31 {
     let knollTop &quot;$groundHeight + 4dmm&quot;        // a plain name: this tile's own
     let $treeLine &quot;40dmm&quot;                      // a $ name: the context, read by whatever is called below
     override $waterBedHeight &quot;0.8dmm&quot;          // deeper water, everywhere on this tile
     stack {
         base
         dirt { pin top=&quot;knollTop&quot; at=center }
-        scatter count=3 {
+        scatter count=2 {
             override $treeLine &quot;30dmm&quot;         // for this block only
             tree top=&quot;$bottom + $treeLine&quot;
         }

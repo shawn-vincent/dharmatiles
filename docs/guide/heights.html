@@ -25,9 +25,6 @@
 <li><a href="#plainly">Say it plainly</a></li>
 <li><a href="#heights">A height is a length above zero</a></li>
 <li><a href="#tops">A body&rsquo;s <code>top=</code> is a band, and a pin holds it to a height at a place</a></li>
-<li><a href="#defaults">Every body starts from the library&rsquo;s defaults</a></li>
-<li><a href="#solve"><code>check</code> solves each band before anything is built</a></li>
-<li><a href="#edge-contract">Every tile meets its neighbours at the edge contract</a></li>
 <li><a href="#pin">A pin needs <code>top=</code> and <code>at=</code>, and belongs on a body</a></li>
 <li><a href="#empty">A pin&rsquo;s place must cover something</a></li>
 <li><a href="#thin">A layer must be able to be as thick as the printer&rsquo;s skin</a></li>
@@ -42,16 +39,20 @@
 <ol class="guide-pages">
 <li><a href="../language.html">The map</a></li>
 <li><a href="tile.html">The tile document</a></li>
+<li><a href="syntax.html">Syntax</a></li>
 <li><a href="squares.html">Squares, cells and points</a></li>
 <li><a href="lines.html">Lines</a></li>
+<li><a href="seams.html">Seams</a></li>
 <li><a href="regions.html">Regions</a></li>
 <li><a href="stack.html">The stack</a></li>
 <li><a href="placement.html">Placement and scatter</a></li>
 <li><a href="values.html">Values and ranges</a></li>
 <li><a href="weightings.html">Weighted ranges</a></li>
 <li><a href="units.html">Units and kinds</a></li>
+<li><a href="kinds.html">Kinds</a></li>
 <li><a href="names.html">Names</a></li>
 <li><a href="heights.html" aria-current="page">Heights</a></li>
+<li><a href="defaults.html">Defaults and the edge contract</a></li>
 <li><a href="clouds.html">Clouds</a></li>
 <li><a href="seeds.html">Seeds</a></li>
 <li><a href="parts.html">Parts</a></li>
@@ -101,7 +102,7 @@ tile size=&quot;1x1&quot; seed=62 {
 <section class="rule">
 <h3 id="heights">A height is a length above zero</h3>
 <p>Heights are written one way everywhere: lengths above zero, the top of the <a href="../elements/base.html">base</a>. A height is a length (<code>top="8dmm"</code>), a <code>$</code> name from <a href="names.html#library-names">the library's heights</a>, or a formula of them. <code>height</code> is a different word: how tall a thing stands above what it stands on, a length (<code>thickness "7dmm"</code>, <code>stones height="2.2dmm .. 5.2dmm"</code>) or a word (<code>wall … height full</code>, up to <code>$wallHeight</code>).</p>
-<p>A height may use numbers with units, plain and <code>$</code> names, <code>$x</code> and <code>$y</code> (squares, plain), <code>$d</code> and <code>$a</code> (fractions), <code>$bottom</code> (the surface under this body, or under the thing), <code>+ - * /</code>, a range in brackets anywhere (<code>$groundHeight + [1dmm .. 2dmm]</code>), the coordinate calls (<a href="squares.html#coordinates">squares and points</a>), and the functions <code>sin</code> and <code>cos</code> (of an angle), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Kinds are checked (<a href="units.html#kinds">units</a>): <code>$groundHeight + $x</code> adds squares to a length and is refused.</p>
+<p>A height may use numbers with units, plain and <code>$</code> names, <code>$x</code> and <code>$y</code> (squares, plain), <code>$d</code> and <code>$a</code> (fractions), <code>$bottom</code> (the surface under this body, or under the thing), <code>+ - * /</code>, a range in brackets anywhere (<code>$groundHeight + [1dmm .. 2dmm]</code>), the coordinate calls (<a href="squares.html#coordinates">squares and points</a>), and the functions <code>sin</code> and <code>cos</code> (of an angle), <code>abs</code>, <code>min</code>, <code>max</code>, <code>clamp</code> and <code>smooth</code>. Kinds are checked (<a href="kinds.html#kinds">kinds</a>): <code>$groundHeight + $x</code> adds squares to a length and is refused.</p>
 </section>
 <section class="rule">
 <h3 id="tops">A body&rsquo;s <code>top=</code> is a band, and a pin holds it to a height at a place</h3>
@@ -121,28 +122,6 @@ tile size="1x1" {
         grass at=banks                                // listed after the water: keeps off the wet ground
     }
 }</code></pre>
-</section>
-<section class="rule">
-<h3 id="defaults">Every body starts from the library&rsquo;s defaults</h3>
-<p><strong>Defaults.</strong> <code>library/parts/edges.dtile</code> also holds the tops and pins every body starts with, read before the tile's own lines:</p>
-<pre data-doc><code>dharmatiles version="1.0.0"
-
-defaults {
-    dirt  top="[$groundHeight .. $groundHeight + 1dmm]" { pin top="$dirtEdgeHeight" at=edges }
-    cliff top="$dirtEdgeHeight + 35dmm"
-    flagstones top="$floorHeight"                     { pin top="$floorEdgeHeight" at=edges }
-    planks top="$floorHeight"                         { pin top="$floorEdgeHeight" at=edges }
-    water top="[$waterSurfaceHeight - 1.9dmm .. $waterSurfaceHeight + 3dmm]" { pin top="$waterEdgeHeight" at=edges }
-}</code></pre>
-<p>A tile's own <code>top=</code> replaces the default top, and its pins win over the default pin wherever they overlap. The dirt default applies to the first dirt only, so a second dirt laid over what is under it (<code>dirt top="$bottom + [0.6dmm .. 1.2dmm]"</code>) is not pulled to the rim; the water, flagstones and planks defaults apply to every water and every floor. <code>dharmatiles check --explain</code> lists every default applied and where it came from, each override (<code>override $waterBedHeight 0.4dmm → 0.8dmm</code>), each pin's share of its place, and the region tree (<a href="regions.html#region-tree">regions</a>).</p>
-</section>
-<section class="rule">
-<h3 id="solve"><code>check</code> solves each band before anything is built</h3>
-<p><strong>What <code>check</code> does with them.</strong> Besides reading the names and kinds, <code>check</code> solves each body's band on a lattice (no meshes, tens of milliseconds): the pins hold the band exactly where they are, dirt eases back toward the others no steeper than its slope (water settles over 9 mm; cliffs and floors do not ease: their stones and slabs step), and the result is the band the body fills. It refuses what cannot be solved and notes what looks wrong (the codes are in <a href="errors.html#errors">Errors</a>). <code>build</code> solves the same bands again on the build's own lattice and fills them: a dirt draws hills in its band, a water draws its waves inside it, and a floor draws each slab's or board's height and tilt inside it. A cliff draws its stones inside its band, as a floor draws its slabs. A tree's <code>top=</code> is its height: <code>$bottom</code> is the ground at its foot, so <code>top="$bottom + 40dmm"</code> is 40 design millimetres tall wherever it stands and <code>top="$groundHeight + 40dmm"</code> reaches that height above zero. A tree's top is a cloud like a band's: each branch tip rolls smoothly inside it and the crown stays under its high.</p>
-</section>
-<section class="rule">
-<h3 id="edge-contract" data-explains="dt::edge"><!--gen:anchors--><span id="dt-edge"></span><!--/gen:anchors-->Every tile meets its neighbours at the edge contract</h3>
-<p>Every tile also reads <code>library/parts/edges.dtile</code>, without a <code>use</code> line. Its <code>defaults</code> block (above) gives the first dirt, and every water and floor, a top and a pin at the tile's edges, so that neighbours butt with no step. So any dirt tile butts any other with no step, and any two water tiles meet in the same wave. A pin the tile writes later wins over a default where they overlap. See <a href="../elements/edges.html"><code>edges</code></a>.</p>
 </section>
 <section class="rule">
 <h3 id="pin" data-explains="dt::pin"><!--gen:anchors--><span id="dt-pin"></span><!--/gen:anchors-->A pin needs <code>top=</code> and <code>at=</code>, and belongs on a body</h3>
@@ -174,7 +153,6 @@ defaults {
 <h2>Errors this page explains</h2>
 <!-- gen:explains -->
 <ul class="explains">
-<li><a class="codelink" href="../e/edge.html"><code>dt::edge</code></a> A body meets the tile's edge at a height of its own, so it no longer butts a standard tile <a class="cp-in" href="#edge-contract">The rule</a></li>
 <li><a class="codelink" href="../e/pin.html"><code>dt::pin</code></a> A pin needs <code>top=</code> and <code>at=</code>, and belongs on a body <a class="cp-in" href="#pin">The rule</a></li>
 <li><a class="codelink" href="../e/empty.html"><code>dt::empty</code></a> A pin's place covers nothing <a class="cp-in" href="#empty">The rule</a></li>
 <li><a class="codelink" href="../e/thin.html"><code>dt::thin</code></a> A layer can never be as thick as the printer's skin <a class="cp-in" href="#thin">The rule</a></li>
@@ -185,7 +163,7 @@ defaults {
 </section>
 <section id="next" class="next">
 <h2>Next</h2>
-<p>Next: <a href="clouds.html">clouds</a>, a top with odds.</p>
+<p>Next: <a href="defaults.html">defaults and the edge contract</a>, what every body starts from.</p>
 </section>
 </article>
 </div>

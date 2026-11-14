@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kinds</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Kinds</h1>
+  <p class="lede">Lengths, angles and plain numbers are checked apart, before anything is built.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#kinds">Lengths, angles and plain numbers are checked apart</a></li>
+<li><a href="#written-printed">The editor shows a length as written and as printed</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="syntax.html">Syntax</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="seams.html">Seams</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="kinds.html" aria-current="page">Kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="defaults.html">Defaults and the edge contract</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="tile">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/units/no-unit.dtile" expect-error="dt::unit">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view dtx-nothing" style="aspect-ratio: 1 / 1"><div class="dtx-nobuild"><b>Nothing builds</b><span>this source gives <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a></span></div></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A bare number is not a length: the wobble needs a unit, so this tile does not build.
+tile size=&quot;1x1&quot; seed=4 {
+    line stream wobble=5 { through &quot;(0sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
+    stack {
+        base
+        dirt
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A length with no unit builds nothing: the program says what to write, <code>5dmm</code> or <code>5mm</code>.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>A control wants a kind of value, and a formula has the kind its parts give it. A length plus a length is a length; a length times a plain number is a length; a length plus a plain number is refused.</p>
+<p>Because nothing is guessed, a mistake of kind is found at the line it is written on, with what to write instead.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="kinds" data-explains="dt::type"><!--gen:anchors--><span id="dt-type"></span><!--/gen:anchors-->Lengths, angles and plain numbers are checked apart</h3>
+<p>Lengths, angles and plain numbers are checked apart, before anything is built. A control wants a kind, and a formula has the kind its parts give it:</p>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Kind</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><code>$bottom + 2layer</code></td><td>length</td><td>length + length</td></tr>
+<tr><td><code>1 - $d * $d</code></td><td>plain</td><td><code>$d</code> is a fraction</td></tr>
+<tr><td><code>$bottom + 30dmm * (1 - $d * $d)</code></td><td>length</td><td>length + length × plain</td></tr>
+<tr><td><code>$groundHeight + 20%</code></td><td>error</td><td>a length plus a plain fraction; write <code>$groundHeight + 20% * 10dmm</code></td></tr>
+<tr><td><code>$groundHeight + $x</code></td><td>error</td><td>squares counted are plain; write <code>$groundHeight + 4dmm * $x</code></td></tr>
+<tr><td><code>2dmm * 3dmm</code></td><td>error</td><td>no area exists in this language</td></tr>
+<tr><td><code>size=5</code></td><td>error</td><td>a size is a length: <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a> says to write <code>5dmm</code> or <code>5mm</code></td></tr>
+<tr><td><code>sin(360 * $x)</code></td><td>error</td><td><code>sin</code> takes an angle: write <code>sin(360deg * $x)</code></td></tr>
+<tr><td><code>$region + 1</code></td><td>error</td><td>a region is not a number</td></tr>
+</tbody></table></div>
+<p>A mismatch is <a class="codelink" href="../e/type.html"><code>dt::type</code></a>, a number missing its unit <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a>; both point at the value and say what to write. A <code>let</code> holds whatever its formula is, so <code>let reach "3dmm"</code> is a length wherever it is read and <code>let n 3</code> a plain number. A <code>param</code> takes its kind from the control it fills (<a href="parts.html#parts">parts</a>).</p>
+</section>
+<section class="rule">
+<h3 id="written-printed">The editor shows a length as written and as printed</h3>
+<p>The editor's property sheet shows a length as you wrote it, with its unit (<code>7 dmm</code>), and never changes one unit into another on its own. Hover a unit for what it is, in the program's own words (<code>dmm</code>: design millimetre, 1/35 of a square; 1 mm on DungeonBlocks, 0.73 mm on OpenLOCK). Beside the written value, quieter, it shows what the length prints on the current build target, the system and printer in the title bar: <code>7 dmm &middot; prints 5.08 mm</code> on OpenLOCK, <code>3.5&ndash;6.5 dmm &middot; prints 2.54&ndash;4.72 mm</code> for a range. The printed size shows only where it differs from the number written: never for <code>mm</code>, never for <code>dmm</code> on DungeonBlocks, for every <code>dmm</code> length on OpenLOCK, and always for <code>sq</code>, <code>in</code> and <code>layer</code>. A formula (<code>$groundHeight + 4dmm</code>) shows the printed size it works out to, the <code>$</code> heights read from the tile as a build reads them. The program works every printed size out, with the same reader and evaluator as a build; the page does no unit arithmetic.</p>
+<p>Typing is literal: what you type into a value is written exactly, so <code>7dmm</code> edited to <code>7mm</code> is <code>7mm</code>. A printed number of a plain number or range is typed too: the program writes it back in the value's own unit, so the intent is kept (typing 5 against <code>7dmm</code> on OpenLOCK writes <code>6.89dmm</code>; on DungeonBlocks, <code>5dmm</code>). A printed size reads to 0.01 mm, and the value is written with the fewest decimals that print exactly the size you typed to 0.01 mm. Each end of a range is typed separately and the other end is kept as written. A formula, or a value with odds written on it (<code>low(3dmm .. 6dmm, 2)</code>), only shows its printed size: edit it as written.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/type.html"><code>dt::type</code></a> Kinds do not agree: a length mixed with a plain number, or a place of the wrong kind <a class="cp-in" href="#kinds">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="names.html">names</a>, for reusing a number or a height.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

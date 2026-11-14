@@ -59,7 +59,7 @@ tile size=&quot;1x1&quot; {
 <section>
 <h2 id="rule">The rule</h2>
 <blockquote class="rule"><p>A line may cross the edge of a square only at a seam: the same few places on every square edge, listed in the edge contract (<code>library/parts/edges.dtile</code>) and shown on the tile system page: the corners, a third, a half and two thirds. A point on a tile side that is not a seam is <a class="codelink" href="seam.html"><code>dt::seam</code></a>, naming the square (<code>column 2, row 1, north side, at 0.45 is not a seam</code>) with a fix that moves it to the nearest seam on that square. Squares are named column then row, counted from 1: C1 R1 is the north-west square. Positions measure from each square&rsquo;s own corner, so a 2&times;2&rsquo;s north side has two sets of seams, one for column 1 and one for column 2. A third is written exactly, <code>1sq/3</code>, never 0.33; the point partway along a side where two squares meet is not a seam, only the tile&rsquo;s own corners are. A tile that must cross an edge elsewhere writes <code>seams=free</code>.</p></blockquote>
-<p class="cp-in"><a href="../guide/lines.html#dt-seam">Read it in context: Lines · A line crosses a square&amp;rsquo;s edge only at a seam</a></p>
+<p class="cp-in"><a href="../guide/seams.html#dt-seam">Read it in context: Seams · A line crosses a square&amp;rsquo;s edge only at a seam</a></p>
 </section>
 </div>
 <footer class="cp-foot">

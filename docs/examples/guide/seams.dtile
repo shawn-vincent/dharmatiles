@@ -1,0 +1,14 @@
+dharmatiles version="1.0.0"
+
+// A line may cross a square's edge only at a seam: a corner, a third, a half or two thirds.
+// `wsw` is two thirds of the way down the west side, `ene` a third down the east side, so the
+// next tile over, which has the same seams, continues the line where it stops.
+tile size="2x1" seed=6 {
+    line shore wobble="3dmm" { through "wsw" "ene" }
+    region bank { boundedBy shore; fill "(1sq, 0.1sq)" }
+    stack {
+        base
+        dirt
+        grass at=bank
+    }
+}

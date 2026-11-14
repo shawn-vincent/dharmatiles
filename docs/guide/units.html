@@ -26,8 +26,6 @@
 <li><a href="#units">Every length is written with its unit</a></li>
 <li><a href="#scaling">Sizes in <code>dmm</code> and <code>sq</code> scale; the printer&rsquo;s floors never do</a></li>
 <li><a href="#juxtaposition">A unit goes right after its number and multiplies it</a></li>
-<li><a href="#written-printed">The editor shows a length as written and as printed</a></li>
-<li><a href="#kinds">Lengths, angles and plain numbers are checked apart</a></li>
 <li><a href="#errors-explained">Errors this page explains</a></li>
 <li><a href="#next">Next</a></li>
 </ol>
@@ -36,16 +34,20 @@
 <ol class="guide-pages">
 <li><a href="../language.html">The map</a></li>
 <li><a href="tile.html">The tile document</a></li>
+<li><a href="syntax.html">Syntax</a></li>
 <li><a href="squares.html">Squares, cells and points</a></li>
 <li><a href="lines.html">Lines</a></li>
+<li><a href="seams.html">Seams</a></li>
 <li><a href="regions.html">Regions</a></li>
 <li><a href="stack.html">The stack</a></li>
 <li><a href="placement.html">Placement and scatter</a></li>
 <li><a href="values.html">Values and ranges</a></li>
 <li><a href="weightings.html">Weighted ranges</a></li>
 <li><a href="units.html" aria-current="page">Units and kinds</a></li>
+<li><a href="kinds.html">Kinds</a></li>
 <li><a href="names.html">Names</a></li>
 <li><a href="heights.html">Heights</a></li>
+<li><a href="defaults.html">Defaults and the edge contract</a></li>
 <li><a href="clouds.html">Clouds</a></li>
 <li><a href="seeds.html">Seeds</a></li>
 <li><a href="parts.html">Parts</a></li>
@@ -128,41 +130,17 @@ printer default {
   <li>Printer files take printed units only: <code>line "0.45mm"</code>, <code>layer "0.2mm"</code>, <code>overhang "55deg"</code>. <code>sq</code>, <code>dmm</code> and <code>layer</code> have no meaning there and are refused.</li>
 </ul>
 </section>
-<section class="rule">
-<h3 id="written-printed">The editor shows a length as written and as printed</h3>
-<p>The editor's property sheet shows a length as you wrote it, with its unit (<code>7 dmm</code>), and never changes one unit into another on its own. Hover a unit for what it is, in the program's own words (<code>dmm</code>: design millimetre, 1/35 of a square; 1 mm on DungeonBlocks, 0.73 mm on OpenLOCK). Beside the written value, quieter, it shows what the length prints on the current build target, the system and printer in the title bar: <code>7 dmm &middot; prints 5.08 mm</code> on OpenLOCK, <code>3.5&ndash;6.5 dmm &middot; prints 2.54&ndash;4.72 mm</code> for a range. The printed size shows only where it differs from the number written: never for <code>mm</code>, never for <code>dmm</code> on DungeonBlocks, for every <code>dmm</code> length on OpenLOCK, and always for <code>sq</code>, <code>in</code> and <code>layer</code>. A formula (<code>$groundHeight + 4dmm</code>) shows the printed size it works out to, the <code>$</code> heights read from the tile as a build reads them. The program works every printed size out, with the same reader and evaluator as a build; the page does no unit arithmetic.</p>
-<p>Typing is literal: what you type into a value is written exactly, so <code>7dmm</code> edited to <code>7mm</code> is <code>7mm</code>. A printed number of a plain number or range is typed too: the program writes it back in the value's own unit, so the intent is kept (typing 5 against <code>7dmm</code> on OpenLOCK writes <code>6.89dmm</code>; on DungeonBlocks, <code>5dmm</code>). A printed size reads to 0.01 mm, and the value is written with the fewest decimals that print exactly the size you typed to 0.01 mm. Each end of a range is typed separately and the other end is kept as written. A formula, or a value with odds written on it (<code>low(3dmm .. 6dmm, 2)</code>), only shows its printed size: edit it as written.</p>
-</section>
-<section class="rule">
-<h3 id="kinds" data-explains="dt::type"><!--gen:anchors--><span id="dt-type"></span><!--/gen:anchors-->Lengths, angles and plain numbers are checked apart</h3>
-<p>Lengths, angles and plain numbers are checked apart, before anything is built. A control wants a kind, and a formula has the kind its parts give it:</p>
-<div class="tbl"><table>
-<thead><tr><th>Written</th><th>Kind</th><th>Why</th></tr></thead>
-<tbody>
-<tr><td><code>$bottom + 2layer</code></td><td>length</td><td>length + length</td></tr>
-<tr><td><code>1 - $d * $d</code></td><td>plain</td><td><code>$d</code> is a fraction</td></tr>
-<tr><td><code>$bottom + 30dmm * (1 - $d * $d)</code></td><td>length</td><td>length + length × plain</td></tr>
-<tr><td><code>$groundHeight + 20%</code></td><td>error</td><td>a length plus a plain fraction; write <code>$groundHeight + 20% * 10dmm</code></td></tr>
-<tr><td><code>$groundHeight + $x</code></td><td>error</td><td>squares counted are plain; write <code>$groundHeight + 4dmm * $x</code></td></tr>
-<tr><td><code>2dmm * 3dmm</code></td><td>error</td><td>no area exists in this language</td></tr>
-<tr><td><code>size=5</code></td><td>error</td><td>a size is a length: <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a> says to write <code>5dmm</code> or <code>5mm</code></td></tr>
-<tr><td><code>sin(360 * $x)</code></td><td>error</td><td><code>sin</code> takes an angle: write <code>sin(360deg * $x)</code></td></tr>
-<tr><td><code>$region + 1</code></td><td>error</td><td>a region is not a number</td></tr>
-</tbody></table></div>
-<p>A mismatch is <a class="codelink" href="../e/type.html"><code>dt::type</code></a>, a number missing its unit <a class="codelink" href="../e/unit.html"><code>dt::unit</code></a>; both point at the value and say what to write. A <code>let</code> holds whatever its formula is, so <code>let reach "3dmm"</code> is a length wherever it is read and <code>let n 3</code> a plain number. A <code>param</code> takes its kind from the control it fills (<a href="parts.html#parts">parts</a>).</p>
-</section>
 </section>
 <section id="errors-explained">
 <h2>Errors this page explains</h2>
 <!-- gen:explains -->
 <ul class="explains">
-<li><a class="codelink" href="../e/unit.html"><code>dt::unit</code></a> A length or angle has no unit, or a unit that is not one <a class="cp-in" href="#juxtaposition">The rule</a></li>
-<li><a class="codelink" href="../e/type.html"><code>dt::type</code></a> Kinds do not agree: a length mixed with a plain number, or a place of the wrong kind <a class="cp-in" href="#kinds">The rule</a></li></ul>
+<li><a class="codelink" href="../e/unit.html"><code>dt::unit</code></a> A length or angle has no unit, or a unit that is not one <a class="cp-in" href="#juxtaposition">The rule</a></li></ul>
 <!-- /gen:explains -->
 </section>
 <section id="next" class="next">
 <h2>Next</h2>
-<p>Next: <a href="names.html">names</a>, for reusing a number or a height.</p>
+<p>Next: <a href="kinds.html">kinds</a>, how lengths, angles and plain numbers are checked apart.</p>
 </section>
 </article>
 </div>

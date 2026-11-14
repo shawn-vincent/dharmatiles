@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Seams</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Seams</h1>
+  <p class="lede">A line may cross the edge of a square only at a seam, so the tile it ends at can continue it.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#off-seam">A point near a side, or a range on one, is refused</a></li>
+<li><a href="#line-seams">A line crosses a square&rsquo;s edge only at a seam</a></li>
+<li><a href="#fixing">A mistake with one exact mend carries its fix</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="syntax.html">Syntax</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="seams.html" aria-current="page">Seams</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="kinds.html">Kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="defaults.html">Defaults and the edge contract</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="line tile">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/guide/seams.dtile" overlay="lines points">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 2 / 1"><img class="dtx-poster" src="../posters/2725e2fee8cbc67eb9b2f0f9e5bf7c09.jpg" alt="The tile this source builds, from above" width="800" height="400" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// A line may cross a square's edge only at a seam: a corner, a third, a half or two thirds.
+// `wsw` is two thirds of the way down the west side, `ene` a third down the east side, so the
+// next tile over, which has the same seams, continues the line where it stops.
+tile size=&quot;2x1&quot; seed=6 {
+    line shore wobble=&quot;3dmm&quot; { through &quot;wsw&quot; &quot;ene&quot; }
+    region bank { boundedBy shore; fill &quot;(1sq, 0.1sq)&quot; }
+    stack {
+        base
+        dirt
+        grass at=bank
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>A line across a tile of two squares, from the west side at two thirds down to the east side at a third down: both ends on seams, written as compass words.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>Every square edge has the same few seams: the corners, a third, a half and two thirds. Two tiles that meet at a seam meet in the same place, and in the same direction.</p>
+<p>Each seam has a short compass word (<code>wsw</code>, <code>n</code>, <code>ese</code>), so you rarely write a number. When a point is off a seam the program names the nearest and can move it for you.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="off-seam" data-explains="dt::near-edge dt::edge-range"><!--gen:anchors--><span id="dt-near-edge"></span><span id="dt-edge-range"></span><!--/gen:anchors-->A point near a side, or a range on one, is refused</h3>
+<p>A point within 1 mm of a side but not on it is <a class="codelink" href="../e/near-edge.html"><code>dt::near-edge</code></a>, with a fix that moves it onto the side. A range on a point that lies on a side is <a class="codelink" href="../e/edge-range.html"><code>dt::edge-range</code></a>: it would draw a different place for each seed; the fix writes the range&rsquo;s middle as the one place (and if that is no seam, the next check offers the nearest).</p>
+</section>
+<section class="rule">
+<h3 id="line-seams" data-explains="dt::seam dt::seams"><!--gen:anchors--><span id="dt-seam"></span><span id="dt-seams"></span><!--/gen:anchors-->A line crosses a square&rsquo;s edge only at a seam</h3>
+<p>A line may cross the edge of a square only at a <strong>seam</strong>: the same few places on every square edge, listed in the edge contract (<code>library/parts/edges.dtile</code>) and shown on the <a href="../standards/tile-system.html#seams">tile system</a> page: the corners, a third, a half and two thirds. A point on a tile side that is not a seam is <a class="codelink" href="../e/seam.html"><code>dt::seam</code></a>, naming the square (<code>column 2, row 1, north side, at 0.45 is not a seam</code>) with a fix that moves it to the nearest seam on that square. Squares are named column then row, counted from 1: C1 R1 is the north-west square. Positions measure from each square&rsquo;s own corner, so a 2&times;2&rsquo;s north side has two sets of seams, one for column 1 and one for column 2. A third is written exactly, <code>1sq/3</code>, never 0.33; the point partway along a side where two squares meet is not a seam, only the tile&rsquo;s own corners are. A tile that must cross an edge elsewhere writes <code>seams=free</code>.</p>
+<p>A seam also has a word, from the table in the edge contract: on the north side <code>nnw</code>, <code>n</code> and <code>nne</code> are a third, a half and two thirds along from the west; <code>ssw s sse</code> on the south; <code>wnw w wsw</code> on the west and <code>ene e ese</code> on the east, from the north. <code>nw ne se sw</code> are the tile&rsquo;s own corners and never take a number. On a side longer than one square the word takes its square, counted from 1 from the west (north and south sides) or the north (west and east sides), and is written quoted because KDL does not allow brackets in a bare word: <code>through "nnw(2)" e</code>. On a one-square side the word stands alone (<code>e(1)</code> means the same). A bare side word on a longer side is an error that lists the numbered forms; a word that is nearly one is offered as a fix, and a point written as a number that lands exactly on a seam is as good as its word. The program keeps no list of its own: the words are in <code>library/parts/edges.dtile</code>.</p>
+<pre data-fragment><code>tile size="2x2" seed=1 {
+    line a { through "wnw(1)" "ese(2)" }                  // column 1, row 1's west side at a third, to column 2, row 2's east side at two thirds
+    line b { through "n(1)" "s(2)" }                      // the middle of the first column's north edge to the middle of the second's south edge
+    line c { through "(0sq, 1sq/3)" "(2sq, 5sq/3)" }      // the first line written as points
+}
+tile size="1x1" seams=free { … }                          // no seam check</code></pre>
+</section>
+<section class="rule">
+<h3 id="fixing">A mistake with one exact mend carries its fix</h3>
+<p>A mistake that has one exact mend carries it: <a class="codelink" href="../e/seam.html"><code>dt::seam</code></a> (the nearest seam, as its word), <a class="codelink" href="../e/near-edge.html"><code>dt::near-edge</code></a> (the point on the side), <a class="codelink" href="../e/edge-range.html"><code>dt::edge-range</code></a> (the range&rsquo;s middle), a misspelt element, control or seam word with a near one, an old spelling of a control (<code>per-square</code>), and a corner or one-square side written with a number (<code>nw(2)</code>). The help says the mend (<code>did you mean wsw?</code>) and the fix is that same edit, made once where the mistake is made, so the words and the change cannot differ. In the editor, the mark in the source, the messages panel and the error card show the fix as a button; one press writes it into the source as one step of the history, and Undo takes it back.</p>
+<p><code>dharmatiles fix tile.dtile</code> does it from the command line, for a file or a folder of tiles: it shows each change (file, line, the text before and after and, for a moved point, how far it moves in millimetres on the build target&rsquo;s square, <code>--system ol</code> for OpenLOCK) and writes nothing; <code>--write</code> writes the files. A fix can show the next mistake, so it checks again and repeats (up to eight rounds). A mistake with no exact mend (a choice is needed) is left, shown as <code>check</code> shows it, and ends the run with a non-zero status. Tiles of the program&rsquo;s library are not written.</p>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/near-edge.html"><code>dt::near-edge</code></a> A point is within a millimetre of a side of the tile but not on it <a class="cp-in" href="#off-seam">The rule</a></li>
+<li><a class="codelink" href="../e/edge-range.html"><code>dt::edge-range</code></a> A point on a side of the tile has a range, so each seed would put it somewhere else on the side <a class="cp-in" href="#off-seam">The rule</a></li>
+<li><a class="codelink" href="../e/seam.html"><code>dt::seam</code></a> A line crosses a square's edge where no seam is, so it would not meet the next tile's <a class="cp-in" href="#line-seams">The rule</a></li>
+<li><a class="codelink" href="../e/seams.html"><code>dt::seams</code></a> The seam table in the edge contract cannot be read, or is missing <a class="cp-in" href="#line-seams">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="regions.html">regions</a>, the areas lines divide a tile into.</p>
+</section>
+</article>
+</div>
+</body>
+</html>

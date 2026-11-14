@@ -1,13 +1,13 @@
 dharmatiles version="1.0.0"
 
-tile size="1x1" seed=31 {
+tile size="2x2" seed=31 {
     let knollTop "$groundHeight + 4dmm"        // a plain name: this tile's own
     let $treeLine "40dmm"                      // a $ name: the context, read by whatever is called below
     override $waterBedHeight "0.8dmm"          // deeper water, everywhere on this tile
     stack {
         base
         dirt { pin top="knollTop" at=center }
-        scatter count=3 {
+        scatter count=2 {
             override $treeLine "30dmm"         // for this block only
             tree top="$bottom + $treeLine"
         }

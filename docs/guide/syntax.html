@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Syntax</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<!-- gen:live-head -->
+<script type="importmap">{"imports":{"preact":"../editor/vendor/preact.mjs","preact/hooks":"../editor/vendor/preact-hooks.mjs","htm":"../editor/vendor/htm.mjs","@preact/signals":"../editor/vendor/preact-signals.mjs","@preact/signals-core":"../editor/vendor/preact-signals-core.mjs","three":"../editor/vendor/three.module.min.js"}}</script>
+<script type="module" src="../assets/live/dt-example.js"></script>
+<!-- /gen:live-head -->
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html" aria-current="page">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">The tile language &middot; guide</div>
+  <h1>Syntax</h1>
+  <p class="lede">A document is KDL v2, a small readable configuration language, checked by the program against the tile language.</p>
+</header>
+<div class="margin">
+<nav class="toc" aria-label="On this page"><details open><summary>On this page</summary><ol>
+<li><a href="#result">The result</a></li>
+<li><a href="#plainly">Say it plainly</a></li>
+<li><a href="#syntax">A document is KDL v2, checked against the tile language</a></li>
+<li><a href="#errors-explained">Errors this page explains</a></li>
+<li><a href="#next">Next</a></li>
+</ol>
+<p class="toc-h">The guide</p>
+<!-- gen:guide-nav -->
+<ol class="guide-pages">
+<li><a href="../language.html">The map</a></li>
+<li><a href="tile.html">The tile document</a></li>
+<li><a href="syntax.html" aria-current="page">Syntax</a></li>
+<li><a href="squares.html">Squares, cells and points</a></li>
+<li><a href="lines.html">Lines</a></li>
+<li><a href="seams.html">Seams</a></li>
+<li><a href="regions.html">Regions</a></li>
+<li><a href="stack.html">The stack</a></li>
+<li><a href="placement.html">Placement and scatter</a></li>
+<li><a href="values.html">Values and ranges</a></li>
+<li><a href="weightings.html">Weighted ranges</a></li>
+<li><a href="units.html">Units and kinds</a></li>
+<li><a href="kinds.html">Kinds</a></li>
+<li><a href="names.html">Names</a></li>
+<li><a href="heights.html">Heights</a></li>
+<li><a href="defaults.html">Defaults and the edge contract</a></li>
+<li><a href="clouds.html">Clouds</a></li>
+<li><a href="seeds.html">Seeds</a></li>
+<li><a href="parts.html">Parts</a></li>
+<li><a href="gate.html">Overhang and the gate</a></li>
+<li><a href="errors.html">Reading errors</a></li>
+<li><a href="worked.html">Worked tiles</a></li>
+<li><a href="cheat-sheet.html">Cheat sheet</a></li>
+</ol>
+<!-- /gen:guide-nav -->
+</details></nav>
+</div>
+<article class="doc guide" data-elements="tile line">
+<section id="result">
+<h2>The result</h2>
+<dt-example src="examples/lines/wobble.dtile" controls="wobble:0..14, seed" overlay="lines">
+<!-- gen:example -->
+<div class="dtx-grid"><figure class="dtx-view" style="aspect-ratio: 1 / 1"><img class="dtx-poster" src="../posters/edb9fcf2bfea1777a3cbc73a4b19b69e.jpg" alt="The tile this source builds, from above" width="800" height="800" loading="lazy"></figure><pre class="dtx-code"><code>dharmatiles version=&quot;1.0.0&quot;
+
+// The same kind of line with a larger wobble.  Change the seed: the points stay where they are
+// written, and the line wanders differently.
+tile size=&quot;1x1&quot; seed=12 {
+    line border wobble=&quot;9dmm&quot; { through &quot;(0sq, 0.5sq)&quot; &quot;(0.5sq, 0.5sq)&quot; &quot;(1sq, 0.5sq)&quot; }
+    region lawn { boundedBy border; fill &quot;(0.5sq, 0.1sq)&quot; }
+    stack {
+        base
+        dirt
+        grass at=lawn
+    }
+}
+</code></pre></div>
+<!-- /gen:example -->
+<figcaption>The same kind of line with a larger wobble. A node is a name, then values and properties, then an optional block; anything with a unit or a range is quoted.</figcaption>
+</dt-example>
+</section>
+<section id="plainly">
+<h2>Say it plainly</h2>
+<p>A node is a name, then values and properties (<code>key=value</code>), then an optional block in braces. That is the whole shape of a tile: <code>tile</code> holds <code>line</code>, <code>region</code> and <code>stack</code>, and <code>stack</code> holds the elements.</p>
+<p>The program, not KDL, knows what the words mean, so every mistake is reported in the tile language&rsquo;s own words, at the line it is about.</p>
+</section>
+<section id="the-rules">
+<h2>The rules</h2>
+<section class="rule">
+<h3 id="syntax" data-explains="dt::syntax dt::positional dt::control-node"><!--gen:anchors--><span id="dt-syntax"></span><span id="dt-positional"></span><span id="dt-control-node"></span><!--/gen:anchors-->A document is KDL v2, checked against the tile language</h3>
+<p>Documents are KDL v2, a small, readable configuration language, checked by the program against the tile language, so every error message is written for you, at the line it is about.</p>
+<div class="tbl"><table>
+<thead><tr><th>Rule</th><th>Example</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>A node is a name, then values and properties, then an optional block.</td><td><code>rock size="8dmm" shape=flat { … }</code></td><td>Properties are <code>key=value</code>; a block is <code>{ … }</code>.</td></tr>
+<tr><td>A control may go on the line or as a child line.</td><td><code>cliff height="35dmm"</code> or <code>cliff { height "35dmm" }</code></td><td>Both decode the same. Edits keep whichever form is written; new controls go on the line.</td></tr>
+<tr><td>Anything with a unit, a range, a <code>$</code>, a percent or a point is quoted.</td><td><code>size="1dmm .. 6dmm"</code>, <code>cover="85%"</code>, <code>at="(0.65sq, 0.5sq)"</code>, <code>top="$groundHeight"</code></td><td>KDL numbers can't contain letters, <code>..</code>, <code>%</code>, <code>$</code> or <code>,</code>. A forgotten quote gets an error that says what to write. A bare number is for counts, densities and fractions (<code>count=3</code>, <code>perSquare=45</code>).</td></tr>
+<tr><td>Switches are <code>#true</code> and <code>#false</code>.</td><td>—</td><td>Bare <code>true</code> is KDL v1 and an error. Few controls are switches: most take a word (<code>clods some</code>, <code>leaves bare</code>).</td></tr>
+<tr><td><code>//</code> comments a line; <code>/-</code> switches off the next node.</td><td><code>/- tree</code></td><td></td></tr>
+<tr><td><code>"""</code> opens a multi-line string.</td><td><code>about """ … """</code></td><td></td></tr>
+<tr><td>Several nodes on one line are separated by <code>;</code>.</td><td><code>region verge { boundedBy trail; fill "(0.15sq, 0.5sq)" }</code></td><td></td></tr>
+</tbody></table></div>
+</section>
+</section>
+<section id="errors-explained">
+<h2>Errors this page explains</h2>
+<!-- gen:explains -->
+<ul class="explains">
+<li><a class="codelink" href="../e/syntax.html"><code>dt::syntax</code></a> Documents are KDL v2: a bare <code>true</code>, <code>false</code> or <code>null</code> is KDL v1 <a class="cp-in" href="#syntax">The rule</a></li>
+<li><a class="codelink" href="../e/positional.html"><code>dt::positional</code></a> The element takes name=value controls, not a bare value <a class="cp-in" href="#syntax">The rule</a></li>
+<li><a class="codelink" href="../e/control-node.html"><code>dt::control-node</code></a> A control written as its own line has no block <a class="cp-in" href="#syntax">The rule</a></li></ul>
+<!-- /gen:explains -->
+</section>
+<section id="next" class="next">
+<h2>Next</h2>
+<p>Next: <a href="squares.html">squares, cells and points</a>, where a tile gets its size and a position is written.</p>
+</section>
+</article>
+</div>
+</body>
+</html>
