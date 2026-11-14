@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { signal } from '@preact/signals-core';
-import { install, press, settle, type } from './dom.js';
+import { install, press, rendered, type, until } from './dom.js';
 
 const root = install();
 const { render, html } = await import('../js/view/html.js');
@@ -41,7 +41,7 @@ const ROWS = [['size', 'size="7dmm"', [20, 12]], ['count', 'count=0', [40, 7]], 
 
 test('a length shows as written, its unit says in a tooltip what it is (the program\'s words), and a range reads with an en dash', async () => {
   world([['size', 'size="3.5dmm .. 6.5dmm"', [20, 24]]], {});
-  await settle();
+  await until(() => root.querySelector('.val'), 'the value drawn');
   const val = root.querySelector('.val');
   assert.equal(val.textContent.replace(/"/g, ''), '3.5–6.5dmm', 'the quotes are in the source and hidden');
   const u = root.querySelectorAll('.u');
@@ -51,7 +51,7 @@ test('a length shows as written, its unit says in a tooltip what it is (the prog
 
 test('a scrubbed range still writes the source form, with `..`', async () => {
   const { calls } = world([['size', 'size="3.5dmm .. 6.5dmm"', [20, 24]]], {});
-  await settle();
+  await until(() => root.querySelectorAll('.num')[0], 'the number drawn');
   const num = root.querySelectorAll('.num')[0];
   num.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 100, pointerId: 1, preventDefault() {} });
   num.dispatchEvent({ type: 'pointermove', clientX: 100 + 40, shiftKey: false });
@@ -62,13 +62,14 @@ test('a scrubbed range still writes the source form, with `..`', async () => {
 
 test('a count of nothing reads "none"', async () => {
   world([['count', 'count=0', [20, 7]]], {}); // the sheet's second row
-  await settle();
+  await until(() => root.querySelectorAll('.row')[1]?.querySelector('.val'), 'the count row drawn');
   assert.equal(root.querySelectorAll('.row')[1].querySelector('.val').textContent, 'none');
 });
 
 test('the printed size sits beside the value, asked of the program for each length; the page works nothing out', async () => {
   const { calls } = world(ROWS, { size: { ends: ['5.08'], editable: true }, top: { ends: ['6.53'], editable: false } });
-  await settle();
+  // the ask is made from an effect (after the paint) and its answer comes back later: wait for the printed sizes drawn
+  await until(() => root.querySelectorAll('.printed').length === 2, 'both printed sizes drawn');
   const asked = calls.find((c) => c[0] === 'printed')[1];
   assert.deepEqual(asked.map((a) => [a.element, a.control, a.typed]), [['rock', 'size', '7dmm'], ['rock', 'top', '$groundHeight + 4dmm']]);
   const rows = root.querySelectorAll('.row');
@@ -81,15 +82,15 @@ test('the printed size sits beside the value, asked of the program for each leng
 
 test('a printed size typed in is converted by the program and written as the new value, one step of history', async () => {
   const { calls } = world(ROWS, { size: { ends: ['5.08'], editable: true } });
-  await settle();
+  await until(() => root.querySelector('.pnum'), 'the printed size drawn');
   root.querySelector('.pnum').dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => root.querySelector('.pedit'), 'the field for the printed number drawn');
   const input = root.querySelector('.pedit');
   assert.ok(input, 'a field for the printed number');
   type(input, '5');
-  await settle();
+  await rendered(); // the typed text is state: drawn before Enter reads it
   press(input, 'Enter');
-  await settle();
+  await until(() => calls.some((c) => c[0] === 'replace'), 'the program\'s conversion written as the new value');
   assert.deepEqual(calls.find((c) => c[0] === 'setPrinted')[1], { typed: '7dmm', end: 0, mm: 5 });
   const w = calls.filter((c) => c[0] === 'replace').at(-1);
   assert.equal(w[3], '"6.89dmm"', 'written in the value\'s own unit, as the program said');
@@ -98,15 +99,15 @@ test('a printed size typed in is converted by the program and written as the new
 
 test('what is not a number is not sent, and the field says so', async () => {
   const { calls } = world(ROWS, { size: { ends: ['5.08'], editable: true } });
-  await settle();
+  await until(() => root.querySelector('.pnum'), 'the printed size drawn');
   root.querySelector('.pnum').dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => root.querySelector('.pedit'), 'the field for the printed number drawn');
   const input = root.querySelector('.pedit');
   type(input, '5 dmm');
-  await settle();
+  await rendered();
   press(input, 'Enter');
-  await settle();
-  await settle();
+  // nothing is sent, so there is no call to wait for: wait for the field to be marked
+  await until(() => { const f = root.querySelector('.pedit'); return f && (f.className || f.getAttribute('class') || '').includes('bad'); }, 'the field marked bad');
   assert.equal(calls.find((c) => c[0] === 'setPrinted'), undefined);
   const f = root.querySelector('.pedit');
   assert.ok((f.className || f.getAttribute('class')).includes('bad'));

@@ -4,7 +4,7 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { install, press, settle, type } from './dom.js';
+import { install, press, rendered, type, until } from './dom.js';
 
 // ---- a fake program: one map, a revision that only rises, the nearest free square settled in its write -----------
 
@@ -112,21 +112,21 @@ test('the panel draws the model and is drawn again when the model changes, with 
   const acts = [];
   const act = new Proxy({}, { get: (_t, name) => (...args) => acts.push([name, ...args]) });
   render(html`<${MapPanel} m=${model.mapPanel} act=${act} />`, root);
-  await settle();
+  await until(() => /On the map/.test(root.textContent), 'the map level drawn');
   assert.match(root.textContent, /On the map/);
   assert.equal(root.querySelectorAll('.mp-group').length, 1, 'one tile, one group');
   // a piece selected in the view: the panel is on its level, by itself
   view.set({ msel: ['p1'] });
-  await settle();
+  await until(() => /Turn/.test(root.textContent) && root.querySelector('.mp-title'), 'the piece level drawn');
   assert.match(root.textContent, /Turn/);
   assert.ok(root.querySelector('.mp-title'), 'the piece\'s own title (the trail above the panel is the page\'s: levels.js)');
   // the program tells a new state: the panel follows without anyone asking it to
   program.answer('mapsSet', { docRev: program.rev, id: 'p1', set: { rot: 270 } });
   applyDocState(program.state());
-  await settle();
+  await until(() => /270°/.test(root.textContent), 'the turn drawn');
   assert.match(root.textContent, /270°/);
   view.set({ msel: [] });
-  await settle();
+  await until(() => /On the map/.test(root.textContent), 'the map level drawn again');
   assert.match(root.textContent, /On the map/);
 });
 
@@ -135,7 +135,7 @@ test('a half-typed field survives the program telling the panel a new state, and
   const act = new Proxy({}, { get: (_t, name) => (...args) => acts.push([name, ...args]) });
   render(html`<${MapPanel} m=${model.mapPanel} act=${act} />`, root);
   view.set({ msel: ['p1'], mprop: 'seed' });
-  await settle();
+  await until(() => propBox().querySelector('input'), 'the seed field drawn');
   const input = propBox().querySelector('input');
   assert.ok(input, 'the seed field');
   assert.equal(input.value, '11');
@@ -143,33 +143,37 @@ test('a half-typed field survives the program telling the panel a new state, and
   // the program says the document changed (a build finished, an outside change): the same panel is drawn again
   program.answer('mapsSet', { docRev: program.rev, id: 'p2', set: { rot: 90 } });
   applyDocState(program.state());
-  await settle();
+  await until(() => model.pieces.value.find((p) => p.id === 'p2').rot === 90, 'the model to take the program\'s state');
+  await rendered(); // the panel is drawn from the model in a microtask: one tick and it has been
   assert.equal(propBox().querySelector('input'), input, 'the same field, not a new one');
   assert.equal(input.value, '4', 'what the user typed is still there');
   // the word the program holds for the field changes under the typing: still the user's until they commit or leave
   program.answer('mapsSet', { docRev: program.rev, id: 'p1', set: { seed: 99 } });
   applyDocState(program.state());
-  await settle();
+  await until(() => model.pieces.value.find((p) => p.id === 'p1').seedUsed === 99, 'the model to take the program\'s seed');
+  await rendered();
   assert.equal(input.value, '4');
   type(input, '42');
   press(input, 'Enter');
   assert.deepEqual(acts.at(-1).slice(0, 3), ['setPiece', 'p1', { seed: 42 }]);
-  await settle();
+  await until(() => input.value === '99', 'the field to show the model\'s word again');
   assert.equal(input.value, '99', 'committed: the field shows the model\'s word again');
   view.set({ msel: [], mprop: null });
-  await settle();
+  await rendered();
 });
 
 test('leaving the field without committing drops what was typed', async () => {
   const act = new Proxy({}, { get: () => () => {} });
   render(html`<${MapPanel} m=${model.mapPanel} act=${act} />`, root);
   view.set({ msel: ['p1'], mprop: 'seed' });
-  await settle();
+  await until(() => propBox().querySelector('input'), 'the seed field drawn');
   const input = propBox().querySelector('input');
+  const seed = String(model.pieces.value.find((p) => p.id === 'p1').seedUsed);
   type(input, '7');
+  assert.equal(input.value, '7');
   input.dispatchEvent({ type: 'blur', target: input });
-  await settle();
-  assert.equal(input.value, String(model.pieces.value.find((p) => p.id === 'p1').seedUsed));
+  await until(() => input.value === seed, 'the typed 7 to be dropped for the model\'s seed');
+  assert.equal(input.value, seed);
   view.set({ msel: [], mprop: null });
 });
 
@@ -181,10 +185,12 @@ test('a piece\'s Seed level shows the same seed strip as the tile level: five ca
   const strip = (p) => ({ svc: { picture: async (s) => { asked.push(s); return null; }, release() {} }, spec: { tile: 't1' }, current: p.seedUsed, owned: new Set([p.seedUsed]), onError: (e) => { throw e; } });
   render(html`<${MapPanel} m=${{ ...model.mapPanel, seedStrip: strip }} act=${act} />`, root);
   view.set({ msel: ['p1'], mprop: 'seed' });
-  await settle();
+  await until(() => propBox().querySelector('.dice'), 'the Seed level drawn, with its dice');
   assert.equal(propBox().querySelectorAll('.seed-card').length, 0, 'nothing is built until the dice is pressed');
+  assert.equal(asked.length, 0);
   propBox().querySelector('.dice').dispatchEvent({ type: 'click' });
-  await settle();
+  // the cards are drawn at once, but each asks for its picture from an effect, which preact runs after the paint: wait for both
+  await until(() => propBox().querySelectorAll('.seed-card').length === 5 && asked.length === 5, 'five cards drawn and five pictures asked for');
   const cards = propBox().querySelectorAll('.seed-card');
   assert.equal(cards.length, 5);
   const now = model.pieces.value.find((p) => p.id === 'p1').seedUsed;
@@ -193,7 +199,7 @@ test('a piece\'s Seed level shows the same seed strip as the tile level: five ca
   assert.equal(asked.length, 5);
   const picked = Number(cards[3].textContent.match(/\d+/)[0]);
   cards[3].dispatchEvent({ type: 'click' });
-  await settle();
+  await until(() => acts.length && propBox().querySelectorAll('.seed-card').length === 0, 'the seed written and the strip closed');
   assert.deepEqual(acts.at(-1).slice(0, 3), ['setPiece', 'p1', { seed: picked }]);
   assert.equal(propBox().querySelectorAll('.seed-card').length, 0, 'the strip closes');
   view.set({ msel: [], mprop: null });

@@ -106,3 +106,18 @@ export const press = (el, key) => el.dispatchEvent({ type: 'keydown', key, targe
 export function type(el, text) { el.value = text; el.dispatchEvent({ type: 'input', target: el }); }
 /** Let what is waiting to be drawn be drawn. */
 export const settle = () => new Promise((r) => setTimeout(r, 40));
+/** One tick: what preact draws from a signal or a state change (a microtask) has been drawn.  Not for effects (those run after the paint): `until` them. */
+export const rendered = () => new Promise((r) => setTimeout(r, 0));
+/**
+ * Wait for exactly what a test is about to assert: until `ok()` is true (checked every tick), never a fixed time.  A 10 s
+ * deadline throws "timed out waiting for `what`", so a real failure says what never happened instead of hanging.
+ * `settle` (a fixed 40 ms) is only for a test that asserts nothing came of it.
+ * @param {() => unknown} ok @param {string} what
+ */
+export async function until(ok, what) {
+  const end = Date.now() + 10000;
+  while (!ok()) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 0));
+  }
+}

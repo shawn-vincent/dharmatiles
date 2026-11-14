@@ -3,20 +3,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { signal } from '@preact/signals-core';
-import { install, settle } from './dom.js';
+import { install, until } from './dom.js';
 import { createThumbs, LIMIT, thumbKey } from '../js/thumbs.js';
 import { tierReady } from '../js/tiers.js';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
-/** Wait for exactly what a test asked for: until `ok()` is true (checked every tick), never a fixed time; a 10 s deadline fails with `what`. */
-async function until(ok, what) {
-  const end = Date.now() + 10000;
-  while (!ok()) {
-    if (Date.now() > end) assert.fail(`timed out waiting for ${what}`);
-    await tick();
-  }
-}
-
 /** A fake program: it holds every want until told it is done, and remembers what it was asked. */
 function fakeHost() {
   const asked = [];
@@ -126,7 +117,7 @@ test('the seed strip shows the current seed first and four new ones, marks one y
   const api = { writable: () => true, canMine: () => false, replace() {}, set: (...a) => calls.push(a), onField() {}, checkValue: async () => null };
   const m = signal(model);
   render(html`<${Sheet} model=${m.value} api=${api} />`, root);
-  await settle();
+  await until(() => root.querySelector('.dice'), 'the sheet drawn, with its dice');
   assert.equal(root.querySelectorAll('.seed-card').length, 0, 'nothing is built until the dice is pressed');
   assert.equal(f.asked.length, 0);
   root.querySelector('.dice').dispatchEvent({ type: 'click' });
@@ -171,7 +162,7 @@ test('the seed row says which entries keep their own seed, from the stack items,
   };
   const api = { writable: () => true, canMine: () => false, replace() {}, set() {}, onField() {}, checkValue: async () => null };
   render(html`<${Sheet} model=${model} api=${api} />`, root);
-  await settle();
+  await until(() => root.querySelector('.pins'), 'the pins line drawn');
   const line = root.querySelector('.pins');
   assert.equal(line.textContent, 'wall keeps its own seed (15)');
   line.querySelector('button').dispatchEvent({ type: 'click' });
