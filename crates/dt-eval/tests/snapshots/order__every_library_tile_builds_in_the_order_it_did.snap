@@ -47,6 +47,7 @@ lib:tests/walls/1x1-wall-brick-corner+grass.dtile: [Entry(0), Lift, Entry(1), En
 lib:tests/walls/1x1-wall-brick.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/walls/1x1-wall-cut-stone-corner.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/walls/1x1-wall-cut-stone.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
+lib:tests/walls/1x1-wall-fieldstone-corner.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/walls/1x1-wall-fieldstone.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/walls/1x1-wall-regular-brick.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
 lib:tests/walls/1x1-wall-rim.dtile: [Entry(0), Lift, Entry(1), Entry(2)]
