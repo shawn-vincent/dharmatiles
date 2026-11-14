@@ -49,6 +49,9 @@ export function pieceLine(p) {
   return [`On the shelf: ${p.have}`, when, colourName(p.colour), `seed ${p.seed}`].filter(Boolean).join(' · ');
 }
 
+/** The badge over a print's picture: how many of it are on the shelf, `×2`. */
+export const shelfBadge = (p) => `×${p.have}`;
+
 /** A tile of the log as a short name: the last part of its path. */
 export const nameOf = (canon) => String(canon).replace(/^(lib|home):/, '').split('/').pop();
 

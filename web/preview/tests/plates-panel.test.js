@@ -11,8 +11,8 @@ const { PlatesPanel } = await import('../js/view/plates-panel.js');
 
 const plan = (gap, pieces = 2) => ({
   planned: true, writable: true, printer: 'p', label: 'Printer', mode: 'single', group: 'filament', gap, margin: 5, turn: true, bed: [180, 180], slots: 1, view: 0, slotCheck: { ok: true, need: 1, have: 1 },
-  layout: [{ plate: 1, filaments: [], pieces: Array.from({ length: pieces }, (_, i) => ({ id: `p${i}`, name: 'rock', kind: 0, pinned: false })) }],
-  kinds: [{ name: 'rock', exact: true, count: pieces, want: pieces, have: 0, otherColour: 0, seedUsed: 7, system: 'db' }],
+  layout: [{ plate: 1, filaments: [], pieces: Array.from({ length: pieces }, (_, i) => ({ id: `p${i}`, name: 'rock', kind: 0, pinned: false, x: 10 + 40 * i, y: 10, w: 35, d: 35, turned: false })) }],
+  kinds: [{ name: 'rock', size: [35, 35], canon: 'lib:rock', exact: true, count: pieces, want: pieces, have: 0, otherColour: 0, seedUsed: 7, system: 'db' }],
   pieces: [{ id: 'p0', tile: 'lib:tiles/rock', count: pieces, print: 'missing' }], held: [], checkInventory: true,
 });
 

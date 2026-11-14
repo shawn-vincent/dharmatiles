@@ -11,6 +11,7 @@ import { exists, plateTotals, systemName, wantLine } from '../inventory.js';
 import { Field } from './field.js';
 import { html } from './html.js';
 import { Icon } from './icons.js';
+import { Thumb } from '../thumbs.js';
 import { Button, Note, Seg, Section, plural } from './widgets.js';
 
 const mm = (n) => `${Number(n).toFixed(1).replace(/\.0$/, '')}`;
@@ -40,6 +41,24 @@ const Spacing = ({ p, ro, act }) => html`<${Section} title="Spacing">
   <${Seg} label="Turns" options=${[['allowed', 'Allowed', 'A piece may turn a quarter to fit'], ['off', 'Off']]} current=${p.turn ? 'allowed' : 'off'} on=${(v) => act.set('turn', v)} disabled=${ro} />
 <//>`;
 
+/**
+ * One plate as a small picture of its bed (docs/plates.html): the bed to scale, every piece where the packer put it, as its
+ * own top-down picture (the page's one picture service, js/thumbs.js; `m.picture`) turned as it is turned on the bed.  Every
+ * plate is drawn at the same width, so the beds are one scale.  The numbers are the layout's (`x`, `y` the piece's front edge
+ * and left, `w` by `d` its footprint as placed, `turned` a quarter counter-clockwise): the page works out only where on the
+ * card they fall.
+ */
+export function Bed({ m, p, pl }) {
+  const [bw, bd] = p.bed;
+  return html`<span class="pl-bed" style=${`aspect-ratio: ${bw} / ${bd}`} aria-hidden="true">${pl.pieces.map((q, i) => {
+    const kind = p.kinds[q.kind];
+    const pic = m.picture ? m.picture(kind) : null;
+    const [sw, sd] = kind.size;
+    return html`<span key=${i} class=${`pl-bp${q.pinned ? ' pin' : ''}`} style=${`left:${(q.x / bw) * 100}%;top:${((bd - q.y - q.d) / bd) * 100}%;width:${(q.w / bw) * 100}%;height:${(q.d / bd) * 100}%`}>
+      ${pic ? html`<span class="pl-bimg" style=${`width:${(sw / (q.turned ? q.d : q.w)) * 100}%;height:${(sd / (q.turned ? q.w : q.d)) * 100}%;transform:translate(-50%,-50%) rotate(${q.turned ? -90 : 0}deg)`}><${Thumb} svc=${pic.svc} spec=${pic.spec} className="pl-bpic" onError=${pic.onError} /></span>` : null}</span>`;
+  })}</span>`;
+}
+
 const Plates = ({ m, p, act }) => {
   const inv = m.inventory.value;
   const totals = plateTotals(p);
@@ -51,9 +70,10 @@ const Plates = ({ m, p, act }) => {
       const on = i === p.view;
       const counts = new Map();
       for (const q of pl.pieces) counts.set(q.name, (counts.get(q.name) ?? 0) + 1);
-      return html`<button type="button" key=${pl.plate} class=${`pl-plate${on ? ' on' : ''}`} aria-pressed=${String(on)} title=${on ? 'On the bed in the view' : 'Show this plate on the bed'} onClick=${() => { if (!on) act.show(i); }}>
-        <b>${`Plate ${pl.plate}`}</b><span class="pl-n">${plural(pl.pieces.length, 'piece')}</span>${p.mode === 'multicolour' && pl.filaments.length ? html`<span class="pl-fil">${pl.filaments.join(' · ')}</span>` : null}
-        <span class="pl-what">${[...counts].map(([n, c]) => `${c} × ${n}`).join(', ')}</span></button>`;
+      const what = [...counts].map(([n, c]) => `${c} × ${n}`).join(', ');
+      return html`<button type="button" key=${pl.plate} class=${`pl-plate${on ? ' on' : ''}`} aria-pressed=${String(on)} title=${`${on ? 'On the bed in the view' : 'Show this plate on the bed'}: ${what}`} onClick=${() => { if (!on) act.show(i); }}>
+        ${p.bed ? html`<${Bed} m=${m} p=${p} pl=${pl} />` : null}
+        <b>${`Plate ${pl.plate}`}</b><span class="pl-n">${plural(pl.pieces.length, 'piece')}</span>${p.mode === 'multicolour' && pl.filaments.length ? html`<span class="pl-fil">${pl.filaments.join(' · ')}</span>` : null}</button>`;
     })}</div>
     ${p.groupingCost ? html`<p class="note warn">${`Grouping by filament takes ${plural(p.groupingCost, 'more plate')} than packing by size. `}<button type="button" class="linkish" onClick=${() => act.set('group', 'size')}>Pack by size only</button></p>` : null}
     <p class=${`note${low ? ' warn' : ' ok'}`}>${low

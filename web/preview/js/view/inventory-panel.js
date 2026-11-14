@@ -9,7 +9,7 @@
 // same when the panel is drawn again; the list a reprint goes into and the tile a re-link points to are the form's own.
 
 import {
-  SYSTEMS, canonOf, colourName, groups, haveLine, nameOf, numbered, pieceLine, relinkCandidates, systemName, tileHave, totalsLine, exists,
+  SYSTEMS, canonOf, colourName, dateWords, groups, haveLine, nameOf, numbered, pieceLine, shelfBadge, relinkCandidates, systemName, tileHave, totalsLine, exists,
 } from '../inventory.js';
 import { html, useState } from './html.js';
 import { Thumb } from '../thumbs.js';
@@ -29,20 +29,24 @@ export function HaveBlock({ t, m, act }) {
   </section>`;
 }
 
-function PieceRow({ g, p, system, m, act }) {
+/**
+ * One print on the shelf as a card (docs/inventory.html): the picture of that tile at that seed (js/thumbs.js, the page's one
+ * picture service), the seed, what the log says of it, how many are on the shelf over the picture, and the two actions.
+ * Cards of one tile are a row of the shelf under the tile's name; Reprint's form opens as a row of its own below them.
+ */
+function PieceCard({ g, p, system, m, act }) {
   const pic = m.picture ? m.picture(g.tile, p.system) : null;
   const key = `${p.tile}|${p.seed}|${p.system}|${p.colour}`;
-  const open = m.ui.value.reprint === key;
-  return html`<div class="inv-wrap">
-    <div class=${`inv-piece${p.have ? '' : ' off'}`} title=${system && p.system !== system ? systemName(p.system) : undefined}>
-      ${pic ? html`<${Thumb} svc=${pic.svc} spec=${{ ...pic.spec, seed: p.seed }} className="inv-pic" onError=${pic.onError} />` : null}
-      <span class="inv-what">${pieceLine(p)}${p.failed ? html`<span class="inv-tag">${`${p.failed} failed`}</span>` : null}${p.gone ? html`<span class="inv-tag">${`${p.gone} gone`}</span>` : null}</span>
-      <span class="inv-acts">
-        <button type="button" class="linkish" disabled=${p.have === 0} title=${p.have ? 'One of these is lost or broken: a line is added to the log, nothing is edited away' : 'None of these is on the shelf'} onClick=${() => act.gone(g, p)}>Gone</button>
-        <button type="button" class="linkish" title="Add this exact piece (its seed) to a print list" onClick=${() => act.toggleReprint(key)}>Reprint</button>
-      </span></div>
-    ${open ? html`<${Reprint} p=${p} m=${m} act=${act} />` : null}
-  </div>`;
+  const when = p.last ? (dateWords(p.last) === 'today' ? 'printed today' : `printed ${dateWords(p.last)}`) : '';
+  return html`<div class=${`inv-card${p.have ? '' : ' off'}`} title=${[pieceLine(p), system && p.system !== system ? systemName(p.system) : ''].filter(Boolean).join(' · ')}>
+    <div class="inv-shot">${pic ? html`<${Thumb} svc=${pic.svc} spec=${{ ...pic.spec, seed: p.seed, w: 176, h: 124 }} className="inv-pic" onError=${pic.onError} />` : html`<span class="thumb-pic ph inv-pic"></span>`}
+      <span class="inv-badge" aria-label=${`${p.have} on the shelf`}>${shelfBadge(p)}</span></div>
+    <div class="inv-meta"><b>${`seed ${p.seed}`}</b><span class="inv-sub">${[colourName(p.colour), when].filter(Boolean).join(' · ')}</span>
+      ${p.failed || p.gone ? html`<span class="inv-sub">${[p.failed ? `${p.failed} failed` : '', p.gone ? `${p.gone} gone` : ''].filter(Boolean).join(' · ')}</span>` : null}</div>
+    <div class="inv-acts">
+      <button type="button" class="linkish" disabled=${p.have === 0} title=${p.have ? 'One of these is lost or broken: a line is added to the log, nothing is edited away' : 'None of these is on the shelf'} onClick=${() => act.gone(g, p)}>Gone</button>
+      <button type="button" class="linkish" title="Add this exact piece (its seed) to a print list" onClick=${() => act.toggleReprint(key)}>Reprint</button>
+    </div></div>`;
 }
 
 /** The small form under a piece: which print list it goes into (or a new one). */
@@ -71,7 +75,10 @@ function Group({ g, system, m, act }) {
   return html`<section class="inv-group"><div class="inv-head"><b title=${g.tile}>${g.name}</b>
       ${g.edited ? html`<span class="inv-tag edited" title="The tile changed since the print was made. It still counts; this is only to tell you.">edited since printing</span>` : null}</div>
     ${g.missing ? html`<${Relink} g=${g} m=${m} act=${act} />` : null}
-    ${g.pieces.map((p) => html`<${PieceRow} key=${`${p.tile}|${p.seed}|${p.system}|${p.colour}`} g=${g} p=${p} system=${system} m=${m} act=${act} />`)}</section>`;
+    <div class="inv-shelf">${g.pieces.map((p) => {
+      const key = `${p.tile}|${p.seed}|${p.system}|${p.colour}`;
+      return [html`<${PieceCard} key=${key} g=${g} p=${p} system=${system} m=${m} act=${act} />`, m.ui.value.reprint === key ? html`<div class="inv-reprint-row" key=${`${key}|reprint`}><${Reprint} p=${p} m=${m} act=${act} /></div>` : null];
+    })}</div></section>`;
 }
 
 function Source({ text }) {
