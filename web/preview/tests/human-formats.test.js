@@ -17,7 +17,9 @@ test('a date is today, day and month this year, with the year before', () => {
 });
 
 test('a piece is a sentence: the count, the date, the colour, the seed', () => {
-  const today = new Date().toISOString().slice(0, 10);
+  // today as the editor writes it, the local day (toISOString is UTC, a day ahead every evening west of Greenwich)
+  const d = new Date(), pad = (n) => String(n).padStart(2, '0');
+  const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   assert.equal(pieceLine({ have: 1, last: today, colour: 'single', seed: 9486 }), 'On the shelf: 1 · printed today · single colour · seed 9486');
   assert.doesNotMatch(pieceLine({ have: 2, last: null, colour: 'multi', seed: 7 }), /×|printed/);
 });
