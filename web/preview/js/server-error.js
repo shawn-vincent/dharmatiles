@@ -27,6 +27,21 @@ export class ServerError extends Error {
   }
 }
 
+/**
+ * A build that stopped on a mistake in the tile's own document (a `dt::` code, `dt::seam` say), as it reaches every caller that
+ * wanted a picture or a piece of it: the tile's mistake to show where the picture would be, never a failure of the page or the
+ * program.  `showError` (problems.js) does not list it as a failure: the program has already said it in the stream of
+ * messages, at the tile, with its place and help.
+ */
+export class TileMistake extends Error {
+  constructor(message, code = null) {
+    super(message);
+    this.name = 'TileMistake';
+    this.mistake = true;
+    this.code = code;
+  }
+}
+
 export const isServerError = (e) => e instanceof ServerError;
 
 const shaped = (x) => x && typeof x === 'object' && typeof x.message === 'string' && ['refused', 'failure', 'bug'].includes(x.kind);

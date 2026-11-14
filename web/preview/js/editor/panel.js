@@ -10,7 +10,7 @@
 
 import { computed, effect, signal, untracked } from '@preact/signals-core';
 import { setReporter, serverErrorIn } from '../problems.js';
-import { detailsFor, fitMsgHeight, statusOf } from '../messages.js';
+import { detailsText, fitMsgHeight, statusOf } from '../messages.js';
 import { html, render } from '../view/html.js';
 import { CopyAll, ErrorCard, MessageFilters, MessagesBody } from '../view/messages-panel.js';
 import { paintStatusLine } from '../view/status-line.js';
@@ -85,7 +85,9 @@ const act = {
   openPanel: () => togglePanel(true),
   showNode: (/** @type {string} */ node) => view.set({ sel: entrySel(node) }),
   dismiss: (/** @type {number} */ seq) => log.dismiss(seq),
-  details: (/** @type {any} */ m, /** @type {string | null} */ source) => detailsFor(m, { source }),
+  // the program's own text of the message (the one renderer, as Copy all), then this page's environment; a message of the
+  // page's own that the program could not be told (seq below zero) has only the page's words
+  details: (/** @type {any} */ m, /** @type {string | null} */ source) => detailsText(m, host, { source }),
   canShowWorst: () => !!viewer.worstFlagged(),
   underside: () => (viewer.payload ? undersidePlan(viewer.payload) : null),
   showWorst,

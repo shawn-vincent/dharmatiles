@@ -185,6 +185,11 @@ export function tileErrorDetails(e, { source = null, env = collectEnvironment(gl
   return out.join('\n');
 }
 
+/** The environment as the copied text says it (the program's own version, the page, the browser): what follows a message's text in a pasted copy. */
+export function environmentText(env = collectEnvironment(globalThis, known())) {
+  return environmentLines(env, env.version ?? null).join('\n');
+}
+
 /** The problems now, oldest first: {what, message, kind, headline, help, detail, chain, details, count, open}. */
 export const problems = () => entries;
 
@@ -206,6 +211,9 @@ export function setReporter(fn) { reporter = fn; }
 
 /** Put one failure in the list of problems (and the stream): `what` was being done, `err` is what went wrong. */
 export function showError(what, err) {
+  // a mistake in a tile's document is the tile's, not a failure: the program said it in the stream of messages (with its
+  // code, file, place and help), and the picture or piece it was for shows it where it would have been
+  if (err?.mistake) { console.info(what, err.message); return; }
   console.error(what, err);
   const d = describe(err);
   const message = serverErrorIn(err)?.message ?? messageOf(err);

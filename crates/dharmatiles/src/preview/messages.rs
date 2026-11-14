@@ -271,6 +271,7 @@ pub(super) fn of_server_error(error: &Value, tile: (&str, &str), origin: &str) -
     )
     .code(if kind == "bug" { "bug" } else { "failure" })
     .help(error["help"].as_str());
+    m.doing = error["context"]["route"].as_str().map(str::to_owned);
     m = m.typed(&ServerData {
         origin: origin.to_owned(),
         kind: kind.to_owned(),
@@ -282,15 +283,18 @@ pub(super) fn of_server_error(error: &Value, tile: (&str, &str), origin: &str) -
     m
 }
 
-/// `GET /api/messages?tile=&since=&format=text|json&state=&kind=&severity=`.
+/// `GET /api/messages?tile=&since=&seq=&format=text|json&state=&kind=&severity=`.
 pub(super) fn read(shared: &Shared, param: &dyn Fn(&str) -> Option<String>) -> Reply {
     let since = param("since").and_then(|s| s.parse().ok()).unwrap_or(0);
     let tile = param("tile");
+    // one message by its number: the details of a row, in the same text as Copy all
+    let only: Option<u64> = param("seq").and_then(|s| s.parse().ok());
     let want = |k: &str| param(k).filter(|v| !v.is_empty() && v != "all");
     let (state, kind, severity) = (want("state"), want("kind"), want("severity"));
     let ev = lock(&shared.events);
     let found = ev.messages.query(tile.as_deref(), since, |m| {
-        state.as_deref().is_none_or(|s| (s == "open") == m.open)
+        only.is_none_or(|n| n == m.seq)
+            && state.as_deref().is_none_or(|s| (s == "open") == m.open)
             && kind.as_deref().is_none_or(|k| k == m.kind.as_str())
             && severity.as_deref().is_none_or(|s| s == m.severity.as_str())
     });

@@ -352,6 +352,12 @@ export function browserHost(requests = createRequests()) {
       if (!r.ok) throw await replyError(r, 'messages');
       return r.text();
     },
+    /** One message as text, the program's one renderer (a row's details). @param {number} seq */
+    async messageText(seq) {
+      const r = await netFetch(`/api/messages?${new URLSearchParams({ seq: String(seq), format: 'text' })}`, { cache: 'no-store' });
+      if (!r.ok) throw await replyError(r, 'messages');
+      return r.text();
+    },
     /** A new tile in My tiles (or in the folder `into`). @param {string} name @param {string} size @param {{root: number, dir: string}} [into] */
     newTile: (name, size, into) => call('POST /api/new', { name, size, ...(into ? { root: into.root, dir: into.dir } : {}) }),
     /** Show the program's folder chooser; the folder chosen is a place from now on. */

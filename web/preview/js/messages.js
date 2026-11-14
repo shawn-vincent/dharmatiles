@@ -17,7 +17,7 @@
 
 import { signal } from '@preact/signals-core';
 import { ServerError } from './server-error.js';
-import { detailsOf, tileErrorDetails } from './problems.js';
+import { detailsOf, environmentText, tileErrorDetails } from './problems.js';
 
 /** @typedef {import('./api').MessageJson} MessageJson */
 /** @typedef {import('./api').GateData} GateData */
@@ -289,6 +289,17 @@ export function detailsFor(m, { source = null, env } = {}) {
   }
   if (isProblem(m)) return tileErrorDetails(asTileError(m), opts);
   return `${m.text}${m.data && Object.keys(m.data).length ? `\n${JSON.stringify(m.data)}` : ''}`;
+}
+
+/**
+ * What Copy on one row puts on the clipboard: the program's own text of the message (`host.messageText`, the one renderer Copy all
+ * uses: file, code, place, source line with the span marked, help, what was being done, kind, causes and backtrace), then this page's
+ * environment.  Only a message of the page's own that the program could not be told (seq below zero) is worded here.
+ * @param {MessageJson} m @param {{ messageText: (seq: number) => Promise<string> }} host @param {{ source?: string | null, env?: any }} [o]
+ */
+export async function detailsText(m, host, o = {}) {
+  if (m.seq <= 0) return detailsFor(m, o);
+  return `${(await host.messageText(m.seq)).trimEnd()}\n\n${environmentText(o.env)}`;
 }
 
 /** The messages panel's height, dragged to `h` px with `room` px above the status line: at least 96, and the view keeps 80 above it. */

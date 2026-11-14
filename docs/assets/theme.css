@@ -238,6 +238,9 @@ dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 
 .thumb-pic { display: block; aspect-ratio: 176 / 124; background: var(--plate, #D9E0EB); overflow: hidden; }
 .thumb-pic.ph { opacity: .55; }
 .thumb-pic.bad { box-shadow: inset 0 0 0 2px var(--err); }
+/* a tile that does not build: its mistake's code where the picture would be */
+.broken { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; text-align: center; padding: 4px; box-sizing: border-box; color: var(--err); font-size: var(--fs-s); line-height: var(--lh-s); overflow: hidden; }
+.broken b { font-weight: 600; overflow-wrap: anywhere; }
 .thumb-pic img { width: 100%; height: 100%; display: block; }
 
 /* The seed strip: five candidate seeds of a tile, the current first; a square marks one you own. */

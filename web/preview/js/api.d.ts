@@ -326,7 +326,19 @@ node: string | null, span: SpanJson | null, text: string, help: string | null,
 /**
  * An edit that mends it (a button in the page), when the program has one.
  */
-fix: FixJson | null, data: JsonValue, state: MessageState, };
+fix: FixJson | null, 
+/**
+ * The tile file it is about, as the program names it.
+ */
+file: string | null, 
+/**
+ * What was being done (a build, a picture, an export, with its system, printer, seed and tier).
+ */
+doing: string | null, 
+/**
+ * The line of the file the span is on.
+ */
+source: string | null, data: JsonValue, state: MessageState, };
 
 type MessageState = "open" | "cleared";
 
@@ -637,7 +649,11 @@ type StreamEvent = { "type": "snapshot" } & Snapshot | { "type": "resumed", rev:
 /**
  * The error is a mistake in the document's text (not a failure of the program).
  */
-mistake: boolean, } | { "type": "resource" } & ResourceEvent;
+mistake: boolean, 
+/**
+ * The code of the document's mistake (`dt::seam`) when `mistake`.
+ */
+code: string | null, } | { "type": "resource" } & ResourceEvent;
 
 type SystemWord = "db" | "ol";
 

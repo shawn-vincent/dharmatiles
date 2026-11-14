@@ -198,7 +198,14 @@ impl Shared {
 
     /// Say on the stream that `key` is done at `doc_rev` (or why it could not be, and whether that is a mistake in the
     /// document's text, which is the document's to show, or a failure of the program's).
-    fn announce_tier(&self, key: &str, doc_rev: u64, error: Option<&str>, mistake: bool) {
+    fn announce_tier(
+        &self,
+        key: &str,
+        doc_rev: u64,
+        error: Option<&str>,
+        mistake: bool,
+        code: Option<&str>,
+    ) {
         let mut ev = lock(&self.events);
         let rev = ev.rev;
         ev.send(&super::api::StreamEvent::Tier {
@@ -207,6 +214,7 @@ impl Shared {
             doc_rev,
             error: error.map(str::to_owned),
             mistake,
+            code: code.map(str::to_owned),
         });
     }
 
@@ -252,7 +260,7 @@ impl Shared {
             let rev = self.rev_of(&r.path);
             let have = lock(&self.tier_book).results.get(&r.key).map(|d| d.doc_rev);
             if have == Some(rev) {
-                self.announce_tier(&r.key, rev, None, false);
+                self.announce_tier(&r.key, rev, None, false, None);
                 continue;
             }
             if !lock(&self.tier_book).inflight.insert(r.key.clone()) {
@@ -320,8 +328,8 @@ impl Shared {
                     e.message
                 );
                 lock(&self.tier_book).inflight.remove(&r.key);
-                self.tier_failed(r, &e.message);
-                self.announce_tier(&r.key, rev, Some(&e.message), false);
+                self.tier_failed(r, &e.message, &[]);
+                self.announce_tier(&r.key, rev, Some(&e.message), false, None);
                 self.job_done_everywhere(&r.key);
                 return;
             }
@@ -335,12 +343,14 @@ impl Shared {
                     .collect::<Vec<_>>()
                     .join("; "),
                 errs.iter().all(|d| crate::build::is_document_error(d.code)),
+                errs,
             )),
             Ok(b) => {
                 payload::for_map(&b, r.tier.name(), rev, &r.opts, &self.palette()).map_err(|e| {
                     (
                         format!("cannot prepare the {} view: {e}", r.tier.name()),
                         false,
+                        Vec::new(),
                     )
                 })
             }
@@ -368,37 +378,63 @@ impl Shared {
                     }
                 }
                 drop(book);
-                self.announce_tier(&r.key, rev, None, false);
+                self.announce_tier(&r.key, rev, None, false, None);
             }
-            Err((message, mistake)) => {
+            Err((message, mistake, errs)) => {
                 drop(book);
-                self.tier_failed(r, &message);
-                self.announce_tier(&r.key, rev, Some(&message), mistake);
+                self.tier_failed(r, &message, &errs);
+                // a document's mistake is told with its code, so every picture's caller shows it as the tile's
+                let code = errs.first().filter(|_| mistake).map(|d| d.code);
+                self.announce_tier(&r.key, rev, Some(&message), mistake, code);
             }
         }
         self.job_done_everywhere(&r.key);
     }
 
     /// A piece could not be built: an error in the panel of every document that wants it, never only on the stream.
-    fn tier_failed(&self, r: &Ready, message: &str) {
+    fn tier_failed(&self, r: &Ready, message: &str, errs: &[dt_eval::Diag]) {
         use crate::message::{Kind, Message, Scope, Severity};
         let docs = self.docs_wanting(&r.key);
         let piece = self.name_of(&r.tile).unwrap_or_else(|| r.tile.clone());
+        let doing = {
+            let o = &r.opts;
+            let seed = o
+                .seed
+                .map_or_else(|| "its own seed".to_owned(), |s| format!("seed {s}"));
+            format!(
+                "the {} build of {piece}, for the map or list: system {}, printer {}, {seed}",
+                r.tier.name(),
+                o.system,
+                o.printer.name
+            )
+        };
         for d in docs {
             let Some(name) = self.name_of(&d) else {
                 continue;
             };
-            self.say(
-                Message::new(
-                    Kind::Server,
-                    Severity::Error,
-                    Scope::Server,
-                    &d,
-                    &name,
-                    format!("The {} build of {piece} failed: {message}", r.tier.name()),
-                )
-                .code("tier"),
-            );
+            if errs.is_empty() {
+                self.say(
+                    Message::new(
+                        Kind::Server,
+                        Severity::Error,
+                        Scope::Server,
+                        &d,
+                        &name,
+                        format!("The {} build of {piece} failed: {message}", r.tier.name()),
+                    )
+                    .code("tier")
+                    .about(&r.path, doing.clone()),
+                );
+                continue;
+            }
+            // the tile's own diagnostics, each with its code, place, source line and help: the piece's mistake, said
+            // where the piece is used, never as a failure of the program
+            for diag in errs {
+                let mut m = Message::from_diag(diag, Scope::Server, false, &d, &name, &[]);
+                m.doing = Some(doing.clone());
+                m.file.get_or_insert_with(|| r.path.clone());
+                self.say(m);
+            }
         }
     }
 

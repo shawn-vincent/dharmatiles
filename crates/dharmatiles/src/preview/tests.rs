@@ -3206,3 +3206,124 @@ fn the_tiers_route_refuses_a_bad_want_by_name() {
     assert!(head.starts_with("HTTP/1.1 400"), "{head} {v}");
     assert!(v.to_string().contains("size"), "{v}");
 }
+
+/// A line that ends off a seam: `dt::seam`, twice.
+const OFF_SEAM: &str = r#"dharmatiles version="1.0.0"
+
+tile size="1x1" seed=97 {
+    line shore wobble="5dmm" { through "(0sq, 0.62sq)" "(1sq, 0.58sq)" }
+    region bank { boundedBy shore; fill "(0.5sq, 0.75sq)" }
+    stack {
+        dirt at=bank
+    }
+}
+"#;
+
+#[test]
+fn a_listed_tile_with_a_document_mistake_reaches_every_picture_as_the_tiles_mistake_with_its_code()
+{
+    let dir = std::env::temp_dir().join(format!("dt-pic-mistake-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let doc = dir.join("first-plate.dtile");
+    let broken = dir.join("broken.dtile");
+    std::fs::write(&doc, dt_eval::Library.read(FLAT).unwrap()).unwrap();
+    std::fs::write(&broken, OFF_SEAM).unwrap();
+    let (dp, bp) = (
+        doc.to_string_lossy().into_owned(),
+        broken.to_string_lossy().into_owned(),
+    );
+    let r = start(&[&dp, &bp], true);
+    wait_for(&r, "both listed", |_| true);
+    let list = tiles(&r);
+    let id_of = |name: &str| {
+        list["tiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["path"].as_str().is_some_and(|p| p.ends_with(name)))
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let (doc_id, bad_id) = (id_of("first-plate.dtile"), id_of("broken.dtile"));
+    let token = token_of(&r);
+    let mut c = TcpStream::connect(r.addr).unwrap();
+    write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
+    let body = serde_json::json!({"scope": "pics", "doc": doc_id, "wants": [
+        {"tile": bad_id, "tier": "super-low"}
+    ]})
+    .to_string();
+    let (head, _) = post(&r, "/api/tiers/want", Some(&token), None, &body);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    let mut seen = None;
+    for l in BufReader::new(c).lines() {
+        let l = l.unwrap();
+        let Some(data) = l.strip_prefix("data: ") else {
+            continue;
+        };
+        let v: Value = serde_json::from_str(data).unwrap();
+        if v["type"] == "tier" && v["error"].is_string() {
+            seen = Some(v);
+            break;
+        }
+    }
+    let ev = seen.expect("the tier's failure is announced");
+    // the document's mistake, with its code: not the program's failure
+    assert_eq!(ev["mistake"], true, "{ev}");
+    assert_eq!(ev["code"], dt_lang::codes::SEAM, "{ev}");
+    assert!(ev["error"].as_str().unwrap().contains("is not a seam"));
+    // and the document that uses the picture is told as the tile's mistake, each with its place, file and help
+    let said = messages(&r, &format!("tile={doc_id}&kind=error"));
+    assert!(
+        !said.is_empty(),
+        "the mistake is a message of the document that wants the piece"
+    );
+    assert!(
+        said.iter()
+            .all(|m| m["code"] == dt_lang::codes::SEAM && m["kind"] == "error"),
+        "{said:?}"
+    );
+    assert!(
+        messages(&r, "kind=server")
+            .iter()
+            .all(|m| m["code"] != "tier" && m["code"] != "bug")
+    );
+    let first = &said[0];
+    assert!(
+        first["file"].as_str().unwrap().ends_with("broken.dtile"),
+        "{first}"
+    );
+    assert!(
+        first["doing"].as_str().unwrap().contains("super-low"),
+        "{first}"
+    );
+    assert!(
+        first["source"].as_str().unwrap().contains("through"),
+        "{first}"
+    );
+    assert!(first["help"].as_str().unwrap().contains("did you mean"));
+    // one message, as the same text the whole list is copied in
+    let (head, text) = get(
+        &r,
+        &format!("/api/messages?seq={}&format=text", first["seq"]),
+    );
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    let text = String::from_utf8(text).unwrap();
+    for want in [
+        "dt::seam",
+        "broken.dtile:4:",
+        "file: ",
+        "doing: ",
+        "seen from: first-plate",
+        "help: did you mean",
+        "  ^^^",
+        "through",
+        "kind: mistake",
+    ] {
+        assert!(text.contains(want), "{want} in\n{text}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

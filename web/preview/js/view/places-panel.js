@@ -19,6 +19,7 @@ import { folderDepth, slideDir } from '../nav.js';
 import { slide } from '../slide.js';
 import { sizeLine, sizeSquares, stemOf, wherePath } from '../folders.js';
 import { thumbBox } from '../rows.js';
+import { brokenCode, brokenWords } from '../thumbs.js';
 import { html, useEffect, useLayoutEffect, useRef, useState } from './html.js';
 import { Icon } from './icons.js';
 import { plural } from './widgets.js';
@@ -48,7 +49,7 @@ function SizeThumb({ t }) {
 function Pic({ t, plate, on }) {
   const box = useRef(/** @type {HTMLElement | null} */ (null));
   const [url, setUrl] = useState(/** @type {string | null} */ (null));
-  const [bad, setBad] = useState(false);
+  const [bad, setBad] = useState(/** @type {string | null} */ (null));
   useEffect(() => {
     const el = box.current;
     if (!el) return undefined;
@@ -56,12 +57,12 @@ function Pic({ t, plate, on }) {
     const seen = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
       seen.disconnect();
-      on.picture(t, plate).then((u) => { if (live && u) setUrl(u); }).catch((e) => { if (live) setBad(true); on.pictureFailed(e); });
+      on.picture(t, plate).then((u) => { if (live && u) setUrl(u); }).catch((e) => { if (live) setBad(brokenWords(e)); on.pictureFailed(e); });
     }, { root: el.closest('.flvl'), rootMargin: '300px 0px 300px 0px' });
     seen.observe(el);
     return () => { live = false; seen.disconnect(); };
   }, [t.id, t.meshVersion, plate]);
-  return html`<div class=${`apic${bad ? ' bad' : ''}`} ref=${box} data-id=${t.id} data-key=${String(t.meshVersion ?? 0)}>${url ? html`<img alt="" src=${url} draggable=${false} />` : null}</div>`;
+  return html`<div class=${`apic${bad ? ' bad' : ''}`} ref=${box} data-id=${t.id} data-key=${String(t.meshVersion ?? 0)} title=${bad ?? undefined}>${url ? html`<img alt="" src=${url} draggable=${false} />` : bad ? html`<span class="broken"><b>${brokenCode(bad)}</b></span>` : null}</div>`;
 }
 
 /** A tile of the add mode: its picture, its name and size, and what you have of it.  Pressed it goes on the map; dragged it is let go where it should stand. */

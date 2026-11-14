@@ -718,13 +718,28 @@ impl Shared {
             .map(|t| t.name.clone())
     }
 
+    /// The path of tile `id` as the program names it (a path in My tiles, or `lib:` in the library).
+    fn path_of(&self, id: &str) -> Option<String> {
+        lock(&self.tiles)
+            .iter()
+            .find(|t| t.id == id)
+            .map(|t| t.path.clone())
+    }
+
+    /// A message about a tile names the tile's file when it names none of its own: a copy of it says which file.
+    fn name_file(&self, m: &mut crate::message::Message) {
+        if m.file.is_none() {
+            m.file = self.path_of(&m.tile);
+        }
+    }
+
     /// Tell every listener of `changed` messages.
     fn send_messages(ev: &mut Events, changed: &[crate::message::Message]) {
         let rev = ev.rev;
         for m in changed {
             ev.send(&api::StreamEvent::Message {
                 rev,
-                message: m.wire(),
+                message: Box::new(m.wire()),
             });
         }
     }
@@ -740,14 +755,18 @@ impl Shared {
         make: impl FnOnce(&str) -> Vec<crate::message::Message>,
     ) {
         let Some(name) = self.name_of(id) else { return };
-        let found = make(&name);
+        let mut found = make(&name);
+        for m in &mut found {
+            self.name_file(m);
+        }
         let mut ev = lock(&self.events);
         let changed = ev.messages.report(fail::now_ms(), id, scope, found);
         Self::send_messages(&mut ev, &changed);
     }
 
     /// One message with nothing to clear (a failure of the server's or the page's), said now.
-    fn say(&self, m: crate::message::Message) {
+    fn say(&self, mut m: crate::message::Message) {
+        self.name_file(&mut m);
         let mut ev = lock(&self.events);
         let m = ev.messages.say(fail::now_ms(), m);
         Self::send_messages(&mut ev, &[m]);
@@ -1017,7 +1036,7 @@ impl Shared {
                 &tx,
                 &api::StreamEvent::Message {
                     rev: ev.rev,
-                    message: m.wire(),
+                    message: Box::new(m.wire()),
                 },
             );
         }

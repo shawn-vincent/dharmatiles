@@ -89,8 +89,8 @@ function historyPictures(id, file, key) {
     svc: thumbs,
     now: stateNow(key),
     spec: (/** @type {string} */ text) => ({ tile: id, text, file, system, printer, plate: token('--plate') || '#D9E0EB', w: 120, h: 84 }),
-    // a text with a mistake in it is the document's to show: the picture says so; anything else is the program's failure, shown loudly
-    onError: (/** @type {any} */ e) => { if (!e.mistake) showError('Could not draw a step of the history', e); },
+    // a text with a mistake in it is the document's to show (showError leaves it to the picture); anything else is the program's failure, shown loudly
+    onError: (/** @type {any} */ e) => showError('Could not draw a step of the history', e),
   };
 }
 function pickHistory(direction, target) {

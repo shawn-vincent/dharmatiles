@@ -511,7 +511,7 @@ pub enum StreamEvent {
     /// A message was said (or its state changed).
     Message {
         rev: u64,
-        message: crate::message::MessageJson,
+        message: Box<crate::message::MessageJson>,
     },
     /// A map's tier is built at `doc_rev` (or why it could not be).
     Tier {
@@ -521,6 +521,8 @@ pub enum StreamEvent {
         error: Option<String>,
         /// The error is a mistake in the document's text (not a failure of the program).
         mistake: bool,
+        /// The code of the document's mistake (`dt::seam`) when `mistake`.
+        code: Option<String>,
     },
     /// A resource changed.
     Resource(super::resources::ResourceEvent),

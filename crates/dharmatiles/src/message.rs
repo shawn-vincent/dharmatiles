@@ -140,6 +140,13 @@ pub(crate) struct Message {
     /// An edit that mends it, when the program has one.
     pub fix: Option<FixJson>,
     pub data: Value,
+    /// The tile file it is about, as the program names it (a path in My tiles, or `lib:` in the library): the file a
+    /// pasted copy needs, which the tile's name alone does not give (a map's piece is not the document the message is in).
+    pub file: Option<String>,
+    /// What was being done, in words: the build, picture or export, with its system, printer, seed and tier.
+    pub doing: Option<String>,
+    /// The line of the file the span is on, as written, so a copy shows the mistake without the file.
+    pub source: Option<String>,
     pub open: bool,
 }
 
@@ -216,6 +223,12 @@ pub struct MessageJson {
     pub help: Option<String>,
     /// An edit that mends it (a button in the page), when the program has one.
     pub fix: Option<FixJson>,
+    /// The tile file it is about, as the program names it.
+    pub file: Option<String>,
+    /// What was being done (a build, a picture, an export, with its system, printer, seed and tier).
+    pub doing: Option<String>,
+    /// The line of the file the span is on.
+    pub source: Option<String>,
     pub data: Value,
     pub state: MessageState,
 }
@@ -311,6 +324,9 @@ impl Message {
             help: None,
             fix: None,
             data: json!({}),
+            file: None,
+            doing: None,
+            source: None,
             open: true,
         }
     }
@@ -324,6 +340,14 @@ impl Message {
     #[must_use]
     pub(crate) fn help(mut self, help: Option<&str>) -> Self {
         self.help = help.map(str::to_owned);
+        self
+    }
+
+    /// The tile file it is about and what was being done.
+    #[must_use]
+    pub(crate) fn about(mut self, file: &str, doing: impl Into<String>) -> Self {
+        self.file = Some(file.to_owned());
+        self.doing = Some(doing.into());
         self
     }
 
@@ -364,7 +388,13 @@ impl Message {
             .code(d.code)
             .help(d.help.as_deref());
         m.fix = d.fix.as_deref().map(FixJson::from);
-        if let (Some((file, line, col)), Some((_, span))) = (d.location(), d.at.as_ref()) {
+        if let (Some((file, line, col)), Some((src, span))) = (d.location(), d.at.as_ref()) {
+            m.source = src
+                .inner()
+                .lines()
+                .nth(line - 1)
+                .map(|l| l.trim_end().to_owned());
+            m.file = Some(file.clone());
             m.node = node_at(stack, &file, span.offset());
             m.span = Some(Span {
                 file,
@@ -394,6 +424,8 @@ impl Message {
             && self.text == o.text
             && self.help == o.help
             && self.fix == o.fix
+            && self.file == o.file
+            && self.doing == o.doing
     }
 
     /// The stable JSON form, as its type (the contract's `MessageJson`).
@@ -418,6 +450,9 @@ impl Message {
             text: self.text.clone(),
             help: self.help.clone(),
             fix: self.fix.clone(),
+            file: self.file.clone(),
+            doing: self.doing.clone(),
+            source: self.source.clone(),
             data: self.data.clone(),
             state: if self.open {
                 MessageState::Open
@@ -432,6 +467,24 @@ impl Message {
     #[allow(clippy::expect_used)]
     pub(crate) fn json(&self) -> Value {
         serde_json::to_value(self.wire()).expect("a message is plain data")
+    }
+
+    /// What sort of thing this is, for a pasted copy: a mistake in the tile, or the program's own failure (a bug when it
+    /// is one), with who found it.
+    fn kind_words(&self) -> String {
+        match self.kind {
+            Kind::Error => "mistake (in the tile)".to_owned(),
+            Kind::Note => "note (the tile is fine)".to_owned(),
+            Kind::Server => {
+                let d = &self.data;
+                let kind = d["kind"].as_str().unwrap_or("failure");
+                match d["origin"].as_str() {
+                    Some(o) => format!("{kind} (the program's own, found by the {o})"),
+                    None => format!("{kind} (the program's own)"),
+                }
+            }
+            k => k.as_str().to_owned(),
+        }
     }
 
     /// The one text form, for the panel's Copy, the command line and an
@@ -456,6 +509,33 @@ impl Message {
             head.push("(cleared)".to_owned());
         }
         let mut out = head.join(" ");
+        let mut field = |k: &str, v: &str| {
+            out.push_str("\n  ");
+            out.push_str(k);
+            out.push_str(": ");
+            out.push_str(v);
+        };
+        if let Some(f) = &self.file {
+            field("file", f);
+        }
+        // a piece of a map or a print list is not the document the message is in: say which document shows it
+        let stem = |f: &str| {
+            f.rsplit('/')
+                .next()
+                .unwrap_or(f)
+                .trim_end_matches(".dtile")
+                .to_owned()
+        };
+        if self
+            .file
+            .as_deref()
+            .is_some_and(|f| stem(f) != self.tile_name)
+        {
+            field("seen from", &self.tile_name);
+        }
+        if let Some(d) = &self.doing {
+            field("doing", d);
+        }
         for line in self.text.lines() {
             out.push_str("\n  ");
             out.push_str(line);
@@ -464,10 +544,44 @@ impl Message {
             out.push_str("\n  help: ");
             out.push_str(h);
         }
+        if let (Some(src), Some(s)) = (&self.source, &self.span) {
+            // the line as the command line prints it, the span marked under it
+            let gutter = format!("{:>4} | ", s.line);
+            let pad = src
+                .chars()
+                .take(s.col.saturating_sub(1))
+                .map(|c| if c == '\t' { '\t' } else { ' ' })
+                .collect::<String>();
+            let width = s
+                .len
+                .clamp(1, src.chars().count().saturating_sub(s.col - 1).max(1));
+            out.push_str(&format!(
+                "\n  {gutter}{src}\n  {}{pad}{}",
+                " ".repeat(gutter.len()),
+                "^".repeat(width)
+            ));
+        }
+        out.push_str(&format!("\n  kind: {}", self.kind_words()));
         let numbers = scalars(&self.data);
         if !numbers.is_empty() {
             out.push_str("\n  ");
             out.push_str(&numbers);
+        }
+        // a failure of the program's own carries its causes and where it happened
+        if self.kind == Kind::Server {
+            for c in self.data["causes"].as_array().into_iter().flatten() {
+                if let Some(c) = c.as_str() {
+                    out.push_str("\n  caused by: ");
+                    out.push_str(c);
+                }
+            }
+            if let Some(b) = self.data["backtrace"].as_str().filter(|b| !b.is_empty()) {
+                out.push_str("\n  backtrace:");
+                for l in b.lines() {
+                    out.push_str("\n    ");
+                    out.push_str(l);
+                }
+            }
         }
         out
     }
@@ -745,7 +859,7 @@ mod tests {
         m.at_ms = 1_794_480_100_771;
         assert_eq!(
             m.text(),
-            "10:41:40.771 note dt::steep pond tile/dirt/0 edges.dtile:13:59\n  the dirt is forced to 64.2°\n  steeper than its slope\n  help: soften the heights\n  degrees=64.25 label=here pins=2"
+            "10:41:40.771 note dt::steep pond tile/dirt/0 edges.dtile:13:59\n  the dirt is forced to 64.2°\n  steeper than its slope\n  help: soften the heights\n  kind: note (the tile is fine)\n  degrees=64.25 label=here pins=2"
         );
         m.open = false;
         assert!(m.text().lines().next().unwrap().ends_with("(cleared)"));
@@ -764,6 +878,8 @@ mod tests {
             [
                 "code",
                 "data",
+                "doing",
+                "file",
                 "fix",
                 "help",
                 "kind",
@@ -771,6 +887,7 @@ mod tests {
                 "scope",
                 "seq",
                 "severity",
+                "source",
                 "span",
                 "state",
                 "t",
@@ -876,6 +993,63 @@ mod tests {
         assert_eq!(log.query(Some("t1"), 0, |m| m.open).len(), 1);
         log.forget("t1");
         assert!(log.all().is_empty());
+    }
+
+    #[test]
+    fn the_text_of_a_mistake_and_of_a_bug_carries_what_a_paste_needs() {
+        let mut m = Message::new(
+            Kind::Error,
+            Severity::Error,
+            Scope::Server,
+            "t1",
+            "first-plate",
+            "column 1, row 1, west side, at 0.62 is not a seam",
+        )
+        .code("dt::seam")
+        .help(Some("did you mean `wsw`?"))
+        .about(
+            "/home/me/My tiles/pool.dtile",
+            "the super-low build of pool",
+        );
+        m.span = Some(Span {
+            file: "/home/me/My tiles/pool.dtile".to_owned(),
+            line: 4,
+            col: 5,
+            offset: 0,
+            len: 3,
+        });
+        m.source = Some("    line shore".to_owned());
+        let t = m.text();
+        for want in [
+            "dt::seam first-plate pool.dtile:4:5",
+            "file: /home/me/My tiles/pool.dtile",
+            "seen from: first-plate",
+            "doing: the super-low build of pool",
+            "help: did you mean `wsw`?",
+            "   4 |     line shore\n",
+            "^^^",
+            "kind: mistake (in the tile)",
+        ] {
+            assert!(t.contains(want), "{want} in\n{t}");
+        }
+        let bug = Message::new(
+            Kind::Server,
+            Severity::Error,
+            Scope::Server,
+            "t1",
+            "pool",
+            "boom",
+        )
+        .code("bug")
+        .data(json!({"origin": "page", "kind": "bug", "causes": ["inner"], "backtrace": "a\nb"}));
+        let t = bug.text();
+        for want in [
+            "kind: bug (the program's own, found by the page)",
+            "caused by: inner",
+            "backtrace:\n    a\n    b",
+        ] {
+            assert!(t.contains(want), "{want} in\n{t}");
+        }
     }
 
     #[test]

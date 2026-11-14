@@ -120,6 +120,11 @@ export function createThumbs({ host, draw, valid = () => true, limit = LIMIT, sc
   };
 }
 
+/** What a picture that could not be made says: for a tile that does not build, its code and the mistake. @param {any} e */
+export const brokenWords = (e) => (e?.mistake ? `${e.code ? `${e.code}: ` : ''}${e.message}` : e?.message || 'could not be drawn');
+/** The mark a broken picture wears: the code of the tile's mistake (nothing for a failure of the program, which is shown in the messages). @param {string} words */
+export const brokenCode = (words) => words.match(/^dt::[a-z0-9-]+/)?.[0] ?? '!';
+
 /**
  * An element for a picture: a quiet placeholder (the plate's own tone) until it arrives, the picture after.  `of` is the
  * service's `picture`/`release` pair; `onError` shows a failure where the user asked for it.
@@ -132,8 +137,8 @@ export function Thumb({ svc, spec, className = '', onError, title }) {
   useEffect(() => {
     let live = true;
     setUrl(null); setBad(null);
-    svc.picture(spec).then((u) => { if (live && u) setUrl(u); }).catch((e) => { if (live) setBad(e.message || 'could not be drawn'); onError?.(e); });
+    svc.picture(spec).then((u) => { if (live && u) setUrl(u); }).catch((e) => { if (live) setBad(brokenWords(e)); onError?.(e); });
     return () => { live = false; svc.release(spec); };
   }, [key]);
-  return html`<span class=${`thumb-pic${url ? '' : bad ? ' bad' : ' ph'} ${className}`} title=${bad ?? title}>${url ? html`<img alt="" src=${url} draggable=${false} />` : null}</span>`;
+  return html`<span class=${`thumb-pic${url ? '' : bad ? ' bad' : ' ph'} ${className}`} title=${bad ?? title}>${url ? html`<img alt="" src=${url} draggable=${false} />` : bad ? html`<span class="broken"><b>${brokenCode(bad)}</b></span>` : null}</span>`;
 }

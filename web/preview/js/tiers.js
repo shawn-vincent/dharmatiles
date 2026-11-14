@@ -16,10 +16,12 @@
 // answers, so the announcement can come first.  An announcement that comes while a post is out and names no key the
 // page knows is held until that post's answer, then matched: the order the two arrive in cannot lose one.
 
+import { TileMistake } from './server-error.js';
+
 /** Every set, to hand the stream's announcements to. */
 const sets = new Set();
 
-/** @typedef {Pick<import('./api').StreamEvent & { type: 'tier' }, 'key' | 'docRev' | 'error' | 'mistake'>} TierDone  the tier event's words (api.rs `StreamEvent`) */
+/** @typedef {Pick<import('./api').StreamEvent & { type: 'tier' }, 'key' | 'docRev' | 'error' | 'mistake' | 'code'>} TierDone  the tier event's words (api.rs `StreamEvent`) */
 
 /** The stream said a tier is done. @param {TierDone} m */
 export function tierReady(m) { for (const s of sets) s.ready(m); }
@@ -89,8 +91,8 @@ export function createTiers({ host, scope, doc = () => null }) {
       if (!w || id === undefined) return;
       wants.delete(id);
       byKey.delete(m.key);
-      // `mistake`: the text has a mistake in it (the document's to show), not a failure of the program
-      if (m.error) { w.reject(Object.assign(new Error(m.error), { mistake: !!m.mistake })); return; }
+      // `mistake`: the document has a mistake in it (its code is `m.code`), the tile's to show, not a failure of the program
+      if (m.error) { w.reject(m.mistake ? new TileMistake(m.error, m.code ?? null) : new Error(m.error)); return; }
       try {
         const buf = await host.tierResult(m.key, m.docRev);
         w.resolve(buf ? { buf, docRev: m.docRev } : null);
