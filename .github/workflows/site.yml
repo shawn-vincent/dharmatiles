@@ -8,7 +8,7 @@
 # What it does, on a release tag (v1.4.0) or by hand:
 #   module   the engine as WebAssembly (the WASM toolchain, `cargo xtask wasm`)           cached by the engine's sources
 #   posters  the pictures of the examples                                                a placeholder until phase 2
-#   pages    `cargo xtask docs`: the controls tables, anchors and error pages, checked
+#   pages    the committed docs/, checked with `cargo xtask docs --check`
 #   deploy   needs all three, checks they come from one commit, and publishes (actions/deploy-pages)
 # and, on a pull request, one quick job: `cargo xtask docs --check`, which fails on a code with no explaining
 # section, a marker naming no code, or a stale error page or anchor.
@@ -35,6 +35,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # no incremental files: they only make the cached build folders bigger
+  CARGO_INCREMENTAL: 0
 
 jobs:
   # The quick check on a pull request: nothing is built for the page, nothing is published.
@@ -44,7 +46,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      # The whole build folder, Manifold's C++ included.  rust-cache would drop the third_party crates (they sit
+      # inside the workspace but are not members), so Manifold rebuilt on every run; Cargo itself decides what is
+      # stale, so a cache from an older commit is only a head start.
+      - name: The native build, from the last run
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: native-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            native-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            native-${{ runner.os }}-
       # `docs` runs the program for the element schema, so it builds Manifold's C++ (cmake and a C++ compiler)
       - run: cmake --version
       - run: cargo xtask docs --check
@@ -83,17 +99,29 @@ jobs:
           sudo apt-get install -y cmake libc++-22-dev libc++abi-22-dev binaryen
           /usr/lib/llvm-22/bin/clang++ --version
           test -d /usr/lib/llvm-22/include/c++/v1
-      - name: The Rust build cache, keyed by the engine's sources
+      # Only reached when the engine changed, so the build folder is restored from the last engine's: keying it by
+      # this engine would never match.  Cargo decides what is stale.
+      - name: The wasm build, from the last engine
         if: steps.cached.outputs.cache-hit != 'true'
-        uses: Swatinem/rust-cache@v2
+        uses: actions/cache@v4
         with:
-          shared-key: wasm-${{ steps.engine.outputs.key }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: wasm-${{ runner.os }}-${{ steps.engine.outputs.key }}
+          restore-keys: |
+            wasm-${{ runner.os }}-
       - name: wasm-bindgen, at the version Cargo.lock holds
         if: steps.cached.outputs.cache-hit != 'true'
         run: |
           V=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[^0-9.]/, ""); print; exit }' Cargo.lock)
           test -n "$V" || { echo "no wasm-bindgen in Cargo.lock"; exit 1; }
-          cargo install wasm-bindgen-cli --version "$V" --locked
+          # the project's own release build of it, not a compile from source
+          curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$V/wasm-bindgen-$V-x86_64-unknown-linux-musl.tar.gz" | tar xz
+          sudo install "wasm-bindgen-$V-x86_64-unknown-linux-musl/wasm-bindgen" /usr/local/bin/
+          wasm-bindgen --version
       - name: cargo xtask wasm
         if: steps.cached.outputs.cache-hit != 'true'
         run: cargo xtask wasm out/site-module
@@ -134,10 +162,24 @@ jobs:
       - id: sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      # The whole build folder, Manifold's C++ included.  rust-cache would drop the third_party crates (they sit
+      # inside the workspace but are not members), so Manifold rebuilt on every run; Cargo itself decides what is
+      # stale, so a cache from an older commit is only a head start.
+      - name: The native build, from the last run
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: native-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            native-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            native-${{ runner.os }}-
       - run: cmake --version
-      # writes the controls tables, anchors and error pages, then checks that nothing dangles
-      - run: cargo xtask docs
+      # The site is the committed docs/, exactly: they were generated on the Mac, and here they are only checked
+      # (fails on a stale controls table, anchor or error page, or a code with no explaining section).
       - run: cargo xtask docs --check
       - run: |
           mkdir -p out/site-pages
