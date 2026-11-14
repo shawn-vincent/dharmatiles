@@ -427,6 +427,16 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/js/overlay-geometry.js"),
     ),
     (
+        "/js/overlay-marks.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/overlay-marks.js"),
+    ),
+    (
+        "/js/overlay-render.js",
+        "text/javascript; charset=utf-8",
+        include_bytes!("../../../../web/preview/js/overlay-render.js"),
+    ),
+    (
         "/js/view/status-line.js",
         "text/javascript; charset=utf-8",
         include_bytes!("../../../../web/preview/js/view/status-line.js"),

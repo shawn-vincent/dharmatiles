@@ -523,7 +523,7 @@ export class Card {
       if (this.status === 'ready' && t.shown && !t.shown.checked && !view.counts.errors) words.verdict = `draft detail · ${view.record?.build?.data?.cache === 'hit' ? 'cached' : `${(view.record?.build?.data?.build_s ?? 0).toFixed(2)} s`} · not yet through the gate`;
       if (view.counts.errors && has) words.counts = [counts, 'last good build shown'].filter(Boolean).join(' · ');
     }
-    paintStatusLine(this.sl, { ...words, expanded: this.model.open.value });
+    paintStatusLine(this.sl, { ...words, counts: words.counts ? `· ${words.counts}` : '', expanded: this.model.open.value });
     this.host.dataset.state = this.status;
     const busy = this.status === 'building' || this.status === 'queued';
     this.badge.dataset.kind = this.status;

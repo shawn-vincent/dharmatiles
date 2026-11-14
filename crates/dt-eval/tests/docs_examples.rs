@@ -1,9 +1,9 @@
 //! The site's examples are files the tests build.  Every `<dt-example src="examples/…">` card in `docs/` names a `.dtile` under
 //! `docs/examples/`, which the page reads for its source and this test reads to build it: an example cannot drift from the
-//! language.  A card with `expect-error="dt::code"` must fail with exactly that code; every other card must build.  Every file
+//! language.  A card with `expect-error="CODE"` must fail with exactly that code; every other card must build.  Every file
 //! under `docs/examples/` must be used by a card, and none is a library tile (the library is `library/`).
 //!
-//! The build is the draft tier (a coarse lattice), which is what the page builds while it is being edited; the gate's own
+//! The build is the low tier (grass as a carpet, rocks as hulls), which is what the page builds while it is being edited; the gate's own
 //! sweep is the library's.
 
 #![allow(clippy::unwrap_used)]
@@ -89,7 +89,7 @@ fn every_card_builds_or_gives_the_code_it_says() {
         assert!(path.is_file(), "{page}: {src} does not exist");
         let path = path.display().to_string();
         let mut opts = Options::in_source(&Files).unwrap();
-        opts.draft = true;
+        opts.low = true;
         let built = build(&Files, &path, &opts);
         match (code, built) {
             (None, Ok(b)) => assert!(
