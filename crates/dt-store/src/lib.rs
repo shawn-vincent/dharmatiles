@@ -465,7 +465,7 @@ impl Store {
         }
         self.touch(&file);
         let mut built = trim(built, want);
-        built.cache.made_by = Some(head.engine);
+        built.report.cache.made_by = Some(head.engine);
         Ok(Some(built))
     }
 
@@ -777,8 +777,8 @@ impl Store {
 /// What a build holds beside its geometry, as a [`Collect`].
 fn collected(b: &Built) -> Collect {
     Collect {
-        clouds: b.clouds.is_some(),
-        marks: b.debug.is_some(),
+        clouds: b.report.clouds.is_some(),
+        marks: b.report.debug.is_some(),
     }
 }
 
@@ -786,10 +786,10 @@ fn collected(b: &Built) -> Collect {
 /// read back is what a fresh one with those options would have made.
 fn trim(mut built: Built, want: Collect) -> Built {
     if !want.clouds {
-        built.clouds = None;
+        built.report.clouds = None;
     }
     if !want.marks {
-        built.debug = None;
+        built.report.debug = None;
     }
     built
 }
@@ -966,7 +966,7 @@ pub fn build_stored(
         Ok(Some(mut b)) => {
             // the engine label is not part of the key: it is the one asked for
             b.record.engine.clone_from(&opts.engine);
-            b.cache.state = CacheState::Hit;
+            b.report.cache.state = CacheState::Hit;
             return Ok(b);
         }
         Ok(None) => {}
@@ -977,9 +977,9 @@ pub fn build_stored(
         problems.push(e);
     }
     if !opts.clouds {
-        b.clouds = None;
+        b.report.clouds = None;
     }
-    b.cache = CacheUse {
+    b.report.cache = CacheUse {
         state: CacheState::Miss,
         made_by: None,
         problems,
@@ -1037,7 +1037,7 @@ pub fn build_tier(
     match store.get(&key, want) {
         Ok(Some(mut b)) => {
             b.record.engine.clone_from(&opts.engine);
-            b.cache.state = CacheState::Hit;
+            b.report.cache.state = CacheState::Hit;
             return Ok(b);
         }
         Ok(None) => {}
@@ -1050,7 +1050,7 @@ pub fn build_tier(
     if let Err(e) = store.put(&key, &b) {
         problems.push(e);
     }
-    b.cache = CacheUse {
+    b.report.cache = CacheUse {
         state: CacheState::Miss,
         made_by: None,
         problems,

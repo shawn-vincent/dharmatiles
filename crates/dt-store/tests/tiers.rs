@@ -56,13 +56,13 @@ fn what_each_tier_costs() {
             tier.name(),
             b.export.mesh.triangles.len()
         );
-        let mut per = vec![0usize; b.stack.len() + 1];
-        for &e in &b.entries {
-            let i = usize::from(e).min(b.stack.len());
+        let mut per = vec![0usize; b.report.stack.len() + 1];
+        for &e in &b.report.entries {
+            let i = usize::from(e).min(b.report.stack.len());
             per[i] += 1;
         }
         for (i, n) in per.iter().enumerate() {
-            let name = b.stack.get(i).map_or("(none)", |s| s.id.as_str());
+            let name = b.report.stack.get(i).map_or("(none)", |s| s.id.as_str());
             eprintln!("    {name}: {n}");
         }
     }
@@ -92,8 +92,8 @@ fn only_a_full_build_is_checked_and_a_low_one_is_lighter() {
     assert_eq!(low.audit.overhang.len(), n(&low));
     assert_eq!(tiny.audit.overhang.len(), n(&tiny));
     // the same places
-    assert_eq!(full.placed, low.placed);
-    assert_eq!(full.placed, tiny.placed);
+    assert_eq!(full.report.placed, low.report.placed);
+    assert_eq!(full.report.placed, tiny.report.placed);
 }
 
 #[test]
@@ -113,13 +113,13 @@ fn the_three_tiers_are_three_entries() {
         .unwrap()
     };
     use dt_eval::CacheState::{Hit, Miss};
-    assert_eq!(go(Tier::SuperLow).cache.state, Miss);
+    assert_eq!(go(Tier::SuperLow).report.cache.state, Miss);
     // the low it was cut from was not kept: the low is its own entry
-    assert_eq!(go(Tier::Low).cache.state, Miss);
-    assert_eq!(go(Tier::Low).cache.state, Hit);
-    assert_eq!(go(Tier::Full).cache.state, Miss);
-    assert_eq!(go(Tier::SuperLow).cache.state, Hit);
-    assert_eq!(go(Tier::Full).cache.state, Hit);
+    assert_eq!(go(Tier::Low).report.cache.state, Miss);
+    assert_eq!(go(Tier::Low).report.cache.state, Hit);
+    assert_eq!(go(Tier::Full).report.cache.state, Miss);
+    assert_eq!(go(Tier::SuperLow).report.cache.state, Hit);
+    assert_eq!(go(Tier::Full).report.cache.state, Hit);
     assert_eq!(store.stats().unwrap().entries, 3);
     let low = go(Tier::Low);
     assert!(!low.checked, "a low build read back is still not checked");

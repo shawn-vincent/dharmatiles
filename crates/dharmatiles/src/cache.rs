@@ -252,7 +252,7 @@ fn stored_preview(
         None,
         Some(store),
     )?;
-    let problems = std::mem::take(&mut b.cache.problems);
+    let problems = std::mem::take(&mut b.report.cache.problems);
     Ok((b, problems))
 }
 
@@ -272,7 +272,7 @@ fn preview_one(
             for problem in &problems {
                 tell!("warning: {path}: {problem}");
             }
-            let how = if b.cache.state == dt_eval::CacheState::Hit {
+            let how = if b.report.cache.state == dt_eval::CacheState::Hit {
                 "kept already"
             } else {
                 "built"

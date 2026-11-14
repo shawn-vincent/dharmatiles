@@ -44,16 +44,16 @@ pub struct CacheUse {
     pub problems: Vec<String>,
 }
 
-/// A finished build.
-pub struct Built {
+/// What prints: the mesh, what each face is made of, the gate's verdict and
+/// where the build came from.  Everything the program writes to a printer's
+/// file is here, and nothing else is needed to write it.
+pub struct Product {
     /// The mesh as written, with each triangle's input triangle.
     pub export: Export,
     /// Material of each written triangle.
     pub materials: Vec<Material>,
     /// The gate's findings.
     pub audit: Audit,
-    /// Stage hashes, in build order.
-    pub stages: Vec<Stage>,
     /// Where it came from.
     pub record: BuildRecord,
     /// Output path below the project's `out/`, such as
@@ -61,6 +61,19 @@ pub struct Built {
     pub out: PathBuf,
     /// Tile width and height in mm.
     pub footprint: [f64; 2],
+    /// Whether the gate checked this build.  Only a full build is: a low
+    /// ([`Options::low`]) or draft build has each face flagged by its angle
+    /// alone and its verdict is **not yet checked**.
+    pub checked: bool,
+}
+
+/// What a build says about itself beside what it makes: the editor's data
+/// (the surface it is painted from, the clouds and marks, which entry made
+/// which triangle), the determinism record (stage hashes), the timings and
+/// what the caches did.  None of it is written to a printer's file.
+pub struct Report {
+    /// Stage hashes, in build order.
+    pub stages: Vec<Stage>,
     /// The edge level the ground meets every tile edge at, mm.
     pub edge_mm: Option<f64>,
     /// Numbers the elements noted (counts), in build order.
@@ -79,11 +92,11 @@ pub struct Built {
     /// Steps a [`Cache`] gave, not built (the first ones, in plan order);
     /// their stages are missing from `stage_secs`.
     pub reused: usize,
-    /// The masonry is brick (a `brick` or `regular-brick` wall): painted
-    /// in reds, not stone greys.
-    pub brick: bool,
+    /// How the build is to be painted beyond its materials.  The document's
+    /// words behind it are read by `dt_doc::schema`, not here.
+    pub look: dt_kit::Look,
     /// The stack entry each written triangle came from (an index into
-    /// [`Built::stack`], which lists the connector last; [`NO_ENTRY`] none).
+    /// [`Report::stack`], which lists the connector last; [`NO_ENTRY`] none).
     /// The lifted ground goes to the surface entry that painted it.
     pub entries: Vec<u16>,
     /// Which of its entry's solids each written triangle came from (the
@@ -91,7 +104,7 @@ pub struct Built {
     pub pieces: Vec<u16>,
     /// The stack this mesh was built from: each entry by who it is, the
     /// connector last when the tile has a base.  An entry number in
-    /// [`Built::entries`] is a place in this list.
+    /// [`Report::entries`] is a place in this list.
     pub stack: Vec<doc::Named>,
     /// The clouds ([`Options::clouds`]): sheets and columns only.
     pub clouds: Option<dt_kit::debug::Debug>,
@@ -100,13 +113,32 @@ pub struct Built {
     /// Where everything was placed (rocks, trees, flowers), before any
     /// detail was drawn: the same in every tier of a build.
     pub placed: Vec<dt_kit::Placement>,
-    /// Whether the gate checked this build.  Only a full build is: a low
-    /// ([`Options::low`]) or draft build has each face flagged by its angle
-    /// alone and its verdict is **not yet checked**.
-    pub checked: bool,
     /// Whether the disk cache was used for this build, and what
-    /// went wrong with it, if anything .
+    /// went wrong with it, if anything.
     pub cache: CacheUse,
+}
+
+/// A finished build: the [`Product`] and the [`Report`] beside it.  A build
+/// reads as its product (`built.export`, `built.audit`: the product's fields
+/// are reached through it); the report is `built.report`.
+pub struct Built {
+    /// What prints.
+    pub product: Product,
+    /// What the build says about itself.
+    pub report: Report,
+}
+
+impl std::ops::Deref for Built {
+    type Target = Product;
+    fn deref(&self) -> &Product {
+        &self.product
+    }
+}
+
+impl std::ops::DerefMut for Built {
+    fn deref_mut(&mut self) -> &mut Product {
+        &mut self.product
+    }
 }
 
 /// No stack entry made this triangle.
@@ -145,9 +177,9 @@ impl Built {
     /// `overhang`, no red or orange (the viewer's overhang toggle).
     #[must_use]
     pub fn colours_with(&self, palette: &dt_kit::Palette, overhang: bool) -> Vec<[f32; 3]> {
-        let surface = self.surface.as_ref().map(|(g, stone)| {
+        let surface = self.report.surface.as_ref().map(|(g, stone)| {
             let p = dt_kit::SurfacePaint::new(g, stone);
-            match &self.covered {
+            match &self.report.covered {
                 Some(c) => p.covered(c),
                 None => p,
             }
@@ -165,7 +197,7 @@ impl Built {
             band,
             surface.as_ref(),
             palette,
-            self.brick,
+            self.report.look.brick,
         )
     }
 }
@@ -695,19 +727,17 @@ impl<'a> Plan<'a> {
         } = ran;
         let t_stage = crate::clock::Stopwatch::start();
         progress.begin(progress::UNION, "joining the parts");
-        // the masonry is brick when every wall and floor is, and there is some
-        let masonry: Vec<bool> = tile
-            .stack
-            .iter()
-            .filter(|e| dt_doc::schema::element(&e.what.value).is_some_and(|l| l.masonry))
-            .map(|e| {
-                e.controls.iter().any(|c| {
-                    c.name == "style"
-                        && matches!(&c.value, dt_elements::Value::Word(w) if w.contains("brick"))
-                })
-            })
-            .collect();
-        let brick = !masonry.is_empty() && masonry.iter().all(|&b| b);
+        // how the build is painted beyond its materials: the schema reads the
+        // document's words (brick masonry), this only carries the answer
+        let look = dt_kit::Look {
+            brick: dt_doc::schema::masonry_is_brick(tile.stack.iter().map(|e| {
+                let style = e.controls.iter().find_map(|c| match &c.value {
+                    dt_elements::Value::Word(w) if c.name == "style" => Some(w.as_str()),
+                    _ => None,
+                });
+                (e.what.value.as_str(), style)
+            })),
+        };
         let (mesh, mats) = if opts.draft || opts.low {
             scene.soup_since(0)
         } else {
@@ -763,47 +793,51 @@ impl<'a> Plan<'a> {
             printer: opts.printer.name.clone(),
         };
         let built = Built {
-            export,
-            materials,
-            audit,
-            stages: std::iter::once(self.plan_stage.clone())
-                .chain(scene.stages().iter().cloned())
-                .collect(),
-            record,
-            out: out_path(path, &opts.target()),
-            footprint,
-            edge_mm: self.solved.edge_mm,
-            notes: scene.notes().to_vec(),
-            left_out: {
-                let mut all = scene.left_outs().to_vec();
-                for b in self.solved.bodies.iter().filter(|b| b.left_out > 0) {
-                    match all.iter_mut().find(|(e, _)| *e == b.element) {
-                        Some((_, n)) => *n += b.left_out,
-                        None => all.push((b.element.clone(), b.left_out)),
-                    }
-                }
-                all
+            product: Product {
+                export,
+                materials,
+                audit,
+                record,
+                out: out_path(path, &opts.target()),
+                footprint,
+                checked: !(opts.draft || opts.low),
             },
-            surface: scene.surface(),
-            covered: scene
-                .support()
-                .zip(scene.bedded())
-                .map(|(g, bits)| dt_kit::Mask {
-                    nx: g.nx,
-                    ny: g.ny,
-                    bits,
-                }),
-            stage_secs,
-            reused,
-            brick,
-            entries,
-            pieces,
-            stack: tile.names(&opts.system),
-            clouds: opts.clouds.then(|| cloud_part(scene.collected())).flatten(),
-            debug: opts.debug.then(|| mark_part(scene.collected())).flatten(),
-            placed: scene.placed().to_vec(),
-            checked: !(opts.draft || opts.low),
-            cache: CacheUse::default(),
+            report: Report {
+                stages: std::iter::once(self.plan_stage.clone())
+                    .chain(scene.stages().iter().cloned())
+                    .collect(),
+                edge_mm: self.solved.edge_mm,
+                notes: scene.notes().to_vec(),
+                left_out: {
+                    let mut all = scene.left_outs().to_vec();
+                    for b in self.solved.bodies.iter().filter(|b| b.left_out > 0) {
+                        match all.iter_mut().find(|(e, _)| *e == b.element) {
+                            Some((_, n)) => *n += b.left_out,
+                            None => all.push((b.element.clone(), b.left_out)),
+                        }
+                    }
+                    all
+                },
+                surface: scene.surface(),
+                covered: scene
+                    .support()
+                    .zip(scene.bedded())
+                    .map(|(g, bits)| dt_kit::Mask {
+                        nx: g.nx,
+                        ny: g.ny,
+                        bits,
+                    }),
+                stage_secs,
+                reused,
+                look,
+                entries,
+                pieces,
+                stack: tile.names(&opts.system),
+                clouds: opts.clouds.then(|| cloud_part(scene.collected())).flatten(),
+                debug: opts.debug.then(|| mark_part(scene.collected())).flatten(),
+                placed: scene.placed().to_vec(),
+                cache: CacheUse::default(),
+            },
         };
         // a low build keeps to its budget: a cliff's carving is more than a
         // map can show

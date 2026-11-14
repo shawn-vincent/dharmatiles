@@ -371,7 +371,8 @@ fn the_ledges_and_the_shattered_controls_still_parse() {
 }
 
 fn note(b: &Built, name: &str) -> f64 {
-    b.notes
+    b.report
+        .notes
         .iter()
         .find(|(k, _)| k == name)
         .map(|(_, v)| *v)

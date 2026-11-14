@@ -34,26 +34,41 @@ fn same(a: &Built, b: &Built) {
     assert_eq!(a.export, b.export);
     assert_eq!(a.materials, b.materials);
     assert_eq!(a.audit, b.audit);
-    assert_eq!(a.stages, b.stages);
+    assert_eq!(a.report.stages, b.report.stages);
     assert_eq!(a.record.document, b.record.document);
     assert_eq!(a.record.document_hash, b.record.document_hash);
     assert_eq!(a.record.engine, b.record.engine);
     assert_eq!(a.out, b.out);
     assert_eq!(a.footprint, b.footprint);
-    assert_eq!(a.notes, b.notes);
-    assert_eq!(a.left_out, b.left_out);
+    assert_eq!(a.report.notes, b.report.notes);
+    assert_eq!(a.report.left_out, b.report.left_out);
     assert_eq!(
-        a.stage_secs.iter().map(|s| &s.0).collect::<Vec<_>>(),
-        b.stage_secs.iter().map(|s| &s.0).collect::<Vec<_>>()
+        a.report.stage_secs.iter().map(|s| &s.0).collect::<Vec<_>>(),
+        b.report.stage_secs.iter().map(|s| &s.0).collect::<Vec<_>>()
     );
-    assert_eq!(a.entries, b.entries);
-    assert_eq!(a.pieces, b.pieces);
-    assert_eq!(a.brick, b.brick);
-    assert_eq!(format!("{:?}", a.stack), format!("{:?}", b.stack));
-    assert_eq!(format!("{:?}", a.surface), format!("{:?}", b.surface));
-    assert_eq!(format!("{:?}", a.covered), format!("{:?}", b.covered));
-    assert_eq!(format!("{:?}", a.clouds), format!("{:?}", b.clouds));
-    assert_eq!(format!("{:?}", a.debug), format!("{:?}", b.debug));
+    assert_eq!(a.report.entries, b.report.entries);
+    assert_eq!(a.report.pieces, b.report.pieces);
+    assert_eq!(a.report.look, b.report.look);
+    assert_eq!(
+        format!("{:?}", a.report.stack),
+        format!("{:?}", b.report.stack)
+    );
+    assert_eq!(
+        format!("{:?}", a.report.surface),
+        format!("{:?}", b.report.surface)
+    );
+    assert_eq!(
+        format!("{:?}", a.report.covered),
+        format!("{:?}", b.report.covered)
+    );
+    assert_eq!(
+        format!("{:?}", a.report.clouds),
+        format!("{:?}", b.report.clouds)
+    );
+    assert_eq!(
+        format!("{:?}", a.report.debug),
+        format!("{:?}", b.report.debug)
+    );
     assert_eq!(a.colours(), b.colours());
     assert_eq!(
         dt_print::stl(&a.export.mesh, &a.record),
@@ -68,15 +83,15 @@ fn a_hit_is_the_same_bytes_as_a_fresh_build() {
     let opts = Options::default();
     let fresh = build(&Library, FLAT, &opts).unwrap();
     let first = stored(&store, &Library, FLAT, &opts);
-    assert_eq!(first.cache.state, CacheState::Miss);
-    assert!(first.cache.problems.is_empty());
+    assert_eq!(first.report.cache.state, CacheState::Miss);
+    assert!(first.report.cache.problems.is_empty());
     same(&first, &fresh);
     let second = stored(&store, &Library, FLAT, &opts);
-    assert_eq!(second.cache.state, CacheState::Hit);
-    assert_eq!(second.cache.made_by.as_deref(), Some("test-engine"));
+    assert_eq!(second.report.cache.state, CacheState::Hit);
+    assert_eq!(second.report.cache.made_by.as_deref(), Some("test-engine"));
     same(&second, &fresh);
     assert_eq!(
-        second.stage_secs, first.stage_secs,
+        second.report.stage_secs, first.report.stage_secs,
         "a hit keeps the times it was made in"
     );
     // the engine label of the record is the one asked for, not the entry's
@@ -85,7 +100,7 @@ fn a_hit_is_the_same_bytes_as_a_fresh_build() {
         ..Options::default()
     };
     let third = stored(&store, &Library, FLAT, &relabelled);
-    assert_eq!(third.cache.state, CacheState::Hit);
+    assert_eq!(third.report.cache.state, CacheState::Hit);
     assert_eq!(third.record.engine, "another-label");
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -118,17 +133,21 @@ fn clouds_marks_surface_and_stack_come_back_exactly() {
         ..Options::default()
     };
     let fresh = build(&m, "probe.dtile", &opts).unwrap();
-    assert!(fresh.debug.is_some() && fresh.clouds.is_some() && fresh.surface.is_some());
+    assert!(
+        fresh.report.debug.is_some()
+            && fresh.report.clouds.is_some()
+            && fresh.report.surface.is_some()
+    );
     let first = stored(&store, &m, "probe.dtile", &opts);
     same(&first, &fresh);
     let again = stored(&store, &m, "probe.dtile", &opts);
-    assert_eq!(again.cache.state, CacheState::Hit);
+    assert_eq!(again.report.cache.state, CacheState::Hit);
     same(&again, &fresh);
     // what was not asked for is left off, as a fresh build leaves it
     let plain = Options::default();
     let bare = stored(&store, &m, "probe.dtile", &plain);
-    assert_eq!(bare.cache.state, CacheState::Hit);
-    assert!(bare.clouds.is_none() && bare.debug.is_none());
+    assert_eq!(bare.report.cache.state, CacheState::Hit);
+    assert!(bare.report.clouds.is_none() && bare.report.debug.is_none());
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -139,21 +158,25 @@ fn an_entry_without_the_marks_does_not_serve_a_build_that_wants_them() {
     let m = common::memory(&[("probe.dtile", PROBE)]);
     let plain = Options::default();
     let first = stored(&store, &m, "probe.dtile", &plain);
-    assert_eq!(first.cache.state, CacheState::Miss);
+    assert_eq!(first.report.cache.state, CacheState::Miss);
     let marks = Options {
         debug: true,
         ..Options::default()
     };
     let wants = stored(&store, &m, "probe.dtile", &marks);
-    assert_eq!(wants.cache.state, CacheState::Miss, "marks were not kept");
-    assert!(wants.debug.is_some());
+    assert_eq!(
+        wants.report.cache.state,
+        CacheState::Miss,
+        "marks were not kept"
+    );
+    assert!(wants.report.debug.is_some());
     // the entry now holds them, and serves both
     assert_eq!(
-        stored(&store, &m, "probe.dtile", &marks).cache.state,
+        stored(&store, &m, "probe.dtile", &marks).report.cache.state,
         CacheState::Hit
     );
     assert_eq!(
-        stored(&store, &m, "probe.dtile", &plain).cache.state,
+        stored(&store, &m, "probe.dtile", &plain).report.cache.state,
         CacheState::Hit
     );
     std::fs::remove_dir_all(&dir).unwrap();
@@ -276,7 +299,7 @@ fn a_changed_part_is_built_again_and_the_old_one_is_still_the_previous() {
     let store = Store::new(&dir, "test-engine");
     let opts = Options::default();
     let a = stored(&store, &with_part(PART), "mem/t.dtile", &opts);
-    assert_eq!(a.cache.state, CacheState::Miss);
+    assert_eq!(a.report.cache.state, CacheState::Miss);
     let edited = with_part(&PART.replace("3.4dmm", "3.6dmm"));
     let key = key_of(&store, &edited, "mem/t.dtile", &opts);
     assert!(!store.contains(&key));
@@ -287,7 +310,7 @@ fn a_changed_part_is_built_again_and_the_old_one_is_still_the_previous() {
     same(&old.built, &a);
     assert_eq!(old.made_by, "test-engine");
     let b = stored(&store, &edited, "mem/t.dtile", &opts);
-    assert_eq!(b.cache.state, CacheState::Miss);
+    assert_eq!(b.report.cache.state, CacheState::Miss);
     assert!(store.contains(&key));
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -308,30 +331,35 @@ fn a_damaged_entry_is_reported_removed_and_built_again() {
     bytes[at] ^= 0x55;
     std::fs::write(file, &bytes).unwrap();
     let again = stored(&store, &Library, FLAT, &opts);
-    assert_eq!(again.cache.state, CacheState::Miss);
-    assert_eq!(again.cache.problems.len(), 1, "{:?}", again.cache.problems);
-    assert!(
-        again.cache.problems[0].contains("damaged"),
+    assert_eq!(again.report.cache.state, CacheState::Miss);
+    assert_eq!(
+        again.report.cache.problems.len(),
+        1,
         "{:?}",
-        again.cache.problems
+        again.report.cache.problems
+    );
+    assert!(
+        again.report.cache.problems[0].contains("damaged"),
+        "{:?}",
+        again.report.cache.problems
     );
     // the build that replaced it is real
     same(&again, &fresh);
     // and the replacement is whole
     let third = stored(&store, &Library, FLAT, &opts);
-    assert_eq!(third.cache.state, CacheState::Hit);
-    assert!(third.cache.problems.is_empty());
+    assert_eq!(third.report.cache.state, CacheState::Hit);
+    assert!(third.report.cache.problems.is_empty());
     same(&third, &fresh);
     // a truncated entry
     let bytes = std::fs::read(file).unwrap();
     std::fs::write(file, &bytes[..bytes.len() / 3]).unwrap();
     let fourth = stored(&store, &Library, FLAT, &opts);
-    assert_eq!(fourth.cache.problems.len(), 1);
+    assert_eq!(fourth.report.cache.problems.len(), 1);
     same(&fourth, &fresh);
     // one that is not an entry at all
     std::fs::write(file, b"not a cache entry").unwrap();
     let fifth = stored(&store, &Library, FLAT, &opts);
-    assert_eq!(fifth.cache.problems.len(), 1);
+    assert_eq!(fifth.report.cache.problems.len(), 1);
     same(&fifth, &fresh);
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -345,12 +373,17 @@ fn a_cache_that_cannot_be_written_is_told_and_the_build_stands() {
     let opts = Options::default();
     let fresh = build(&Library, FLAT, &opts).unwrap();
     let b = stored(&store, &Library, FLAT, &opts);
-    assert_eq!(b.cache.state, CacheState::Miss);
-    assert_eq!(b.cache.problems.len(), 2, "{:?}", b.cache.problems);
-    assert!(
-        b.cache.problems[0].contains("cannot"),
+    assert_eq!(b.report.cache.state, CacheState::Miss);
+    assert_eq!(
+        b.report.cache.problems.len(),
+        2,
         "{:?}",
-        b.cache.problems
+        b.report.cache.problems
+    );
+    assert!(
+        b.report.cache.problems[0].contains("cannot"),
+        "{:?}",
+        b.report.cache.problems
     );
     same(&b, &fresh);
     std::fs::remove_file(&dir).unwrap();
@@ -397,7 +430,7 @@ fn the_folder_stays_under_its_limit_and_the_least_recently_used_go_first() {
         ..Options::default()
     };
     assert_eq!(
-        stored(&store, &Library, FLAT, &o2).cache.state,
+        stored(&store, &Library, FLAT, &o2).report.cache.state,
         CacheState::Hit
     );
     std::thread::sleep(std::time::Duration::from_millis(30));
@@ -430,11 +463,15 @@ fn writers_in_a_crowd_leave_whole_entries() {
         hs.into_iter().map(|h| h.join().unwrap()).collect()
     });
     for b in &built {
-        assert!(b.cache.problems.is_empty(), "{:?}", b.cache.problems);
+        assert!(
+            b.report.cache.problems.is_empty(),
+            "{:?}",
+            b.report.cache.problems
+        );
         same(b, &fresh);
     }
     let after = stored(&store, &Library, FLAT, &opts);
-    assert_eq!(after.cache.state, CacheState::Hit);
+    assert_eq!(after.report.cache.state, CacheState::Hit);
     same(&after, &fresh);
     let st = store.stats().unwrap();
     assert_eq!(st.entries, 1, "one key, one entry");
@@ -462,21 +499,21 @@ fn the_draft_tier_has_its_own_entries() {
         ..Options::default()
     };
     let d = stored(&store, &Library, FLAT, &draft);
-    assert_eq!(d.cache.state, CacheState::Miss);
+    assert_eq!(d.report.cache.state, CacheState::Miss);
     // a full build is not answered with a preview
     let f = stored(&store, &Library, FLAT, &full);
-    assert_eq!(f.cache.state, CacheState::Miss);
+    assert_eq!(f.report.cache.state, CacheState::Miss);
     assert_ne!(
         f.export.mesh.content_hash(),
         d.export.mesh.content_hash(),
         "the draft is a different mesh"
     );
     assert_eq!(
-        stored(&store, &Library, FLAT, &draft).cache.state,
+        stored(&store, &Library, FLAT, &draft).report.cache.state,
         CacheState::Hit
     );
     assert_eq!(
-        stored(&store, &Library, FLAT, &full).cache.state,
+        stored(&store, &Library, FLAT, &full).report.cache.state,
         CacheState::Hit
     );
     assert_eq!(store.stats().unwrap().entries, 2);

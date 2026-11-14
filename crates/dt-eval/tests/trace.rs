@@ -35,11 +35,11 @@ fn every_triangle_has_its_entry() {
     )
     .unwrap();
     let n = b.materials.len();
-    assert_eq!(b.entries.len(), n);
-    assert_eq!(b.pieces.len(), n);
+    assert_eq!(b.report.entries.len(), n);
+    assert_eq!(b.report.pieces.len(), n);
     let mut count: BTreeMap<u16, usize> = BTreeMap::new();
     let mut rocks: BTreeMap<u16, usize> = BTreeMap::new();
-    for (e, p) in b.entries.iter().zip(&b.pieces) {
+    for (e, p) in b.report.entries.iter().zip(&b.report.pieces) {
         *count.entry(*e).or_default() += 1;
         if *e == 1 {
             *rocks.entry(*p).or_default() += 1;
@@ -77,9 +77,9 @@ fn a_draft_is_quick_and_still_traced() {
             f.materials.len(),
             d.materials.len()
         );
-        assert_eq!(d.entries.len(), d.materials.len());
+        assert_eq!(d.report.entries.len(), d.materials.len());
         assert!(
-            !d.entries.contains(&NO_ENTRY),
+            !d.report.entries.contains(&NO_ENTRY),
             "every draft triangle is traced"
         );
     }

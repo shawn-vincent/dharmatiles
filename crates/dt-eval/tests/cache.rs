@@ -10,7 +10,11 @@ use dt_eval::{Built, Cache, Library, Memory, Options, Progress, Source, build, b
 
 fn fingerprint(b: &Built) -> (Vec<(String, u64)>, u64) {
     (
-        b.stages.iter().map(|s| (s.name.clone(), s.hash)).collect(),
+        b.report
+            .stages
+            .iter()
+            .map(|s| (s.name.clone(), s.hash))
+            .collect(),
         b.export.mesh.content_hash(),
     )
 }
@@ -33,12 +37,12 @@ fn edit(tile: &str, from: &str, to: &str, opts: &Options) -> usize {
     let src = |t: &str| Memory(BTreeMap::from([(path.to_owned(), t.to_owned())]));
     let cache = Cache::new();
     let first = build_cached(&src(&text), path, opts, &Progress::none(), Some(&cache)).unwrap();
-    assert_eq!(first.reused, 0, "an empty cache gives nothing");
+    assert_eq!(first.report.reused, 0, "an empty cache gives nothing");
     assert!(!cache.is_empty());
     let steps = cache.len();
     // the same text again: every step comes from the cache
     let again = build_cached(&src(&text), path, opts, &Progress::none(), Some(&cache)).unwrap();
-    assert_eq!(again.reused, steps);
+    assert_eq!(again.report.reused, steps);
     assert_eq!(fingerprint(&again), fingerprint(&first));
     let edited = text.replace(from, to);
     let cached = build_cached(&src(&edited), path, opts, &Progress::none(), Some(&cache)).unwrap();
@@ -49,7 +53,7 @@ fn edit(tile: &str, from: &str, to: &str, opts: &Options) -> usize {
         "{tile}: `{to}` from the cache differs from a fresh build"
     );
     assert_eq!(cache.len(), steps);
-    cached.reused
+    cached.report.reused
 }
 
 /// Water, banks and two scatters: changing the scatter in the water keeps
@@ -203,15 +207,23 @@ fn the_debug_layer_is_not_in_the_key_but_a_scene_without_it_is_not_given_to_a_bu
     };
     let cache = Cache::new();
     let none = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
-    assert!(none.debug.is_none() && none.clouds.is_none());
+    assert!(none.report.debug.is_none() && none.report.clouds.is_none());
     let steps = cache.len();
     // the same build again: every step kept
     let again = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
-    assert_eq!(again.reused, steps);
+    assert_eq!(again.report.reused, steps);
     // asking for the layer: the scenes kept have none, so none is given, and the marks are there
     let with = build_cached(&src, path, &layer, &Progress::none(), Some(&cache)).unwrap();
-    assert_eq!(with.reused, 0, "a scene without the marks cannot give them");
-    assert!(with.debug.as_ref().is_some_and(|d| !d.dots.is_empty()));
+    assert_eq!(
+        with.report.reused, 0,
+        "a scene without the marks cannot give them"
+    );
+    assert!(
+        with.report
+            .debug
+            .as_ref()
+            .is_some_and(|d| !d.dots.is_empty())
+    );
     assert_eq!(
         fingerprint(&with),
         fingerprint(&none),
@@ -219,10 +231,13 @@ fn the_debug_layer_is_not_in_the_key_but_a_scene_without_it_is_not_given_to_a_bu
     );
     // the layer off again: the scenes that have it serve every step
     let off = build_cached(&src, path, &plain, &Progress::none(), Some(&cache)).unwrap();
-    assert_eq!(off.reused, steps, "toggling the layer off rebuilds nothing");
-    assert!(off.debug.is_none() && off.clouds.is_none());
+    assert_eq!(
+        off.report.reused, steps,
+        "toggling the layer off rebuilds nothing"
+    );
+    assert!(off.report.debug.is_none() && off.report.clouds.is_none());
     // and on again, from the same scenes
     let on = build_cached(&src, path, &layer, &Progress::none(), Some(&cache)).unwrap();
-    assert_eq!(on.reused, steps, "the scenes still have the marks");
-    assert!(on.debug.as_ref().is_some_and(|d| !d.dots.is_empty()));
+    assert_eq!(on.report.reused, steps, "the scenes still have the marks");
+    assert!(on.report.debug.as_ref().is_some_and(|d| !d.dots.is_empty()));
 }

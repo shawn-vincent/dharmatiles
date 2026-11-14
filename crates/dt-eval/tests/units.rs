@@ -100,7 +100,8 @@ fn rows_and_columns_start_at_the_north_west() {
 }
 
 fn hashes(b: &Built) -> String {
-    b.stages
+    b.report
+        .stages
         .iter()
         .map(|s| format!("{:016x}  {}\n", s.hash, s.name))
         .collect()
@@ -121,7 +122,7 @@ fn same_mesh(zero: &str, one: &str) {
     )
     .unwrap_or_else(|e| panic!("{zero}\n{e:#?}"));
     let b = built(one, &preview());
-    assert!(!a.stages.is_empty());
+    assert!(!a.report.stages.is_empty());
     assert_eq!(hashes(&a), hashes(&b), "{zero}\n{one}");
 }
 

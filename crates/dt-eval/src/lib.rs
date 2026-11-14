@@ -37,7 +37,8 @@ pub mod unwritten;
 use std::path::{Path, PathBuf};
 
 pub use build::{
-    Built, CacheState, CacheUse, NO_ENTRY, build, build_cached, build_checked, build_with,
+    Built, CacheState, CacheUse, NO_ENTRY, Product, Report, build, build_cached, build_checked,
+    build_with,
 };
 pub use cache::Cache;
 pub use check::{Checked, check};

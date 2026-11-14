@@ -198,8 +198,8 @@ pub fn from_built(
         &b.export.mesh,
         &painted,
         &clean,
-        &b.entries,
-        &b.pieces,
+        &b.report.entries,
+        &b.report.pieces,
         &meta,
     )
 }
@@ -241,8 +241,8 @@ pub fn for_map(
 /// works nothing out of the mesh itself.
 #[must_use]
 pub fn stack_json(b: &Built) -> Value {
-    let mut z: Vec<Option<[f64; 2]>> = vec![None; b.stack.len()];
-    for (t, &e) in b.export.mesh.triangles.iter().zip(&b.entries) {
+    let mut z: Vec<Option<[f64; 2]>> = vec![None; b.report.stack.len()];
+    for (t, &e) in b.export.mesh.triangles.iter().zip(&b.report.entries) {
         let Some(slot) = z.get_mut(usize::from(e)) else {
             continue; // NO_ENTRY, or an entry the stack does not have
         };
@@ -252,7 +252,8 @@ pub fn stack_json(b: &Built) -> Value {
         }
     }
     Value::Array(
-        b.stack
+        b.report
+            .stack
             .iter()
             .enumerate()
             .map(|(index, n)| {
@@ -294,7 +295,7 @@ fn every(n: usize, budget: usize) -> usize {
 #[must_use]
 pub fn debug_json(b: &Built) -> Value {
     use std::collections::BTreeMap;
-    let Some(d) = &b.debug else {
+    let Some(d) = &b.report.debug else {
         return Value::Null;
     };
     let mut thinned = false;
@@ -339,7 +340,7 @@ pub fn debug_json(b: &Built) -> Value {
 #[must_use]
 pub fn clouds_json(b: &Built) -> Value {
     use std::collections::BTreeMap;
-    let Some(d) = &b.clouds else {
+    let Some(d) = &b.report.clouds else {
         return Value::Null;
     };
     let k_col = every(d.columns.len(), DEBUG_COLUMNS);
@@ -445,8 +446,8 @@ pub fn from_draft(
         &mesh,
         &pick(&painted),
         &pick(&clean),
-        &pick16("entries", &b.entries)?,
-        &pick16("pieces", &b.pieces)?,
+        &pick16("entries", &b.report.entries)?,
+        &pick16("pieces", &b.report.pieces)?,
         &meta,
     )
 }
@@ -645,8 +646,8 @@ mod tests {
                 &b.export.mesh,
                 &painted,
                 &clean,
-                &b.entries,
-                &b.pieces,
+                &b.report.entries,
+                &b.report.pieces,
                 &bytes[8..8 + jl],
             );
             let first = bytes.iter().zip(&want).position(|(a, b)| a != b);

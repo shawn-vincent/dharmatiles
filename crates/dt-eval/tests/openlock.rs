@@ -62,7 +62,7 @@ fn passes(path: &str, system: &str) {
         assert!((ratio - RATIO).abs() < 1e-12, "{path}: {ratio}");
     }
     // the edge level is a photocopy too
-    if let Some(e) = b.edge_mm {
+    if let Some(e) = b.report.edge_mm {
         let d = 3.4;
         assert!((e / d - RATIO).abs() < 1e-9, "{path}: edge {e} against {d}");
     }

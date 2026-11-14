@@ -61,7 +61,11 @@ fn check_plans_the_stack_in_the_order_it_is_written_and_build_builds_that_plan()
     // build agrees with check about the stack it built, and the gate holds
     let b = build(&mem(&text), "t.dtile", &opts).unwrap();
     assert_eq!(
-        b.stack.iter().map(|n| n.label.clone()).collect::<Vec<_>>(),
+        b.report
+            .stack
+            .iter()
+            .map(|n| n.label.clone())
+            .collect::<Vec<_>>(),
         t.names(&opts.system)
             .iter()
             .map(|n| n.label.clone())
@@ -69,7 +73,7 @@ fn check_plans_the_stack_in_the_order_it_is_written_and_build_builds_that_plan()
     );
     assert!(b.audit.failures(&opts.printer).is_empty(), "{:?}", b.audit);
     // and every triangle belongs to a listed entry
-    assert_eq!(b.entries.len(), b.materials.len());
+    assert_eq!(b.report.entries.len(), b.materials.len());
 }
 
 #[test]

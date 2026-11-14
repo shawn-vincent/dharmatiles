@@ -374,8 +374,8 @@ fn a_mixed_scatter_builds_and_is_deterministic() {
         let b = build(&src, "t.dtile", &legacy()).unwrap();
         assert_eq!(a.materials, b.materials, "{body}");
         assert_eq!(
-            format!("{:?}", a.stages),
-            format!("{:?}", b.stages),
+            format!("{:?}", a.report.stages),
+            format!("{:?}", b.report.stages),
             "{body}"
         );
     }
@@ -422,9 +422,9 @@ fn a_seed_wobbles_the_lines_again() {
             seed: Some(seed),
             ..legacy()
         };
-        build(&src, "t.dtile", &o).unwrap().stages
+        build(&src, "t.dtile", &o).unwrap().report.stages
     };
-    let plain = build(&src, "t.dtile", &legacy()).unwrap().stages;
+    let plain = build(&src, "t.dtile", &legacy()).unwrap().report.stages;
     // the tile's own seed again changes nothing; another moves the line
     assert_eq!(hash(3), plain);
     assert_ne!(hash(4), plain);
@@ -526,6 +526,7 @@ fn a_lines_width_makes_a_strip_that_a_surface_follows() {
     let hash = |t: &str| {
         build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
             .unwrap()
+            .report
             .stages
     };
     assert_ne!(hash(&text), hash(&wide));
@@ -572,6 +573,7 @@ fn a_scatter_along_a_line_reaches_half_its_width_unless_told() {
     let hash = |t: &str| {
         build(&mem(&[("t.dtile", t)]), "t.dtile", &legacy())
             .unwrap()
+            .report
             .stages
     };
     // reach=\"10dmm\" is half the width: the same tile
@@ -602,7 +604,7 @@ fn a_scatter_holds_a_definition_of_one_thing() {
     assert!(a.materials.contains(&dt_kit::Material::Rock) || a.materials.len() > 1);
     // the parameter reaches the rock: a different size is a different tile
     let wide = text("5dmm").replace("\"7dmm .. 10dmm\"", "\"12dmm .. 14dmm\"");
-    assert_ne!(a.stages, build_of(&wide).unwrap().stages);
+    assert_ne!(a.report.stages, build_of(&wide).unwrap().report.stages);
 }
 
 #[test]

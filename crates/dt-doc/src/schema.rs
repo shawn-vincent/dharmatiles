@@ -794,6 +794,24 @@ impl Element {
     }
 }
 
+/// Whether a tile's masonry is brick: there is some, and every wall or floor
+/// in it (an element whose schema is `masonry`) has a `style` word that says
+/// brick.  `entries` is each stack entry's element name and its `style` word,
+/// if it wrote one.  This is the one place the word is read: a build only
+/// carries the answer (`dt_kit::Look`).
+pub fn masonry_is_brick<'a>(entries: impl IntoIterator<Item = (&'a str, Option<&'a str>)>) -> bool {
+    let mut any = false;
+    for (name, style) in entries {
+        if element(name).is_some_and(|l| l.masonry) {
+            if !style.is_some_and(|w| w.contains("brick")) {
+                return false;
+            }
+            any = true;
+        }
+    }
+    any
+}
+
 /// Element up a built-in element by name.
 #[must_use]
 pub fn element(name: &str) -> Option<&'static Element> {

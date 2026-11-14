@@ -43,7 +43,11 @@ fn tracked(path: &str, threads: usize) -> (Built, Vec<Status>) {
 
 fn fingerprint(b: &Built) -> (Vec<(String, u64)>, u64) {
     (
-        b.stages.iter().map(|s| (s.name.clone(), s.hash)).collect(),
+        b.report
+            .stages
+            .iter()
+            .map(|s| (s.name.clone(), s.hash))
+            .collect(),
         b.export.mesh.content_hash(),
     )
 }
@@ -73,8 +77,14 @@ fn progress_climbs_to_100_percent_and_changes_nothing() {
         );
         assert!(v.iter().rev().skip(1).all(|s| s.fraction < 1.0), "{path}");
         // every stage reported its own time
-        assert!(b.stage_secs.iter().any(|(k, _)| k == "union"), "{path}");
-        assert!(b.stage_secs.iter().any(|(k, _)| k == "audit"), "{path}");
+        assert!(
+            b.report.stage_secs.iter().any(|(k, _)| k == "union"),
+            "{path}"
+        );
+        assert!(
+            b.report.stage_secs.iter().any(|(k, _)| k == "audit"),
+            "{path}"
+        );
     });
 }
 

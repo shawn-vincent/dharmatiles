@@ -84,7 +84,7 @@ pub use field::{
 };
 pub use land::{Disc, Land, STEEPEST_GROUND_DEG, Seat, SeatRule, THINGS, seat_on};
 pub use outline::Outline;
-pub use paint::{ORANGE, RED, SurfacePaint, paint, paint_mesh, paint_surface};
+pub use paint::{Look, ORANGE, RED, SurfacePaint, paint, paint_mesh, paint_surface};
 pub use palette::{Palette, RAMPS, Ramp};
 pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
 pub use progress::{Counter, Event, Progress, Reporter};

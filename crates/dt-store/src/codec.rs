@@ -11,13 +11,14 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use dt_kit::Look;
 use dt_kit::debug::{Column, Debug, Dot, Sheet, Trail};
 use dt_kit::{
     Audit, BuildRecord, Dropped, EntryId, Export, Grid, Kind, Mask, Material, Stage, TriMesh,
 };
 
 use dt_eval::doc::Named;
-use dt_eval::{Built, CacheUse};
+use dt_eval::{Built, CacheUse, Product, Report};
 
 /// Every material, to read one back by its number.
 const MATERIALS: [Material; 9] = [
@@ -455,8 +456,8 @@ pub(super) fn built_out(b: &Built) -> Vec<u8> {
     w.usize(b.materials.len());
     w.0.extend(b.materials.iter().map(|&m| m as u8));
     audit_out(&mut w, &b.audit);
-    w.usize(b.stages.len());
-    for s in &b.stages {
+    w.usize(b.report.stages.len());
+    for s in &b.report.stages {
         w.str(&s.name);
         w.u64(s.hash);
     }
@@ -469,55 +470,55 @@ pub(super) fn built_out(b: &Built) -> Vec<u8> {
     w.str(&b.out.to_string_lossy());
     w.f64(b.footprint[0]);
     w.f64(b.footprint[1]);
-    w.opt(b.edge_mm.is_some());
-    w.f64(b.edge_mm.unwrap_or(0.0));
-    w.usize(b.notes.len());
-    for (k, v) in &b.notes {
+    w.opt(b.report.edge_mm.is_some());
+    w.f64(b.report.edge_mm.unwrap_or(0.0));
+    w.usize(b.report.notes.len());
+    for (k, v) in &b.report.notes {
         w.str(k);
         w.f64(*v);
     }
-    w.usize(b.left_out.len());
-    for (k, n) in &b.left_out {
+    w.usize(b.report.left_out.len());
+    for (k, n) in &b.report.left_out {
         w.str(k);
         w.usize(*n);
     }
-    w.opt(b.surface.is_some());
-    if let Some((g, m)) = &b.surface {
+    w.opt(b.report.surface.is_some());
+    if let Some((g, m)) = &b.report.surface {
         w.usize(g.nx);
         w.usize(g.ny);
         w.f64(g.step);
         w.f32s(&g.z);
         mask_out(&mut w, m);
     }
-    w.opt(b.covered.is_some());
-    if let Some(m) = &b.covered {
+    w.opt(b.report.covered.is_some());
+    if let Some(m) = &b.report.covered {
         mask_out(&mut w, m);
     }
-    w.usize(b.stage_secs.len());
-    for (k, v) in &b.stage_secs {
+    w.usize(b.report.stage_secs.len());
+    for (k, v) in &b.report.stage_secs {
         w.str(k);
         w.f64(*v);
     }
-    w.bool(b.brick);
-    w.u16s(&b.entries);
-    w.u16s(&b.pieces);
-    w.usize(b.stack.len());
-    for n in &b.stack {
+    w.bool(b.report.look.brick);
+    w.u16s(&b.report.entries);
+    w.u16s(&b.report.pieces);
+    w.usize(b.report.stack.len());
+    for n in &b.report.stack {
         w.str(n.id.as_str());
         w.str(&n.what);
         w.str(&n.element);
         w.str(&n.label);
     }
-    w.opt(b.clouds.is_some());
-    if let Some(d) = &b.clouds {
+    w.opt(b.report.clouds.is_some());
+    if let Some(d) = &b.report.clouds {
         debug_out(&mut w, d);
     }
-    w.opt(b.debug.is_some());
-    if let Some(d) = &b.debug {
+    w.opt(b.report.debug.is_some());
+    if let Some(d) = &b.report.debug {
         debug_out(&mut w, d);
     }
-    w.usize(b.placed.len());
-    for p in &b.placed {
+    w.usize(b.report.placed.len());
+    for p in &b.report.placed {
         w.u8(Kind::ALL
             .iter()
             .position(|k| *k == p.kind)
@@ -645,28 +646,32 @@ pub(super) fn built_in(bytes: &[u8]) -> R<Built> {
         ));
     }
     Ok(Built {
-        export: Export { mesh, source },
-        materials,
-        audit,
-        stages,
-        record,
-        out,
-        footprint,
-        edge_mm: has_edge.then_some(edge),
-        notes,
-        left_out,
-        surface,
-        covered,
-        stage_secs,
-        reused: 0,
-        brick,
-        entries,
-        pieces,
-        stack,
-        clouds,
-        debug,
-        placed,
-        checked,
-        cache: CacheUse::default(),
+        product: Product {
+            export: Export { mesh, source },
+            materials,
+            audit,
+            record,
+            out,
+            footprint,
+            checked,
+        },
+        report: Report {
+            stages,
+            edge_mm: has_edge.then_some(edge),
+            notes,
+            left_out,
+            surface,
+            covered,
+            stage_secs,
+            reused: 0,
+            look: Look { brick },
+            entries,
+            pieces,
+            stack,
+            clouds,
+            debug,
+            placed,
+            cache: CacheUse::default(),
+        },
     })
 }

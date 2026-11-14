@@ -37,20 +37,21 @@ fn the_debug_layer_changes_nothing_built() {
         },
     )
     .unwrap();
-    assert!(off.debug.is_none() && off.clouds.is_none());
+    assert!(off.report.debug.is_none() && off.report.clouds.is_none());
     assert_eq!(
         off.export.mesh.content_hash(),
         on.export.mesh.content_hash()
     );
     let hashes = |b: &dt_eval::Built| {
-        b.stages
+        b.report
+            .stages
             .iter()
             .map(|s| (s.name.clone(), s.hash))
             .collect::<Vec<_>>()
     };
     assert_eq!(hashes(&off), hashes(&on));
 
-    let d = on.debug.as_ref().unwrap();
+    let d = on.report.debug.as_ref().unwrap();
     let class = |c: &str| d.dots.iter().filter(|p| p.class == c).count();
     assert!(class("grew") > 100, "grown starts: {}", class("grew"));
     assert!(class("outside") > 0, "starts outside the bank");
@@ -67,7 +68,7 @@ fn the_debug_layer_changes_nothing_built() {
     assert_eq!(spines, grown, "a spine for each grown start");
     assert!(d.trails.iter().any(|t| t.class == "flow"));
     // the dirt's pinned band
-    let sheets = &on.clouds.as_ref().unwrap().sheets;
+    let sheets = &on.report.clouds.as_ref().unwrap().sheets;
     assert!(
         sheets
             .iter()
@@ -80,5 +81,5 @@ fn the_debug_layer_changes_nothing_built() {
     );
     // the layer's marks are only marks, the clouds only clouds
     assert!(d.sheets.is_empty() && d.columns.is_empty());
-    assert!(on.clouds.as_ref().unwrap().dots.is_empty());
+    assert!(on.report.clouds.as_ref().unwrap().dots.is_empty());
 }

@@ -155,7 +155,7 @@ pub fn thin_built(mut b: Built, budget: usize) -> Built {
         } else if b.audit.band[f] {
             band[best] += area;
         }
-        let key = (b.materials[f], b.entries[f], b.pieces[f]);
+        let key = (b.materials[f], b.report.entries[f], b.report.pieces[f]);
         match owners[best].iter_mut().find(|(k, _)| *k == key) {
             Some((_, a)) => *a += area,
             None => owners[best].push((key, area)),
@@ -166,7 +166,7 @@ pub fn thin_built(mut b: Built, budget: usize) -> Built {
     let mut pieces = Vec::with_capacity(nk);
     for (k, &f) in kept.iter().enumerate() {
         // a kept triangle nothing voted for keeps its own
-        let own = (b.materials[f], b.entries[f], b.pieces[f]);
+        let own = (b.materials[f], b.report.entries[f], b.report.pieces[f]);
         let (m, e, p) = owners[k]
             .iter()
             .max_by(|x, y| x.1.total_cmp(&y.1))
@@ -191,8 +191,8 @@ pub fn thin_built(mut b: Built, budget: usize) -> Built {
     b.materials = materials;
     b.audit.overhang = overhang;
     b.audit.band = band;
-    b.entries = entries;
-    b.pieces = pieces;
+    b.report.entries = entries;
+    b.report.pieces = pieces;
     b.audit.triangles = b.export.mesh.triangles.len();
     b.audit.vertices = b.export.mesh.positions.len();
     b

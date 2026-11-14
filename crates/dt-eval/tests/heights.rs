@@ -338,7 +338,8 @@ fn the_stream_banks_fall_from_the_land_to_the_bed() {
 /// The height a built tile's one tree came to, mm.
 fn tree_height(text: &str) -> f64 {
     let b = build(&mem(text), "t.dtile", &legacy()).unwrap_or_else(|e| panic!("{text}\n{e:#?}"));
-    b.notes
+    b.report
+        .notes
         .iter()
         .find(|(k, _)| k == "tree.height_mm")
         .map(|(_, v)| *v)

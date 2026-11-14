@@ -82,7 +82,11 @@ fn hash(text: &str) -> Vec<(String, u64)> {
         ..legacy()
     };
     let b = build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
-    b.stages.iter().map(|s| (s.name.clone(), s.hash)).collect()
+    b.report
+        .stages
+        .iter()
+        .map(|s| (s.name.clone(), s.hash))
+        .collect()
 }
 
 fn refused(text: &str, code: &str, help: &str) -> Diag {

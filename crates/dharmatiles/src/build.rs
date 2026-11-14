@@ -187,7 +187,7 @@ pub(crate) fn build_one(
         }
     };
     let total_s = t0.elapsed().as_secs_f64();
-    let mut secs = b.stage_secs.clone();
+    let mut secs = b.report.stage_secs.clone();
     secs.push((progress::WRITE.to_owned(), t_write.elapsed().as_secs_f64()));
     timings.record(p, &opts.system, &secs);
     timings.save();
@@ -217,34 +217,38 @@ pub(crate) fn build_one(
             built_s,
             total_s
         );
-        if !b.left_out.is_empty() {
-            tell!("  left out: {}", left_out_text(&b.left_out));
+        if !b.report.left_out.is_empty() {
+            tell!("  left out: {}", left_out_text(&b.report.left_out));
         }
-        if b.reused > 0 {
-            tell!("  {} steps kept from the last build", b.reused);
+        if b.report.reused > 0 {
+            tell!("  {} steps kept from the last build", b.report.reused);
         }
-        if b.cache.state == dt_eval::CacheState::Hit {
-            let made: f64 = b.stage_secs.iter().map(|s| s.1).sum();
+        if b.report.cache.state == dt_eval::CacheState::Hit {
+            let made: f64 = b.report.stage_secs.iter().map(|s| s.1).sum();
             tell!(
                 "  from the cache (made in {made:.2} s by {})",
-                b.cache.made_by.as_deref().unwrap_or("an earlier run")
+                b.report
+                    .cache
+                    .made_by
+                    .as_deref()
+                    .unwrap_or("an earlier run")
             );
         }
         for f in &failures {
             tell!("  audit failed: {f}");
         }
     }
-    for problem in &b.cache.problems {
+    for problem in &b.report.cache.problems {
         tell!("warning: {p}: {problem}");
     }
     let mut r = tile_json(&b, &failures, built_s);
     r["cache"] = json!({
-        "state": match b.cache.state {
+        "state": match b.report.cache.state {
             dt_eval::CacheState::Off => "off",
             dt_eval::CacheState::Miss => "miss",
             dt_eval::CacheState::Hit => "hit",
         },
-        "problems": b.cache.problems,
+        "problems": b.report.cache.problems,
     });
     r["files"] = json!(
         files
@@ -362,19 +366,20 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
             "holes": a.holes,
             "failures": failures,
         },
-        "stages": b.stages.iter().map(|s| json!({"name": s.name, "hash": format!("{:016x}", s.hash)})).collect::<Vec<_>>(),
+        "stages": b.report.stages.iter().map(|s| json!({"name": s.name, "hash": format!("{:016x}", s.hash)})).collect::<Vec<_>>(),
         "build_s": built_s,
-        "stage_secs": b.stage_secs.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>(),
-        "edge_mm": b.edge_mm,
-        "stats": stats(&b.notes),
+        "stage_secs": b.report.stage_secs.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>(),
+        "edge_mm": b.report.edge_mm,
+        "stats": stats(&b.report.notes),
     });
     // a low build says so; a full one's record is unchanged
     if !b.checked {
         v["checked"] = json!(false);
     }
     // only when an element left something out: the record is unchanged otherwise
-    if !b.left_out.is_empty() {
+    if !b.report.left_out.is_empty() {
         v["left_out"] = b
+            .report
             .left_out
             .iter()
             .map(|(e, n)| (e.clone(), json!(n)))

@@ -47,7 +47,7 @@ fn peak(b: &Built) -> f64 {
 }
 
 fn hashes(b: &Built) -> Vec<u64> {
-    b.stages.iter().map(|s| s.hash).collect()
+    b.report.stages.iter().map(|s| s.hash).collect()
 }
 
 #[test]
@@ -86,11 +86,12 @@ fn a_rock_peak_stands_at_its_top() {
     let plain = built(&tile("rock at=\"(0.5sq, 0.5sq)\" size=\"10dmm\""), None);
     assert_ne!(hashes(&plain), hashes(&flat));
     assert!(
-        flat.notes
+        flat.report
+            .notes
             .iter()
             .any(|(k, v)| k == "topped_stones" && *v == 1.0)
     );
-    assert!(!plain.notes.iter().any(|(k, _)| k == "topped_stones"));
+    assert!(!plain.report.notes.iter().any(|(k, _)| k == "topped_stones"));
 }
 
 #[test]

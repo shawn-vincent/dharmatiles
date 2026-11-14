@@ -389,7 +389,11 @@ fn hash(text: &str) -> Vec<(String, u64)> {
         ..Options::default()
     };
     let b = build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
-    b.stages.iter().map(|s| (s.name.clone(), s.hash)).collect()
+    b.report
+        .stages
+        .iter()
+        .map(|s| (s.name.clone(), s.hash))
+        .collect()
 }
 
 #[test]
@@ -439,7 +443,11 @@ fn the_cloud_tiles_pass_the_gate_and_build_alike_on_any_threads() {
         assert!(a.watertight, "{path}");
         assert!(a.dropped.is_empty(), "{path}: {:?}", a.dropped);
         let hashes = |b: &dt_eval::Built| -> Vec<(String, u64)> {
-            b.stages.iter().map(|s| (s.name.clone(), s.hash)).collect()
+            b.report
+                .stages
+                .iter()
+                .map(|s| (s.name.clone(), s.hash))
+                .collect()
         };
         assert_eq!(hashes(&one), hashes(&four), "{path}: threads move the hash");
     }

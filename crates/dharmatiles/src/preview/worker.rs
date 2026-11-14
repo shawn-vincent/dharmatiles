@@ -264,12 +264,12 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             let built_s = t0.elapsed().as_secs_f64();
             let failures = b.audit.failures(&opts.printer);
             let mut record = tile_json(&b, &failures, built_s);
-            record["cache"] = json!(match b.cache.state {
+            record["cache"] = json!(match b.report.cache.state {
                 dt_eval::CacheState::Off => "off",
                 dt_eval::CacheState::Miss => "miss",
                 dt_eval::CacheState::Hit => "hit",
             });
-            for problem in &b.cache.problems {
+            for problem in &b.report.cache.problems {
                 tell!("warning: {path}: the build cache: {problem}");
             }
             // Cancellation panics are caught only around build_with. Encoding
@@ -309,17 +309,19 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
                 t.finish();
             }
             if shared.cache.is_some() {
-                let mut secs = b.stage_secs.clone();
+                let mut secs = b.report.stage_secs.clone();
                 secs.push((ENCODE.to_owned(), t_encode.elapsed().as_secs_f64()));
                 timings.record(&path, &opts.system, &secs);
                 timings.save();
             }
-            let reused = match b.reused {
-                _ if b.cache.state == dt_eval::CacheState::Hit => " (from the cache)".to_owned(),
+            let reused = match b.report.reused {
+                _ if b.report.cache.state == dt_eval::CacheState::Hit => {
+                    " (from the cache)".to_owned()
+                }
                 0 => String::new(),
                 n => format!(
                     " ({n} of {} steps kept from the last build)",
-                    n + b.stage_secs.len() - 2
+                    n + b.report.stage_secs.len() - 2
                 ),
             };
             tell!(
@@ -330,7 +332,8 @@ pub(super) fn rebuild(shared: &Arc<Shared>, id: &str, cancel: Arc<AtomicBool>, o
             // said before the tile is: what this build no longer reports clears while it still shows as running
             let palette = shared.palette_diags();
             shared.report(id, Scope::Build, |name| {
-                let mut found = messages::of_build(&record, b.reused, &b.cache, id, name);
+                let mut found =
+                    messages::of_build(&record, b.report.reused, &b.report.cache, id, name);
                 for m in messages::of_errors(&palette, Scope::Build, id, name, &[]) {
                     found.push(crate::message::Message {
                         severity: Severity::Warning,

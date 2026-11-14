@@ -32,7 +32,7 @@ fn built(rel: &str, debug: bool) -> Built {
 }
 
 fn sheet<'a>(b: &'a Built, class: &str) -> &'a dt_kit::debug::Sheet {
-    let d = b.clouds.as_ref().unwrap();
+    let d = b.report.clouds.as_ref().unwrap();
     d.sheets
         .iter()
         .find(|s| s.class == class)
@@ -42,13 +42,16 @@ fn sheet<'a>(b: &'a Built, class: &str) -> &'a dt_kit::debug::Sheet {
 /// The layer on changes no hash, no stage and no triangle.
 fn same_built(rel: &str) {
     let (off, on) = (built(rel, false), built(rel, true));
-    assert!(off.clouds.is_none(), "{rel}: nothing collected with it off");
+    assert!(
+        off.report.clouds.is_none(),
+        "{rel}: nothing collected with it off"
+    );
     assert_eq!(
         off.export.mesh.content_hash(),
         on.export.mesh.content_hash(),
         "{rel}"
     );
-    let h = |b: &Built| b.stages.iter().map(|s| s.hash).collect::<Vec<_>>();
+    let h = |b: &Built| b.report.stages.iter().map(|s| s.hash).collect::<Vec<_>>();
     assert_eq!(h(&off), h(&on), "{rel}");
 }
 
@@ -87,6 +90,7 @@ fn a_pinned_cloud_and_a_water_cloud_draw_their_sheets() {
     assert!(sheet(&pinned, "band-hi").owner.contains("dirt"));
     let water = built("water/1x1-cloud-water.dtile", true);
     let hi = water
+        .report
         .clouds
         .as_ref()
         .unwrap()
@@ -122,7 +126,7 @@ fn a_flat_cloud_shades_at_half() {
 #[test]
 fn a_rock_cloud_draws_a_span_for_every_topped_stone() {
     let b = built("rocks/2x2-rock-clouds.dtile", true);
-    let d = b.clouds.as_ref().unwrap();
+    let d = b.report.clouds.as_ref().unwrap();
     let stones: Vec<_> = d
         .columns
         .iter()
@@ -146,7 +150,7 @@ fn a_rock_cloud_draws_a_span_for_every_topped_stone() {
 #[test]
 fn a_grove_draws_a_span_for_every_branch_tip() {
     let b = built("plants/2x2-grove.dtile", true);
-    let d = b.clouds.as_ref().unwrap();
+    let d = b.report.clouds.as_ref().unwrap();
     let tips: Vec<_> = d
         .columns
         .iter()
@@ -171,7 +175,7 @@ fn clouds_are_drawn_the_same_every_time_and_change_nothing_built() {
     ] {
         same_built(rel);
         let (a, b) = (built(rel, true), built(rel, true));
-        let (da, db) = (a.clouds.unwrap(), b.clouds.unwrap());
+        let (da, db) = (a.report.clouds.unwrap(), b.report.clouds.unwrap());
         assert_eq!(da.sheets.len(), db.sheets.len(), "{rel}");
         for (x, y) in da.sheets.iter().zip(&db.sheets) {
             assert_eq!((&x.z.z, &x.shade), (&y.z.z, &y.shade), "{rel}");
@@ -193,7 +197,7 @@ fn the_grove_builds_the_same_with_the_layer_on() {
 #[test]
 fn debug_marks_never_reach_the_export() {
     let b = built("rocks/2x2-rock-clouds.dtile", true);
-    assert!(!b.clouds.as_ref().unwrap().columns.is_empty());
+    assert!(!b.report.clouds.as_ref().unwrap().columns.is_empty());
     // the printed mesh is the solids' union: the same triangles with the
     // layer off (checked above by hash); and the gate saw no extra part
     let off = built("rocks/2x2-rock-clouds.dtile", false);

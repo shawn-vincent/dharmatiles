@@ -41,7 +41,8 @@ fn a_low_build_places_everything_where_the_full_build_does() {
         let full = made(path, |_| {});
         let low = made(path, |o| o.low = true);
         let of = |b: &Built, grass: bool| -> Vec<dt_kit::Placement> {
-            b.placed
+            b.report
+                .placed
                 .iter()
                 .copied()
                 .filter(|p| (p.kind == dt_kit::Kind::Grass) == grass)
@@ -62,7 +63,7 @@ fn a_low_build_places_everything_where_the_full_build_does() {
             let d = (p.at[0] - q.at[0]).hypot(p.at[1] - q.at[1]);
             assert!(d < 3.0, "{path}: a clearing moved {d:.2} mm");
         }
-        anything += full.placed.len();
+        anything += full.report.placed.len();
     }
     assert!(anything > 20, "only {anything} placements in the sweep");
 }
@@ -71,6 +72,7 @@ fn a_low_build_places_everything_where_the_full_build_does() {
 fn placements_are_recorded_for_every_placing_element() {
     let kinds = |path: &str| -> Vec<&'static str> {
         let mut k: Vec<&'static str> = made(path, |_| {})
+            .report
             .placed
             .iter()
             .map(|p| p.kind.name())
@@ -96,10 +98,13 @@ fn rocks_and_flowers_stand_where_they_did_at_other_cells() {
         "lib:tiles/ground/1x1-grass-flowers.dtile",
     ] {
         let full = made(path, |_| {});
-        assert!(!full.placed.is_empty(), "{path}");
+        assert!(!full.report.placed.is_empty(), "{path}");
         for cells in [32, 48, 128] {
             let other = made(path, |o| o.cells = Some(cells));
-            assert_eq!(full.placed, other.placed, "{path} at {cells} cells");
+            assert_eq!(
+                full.report.placed, other.report.placed,
+                "{path} at {cells} cells"
+            );
         }
     }
 }
@@ -107,7 +112,7 @@ fn rocks_and_flowers_stand_where_they_did_at_other_cells() {
 /// How far each placement of a build at `cells` is from the full build's,
 /// mm (infinite for one with no match: a count that changed).
 fn drift(full: &Built, other: &Built) -> (usize, usize, f64) {
-    let (a, b) = (&full.placed, &other.placed);
+    let (a, b) = (&full.report.placed, &other.report.placed);
     let mut worst: f64 = 0.0;
     for p in a {
         let near = b

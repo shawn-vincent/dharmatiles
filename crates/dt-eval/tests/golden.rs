@@ -101,7 +101,8 @@ fn built(path: &str) -> &'static Built {
 }
 
 fn hashes(b: &Built) -> String {
-    b.stages
+    b.report
+        .stages
         .iter()
         .map(|s| format!("{:016x}  {}\n", s.hash, s.name))
         .collect()
@@ -244,7 +245,7 @@ fn the_edge_height_is_the_most_the_rim_reaches() {
         "lib:tests/ground/1x1-soil.dtile",
     ] {
         let b = built(path);
-        let (surface, _) = b.surface.as_ref().unwrap();
+        let (surface, _) = b.report.surface.as_ref().unwrap();
         let (nx, ny) = (surface.nx, surface.ny);
         let mut rim: Vec<f64> = Vec::new();
         for j in 0..ny {
@@ -409,14 +410,14 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
         assert_eq!(a.overhang_mm2, 0.0, "{path}");
         assert!(a.dropped.is_empty(), "{path}: {:?}", a.dropped);
         assert_eq!(a.holes, 0, "{path}");
-        let note = |k: &str| b.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+        let note = |k: &str| b.report.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
         let tex = note("texture_ok").unwrap();
         assert!(tex >= 0.97, "{path}: printable texture {tex}");
         assert!(note("clods").unwrap() > 0.0 && note("pebbles_small").unwrap() > 0.0);
         // the edge contract: the top of every column on the tile edge is
         // the edge level less the dirt's round (0.2 mm), and no vertex of
         // the ground on the edge is above the edge level
-        let edge = b.edge_mm.unwrap();
+        let edge = b.report.edge_mm.unwrap();
         let [w, h] = b.footprint;
         let mut top = f64::MIN;
         for p in &b.export.mesh.positions {
@@ -450,7 +451,7 @@ fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
         // every triangle traced to a material, and rock present
         assert_eq!(b.materials.len(), b.export.mesh.triangles.len(), "{path}");
         assert!(b.materials.contains(&Material::Rock), "{path}: no rock");
-        let note = |k: &str| b.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+        let note = |k: &str| b.report.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
         if path.contains("rocks") {
             assert!(note("chip_loss_max").unwrap() <= 0.03, "{path}: chip loss");
             assert!(note("facets_min").unwrap() >= 25.0, "{path}");
@@ -488,12 +489,17 @@ fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
         assert_eq!(a.overhang_mm2, 0.0, "{path}");
         assert_eq!(a.holes, 0, "{path}");
         let note = |k: &str| {
-            b.notes
+            b.report
+                .notes
                 .iter()
                 .find(|(n, _)| n.ends_with(k))
                 .map(|(_, v)| *v)
         };
-        assert!(note("units").unwrap_or(0.0) > 0.0, "{path}: {:?}", b.notes);
+        assert!(
+            note("units").unwrap_or(0.0) > 0.0,
+            "{path}: {:?}",
+            b.report.notes
+        );
     }
 }
 
@@ -512,7 +518,7 @@ fn the_grass_tiles_meet_the_exit_criteria() {
         assert!(a.dropped.is_empty(), "{path}: {:?}", a.dropped);
         assert_eq!(a.holes, 0, "{path}");
         assert!(b.materials.contains(&Material::Grass), "{path}: no grass");
-        let note = |k: &str| b.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+        let note = |k: &str| b.report.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
         let blades = note("blades").unwrap_or(0.0);
         let least = if path.contains("shore") {
             500.0
@@ -540,7 +546,7 @@ fn the_grass_tiles_meet_the_exit_criteria() {
             assert!(
                 note("reed_stems").unwrap_or(0.0) >= 5.0,
                 "{path}: {:?}",
-                b.notes
+                b.report.notes
             );
         }
     }

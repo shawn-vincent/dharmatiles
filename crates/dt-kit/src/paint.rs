@@ -253,6 +253,16 @@ pub fn paint_surface(
     )
 }
 
+/// How a build is to be painted beyond its materials: the look the document
+/// asks for, decided by the evaluator from the document (see
+/// `dt_doc::schema::masonry_is_brick`), carried with the build.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Look {
+    /// The masonry is brick (a `brick` or `regular-brick` wall): painted in
+    /// reds, not stone greys.
+    pub brick: bool,
+}
+
 /// Per vertex: how far it stands out of its neighbours, in units of the
 /// local edge length, at a fine scale and a coarse one (positive = ridge
 /// or tip, negative = hollow or joint).

@@ -29,6 +29,7 @@ fn height(text: &str) -> f64 {
     let opts = Options::default();
     match build(&mem(text), "t.dtile", &opts) {
         Ok(b) => b
+            .report
             .notes
             .iter()
             .find(|(k, _)| k == "tree.height_mm")

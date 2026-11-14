@@ -608,11 +608,12 @@ pub fn build_tile(text: &str, system: &str, seed: i32, cells: u32) -> Result<Til
             stl_sha256,
             stl_bytes,
             stages: built
+                .report
                 .stages
                 .iter()
                 .map(|s| (s.name.clone(), format!("{:016x}", s.hash)))
                 .collect(),
-            stage_secs: built.stage_secs.clone(),
+            stage_secs: built.report.stage_secs.clone(),
         };
         Ok(Tile {
             meta: json(&meta)?,
