@@ -1568,7 +1568,8 @@ impl<'k> Decoder<'k> {
             return None;
         }
         // a seam word: `nnw`, `nnw(2)`, `nw`
-        if let (Some((cols, rows)), Some(table)) = (ctx.size, self.known.seams())
+        if Edge::parse(s.trim()).is_none()
+            && let (Some((cols, rows)), Some(table)) = (ctx.size, self.known.seams())
             && let Some(read) = table.read(s, cols, rows)
         {
             return match read {

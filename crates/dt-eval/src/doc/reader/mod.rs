@@ -702,7 +702,10 @@ impl Reader<'_> {
                     }
                 };
                 let to = [snap(p[0], w), snap(p[1], h)];
-                if to.iter().zip(p).any(|(a, b)| (a - b).abs() > 0.0) && (0.0..=w).contains(&p[0]) && (0.0..=h).contains(&p[1]) {
+                if to.iter().zip(p).any(|(a, b)| (a - b).abs() > 0.0)
+                    && (0.0..=w).contains(&p[0])
+                    && (0.0..=h).contains(&p[1])
+                {
                     self.errors.push(
                         Diag::at(
                             src,

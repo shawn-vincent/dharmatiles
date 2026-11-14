@@ -1799,7 +1799,7 @@ fn the_map_marks_every_point_a_line_or_region_refers_to() {
     let dir = std::env::temp_dir().join(format!("dt-markers-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("t.dtile");
-    let text = "dharmatiles version=1\ntile size=\"2x2\" seed=3 {\n    point knoll \"(0.5sq, 1.5sq)\"\n    line shore { through west \"(0sq, 1.5sq)\" knoll \"(1.5sq, 0.75sq)\" east }\n    line ring closed=#true { through \"(0.25sq, 1.75sq)\" \"(0.75sq, 1.75sq)\" \"(0.5sq, 1.25sq)\" }\n    region bay { boundedBy shore; fill \"(0.5sq, 1.75sq)\"; fill center; within \"4dmm\" of=\"(1.25sq, 1.75sq)\"; within \"6dmm\" of=knoll; within \"5dmm\" of=shore }\n    stack {\n        dirt\n    }\n}\n";
+    let text = "dharmatiles version=1\ntile size=\"2x2\" seed=3 seams=free {\n    point knoll \"(0.5sq, 1.5sq)\"\n    line shore { through west \"(0sq, 1.5sq)\" knoll \"(1.5sq, 0.75sq)\" east }\n    line ring closed=#true { through \"(0.25sq, 1.75sq)\" \"(0.75sq, 1.75sq)\" \"(0.5sq, 1.25sq)\" }\n    region bay { boundedBy shore; fill \"(0.5sq, 1.75sq)\"; fill center; within \"4dmm\" of=\"(1.25sq, 1.75sq)\"; within \"6dmm\" of=knoll; within \"5dmm\" of=shore }\n    stack {\n        dirt\n    }\n}\n";
     std::fs::write(&file, text).unwrap();
     let path = file.to_string_lossy().into_owned();
     let r = start(&[&path], false);

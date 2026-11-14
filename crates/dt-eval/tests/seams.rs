@@ -234,3 +234,11 @@ fn the_seam_table_is_the_contracts_and_closed_under_turning() {
     let e = dt_eval::doc::read(&common::memory(&[("e.dtile", text)]), "e.dtile").unwrap_err();
     assert!(e.iter().any(|d| d.code == "dt::seams"), "{e:#?}");
 }
+
+#[test]
+fn the_edge_words_still_mean_the_middle_of_their_side() {
+    let t = ok("1x1", "line a { through west east }");
+    let l = &t.lines["a"];
+    assert_eq!((l[0], l[l.len() - 1]), ([0.0, 0.5], [1.0, 0.5]));
+    ok("1x1", "line a { through north south }");
+}
