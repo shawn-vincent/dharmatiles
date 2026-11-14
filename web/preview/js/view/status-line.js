@@ -19,7 +19,7 @@ export function paintStatusLine(parts, s) {
   parts.dot.className = `dot ${s.tone}`;
   parts.root.dataset.tone = s.tone;
   parts.bar.style.width = s.progress == null ? '0' : `${Math.round(s.progress * 100)}%`;
-  parts.bar.hidden = s.progress == null;
+  parts.bar.toggleAttribute('hidden', s.progress == null);
   if (s.expanded != null) parts.main.setAttribute('aria-expanded', String(s.expanded));
 }
 
@@ -38,7 +38,7 @@ export function buildStatusLine({ onToggle, controls } = {}) {
   };
   const root = make('div', 'statusline', { role: 'status' });
   const bar = make('i', 'sl-bar', { 'aria-hidden': 'true' });
-  bar.hidden = true;
+  bar.setAttribute('hidden', '');
   const main = make('button', 'sl-main', { type: 'button', 'aria-expanded': 'false', title: 'Messages' });
   if (controls) main.setAttribute('aria-controls', controls);
   const dot = make('i', 'dot idle', { 'aria-hidden': 'true' });
