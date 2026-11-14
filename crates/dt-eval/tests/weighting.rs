@@ -77,8 +77,20 @@ fn errors(text: &str) -> Vec<Diag> {
 /// Each stage's hash, from a draft: a draw moves a draft as it moves a full
 /// build, at a fraction of the time.
 fn hash(text: &str) -> Vec<(String, u64)> {
+    hash_of(text, false)
+}
+
+/// The same from a draft of the low tier, where a tree is blobs and a rock its
+/// hull: the same places and sizes are drawn, much quicker still, but grass is
+/// a carpet with no blades, so a blade's draw is not seen in it.
+fn hash_low(text: &str) -> Vec<(String, u64)> {
+    hash_of(text, true)
+}
+
+fn hash_of(text: &str, low: bool) -> Vec<(String, u64)> {
     let draft = Options {
         draft: true,
+        low,
         ..legacy()
     };
     let b = build(&mem(text), "t.dtile", &draft).unwrap_or_else(|e| panic!("{e:?}"));
@@ -534,6 +546,16 @@ fn a_band_takes_a_list_a_steps_an_ends_and_a_mix() {
 /// A flat spelling of a range builds as the plain range does, the same range
 /// with odds builds differently, and nothing is refused: the control draws.
 fn takes_a_weighting(stack: impl Fn(&str) -> String, plain: &str, flat: &str, weighted: &str) {
+    takes_a_weighting_by(hash, stack, plain, flat, weighted);
+}
+
+fn takes_a_weighting_by(
+    hash: fn(&str) -> Vec<(String, u64)>,
+    stack: impl Fn(&str) -> String,
+    plain: &str,
+    flat: &str,
+    weighted: &str,
+) {
     let base = hash(&tile("", &stack(plain)));
     assert_eq!(hash(&tile("", &stack(flat))), base, "{flat}");
     assert_ne!(hash(&tile("", &stack(weighted))), base, "{weighted}");
@@ -596,14 +618,15 @@ fn a_blades_length_and_height_take_a_weighting() {
 #[test]
 fn a_trees_heights_and_a_cliffs_patches_take_a_weighting() {
     let tree = |v: &str| format!("        dirt\n        tree {v}");
-    takes_a_weighting(
+    takes_a_weighting_by(
+        hash_low,
         |v| tree(&format!("top=\"$bottom + {v}\"")),
         "[46dmm .. 50dmm]",
         "low([46dmm .. 50dmm], 1)",
         "low([46dmm .. 50dmm], 8)",
     );
     // the rest read and build too
-    hash(&tile(
+    hash_low(&tile(
         "",
         &tree(
             "top=\"$bottom + 48dmm\" { trunk height=\"low(26dmm .. 32dmm)\"; crown width=\"24dmm\" clumpSize=\"[4dmm, 5dmm:3, 6dmm]\"; leaf length=\"bell(4dmm .. 5dmm)\" width=\"3dmm\" }",
@@ -614,7 +637,7 @@ fn a_trees_heights_and_a_cliffs_patches_take_a_weighting() {
             "dharmatiles version=\"1.0.0\"; tile size=\"2x1\" seed=1 {{\n    region crag {{ within \"[10dmm .. 20dmm]\" of=northEdge }}\n    stack {{\n        base\n        dirt top=\"4dmm\"\n        cliff top=\"$dirtEdgeHeight + 35dmm\" at=crag {{\n            rock mixed\n            shattered patches=3 width=\"{v}\"\n        }}\n    }}\n}}\n"
         )
     };
-    let base = hash(&cliff("5dmm .. 10dmm"));
-    assert_eq!(hash(&cliff("low(5dmm .. 10dmm, 1)")), base);
-    assert_ne!(hash(&cliff("low(5dmm .. 10dmm, 8)")), base);
+    let base = hash_low(&cliff("5dmm .. 10dmm"));
+    assert_eq!(hash_low(&cliff("low(5dmm .. 10dmm, 1)")), base);
+    assert_ne!(hash_low(&cliff("low(5dmm .. 10dmm, 8)")), base);
 }

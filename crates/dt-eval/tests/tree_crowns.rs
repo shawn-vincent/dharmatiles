@@ -23,11 +23,10 @@ fn tile(at: &str, top: &str) -> String {
     )
 }
 
-/// What the tree came to: its height over its foot, mm, from the build
-/// record (a gate failure's build is a build all the same).
-fn height(text: &str) -> f64 {
-    let opts = Options::default();
-    match build(&mem(text), "t.dtile", &opts) {
+/// What the tree came to under `opts`: its height over its foot, mm, from
+/// the build record.
+fn height_with(text: &str, opts: &Options) -> f64 {
+    match build(&mem(text), "t.dtile", opts) {
         Ok(b) => b
             .report
             .notes
@@ -37,6 +36,23 @@ fn height(text: &str) -> f64 {
             .expect("a tree"),
         Err(e) => panic!("{text}\n{e:#?}"),
     }
+}
+
+/// The height of a draft: the crown's rules are the tree's, not the
+/// ground's, so a draft (coarse cells under the tree) holds them as well as
+/// a full build does, in a fraction of the time.  A tip's height moves by
+/// under a millimetre with the cells.
+fn height(text: &str) -> f64 {
+    let draft = Options {
+        draft: true,
+        ..Options::default()
+    };
+    height_with(text, &draft)
+}
+
+/// The same at full detail.
+fn height_full(text: &str) -> f64 {
+    height_with(text, &Options::default())
 }
 
 #[test]
@@ -53,7 +69,13 @@ fn the_crown_stays_under_the_high_of_its_cloud() {
         } else {
             45.0
         };
-        let h = height(&tile("(1sq, 1sq)", top));
+        // the first at full detail, the others as drafts
+        let text = tile("(1sq, 1sq)", top);
+        let h = if top.ends_with("45dmm") {
+            height_full(&text)
+        } else {
+            height(&text)
+        };
         assert!(h <= high + 1e-6, "{top}: {h} over {high}");
         assert!(h > high - 8.0, "{top}: {h} is nowhere near {high}");
     }

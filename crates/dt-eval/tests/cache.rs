@@ -19,11 +19,14 @@ fn fingerprint(b: &Built) -> (Vec<(String, u64)>, u64) {
     )
 }
 
-/// Drafts: the cache keeps a draft's steps as it keeps a full build's, and
-/// a draft is a fraction of the time.
+/// Drafts of the low tier: the cache keeps those steps as it keeps a full
+/// build's, and these tests are about what an edit reuses, not about the
+/// mesh, so they take the cheapest build there is (a draft's cells, a low
+/// tier's rocks, grass and trees).
 fn draft() -> Options {
     Options {
         draft: true,
+        low: true,
         ..Options::default()
     }
 }
@@ -196,6 +199,8 @@ fn the_debug_layer_is_not_in_the_key_but_a_scene_without_it_is_not_given_to_a_bu
     let path = "mem/tile.dtile";
     let text = Library.read("lib:tests/plants/2x2-grass.dtile").unwrap();
     let src = Memory(BTreeMap::from([(path.to_owned(), text)]));
+    // a draft at full detail: the low tier's grass is a carpet with no blades
+    // to leave marks
     let plain = Options {
         draft: true,
         ..Options::default()
