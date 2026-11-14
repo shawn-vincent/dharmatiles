@@ -284,11 +284,11 @@ dialog input:focus, dialog select:focus { border-color: var(--accent); outline: 
 .msglist .msg .acts .btn.icon { width: var(--h-sm); height: var(--h-sm); padding: 0; }
 .msglist .msg .report-pane { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); background: color-mix(in srgb, var(--ink) 4%, transparent); cursor: default; }
 .msglist .msg .report-head { font-size: var(--fs-s); color: var(--muted); margin-bottom: 6px; }
-.msglist .msg .report-body { margin: 0 0 6px; max-height: 160px; overflow: auto; font: var(--fs-s) var(--f-code); white-space: pre-wrap; overflow-wrap: anywhere; }
+.msglist .msg .report-body { margin: 0; max-height: clamp(48px, 28vh, 160px); overflow: auto; font: var(--fs-s) var(--f-code); white-space: pre-wrap; overflow-wrap: anywhere; }
 .msglist .msg .report-opt { display: flex; gap: 6px; align-items: center; font-size: var(--fs-s); margin-bottom: 6px; }
 .msglist .msg .report-note, .msglist .msg .report-wait { font-size: var(--fs-s); color: var(--muted); margin-bottom: 6px; }
 .msglist .msg .report-err { font-size: var(--fs-s); color: var(--err); margin-bottom: 6px; }
-.msglist .msg .report-acts { display: flex; gap: 6px; }
+.msglist .msg .report-acts { display: flex; gap: 6px; margin-bottom: 6px; }
 .msglist .msg .report-acts .btn { height: var(--h-sm); padding: 0 8px; font-size: var(--fs-s); }
 .msglist .msg.dim { opacity: .5; }
 .msglist .msg.lit { background: color-mix(in srgb, var(--accent) 14%, transparent); }

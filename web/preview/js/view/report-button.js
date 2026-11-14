@@ -3,7 +3,7 @@
 // beside Copy.  It opens a short preview of the report the program made (`GET /api/messages/report`, crates/dharmatiles/src/
 // report.rs: the message's copied text, the environment, the tile's source) and a button that opens GitHub's new-issue form,
 // filled in.  When the address would be too long the whole report goes to the clipboard first (a refusal of the clipboard is
-// said under the preview, never hidden) and the form says to paste it.  The row owns whether the preview is open: the button
+// said under the preview, never hidden) and the form says to paste it.  The controls stand above the report, which scrolls in its own box, so a short panel never hides them.  The row owns whether the preview is open: the button
 // sits in its actions and the preview under its words.
 
 import { html, useEffect, useState } from './html.js';
@@ -42,18 +42,18 @@ export function ReportPane({ msg, act, close }) {
         setNote('The whole report is on your clipboard: paste it into the issue.');
       } catch (e) {
         // said, not hidden: the form still opens, and the report is in the box above to copy by hand
-        setNote(`Could not copy the report (${/** @type {Error} */ (e).message}); select it above and copy it yourself, then paste it into the issue.`);
+        setNote(`Could not copy the report (${/** @type {Error} */ (e).message}); select it below and copy it yourself, then paste it into the issue.`);
       }
     }
     act.openIssue(rep.url);
   };
   return html`<div class="report-pane" data-report="1">
     <div class="report-head">This is what will go in the issue${rep ? html`: <b>${rep.title}</b>` : ''}</div>
-    ${rep ? html`<pre class="report-body" tabIndex=${0}>${rep.body}</pre>` : problem ? null : html`<div class="report-wait">Making the report</div>`}
-    ${problem ? html`<div class="report-err" role="alert">${problem}</div>` : null}
     <label class="report-opt"><input type="checkbox" checked=${leaveOut} onChange=${(e) => setLeaveOut(e.currentTarget.checked)} /> Leave my tile's source out</label>
+    <div class="report-acts"><button type="button" class="btn primary" disabled=${!rep} onClick=${file}>Open GitHub issue</button><button type="button" class="btn" onClick=${close}>Close</button></div>
     ${rep?.truncated ? html`<div class="report-note">Too long for the address: the issue will say to paste the report, which is copied for you.</div>` : null}
     ${note ? html`<div class="report-note" role="status">${note}</div>` : null}
-    <div class="report-acts"><button type="button" class="btn primary" disabled=${!rep} onClick=${file}>Open GitHub issue</button><button type="button" class="btn" onClick=${close}>Close</button></div>
+    ${problem ? html`<div class="report-err" role="alert">${problem}</div>` : null}
+    ${rep ? html`<pre class="report-body" tabIndex=${0}>${rep.body}</pre>` : problem ? null : html`<div class="report-wait">Making the report</div>`}
   </div>`;
 }
