@@ -10,7 +10,6 @@ import { indentFor, braceEnd } from '../js/text.js';
 import { DEFAULTS, MIN, SASH, normalise, fit, grid } from '../js/layout.js';
 import { PINNED_VIEWS, presetAt } from '../js/view-presets.js';
 import { describeChange } from '../js/history.js';
-import { RATIO_SPAN, STEPS, curveShape, sliderOf, valueOfSlider } from '../js/gallery.js';
 import { asNumber, asRange, debounce, formOf, setUnits, valueItems, written } from '../js/value.js';
 
 setUnits(['sq', 'mm', 'in', 'dmm', 'layer', 'deg', 'rad', 'pi']); // what the program's language table says
@@ -435,80 +434,5 @@ test('unexpected failures are kept with what was being done, once each, and show
     assert.equal(problems().length, 0);
   } finally {
     console.error = log;
-  }
-});
-
-// ---- the weighting gallery (js/gallery.js): geometry and sliders; the curves are the program's ----
-
-const RATIO = { name: 'ratio', default: 4, least: 0, above: true, most: null };
-const SPREAD = { name: 'spread', default: 0.2, least: 0.05, above: false, most: 1 };
-
-test('a ratio slides on a log scale from 0.1 to 100, and the default sits where it should', () => {
-  assert.equal(valueOfSlider(RATIO, 0), RATIO_SPAN[0]);
-  assert.equal(valueOfSlider(RATIO, STEPS), RATIO_SPAN[1]);
-  // a third of the way is a tenth of the decades: 0.1 * 10^1 = 1
-  assert.equal(valueOfSlider(RATIO, STEPS / 3), 1);
-  // the number written is two figures, so the source stays short
-  for (const at of [123, 457, 777]) assert.match(String(valueOfSlider(RATIO, at)), /^\d*\.?\d{1,2}$/);
-  // the default round-trips to within a step, and a value past the ends stops at them
-  assert.ok(Math.abs(valueOfSlider(RATIO, sliderOf(RATIO, 4)) - 4) < 0.1);
-  assert.equal(sliderOf(RATIO, 5000), STEPS);
-  assert.equal(sliderOf(RATIO, 0.001), 0);
-});
-
-test('a bounded number slides straight between its limits, in hundredths', () => {
-  assert.equal(valueOfSlider(SPREAD, 0), 0.05);
-  assert.equal(valueOfSlider(SPREAD, STEPS), 1);
-  assert.equal(valueOfSlider(SPREAD, 500), 0.53); // 0.05 + 0.95 / 2 = 0.525, to hundredths
-  assert.equal(sliderOf(SPREAD, 0.525), 500);
-  // past its limits the slider stops; it never writes a number the program would refuse
-  assert.equal(valueOfSlider(SPREAD, -50), 0.05);
-  assert.equal(valueOfSlider(SPREAD, STEPS + 50), 1);
-});
-
-test('a density is drawn as an outline over a flat line at the height of a plain range', () => {
-  const flat = curveShape({ kind: 'density', values: Array(8).fill(1) }, 64, 32);
-  assert.match(flat.line, /^M/);
-  assert.ok(flat.area.endsWith('Z'));
-  // the curve of a plain range lies on the flat line
-  const y = flat.line.match(/M[\d.]+ ([\d.]+)/)[1];
-  assert.equal(Number(y), flat.flat);
-  // a sharp curve is scaled to its own top: its peak is nearer the top than the flat line is
-  const sharp = curveShape({ kind: 'density', values: [0, 0, 4, 0] }, 64, 32);
-  const ys = [...sharp.line.matchAll(/ ([\d.]+)/g)].map((m) => Number(m[1]));
-  assert.ok(Math.min(...ys) < sharp.flat);
-  assert.ok(Math.min(...ys) >= 2); // inside the padding
-});
-
-test('a list is drawn as one bar per value, the likeliest tallest', () => {
-  const { bars } = curveShape({ kind: 'masses', values: [[0, 0.5], [0.5, 0.25], [1, 0.25]] }, 64, 32);
-  assert.equal(bars.length, 3);
-  assert.ok(bars[0].h > bars[1].h && bars[1].h === bars[2].h);
-  assert.ok(bars[0].x < bars[1].x && bars[1].x < bars[2].x);
-  // every bar stands on the same floor
-  assert.ok(bars.every((b) => Math.abs(b.y + b.h - 30) < 1e-9));
-});
-
-test('the host reads the program\'s weighting curves with a query and gives an answer or a failure', async () => {
-  const seen = [];
-  const real = globalThis.fetch;
-  globalThis.fetch = async (url) => { seen.push(String(url)); return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, text: 'low(1..6, 4)' }) }; };
-  try {
-    const r = await browserHost().weightings({ fn: 'low', range: '1..6', args: '4' });
-    assert.equal(seen[0], '/api/weightings?fn=low&range=1..6&args=4');
-    assert.deepEqual(r, { status: 200, body: { ok: true, text: 'low(1..6, 4)' } });
-    // a reply that is not JSON is a failure, not a silent null
-    globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => 'oops' });
-    await assert.rejects(browserHost().weightings({ range: '1..6' }), /not JSON/);
-    // a refusal with its reason is the body's, for the caller to show
-    globalThis.fetch = async () => ({ ok: false, status: 400, text: async () => '{"error":"give a range"}' });
-    const refusal = await browserHost().weightings({});
-    assert.deepEqual({ status: refusal.status, body: refusal.body }, { status: 400, body: { error: 'give a range' } });
-    assert.equal(refusal.error.kind, 'refused');
-    // lost connection: status 0, the chip's business
-    globalThis.fetch = async () => { throw new TypeError('failed to fetch'); };
-    assert.equal((await browserHost().weightings({ range: '1..6' })).status, 0);
-  } finally {
-    globalThis.fetch = real;
   }
 });

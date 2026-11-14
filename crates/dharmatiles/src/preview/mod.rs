@@ -18,7 +18,6 @@
 //! | `GET /api/about` | the application version and the tile formats it reads, for the About box |
 //! | `GET /api/elements` | the elements and their controls |
 //! | `GET /api/language` | the tile's nodes with their controls, and the language's units, functions and `$` names |
-//! | `GET /api/weightings?range=` / `?text=` | the weighting functions, each with its curve ([`crate::weightings`]) |
 //! | `GET /api/tiles/ID/tier?tier=super-low\|low\|full[&seed=N&system=db\|ol&printer=NAME]` | a tile's mesh at a tier for a map's piece (from the cache or built; lean: no stack, no clouds) |
 //! | `POST /api/maps/…` | a map's edits: add, set, batch, dup, remove, pin, unpin, unpin-all ([`maps`]); each answers with Undo's `before` and the map's new `scene` ([`scene`]) |
 //! | `POST /api/…` | the editor's calls: check, draft, save, rename, new, export… ([`edit`]) |

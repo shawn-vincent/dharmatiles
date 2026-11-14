@@ -318,8 +318,6 @@ export function browserHost(requests = createRequests()) {
     check: (id, body) => call('POST /api/tiles/:id/check', body, id),
     /** What the Add menu may offer at a place of the stack. @param {string} id @param {Req<'POST /api/tiles/:id/offers'>} body */
     offers: (id, body) => call('POST /api/tiles/:id/offers', body, id),
-    /** The weighting functions over a range, or one value, with the program's curves (a read; no token). @param {Record<string, string>} query */
-    weightings: (query) => read('/api/weightings', query),
     /** What the reader refuses in a typed value. @param {string} element @param {string} control @param {string} typed */
     checkValue: (element, control, typed) => call('POST /api/check-value', { element, control, typed }),
     /** What each written length prints on the build target. @param {string} id @param {Req<'POST /api/tiles/:id/printed'>} body */

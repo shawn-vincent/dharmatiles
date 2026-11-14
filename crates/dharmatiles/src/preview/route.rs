@@ -184,10 +184,6 @@ pub(super) fn route(shared: &Shared, req: &Request) -> Reply {
         .into(),
         ("GET", "/api/elements", _) => Reply::Json(OK, crate::elements::all_json()),
         ("GET", "/api/language", _) => Reply::Json(OK, crate::elements::language_json()),
-        ("GET", "/api/weightings", _) => {
-            let (status, body) = crate::weightings::answer(&|k| req.param(k).map(str::to_owned));
-            Reply::Json(status, body)
-        }
         ("GET", "/api/tiles", _) => ok(&shared.snapshot()).into(),
         ("GET", _, Some((id, "mesh"))) => {
             let Some(asked) = req.param("docRev").and_then(|s| s.parse::<u64>().ok()) else {

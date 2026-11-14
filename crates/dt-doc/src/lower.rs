@@ -356,7 +356,7 @@ fn scale(p: Part, k: f64) -> Part {
     }
 }
 
-/// One range as the editor's gallery reads it: its ends and odds, and how
+/// One range read on its own: its ends and odds, and how
 /// it is written (the function and its numbers after the range).
 #[derive(Clone, Debug)]
 pub struct Ranged {
@@ -388,9 +388,8 @@ fn not_a_range(message: impl Into<String>, help: &str) -> RangeRefusal {
     }
 }
 
-/// Read `src`, a control's value, as one range with its odds.  The gallery
-/// asks the program this for every curve it draws, so the odds are never
-/// worked out in the page.
+/// Read `src`, a control's value, as one range with its odds, as the
+/// language reads it (the odds are never worked out outside the program).
 ///
 /// # Errors
 /// The value does not parse, is not one range (a number, a sum, a name), or
@@ -436,7 +435,7 @@ fn ranged_expr(src: &str, e: &Expr) -> Result<Ranged, RangeRefusal> {
     let Part::Dist(dist) = part else {
         return Err(not_a_range(
             format!("`{}` is not one range", src.trim()),
-            "the gallery weights one range such as 1..6",
+            "a weighted value is one range such as 1..6",
         ));
     };
     let (function, args) = match e {
@@ -568,7 +567,7 @@ mod tests {
     }
 
     #[test]
-    fn the_gallery_reads_one_range_and_says_what_it_is() {
+    fn a_value_reads_as_one_range_and_says_what_it_is() {
         let r = ranged("low(1..6, 12.5)").unwrap();
         assert_eq!((r.function.as_str(), r.args.clone()), ("low", vec![12.5]));
         assert_eq!(r.dist.written(), "low(1..6, 12.5)");
