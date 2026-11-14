@@ -197,6 +197,32 @@ registry! {
         help: "pick another name for the line; the edges and corners belong to the tile",
         example: NONE,
     }
+    SEAM "seam" Mistake {
+        summary: "A line crosses a square's edge where no seam is, so it would not meet the next tile's",
+        help: "move the point onto a seam: the message gives the nearest, by its word or as a point; `seams=free` on the tile lets its lines cross anywhere",
+        example: ex!(
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    line edge { through \"(0sq, 0.4sq)\" \"(1sq, 0.5sq)\" }\n    stack { dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    line edge { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n    stack { dirt }\n}\n"
+        ),
+    }
+    NEAR_EDGE "near-edge" Mistake {
+        summary: "A point is within a millimetre of a side of the tile but not on it",
+        help: "put the point on the side, as the fix in the message does, so the line meets the next tile's",
+        example: ex!(
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    line edge { through \"(0.02sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n    stack { dirt }\n}\n",
+            "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" {\n    line edge { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" }\n    stack { dirt }\n}\n"
+        ),
+    }
+    EDGE_RANGE "edge-range" Mistake {
+        summary: "A point on a side of the tile has a range, so each seed would put it somewhere else on the side",
+        help: "write the place alone, a seam such as `n` (halfway along the north side)",
+        example: NONE,
+    }
+    SEAMS "seams" Mistake {
+        summary: "The seam table in the edge contract cannot be read, or is missing",
+        help: "the table is `library/parts/edges.dtile`'s `seams` block: a `seam` with a position and a word for each side, and one `corner` line; each seam needs its mirror",
+        example: NONE,
+    }
 
     // controls
     UNKNOWN_CONTROL "unknown-control" Mistake {

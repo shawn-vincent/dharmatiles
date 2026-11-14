@@ -50,7 +50,7 @@ tile size="1x1" seed=97 {
 <tbody>
 <tr><td><code>size=</code></td><td><code>"CxR"</code></td><td><code>"1x1"</code></td><td>Squares across, then down. A square is 35 mm (DungeonBlocks) or 25.4 mm (OpenLOCK).</td></tr>
 <tr><td><code>seed=</code></td><td>a whole number</td><td>1</td><td>The root seed. Every element's randomness is keyed from it and the stack, never from the file name, so renaming a tile never changes it; <code>dharmatiles build --seed</code> overrides it.</td></tr>
-<tr><td><code>seams=</code></td><td><code>free</code></td><td>kept</td><td>A tile's lines may cross its edges only at a <a href="line.html">seam</a>: a third, a half or two thirds of a square's side, or a tile corner (<code>dt::seam</code> otherwise). <code>seams=free</code> lets this tile's lines cross anywhere.</td></tr>
+<tr><td><code>seams=</code></td><td><code>free</code></td><td>kept</td><td>A tile's lines may cross its edges only at a <a href="line.html">seam</a>: a third, a half or two thirds of a square's side, or a tile corner (<a class="codelink" href="../e/seam.html"><code>dt::seam</code></a> otherwise). <code>seams=free</code> lets this tile's lines cross anywhere.</td></tr>
 <tr><td><code>about</code></td><td>a string</td><td>—</td><td>Free text: what the tile is.</td></tr>
 <tr><td><a href="let.html"><code>let</code></a></td><td>a name and a value</td><td>—</td><td>Names this tile adds; <code>override</code> replaces a <code>$</code> name.</td></tr>
 <tr><td><a href="point.html"><code>point</code></a></td><td>a name and a point</td><td>—</td><td>Named points.</td></tr>

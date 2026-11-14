@@ -113,7 +113,7 @@ fn heading_and_pull_belong_on_one_point() {
         "line a { through \"(0sq, 0.5sq)\" \"(1sq, 0.5sq)\" heading=\"30deg\" }",
     )
     .unwrap_err();
-    assert!(e.iter().any(|d| d.code == "dt::line"), "{e:#?}");
+    assert!(e.iter().any(|d| d.code == dt_lang::codes::LINE), "{e:#?}");
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn a_point_on_a_side_is_on_a_seam_or_it_is_dt_seam_with_a_fix() {
         "line a { through \"(0sq, 0.45sq)\" \"(1sq, 0.5sq)\" }",
     )
     .unwrap_err();
-    assert_eq!(codes(&e), ["dt::seam"]);
+    assert_eq!(codes(&e), [dt_lang::codes::SEAM]);
     assert_eq!(
         e[0].message,
         "column 1, row 1, west side, at 0.45 is not a seam"
@@ -162,7 +162,7 @@ fn a_point_on_a_side_is_on_a_seam_or_it_is_dt_seam_with_a_fix() {
     assert_eq!(e[0].fix.as_ref().unwrap().replacement, "\"n(2)\"");
     // the point where two squares meet is not a seam
     let e = tile("2x1", "line a { through \"(1sq, 0sq)\" \"(1.5sq, 1sq)\" }").unwrap_err();
-    assert_eq!(codes(&e), ["dt::seam"]);
+    assert_eq!(codes(&e), [dt_lang::codes::SEAM]);
     // thirds are exact; 0.33 is not a third
     ok(
         "1x1",
@@ -173,7 +173,7 @@ fn a_point_on_a_side_is_on_a_seam_or_it_is_dt_seam_with_a_fix() {
         "line a { through \"(0sq, 0.33sq)\" \"(1sq, 2sq/3)\" }",
     )
     .unwrap_err();
-    assert_eq!(codes(&e), ["dt::seam"]);
+    assert_eq!(codes(&e), [dt_lang::codes::SEAM]);
     // the tile's corners are seams; a tile may opt out
     ok("1x1", "line a { through \"(0sq, 0sq)\" \"(1sq, 1sq)\" }");
     let text = "dharmatiles version=\"1.0.0\"\ntile size=\"1x1\" seed=1 seams=free {\n line a { through \"(0sq, 0.45sq)\" \"(1sq, 0.5sq)\" }\n stack {\n base\n dirt\n }\n}\n";
@@ -188,14 +188,14 @@ fn a_point_near_a_side_and_a_range_on_one_are_refused() {
         "line a { through \"(0.02sq, 0.5sq)\" \"(1sq, 0.5sq)\" }",
     )
     .unwrap_err();
-    assert_eq!(codes(&e), ["dt::near-edge"]);
+    assert_eq!(codes(&e), [dt_lang::codes::NEAR_EDGE]);
     assert_eq!(e[0].fix.as_ref().unwrap().replacement, "\"(0sq, 0.5sq)\"");
     let e = tile(
         "1x1",
         "line a { through \"(0sq, 0.4sq .. 0.6sq)\" \"(1sq, 0.5sq)\" }",
     )
     .unwrap_err();
-    assert_eq!(codes(&e), ["dt::edge-range"]);
+    assert_eq!(codes(&e), [dt_lang::codes::EDGE_RANGE]);
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn seam_words_name_the_places_and_say_what_is_wrong() {
     // the corner words are the tile's corners and take no number
     ok("2x2", "line a { through nw se }");
     let e = tile("2x2", "line a { through \"nw(1)\" se }").unwrap_err();
-    assert!(e.iter().any(|d| d.code == "dt::seam"), "{e:#?}");
+    assert!(e.iter().any(|d| d.code == dt_lang::codes::SEAM), "{e:#?}");
     // a longer side needs its square: the bare word is refused and the help lists the forms
     let e = tile("2x1", "line a { through n s }").unwrap_err();
     assert!(
@@ -232,7 +232,7 @@ fn the_seam_table_is_the_contracts_and_closed_under_turning() {
     // an open table is refused where it is written
     let text = "dharmatiles version=\"1.0.0\"\nseams {\n seam \"1/3\" north=a south=b west=c east=d\n corner north-west=nw north-east=ne south-east=se south-west=sw\n}\n";
     let e = dt_eval::doc::read(&common::memory(&[("e.dtile", text)]), "e.dtile").unwrap_err();
-    assert!(e.iter().any(|d| d.code == "dt::seams"), "{e:#?}");
+    assert!(e.iter().any(|d| d.code == dt_lang::codes::SEAMS), "{e:#?}");
 }
 
 #[test]

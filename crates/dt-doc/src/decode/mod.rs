@@ -765,7 +765,7 @@ impl<'k> Decoder<'k> {
                 }
                 _ => {
                     this.err(
-                        "dt::seams",
+                        dt_lang::codes::SEAMS,
                         value_span(e),
                         "a seam word is lower-case letters, and each word is used once in the table",
                         "not a word",
@@ -818,7 +818,7 @@ impl<'k> Decoder<'k> {
                         }
                         _ => {
                             self.err(
-                                "dt::seams",
+                                dt_lang::codes::SEAMS,
                                 c.span(),
                                 "a seam is `seam \"1/3\" north=nnw south=ssw west=wnw east=ene`: a new position between 0 and 1, and a word for each side",
                                 "not a seam",
@@ -839,7 +839,7 @@ impl<'k> Decoder<'k> {
                 }
                 other => {
                     self.err(
-                        "dt::seams",
+                        dt_lang::codes::SEAMS,
                         c.name().span(),
                         format!("a `seams` block holds `seam` and `corner`, not `{other}`"),
                         "unknown",
@@ -849,7 +849,7 @@ impl<'k> Decoder<'k> {
         }
         if table.corners.len() != 4 {
             self.err(
-                "dt::seams",
+                dt_lang::codes::SEAMS,
                 n.span(),
                 "the seams need a word for each of the four corners",
                 "write `corner north-west=nw north-east=ne south-east=se south-west=sw`",
@@ -858,7 +858,7 @@ impl<'k> Decoder<'k> {
         table.seams.sort_by(|a, b| a.at.total_cmp(&b.at));
         if let Err(at) = table.closed() {
             self.err(
-                "dt::seams",
+                dt_lang::codes::SEAMS,
                 n.span(),
                 format!(
                     "the seams must be the same turned a quarter: {at} has no seam at {}",
@@ -950,7 +950,7 @@ impl<'k> Decoder<'k> {
                     Some("free") => h.seams_free = true,
                     _ => {
                         self.err(
-                            "dt::value",
+                            dt_lang::codes::VALUE,
                             value_span(e),
                             "a tile's `seams` is `free`, or left out",
                             "not free",
@@ -1058,7 +1058,7 @@ impl<'k> Decoder<'k> {
                 let i = usize::from(key == "ends");
                 if word_set[i] {
                     this.err(
-                        "dt::duplicate",
+                        dt_lang::codes::DUPLICATE,
                         kspan,
                         format!("`{key}` is set twice"),
                         "again here",
@@ -1183,7 +1183,7 @@ impl<'k> Decoder<'k> {
         }
         if line.through.len() < 2 && n.iter_children().any(|c| c.name().value() == "through") {
             self.err(
-                "dt::line",
+                dt_lang::codes::LINE,
                 line.name.span,
                 "a line passes through at least two points",
                 format!("{} point(s)", line.through.len()),
@@ -1225,7 +1225,7 @@ impl<'k> Decoder<'k> {
         if !matches!(key.value(), "corner" | "heading" | "pull") {
             let near = did_you_mean(key.value(), ["corner", "heading", "pull"]);
             self.err(
-                "dt::unknown-control",
+                dt_lang::codes::UNKNOWN_CONTROL,
                 kspan,
                 format!("a `through` has no `{}`", key.value()),
                 "unknown",
@@ -1240,7 +1240,7 @@ impl<'k> Decoder<'k> {
         }
         if points != 1 {
             self.err(
-                "dt::line",
+                dt_lang::codes::LINE,
                 kspan,
                 format!("`{}` goes on a `through` of one point", key.value()),
                 "not on several points",
@@ -1256,7 +1256,7 @@ impl<'k> Decoder<'k> {
                 KdlValue::Bool(b) => mark.corner = *b,
                 _ => {
                     self.err(
-                        "dt::value",
+                        dt_lang::codes::VALUE,
                         span,
                         "`corner` is #true or #false",
                         "not a switch",
@@ -1274,7 +1274,7 @@ impl<'k> Decoder<'k> {
                     Some(v) if (0.0..=3.0).contains(&v) => mark.pull = Some(v),
                     _ => {
                         self.err(
-                            "dt::value",
+                            dt_lang::codes::VALUE,
                             span,
                             "`pull` is a number from 0 to 3, 1 by default",
                             "out of range",
@@ -1296,7 +1296,7 @@ impl<'k> Decoder<'k> {
         let span = value_span(e);
         let KdlValue::String(s) = e.value() else {
             self.err(
-                "dt::unit",
+                dt_lang::codes::UNIT,
                 span,
                 "`heading` is written with its unit",
                 "no unit",
@@ -1309,7 +1309,7 @@ impl<'k> Decoder<'k> {
             Ok(x) => x,
             Err(err) => {
                 self.err(
-                    err.code.unwrap_or("dt::value"),
+                    err.code.unwrap_or(dt_lang::codes::VALUE),
                     sub_span(span, at + err.start, at + err.end),
                     format!("can't read `heading`: {}", err.message),
                     "here",
@@ -1325,7 +1325,12 @@ impl<'k> Decoder<'k> {
             Ok(l) => match l.sample(&|_| None, 0.0) {
                 Ok(v) if v.is_finite() => Some(v),
                 _ => {
-                    self.err("dt::value", span, "`heading` is one angle", "here");
+                    self.err(
+                        dt_lang::codes::VALUE,
+                        span,
+                        "`heading` is one angle",
+                        "here",
+                    );
                     None
                 }
             },
@@ -1585,7 +1590,12 @@ impl<'k> Decoder<'k> {
                     span,
                 }),
                 Err(w) => {
-                    let d = self.err("dt::seam", span, w.message, "not a place on a side");
+                    let d = self.err(
+                        dt_lang::codes::SEAM,
+                        span,
+                        w.message,
+                        "not a place on a side",
+                    );
                     match w.near {
                         Some(near) => d.suggest(span, &near),
                         None => d.help = w.help,

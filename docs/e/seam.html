@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dt::seam</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../plates.html">Plates</a><a href="../maps.html">Maps</a><a href="../printers.html">Printers</a><a href="../inventory.html">Inventory</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a><a href="../roadmap.html">Roadmap</a><a href="../changelog.html">Changelog</a></div></nav>
+<main class="wrap codepage mistake">
+<header class="hero">
+  <div class="eyebrow"><a href="../errors.html">Error code</a> · a mistake in the document</div>
+  <h1>dt::seam</h1>
+  <p class="lede" data-part="summary">A line crosses a square's edge where no seam is, so it would not meet the next tile's.</p>
+</header>
+<section class="said" aria-labelledby="said">
+<h2 id="said">What the program says</h2>
+<pre class="said no-hl"><code>dt::seam
+
+  × column 1, row 1, west side, at 0.4 is not a seam
+   ╭─[example.dtile:3:25]
+ 2 │ tile size=&quot;1x1&quot; {
+ 3 │     line edge { through &quot;(0sq, 0.4sq)&quot; &quot;(1sq, 0.5sq)&quot; }
+   ·                         ───────┬──────
+   ·                                ╰── not on a seam
+ 4 │     stack { dirt }
+   ╰────
+  help: did you mean `wnw`? the nearest seam of this square's edge is 1/3;
+        `seams=free` on the tile lets its lines cross anywhere
+        explain: https://shawn-vincent.github.io/dharmatiles/e/seam
+        offline: dharmatiles explain dt::seam</code></pre>
+</section>
+<div class="cp-grid">
+<div>
+<section>
+<h2 id="help">What to do</h2>
+<p data-part="help">Move the point onto a seam: the message gives the nearest, by its word or as a point; <code>seams=free</code> on the tile lets its lines cross anywhere.</p>
+</section>
+<section>
+<h2 id="example">Broken, then fixed</h2>
+<div class="cp-pair">
+<figure class="broken"><figcaption>Gives <code>dt::seam</code></figcaption>
+<pre><code>dharmatiles version=&quot;1.0.0&quot;
+tile size=&quot;1x1&quot; {
+    line edge { through &quot;(0sq, <mark class="del">0.4sq</mark>)&quot; &quot;(1sq, 0.5sq)&quot; }
+    stack { dirt }
+}</code></pre></figure>
+<figure class="fixed"><figcaption>Mended, it reads clean</figcaption>
+<pre><code>dharmatiles version=&quot;1.0.0&quot;
+tile size=&quot;1x1&quot; {
+    line edge { through &quot;(0sq, <mark class="ins">0.5sq</mark>)&quot; &quot;(1sq, 0.5sq)&quot; }
+    stack { dirt }
+}</code></pre></figure>
+</div>
+</section>
+</div>
+<section>
+<h2 id="rule">The rule</h2>
+<blockquote class="rule"><p>A line may cross the edge of a square only at a seam: the same few places on every square edge, listed in the edge contract (<code>library/parts/edges.dtile</code>) and shown on the tile system page: the corners, a third, a half and two thirds. A point on a tile side that is not a seam is <a class="codelink" href="seam.html"><code>dt::seam</code></a>, naming the square (<code>column 2, row 1, north side, at 0.45 is not a seam</code>) with a fix that moves it to the nearest seam on that square. Squares are named column then row, counted from 1: C1 R1 is the north-west square. Positions measure from each square&rsquo;s own corner, so a 2&times;2&rsquo;s north side has two sets of seams, one for column 1 and one for column 2. A third is written exactly, <code>1sq/3</code>, never 0.33; the point partway along a side where two squares meet is not a seam, only the tile&rsquo;s own corners are. A tile that must cross an edge elsewhere writes <code>seams=free</code>.</p></blockquote>
+<p class="cp-in"><a href="../language.html#dt-seam">Read it in context: The tile language · Seams: where a line crosses an edge</a></p>
+</section>
+</div>
+<footer class="cp-foot">
+<span>Explained with it: <a href="near-edge.html"><code>dt::near-edge</code></a> <a href="edge-range.html"><code>dt::edge-range</code></a> <a href="seams.html"><code>dt::seams</code></a></span>
+<span><a href="../errors.html">Every error code</a></span>
+<span>Offline: <code>dharmatiles explain dt::seam</code></span>
+</footer>
+</main>
+</body>
+</html>

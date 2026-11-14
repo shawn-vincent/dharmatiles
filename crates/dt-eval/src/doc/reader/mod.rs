@@ -450,7 +450,7 @@ impl Reader<'_> {
             Some(f) if f.doc.seams.is_some() => f.doc.seams.clone().filter(|_| !header.seams_free),
             Some(_) => {
                 self.errors.push(Diag::plain(
-                    "dt::seams",
+                    dt_lang::codes::SEAMS,
                     format!("the edge contract, {EDGES}, has no `seams` block: the places a line may cross a square's edge"),
                 ));
                 None
@@ -710,7 +710,7 @@ impl Reader<'_> {
                         Diag::at(
                             src,
                             span,
-                            "dt::near-edge",
+                            dt_lang::codes::NEAR_EDGE,
                             "this point is close to a side of the tile but not on it",
                             "within a millimetre of the side",
                         )
@@ -727,7 +727,7 @@ impl Reader<'_> {
                         Diag::at(
                             src,
                             span,
-                            "dt::seam",
+                            dt_lang::codes::SEAM,
                             format!("{}, at {} is not a seam", say(&pl), number(pl.at)),
                             "not on a seam",
                         )
@@ -754,7 +754,7 @@ impl Reader<'_> {
                         Diag::at(
                             src,
                             span,
-                            "dt::edge-range",
+                            dt_lang::codes::EDGE_RANGE,
                             "a point on a tile side is one place: a range on it would draw a different place for each seed",
                             "a range on a side",
                         )
